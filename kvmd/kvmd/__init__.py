@@ -75,7 +75,6 @@ class _Application:
         self.__system_tasks.extend([
             self.__loop.create_task(self.__poll_dead_sockets()),
             self.__loop.create_task(self.__poll_atx_leds()),
-            self.__loop.create_task(self.__poll_streamer_events()),
         ])
 
         aiohttp.web.run_app(
@@ -133,11 +132,6 @@ class _Application:
             if self.__sockets:
                 await self.__broadcast("EVENT atx_leds %d %d" % (self.__atx.get_leds()))
             await asyncio.sleep(self.__config["atx"]["leds"]["poll"])
-
-    @_system_task
-    async def __poll_streamer_events(self) -> None:
-        async for event in self.__streamer.events():
-            await self.__broadcast("EVENT %s" % (event))
 
     async def __broadcast(self, msg: str) -> None:
         await asyncio.gather(*[

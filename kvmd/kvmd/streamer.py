@@ -2,7 +2,6 @@ import asyncio
 import asyncio.subprocess
 
 from typing import Dict
-from typing import AsyncIterator
 from typing import Optional
 
 from contextlog import get_logger
@@ -34,17 +33,12 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__loop = loop
 
         self.__lock = asyncio.Lock()
-        self.__events_queue: asyncio.Queue = asyncio.Queue()
         self.__proc_task: Optional[asyncio.Task] = None
 
     def __set_output_pin(self, pin: int) -> int:
         GPIO.setup(pin, GPIO.OUT)
         GPIO.output(pin, False)
         return pin
-
-    async def events(self) -> AsyncIterator[str]:
-        while True:
-            yield (await self.__events_queue.get())
 
     async def start(self) -> None:
         async with self.__lock:
@@ -61,7 +55,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 await asyncio.gather(self.__proc_task, return_exceptions=True)
                 await self.__set_hw_enabled(False)
                 self.__proc_task = None
-                await self.__events_queue.put("mjpg_streamer stopped")
 
     async def __set_hw_enabled(self, enabled: bool) -> None:
         # This sequence is important for enable
@@ -82,9 +75,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                 )
-
                 logger.info("Started mjpg_streamer pid=%d: %s", proc.pid, self.__cmd)
-                await self.__events_queue.put("mjpg_streamer started")
 
                 empty = 0
                 while proc.returncode is None:
