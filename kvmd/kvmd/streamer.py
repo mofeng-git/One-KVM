@@ -11,13 +11,14 @@ from RPi import GPIO
 
 
 # =====
-class Streamer:
+class Streamer:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         cap_power: int,
         vga_power: int,
         sync_delay: float,
         mjpg_streamer: Dict,
+        loop: asyncio.AbstractEventLoop,
     ) -> None:
 
         self.__cap_power = self.__set_output_pin(cap_power)
@@ -30,9 +31,11 @@ class Streamer:
             " -o 'output_http.so -p -l %(host)s %(port)s'"
         ) % (mjpg_streamer)
 
+        self.__loop = loop
+
         self.__lock = asyncio.Lock()
         self.__events_queue: asyncio.Queue = asyncio.Queue()
-        self.__proc_future: Optional[asyncio.Future] = None
+        self.__proc_task: Optional[asyncio.Task] = None
 
     def __set_output_pin(self, pin: int) -> int:
         GPIO.setup(pin, GPIO.OUT)
@@ -46,18 +49,18 @@ class Streamer:
     async def start(self) -> None:
         async with self.__lock:
             get_logger().info("Starting mjpg_streamer ...")
-            assert not self.__proc_future
+            assert not self.__proc_task
             await self.__set_hw_enabled(True)
-            self.__proc_future = asyncio.ensure_future(self.__process(), loop=asyncio.get_event_loop())
+            self.__proc_task = self.__loop.create_task(self.__process())
 
     async def stop(self) -> None:
         async with self.__lock:
             get_logger().info("Stopping mjpg_streamer ...")
-            if self.__proc_future:
-                self.__proc_future.cancel()
-                await asyncio.gather(self.__proc_future, return_exceptions=True)
+            if self.__proc_task:
+                self.__proc_task.cancel()
+                await asyncio.gather(self.__proc_task, return_exceptions=True)
                 await self.__set_hw_enabled(False)
-                self.__proc_future = None
+                self.__proc_task = None
                 await self.__events_queue.put("mjpg_streamer stopped")
 
     async def __set_hw_enabled(self, enabled: bool) -> None:

@@ -60,9 +60,10 @@ class _Application:
             vga_power=self.__config["video"]["pinout"]["vga"],
             sync_delay=self.__config["video"]["sync_delay"],
             mjpg_streamer=self.__config["video"]["mjpg_streamer"],
+            loop=self.__loop,
         )
 
-        self.__system_futures: List[asyncio.Future] = []
+        self.__system_tasks: List[asyncio.Task] = []
 
     def run(self) -> None:
         app = aiohttp.web.Application(loop=self.__loop)
@@ -71,10 +72,10 @@ class _Application:
         app.on_shutdown.append(self.__on_shutdown)
         app.on_cleanup.append(self.__on_cleanup)
 
-        self.__system_futures.extend([
-            asyncio.ensure_future(self.__poll_dead_sockets(), loop=self.__loop),
-            asyncio.ensure_future(self.__poll_atx_leds(), loop=self.__loop),
-            asyncio.ensure_future(self.__poll_streamer_events(), loop=self.__loop),
+        self.__system_tasks.extend([
+            self.__loop.create_task(self.__poll_dead_sockets()),
+            self.__loop.create_task(self.__poll_atx_leds()),
+            self.__loop.create_task(self.__poll_streamer_events()),
         ])
 
         aiohttp.web.run_app(
@@ -109,9 +110,9 @@ class _Application:
         logger = get_logger()
 
         logger.info("Cancelling tasks ...")
-        for future in self.__system_futures:
-            future.cancel()
-        await asyncio.gather(*self.__system_futures)
+        for task in self.__system_tasks:
+            task.cancel()
+        await asyncio.gather(*self.__system_tasks)
 
         logger.info("Cleaning up GPIO ...")
         GPIO.cleanup()
