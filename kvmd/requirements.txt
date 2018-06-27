@@ -1,0 +1,6 @@
+RPi.GPIO
+aiohttp
+contextlog
+pyyaml
+bumpversion
+tox

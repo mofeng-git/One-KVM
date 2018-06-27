@@ -1,0 +1,6 @@
+git+git://github.com/willbuckner/rpi-gpio-development-mock@master#egg=rpi
+aiohttp
+contextlog
+pyyaml
+bumpversion
+tox

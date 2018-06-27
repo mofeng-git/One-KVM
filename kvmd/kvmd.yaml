@@ -1,0 +1,64 @@
+kvmd:
+    server:
+        host: localhost
+        port: 8081
+    ws:
+        heartbeat: 3.0
+
+    keyboard:
+        pinout:
+            clock: 17
+            data: 4
+        delay: 0.0002
+
+    atx:
+        leds:
+            pinout:
+                power: 16
+                hdd: 12
+            poll: 0.1
+
+        switches:
+            pinout:
+                power: 26
+                reset: 20
+            click_delay: 0.1
+            long_click_delay: 5.5
+
+    video:
+        pinout:
+            cap: 21
+            vga: 25
+        sync_delay: 1.0
+
+        mjpg_streamer:
+            prog: /usr/bin/mjpg_streamer
+            device: /dev/video0
+            width: 720
+            height: 576
+            every: 2
+            host: localhost
+            port: 8082
+
+logging:
+    version: 1
+    disable_existing_loggers: false
+
+    formatters:
+        console:
+            (): contextlog.SmartFormatter
+            style: "{"
+            datefmt: "%H:%M:%S"
+            format: "[{asctime}] {app:10.10} {fg_bold_purple}{name:20.20} {log_color}{levelname:>7}{reset} {message} -- {cyan}{_extra}{reset}"
+
+    handlers:
+        console:
+            level: DEBUG
+            class: logging.StreamHandler
+            stream: ext://sys.stdout
+            formatter: console
+
+    root:
+        level: INFO
+        handlers:
+            - console
