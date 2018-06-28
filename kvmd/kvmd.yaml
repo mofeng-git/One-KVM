@@ -30,6 +30,7 @@ kvmd:
             cap: 21
             vga: 25
         sync_delay: 1.0
+        shutdown_delay: 10.0
 
         mjpg_streamer:
             prog: /usr/bin/mjpg_streamer

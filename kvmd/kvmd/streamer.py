@@ -32,7 +32,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__loop = loop
 
-        self.__lock = asyncio.Lock()
         self.__proc_task: Optional[asyncio.Task] = None
 
     def __set_output_pin(self, pin: int) -> int:
@@ -41,23 +40,24 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         return pin
 
     async def start(self) -> None:
-        async with self.__lock:
-            get_logger().info("Starting mjpg_streamer ...")
-            assert not self.__proc_task
-            await self.__set_hw_enabled(True)
-            self.__proc_task = self.__loop.create_task(self.__process())
+        assert not self.__proc_task
+        get_logger().info("Starting mjpg_streamer ...")
+        await self.__set_hw_enabled(True)
+        self.__proc_task = self.__loop.create_task(self.__process())
 
     async def stop(self) -> None:
-        async with self.__lock:
-            get_logger().info("Stopping mjpg_streamer ...")
-            if self.__proc_task:
-                self.__proc_task.cancel()
-                await asyncio.gather(self.__proc_task, return_exceptions=True)
-                await self.__set_hw_enabled(False)
-                self.__proc_task = None
+        assert self.__proc_task
+        get_logger().info("Stopping mjpg_streamer ...")
+        self.__proc_task.cancel()
+        await asyncio.gather(self.__proc_task, return_exceptions=True)
+        await self.__set_hw_enabled(False)
+        self.__proc_task = None
+
+    def is_running(self) -> bool:
+        return bool(self.__proc_task)
 
     async def __set_hw_enabled(self, enabled: bool) -> None:
-        # This sequence is important for enable
+        # XXX: This sequence is very important for enable
         GPIO.output(self.__cap_power, enabled)
         if enabled:
             await asyncio.sleep(self.__sync_delay)

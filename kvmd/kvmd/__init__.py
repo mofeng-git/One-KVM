@@ -2,6 +2,7 @@ import asyncio
 import argparse
 import logging
 import logging.config
+import time
 
 from typing import List
 from typing import Dict
@@ -73,6 +74,7 @@ class _Application:
         app.on_cleanup.append(self.__on_cleanup)
 
         self.__system_tasks.extend([
+            self.__loop.create_task(self.__stream_controller()),
             self.__loop.create_task(self.__poll_dead_sockets()),
             self.__loop.create_task(self.__poll_atx_leds()),
         ])
@@ -101,22 +103,44 @@ class _Application:
         return ws
 
     async def __on_shutdown(self, _: aiohttp.web.Application) -> None:
-        get_logger().info("Shutting down ...")
+        logger = get_logger()
+
+        logger.info("Cancelling system tasks ...")
+        for task in self.__system_tasks:
+            task.cancel()
+        await asyncio.gather(*self.__system_tasks)
+
+        logger.info("Disconnecting clients ...")
         for ws in list(self.__sockets):
             await self.__remove_socket(ws)
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
         logger = get_logger()
 
-        logger.info("Cancelling tasks ...")
-        for task in self.__system_tasks:
-            task.cancel()
-        await asyncio.gather(*self.__system_tasks)
+        if self.__streamer.is_running():
+            await self.__streamer.stop()
 
         logger.info("Cleaning up GPIO ...")
         GPIO.cleanup()
 
         logger.info("Bye-bye")
+
+    @_system_task
+    async def __stream_controller(self) -> None:
+        prev = 0
+        shutdown_at = 0.0
+        while True:
+            cur = len(self.__sockets)
+            if prev == 0 and cur > 0:
+                if not self.__streamer.is_running():
+                    await self.__streamer.start()
+            elif prev > 0 and cur == 0:
+                shutdown_at = time.time() + self.__config["video"]["shutdown_delay"]
+            elif prev == 0 and cur == 0 and time.time() > shutdown_at:
+                if self.__streamer.is_running():
+                    await self.__streamer.stop()
+            prev = cur
+            await asyncio.sleep(0.1)
 
     @_system_task
     async def __poll_dead_sockets(self) -> None:
@@ -159,8 +183,6 @@ class _Application:
             self.__sockets.add(ws)
             get_logger().info("Registered new client socket: remote=%s; id=%d; active=%d",
                               ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
-            if len(self.__sockets) == 1:
-                await self.__streamer.start()
 
     async def __remove_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
@@ -171,8 +193,6 @@ class _Application:
                 await ws.close()
             except Exception:
                 pass
-            if not self.__sockets:
-                await self.__streamer.stop()
 
 
 def main() -> None:
