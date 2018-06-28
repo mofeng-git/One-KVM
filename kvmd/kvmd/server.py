@@ -1,7 +1,6 @@
 import os
 import signal
 import asyncio
-import logging
 import time
 
 from typing import List
@@ -15,11 +14,10 @@ from .atx import Atx
 from .streamer import Streamer
 from .ps2 import Ps2Keyboard
 
+from .logging import get_logger
+
 
 # =====
-_logger = logging.getLogger(__name__)
-
-
 def _system_task(method: Callable) -> Callable:
     async def wrap(self: "Server") -> None:
         try:
@@ -27,7 +25,7 @@ def _system_task(method: Callable) -> Callable:
         except asyncio.CancelledError:
             pass
         except Exception:
-            _logger.exception("Unhandled exception, killing myself ...")
+            get_logger().exception("Unhandled exception, killing myself ...")
             os.kill(os.getpid(), signal.SIGTERM)
     return wrap
 
@@ -77,7 +75,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             app=app,
             host=host,
             port=port,
-            print=(lambda text: [_logger.info(line.strip()) for line in text.strip().splitlines()]),  # type: ignore
+            print=(lambda text: [get_logger().info(line.strip()) for line in text.strip().splitlines()]),  # type: ignore
         )
 
     async def __root_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -97,12 +95,14 @@ class Server:  # pylint: disable=too-many-instance-attributes
         return ws
 
     async def __on_shutdown(self, _: aiohttp.web.Application) -> None:
-        _logger.info("Cancelling system tasks ...")
+        logger = get_logger(0)
+
+        logger.info("Cancelling system tasks ...")
         for task in self.__system_tasks:
             task.cancel()
         await asyncio.gather(*self.__system_tasks)
 
-        _logger.info("Disconnecting clients ...")
+        logger.info("Disconnecting clients ...")
         for ws in list(self.__sockets):
             await self.__remove_socket(ws)
 
@@ -168,21 +168,21 @@ class Server:  # pylint: disable=too-many-instance-attributes
             if method:
                 await method()
                 return None
-        _logger.warning("Received an incorrect command: %r", command)
+        get_logger().warning("Received an incorrect command: %r", command)
         return "ERROR incorrect command"
 
     async def __register_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
             self.__sockets.add(ws)
-            _logger.info("Registered new client socket: remote=%s; id=%d; active=%d",
-                         ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
+            get_logger().info("Registered new client socket: remote=%s; id=%d; active=%d",
+                              ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
 
     async def __remove_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
             try:
                 self.__sockets.remove(ws)
-                _logger.info("Removed client socket: remote=%s; id=%d; active=%d",
-                             ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
+                get_logger().info("Removed client socket: remote=%s; id=%d; active=%d",
+                                  ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
                 await ws.close()
             except Exception:
                 pass

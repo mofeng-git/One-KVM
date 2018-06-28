@@ -1,7 +1,7 @@
 import asyncio
-import logging
 
 from .application import init
+from .logging import get_logger
 
 from .atx import Atx
 from .streamer import Streamer
@@ -52,4 +52,4 @@ def main() -> None:
             host=config["server"]["host"],
             port=config["server"]["port"],
         )
-    logging.getLogger(__name__).info("Bye-bye")
+    get_logger().info("Bye-bye")

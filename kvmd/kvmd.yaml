@@ -49,7 +49,7 @@ logging:
             (): contextlog.SmartFormatter
             style: "{"
             datefmt: "%H:%M:%S"
-            format: "[{asctime}] {name:15.15} {levelname:>7} --- {message}"
+            format: "[{asctime}] {name:20.20} {levelname:>7} --- {message}"
 
     handlers:
         console:

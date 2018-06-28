@@ -1,24 +1,23 @@
 import contextlib
-import logging
 
 from typing import Generator
 
 from RPi import GPIO
 
+from .logging import get_logger
+
 
 # =====
-_logger = logging.getLogger(__name__)
-
-
 @contextlib.contextmanager
 def bcm() -> Generator[None, None, None]:
+    logger = get_logger(2)
     GPIO.setmode(GPIO.BCM)
-    _logger.info("Configured GPIO mode as BCM")
+    logger.info("Configured GPIO mode as BCM")
     try:
         yield
     finally:
         GPIO.cleanup()
-        _logger.info("GPIO cleaned")
+        logger.info("GPIO cleaned")
 
 
 def set_output(pin: int, initial: bool=False) -> int:

@@ -1,16 +1,14 @@
 import multiprocessing
 import multiprocessing.queues
 import queue
-import logging
 import time
+
+from .logging import get_logger
 
 from . import gpio
 
 
 # =====
-_logger = logging.getLogger(__name__)
-
-
 class Ps2Keyboard(multiprocessing.Process):
     def __init__(self, clock: int, data: int, pulse: float) -> None:
         super().__init__(daemon=True)
@@ -23,11 +21,11 @@ class Ps2Keyboard(multiprocessing.Process):
         self.__event = multiprocessing.Event()
 
     def start(self) -> None:
-        _logger.info("Starting keyboard daemon ...")
+        get_logger().info("Starting keyboard daemon ...")
         super().start()
 
     def stop(self) -> None:
-        _logger.info("Stopping keyboard daemon ...")
+        get_logger().info("Stopping keyboard daemon ...")
         self.__event.set()
         self.join()
 
@@ -35,17 +33,18 @@ class Ps2Keyboard(multiprocessing.Process):
         self.__queue.put(code)
 
     def run(self) -> None:
-        try:
-            while not self.__event.is_set():
-                try:
-                    code = self.__queue.get(timeout=0.1)
-                except queue.Empty:
-                    pass
-                else:
-                    self.__send_byte(code)
-        except Exception:
-            _logger.exception("Unhandled exception")
-            raise
+        with gpio.bcm():
+            try:
+                while not self.__event.is_set():
+                    try:
+                        code = self.__queue.get(timeout=0.1)
+                    except queue.Empty:
+                        pass
+                    else:
+                        self.__send_byte(code)
+            except Exception:
+                get_logger().exception("Unhandled exception")
+                raise
 
     def __send_byte(self, code: int) -> None:
         code_bits = list(map(bool, bin(code)[2:].zfill(8)))

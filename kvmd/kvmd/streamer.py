@@ -1,17 +1,15 @@
 import asyncio
 import asyncio.subprocess
-import logging
 
 from typing import Dict
 from typing import Optional
+
+from .logging import get_logger
 
 from . import gpio
 
 
 # =====
-_logger = logging.getLogger(__name__)
-
-
 class Streamer:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
@@ -38,13 +36,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     async def start(self) -> None:
         assert not self.__proc_task
-        _logger.info("Starting mjpg_streamer ...")
+        get_logger().info("Starting mjpg_streamer ...")
         await self.__set_hw_enabled(True)
         self.__proc_task = self.__loop.create_task(self.__process())
 
     async def stop(self) -> None:
         assert self.__proc_task
-        _logger.info("Stopping mjpg_streamer ...")
+        get_logger().info("Stopping mjpg_streamer ...")
         self.__proc_task.cancel()
         await asyncio.gather(self.__proc_task, return_exceptions=True)
         await self.__set_hw_enabled(False)
@@ -62,6 +60,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         await asyncio.sleep(self.__sync_delay)
 
     async def __process(self) -> None:
+        logger = get_logger(0)
+
         proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
         while True:
             try:
@@ -70,13 +70,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                 )
-                _logger.info("Started mjpg_streamer pid=%d: %s", proc.pid, self.__cmd)
+                logger.info("Started mjpg_streamer pid=%d: %s", proc.pid, self.__cmd)
 
                 empty = 0
                 while proc.returncode is None:
                     line = (await proc.stdout.readline()).decode(errors="ignore").strip()
                     if line:
-                        _logger.info("mjpg_streamer: %s", line)
+                        logger.info("mjpg_streamer: %s", line)
                         empty = 0
                     else:
                         empty += 1
@@ -90,9 +90,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 break
             except Exception as err:
                 if proc:
-                    _logger.error("Unexpected finished mjpg_streamer pid=%d with retcode=%d", proc.pid, proc.returncode)
+                    logger.exception("Unexpected finished mjpg_streamer pid=%d with retcode=%d", proc.pid, proc.returncode)
                 else:
-                    _logger.error("Can't start mjpg_streamer: %s", err)
+                    logger.exception("Can't start mjpg_streamer: %s", err)
                 await asyncio.sleep(1)
 
         if proc:
