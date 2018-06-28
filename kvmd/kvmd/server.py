@@ -13,6 +13,7 @@ import aiohttp
 
 from .atx import Atx
 from .streamer import Streamer
+from .ps2 import Ps2Keyboard
 
 
 # =====
@@ -36,6 +37,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self,
         atx: Atx,
         streamer: Streamer,
+        keyboard: Ps2Keyboard,
         heartbeat: float,
         atx_leds_poll: float,
         video_shutdown_delay: float,
@@ -45,6 +47,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__atx = atx
         self.__streamer = streamer
         self.__heartbeat = heartbeat
+        self.__keyboard = keyboard
         self.__video_shutdown_delay = video_shutdown_delay
         self.__atx_leds_poll = atx_leds_poll
         self.__loop = loop
@@ -55,6 +58,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__system_tasks: List[asyncio.Task] = []
 
     def run(self, host: str, port: int) -> None:
+        self.__keyboard.start()
+
         app = aiohttp.web.Application(loop=self.__loop)
         app.router.add_get("/", self.__root_handler)
         app.router.add_get("/ws", self.__ws_handler)
@@ -62,6 +67,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         app.on_cleanup.append(self.__on_cleanup)
 
         self.__system_tasks.extend([
+            self.__loop.create_task(self.__monitor_keyboard()),
             self.__loop.create_task(self.__stream_controller()),
             self.__loop.create_task(self.__poll_dead_sockets()),
             self.__loop.create_task(self.__poll_atx_leds()),
@@ -101,8 +107,16 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await self.__remove_socket(ws)
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
+        if self.__keyboard.is_alive():
+            self.__keyboard.stop()
         if self.__streamer.is_running():
             await self.__streamer.stop()
+
+    @_system_task
+    async def __monitor_keyboard(self) -> None:
+        while self.__keyboard.is_alive():
+            await asyncio.sleep(0.1)
+        raise RuntimeError("Keyboard dead")
 
     @_system_task
     async def __stream_controller(self) -> None:

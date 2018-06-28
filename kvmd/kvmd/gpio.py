@@ -21,8 +21,8 @@ def bcm() -> Generator[None, None, None]:
         _logger.info("GPIO cleaned")
 
 
-def set_output_zeroed(pin: int) -> int:
-    GPIO.setup(pin, GPIO.OUT)
+def set_output(pin: int, initial: bool=False) -> int:
+    GPIO.setup(pin, GPIO.OUT, initial=initial)
     GPIO.output(pin, False)
     return pin
 

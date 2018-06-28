@@ -24,8 +24,8 @@ class Atx:
         self.__power_led = gpio.set_input(power_led)
         self.__hdd_led = gpio.set_input(hdd_led)
 
-        self.__power_switch = gpio.set_output_zeroed(power_switch)
-        self.__reset_switch = gpio.set_output_zeroed(reset_switch)
+        self.__power_switch = gpio.set_output(power_switch)
+        self.__reset_switch = gpio.set_output(reset_switch)
         self.__click_delay = click_delay
         self.__long_click_delay = long_click_delay
 

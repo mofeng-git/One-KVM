@@ -5,6 +5,7 @@ from .application import init
 
 from .atx import Atx
 from .streamer import Streamer
+from .ps2 import Ps2Keyboard
 from .server import Server
 
 from . import gpio
@@ -33,9 +34,16 @@ def main() -> None:
             loop=loop,
         )
 
+        keyboard = Ps2Keyboard(
+            clock=config["keyboard"]["pinout"]["clock"],
+            data=config["keyboard"]["pinout"]["data"],
+            pulse=config["keyboard"]["pulse"],
+        )
+
         Server(
             atx=atx,
             streamer=streamer,
+            keyboard=keyboard,
             heartbeat=config["server"]["heartbeat"],
             atx_leds_poll=config["atx"]["leds"]["poll"],
             video_shutdown_delay=config["video"]["shutdown_delay"],

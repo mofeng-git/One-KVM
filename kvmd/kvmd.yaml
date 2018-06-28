@@ -8,7 +8,7 @@ kvmd:
         pinout:
             clock: 17
             data: 4
-        delay: 0.0002
+        pulse: 0.0002
 
     atx:
         leds:

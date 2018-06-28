@@ -22,8 +22,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
-        self.__cap_power = gpio.set_output_zeroed(cap_power)
-        self.__vga_power = gpio.set_output_zeroed(vga_power)
+        self.__cap_power = gpio.set_output(cap_power)
+        self.__vga_power = gpio.set_output(vga_power)
         self.__sync_delay = sync_delay
 
         self.__cmd = (
