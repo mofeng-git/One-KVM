@@ -21,5 +21,6 @@ install: pi-builder
 clean: pi-builder
 	cd pi-builder && make clean
 
-clean-all: clean
+clean-all:
+	-cd pi-builder && make clean
 	rm -rf pi-builder
