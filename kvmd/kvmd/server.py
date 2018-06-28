@@ -8,7 +8,7 @@ from typing import Set
 from typing import Callable
 from typing import Optional
 
-import aiohttp
+import aiohttp.web
 
 from .atx import Atx
 from .streamer import Streamer
