@@ -1,7 +1,5 @@
 import asyncio
-import argparse
 import logging
-import logging.config
 import time
 
 from typing import List
@@ -14,7 +12,7 @@ from RPi import GPIO
 
 import aiohttp
 
-import yaml
+from .application import init
 
 from .atx import Atx
 from .streamer import Streamer
@@ -191,13 +189,4 @@ class _Application:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", default="kvmd.yaml", metavar="<path>")
-    options = parser.parse_args()
-
-    with open(options.config) as config_file:
-        config = yaml.load(config_file)
-    logging.captureWarnings(True)
-    logging.config.dictConfig(config["logging"])
-
-    _Application(config["kvmd"]).run()
+    _Application(init()).run()
