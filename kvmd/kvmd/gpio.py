@@ -14,9 +14,11 @@ _logger = logging.getLogger(__name__)
 def bcm() -> Generator[None, None, None]:
     GPIO.setmode(GPIO.BCM)
     _logger.info("Configured GPIO mode as BCM")
-    yield
-    GPIO.cleanup()
-    _logger.info("GPIO cleaned")
+    try:
+        yield
+    finally:
+        GPIO.cleanup()
+        _logger.info("GPIO cleaned")
 
 
 def set_output_zeroed(pin: int) -> int:
