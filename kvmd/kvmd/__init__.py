@@ -10,10 +10,6 @@ from typing import Set
 from typing import Callable
 from typing import Optional
 
-from contextlog import get_logger
-from contextlog import patch_logging
-from contextlog import patch_threading
-
 from RPi import GPIO
 
 import aiohttp
@@ -25,6 +21,9 @@ from .streamer import Streamer
 
 
 # =====
+_logger = logging.getLogger(__name__)
+
+
 def _system_task(method: Callable) -> Callable:
     async def wrap(self: "_Application") -> None:
         try:
@@ -32,7 +31,7 @@ def _system_task(method: Callable) -> Callable:
         except asyncio.CancelledError:
             pass
         except Exception:
-            get_logger().exception("Unhandled exception")
+            _logger.exception("Unhandled exception")
             raise SystemExit(1)
     return wrap
 
@@ -83,7 +82,7 @@ class _Application:
             app=app,
             host=self.__config["server"]["host"],
             port=self.__config["server"]["port"],
-            print=(lambda text: [get_logger().info(line.strip()) for line in text.strip().splitlines()]),
+            print=(lambda text: [_logger.info(line.strip()) for line in text.strip().splitlines()]),  # type: ignore
         )
 
     async def __root_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -103,27 +102,23 @@ class _Application:
         return ws
 
     async def __on_shutdown(self, _: aiohttp.web.Application) -> None:
-        logger = get_logger()
-
-        logger.info("Cancelling system tasks ...")
+        _logger.info("Cancelling system tasks ...")
         for task in self.__system_tasks:
             task.cancel()
         await asyncio.gather(*self.__system_tasks)
 
-        logger.info("Disconnecting clients ...")
+        _logger.info("Disconnecting clients ...")
         for ws in list(self.__sockets):
             await self.__remove_socket(ws)
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
-        logger = get_logger()
-
         if self.__streamer.is_running():
             await self.__streamer.stop()
 
-        logger.info("Cleaning up GPIO ...")
+        _logger.info("Cleaning up GPIO ...")
         GPIO.cleanup()
 
-        logger.info("Bye-bye")
+        _logger.info("Bye-bye")
 
     @_system_task
     async def __stream_controller(self) -> None:
@@ -175,31 +170,27 @@ class _Application:
             if method:
                 await method()
                 return None
-        get_logger().warning("Received incorrect command: %r", command)
+        _logger.warning("Received an incorrect command: %r", command)
         return "ERROR incorrect command"
 
     async def __register_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
             self.__sockets.add(ws)
-            get_logger().info("Registered new client socket: remote=%s; id=%d; active=%d",
-                              ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
+            _logger.info("Registered new client socket: remote=%s; id=%d; active=%d",
+                         ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
 
     async def __remove_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
             try:
                 self.__sockets.remove(ws)
-                get_logger().info("Removed client socket: remote=%s; id=%d; active=%d",
-                                  ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
+                _logger.info("Removed client socket: remote=%s; id=%d; active=%d",
+                             ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
                 await ws.close()
             except Exception:
                 pass
 
 
 def main() -> None:
-    patch_logging()
-    patch_threading()
-    get_logger(app="kvmd")
-
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", default="kvmd.yaml", metavar="<path>")
     options = parser.parse_args()

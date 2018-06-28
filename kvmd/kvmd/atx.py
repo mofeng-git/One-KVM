@@ -1,13 +1,15 @@
 import asyncio
+import logging
 
 from typing import Tuple
-
-from contextlog import get_logger
 
 from RPi import GPIO
 
 
 # =====
+_logger = logging.getLogger(__name__)
+
+
 class Atx:
     def __init__(
         self,
@@ -42,15 +44,15 @@ class Atx:
 
     async def click_power(self) -> None:
         if (await self.__click(self.__power_switch, self.__click_delay)):
-            get_logger().info("Clicked power")
+            _logger.info("Clicked power")
 
     async def click_power_long(self) -> None:
         if (await self.__click(self.__power_switch, self.__long_click_delay)):
-            get_logger().info("Clicked power (long press)")
+            _logger.info("Clicked power (long press)")
 
     async def click_reset(self) -> None:
         if (await self.__click(self.__reset_switch, self.__click_delay)):
-            get_logger().info("Clicked reset")
+            _logger.info("Clicked reset")
 
     async def __click(self, pin: int, delay: float) -> bool:
         if not self.__lock.locked():

@@ -1,4 +1,3 @@
 RPi.GPIO
 aiohttp
-contextlog
 pyyaml
