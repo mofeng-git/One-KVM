@@ -8,14 +8,14 @@ from typing import Set
 from typing import Callable
 from typing import Optional
 
-from RPi import GPIO
-
 import aiohttp
 
 from .application import init
 
 from .atx import Atx
 from .streamer import Streamer
+
+from . import gpio
 
 
 # =====
@@ -41,8 +41,6 @@ class _Application:
         self.__loop = asyncio.get_event_loop()
         self.__sockets: Set[aiohttp.web.WebSocketResponse] = set()
         self.__sockets_lock = asyncio.Lock()
-
-        GPIO.setmode(GPIO.BCM)
 
         self.__atx = Atx(
             power_led=self.__config["atx"]["leds"]["pinout"]["power"],
@@ -112,11 +110,6 @@ class _Application:
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
         if self.__streamer.is_running():
             await self.__streamer.stop()
-
-        _logger.info("Cleaning up GPIO ...")
-        GPIO.cleanup()
-
-        _logger.info("Bye-bye")
 
     @_system_task
     async def __stream_controller(self) -> None:
@@ -189,4 +182,7 @@ class _Application:
 
 
 def main() -> None:
-    _Application(init()).run()
+    config = init()
+    with gpio.bcm():
+        _Application(config).run()
+    _logger.info("Bye-bye")

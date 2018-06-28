@@ -5,7 +5,7 @@ import logging
 from typing import Dict
 from typing import Optional
 
-from RPi import GPIO
+from . import gpio
 
 
 # =====
@@ -22,8 +22,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
-        self.__cap_power = self.__set_output_pin(cap_power)
-        self.__vga_power = self.__set_output_pin(vga_power)
+        self.__cap_power = gpio.set_output_zeroed(cap_power)
+        self.__vga_power = gpio.set_output_zeroed(vga_power)
         self.__sync_delay = sync_delay
 
         self.__cmd = (
@@ -35,11 +35,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__loop = loop
 
         self.__proc_task: Optional[asyncio.Task] = None
-
-    def __set_output_pin(self, pin: int) -> int:
-        GPIO.setup(pin, GPIO.OUT)
-        GPIO.output(pin, False)
-        return pin
 
     async def start(self) -> None:
         assert not self.__proc_task
@@ -60,10 +55,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     async def __set_hw_enabled(self, enabled: bool) -> None:
         # XXX: This sequence is very important for enable
-        GPIO.output(self.__cap_power, enabled)
+        gpio.write(self.__cap_power, enabled)
         if enabled:
             await asyncio.sleep(self.__sync_delay)
-        GPIO.output(self.__vga_power, enabled)
+        gpio.write(self.__vga_power, enabled)
         await asyncio.sleep(self.__sync_delay)
 
     async def __process(self) -> None:

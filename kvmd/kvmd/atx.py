@@ -3,7 +3,7 @@ import logging
 
 from typing import Tuple
 
-from RPi import GPIO
+from . import gpio
 
 
 # =====
@@ -21,29 +21,20 @@ class Atx:
         long_click_delay: float,
     ) -> None:
 
-        self.__power_led = self.__set_input_pin(power_led)
-        self.__hdd_led = self.__set_input_pin(hdd_led)
+        self.__power_led = gpio.set_input(power_led)
+        self.__hdd_led = gpio.set_input(hdd_led)
 
-        self.__power_switch = self.__set_output_pin(power_switch)
-        self.__reset_switch = self.__set_output_pin(reset_switch)
+        self.__power_switch = gpio.set_output_zeroed(power_switch)
+        self.__reset_switch = gpio.set_output_zeroed(reset_switch)
         self.__click_delay = click_delay
         self.__long_click_delay = long_click_delay
 
         self.__lock = asyncio.Lock()
 
-    def __set_input_pin(self, pin: int) -> int:
-        GPIO.setup(pin, GPIO.IN)
-        return pin
-
-    def __set_output_pin(self, pin: int) -> int:
-        GPIO.setup(pin, GPIO.OUT)
-        GPIO.output(pin, False)
-        return pin
-
     def get_leds(self) -> Tuple[bool, bool]:
         return (
-            not GPIO.input(self.__power_led),
-            not GPIO.input(self.__hdd_led),
+            not gpio.read(self.__power_led),
+            not gpio.read(self.__hdd_led),
         )
 
     async def click_power(self) -> None:
@@ -62,7 +53,7 @@ class Atx:
         if not self.__lock.locked():
             async with self.__lock:
                 for flag in (True, False):
-                    GPIO.output(pin, flag)
+                    gpio.write(pin, flag)
                     await asyncio.sleep(delay)
                     return True
         return False
