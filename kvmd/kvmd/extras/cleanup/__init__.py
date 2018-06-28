@@ -1,4 +1,6 @@
+import subprocess
 import logging
+import time
 
 from ...application import init
 
@@ -19,4 +21,13 @@ def main() -> None:
         ]:
             _logger.info("Writing value=0 to pin=%d (%s)", pin, key)
             gpio.write(pin, False)
+
+    _logger.info("Trying to find and kill mjpg_streamer ...")
+    try:
+        subprocess.check_output(["killall", "mjpg_streamer"], stderr=subprocess.STDOUT)
+        time.sleep(3)
+        subprocess.check_output(["killall", "-9", "mjpg_streamer"], stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError:
+        pass
+
     _logger.info("Bye-bye")
