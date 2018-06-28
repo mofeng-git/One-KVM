@@ -18,38 +18,39 @@ def main() -> None:
         loop = asyncio.get_event_loop()
 
         atx = Atx(
-            power_led=config["atx"]["leds"]["pinout"]["power"],
-            hdd_led=config["atx"]["leds"]["pinout"]["hdd"],
-            power_switch=config["atx"]["switches"]["pinout"]["power"],
-            reset_switch=config["atx"]["switches"]["pinout"]["reset"],
-            click_delay=config["atx"]["switches"]["click_delay"],
-            long_click_delay=config["atx"]["switches"]["long_click_delay"],
+            power_led=int(config["atx"]["leds"]["pinout"]["power"]),
+            hdd_led=int(config["atx"]["leds"]["pinout"]["hdd"]),
+            power_switch=int(config["atx"]["switches"]["pinout"]["power"]),
+            reset_switch=int(config["atx"]["switches"]["pinout"]["reset"]),
+            click_delay=float(config["atx"]["switches"]["click_delay"]),
+            long_click_delay=float(config["atx"]["switches"]["long_click_delay"]),
         )
 
         streamer = Streamer(
-            cap_power=config["video"]["pinout"]["cap"],
-            vga_power=config["video"]["pinout"]["vga"],
-            sync_delay=config["video"]["sync_delay"],
-            mjpg_streamer=config["video"]["mjpg_streamer"],
+            cap_power=int(config["video"]["pinout"]["cap"]),
+            conv_power=int(config["video"]["pinout"]["conv"]),
+            sync_delay=float(config["video"]["sync_delay"]),
+            cmd=str(config["video"]["cmd"]),
             loop=loop,
         )
 
         keyboard = Ps2Keyboard(
-            clock=config["keyboard"]["pinout"]["clock"],
-            data=config["keyboard"]["pinout"]["data"],
-            pulse=config["keyboard"]["pulse"],
+            clock=int(config["keyboard"]["pinout"]["clock"]),
+            data=int(config["keyboard"]["pinout"]["data"]),
+            pulse=float(config["keyboard"]["pulse"]),
         )
 
         Server(
             atx=atx,
             streamer=streamer,
             keyboard=keyboard,
-            heartbeat=config["server"]["heartbeat"],
-            atx_leds_poll=config["atx"]["leds"]["poll"],
-            video_shutdown_delay=config["video"]["shutdown_delay"],
+            heartbeat=float(config["server"]["heartbeat"]),
+            atx_leds_poll=float(config["atx"]["leds"]["poll"]),
+            video_shutdown_delay=float(config["video"]["shutdown_delay"]),
             loop=loop,
         ).run(
-            host=config["server"]["host"],
-            port=config["server"]["port"],
+            host=str(config["server"]["host"]),
+            port=int(config["server"]["port"]),
         )
+
     get_logger().info("Bye-bye")

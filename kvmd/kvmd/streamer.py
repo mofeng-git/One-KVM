@@ -1,7 +1,6 @@
 import asyncio
 import asyncio.subprocess
 
-from typing import Dict
 from typing import Optional
 
 from .logging import get_logger
@@ -14,21 +13,16 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         cap_power: int,
-        vga_power: int,
+        conv_power: int,
         sync_delay: float,
-        mjpg_streamer: Dict,
+        cmd: str,
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
         self.__cap_power = gpio.set_output(cap_power)
-        self.__vga_power = gpio.set_output(vga_power)
+        self.__conv_power = (gpio.set_output(conv_power) if conv_power > 0 else conv_power)
         self.__sync_delay = sync_delay
-
-        self.__cmd = (
-            "%(prog)s"
-            " -i 'input_uvc.so -d %(device)s -e %(every)s -y -n -r %(width)sx%(height)s'"
-            " -o 'output_http.so -p -l %(host)s %(port)s'"
-        ) % (mjpg_streamer)
+        self.__cmd = cmd
 
         self.__loop = loop
 
@@ -36,13 +30,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     async def start(self) -> None:
         assert not self.__proc_task
-        get_logger().info("Starting mjpg_streamer ...")
+        get_logger().info("Starting streamer ...")
         await self.__set_hw_enabled(True)
         self.__proc_task = self.__loop.create_task(self.__process())
 
     async def stop(self) -> None:
         assert self.__proc_task
-        get_logger().info("Stopping mjpg_streamer ...")
+        get_logger().info("Stopping streamer ...")
         self.__proc_task.cancel()
         await asyncio.gather(self.__proc_task, return_exceptions=True)
         await self.__set_hw_enabled(False)
@@ -52,11 +46,12 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         return bool(self.__proc_task)
 
     async def __set_hw_enabled(self, enabled: bool) -> None:
-        # XXX: This sequence is very important for enable
+        # XXX: This sequence is very important to enable converter and cap board
         gpio.write(self.__cap_power, enabled)
-        if enabled:
-            await asyncio.sleep(self.__sync_delay)
-        gpio.write(self.__vga_power, enabled)
+        if self.__conv_power > 0:
+            if enabled:
+                await asyncio.sleep(self.__sync_delay)
+            gpio.write(self.__conv_power, enabled)
         await asyncio.sleep(self.__sync_delay)
 
     async def __process(self) -> None:
@@ -70,13 +65,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                 )
-                logger.info("Started mjpg_streamer pid=%d: %s", proc.pid, self.__cmd)
+                logger.info("Started streamer pid=%d: %s", proc.pid, self.__cmd)
 
                 empty = 0
                 while proc.returncode is None:
                     line = (await proc.stdout.readline()).decode(errors="ignore").strip()
                     if line:
-                        logger.info("mjpg_streamer: %s", line)
+                        logger.info("streamer: %s", line)
                         empty = 0
                     else:
                         empty += 1
@@ -90,9 +85,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 break
             except Exception as err:
                 if proc:
-                    logger.exception("Unexpected finished mjpg_streamer pid=%d with retcode=%d", proc.pid, proc.returncode)
+                    logger.exception("Unexpected finished streamer pid=%d with retcode=%d", proc.pid, proc.returncode)
                 else:
-                    logger.exception("Can't start mjpg_streamer: %s", err)
+                    logger.exception("Can't start streamer: %s", err)
                 await asyncio.sleep(1)
 
         if proc:

@@ -18,8 +18,9 @@ def main() -> None:
             *config["atx"]["switches"]["pinout"].items(),
             *config["video"]["pinout"].items(),
         ]:
-            logger.info("Writing value=0 to pin=%d (%s)", pin, key)
-            gpio.write(pin, False)
+            if pin > 0:
+                logger.info("Writing value=0 to pin=%d (%s)", pin, key)
+                gpio.write(pin, False)
 
     logger.info("Trying to find and kill mjpg_streamer ...")
     try:

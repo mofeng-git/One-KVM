@@ -27,18 +27,12 @@ kvmd:
     video:
         pinout:
             cap: 21
-            vga: 25
+            conv: 25
         sync_delay: 1.0
+
         shutdown_delay: 10.0
 
-        mjpg_streamer:
-            prog: /usr/bin/mjpg_streamer
-            device: /dev/video0
-            width: 720
-            height: 576
-            every: 2
-            host: localhost
-            port: 8082
+        cmd: "/usr/bin/mjpg_streamer -i 'input_uvc.so -d /dev/video0 -e 2 -y -n -r 720x576' -o 'output_http.so -l localhost -p 8082'"
 
 logging:
     version: 1
@@ -46,7 +40,7 @@ logging:
 
     formatters:
         console:
-            (): contextlog.SmartFormatter
+            (): logging.Formatter
             style: "{"
             datefmt: "%H:%M:%S"
             format: "[{asctime}] {name:20.20} {levelname:>7} --- {message}"
