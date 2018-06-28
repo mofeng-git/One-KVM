@@ -1,0 +1,14 @@
+[Unit]
+Description=The main process of Pi-KVM
+After=network.target network-online.target nss-lookup.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+
+ExecStart=python -m kvmd --config /etc/kvmd.yaml
+ExecStopPost=python -m kvmd.extras.cleanup --config /etc/kvmd.yaml
+
+[Install]
+WantedBy=multi-user.target
