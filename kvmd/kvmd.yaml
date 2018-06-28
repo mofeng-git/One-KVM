@@ -2,7 +2,6 @@ kvmd:
     server:
         host: localhost
         port: 8081
-    ws:
         heartbeat: 3.0
 
     keyboard:

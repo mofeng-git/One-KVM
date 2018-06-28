@@ -3,7 +3,6 @@ import logging
 import time
 
 from typing import List
-from typing import Dict
 from typing import Set
 from typing import Callable
 from typing import Optional
@@ -23,7 +22,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _system_task(method: Callable) -> Callable:
-    async def wrap(self: "_Application") -> None:
+    async def wrap(self: "_Server") -> None:
         try:
             await method(self)
         except asyncio.CancelledError:
@@ -34,34 +33,30 @@ def _system_task(method: Callable) -> Callable:
     return wrap
 
 
-class _Application:
-    def __init__(self, config: Dict) -> None:
-        self.__config = config
+class _Server:  # pylint: disable=too-many-instance-attributes
+    def __init__(
+        self,
+        atx: Atx,
+        streamer: Streamer,
+        heartbeat: float,
+        atx_leds_poll: float,
+        video_shutdown_delay: float,
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
 
-        self.__loop = asyncio.get_event_loop()
+        self.__atx = atx
+        self.__streamer = streamer
+        self.__heartbeat = heartbeat
+        self.__video_shutdown_delay = video_shutdown_delay
+        self.__atx_leds_poll = atx_leds_poll
+        self.__loop = loop
+
         self.__sockets: Set[aiohttp.web.WebSocketResponse] = set()
         self.__sockets_lock = asyncio.Lock()
 
-        self.__atx = Atx(
-            power_led=self.__config["atx"]["leds"]["pinout"]["power"],
-            hdd_led=self.__config["atx"]["leds"]["pinout"]["hdd"],
-            power_switch=self.__config["atx"]["switches"]["pinout"]["power"],
-            reset_switch=self.__config["atx"]["switches"]["pinout"]["reset"],
-            click_delay=self.__config["atx"]["switches"]["click_delay"],
-            long_click_delay=self.__config["atx"]["switches"]["long_click_delay"],
-        )
-
-        self.__streamer = Streamer(
-            cap_power=self.__config["video"]["pinout"]["cap"],
-            vga_power=self.__config["video"]["pinout"]["vga"],
-            sync_delay=self.__config["video"]["sync_delay"],
-            mjpg_streamer=self.__config["video"]["mjpg_streamer"],
-            loop=self.__loop,
-        )
-
         self.__system_tasks: List[asyncio.Task] = []
 
-    def run(self) -> None:
+    def run(self, host: str, port: int) -> None:
         app = aiohttp.web.Application(loop=self.__loop)
         app.router.add_get("/", self.__root_handler)
         app.router.add_get("/ws", self.__ws_handler)
@@ -76,8 +71,8 @@ class _Application:
 
         aiohttp.web.run_app(
             app=app,
-            host=self.__config["server"]["host"],
-            port=self.__config["server"]["port"],
+            host=host,
+            port=port,
             print=(lambda text: [_logger.info(line.strip()) for line in text.strip().splitlines()]),  # type: ignore
         )
 
@@ -85,7 +80,7 @@ class _Application:
         return aiohttp.web.Response(text="OK")
 
     async def __ws_handler(self, request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
-        ws = aiohttp.web.WebSocketResponse(**self.__config["ws"])
+        ws = aiohttp.web.WebSocketResponse(heartbeat=self.__heartbeat)
         await ws.prepare(request)
         await self.__register_socket(ws)
         async for msg in ws:
@@ -121,7 +116,7 @@ class _Application:
                 if not self.__streamer.is_running():
                     await self.__streamer.start()
             elif prev > 0 and cur == 0:
-                shutdown_at = time.time() + self.__config["video"]["shutdown_delay"]
+                shutdown_at = time.time() + self.__video_shutdown_delay
             elif prev == 0 and cur == 0 and time.time() > shutdown_at:
                 if self.__streamer.is_running():
                     await self.__streamer.stop()
@@ -141,7 +136,7 @@ class _Application:
         while True:
             if self.__sockets:
                 await self.__broadcast("EVENT atx_leds %d %d" % (self.__atx.get_leds()))
-            await asyncio.sleep(self.__config["atx"]["leds"]["poll"])
+            await asyncio.sleep(self.__atx_leds_poll)
 
     async def __broadcast(self, msg: str) -> None:
         await asyncio.gather(*[
@@ -184,5 +179,34 @@ class _Application:
 def main() -> None:
     config = init()
     with gpio.bcm():
-        _Application(config).run()
+        loop = asyncio.get_event_loop()
+
+        atx = Atx(
+            power_led=config["atx"]["leds"]["pinout"]["power"],
+            hdd_led=config["atx"]["leds"]["pinout"]["hdd"],
+            power_switch=config["atx"]["switches"]["pinout"]["power"],
+            reset_switch=config["atx"]["switches"]["pinout"]["reset"],
+            click_delay=config["atx"]["switches"]["click_delay"],
+            long_click_delay=config["atx"]["switches"]["long_click_delay"],
+        )
+
+        streamer = Streamer(
+            cap_power=config["video"]["pinout"]["cap"],
+            vga_power=config["video"]["pinout"]["vga"],
+            sync_delay=config["video"]["sync_delay"],
+            mjpg_streamer=config["video"]["mjpg_streamer"],
+            loop=loop,
+        )
+
+        _Server(
+            atx=atx,
+            streamer=streamer,
+            heartbeat=config["server"]["heartbeat"],
+            atx_leds_poll=config["atx"]["leds"]["poll"],
+            video_shutdown_delay=config["video"]["shutdown_delay"],
+            loop=loop,
+        ).run(
+            host=config["server"]["host"],
+            port=config["server"]["port"],
+        )
     _logger.info("Bye-bye")
