@@ -21,8 +21,8 @@ class Atx:
         long_click_delay: float,
     ) -> None:
 
-        self.__power_led = self.__set_output_pin(power_led)
-        self.__hdd_led = self.__set_output_pin(hdd_led)
+        self.__power_led = self.__set_input_pin(power_led)
+        self.__hdd_led = self.__set_input_pin(hdd_led)
 
         self.__power_switch = self.__set_output_pin(power_switch)
         self.__reset_switch = self.__set_output_pin(reset_switch)
@@ -30,6 +30,10 @@ class Atx:
         self.__long_click_delay = long_click_delay
 
         self.__lock = asyncio.Lock()
+
+    def __set_input_pin(self, pin: int) -> int:
+        GPIO.setup(pin, GPIO.IN)
+        return pin
 
     def __set_output_pin(self, pin: int) -> int:
         GPIO.setup(pin, GPIO.OUT)

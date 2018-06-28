@@ -47,7 +47,3 @@ def main() -> None:
     loop.add_signal_handler(signal.SIGINT, loop.stop)
     loop.create_task(_run_client(loop, options.url))
     loop.run_forever()
-
-
-if __name__ == "__main__":
-    main()
