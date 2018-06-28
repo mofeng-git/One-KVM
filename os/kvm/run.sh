@@ -7,13 +7,11 @@ set -x
 
 cat config.txt > "$FS/boot/config.txt"
 pkg_install \
-	python \
-	python-pyaml \
-	python-aiohttp \
-	python-raspberry-gpio \
+	kvmd \
 	mjpg-streamer-pikvm \
 	nginx
 
 cp index.html "$FS/srv/http/"
 cp nginx.conf "$FS/etc/nginx/"
+rpi systemctl enable kvmd
 rpi systemctl enable nginx
