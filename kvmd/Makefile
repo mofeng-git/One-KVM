@@ -18,7 +18,7 @@ tox:
 	tox
 
 bump:
-	bumpversion patch
+	bumpversion minor
 
 push:
 	git push
