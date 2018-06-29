@@ -67,18 +67,13 @@ class Server:  # pylint: disable=too-many-instance-attributes
         app.on_cleanup.append(self.__on_cleanup)
 
         self.__system_tasks.extend([
-            self.__loop.create_task(self.__monitor_keyboard()),
+            self.__loop.create_task(self.__keyboard_watchdog()),
             self.__loop.create_task(self.__stream_controller()),
             self.__loop.create_task(self.__poll_dead_sockets()),
             self.__loop.create_task(self.__poll_atx_leds()),
         ])
 
-        aiohttp.web.run_app(
-            app=app,
-            host=host,
-            port=port,
-            print=(lambda text: [get_logger().info(line.strip()) for line in text.strip().splitlines()]),  # type: ignore
-        )
+        aiohttp.web.run_app(app, host=host, port=port, print=self.__run_app_print)
 
     async def __root_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response(text="OK")
@@ -95,6 +90,11 @@ class Server:  # pylint: disable=too-many-instance-attributes
             else:
                 break
         return ws
+
+    def __run_app_print(self, text: str) -> None:
+        logger = get_logger()
+        for line in text.strip().splitlines():
+            logger.info(line.strip())
 
     async def __on_shutdown(self, _: aiohttp.web.Application) -> None:
         logger = get_logger(0)
@@ -115,7 +115,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await self.__streamer.stop()
 
     @_system_task
-    async def __monitor_keyboard(self) -> None:
+    async def __keyboard_watchdog(self) -> None:
         while self.__keyboard.is_alive():
             await asyncio.sleep(0.1)
         raise RuntimeError("Keyboard dead")
