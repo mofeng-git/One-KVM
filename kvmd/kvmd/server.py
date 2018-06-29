@@ -55,6 +55,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         self.__system_tasks: List[asyncio.Task] = []
 
+        self.__restart_video = False
+
     def run(self, host: str, port: int) -> None:
         self.__keyboard.start()
 
@@ -122,6 +124,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __stream_controller(self) -> None:
         prev = 0
         shutdown_at = 0.0
+
         while True:
             cur = len(self.__sockets)
             if prev == 0 and cur > 0:
@@ -132,6 +135,13 @@ class Server:  # pylint: disable=too-many-instance-attributes
             elif prev == 0 and cur == 0 and time.time() > shutdown_at:
                 if self.__streamer.is_running():
                     await self.__streamer.stop()
+
+            if self.__restart_video:
+                if self.__streamer.is_running():
+                    await self.__streamer.stop()
+                    await self.__streamer.start()
+                self.__restart_video = False
+
             prev = cur
             await asyncio.sleep(0.1)
 
@@ -168,6 +178,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
             if method:
                 await method()
                 return None
+        elif command == "RESTART_VIDEO":
+            self.__restart_video = True
+            return None
         get_logger().warning("Received an incorrect command: %r", command)
         return "ERROR incorrect command"
 
