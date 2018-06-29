@@ -22,7 +22,6 @@ def bcm() -> Generator[None, None, None]:
 
 def set_output(pin: int, initial: bool=False) -> int:
     GPIO.setup(pin, GPIO.OUT, initial=initial)
-    GPIO.output(pin, False)
     return pin
 
 
