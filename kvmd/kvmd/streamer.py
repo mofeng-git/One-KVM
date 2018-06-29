@@ -1,6 +1,7 @@
 import asyncio
 import asyncio.subprocess
 
+from typing import List
 from typing import Optional
 
 from .logging import get_logger
@@ -15,9 +16,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         cap_power: int,
         conv_power: int,
         sync_delay: float,
-        cmd: str,
+        cmd: List[str],
         loop: asyncio.AbstractEventLoop,
     ) -> None:
+
+        assert cmd, cmd
 
         self.__cap_power = gpio.set_output(cap_power)
         self.__conv_power = (gpio.set_output(conv_power) if conv_power > 0 else conv_power)
@@ -60,8 +63,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         while True:  # pylint: disable=too-many-nested-blocks
             proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
             try:
-                proc = await asyncio.create_subprocess_shell(
-                    self.__cmd,
+                proc = await asyncio.create_subprocess_exec(
+                    *self.__cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                 )
@@ -105,7 +108,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                     if proc.returncode is not None:
                         raise
             await proc.wait()
-            get_logger().info("Streamer killed: pid=%d; retcode=%d")
+            get_logger().info("Streamer killed: pid=%d; retcode=%d", proc.pid, proc.returncode)
         except Exception:
             if proc.returncode is None:
                 get_logger().exception("Can't kill streamer pid=%d", proc.pid)

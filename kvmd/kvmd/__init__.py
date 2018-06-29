@@ -30,7 +30,7 @@ def main() -> None:
             cap_power=int(config["video"]["pinout"]["cap"]),
             conv_power=int(config["video"]["pinout"]["conv"]),
             sync_delay=float(config["video"]["sync_delay"]),
-            cmd=str(config["video"]["cmd"]),
+            cmd=list(map(str, config["video"]["cmd"])),
             loop=loop,
         )
 
