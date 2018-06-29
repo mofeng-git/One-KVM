@@ -18,6 +18,9 @@ format: pi-builder
 install: pi-builder
 	cd pi-builder && make install
 
+scan: pi-builder
+	cd pi-builder && make scan
+
 clean: pi-builder
 	cd pi-builder && make clean
 
