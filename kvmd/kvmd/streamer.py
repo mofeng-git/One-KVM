@@ -57,8 +57,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     async def __process(self) -> None:
         logger = get_logger(0)
 
-        proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
-        while True:
+        while True:  # pylint: disable=too-many-nested-blocks
+            proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
             try:
                 proc = await asyncio.create_subprocess_shell(
                     self.__cmd,
@@ -78,27 +78,36 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                         if empty == 100:  # asyncio bug
                             break
 
-                await self.__kill(proc)
                 raise RuntimeError("WTF")
 
             except asyncio.CancelledError:
                 break
+
             except Exception as err:
                 if proc:
-                    logger.exception("Unexpected finished streamer pid=%d with retcode=%d", proc.pid, proc.returncode)
+                    logger.exception("Unexpected streamer error: pid=%d", proc.pid)
                 else:
                     logger.exception("Can't start streamer: %s", err)
                 await asyncio.sleep(1)
 
-        if proc:
-            await self.__kill(proc)
+            finally:
+                if proc and proc.returncode is None:
+                    await self.__kill(proc)
 
     async def __kill(self, proc: asyncio.subprocess.Process) -> None:  # pylint: disable=no-member
         try:
             proc.terminate()
             await asyncio.sleep(1)
             if proc.returncode is None:
-                proc.kill()
+                try:
+                    proc.kill()
+                except Exception:
+                    if proc.returncode is not None:
+                        raise
             await proc.wait()
+            get_logger().info("Streamer killed: pid=%d; retcode=%d")
         except Exception:
-            pass
+            if proc.returncode is None:
+                get_logger().exception("Can't kill streamer pid=%d", proc.pid)
+            else:
+                get_logger().info("Streamer killed: pid=%d; retcode=%d", proc.pid, proc.returncode)
