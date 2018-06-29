@@ -22,6 +22,8 @@ def main() -> None:
         packages=[
             "kvmd",
             "kvmd.extras",
+            "kvmd.extras.cleanup",
+            "kvmd.extras.wscli",
         ],
 
         entry_points={
