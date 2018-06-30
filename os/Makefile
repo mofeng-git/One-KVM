@@ -2,7 +2,7 @@ all:
 	cat Makefile
 
 v1:
-	make _pikvm PIKVM=v1
+	make _pikvm PIKVM_PLATFORM=v1
 
 _pikvm: pi-builder
 	rm -rf pi-builder/builder/scripts/pikvm
