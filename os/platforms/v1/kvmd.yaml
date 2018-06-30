@@ -1,0 +1,63 @@
+kvmd:
+    server:
+        host: localhost
+        port: 8081
+        heartbeat: 3.0
+
+    keyboard:
+        pinout:
+            clock: 17
+            data: 4
+        pulse: 0.0002
+
+    atx:
+        leds:
+            pinout:
+                power: 16
+                hdd: 12
+            poll: 0.1
+
+        switches:
+            pinout:
+                power: 26
+                reset: 20
+            click_delay: 0.1
+            long_click_delay: 5.5
+
+    video:
+        pinout:
+            cap: 21
+            conv: 25
+        sync_delay: 1.0
+
+        shutdown_delay: 10.0
+
+        cmd:
+            - "/usr/bin/mjpg_streamer"
+            - "-i"
+            - "input_uvc.so -d /dev/video0 -e 2 -y -n -r 720x576"
+            - "-o"
+            - "output_http.so -l localhost -p 8082"
+
+logging:
+    version: 1
+    disable_existing_loggers: false
+
+    formatters:
+        console:
+            (): logging.Formatter
+            style: "{"
+            datefmt: "%H:%M:%S"
+            format: "[{asctime}] {name:20.20} {levelname:>7} --- {message}"
+
+    handlers:
+        console:
+            level: DEBUG
+            class: logging.StreamHandler
+            stream: ext://sys.stdout
+            formatter: console
+
+    root:
+        level: INFO
+        handlers:
+            - console

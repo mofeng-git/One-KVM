@@ -1,16 +1,19 @@
 all:
 	cat Makefile
 
-pi-builder:
-	git clone https://github.com/mdevaev/pi-builder --depth=1
+v1:
+	make _pikvm PIKVM=v1
 
-pi-kvm: pi-builder
-	rm -rf pi-builder/builder/scripts/kvm
-	cp -a kvm pi-builder/builder/scripts
+_pikvm: pi-builder
+	rm -rf pi-builder/builder/scripts/pikvm
+	cp -a platforms/$(PIKVM_PLATFORM) pi-builder/builder/scripts/pikvm
 	cd pi-builder && make _rpi \
 		PLATFORM=rpi-2 \
-		BUILDER=kvm-builder \
-		STAGES="base keys watchdog ro kvm"
+		BUILDER=pikvm-builder \
+		STAGES="base keys watchdog ro pikvm"
+
+pi-builder:
+	git clone https://github.com/mdevaev/pi-builder --depth=1
 
 format: pi-builder
 	cd pi-builder && make format

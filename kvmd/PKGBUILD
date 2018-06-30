@@ -15,7 +15,6 @@ depends=(
 	"python-aiohttp"
 	"python-raspberry-gpio"
 )
-backup=("etc/kvmd.yaml")
 makedepends=("python-setuptools" "wget")
 
 
@@ -37,7 +36,5 @@ build() {
 package() {
 	cd $srcdir/$pkgname-build
 	python setup.py install --root=$pkgdir
-
-	install -Dm644 kvmd.yaml $pkgdir/etc/kvmd.yaml
 	install -Dm644 kvmd.service "$pkgdir"/usr/lib/systemd/system/kvmd.service
 }
