@@ -1,3 +1,4 @@
+import os
 import subprocess
 import time
 
@@ -20,13 +21,14 @@ def main() -> None:
         ]:
             if pin > 0:
                 logger.info("Writing value=0 to pin=%d (%s)", pin, key)
-                gpio.write(pin, False)
+                gpio.set_output(pin, initial=False)
 
-    logger.info("Trying to find and kill mjpg_streamer ...")
+    streamer = os.path.basename(config["video"]["cmd"][0])
+    logger.info("Trying to find and kill %r ...", streamer)
     try:
-        subprocess.check_output(["killall", "mjpg_streamer"], stderr=subprocess.STDOUT)
+        subprocess.check_output(["killall", streamer], stderr=subprocess.STDOUT)
         time.sleep(3)
-        subprocess.check_output(["killall", "-9", "mjpg_streamer"], stderr=subprocess.STDOUT)
+        subprocess.check_output(["killall", "-9", streamer], stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError:
         pass
 
