@@ -159,9 +159,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
         if to == "kvm":
             await self.__msd.connect_to_kvm()
             await self.__broadcast_event("msd_state", state="connected_to_kvm")  # type: ignore
-        elif to == "pc":
+        elif to == "server":
             await self.__msd.connect_to_pc()
-            await self.__broadcast_event("msd_state", state="connected_to_pc")  # type: ignore
+            await self.__broadcast_event("msd_state", state="connected_to_server")  # type: ignore
         else:
             raise RuntimeError("Missing or invalid 'to=%s'" % (to))
         return _json_200(self.__msd.get_state())

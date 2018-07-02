@@ -30,7 +30,7 @@ class IsNotOperationalError(MassStorageError):
 
 class AlreadyConnectedToPcError(MassStorageError):
     def __init__(self) -> None:
-        super().__init__("Mass-storage is already connected to PC")
+        super().__init__("Mass-storage is already connected to Server")
 
 
 class AlreadyConnectedToKvmError(MassStorageError):
@@ -180,12 +180,12 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             raise AlreadyConnectedToPcError()
         # TODO: enable gpio
         self.__device_info = None
-        get_logger().info("Mass-storage device switched to PC")
+        get_logger().info("Mass-storage device switched to Server")
 
     def get_state(self) -> Dict:
         return {
             "in_operate": bool(self._bind),
-            "connected_to": ("kvm" if self.__device_info else "pc"),
+            "connected_to": ("kvm" if self.__device_info else "server"),
             "is_busy": bool(self._device_file),
             "writed": self.__writed,
             "info": (self.__device_info._asdict() if self.__device_info else None),
