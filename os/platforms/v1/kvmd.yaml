@@ -8,21 +8,20 @@ kvmd:
         pinout:
             clock: 17
             data: 4
+
         pulse: 0.0002
 
     atx:
-        leds:
-            pinout:
-                power: 16
-                hdd: 12
-            poll: 0.1
+        pinout:
+            power_led: 16
+            hdd_led: 12
+            power_switch: 26
+            reset_switch: 20
 
-        switches:
-            pinout:
-                power: 26
-                reset: 20
-            click_delay: 0.1
-            long_click_delay: 5.5
+        click_delay: 0.1
+        long_click_delay: 5.5
+
+        state_poll: 0.1
 
     msd:
         # FIXME: It's for laptop lol
@@ -30,17 +29,21 @@ kvmd:
         init_delay: 2.0
         chunk_size: 8192
 
-    video:
+    streamer:
         pinout:
             cap: 21
             conv: 25
         sync_delay: 1.0
         shutdown_delay: 10.0
 
+        size:
+            width: 720
+            height: 576
+
         cmd:
             - "/usr/bin/mjpg_streamer"
             - "-i"
-            - "input_uvc.so -d /dev/video0 -e 2 -y -n -r 720x576"
+            - "input_uvc.so -d /dev/video0 -e 2 -y -n -r {width}x{height}"
             - "-o"
             - "output_http.so -l localhost -p 8082"
 

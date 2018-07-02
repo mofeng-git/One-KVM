@@ -25,12 +25,12 @@ def main() -> None:
         )
 
         atx = Atx(
-            power_led=int(config["atx"]["leds"]["pinout"]["power"]),
-            hdd_led=int(config["atx"]["leds"]["pinout"]["hdd"]),
-            power_switch=int(config["atx"]["switches"]["pinout"]["power"]),
-            reset_switch=int(config["atx"]["switches"]["pinout"]["reset"]),
-            click_delay=float(config["atx"]["switches"]["click_delay"]),
-            long_click_delay=float(config["atx"]["switches"]["long_click_delay"]),
+            power_led=int(config["atx"]["pinout"]["power_led"]),
+            hdd_led=int(config["atx"]["pinout"]["hdd_led"]),
+            power_switch=int(config["atx"]["pinout"]["power_switch"]),
+            reset_switch=int(config["atx"]["pinout"]["reset_switch"]),
+            click_delay=float(config["atx"]["click_delay"]),
+            long_click_delay=float(config["atx"]["long_click_delay"]),
         )
 
         msd = MassStorageDevice(
@@ -40,10 +40,12 @@ def main() -> None:
         )
 
         streamer = Streamer(
-            cap_power=int(config["video"]["pinout"]["cap"]),
-            conv_power=int(config["video"]["pinout"]["conv"]),
-            sync_delay=float(config["video"]["sync_delay"]),
-            cmd=list(map(str, config["video"]["cmd"])),
+            cap_power=int(config["streamer"]["pinout"]["cap"]),
+            conv_power=int(config["streamer"]["pinout"]["conv"]),
+            sync_delay=float(config["streamer"]["sync_delay"]),
+            width=int(config["streamer"]["size"]["width"]),
+            height=int(config["streamer"]["size"]["height"]),
+            cmd=list(map(str, config["streamer"]["cmd"])),
             loop=loop,
         )
 
@@ -53,8 +55,8 @@ def main() -> None:
             msd=msd,
             streamer=streamer,
             heartbeat=float(config["server"]["heartbeat"]),
-            atx_leds_poll=float(config["atx"]["leds"]["poll"]),
-            video_shutdown_delay=float(config["video"]["shutdown_delay"]),
+            atx_state_poll=float(config["atx"]["state_poll"]),
+            streamer_shutdown_delay=float(config["streamer"]["shutdown_delay"]),
             msd_chunk_size=int(config["msd"]["chunk_size"]),
             loop=loop,
         ).run(

@@ -2,6 +2,7 @@ import asyncio
 import asyncio.subprocess
 
 from typing import List
+from typing import Dict
 from typing import Optional
 
 from .logging import get_logger
@@ -16,6 +17,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         cap_power: int,
         conv_power: int,
         sync_delay: float,
+        width: int,
+        height: int,
         cmd: List[str],
         loop: asyncio.AbstractEventLoop,
     ) -> None:
@@ -25,7 +28,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__cap_power = gpio.set_output(cap_power)
         self.__conv_power = (gpio.set_output(conv_power) if conv_power > 0 else conv_power)
         self.__sync_delay = sync_delay
-        self.__cmd = cmd
+        self.__width = width
+        self.__height = height
+        self.__cmd = [part.format(width=width, height=height) for part in cmd]
 
         self.__loop = loop
 
@@ -47,6 +52,15 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     def is_running(self) -> bool:
         return bool(self.__proc_task)
+
+    def get_state(self) -> Dict:
+        return {
+            "is_running": self.is_running(),
+            "size": {
+                "width": self.__width,
+                "height": self.__height,
+            },
+        }
 
     async def cleanup(self) -> None:
         if self.is_running():

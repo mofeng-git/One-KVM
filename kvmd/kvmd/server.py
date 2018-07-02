@@ -1,9 +1,11 @@
 import os
 import signal
 import asyncio
+import json
 import time
 
 from typing import List
+from typing import Dict
 from typing import Set
 from typing import Callable
 from typing import Optional
@@ -38,17 +40,27 @@ def _system_task(method: Callable) -> Callable:
 
 def _exceptions_as_400(msg: str, exceptions: List[Type[Exception]]) -> Callable:
     def make_wrapper(method: Callable) -> Callable:
-        async def wrap(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
+        async def wrap(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
             try:
                 return (await method(self, request))
             except tuple(exceptions) as err:  # pylint: disable=catching-non-exception
                 get_logger().exception(msg)
                 return aiohttp.web.json_response({
-                    "error": type(err).__name__,
-                    "error_msg": str(err),
+                    "ok": False,
+                    "result": {
+                        "error": type(err).__name__,
+                        "error_msg": str(err),
+                    },
                 }, status=400)
         return wrap
     return make_wrapper
+
+
+def _json_200(result: Optional[Dict]=None) -> aiohttp.web.Response:
+    return aiohttp.web.json_response({
+        "ok": True,
+        "result": (result or {}),
+    })
 
 
 class Server:  # pylint: disable=too-many-instance-attributes
@@ -59,8 +71,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
         msd: MassStorageDevice,
         streamer: Streamer,
         heartbeat: float,
-        atx_leds_poll: float,
-        video_shutdown_delay: float,
+        atx_state_poll: float,
+        streamer_shutdown_delay: float,
         msd_chunk_size: int,
         loop: asyncio.AbstractEventLoop,
     ) -> None:
@@ -70,8 +82,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__msd = msd
         self.__streamer = streamer
         self.__heartbeat = heartbeat
-        self.__video_shutdown_delay = video_shutdown_delay
-        self.__atx_leds_poll = atx_leds_poll
+        self.__streamer_shutdown_delay = streamer_shutdown_delay
+        self.__atx_state_poll = atx_state_poll
         self.__msd_chunk_size = msd_chunk_size
         self.__loop = loop
 
@@ -80,17 +92,25 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         self.__system_tasks: List[asyncio.Task] = []
 
-        self.__restart_video = False
+        self.__reset_streamer = False
 
     def run(self, host: str, port: int) -> None:
         self.__keyboard.start()
 
         app = aiohttp.web.Application(loop=self.__loop)
-        app.router.add_get("/", self.__root_handler)
+
         app.router.add_get("/ws", self.__ws_handler)
+
+        app.router.add_get("/atx", self.__atx_state_handler)
+        app.router.add_post("/atx/click", self.__atx_click_handler)
+
         app.router.add_get("/msd", self.__msd_state_handler)
         app.router.add_post("/msd/connect", self.__msd_connect_handler)
         app.router.add_post("/msd/write", self.__msd_write_handler)
+
+        app.router.add_get("/streamer", self.__streamer_state_handler)
+        app.router.add_post("/streamer/reset", self.__streamer_reset_handler)
+
         app.on_shutdown.append(self.__on_shutdown)
         app.on_cleanup.append(self.__on_cleanup)
 
@@ -98,13 +118,10 @@ class Server:  # pylint: disable=too-many-instance-attributes
             self.__loop.create_task(self.__keyboard_watchdog()),
             self.__loop.create_task(self.__stream_controller()),
             self.__loop.create_task(self.__poll_dead_sockets()),
-            self.__loop.create_task(self.__poll_atx_leds()),
+            self.__loop.create_task(self.__poll_atx_state()),
         ])
 
         aiohttp.web.run_app(app, host=host, port=port, print=self.__run_app_print)
-
-    async def __root_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return aiohttp.web.Response(text="OK")
 
     async def __ws_handler(self, request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
         ws = aiohttp.web.WebSocketResponse(heartbeat=self.__heartbeat)
@@ -112,30 +129,44 @@ class Server:  # pylint: disable=too-many-instance-attributes
         await self.__register_socket(ws)
         async for msg in ws:
             if msg.type == aiohttp.web.WSMsgType.TEXT:
-                retval = await self.__execute_command(msg.data)
-                if retval:
-                    await ws.send_str(retval)
+                await ws.send_str(json.dumps({"msg_type": "echo", "msg": msg.data}))
             else:
                 break
         return ws
 
+    async def __atx_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        return _json_200(self.__atx.get_state())
+
+    @_exceptions_as_400("Click error", [RuntimeError])
+    async def __atx_click_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        button = request.query.get("button")
+        if button == "power":
+            await self.__atx.click_power()
+        elif button == "power_long":
+            await self.__atx.click_power_long()
+        elif button == "reset":
+            await self.__atx.click_reset()
+        else:
+            raise RuntimeError("Missing or invalid 'button=%s'" % (button))
+        return _json_200({"clicked": button})
+
     async def __msd_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return aiohttp.web.json_response(self.__msd.get_state())
+        return _json_200(self.__msd.get_state())
 
     @_exceptions_as_400("Mass-storage error", [MassStorageError, RuntimeError])
     async def __msd_connect_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         to = request.query.get("to")
         if to == "kvm":
             await self.__msd.connect_to_kvm()
-            await self.__broadcast("EVENT msd connected_to_kvm")
+            await self.__broadcast_event("msd_state", state="connected_to_kvm")  # type: ignore
         elif to == "pc":
             await self.__msd.connect_to_pc()
-            await self.__broadcast("EVENT msd connected_to_pc")
+            await self.__broadcast_event("msd_state", state="connected_to_pc")  # type: ignore
         else:
             raise RuntimeError("Missing or invalid 'to=%s'" % (to))
-        return aiohttp.web.json_response(self.__msd.get_state())
+        return _json_200(self.__msd.get_state())
 
-    @_exceptions_as_400("Can't write image to mass-storage device", [MassStorageError, RuntimeError, OSError])
+    @_exceptions_as_400("Can't write data to mass-storage device", [MassStorageError, RuntimeError, OSError])
     async def __msd_write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         logger = get_logger(0)
         reader = await request.multipart()
@@ -146,18 +177,25 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 raise RuntimeError("Missing 'data' field")
 
             async with self.__msd:
-                await self.__broadcast("EVENT msd busy")
+                await self.__broadcast_event("msd_state", state="busy")  # type: ignore
                 logger.info("Writing image to mass-storage device ...")
                 while True:
                     chunk = await field.read_chunk(self.__msd_chunk_size)
                     if not chunk:
                         break
                     writed = await self.__msd.write(chunk)
-            await self.__broadcast("EVENT msd free")
+            await self.__broadcast_event("msd_state", state="free")  # type: ignore
         finally:
             if writed != 0:
                 logger.info("Writed %d bytes to mass-storage device", writed)
-        return aiohttp.web.json_response({"writed": writed})
+        return _json_200({"writed": writed})
+
+    async def __streamer_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        return _json_200(self.__streamer.get_state())
+
+    async def __streamer_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        self.__reset_streamer = True
+        return _json_200()
 
     def __run_app_print(self, text: str) -> None:
         logger = get_logger()
@@ -198,16 +236,16 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 if not self.__streamer.is_running():
                     await self.__streamer.start()
             elif prev > 0 and cur == 0:
-                shutdown_at = time.time() + self.__video_shutdown_delay
+                shutdown_at = time.time() + self.__streamer_shutdown_delay
             elif prev == 0 and cur == 0 and time.time() > shutdown_at:
                 if self.__streamer.is_running():
                     await self.__streamer.stop()
 
-            if self.__restart_video:
+            if self.__reset_streamer:
                 if self.__streamer.is_running():
                     await self.__streamer.stop()
                     await self.__streamer.start()
-                self.__restart_video = False
+                self.__reset_streamer = False
 
             prev = cur
             await asyncio.sleep(0.1)
@@ -221,35 +259,24 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await asyncio.sleep(0.1)
 
     @_system_task
-    async def __poll_atx_leds(self) -> None:
+    async def __poll_atx_state(self) -> None:
         while True:
             if self.__sockets:
-                await self.__broadcast("EVENT atx_leds %d %d" % (self.__atx.get_leds()))
-            await asyncio.sleep(self.__atx_leds_poll)
+                await self.__broadcast_event("atx_state", **self.__atx.get_state())
+            await asyncio.sleep(self.__atx_state_poll)
 
-    async def __broadcast(self, msg: str) -> None:
+    async def __broadcast_event(self, event: str, **kwargs: Dict) -> None:
         await asyncio.gather(*[
-            ws.send_str(msg)
+            ws.send_str(json.dumps({
+                "msg_type": "event",
+                "msg": {
+                    "event": event,
+                    "event_attrs": kwargs,
+                },
+            }))
             for ws in list(self.__sockets)
             if not ws.closed and ws._req.transport  # pylint: disable=protected-access
         ], return_exceptions=True)
-
-    async def __execute_command(self, command: str) -> Optional[str]:
-        (command, args) = (command.strip().split(" ", maxsplit=1) + [""])[:2]
-        if command == "CLICK":
-            method = {
-                "power": self.__atx.click_power,
-                "power_long": self.__atx.click_power_long,
-                "reset": self.__atx.click_reset,
-            }.get(args)
-            if method:
-                await method()
-                return None
-        elif command == "RESTART_VIDEO":
-            self.__restart_video = True
-            return None
-        get_logger().warning("Received an incorrect command: %r", command)
-        return "ERROR incorrect command"
 
     async def __register_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:

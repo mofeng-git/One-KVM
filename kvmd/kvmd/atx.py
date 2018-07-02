@@ -1,6 +1,6 @@
 import asyncio
 
-from typing import Tuple
+from typing import Dict
 
 from .logging import get_logger
 
@@ -29,11 +29,13 @@ class Atx:
 
         self.__lock = asyncio.Lock()
 
-    def get_leds(self) -> Tuple[bool, bool]:
-        return (
-            not gpio.read(self.__power_led),
-            not gpio.read(self.__hdd_led),
-        )
+    def get_state(self) -> Dict:
+        return {
+            "leds": {
+                "power": (not gpio.read(self.__power_led)),
+                "hdd": (not gpio.read(self.__hdd_led)),
+            },
+        }
 
     async def click_power(self) -> None:
         if (await self.__click(self.__power_switch, self.__click_delay)):

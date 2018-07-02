@@ -118,8 +118,12 @@ class MassStorageDevice:
             get_logger().info("Using bind %r as mass-storage device", self._bind)
             try:
                 loop.run_until_complete(self.connect_to_kvm(no_delay=True))
-            except Exception:
-                get_logger().exception("Mass-storage device is not operational")
+            except Exception as err:
+                if isinstance(err, MassStorageError):
+                    log = get_logger().warning
+                else:
+                    log = get_logger().exception
+                log("Mass-storage device is not operational: %s", err)
                 self._bind = ""
         else:
             get_logger().warning("Missing bind; mass-storage device is not operational")
@@ -133,7 +137,7 @@ class MassStorageDevice:
             await asyncio.sleep(self.__init_delay)
         path = locate_by_bind(self._bind)
         if not path:
-            raise RuntimeError("Can't locate device by bind %r" % (self._bind))
+            raise MassStorageError("Can't locate device by bind %r" % (self._bind))
         self.__device_info = explore_device(path)
         get_logger().info("Mass-storage device switched to KVM: %s", self.__device_info)
 
