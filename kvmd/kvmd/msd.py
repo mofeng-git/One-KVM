@@ -107,6 +107,7 @@ class MassStorageDevice:
     def __init__(self, bind: str, init_delay: float, loop: asyncio.AbstractEventLoop) -> None:
         self._bind = bind
         self.__init_delay = init_delay
+        self.__loop = loop
 
         self.__device_info: Optional[DeviceInfo] = None
         self._lock = asyncio.Lock()
@@ -172,7 +173,7 @@ class MassStorageDevice:
             size = len(data)
             await self._device_file.write(data)
             await self._device_file.flush()
-            os.fsync(self._device_file.fileno())
+            await self.__loop.run_in_executor(None, os.fsync, self._device_file.fileno())
             self.__writed += size
             return self.__writed
 
