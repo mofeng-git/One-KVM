@@ -22,27 +22,27 @@ class MassStorageError(Exception):
     pass
 
 
-class MassStorageIsNotOperationalError(MassStorageError):
+class IsNotOperationalError(MassStorageError):
     def __init__(self) -> None:
         super().__init__("Missing bind for mass-storage device")
 
 
-class MassStorageAlreadyConnectedToPcError(MassStorageError):
+class AlreadyConnectedToPcError(MassStorageError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is already connected to PC")
 
 
-class MassStorageAlreadyConnectedToKvmError(MassStorageError):
+class AlreadyConnectedToKvmError(MassStorageError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is already connected to KVM")
 
 
-class MassStorageIsNotConnectedToKvmError(MassStorageError):
+class IsNotConnectedToKvmError(MassStorageError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is not connected to KVM")
 
 
-class MassStorageIsBusyError(MassStorageError):
+class IsBusyError(MassStorageError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is busy (write in progress)")
 
@@ -95,9 +95,9 @@ def locate_by_bind(bind: str) -> str:
 def _operated_and_locked(method: Callable) -> Callable:
     async def wrap(self: "MassStorageDevice", *args: Any, **kwargs: Any) -> Any:
         if self._device_file:  # pylint: disable=protected-access
-            raise MassStorageIsBusyError()
+            raise IsBusyError()
         if not self._bind:  # pylint: disable=protected-access
-            MassStorageIsNotOperationalError()
+            IsNotOperationalError()
         async with self._lock:  # pylint: disable=protected-access
             return (await method(self, *args, **kwargs))
     return wrap
@@ -127,7 +127,7 @@ class MassStorageDevice:
     @_operated_and_locked
     async def connect_to_kvm(self, no_delay: bool=False) -> None:
         if self.__device_info:
-            raise MassStorageAlreadyConnectedToKvmError()
+            raise AlreadyConnectedToKvmError()
         # TODO: disable gpio
         if not no_delay:
             await asyncio.sleep(self.__init_delay)
@@ -140,7 +140,7 @@ class MassStorageDevice:
     @_operated_and_locked
     async def connect_to_pc(self) -> None:
         if not self.__device_info:
-            raise MassStorageAlreadyConnectedToPcError()
+            raise AlreadyConnectedToPcError()
         # TODO: enable gpio
         self.__device_info = None
         get_logger().info("Mass-storage device switched to PC")
@@ -156,13 +156,13 @@ class MassStorageDevice:
 
     async def cleanup(self) -> None:
         async with self._lock:
-            await self.__close_file()
+            await self.__close_device_file()
             # TODO: disable gpio
 
     @_operated_and_locked
     async def __aenter__(self) -> "MassStorageDevice":
         if not self.__device_info:
-            raise MassStorageIsNotConnectedToKvmError()
+            raise IsNotConnectedToKvmError()
         self._device_file = await aiofiles.open(self.__device_info.path, mode="wb", buffering=0)
         self.__writed = 0
         return self
@@ -184,9 +184,9 @@ class MassStorageDevice:
         _tb: types.TracebackType,
     ) -> None:
         async with self._lock:
-            await self.__close_file()
+            await self.__close_device_file()
 
-    async def __close_file(self) -> None:
+    async def __close_device_file(self) -> None:
         try:
             if self._device_file:
                 get_logger().info("Closing device file ...")
