@@ -15,15 +15,17 @@ def main() -> None:
 
     logger.info("Cleaning up ...")
     with gpio.bcm():
-        for (key, pin) in [
-            *config["atx"]["switches"]["pinout"].items(),
-            *config["video"]["pinout"].items(),
+        for (name, pin) in [
+            ("atx_power_switch", config["atx"]["pinout"]["power_switch"]),
+            ("atx_reset_switch", config["atx"]["pinout"]["reset_switch"]),
+            ("streamer_cap", config["streamer"]["pinout"]["cap"]),
+            ("streamer_conv", config["streamer"]["pinout"]["conv"]),
         ]:
             if pin > 0:
-                logger.info("Writing value=0 to pin=%d (%s)", pin, key)
+                logger.info("Writing value=0 to pin=%d (%s)", pin, name)
                 gpio.set_output(pin, initial=False)
 
-    streamer = os.path.basename(config["video"]["cmd"][0])
+    streamer = os.path.basename(config["streamer"]["cmd"][0])
     logger.info("Trying to find and kill %r ...", streamer)
     try:
         subprocess.check_output(["killall", streamer], stderr=subprocess.STDOUT)
