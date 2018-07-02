@@ -1,4 +1,5 @@
 import os
+import struct
 import asyncio
 import types
 
@@ -54,6 +55,20 @@ class DeviceInfo(NamedTuple):
     manufacturer: str
     product: str
     serial: str
+    image_name: str
+
+
+_DISK_META_SIZE = 4096
+_DISK_META_MAGIC_SIZE = 16
+_DISK_META_IMAGE_NAME_SIZE = 256
+_DISK_META_PADS_SIZE = _DISK_META_SIZE - _DISK_META_IMAGE_NAME_SIZE - _DISK_META_MAGIC_SIZE * 8 * 2
+_DISK_META_FORMAT = "%dL%dc%dx%dL" % (
+    _DISK_META_MAGIC_SIZE,
+    _DISK_META_IMAGE_NAME_SIZE,
+    _DISK_META_PADS_SIZE,
+    _DISK_META_MAGIC_SIZE,
+)
+_DISK_META_MAGIC = [0x1ACE1ACE] * _DISK_META_MAGIC_SIZE
 
 
 def explore_device(path: str) -> DeviceInfo:
@@ -69,6 +84,20 @@ def explore_device(path: str) -> DeviceInfo:
     usb_device = block_device.find_parent("usb", "usb_device")
     assert usb_device.driver == "usb", (usb_device.driver, usb_device)
 
+    image_name = ""
+    with open(path, "rb") as device_file:
+        device_file.seek(size - _DISK_META_SIZE)
+        try:
+            parsed = list(struct.unpack(_DISK_META_FORMAT, device_file.read()))
+        except struct.error:
+            pass
+        else:
+            magic_begin = parsed[:_DISK_META_MAGIC_SIZE]
+            magic_end = parsed[-_DISK_META_MAGIC_SIZE:]
+            if magic_begin == magic_end == _DISK_META_MAGIC:
+                image_name_bytes = b"".join(parsed[_DISK_META_MAGIC_SIZE:_DISK_META_MAGIC_SIZE + _DISK_META_IMAGE_NAME_SIZE])
+                image_name = image_name_bytes.decode("utf-8", errors="ignore").strip("\x00").strip()
+
     return DeviceInfo(
         path=path,
         bind=storage_device.sys_name,
@@ -76,6 +105,7 @@ def explore_device(path: str) -> DeviceInfo:
         manufacturer=usb_device.attributes.asstring("manufacturer").strip(),
         product=usb_device.attributes.asstring("product").strip(),
         serial=usb_device.attributes.asstring("serial").strip(),
+        image_name=image_name,
     )
 
 
@@ -103,10 +133,11 @@ def _operated_and_locked(method: Callable) -> Callable:
     return wrap
 
 
-class MassStorageDevice:
-    def __init__(self, bind: str, init_delay: float, loop: asyncio.AbstractEventLoop) -> None:
+class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
+    def __init__(self, bind: str, init_delay: float, write_meta: bool, loop: asyncio.AbstractEventLoop) -> None:
         self._bind = bind
         self.__init_delay = init_delay
+        self.__write_meta = write_meta
         self.__loop = loop
 
         self.__device_info: Optional[DeviceInfo] = None
@@ -114,19 +145,21 @@ class MassStorageDevice:
         self._device_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__writed = 0
 
+        logger = get_logger(0)
         if self._bind:
-            get_logger().info("Using bind %r as mass-storage device", self._bind)
+            logger.info("Using bind %r as mass-storage device", self._bind)
             try:
+                logger.info("Enabled metadata writing")
                 loop.run_until_complete(self.connect_to_kvm(no_delay=True))
             except Exception as err:
                 if isinstance(err, MassStorageError):
-                    log = get_logger().warning
+                    log = logger.warning
                 else:
-                    log = get_logger().exception
+                    log = logger.exception
                 log("Mass-storage device is not operational: %s", err)
                 self._bind = ""
         else:
-            get_logger().warning("Missing bind; mass-storage device is not operational")
+            logger.warning("Missing bind; mass-storage device is not operational")
 
     @_operated_and_locked
     async def connect_to_kvm(self, no_delay: bool=False) -> None:
@@ -135,10 +168,10 @@ class MassStorageDevice:
         # TODO: disable gpio
         if not no_delay:
             await asyncio.sleep(self.__init_delay)
-        path = locate_by_bind(self._bind)
+        path = await self.__loop.run_in_executor(None, locate_by_bind, self._bind)
         if not path:
             raise MassStorageError("Can't locate device by bind %r" % (self._bind))
-        self.__device_info = explore_device(path)
+        self.__device_info = await self.__loop.run_in_executor(None, explore_device, path)
         get_logger().info("Mass-storage device switched to KVM: %s", self.__device_info)
 
     @_operated_and_locked
@@ -171,11 +204,30 @@ class MassStorageDevice:
         self.__writed = 0
         return self
 
-    async def write(self, data: bytes) -> int:
+    async def write_image_name(self, image_name: str) -> None:
         async with self._lock:
             assert self._device_file
-            size = len(data)
-            await self._device_file.write(data)
+            assert self.__device_info
+            if self.__write_meta:
+                await self._device_file.seek(self.__device_info.size - _DISK_META_SIZE)
+                await self._device_file.write(struct.pack(
+                    _DISK_META_FORMAT,
+                    *_DISK_META_MAGIC,
+                    *memoryview((  # type: ignore
+                        image_name.encode("utf-8")
+                        + b"\x00" * _DISK_META_IMAGE_NAME_SIZE
+                    )[:_DISK_META_IMAGE_NAME_SIZE]).cast("c"),
+                    *_DISK_META_MAGIC,
+                ))
+                await self._device_file.flush()
+                await self.__loop.run_in_executor(None, os.fsync, self._device_file.fileno())
+                await self._device_file.seek(0)
+
+    async def write_image_chunk(self, chunk: bytes) -> int:
+        async with self._lock:
+            assert self._device_file
+            size = len(chunk)
+            await self._device_file.write(chunk)
             await self._device_file.flush()
             await self.__loop.run_in_executor(None, os.fsync, self._device_file.fileno())
             self.__writed += size
@@ -193,10 +245,10 @@ class MassStorageDevice:
     async def __close_device_file(self) -> None:
         try:
             if self._device_file:
-                get_logger().info("Closing device file ...")
+                get_logger().info("Closing mass-storage device file ...")
                 await self._device_file.close()
         except Exception:
-            get_logger().exception("Can't close device file")
+            get_logger().exception("Can't close mass-storage device file")
             # TODO: reset device file
         self._device_file = None
         self.__writed = 0

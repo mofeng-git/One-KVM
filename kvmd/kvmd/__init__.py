@@ -36,6 +36,7 @@ def main() -> None:
         msd = MassStorageDevice(
             bind=str(config["msd"]["bind"]),
             init_delay=float(config["msd"]["init_delay"]),
+            write_meta=bool(config["msd"]["write_meta"]),
             loop=loop,
         )
 
