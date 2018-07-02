@@ -24,6 +24,7 @@ def main() -> None:
             "kvmd.extras",
             "kvmd.extras.cleanup",
             "kvmd.extras.wscli",
+            "kvmd.extras.exploremsd",
         ],
 
         entry_points={
@@ -31,6 +32,7 @@ def main() -> None:
                 "kvmd = kvmd:main",
                 "kvmd-cleanup = kvmd.extras.cleanup:main",
                 "kvmd-wscli = kvmd.extras.wscli:main",
+                "kvmd-exploremsd = kvmd.extras.exploremsd:main",
             ],
         },
 

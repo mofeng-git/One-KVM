@@ -48,6 +48,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     def is_running(self) -> bool:
         return bool(self.__proc_task)
 
+    async def cleanup(self) -> None:
+        if self.is_running():
+            await self.stop()
+
     async def __set_hw_enabled(self, enabled: bool) -> None:
         # XXX: This sequence is very important to enable converter and cap board
         gpio.write(self.__cap_power, enabled)

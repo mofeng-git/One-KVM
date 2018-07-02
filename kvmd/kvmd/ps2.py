@@ -32,6 +32,10 @@ class Ps2Keyboard(multiprocessing.Process):
     def send_byte(self, code: int) -> None:
         self.__queue.put(code)
 
+    def cleanup(self) -> None:
+        if self.is_alive():
+            self.stop()
+
     def run(self) -> None:
         with gpio.bcm():
             try:

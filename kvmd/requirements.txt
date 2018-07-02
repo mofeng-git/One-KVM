@@ -1,3 +1,5 @@
 RPi.GPIO
 aiohttp
+aiofiles
+pyudev
 pyyaml

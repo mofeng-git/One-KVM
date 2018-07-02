@@ -13,6 +13,8 @@ depends=(
 	"python"
 	"python-yaml"
 	"python-aiohttp"
+	"python-aiofiles"
+	"python-pyudev"
 	"python-raspberry-gpio"
 )
 makedepends=("python-setuptools" "wget")

@@ -24,12 +24,17 @@ kvmd:
             click_delay: 0.1
             long_click_delay: 5.5
 
+    msd:
+        # FIXME: It's for laptop lol
+        bind: "1-2:1.0"
+        init_delay: 2.0
+        chunk_size: 512
+
     video:
         pinout:
             cap: 21
             conv: 25
         sync_delay: 1.0
-
         shutdown_delay: 10.0
 
         cmd:

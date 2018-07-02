@@ -7,12 +7,18 @@ from typing import List
 from typing import Set
 from typing import Callable
 from typing import Optional
+from typing import Type
 
 import aiohttp.web
 
-from .atx import Atx
-from .streamer import Streamer
 from .ps2 import Ps2Keyboard
+
+from .atx import Atx
+
+from .msd import MassStorageError
+from .msd import MassStorageDevice
+
+from .streamer import Streamer
 
 from .logging import get_logger
 
@@ -30,24 +36,43 @@ def _system_task(method: Callable) -> Callable:
     return wrap
 
 
+def _exceptions_as_400(msg: str, exceptions: List[Type[Exception]]) -> Callable:
+    def make_wrapper(method: Callable) -> Callable:
+        async def wrap(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
+            try:
+                return (await method(self, request))
+            except tuple(exceptions) as err:  # pylint: disable=catching-non-exception
+                get_logger().exception(msg)
+                return aiohttp.web.json_response({
+                    "error": type(err).__name__,
+                    "error_msg": str(err),
+                }, status=400)
+        return wrap
+    return make_wrapper
+
+
 class Server:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
-        atx: Atx,
-        streamer: Streamer,
         keyboard: Ps2Keyboard,
+        atx: Atx,
+        msd: MassStorageDevice,
+        streamer: Streamer,
         heartbeat: float,
         atx_leds_poll: float,
         video_shutdown_delay: float,
+        msd_chunk_size: int,
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
+        self.__keyboard = keyboard
         self.__atx = atx
+        self.__msd = msd
         self.__streamer = streamer
         self.__heartbeat = heartbeat
-        self.__keyboard = keyboard
         self.__video_shutdown_delay = video_shutdown_delay
         self.__atx_leds_poll = atx_leds_poll
+        self.__msd_chunk_size = msd_chunk_size
         self.__loop = loop
 
         self.__sockets: Set[aiohttp.web.WebSocketResponse] = set()
@@ -63,6 +88,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
         app = aiohttp.web.Application(loop=self.__loop)
         app.router.add_get("/", self.__root_handler)
         app.router.add_get("/ws", self.__ws_handler)
+        app.router.add_get("/msd", self.__msd_state_handler)
+        app.router.add_post("/msd/connect", self.__msd_connect_handler)
+        app.router.add_post("/msd/write", self.__msd_write_handler)
         app.on_shutdown.append(self.__on_shutdown)
         app.on_cleanup.append(self.__on_cleanup)
 
@@ -91,6 +119,46 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 break
         return ws
 
+    async def __msd_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        return aiohttp.web.json_response(self.__msd.get_state())
+
+    @_exceptions_as_400("Mass-storage error", [MassStorageError, RuntimeError])
+    async def __msd_connect_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        to = request.query.get("to")
+        if to == "kvm":
+            await self.__msd.connect_to_kvm()
+            await self.__broadcast("EVENT msd connected_to_kvm")
+        elif to == "pc":
+            await self.__msd.connect_to_pc()
+            await self.__broadcast("EVENT msd connected_to_pc")
+        else:
+            raise RuntimeError("Missing or invalid 'to=%s'" % (to))
+        return aiohttp.web.json_response(self.__msd.get_state())
+
+    @_exceptions_as_400("Can't write image to mass-storage device", [MassStorageError, RuntimeError, OSError])
+    async def __msd_write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        logger = get_logger(0)
+        reader = await request.multipart()
+        writed = 0
+        try:
+            field = await reader.next()
+            if field.name != "image":
+                raise RuntimeError("Missing 'data' field")
+
+            async with self.__msd:
+                await self.__broadcast("EVENT msd busy")
+                logger.info("Writing image to mass-storage device ...")
+                while True:
+                    chunk = await field.read_chunk(self.__msd_chunk_size)
+                    if not chunk:
+                        break
+                    writed = await self.__msd.write(chunk)
+            await self.__broadcast("EVENT msd free")
+        finally:
+            if writed != 0:
+                logger.info("Writed %d bytes to mass-storage device", writed)
+        return aiohttp.web.json_response({"writed": writed})
+
     def __run_app_print(self, text: str) -> None:
         logger = get_logger()
         for line in text.strip().splitlines():
@@ -109,10 +177,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await self.__remove_socket(ws)
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
-        if self.__keyboard.is_alive():
-            self.__keyboard.stop()
-        if self.__streamer.is_running():
-            await self.__streamer.stop()
+        self.__keyboard.cleanup()
+        await self.__streamer.cleanup()
+        await self.__msd.cleanup()
 
     @_system_task
     async def __keyboard_watchdog(self) -> None:

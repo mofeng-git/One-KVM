@@ -3,9 +3,10 @@ import asyncio
 from .application import init
 from .logging import get_logger
 
-from .atx import Atx
-from .streamer import Streamer
 from .ps2 import Ps2Keyboard
+from .atx import Atx
+from .msd import MassStorageDevice
+from .streamer import Streamer
 from .server import Server
 
 from . import gpio
@@ -17,6 +18,12 @@ def main() -> None:
     with gpio.bcm():
         loop = asyncio.get_event_loop()
 
+        keyboard = Ps2Keyboard(
+            clock=int(config["keyboard"]["pinout"]["clock"]),
+            data=int(config["keyboard"]["pinout"]["data"]),
+            pulse=float(config["keyboard"]["pulse"]),
+        )
+
         atx = Atx(
             power_led=int(config["atx"]["leds"]["pinout"]["power"]),
             hdd_led=int(config["atx"]["leds"]["pinout"]["hdd"]),
@@ -24,6 +31,12 @@ def main() -> None:
             reset_switch=int(config["atx"]["switches"]["pinout"]["reset"]),
             click_delay=float(config["atx"]["switches"]["click_delay"]),
             long_click_delay=float(config["atx"]["switches"]["long_click_delay"]),
+        )
+
+        msd = MassStorageDevice(
+            bind=str(config["msd"]["bind"]),
+            init_delay=float(config["msd"]["init_delay"]),
+            loop=loop,
         )
 
         streamer = Streamer(
@@ -34,19 +47,15 @@ def main() -> None:
             loop=loop,
         )
 
-        keyboard = Ps2Keyboard(
-            clock=int(config["keyboard"]["pinout"]["clock"]),
-            data=int(config["keyboard"]["pinout"]["data"]),
-            pulse=float(config["keyboard"]["pulse"]),
-        )
-
         Server(
-            atx=atx,
-            streamer=streamer,
             keyboard=keyboard,
+            atx=atx,
+            msd=msd,
+            streamer=streamer,
             heartbeat=float(config["server"]["heartbeat"]),
             atx_leds_poll=float(config["atx"]["leds"]["poll"]),
             video_shutdown_delay=float(config["video"]["shutdown_delay"]),
+            msd_chunk_size=int(config["msd"]["chunk_size"]),
             loop=loop,
         ).run(
             host=str(config["server"]["host"]),
