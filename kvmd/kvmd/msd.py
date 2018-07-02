@@ -71,6 +71,33 @@ _DISK_META_FORMAT = "%dL%dc%dx%dL" % (
 _DISK_META_MAGIC = [0x1ACE1ACE] * _DISK_META_MAGIC_SIZE
 
 
+def _make_disk_meta(image_name: str) -> bytes:
+    return struct.pack(
+        _DISK_META_FORMAT,
+        *_DISK_META_MAGIC,
+        *memoryview((  # type: ignore
+            image_name.encode("utf-8")
+            + b"\x00" * _DISK_META_IMAGE_NAME_SIZE
+        )[:_DISK_META_IMAGE_NAME_SIZE]).cast("c"),
+        *_DISK_META_MAGIC,
+    )
+
+
+def _parse_disk_meta(data: bytes) -> Dict:
+    disk_meta = {"image_name": ""}
+    try:
+        parsed = list(struct.unpack(_DISK_META_FORMAT, data))
+    except struct.error:
+        pass
+    else:
+        magic_begin = parsed[:_DISK_META_MAGIC_SIZE]
+        magic_end = parsed[-_DISK_META_MAGIC_SIZE:]
+        if magic_begin == magic_end == _DISK_META_MAGIC:
+            image_name_bytes = b"".join(parsed[_DISK_META_MAGIC_SIZE:_DISK_META_MAGIC_SIZE + _DISK_META_IMAGE_NAME_SIZE])
+            disk_meta["image_name"] = image_name_bytes.decode("utf-8", errors="ignore").strip("\x00").strip()
+    return disk_meta
+
+
 def explore_device(path: str) -> DeviceInfo:
     # udevadm info -a -p  $(udevadm info -q path -n /dev/sda)
     ctx = pyudev.Context()
@@ -84,19 +111,9 @@ def explore_device(path: str) -> DeviceInfo:
     usb_device = block_device.find_parent("usb", "usb_device")
     assert usb_device.driver == "usb", (usb_device.driver, usb_device)
 
-    image_name = ""
     with open(path, "rb") as device_file:
         device_file.seek(size - _DISK_META_SIZE)
-        try:
-            parsed = list(struct.unpack(_DISK_META_FORMAT, device_file.read()))
-        except struct.error:
-            pass
-        else:
-            magic_begin = parsed[:_DISK_META_MAGIC_SIZE]
-            magic_end = parsed[-_DISK_META_MAGIC_SIZE:]
-            if magic_begin == magic_end == _DISK_META_MAGIC:
-                image_name_bytes = b"".join(parsed[_DISK_META_MAGIC_SIZE:_DISK_META_MAGIC_SIZE + _DISK_META_IMAGE_NAME_SIZE])
-                image_name = image_name_bytes.decode("utf-8", errors="ignore").strip("\x00").strip()
+        disk_meta = _parse_disk_meta(device_file.read())
 
     return DeviceInfo(
         path=path,
@@ -105,7 +122,7 @@ def explore_device(path: str) -> DeviceInfo:
         manufacturer=usb_device.attributes.asstring("manufacturer").strip(),
         product=usb_device.attributes.asstring("product").strip(),
         serial=usb_device.attributes.asstring("serial").strip(),
-        image_name=image_name,
+        image_name=disk_meta["image_name"],
     )
 
 
@@ -153,7 +170,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
                 loop.run_until_complete(self.connect_to_kvm(no_delay=True))
             except Exception as err:
                 if isinstance(err, MassStorageError):
-                    log = logger.warning
+                    log = logger.error
                 else:
                     log = logger.exception
                 log("Mass-storage device is not operational: %s", err)
@@ -210,15 +227,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             assert self.__device_info
             if self.__write_meta:
                 await self._device_file.seek(self.__device_info.size - _DISK_META_SIZE)
-                await self._device_file.write(struct.pack(
-                    _DISK_META_FORMAT,
-                    *_DISK_META_MAGIC,
-                    *memoryview((  # type: ignore
-                        image_name.encode("utf-8")
-                        + b"\x00" * _DISK_META_IMAGE_NAME_SIZE
-                    )[:_DISK_META_IMAGE_NAME_SIZE]).cast("c"),
-                    *_DISK_META_MAGIC,
-                ))
+                await self._device_file.write(_make_disk_meta(image_name))
                 await self._device_file.flush()
                 await self.__loop.run_in_executor(None, os.fsync, self._device_file.fileno())
                 await self._device_file.seek(0)
