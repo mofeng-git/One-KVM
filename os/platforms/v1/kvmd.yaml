@@ -28,7 +28,7 @@ kvmd:
         # FIXME: It's for laptop lol
         bind: "1-2:1.0"
         init_delay: 2.0
-        chunk_size: 512
+        chunk_size: 8192
 
     video:
         pinout:
