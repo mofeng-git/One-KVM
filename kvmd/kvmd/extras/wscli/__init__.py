@@ -5,6 +5,7 @@ import sys
 import signal
 import asyncio
 import argparse
+import time
 
 import aiohttp
 
@@ -24,12 +25,12 @@ async def _run_client(loop: asyncio.AbstractEventLoop, url: str) -> None:
         while True:
             msg = await ws.receive()
             if msg.type == aiohttp.WSMsgType.TEXT:
-                print("Received:", msg.data.strip())
+                print("[%.5f] Received: %s" % (time.time(), msg.data.strip()))
             else:
                 if msg.type == aiohttp.WSMsgType.CLOSE:
                     await ws.close()
                 elif msg.type == aiohttp.WSMsgType.ERROR:
-                    print("Error during receive:", ws.exception())
+                    print("[%.5f] Error during receive: %s" % (time.time(), ws.exception()))
                 elif msg.type == aiohttp.WSMsgType.CLOSED:
                     pass
                 break
