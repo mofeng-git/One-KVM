@@ -61,8 +61,8 @@ class DeviceInfo(NamedTuple):
 _DISK_META_SIZE = 4096
 _DISK_META_MAGIC_SIZE = 16
 _DISK_META_IMAGE_NAME_SIZE = 256
-_DISK_META_PADS_SIZE = _DISK_META_SIZE - _DISK_META_IMAGE_NAME_SIZE - _DISK_META_MAGIC_SIZE * 8 * 2
-_DISK_META_FORMAT = "%dL%dc%dx%dL" % (
+_DISK_META_PADS_SIZE = _DISK_META_SIZE - _DISK_META_IMAGE_NAME_SIZE - _DISK_META_MAGIC_SIZE * 8
+_DISK_META_FORMAT = ">%dL%dc%dx%dL" % (
     _DISK_META_MAGIC_SIZE,
     _DISK_META_IMAGE_NAME_SIZE,
     _DISK_META_PADS_SIZE,
@@ -185,10 +185,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         # TODO: disable gpio
         if not no_delay:
             await asyncio.sleep(self.__init_delay)
-        path = await self.__loop.run_in_executor(None, locate_by_bind, self._bind)
-        if not path:
-            raise MassStorageError("Can't locate device by bind %r" % (self._bind))
-        self.__device_info = await self.__loop.run_in_executor(None, explore_device, path)
+        await self.__reread_device_info()
         get_logger().info("Mass-storage device switched to KVM: %s", self.__device_info)
 
     @_operated_and_locked
@@ -231,6 +228,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
                 await self._device_file.flush()
                 await self.__loop.run_in_executor(None, os.fsync, self._device_file.fileno())
                 await self._device_file.seek(0)
+                await self.__reread_device_info()
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         async with self._lock:
@@ -250,6 +248,12 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         async with self._lock:
             await self.__close_device_file()
+
+    async def __reread_device_info(self) -> None:
+        path = await self.__loop.run_in_executor(None, locate_by_bind, self._bind)
+        if not path:
+            raise MassStorageError("Can't locate device by bind %r" % (self._bind))
+        self.__device_info = await self.__loop.run_in_executor(None, explore_device, path)
 
     async def __close_device_file(self) -> None:
         try:
