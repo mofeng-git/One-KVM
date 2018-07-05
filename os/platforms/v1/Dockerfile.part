@@ -1,0 +1,13 @@
+RUN pkg-install \
+	kvmd \
+	mjpg-streamer-pikvm \
+	nginx
+
+COPY stages/pikvm/config.txt /boot/
+COPY stages/pikvm/99-pikvm.conf /etc/sysctl.d/
+COPY stages/pikvm/index.html /srv/http/
+COPY stages/pikvm/kvmd.yaml /etc/
+COPY stages/pikvm/nginx.conf /etc/nginx/
+
+RUN systemctl enable kvmd
+RUN systemctl enable nginx

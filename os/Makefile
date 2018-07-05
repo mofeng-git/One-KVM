@@ -1,32 +1,36 @@
+_BUILD_DIR=./.build
+
 all:
 	cat Makefile
 
 v1:
 	make _pikvm PIKVM_PLATFORM=v1
 
-_pikvm: pi-builder
-	rm -rf pi-builder/builder/scripts/pikvm
-	cp -a platforms/$(PIKVM_PLATFORM) pi-builder/builder/scripts/pikvm
-	cd pi-builder && make _rpi \
+_pikvm: $(_BUILD_DIR)
+	rm -rf $(_BUILD_DIR)/stages/pikvm
+	rm -rf $(_BUILD_DIR)/builder/scripts/pikvm
+	cp -a platforms/$(PIKVM_PLATFORM) $(_BUILD_DIR)/stages/pikvm
+	cd $(_BUILD_DIR) && make _rpi \
 		PLATFORM=rpi-2 \
 		BUILDER=pikvm-builder \
-		STAGES="base keys watchdog ro pikvm"
+		STAGES="base os ssh watchdog ro pikvm" \
+		HOSTNAME=pikvm
 
-pi-builder:
-	git clone https://github.com/mdevaev/pi-builder --depth=1
+$(_BUILD_DIR):
+	git clone --depth=1 https://github.com/mdevaev/pi-builder $(_BUILD_DIR)
 
-format: pi-builder
-	cd pi-builder && make format
+format: $(_BUILD_DIR)
+	cd $(_BUILD_DIR) && make format
 
-install: pi-builder
-	cd pi-builder && make install
+install: $(_BUILD_DIR)
+	cd $(_BUILD_DIR) && make install
 
-scan: pi-builder
-	cd pi-builder && make scan
+scan: $(_BUILD_DIR)
+	cd $(_BUILD_DIR) && make scan
 
-clean: pi-builder
-	cd pi-builder && make clean
+clean: $(_BUILD_DIR)
+	cd $(_BUILD_DIR) && make clean
 
 clean-all:
-	-cd pi-builder && make clean
-	rm -rf pi-builder
+	-cd $(_BUILD_DIR) && make clean-all
+	rm -rf $(_BUILD_DIR)

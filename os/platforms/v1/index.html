@@ -36,15 +36,31 @@ function onWsMessage(message) {
 	}
 }
 
+function onKeyPress(event) {
+	console.log("key pressed: ", event);
+	let e = event || window.event || arguments.callee.caller.arguments[0];
+//	ws.Send("EVENT press " + e.keyCode);
+}
+
+function onKeyRelease(event) {
+	console.log("key released: ", event);
+	let e = event || window.event || arguments.callee.caller.arguments[0];
+//	ws.Send("EVENT press " + e.keyCode);
+}
+
 ws = new WebSocket("ws://" + location.host + "/kvmd/ws");
 ws.onmessage = (message) => onWsMessage(message);
 ws.onerror = (error) => console.error(error);
 ws.onclose = () => console.log("closed");
+
+//https://www.codeday.top/2017/05/03/24906.html
+document.onkeydown = onKeyPress;
+document.onkeyup = onKeyRelease;
 </script>
 
 <body>
 <div class="screen">
-	<img src="/video/?action=stream" id="stream-image" class="screen-image" alt="" />
+	<img src="/streamer/?action=stream" id="stream-image" class="screen-image" alt="" />
 </div>
 </body>
 </html>
