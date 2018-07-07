@@ -48,7 +48,7 @@ class IsBusyError(MassStorageError):
         super().__init__("Mass-storage is busy (write in progress)")
 
 
-class DeviceInfo(NamedTuple):
+class MassStorageDeviceInfo(NamedTuple):
     path: str
     bind: str
     size: int
@@ -98,7 +98,7 @@ def _parse_disk_meta(data: bytes) -> Dict:
     return disk_meta
 
 
-def explore_device(path: str) -> DeviceInfo:
+def explore_device(path: str) -> MassStorageDeviceInfo:
     # udevadm info -a -p  $(udevadm info -q path -n /dev/sda)
     ctx = pyudev.Context()
 
@@ -115,7 +115,7 @@ def explore_device(path: str) -> DeviceInfo:
         device_file.seek(size - _DISK_META_SIZE)
         disk_meta = _parse_disk_meta(device_file.read())
 
-    return DeviceInfo(
+    return MassStorageDeviceInfo(
         path=path,
         bind=storage_device.sys_name,
         size=size,
@@ -157,7 +157,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__write_meta = write_meta
         self.__loop = loop
 
-        self.__device_info: Optional[DeviceInfo] = None
+        self.__device_info: Optional[MassStorageDeviceInfo] = None
         self._lock = asyncio.Lock()
         self._device_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__writed = 0
