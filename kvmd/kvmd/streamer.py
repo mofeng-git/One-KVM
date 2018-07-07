@@ -1,9 +1,14 @@
+import os
 import asyncio
 import asyncio.subprocess
 
 from typing import List
 from typing import Dict
+from typing import NamedTuple
 from typing import Optional
+from typing import Any
+
+import pyudev
 
 from .logging import get_logger
 
@@ -11,11 +16,52 @@ from . import gpio
 
 
 # =====
+class StreamerDeviceInfo(NamedTuple):
+    path: str
+    bind: str
+    driver: str
+
+
+def explore_device(path: str) -> Optional[StreamerDeviceInfo]:
+    # udevadm info -a -p  $(udevadm info -q path -n /dev/sda)
+    ctx = pyudev.Context()
+
+    video_device = pyudev.Devices.from_device_file(ctx, path)
+    if video_device.subsystem != "video4linux":
+        return None
+    try:
+        if int(video_device.attributes.get("index")) != 0:
+            # My strange laptop configuration
+            return None
+    except ValueError:
+        return None
+
+    interface_device = video_device.find_parent("usb", "usb_interface")
+    if not interface_device:
+        return None
+
+    return StreamerDeviceInfo(
+        path=path,
+        bind=interface_device.sys_name,
+        driver=interface_device.driver,
+    )
+
+
+def locate_by_bind(bind: str) -> str:
+    ctx = pyudev.Context()
+    for device in ctx.list_devices(subsystem="video4linux"):
+        interface_device = device.find_parent("usb", "usb_interface")
+        if interface_device and interface_device.sys_name == bind:
+            return os.path.join("/dev", device.sys_name)
+    return ""
+
+
 class Streamer:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         cap_power: int,
         conv_power: int,
+        bind: str,
         sync_delay: float,
         init_delay: float,
         width: int,
@@ -28,11 +74,12 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__cap_power = (gpio.set_output(cap_power) if cap_power > 0 else cap_power)
         self.__conv_power = (gpio.set_output(conv_power) if conv_power > 0 else conv_power)
+        self.__bind = bind
         self.__sync_delay = sync_delay
         self.__init_delay = init_delay
         self.__width = width
         self.__height = height
-        self.__cmd = [part.format(width=width, height=height) for part in cmd]
+        self.__cmd = cmd
 
         self.__loop = loop
 
@@ -79,18 +126,27 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         if enabled:
             await asyncio.sleep(self.__init_delay)
 
-    async def __process(self) -> None:
+    async def __process(self) -> None:  # pylint: disable=too-many-branches
         logger = get_logger(0)
 
         while True:  # pylint: disable=too-many-nested-blocks
             proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
             try:
+                cmd_placeholders: Dict[str, Any] = {"width": self.__width, "height": self.__height}
+                if self.__bind:
+                    logger.info("Using bind %r as streamer device", self.__bind)
+                    device_path = await self.__loop.run_in_executor(None, locate_by_bind, self.__bind)
+                    if not device_path:
+                        raise RuntimeError("Can't locate device by bind %r" % (self.__bind))
+                    cmd_placeholders["device"] = device_path
+                cmd = [part.format(**cmd_placeholders) for part in self.__cmd]
+
                 proc = await asyncio.create_subprocess_exec(
-                    *self.__cmd,
+                    *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                 )
-                logger.info("Started streamer pid=%d: %s", proc.pid, self.__cmd)
+                logger.info("Started streamer pid=%d: %s", proc.pid, cmd)
 
                 empty = 0
                 while proc.returncode is None:

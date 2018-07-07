@@ -98,18 +98,23 @@ def _parse_disk_meta(data: bytes) -> Dict:
     return disk_meta
 
 
-def explore_device(path: str) -> MassStorageDeviceInfo:
+def explore_device(path: str) -> Optional[MassStorageDeviceInfo]:
     # udevadm info -a -p  $(udevadm info -q path -n /dev/sda)
     ctx = pyudev.Context()
 
     block_device = pyudev.Devices.from_device_file(ctx, path)
-    size = block_device.attributes.asint("size") * 512
+    try:
+        size = block_device.attributes.asint("size") * 512
+    except KeyError:
+        return None
 
-    storage_device = block_device.find_parent("usb", "usb_interface")
-    assert storage_device.driver == "usb-storage", (storage_device.driver, storage_device)
+    interface_device = block_device.find_parent("usb", "usb_interface")
+    if not interface_device:
+        return None
 
     usb_device = block_device.find_parent("usb", "usb_device")
-    assert usb_device.driver == "usb", (usb_device.driver, usb_device)
+    if not usb_device:
+        return None
 
     with open(path, "rb") as device_file:
         device_file.seek(size - _DISK_META_SIZE)
@@ -117,7 +122,7 @@ def explore_device(path: str) -> MassStorageDeviceInfo:
 
     return MassStorageDeviceInfo(
         path=path,
-        bind=storage_device.sys_name,
+        bind=interface_device.sys_name,
         size=size,
         manufacturer=usb_device.attributes.asstring("manufacturer").strip(),
         product=usb_device.attributes.asstring("product").strip(),
@@ -250,10 +255,13 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             await self.__close_device_file()
 
     async def __reread_device_info(self) -> None:
-        path = await self.__loop.run_in_executor(None, locate_by_bind, self._bind)
-        if not path:
+        device_path = await self.__loop.run_in_executor(None, locate_by_bind, self._bind)
+        if not device_path:
             raise MassStorageError("Can't locate device by bind %r" % (self._bind))
-        self.__device_info = await self.__loop.run_in_executor(None, explore_device, path)
+        device_info = await self.__loop.run_in_executor(None, explore_device, device_path)
+        if not device_info:
+            raise MassStorageError("Can't explore device %r" % (device_path))
+        self.__device_info = device_info
 
     async def __close_device_file(self) -> None:
         try:

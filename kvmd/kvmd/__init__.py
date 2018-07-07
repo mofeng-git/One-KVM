@@ -43,6 +43,7 @@ def main() -> None:
         streamer = Streamer(
             cap_power=int(config["streamer"]["pinout"].get("cap", -1)),
             conv_power=int(config["streamer"]["pinout"].get("conv", -1)),
+            bind=str(config["streamer"].get("bind", "")),
             sync_delay=float(config["streamer"]["sync_delay"]),
             init_delay=float(config["streamer"]["init_delay"]),
             width=int(config["streamer"]["size"]["width"]),
