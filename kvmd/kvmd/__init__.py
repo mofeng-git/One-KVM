@@ -34,16 +34,15 @@ def main() -> None:
         )
 
         msd = MassStorageDevice(
-            bind=str(config["msd"]["bind"]),
+            device_path=str(config["msd"]["device"]),
             init_delay=float(config["msd"]["init_delay"]),
             write_meta=bool(config["msd"]["write_meta"]),
             loop=loop,
         )
 
         streamer = Streamer(
-            cap_power=int(config["streamer"]["pinout"].get("cap", -1)),
-            conv_power=int(config["streamer"]["pinout"].get("conv", -1)),
-            bind=str(config["streamer"].get("bind", "")),
+            cap_power=int(config["streamer"]["pinout"]["cap"]),
+            conv_power=int(config["streamer"]["pinout"]["conv"]),
             sync_delay=float(config["streamer"]["sync_delay"]),
             init_delay=float(config["streamer"]["init_delay"]),
             width=int(config["streamer"]["size"]["width"]),

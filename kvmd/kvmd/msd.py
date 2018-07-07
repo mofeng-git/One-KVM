@@ -25,7 +25,7 @@ class MassStorageError(Exception):
 
 class IsNotOperationalError(MassStorageError):
     def __init__(self) -> None:
-        super().__init__("Missing bind for mass-storage device")
+        super().__init__("Missing path for mass-storage device")
 
 
 class AlreadyConnectedToPcError(MassStorageError):
@@ -50,7 +50,6 @@ class IsBusyError(MassStorageError):
 
 class MassStorageDeviceInfo(NamedTuple):
     path: str
-    bind: str
     size: int
     manufacturer: str
     product: str
@@ -108,10 +107,6 @@ def explore_device(path: str) -> Optional[MassStorageDeviceInfo]:
     except KeyError:
         return None
 
-    interface_device = block_device.find_parent("usb", "usb_interface")
-    if not interface_device:
-        return None
-
     usb_device = block_device.find_parent("usb", "usb_device")
     if not usb_device:
         return None
@@ -122,7 +117,6 @@ def explore_device(path: str) -> Optional[MassStorageDeviceInfo]:
 
     return MassStorageDeviceInfo(
         path=path,
-        bind=interface_device.sys_name,
         size=size,
         manufacturer=usb_device.attributes.asstring("manufacturer").strip(),
         product=usb_device.attributes.asstring("product").strip(),
@@ -131,24 +125,11 @@ def explore_device(path: str) -> Optional[MassStorageDeviceInfo]:
     )
 
 
-def locate_by_bind(bind: str) -> str:
-    ctx = pyudev.Context()
-    for device in ctx.list_devices(subsystem="block"):
-        storage_device = device.find_parent("usb", "usb_interface")
-        if storage_device:
-            try:
-                device.attributes.asint("partititon")
-            except KeyError:
-                if storage_device.sys_name == bind:
-                    return os.path.join("/dev", device.sys_name)
-    return ""
-
-
 def _operated_and_locked(method: Callable) -> Callable:
     async def wrap(self: "MassStorageDevice", *args: Any, **kwargs: Any) -> Any:
         if self._device_file:  # pylint: disable=protected-access
             raise IsBusyError()
-        if not self._bind:  # pylint: disable=protected-access
+        if not self._device_path:  # pylint: disable=protected-access
             IsNotOperationalError()
         async with self._lock:  # pylint: disable=protected-access
             return (await method(self, *args, **kwargs))
@@ -156,8 +137,15 @@ def _operated_and_locked(method: Callable) -> Callable:
 
 
 class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
-    def __init__(self, bind: str, init_delay: float, write_meta: bool, loop: asyncio.AbstractEventLoop) -> None:
-        self._bind = bind
+    def __init__(
+        self,
+        device_path: str,
+        init_delay: float,
+        write_meta: bool,
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
+
+        self._device_path = device_path
         self.__init_delay = init_delay
         self.__write_meta = write_meta
         self.__loop = loop
@@ -168,8 +156,8 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__writed = 0
 
         logger = get_logger(0)
-        if self._bind:
-            logger.info("Using bind %r as mass-storage device", self._bind)
+        if self._device_path:
+            logger.info("Using %r as mass-storage device", self._device_path)
             try:
                 logger.info("Enabled metadata writing")
                 loop.run_until_complete(self.connect_to_kvm(no_delay=True))
@@ -179,9 +167,9 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
                 else:
                     log = logger.exception
                 log("Mass-storage device is not operational: %s", err)
-                self._bind = ""
+                self._device_path = ""
         else:
-            logger.warning("Missing bind; mass-storage device is not operational")
+            logger.warning("Mass-storage device is not operational")
 
     @_operated_and_locked
     async def connect_to_kvm(self, no_delay: bool=False) -> None:
@@ -203,7 +191,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     def get_state(self) -> Dict:
         return {
-            "in_operate": bool(self._bind),
+            "in_operate": bool(self._device_path),
             "connected_to": ("kvm" if self.__device_info else "server"),
             "is_busy": bool(self._device_file),
             "writed": self.__writed,
@@ -255,12 +243,9 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             await self.__close_device_file()
 
     async def __reread_device_info(self) -> None:
-        device_path = await self.__loop.run_in_executor(None, locate_by_bind, self._bind)
-        if not device_path:
-            raise MassStorageError("Can't locate device by bind %r" % (self._bind))
-        device_info = await self.__loop.run_in_executor(None, explore_device, device_path)
+        device_info = await self.__loop.run_in_executor(None, explore_device, self._device_path)
         if not device_info:
-            raise MassStorageError("Can't explore device %r" % (device_path))
+            raise MassStorageError("Can't explore device %r" % (self._device_path))
         self.__device_info = device_info
 
     async def __close_device_file(self) -> None:

@@ -4,7 +4,8 @@ RUN pkg-install \
 	nginx
 
 COPY stages/pikvm/config.txt /boot/
-COPY stages/pikvm/99-pikvm.conf /etc/sysctl.d/
+COPY stages/pikvm/sysctl.conf /etc/sysctl.d/99-pikvm.conf
+COPY stages/pikvm/udev.rules /etc/udev/rules.d/pikvm.rules
 COPY stages/pikvm/index.html /srv/http/
 COPY stages/pikvm/kvmd.yaml /etc/
 COPY stages/pikvm/nginx.conf /etc/nginx/

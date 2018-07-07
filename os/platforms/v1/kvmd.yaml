@@ -24,8 +24,7 @@ kvmd:
         state_poll: 0.1
 
     msd:
-        # FIXME: It's for laptop lol
-        bind: "1-2:1.0"
+        device: "/dev/kvmd-msd"
         init_delay: 2.0
         write_meta: true
         chunk_size: 8192
@@ -46,7 +45,7 @@ kvmd:
         cmd:
             - "/usr/bin/mjpg_streamer"
             - "-i"
-            - "input_uvc.so -d /dev/video0 -e 2 -y -n -r {width}x{height}"
+            - "input_uvc.so -d /dev/kvmd-streamer -e 2 -y -n -r {width}x{height}"
             - "-o"
             - "output_http.so -l localhost -p 8082"
 
