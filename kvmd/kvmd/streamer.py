@@ -17,6 +17,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         cap_power: int,
         conv_power: int,
         sync_delay: float,
+        init_delay: float,
         width: int,
         height: int,
         cmd: List[str],
@@ -25,9 +26,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         assert cmd, cmd
 
-        self.__cap_power = gpio.set_output(cap_power)
+        self.__cap_power = (gpio.set_output(cap_power) if cap_power > 0 else cap_power)
         self.__conv_power = (gpio.set_output(conv_power) if conv_power > 0 else conv_power)
         self.__sync_delay = sync_delay
+        self.__init_delay = init_delay
         self.__width = width
         self.__height = height
         self.__cmd = [part.format(width=width, height=height) for part in cmd]
@@ -68,12 +70,14 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     async def __set_hw_enabled(self, enabled: bool) -> None:
         # XXX: This sequence is very important to enable converter and cap board
-        gpio.write(self.__cap_power, enabled)
+        if self.__cap_power > 0:
+            gpio.write(self.__cap_power, enabled)
         if self.__conv_power > 0:
             if enabled:
                 await asyncio.sleep(self.__sync_delay)
             gpio.write(self.__conv_power, enabled)
-        await asyncio.sleep(self.__sync_delay)
+        if enabled:
+            await asyncio.sleep(self.__init_delay)
 
     async def __process(self) -> None:
         logger = get_logger(0)

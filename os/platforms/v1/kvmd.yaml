@@ -34,7 +34,9 @@ kvmd:
         pinout:
             cap: 21
             conv: 25
+
         sync_delay: 1.0
+        init_delay: 1.0
         shutdown_delay: 10.0
 
         size:
