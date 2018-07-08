@@ -6,9 +6,9 @@ RUN pkg-install \
 COPY stages/pikvm/config.txt /boot/
 COPY stages/pikvm/sysctl.conf /etc/sysctl.d/99-pikvm.conf
 COPY stages/pikvm/udev.rules /etc/udev/rules.d/pikvm.rules
-COPY stages/pikvm/index.html /srv/http/
-COPY stages/pikvm/kvmd.yaml /etc/
-COPY stages/pikvm/nginx.conf /etc/nginx/
+
+RUN cp /usr/share/kvmd/configs/nginx/nginx.conf /etc/nginx/
+RUN cp /usr/share/kvmd/configs/kvmd/v1.yaml /etc/kvmd.yaml
 
 RUN systemctl enable kvmd
 RUN systemctl enable nginx

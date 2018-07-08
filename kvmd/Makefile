@@ -11,7 +11,6 @@ release:
 	make push
 	make bump
 	make push
-	make pypi
 	make clean
 
 tox:
@@ -23,10 +22,6 @@ bump:
 push:
 	git push
 	git push --tags
-
-pypi:
-	python3 setup.py register
-	python3 setup.py sdist upload
 
 clean:
 	rm -rf build site dist pkg src *.egg-info kvmd-*.tar.gz
