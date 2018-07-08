@@ -2,7 +2,8 @@ TESTENV_IMAGE ?= kvmd-testenv
 TESTENV_VIDEO ?= /dev/video0
 TESTENV_LOOP ?= /dev/loop7
 TESTENV_CMD ?= /bin/bash -c " \
-		ln -s $(TESTENV_VIDEO) /dev/kvmd-streamer \
+		nginx -c /testenv/nginx.conf \
+		&& ln -s $(TESTENV_VIDEO) /dev/kvmd-streamer \
 		&& (losetup -d /dev/kvmd-msd || true) \
 		&& losetup /dev/kvmd-msd /root/loop.img \
 		&& python -m kvmd -c testenv/kvmd.yaml \
