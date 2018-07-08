@@ -10,7 +10,7 @@ import yaml
 # =====
 def init() -> Dict:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", default="kvmd.yaml", metavar="<path>")
+    parser.add_argument("-c", "--config", required=True, metavar="<path>")
     options = parser.parse_args()
 
     with open(options.config) as config_file:

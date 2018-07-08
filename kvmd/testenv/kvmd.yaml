@@ -1,0 +1,73 @@
+kvmd:
+    server:
+        host: 0.0.0.0
+        port: 8081
+        heartbeat: 3.0
+
+    keyboard:
+        pinout:
+            clock: 17
+            data: 4
+
+        pulse: 0.0002
+
+    atx:
+        pinout:
+            power_led: 16
+            hdd_led: 12
+            power_switch: 26
+            reset_switch: 20
+
+        click_delay: 0.1
+        long_click_delay: 5.5
+
+        state_poll: 0.1
+
+    msd:
+        device: "/dev/kvmd-msd"
+        init_delay: 2.0
+        write_meta: true
+        chunk_size: 8192
+
+    streamer:
+        pinout:
+            cap: 21
+            conv: 25
+
+        sync_delay: 1.0
+        init_delay: 1.0
+        shutdown_delay: 10.0
+
+        size:
+            width: 720
+            height: 576
+
+        cmd:
+            - "/usr/bin/mjpg_streamer"
+            - "-i"
+            - "input_uvc.so -d /dev/kvmd-streamer -e 2 -y -n -r {width}x{height}"
+            - "-o"
+            - "output_http.so -l 0.0.0.0 -p 8082"
+
+logging:
+    version: 1
+    disable_existing_loggers: false
+
+    formatters:
+        console:
+            (): logging.Formatter
+            style: "{"
+            datefmt: "%H:%M:%S"
+            format: "[{asctime}] {name:20.20} {levelname:>7} --- {message}"
+
+    handlers:
+        console:
+            level: DEBUG
+            class: logging.StreamHandler
+            stream: ext://sys.stdout
+            formatter: console
+
+    root:
+        level: INFO
+        handlers:
+            - console

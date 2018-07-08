@@ -50,11 +50,12 @@ class IsBusyError(MassStorageError):
 
 class MassStorageDeviceInfo(NamedTuple):
     path: str
+    real: str
     size: int
-    manufacturer: str
-    product: str
-    serial: str
     image_name: str
+    manufacturer: str = ""
+    product: str = ""
+    serial: str = ""
 
 
 _DISK_META_SIZE = 4096
@@ -101,15 +102,15 @@ def explore_device(path: str) -> Optional[MassStorageDeviceInfo]:
     # udevadm info -a -p  $(udevadm info -q path -n /dev/sda)
     ctx = pyudev.Context()
 
-    block_device = pyudev.Devices.from_device_file(ctx, path)
+    device = pyudev.Devices.from_device_file(ctx, path)
+    if device.subsystem != "block":
+        return None
     try:
-        size = block_device.attributes.asint("size") * 512
+        size = device.attributes.asint("size") * 512
     except KeyError:
         return None
 
-    usb_device = block_device.find_parent("usb", "usb_device")
-    if not usb_device:
-        return None
+    usb_device = device.find_parent("usb", "usb_device")
 
     with open(path, "rb") as device_file:
         device_file.seek(size - _DISK_META_SIZE)
@@ -117,11 +118,14 @@ def explore_device(path: str) -> Optional[MassStorageDeviceInfo]:
 
     return MassStorageDeviceInfo(
         path=path,
+        real=(os.readlink(path) if os.path.islink(path) else ""),
         size=size,
-        manufacturer=usb_device.attributes.asstring("manufacturer").strip(),
-        product=usb_device.attributes.asstring("product").strip(),
-        serial=usb_device.attributes.asstring("serial").strip(),
         image_name=disk_meta["image_name"],
+        **{
+            attr: usb_device.attributes.asstring(attr).strip()
+            for attr in ["manufacturer", "product", "serial"]
+            if usb_device
+        },
     )
 
 
