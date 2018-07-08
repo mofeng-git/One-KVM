@@ -1,4 +1,6 @@
 ARG KVMD_VERSION
+RUN echo $KVMD_VERSION
+
 RUN pkg-install \
 	kvmd \
 	mjpg-streamer-pikvm \
