@@ -27,7 +27,7 @@ kvmd:
         device: "/dev/kvmd-msd"
         init_delay: 2.0
         write_meta: true
-        chunk_size: 8192
+        chunk_size: 65536
 
     streamer:
         pinout:
