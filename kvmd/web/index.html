@@ -29,33 +29,32 @@ body {
 </head>
 
 <script>
+ws = new WebSocket("ws://" + location.host + "/kvmd/ws");
+
 function onWsMessage(message) {
 	console.log(message.data);
-	if (message.data == "EVENT mjpg_streamer started") {
+	/*if (message.data == "EVENT mjpg_streamer started") {
 		document.getElementById("stream-image").src = "/streamer/?action=stream&time=" + new Date().getTime();
-	}
+	}*/
 }
 
-function onKeyPress(event) {
-	console.log("key pressed: ", event);
-	let e = event || window.event || arguments.callee.caller.arguments[0];
-//	ws.Send("EVENT press " + e.keyCode);
+function onKeyEvent(event, state) {
+	// TODO: run this code under the lock
+	console.log("Key", (state ? "pressed:" : "released:"), event)
+	ws.send(JSON.stringify({
+		event_type: "key_event",
+		key_code: event.code,
+		key_state: state,
+	}));
 }
 
-function onKeyRelease(event) {
-	console.log("key released: ", event);
-	let e = event || window.event || arguments.callee.caller.arguments[0];
-//	ws.Send("EVENT press " + e.keyCode);
-}
-
-ws = new WebSocket("ws://" + location.host + "/kvmd/ws");
 ws.onmessage = (message) => onWsMessage(message);
 ws.onerror = (error) => console.error(error);
 ws.onclose = () => console.log("closed");
 
-//https://www.codeday.top/2017/05/03/24906.html
-document.onkeydown = onKeyPress;
-document.onkeyup = onKeyRelease;
+// https://www.codeday.top/2017/05/03/24906.html
+document.onkeydown = (event) => onKeyEvent(event, true);
+document.onkeyup = (event) => onKeyEvent(event, false);
 </script>
 
 <body>

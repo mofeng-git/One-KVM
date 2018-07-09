@@ -124,11 +124,25 @@ class Server:  # pylint: disable=too-many-instance-attributes
         aiohttp.web.run_app(app, host=host, port=port, print=self.__run_app_print)
 
     async def __ws_handler(self, request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
+        logger = get_logger(0)
         ws = aiohttp.web.WebSocketResponse(heartbeat=self.__heartbeat)
         await ws.prepare(request)
         await self.__register_socket(ws)
         async for msg in ws:
             if msg.type == aiohttp.web.WSMsgType.TEXT:
+                try:
+                    event = json.loads(msg.data)
+                except Exception:
+                    logger.exception("Can't parse JSON event from websocket")
+                else:
+                    if event.get("event_type") == "key_event":
+                        key_code = str(event.get("key_code", ""))[:64].strip()
+                        key_state = event.get("key_state")
+                        if key_code and key_state in [True, False]:
+                            self.__keyboard.send_event(key_code, key_state)
+                            continue
+                    else:
+                        logger.error("Invalid websocket event: %r", event)
                 await ws.send_str(json.dumps({"msg_type": "echo", "msg": msg.data}))
             else:
                 break

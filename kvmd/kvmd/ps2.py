@@ -29,8 +29,12 @@ class Ps2Keyboard(multiprocessing.Process):
         self.__event.set()
         self.join()
 
-    def send_byte(self, code: int) -> None:
-        self.__queue.put(code)
+    def send_event(self, code: str, state: bool) -> None:
+        if state:
+            get_logger().info("Key pressed: %s", code)
+        else:
+            get_logger().info("Key released: %s", code)
+        # TODO: self.__queue.put(code)
 
     def cleanup(self) -> None:
         if self.is_alive():
