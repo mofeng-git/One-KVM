@@ -53,6 +53,7 @@ class MassStorageDeviceInfo(NamedTuple):
     real: str
     size: int
     image_name: str
+    image_complete: bool
     manufacturer: str = ""
     product: str = ""
     serial: str = ""
@@ -61,8 +62,8 @@ class MassStorageDeviceInfo(NamedTuple):
 _DISK_META_SIZE = 4096
 _DISK_META_MAGIC_SIZE = 16
 _DISK_META_IMAGE_NAME_SIZE = 256
-_DISK_META_PADS_SIZE = _DISK_META_SIZE - _DISK_META_IMAGE_NAME_SIZE - _DISK_META_MAGIC_SIZE * 8
-_DISK_META_FORMAT = ">%dL%dc%dx%dL" % (
+_DISK_META_PADS_SIZE = _DISK_META_SIZE - _DISK_META_IMAGE_NAME_SIZE - 1 - _DISK_META_MAGIC_SIZE * 8
+_DISK_META_FORMAT = ">%dL%dc?%dx%dL" % (
     _DISK_META_MAGIC_SIZE,
     _DISK_META_IMAGE_NAME_SIZE,
     _DISK_META_PADS_SIZE,
@@ -71,7 +72,7 @@ _DISK_META_FORMAT = ">%dL%dc%dx%dL" % (
 _DISK_META_MAGIC = [0x1ACE1ACE] * _DISK_META_MAGIC_SIZE
 
 
-def _make_disk_meta(image_name: str) -> bytes:
+def _make_disk_meta(image_name: str, image_complete: bool) -> bytes:
     return struct.pack(
         _DISK_META_FORMAT,
         *_DISK_META_MAGIC,
@@ -79,12 +80,16 @@ def _make_disk_meta(image_name: str) -> bytes:
             image_name.encode("utf-8")
             + b"\x00" * _DISK_META_IMAGE_NAME_SIZE
         )[:_DISK_META_IMAGE_NAME_SIZE]).cast("c"),
+        image_complete,
         *_DISK_META_MAGIC,
     )
 
 
 def _parse_disk_meta(data: bytes) -> Dict:
-    disk_meta = {"image_name": ""}
+    disk_meta = {
+        "image_name": "",
+        "image_complete": False,
+    }
     try:
         parsed = list(struct.unpack(_DISK_META_FORMAT, data))
     except struct.error:
@@ -95,32 +100,32 @@ def _parse_disk_meta(data: bytes) -> Dict:
         if magic_begin == magic_end == _DISK_META_MAGIC:
             image_name_bytes = b"".join(parsed[_DISK_META_MAGIC_SIZE:_DISK_META_MAGIC_SIZE + _DISK_META_IMAGE_NAME_SIZE])
             disk_meta["image_name"] = image_name_bytes.decode("utf-8", errors="ignore").strip("\x00").strip()
+            disk_meta["image_complete"] = parsed[_DISK_META_MAGIC_SIZE + _DISK_META_IMAGE_NAME_SIZE]
     return disk_meta
 
 
-def explore_device(path: str) -> Optional[MassStorageDeviceInfo]:
+def explore_device(device_path: str) -> Optional[MassStorageDeviceInfo]:
     # udevadm info -a -p  $(udevadm info -q path -n /dev/sda)
     ctx = pyudev.Context()
 
-    device = pyudev.Devices.from_device_file(ctx, path)
+    device = pyudev.Devices.from_device_file(ctx, device_path)
     if device.subsystem != "block":
         return None
     try:
         size = device.attributes.asint("size") * 512
     except KeyError:
         return None
-
     usb_device = device.find_parent("usb", "usb_device")
 
-    with open(path, "rb") as device_file:
+    with open(device_path, "rb") as device_file:
         device_file.seek(size - _DISK_META_SIZE)
         disk_meta = _parse_disk_meta(device_file.read())
 
-    return MassStorageDeviceInfo(
-        path=path,
-        real=(os.readlink(path) if os.path.islink(path) else ""),
+    return MassStorageDeviceInfo(  # type: ignore
+        path=device_path,
+        real=(os.readlink(device_path) if os.path.islink(device_path) else device_path),
         size=size,
-        image_name=disk_meta["image_name"],
+        **disk_meta,
         **{
             attr: usb_device.attributes.asstring(attr).strip()
             for attr in ["manufacturer", "product", "serial"]
@@ -182,7 +187,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         # TODO: disable gpio
         if not no_delay:
             await asyncio.sleep(self.__init_delay)
-        await self.__reread_device_info()
+        await self.__load_device_info()
         get_logger().info("Mass-storage device switched to KVM: %s", self.__device_info)
 
     @_operated_and_locked
@@ -211,30 +216,27 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     async def __aenter__(self) -> "MassStorageDevice":
         if not self.__device_info:
             raise IsNotConnectedToKvmError()
-        self._device_file = await aiofiles.open(self.__device_info.path, mode="wb", buffering=0)
+        self._device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
         self.__writed = 0
         return self
 
-    async def write_image_name(self, image_name: str) -> None:
+    async def write_image_meta(self, image_name: str, image_complete: bool) -> None:
         async with self._lock:
             assert self._device_file
             assert self.__device_info
             if self.__write_meta:
-                await self._device_file.seek(self.__device_info.size - _DISK_META_SIZE)
-                await self._device_file.write(_make_disk_meta(image_name))
-                await self._device_file.flush()
-                await self.__loop.run_in_executor(None, os.fsync, self._device_file.fileno())
-                await self._device_file.seek(0)
-                await self.__reread_device_info()
+                if self.__device_info.size - self.__writed > _DISK_META_SIZE:
+                    await self._device_file.seek(self.__device_info.size - _DISK_META_SIZE)
+                    await self.__write_to_device_file(_make_disk_meta(image_name, image_complete))
+                    await self._device_file.seek(0)
+                    await self.__load_device_info()
+                else:
+                    get_logger().error("Can't write image meta because device is full")
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         async with self._lock:
-            assert self._device_file
-            size = len(chunk)
-            await self._device_file.write(chunk)
-            await self._device_file.flush()
-            await self.__loop.run_in_executor(None, os.fsync, self._device_file.fileno())
-            self.__writed += size
+            await self.__write_to_device_file(chunk)
+            self.__writed += len(chunk)
             return self.__writed
 
     async def __aexit__(
@@ -246,7 +248,13 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         async with self._lock:
             await self.__close_device_file()
 
-    async def __reread_device_info(self) -> None:
+    async def __write_to_device_file(self, data: bytes) -> None:
+        assert self._device_file
+        await self._device_file.write(data)
+        await self._device_file.flush()
+        await self.__loop.run_in_executor(None, os.fsync, self._device_file.fileno())
+
+    async def __load_device_info(self) -> None:
         device_info = await self.__loop.run_in_executor(None, explore_device, self._device_path)
         if not device_info:
             raise MassStorageError("Can't explore device %r" % (self._device_path))

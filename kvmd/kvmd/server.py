@@ -173,23 +173,24 @@ class Server:  # pylint: disable=too-many-instance-attributes
         writed = 0
         try:
             field = await reader.next()
-            if field.name != "image_name":
+            if not field or field.name != "image_name":
                 raise RuntimeError("Missing 'image_name' field")
             image_name = (await field.read()).decode("utf-8")[:256]
 
             field = await reader.next()
-            if field.name != "image_data":
+            if not field or field.name != "image_data":
                 raise RuntimeError("Missing 'image_data' field")
 
             async with self.__msd:
                 await self.__broadcast_event("msd_state", state="busy")  # type: ignore
                 logger.info("Writing image %r to mass-storage device ...", image_name)
-                await self.__msd.write_image_name(image_name)
+                await self.__msd.write_image_meta(image_name, False)
                 while True:
                     chunk = await field.read_chunk(self.__msd_chunk_size)
                     if not chunk:
                         break
                     writed = await self.__msd.write_image_chunk(chunk)
+                await self.__msd.write_image_meta(image_name, True)
             await self.__broadcast_event("msd_state", state="free")  # type: ignore
         finally:
             if writed != 0:
