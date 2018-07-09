@@ -40,6 +40,9 @@ function onWsMessage(message) {
 
 function onKeyEvent(event, state) {
 	// TODO: run this code under the lock
+	if (!event.metaKey) { // https://github.com/wesbos/keycodes/blob/gh-pages/scripts.js
+		event.preventDefault();
+	}
 	console.log("Key", (state ? "pressed:" : "released:"), event)
 	ws.send(JSON.stringify({
 		event_type: "key",
