@@ -3,7 +3,7 @@ import asyncio
 from .application import init
 from .logging import get_logger
 
-from .ps2 import Ps2Keyboard
+from .keyboard import Keyboard
 from .atx import Atx
 from .msd import MassStorageDevice
 from .streamer import Streamer
@@ -18,7 +18,7 @@ def main() -> None:
     with gpio.bcm():
         loop = asyncio.get_event_loop()
 
-        keyboard = Ps2Keyboard(
+        keyboard = Keyboard(
             clock=int(config["keyboard"]["pinout"]["clock"]),
             data=int(config["keyboard"]["pinout"]["data"]),
             pulse=float(config["keyboard"]["pulse"]),

@@ -76,7 +76,7 @@ def _key_event_to_ps2_codes(event: _KeyEvent) -> List[int]:
     return []
 
 
-class Ps2Keyboard(multiprocessing.Process):
+class Keyboard(multiprocessing.Process):
     # http://dkudrow.blogspot.com/2013/08/ps2-keyboard-emulation-with-arduino-uno.html
 
     def __init__(self, clock: int, data: int, pulse: float) -> None:

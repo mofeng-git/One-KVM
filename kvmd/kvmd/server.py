@@ -13,7 +13,7 @@ from typing import Type
 
 import aiohttp.web
 
-from .ps2 import Ps2Keyboard
+from .keyboard import Keyboard
 
 from .atx import Atx
 
@@ -66,7 +66,7 @@ def _json_200(result: Optional[Dict]=None) -> aiohttp.web.Response:
 class Server:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
-        keyboard: Ps2Keyboard,
+        keyboard: Keyboard,
         atx: Atx,
         msd: MassStorageDevice,
         streamer: Streamer,
