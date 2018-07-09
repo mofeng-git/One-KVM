@@ -170,7 +170,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __msd_write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         logger = get_logger(0)
         reader = await request.multipart()
-        writed = 0
+        written = 0
         try:
             field = await reader.next()
             if not field or field.name != "image_name":
@@ -189,13 +189,13 @@ class Server:  # pylint: disable=too-many-instance-attributes
                     chunk = await field.read_chunk(self.__msd_chunk_size)
                     if not chunk:
                         break
-                    writed = await self.__msd.write_image_chunk(chunk)
+                    written = await self.__msd.write_image_chunk(chunk)
                 await self.__msd.write_image_info(image_name, True)
             await self.__broadcast_event("msd_state", state="free")  # type: ignore
         finally:
-            if writed != 0:
-                logger.info("Writed %d bytes to mass-storage device", writed)
-        return _json_200({"writed": writed})
+            if written != 0:
+                logger.info("written %d bytes to mass-storage device", written)
+        return _json_200({"written": written})
 
     async def __streamer_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json_200(self.__streamer.get_state())

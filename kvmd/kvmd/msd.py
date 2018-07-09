@@ -176,7 +176,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__device_info: Optional[_MassStorageDeviceInfo] = None
         self._lock = asyncio.Lock()
         self._device_file: Optional[aiofiles.base.AiofilesContextManager] = None
-        self.__writed = 0
+        self.__written = 0
 
         logger = get_logger(0)
         if self._device_path:
@@ -221,7 +221,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             "in_operate": bool(self._device_path),
             "connected_to": ("kvm" if self.__device_info else "server"),
             "busy": bool(self._device_file),
-            "writed": self.__writed,
+            "written": self.__written,
             "info": info,
         }
 
@@ -235,7 +235,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         if not self.__device_info:
             raise IsNotConnectedToKvmError()
         self._device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
-        self.__writed = 0
+        self.__written = 0
         return self
 
     async def write_image_info(self, name: str, complete: bool) -> None:
@@ -243,9 +243,9 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             assert self._device_file
             assert self.__device_info
             if self.__write_meta:
-                if self.__device_info.size - self.__writed > _IMAGE_INFO_SIZE:
+                if self.__device_info.size - self.__written > _IMAGE_INFO_SIZE:
                     await self._device_file.seek(self.__device_info.size - _IMAGE_INFO_SIZE)
-                    await self.__write_to_device_file(_make_image_info_bytes(name, self.__writed, complete))
+                    await self.__write_to_device_file(_make_image_info_bytes(name, self.__written, complete))
                     await self._device_file.seek(0)
                     await self.__load_device_info()
                 else:
@@ -254,8 +254,8 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     async def write_image_chunk(self, chunk: bytes) -> int:
         async with self._lock:
             await self.__write_to_device_file(chunk)
-            self.__writed += len(chunk)
-            return self.__writed
+            self.__written += len(chunk)
+            return self.__written
 
     async def __aexit__(
         self,
@@ -287,4 +287,4 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             get_logger().exception("Can't close mass-storage device file")
             # TODO: reset device file
         self._device_file = None
-        self.__writed = 0
+        self.__written = 0
