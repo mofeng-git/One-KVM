@@ -11,7 +11,7 @@ def main() -> None:
 
     setup(
         name="kvmd",
-        version="0.14",
+        version="0.15",
         url="https://github.com/mdevaev/pi-kvm",
         license="GPLv3",
         author="Maxim Devaev",
