@@ -123,7 +123,7 @@ def explore_device(device_path: str) -> Optional[MassStorageDeviceInfo]:
 
     return MassStorageDeviceInfo(  # type: ignore
         path=device_path,
-        real=(os.readlink(device_path) if os.path.islink(device_path) else device_path),
+        real=os.path.realpath(device_path),
         size=size,
         **disk_meta,
         **{
