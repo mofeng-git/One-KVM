@@ -1,7 +1,12 @@
+import asyncio
 import multiprocessing
 import multiprocessing.queues
 import queue
 import time
+
+from typing import List
+from typing import Set
+from typing import NamedTuple
 
 from .logging import get_logger
 
@@ -9,6 +14,16 @@ from . import gpio
 
 
 # =====
+class _KeyEvent(NamedTuple):
+    key: str
+    state: bool
+
+
+def _key_event_to_ps2_codes(event: _KeyEvent) -> List[int]:
+    get_logger().info(str(event))
+    return []  # TODO
+
+
 class Ps2Keyboard(multiprocessing.Process):
     def __init__(self, clock: int, data: int, pulse: float) -> None:
         super().__init__(daemon=True)
@@ -17,39 +32,65 @@ class Ps2Keyboard(multiprocessing.Process):
         self.__data = gpio.set_output(data, initial=True)
         self.__pulse = pulse
 
+        self.__pressed_keys: Set[str] = set()
+        self.__lock = asyncio.Lock()
         self.__queue: multiprocessing.queues.Queue = multiprocessing.Queue()
-        self.__event = multiprocessing.Event()
+
+        self.__stop_event = multiprocessing.Event()
 
     def start(self) -> None:
         get_logger().info("Starting keyboard daemon ...")
         super().start()
 
-    def stop(self) -> None:
-        get_logger().info("Stopping keyboard daemon ...")
-        self.__event.set()
-        self.join()
+    async def send_event(self, key: str, state: bool) -> None:
+        if not self.__stop_event.is_set():
+            async with self.__lock:
+                if state and key not in self.__pressed_keys:
+                    self.__pressed_keys.add(key)
+                    self.__queue.put(_KeyEvent(key, state))
+                elif not state and key in self.__pressed_keys:
+                    self.__pressed_keys.remove(key)
+                    self.__queue.put(_KeyEvent(key, state))
 
-    def send_event(self, code: str, state: bool) -> None:
-        if state:
-            get_logger().info("Key pressed: %s", code)
-        else:
-            get_logger().info("Key released: %s", code)
-        # TODO: self.__queue.put(code)
+    async def clear_events(self) -> None:
+        if not self.__stop_event.is_set():
+            async with self.__lock:
+                self.__unsafe_clear_events()
 
-    def cleanup(self) -> None:
-        if self.is_alive():
-            self.stop()
+    async def cleanup(self) -> None:
+        async with self.__lock:
+            if self.is_alive():
+                self.__unsafe_clear_events()
+                get_logger().info("Stopping keyboard daemon ...")
+                self.__stop_event.set()
+                self.join()
+            else:
+                get_logger().warning("Emergency cleaning up keyboard events ...")
+                self.__emergency_clear_events()
+
+    def __unsafe_clear_events(self) -> None:
+        for key in self.__pressed_keys:
+            self.__queue.put(_KeyEvent(key, False))
+        self.__pressed_keys.clear()
+
+    def __emergency_clear_events(self) -> None:
+        for key in self.__pressed_keys:
+            for code in _key_event_to_ps2_codes(_KeyEvent(key, False)):
+                self.__send_byte(code)
 
     def run(self) -> None:
         with gpio.bcm():
             try:
-                while not self.__event.is_set():
+                while True:
                     try:
-                        code = self.__queue.get(timeout=0.1)
+                        event = self.__queue.get(timeout=0.1)
                     except queue.Empty:
                         pass
                     else:
-                        self.__send_byte(code)
+                        for code in _key_event_to_ps2_codes(event):
+                            self.__send_byte(code)
+                    if self.__stop_event.is_set() and self.__queue.qsize() == 0:
+                        break
             except Exception:
                 get_logger().exception("Unhandled exception")
                 raise

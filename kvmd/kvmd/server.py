@@ -135,11 +135,11 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 except Exception:
                     logger.exception("Can't parse JSON event from websocket")
                 else:
-                    if event.get("event_type") == "key_event":
-                        key_code = str(event.get("key_code", ""))[:64].strip()
-                        key_state = event.get("key_state")
-                        if key_code and key_state in [True, False]:
-                            self.__keyboard.send_event(key_code, key_state)
+                    if event.get("event_type") == "key":
+                        key = str(event.get("key", ""))[:64].strip()
+                        state = event.get("state")
+                        if key and state in [True, False]:
+                            await self.__keyboard.send_event(key, state)
                             continue
                     else:
                         logger.error("Invalid websocket event: %r", event)
@@ -236,7 +236,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await self.__remove_socket(ws)
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
-        self.__keyboard.cleanup()
+        await self.__keyboard.cleanup()
         await self.__streamer.cleanup()
         await self.__msd.cleanup()
 
@@ -307,6 +307,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     async def __remove_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
+            await self.__keyboard.clear_events()
             try:
                 self.__sockets.remove(ws)
                 get_logger().info("Removed client socket: remote=%s; id=%d; active=%d",

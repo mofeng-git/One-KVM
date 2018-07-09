@@ -42,9 +42,9 @@ function onKeyEvent(event, state) {
 	// TODO: run this code under the lock
 	console.log("Key", (state ? "pressed:" : "released:"), event)
 	ws.send(JSON.stringify({
-		event_type: "key_event",
-		key_code: event.code,
-		key_state: state,
+		event_type: "key",
+		key: event.code,
+		state: state,
 	}));
 }
 
