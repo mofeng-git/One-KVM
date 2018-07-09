@@ -1,4 +1,5 @@
-_BUILD_DIR=./.build
+_BUILD_DIR = ./.build
+_KVMD_VERSION = $(shell bash -c 'source ../kvmd/PKGBUILD; echo $$pkgver')
 
 all:
 	@ cat Makefile
@@ -6,12 +7,15 @@ all:
 v1:
 	make _pikvm PIKVM_PLATFORM=v1
 
+shell:
+	cd $(_BUILD_DIR) && make shell
+
 _pikvm: $(_BUILD_DIR)
 	rm -rf $(_BUILD_DIR)/stages/pikvm
 	rm -rf $(_BUILD_DIR)/builder/scripts/pikvm
 	cp -a platforms/$(PIKVM_PLATFORM) $(_BUILD_DIR)/stages/pikvm
 	cd $(_BUILD_DIR) && make binfmt && make _rpi \
-		BUILD_OPTS="--build-arg KVMD_VERSION=`bash -c '. ../kvmd/PKGBUILD; echo $$pkgver'`" \
+		BUILD_OPTS="--build-arg $(_KVMD_VERSION)" \
 		PROJECT=pi-kvm \
 		PLATFORM=rpi-2 \
 		STAGES="__init__ os ssh watchdog ro pikvm __cleanup__" \
