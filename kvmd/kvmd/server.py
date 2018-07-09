@@ -184,13 +184,13 @@ class Server:  # pylint: disable=too-many-instance-attributes
             async with self.__msd:
                 await self.__broadcast_event("msd_state", state="busy")  # type: ignore
                 logger.info("Writing image %r to mass-storage device ...", image_name)
-                await self.__msd.write_image_meta(image_name, False)
+                await self.__msd.write_image_info(image_name, False)
                 while True:
                     chunk = await field.read_chunk(self.__msd_chunk_size)
                     if not chunk:
                         break
                     writed = await self.__msd.write_image_chunk(chunk)
-                await self.__msd.write_image_meta(image_name, True)
+                await self.__msd.write_image_info(image_name, True)
             await self.__broadcast_event("msd_state", state="free")  # type: ignore
         finally:
             if writed != 0:
