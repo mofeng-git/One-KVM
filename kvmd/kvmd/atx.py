@@ -13,6 +13,7 @@ class Atx:
         self,
         power_led: int,
         hdd_led: int,
+
         power_switch: int,
         reset_switch: int,
         click_delay: float,

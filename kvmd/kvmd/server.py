@@ -70,10 +70,12 @@ class Server:  # pylint: disable=too-many-instance-attributes
         atx: Atx,
         msd: MassStorageDevice,
         streamer: Streamer,
+
         heartbeat: float,
         atx_state_poll: float,
         streamer_shutdown_delay: float,
         msd_chunk_size: int,
+
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
@@ -81,10 +83,12 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__atx = atx
         self.__msd = msd
         self.__streamer = streamer
+
         self.__heartbeat = heartbeat
         self.__streamer_shutdown_delay = streamer_shutdown_delay
         self.__atx_state_poll = atx_state_poll
         self.__msd_chunk_size = msd_chunk_size
+
         self.__loop = loop
 
         self.__sockets: Set[aiohttp.web.WebSocketResponse] = set()

@@ -18,9 +18,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         conv_power: int,
         sync_delay: float,
         init_delay: float,
+
         width: int,
         height: int,
         cmd: List[str],
+
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
@@ -28,6 +30,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__conv_power = (gpio.set_output(conv_power) if conv_power > 0 else conv_power)
         self.__sync_delay = sync_delay
         self.__init_delay = init_delay
+
         self.__width = width
         self.__height = height
         self.__cmd = cmd
