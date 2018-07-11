@@ -16,6 +16,7 @@ depends=(
 	"python-aiofiles"
 	"python-pyudev"
 	"python-raspberry-gpio"
+	"python-pyserial"
 )
 makedepends=("python-setuptools" "wget")
 
