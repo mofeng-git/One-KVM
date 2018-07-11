@@ -26,10 +26,10 @@ def main() -> None:
 
     with open("src/keymap.h", "w") as hid_header_file:
         hid_header_file.write("#include <HID-Project.h>\n\n#include \"inline.h\"\n\n\n")
-        hid_header_file.write("INLINE uint8_t keymap(uint8_t code) {\n\tswitch(code) {\n")
+        hid_header_file.write("INLINE KeyboardKeycode keymap(uint8_t code) {\n\tswitch(code) {\n")
         for (code, hid_key, _) in sorted(keymap, key=operator.itemgetter(1)):
             hid_header_file.write("\t\tcase %d: return %s;\n" % (code, hid_key))
-        hid_header_file.write("\t\tdefault: return 0;\n\t}\n}")
+        hid_header_file.write("\t\tdefault: return 0;\n\t}\n}\n")
 
 
 if __name__ == "__main__":

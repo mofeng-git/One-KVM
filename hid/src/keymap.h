@@ -3,7 +3,7 @@
 #include "inline.h"
 
 
-INLINE uint8_t keymap(uint8_t code) {
+INLINE KeyboardKeycode keymap(uint8_t code) {
 	switch(code) {
 		case 36: return KEY_0;
 		case 27: return KEY_1;
