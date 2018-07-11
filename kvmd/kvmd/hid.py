@@ -13,8 +13,6 @@ import serial
 
 from .logging import get_logger
 
-from . import gpio
-
 
 # =====
 def _get_keymap() -> Dict[str, int]:
@@ -95,21 +93,20 @@ class Hid(multiprocessing.Process):
             get_logger().exception("Can't execute emergency clear events")
 
     def run(self) -> None:
-        with gpio.bcm():
-            try:
-                with serial.Serial(self.__device_path, self.__speed) as tty:
-                    while True:
-                        try:
-                            event = self.__queue.get(timeout=0.1)
-                        except queue.Empty:
-                            pass
-                        else:
-                            self.__send_key_event(tty, event)
-                        if self.__stop_event.is_set() and self.__queue.qsize() == 0:
-                            break
-            except Exception:
-                get_logger().exception("Unhandled exception")
-                raise
+        try:
+            with serial.Serial(self.__device_path, self.__speed) as tty:
+                while True:
+                    try:
+                        event = self.__queue.get(timeout=0.1)
+                    except queue.Empty:
+                        pass
+                    else:
+                        self.__send_key_event(tty, event)
+                    if self.__stop_event.is_set() and self.__queue.qsize() == 0:
+                        break
+        except Exception:
+            get_logger().exception("Unhandled exception")
+            raise
 
     def __send_key_event(self, tty: serial.Serial, event: _KeyEvent) -> None:
         key_bytes = _keymap(event.key)
