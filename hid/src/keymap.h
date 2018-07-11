@@ -1,0 +1,94 @@
+#include <HID-Project.h>
+
+#include "inline.h"
+
+
+INLINE uint8_t keymap(uint8_t code) {
+	switch(code) {
+		case 36: return KEY_0;
+		case 27: return KEY_1;
+		case 28: return KEY_2;
+		case 29: return KEY_3;
+		case 30: return KEY_4;
+		case 31: return KEY_5;
+		case 32: return KEY_6;
+		case 33: return KEY_7;
+		case 34: return KEY_8;
+		case 35: return KEY_9;
+		case 1: return KEY_A;
+		case 2: return KEY_B;
+		case 46: return KEY_BACKSLASH;
+		case 39: return KEY_BACKSPACE;
+		case 3: return KEY_C;
+		case 53: return KEY_CAPS_LOCK;
+		case 50: return KEY_COMMA;
+		case 4: return KEY_D;
+		case 70: return KEY_DELETE;
+		case 75: return KEY_DOWN_ARROW;
+		case 5: return KEY_E;
+		case 71: return KEY_END;
+		case 37: return KEY_ENTER;
+		case 43: return KEY_EQUAL;
+		case 38: return KEY_ESC;
+		case 6: return KEY_F;
+		case 54: return KEY_F1;
+		case 63: return KEY_F10;
+		case 64: return KEY_F11;
+		case 65: return KEY_F12;
+		case 55: return KEY_F2;
+		case 56: return KEY_F3;
+		case 57: return KEY_F4;
+		case 58: return KEY_F5;
+		case 59: return KEY_F6;
+		case 60: return KEY_F7;
+		case 61: return KEY_F8;
+		case 62: return KEY_F9;
+		case 7: return KEY_G;
+		case 8: return KEY_H;
+		case 68: return KEY_HOME;
+		case 9: return KEY_I;
+		case 67: return KEY_INSERT;
+		case 10: return KEY_J;
+		case 11: return KEY_K;
+		case 12: return KEY_L;
+		case 79: return KEY_LEFT_ALT;
+		case 74: return KEY_LEFT_ARROW;
+		case 44: return KEY_LEFT_BRACE;
+		case 77: return KEY_LEFT_CTRL;
+		case 80: return KEY_LEFT_GUI;
+		case 78: return KEY_LEFT_SHIFT;
+		case 13: return KEY_M;
+		case 42: return KEY_MINUS;
+		case 14: return KEY_N;
+		case 15: return KEY_O;
+		case 16: return KEY_P;
+		case 72: return KEY_PAGE_DOWN;
+		case 69: return KEY_PAGE_UP;
+		case 51: return KEY_PERIOD;
+		case 66: return KEY_PRINT;
+		case 17: return KEY_Q;
+		case 48: return KEY_QUOTE;
+		case 18: return KEY_R;
+		case 83: return KEY_RIGHT_ALT;
+		case 73: return KEY_RIGHT_ARROW;
+		case 45: return KEY_RIGHT_BRACE;
+		case 81: return KEY_RIGHT_CTRL;
+		case 84: return KEY_RIGHT_GUI;
+		case 82: return KEY_RIGHT_SHIFT;
+		case 19: return KEY_S;
+		case 47: return KEY_SEMICOLON;
+		case 52: return KEY_SLASH;
+		case 41: return KEY_SPACE;
+		case 20: return KEY_T;
+		case 40: return KEY_TAB;
+		case 49: return KEY_TILDE;
+		case 21: return KEY_U;
+		case 76: return KEY_UP_ARROW;
+		case 22: return KEY_V;
+		case 23: return KEY_W;
+		case 24: return KEY_X;
+		case 25: return KEY_Y;
+		case 26: return KEY_Z;
+		default: return 0;
+	}
+}

@@ -26,6 +26,10 @@ def main() -> None:
             "kvmd.extras.wscli",
         ],
 
+        package_data={
+            "kvmd": ["data/*.yaml"],
+        },
+
         entry_points={
             "console_scripts": [
                 "kvmd = kvmd:main",

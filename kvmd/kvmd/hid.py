@@ -1,13 +1,14 @@
-import re
 import asyncio
 import multiprocessing
 import multiprocessing.queues
 import queue
+import pkgutil
 
+from typing import Dict
 from typing import Set
 from typing import NamedTuple
-from typing import Union
 
+import yaml
 import serial
 
 from .logging import get_logger
@@ -16,48 +17,21 @@ from . import gpio
 
 
 # =====
+def _get_keymap() -> Dict[str, int]:
+    return yaml.load(pkgutil.get_data(__name__, "data/keymap.yaml").decode())  # type: ignore
+
+
+_KEYMAP = _get_keymap()
+
+
+def _keymap(key: str) -> bytes:
+    code = _KEYMAP.get(key)
+    return (bytes([code]) if code else b"")  # type: ignore
+
+
 class _KeyEvent(NamedTuple):
     key: str
     state: bool
-
-
-def _key_to_bytes(key: str) -> bytes:
-    # https://www.arduino.cc/reference/en/language/functions/usb/keyboard/
-    # Also locate Keyboard.h
-
-    match = re.match(r"(Digit|Key)([0-9A-Z])", key)
-    code: Union[str, int, None]
-    if match:
-        code = match.group(2)
-    else:
-        code = {  # type: ignore
-            "Escape":    0xB1, "Backspace":  0xB2,
-            "Tab":       0xB3, "Enter":      0xB0,
-            "Insert":    0xD1, "Delete":     0xD4,
-            "Home":      0xD2, "End":        0xD5,
-            "PageUp":    0xD3, "PageDown":   0xD6,
-            "ArrowLeft": 0xD8, "ArrowRight": 0xD7,
-            "ArrowUp":   0xDA, "ArrowDown":  0xD9,
-
-            "CapsLock":    0xC1,
-            "ShiftLeft":   0x81, "ShiftRight":   0x85,
-            "ControlLeft": 0x80, "ControlRight": 0x84,
-            "AltLeft":     0x82, "AltRight":     0x86,
-            "MetaLeft":    0x83, "MetaRight":    0x87,
-
-            "Backquote":   "`", "Minus":        "-", "Equal":     "=", "Space":     " ",
-            "BracketLeft": "[", "BracketRight": "]", "Semicolon": ";", "Quote":     "'",
-            "Comma":       ",", "Period":       ".", "Slash":     "/", "Backslash": "\\",
-
-            "F1": 0xC2, "F2":  0xC3, "F3":  0xC4, "F4":  0xC5,
-            "F5": 0xC6, "F6":  0xC7, "F7":  0xC8, "F8":  0xC9,
-            "F9": 0xCA, "F10": 0xCB, "F11": 0xCC, "F12": 0xCD,
-        }.get(key)
-    if isinstance(code, str):
-        return bytes(code, encoding="ascii")  # type: ignore
-    elif isinstance(code, int):
-        return bytes([code])
-    return b""
 
 
 class Hid(multiprocessing.Process):
@@ -138,14 +112,15 @@ class Hid(multiprocessing.Process):
                 raise
 
     def __send_key_event(self, tty: serial.Serial, event: _KeyEvent) -> None:
-        key_bytes = _key_to_bytes(event.key)
+        key_bytes = _keymap(event.key)
         if key_bytes:
             assert len(key_bytes) == 1, (event, key_bytes)
             tty.write(
                 b"\01"
                 + (b"\01" if event.state else b"\00")
                 + key_bytes
+                + b"\00"
             )
 
     def __send_clear_hid(self, tty: serial.Serial) -> None:
-        tty.write(b"\00")
+        tty.write(b"\00\00\00\00")
