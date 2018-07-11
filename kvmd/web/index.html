@@ -1,68 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8" />
-<title>&pi;-kvm</title>
-<style>
-body {
-	text-align: center;
-}
-.screen, .screen * {
-	box-sizing: border-box;
-}
-.screen {
-	display: inline-block;
-	background-color: #e5e5f5;
-	font-family: Arial, Tahoma, Verdana, sans;
-	font-size: 10pt;
-	text-align: center;
-	padding: 1em;
-	text-align: left;
-}
-.screen .screen-image {
-	width: 720px;
-	height: 576px;
-	border: 1px solid #77d;
-	display: inline-block;
-}
-</style>
+	<meta charset="utf-8" />
+	<title>&pi;-kvm</title>
+	<link rel="stylesheet" href="css/main.css">
 </head>
 
-<script>
-ws = new WebSocket("ws://" + location.host + "/kvmd/ws");
-
-function onWsMessage(message) {
-	console.log(message.data);
-	/*if (message.data == "EVENT mjpg_streamer started") {
-		document.getElementById("stream-image").src = "/streamer/?action=stream&time=" + new Date().getTime();
-	}*/
-}
-
-function onKeyEvent(event, state) {
-	// TODO: run this code under the lock
-	if (!event.metaKey) { // https://github.com/wesbos/keycodes/blob/gh-pages/scripts.js
-		event.preventDefault();
-	}
-	console.log("Key", (state ? "pressed:" : "released:"), event)
-	ws.send(JSON.stringify({
-		event_type: "key",
-		key: event.code,
-		state: state,
-	}));
-}
-
-ws.onmessage = (message) => onWsMessage(message);
-ws.onerror = (error) => console.error(error);
-ws.onclose = () => console.log("closed");
-
-// https://www.codeday.top/2017/05/03/24906.html
-document.onkeydown = (event) => onKeyEvent(event, true);
-document.onkeyup = (event) => onKeyEvent(event, false);
-</script>
+<script src="js/kvmd.js"></script>
+<script> window.onload = runKvmdSession; </script>
 
 <body>
-<div class="screen">
-	<img src="/streamer/?action=stream" id="stream-image" class="screen-image" alt="" />
-</div>
+	<div class="stream-box">
+		<img src="/streamer/?action=stream" id="stream-image" class="stream-image" alt="" />
+	</div>
+
+	<table><tr>
+		<td><div id="power-led" class="power-led-off"></div></td>
+		<td><div id="hdd-led" class="hdd-led-off"></div></td>
+		<td>&nbsp;&nbsp;</td>
+		<td><button id="power-button" type="button" title="Click hardware power button" onclick="clickPowerButton();">Power</button></td>
+		<td><button id="power-button-long" type="button" title="Click hardware power button (long press)" onclick="clickPowerButtonLong();">Power (long)</button></td>
+		<td><button id="reset-button" type="button" title="Click to force reset" onclick="clickResetButton();">Reset</button></td>
+		<td>&nbsp;&nbsp;</td>
+		<td><div id="session-status">Not connected yet...</div></td>
+	</tr></table>
 </body>
 </html>

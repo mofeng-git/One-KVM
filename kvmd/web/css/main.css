@@ -1,0 +1,41 @@
+.stream-box {
+   box-sizing: border-box;
+   display: inline-block;
+   background-color: #e5e5f5;
+   padding: 1em;
+   text-align: left;
+}
+.stream-box .stream-image {
+   width: 720px;
+   height: 576px;
+   border: 1px solid grey;
+   display: inline-block;
+}
+
+.session-opened {
+}
+.session-closed {
+	color: #ff3d40;
+}
+
+div#power-led, div#hdd-led {
+	border-radius: 50%;
+	border: 1px solid grey;
+	width: 16px;
+	height: 16px;
+}
+div.power-led-on {
+	background: #00ce00;
+}
+div.power-led-off {
+	background: #adceab;
+}
+div.hdd-led-on {
+	background: #ff373a;
+}
+div.hdd-led-off {
+	background: #ffcdce;
+}
+
+button#power-button, button#reset-button {
+}
