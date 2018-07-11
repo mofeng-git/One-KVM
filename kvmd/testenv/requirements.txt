@@ -3,5 +3,6 @@ aiohttp
 aiofiles
 pyudev
 pyyaml
+pyserial
 bumpversion
 tox

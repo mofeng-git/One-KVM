@@ -3,7 +3,7 @@ import asyncio
 from .application import init
 from .logging import get_logger
 
-from .keyboard import Keyboard
+from .hid import Hid
 from .atx import Atx
 from .msd import MassStorageDevice
 from .streamer import Streamer
@@ -18,10 +18,9 @@ def main() -> None:
     with gpio.bcm():
         loop = asyncio.get_event_loop()
 
-        keyboard = Keyboard(
-            clock=int(config["keyboard"]["pinout"]["clock"]),
-            data=int(config["keyboard"]["pinout"]["data"]),
-            pulse=float(config["keyboard"]["pulse"]),
+        hid = Hid(
+            device_path=str(config["hid"]["device"]),
+            speed=int(config["hid"]["speed"]),
         )
 
         atx = Atx(
@@ -52,7 +51,7 @@ def main() -> None:
         )
 
         Server(
-            keyboard=keyboard,
+            hid=hid,
             atx=atx,
             msd=msd,
             streamer=streamer,

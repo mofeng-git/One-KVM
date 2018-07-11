@@ -1,8 +1,10 @@
 TESTENV_IMAGE ?= kvmd-testenv
+TESTENV_HID ?= /dev/ttyS10
 TESTENV_VIDEO ?= /dev/video0
 TESTENV_LOOP ?= /dev/loop7
 TESTENV_CMD ?= /bin/bash -c " \
-		nginx -c /testenv/nginx.conf \
+		(socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
+		&& nginx -c /testenv/nginx.conf \
 		&& ln -s $(TESTENV_VIDEO) /dev/kvmd-streamer \
 		&& (losetup -d /dev/kvmd-msd || true) \
 		&& losetup /dev/kvmd-msd /root/loop.img \

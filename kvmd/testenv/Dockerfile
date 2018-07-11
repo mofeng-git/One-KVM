@@ -33,6 +33,7 @@ RUN pacman -Syy \
 		python-pip \
 		nginx \
 		mjpg-streamer-pikvm \
+		socat \
 	&& pacman -Sc --noconfirm
 
 COPY testenv/requirements.txt requirements.txt

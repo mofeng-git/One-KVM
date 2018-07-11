@@ -13,7 +13,7 @@ from typing import Type
 
 import aiohttp.web
 
-from .keyboard import Keyboard
+from .hid import Hid
 
 from .atx import Atx
 
@@ -66,7 +66,7 @@ def _json_200(result: Optional[Dict]=None) -> aiohttp.web.Response:
 class Server:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
-        keyboard: Keyboard,
+        hid: Hid,
         atx: Atx,
         msd: MassStorageDevice,
         streamer: Streamer,
@@ -79,7 +79,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
-        self.__keyboard = keyboard
+        self.__hid = hid
         self.__atx = atx
         self.__msd = msd
         self.__streamer = streamer
@@ -99,7 +99,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__reset_streamer = False
 
     def run(self, host: str, port: int) -> None:
-        self.__keyboard.start()
+        self.__hid.start()
 
         app = aiohttp.web.Application(loop=self.__loop)
 
@@ -119,7 +119,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         app.on_cleanup.append(self.__on_cleanup)
 
         self.__system_tasks.extend([
-            self.__loop.create_task(self.__keyboard_watchdog()),
+            self.__loop.create_task(self.__hid_watchdog()),
             self.__loop.create_task(self.__stream_controller()),
             self.__loop.create_task(self.__poll_dead_sockets()),
             self.__loop.create_task(self.__poll_atx_state()),
@@ -143,7 +143,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                         key = str(event.get("key", ""))[:64].strip()
                         state = event.get("state")
                         if key and state in [True, False]:
-                            await self.__keyboard.send_event(key, state)
+                            await self.__hid.send_key_event(key, state)
                             continue
                     else:
                         logger.error("Invalid websocket event: %r", event)
@@ -240,15 +240,15 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await self.__remove_socket(ws)
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
-        await self.__keyboard.cleanup()
+        await self.__hid.cleanup()
         await self.__streamer.cleanup()
         await self.__msd.cleanup()
 
     @_system_task
-    async def __keyboard_watchdog(self) -> None:
-        while self.__keyboard.is_alive():
+    async def __hid_watchdog(self) -> None:
+        while self.__hid.is_alive():
             await asyncio.sleep(0.1)
-        raise RuntimeError("Keyboard dead")
+        raise RuntimeError("HID is dead")
 
     @_system_task
     async def __stream_controller(self) -> None:
@@ -311,7 +311,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     async def __remove_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
-            await self.__keyboard.clear_events()
+            await self.__hid.clear_events()
             try:
                 self.__sockets.remove(ws)
                 get_logger().info("Removed client socket: remote=%s; id=%d; active=%d",

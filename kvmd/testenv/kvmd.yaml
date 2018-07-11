@@ -4,12 +4,9 @@ kvmd:
         port: 8081
         heartbeat: 3.0
 
-    keyboard:
-        pinout:
-            clock: 17
-            data: 4
-
-        pulse: 0.0002
+    hid:
+        device: /dev/ttyS10
+        speed: 115200
 
     atx:
         pinout:
