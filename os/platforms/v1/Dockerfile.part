@@ -12,7 +12,7 @@ COPY stages/pikvm/sysctl.conf /etc/sysctl.d/99-pikvm.conf
 COPY stages/pikvm/udev.rules /etc/udev/rules.d/pikvm.rules
 
 RUN sed -i -e "s/console=ttyAMA0\,115200//g" /boot/cmdline.txt \
-	&& sed -i -e "s/kgdboc=ttyAMA0\,115200//g" /boo/cmdline.txt
+	&& sed -i -e "s/kgdboc=ttyAMA0\,115200//g" /boot/cmdline.txt
 RUN systemctl mask serial-getty@ttyAMA0.service
 
 RUN cp /usr/share/kvmd/configs/nginx/nginx.conf /etc/nginx/
