@@ -42,7 +42,7 @@ kvmd:
         cmd:
             - "/usr/bin/mjpg_streamer"
             - "-i"
-            - "input_uvc.so -d /dev/kvmd-streamer -e 2 -y -n -r {width}x{height}"
+            - "input_uvc.so -d /dev/kvmd-streamer -e 2 -t pal -y -n -r {width}x{height}"
             - "-o"
             - "output_http.so -l localhost -p 8082"
 

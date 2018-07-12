@@ -36,8 +36,8 @@ kvmd:
         shutdown_delay: 10.0
 
         size:
-            width: 720
-            height: 576
+            width: 800
+            height: 600
 
         cmd:
             - "/usr/bin/mjpg_streamer"
