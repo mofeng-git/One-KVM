@@ -1,12 +1,13 @@
+RUN pkg-install \
+	nginx \
+	mjpg-streamer-pikvm \
+	python \
+	python-raspberry-gpio
+RUN systemctl enable nginx
+
 ARG KVMD_VERSION
 ENV KVMD_VERSION $KVMD_VERSION
 RUN echo $KVMD_VERSION
-
-RUN pkg-install \
-	nginx \
-	mjpg-streamer-pikvm
-RUN systemctl enable nginx
-
 RUN pkg-install kvmd
 RUN systemctl enable kvmd
 
