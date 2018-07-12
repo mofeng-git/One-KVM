@@ -3,9 +3,12 @@ ENV KVMD_VERSION $KVMD_VERSION
 RUN echo $KVMD_VERSION
 
 RUN pkg-install \
-	kvmd \
-	mjpg-streamer-pikvm \
-	nginx
+	nginx \
+	mjpg-streamer-pikvm
+RUN systemctl enable nginx
+
+RUN pkg-install kvmd
+RUN systemctl enable kvmd
 
 COPY stages/pikvm/config.txt /boot/
 COPY stages/pikvm/sysctl.conf /etc/sysctl.d/99-pikvm.conf
@@ -17,6 +20,3 @@ RUN systemctl mask serial-getty@ttyAMA0.service
 
 RUN cp /usr/share/kvmd/configs/nginx/nginx.conf /etc/nginx/
 RUN cp /usr/share/kvmd/configs/kvmd/v1.yaml /etc/kvmd.yaml
-
-RUN systemctl enable kvmd
-RUN systemctl enable nginx
