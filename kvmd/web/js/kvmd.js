@@ -1,12 +1,7 @@
-KVMD_BASE_URL = "/kvmd"
-
-
-// -----------------------------------------------------------------------------
 function runKvmdSession() {
-	var ws = new WebSocket("ws://" + location.host + KVMD_BASE_URL + "/ws");
+	var ws = new WebSocket("ws://" + location.host + "/kvmd/ws");
 
 	ws.onopen = function(event) {
-		alert("Session opened and keyboard will be captured");
 		__installHidHandlers(ws);
 		__setSessionStatus("session-opened", "Session opened (keyboard captured)");
 	};
@@ -86,14 +81,38 @@ function clickResetButton() {
 
 function __clickButton(button) {
 	var http = new XMLHttpRequest();
-	http.open("POST", KVMD_BASE_URL + "/atx/click?button=" + button, true);
+	http.open("POST", "/kvmd/atx/click?button=" + button, true);
 	http.onreadystatechange = function() {
-		if (http.readyState == 4) {
-			if (http.status == 200) {
-				alert("Clicked!")
-			} else {
-				alert("Click error: " + http.responseText);
+		if (http.readyState == 4 && http.status != 200) {
+			alert("Click error: " + http.responseText);
+		}
+	}
+	http.send();
+}
+
+
+// -----------------------------------------------------------------------------
+function pollStreamer() {
+	var http = new XMLHttpRequest();
+	http.open("GET", "/streamer/?action=snapshot", true);
+	http.onreadystatechange = function() {
+		if (http.readyState == 2) {
+			http.abort();
+			if (http.status != 200) {
+				document.getElementById("stream-image").src = "/streamer/?action=stream&time=" + new Date().getTime();
 			}
+		}
+	}
+	http.send();
+	setTimeout(pollStreamer, 2000);
+}
+
+function resetStreamer() {
+	var http = new XMLHttpRequest();
+	http.open("POST", "/kvmd/streamer/reset", true);
+	http.onreadystatechange = function() {
+		if (http.readyState == 4 && http.status != 200) {
+			alert("Can't reset streamer: " + http.responseText);
 		}
 	}
 	http.send();
