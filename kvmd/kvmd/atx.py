@@ -56,5 +56,5 @@ class Atx:
                 for flag in (True, False):
                     gpio.write(pin, flag)
                     await asyncio.sleep(delay)
-                    return True
+                return True
         return False
