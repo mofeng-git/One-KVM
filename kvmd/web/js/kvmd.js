@@ -41,24 +41,79 @@ function __installHidHandlers(ws) {
 	// https://www.codeday.top/2017/05/03/24906.html
 	document.onkeydown = (event) => __onKeyEvent(ws, event, true);
 	document.onkeyup = (event) => __onKeyEvent(ws, event, false);
+
+	el_stream_image = document.getElementById("stream-image");
+	el_stream_image.onmousedown = (event) => __onMouseButton(ws, event, true);
+	el_stream_image.onmouseup = (event) => __onMouseButton(ws, event, false);
+	el_stream_image.oncontextmenu = (event) => event.preventDefault();
+	el_stream_image.onmousemove = __onMouseMove;
+	runKvmdSession.mouse_timer_id = setInterval(() => __handleMouseMove(ws), 100);
+	// TODO: https://learn.javascript.ru/mousewheel
 }
 
 function __clearHidHandlers() {
 	document.onkeydown = null;
 	document.onkeyup = null;
+
+	el_stream_image = document.getElementById("stream-image");
+	el_stream_image.onmousedown = null;
+	el_stream_image.onmouseup = null;
+	el_stream_image.oncontextmenu = null;
+	el_stream_image.onmousemove = null;
+	clearInterval(runKvmdSession.mouse_timer_id);
 }
 
 function __onKeyEvent(ws, event, state) {
-    if (!event.metaKey) { // https://github.com/wesbos/keycodes/blob/gh-pages/scripts.js
-        event.preventDefault();
-    }
-    // console.log("KVMD: Key", (state ? "pressed:" : "released:"), event)
-    ws.send(JSON.stringify({
-        event_type: "key",
-        key: event.code,
-        state: state,
-    }));
+	// console.log("KVMD: Key", (state ? "pressed:" : "released:"), event)
+	if (!event.metaKey) { // https://github.com/wesbos/keycodes/blob/gh-pages/scripts.js
+		event.preventDefault();
+	}
+	ws.send(JSON.stringify({
+		event_type: "key",
+		key: event.code,
+		state: state,
+	}));
 }
+
+function __onMouseButton(ws, event, state) {
+	// https://www.w3schools.com/jsref/event_button.asp
+	switch (event.button) {
+		case 0: var button = "Left"; break;
+		case 2: var button = "Right"; break;
+		default: var button = null; break
+	}
+	if (button) {
+		// console.log("KVMD: Mouse button", (state ? "pressed:" : "released:"), button);
+		event.preventDefault();
+		__handleMouseMove(ws);
+		ws.send(JSON.stringify({
+			event_type: "mouse_button",
+			button: button,
+			state: state,
+		}));
+	}
+}
+
+function __onMouseMove(event) {
+	var rect = event.target.getBoundingClientRect();
+	__onMouseMove.pos = {
+		x: Math.round(event.clientX - rect.left),
+		y: Math.round(event.clientY - rect.top),
+	};
+}
+__onMouseMove.pos = {x: 0, y:0};
+
+function __handleMouseMove(ws) {
+	var pos = __onMouseMove.pos;
+	if (pos.x != __handleMouseMove.old_pos.x || pos.y != __handleMouseMove.old_pos.y) {
+		ws.send(JSON.stringify({
+			event_type: "mouse_move",
+			move_to: pos,
+		}));
+		__handleMouseMove.old_pos = pos;
+	}
+}
+__handleMouseMove.old_pos = {x: 0, y:0};
 
 
 // -----------------------------------------------------------------------------
