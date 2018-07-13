@@ -58,23 +58,15 @@ class BadRequest(Exception):
     pass
 
 
-class PerformingAnotherOperation(Exception):
-    def __init__(self) -> None:
-        super().__init__("Performing another operation, please try again later")
-
-
 def _wrap_exceptions_for_web(msg: str) -> Callable:
     def make_wrapper(method: Callable) -> Callable:
         async def wrap(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
             try:
-                try:
-                    return (await method(self, request))
-                except RegionIsBusyError:
-                    raise PerformingAnotherOperation()
+                return (await method(self, request))
+            except RegionIsBusyError as err:
+                return _json_exception(msg, err, 409)
             except (BadRequest, MassStorageOperationError) as err:
                 return _json_exception(msg, err, 400)
-            except PerformingAnotherOperation as err:
-                return _json_exception(msg, err, 409)
         return wrap
     return make_wrapper
 

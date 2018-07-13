@@ -9,14 +9,15 @@ class RegionIsBusyError(Exception):
 
 
 class AioExclusiveRegion:
-    def __init__(self) -> None:
+    def __init__(self, exc_type: Type[RegionIsBusyError]) -> None:
+        self.__exc_type = exc_type
         self.__busy = False
 
     def enter(self) -> None:
         if not self.__busy:
             self.__busy = True
             return
-        raise RegionIsBusyError()
+        raise self.__exc_type()
 
     def exit(self) -> None:
         self.__busy = False

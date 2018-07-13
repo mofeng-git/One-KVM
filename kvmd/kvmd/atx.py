@@ -9,6 +9,11 @@ from . import gpio
 
 
 # =====
+class AtxIsBusy(aioregion.RegionIsBusyError):
+    def __init__(self) -> None:
+        super().__init__("Performing another operation, please try again later")
+
+
 class Atx:
     def __init__(
         self,
@@ -29,7 +34,7 @@ class Atx:
         self.__click_delay = click_delay
         self.__long_click_delay = long_click_delay
 
-        self.__region = aioregion.AioExclusiveRegion()
+        self.__region = aioregion.AioExclusiveRegion(AtxIsBusy)
 
     def get_state(self) -> Dict:
         return {

@@ -49,7 +49,7 @@ class IsNotConnectedToKvmError(MassStorageOperationError):
         super().__init__("Mass-storage is not connected to KVM")
 
 
-class IsBusyError(MassStorageOperationError):
+class IsBusyError(MassStorageOperationError, aioregion.RegionIsBusyError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is busy (write in progress)")
 
@@ -155,8 +155,6 @@ def _explore_device(device_path: str) -> Optional[_MassStorageDeviceInfo]:
 
 def _msd_operated(method: Callable) -> Callable:
     async def wrap(self: "MassStorageDevice", *args: Any, **kwargs: Any) -> Any:
-        if self._device_file:  # pylint: disable=protected-access
-            raise IsBusyError()
         if not self._device_path:  # pylint: disable=protected-access
             IsNotOperationalError()
         return (await method(self, *args, **kwargs))
@@ -179,7 +177,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__loop = loop
 
         self.__device_info: Optional[_MassStorageDeviceInfo] = None
-        self.__region = aioregion.AioExclusiveRegion()
+        self.__region = aioregion.AioExclusiveRegion(IsBusyError)
         self._device_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__written = 0
 
@@ -238,11 +236,11 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     @_msd_operated
     async def __aenter__(self) -> "MassStorageDevice":
+        self.__region.enter()
         if not self.__device_info:
             raise IsNotConnectedToKvmError()
         self._device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
         self.__written = 0
-        self.__region.enter()
         return self
 
     async def write_image_info(self, name: str, complete: bool) -> None:
