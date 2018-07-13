@@ -1,15 +1,16 @@
 .stream-box {
-   box-sizing: border-box;
-   display: inline-block;
-   background-color: #e5e5f5;
-   padding: 1em;
-   text-align: left;
+	box-sizing: border-box;
+	display: inline-block;
+	background-color: #e5e5f5;
+	padding: 1em;
+	text-align: left;
 }
 .stream-box .stream-image {
-   width: 640px;
-   height: 480px;
-   border: 1px solid grey;
-   display: inline-block;
+	width: 640px;
+	height: 480px;
+	border: 1px solid grey;
+	display: inline-block;
+	cursor: wait;
 }
 
 .session-opened {

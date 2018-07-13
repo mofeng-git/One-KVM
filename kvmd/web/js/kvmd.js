@@ -167,14 +167,16 @@ function pollStreamer() {
 	var http = new XMLHttpRequest();
 	http.open("GET", "/streamer/?action=snapshot", true);
 	http.onreadystatechange = function() {
-		if (http.readyState == 2) {
+		if (http.readyState == 2 || http.readyState == 4) {
 			var status = http.status;
 			http.abort();
 			if (status != 200) {
 				console.log("Refreshing streamer ...");
 				pollStreamer.last = false;
+				document.getElementById("stream-image").style.cursor = "wait";
 			} else if (!pollStreamer.last) {
 				__refreshStremaer();
+				document.getElementById("stream-image").style.cursor = "cell";
 				pollStreamer.last = true;
 			}
 		}
