@@ -109,7 +109,7 @@ function __handleMouseMove(ws) {
 	if (pos.x != __handleMouseMove.old_pos.x || pos.y != __handleMouseMove.old_pos.y) {
 		ws.send(JSON.stringify({
 			event_type: "mouse_move",
-			move_to: pos,
+			to: pos,
 		}));
 		__handleMouseMove.old_pos = pos;
 	}
