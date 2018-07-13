@@ -21,37 +21,36 @@ from .logging import get_logger
 
 
 # =====
-class MassStorageError(Exception):
+class MsdError(Exception):
     pass
 
 
-class MassStorageOperationError(MassStorageError):
+class MsdOperationError(MsdError):
     pass
 
 
-class IsNotOperationalError(MassStorageOperationError):
+class MsdIsNotOperationalError(MsdOperationError):
     def __init__(self) -> None:
         super().__init__("Missing path for mass-storage device")
 
 
-class AlreadyConnectedToPcError(MassStorageOperationError):
+class MsdAlreadyConnectedToPcError(MsdOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is already connected to Server")
 
 
-class AlreadyConnectedToKvmError(MassStorageOperationError):
+class MsdAlreadyConnectedToKvmError(MsdOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is already connected to KVM")
 
 
-class IsNotConnectedToKvmError(MassStorageOperationError):
+class MsdIsNotConnectedToKvmError(MsdOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is not connected to KVM")
 
 
-class IsBusyError(MassStorageOperationError, aioregion.RegionIsBusyError):
-    def __init__(self) -> None:
-        super().__init__("Mass-storage is busy (write in progress)")
+class MsdIsBusyError(MsdOperationError, aioregion.RegionIsBusyError):
+    pass
 
 
 # =====
@@ -156,7 +155,7 @@ def _explore_device(device_path: str) -> Optional[_MassStorageDeviceInfo]:
 def _msd_operated(method: Callable) -> Callable:
     async def wrap(self: "MassStorageDevice", *args: Any, **kwargs: Any) -> Any:
         if not self._device_path:  # pylint: disable=protected-access
-            IsNotOperationalError()
+            MsdIsNotOperationalError()
         return (await method(self, *args, **kwargs))
     return wrap
 
@@ -177,8 +176,8 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__loop = loop
 
         self.__device_info: Optional[_MassStorageDeviceInfo] = None
-        self.__region = aioregion.AioExclusiveRegion(IsBusyError)
-        self._device_file: Optional[aiofiles.base.AiofilesContextManager] = None
+        self.__region = aioregion.AioExclusiveRegion(MsdIsBusyError)
+        self.__device_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__written = 0
 
         logger = get_logger(0)
@@ -188,7 +187,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
                 logger.info("Enabled image metadata writing")
                 loop.run_until_complete(self.connect_to_kvm(no_delay=True))
             except Exception as err:
-                if isinstance(err, MassStorageError):
+                if isinstance(err, MsdError):
                     log = logger.error
                 else:
                     log = logger.exception
@@ -201,7 +200,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     async def connect_to_kvm(self, no_delay: bool=False) -> None:
         with self.__region:
             if self.__device_info:
-                raise AlreadyConnectedToKvmError()
+                raise MsdAlreadyConnectedToKvmError()
             # TODO: disable gpio
             if not no_delay:
                 await asyncio.sleep(self.__init_delay)
@@ -212,7 +211,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     async def connect_to_pc(self) -> None:
         with self.__region:
             if not self.__device_info:
-                raise AlreadyConnectedToPcError()
+                raise MsdAlreadyConnectedToPcError()
             # TODO: enable gpio
             self.__device_info = None
             get_logger().info("Mass-storage device switched to Server")
@@ -225,7 +224,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         return {
             "in_operate": bool(self._device_path),
             "connected_to": ("kvm" if self.__device_info else "server"),
-            "busy": bool(self._device_file),
+            "busy": bool(self.__device_file),
             "written": self.__written,
             "info": info,
         }
@@ -238,19 +237,19 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     async def __aenter__(self) -> "MassStorageDevice":
         self.__region.enter()
         if not self.__device_info:
-            raise IsNotConnectedToKvmError()
-        self._device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
+            raise MsdIsNotConnectedToKvmError()
+        self.__device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
         self.__written = 0
         return self
 
     async def write_image_info(self, name: str, complete: bool) -> None:
-        assert self._device_file
+        assert self.__device_file
         assert self.__device_info
         if self.__write_meta:
             if self.__device_info.size - self.__written > _IMAGE_INFO_SIZE:
-                await self._device_file.seek(self.__device_info.size - _IMAGE_INFO_SIZE)
+                await self.__device_file.seek(self.__device_info.size - _IMAGE_INFO_SIZE)
                 await self.__write_to_device_file(_make_image_info_bytes(name, self.__written, complete))
-                await self._device_file.seek(0)
+                await self.__device_file.seek(0)
                 await self.__load_device_info()
             else:
                 get_logger().error("Can't write image info because device is full")
@@ -272,24 +271,24 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             self.__region.exit()
 
     async def __write_to_device_file(self, data: bytes) -> None:
-        assert self._device_file
-        await self._device_file.write(data)
-        await self._device_file.flush()
-        await self.__loop.run_in_executor(None, os.fsync, self._device_file.fileno())
+        assert self.__device_file
+        await self.__device_file.write(data)
+        await self.__device_file.flush()
+        await self.__loop.run_in_executor(None, os.fsync, self.__device_file.fileno())
 
     async def __load_device_info(self) -> None:
         device_info = await self.__loop.run_in_executor(None, _explore_device, self._device_path)
         if not device_info:
-            raise MassStorageError("Can't explore device %r" % (self._device_path))
+            raise MsdError("Can't explore device %r" % (self._device_path))
         self.__device_info = device_info
 
     async def __close_device_file(self) -> None:
         try:
-            if self._device_file:
+            if self.__device_file:
                 get_logger().info("Closing mass-storage device file ...")
-                await self._device_file.close()
+                await self.__device_file.close()
         except Exception:
             get_logger().exception("Can't close mass-storage device file")
             # TODO: reset device file
-        self._device_file = None
+        self.__device_file = None
         self.__written = 0

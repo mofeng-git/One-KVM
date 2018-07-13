@@ -5,7 +5,8 @@ from typing import Type
 
 # =====
 class RegionIsBusyError(Exception):
-    pass
+    def __init__(self) -> None:
+        super().__init__("Performing another operation, please try again later")
 
 
 class AioExclusiveRegion:

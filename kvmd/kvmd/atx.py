@@ -10,8 +10,7 @@ from . import gpio
 
 # =====
 class AtxIsBusy(aioregion.RegionIsBusyError):
-    def __init__(self) -> None:
-        super().__init__("Performing another operation, please try again later")
+    pass
 
 
 class Atx:

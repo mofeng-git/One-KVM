@@ -18,7 +18,7 @@ from .hid import Hid
 
 from .atx import Atx
 
-from .msd import MassStorageOperationError
+from .msd import MsdOperationError
 from .msd import MassStorageDevice
 
 from .streamer import Streamer
@@ -47,10 +47,11 @@ def _json(result: Optional[Dict]=None, status: int=200) -> aiohttp.web.Response:
 
 
 def _json_exception(msg: str, err: Exception, status: int) -> aiohttp.web.Response:
-    get_logger().error("%s: %s", msg, err)
+    msg = "%s: %s" % (msg, err)
+    get_logger().error(msg)
     return _json({
         "error": type(err).__name__,
-        "error_msg": str(err),
+        "error_msg": msg,
     }, status=status)
 
 
@@ -65,7 +66,7 @@ def _wrap_exceptions_for_web(msg: str) -> Callable:
                 return (await method(self, request))
             except RegionIsBusyError as err:
                 return _json_exception(msg, err, 409)
-            except (BadRequest, MassStorageOperationError) as err:
+            except (BadRequest, MsdOperationError) as err:
                 return _json_exception(msg, err, 400)
         return wrap
     return make_wrapper
@@ -227,7 +228,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await self.__broadcast_event("msd_state", state="free")  # type: ignore
         finally:
             if written != 0:
-                logger.info("written %d bytes to mass-storage device", written)
+                logger.info("Written %d bytes to mass-storage device", written)
         return _json({"written": written})
 
     async def __streamer_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
