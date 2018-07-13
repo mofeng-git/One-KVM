@@ -4,7 +4,7 @@
 #include "inline.h"
 #include "keymap.h"
 
-#define CMD_SERIAL Serial
+#define CMD_SERIAL Serial1
 #define CMD_SERIAL_SPEED 115200
 
 #define CMD_MOUSE_LEFT			0b10000000
