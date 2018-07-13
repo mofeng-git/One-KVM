@@ -121,6 +121,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         app.router.add_get("/ws", self.__ws_handler)
 
+        app.router.add_get("/hid", self.__hid_state_handler)
+
         app.router.add_get("/atx", self.__atx_state_handler)
         app.router.add_post("/atx/click", self.__atx_click_handler)
 
@@ -169,6 +171,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
             else:
                 break
         return ws
+
+    async def __hid_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        return _json(self.__hid.get_state())
 
     async def __atx_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(self.__atx.get_state())

@@ -7,19 +7,21 @@
 </head>
 
 <script src="js/kvmd.js"></script>
-<script>
-	window.onload = function() {
-		runKvmdSession();
-		pollStreamer();
-	}
-</script>
+<script>window.onload = runKvmdUi;</script>
 
 <body>
-	<div id="stream-box" class="stream-box">
-		<img src="/streamer/?action=stream" id="stream-image" class="stream-image" alt="" />
+	<div id="stream-box">
+		<img src="/streamer/?action=stream" id="stream-image" class="stream-image-off" alt="Loading..."/>
+		<hr>
 		<table cellpadding="0" cellspacing="0" style="border: none;">
 			<tr>
-				<td><button id="reset-streamer-button" type="button" title="Click here if your video looks like crap" onclick="clickResetStreamerButton(this);">Reset stream</button></td>
+				<td><div id="screen-led" class="led-off">&#128437;</div></td>
+				<td>&nbsp;</td>
+				<td><div id="hid-keyboard-led" class="led-off">&#9000;</div></td>
+				<td>&nbsp;</td>
+				<td><div id="hid-mouse-led" class="led-off">&#128432;</div></td>
+				<td>&nbsp;&nbsp;</td>
+				<td><button id="reset-stream-button" type="button" title="Click here if your video looks like crap" onclick="clickResetStreamButton(this);">Reset stream</button></td>
 				<td>&nbsp;&nbsp;</td>
 				<td><div id="session-status">Not connected yet...</div></td>
 			</tr>
@@ -28,9 +30,11 @@
 
 	<table cellpadding="0" cellspacing="5" style="border: none;">
 		<tr>
-			<td><div id="power-led" class="power-led-off"></div></td>
-			<td><div id="hdd-led" class="hdd-led-off"></div></td>
-			<td>&nbsp;&nbsp;</td>
+			<td><div id="atx-power-led" class="led-off">&#x23FB;</div></td>
+			<td><div id="atx-hdd-led" class="led-off">&#128436;</div></td>
+			<td>&nbsp;</td>
+			<!--<td><div id="msd-led" class="led-off">&#9991;</div></td>
+			<td>&nbsp;</td>-->
 			<td><button id="atx-power-button" type="button" title="Click hardware power button" onclick="clickAtxButton(this);">Power</button></td>
 			<td><button id="atx-power-button-long" type="button" title="Click hardware power button (long press)" onclick="clickAtxButton(this);">Power (long)</button></td>
 			<td><button id="atx-reset-button" type="button" title="Click to force reset" onclick="clickAtxButton(this);">Reset</button></td>

@@ -1,9 +1,16 @@
-function runKvmdSession() {
+function runKvmdUi() {
+	__startSessionPoller();
+	__startStreamPoller();
+}
+
+
+// -----------------------------------------------------------------------------
+function __startSessionPoller() {
 	var ws = new WebSocket("ws://" + location.host + "/kvmd/ws");
 
 	ws.onopen = function(event) {
 		__installHidHandlers(ws);
-		__setSessionStatus("session-opened", "Session opened (keyboard captured)");
+		__setSessionStatus(true);
 	};
 
 	ws.onmessage = function(event) {
@@ -12,18 +19,18 @@ function runKvmdSession() {
 		if (event.msg_type == "event") {
 			if (event.msg.event == "atx_state") {
 				leds = event.msg.event_attrs.leds;
-				document.getElementById("power-led").className = "power-led-" + (leds.power ? "on" : "off");
-				document.getElementById("hdd-led").className = "hdd-led-" + (leds.hdd ? "on" : "off");
+				document.getElementById("atx-power-led").className = (leds.power ? "led-on" : "led-off");
+				document.getElementById("atx-hdd-led").className = (leds.hdd ? "led-busy" : "led-off");
 			}
 		}
 	};
 
 	ws.onclose = function(event) {
 		__clearHidHandlers();
-		__setSessionStatus("session-closed", "Session closed (keyboard free), trying to reconnect...");
-		document.getElementById("power-led").className = "power-led-off";
-		document.getElementById("hdd-led").className = "hdd-led-off";
-		setTimeout(runKvmdSession, 5000);
+		__setSessionStatus(false);
+		document.getElementById("atx-power-led").className = "led-off";
+		document.getElementById("atx-hdd-led").className = "led-off";
+		setTimeout(__startSessionPoller, 2000);
 	};
 
 	ws.onerror = function(error) {
@@ -31,29 +38,47 @@ function runKvmdSession() {
 	};
 }
 
-function __setSessionStatus(cls, msg) {
+function __setSessionStatus(status) {
 	var el_session_status = document.getElementById("session-status");
-	el_session_status.innerHTML = msg;
-	el_session_status.className = cls;
+	el_session_status.innerHTML = (status ? "Session active" : "Session closed, trying to reconnect...");
+	el_session_status.className = (status ? "session-active" : "session-closed");
 }
 
 function __installHidHandlers(ws) {
-	// https://www.codeday.top/2017/05/03/24906.html
-	document.onkeydown = (event) => __onKeyEvent(ws, event, true);
-	document.onkeyup = (event) => __onKeyEvent(ws, event, false);
+	var http = __request("GET", "/kvmd/hid", function() {
+		if (http.readyState == 4) {
+			if (http.status == 200) {
+				features = JSON.parse(http.responseText).result.features;
+				if (features.keyboard) {
+					// https://www.codeday.top/2017/05/03/24906.html
+					document.onkeydown = (event) => __onKeyEvent(ws, event, true);
+					document.onkeyup = (event) => __onKeyEvent(ws, event, false);
+					document.getElementById("hid-keyboard-led").className = "led-on";
+				}
+				if (features.mouse) {
+					el_stream_image = document.getElementById("stream-image");
+					el_stream_image.onmousedown = (event) => __onMouseButton(ws, event, true);
+					el_stream_image.onmouseup = (event) => __onMouseButton(ws, event, false);
+					el_stream_image.oncontextmenu = (event) => event.preventDefault();
+					el_stream_image.onmousemove = __onMouseMove;
+					el_stream_image.onwheel = (event) => __onMouseWheel(ws, event);
+					document.getElementById("hid-mouse-led").className = "led-on";
 
-	el_stream_image = document.getElementById("stream-image");
-	el_stream_image.onmousedown = (event) => __onMouseButton(ws, event, true);
-	el_stream_image.onmouseup = (event) => __onMouseButton(ws, event, false);
-	el_stream_image.oncontextmenu = (event) => event.preventDefault();
-	el_stream_image.onmousemove = __onMouseMove;
-	el_stream_image.onwheel = (event) => __onMouseWheel(ws, event);
-	runKvmdSession.mouse_move_timer = setInterval(() => __handleMouseMove(ws), 100);
+					__installHidHandlers.mouse_move_timer = setInterval(() => __handleMouseMove(ws), 100);
+				}
+			} else {
+				alert("Can't fetch HID features:", http.responseText);
+			}
+		}
+	});
 }
 
 function __clearHidHandlers() {
+	clearInterval(__installHidHandlers.mouse_move_timer);
+
 	document.onkeydown = null;
 	document.onkeyup = null;
+	document.getElementById("hid-keyboard-led").className = "led-off";
 
 	el_stream_image = document.getElementById("stream-image");
 	el_stream_image.onmousedown = null;
@@ -61,7 +86,7 @@ function __clearHidHandlers() {
 	el_stream_image.oncontextmenu = null;
 	el_stream_image.onmousemove = null;
 	el_stream_image.onwheel = null;
-	clearInterval(runKvmdSession.mouse_move_timer);
+	document.getElementById("hid-mouse-led").className = "led-off";
 }
 
 function __onKeyEvent(ws, event, state) {
@@ -159,7 +184,7 @@ function clickAtxButton(el_button) {
 				if (http.status == 409) {
 					alert("Performing another ATX operation for other client, please try again later");
 				} else if (http.status != 200) {
-					alert("Click error: " + http.responseText);
+					alert("Click error:", http.responseText);
 				}
 				__setAtxButtonsBusy(false);
 			}
@@ -179,28 +204,30 @@ function __setAtxButtonsBusy(busy) {
 
 
 // -----------------------------------------------------------------------------
-function pollStreamer() {
+function __startStreamPoller() {
 	var http = __request("GET", "/streamer/?action=snapshot", function() {
 		if (http.readyState == 2 || http.readyState == 4) {
 			var status = http.status;
 			http.onreadystatechange = null;
 			http.abort();
 			if (status != 200) {
-				console.log("Refreshing streamer ...");
-				pollStreamer.last = false;
-				document.getElementById("stream-image").style.cursor = "wait";
-			} else if (!pollStreamer.last) {
-				__refreshStreamer();
-				document.getElementById("stream-image").style.cursor = "cell";
-				pollStreamer.last = true;
+				console.log("Refreshing stream ...");
+				__startStreamPoller.last = false;
+				document.getElementById("stream-image").className = "stream-image-off";
+				document.getElementById("screen-led").className = "led-off";
+			} else if (!__startStreamPoller.last) {
+				__refreshStream();
+				__startStreamPoller.last = true;
+				document.getElementById("stream-image").className = "stream-image-on";
+				document.getElementById("screen-led").className = "led-on";
 			}
 		}
 	});
-	setTimeout(pollStreamer, 2000);
+	setTimeout(__startStreamPoller, 2000);
 }
-pollStreamer.last = false;
+__startStreamPoller.last = false;
 
-function __refreshStreamer() {
+function __refreshStream() {
 	var http = __request("GET", "/kvmd/streamer", function() {
 		if (http.readyState == 4 && http.status == 200) {
 			size = JSON.parse(http.responseText).result.size;
@@ -212,12 +239,12 @@ function __refreshStreamer() {
 	});
 }
 
-function clickResetStreamerButton(el_button) {
+function clickResetStreamButton(el_button) {
 	__setButtonBusy(el_button, true);
 	var http = __request("POST", "/kvmd/streamer/reset", function() {
 		if (http.readyState == 4) {
 			if (http.status != 200) {
-				alert("Can't reset streamer: " + http.responseText);
+				alert("Can't reset stream:", http.responseText);
 			}
 			__setButtonBusy(el_button, false);
 		}

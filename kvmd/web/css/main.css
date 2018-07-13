@@ -1,40 +1,48 @@
-.stream-box {
+div#stream-box {
 	box-sizing: border-box;
 	display: inline-block;
 	background-color: #e5e5f5;
 	padding: 10px;
 }
-.stream-image {
+img#stream-image {
 	width: 640px;
 	height: 480px;
+	display: inline-block;
 	border: 1px solid grey;
+}
+img.stream-image-on {
+	cursor: cell;
+	-webkit-filter: none;
+	filter: none;
+}
+img.stream-image-off {
 	cursor: wait;
+	-webkit-filter: grayscale(100%); /* Safari 6.0 - 9.0 */
+	filter: grayscale(100%);
 }
 
-.session-opened {
+div.session-active {
 	color: grey;
 }
-.session-closed {
+div.session-closed {
 	color: #ff3d40;
 }
 
-div#power-led, div#hdd-led {
-	border-radius: 50%;
-	border: 1px solid grey;
-	width: 16px;
-	height: 16px;
+div#atx-power-led, div#hid-mouse-led, div#msd-led {
+	font-weight: bold;
+	font-size: 150%;
 }
-div.power-led-on {
-	background: #00ce00;
+div#atx-hdd-led, div#screen-led, div#hid-keyboard-led {
+	font-size: 150%;
 }
-div.power-led-off {
-	background: #adceab;
+div.led-on {
+	color: #00ce00;
 }
-div.hdd-led-on {
-	background: #ff373a;
+div.led-off {
+	color: grey;
 }
-div.hdd-led-off {
-	background: #ffcdce;
+div.led-busy {
+	color: #ff373a;
 }
 
 button#power-button, button#reset-button {

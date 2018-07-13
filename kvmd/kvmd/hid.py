@@ -56,6 +56,14 @@ class Hid(multiprocessing.Process):
 
     # TODO: add reset or power switching
 
+    def get_state(self) -> Dict:
+        return {
+            "features": {
+                "keyboard": True,  # Always
+                "mouse": False,  # TODO
+            },
+        }
+
     async def send_key_event(self, key: str, state: bool) -> None:
         if not self.__stop_event.is_set():
             async with self.__lock:
