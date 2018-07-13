@@ -36,13 +36,13 @@ kvmd:
         shutdown_delay: 10.0
 
         size:
-            width: 720
-            height: 576
+            width: 800
+            height: 600
 
         cmd:
             - "/usr/bin/mjpg_streamer"
             - "-i"
-            - "input_uvc.so -d /dev/kvmd-streamer -e 2 -t pal -y -n -r {width}x{height}"
+            - "input_uvc.so -d /dev/kvmd-streamer -e 2 -t pal -y -n -r 720x576"
             - "-o"
             - "output_http.so -l localhost -p 8082"
 
