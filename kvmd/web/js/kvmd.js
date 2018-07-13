@@ -154,17 +154,16 @@ function clickAtxButton(el_button) {
 
 	if (button && confirm(confirm_msg)) {
 		__setAtxButtonsBusy(true);
-		var http = new XMLHttpRequest();
-		http.open("POST", "/kvmd/atx/click?button=" + button, true);
-		http.onreadystatechange = function() {
+		var http = __request("POST", "/kvmd/atx/click?button=" + button, function() {
 			if (http.readyState == 4) {
-				if (http.status != 200) {
+				if (http.status == 409) {
+					alert("Performing another ATX operation for other client, please try again later");
+				} else if (http.status != 200) {
 					alert("Click error: " + http.responseText);
 				}
-			__setAtxButtonsBusy(false);
+				__setAtxButtonsBusy(false);
 			}
-		}
-		http.send();
+		});
 	}
 }
 
@@ -181,9 +180,7 @@ function __setAtxButtonsBusy(busy) {
 
 // -----------------------------------------------------------------------------
 function pollStreamer() {
-	var http = new XMLHttpRequest();
-	http.open("GET", "/streamer/?action=snapshot", true);
-	http.onreadystatechange = function() {
+	var http = __request("GET", "/streamer/?action=snapshot", function() {
 		if (http.readyState == 2 || http.readyState == 4) {
 			var status = http.status;
 			http.onreadystatechange = null;
@@ -198,16 +195,13 @@ function pollStreamer() {
 				pollStreamer.last = true;
 			}
 		}
-	}
-	http.send();
+	});
 	setTimeout(pollStreamer, 2000);
 }
 pollStreamer.last = false;
 
 function __refreshStreamer() {
-	var http = new XMLHttpRequest();
-	http.open("GET", "/kvmd/streamer", true);
-	http.onreadystatechange = function() {
+	var http = __request("GET", "/kvmd/streamer", function() {
 		if (http.readyState == 4 && http.status == 200) {
 			size = JSON.parse(http.responseText).result.size;
 			el_stream_box = document.getElementById("stream-image");
@@ -215,27 +209,31 @@ function __refreshStreamer() {
 			el_stream_box.style.height = size.height + "px";
 			document.getElementById("stream-image").src = "/streamer/?action=stream&time=" + new Date().getTime();
 		}
-	}
-	http.send();
+	});
 }
 
 function clickResetStreamerButton(el_button) {
 	__setButtonBusy(el_button, true);
-	var http = new XMLHttpRequest();
-	http.open("POST", "/kvmd/streamer/reset", true);
-	http.onreadystatechange = function() {
+	var http = __request("POST", "/kvmd/streamer/reset", function() {
 		if (http.readyState == 4) {
 			if (http.status != 200) {
 				alert("Can't reset streamer: " + http.responseText);
 			}
 			__setButtonBusy(el_button, false);
 		}
-	}
-	http.send();
+	});
 }
 
 
 // -----------------------------------------------------------------------------
+function __request(method, url, callback) {
+	var http = new XMLHttpRequest();
+	http.open(method, url, true)
+	http.onreadystatechange = callback;
+	http.send();
+	return http;
+}
+
 function __setButtonBusy(el_button, busy) {
 	el_button.disabled = busy;
 	el_button.style.cursor = (busy ? "wait" : "default");

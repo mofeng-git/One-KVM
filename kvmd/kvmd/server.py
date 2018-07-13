@@ -9,9 +9,10 @@ from typing import Dict
 from typing import Set
 from typing import Callable
 from typing import Optional
-from typing import Type
 
 import aiohttp.web
+
+from .aioregion import RegionIsBusyError
 
 from .hid import Hid
 
@@ -38,33 +39,44 @@ def _system_task(method: Callable) -> Callable:
     return wrap
 
 
-class _BadRequest(Exception):
+def _json(result: Optional[Dict]=None, status: int=200) -> aiohttp.web.Response:
+    return aiohttp.web.json_response({
+        "ok": (True if status == 200 else False),
+        "result": (result or {}),
+    }, status=status)
+
+
+def _json_exception(msg: str, err: Exception, status: int) -> aiohttp.web.Response:
+    get_logger().error("%s: %s", msg, err)
+    return _json({
+        "error": type(err).__name__,
+        "error_msg": str(err),
+    }, status=status)
+
+
+class BadRequest(Exception):
     pass
 
 
-def _exceptions_as_400(msg: str, exceptions: List[Type[Exception]]) -> Callable:
+class PerformingAnotherOperation(Exception):
+    def __init__(self) -> None:
+        super().__init__("Performing another operation, please try again later")
+
+
+def _wrap_exceptions_for_web(msg: str) -> Callable:
     def make_wrapper(method: Callable) -> Callable:
         async def wrap(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
             try:
-                return (await method(self, request))
-            except tuple(exceptions) as err:  # pylint: disable=catching-non-exception
-                get_logger().error(msg)
-                return aiohttp.web.json_response({
-                    "ok": False,
-                    "result": {
-                        "error": type(err).__name__,
-                        "error_msg": str(err),
-                    },
-                }, status=400)
+                try:
+                    return (await method(self, request))
+                except RegionIsBusyError:
+                    raise PerformingAnotherOperation()
+            except (BadRequest, MassStorageOperationError) as err:
+                return _json_exception(msg, err, 400)
+            except PerformingAnotherOperation as err:
+                return _json_exception(msg, err, 409)
         return wrap
     return make_wrapper
-
-
-def _json_200(result: Optional[Dict]=None) -> aiohttp.web.Response:
-    return aiohttp.web.json_response({
-        "ok": True,
-        "result": (result or {}),
-    })
 
 
 class Server:  # pylint: disable=too-many-instance-attributes
@@ -159,9 +171,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
         return ws
 
     async def __atx_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json_200(self.__atx.get_state())
+        return _json(self.__atx.get_state())
 
-    @_exceptions_as_400("Click error", [_BadRequest])
+    @_wrap_exceptions_for_web("Click error")
     async def __atx_click_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         button = request.query.get("button")
         if button == "power":
@@ -171,13 +183,13 @@ class Server:  # pylint: disable=too-many-instance-attributes
         elif button == "reset":
             await self.__atx.click_reset()
         else:
-            raise _BadRequest("Missing or invalid 'button=%s'" % (button))
-        return _json_200({"clicked": button})
+            raise BadRequest("Missing or invalid 'button=%s'" % (button))
+        return _json({"clicked": button})
 
     async def __msd_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json_200(self.__msd.get_state())
+        return _json(self.__msd.get_state())
 
-    @_exceptions_as_400("Mass-storage error", [MassStorageOperationError, _BadRequest])
+    @_wrap_exceptions_for_web("Mass-storage error")
     async def __msd_connect_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         to = request.query.get("to")
         if to == "kvm":
@@ -187,10 +199,10 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await self.__msd.connect_to_pc()
             await self.__broadcast_event("msd_state", state="connected_to_server")  # type: ignore
         else:
-            raise _BadRequest("Missing or invalid 'to=%s'" % (to))
-        return _json_200(self.__msd.get_state())
+            raise BadRequest("Missing or invalid 'to=%s'" % (to))
+        return _json(self.__msd.get_state())
 
-    @_exceptions_as_400("Can't write data to mass-storage device", [MassStorageOperationError, _BadRequest])
+    @_wrap_exceptions_for_web("Can't write data to mass-storage device")
     async def __msd_write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         logger = get_logger(0)
         reader = await request.multipart()
@@ -198,12 +210,12 @@ class Server:  # pylint: disable=too-many-instance-attributes
         try:
             field = await reader.next()
             if not field or field.name != "image_name":
-                raise _BadRequest("Missing 'image_name' field")
+                raise BadRequest("Missing 'image_name' field")
             image_name = (await field.read()).decode("utf-8")[:256]
 
             field = await reader.next()
             if not field or field.name != "image_data":
-                raise _BadRequest("Missing 'image_data' field")
+                raise BadRequest("Missing 'image_data' field")
 
             async with self.__msd:
                 await self.__broadcast_event("msd_state", state="busy")  # type: ignore
@@ -219,14 +231,14 @@ class Server:  # pylint: disable=too-many-instance-attributes
         finally:
             if written != 0:
                 logger.info("written %d bytes to mass-storage device", written)
-        return _json_200({"written": written})
+        return _json({"written": written})
 
     async def __streamer_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json_200(self.__streamer.get_state())
+        return _json(self.__streamer.get_state())
 
     async def __streamer_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         self.__reset_streamer = True
-        return _json_200()
+        return _json()
 
     def __run_app_print(self, text: str) -> None:
         logger = get_logger()

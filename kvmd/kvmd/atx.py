@@ -4,6 +4,7 @@ from typing import Dict
 
 from .logging import get_logger
 
+from . import aioregion
 from . import gpio
 
 
@@ -28,7 +29,7 @@ class Atx:
         self.__click_delay = click_delay
         self.__long_click_delay = long_click_delay
 
-        self.__lock = asyncio.Lock()
+        self.__region = aioregion.AioExclusiveRegion()
 
     def get_state(self) -> Dict:
         return {
@@ -39,22 +40,19 @@ class Atx:
         }
 
     async def click_power(self) -> None:
-        if (await self.__click(self.__power_switch, self.__click_delay)):
-            get_logger().info("Clicked power")
+        await self.__click(self.__power_switch, self.__click_delay)
+        get_logger().info("Clicked power")
 
     async def click_power_long(self) -> None:
-        if (await self.__click(self.__power_switch, self.__long_click_delay)):
-            get_logger().info("Clicked power (long press)")
+        await self.__click(self.__power_switch, self.__long_click_delay)
+        get_logger().info("Clicked power (long press)")
 
     async def click_reset(self) -> None:
-        if (await self.__click(self.__reset_switch, self.__click_delay)):
-            get_logger().info("Clicked reset")
+        await self.__click(self.__reset_switch, self.__click_delay)
+        get_logger().info("Clicked reset")
 
-    async def __click(self, pin: int, delay: float) -> bool:
-        if not self.__lock.locked():
-            async with self.__lock:
-                for flag in (True, False):
-                    gpio.write(pin, flag)
-                    await asyncio.sleep(delay)
-                return True
-        return False
+    async def __click(self, pin: int, delay: float) -> None:
+        with self.__region:
+            for flag in (True, False):
+                gpio.write(pin, flag)
+                await asyncio.sleep(delay)
