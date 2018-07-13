@@ -116,10 +116,10 @@ class Hid(multiprocessing.Process):
             assert len(key_bytes) == 1, (event, key_bytes)
             tty.write(
                 b"\01"
-                + (b"\01" if event.state else b"\00")
                 + key_bytes
-                + b"\00"
+                + (b"\01" if event.state else b"\00")
+                + b"\00\00"
             )
 
     def __send_clear_hid(self, tty: serial.Serial) -> None:
-        tty.write(b"\00\00\00\00")
+        tty.write(b"\00\00\00\00\00")
