@@ -54,6 +54,8 @@ class Hid(multiprocessing.Process):
         get_logger().info("Starting HID daemon ...")
         super().start()
 
+    # TODO: add reset or power switching
+
     async def send_key_event(self, key: str, state: bool) -> None:
         if not self.__stop_event.is_set():
             async with self.__lock:
