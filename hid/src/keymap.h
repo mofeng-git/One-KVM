@@ -89,6 +89,6 @@ INLINE KeyboardKeycode keymap(uint8_t code) {
 		case 24: return KEY_X;
 		case 25: return KEY_Y;
 		case 26: return KEY_Z;
-		default: return 0;
+		default: return KEY_ERROR_UNDEFINED;
 	}
 }

@@ -20,8 +20,7 @@ INLINE void cmdResetHid() {
 INLINE void cmdKeyEvent() {
 	uint8_t state = CMD_SERIAL.read();
 	KeyboardKeycode code = keymap((uint8_t)CMD_SERIAL.read());
-	CMD_SERIAL.read(); // unused now
-	if (code) {
+	if (code != KEY_ERROR_UNDEFINED) {
 		if (state) {
 			Keyboard.press(code);
 		} else {

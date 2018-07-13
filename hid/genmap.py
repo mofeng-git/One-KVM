@@ -29,7 +29,7 @@ def main() -> None:
         hid_header_file.write("INLINE KeyboardKeycode keymap(uint8_t code) {\n\tswitch(code) {\n")
         for (code, hid_key, _) in sorted(keymap, key=operator.itemgetter(1)):
             hid_header_file.write("\t\tcase %d: return %s;\n" % (code, hid_key))
-        hid_header_file.write("\t\tdefault: return 0;\n\t}\n}\n")
+        hid_header_file.write("\t\tdefault: return KEY_ERROR_UNDEFINED;\n\t}\n}\n")
 
 
 if __name__ == "__main__":
