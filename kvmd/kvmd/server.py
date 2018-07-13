@@ -145,9 +145,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
                         if key and state in [True, False]:
                             await self.__hid.send_key_event(key, state)
                             continue
-                    elif event.get("event_type") in ["mouse_move", "mouse_button"]:
+                    elif event.get("event_type") in ["mouse_move", "mouse_button", "mouse_wheel"]:
                         pass
-                        # logger.info("Mouse event: %s", event)  # TODO
                     else:
                         logger.error("Invalid websocket event: %r", event)
                 await ws.send_str(json.dumps({"msg_type": "echo", "msg": msg.data}))

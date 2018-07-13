@@ -47,8 +47,8 @@ function __installHidHandlers(ws) {
 	el_stream_image.onmouseup = (event) => __onMouseButton(ws, event, false);
 	el_stream_image.oncontextmenu = (event) => event.preventDefault();
 	el_stream_image.onmousemove = __onMouseMove;
-	runKvmdSession.mouse_timer_id = setInterval(() => __handleMouseMove(ws), 100);
-	// TODO: https://learn.javascript.ru/mousewheel
+	el_stream_image.onwheel = (event) => __onMouseWheel(ws, event);
+	runKvmdSession.mouse_move_timer = setInterval(() => __handleMouseMove(ws), 100);
 }
 
 function __clearHidHandlers() {
@@ -60,7 +60,8 @@ function __clearHidHandlers() {
 	el_stream_image.onmouseup = null;
 	el_stream_image.oncontextmenu = null;
 	el_stream_image.onmousemove = null;
-	clearInterval(runKvmdSession.mouse_timer_id);
+	el_stream_image.onwheel = null;
+	clearInterval(runKvmdSession.mouse_move_timer);
 }
 
 function __onKeyEvent(ws, event, state) {
@@ -114,6 +115,20 @@ function __handleMouseMove(ws) {
 	}
 }
 __handleMouseMove.old_pos = {x: 0, y:0};
+
+function __onMouseWheel(ws, event) {
+	// https://learn.javascript.ru/mousewheel
+	if (event.preventDefault) {
+		event.preventDefault();
+	}
+	ws.send(JSON.stringify({
+		event_type: "mouse_wheel",
+		delta: {
+			x: event.deltaX,
+			y: event.deltaY,
+		},
+	}));
+}
 
 
 // -----------------------------------------------------------------------------
