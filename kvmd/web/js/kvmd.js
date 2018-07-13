@@ -11,8 +11,9 @@ function runKvmdSession() {
 		event = JSON.parse(event.data);
 		if (event.msg_type == "event") {
 			if (event.msg.event == "atx_state") {
-				document.getElementById("power-led").className = "power-led-" + (event.msg.event_attrs.leds.power ? "on" : "off");
-				document.getElementById("hdd-led").className = "hdd-led-" + (event.msg.event_attrs.leds.hdd ? "on" : "off");
+				leds = event.msg.event_attrs.leds;
+				document.getElementById("power-led").className = "power-led-" + (leds.power ? "on" : "off");
+				document.getElementById("hdd-led").className = "hdd-led-" + (leds.hdd ? "on" : "off");
 			}
 		}
 	};
@@ -97,14 +98,35 @@ function pollStreamer() {
 	http.open("GET", "/streamer/?action=snapshot", true);
 	http.onreadystatechange = function() {
 		if (http.readyState == 2) {
+			var status = http.status;
 			http.abort();
-			if (http.status != 200) {
-				document.getElementById("stream-image").src = "/streamer/?action=stream&time=" + new Date().getTime();
+			if (status != 200) {
+				console.log("Refreshing streamer ...");
+				pollStreamer.last = false;
+			} else if (!pollStreamer.last) {
+				__refreshStremaer();
+				pollStreamer.last = true;
 			}
 		}
 	}
 	http.send();
 	setTimeout(pollStreamer, 2000);
+}
+pollStreamer.last = false;
+
+function __refreshStremaer() {
+	var http = new XMLHttpRequest();
+	http.open("GET", "/kvmd/streamer", true);
+	http.onreadystatechange = function() {
+		if (http.readyState == 4 && http.status == 200) {
+			size = JSON.parse(http.responseText).result.size;
+			el_stream_box = document.getElementById("stream-image");
+			el_stream_box.style.width = size.width + "px";
+			el_stream_box.style.height = size.height + "px";
+			document.getElementById("stream-image").src = "/streamer/?action=stream&time=" + new Date().getTime();
+		}
+	}
+	http.send();
 }
 
 function resetStreamer() {
