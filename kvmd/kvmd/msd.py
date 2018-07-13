@@ -23,27 +23,31 @@ class MassStorageError(Exception):
     pass
 
 
-class IsNotOperationalError(MassStorageError):
+class MassStorageOperationError(MassStorageError):
+    pass
+
+
+class IsNotOperationalError(MassStorageOperationError):
     def __init__(self) -> None:
         super().__init__("Missing path for mass-storage device")
 
 
-class AlreadyConnectedToPcError(MassStorageError):
+class AlreadyConnectedToPcError(MassStorageOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is already connected to Server")
 
 
-class AlreadyConnectedToKvmError(MassStorageError):
+class AlreadyConnectedToKvmError(MassStorageOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is already connected to KVM")
 
 
-class IsNotConnectedToKvmError(MassStorageError):
+class IsNotConnectedToKvmError(MassStorageOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is not connected to KVM")
 
 
-class IsBusyError(MassStorageError):
+class IsBusyError(MassStorageOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is busy (write in progress)")
 

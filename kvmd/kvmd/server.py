@@ -17,7 +17,7 @@ from .hid import Hid
 
 from .atx import Atx
 
-from .msd import MassStorageError
+from .msd import MassStorageOperationError
 from .msd import MassStorageDevice
 
 from .streamer import Streamer
@@ -38,13 +38,17 @@ def _system_task(method: Callable) -> Callable:
     return wrap
 
 
+class _BadRequest(Exception):
+    pass
+
+
 def _exceptions_as_400(msg: str, exceptions: List[Type[Exception]]) -> Callable:
     def make_wrapper(method: Callable) -> Callable:
         async def wrap(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
             try:
                 return (await method(self, request))
             except tuple(exceptions) as err:  # pylint: disable=catching-non-exception
-                get_logger().exception(msg)
+                get_logger().error(msg)
                 return aiohttp.web.json_response({
                     "ok": False,
                     "result": {
@@ -136,8 +140,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
             if msg.type == aiohttp.web.WSMsgType.TEXT:
                 try:
                     event = json.loads(msg.data)
-                except Exception:
-                    logger.exception("Can't parse JSON event from websocket")
+                except Exception as err:
+                    logger.error("Can't parse JSON event from websocket: %s", err)
                 else:
                     if event.get("event_type") == "key":
                         key = str(event.get("key", ""))[:64].strip()
@@ -157,7 +161,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __atx_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json_200(self.__atx.get_state())
 
-    @_exceptions_as_400("Click error", [RuntimeError])
+    @_exceptions_as_400("Click error", [_BadRequest])
     async def __atx_click_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         button = request.query.get("button")
         if button == "power":
@@ -167,13 +171,13 @@ class Server:  # pylint: disable=too-many-instance-attributes
         elif button == "reset":
             await self.__atx.click_reset()
         else:
-            raise RuntimeError("Missing or invalid 'button=%s'" % (button))
+            raise _BadRequest("Missing or invalid 'button=%s'" % (button))
         return _json_200({"clicked": button})
 
     async def __msd_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json_200(self.__msd.get_state())
 
-    @_exceptions_as_400("Mass-storage error", [MassStorageError, RuntimeError])
+    @_exceptions_as_400("Mass-storage error", [MassStorageOperationError, _BadRequest])
     async def __msd_connect_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         to = request.query.get("to")
         if to == "kvm":
@@ -183,10 +187,10 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await self.__msd.connect_to_pc()
             await self.__broadcast_event("msd_state", state="connected_to_server")  # type: ignore
         else:
-            raise RuntimeError("Missing or invalid 'to=%s'" % (to))
+            raise _BadRequest("Missing or invalid 'to=%s'" % (to))
         return _json_200(self.__msd.get_state())
 
-    @_exceptions_as_400("Can't write data to mass-storage device", [MassStorageError, RuntimeError, OSError])
+    @_exceptions_as_400("Can't write data to mass-storage device", [MassStorageOperationError, _BadRequest])
     async def __msd_write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         logger = get_logger(0)
         reader = await request.multipart()
@@ -194,12 +198,12 @@ class Server:  # pylint: disable=too-many-instance-attributes
         try:
             field = await reader.next()
             if not field or field.name != "image_name":
-                raise RuntimeError("Missing 'image_name' field")
+                raise _BadRequest("Missing 'image_name' field")
             image_name = (await field.read()).decode("utf-8")[:256]
 
             field = await reader.next()
             if not field or field.name != "image_data":
-                raise RuntimeError("Missing 'image_data' field")
+                raise _BadRequest("Missing 'image_data' field")
 
             async with self.__msd:
                 await self.__broadcast_event("msd_state", state="busy")  # type: ignore
