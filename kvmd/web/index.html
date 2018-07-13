@@ -17,23 +17,23 @@
 <body>
 	<div id="stream-box" class="stream-box">
 		<img src="/streamer/?action=stream" id="stream-image" class="stream-image" alt="" />
+		<table cellpadding="0" cellspacing="0" style="border: none;">
+			<tr>
+				<td><button id="reset-streamer-button" type="button" title="Click here if your video looks like crap" onclick="clickResetStreamerButton(this);">Reset stream</button></td>
+				<td>&nbsp;&nbsp;</td>
+				<td><div id="session-status">Not connected yet...</div></td>
+			</tr>
+		</table>
 	</div>
 
-	<table>
+	<table cellpadding="0" cellspacing="5" style="border: none;">
 		<tr>
 			<td><div id="power-led" class="power-led-off"></div></td>
 			<td><div id="hdd-led" class="hdd-led-off"></div></td>
 			<td>&nbsp;&nbsp;</td>
-			<td><button id="power-button" type="button" title="Click hardware power button" onclick="clickPowerButton();">Power</button></td>
-			<td><button id="power-button-long" type="button" title="Click hardware power button (long press)" onclick="clickPowerButtonLong();">Power (long)</button></td>
-			<td><button id="reset-button" type="button" title="Click to force reset" onclick="clickResetButton();">Reset</button></td>
-		</tr>
-	</table>
-	<table>
-		<tr>
-			<td><button id="restart-stream-button" type="button" title="Click here if your video looks like a crap" onclick="resetStreamer();">Restart video</button></td>
-			<td>&nbsp;&nbsp;</td>
-			<td><div id="session-status">Not connected yet...</div></td>
+			<td><button id="atx-power-button" type="button" title="Click hardware power button" onclick="clickAtxButton(this);">Power</button></td>
+			<td><button id="atx-power-button-long" type="button" title="Click hardware power button (long press)" onclick="clickAtxButton(this);">Power (long)</button></td>
+			<td><button id="atx-reset-button" type="button" title="Click to force reset" onclick="clickAtxButton(this);">Reset</button></td>
 		</tr>
 	</table>
 </body>

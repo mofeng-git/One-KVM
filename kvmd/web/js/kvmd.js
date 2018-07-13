@@ -132,33 +132,50 @@ function __onMouseWheel(ws, event) {
 
 
 // -----------------------------------------------------------------------------
-function clickPowerButton() {
-	if (confirm("Are you sure to click the power button?")) {
-		__clickButton("power");
+function clickAtxButton(el_button) {
+	switch (el_button.id) {
+		case "atx-power-button":
+			var button = "power";
+			var confirm_msg = "Are you sure to click the power button?";
+			break;
+		case "atx-power-button-long":
+			var button = "power_long";
+			var confirm_msg = "Are you sure to perform the long press of the power button?";
+			break;
+		case "atx-reset-button":
+			var button = "reset";
+			var confirm_msg = "Are you sure to reboot the server?";
+			break;
+		default:
+			var button = null;
+			var confirm_msg = null;
+			break;
 	}
-}
 
-function clickPowerButtonLong() {
-	if (confirm("Are you sure to perform the long press of the power button?")) {
-		__clickButton("power_long");
-	}
-}
-
-function clickResetButton() {
-	if (confirm("Are you sure to reboot the server?")) {
-		__clickButton("reset");
-	}
-}
-
-function __clickButton(button) {
-	var http = new XMLHttpRequest();
-	http.open("POST", "/kvmd/atx/click?button=" + button, true);
-	http.onreadystatechange = function() {
-		if (http.readyState == 4 && http.status != 200) {
-			alert("Click error: " + http.responseText);
+	if (button && confirm(confirm_msg)) {
+		__setAtxButtonsBusy(true);
+		var http = new XMLHttpRequest();
+		http.open("POST", "/kvmd/atx/click?button=" + button, true);
+		http.onreadystatechange = function() {
+			if (http.readyState == 4) {
+				if (http.status != 200) {
+					alert("Click error: " + http.responseText);
+				}
+			__setAtxButtonsBusy(false);
+			}
 		}
+		http.send();
 	}
-	http.send();
+}
+
+function __setAtxButtonsBusy(busy) {
+	[
+		"atx-power-button",
+		"atx-power-button-long",
+		"atx-reset-button",
+	].forEach(function(name) {
+		__setButtonBusy(document.getElementById(name), busy);
+	});
 }
 
 
@@ -169,13 +186,14 @@ function pollStreamer() {
 	http.onreadystatechange = function() {
 		if (http.readyState == 2 || http.readyState == 4) {
 			var status = http.status;
+			http.onreadystatechange = null;
 			http.abort();
 			if (status != 200) {
 				console.log("Refreshing streamer ...");
 				pollStreamer.last = false;
 				document.getElementById("stream-image").style.cursor = "wait";
 			} else if (!pollStreamer.last) {
-				__refreshStremaer();
+				__refreshStreamer();
 				document.getElementById("stream-image").style.cursor = "cell";
 				pollStreamer.last = true;
 			}
@@ -186,7 +204,7 @@ function pollStreamer() {
 }
 pollStreamer.last = false;
 
-function __refreshStremaer() {
+function __refreshStreamer() {
 	var http = new XMLHttpRequest();
 	http.open("GET", "/kvmd/streamer", true);
 	http.onreadystatechange = function() {
@@ -201,13 +219,24 @@ function __refreshStremaer() {
 	http.send();
 }
 
-function resetStreamer() {
+function clickResetStreamerButton(el_button) {
+	__setButtonBusy(el_button, true);
 	var http = new XMLHttpRequest();
 	http.open("POST", "/kvmd/streamer/reset", true);
 	http.onreadystatechange = function() {
-		if (http.readyState == 4 && http.status != 200) {
-			alert("Can't reset streamer: " + http.responseText);
+		if (http.readyState == 4) {
+			if (http.status != 200) {
+				alert("Can't reset streamer: " + http.responseText);
+			}
+			__setButtonBusy(el_button, false);
 		}
 	}
 	http.send();
+}
+
+
+// -----------------------------------------------------------------------------
+function __setButtonBusy(el_button, busy) {
+	el_button.disabled = busy;
+	el_button.style.cursor = (busy ? "wait" : "default");
 }
