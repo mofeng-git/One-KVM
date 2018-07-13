@@ -18,21 +18,16 @@ depends=(
 	"python-raspberry-gpio"
 	"python-pyserial"
 )
-makedepends=("python-setuptools" "wget")
+makedepends=("python-setuptools")
+source=("$url/archive/v$pkgver.tar.gz")
+md5sums=("SKIP")
 
 
 build() {
 	cd $srcdir
-	if [ ! -d pi-kvm-$pkgver ]; then
-		msg "Downloading tag v$pkgver..."
-		wget $url/archive/v$pkgver.tar.gz
-		tar -xzf v$pkgver.tar.gz
-	fi
-
 	rm -rf $pkgname-build
 	cp -r pi-kvm-$pkgver/kvmd $pkgname-build
 	cd $pkgname-build
-
 	python setup.py build
 }
 
