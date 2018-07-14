@@ -11,13 +11,16 @@ function __startSessionPoller() {
 	ws.onopen = function(event) {
 		__installHidHandlers(ws);
 		__setSessionStatus(true);
+		__startSessionPoller.ping_server_timer = setInterval(() => __pingServer(ws), 2000);
 	};
 
 	ws.onmessage = function(event) {
 		// console.log("KVMD:", event.data);
 		event = JSON.parse(event.data);
 		if (event.msg_type == "event") {
-			if (event.msg.event == "atx_state") {
+			if (event.msg.event == "pong") {
+				__pingServer.missed_heartbeats = 0;
+			} else if (event.msg.event == "atx_state") {
 				leds = event.msg.event_attrs.leds;
 				document.getElementById("atx-power-led").className = (leds.power ? "led-on" : "led-off");
 				document.getElementById("atx-hdd-led").className = (leds.hdd ? "led-busy" : "led-off");
@@ -26,6 +29,9 @@ function __startSessionPoller() {
 	};
 
 	ws.onclose = function(event) {
+		if (__startSessionPoller.ping_server_timer) {
+			clearInterval(__startSessionPoller.ping_server_timer);
+		}
 		__clearHidHandlers();
 		__setSessionStatus(false);
 		document.getElementById("atx-power-led").className = "led-off";
@@ -37,6 +43,21 @@ function __startSessionPoller() {
 		ws.close();
 	};
 }
+
+function __pingServer(ws) {
+	try {
+		__pingServer.missed_heartbeats++;
+		if (__pingServer.missed_heartbeats >= 5) {
+			throw new Error("Too many missed heartbeats");
+		}
+		ws.send(JSON.stringify({"event_type": "ping"}));
+	} catch (err) {
+		__pingServer.missed_heartbeats = 0;
+		console.warn("Closing session:", err.message);
+		ws.close();
+	}
+}
+__pingServer.missed_heartbeats = 0;
 
 function __setSessionStatus(status) {
 	var el_session_status = document.getElementById("session-status");
@@ -74,7 +95,9 @@ function __installHidHandlers(ws) {
 }
 
 function __clearHidHandlers() {
-	clearInterval(__installHidHandlers.mouse_move_timer);
+	if (__installHidHandlers.mouse_move_timer) {
+		clearInterval(__installHidHandlers.mouse_move_timer);
+	}
 
 	document.onkeydown = null;
 	document.onkeyup = null;
