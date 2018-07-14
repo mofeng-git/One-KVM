@@ -151,18 +151,16 @@ class Server:  # pylint: disable=too-many-instance-attributes
                     logger.error("Can't parse JSON event from websocket: %s", err)
                 else:
                     if event.get("event_type") == "ping":
-                        ws.send_str(json.dumps({"msg_type": "pong"}))
+                        await ws.send_str(json.dumps({"msg_type": "pong"}))
                     elif event.get("event_type") == "key":
                         key = str(event.get("key", ""))[:64].strip()
                         state = event.get("state")
                         if key and state in [True, False]:
                             await self.__hid.send_key_event(key, state)
-                            continue
                     elif event.get("event_type") in ["mouse_move", "mouse_button", "mouse_wheel"]:
                         pass
                     else:
                         logger.error("Invalid websocket event: %r", event)
-                await ws.send_str(json.dumps({"msg_type": "echo", "msg": msg.data}))
             else:
                 break
         return ws
