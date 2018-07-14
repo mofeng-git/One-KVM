@@ -17,10 +17,10 @@ function __startSessionPoller() {
 	ws.onmessage = function(event) {
 		// console.log("KVMD:", event.data);
 		event = JSON.parse(event.data);
-		if (event.msg_type == "event") {
-			if (event.msg.event == "pong") {
+		if (event.msg_type === "event") {
+			if (event.msg.event === "pong") {
 				__pingServer.missed_heartbeats = 0;
-			} else if (event.msg.event == "atx_state") {
+			} else if (event.msg.event === "atx_state") {
 				leds = event.msg.event_attrs.leds;
 				document.getElementById("atx-power-led").className = (leds.power ? "led-on" : "led-off");
 				document.getElementById("atx-hdd-led").className = (leds.hdd ? "led-busy" : "led-off");
@@ -67,8 +67,8 @@ function __setSessionStatus(status) {
 
 function __installHidHandlers(ws) {
 	var http = __request("GET", "/kvmd/hid", function() {
-		if (http.readyState == 4) {
-			if (http.status == 200) {
+		if (http.readyState === 4) {
+			if (http.status === 200) {
 				features = JSON.parse(http.responseText).result.features;
 				if (features.keyboard) {
 					// https://www.codeday.top/2017/05/03/24906.html
@@ -154,7 +154,7 @@ __onMouseMove.pos = {x: 0, y:0};
 
 function __handleMouseMove(ws) {
 	var pos = __onMouseMove.pos;
-	if (pos.x != __handleMouseMove.old_pos.x || pos.y != __handleMouseMove.old_pos.y) {
+	if (pos.x !== __handleMouseMove.old_pos.x || pos.y !== __handleMouseMove.old_pos.y) {
 		ws.send(JSON.stringify({
 			event_type: "mouse_move",
 			to: pos,
@@ -203,10 +203,10 @@ function clickAtxButton(el_button) {
 	if (button && confirm(confirm_msg)) {
 		__setAtxButtonsBusy(true);
 		var http = __request("POST", "/kvmd/atx/click?button=" + button, function() {
-			if (http.readyState == 4) {
-				if (http.status == 409) {
+			if (http.readyState === 4) {
+				if (http.status === 409) {
 					alert("Performing another ATX operation for other client, please try again later");
-				} else if (http.status != 200) {
+				} else if (http.status !== 200) {
 					alert("Click error:", http.responseText);
 				}
 				__setAtxButtonsBusy(false);
@@ -229,11 +229,11 @@ function __setAtxButtonsBusy(busy) {
 // -----------------------------------------------------------------------------
 function __startStreamPoller() {
 	var http = __request("GET", "/streamer/?action=snapshot", function() {
-		if (http.readyState == 2 || http.readyState == 4) {
+		if (http.readyState === 2 || http.readyState === 4) {
 			var status = http.status;
 			http.onreadystatechange = null;
 			http.abort();
-			if (status != 200) {
+			if (status !== 200) {
 				console.log("Refreshing stream ...");
 				__startStreamPoller.last = false;
 				document.getElementById("stream-image").className = "stream-image-off";
@@ -252,7 +252,7 @@ __startStreamPoller.last = false;
 
 function __refreshStream() {
 	var http = __request("GET", "/kvmd/streamer", function() {
-		if (http.readyState == 4 && http.status == 200) {
+		if (http.readyState === 4 && http.status === 200) {
 			size = JSON.parse(http.responseText).result.size;
 			el_stream_box = document.getElementById("stream-image");
 			el_stream_box.style.width = size.width + "px";
@@ -265,8 +265,8 @@ function __refreshStream() {
 function clickResetStreamButton(el_button) {
 	__setButtonBusy(el_button, true);
 	var http = __request("POST", "/kvmd/streamer/reset", function() {
-		if (http.readyState == 4) {
-			if (http.status != 200) {
+		if (http.readyState === 4) {
+			if (http.status !== 200) {
 				alert("Can't reset stream:", http.responseText);
 			}
 			__setButtonBusy(el_button, false);
