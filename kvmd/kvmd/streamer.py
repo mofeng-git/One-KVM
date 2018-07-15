@@ -18,6 +18,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         conv_power: int,
         sync_delay: float,
         init_delay: float,
+        init_restart_after: float,
 
         width: int,
         height: int,
@@ -30,6 +31,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__conv_power = (gpio.set_output(conv_power) if conv_power > 0 else conv_power)
         self.__sync_delay = sync_delay
         self.__init_delay = init_delay
+        self.__init_restart_after = init_restart_after
 
         self.__width = width
         self.__height = height
@@ -39,19 +41,19 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__proc_task: Optional[asyncio.Task] = None
 
-    async def start(self) -> None:
-        assert not self.__proc_task
-        get_logger().info("Starting streamer ...")
-        await self.__set_hw_enabled(True)
-        self.__proc_task = self.__loop.create_task(self.__process())
+    async def start(self, no_init_restart: bool=False) -> None:
+        logger = get_logger()
+        logger.info("Starting streamer ...")
+        await self.__inner_start()
+        if self.__init_restart_after > 0.0 and not no_init_restart:
+            logger.info("Stopping streamer to restart ...")
+            await self.__inner_stop()
+            logger.info("Starting again ...")
+            await self.__inner_start()
 
     async def stop(self) -> None:
-        assert self.__proc_task
         get_logger().info("Stopping streamer ...")
-        self.__proc_task.cancel()
-        await asyncio.gather(self.__proc_task, return_exceptions=True)
-        await self.__set_hw_enabled(False)
-        self.__proc_task = None
+        await self.__inner_stop()
 
     def is_running(self) -> bool:
         return bool(self.__proc_task)
@@ -68,6 +70,18 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     async def cleanup(self) -> None:
         if self.is_running():
             await self.stop()
+
+    async def __inner_start(self) -> None:
+        assert not self.__proc_task
+        await self.__set_hw_enabled(True)
+        self.__proc_task = self.__loop.create_task(self.__process())
+
+    async def __inner_stop(self) -> None:
+        assert self.__proc_task
+        self.__proc_task.cancel()
+        await asyncio.gather(self.__proc_task, return_exceptions=True)
+        await self.__set_hw_enabled(False)
+        self.__proc_task = None
 
     async def __set_hw_enabled(self, enabled: bool) -> None:
         # XXX: This sequence is very important to enable converter and cap board

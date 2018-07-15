@@ -33,6 +33,7 @@ kvmd:
 
         sync_delay: 1.0
         init_delay: 1.0
+        init_restart_after: 1.0
         shutdown_delay: 10.0
 
         size:

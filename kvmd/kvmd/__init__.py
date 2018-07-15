@@ -44,6 +44,7 @@ def main() -> None:
             conv_power=int(config["streamer"]["pinout"]["conv"]),
             sync_delay=float(config["streamer"]["sync_delay"]),
             init_delay=float(config["streamer"]["init_delay"]),
+            init_restart_after=float(config["streamer"]["init_restart_after"]),
             width=int(config["streamer"]["size"]["width"]),
             height=int(config["streamer"]["size"]["height"]),
             cmd=list(map(str, config["streamer"]["cmd"])),

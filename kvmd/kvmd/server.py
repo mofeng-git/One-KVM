@@ -285,7 +285,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             if self.__reset_streamer:
                 if self.__streamer.is_running():
                     await self.__streamer.stop()
-                    await self.__streamer.start()
+                    await self.__streamer.start(no_init_restart=True)
                 self.__reset_streamer = False
 
             prev = cur
