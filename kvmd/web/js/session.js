@@ -33,6 +33,7 @@ var session = new function() {
 	var __wsErrorHandler = function(event) {
 		tools.error("WebSocket error:", event);
 		__ws.close();
+		__ws = null;
 	};
 
 	var __wsCloseHandler = function(event) {
@@ -55,7 +56,10 @@ var session = new function() {
 			__ws.send(JSON.stringify({"event_type": "ping"}));
 		} catch (err) {
 			tools.error("Ping error:", err.message);
-			__ws.close();
+			if (__ws) {
+				__ws.close();
+				__ws = null;
+			}
 		}
 	};
 };
