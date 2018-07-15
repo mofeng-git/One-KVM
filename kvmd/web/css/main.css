@@ -10,29 +10,22 @@ img#stream-image {
 	display: inline-block;
 	border: 1px solid grey;
 }
-img.stream-image-on {
-	cursor: cell;
+img.stream-image-active {
+	cursor: crosshair;
 	-webkit-filter: none;
 	filter: none;
 }
-img.stream-image-off {
+img.stream-image-inactive {
 	cursor: wait;
 	-webkit-filter: grayscale(100%); /* Safari 6.0 - 9.0 */
 	filter: grayscale(100%);
-}
-
-div.session-active {
-	color: grey;
-}
-div.session-closed {
-	color: #ff3d40;
 }
 
 div#atx-power-led, div#hid-mouse-led, div#msd-led {
 	font-weight: bold;
 	font-size: 150%;
 }
-div#atx-hdd-led, div#screen-led, div#hid-keyboard-led {
+div#atx-hdd-led, div#stream-led, div#hid-keyboard-led {
 	font-size: 150%;
 }
 div.led-on {
@@ -45,5 +38,5 @@ div.led-busy {
 	color: #ff373a;
 }
 
-button#power-button, button#reset-button {
+button#stream-reset-button button#atx-power-button, button#atx-reset-button {
 }
