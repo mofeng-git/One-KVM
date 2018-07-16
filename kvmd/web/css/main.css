@@ -21,22 +21,28 @@ img.stream-image-inactive {
 	filter: grayscale(100%);
 }
 
-div#atx-power-led, div#hid-mouse-led, div#msd-led {
-	font-weight: bold;
-	font-size: 150%;
+img#atx-power-led,
+img#hid-mouse-led,
+img#msd-led,
+img#atx-hdd-led,
+img#stream-led,
+img#hid-keyboard-led {
+	height: 24px;
 }
-div#atx-hdd-led, div#stream-led, div#hid-keyboard-led {
-	font-size: 150%;
+img.led-on {
+	filter: invert(.5) sepia(1) saturate(5) hue-rotate(100deg);
 }
-div.led-on {
-	color: #00ce00;
+img.led-off {
+	filter: invert(.5);
 }
-div.led-off {
-	color: grey;
-}
-div.led-busy {
-	color: #ff373a;
+img.led-busy {
+	/*color: #ff373a;*/
+	filter: invert(.5) sepia(1) saturate(15) hue-rotate(320deg);
 }
 
-button#stream-reset-button button#atx-power-button, button#atx-reset-button {
+button#stream-reset-button,
+button#atx-power-button,
+button#atx-power-button-long,
+button#atx-reset-button {
+	height: 24px;
 }
