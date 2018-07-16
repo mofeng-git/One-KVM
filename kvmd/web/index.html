@@ -18,33 +18,41 @@
 <script>window.onload = main;</script>
 
 <body>
-	<div id="stream-box">
-		<img src="/streamer/?action=stream" id="stream-image" class="stream-image-inactive" alt="Loading..." />
-		<hr>
-		<table cellpadding="0" cellspacing="0" style="border: none;">
-			<tr>
-				<td><img id="stream-led" class="led-off" src="svg/stream-led.svg" /></td>
-				<td>&nbsp;</td>
-				<td><img id="hid-keyboard-led" class="led-off" src="svg/hid-keyboard-led.svg" /></td>
-				<td>&nbsp;</td>
-				<td><img id="hid-mouse-led" class="led-off" src="svg/hid-mouse-led.svg" /></td>
-				<td>&nbsp;&nbsp;</td>
-				<td><button id="stream-reset-button" type="button" title="Click here if your video looks like crap" onclick="stream.clickResetButton(this);">Reset stream</button></td>
-			</tr>
-		</table>
-	</div>
+	<ul id="ctl">
+		<li class="ctl-left"><img id="logo" src="svg/logo.svg" alt="&pi;-kvm" /></li>
+		<li class="ctl-right"><img id="hid-mouse-led" class="led-off" src="svg/hid-mouse-led.svg" /></li>
+		<li class="ctl-right"><img id="hid-keyboard-led" class="led-off" src="svg/hid-keyboard-led.svg" /></li>
+		<li class="ctl-right"><img id="stream-led" class="led-off" src="svg/stream-led.svg" /></li>
+		<li class="ctl-right"><img id="msd-led" class="led-off" src="svg/msd-led.svg" /></li>
+		<li class="ctl-right"><img id="atx-hdd-led" class="led-off" src="svg/atx-hdd-led.svg" /></li>
+		<li class="ctl-right-sep"><img id="atx-power-led" class="led-off" src="svg/atx-power-led.svg" /></li>
 
-	<table cellpadding="0" cellspacing="5" style="border: none;">
-		<tr>
-			<td><img id="atx-power-led" class="led-off" src="svg/atx-power-led.svg" /></td>
-			<td><img id="atx-hdd-led" class="led-off" src="svg/atx-hdd-led.svg" /></td>
-			<td>&nbsp;</td>
-			<td><img id="msd-led" class="led-off" src="svg/msd-led.svg" /></td>
-			<td>&nbsp;</td>
-			<td><button id="atx-power-button" type="button" title="Click hardware power button" onclick="atx.clickButton(this);">Power</button></td>
-			<td><button id="atx-power-button-long" type="button" title="Click hardware power button (long press)" onclick="atx.clickButton(this);">Power (long)</button></td>
-			<td><button id="atx-reset-button" type="button" title="Click to force reset" onclick="atx.clickButton(this);">Reset</button></td>
-		</tr>
-	</table>
+		<li class="ctl-right-sep">
+			<div class="ctl-dropdown">
+				<a class="ctl-item" href="#">ATX Buttons&#8628;</a>
+				<div class="ctl-dropdown-content">
+					<button id="atx-power-button" onclick="atx.clickButton(this);" href="#">Click Power</button>
+					<button id="atx-power-button-long" onclick="atx.clickButton(this);" href="#">Click Power (long)</button>
+					<hr>
+					<button id="atx-reset-button" onclick="atx.clickButton(this);"href="#">Click Reset</button>
+				</div>
+			</div>
+		</li>
+
+		<li class="ctl-right-sep">
+			<div class="ctl-dropdown">
+				<a class="ctl-item" href="#">Tools &#8628;</a>
+				<div class="ctl-dropdown-content">
+					<button id="stream-reset-button" onclick="stream.clickResetButton(this);"href="#">Reset stream</button>
+				</div>
+			</div>
+		</li>
+	</ul>
+
+	<div class="centered">
+		<div id="stream-box">
+			<img src="/streamer/?action=stream" id="stream-image" class="stream-image-inactive" alt="Loading..." />
+		</div>
+	</div>
 </body>
 </html>
