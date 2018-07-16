@@ -236,11 +236,14 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     @_msd_operated
     async def __aenter__(self) -> "MassStorageDevice":
         self.__region.enter()
-        if not self.__device_info:
-            raise MsdIsNotConnectedToKvmError()
-        self.__device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
-        self.__written = 0
-        return self
+        try:
+            if not self.__device_info:
+                raise MsdIsNotConnectedToKvmError()
+            self.__device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
+            self.__written = 0
+            return self
+        finally:
+            self.__region.exit()
 
     async def write_image_info(self, name: str, complete: bool) -> None:
         assert self.__device_file
