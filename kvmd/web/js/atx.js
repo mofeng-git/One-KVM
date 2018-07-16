@@ -1,7 +1,7 @@
 var atx = new function() {
 	this.setLedsState = function(leds) {
 		$("atx-power-led").className = (leds.power ? "led-on" : "led-off");
-		$("atx-hdd-led").className = (leds.hdd ? "led-busy" : "led-off");
+		$("atx-hdd-led").className = (leds.hdd ? "led-hdd-busy" : "led-off");
 	};
 
 	this.clearLeds = function() {
