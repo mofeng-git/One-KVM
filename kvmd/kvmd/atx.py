@@ -37,6 +37,7 @@ class Atx:
 
     def get_state(self) -> Dict:
         return {
+            "busy": self.__region.is_busy(),
             "leds": {
                 "power": (not gpio.read(self.__power_led)),
                 "hdd": (not gpio.read(self.__hdd_led)),

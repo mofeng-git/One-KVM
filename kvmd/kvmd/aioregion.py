@@ -14,6 +14,9 @@ class AioExclusiveRegion:
         self.__exc_type = exc_type
         self.__busy = False
 
+    def is_busy(self) -> bool:
+        return self.__busy
+
     def enter(self) -> None:
         if not self.__busy:
             self.__busy = True

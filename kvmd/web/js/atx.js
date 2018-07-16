@@ -1,10 +1,22 @@
 var atx = new function() {
-	this.setLedsState = function(leds) {
-		$("atx-power-led").className = (leds.power ? "led-on" : "led-off");
-		$("atx-hdd-led").className = (leds.hdd ? "led-hdd-busy" : "led-off");
+	this.loadInitialState = function() {
+		var http = tools.makeRequest("GET", "/kvmd/atx", function() {
+			if (http.readyState === 4) {
+				if (http.status === 200) {
+					atx.setButtonsBusy(JSON.parse(http.responseText).result.busy);
+				} else {
+					setTimeout(atx.loadInitialState, 1000);
+				}
+			}
+		});
 	};
 
-	this.clearLeds = function() {
+	this.setState = function(state) {
+		$("atx-power-led").className = (state.leds.power ? "led-on" : "led-off");
+		$("atx-hdd-led").className = (state.leds.hdd ? "led-hdd-busy" : "led-off");
+	};
+
+	this.clearState = function() {
 		[
 			"atx-power-led",
 			"atx-hdd-led",
@@ -35,7 +47,7 @@ var atx = new function() {
 		}
 
 		if (button && confirm(confirm_msg)) {
-			__setButtonsBusy(true);
+			// atx.setButtonsBusy(true);
 			var http = tools.makeRequest("POST", "/kvmd/atx/click?button=" + button, function() {
 				if (http.readyState === 4) {
 					if (http.status === 409) {
@@ -43,13 +55,13 @@ var atx = new function() {
 					} else if (http.status !== 200) {
 						alert("Click error:", http.responseText);
 					}
-					__setButtonsBusy(false);
+					// atx.setButtonsBusy(false);
 				}
 			}, timeout);
 		}
 	};
 
-	var __setButtonsBusy = function(busy) {
+	this.setButtonsBusy = function(busy) {
 		[
 			"atx-power-button",
 			"atx-power-button-long",

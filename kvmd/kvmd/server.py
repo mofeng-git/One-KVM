@@ -174,14 +174,16 @@ class Server:  # pylint: disable=too-many-instance-attributes
     @_wrap_exceptions_for_web("Click error")
     async def __atx_click_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         button = request.query.get("button")
-        if button == "power":
-            await self.__atx.click_power()
-        elif button == "power_long":
-            await self.__atx.click_power_long()
-        elif button == "reset":
-            await self.__atx.click_reset()
-        else:
+        clicker = {
+            "power": self.__atx.click_power,
+            "power_long": self.__atx.click_power_long,
+            "reset": self.__atx.click_reset,
+        }.get(button)
+        if not clicker:
             raise BadRequest("Missing or invalid 'button=%s'" % (button))
+        await self.__broadcast_event("atx_click", button=button)  # type: ignore
+        await clicker()
+        await self.__broadcast_event("atx_click", button=None)  # type: ignore
         return _json({"clicked": button})
 
     async def __msd_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -192,13 +194,15 @@ class Server:  # pylint: disable=too-many-instance-attributes
         to = request.query.get("to")
         if to == "kvm":
             await self.__msd.connect_to_kvm()
-            await self.__broadcast_event("msd_state", state="connected_to_kvm")  # type: ignore
+            state = self.__msd.get_state()
+            await self.__broadcast_event("msd_state", **state)
         elif to == "server":
             await self.__msd.connect_to_pc()
-            await self.__broadcast_event("msd_state", state="connected_to_server")  # type: ignore
+            state = self.__msd.get_state()
+            await self.__broadcast_event("msd_state", **state)
         else:
             raise BadRequest("Missing or invalid 'to=%s'" % (to))
-        return _json(self.__msd.get_state())
+        return _json(state)
 
     @_wrap_exceptions_for_web("Can't write data to mass-storage device")
     async def __msd_write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -216,7 +220,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 raise BadRequest("Missing 'image_data' field")
 
             async with self.__msd:
-                await self.__broadcast_event("msd_state", state="busy")  # type: ignore
+                await self.__broadcast_event("msd_state", **self.__msd.get_state())
                 logger.info("Writing image %r to mass-storage device ...", image_name)
                 await self.__msd.write_image_info(image_name, False)
                 while True:
@@ -225,7 +229,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                         break
                     written = await self.__msd.write_image_chunk(chunk)
                 await self.__msd.write_image_info(image_name, True)
-            await self.__broadcast_event("msd_state", state="free")  # type: ignore
+                await self.__broadcast_event("msd_state", **self.__msd.get_state())
         finally:
             if written != 0:
                 logger.info("Written %d bytes to mass-storage device", written)

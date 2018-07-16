@@ -13,6 +13,8 @@ var session = new function() {
 
 	var __wsOpenHandler = function(event) {
 		tools.debug("WebSocket opened:", event);
+		atx.loadInitialState();
+		msd.loadInitialState();
 		hid.installCapture(__ws);
 		__missed_heartbeats = 0;
 		__ping_timer = setInterval(__pingServer, 1000);
@@ -25,7 +27,11 @@ var session = new function() {
 			__missed_heartbeats = 0;
 		} else if (event.msg_type === "event") {
 			if (event.msg.event === "atx_state") {
-				atx.setLedsState(event.msg.event_attrs.leds);
+				atx.setState(event.msg.event_attrs);
+			// } else if (event.msg.event === "atx_click") {
+			//	atx.setButtonsBusy(event.msg.event_attrs.button);
+			} else if (event.msg.event === "msd_state") {
+				msd.setState(event.msg.event_attrs);
 			}
 		}
 	};
@@ -46,7 +52,7 @@ var session = new function() {
 			__ping_timer = null;
 		}
 		hid.clearCapture();
-		atx.clearLeds();
+		atx.clearState();
 		__ws = null;
 		setTimeout(session.startPoller, 1000);
 	};
