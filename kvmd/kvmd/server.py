@@ -229,8 +229,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
                         break
                     written = await self.__msd.write_image_chunk(chunk)
                 await self.__msd.write_image_info(image_name, True)
-                await self.__broadcast_event("msd_state", **self.__msd.get_state())
         finally:
+            await self.__broadcast_event("msd_state", **self.__msd.get_state())
             if written != 0:
                 logger.info("Written %d bytes to mass-storage device", written)
         return _json({"written": written})

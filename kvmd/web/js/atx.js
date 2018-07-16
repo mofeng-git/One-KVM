@@ -12,6 +12,7 @@ var atx = new function() {
 	};
 
 	this.setState = function(state) {
+		atx.setButtonsBusy(state.busy);
 		$("atx-power-led").className = (state.leds.power ? "led-on" : "led-off");
 		$("atx-hdd-led").className = (state.leds.hdd ? "led-hdd-busy" : "led-off");
 	};
