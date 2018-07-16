@@ -5,11 +5,20 @@ var atx = new function() {
 	};
 
 	this.clearLeds = function() {
-		atx.setLedsState(false, false);
+		[
+			"atx-power-led",
+			"atx-hdd-led",
+		].forEach(function(name) {
+			$(name).className = "led-off";
+		});
 	};
 
-	this.clickButton = function(el_button) {
-		switch (el_button.id) {
+	this.clickButton = function(el) {
+		var button = null;
+		var confirm_msg = null;
+		var timeout = null;
+
+		switch (el.id) {
 			case "atx-power-button":
 				var button = "power";
 				var confirm_msg = "Are you sure to click the power button?";
@@ -17,14 +26,11 @@ var atx = new function() {
 			case "atx-power-button-long":
 				var button = "power_long";
 				var confirm_msg = "Are you sure to perform the long press of the power button?";
+				var timeout = 15000;
 				break;
 			case "atx-reset-button":
 				var button = "reset";
 				var confirm_msg = "Are you sure to reboot the server?";
-				break;
-			default:
-				var button = null;
-				var confirm_msg = null;
 				break;
 		}
 
@@ -39,7 +45,7 @@ var atx = new function() {
 					}
 					__setButtonsBusy(false);
 				}
-			});
+			}, timeout);
 		}
 	};
 

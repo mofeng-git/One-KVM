@@ -1,8 +1,9 @@
 var tools = new function() {
-	this.makeRequest = function(method, url, callback) {
+	this.makeRequest = function(method, url, callback, timeout=null) {
 		var http = new XMLHttpRequest();
 		http.open(method, url, true)
 		http.onreadystatechange = callback;
+		http.timeout = timeout ? timeout : 5000;
 		http.send();
 		return http;
 	};

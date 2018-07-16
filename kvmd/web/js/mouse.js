@@ -35,9 +35,9 @@ var mouse = new function() {
 	var __buttonHandler = function(ws, event, state) {
 		// https://www.w3schools.com/jsref/event_button.asp
 		switch (event.button) {
-			case 0: var button = "Left"; break;
-			case 2: var button = "Right"; break;
-			default: var button = null; break
+			case 0: var button = "left"; break;
+			case 2: var button = "right"; break;
+			default: var button = null; break;
 		}
 		if (button) {
 			tools.debug("Mouse button", (state ? "pressed:" : "released:"), button);

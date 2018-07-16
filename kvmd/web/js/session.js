@@ -32,8 +32,11 @@ var session = new function() {
 
 	var __wsErrorHandler = function(event) {
 		tools.error("WebSocket error:", event);
-		__ws.close();
-		__ws = null;
+		if (__ws) {
+			__ws.onclose = null;
+			__ws.close();
+			__wsCloseHandler(null);
+		}
 	};
 
 	var __wsCloseHandler = function(event) {
@@ -44,6 +47,7 @@ var session = new function() {
 		}
 		hid.clearCapture();
 		atx.clearLeds();
+		__ws = null;
 		setTimeout(session.startPoller, 1000);
 	};
 
@@ -57,8 +61,9 @@ var session = new function() {
 		} catch (err) {
 			tools.error("Ping error:", err.message);
 			if (__ws) {
+				__ws.onclose = null;
 				__ws.close();
-				__ws = null;
+				__wsCloseHandler(null);
 			}
 		}
 	};
