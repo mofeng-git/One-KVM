@@ -7,6 +7,9 @@ img#logo {
 	height: 24px;
 	-webkit-filter: invert(0.7);
 	filter: invert(0.7);
+	vertical-align: middle;
+	margin-right: 10px;
+	padding: 13px 15px;
 }
 div.centered {
 	position: absolute;
@@ -51,22 +54,25 @@ ul#ctl p {
 	padding: 15px 16px;
 }
 ul#ctl img {
-	margin: 0px;
-	padding: 11px 11px;
-	height: 24px;
+	vertical-align: middle;
+	margin-right: 10px;
+	height: 20px;
 }
 ul#ctl a.ctl-item {
-	display: block;
+	display: inline-block;
+	vertical-align: middle;
 	color: #c3c3c3;
 	text-align: center;
 	padding: 15px 16px;
 	text-decoration: none;
+	height: 20px;
 }
 div.ctl-dropdown {
 	position: relative;
 	display: inline-block;
 }
 div.ctl-dropdown-content {
+	white-space:nowrap;
 	border: 1px solid #17191d;
 	border-radius: 0 0 8px 8px;
 	display: none;
@@ -89,7 +95,6 @@ div.ctl-dropdown-content button {
 	background-color: #282b30;
 	display: block;
 	width: 100%;
-	white-space:nowrap;
 	height: 30px;
 	font-size: 16px;
 	text-align: left;

@@ -21,16 +21,28 @@
 <body>
 	<ul id="ctl">
 		<li class="ctl-left"><img id="logo" src="svg/logo.svg" alt="&pi;-kvm" /></li>
-		<li class="ctl-right"><img id="hid-mouse-led" class="led-off" src="svg/hid-mouse-led.svg" /></li>
-		<li class="ctl-right"><img id="hid-keyboard-led" class="led-off" src="svg/hid-keyboard-led.svg" /></li>
-		<li class="ctl-right"><img id="stream-led" class="led-off" src="svg/stream-led.svg" /></li>
-		<li class="ctl-right"><img id="msd-led" class="led-off" src="svg/msd-led.svg" /></li>
-		<li class="ctl-right"><img id="atx-hdd-led" class="led-off" src="svg/atx-hdd-led.svg" /></li>
-		<li class="ctl-right-sep"><img id="atx-power-led" class="led-off" src="svg/atx-power-led.svg" /></li>
 
 		<li class="ctl-right-sep">
 			<div class="ctl-dropdown">
-				<a class="ctl-item" href="#">ATX Buttons&#8628;</a>
+				<a class="ctl-item" href="#">
+					<img id="stream-led" class="led-off" src="svg/stream-led.svg" />
+					<img id="hid-keyboard-led" class="led-off" src="svg/hid-keyboard-led.svg" />
+					<img id="hid-mouse-led" class="led-off" src="svg/hid-mouse-led.svg" />
+					System &#8628;
+				</a>
+				<div class="ctl-dropdown-content">
+					<button id="stream-reset-button" onclick="stream.clickResetButton(this);"href="#">Reset stream</button>
+				</div>
+			</div>
+		</li>
+
+		<li class="ctl-right-sep">
+			<div class="ctl-dropdown">
+				<a class="ctl-item" href="#">
+					<img id="atx-power-led" class="led-off" src="svg/atx-power-led.svg" />
+					<img id="atx-hdd-led" class="led-off" src="svg/atx-hdd-led.svg" />
+					ATX &#8628;
+				</a>
 				<div class="ctl-dropdown-content">
 					<button id="atx-power-button" onclick="atx.clickButton(this);" href="#">Click Power <sup><i>short</i></sup></button>
 					<button id="atx-power-button-long" onclick="atx.clickButton(this);" href="#">Click Power <sup><i>long</i></sup></button>
@@ -42,9 +54,14 @@
 
 		<li class="ctl-right-sep">
 			<div class="ctl-dropdown">
-				<a class="ctl-item" href="#">Tools &#8628;</a>
+				<a class="ctl-item" href="#">
+					<img id="msd-led" class="led-off" src="svg/msd-led.svg" />
+					Mass Storage &#8628;
+				</a>
 				<div class="ctl-dropdown-content">
-					<button id="stream-reset-button" onclick="stream.clickResetButton(this);"href="#">Reset stream</button>
+					О, привет!<br>
+					К сожалению, я пока не реализовал эту функцию,<br>
+					но ты можешь полюбоваться на эту великолепную менюшку :3
 				</div>
 			</div>
 		</li>
