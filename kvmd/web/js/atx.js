@@ -26,12 +26,12 @@ var atx = new function() {
 		});
 	};
 
-	this.clickButton = function(el) {
+	this.clickButton = function(el_button) {
 		var button = null;
 		var confirm_msg = null;
 		var timeout = null;
 
-		switch (el.id) {
+		switch (el_button.id) {
 			case "atx-power-button":
 				var button = "power";
 				var confirm_msg = "Are you sure to click the power button?";
@@ -48,7 +48,6 @@ var atx = new function() {
 		}
 
 		if (button && confirm(confirm_msg)) {
-			// atx.setButtonsBusy(true);
 			var http = tools.makeRequest("POST", "/kvmd/atx/click?button=" + button, function() {
 				if (http.readyState === 4) {
 					if (http.status === 409) {
@@ -56,7 +55,6 @@ var atx = new function() {
 					} else if (http.status !== 200) {
 						alert("Click error:", http.responseText);
 					}
-					// atx.setButtonsBusy(false);
 				}
 			}, timeout);
 		}
