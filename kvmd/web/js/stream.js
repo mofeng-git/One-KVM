@@ -28,13 +28,13 @@ var stream = new function() {
 //	};
 
 	this.clickResetButton = function(el_button) {
-		tools.setButtonBusy(el_button, true);
+		el_button.disabled = true;
 		var http = tools.makeRequest("POST", "/kvmd/streamer/reset", function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					alert("Can't reset stream:", http.responseText);
 				}
-				tools.setButtonBusy(el_button, false);
+				el_button.disabled = false;
 			}
 		});
 	};

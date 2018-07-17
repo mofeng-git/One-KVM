@@ -8,11 +8,6 @@ var tools = new function() {
 		return http;
 	};
 
-	this.setButtonBusy = function(el_button, busy) {
-		el_button.disabled = busy;
-		el_button.style.cursor = (busy ? "wait" : "default");
-	};
-
 	var __debug = (new URL(window.location.href)).searchParams.get("debug");
 
 	this.debug = function(...args) {

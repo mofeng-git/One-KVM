@@ -68,7 +68,7 @@ var atx = new function() {
 			"atx-power-button-long",
 			"atx-reset-button",
 		].forEach(function(name) {
-			tools.setButtonBusy(document.getElementById(name), busy);
+			document.getElementById(name).disabled = busy;
 		});
 	};
 };
