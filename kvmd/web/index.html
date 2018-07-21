@@ -31,7 +31,7 @@
 					System &#8628;
 				</a>
 				<div class="ctl-dropdown-content">
-					<button disabled id="stream-reset-button" onclick="stream.clickResetButton(this);">&bull; Reset stream</button>
+					<button disabled id="stream-reset-button" onclick="stream.clickResetButton();">&bull; Reset stream</button>
 				</div>
 			</div>
 		</li>
@@ -83,6 +83,26 @@
 						<hr>
 					</div>
 
+					<div id="msd-another-another-user-uploads" style="display:none">
+						<div class="ctl-dropdown-content-text">
+							<table>
+								<tr>
+									<td><img src="svg/info.svg" /></td>
+									<td><b>Another user uploads an image</b></td>
+								</tr>
+							</table>
+						</div>
+						<hr>
+					</div>
+
+					<table id="msd-info">
+						<tr>
+							<td>Status: </td>
+							<td id="msd-status"></td>
+						</tr>
+					</table>
+					<hr>
+
 					<table id="msd-info">
 						<tr>
 							<td>Image name:</td>
@@ -95,20 +115,12 @@
 							<td>Storage size:</td>
 							<td id="msd-storage-size"></td>
 						</tr>
-						<tr>
-							<td>KVM Device:</td>
-							<td id="msd-storage-device"></td>
-						</tr>
 					</table>
 					<hr>
 
-
-
 					<input type="file" id="msd-select-new-image-file" style="display:none;" onchange="msd.selectNewImageFile(this)" />
-					<button disabled id="msd-select-new-image-button" class="first" onclick="document.getElementById('msd-select-new-image-file').click();">&bull; Upload new image</button><button disabled id="msd-upload-new-image-button" class="second-half-first" onclick="msd.clickButton(this);">&bull; Start</button><button disabled id="msd-abort-uploading-button" class="second-half-second" onclick="msd.clickButton(this);">&bull; Abort</button>
+					<button disabled id="msd-select-new-image-button" class="first" onclick="document.getElementById('msd-select-new-image-file').click();">&bull; Upload new image <b>&#8680;</button><button disabled id="msd-upload-new-image-button" class="second-half-first" onclick="msd.clickButton(this);">&bull; Start</button><button disabled id="msd-abort-uploading-button" class="second-half-second" onclick="msd.clickButton(this);">&bull; Abort</button>
 					<hr>
-
-
 
 					<div id="msd-new-image" style="display:none">
 						<table id="msd-info">
@@ -128,10 +140,6 @@
 							</div>
 						</div>
 						<hr>
-						<!--<div class="ctl-dropdown-content-text">
-							<img src="svg/info.svg" /><b>You can't switch Mass Storage Device while uploading</b><br>
-						</div>
-						<hr>-->
 					</div>
 
 					<button disabled id="msd-switch-to-kvm-button" class="first-bottom" onclick="msd.clickButton(this);">&bull; Switch drive to KVM</button><button disabled id="msd-switch-to-server-button" class="second-bottom" onclick="msd.clickButton(this);">&bull; Switch drive to Server</button>

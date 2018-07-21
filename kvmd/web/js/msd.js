@@ -17,7 +17,6 @@ var msd = new function() {
 
 	this.setState = function(state) {
 		__state = state;
-		console.log(state);
 		__applyState();
 	};
 
@@ -41,7 +40,6 @@ var msd = new function() {
 			__upload_http = null;
 			$("msd-progress").setAttribute("data-label", "Aborted");
 			$("msd-progress-value").style.width = "0%";
-			msd.loadInitialState();
 
 		} else if (el_button.id === "msd-switch-to-kvm-button" || el_button.id === "msd-switch-to-server-button") {
 			var to = (el_button.id === "msd-switch-to-kvm-button" ? "kvm" : "server");
@@ -76,20 +74,35 @@ var msd = new function() {
 
 	var __applyState = function() {
 		if (__state.connected_to === "server") {
+			$("msd-another-another-user-uploads").style.display = "none";
 			$("msd-led").className = "led-on";
+			$("msd-status").innerHTML = "Connected to Server";
+			$("msd-another-another-user-uploads").style.display = "none";
 		} else if (__state.busy) {
+			if (!__upload_http) {
+				$("msd-another-another-user-uploads").style.display = "block";
+			}
 			$("msd-led").className = "led-msd-writing";
+			$("msd-status").innerHTML = "Uploading new image";
 		} else {
+			$("msd-another-another-user-uploads").style.display = "none";
 			$("msd-led").className = "led-off";
+			if (__state.in_operate) {
+				$("msd-status").innerHTML = "Connected to KVM";
+			} else {
+				$("msd-status").innerHTML = "Unavailable";
+			}
 		}
 
 		$("msd-not-in-operate").style.display = (__state.in_operate ? "none" : "block");
-		$("msd-current-image-broken").style.display = ((__state.info.image && !__state.info.image.complete) ? "block" : "none");
+		$("msd-current-image-broken").style.display = (
+			__state.in_operate && __state.info.image &&
+			!__state.info.image.complete && !__state.busy ? "block" : "none"
+		);
 
-		$("msd-current-image-name").innerHTML = (__state.info.image ? __state.info.image.name : "None");
-		$("msd-current-image-size").innerHTML = (__state.info.image ? __formatSize(__state.info.image.size) : "None");
+		$("msd-current-image-name").innerHTML = (__state.in_operate && __state.info.image ? __state.info.image.name : "None");
+		$("msd-current-image-size").innerHTML = (__state.in_operate && __state.info.image ? __formatSize(__state.info.image.size) : "None");
 		$("msd-storage-size").innerHTML = (__state.in_operate ? __formatSize(__state.info.size) : "Unavailable");
-		$("msd-storage-device").innerHTML = (__state.in_operate ? __state.info.real : "Missing");
 
 		$("msd-switch-to-kvm-button").disabled = (!__state.in_operate || __state.connected_to === "kvm" || __state.busy);
 		$("msd-switch-to-server-button").disabled = (!__state.in_operate || __state.connected_to === "server" || __state.busy);

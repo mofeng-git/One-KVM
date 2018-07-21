@@ -222,9 +222,14 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         if info:
             info["hw"] = (info["hw"]._asdict() if info["hw"] else None)
             info["image"] = (info["image"]._asdict() if info["image"] else None)
+
+        connected_to: Optional[str] = None
+        if self._device_path:
+            connected_to = ("kvm" if self.__device_info else "server")
+
         return {
             "in_operate": bool(self._device_path),
-            "connected_to": ("kvm" if self.__device_info else "server"),
+            "connected_to": connected_to,
             "busy": bool(self.__device_file),
             "written": self.__written,
             "info": info,

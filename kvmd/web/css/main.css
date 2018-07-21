@@ -213,9 +213,9 @@ table#msd-info {
 	font-size: 14px;
 }
 table#msd-info
+td#msd-status,
 td#msd-current-image-name,
 td#msd-current-image-size,
-td#msd-storage-device,
 td#msd-storage-size,
 td#msd-new-image-name,
 td#msd-new-image-size {
