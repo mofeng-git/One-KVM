@@ -124,10 +124,8 @@ var msd = new function() {
 		if (__upload_http.readyState === 4) {
 			if (__upload_http.status !== 200) {
 				alert("Can't upload image to the Mass Storage Device:", __upload_http.responseText);
-			} else {
-				$("msd-progress").setAttribute("data-label", "Done");
-				$("msd-progress-value").style.width = "100%";
 			}
+			el_input.value = "";
 			__upload_http = null;
 			__applyState();
 		}
