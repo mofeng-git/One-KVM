@@ -31,7 +31,7 @@
 					System &#8628;
 				</a>
 				<div class="ctl-dropdown-content">
-					<button id="stream-reset-button" onclick="stream.clickResetButton(this);"href="#">Reset stream</button>
+					<button disabled id="stream-reset-button" onclick="stream.clickResetButton(this);">&bull; Reset stream</button>
 				</div>
 			</div>
 		</li>
@@ -44,10 +44,10 @@
 					ATX &#8628;
 				</a>
 				<div class="ctl-dropdown-content">
-					<button id="atx-power-button" onclick="atx.clickButton(this);" href="#">Click Power <sup><i>short</i></sup></button>
-					<button id="atx-power-button-long" onclick="atx.clickButton(this);" href="#">Click Power <sup><i>long</i></sup></button>
+					<button disabled id="atx-power-button" onclick="atx.clickButton(this);">&bull; Click Power <sup><i>short</i></sup></button>
+					<button disabled id="atx-power-button-long" onclick="atx.clickButton(this);">&bull; Click Power <sup><i>long</i></sup></button>
 					<hr>
-					<button id="atx-reset-button" onclick="atx.clickButton(this);"href="#">Click Reset</button>
+					<button disabled id="atx-reset-button" onclick="atx.clickButton(this);">&bull; Click Reset</button>
 				</div>
 			</div>
 		</li>
@@ -59,9 +59,82 @@
 					Mass Storage &#8628;
 				</a>
 				<div class="ctl-dropdown-content">
-					О, привет!<br>
-					К сожалению, я пока не реализовал эту функцию,<br>
-					но ты можешь полюбоваться на эту великолепную менюшку :3
+					<div id="msd-not-in-operate" style="display:none">
+						<div class="ctl-dropdown-content-text">
+							<table>
+								<tr>
+									<td><img src="svg/warning.svg" /></td>
+									<td><b>Mass Storage Device is not operational</b></td>
+								</tr>
+							</table>
+						</div>
+						<hr>
+					</div>
+
+					<div id="msd-current-image-broken" style="display:none">
+						<div class="ctl-dropdown-content-text">
+							<table>
+								<tr>
+									<td><img src="svg/warning.svg" /></td>
+									<td><b>Current image is broken!</b><br><sub>Perhaps uploading was interrupted</sub></td>
+								</tr>
+							</table>
+						</div>
+						<hr>
+					</div>
+
+					<table id="msd-info">
+						<tr>
+							<td>Image name:</td>
+							<td id="msd-current-image-name"></td>
+						</tr>
+						<tr>
+							<td>Image size:</td>
+							<td id="msd-current-image-size"></td>
+						</tr>
+							<td>Storage size:</td>
+							<td id="msd-storage-size"></td>
+						</tr>
+						<tr>
+							<td>KVM Device:</td>
+							<td id="msd-storage-device"></td>
+						</tr>
+					</table>
+					<hr>
+
+
+
+					<input type="file" id="msd-select-new-image-file" style="display:none;" onchange="msd.selectNewImageFile(this)" />
+					<button disabled id="msd-select-new-image-button" class="first" onclick="document.getElementById('msd-select-new-image-file').click();">&bull; Upload new image</button><button disabled id="msd-upload-new-image-button" class="second-half-first" onclick="msd.clickButton(this);">&bull; Start</button><button disabled id="msd-abort-uploading-button" class="second-half-second" onclick="msd.clickButton(this);">&bull; Abort</button>
+					<hr>
+
+
+
+					<div id="msd-new-image" style="display:none">
+						<table id="msd-info">
+							<tr>
+								<td>Image name:</td>
+								<td id="msd-new-image-name"></td>
+							</tr>
+							<tr>
+								<td>Upload size:</td>
+								<td id="msd-new-image-size"></td>
+							</tr>
+						</table>
+						<hr>
+						<div class="ctl-dropdown-content-text">
+							<div id="msd-progress">
+								<span id="msd-progress-value"></span>
+							</div>
+						</div>
+						<hr>
+						<!--<div class="ctl-dropdown-content-text">
+							<img src="svg/info.svg" /><b>You can't switch Mass Storage Device while uploading</b><br>
+						</div>
+						<hr>-->
+					</div>
+
+					<button disabled id="msd-switch-to-kvm-button" class="first-bottom" onclick="msd.clickButton(this);">&bull; Switch drive to KVM</button><button disabled id="msd-switch-to-server-button" class="second-bottom" onclick="msd.clickButton(this);">&bull; Switch drive to Server</button>
 				</div>
 			</div>
 		</li>

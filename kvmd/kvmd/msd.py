@@ -176,6 +176,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__loop = loop
 
         self.__device_info: Optional[_MassStorageDeviceInfo] = None
+        self.__saved_device_info: Optional[_MassStorageDeviceInfo] = None
         self.__region = aioregion.AioExclusiveRegion(MsdIsBusyError)
         self.__device_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__written = 0
@@ -217,7 +218,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             get_logger().info("Mass-storage device switched to Server")
 
     def get_state(self) -> Dict:
-        info = (self.__device_info._asdict() if self.__device_info else None)
+        info = (self.__saved_device_info._asdict() if self.__saved_device_info else None)
         if info:
             info["hw"] = (info["hw"]._asdict() if info["hw"] else None)
             info["image"] = (info["image"]._asdict() if info["image"] else None)
@@ -283,7 +284,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         device_info = await self.__loop.run_in_executor(None, _explore_device, self._device_path)
         if not device_info:
             raise MsdError("Can't explore device %r" % (self._device_path))
-        self.__device_info = device_info
+        self.__device_info = self.__saved_device_info = device_info
 
     async def __close_device_file(self) -> None:
         try:
