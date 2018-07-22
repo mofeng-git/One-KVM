@@ -55,10 +55,11 @@ ul#ctl {
 	width: 100%;
 	z-index: 10;
 }
-ul#ctl li.ctl-left {
+ul#ctl li.ctl-logo {
 	float: left;
 }
-ul#ctl li.ctl-right {
+ul#ctl li.ctl-right-actions {
+	cursor: pointer;
 	float: right;
 }
 ul#ctl img {
@@ -80,7 +81,6 @@ ul#ctl li a.ctl-item:hover:not(.active) {
 }
 div.ctl-dropdown {
 	outline: none;
-	cursor: pointer;
 	position: relative;
 	display: inline-block;
 }
@@ -175,7 +175,7 @@ div.ctl-dropdown-content-text {
 }
 
 div#stream-box {
-	pointer-events: none;
+	user-select: none;
 	border: var(--dark-border);
 	border-radius: 8px;
 	box-sizing: border-box;
