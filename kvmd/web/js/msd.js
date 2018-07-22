@@ -56,7 +56,8 @@ var msd = new function() {
 		}
 	};
 
-	this.selectNewImageFile = function(el_input) {
+	this.selectNewImageFile = function() {
+		var el_input = $("msd-select-new-image-file");
 		var image_file = (el_input.files.length ? el_input.files[0] : null);
 		if (image_file && image_file.size > __state.info.size) {
 			alert("New image is too big for your Mass Storage Device; maximum: " + __formatSize(__state.info.size));
@@ -64,11 +65,6 @@ var msd = new function() {
 			image_file = null;
 		}
 		__image_file = image_file;
-		$("msd-new-image").style.display = (__image_file ? "block" : "none");
-		$("msd-progress").setAttribute("data-label", "Waiting for upload ...");
-		$("msd-progress-value").style.width = "0%";
-		$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
-		$("msd-new-image-size").innerHTML = (__image_file ? __formatSize(__image_file.size) : "");
 		__applyState();
 	};
 
@@ -109,6 +105,12 @@ var msd = new function() {
 		$("msd-select-new-image-button").disabled = (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || __upload_http);
 		$("msd-upload-new-image-button").disabled = (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || !__image_file);
 		$("msd-abort-uploading-button").disabled = (!__state.in_operate || !__upload_http);
+
+		$("msd-new-image").style.display = (__image_file ? "block" : "none");
+		$("msd-progress").setAttribute("data-label", "Waiting for upload ...");
+		$("msd-progress-value").style.width = "0%";
+		$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
+		$("msd-new-image-size").innerHTML = (__image_file ? __formatSize(__image_file.size) : "");
 	};
 
 	var __formatSize = function(size) {
@@ -125,7 +127,8 @@ var msd = new function() {
 			if (__upload_http.status !== 200) {
 				alert("Can't upload image to the Mass Storage Device:", __upload_http.responseText);
 			}
-			el_input.value = "";
+			$("msd-select-new-image-file").value = "";
+			__image_file = null;
 			__upload_http = null;
 			__applyState();
 		}

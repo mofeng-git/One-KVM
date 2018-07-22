@@ -22,7 +22,7 @@
 	<ul id="ctl">
 		<li class="ctl-left"><img id="logo" src="svg/logo.svg" alt="&pi;-kvm" /></li>
 
-		<li class="ctl-right-sep">
+		<li class="ctl-right">
 			<div class="ctl-dropdown">
 				<a class="ctl-item" href="#">
 					<img id="stream-led" class="led-off" src="svg/stream-led.svg" />
@@ -36,7 +36,7 @@
 			</div>
 		</li>
 
-		<li class="ctl-right-sep">
+		<li class="ctl-right">
 			<div class="ctl-dropdown">
 				<a class="ctl-item" href="#">
 					<img id="atx-power-led" class="led-off" src="svg/atx-power-led.svg" />
@@ -52,13 +52,13 @@
 			</div>
 		</li>
 
-		<li class="ctl-right-sep">
+		<li class="ctl-right">
 			<div class="ctl-dropdown">
 				<a class="ctl-item" href="#">
 					<img id="msd-led" class="led-off" src="svg/msd-led.svg" />
 					Mass Storage &#8628;
 				</a>
-				<div class="ctl-dropdown-content">
+				<div id="msd-menu" class="ctl-dropdown-content">
 					<div id="msd-not-in-operate" style="display:none">
 						<div class="ctl-dropdown-content-text">
 							<table>
@@ -105,7 +105,7 @@
 
 					<table id="msd-info">
 						<tr>
-							<td>Image name:</td>
+							<td>Current image:</td>
 							<td id="msd-current-image-name"></td>
 						</tr>
 						<tr>
@@ -118,14 +118,14 @@
 					</table>
 					<hr>
 
-					<input type="file" id="msd-select-new-image-file" style="display:none;" onchange="msd.selectNewImageFile(this)" />
-					<button disabled id="msd-select-new-image-button" class="first" onclick="document.getElementById('msd-select-new-image-file').click();">&bull; Upload new image &#8680;</button><button disabled id="msd-upload-new-image-button" class="second-half-first" onclick="msd.clickButton(this);">&bull; Start</button><button disabled id="msd-abort-uploading-button" class="second-half-second" onclick="msd.clickButton(this);">&bull; Abort</button>
+					<input type="file" id="msd-select-new-image-file" style="display:none;" onchange="msd.selectNewImageFile()" />
+					<button disabled id="msd-select-new-image-button" class="first" onclick="document.getElementById('msd-select-new-image-file').click();">&bull; Upload new image</button><button disabled id="msd-upload-new-image-button" class="second-half" onclick="msd.clickButton(this);">&bull; Start</button><button disabled id="msd-abort-uploading-button" class="second-half" onclick="msd.clickButton(this);">&bull; Abort</button>
 					<hr>
 
 					<div id="msd-new-image" style="display:none">
 						<table id="msd-info">
 							<tr>
-								<td>Image name:</td>
+								<td>New name:</td>
 								<td id="msd-new-image-name"></td>
 							</tr>
 							<tr>
