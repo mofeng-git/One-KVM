@@ -2,7 +2,7 @@
 <html>
 <head>
 	<meta charset="utf-8" />
-	<title>&pi;-kvm</title>
+	<title>Pi-KVM</title>
 
 	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 	<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
@@ -20,6 +20,7 @@
 <script src="js/hid.js"></script>
 <script src="js/msd.js"></script>
 <script src="js/session.js"></script>
+<script src="js/ui.js"></script>
 <script src="js/main.js"></script>
 
 <script>window.onload = main;</script>
@@ -29,27 +30,27 @@
 		<li class="ctl-logo"><img id="logo" src="svg/logo.svg" alt="&pi;-kvm" /></li>
 
 		<li class="ctl-right-actions">
-			<div class="ctl-dropdown" tabindex="0">
-				<a class="ctl-item" href="#">
-					<img id="stream-led" class="led-off" src="svg/stream-led.svg" />
-					<img id="hid-keyboard-led" class="led-off" src="svg/hid-keyboard-led.svg" />
-					<img id="hid-mouse-led" class="led-off" src="svg/hid-mouse-led.svg" />
+			<div class="ctl-dropdown">
+				<a class="ctl-item" href="#" onclick="ui.toggleMenu(this);">
+					<img data-dont-hide-menu id="stream-led" class="led-off" src="svg/stream-led.svg" />
+					<img data-dont-hide-menu id="hid-keyboard-led" class="led-off" src="svg/hid-keyboard-led.svg" />
+					<img data-dont-hide-menu id="hid-mouse-led" class="led-off" src="svg/hid-mouse-led.svg" />
 					System &#8628;
 				</a>
-				<div class="ctl-dropdown-content">
+				<div class="ctl-dropdown-content" style="display:none">
 					<button disabled id="stream-reset-button" onclick="stream.clickResetButton();">&bull; Reset stream</button>
 				</div>
 			</div>
 		</li>
 
 		<li class="ctl-right-actions">
-			<div class="ctl-dropdown" tabindex="0">
-				<a class="ctl-item" href="#">
-					<img id="atx-power-led" class="led-off" src="svg/atx-power-led.svg" />
-					<img id="atx-hdd-led" class="led-off" src="svg/atx-hdd-led.svg" />
+			<div class="ctl-dropdown">
+				<a class="ctl-item" href="#" onclick="ui.toggleMenu(this);">
+					<img data-dont-hide-menu id="atx-power-led" class="led-off" src="svg/atx-power-led.svg" />
+					<img data-dont-hide-menu id="atx-hdd-led" class="led-off" src="svg/atx-hdd-led.svg" />
 					ATX &#8628;
 				</a>
-				<div class="ctl-dropdown-content">
+				<div class="ctl-dropdown-content" style="display:none">
 					<button disabled id="atx-power-button" onclick="atx.clickButton(this);">&bull; Click Power <sup><i>short</i></sup></button>
 					<button disabled id="atx-power-button-long" onclick="atx.clickButton(this);">&bull; Click Power <sup><i>long</i></sup></button>
 					<hr>
@@ -59,12 +60,12 @@
 		</li>
 
 		<li class="ctl-right-actions">
-			<div class="ctl-dropdown" tabindex="0">
-				<a class="ctl-item" href="#">
-					<img id="msd-led" class="led-off" src="svg/msd-led.svg" />
+			<div class="ctl-dropdown">
+				<a class="ctl-item" href="#" onclick="ui.toggleMenu(this);">
+					<img data-dont-hide-menu id="msd-led" class="led-off" src="svg/msd-led.svg" />
 					Mass Storage &#8628;
 				</a>
-				<div id="msd-menu" class="ctl-dropdown-content">
+				<div data-dont-hide-menu id="msd-menu" class="ctl-dropdown-content" style="display:none">
 					<div id="msd-not-in-operate" style="display:none">
 						<div class="ctl-dropdown-content-text">
 							<table>
@@ -125,7 +126,7 @@
 					<hr>
 
 					<input type="file" id="msd-select-new-image-file" style="display:none;" onchange="msd.selectNewImageFile()" />
-					<button disabled id="msd-select-new-image-button" class="first" onclick="document.getElementById('msd-select-new-image-file').click();">&bull; Upload new image</button><button disabled id="msd-upload-new-image-button" class="second-half" onclick="msd.clickButton(this);">&bull; Start</button><button disabled id="msd-abort-uploading-button" class="second-half" onclick="msd.clickButton(this);">&bull; Abort</button>
+					<button disabled id="msd-select-new-image-button" class="first" onclick="document.getElementById('msd-select-new-image-file').click();">Upload new image</button><button disabled id="msd-upload-new-image-button" class="second-half" onclick="msd.clickButton(this);">Start</button><button disabled id="msd-abort-uploading-button" class="second-half" onclick="msd.clickButton(this);">Abort</button>
 					<hr>
 
 					<div id="msd-new-image" style="display:none">
@@ -148,7 +149,7 @@
 						<hr>
 					</div>
 
-					<button disabled id="msd-switch-to-kvm-button" class="first-bottom" onclick="msd.clickButton(this);">&bull; Switch drive to KVM</button><button disabled id="msd-switch-to-server-button" class="second-bottom" onclick="msd.clickButton(this);">&bull; Switch drive to Server</button>
+					<button disabled data-force-hide-menu id="msd-switch-to-kvm-button" class="first-bottom" onclick="msd.clickButton(this);">&bull; Switch drive to KVM</button><button disabled data-force-hide-menu id="msd-switch-to-server-button" class="second-bottom" onclick="msd.clickButton(this);">&bull; Switch drive to Server</button>
 				</div>
 			</div>
 		</li>

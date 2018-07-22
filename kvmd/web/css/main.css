@@ -59,7 +59,6 @@ ul#ctl li.ctl-logo {
 	float: left;
 }
 ul#ctl li.ctl-right-actions {
-	cursor: pointer;
 	float: right;
 }
 ul#ctl img {
@@ -68,7 +67,7 @@ ul#ctl img {
 	height: 20px;
 }
 ul#ctl li a.ctl-item {
-	pointer-events: none;
+	cursor: pointer;
 	border-left: var(--black-border);
 	display: inline-block;
 	color: var(--fg-color-normal);
@@ -77,16 +76,10 @@ ul#ctl li a.ctl-item {
 	height: 20px;
 }
 ul#ctl li a.ctl-item:hover:not(.active) {
-	background-color: var(--bg-color-selected);
-}
-div.ctl-dropdown {
-	outline: none;
-	position: relative;
-	display: inline-block;
+	background-color: var(--bg-color-hovered);
 }
 div.ctl-dropdown-content {
 	user-select: text;
-	cursor: default;
 	white-space: nowrap;
 	border: var(--dark-border);
 	border-radius: 0 0 8px 8px;
@@ -95,23 +88,6 @@ div.ctl-dropdown-content {
 	min-width: 180px;
 	box-shadow: var(--big-shadow);
 	z-index: 9;
-	visibility: hidden;
-	transition: visibility 0.5s;
-	opacity: 0;
-}
-div.ctl-dropdown:focus {
-	pointer-events: none;
-}
-div.ctl-dropdown:focus div.ctl-dropdown-content {
-	opacity: 1;
-	visibility: visible;
-	pointer-events: auto;
-}
-div.ctl-dropdown:hover a.ctl-item {
-	background-color: var(--bg-color-hovered);
-}
-div.ctl-dropdown:focus a.ctl-item {
-	background-color: var(--bg-color-selected);
 }
 div.ctl-dropdown-content button {
 	box-shadow: none;
