@@ -258,3 +258,27 @@ div#msd-progress span#msd-progress-value {
 	display: inline-block;
 	height: 100%;
 }
+
+ul#bottom {
+	list-style-type: none;
+	bottom: 0;
+	position: fixed;
+	width: 100%;
+	padding: 0;
+	font-size: 0.7em;
+	color: var(--fg-color-inactive);
+	z-index: -1;
+}
+ul#bottom li {
+	padding: 0 10px;
+}
+ul#bottom li.bottom-left {
+	float: left;
+}
+ul#bottom li.bottom-right {
+	float: right;
+}
+ul#bottom li a {
+	text-decoration: underline dotted;
+	color: var(--fg-color-inactive);
+}

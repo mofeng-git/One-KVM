@@ -1,6 +1,8 @@
 import os
 import signal
 import asyncio
+import platform
+import functools
 import json
 import time
 
@@ -24,6 +26,21 @@ from .msd import MassStorageDevice
 from .streamer import Streamer
 
 from .logging import get_logger
+
+
+# =====
+__version__ = "0.37"
+
+
+@functools.lru_cache()
+def _get_system_info() -> Dict[str, Dict[str, str]]:
+    return {
+        "version": {
+            "platform": platform.platform(),
+            "python": platform.python_version(),
+            "kvmd": __version__,
+        },
+    }
 
 
 # =====
@@ -116,6 +133,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         app = aiohttp.web.Application(loop=self.__loop)
 
+        app.router.add_get("/info", self.__info_handler)
+
         app.router.add_get("/ws", self.__ws_handler)
 
         app.router.add_get("/hid", self.__hid_state_handler)
@@ -141,6 +160,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
         ])
 
         aiohttp.web.run_app(app, host=host, port=port, print=self.__run_app_print)
+
+    async def __info_handler(self, _: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
+        return _json(_get_system_info())
 
     async def __ws_handler(self, request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
         logger = get_logger(0)

@@ -13,6 +13,10 @@ from . import gpio
 
 
 # =====
+from .server import __version__  # noqa: F401
+
+
+# =====
 def main() -> None:
     config = init()
     with gpio.bcm():

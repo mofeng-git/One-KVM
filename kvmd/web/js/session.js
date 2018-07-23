@@ -3,6 +3,18 @@ var session = new function() {
 	var __ping_timer = null;
 	var __missed_heartbeats = 0;
 
+	this.loadKvmdVersion = function() {
+		var http = tools.makeRequest("GET", "/kvmd/info", function() {
+			if (http.readyState === 4) {
+				if (http.status === 200) {
+					$("kvmd-version").innerHTML = "kvmd " + JSON.parse(http.responseText).result.version.kvmd;
+				} else {
+					setTimeout(session.loadKvmdVersion, 1000);
+				}
+			}
+		});
+	};
+
 	this.startPoller = function() {
 		__ws = new WebSocket("ws://" + location.host + "/kvmd/ws");
 		__ws.onopen = __wsOpenHandler;
