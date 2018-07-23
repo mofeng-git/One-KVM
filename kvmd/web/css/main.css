@@ -14,6 +14,7 @@
 	--bg-color-progress: #171717;
 
 	--fg-color-normal: #c3c3c3;
+	--fg-color-dark: #aaaaaa;
 	--fg-color-intensive: white;
 	--fg-color-inactive: #6c7481;
 	--fg-color-selected: #6c7481;
@@ -24,6 +25,7 @@
 
 body {
 	margin: 0;
+	overflow: hidden;
 	color: var(--fg-color-normal);
 	background-color: var(--bg-color-normal);
 	font-family: sans-serif !important;
@@ -34,13 +36,27 @@ img#logo {
 	vertical-align: middle;
 	padding: 13px 15px;
 }
-div.centered {
+
+div.window {
+	user-select: none;
 	position: absolute;
+	border: var(--dark-border);
+	border-radius: 8px;
+	box-sizing: border-box;
+	box-shadow: var(--big-shadow);
+	display: inline-block;
+	background-color: var(--bg-color-light);
+	padding: 3px 10px 10px 10px;
 	top: 70px;
 	left: 50%;
 	-webkit-transform: translate(-50%);
 	-moz-transform: translate(-50%);
 	transform: translate(-50%);
+}
+div.window-header {
+	color: var(--fg-color-dark);
+	cursor: move;
+	padding-bottom: 3px;
 }
 
 ul#ctl {
@@ -144,16 +160,6 @@ div.ctl-dropdown-content-text {
 	font-size: 14px;
 }
 
-div#stream-box {
-	user-select: none;
-	border: var(--dark-border);
-	border-radius: 8px;
-	box-sizing: border-box;
-	box-shadow: var(--big-shadow);
-	display: inline-block;
-	background-color: var(--bg-color-light);
-	padding: 10px;
-}
 img#stream-image {
 	width: 640px;
 	height: 480px;

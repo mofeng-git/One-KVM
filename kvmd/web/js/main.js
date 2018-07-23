@@ -1,5 +1,5 @@
 function main () {
-	window.onclick = ui.windowClickHandler;
+	ui.init();
 	session.loadKvmdVersion();
 	session.startPoller();
 	stream.startPoller();
