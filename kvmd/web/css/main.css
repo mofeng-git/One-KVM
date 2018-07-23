@@ -79,6 +79,7 @@ ul#ctl li a.ctl-item:hover:not(.active) {
 	background-color: var(--bg-color-hovered);
 }
 div.ctl-dropdown-content {
+	overflow: hidden;
 	user-select: text;
 	white-space: nowrap;
 	border: var(--dark-border);
@@ -88,6 +89,11 @@ div.ctl-dropdown-content {
 	min-width: 180px;
 	box-shadow: var(--big-shadow);
 	z-index: 9;
+}
+div.ctl-dropdown-content div.buttons-row {
+	margin: 0;
+	padding: 0;
+	font-size: 0;
 }
 div.ctl-dropdown-content button {
 	box-shadow: none;
@@ -103,9 +109,6 @@ div.ctl-dropdown-content button {
 	outline: none;
 	cursor: pointer;
 }
-div.ctl-dropdown-content button:last-child {
-	border-radius: 0 0 7px 7px;
-}
 div.ctl-dropdown-content button:enabled:hover {
 	color: var(--fg-color-intensive);
 	background-color: var(--bg-color-dark) !important;
@@ -117,25 +120,16 @@ div.ctl-dropdown-content button:disabled {
 div.ctl-dropdown-content button:active {
 	color: var(--fg-color-selected) !important;
 }
-div.ctl-dropdown-content button.first {
+div.ctl-dropdown-content button.row50 {
 	display: inline-block;
 	width: 50%;
 }
-div.ctl-dropdown-content button.second-half {
+div.ctl-dropdown-content button.row25 {
 	display: inline-block;
 	width: 25%;
-	border-left: var(--dark-border);
 }
-div.ctl-dropdown-content button.first-bottom {
-	display: inline-block;
-	width: 50%;
-	border-radius: 0 0 0 7px;
-}
-div.ctl-dropdown-content button.second-bottom {
-	display: inline-block;
-	width: 50%;
+div.ctl-dropdown-content button.row50:not(:first-child), button.row25:not(:first-child) {
 	border-left: var(--dark-border);
-	border-radius: 0 0 7px 0;
 }
 div.ctl-dropdown-content hr {
 	margin: 0;
@@ -267,7 +261,7 @@ ul#bottom {
 	padding: 0;
 	font-size: 0.7em;
 	color: var(--fg-color-inactive);
-	z-index: -1;
+	z-index: -10;
 }
 ul#bottom li {
 	padding: 0 10px;

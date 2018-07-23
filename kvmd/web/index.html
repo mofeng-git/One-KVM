@@ -126,7 +126,11 @@
 					<hr>
 
 					<input type="file" id="msd-select-new-image-file" style="display:none;" onchange="msd.selectNewImageFile()" />
-					<button disabled id="msd-select-new-image-button" class="first" onclick="document.getElementById('msd-select-new-image-file').click();">Upload new image</button><button disabled id="msd-upload-new-image-button" class="second-half" onclick="msd.clickButton(this);">Start</button><button disabled id="msd-abort-uploading-button" class="second-half" onclick="msd.clickButton(this);">Abort</button>
+					<div class="buttons-row">
+						<button disabled id="msd-select-new-image-button" class="row50" onclick="document.getElementById('msd-select-new-image-file').click();">Upload new image</button>
+						<button disabled id="msd-upload-new-image-button" class="row25" onclick="msd.clickButton(this);">Start</button>
+						<button disabled id="msd-abort-uploading-button" class="row25" onclick="msd.clickButton(this);">Abort</button>
+					</div>
 					<hr>
 
 					<div id="msd-new-image" style="display:none">
@@ -149,7 +153,10 @@
 						<hr>
 					</div>
 
-					<button disabled data-force-hide-menu id="msd-switch-to-kvm-button" class="first-bottom" onclick="msd.clickButton(this);">&bull; Switch drive to KVM</button><button disabled data-force-hide-menu id="msd-switch-to-server-button" class="second-bottom" onclick="msd.clickButton(this);">&bull; Switch drive to Server</button>
+					<div class="buttons-row">
+						<button disabled data-force-hide-menu id="msd-switch-to-kvm-button" class="row50" onclick="msd.clickButton(this);">&bull; Switch drive to KVM</button>
+						<button disabled data-force-hide-menu id="msd-switch-to-server-button" class="row50" onclick="msd.clickButton(this);">&bull; Switch drive to Server</button>
+					</div>
 				</div>
 			</div>
 		</li>
