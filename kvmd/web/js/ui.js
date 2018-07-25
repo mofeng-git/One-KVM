@@ -1,4 +1,6 @@
 var ui = new function() {
+	var __top_z_index = 1;
+
 	this.init = function() {
 		Array.prototype.forEach.call(document.getElementsByClassName("ctl-item"), function(el_item) {
 			el_item.onclick = function() { __toggleMenu(el_item); };
@@ -44,6 +46,7 @@ var ui = new function() {
 		var prev_y = 0;
 
 		function startMoving(event) {
+			__raiseWindow(el_body);
 			event = (event || window.event);
 			event.preventDefault();
 			prev_x = event.clientX;
@@ -69,5 +72,11 @@ var ui = new function() {
 		}
 
 		el_header.onmousedown = startMoving;
+		el_body.onclick = function () { __raiseWindow(el_body) };
+	};
+
+	var __raiseWindow = function(el_body) {
+		__top_z_index += 1;
+		el_body.style.zIndex = __top_z_index;
 	};
 };

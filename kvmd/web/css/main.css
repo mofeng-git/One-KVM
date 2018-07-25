@@ -25,7 +25,7 @@ ul#ctl {
 	position: fixed;
 	top: 0;
 	width: 100%;
-	z-index: 10;
+	z-index: 2147483647;
 }
 ul#ctl li.ctl-logo {
 	float: left;
@@ -64,7 +64,7 @@ div.ctl-dropdown-content {
 	background-color: var(--bg-color-ctl);
 	min-width: 180px;
 	box-shadow: var(--big-shadow);
-	z-index: 9;
+	z-index: 2147483646;
 }
 div.ctl-dropdown-content div.buttons-row {
 	margin: 0;
