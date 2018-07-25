@@ -1,5 +1,9 @@
 var ui = new function() {
 	this.init = function() {
+		Array.prototype.forEach.call(document.getElementsByClassName("ctl-item"), function(el_item) {
+			el_item.onclick = function() { __toggleMenu(el_item); };
+		});
+
 		window.onclick = __windowClickHandler;
 
 		Array.prototype.forEach.call(document.getElementsByClassName("window"), function(el_window) {
@@ -8,7 +12,7 @@ var ui = new function() {
 		});
 	};
 
-	this.toggleMenu = function(el_a) {
+	var __toggleMenu = function(el_a) {
 		Array.prototype.forEach.call(document.getElementsByClassName("ctl-item"), function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
 			if (el_item === el_a && el_menu.style.display === "none") {
@@ -31,7 +35,7 @@ var ui = new function() {
 					return;
 				}
 			}
-			ui.toggleMenu(null);
+			__toggleMenu(null);
 		}
 	};
 
