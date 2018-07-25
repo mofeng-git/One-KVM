@@ -12,6 +12,7 @@
 	--bg-color-gray: #3b3e43;
 	--bg-color-dark: #17191d;
 	--bg-color-ctl: #202225;
+	--bg-color-intensive: #436a8a;
 	--bg-color-hovered: #1a1c1f;
 	--bg-color-selected: #171717;
 	--bg-color-progress: #171717;
@@ -22,6 +23,7 @@
 	--fg-color-inactive: #6c7481;
 	--fg-color-selected: #6c7481;
 	--fg-color-progress: #436a8a;
+	--fg-color-special: #436a8a;
 
 	--bg-color-stream-screen: black;
 }
