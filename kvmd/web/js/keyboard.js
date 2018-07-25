@@ -1,23 +1,22 @@
 var keyboard = new function() {
-	this.installCapture = function(ws) {
-		// https://www.codeday.top/2017/05/03/24906.html
-		tools.info("Installing keyboard capture ...")
-		document.onkeydown = (event) => __keyHandler(ws, event, true);
-		document.onkeyup = (event) => __keyHandler(ws, event, false);
-		$("hid-keyboard-led").className = "led-on";
+	var __ws = null;
+
+	this.init = function() {
+		document.onkeydown = (event) => __keyHandler(event, true);
+		document.onkeyup = (event) => __keyHandler(event, false);
 	};
 
-	this.clearCapture = function() {
-		tools.info("Removing keyboard capture ...")
-		document.onkeydown = null;
-		document.onkeyup = null;
-		$("hid-keyboard-led").className = "led-off";
+	this.setSocket = function(ws) {
+		__ws = ws;
+		$("hid-keyboard-led").className = (ws ? "led-on" : "led-off");
 	};
 
-	var __keyHandler = function(ws, event, state) {
+	var __keyHandler = function(event, state) {
 		// https://github.com/wesbos/keycodes/blob/gh-pages/scripts.js
 		el_key = $(event.code);
 		if (el_key) {
+			event.preventDefault();
+
 			tools.debug("Key", (state ? "pressed:" : "released:"), event);
 
 			if (state) {
@@ -28,12 +27,13 @@ var keyboard = new function() {
 				el_key.removeAttribute("style");
 			}
 
-			event.preventDefault();
-			ws.send(JSON.stringify({
-				event_type: "key",
-				key: event.code,
-				state: state,
-			}));
+			if (__ws) {
+				__ws.send(JSON.stringify({
+					event_type: "key",
+					key: event.code,
+					state: state,
+				}));
+			}
 		}
 	};
 };
