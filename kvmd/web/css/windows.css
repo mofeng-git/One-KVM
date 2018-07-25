@@ -1,0 +1,33 @@
+div.window {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
+	position: absolute;
+	border: var(--dark-border);
+	-webkit-border-radius: 8px;
+	-moz-border-radius: 8px;
+	border-radius: 8px;
+	box-sizing: border-box;
+	box-shadow: var(--big-shadow);
+	display: inline-block;
+	background-color: var(--bg-color-light);
+	padding: 3px 10px 10px 10px;
+	-webkit-transform: translate(-50%);
+	-moz-transform: translate(-50%);
+	transform: translate(-50%);
+}
+
+div.window-header {
+	color: var(--fg-color-dark);
+	font-size: 0.8em;
+	cursor: move;
+	padding-left: 6px;
+	padding-bottom: 4px;
+}
+
+div.window hr.window-sep {
+	margin: 0 0 6px 0;
+	display: block;
+	border: none;
+	border-top: 1px solid var(--bg-color-normal);
+}

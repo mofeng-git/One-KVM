@@ -1,0 +1,92 @@
+div#keyboard {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
+	zoom: 0.8;
+}
+
+div#keyboard div.keyboard-block {
+	padding-right: 15px;
+	display: table-cell;
+}
+div#keyboard div.keyboard-block:last-child {
+	padding-right: 0;
+}
+
+div#keyboard div.keyboard-row {
+	white-space: nowrap;
+	height: 40px;
+	margin-bottom: 5px;
+}
+div#keyboard div.keyboard-row:last-child {
+	margin-bottom: 0;
+}
+
+div#keyboard div.key, div.empty-key {
+	box-sizing: border-box;
+	display: inline-block;
+	margin-right: 5px;
+	padding: 0;
+	width: 40px;
+	height: 40px;
+}
+div#keyboard div.key {
+	font-size: 0.9em;
+	text-align: center;
+	vertical-align: top;
+	box-shadow: var(--micro-shadow);
+	border: var(--grey-border);
+	-webkit-border-radius: 6px;
+	-moz-border-radius: 6px;
+	border-radius: 6px;
+	color: var(--fg-color-normal);
+	background-color: var(--bg-color-gray);
+	cursor: pointer;
+}
+div#keyboard div.key:hover {
+	color: var(--fg-color-intensive);
+	background-color: var(--bg-color-ctl);
+}
+div#keyboard div.key:active {
+	box-shadow: none;
+	color: var(--fg-color-selected);
+	background-color: var(--bg-color-dark);
+}
+div#keyboard div.key:last-child, div.empty-key:last-child {
+	margin-right: 0;
+}
+div#keyboard div.wide-1 {
+	width: 61px;
+}
+div#keyboard div.wide-2 {
+	width: 64px;
+}
+div#keyboard div.wide-3 {
+	width: 77px;
+}
+div#keyboard div.wide-4 {
+	width: 102px;
+}
+div#keyboard div.wide-5 {
+	width: 288px;
+}
+div#keyboard div.left {
+	text-align: left !important;
+	padding-left: 6px !important;
+}
+div#keyboard div.right {
+	text-align: right !important;
+	padding-right: 6px !important;
+}
+div#keyboard div.small {
+	font-size: 0.7em;
+}
+
+div#keyboard div.key p {
+	margin: 0;
+	position: relative;
+	top: 50%;
+	-webkit-transform: translateY(-50%);
+	-moz-transform: translateY(-50%);
+	transform: translateY(-50%);
+}

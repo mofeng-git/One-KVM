@@ -16,12 +16,24 @@ var keyboard = new function() {
 
 	var __keyHandler = function(ws, event, state) {
 		// https://github.com/wesbos/keycodes/blob/gh-pages/scripts.js
-		tools.debug("Key", (state ? "pressed:" : "released:"), event)
-		event.preventDefault();
-		ws.send(JSON.stringify({
-			event_type: "key",
-			key: event.code,
-			state: state,
-		}));
+		el_key = $(event.code);
+		if (el_key) {
+			tools.debug("Key", (state ? "pressed:" : "released:"), event);
+
+			if (state) {
+				el_key.style.boxShadow = "none";
+				el_key.style.color = "var(--fg-color-selected)";
+				el_key.style.backgroundColor = "var(--bg-color-dark)";
+			} else {
+				el_key.removeAttribute("style");
+			}
+
+			event.preventDefault();
+			ws.send(JSON.stringify({
+				event_type: "key",
+				key: event.code,
+				state: state,
+			}));
+		}
 	};
 };

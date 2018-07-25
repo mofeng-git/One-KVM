@@ -1,3 +1,31 @@
+:root {
+	--dark-border: 1px solid #17191d;
+	--grey-border: 1px solid #202225;
+	--black-border: 1px solid black;
+
+	--micro-shadow: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
+	--small-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+	--big-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.4);
+
+	--bg-color-normal: #36393f;
+	--bg-color-light: #484b51;
+	--bg-color-gray: #3b3e43;
+	--bg-color-dark: #17191d;
+	--bg-color-ctl: #202225;
+	--bg-color-hovered: #1a1c1f;
+	--bg-color-selected: #171717;
+	--bg-color-progress: #171717;
+
+	--fg-color-normal: #c3c3c3;
+	--fg-color-dark: #aaaaaa;
+	--fg-color-intensive: white;
+	--fg-color-inactive: #6c7481;
+	--fg-color-selected: #6c7481;
+	--fg-color-progress: #436a8a;
+
+	--bg-color-stream-screen: black;
+}
+
 body {
 	margin: 0;
 	overflow: hidden;
