@@ -6,6 +6,23 @@ var hid = new function() {
 		mouse.init();
 	}
 
+	this.emitShortcut = function(...codes) {
+		console.log(codes);
+		var delay = 0;
+		[[codes, true], [codes.slice().reverse(), false]].forEach(function(op) {
+			var [op_codes, state] = op;
+			op_codes.forEach(function(code) {
+				setTimeout(function() {
+					document.dispatchEvent(new KeyboardEvent(
+						(state ? "keydown" : "keyup"),
+						{code: code},
+					));
+				}, delay);
+				delay += 100;
+			});
+		});
+	};
+
 	this.installCapture = function(ws) {
 		var http = tools.makeRequest("GET", "/kvmd/hid", function() {
 			if (http.readyState === 4) {
