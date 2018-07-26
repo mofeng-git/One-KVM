@@ -24,7 +24,7 @@ var keyboard = new function() {
 	var __keyboardHandler = function(event, state) {
 		event.preventDefault();
 		el_key = $(event.code);
-		if (el_key) {
+		if (el_key && !event.repeat) {
 			__commonHandler(el_key, state, "pressed");
 			__unholdModifiers();
 		}
