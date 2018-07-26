@@ -1,5 +1,6 @@
 var hid = new function() {
 	var __install_timer = null;
+	var __installed = false;
 
 	this.init = function() {
 		keyboard.init();
@@ -12,12 +13,7 @@ var hid = new function() {
 		[[codes, true], [codes.slice().reverse(), false]].forEach(function(op) {
 			var [op_codes, state] = op;
 			op_codes.forEach(function(code) {
-				setTimeout(function() {
-					document.dispatchEvent(new KeyboardEvent(
-						(state ? "keydown" : "keyup"),
-						{code: code},
-					));
-				}, delay);
+				setTimeout(() => keyboard.fireEvent(code, state), delay);
 				delay += 100;
 			});
 		});
@@ -32,6 +28,7 @@ var hid = new function() {
 						mouse.setSocket(ws);
 					}
 					keyboard.setSocket(ws);
+					__installed = true;
 				} else {
 					tools.error("Can't resolve HID features:", http.responseText);
 					__install_timer = setTimeout(() => hid.installCapture(ws), 1000);
@@ -45,7 +42,10 @@ var hid = new function() {
 			clearTimeout(__install_timer);
 			__install_timer = null;
 		}
-		mouse.setSocket(null);
-		keyboard.setSocket(null);
+		if (__installed) {
+			mouse.setSocket(null);
+			keyboard.setSocket(null);
+			__installed = false;
+		}
 	};
 }
