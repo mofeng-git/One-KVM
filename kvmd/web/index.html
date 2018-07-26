@@ -184,6 +184,13 @@
 					<hr>
 					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen');">&bull; Alt+PrtSc</button>
 					<button onclick="hid.emitShortcut('PrintScreen');">&bull; PrtSc</button>
+					<hr>
+					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyR');">&bull; Alt+SysRq+R</button>
+					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyE');">&bull; Alt+SysRq+E</button>
+					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyI');">&bull; Alt+SysRq+I</button>
+					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyS');">&bull; Alt+SysRq+S</button>
+					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyU');">&bull; Alt+SysRq+U</button>
+					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyB');">&bull; Alt+SysRq+B</button>
 				</div>
 			</div>
 		</li>
@@ -291,9 +298,8 @@
 			</div>
 			<div class="keyboard-block">
 				<div class="keyboard-row">
-					<div class="empty-key"></div>
-					<div class="empty-key"></div>
-					<div id="PrintScreen" class="key small"><p>PrtSc</p></div>
+					<div class="empty-key" style="width:28px"></div>
+					<div id="PrintScreen" class="modifier wide-4 right small"><p><b>&bull;</b><br>PrtSc / SysRq</p></div>
 				</div>
 				<div class="keyboard-row">
 					<div id="Insert" class="key small"><p>Ins</p></div>
