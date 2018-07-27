@@ -12,7 +12,6 @@ var hid = new function() {
 
 	this.releaseAll = function() {
 		keyboard.releaseAll();
-		mouse.releaseAll();
 	};
 
 	this.emitShortcut = function(...codes) {
