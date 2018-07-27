@@ -1,7 +1,4 @@
 div.window {
-	-webkit-user-select: none;
-	-moz-user-select: none;
-	user-select: none;
 	overflow: hidden;
 	position: absolute;
 	border: var(--dark-border);

@@ -1,7 +1,4 @@
 div#keyboard {
-	-webkit-user-select: none;
-	-moz-user-select: none;
-	user-select: none;
 	zoom: 0.8;
 }
 

@@ -4,6 +4,9 @@ body {
 	color: var(--fg-color-normal);
 	background-color: var(--bg-color-normal);
 	font-family: sans-serif !important;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
 }
 img#logo {
 	-webkit-filter: invert(0.7);
@@ -14,9 +17,6 @@ img#logo {
 }
 
 ul#ctl {
-	-webkit-user-select: none;
-	-moz-user-select: none;
-	user-select: none;
 	box-shadow: var(--small-shadow);
 	list-style-type: none;
 	margin: 0;
@@ -51,9 +51,6 @@ ul#ctl li a.ctl-item:hover:not(.active) {
 	background-color: var(--bg-color-hovered);
 }
 div.ctl-dropdown-content {
-	-webkit-user-select: none;
-	-moz-user-select: none;
-	user-select: none;
 	overflow: hidden;
 	white-space: nowrap;
 	border: var(--dark-border);
@@ -145,5 +142,4 @@ ul#footer li a {
 }
 ul#footer li a:hover {
 	text-decoration: underline;
-	color: var(--fg-color-inactive);
 }
