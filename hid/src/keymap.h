@@ -64,6 +64,7 @@ INLINE KeyboardKeycode keymap(uint8_t code) {
 		case 16: return KEY_P;
 		case 72: return KEY_PAGE_DOWN;
 		case 69: return KEY_PAGE_UP;
+		case 85: return KEY_PAUSE;
 		case 51: return KEY_PERIOD;
 		case 66: return KEY_PRINT;
 		case 17: return KEY_Q;
@@ -76,6 +77,7 @@ INLINE KeyboardKeycode keymap(uint8_t code) {
 		case 84: return KEY_RIGHT_GUI;
 		case 82: return KEY_RIGHT_SHIFT;
 		case 19: return KEY_S;
+		case 86: return KEY_SCROLL_LOCK;
 		case 47: return KEY_SEMICOLON;
 		case 52: return KEY_SLASH;
 		case 41: return KEY_SPACE;

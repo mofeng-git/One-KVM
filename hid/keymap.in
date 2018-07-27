@@ -1,4 +1,5 @@
 # https://github.com/NicoHood/HID/blob/master/src/HID-APIs/ImprovedKeylayouts.h
+# https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code
 1 KEY_A KeyA
 2 KEY_B KeyB
 3 KEY_C KeyC
@@ -83,9 +84,9 @@
 82 KEY_RIGHT_SHIFT ShiftRight
 83 KEY_RIGHT_ALT AltRight
 84 KEY_RIGHT_GUI MetaRight
-# KEY_PAUSE
+85 KEY_PAUSE Pause
+86 KEY_SCROLL_LOCK ScrollLock
 # KEY_NON_US_NUM
-# KEY_SCROLL_LOCK
 # KEY_NUM_LOCK
 # KEYPAD_DIVIDE
 # KEYPAD_MULTIPLY

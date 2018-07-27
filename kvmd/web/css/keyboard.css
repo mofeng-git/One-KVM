@@ -28,7 +28,6 @@ div#keyboard div.key, div.modifier, div.empty-key {
 	margin-right: 5px;
 	padding: 0;
 	width: 40px;
-	height: 40px;
 }
 div#keyboard div.key, div.modifier {
 	font-size: 0.9em;
@@ -42,6 +41,7 @@ div#keyboard div.key, div.modifier {
 	color: var(--fg-color-normal);
 	background-color: var(--bg-color-gray);
 	cursor: pointer;
+	height: 40px;
 }
 div#keyboard div.key:hover, div.modifier:hover {
 	color: var(--fg-color-intensive);
