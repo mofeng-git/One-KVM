@@ -42,3 +42,27 @@ img.led-msd-writing {
 	-moz-animation: spin 2s linear infinite;
 	animation: spin 2s linear infinite;
 }
+
+img.led-fan-on {
+	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
+	-moz-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
+	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
+	-webkit-animation: spin 3s linear infinite;
+	-moz-animation: spin 3s linear infinite;
+	animation: spin 3s linear infinite;
+}
+
+img.led-fan-slow {
+	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
+	-moz-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
+	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
+	-webkit-animation: spin 6s linear infinite;
+	-moz-animation: spin 6s linear infinite;
+	animation: spin 6s linear infinite;
+}
+
+img.led-fan-fail {
+	-webkit-filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
+	-moz-filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
+	filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
+}
