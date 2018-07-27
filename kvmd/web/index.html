@@ -16,6 +16,7 @@
 	<link rel="stylesheet" href="css/stream.css">
 	<link rel="stylesheet" href="css/msd.css">
 	<link rel="stylesheet" href="css/keyboard.css">
+	<link rel="stylesheet" href="css/about.css">
 </head>
 
 <script src="js/tools.js"></script>
@@ -44,8 +45,9 @@
 					System &#8628;
 				</a>
 				<div class="ctl-dropdown-content" style="display:none">
-					<button onclick="ui.showWindow('stream-window')">&bull; Show stream</button>
 					<button onclick="ui.showWindow('keyboard-window')">&bull; Show keyboard</button>
+					<button onclick="ui.showWindow('stream-window')">&bull; Show stream</button>
+					<button onclick="ui.showWindow('about-window')">&bull; Show about</button>
 					<hr>
 					<button disabled id="stream-reset-button" onclick="stream.clickResetButton();">&bull; Reset stream</button>
 				</div>
@@ -204,7 +206,7 @@
 		<img id="stream-image" class="stream-image-inactive" alt="Loading..." src="/streamer/?action=stream"/>
 	</div>
 
-	<div id="keyboard-window" class="window">
+	<div id="keyboard-window" class="window" style="display:none">
 		<div class="window-header">
 			<div class="window-grab">Virtual Keyboard</div>
 			<button class="window-button-close">&times;</button>
@@ -328,6 +330,43 @@
 					<div id="ArrowRight" class="key"><p>&rarr;</p></div>
 				</div>
 			</div>
+		</div>
+	</div>
+
+	<div id="about-window" class="window" style="display:none">
+		<div class="window-header">
+			<div class="window-grab">About Pi-KVM</div>
+			<button class="window-button-close">&times;</button>
+		</div>
+		<div id="about">
+			<table>
+				<tr>
+					<td>Kvmd:</td>
+					<td id="about-version-kvmd"></td>
+				</tr>
+				<tr>
+					<td>Python:</td>
+					<td id="about-version-python"></td>
+				</tr>
+				<tr>
+					<td>Platform:</td>
+					<td id="about-version-platform"></td>
+				</tr>
+			</table>
+			<p>
+				This program is free software: you can redistribute it and/or modify<br>
+				it under the terms of the GNU General Public License as published by<br>
+				the Free Software Foundation, either version 3 of the License, or<br>
+				(at your option) any later version.<br>
+				<br>
+				This program is distributed in the hope that it will be useful,<br>
+				but WITHOUT ANY WARRANTY; without even the implied warranty of<br>
+				MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the<br>
+				GNU General Public License for more details.<br>
+				<br>
+				You should have received a copy of the GNU General Public License<br>
+				along with this program. If not, see <a target="_blank" href="https://www.gnu.org/licenses">https://www.gnu.org/licenses</a>.
+			</p>
 		</div>
 	</div>
 

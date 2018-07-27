@@ -7,7 +7,11 @@ var session = new function() {
 		var http = tools.makeRequest("GET", "/kvmd/info", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
-					$("kvmd-version").innerHTML = "kvmd " + JSON.parse(http.responseText).result.version.kvmd;
+					var version = JSON.parse(http.responseText).result.version;
+					$("kvmd-version").innerHTML = "kvmd " + version.kvmd;
+					$("about-version-kvmd").innerHTML = version.kvmd;
+					$("about-version-python").innerHTML = version.python;
+					$("about-version-platform").innerHTML = version.platform;
 				} else {
 					setTimeout(session.loadKvmdVersion, 1000);
 				}

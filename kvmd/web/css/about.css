@@ -1,0 +1,24 @@
+div#about {
+	-webkit-user-select: text;
+	-moz-user-select: text;
+	user-select: text;
+}
+
+div#about
+td#about-version-kvmd,
+td#about-version-python,
+td#about-version-platform {
+	font-weight: bold;
+}
+
+div#about p {
+	font-family: monospace;
+	padding: 0 10px 0 10px;
+}
+div#about p a {
+	text-decoration: underline dotted;
+	color: var(--fg-color-normal);
+}
+div#about p a:hover {
+	text-decoration: underline;
+}

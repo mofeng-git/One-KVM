@@ -11,6 +11,7 @@ div.window {
 	box-sizing: border-box;
 	box-shadow: var(--big-shadow);
 	display: inline-block;
+	white-space: nowrap;
 	background-color: var(--bg-color-light);
 	padding: 30px 9px 9px 9px;
 	-webkit-transform: translate(-50%, -50%);
