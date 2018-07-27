@@ -2,10 +2,18 @@ var hid = new function() {
 	var __install_timer = null;
 	var __installed = false;
 
+	var __hidden_attr = null;
+	var __visibility_change_attr = null;
+
 	this.init = function() {
 		keyboard.init();
 		mouse.init();
 	}
+
+	this.releaseAll = function() {
+		keyboard.releaseAll();
+		mouse.releaseAll();
+	};
 
 	this.emitShortcut = function(...codes) {
 		console.log(codes);

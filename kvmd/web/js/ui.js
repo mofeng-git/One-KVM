@@ -12,6 +12,32 @@ var ui = new function() {
 			var el_header = el_window.querySelector(".window-header");
 			__makeWindowMovable(el_header, el_window);
 		});
+
+		if (typeof document.hidden !== "undefined") {
+			__hidden_attr = "hidden";
+			__visibility_change_attr = "visibilitychange";
+		} else if (typeof document.webkitHidden !== "undefined") {
+			__hidden_attr = "webkitHidden";
+			__visibility_change_attr = "webkitvisibilitychange";
+		} else if (typeof document.mozHidden !== "undefined") {
+			__hidden_attr = "mozHidden";
+			__visibility_change_attr = "mozvisibilitychange";
+		}
+
+		if (__visibility_change_attr) {
+			document.addEventListener(
+				__visibility_change_attr,
+				function() {
+					if (document[__hidden_attr]) {
+						hid.releaseAll();
+					}
+				},
+				false,
+			);
+		}
+
+		window.onpagehide = hid.releaseAll;
+		window.onblur = hid.releaseAll;
 	};
 
 	var __toggleMenu = function(el_a) {
