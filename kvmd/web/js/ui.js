@@ -7,10 +7,16 @@ var ui = new function() {
 		});
 
 		window.onclick = __windowClickHandler;
-
 		Array.prototype.forEach.call(document.getElementsByClassName("window"), function(el_window) {
-			var el_header = el_window.querySelector(".window-header");
-			__makeWindowMovable(el_header, el_window);
+			var el_grab = el_window.querySelector(".window-header .window-grab");
+			__makeWindowMovable(el_grab, el_window);
+
+			var el_button = el_window.querySelector(".window-header .window-button-close");
+			if (el_button) {
+				el_button.onclick = function() {
+					el_window.style.display = "none";
+				};
+			}
 		});
 
 		if (typeof document.hidden !== "undefined") {
@@ -40,6 +46,32 @@ var ui = new function() {
 		window.onblur = hid.releaseAll;
 	};
 
+	this.showWindow = function(id) {
+		var el_window = $(id);
+		if (!__isWindowOnPage(el_window)) {
+			el_window.style.top = "50%";
+			el_window.style.left = "50%";
+		}
+		el_window.style.display = "block";
+		__raiseWindow(el_window);
+	};
+
+	var __isWindowOnPage = function(el_window) {
+		var view_top = $("ctl").clientHeight;
+		var view_bottom = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+		var view_left = 0;
+		var view_right = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+
+		var rect = el_window.getBoundingClientRect();
+
+		return (
+			(rect.bottom - el_window.clientHeight / 1.5) <= view_bottom
+			&& rect.top >= view_top
+			&& (rect.left + el_window.clientWidth / 1.5) >= view_left
+			&& (rect.right - el_window.clientWidth / 1.5) <= view_right
+		);
+	};
+
 	var __toggleMenu = function(el_a) {
 		Array.prototype.forEach.call(document.getElementsByClassName("ctl-item"), function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
@@ -67,12 +99,12 @@ var ui = new function() {
 		}
 	};
 
-	var __makeWindowMovable = function(el_header, el_body) {
+	var __makeWindowMovable = function(el_grab, el_window) {
 		var prev_x = 0;
 		var prev_y = 0;
 
 		function startMoving(event) {
-			__raiseWindow(el_body);
+			__raiseWindow(el_window);
 			event = (event || window.event);
 			event.preventDefault();
 			prev_x = event.clientX;
@@ -88,8 +120,8 @@ var ui = new function() {
 			y = prev_y - event.clientY;
 			prev_x = event.clientX;
 			prev_y = event.clientY;
-			el_body.style.top = (el_body.offsetTop - y) + "px";
-			el_body.style.left = (el_body.offsetLeft - x) + "px";
+			el_window.style.top = (el_window.offsetTop - y) + "px";
+			el_window.style.left = (el_window.offsetLeft - x) + "px";
 		}
 
 		function stopMoving() {
@@ -97,12 +129,12 @@ var ui = new function() {
 			document.onmouseup = null;
 		}
 
-		el_header.onmousedown = startMoving;
-		el_body.onclick = function () { __raiseWindow(el_body) };
+		el_grab.onmousedown = startMoving;
+		el_window.onclick = function () { __raiseWindow(el_window) };
 	};
 
-	var __raiseWindow = function(el_body) {
+	var __raiseWindow = function(el_window) {
 		__top_z_index += 1;
-		el_body.style.zIndex = __top_z_index;
+		el_window.style.zIndex = __top_z_index;
 	};
 };

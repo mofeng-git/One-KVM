@@ -110,10 +110,10 @@ div.ctl-dropdown-content button.row50:not(:first-child), button.row25:not(:first
 div.ctl-dropdown-content hr {
 	margin: 0;
 	display: block;
-	height: 1px;
-	border: 0;
+	height: 0px;
 	padding: 0;
-	background-color: var(--bg-color-dark);
+	border: none;
+	border-top: var(--dark-border);
 }
 div.ctl-dropdown-content-text {
 	margin: 10px 15px 10px 15px;

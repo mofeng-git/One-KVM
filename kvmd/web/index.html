@@ -44,6 +44,9 @@
 					System &#8628;
 				</a>
 				<div class="ctl-dropdown-content" style="display:none">
+					<button onclick="ui.showWindow('stream-window')">&bull; Show stream</button>
+					<button onclick="ui.showWindow('keyboard-window')">&bull; Show keyboard</button>
+					<hr>
 					<button disabled id="stream-reset-button" onclick="stream.clickResetButton();">&bull; Reset stream</button>
 				</div>
 			</div>
@@ -196,15 +199,16 @@
 		</li>
 	</ul>
 
-	<div class="window" style="left:50%; top:70px">
-		<div class="window-header">Stream</div>
-		<!-- <hr class="window-sep"> -->
+	<div id="stream-window" class="window">
+		<div class="window-header"><div class="window-grab">Stream</div></div>
 		<img id="stream-image" class="stream-image-inactive" alt="Loading..." src="/streamer/?action=stream"/>
 	</div>
 
-	<div class="window" style="left:75%; top:60%">
-		<div class="window-header">Virtual Keyboard</div>
-		<hr class="window-sep">
+	<div id="keyboard-window" class="window">
+		<div class="window-header">
+			<div class="window-grab">Virtual Keyboard</div>
+			<button class="window-button-close">&times;</button>
+		</div>
 		<div id="keyboard">
 			<div class="keyboard-block">
 				<div class="keyboard-row">

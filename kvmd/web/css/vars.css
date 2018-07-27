@@ -1,7 +1,8 @@
 :root {
-	--dark-border: 1px solid #17191d;
-	--grey-border: 1px solid #202225;
-	--black-border: 1px solid black;
+	--dark-border: thin solid #17191d;
+	--grey-border: thin solid #202225;
+	--normal-border: thin solid #36393f;
+	--black-border: thin solid black;
 
 	--micro-shadow: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
 	--small-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
