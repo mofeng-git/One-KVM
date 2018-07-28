@@ -1,15 +1,22 @@
 var ui = new function() {
-	var __top_z_index = 1;
+	var __top_z_index = 0;
+	var __windows = [];
+	var __ctl_items = [];
 
 	this.init = function() {
 		Array.prototype.forEach.call(document.getElementsByClassName("ctl-item"), function(el_item) {
 			el_item.onclick = function() { __toggleMenu(el_item); };
+			__ctl_items.push(el_item);
 		});
 
-		window.onclick = __windowClickHandler;
 		Array.prototype.forEach.call(document.getElementsByClassName("window"), function(el_window) {
 			var el_grab = el_window.querySelector(".window-header .window-grab");
+
+			el_window.style.display = window.getComputedStyle(el_window, null).display;
+			el_window.style.zIndex = parseInt(window.getComputedStyle(el_window, null).zIndex);
+
 			__makeWindowMovable(el_grab, el_window);
+			__windows.push(el_window);
 
 			var el_button = el_window.querySelector(".window-header .window-button-close");
 			if (el_button) {
@@ -42,8 +49,11 @@ var ui = new function() {
 			);
 		}
 
+		window.onclick = __windowClickHandler;
 		window.onpagehide = hid.releaseAll;
 		window.onblur = hid.releaseAll;
+
+		__raiseWindow($("stream-window"));
 	};
 
 	this.showWindow = function(id) {
@@ -73,7 +83,7 @@ var ui = new function() {
 	};
 
 	var __toggleMenu = function(el_a) {
-		Array.prototype.forEach.call(document.getElementsByClassName("ctl-item"), function(el_item) {
+		__ctl_items.forEach(function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
 			if (el_item === el_a && el_menu.style.display === "none") {
 				el_menu.style.display = "block";
@@ -96,6 +106,7 @@ var ui = new function() {
 				}
 			}
 			__toggleMenu(null);
+			__raiseLastWindow();
 		}
 	};
 
@@ -130,11 +141,29 @@ var ui = new function() {
 		}
 
 		el_grab.onmousedown = startMoving;
-		el_window.onclick = function () { __raiseWindow(el_window) };
+		el_window.onclick = function() { __raiseWindow(el_window) };
+	};
+
+	var __raiseLastWindow = function() {
+		var last_el_window = null;
+		var max_z_index = 0;
+		__windows.forEach(function(el_window) {
+			z_index = parseInt(el_window.style.zIndex);
+			if (max_z_index < z_index && el_window.style.display !== "none") {
+				last_el_window = el_window;
+				max_z_index = z_index;
+			}
+		});
+		if (last_el_window) {
+			__raiseWindow(last_el_window);
+		}
 	};
 
 	var __raiseWindow = function(el_window) {
-		__top_z_index += 1;
-		el_window.style.zIndex = __top_z_index;
+		var z_index = __top_z_index + 1;
+		el_window.style.zIndex = z_index;
+		el_window.focus();
+		__top_z_index = z_index;
+		console.log("raise", el_window, el_window.style.zIndex);
 	};
 };

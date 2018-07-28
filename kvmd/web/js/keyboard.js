@@ -4,8 +4,11 @@ var keyboard = new function() {
 	var __modifiers = [];
 
 	this.init = function() {
-		document.onkeydown = (event) => __keyboardHandler(event, true);
-		document.onkeyup = (event) => __keyboardHandler(event, false);
+		$("keyboard-window").onkeydown = (event) => __keyboardHandler(event, true);
+		$("keyboard-window").onkeyup = (event) => __keyboardHandler(event, false);
+
+		$("stream-window").onkeydown = (event) => __keyboardHandler(event, true);
+		$("stream-window").onkeyup = (event) => __keyboardHandler(event, false);
 
 		Array.prototype.forEach.call(document.getElementsByClassName("key"), function(el_key) {
 			el_key.onmousedown = () => __clickHandler(el_key, true);
@@ -38,7 +41,7 @@ var keyboard = new function() {
 	};
 
 	this.fireEvent = function(code, state) {
-		document.dispatchEvent(new KeyboardEvent(
+		$("keyboard-window").dispatchEvent(new KeyboardEvent(
 			(state ? "keydown" : "keyup"),
 			{code: code},
 		));

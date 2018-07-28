@@ -202,12 +202,12 @@
 		</li>
 	</ul>
 
-	<div id="stream-window" class="window">
+	<div id="stream-window" class="window" style="z-index: 1" tabindex="0">
 		<div class="window-header"><div class="window-grab">Stream</div></div>
 		<img id="stream-image" class="stream-image-inactive" alt="Loading..." src="/streamer/?action=stream"/>
 	</div>
 
-	<div id="keyboard-window" class="window" style="display:none">
+	<div id="keyboard-window" class="window" style="display:none" tabindex="0">
 		<div class="window-header">
 			<div class="window-grab">Virtual Keyboard</div>
 			<button class="window-button-close">&times;</button>
@@ -334,7 +334,7 @@
 		</div>
 	</div>
 
-	<div id="about-window" class="window" style="display:none">
+	<div id="about-window" class="window" style="display:none" tabindex="0">
 		<div class="window-header">
 			<div class="window-grab">About Pi-KVM</div>
 			<button class="window-button-close">&times;</button>

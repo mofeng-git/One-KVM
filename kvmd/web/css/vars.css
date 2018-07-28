@@ -3,6 +3,7 @@
 	--grey-border: thin solid #202225;
 	--normal-border: thin solid #36393f;
 	--black-border: thin solid black;
+	--intensive-border: 2px solid #5b90bb;
 
 	--micro-shadow: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
 	--small-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);

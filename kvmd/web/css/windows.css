@@ -1,4 +1,5 @@
 div.window {
+	outline: none;
 	overflow: hidden;
 	position: absolute;
 	border: var(--dark-border);
@@ -16,6 +17,9 @@ div.window {
 	transform: translate(-50%, -50%);
 	top: 50%;
 	left: 50%;
+}
+div.window:focus {
+	border: var(--intensive-border) !important;
 }
 
 div.window-header {

@@ -39,6 +39,7 @@ ul#ctl img {
 	height: 20px;
 }
 ul#ctl li a.ctl-item {
+	outline: none;
 	cursor: pointer;
 	border-left: var(--black-border);
 	display: inline-block;
