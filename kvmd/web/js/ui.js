@@ -22,6 +22,7 @@ var ui = new function() {
 			if (el_button) {
 				el_button.onclick = function() {
 					el_window.style.display = "none";
+					__raiseLastWindow();
 				};
 			}
 		});
@@ -49,9 +50,11 @@ var ui = new function() {
 			);
 		}
 
-		window.onclick = __globalClickHandler;
 		window.onpagehide = hid.releaseAll;
 		window.onblur = hid.releaseAll;
+
+		window.onmouseup = __globalMouseButtonHandler;
+		// window.oncontextmenu = __globalMouseButtonHandler;
 
 		__raiseWindow($("stream-window"));
 	};
@@ -110,7 +113,7 @@ var ui = new function() {
 		}
 	};
 
-	var __globalClickHandler = function(event) {
+	var __globalMouseButtonHandler = function(event) {
 		hid.updateLeds();
 		if (!event.target.matches(".ctl-item")) {
 			for (el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
