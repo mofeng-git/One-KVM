@@ -8,14 +8,19 @@ var hid = new function() {
 	this.init = function() {
 		keyboard.init();
 		mouse.init();
-	}
+	};
+
+	this.updateLeds = function() {
+		keyboard.updateLeds();
+		mouse.updateLeds();
+	};
 
 	this.releaseAll = function() {
 		keyboard.releaseAll();
 	};
 
 	this.emitShortcut = function(...codes) {
-		console.log(codes);
+		tools.debug("Emitted keys:", codes);
 		var delay = 0;
 		[[codes, true], [codes.slice().reverse(), false]].forEach(function(op) {
 			var [op_codes, state] = op;

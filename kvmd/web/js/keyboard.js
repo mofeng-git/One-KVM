@@ -29,7 +29,12 @@ var keyboard = new function() {
 	this.setSocket = function(ws) {
 		keyboard.releaseAll();
 		__ws = ws;
-		$("hid-keyboard-led").className = (ws ? "led-on" : "led-off");
+		keyboard.updateLeds();
+	};
+
+	this.updateLeds = function() {
+		var focused = (__ws && (document.activeElement === $("stream-window") || document.activeElement === $("keyboard-window")));
+		$("hid-keyboard-led").className = (focused ? "led-on" : "led-off");
 	};
 
 	this.releaseAll = function(ws) {

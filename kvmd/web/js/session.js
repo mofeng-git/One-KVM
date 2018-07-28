@@ -28,6 +28,7 @@ var session = new function() {
 	};
 
 	var __wsOpenHandler = function(event) {
+		$("link-led").className = "led-on";
 		tools.debug("WebSocket opened:", event);
 		atx.loadInitialState();
 		msd.loadInitialState();
@@ -62,6 +63,7 @@ var session = new function() {
 	};
 
 	var __wsCloseHandler = function(event) {
+		$("link-led").className = "led-off";
 		tools.debug("WebSocket closed:", event);
 		if (__ping_timer) {
 			clearInterval(__ping_timer);

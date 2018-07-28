@@ -14,8 +14,12 @@ var mouse = new function() {
 	};
 
 	this.setSocket = function(ws) {
-		$("hid-mouse-led").className = (ws ? "led-on" : "led-off");
 		__ws = ws;
+	};
+
+	this.updateLeds = function() {
+		var focused = (__ws && document.activeElement === $("stream-window"));
+		$("hid-mouse-led").className = (focused ? "led-on" : "led-off");
 	};
 
 	var __buttonHandler = function(event, state) {

@@ -49,7 +49,7 @@ var ui = new function() {
 			);
 		}
 
-		window.onclick = __windowClickHandler;
+		window.onclick = __globalClickHandler;
 		window.onpagehide = hid.releaseAll;
 		window.onblur = hid.releaseAll;
 
@@ -83,19 +83,25 @@ var ui = new function() {
 	};
 
 	var __toggleMenu = function(el_a) {
+		var all_hidden = true;
 		__ctl_items.forEach(function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
 			if (el_item === el_a && el_menu.style.display === "none") {
 				el_menu.style.display = "block";
 				el_item.setAttribute("style", "background-color: var(--bg-color-selected)");
+				all_hidden &= false;
 			} else {
 				el_menu.style.display = "none";
 				el_item.setAttribute("style", "background-color: default");
 			}
 		});
+		if (all_hidden) {
+			__raiseLastWindow();
+		}
 	};
 
-	var __windowClickHandler = function(event) {
+	var __globalClickHandler = function(event) {
+		hid.updateLeds();
 		if (!event.target.matches(".ctl-item")) {
 			for (el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
 				if (el_item.hasAttribute("data-force-hide-menu")) {
@@ -106,7 +112,6 @@ var ui = new function() {
 				}
 			}
 			__toggleMenu(null);
-			__raiseLastWindow();
 		}
 	};
 
@@ -154,16 +159,17 @@ var ui = new function() {
 				max_z_index = z_index;
 			}
 		});
-		if (last_el_window) {
-			__raiseWindow(last_el_window);
-		}
+		__raiseWindow(last_el_window);
 	};
 
 	var __raiseWindow = function(el_window) {
-		var z_index = __top_z_index + 1;
-		el_window.style.zIndex = z_index;
 		el_window.focus();
-		__top_z_index = z_index;
-		console.log("raise", el_window, el_window.style.zIndex);
+		hid.updateLeds();
+		if (parseInt(el_window.style.zIndex) !== __top_z_index) {
+			var z_index = __top_z_index + 1;
+			el_window.style.zIndex = z_index;
+			__top_z_index = z_index;
+			tools.debug("Raised window:", el_window);
+		}
 	};
 };
