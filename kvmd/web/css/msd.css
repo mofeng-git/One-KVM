@@ -23,7 +23,7 @@ td#msd-new-image-size {
 }
 
 div#msd-progress {
-	background-color: var(--bg-color-progress);
+	background-color: var(--bg-color-selected);
 	height: 1.5em;
 	width: 100%;
 	position: relative;
@@ -39,7 +39,7 @@ div#msd-progress:before {
 	right: 0;
 }
 div#msd-progress span#msd-progress-value {
-	background-color: var(--fg-color-progress);
+	background-color: var(--bg-color-intensive);
 	display: inline-block;
 	height: 100%;
 }

@@ -93,5 +93,5 @@ div#keyboard p {
 	transform: translateY(-50%);
 }
 div#keyboard b {
-	color: var(--fg-color-special);
+	color: var(--bg-color-intensive);
 }

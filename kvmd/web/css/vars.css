@@ -1,16 +1,4 @@
 :root {
-	--dark-border: thin solid #17191d;
-	--grey-border: thin solid #202225;
-	--normal-border: thin solid #36393f;
-	--black-border: thin solid black;
-	--intensive-border: 2px solid #5b90bb;
-
-	--micro-shadow: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
-	--small-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
-	--big-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.4);
-
-	--border-color-intensive: #5b90bb;
-
 	--bg-color-normal: #36393f;
 	--bg-color-light: #484b51;
 	--bg-color-gray: #3b3e43;
@@ -19,15 +7,27 @@
 	--bg-color-intensive: #436a8a;
 	--bg-color-hovered: #1a1c1f;
 	--bg-color-selected: #171717;
-	--bg-color-progress: #171717;
 
 	--fg-color-normal: #c3c3c3;
 	--fg-color-dark: #aaaaaa;
 	--fg-color-intensive: white;
 	--fg-color-inactive: #6c7481;
-	--fg-color-selected: #6c7481;
-	--fg-color-progress: #436a8a;
-	--fg-color-special: #436a8a;
+	--fg-color-selected: var(--fg-color-inactive);
 
 	--bg-color-stream-screen: black;
+
+	--border-color-normal: var(--bg-color-normal);
+	--border-color-grey: var(--bg-color-ctl);
+	--border-color-dark: var(--bg-color-dark);
+	--border-color-intensive: #5b90bb;
+
+	--dark-border: thin solid var(--border-color-dark);
+	--grey-border: thin solid var(--border-color-grey);
+	--normal-border: thin solid var(--border-color-normal);
+	--black-border: thin solid black;
+	--intensive-border: 2px solid var(--border-color-intensive);
+
+	--micro-shadow: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
+	--small-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+	--big-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.4);
 }
