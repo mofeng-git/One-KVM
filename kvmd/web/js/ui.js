@@ -6,11 +6,6 @@ var ui = new function() {
 	this.init = function() {
 		Array.prototype.forEach.call(document.getElementsByClassName("ctl-item"), function(el_item) {
 			el_item.onclick = () => __toggleMenu(el_item);
-			el_item.onkeyup = function(event) {
-				if (event.code == "Escape") {
-					__toggleMenu(el_item);
-				}
-			};
 			__ctl_items.push(el_item);
 		});
 
@@ -89,6 +84,7 @@ var ui = new function() {
 
 	var __toggleMenu = function(el_a) {
 		var all_hidden = true;
+
 		__ctl_items.forEach(function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
 			if (el_item === el_a && el_menu.style.display === "none") {
@@ -100,8 +96,17 @@ var ui = new function() {
 				el_menu.style.display = "none";
 			}
 		});
+
 		if (all_hidden) {
 			__raiseLastWindow();
+			document.onkeyup = null;
+		} else {
+			document.onkeyup = function(event) {
+				if (event.code == "Escape") {
+					event.preventDefault();
+					__toggleMenu(null);
+				}
+			}
 		}
 	};
 
@@ -151,7 +156,7 @@ var ui = new function() {
 		}
 
 		el_grab.onmousedown = startMoving;
-		el_window.onclick = function() { __raiseWindow(el_window) };
+		el_window.onclick = () => __raiseWindow(el_window);
 	};
 
 	var __raiseLastWindow = function() {
