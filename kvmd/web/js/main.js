@@ -1,4 +1,4 @@
-function main () {
+function main() {
 	ui.init();
 	hid.init();
 	session.loadKvmdVersion();
