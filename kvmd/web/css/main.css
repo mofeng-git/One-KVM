@@ -51,10 +51,15 @@ ul#ctl li a.ctl-item {
 ul#ctl li a.ctl-item:hover:not(.active) {
 	background-color: var(--bg-color-hovered);
 }
+ul#ctl li a.ctl-item-selected {
+	box-shadow: 0 5px 0 var(--border-color-intensive) inset;
+	background-color: var(--bg-color-selected) !important;
+}
 div.ctl-dropdown-content {
 	overflow: hidden;
 	white-space: nowrap;
-	border: var(--dark-border);
+	border: var(--intensive-border);
+	border-top: none;
 	-webkit-border-radius: 0 0 8px 8px;
 	-moz-border-radius: 0 0 8px 8px;
 	border-radius: 0 0 8px 8px;

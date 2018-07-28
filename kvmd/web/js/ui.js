@@ -92,12 +92,12 @@ var ui = new function() {
 		__ctl_items.forEach(function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
 			if (el_item === el_a && el_menu.style.display === "none") {
+				el_item.classList.add("ctl-item-selected");
 				el_menu.style.display = "block";
-				el_item.setAttribute("style", "background-color: var(--bg-color-selected)");
 				all_hidden &= false;
 			} else {
+				el_item.classList.remove("ctl-item-selected");
 				el_menu.style.display = "none";
-				el_item.setAttribute("style", "background-color: default");
 			}
 		});
 		if (all_hidden) {
