@@ -5,7 +5,12 @@ var ui = new function() {
 
 	this.init = function() {
 		Array.prototype.forEach.call(document.getElementsByClassName("ctl-item"), function(el_item) {
-			el_item.onclick = function() { __toggleMenu(el_item); };
+			el_item.onclick = () => __toggleMenu(el_item);
+			el_item.onkeyup = function(event) {
+				if (event.code == "Escape") {
+					__toggleMenu(el_item);
+				}
+			};
 			__ctl_items.push(el_item);
 		});
 
