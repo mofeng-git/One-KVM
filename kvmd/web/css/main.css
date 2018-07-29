@@ -59,7 +59,7 @@ div.ctl-dropdown-content {
 	overflow: hidden;
 	white-space: nowrap;
 	border: var(--intensive-border);
-	border-top: none;
+	border-top: var(--dark-border);
 	-webkit-border-radius: 0 0 8px 8px;
 	-moz-border-radius: 0 0 8px 8px;
 	border-radius: 0 0 8px 8px;
