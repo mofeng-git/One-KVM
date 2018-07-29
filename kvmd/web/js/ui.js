@@ -101,16 +101,26 @@ var ui = new function() {
 		});
 
 		if (all_hidden) {
-			__raiseLastWindow();
 			document.onkeyup = null;
+			__raiseLastWindow();
 		} else {
 			document.onkeyup = function(event) {
 				if (event.code == "Escape") {
 					event.preventDefault();
-					__toggleMenu(null);
+					__closeAllMenues();
+					__raiseLastWindow();
 				}
 			}
 		}
+	};
+
+	var __closeAllMenues = function() {
+		document.onkeyup = null;
+		__ctl_items.forEach(function(el_item) {
+			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
+			el_item.classList.remove("ctl-item-selected");
+			el_menu.style.display = "none";
+		});
 	};
 
 	var __globalMouseButtonHandler = function(event) {
@@ -124,7 +134,8 @@ var ui = new function() {
 					return;
 				}
 			}
-			__toggleMenu(null);
+			__closeAllMenues();
+			__raiseLastWindow();
 		}
 	};
 
@@ -133,6 +144,7 @@ var ui = new function() {
 		var prev_y = 0;
 
 		function startMoving(event) {
+			__closeAllMenues();
 			__raiseWindow(el_window);
 			event = (event || window.event);
 			event.preventDefault();
