@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 	<meta charset="utf-8" />
 	<title>Pi-KVM</title>
@@ -17,20 +17,20 @@
 	<link rel="stylesheet" href="css/msd.css">
 	<link rel="stylesheet" href="css/keyboard.css">
 	<link rel="stylesheet" href="css/about.css">
+
+	<script src="js/tools.js"></script>
+	<script src="js/stream.js"></script>
+	<script src="js/atx.js"></script>
+	<script src="js/keyboard.js"></script>
+	<script src="js/mouse.js"></script>
+	<script src="js/hid.js"></script>
+	<script src="js/msd.js"></script>
+	<script src="js/session.js"></script>
+	<script src="js/ui.js"></script>
+	<script src="js/main.js"></script>
+
+	<script>window.onload = main;</script>
 </head>
-
-<script src="js/tools.js"></script>
-<script src="js/stream.js"></script>
-<script src="js/atx.js"></script>
-<script src="js/keyboard.js"></script>
-<script src="js/mouse.js"></script>
-<script src="js/hid.js"></script>
-<script src="js/msd.js"></script>
-<script src="js/session.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/main.js"></script>
-
-<script>window.onload = main;</script>
 
 <body>
 	<ul id="ctl">
@@ -131,6 +131,7 @@
 							<td>Image size:</td>
 							<td id="msd-current-image-size"></td>
 						</tr>
+						<tr>
 							<td>Storage size:</td>
 							<td id="msd-storage-size"></td>
 						</tr>
