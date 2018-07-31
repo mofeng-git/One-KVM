@@ -44,6 +44,7 @@ var stream = new function() {
 				el_stream_image.style.width = size.width + "px";
 				el_stream_image.style.height = size.height + "px";
 				el_stream_image.src = "/streamer/?action=stream&time=" + new Date().getTime();
+				ui.showWindow("stream-window");
 			}
 		});
 	};

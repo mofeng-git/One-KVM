@@ -58,11 +58,12 @@ var ui = new function() {
 
 	this.showWindow = function(id) {
 		var el_window = $(id);
-		if (!__isWindowOnPage(el_window)) {
+		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered")) {
 			var view = __getViewGeometry();
 			var rect = el_window.getBoundingClientRect();
 			el_window.style.top = Math.max($("ctl").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
 			el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
+			el_window.setAttribute("data-centered", "");
 		}
 		el_window.style.visibility = "visible";
 		__raiseWindow(el_window);
@@ -94,13 +95,13 @@ var ui = new function() {
 
 		__ctl_items.forEach(function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
-			if (el_item === el_a && el_menu.style.display === "none") {
+			if (el_item === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
 				el_item.classList.add("ctl-item-selected");
-				el_menu.style.display = "block";
+				el_menu.style.visibility = "visible";
 				all_hidden &= false;
 			} else {
 				el_item.classList.remove("ctl-item-selected");
-				el_menu.style.display = "none";
+				el_menu.style.visibility = "hidden";
 			}
 		});
 
@@ -123,7 +124,7 @@ var ui = new function() {
 		__ctl_items.forEach(function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
 			el_item.classList.remove("ctl-item-selected");
-			el_menu.style.display = "none";
+			el_menu.style.visibility = "hidden";
 		});
 	};
 
@@ -159,6 +160,7 @@ var ui = new function() {
 		}
 
 		function doMoving(event) {
+			el_window.removeAttribute("data-centered");
 			event = (event || window.event);
 			event.preventDefault();
 			x = prev_x - event.clientX;
@@ -174,6 +176,7 @@ var ui = new function() {
 			document.onmouseup = null;
 		}
 
+		el_window.setAttribute("data-centered", "");
 		el_grab.onmousedown = startMoving;
 		el_window.onclick = () => __raiseWindow(el_window);
 	};

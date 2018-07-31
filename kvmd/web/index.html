@@ -45,7 +45,7 @@
 					<img data-dont-hide-menu id="hid-mouse-led" class="led-off" src="svg/hid-mouse-led.svg" />
 					System &#8628;
 				</a>
-				<div class="ctl-dropdown-content" style="display:none">
+				<div class="ctl-dropdown-content">
 					<button onclick="ui.showWindow('keyboard-window')">&bull; Show keyboard</button>
 					<button onclick="ui.showWindow('stream-window')">&bull; Show stream</button>
 					<button onclick="ui.showWindow('about-window')">&bull; Show about</button>
@@ -62,7 +62,7 @@
 					<img data-dont-hide-menu id="atx-hdd-led" class="led-off" src="svg/atx-hdd-led.svg" />
 					ATX &#8628;
 				</a>
-				<div class="ctl-dropdown-content" style="display:none">
+				<div class="ctl-dropdown-content">
 					<button disabled id="atx-power-button" onclick="atx.clickButton(this);">&bull; Click Power <sup><i>short</i></sup></button>
 					<button disabled id="atx-power-button-long" onclick="atx.clickButton(this);">&bull; Click Power <sup><i>long</i></sup></button>
 					<hr>
@@ -77,8 +77,8 @@
 					<img data-dont-hide-menu id="msd-led" class="led-off" src="svg/msd-led.svg" />
 					Mass Storage &#8628;
 				</a>
-				<div data-dont-hide-menu id="msd-menu" class="ctl-dropdown-content" style="display:none">
-					<div id="msd-not-in-operate" style="display:none">
+				<div data-dont-hide-menu id="msd-menu" class="ctl-dropdown-content">
+					<div id="msd-not-in-operate">
 						<div class="ctl-dropdown-content-text">
 							<table>
 								<tr>
@@ -90,7 +90,7 @@
 						<hr>
 					</div>
 
-					<div id="msd-current-image-broken" style="display:none">
+					<div id="msd-current-image-broken">
 						<div class="ctl-dropdown-content-text">
 							<table>
 								<tr>
@@ -102,7 +102,7 @@
 						<hr>
 					</div>
 
-					<div id="msd-another-another-user-uploads" style="display:none">
+					<div id="msd-another-another-user-uploads">
 						<div class="ctl-dropdown-content-text">
 							<table>
 								<tr>
@@ -114,7 +114,7 @@
 						<hr>
 					</div>
 
-					<table id="msd-info">
+					<table class="msd-info">
 						<tr>
 							<td>Status: </td>
 							<td id="msd-status"></td>
@@ -122,7 +122,7 @@
 					</table>
 					<hr>
 
-					<table id="msd-info">
+					<table class="msd-info">
 						<tr>
 							<td>Current image:</td>
 							<td id="msd-current-image-name"></td>
@@ -137,7 +137,7 @@
 					</table>
 					<hr>
 
-					<input type="file" id="msd-select-new-image-file" style="display:none;" onchange="msd.selectNewImageFile()" />
+					<input type="file" id="msd-select-new-image-file" onchange="msd.selectNewImageFile()" />
 					<div class="buttons-row">
 						<button disabled id="msd-select-new-image-button" class="row50" onclick="document.getElementById('msd-select-new-image-file').click();">Upload new image</button>
 						<button disabled id="msd-upload-new-image-button" class="row25" onclick="msd.clickButton(this);">Start</button>
@@ -145,8 +145,8 @@
 					</div>
 					<hr>
 
-					<div id="msd-new-image" style="display:none">
-						<table id="msd-info">
+					<div id="msd-new-image">
+						<table class="msd-info">
 							<tr>
 								<td>New name:</td>
 								<td id="msd-new-image-name"></td>
@@ -178,7 +178,7 @@
 				<a class="ctl-item" href="#">
 					Shortcuts &#8628;
 				</a>
-				<div class="ctl-dropdown-content" style="display:none">
+				<div class="ctl-dropdown-content">
 					<button onclick="hid.emitShortcut('ControlLeft', 'AltLeft', 'Delete');">&bull; Ctrl+Alt+Del</button>
 					<hr>
 					<button onclick="hid.emitShortcut('ControlLeft', 'KeyW');">&bull; Ctrl+W</button>
@@ -205,7 +205,7 @@
 
 	<div id="stream-window" class="window" style="z-index: 1" tabindex="0">
 		<div class="window-header"><div class="window-grab">Stream</div></div>
-		<img id="stream-image" class="stream-image-inactive" alt="Loading..." src="/streamer/?action=stream"/>
+		<img id="stream-image" class="stream-image-inactive" alt="Loading..."/>
 	</div>
 
 	<div id="keyboard-window" class="window" tabindex="0">

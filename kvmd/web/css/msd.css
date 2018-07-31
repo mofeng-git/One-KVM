@@ -1,8 +1,16 @@
 div#msd-menu {
 	width: 450px;
 }
+div#msd-menu
+div#msd-not-in-operate,
+div#msd-current-image-broken,
+div#msd-another-another-user-uploads,
+input#msd-select-new-image-file,
+div#msd-new-image {
+	display: none;
+}
 
-table#msd-info {
+table.msd-info {
 	-webkit-user-select: text;
 	-moz-user-select: text;
 	user-select: text;
@@ -10,7 +18,7 @@ table#msd-info {
 	margin: 0 10px 0 10px;
 	font-size: 12px;
 }
-table#msd-info
+table.msd-info
 td#msd-status,
 td#msd-current-image-name,
 td#msd-current-image-size,

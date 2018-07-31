@@ -55,6 +55,7 @@ ul#ctl li a.ctl-item-selected {
 	background-color: var(--bg-color-selected) !important;
 }
 div.ctl-dropdown-content {
+	visibility: hidden;
 	overflow: hidden;
 	white-space: nowrap;
 	border: var(--intensive-border);
