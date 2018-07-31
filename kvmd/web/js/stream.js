@@ -11,12 +11,14 @@ var stream = new function() {
 					tools.info("Refreshing stream ...");
 					__prev_state = false;
 					$("stream-image").className = "stream-image-inactive";
+					$("stream-box").className = "stream-box-inactive";
 					$("stream-led").className = "led-off";
 					$("stream-reset-button").disabled = true;
 				} else if (!__prev_state) {
 					__refreshImage();
 					__prev_state = true;
 					$("stream-image").className = "stream-image-active";
+					$("stream-box").className = "stream-box-active";
 					$("stream-led").className = "led-on";
 					$("stream-reset-button").disabled = false;
 				}

@@ -4,12 +4,12 @@ var mouse = new function() {
 	var __sent_pos = {x: 0, y:0};
 
 	this.init = function() {
-		el_stream_image = $("stream-image");
-		el_stream_image.onmousedown = (event) => __buttonHandler(event, true);
-		el_stream_image.onmouseup = (event) => __buttonHandler(event, false);
-		el_stream_image.oncontextmenu = (event) => event.preventDefault();
-		el_stream_image.onmousemove = __moveHandler;
-		el_stream_image.onwheel = (event) => __wheelHandler(event);
+		el_stream_box = $("stream-box");
+		el_stream_box.onmousedown = (event) => __buttonHandler(event, true);
+		el_stream_box.onmouseup = (event) => __buttonHandler(event, false);
+		el_stream_box.oncontextmenu = (event) => event.preventDefault();
+		el_stream_box.onmousemove = __moveHandler;
+		el_stream_box.onwheel = (event) => __wheelHandler(event);
 		setInterval(__sendMove, 100);
 	};
 
