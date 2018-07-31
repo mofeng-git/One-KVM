@@ -12,16 +12,13 @@ var ui = new function() {
 		Array.prototype.forEach.call(document.getElementsByClassName("window"), function(el_window) {
 			var el_grab = el_window.querySelector(".window-header .window-grab");
 
-			el_window.style.display = window.getComputedStyle(el_window, null).display;
-			el_window.style.zIndex = parseInt(window.getComputedStyle(el_window, null).zIndex);
-
 			__makeWindowMovable(el_grab, el_window);
 			__windows.push(el_window);
 
 			var el_button = el_window.querySelector(".window-header .window-button-close");
 			if (el_button) {
 				el_button.onclick = function() {
-					el_window.style.display = "none";
+					el_window.style.visibility = "hidden";
 					__raiseLastWindow();
 				};
 			}
@@ -56,33 +53,40 @@ var ui = new function() {
 		window.onmouseup = __globalMouseButtonHandler;
 		// window.oncontextmenu = __globalMouseButtonHandler;
 
-		__raiseWindow($("stream-window"));
+		ui.showWindow("stream-window");
 	};
 
 	this.showWindow = function(id) {
 		var el_window = $(id);
 		if (!__isWindowOnPage(el_window)) {
-			el_window.style.top = "50%";
-			el_window.style.left = "50%";
+			var view = __getViewGeometry();
+			var rect = el_window.getBoundingClientRect();
+			el_window.style.top = Math.max($("ctl").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
+			el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
 		}
-		el_window.style.display = "block";
+		el_window.style.visibility = "visible";
 		__raiseWindow(el_window);
 	};
 
 	var __isWindowOnPage = function(el_window) {
-		var view_top = $("ctl").clientHeight;
-		var view_bottom = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
-		var view_left = 0;
-		var view_right = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
-
+		var view = __getViewGeometry();
 		var rect = el_window.getBoundingClientRect();
 
 		return (
-			(rect.bottom - el_window.clientHeight / 1.5) <= view_bottom
-			&& rect.top >= view_top
-			&& (rect.left + el_window.clientWidth / 1.5) >= view_left
-			&& (rect.right - el_window.clientWidth / 1.5) <= view_right
+			(rect.bottom - el_window.clientHeight / 1.5) <= view.bottom
+			&& rect.top >= view.top
+			&& (rect.left + el_window.clientWidth / 1.5) >= view.left
+			&& (rect.right - el_window.clientWidth / 1.5) <= view.right
 		);
+	};
+
+	var __getViewGeometry = function() {
+		return {
+			top: $("ctl").clientHeight,
+			bottom: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
+			left: 0,
+			right: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
+		};
 	};
 
 	var __toggleMenu = function(el_a) {
@@ -178,8 +182,8 @@ var ui = new function() {
 		var last_el_window = null;
 		var max_z_index = 0;
 		__windows.forEach(function(el_window) {
-			z_index = parseInt(el_window.style.zIndex);
-			if (max_z_index < z_index && el_window.style.display !== "none") {
+			z_index = parseInt(window.getComputedStyle(el_window, null).zIndex);
+			if (max_z_index < z_index && window.getComputedStyle(el_window, null).visibility !== "hidden") {
 				last_el_window = el_window;
 				max_z_index = z_index;
 			}
