@@ -12,12 +12,12 @@ var tools = new function() {
 
 	this.debug = function(...args) {
 		if (__debug) {
-			console.log(...args);
+			console.log("LOG/DEBUG", ...args);
 		}
 	};
 
-	this.info = console.log;
-	this.error = console.error;
+	this.info = (...args) => console.log("LOG/INFO", ...args);
+	this.error = (...args) => console.error("LOG/ERROR", ...args);
 };
 
 var $ = function(id) { return document.getElementById(id); };
