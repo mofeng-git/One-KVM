@@ -9,13 +9,11 @@ img#stream-image {
 img.stream-image-active {
 	cursor: crosshair;
 	-webkit-filter: none;
-	-moz-filter: none;
 	filter: none;
 }
 
 img.stream-image-inactive {
 	cursor: wait;
 	-webkit-filter: grayscale(100%) brightness(75%);
-	-moz-filter: grayscale(100%) brightness(75%);
 	filter: grayscale(100%) brightness(75%);
 }

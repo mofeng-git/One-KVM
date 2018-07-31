@@ -10,7 +10,6 @@ body {
 }
 img#logo {
 	-webkit-filter: invert(0.7);
-	-moz-filter: invert(0.7);
 	filter: invert(0.7);
 	vertical-align: middle;
 	padding: 13px 15px;
@@ -60,8 +59,6 @@ div.ctl-dropdown-content {
 	white-space: nowrap;
 	border: var(--intensive-border);
 	border-top: var(--dark-border);
-	-webkit-border-radius: 0 0 8px 8px;
-	-moz-border-radius: 0 0 8px 8px;
 	border-radius: 0 0 8px 8px;
 	position: absolute;
 	background-color: var(--bg-color-ctl);

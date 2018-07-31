@@ -32,8 +32,6 @@ div#keyboard div.key, div.modifier {
 	vertical-align: top;
 	box-shadow: var(--micro-shadow);
 	border: var(--grey-border);
-	-webkit-border-radius: 6px;
-	-moz-border-radius: 6px;
 	border-radius: 6px;
 	color: var(--fg-color-normal);
 	background-color: var(--bg-color-gray);
@@ -89,7 +87,6 @@ div#keyboard p {
 	position: relative;
 	top: 50%;
 	-webkit-transform: translateY(-50%);
-	-moz-transform: translateY(-50%);
 	transform: translateY(-50%);
 }
 div#keyboard b {

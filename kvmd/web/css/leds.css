@@ -3,66 +3,50 @@
 		-webkit-transform: rotate(360deg);
 	}
 }
-@-moz-keyframes spin {
-	100% {
-		-moz-transform: rotate(360deg);
-	}
-}
 @keyframes spin {
 	100% {
 		-webkit-transform: rotate(360deg);
-		-moz-transform: rotate(360deg);
 		transform: rotate(360deg);
 	}
 }
 
 img.led-on {
 	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
-	-moz-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
 	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
 }
 
 img.led-off {
 	-webkit-filter: invert(0.5);
-	-moz-filter: invert(0.5);
 	filter: invert(0.5);
 }
 
 img.led-hdd-busy {
 	-webkit-filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
-	-moz-filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
 	filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
 }
 
 img.led-msd-writing {
 	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
-	-moz-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
 	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
 	-webkit-animation: spin 2s linear infinite;
-	-moz-animation: spin 2s linear infinite;
 	animation: spin 2s linear infinite;
 }
 
 img.led-fan-on {
 	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
-	-moz-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
 	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
 	-webkit-animation: spin 3s linear infinite;
-	-moz-animation: spin 3s linear infinite;
 	animation: spin 3s linear infinite;
 }
 
 img.led-fan-slow {
 	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
-	-moz-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
 	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
 	-webkit-animation: spin 6s linear infinite;
-	-moz-animation: spin 6s linear infinite;
 	animation: spin 6s linear infinite;
 }
 
 img.led-fan-fail {
 	-webkit-filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
-	-moz-filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
 	filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
 }
