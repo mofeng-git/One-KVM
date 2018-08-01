@@ -137,8 +137,6 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         app.router.add_get("/ws", self.__ws_handler)
 
-        app.router.add_get("/hid", self.__hid_state_handler)
-
         app.router.add_get("/atx", self.__atx_state_handler)
         app.router.add_post("/atx/click", self.__atx_click_handler)
 
@@ -161,8 +159,12 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         aiohttp.web.run_app(app, host=host, port=port, print=self.__run_app_print)
 
+    # ===== INFO
+
     async def __info_handler(self, _: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
         return _json(_get_system_info())
+
+    # ===== WEBSOCKET
 
     async def __ws_handler(self, request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
         logger = get_logger(0)
@@ -176,23 +178,51 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 except Exception as err:
                     logger.error("Can't parse JSON event from websocket: %s", err)
                 else:
-                    if event.get("event_type") == "ping":
+                    event_type = event.get("event_type")
+                    if event_type == "ping":
                         await ws.send_str(json.dumps({"msg_type": "pong"}))
-                    elif event.get("event_type") == "key":
-                        key = str(event.get("key", ""))[:64].strip()
-                        state = event.get("state")
-                        if key and state in [True, False]:
-                            await self.__hid.send_key_event(key, state)
-                    elif event.get("event_type") in ["mouse_move", "mouse_button", "mouse_wheel"]:
-                        pass
+                    elif event_type == "key":
+                        await self.__handle_ws_key_event(event)
+                    elif event_type == "mouse_move":
+                        await self.__handle_ws_mouse_move_event(event)
+                    elif event_type == "mouse_button":
+                        await self.__handle_ws_mouse_button_event(event)
+                    elif event_type == "mouse_wheel":
+                        await self.__handle_ws_mouse_wheel_event(event)
                     else:
-                        logger.error("Invalid websocket event: %r", event)
+                        logger.error("Unknown websocket event: %r", event)
             else:
                 break
         return ws
 
-    async def __hid_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json(self.__hid.get_state())
+    async def __handle_ws_key_event(self, event: Dict) -> None:
+        key = str(event.get("key", ""))[:64].strip()
+        state = event.get("state")
+        if key and state in [True, False]:
+            await self.__hid.send_key_event(key, state)
+
+    async def __handle_ws_mouse_move_event(self, event: Dict) -> None:
+        try:
+            to_x = int(event["to"]["x"])
+            to_y = int(event["to"]["y"])
+        except Exception:
+            return
+        await self.__hid.send_mouse_move_event(to_x, to_y)
+
+    async def __handle_ws_mouse_button_event(self, event: Dict) -> None:
+        button = str(event.get("button", ""))[:64].strip()
+        state = event.get("state")
+        if button and state in [True, False]:
+            await self.__hid.send_mouse_button_event(button, state)
+
+    async def __handle_ws_mouse_wheel_event(self, event: Dict) -> None:
+        try:
+            delta_y = int(event["delta"]["y"])
+        except Exception:
+            return
+        await self.__hid.send_mouse_wheel_event(delta_y)
+
+    # ===== ATX
 
     async def __atx_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(self.__atx.get_state())
@@ -211,6 +241,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
         await clicker()
         await self.__broadcast_event("atx_click", button=None)  # type: ignore
         return _json({"clicked": button})
+
+    # ===== MSD
 
     async def __msd_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(self.__msd.get_state())
@@ -261,12 +293,16 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 logger.info("Written %d bytes to mass-storage device", written)
         return _json({"written": written})
 
+    # ===== STREAMER
+
     async def __streamer_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(self.__streamer.get_state())
 
     async def __streamer_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         self.__reset_streamer = True
         return _json()
+
+    # =====
 
     def __run_app_print(self, text: str) -> None:
         logger = get_logger()

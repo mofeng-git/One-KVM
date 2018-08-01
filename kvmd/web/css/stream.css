@@ -2,7 +2,6 @@ img#stream-image {
 	width: 640px;
 	height: 480px;
 	display: inline-block;
-	border: var(--dark-border);
 	background-color: var(--bg-color-stream-screen);
 }
 
@@ -19,9 +18,7 @@ img.stream-image-inactive {
 div#stream-box {
 	position: relative;
 	display: inline-block;
-}
-div.stream-box-active: {
-	cursor: crosshair;
+	border: var(--dark-border);
 }
 div.stream-box-inactive::after {
 	cursor: wait;
@@ -33,4 +30,7 @@ div.stream-box-inactive::after {
 	height: 100%;
 	display: inline-block;
 	background: radial-gradient(transparent 20%, black);
+}
+div.stream-box-mouse-enabled {
+	cursor: url("../svg/stream-mouse-cursor.svg"), pointer;
 }

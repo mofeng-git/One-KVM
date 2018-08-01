@@ -42,7 +42,6 @@ INLINE void cmdMouseMoveEvent() { // 4 bytes
 	x |= (int)CMD_SERIAL.read();
 	int y = (int)CMD_SERIAL.read() << 8;
 	y |= (int)CMD_SERIAL.read();
-	AbsoluteMouse.moveTo(0, 0);
 	AbsoluteMouse.moveTo(x, y);
 }
 

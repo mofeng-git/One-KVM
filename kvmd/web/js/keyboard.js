@@ -27,8 +27,10 @@ var keyboard = new function() {
 	};
 
 	this.setSocket = function(ws) {
-		keyboard.releaseAll();
-		__ws = ws;
+		if (ws !== __ws) {
+			keyboard.releaseAll();
+			__ws = ws;
+		}
 		keyboard.updateLeds();
 	};
 
