@@ -29,7 +29,7 @@ from .logging import get_logger
 
 
 # =====
-__version__ = "0.42"
+__version__ = "0.43"
 
 
 @functools.lru_cache()
