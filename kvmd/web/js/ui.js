@@ -110,7 +110,7 @@ var ui = new function() {
 			__raiseLastWindow();
 		} else {
 			document.onkeyup = function(event) {
-				if (event.code == "Escape") {
+				if (event.code === "Escape") {
 					event.preventDefault();
 					__closeAllMenues();
 					__raiseLastWindow();
