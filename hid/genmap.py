@@ -25,7 +25,7 @@ def main() -> None:
         }, kvmd_yaml_file, indent=4, default_flow_style=False)
 
     with open("src/keymap.h", "w") as hid_header_file:
-        hid_header_file.write("#include <HID-Project.h>\n\n#include \"inline.h\"\n\n\n")
+        hid_header_file.write("#pragma once\n\n#include <HID-Project.h>\n\n#include \"inline.h\"\n\n\n")
         hid_header_file.write("INLINE KeyboardKeycode keymap(uint8_t code) {\n\tswitch(code) {\n")
         for (code, hid_key, _) in sorted(keymap, key=operator.itemgetter(1)):
             hid_header_file.write("\t\tcase %d: return %s;\n" % (code, hid_key))

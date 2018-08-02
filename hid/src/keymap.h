@@ -1,3 +1,5 @@
+#pragma once
+
 #include <HID-Project.h>
 
 #include "inline.h"
