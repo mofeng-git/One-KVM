@@ -19,7 +19,7 @@ INLINE void cmdResetHid() { // 0 bytes
 	CMD_SERIAL.read(); // unused
 	CMD_SERIAL.read(); // unused
 	CMD_SERIAL.read(); // unused
-	Keyboard.releaseAll();
+	BootKeyboard.releaseAll();
 	AbsoluteMouse.releaseAll();
 }
 
@@ -30,9 +30,9 @@ INLINE void cmdKeyEvent() { // 2 bytes
 	CMD_SERIAL.read(); // unused
 	if (code != KEY_ERROR_UNDEFINED) {
 		if (state) {
-			Keyboard.press(code);
+			BootKeyboard.press(code);
 		} else {
-			Keyboard.release(code);
+			BootKeyboard.release(code);
 		}
 	}
 }
@@ -79,7 +79,7 @@ INLINE void cmdMouseWheelEvent() { // 2 bytes
 // -----------------------------------------------------------------------------
 void setup() {
 	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
-	Keyboard.begin();
+	BootKeyboard.begin();
 	AbsoluteMouse.begin();
 }
 
