@@ -38,7 +38,7 @@ shell:
 
 release:
 	make clean
-	#make tox
+	make tox
 	make clean
 	make push
 	make bump
