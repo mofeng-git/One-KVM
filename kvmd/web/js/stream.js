@@ -1,5 +1,7 @@
 var stream = new function() {
 	var __prev_state = false;
+	var __normal_size = {width: 640, height: 480};
+	var __size_factor = 1;
 
 	this.startPoller = function() {
 		var http = tools.makeRequest("GET", "/streamer/?action=snapshot", function() {
@@ -38,14 +40,24 @@ var stream = new function() {
 		});
 	};
 
+	this.resize = function(percent) {
+		$("stream-size-counter").innerHTML = percent + "%";
+		__size_factor = percent / 100;
+		__applySizeFactor();
+	};
+
+	var __applySizeFactor = function() {
+		var el_stream_image = $("stream-image");
+		el_stream_image.style.width = __normal_size.width * __size_factor + "px";
+		el_stream_image.style.height = __normal_size.height * __size_factor + "px";
+	};
+
 	var __refreshImage = function() {
 		var http = tools.makeRequest("GET", "/kvmd/streamer", function() {
 			if (http.readyState === 4 && http.status === 200) {
-				size = JSON.parse(http.responseText).result.size;
-				el_stream_image = $("stream-image");
-				el_stream_image.style.width = size.width + "px";
-				el_stream_image.style.height = size.height + "px";
-				el_stream_image.src = "/streamer/?action=stream&time=" + new Date().getTime();
+				__normal_size = JSON.parse(http.responseText).result.size;
+				__applySizeFactor();
+				$("stream-image").src = "/streamer/?action=stream&time=" + new Date().getTime();
 				ui.showWindow("stream-window");
 			}
 		});

@@ -46,11 +46,23 @@
 					System &#8628;
 				</a>
 				<div class="ctl-dropdown-content">
-					<button onclick="ui.showWindow('keyboard-window')">&bull; Show keyboard</button>
-					<button onclick="ui.showWindow('stream-window')">&bull; Show stream</button>
 					<button onclick="ui.showWindow('about-window')">&bull; Show about</button>
 					<hr>
+					<button onclick="ui.showWindow('keyboard-window')">&bull; Show keyboard</button>
+					<hr>
+					<button onclick="ui.showWindow('stream-window')">&bull; Show stream</button>
 					<button disabled id="stream-reset-button" onclick="stream.clickResetButton();">&bull; Reset stream</button>
+					<hr>
+					<div data-dont-hide-menu id="stream-size">
+						Stream size: <span id="stream-size-counter">100%</span>
+						<div id="stream-size-slider-box">
+							<input
+								type="range" min="50" max="150" value="100" step="10"
+								oninput="stream.resize(this.value);"
+								onchange="stream.resize(this.value);"
+							/>
+						</div>
+					</div>
 				</div>
 			</div>
 		</li>

@@ -71,15 +71,16 @@ var mouse = new function() {
 	var __sendMove = function() {
 		var pos = __current_pos;
 		if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
-			tools.debug("Mouse move:", pos);
+			el_stream_image = $("stream-image");
+			var to = {
+				x: __translate(pos.x, 0, el_stream_image.clientWidth, -32768, 32767),
+				y: __translate(pos.y, 0, el_stream_image.clientHeight, -32768, 32767),
+			};
+			tools.debug("Mouse move:", to);
 			if (__ws) {
-				el_stream_image = $("stream-image");
 				__ws.send(JSON.stringify({
 					event_type: "mouse_move",
-					to: {
-						x: __translate(pos.x, 0, el_stream_image.clientWidth, -32768, 32767),
-						y: __translate(pos.y, 0, el_stream_image.clientHeight, -32768, 32767),
-					},
+					to: to,
 				}));
 			}
 			__sent_pos = pos;
