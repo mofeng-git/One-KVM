@@ -33,17 +33,17 @@ var atx = new function() {
 
 		switch (el_button.id) {
 			case "atx-power-button":
-				var button = "power";
-				var confirm_msg = "Are you sure to click the power button?";
+				button = "power";
+				confirm_msg = "Are you sure to click the power button?";
 				break;
 			case "atx-power-button-long":
-				var button = "power_long";
-				var confirm_msg = "Are you sure to perform the long press of the power button?";
-				var timeout = 15000;
+				button = "power_long";
+				confirm_msg = "Are you sure to perform the long press of the power button?";
+				timeout = 15000;
 				break;
 			case "atx-reset-button":
-				var button = "reset";
-				var confirm_msg = "Are you sure to reboot the server?";
+				button = "reset";
+				confirm_msg = "Are you sure to reboot the server?";
 				break;
 		}
 

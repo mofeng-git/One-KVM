@@ -5,7 +5,7 @@ var mouse = new function() {
 	var __stream_hovered = false;
 
 	this.init = function() {
-		el_stream_box = $("stream-box");
+		var el_stream_box = $("stream-box");
 		el_stream_box.onmouseenter = __hoverStream;
 		el_stream_box.onmouseleave = __leaveStream;
 		el_stream_box.onmousedown = (event) => __buttonHandler(event, true);
@@ -41,10 +41,10 @@ var mouse = new function() {
 
 	var __buttonHandler = function(event, state) {
 		// https://www.w3schools.com/jsref/event_button.asp
+		var button = null;
 		switch (event.button) {
-			case 0: var button = "left"; break;
-			case 2: var button = "right"; break;
-			default: var button = null; break;
+			case 0: button = "left"; break;
+			case 2: button = "right"; break;
 		}
 		if (button) {
 			event.preventDefault();
@@ -71,7 +71,7 @@ var mouse = new function() {
 	var __sendMove = function() {
 		var pos = __current_pos;
 		if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
-			el_stream_image = $("stream-image");
+			var el_stream_image = $("stream-image");
 			var to = {
 				x: __translate(pos.x, 0, el_stream_image.clientWidth, -32768, 32767),
 				y: __translate(pos.y, 0, el_stream_image.clientHeight, -32768, 32767),
@@ -96,7 +96,7 @@ var mouse = new function() {
 		if (event.preventDefault) {
 			event.preventDefault();
 		}
-		delta = {x: event.deltaX, y: event.deltaY};
+		var delta = {x: event.deltaX, y: event.deltaY};
 		tools.debug("Mouse wheel:", delta);
 		if (__ws) {
 			__ws.send(JSON.stringify({

@@ -24,6 +24,9 @@ var ui = new function() {
 			}
 		});
 
+		var __hidden_attr = null;
+		var __visibility_change_attr = null;
+
 		if (typeof document.hidden !== "undefined") {
 			__hidden_attr = "hidden";
 			__visibility_change_attr = "visibilitychange";
@@ -43,7 +46,7 @@ var ui = new function() {
 						hid.releaseAll();
 					}
 				},
-				false,
+				false
 			);
 		}
 
@@ -115,7 +118,7 @@ var ui = new function() {
 					__closeAllMenues();
 					__raiseLastWindow();
 				}
-			}
+			};
 		}
 	};
 
@@ -131,7 +134,7 @@ var ui = new function() {
 	var __globalMouseButtonHandler = function(event) {
 		hid.updateLeds();
 		if (!event.target.matches(".ctl-item")) {
-			for (el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
+			for (var el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
 				if (el_item.hasAttribute("data-force-hide-menu")) {
 					break;
 				}
@@ -163,8 +166,8 @@ var ui = new function() {
 			el_window.removeAttribute("data-centered");
 			event = (event || window.event);
 			event.preventDefault();
-			x = prev_x - event.clientX;
-			y = prev_y - event.clientY;
+			var x = prev_x - event.clientX;
+			var y = prev_y - event.clientY;
 			prev_x = event.clientX;
 			prev_y = event.clientY;
 			el_window.style.top = (el_window.offsetTop - y) + "px";
@@ -185,7 +188,7 @@ var ui = new function() {
 		var last_el_window = null;
 		var max_z_index = 0;
 		__windows.forEach(function(el_window) {
-			z_index = parseInt(window.getComputedStyle(el_window, null).zIndex);
+			var z_index = parseInt(window.getComputedStyle(el_window, null).zIndex);
 			if (max_z_index < z_index && window.getComputedStyle(el_window, null).visibility !== "hidden") {
 				last_el_window = el_window;
 				max_z_index = z_index;

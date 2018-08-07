@@ -50,7 +50,7 @@ var keyboard = new function() {
 		$("hid-keyboard-led").className = (focused ? "led-on" : "led-off");
 	};
 
-	this.releaseAll = function(ws) {
+	this.releaseAll = function() {
 		__keys.concat(__modifiers).forEach(function(el_key) {
 			if (__isActive(el_key)) {
 				keyboard.fireEvent(el_key.id, false);
@@ -61,13 +61,13 @@ var keyboard = new function() {
 	this.fireEvent = function(code, state) {
 		$("keyboard-window").dispatchEvent(new KeyboardEvent(
 			(state ? "keydown" : "keyup"),
-			{code: code},
+			{code: code}
 		));
 	};
 
 	var __keyboardHandler = function(event, state) {
 		event.preventDefault();
-		el_key = $(event.code);
+		var el_key = $(event.code);
 		if (el_key && !event.repeat) {
 			__commonHandler(el_key, state, "pressed");
 			if (__mac_cmd_hook) {

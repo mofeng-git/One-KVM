@@ -34,4 +34,4 @@ var hid = new function() {
 		mouse.setSocket(null);
 		keyboard.setSocket(null);
 	};
-}
+};

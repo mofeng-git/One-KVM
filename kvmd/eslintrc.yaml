@@ -1,0 +1,40 @@
+globals:
+    atx: true
+    hid: true
+    keyboard: true
+    mouse: true
+    msd: true
+    session: true
+    stream: true
+    tools: true
+    ui: true
+    "$": true
+
+env:
+    browser: true
+
+extends: "eslint:recommended"
+
+parserOptions:
+    ecmaVersion: 6
+
+rules:
+    indent:
+        - error
+        - tab
+        - SwitchCase: 1
+    linebreak-style:
+        - error
+        - unix
+    quotes:
+        - error
+        - double
+    semi:
+        - error
+        - always
+    comma-dangle:
+        - error
+        - always-multiline
+    no-unused-vars:
+        - error
+        - {vars: local, args: after-used}

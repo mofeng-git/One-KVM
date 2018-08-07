@@ -122,7 +122,7 @@ var msd = new function() {
 		}
 	};
 
-	var __uploadStateChange = function(event) {
+	var __uploadStateChange = function() {
 		if (__upload_http.readyState === 4) {
 			if (__upload_http.status !== 200) {
 				alert("Can't upload image to the Mass Storage Device:", __upload_http.responseText);

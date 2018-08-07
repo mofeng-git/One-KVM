@@ -75,7 +75,7 @@ var session = new function() {
 		setTimeout(session.startPoller, 1000);
 	};
 
-	var __pingServer = function(event) {
+	var __pingServer = function() {
 		try {
 			__missed_heartbeats += 1;
 			if (__missed_heartbeats >= 5) {
