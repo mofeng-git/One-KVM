@@ -1,4 +1,11 @@
 var keyboard = new function() {
+	var __mac_cmd_hook = ((
+		window.navigator.oscpu
+		|| window.navigator.platform
+		|| window.navigator.appVersion
+		|| "Unknown"
+	).indexOf("Mac") !== -1);
+
 	var __ws = null;
 	var __keys = [];
 	var __modifiers = [];
@@ -24,6 +31,10 @@ var keyboard = new function() {
 			el_key.onmousedown = () => __toggleModifierHandler(el_key);
 			__modifiers.push(el_key);
 		});
+
+		if (__mac_cmd_hook) {
+			tools.info("Keyboard: enabled Mac-CMD-Hook");
+		}
 	};
 
 	this.setSocket = function(ws) {
@@ -59,6 +70,18 @@ var keyboard = new function() {
 		el_key = $(event.code);
 		if (el_key && !event.repeat) {
 			__commonHandler(el_key, state, "pressed");
+			if (__mac_cmd_hook) {
+				// https://bugs.chromium.org/p/chromium/issues/detail?id=28089
+				// https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
+				if ((event.code === "MetaLeft" || event.code === "MetaRight") && !state) {
+					__keys.forEach(function(el_key) {
+						if (__isActive(el_key)) {
+							// __commonHandler(el_key, false, "pressed");
+							keyboard.fireEvent(el_key.id, false);
+						}
+					});
+				}
+			}
 			__unholdModifiers();
 		}
 	};
