@@ -32,7 +32,7 @@ var session = new function() {
 		tools.debug("WebSocket opened:", event);
 		atx.loadInitialState();
 		msd.loadInitialState();
-		hid.installCapture(__ws);
+		hid.setSocket(__ws);
 		__missed_heartbeats = 0;
 		__ping_timer = setInterval(__pingServer, 1000);
 	};
@@ -69,7 +69,7 @@ var session = new function() {
 			clearInterval(__ping_timer);
 			__ping_timer = null;
 		}
-		hid.clearCapture();
+		hid.setSocket(null);
 		atx.clearState();
 		__ws = null;
 		setTimeout(session.startPoller, 1000);

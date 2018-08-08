@@ -189,9 +189,12 @@
 		<li class="ctl-right-actions">
 			<div class="ctl-dropdown">
 				<a class="ctl-item" href="#">
+					<img data-dont-hide-menu id="pak-led" class="led-off" src="svg/gear-led.svg" />
 					Shortcuts &#8628;
 				</a>
 				<div class="ctl-dropdown-content">
+					<button disabled id="pak-button">&bull; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
+					<hr>
 					<button onclick="hid.emitShortcut('ControlLeft', 'AltLeft', 'Delete');">&bull; Ctrl+Alt+Del</button>
 					<hr>
 					<button onclick="hid.emitShortcut('ControlLeft', 'KeyW');">&bull; Ctrl+W</button>

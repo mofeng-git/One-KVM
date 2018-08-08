@@ -1,7 +1,24 @@
 var hid = new function() {
+	var __ws = null;
+	var __chars_to_codes = {};
+	var __codes_delay = 50;
+
 	this.init = function() {
 		keyboard.init();
 		mouse.init();
+		if (window.navigator.clipboard && window.navigator.clipboard.readText) {
+			__chars_to_codes = __buildCharsToCodes();
+			$("pak-button").onclick = __pasteAsKeys;
+		} else {
+			$("pak-button").title = "Your browser does not support the Clipboard API.\nUse Google Chrome or Chromium.";
+		}
+	};
+
+	this.setSocket = function(ws) {
+		__ws = ws;
+		keyboard.setSocket(ws);
+		mouse.setSocket(ws);
+		$("pak-button").disabled = !(window.navigator.clipboard && window.navigator.clipboard.readText && ws);
 	};
 
 	this.updateLeds = function() {
@@ -14,24 +31,111 @@ var hid = new function() {
 	};
 
 	this.emitShortcut = function(...codes) {
-		tools.debug("Emitted keys:", codes);
-		var delay = 0;
-		[[codes, true], [codes.slice().reverse(), false]].forEach(function(op) {
-			var [op_codes, state] = op;
-			op_codes.forEach(function(code) {
-				setTimeout(() => keyboard.fireEvent(code, state), delay);
-				delay += 100;
+		return new Promise(function(resolve) {
+			tools.debug("Emitting keys:", codes);
+
+			var raw_events = [];
+			[[codes, true], [codes.slice().reverse(), false]].forEach(function(op) {
+				var [op_codes, state] = op;
+				op_codes.forEach(function(code) {
+					raw_events.push({code: code, state: state});
+				});
 			});
+
+			var index = 0;
+			var iterate = () => setTimeout(function() {
+				keyboard.fireEvent(raw_events[index].code, raw_events[index].state);
+				++index;
+				if (index < raw_events.length) {
+					iterate();
+				} else {
+					resolve(null);
+				}
+			}, __codes_delay);
+			iterate();
 		});
 	};
 
-	this.installCapture = function(ws) {
-		keyboard.setSocket(ws);
-		mouse.setSocket(ws);
+	var __buildCharsToCodes = function() {
+		var chars_to_codes = {
+			"\n": ["Enter"],
+			"\t": ["Tab"],
+			" ": ["Space"],
+			"`": ["Backquote"],   "~": ["ShiftLeft", "Backquote"],
+			"\\": ["Backslash"],  "|": ["ShiftLeft", "Backslash"],
+			"[": ["BracketLeft"], "{": ["ShiftLeft", "BracketLeft"],
+			"]": ["BracketLeft"], "}": ["ShiftLeft", "BracketRight"],
+			",": ["Comma"],       "<": ["ShiftLeft", "Comma"],
+			".": ["Period"],      ">": ["ShiftLeft", "Period"],
+			"1": ["Digit1"],      "!": ["ShiftLeft", "Digit1"],
+			"2": ["Digit2"],      "@": ["ShiftLeft", "Digit2"],
+			"3": ["Digit3"],      "#": ["ShiftLeft", "Digit3"],
+			"4": ["Digit4"],      "$": ["ShiftLeft", "Digit4"],
+			"5": ["Digit5"],      "%": ["ShiftLeft", "Digit5"],
+			"6": ["Digit6"],      "^": ["ShiftLeft", "Digit6"],
+			"7": ["Digit7"],      "&": ["ShiftLeft", "Digit7"],
+			"8": ["Digit8"],      "*": ["ShiftLeft", "Digit8"],
+			"9": ["Digit9"],      "(": ["ShiftLeft", "Digit9"],
+			"0": ["Digit0"],      ")": ["ShiftLeft", "Digit0"],
+			"-": ["Minus"],       "_": ["ShiftLeft", "Minus"],
+			"'": ["Quote"],       "\"": ["ShiftLeft", "Quote"],
+			";": ["Semicolon"],   ":": ["ShiftLeft", "Semicolon"],
+			"/": ["Slash"],       "?": ["ShiftLeft", "Slash"],
+			"=": ["Equal"],       "+": ["ShiftLeft", "Equal"],
+		};
+
+		for (var ch = "a".charCodeAt(0); ch <= "z".charCodeAt(0); ++ch) {
+			var low = String.fromCharCode(ch);
+			var up = low.toUpperCase();
+			var code = "Key" + up;
+			chars_to_codes[low] = [code];
+			chars_to_codes[up] = ["ShiftLeft", code];
+		}
+
+		return chars_to_codes;
 	};
 
-	this.clearCapture = function() {
-		mouse.setSocket(null);
-		keyboard.setSocket(null);
+	var __pasteAsKeys = function() {
+		window.navigator.clipboard.readText().then(function(clipboard_text) {
+			clipboard_text = clipboard_text.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
+			if (clipboard_text) {
+				var clipboard_codes = [];
+				var codes_count = 0;
+				[...clipboard_text].forEach(function(ch) {
+					var codes = __chars_to_codes[ch];
+					if (codes) {
+						codes_count += codes.length;
+						clipboard_codes.push(codes);
+					}
+				});
+
+				var confirm_msg = (
+					"You are going to automatically type " + codes_count
+					+ " characters from the system clipboard.\nAre you sure you want to continue?\n"
+					+ "It will take " + (__codes_delay * codes_count * 2 / 1000) + " seconds."
+				);
+
+				if (codes_count <= 256 || confirm(confirm_msg)) {
+					$("pak-button").disabled = true;
+					$("pak-led").className = "led-pak-typing";
+
+					tools.debug("Paste-as-keys:", clipboard_text);
+
+					var index = 0;
+					var iterate = function() {
+						hid.emitShortcut(...clipboard_codes[index]).then(function() {
+							++index;
+							if (index < clipboard_codes.length && __ws) {
+								iterate();
+							} else {
+								$("pak-button").disabled = false;
+								$("pak-led").className = "led-off";
+							}
+						});
+					};
+					iterate();
+				}
+			}
+		});
 	};
 };

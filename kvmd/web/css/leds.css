@@ -25,7 +25,8 @@ img.led-hdd-busy {
 	filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
 }
 
-img.led-msd-writing {
+img.led-msd-writing,
+img.led-pak-typing {
 	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
 	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
 	-webkit-animation: spin 2s linear infinite;
