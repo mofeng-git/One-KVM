@@ -21,3 +21,4 @@ var tools = new function() {
 };
 
 var $ = (id) => document.getElementById(id);
+var $$ = (cls) => document.getElementsByClassName(cls);

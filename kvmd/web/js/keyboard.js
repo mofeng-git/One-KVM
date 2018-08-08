@@ -17,7 +17,7 @@ var keyboard = new function() {
 		$("stream-window").onkeydown = (event) => __keyboardHandler(event, true);
 		$("stream-window").onkeyup = (event) => __keyboardHandler(event, false);
 
-		Array.prototype.forEach.call(document.getElementsByClassName("key"), function(el_key) {
+		Array.prototype.forEach.call($$("key"), function(el_key) {
 			el_key.onmousedown = () => __clickHandler(el_key, true);
 			el_key.onmouseup = () => __clickHandler(el_key, false);
 			el_key.onmouseout = function() {
@@ -27,7 +27,7 @@ var keyboard = new function() {
 			};
 			__keys.push(el_key);
 		});
-		Array.prototype.forEach.call(document.getElementsByClassName("modifier"), function(el_key) {
+		Array.prototype.forEach.call($$("modifier"), function(el_key) {
 			el_key.onmousedown = () => __toggleModifierHandler(el_key);
 			__modifiers.push(el_key);
 		});

@@ -9,6 +9,7 @@ globals:
     tools: true
     ui: true
     "$": true
+    "$$": true
 
 env:
     browser: true

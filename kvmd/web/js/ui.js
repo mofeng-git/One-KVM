@@ -4,12 +4,12 @@ var ui = new function() {
 	var __ctl_items = [];
 
 	this.init = function() {
-		Array.prototype.forEach.call(document.getElementsByClassName("ctl-item"), function(el_item) {
+		Array.prototype.forEach.call($$("ctl-item"), function(el_item) {
 			el_item.onclick = () => __toggleMenu(el_item);
 			__ctl_items.push(el_item);
 		});
 
-		Array.prototype.forEach.call(document.getElementsByClassName("window"), function(el_window) {
+		Array.prototype.forEach.call($$("window"), function(el_window) {
 			var el_grab = el_window.querySelector(".window-header .window-grab");
 
 			__makeWindowMovable(el_grab, el_window);
