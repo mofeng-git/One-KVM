@@ -22,8 +22,11 @@ RUN sed -i -e "s/console=ttyAMA0\,115200//g" /boot/cmdline.txt \
 RUN systemctl mask serial-getty@ttyAMA0.service
 
 RUN sed -e "s/^#PROD//g" /usr/share/kvmd/configs/nginx/nginx.conf.example > /etc/nginx/nginx.conf
-RUN echo "admin:admin" > /etc/nginx/htpasswd
 RUN cp /usr/share/kvmd/configs/kvmd/v1.yaml /etc/kvmd.yaml
+
+ARG WEBUI_ADMIN_PASSWD
+ENV WEBUI_ADMIN_PASSWD $WEBUI_ADMIN_PASSWD
+RUN echo "$WEBUI_ADMIN_PASSWD" | htpasswd -ci /etc/nginx/htpasswd admin
 
 ARG NEW_HTTPS_CERT
 ENV NEW_HTTPS_CERT $NEW_HTTPS_CERT
