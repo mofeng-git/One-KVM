@@ -50,6 +50,9 @@ http {
 
 #PROD		add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
+#PROD		auth_basic "Restricted Area";
+#PROD		auth_basic_user_file /etc/nginx/htpasswd;
+
 		location / {
 			root /usr/share/kvmd/web;
 			index index.html;

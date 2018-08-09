@@ -1,0 +1,17 @@
+         _____ _        _  ____      ____  __
+        |  __ (_)      | |/ /\ \    / /  \/  |
+        | |__) |   __  | ' /  \ \  / /| \  / |
+        |  ___/ | (__) |  <    \ \/ / | |\/| |
+        | |   | |      | . \    \  /  | |  | |
+        |_|   |_|      |_|\_\    \/   |_|  |_|
+
+    Welcome to Pi-KVM - Open Source IP-KVM based on Raspberry Pi
+
+    Website: https://github.com/pi-kvm
+    ____________________________________________________________________________
+
+    The root filesystem of Pi-KVM is mounted in read-only mode by default.
+    Use command "rw" to remount it in the RW-mode and "ro" to switch it back.
+
+    To change Web UI password use command "htpasswd /etc/nginx/htpasswd admin".
+

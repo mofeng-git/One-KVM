@@ -1,5 +1,6 @@
 RUN pkg-install \
 	nginx \
+	apache-tools \
 	mjpg-streamer-pikvm \
 	python \
 	python-raspberry-gpio
@@ -14,12 +15,14 @@ RUN systemctl enable kvmd
 COPY stages/pikvm/config.txt /boot/
 COPY stages/pikvm/sysctl.conf /etc/sysctl.d/99-pikvm.conf
 COPY stages/pikvm/udev.rules /etc/udev/rules.d/pikvm.rules
+COPY stages/pikvm/motd /etc/
 
 RUN sed -i -e "s/console=ttyAMA0\,115200//g" /boot/cmdline.txt \
 	&& sed -i -e "s/kgdboc=ttyAMA0\,115200//g" /boot/cmdline.txt
 RUN systemctl mask serial-getty@ttyAMA0.service
 
 RUN sed -e "s/^#PROD//g" /usr/share/kvmd/configs/nginx/nginx.conf.example > /etc/nginx/nginx.conf
+RUN echo "admin:admin" > /etc/nginx/htpasswd
 RUN cp /usr/share/kvmd/configs/kvmd/v1.yaml /etc/kvmd.yaml
 
 ARG NEW_HTTPS_CERT
