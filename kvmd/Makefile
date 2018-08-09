@@ -4,7 +4,8 @@ TESTENV_VIDEO ?= /dev/video0
 TESTENV_LOOP ?= /dev/loop7
 TESTENV_CMD ?= /bin/bash -c " \
 		(socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
-		&& nginx -c /testenv/nginx.conf \
+		&& cp /configs/nginx/nginx.conf.example /etc/nginx/nginx.conf \
+		&& nginx -c /etc/nginx/nginx.conf \
 		&& ln -s $(TESTENV_VIDEO) /dev/kvmd-streamer \
 		&& (losetup -d /dev/kvmd-msd || true) \
 		&& losetup /dev/kvmd-msd /root/loop.img \
@@ -21,11 +22,12 @@ run:
 	docker build --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
 	- docker run --rm \
 			--volume `pwd`/kvmd:/kvmd:ro \
-			--volume `pwd`/web:/web:ro \
+			--volume `pwd`/web:/usr/share/kvmd/web:ro \
 			--volume `pwd`/testenv:/testenv:ro \
+			--volume `pwd`/configs:/configs:ro \
 			--device $(TESTENV_LOOP):/dev/kvmd-msd \
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
-			--publish 8080:8080/tcp \
+			--publish 8080:80/tcp \
 			--publish 8081:8081/tcp \
 			--publish 8082:8082/tcp \
 		-it $(TESTENV_IMAGE) $(TESTENV_CMD)

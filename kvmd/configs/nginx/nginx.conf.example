@@ -25,11 +25,11 @@ http {
 	scgi_temp_path			/tmp/nginx.scgi_temp;
 	uwsgi_temp_path			/tmp/nginx.uwsgi_temp;
 
-	server {
-		listen 80;
-		server_name localhost;
-		return 301 https://$host$request_uri;
-	}
+#PROD	server {
+#PROD		listen 80;
+#PROD		server_name localhost;
+#PROD		return 301 https://$host$request_uri;
+#PROD	}
 
 	upstream kvmd {
 		server localhost:8081 fail_timeout=0s max_fails=0;
@@ -40,15 +40,15 @@ http {
 	}
 
 	server {
-		listen 443 ssl http2;
+#PROD		listen 443 ssl http2;
 		server_name localhost;
 
-		ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-		ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH";
-		ssl_certificate ssl/server.crt;
-		ssl_certificate_key ssl/server.key;
+#PROD		ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+#PROD		ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH";
+#PROD		ssl_certificate ssl/server.crt;
+#PROD		ssl_certificate_key ssl/server.key;
 
-		add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+#PROD		add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
 		location / {
 			root /usr/share/kvmd/web;

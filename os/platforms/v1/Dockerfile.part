@@ -19,7 +19,7 @@ RUN sed -i -e "s/console=ttyAMA0\,115200//g" /boot/cmdline.txt \
 	&& sed -i -e "s/kgdboc=ttyAMA0\,115200//g" /boot/cmdline.txt
 RUN systemctl mask serial-getty@ttyAMA0.service
 
-RUN cp /usr/share/kvmd/configs/nginx/nginx.conf.example /etc/nginx/nginx.conf
+RUN sed -e "s/^#PROD//g" /usr/share/kvmd/configs/nginx/nginx.conf.example > /etc/nginx/nginx.conf
 RUN cp /usr/share/kvmd/configs/kvmd/v1.yaml /etc/kvmd.yaml
 
 ARG NEW_HTTPS_CERT
