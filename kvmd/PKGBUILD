@@ -3,7 +3,7 @@
 
 
 pkgname="kvmd"
-pkgver="0.47"
+pkgver="0.48"
 pkgrel="1"
 pkgdesc="The main Pi-KVM daemon"
 arch=("any")
