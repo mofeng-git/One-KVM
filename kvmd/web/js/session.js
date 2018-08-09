@@ -20,7 +20,7 @@ var session = new function() {
 	};
 
 	this.startPoller = function() {
-		__ws = new WebSocket("ws://" + location.host + "/kvmd/ws");
+		__ws = new WebSocket((location.protocol == "https:" ? "wss" : "ws") + "://" + location.host + "/kvmd/ws");
 		__ws.onopen = __wsOpenHandler;
 		__ws.onmessage = __wsMessageHandler;
 		__ws.onerror = __wsErrorHandler;
