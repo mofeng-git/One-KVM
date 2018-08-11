@@ -14,7 +14,7 @@ events {
 http {
 	access_log off;
 
-	include mime.types;
+	include /etc/nginx/mime.types;
 	default_type application/octet-stream;
 	charset utf-8;
 
@@ -52,8 +52,8 @@ http {
 
 #PROD		ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
 #PROD		ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH";
-#PROD		ssl_certificate ssl/server.crt;
-#PROD		ssl_certificate_key ssl/server.key;
+#PROD		ssl_certificate /etc/nginx/ssl/server.crt;
+#PROD		ssl_certificate_key /etc/nginx/ssl/server.key;
 
 #PROD		add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
