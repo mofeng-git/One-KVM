@@ -1,3 +1,5 @@
+load_module /usr/lib/nginx/modules/ngx_http_lua_module.so;
+
 user http;
 worker_processes 4;
 
@@ -5,7 +7,7 @@ worker_processes 4;
 error_log /dev/null crit;
 
 events {
-	worker_connections 64;
+	worker_connections 1024;
 	use epoll;
 }
 
@@ -25,12 +27,6 @@ http {
 	scgi_temp_path			/tmp/nginx.scgi_temp;
 	uwsgi_temp_path			/tmp/nginx.uwsgi_temp;
 
-#PROD	server {
-#PROD		listen 80;
-#PROD		server_name localhost;
-#PROD		return 301 https://$host$request_uri;
-#PROD	}
-
 	upstream kvmd {
 		server localhost:8081 fail_timeout=0s max_fails=0;
 	}
@@ -38,6 +34,17 @@ http {
 	upstream mjpg_streamer {
 		server localhost:8082 fail_timeout=0s max_fails=0;
 	}
+
+#PROD	server {
+#PROD		listen 80;
+#PROD		server_name localhost;
+#PROD		return 301 https://$host$request_uri;
+#PROD	}
+
+#PROD	lua_shared_dict WS_TOKENS 10m;
+#PROD	init_by_lua_block {
+#PROD		WS_TOKEN_EXPIRES = 10;
+#PROD	}
 
 	server {
 #PROD		listen 443 ssl http2;
@@ -58,7 +65,27 @@ http {
 			index index.html;
 		}
 
+		location /wsauth {
+			# Workaround for Safari: https://bugs.webkit.org/show_bug.cgi?id=80362
+#PROD			access_by_lua_block {
+#PROD				local token = ngx.encode_base64(ngx.sha1_bin(ngx.var.http_Authorization));
+#PROD				ngx.shared.WS_TOKENS:set(token, token, WS_TOKEN_EXPIRES);
+#PROD				ngx.header["Set-Cookie"] = "WS_ACCESS_TOKEN=" .. token .. "; Path=/; Expires=" .. ngx.cookie_time(ngx.time() + WS_TOKEN_EXPIRES);
+#PROD			}
+			content_by_lua_block {
+				ngx.say("ok");
+			}
+		}
+
 		location /kvmd/ws {
+#PROD			auth_basic off;
+#PROD			access_by_lua_block {
+#PROD				local token = ngx.var.cookie_WS_ACCESS_TOKEN;
+#PROD				local value, _ = ngx.shared.WS_TOKENS:get(token);
+#PROD				if value == nil then
+#PROD					ngx.exec("/wsauth");
+#PROD				end
+#PROD			}
 			rewrite /kvmd/ws /ws break;
 			proxy_pass http://kvmd;
 			proxy_set_header Upgrade $http_upgrade;

@@ -31,7 +31,8 @@ RUN pacman -Syy \
 	&& user-packer -S --noconfirm \
 		python \
 		python-pip \
-		nginx \
+		nginx-mainline \
+		nginx-mainline-mod-lua \
 		mjpg-streamer-pikvm \
 		socat \
 	&& pacman -Sc --noconfirm

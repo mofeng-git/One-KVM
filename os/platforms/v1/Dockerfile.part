@@ -1,5 +1,6 @@
 RUN pkg-install \
-	nginx \
+	nginx-mainline \
+	nginx-mainline-mod-lua \
 	apache-tools \
 	mjpg-streamer-pikvm \
 	python \

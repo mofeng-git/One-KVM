@@ -20,11 +20,19 @@ var session = new function() {
 	};
 
 	this.startPoller = function() {
-		__ws = new WebSocket((location.protocol == "https:" ? "wss" : "ws") + "://" + location.host + "/kvmd/ws");
-		__ws.onopen = __wsOpenHandler;
-		__ws.onmessage = __wsMessageHandler;
-		__ws.onerror = __wsErrorHandler;
-		__ws.onclose = __wsCloseHandler;
+		var http = tools.makeRequest("GET", "/wsauth", function() {
+			if (http.readyState === 4) {
+				if (http.status === 200) {
+					__ws = new WebSocket((location.protocol == "https:" ? "wss" : "ws") + "://" + location.host + "/kvmd/ws");
+					__ws.onopen = __wsOpenHandler;
+					__ws.onmessage = __wsMessageHandler;
+					__ws.onerror = __wsErrorHandler;
+					__ws.onclose = __wsCloseHandler;
+				} else {
+					__wsCloseHandler(null);
+				}
+			}
+		});
 	};
 
 	var __wsOpenHandler = function(event) {
