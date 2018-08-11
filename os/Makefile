@@ -37,7 +37,6 @@ _pikvm: $(_BUILD_DIR)
 		PROJECT=pikvm \
 		BOARD=$(PI_BOARD) \
 		STAGES="__init__ os watchdog ro pikvm rootssh __cleanup__" \
-		HOSTNAME=$(HOSTNAME) \
 		LOCALE=$(LOCALE) \
 		TIMEZONE=$(TIMEZONE)
 
@@ -47,7 +46,7 @@ $(_BUILD_DIR):
 
 
 install: $(_BUILD_DIR)
-	cd $(_BUILD_DIR) && make install
+	cd $(_BUILD_DIR) && make install HOSTNAME=$(HOSTNAME)
 
 
 scan: $(_BUILD_DIR)
