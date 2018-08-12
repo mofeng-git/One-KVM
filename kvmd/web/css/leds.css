@@ -10,49 +10,60 @@
 	}
 }
 
+:root {
+	--led-filter-gray: invert(0.5);
+	--led-filter-green: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
+	--led-filter-red: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
+	--led-filter-yellow: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
+
+	--led-spin-slow: spin 6s linear infinite;
+	--led-spin-medium: spin 3s linear infinite;
+	--led-spin-fast: spin 2s linear infinite;
+}
+
 img.led-on {
-	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
-	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
+	-webkit-filter: var(--led-filter-green);
+	filter: var(--led-filter-green);
 }
 
 img.led-off {
-	-webkit-filter: invert(0.5);
-	filter: invert(0.5);
+	-webkit-filter: var(--led-filter-gray);
+	filter: var(--led-filter-gray);
 }
 
 img.led-hdd-busy {
-	-webkit-filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
-	filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
+	-webkit-filter: var(--led-filter-red);
+	filter: var(--led-filter-red);
 }
 
 img.led-msd-writing,
 img.led-pak-typing {
-	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
-	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
-	-webkit-animation: spin 2s linear infinite;
-	animation: spin 2s linear infinite;
+	-webkit-filter: var(--led-filter-yellow);
+	filter: var(--led-filter-yellow);
+	-webkit-animation: var(--led-spin-fast);
+	animation: var(--led-spin-fast);
 }
 
 img.led-link-connecting {
-	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
-	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
+	-webkit-filter: var(--led-filter-yellow);
+	filter: var(--led-filter-yellow);
 }
 
 img.led-fan-on {
-	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
-	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
-	-webkit-animation: spin 3s linear infinite;
-	animation: spin 3s linear infinite;
+	-webkit-filter: var(--led-filter-green);
+	filter: var(--led-filter-green);
+	-webkit-animation: var(--led-spin-medium);
+	animation: var(--led-spin-medium);
 }
 
 img.led-fan-slow {
-	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
-	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
-	-webkit-animation: spin 6s linear infinite;
-	animation: spin 6s linear infinite;
+	-webkit-filter: var(--led-filter-yellow);
+	filter: var(--led-filter-yellow);
+	-webkit-animation: var(--led-spin-slow);
+	animation: var(--led-spin-slow);
 }
 
 img.led-fan-fail {
-	-webkit-filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
-	filter: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
+	-webkit-filter: var(--led-filter-red);
+	filter: var(--led-filter-red);
 }
