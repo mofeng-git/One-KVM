@@ -33,6 +33,11 @@ img.led-pak-typing {
 	animation: spin 2s linear infinite;
 }
 
+img.led-link-connecting {
+	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
+	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
+}
+
 img.led-fan-on {
 	-webkit-filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
 	filter: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);

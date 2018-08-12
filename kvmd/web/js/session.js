@@ -20,6 +20,8 @@ var session = new function() {
 	};
 
 	this.startPoller = function() {
+		$("link-led").className = "led-link-connecting";
+		$("link-led").title = "Connecting...";
 		var http = tools.makeRequest("GET", "/wsauth", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
@@ -37,6 +39,7 @@ var session = new function() {
 
 	var __wsOpenHandler = function(event) {
 		$("link-led").className = "led-on";
+		$("link-led").title = "Connected";
 		tools.debug("WebSocket opened:", event);
 		atx.loadInitialState();
 		msd.loadInitialState();
@@ -80,7 +83,10 @@ var session = new function() {
 		hid.setSocket(null);
 		atx.clearState();
 		__ws = null;
-		setTimeout(session.startPoller, 1000);
+		setTimeout(function() {
+			$("link-led").className = "led-link-connecting";
+			setTimeout(session.startPoller, 500);
+		}, 500);
 	};
 
 	var __pingServer = function() {
