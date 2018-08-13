@@ -1,3 +1,5 @@
+BUILD_OPTS ?=
+
 HOSTNAME ?= pikvm
 LOCALE ?= en_US.UTF-8
 TIMEZONE ?= Europe/Moscow
@@ -28,7 +30,7 @@ _pikvm: $(_BUILD_DIR)
 	rm -rf $(_BUILD_DIR)/builder/scripts/pikvm
 	cp -a platforms/$(PIKVM_PLATFORM) $(_BUILD_DIR)/stages/pikvm
 	cd $(_BUILD_DIR) && make binfmt && make _rpi \
-		BUILD_OPTS=" \
+		BUILD_OPTS=" $(BUILD_OPTS) \
 			--build-arg KVMD_VERSION=$(_KVMD_VERSION) \
 			--build-arg NEW_SSH_KEYGEN=$(shell uuidgen) \
 			--build-arg WEBUI_ADMIN_PASSWD='$(WEBUI_ADMIN_PASSWD)' \
