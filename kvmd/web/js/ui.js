@@ -1,18 +1,18 @@
-var ui = new function() {
+function Ui(hid) {
 	var __top_z_index = 0;
 	var __windows = [];
 	var __ctl_items = [];
 
-	this.init = function() {
+	/********************************************************************************/
+
+	var __init__ = function() {
 		Array.prototype.forEach.call($$("ctl-item"), function(el_item) {
 			el_item.onclick = () => __toggleMenu(el_item);
 			__ctl_items.push(el_item);
 		});
 
 		Array.prototype.forEach.call($$("window"), function(el_window) {
-			var el_grab = el_window.querySelector(".window-header .window-grab");
-
-			__makeWindowMovable(el_grab, el_window);
+			__makeWindowMovable(el_window);
 			__windows.push(el_window);
 
 			var el_button = el_window.querySelector(".window-header .window-button-close");
@@ -56,11 +56,16 @@ var ui = new function() {
 		window.onmouseup = __globalMouseButtonHandler;
 		// window.oncontextmenu = __globalMouseButtonHandler;
 
-		ui.showWindow("stream-window");
+		$("show-about-button").onclick = () => __showWindow($("about-window"));
+		$("show-keyboard-button").onclick = () => __showWindow($("keyboard-window"));
+		$("show-stream-button").onclick = () => __showWindow($("stream-window"));
+
+		__showWindow($("stream-window"));
 	};
 
-	this.showWindow = function(id) {
-		var el_window = $(id);
+	/********************************************************************************/
+
+	var __showWindow = function(el_window) {
 		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered")) {
 			var view = __getViewGeometry();
 			var rect = el_window.getBoundingClientRect();
@@ -147,7 +152,7 @@ var ui = new function() {
 		}
 	};
 
-	var __makeWindowMovable = function(el_grab, el_window) {
+	var __makeWindowMovable = function(el_window) {
 		var prev_x = 0;
 		var prev_y = 0;
 
@@ -180,7 +185,7 @@ var ui = new function() {
 		}
 
 		el_window.setAttribute("data-centered", "");
-		el_grab.onmousedown = startMoving;
+		el_window.querySelector(".window-header .window-grab").onmousedown = startMoving;
 		el_window.onclick = () => __raiseWindow(el_window);
 	};
 
@@ -207,4 +212,6 @@ var ui = new function() {
 			tools.debug("Raised window:", el_window);
 		}
 	};
-};
+
+	__init__();
+}

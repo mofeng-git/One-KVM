@@ -1,9 +1,25 @@
-var stream = new function() {
+function Stream() {
+	// var self = this;
+
+	/********************************************************************************/
+
 	var __prev_state = false;
 	var __normal_size = {width: 640, height: 480};
 	var __size_factor = 1;
 
-	this.startPoller = function() {
+	var __init__ = function() {
+		$("stream-led").title = "Stream inactive";
+
+		$("stream-reset-button").onclick = __clickResetButton;
+		$("stream-size-slider").oninput = __resize;
+		$("stream-size-slider").onchange = __resize;
+
+		__startPoller();
+	};
+
+	/********************************************************************************/
+
+	var __startPoller = function() {
 		var http = tools.makeRequest("GET", "/streamer/?action=snapshot", function() {
 			if (http.readyState === 2 || http.readyState === 4) {
 				var status = http.status;
@@ -15,6 +31,7 @@ var stream = new function() {
 					$("stream-image").className = "stream-image-inactive";
 					$("stream-box").classList.add("stream-box-inactive");
 					$("stream-led").className = "led-off";
+					$("stream-led").title = "Stream inactive";
 					$("stream-reset-button").disabled = true;
 				} else if (!__prev_state) {
 					__refreshImage();
@@ -22,14 +39,15 @@ var stream = new function() {
 					$("stream-image").className = "stream-image-active";
 					$("stream-box").classList.remove("stream-box-inactive");
 					$("stream-led").className = "led-on";
+					$("stream-led").title = "Stream is active";
 					$("stream-reset-button").disabled = false;
 				}
 			}
 		});
-		setTimeout(stream.startPoller, 2000);
+		setTimeout(__startPoller, 2000);
 	};
 
-	this.clickResetButton = function() {
+	var __clickResetButton = function() {
 		$("stream-reset-button").disabled = true;
 		var http = tools.makeRequest("POST", "/kvmd/streamer/reset", function() {
 			if (http.readyState === 4) {
@@ -40,7 +58,8 @@ var stream = new function() {
 		});
 	};
 
-	this.resize = function(percent) {
+	var __resize = function() {
+		var percent = $("stream-size-slider").value;
 		$("stream-size-counter").innerHTML = percent + "%";
 		__size_factor = percent / 100;
 		__applySizeFactor();
@@ -58,8 +77,9 @@ var stream = new function() {
 				__normal_size = JSON.parse(http.responseText).result.size;
 				__applySizeFactor();
 				$("stream-image").src = "/streamer/?action=stream&time=" + new Date().getTime();
-				ui.showWindow("stream-window");
 			}
 		});
 	};
-};
+
+	__init__();
+}

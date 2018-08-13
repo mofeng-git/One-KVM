@@ -1,22 +1,32 @@
-var mouse = new function() {
+function Mouse() {
+	var self = this;
+
+	/********************************************************************************/
+
 	var __ws = null;
+
 	var __current_pos = {x: 0, y:0};
 	var __sent_pos = {x: 0, y:0};
+
 	var __stream_hovered = false;
 
-	this.init = function() {
-		var el_stream_box = $("stream-box");
-		el_stream_box.onmouseenter = __hoverStream;
-		el_stream_box.onmouseleave = __leaveStream;
-		el_stream_box.onmousedown = (event) => __buttonHandler(event, true);
-		el_stream_box.onmouseup = (event) => __buttonHandler(event, false);
-		el_stream_box.oncontextmenu = (event) => event.preventDefault();
-		el_stream_box.onmousemove = __moveHandler;
-		el_stream_box.onwheel = (event) => __wheelHandler(event);
+	var __init__ = function() {
+		$("hid-mouse-led").title = "Mouse free";
+
+		$("stream-box").onmouseenter = __hoverStream;
+		$("stream-box").onmouseleave = __leaveStream;
+		$("stream-box").onmousedown = (event) => __buttonHandler(event, true);
+		$("stream-box").onmouseup = (event) => __buttonHandler(event, false);
+		$("stream-box").oncontextmenu = (event) => event.preventDefault();
+		$("stream-box").onmousemove = __moveHandler;
+		$("stream-box").onwheel = __wheelHandler;
+
 		setInterval(__sendMove, 100);
 	};
 
-	this.setSocket = function(ws) {
+	/********************************************************************************/
+
+	self.setSocket = function(ws) {
 		__ws = ws;
 		if (ws) {
 			$("stream-box").classList.add("stream-box-mouse-enabled");
@@ -25,18 +35,24 @@ var mouse = new function() {
 		}
 	};
 
+	self.updateLeds = function() {
+		if (__ws && __stream_hovered) {
+			$("hid-mouse-led").className = "led-on";
+			$("hid-mouse-led").title = "Mouse tracked";
+		} else {
+			$("hid-mouse-led").className = "led-off";
+			$("hid-mouse-led").title = "Mouse free";
+		}
+	};
+
 	var __hoverStream = function() {
 		__stream_hovered = true;
-		mouse.updateLeds();
+		self.updateLeds();
 	};
 
 	var __leaveStream = function() {
 		__stream_hovered = false;
-		mouse.updateLeds();
-	};
-
-	this.updateLeds = function() {
-		$("hid-mouse-led").className = (__ws && __stream_hovered ? "led-on" : "led-off");
+		self.updateLeds();
 	};
 
 	var __buttonHandler = function(event, state) {
@@ -105,4 +121,6 @@ var mouse = new function() {
 			}));
 		}
 	};
-};
+
+	__init__();
+}

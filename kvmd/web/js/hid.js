@@ -1,36 +1,48 @@
-var hid = new function() {
+function Hid() {
+	var self = this;
+
+	/********************************************************************************/
+
 	var __ws = null;
+
 	var __chars_to_codes = {};
 	var __codes_delay = 50;
 
-	this.init = function() {
-		keyboard.init();
-		mouse.init();
+	var __keyboard = new Keyboard();
+	var __mouse = new Mouse();
+
+	var __init__ = function() {
 		if (window.navigator.clipboard && window.navigator.clipboard.readText) {
 			__chars_to_codes = __buildCharsToCodes();
 			$("pak-button").onclick = __pasteAsKeys;
 		} else {
-			$("pak-button").title = "Your browser does not support the Clipboard API.\nUse Google Chrome or Chromium.";
+			$("pak-button").title = $("pak-led").title = "Your browser does not support the Clipboard API.\nUse Google Chrome or Chromium.";
 		}
+
+		Array.prototype.forEach.call($$("shortcut"), function(el_shortcut) {
+			el_shortcut.onclick = () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" "));
+		});
 	};
 
-	this.setSocket = function(ws) {
+	/********************************************************************************/
+
+	self.setSocket = function(ws) {
 		__ws = ws;
-		keyboard.setSocket(ws);
-		mouse.setSocket(ws);
+		__keyboard.setSocket(ws);
+		__mouse.setSocket(ws);
 		$("pak-button").disabled = !(window.navigator.clipboard && window.navigator.clipboard.readText && ws);
 	};
 
-	this.updateLeds = function() {
-		keyboard.updateLeds();
-		mouse.updateLeds();
+	self.updateLeds = function() {
+		__keyboard.updateLeds();
+		__mouse.updateLeds();
 	};
 
-	this.releaseAll = function() {
-		keyboard.releaseAll();
+	self.releaseAll = function() {
+		__keyboard.releaseAll();
 	};
 
-	this.emitShortcut = function(...codes) {
+	var __emitShortcut = function(codes) {
 		return new Promise(function(resolve) {
 			tools.debug("Emitting keys:", codes);
 
@@ -44,7 +56,7 @@ var hid = new function() {
 
 			var index = 0;
 			var iterate = () => setTimeout(function() {
-				keyboard.fireEvent(raw_events[index].code, raw_events[index].state);
+				__keyboard.fireEvent(raw_events[index].code, raw_events[index].state);
 				++index;
 				if (index < raw_events.length) {
 					iterate();
@@ -118,18 +130,20 @@ var hid = new function() {
 				if (codes_count <= 256 || confirm(confirm_msg)) {
 					$("pak-button").disabled = true;
 					$("pak-led").className = "led-pak-typing";
+					$("pak-led").title = "Autotyping...";
 
 					tools.debug("Paste-as-keys:", clipboard_text);
 
 					var index = 0;
 					var iterate = function() {
-						hid.emitShortcut(...clipboard_codes[index]).then(function() {
+						__emitShortcut(clipboard_codes[index]).then(function() {
 							++index;
 							if (index < clipboard_codes.length && __ws) {
 								iterate();
 							} else {
 								$("pak-button").disabled = false;
 								$("pak-led").className = "led-off";
+								$("pak-led").title = "";
 							}
 						});
 					};
@@ -138,4 +152,6 @@ var hid = new function() {
 			}
 		});
 	};
-};
+
+	__init__();
+}

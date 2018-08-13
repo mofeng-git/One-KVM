@@ -1,9 +1,22 @@
-var session = new function() {
+function Session(atx, hid, msd) {
+	// var self = this;
+
+	/********************************************************************************/
+
 	var __ws = null;
+
 	var __ping_timer = null;
 	var __missed_heartbeats = 0;
 
-	this.loadKvmdVersion = function() {
+	var __init__ = function() {
+		$("link-led").title = "Not connected yet...";
+		__loadKvmdVersion();
+		__startPoller();
+	};
+
+	/********************************************************************************/
+
+	var __loadKvmdVersion = function() {
 		var http = tools.makeRequest("GET", "/kvmd/info", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
@@ -13,13 +26,13 @@ var session = new function() {
 					$("about-version-python").innerHTML = version.python;
 					$("about-version-platform").innerHTML = version.platform;
 				} else {
-					setTimeout(session.loadKvmdVersion, 1000);
+					setTimeout(__loadKvmdVersion, 1000);
 				}
 			}
 		});
 	};
 
-	this.startPoller = function() {
+	var __startPoller = function() {
 		$("link-led").className = "led-link-connecting";
 		$("link-led").title = "Connecting...";
 		var http = tools.makeRequest("GET", "/wsauth", function() {
@@ -56,8 +69,6 @@ var session = new function() {
 		} else if (event.msg_type === "event") {
 			if (event.msg.event === "atx_state") {
 				atx.setState(event.msg.event_attrs);
-			// } else if (event.msg.event === "atx_click") {
-			//	atx.setButtonsBusy(event.msg.event_attrs.button);
 			} else if (event.msg.event === "msd_state") {
 				msd.setState(event.msg.event_attrs);
 			}
@@ -85,7 +96,7 @@ var session = new function() {
 		__ws = null;
 		setTimeout(function() {
 			$("link-led").className = "led-link-connecting";
-			setTimeout(session.startPoller, 500);
+			setTimeout(__startPoller, 500);
 		}, 500);
 	};
 
@@ -105,4 +116,6 @@ var session = new function() {
 			}
 		}
 	};
-};
+
+	__init__();
+}

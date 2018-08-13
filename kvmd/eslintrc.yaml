@@ -1,13 +1,13 @@
 globals:
-    atx: true
-    hid: true
-    keyboard: true
-    mouse: true
-    msd: true
-    session: true
-    stream: true
+    Atx: true
+    Hid: true
+    Keyboard: true
+    Mouse: true
+    Msd: true
+    Session: true
+    Stream: true
+    Ui: true
     tools: true
-    ui: true
     "$": true
     "$$": true
 

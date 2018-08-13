@@ -1,62 +1,80 @@
-var msd = new function() {
+function Msd() {
+	var self = this;
+
+	/********************************************************************************/
+
 	var __state = null;
 	var __upload_http = null;
 	var __image_file = null;
 
-	this.loadInitialState = function() {
+	var __init__ = function() {
+		$("msd-led").title = "Unknown state";
+
+		$("msd-select-new-image-file").onchange = __selectNewImageFile;
+		$("msd-select-new-image-button").onclick = () => $("msd-select-new-image-file").click();
+
+		$("msd-upload-new-image-button").onclick = __clickUploadNewImageButton;
+		$("msd-abort-uploading-button").onclick = __clickAbortUploadingButton;
+
+		$("msd-switch-to-kvm-button").onclick = () => __clickSwitchButton("kvm");
+		$("msd-switch-to-server-button").onclick = () => __clickSwitchButton("server");
+	};
+
+	/********************************************************************************/
+
+	self.loadInitialState = function() {
 		var http = tools.makeRequest("GET", "/kvmd/msd", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
-					msd.setState(JSON.parse(http.responseText).result);
+					self.setState(JSON.parse(http.responseText).result);
 				} else {
-					setTimeout(msd.loadInitialState, 1000);
+					setTimeout(self.loadInitialState, 1000);
 				}
 			}
 		});
 	};
 
-	this.setState = function(state) {
+	self.setState = function(state) {
 		__state = state;
 		__applyState();
 	};
 
-	this.clickButton = function(el_button) {
-		if (el_button.id === "msd-upload-new-image-button") {
-			var form_data = new FormData();
-			form_data.append("image_name", __image_file.name);
-			form_data.append("image_data", __image_file);
+	var __clickUploadNewImageButton = function() {
+		var form_data = new FormData();
+		form_data.append("image_name", __image_file.name);
+		form_data.append("image_data", __image_file);
 
-			__upload_http = new XMLHttpRequest();
-			__upload_http.open("POST", "/kvmd/msd/write", true);
-			__upload_http.upload.timeout = 5000;
-			__upload_http.onreadystatechange = __uploadStateChange;
-			__upload_http.upload.onprogress = __uploadProgress;
-			__upload_http.send(form_data);
-
-		} else if (el_button.id === "msd-abort-uploading-button") {
-			__upload_http.onreadystatechange = null;
-			__upload_http.upload.onprogress = null;
-			__upload_http.abort();
-			__upload_http = null;
-			$("msd-progress").setAttribute("data-label", "Aborted");
-			$("msd-progress-value").style.width = "0%";
-
-		} else if (el_button.id === "msd-switch-to-kvm-button" || el_button.id === "msd-switch-to-server-button") {
-			var to = (el_button.id === "msd-switch-to-kvm-button" ? "kvm" : "server");
-			var http = tools.makeRequest("POST", "/kvmd/msd/connect?to=" + to, function() {
-				if (http.readyState === 4) {
-					if (http.status !== 200) {
-						alert("Switch error:", http.responseText);
-					}
-				}
-				__applyState();
-			});
-			__applyState();
-			el_button.disabled = true;
-		}
+		__upload_http = new XMLHttpRequest();
+		__upload_http.open("POST", "/kvmd/msd/write", true);
+		__upload_http.upload.timeout = 5000;
+		__upload_http.onreadystatechange = __uploadStateChange;
+		__upload_http.upload.onprogress = __uploadProgress;
+		__upload_http.send(form_data);
 	};
 
-	this.selectNewImageFile = function() {
+	var __clickAbortUploadingButton = function() {
+		__upload_http.onreadystatechange = null;
+		__upload_http.upload.onprogress = null;
+		__upload_http.abort();
+		__upload_http = null;
+		$("msd-progress").setAttribute("data-label", "Aborted");
+		$("msd-progress-value").style.width = "0%";
+	};
+
+	var __clickSwitchButton = function(to) {
+		var http = tools.makeRequest("POST", "/kvmd/msd/connect?to=" + to, function() {
+			if (http.readyState === 4) {
+				if (http.status !== 200) {
+					alert("Switch error:", http.responseText);
+				}
+			}
+			__applyState();
+		});
+		__applyState();
+		$("msd-switch-to-" + to + "-button").disabled = true;
+	};
+
+	var __selectNewImageFile = function() {
 		var el_input = $("msd-select-new-image-file");
 		var image_file = (el_input.files.length ? el_input.files[0] : null);
 		if (image_file && image_file.size > __state.info.size) {
@@ -72,21 +90,21 @@ var msd = new function() {
 		if (__state.connected_to === "server") {
 			$("msd-another-another-user-uploads").style.display = "none";
 			$("msd-led").className = "led-on";
-			$("msd-status").innerHTML = "Connected to Server";
+			$("msd-status").innerHTML = $("msd-led").title = "Connected to Server";
 			$("msd-another-another-user-uploads").style.display = "none";
 		} else if (__state.busy) {
 			if (!__upload_http) {
 				$("msd-another-another-user-uploads").style.display = "block";
 			}
 			$("msd-led").className = "led-msd-writing";
-			$("msd-status").innerHTML = "Uploading new image";
+			$("msd-status").innerHTML = $("msd-led").title = "Uploading new image";
 		} else {
 			$("msd-another-another-user-uploads").style.display = "none";
 			$("msd-led").className = "led-off";
 			if (__state.in_operate) {
-				$("msd-status").innerHTML = "Connected to KVM";
+				$("msd-status").innerHTML = $("msd-led").title = "Connected to KVM";
 			} else {
-				$("msd-status").innerHTML = "Unavailable";
+				$("msd-status").innerHTML = $("msd-led").title = "Unavailable";
 			}
 		}
 
@@ -141,4 +159,6 @@ var msd = new function() {
 			$("msd-progress-value").style.width = percent + "%";
 		}
 	};
-};
+
+	__init__();
+}

@@ -1,4 +1,13 @@
-var keyboard = new function() {
+function Keyboard() {
+	var self = this;
+
+	/********************************************************************************/
+
+	var __ws = null;
+
+	var __keys = [];
+	var __modifiers = [];
+
 	var __mac_cmd_hook = ((
 		window.navigator.oscpu
 		|| window.navigator.platform
@@ -6,11 +15,9 @@ var keyboard = new function() {
 		|| "Unknown"
 	).indexOf("Mac") !== -1);
 
-	var __ws = null;
-	var __keys = [];
-	var __modifiers = [];
+	var __init__ = function() {
+		$("hid-keyboard-led").title = "Keyboard free";
 
-	this.init = function() {
 		$("keyboard-window").onkeydown = (event) => __keyboardHandler(event, true);
 		$("keyboard-window").onkeyup = (event) => __keyboardHandler(event, false);
 
@@ -27,6 +34,7 @@ var keyboard = new function() {
 			};
 			__keys.push(el_key);
 		});
+
 		Array.prototype.forEach.call($$("modifier"), function(el_key) {
 			el_key.onmousedown = () => __toggleModifierHandler(el_key);
 			__modifiers.push(el_key);
@@ -37,28 +45,35 @@ var keyboard = new function() {
 		}
 	};
 
-	this.setSocket = function(ws) {
+	/********************************************************************************/
+
+	self.setSocket = function(ws) {
 		if (ws !== __ws) {
-			keyboard.releaseAll();
+			self.releaseAll();
 			__ws = ws;
 		}
-		keyboard.updateLeds();
+		self.updateLeds();
 	};
 
-	this.updateLeds = function() {
-		var focused = (__ws && (document.activeElement === $("stream-window") || document.activeElement === $("keyboard-window")));
-		$("hid-keyboard-led").className = (focused ? "led-on" : "led-off");
+	self.updateLeds = function() {
+		if (__ws && (document.activeElement === $("stream-window") || document.activeElement === $("keyboard-window"))) {
+			$("hid-keyboard-led").className = "led-on";
+			$("hid-keyboard-led").title = "Keyboard captured";
+		} else {
+			$("hid-keyboard-led").className = "led-off";
+			$("hid-keyboard-led").title = "Keyboard free";
+		}
 	};
 
-	this.releaseAll = function() {
+	self.releaseAll = function() {
 		__keys.concat(__modifiers).forEach(function(el_key) {
 			if (__isActive(el_key)) {
-				keyboard.fireEvent(el_key.id, false);
+				self.fireEvent(el_key.id, false);
 			}
 		});
 	};
 
-	this.fireEvent = function(code, state) {
+	self.fireEvent = function(code, state) {
 		$("keyboard-window").dispatchEvent(new KeyboardEvent(
 			(state ? "keydown" : "keyup"),
 			{code: code}
@@ -77,7 +92,7 @@ var keyboard = new function() {
 					__keys.forEach(function(el_key) {
 						if (__isActive(el_key)) {
 							// __commonHandler(el_key, false, "pressed");
-							keyboard.fireEvent(el_key.id, false);
+							self.fireEvent(el_key.id, false);
 						}
 					});
 				}
@@ -142,4 +157,6 @@ var keyboard = new function() {
 			}));
 		}
 	};
-};
+
+	__init__();
+}

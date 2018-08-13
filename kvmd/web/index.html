@@ -46,21 +46,17 @@
 					System &#8628;
 				</a>
 				<div class="ctl-dropdown-content">
-					<button onclick="ui.showWindow('about-window')">&bull; Show about</button>
+					<button id="show-about-button">&bull; Show about</button>
 					<hr>
-					<button onclick="ui.showWindow('keyboard-window')">&bull; Show keyboard</button>
+					<button id="show-keyboard-button">&bull; Show keyboard</button>
 					<hr>
-					<button onclick="ui.showWindow('stream-window')">&bull; Show stream</button>
-					<button disabled id="stream-reset-button" onclick="stream.clickResetButton();">&bull; Reset stream</button>
+					<button id="show-stream-button">&bull; Show stream</button>
+					<button disabled id="stream-reset-button">&bull; Reset stream</button>
 					<hr>
 					<div data-dont-hide-menu id="stream-size">
 						Stream size: <span id="stream-size-counter">100%</span>
 						<div id="stream-size-slider-box">
-							<input
-								type="range" min="50" max="150" value="100" step="10"
-								oninput="stream.resize(this.value);"
-								onchange="stream.resize(this.value);"
-							/>
+							<input id="stream-size-slider" type="range" min="50" max="150" value="100" step="10" />
 						</div>
 					</div>
 				</div>
@@ -75,10 +71,10 @@
 					ATX &#8628;
 				</a>
 				<div class="ctl-dropdown-content">
-					<button disabled id="atx-power-button" onclick="atx.clickButton(this);">&bull; Click Power <sup><i>short</i></sup></button>
-					<button disabled id="atx-power-button-long" onclick="atx.clickButton(this);">&bull; Click Power <sup><i>long</i></sup></button>
+					<button disabled id="atx-power-button">&bull; Click Power <sup><i>short</i></sup></button>
+					<button disabled id="atx-power-button-long">&bull; Click Power <sup><i>long</i></sup></button>
 					<hr>
-					<button disabled id="atx-reset-button" onclick="atx.clickButton(this);">&bull; Click Reset</button>
+					<button disabled id="atx-reset-button">&bull; Click Reset</button>
 				</div>
 			</div>
 		</li>
@@ -150,11 +146,11 @@
 					</table>
 					<hr>
 
-					<input type="file" id="msd-select-new-image-file" onchange="msd.selectNewImageFile()" />
+					<input type="file" id="msd-select-new-image-file" />
 					<div class="buttons-row">
-						<button disabled id="msd-select-new-image-button" class="row50" onclick="document.getElementById('msd-select-new-image-file').click();">Upload new image</button>
-						<button disabled id="msd-upload-new-image-button" class="row25" onclick="msd.clickButton(this);">Start</button>
-						<button disabled id="msd-abort-uploading-button" class="row25" onclick="msd.clickButton(this);">Abort</button>
+						<button disabled id="msd-select-new-image-button" class="row50">Upload new image</button>
+						<button disabled id="msd-upload-new-image-button" class="row25">Start</button>
+						<button disabled id="msd-abort-uploading-button" class="row25">Abort</button>
 					</div>
 					<hr>
 
@@ -179,8 +175,8 @@
 					</div>
 
 					<div class="buttons-row">
-						<button disabled data-force-hide-menu id="msd-switch-to-kvm-button" class="row50" onclick="msd.clickButton(this);">&bull; Switch drive to KVM</button>
-						<button disabled data-force-hide-menu id="msd-switch-to-server-button" class="row50" onclick="msd.clickButton(this);">&bull; Switch drive to Server</button>
+						<button disabled data-force-hide-menu id="msd-switch-to-kvm-button" class="row50">&bull; Switch drive to KVM</button>
+						<button disabled data-force-hide-menu id="msd-switch-to-server-button" class="row50">&bull; Switch drive to Server</button>
 					</div>
 				</div>
 			</div>
@@ -195,25 +191,25 @@
 				<div class="ctl-dropdown-content">
 					<button disabled id="pak-button">&bull; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
 					<hr>
-					<button onclick="hid.emitShortcut('ControlLeft', 'AltLeft', 'Delete');">&bull; Ctrl+Alt+Del</button>
+					<button class="shortcut" data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
 					<hr>
-					<button onclick="hid.emitShortcut('ControlLeft', 'KeyW');">&bull; Ctrl+W</button>
-					<button onclick="hid.emitShortcut('ControlLeft', 'Escape');">&bull; Ctrl+Esc</button>
-					<button onclick="hid.emitShortcut('AltLeft', 'Tab');">&bull; Alt+Tab</button>
-					<button onclick="hid.emitShortcut('AltLeft', 'Escape');">&bull; Alt+Escape</button>
-					<button onclick="hid.emitShortcut('AltLeft', 'Space');">&bull; Alt+Space</button>
-					<button onclick="hid.emitShortcut('AltLeft', 'Enter');">&bull; Alt+Enter</button>
-					<button onclick="hid.emitShortcut('AltLeft', 'F4');">&bull; Alt+F4</button>
+					<button class="shortcut" data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
+					<button class="shortcut" data-shortcut="ControlLeft Escape">&bull; Ctrl+Esc</button>
+					<button class="shortcut" data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
+					<button class="shortcut" data-shortcut="AltLeft Escape">&bull; Alt+Escape</button>
+					<button class="shortcut" data-shortcut="AltLeft Space">&bull; Alt+Space</button>
+					<button class="shortcut" data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
+					<button class="shortcut" data-shortcut="AltLeft F4">&bull; Alt+F4</button>
 					<hr>
-					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen');">&bull; Alt+PrtSc</button>
-					<button onclick="hid.emitShortcut('PrintScreen');">&bull; PrtSc</button>
+					<button class="shortcut" data-shortcut="AltLeft PrintScreen">&bull; Alt+PrtSc</button>
+					<button class="shortcut" data-shortcut="PrintScreen">&bull; PrtSc</button>
 					<hr>
-					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyR');">&bull; Alt+SysRq+R</button>
-					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyE');">&bull; Alt+SysRq+E</button>
-					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyI');">&bull; Alt+SysRq+I</button>
-					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyS');">&bull; Alt+SysRq+S</button>
-					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyU');">&bull; Alt+SysRq+U</button>
-					<button onclick="hid.emitShortcut('AltLeft', 'PrintScreen', 'KeyB');">&bull; Alt+SysRq+B</button>
+					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyR">&bull; Alt+SysRq+R</button>
+					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyE">&bull; Alt+SysRq+E</button>
+					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyI">&bull; Alt+SysRq+I</button>
+					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyS">&bull; Alt+SysRq+S</button>
+					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyU">&bull; Alt+SysRq+U</button>
+					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyB">&bull; Alt+SysRq+B</button>
 				</div>
 			</div>
 		</li>
