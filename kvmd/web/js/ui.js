@@ -1,9 +1,11 @@
 function Ui(hid) {
+	var self = this;
+
+	/********************************************************************************/
+
 	var __top_z_index = 0;
 	var __windows = [];
 	var __ctl_items = [];
-
-	/********************************************************************************/
 
 	var __init__ = function() {
 		Array.prototype.forEach.call($$("ctl-item"), function(el_item) {
@@ -56,16 +58,16 @@ function Ui(hid) {
 		window.onmouseup = __globalMouseButtonHandler;
 		// window.oncontextmenu = __globalMouseButtonHandler;
 
-		$("show-about-button").onclick = () => __showWindow($("about-window"));
-		$("show-keyboard-button").onclick = () => __showWindow($("keyboard-window"));
-		$("show-stream-button").onclick = () => __showWindow($("stream-window"));
+		$("show-about-button").onclick = () => self.showWindow($("about-window"));
+		$("show-keyboard-button").onclick = () => self.showWindow($("keyboard-window"));
+		$("show-stream-button").onclick = () => self.showWindow($("stream-window"));
 
-		__showWindow($("stream-window"));
+		self.showWindow($("stream-window"));
 	};
 
 	/********************************************************************************/
 
-	var __showWindow = function(el_window) {
+	self.showWindow = function(el_window) {
 		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered")) {
 			var view = __getViewGeometry();
 			var rect = el_window.getBoundingClientRect();

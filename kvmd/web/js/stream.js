@@ -1,4 +1,4 @@
-function Stream() {
+function Stream(ui) {
 	// var self = this;
 
 	/********************************************************************************/
@@ -69,6 +69,7 @@ function Stream() {
 		var el_stream_image = $("stream-image");
 		el_stream_image.style.width = __normal_size.width * __size_factor + "px";
 		el_stream_image.style.height = __normal_size.height * __size_factor + "px";
+		ui.showWindow($("stream-window"));
 	};
 
 	var __refreshImage = function() {
