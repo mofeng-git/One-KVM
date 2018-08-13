@@ -12,7 +12,7 @@ img#logo {
 	-webkit-filter: invert(0.7);
 	filter: invert(0.7);
 	vertical-align: middle;
-	padding: 13px 15px;
+	padding-left: 16px;
 }
 
 ul#ctl {
@@ -24,9 +24,12 @@ ul#ctl {
 	position: fixed;
 	top: 0;
 	width: 100%;
+	height: 50px;
 	z-index: 2147483647;
 }
 ul#ctl li.ctl-logo {
+	line-height: 50px;
+	margin-top: -2px;
 	float: left;
 }
 ul#ctl li.ctl-right-actions {
@@ -38,14 +41,15 @@ ul#ctl img {
 	height: 20px;
 }
 ul#ctl li a.ctl-item {
+	line-height: 50px;
 	outline: none;
 	cursor: pointer;
 	border-left: var(--black-border);
 	display: inline-block;
 	color: var(--fg-color-normal);
-	padding: 15px 16px;
+	padding-left: 16px;
+	padding-right: 16px;
 	text-decoration: none;
-	height: 20px;
 }
 ul#ctl li a.ctl-item:hover:not(.active) {
 	background-color: var(--bg-color-hovered);
@@ -82,7 +86,7 @@ div.ctl-dropdown-content button {
 	height: 30px;
 	font-size: 16px;
 	text-align: left;
-	padding: 0 15px;
+	padding: 0 16px;
 	outline: none;
 	cursor: pointer;
 }
