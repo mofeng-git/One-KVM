@@ -4,7 +4,8 @@ TESTENV_VIDEO ?= /dev/video0
 TESTENV_LOOP ?= /dev/loop7
 TESTENV_CMD ?= /bin/bash -c " \
 		(socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
-		&& cp /configs/nginx/nginx.conf.example /etc/nginx/nginx.conf \
+		&& rm -rf /etc/nginx/* \
+		&& cp /configs/nginx/* /etc/nginx \
 		&& nginx -c /etc/nginx/nginx.conf \
 		&& ln -s $(TESTENV_VIDEO) /dev/kvmd-streamer \
 		&& (losetup -d /dev/kvmd-msd || true) \

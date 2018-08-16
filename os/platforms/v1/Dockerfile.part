@@ -22,7 +22,9 @@ RUN sed -i -e "s/console=ttyAMA0\,115200//g" /boot/cmdline.txt \
 	&& sed -i -e "s/kgdboc=ttyAMA0\,115200//g" /boot/cmdline.txt
 RUN systemctl mask serial-getty@ttyAMA0.service
 
-RUN sed -e "s/^#PROD//g" /usr/share/kvmd/configs/nginx/nginx.conf.example > /etc/nginx/nginx.conf
+RUN rm -rf /etc/nginx/* \
+	&& cp /usr/share/kvmd/configs/nginx/* /etc/nginx/ \
+	&& sed -i -e "s/^#PROD//g" /etc/nginx/nginx.conf
 RUN cp /usr/share/kvmd/configs/kvmd/v1.yaml /etc/kvmd.yaml
 
 ARG WEBUI_ADMIN_PASSWD
@@ -37,4 +39,6 @@ RUN mkdir /etc/nginx/ssl \
 	&& openssl req -new -x509 -nodes -newkey rsa:4096 -keyout server.key -out server.crt -days 3650 \
 		-subj "/C=RU/ST=Moscow/L=Moscow/O=Pi-KVM/OU=Pi-KVM/CN=localhost" \
 	&& chmod 400 server.key \
-	&& chmod 444 server.crt
+	&& chmod 444 server.crt \
+	&& chmod 750 /etc/nginx/ssl \
+	&& chown -R root:http /etc/nginx/ssl
