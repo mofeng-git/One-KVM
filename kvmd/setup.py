@@ -44,6 +44,7 @@ def main() -> None:
             "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
             "Development Status :: 3 - Alpha",
             "Programming Language :: Python :: 3.6",
+            "Programming Language :: Python :: 3.7",
             "Topic :: System :: Systems Administration",
             "Operating System :: POSIX :: Linux",
             "Intended Audience :: System Administrators",
