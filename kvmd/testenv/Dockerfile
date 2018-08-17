@@ -33,7 +33,7 @@ RUN pacman -Syy \
 		python-pip \
 		nginx-mainline \
 		nginx-mainline-mod-lua \
-		mjpg-streamer-pikvm \
+		mjpg-streamer \
 		socat \
 	&& pacman -Sc --noconfirm
 

@@ -2,7 +2,7 @@ RUN pkg-install \
 	nginx-mainline \
 	nginx-mainline-mod-lua \
 	apache-tools \
-	mjpg-streamer-pikvm \
+	mjpg-streamer \
 	python \
 	python-raspberry-gpio
 RUN systemctl enable nginx
