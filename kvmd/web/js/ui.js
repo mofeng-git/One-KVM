@@ -155,40 +155,65 @@ function Ui(hid) {
 	};
 
 	var __makeWindowMovable = function(el_window) {
-		var prev_x = 0;
-		var prev_y = 0;
+		var prev_pos = {x: 0, y: 0};
 
 		function startMoving(event) {
 			__closeAllMenues();
 			__raiseWindow(el_window);
 			event = (event || window.event);
 			event.preventDefault();
-			prev_x = event.clientX;
-			prev_y = event.clientY;
-			document.onmousemove = doMoving;
-			document.onmouseup = stopMoving;
+
+			if (!event.touches || event.touches.length === 1) {
+				prev_pos = getEventPosition(event);
+
+				document.onmousemove = doMoving;
+				document.onmouseup = stopMoving;
+
+				document.ontouchmove = doMoving;
+				document.ontouchend = stopMoving;
+				document.ontouchcancel = stopMoving;
+			}
 		}
 
 		function doMoving(event) {
 			el_window.removeAttribute("data-centered");
+
 			event = (event || window.event);
 			event.preventDefault();
-			var x = prev_x - event.clientX;
-			var y = prev_y - event.clientY;
-			prev_x = event.clientX;
-			prev_y = event.clientY;
+
+			var event_pos = getEventPosition(event);
+			var x = prev_pos.x - event_pos.x;
+			var y = prev_pos.y - event_pos.y;
+
 			el_window.style.top = (el_window.offsetTop - y) + "px";
 			el_window.style.left = (el_window.offsetLeft - x) + "px";
+
+			prev_pos = event_pos;
 		}
 
 		function stopMoving() {
 			document.onmousemove = null;
 			document.onmouseup = null;
+
+			document.ontouchmove = null;
+			document.ontouchend = null;
+			document.ontouchcancel = null;
+		}
+
+		function getEventPosition(event) {
+			if (event.touches) {
+				return {x: event.touches[0].clientX, y: event.touches[0].clientY};
+			} else {
+				return {x: event.clientX, y: event.clientY};
+			}
 		}
 
 		el_window.setAttribute("data-centered", "");
-		el_window.querySelector(".window-header .window-grab").onmousedown = startMoving;
 		el_window.onclick = () => __raiseWindow(el_window);
+
+		var el_grab = el_window.querySelector(".window-header .window-grab");
+		el_grab.onmousedown = startMoving;
+		el_grab.ontouchstart = startMoving;
 	};
 
 	var __raiseLastWindow = function() {
