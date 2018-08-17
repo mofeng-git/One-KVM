@@ -26,6 +26,7 @@
 	--normal-border: thin solid var(--border-color-normal);
 	--black-border: thin solid black;
 	--intensive-border: 2px solid var(--border-color-intensive);
+	--thin-intensive-border: thin solid var(--border-color-intensive);
 
 	--micro-shadow: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
 	--small-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);

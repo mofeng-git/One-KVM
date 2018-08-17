@@ -155,6 +155,9 @@ function Ui(hid) {
 	};
 
 	var __makeWindowMovable = function(el_window) {
+		var el_header = el_window.querySelector(".window-header");
+		var el_grab = el_window.querySelector(".window-header .window-grab");
+
 		var prev_pos = {x: 0, y: 0};
 
 		function startMoving(event) {
@@ -164,6 +167,8 @@ function Ui(hid) {
 			event.preventDefault();
 
 			if (!event.touches || event.touches.length === 1) {
+				el_header.classList.add("window-header-grabbed");
+
 				prev_pos = getEventPosition(event);
 
 				document.onmousemove = doMoving;
@@ -192,6 +197,8 @@ function Ui(hid) {
 		}
 
 		function stopMoving() {
+			el_header.classList.remove("window-header-grabbed");
+
 			document.onmousemove = null;
 			document.onmouseup = null;
 
@@ -211,7 +218,6 @@ function Ui(hid) {
 		el_window.setAttribute("data-centered", "");
 		el_window.onclick = () => __raiseWindow(el_window);
 
-		var el_grab = el_window.querySelector(".window-header .window-grab");
 		el_grab.onmousedown = startMoving;
 		el_grab.ontouchstart = startMoving;
 	};

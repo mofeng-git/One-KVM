@@ -23,12 +23,13 @@ div.window-header {
 	width: 100%;
 	padding: 0;
 	height: 20px;
+	font-size: 0.8em;
+	color: var(--fg-color-dark);
 	border-bottom: var(--normal-border);
 }
 
 div.window-grab {
 	overflow: hidden;
-	font-size: 0.8em;
 	top: 0;
 	left: 0;
 	position: absolute;
@@ -36,7 +37,12 @@ div.window-grab {
 	height: 20px;
 	cursor: move;
 	padding: 3px 0 2px 20px;
-	color: var(--fg-color-dark);
+}
+
+div.window-header-grabbed {
+	color: var(--fg-color-intensive);
+	background-color: var(--bg-color-intensive);
+	border-bottom: var(--thin-intensive-border);
 }
 
 button.window-button-close {
