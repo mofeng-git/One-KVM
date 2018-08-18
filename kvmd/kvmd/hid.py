@@ -4,6 +4,7 @@ import multiprocessing.queues
 import queue
 import struct
 import pkgutil
+import time
 
 from typing import Dict
 from typing import Set
@@ -139,10 +140,12 @@ class Hid(multiprocessing.Process):
                     else:
                         if isinstance(event, _KeyEvent):
                             self.__send_key_event(tty, event)
+                            time.sleep(0.05)
                         elif isinstance(event, _MouseMoveEvent):
                             self.__send_mouse_move_event(tty, event)
                         elif isinstance(event, _MouseButtonEvent):
                             self.__send_mouse_button_event(tty, event)
+                            time.sleep(0.05)
                         elif isinstance(event, _MouseWheelEvent):
                             self.__send_mouse_wheel_event(tty, event)
                     if self.__stop_event.is_set() and self.__queue.qsize() == 0:
