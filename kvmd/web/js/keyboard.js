@@ -32,6 +32,8 @@ function Keyboard() {
 					__clickHandler(el_key, false);
 				}
 			};
+			el_key.ontouchstart = (event) => __touchHandler(event, el_key, true);
+			el_key.ontouchend = (event) => __touchHandler(event, el_key, false);
 			__keys.push(el_key);
 		});
 
@@ -99,6 +101,12 @@ function Keyboard() {
 			}
 			__unholdModifiers();
 		}
+	};
+
+	var __touchHandler = function(event, el_key, state) {
+		event.stopPropagation();
+		event.preventDefault();
+		__clickHandler(el_key, state);
 	};
 
 	var __clickHandler = function(el_key, state) {
