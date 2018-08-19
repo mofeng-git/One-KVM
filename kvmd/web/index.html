@@ -18,6 +18,8 @@
 	<link rel="stylesheet" href="css/keyboard.css">
 	<link rel="stylesheet" href="css/about.css">
 
+	<link rel="stylesheet" href="css/mobile.css">
+
 	<script src="js/tools.js"></script>
 	<script src="js/stream.js"></script>
 	<script src="js/atx.js"></script>
@@ -216,18 +218,18 @@
 	</ul>
 
 	<div id="stream-window" class="window" style="z-index: 1" tabindex="0">
-		<div class="window-header"><div class="window-grab">Stream</div></div>
+		<div id="stream-window-header" class="window-header"><div class="window-grab">Stream</div></div>
 		<div id="stream-box" class="stream-box-inactive">
 			<img id="stream-image" class="stream-image-inactive" src="png/blank-stream.png" />
 		</div>
 	</div>
 
 	<div id="keyboard-window" class="window" tabindex="0">
-		<div class="window-header">
+		<div id="keyboard-window-header" class="window-header">
 			<div class="window-grab">Virtual Keyboard</div>
 			<button class="window-button-close">&times;</button>
 		</div>
-		<div id="keyboard">
+		<div id="keyboard" align="center">
 			<div class="keyboard-block">
 				<div class="keyboard-row">
 					<div id="Escape" class="key small"><p>Esc</p></div>

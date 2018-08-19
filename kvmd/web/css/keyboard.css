@@ -42,15 +42,15 @@ div#keyboard div.key:hover, div.modifier:hover {
 	color: var(--fg-color-intensive);
 	background-color: var(--bg-color-ctl);
 }
-div#keyboard div.pressed, div.pressed {
+div#keyboard div.pressed {
 	box-shadow: none;
-	color: var(--fg-color-selected);
-	background-color: var(--bg-color-dark);
+	color: var(--fg-color-selected) !important;
+	background-color: var(--bg-color-dark) !important;
 }
 div#keyboard div.holded {
 	box-shadow: none;
-	color: var(--fg-color-normal);
-	background-color: var(--bg-color-intensive);
+	color: var(--fg-color-normal) !important;
+	background-color: var(--bg-color-intensive) !important;
 }
 div#keyboard div.key:last-child, div.empty-key:last-child, div.modifier:last-child {
 	margin-right: 0;

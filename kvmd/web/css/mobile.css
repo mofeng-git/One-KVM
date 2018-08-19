@@ -1,0 +1,65 @@
+/*
+	http://stephen.io/mediaqueries/
+	https://gist.github.com/gokulkrishh/242e68d1ee94ad05f488
+*/
+
+@media only screen and (min-device-width : 768px) and (max-device-width : 1024px) {
+	div.window {
+		padding-top: 45px !important;
+	}
+	div.window-header {
+		height: 35px !important;
+	}
+	div.window-grab {
+		height: 35px !important;
+	}
+	button.window-button-close {
+		height: 40px !important;
+	}
+
+	div#keyboard div.key:hover, div.modifier:hover {
+		color: var(--fg-color-normal);
+		background-color: var(--bg-color-gray);
+	}
+}
+
+@media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+	div.ctl-dropdown-content button {
+		height: 45px !important;
+	}
+
+	div#stream-window {
+		padding-top: 9px !important;
+		border-top: 0 !important;
+		border-radius: 0 0 8px 8px !important;
+		top: 50px !important;
+		left: 50% !important;
+		-webkit-transform: translateX(-50%) !important;
+		transform: translateX(-50%) !important;
+	}
+	div#stream-window-header {
+		display: none !important;
+	}
+
+	div#keyboard {
+		zoom: 1.1 !important;
+	}
+	div#keyboard-window {
+		visibility: visible !important;
+		padding-top: 9px !important;
+		padding-bottom: 30px !important;
+		border-bottom: 0 !important;
+		border-left: 0 !important;
+		border-right: 0 !important;
+		border-radius: 0 !important;
+		top: unset !important;
+		bottom: 0 !important;
+		width: 100% !important;
+		left: 50% !important;
+		-webkit-transform: translateX(-50%) !important;
+		transform: translateX(-50%) !important;
+	}
+	div#keyboard-window-header {
+		display: none !important
+	}
+}

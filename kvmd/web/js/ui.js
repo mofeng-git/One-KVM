@@ -58,6 +58,9 @@ function Ui(hid) {
 		window.onmouseup = __globalMouseButtonHandler;
 		// window.oncontextmenu = __globalMouseButtonHandler;
 
+		window.addEventListener("resize", () => __organizeWindowsOnResize(false));
+		window.addEventListener("orientationchange", () => __organizeWindowsOnResize(true));
+
 		$("show-about-button").onclick = () => self.showWindow($("about-window"));
 		$("show-keyboard-button").onclick = () => self.showWindow($("keyboard-window"));
 		$("show-stream-button").onclick = () => self.showWindow($("stream-window"));
@@ -151,6 +154,18 @@ function Ui(hid) {
 			__closeAllMenues();
 			__raiseLastWindow();
 		}
+	};
+
+	var __organizeWindowsOnResize = function(orientation) {
+		var view = __getViewGeometry();
+		Array.prototype.forEach.call($$("window"), function(el_window) {
+			if (el_window.style.visibility === "visible" && (orientation || el_window.hasAttribute("data-centered"))) {
+				var rect = el_window.getBoundingClientRect();
+				el_window.style.top = Math.max($("ctl").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
+				el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
+				el_window.setAttribute("data-centered", "");
+			}
+		});
 	};
 
 	var __makeWindowMovable = function(el_window) {
