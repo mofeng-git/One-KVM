@@ -21,6 +21,9 @@ function Mouse() {
 		$("stream-box").onmousemove = __moveHandler;
 		$("stream-box").onwheel = __wheelHandler;
 
+		$("stream-box").ontouchstart = (event) => __touchHandler(event, true);
+		$("stream-box").ontouchend = (event) => __touchHandler(event, false);
+
 		setInterval(__sendMove, 100);
 	};
 
@@ -53,6 +56,28 @@ function Mouse() {
 	var __leaveStream = function() {
 		__stream_hovered = false;
 		self.updateLeds();
+	};
+
+	var __touchHandler = function(event, state) {
+		if (state) {
+			var rect = event.touches[0].target.getBoundingClientRect();
+			__current_pos = {
+				x: Math.round(event.touches[0].clientX - rect.left),
+				y: Math.round(event.touches[0].clientY - rect.top),
+			};
+			__sendMove();
+		}
+		var button = "left"; // TODO
+		tools.debug("Mouse button", (state ? "pressed:" : "released:"), button);
+		if (__ws) {
+			__ws.send(JSON.stringify({
+				event_type: "mouse_button",
+				button: button,
+				state: state,
+			}));
+		}
+		event.stopPropagation();
+		event.preventDefault();
 	};
 
 	var __buttonHandler = function(event, state) {
