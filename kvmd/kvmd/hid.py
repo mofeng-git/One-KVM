@@ -129,25 +129,35 @@ class Hid(multiprocessing.Process):
         except Exception:
             get_logger().exception("Can't execute emergency clear HID events")
 
-    def run(self) -> None:
+    def run(self) -> None:  # pylint: disable=too-many-branches
         try:
             with serial.Serial(self.__device_path, self.__speed) as tty:
+                hid_ready = False
                 while True:
-                    try:
-                        event = self.__queue.get(timeout=0.1)
-                    except queue.Empty:
-                        pass
+                    if hid_ready:
+                        try:
+                            event = self.__queue.get(timeout=0.05)
+                        except queue.Empty:
+                            pass
+                        else:
+                            if isinstance(event, _KeyEvent):
+                                self.__send_key_event(tty, event)
+                            elif isinstance(event, _MouseMoveEvent):
+                                self.__send_mouse_move_event(tty, event)
+                            elif isinstance(event, _MouseButtonEvent):
+                                self.__send_mouse_button_event(tty, event)
+                            elif isinstance(event, _MouseWheelEvent):
+                                self.__send_mouse_wheel_event(tty, event)
+                            else:
+                                raise RuntimeError("Unknown HID event")
+                            hid_ready = False
                     else:
-                        if isinstance(event, _KeyEvent):
-                            self.__send_key_event(tty, event)
+                        if tty.in_waiting:
+                            while tty.in_waiting:
+                                tty.read(tty.in_waiting)
+                            hid_ready = True
+                        else:
                             time.sleep(0.05)
-                        elif isinstance(event, _MouseMoveEvent):
-                            self.__send_mouse_move_event(tty, event)
-                        elif isinstance(event, _MouseButtonEvent):
-                            self.__send_mouse_button_event(tty, event)
-                            time.sleep(0.05)
-                        elif isinstance(event, _MouseWheelEvent):
-                            self.__send_mouse_wheel_event(tty, event)
                     if self.__stop_event.is_set() and self.__queue.qsize() == 0:
                         break
         except Exception:

@@ -72,7 +72,6 @@ INLINE void cmdMouseWheelEvent() { // 2 bytes
 	CMD_SERIAL.read(); // unused
 	CMD_SERIAL.read(); // unused
 	AbsoluteMouse.move(0, 0, delta_y);
-	CMD_SERIAL.println(delta_y);
 }
 
 
@@ -81,6 +80,7 @@ void setup() {
 	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
 	BootKeyboard.begin();
 	AbsoluteMouse.begin();
+	CMD_SERIAL.write(0);
 }
 
 void loop() {
@@ -93,5 +93,6 @@ void loop() {
 			case 4: cmdMouseWheelEvent(); break;
 			default: break;
 		}
+		CMD_SERIAL.write(0);
 	}
 }
