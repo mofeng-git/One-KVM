@@ -144,8 +144,7 @@ function Ui(hid) {
 			for (var el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
 				if (el_item.hasAttribute("data-force-hide-menu")) {
 					break;
-				}
-				else if (el_item.hasAttribute("data-dont-hide-menu")) {
+				} else if (el_item.hasAttribute("data-dont-hide-menu")) {
 					return;
 				}
 			}
