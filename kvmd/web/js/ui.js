@@ -190,7 +190,6 @@ function Ui(hid) {
 
 				document.ontouchmove = doMoving;
 				document.ontouchend = stopMoving;
-				document.ontouchcancel = stopMoving;
 			}
 		}
 
@@ -218,7 +217,6 @@ function Ui(hid) {
 
 			document.ontouchmove = null;
 			document.ontouchend = null;
-			document.ontouchcancel = null;
 		}
 
 		function getEventPosition(event) {
