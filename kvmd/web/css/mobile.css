@@ -17,6 +17,10 @@
 		height: 40px !important;
 	}
 
+	ul#ctl li a.ctl-item:hover:not(.active) {
+		background-color: var(--bg-color-ctl) !important;
+	}
+
 	div#keyboard div.key:hover, div.modifier:hover {
 		color: var(--fg-color-normal);
 		background-color: var(--bg-color-gray);
