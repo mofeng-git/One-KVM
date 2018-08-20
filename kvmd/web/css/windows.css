@@ -1,4 +1,5 @@
 div.window {
+	visibility: hidden;
 	outline: none;
 	overflow: hidden;
 	position: fixed;
@@ -6,7 +7,6 @@ div.window {
 	border-radius: 8px;
 	box-sizing: border-box;
 	box-shadow: var(--big-shadow);
-	visibility: hidden;
 	white-space: nowrap;
 	background-color: var(--bg-color-light);
 	padding: 30px 9px 9px 9px;

@@ -20,6 +20,7 @@
 	--border-color-grey: var(--bg-color-ctl);
 	--border-color-dark: var(--bg-color-dark);
 	--border-color-intensive: #5b90bb;
+	--border-color-important: #ff6467;
 
 	--dark-border: thin solid var(--border-color-dark);
 	--grey-border: thin solid var(--border-color-grey);
@@ -27,6 +28,7 @@
 	--black-border: thin solid black;
 	--intensive-border: 2px solid var(--border-color-intensive);
 	--thin-intensive-border: thin solid var(--border-color-intensive);
+	--important-border: 2px solid var(--border-color-important);
 
 	--micro-shadow: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
 	--small-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);

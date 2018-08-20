@@ -9,6 +9,20 @@ body {
 	user-select: none;
 	touch-action: manipulation;
 }
+
+a {
+	text-decoration: underline dotted;
+	color: var(--fg-color-normal);
+}
+a:hover {
+	text-decoration: underline;
+}
+
+hr {
+	border: none;
+	border-top: var(--normal-border);
+}
+
 img#logo {
 	-webkit-filter: invert(0.7);
 	filter: invert(0.7);
@@ -26,7 +40,7 @@ ul#ctl {
 	top: 0;
 	width: 100%;
 	height: 50px;
-	z-index: 2147483647;
+	z-index: 2147483646;
 }
 ul#ctl li.ctl-logo {
 	line-height: 50px;
@@ -70,7 +84,7 @@ div.ctl-dropdown-content {
 	background-color: var(--bg-color-ctl);
 	min-width: 180px;
 	box-shadow: var(--big-shadow);
-	z-index: 2147483646;
+	z-index: 2147483645;
 }
 div.ctl-dropdown-content div.buttons-row {
 	margin: 0;

@@ -15,10 +15,3 @@ div#about p {
 	font-family: monospace;
 	padding: 0 10px 0 10px;
 }
-div#about p a {
-	text-decoration: underline dotted;
-	color: var(--fg-color-normal);
-}
-div#about p a:hover {
-	text-decoration: underline;
-}

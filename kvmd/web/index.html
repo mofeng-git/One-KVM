@@ -12,12 +12,12 @@
 	<link rel="stylesheet" href="css/vars.css">
 	<link rel="stylesheet" href="css/main.css">
 	<link rel="stylesheet" href="css/windows.css">
+	<link rel="stylesheet" href="css/modals.css">
 	<link rel="stylesheet" href="css/leds.css">
 	<link rel="stylesheet" href="css/stream.css">
 	<link rel="stylesheet" href="css/msd.css">
 	<link rel="stylesheet" href="css/keyboard.css">
 	<link rel="stylesheet" href="css/about.css">
-
 	<link rel="stylesheet" href="css/mobile.css">
 
 	<script src="js/tools.js"></script>
@@ -35,6 +35,21 @@
 </head>
 
 <body>
+	<div id="bad-browser-modal" class="modal">
+		<div class="modal-content">
+			You are using an incompatible or legacy browser.<br>
+			Please use one of the following browsers:<br>
+			<hr>
+			<ul>
+				<li><a target="_blank" href="https://www.google.com/chrome">Google Chrome</a> <sup><i>recommended</i></sup></li>
+				<li><a target="_blank" href="https://www.chromium.org/Home">Chromium</a> <sup><i>recommended</i></sup></li>
+				<li><a target="_blank" href="https://www.mozilla.org/firefox">Mozilla Firefox</a></li>
+				<li><a target="_blank" href="https://www.apple.com/safari">Apple Safari</a></li>
+				<li><a target="_blank" href="https://www.opera.com">Opera</a></li>
+			</ul>
+		</div>
+	</div>
+
 	<ul id="ctl">
 		<li class="ctl-logo"><img id="logo" src="svg/logo.svg" alt="&pi;-kvm" /></li>
 

@@ -1,0 +1,25 @@
+div.modal {
+	visibility: hidden;
+	position: fixed;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	background-color: rgb(0, 0, 0);
+	background-color: rgba(0, 0, 0, 0.5);
+	z-index: 2147483647;
+}
+
+div.modal-content {
+	display: table;
+	outline: none;
+	margin: 15% auto;
+	overflow: hidden;
+	border: var(--important-border);
+	border-radius: 8px;
+	box-sizing: border-box;
+	box-shadow: var(--big-shadow);
+	white-space: nowrap;
+	background-color: var(--bg-color-light);
+	padding: 9px;
+}
