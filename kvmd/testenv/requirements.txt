@@ -4,5 +4,6 @@ aiofiles
 pyudev
 pyyaml
 pyserial
+setproctitle
 bumpversion
 tox

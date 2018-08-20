@@ -4,3 +4,4 @@ aiofiles
 pyudev
 pyyaml
 pyserial
+setproctitle

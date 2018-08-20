@@ -13,6 +13,7 @@ from typing import Callable
 from typing import Optional
 
 import aiohttp.web
+import setproctitle
 
 from .aioregion import RegionIsBusyError
 
@@ -130,6 +131,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     def run(self, host: str, port: int) -> None:
         self.__hid.start()
+
+        setproctitle.setproctitle("[main] " + setproctitle.getproctitle())
 
         app = aiohttp.web.Application(loop=self.__loop)
 

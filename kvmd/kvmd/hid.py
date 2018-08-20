@@ -12,6 +12,7 @@ from typing import NamedTuple
 
 import yaml
 import serial
+import setproctitle
 
 from .logging import get_logger
 
@@ -130,6 +131,7 @@ class Hid(multiprocessing.Process):
             get_logger().exception("Can't execute emergency clear HID events")
 
     def run(self) -> None:  # pylint: disable=too-many-branches
+        setproctitle.setproctitle("[hid] " + setproctitle.getproctitle())
         try:
             with serial.Serial(self.__device_path, self.__speed) as tty:
                 hid_ready = False
