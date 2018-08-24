@@ -70,7 +70,7 @@ function Ui(hid) {
 
 	/********************************************************************************/
 
-	self.showWindow = function(el_window) {
+	self.showWindow = function(el_window, raise=true) {
 		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered")) {
 			var view = __getViewGeometry();
 			var rect = el_window.getBoundingClientRect();
@@ -79,7 +79,9 @@ function Ui(hid) {
 			el_window.setAttribute("data-centered", "");
 		}
 		el_window.style.visibility = "visible";
-		__raiseWindow(el_window);
+		if (raise) {
+			__raiseWindow(el_window);
+		}
 	};
 
 	var __isWindowOnPage = function(el_window) {
