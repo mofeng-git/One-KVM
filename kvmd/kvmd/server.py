@@ -308,9 +308,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         resolution = request.query.get("resolution")
         if resolution:
             if resolution in self.__streamer.get_available_resolutions():
-                if resolution != self.__streamer_resolution:
-                    self.__streamer_resolution = resolution
-                    self.__reset_streamer = True
+                self.__streamer_resolution = resolution
             else:
                 raise BadRequest("Unknown resolution %r" % (resolution))
         return _json()
@@ -367,7 +365,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                     await self.__streamer.stop()
                     await self.__broadcast_event("streamer_state", **self.__streamer.get_state())
 
-            if self.__reset_streamer:
+            if self.__reset_streamer or self.__streamer_resolution != self.__streamer.get_current_resolution():
                 if self.__streamer.is_running():
                     await self.__streamer.stop()
                     await self.__streamer.start(self.__streamer_resolution, no_init_restart=True)
