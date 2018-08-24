@@ -128,6 +128,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__system_tasks: List[asyncio.Task] = []
 
         self.__reset_streamer = False
+        self.__streamer_resolution = streamer.get_current_resolution()
 
     def run(self, host: str, port: int) -> None:
         self.__hid.start()
@@ -148,6 +149,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         app.router.add_post("/msd/write", self.__msd_write_handler)
 
         app.router.add_get("/streamer", self.__streamer_state_handler)
+        app.router.add_post("/streamer/set_params", self.__streamer_set_params_handler)
         app.router.add_post("/streamer/reset", self.__streamer_reset_handler)
 
         app.on_shutdown.append(self.__on_shutdown)
@@ -301,6 +303,18 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __streamer_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(self.__streamer.get_state())
 
+    @_wrap_exceptions_for_web("Can't set stream params")
+    async def __streamer_set_params_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        resolution = request.query.get("resolution")
+        if resolution:
+            if resolution in self.__streamer.get_available_resolutions():
+                if resolution != self.__streamer_resolution:
+                    self.__streamer_resolution = resolution
+                    self.__reset_streamer = True
+            else:
+                raise BadRequest("Unknown resolution %r" % (resolution))
+        return _json()
+
     async def __streamer_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         self.__reset_streamer = True
         return _json()
@@ -344,17 +358,20 @@ class Server:  # pylint: disable=too-many-instance-attributes
             cur = len(self.__sockets)
             if prev == 0 and cur > 0:
                 if not self.__streamer.is_running():
-                    await self.__streamer.start()
+                    await self.__streamer.start(self.__streamer_resolution)
+                    await self.__broadcast_event("streamer_state", **self.__streamer.get_state())
             elif prev > 0 and cur == 0:
                 shutdown_at = time.time() + self.__streamer_shutdown_delay
             elif prev == 0 and cur == 0 and time.time() > shutdown_at:
                 if self.__streamer.is_running():
                     await self.__streamer.stop()
+                    await self.__broadcast_event("streamer_state", **self.__streamer.get_state())
 
             if self.__reset_streamer:
                 if self.__streamer.is_running():
                     await self.__streamer.stop()
-                    await self.__streamer.start(no_init_restart=True)
+                    await self.__streamer.start(self.__streamer_resolution, no_init_restart=True)
+                    await self.__broadcast_event("streamer_state", **self.__streamer.get_state())
                 self.__reset_streamer = False
 
             prev = cur

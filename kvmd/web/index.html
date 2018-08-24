@@ -70,8 +70,15 @@
 					<button id="show-stream-button">&bull; Show stream</button>
 					<button disabled id="stream-reset-button">&bull; Reset stream</button>
 					<hr>
-					<div data-dont-hide-menu id="stream-size">
-						Stream size: <span id="stream-size-counter">100%</span>
+					<div data-dont-hide-menu class="stream-params">
+						Resolution:
+						<select disabled data-dont-hide-menu id="stream-resolution-select">
+							<option>640x480</option>
+						</select>
+					</div>
+					<hr>
+					<div data-dont-hide-menu class="stream-params">
+						Stream size: <span id="stream-size-value">100%</span>
 						<div id="stream-size-slider-box">
 							<input id="stream-size-slider" type="range" min="50" max="150" value="100" step="10" />
 						</div>

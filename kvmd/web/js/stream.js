@@ -4,6 +4,10 @@ function Stream(ui) {
 	/********************************************************************************/
 
 	var __prev_state = false;
+
+	var __resolution = "640x480";
+	var __resolutions = ["640x480"];
+
 	var __normal_size = {width: 640, height: 480};
 	var __size_factor = 1;
 
@@ -11,6 +15,7 @@ function Stream(ui) {
 		$("stream-led").title = "Stream inactive";
 
 		$("stream-reset-button").onclick = __clickResetButton;
+		$("stream-resolution-select").onchange = __changeResolution;
 		$("stream-size-slider").oninput = __resize;
 		$("stream-size-slider").onchange = __resize;
 
@@ -18,6 +23,8 @@ function Stream(ui) {
 	};
 
 	/********************************************************************************/
+
+	// XXX: In current implementation we don't need this event because Stream() has own state poller
 
 	var __startPoller = function() {
 		var http = tools.makeRequest("GET", "/streamer/?action=snapshot", function() {
@@ -33,6 +40,7 @@ function Stream(ui) {
 					$("stream-led").className = "led-off";
 					$("stream-led").title = "Stream inactive";
 					$("stream-reset-button").disabled = true;
+					$("stream-resolution-select").disabled = true;
 				} else if (!__prev_state) {
 					__refreshImage();
 					__prev_state = true;
@@ -44,7 +52,7 @@ function Stream(ui) {
 				}
 			}
 		});
-		setTimeout(__startPoller, 2000);
+		setTimeout(__startPoller, 1500);
 	};
 
 	var __clickResetButton = function() {
@@ -58,9 +66,23 @@ function Stream(ui) {
 		});
 	};
 
+	var __changeResolution = function() {
+		var resolution = $("stream-resolution-select").value;
+		if (__resolution != resolution) {
+			$("stream-resolution-select").disabled = true;
+			var http = tools.makeRequest("POST", "/kvmd/streamer/set_params?resolution=" + resolution, function() {
+				if (http.readyState === 4) {
+					if (http.status !== 200) {
+						alert("Can't change stream:", http.responseText);
+					}
+				}
+			});
+		}
+	};
+
 	var __resize = function() {
 		var percent = $("stream-size-slider").value;
-		$("stream-size-counter").innerHTML = percent + "%";
+		$("stream-size-value").innerHTML = percent + "%";
 		__size_factor = percent / 100;
 		__applySizeFactor();
 	};
@@ -75,7 +97,25 @@ function Stream(ui) {
 	var __refreshImage = function() {
 		var http = tools.makeRequest("GET", "/kvmd/streamer", function() {
 			if (http.readyState === 4 && http.status === 200) {
-				__normal_size = JSON.parse(http.responseText).result.size;
+				var result = JSON.parse(http.responseText).result;
+
+				if (__resolutions != result.resolutions) {
+					tools.info("Resolutions list changed:", result.resolutions);
+					$("stream-resolution-select").innerHTML = "";
+					result.resolutions.forEach(function(resolution) {
+						$("stream-resolution-select").innerHTML += "<option value=\"" + resolution + "\">" + resolution + "</option>";
+					});
+					$("stream-resolution-select").disabled = (result.resolutions.length == 1);
+					__resolutions = result.resolutions;
+				}
+
+				if (__resolution != result.resolution) {
+					tools.info("Resolution changed:", result.resolution);
+					document.querySelector("#stream-resolution-select [value=\"" + result.resolution + "\"]").selected = true;
+					__resolution = result.resolution;
+				}
+
+				__normal_size = result.size;
 				__applySizeFactor();
 				$("stream-image").src = "/streamer/?action=stream&time=" + new Date().getTime();
 			}

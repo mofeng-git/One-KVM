@@ -36,14 +36,15 @@ kvmd:
         init_restart_after: 1.0
         shutdown_delay: 10.0
 
-        size:
-            width: 800
-            height: 600
+        resolutions:
+            - 640x480
+            - 800x600
+            - 1024x768
 
         cmd:
             - "/usr/bin/mjpg_streamer"
             - "-i"
-            - "input_uvc.so -d /dev/kvmd-streamer -e 2 -y -n -r {width}x{height}"
+            - "input_uvc.so -d /dev/kvmd-streamer -e 2 -y -n -r {resolution}"
             - "-o"
             - "output_http.so -l 0.0.0.0 -p 8082"
 

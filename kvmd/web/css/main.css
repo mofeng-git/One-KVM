@@ -91,7 +91,7 @@ div.ctl-dropdown-content div.buttons-row {
 	padding: 0;
 	font-size: 0;
 }
-div.ctl-dropdown-content button {
+div.ctl-dropdown-content button, select {
 	box-shadow: none;
 	border: none;
 	color: var(--fg-color-normal);
@@ -105,26 +105,48 @@ div.ctl-dropdown-content button {
 	outline: none;
 	cursor: pointer;
 }
-div.ctl-dropdown-content button:enabled:hover {
+div.ctl-dropdown-content button:enabled:hover, select:enabled:hover {
 	color: var(--fg-color-intensive);
 	background-color: var(--bg-color-dark) !important;
 }
-div.ctl-dropdown-content button:disabled {
+div.ctl-dropdown-content button:disabled, select:disabled {
 	color: var(--fg-color-inactive);
 	cursor: default;
 }
-div.ctl-dropdown-content button:active {
+div.ctl-dropdown-content button:active, select:active {
 	color: var(--fg-color-selected) !important;
 }
-div.ctl-dropdown-content button.row50 {
+div.ctl-dropdown-content select {
+	-webkit-appearance: button;
+	-moz-appearance: button;
+	appearance: button;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
+	background-image: url("../svg/select-arrow-normal.svg");
+	background-position: center right;
+	background-repeat: no-repeat;
+}
+div.ctl-dropdown-content select:enabled:hover {
+	background-image: url("../svg/select-arrow-intensive.svg") !important;
+}
+div.ctl-dropdown-content select:disabled {
+	background-image: url("../svg/select-arrow-inactive.svg") !important;
+}
+div.ctl-dropdown-content select:active {
+	color: var(--fg-color-intensive) !important;
+	background-color: var(--bg-color-dark) !important;
+	background-image: url("../svg/select-arrow-intensive.svg") !important;
+}
+div.ctl-dropdown-content .row50 {
 	display: inline-block;
 	width: 50%;
 }
-div.ctl-dropdown-content button.row25 {
+div.ctl-dropdown-content .row25 {
 	display: inline-block;
 	width: 25%;
 }
-div.ctl-dropdown-content button.row50:not(:first-child), button.row25:not(:first-child) {
+div.ctl-dropdown-content .row50:not(:first-child), .row25:not(:first-child) {
 	border-left: var(--dark-border);
 }
 div.ctl-dropdown-content hr {

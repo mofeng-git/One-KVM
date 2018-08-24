@@ -1,6 +1,8 @@
 import asyncio
 import asyncio.subprocess
 
+from collections import OrderedDict as odict
+
 from typing import List
 from typing import Dict
 from typing import Optional
@@ -20,8 +22,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         init_delay: float,
         init_restart_after: float,
 
-        width: int,
-        height: int,
+        resolutions: List[str],
         cmd: List[str],
 
         loop: asyncio.AbstractEventLoop,
@@ -33,17 +34,25 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__init_delay = init_delay
         self.__init_restart_after = init_restart_after
 
-        self.__width = width
-        self.__height = height
+        self.__resolutions = odict([
+            (display, (real or display))
+            for (display, real) in [
+                (tuple(map(str.lower, map(str.strip, resolution.split("-", maxsplit=1)))) + ("",))[:2]
+                for resolution in resolutions
+            ]
+        ])
+        self.__resolution = list(self.__resolutions)[0]
         self.__cmd = cmd
 
         self.__loop = loop
 
         self.__proc_task: Optional[asyncio.Task] = None
 
-    async def start(self, no_init_restart: bool=False) -> None:
+    async def start(self, resolution: str, no_init_restart: bool=False) -> None:
         logger = get_logger()
         logger.info("Starting streamer ...")
+        assert resolution in self.__resolutions, (resolution, self.__resolutions)
+        self.__resolution = resolution
         await self.__inner_start()
         if self.__init_restart_after > 0.0 and not no_init_restart:
             logger.info("Stopping streamer to restart ...")
@@ -58,13 +67,22 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     def is_running(self) -> bool:
         return bool(self.__proc_task)
 
+    def get_current_resolution(self) -> str:
+        return self.__resolution
+
+    def get_available_resolutions(self) -> List[str]:
+        return list(self.__resolutions)
+
     def get_state(self) -> Dict:
+        (width, height) = tuple(map(int, self.__resolution.split("x")))
         return {
             "is_running": self.is_running(),
             "size": {
-                "width": self.__width,
-                "height": self.__height,
+                "width": width,
+                "height": height,
             },
+            "resolution": self.__resolution,
+            "resolutions": list(self.__resolutions),
         }
 
     async def cleanup(self) -> None:
@@ -100,7 +118,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         while True:  # pylint: disable=too-many-nested-blocks
             proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
             try:
-                cmd = [part.format(width=self.__width, height=self.__height) for part in self.__cmd]
+                cmd = [part.format(resolution=self.__resolutions[self.__resolution]) for part in self.__cmd]
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
