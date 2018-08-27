@@ -1,4 +1,4 @@
-function Ui(hid) {
+function Ui() {
 	var self = this;
 
 	/********************************************************************************/
@@ -25,35 +25,6 @@ function Ui(hid) {
 				};
 			}
 		});
-
-		var __hidden_attr = null;
-		var __visibility_change_attr = null;
-
-		if (typeof document.hidden !== "undefined") {
-			__hidden_attr = "hidden";
-			__visibility_change_attr = "visibilitychange";
-		} else if (typeof document.webkitHidden !== "undefined") {
-			__hidden_attr = "webkitHidden";
-			__visibility_change_attr = "webkitvisibilitychange";
-		} else if (typeof document.mozHidden !== "undefined") {
-			__hidden_attr = "mozHidden";
-			__visibility_change_attr = "mozvisibilitychange";
-		}
-
-		if (__visibility_change_attr) {
-			document.addEventListener(
-				__visibility_change_attr,
-				function() {
-					if (document[__hidden_attr]) {
-						hid.releaseAll();
-					}
-				},
-				false
-			);
-		}
-
-		window.onpagehide = hid.releaseAll;
-		window.onblur = hid.releaseAll;
 
 		window.onmouseup = __globalMouseButtonHandler;
 		// window.oncontextmenu = __globalMouseButtonHandler;
@@ -144,7 +115,6 @@ function Ui(hid) {
 	};
 
 	var __globalMouseButtonHandler = function(event) {
-		hid.updateLeds();
 		if (!event.target.matches(".ctl-item")) {
 			for (var el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
 				if (el_item.hasAttribute("data-force-hide-menu")) {
@@ -251,7 +221,6 @@ function Ui(hid) {
 
 	var __raiseWindow = function(el_window) {
 		el_window.focus();
-		hid.updateLeds();
 		if (parseInt(el_window.style.zIndex) !== __top_z_index) {
 			var z_index = __top_z_index + 1;
 			el_window.style.zIndex = z_index;

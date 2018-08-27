@@ -7,9 +7,8 @@ function main() {
 	) {
 		$("bad-browser-modal").style.visibility = "visible";
 	} else {
-		var hid = new Hid();
-		var ui = new Ui(hid);
-		new Session(new Atx(), hid, new Msd());
+		var ui = new Ui();
+		new Session(new Atx(), new Hid(), new Msd());
 		new Stream(ui);
 	}
 }

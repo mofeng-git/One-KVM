@@ -12,6 +12,35 @@ function Hid() {
 	var __mouse = new Mouse();
 
 	var __init__ = function() {
+		var __hidden_attr = null;
+		var __visibility_change_attr = null;
+
+		if (typeof document.hidden !== "undefined") {
+			__hidden_attr = "hidden";
+			__visibility_change_attr = "visibilitychange";
+		} else if (typeof document.webkitHidden !== "undefined") {
+			__hidden_attr = "webkitHidden";
+			__visibility_change_attr = "webkitvisibilitychange";
+		} else if (typeof document.mozHidden !== "undefined") {
+			__hidden_attr = "mozHidden";
+			__visibility_change_attr = "mozvisibilitychange";
+		}
+
+		if (__visibility_change_attr) {
+			document.addEventListener(
+				__visibility_change_attr,
+				function() {
+					if (document[__hidden_attr]) {
+						__releaseAll();
+					}
+				},
+				false
+			);
+		}
+
+		window.onpagehide = __releaseAll;
+		window.onblur = __releaseAll;
+
 		if (window.navigator.clipboard && window.navigator.clipboard.readText) {
 			__chars_to_codes = __buildCharsToCodes();
 			$("pak-button").onclick = __pasteAsKeys;
@@ -33,12 +62,7 @@ function Hid() {
 		$("pak-button").disabled = !(window.navigator.clipboard && window.navigator.clipboard.readText && ws);
 	};
 
-	self.updateLeds = function() {
-		__keyboard.updateLeds();
-		__mouse.updateLeds();
-	};
-
-	self.releaseAll = function() {
+	var __releaseAll = function() {
 		__keyboard.releaseAll();
 	};
 

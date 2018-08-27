@@ -38,7 +38,17 @@ function Mouse() {
 		}
 	};
 
-	self.updateLeds = function() {
+	var __hoverStream = function() {
+		__stream_hovered = true;
+		__updateLeds();
+	};
+
+	var __leaveStream = function() {
+		__stream_hovered = false;
+		__updateLeds();
+	};
+
+	var __updateLeds = function() {
 		if (__ws && __stream_hovered) {
 			$("hid-mouse-led").className = "led-on";
 			$("hid-mouse-led").title = "Mouse tracked";
@@ -46,16 +56,6 @@ function Mouse() {
 			$("hid-mouse-led").className = "led-off";
 			$("hid-mouse-led").title = "Mouse free";
 		}
-	};
-
-	var __hoverStream = function() {
-		__stream_hovered = true;
-		self.updateLeds();
-	};
-
-	var __leaveStream = function() {
-		__stream_hovered = false;
-		self.updateLeds();
 	};
 
 	var __touchHandler = function(event, state) {

@@ -20,9 +20,13 @@ function Keyboard() {
 
 		$("keyboard-window").onkeydown = (event) => __keyboardHandler(event, true);
 		$("keyboard-window").onkeyup = (event) => __keyboardHandler(event, false);
+		$("keyboard-window").onfocus = __updateLeds;
+		$("keyboard-window").onblur = __updateLeds;
 
 		$("stream-window").onkeydown = (event) => __keyboardHandler(event, true);
 		$("stream-window").onkeyup = (event) => __keyboardHandler(event, false);
+		$("stream-window").onfocus = __updateLeds;
+		$("stream-window").onblur = __updateLeds;
 
 		Array.prototype.forEach.call($$("key"), function(el_key) {
 			el_key.onmousedown = () => __clickHandler(el_key, true);
@@ -54,17 +58,7 @@ function Keyboard() {
 			self.releaseAll();
 			__ws = ws;
 		}
-		self.updateLeds();
-	};
-
-	self.updateLeds = function() {
-		if (__ws && (document.activeElement === $("stream-window") || document.activeElement === $("keyboard-window"))) {
-			$("hid-keyboard-led").className = "led-on";
-			$("hid-keyboard-led").title = "Keyboard captured";
-		} else {
-			$("hid-keyboard-led").className = "led-off";
-			$("hid-keyboard-led").title = "Keyboard free";
-		}
+		__updateLeds();
 	};
 
 	self.releaseAll = function() {
@@ -80,6 +74,16 @@ function Keyboard() {
 			(state ? "keydown" : "keyup"),
 			{code: code}
 		));
+	};
+
+	var __updateLeds = function() {
+		if (__ws && (document.activeElement === $("stream-window") || document.activeElement === $("keyboard-window"))) {
+			$("hid-keyboard-led").className = "led-on";
+			$("hid-keyboard-led").title = "Keyboard captured";
+		} else {
+			$("hid-keyboard-led").className = "led-off";
+			$("hid-keyboard-led").title = "Keyboard free";
+		}
 	};
 
 	var __keyboardHandler = function(event, state) {
