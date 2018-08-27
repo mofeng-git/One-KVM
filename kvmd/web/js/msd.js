@@ -65,7 +65,7 @@ function Msd() {
 		var http = tools.makeRequest("POST", "/kvmd/msd/connect?to=" + to, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
-					modal.error("Switch error:<br>", http.responseText);
+					ui.error("Switch error:<br>", http.responseText);
 				}
 			}
 			__applyState();
@@ -78,7 +78,7 @@ function Msd() {
 		var el_input = $("msd-select-new-image-file");
 		var image_file = (el_input.files.length ? el_input.files[0] : null);
 		if (image_file && image_file.size > __state.info.size) {
-			modal.error("New image is too big for your Mass Storage Device.<br>Maximum:", __formatSize(__state.info.size));
+			ui.error("New image is too big for your Mass Storage Device.<br>Maximum:", __formatSize(__state.info.size));
 			el_input.value = "";
 			image_file = null;
 		}
@@ -143,7 +143,7 @@ function Msd() {
 	var __uploadStateChange = function() {
 		if (__upload_http.readyState === 4) {
 			if (__upload_http.status !== 200) {
-				modal.error("Can't upload image to the Mass Storage Device:<br>", __upload_http.responseText);
+				ui.error("Can't upload image to the Mass Storage Device:<br>", __upload_http.responseText);
 			}
 			$("msd-select-new-image-file").value = "";
 			__image_file = null;

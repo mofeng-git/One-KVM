@@ -148,11 +148,11 @@ function Hid() {
 				var confirm_msg = (
 					"You are going to automatically type " + codes_count
 					+ " characters from the system clipboard."
-					+ "It will take " + (__codes_delay * codes_count * 2 / 1000) + " seconds.<br>"
+					+ " It will take " + (__codes_delay * codes_count * 2 / 1000) + " seconds.<br>"
 					+ "<br>Are you sure you want to continue?<br>"
 				);
 
-				modal.confirm(confirm_msg).then(function(ok) {
+				ui.confirm(confirm_msg).then(function(ok) {
 					if (ok) {
 						$("pak-button").disabled = true;
 						$("pak-led").className = "led-pak-typing";

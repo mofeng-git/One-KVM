@@ -36,7 +36,7 @@
 		background-color: var(--bg-color-normal) !important;
 	}
 
-	div.modal div.modal-window div.modal-buttons button {
+	div.modal-buttons button {
 		height: 50px !important;
 	}
 

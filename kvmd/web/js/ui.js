@@ -41,6 +41,73 @@ function Ui() {
 
 	/********************************************************************************/
 
+	self.error = (...args) => __modalDialog("Error", args.join(" "), true, false);
+	self.confirm = (...args) => __modalDialog("Question", args.join(" "), true, true);
+
+	var __modalDialog = function(header, text, ok, cancel) {
+		var el_modal = document.createElement("div");
+		el_modal.className = "modal";
+		el_modal.style.visibility = "visible";
+
+		var el_window = document.createElement("div");
+		el_window.className = "modal-window";
+		el_window.setAttribute("tabindex", "-1");
+		el_modal.appendChild(el_window);
+
+		var el_header = document.createElement("div");
+		el_header.className = "modal-header";
+		el_header.innerHTML = header;
+		el_window.appendChild(el_header);
+
+		var el_content = document.createElement("div");
+		el_content.className = "modal-content";
+		el_content.innerHTML = text;
+		el_window.appendChild(el_content);
+
+		var promise = null;
+		if (ok || cancel) {
+			promise = new Promise(function(resolve) {
+				var el_buttons = document.createElement("div");
+				el_buttons.className = "modal-buttons";
+				el_window.appendChild(el_buttons);
+
+				var close = function(retval) {
+					el_modal.outerHTML = "";
+					var index = __windows.indexOf(el_modal);
+					if (index !== -1) {
+						__windows.splice(index, 1);
+					}
+					tools.info(__windows);
+					__raiseLastWindow();
+					resolve(retval);
+				};
+
+				if (cancel) {
+					var el_cancel_button = document.createElement("button");
+					el_cancel_button.innerHTML = "Cancel";
+					el_cancel_button.onclick = () => close(false);
+					el_buttons.appendChild(el_cancel_button);
+				}
+				if (ok) {
+					var el_ok_button = document.createElement("button");
+					el_ok_button.innerHTML = "OK";
+					el_ok_button.onclick = () => close(true);
+					el_buttons.appendChild(el_ok_button);
+				}
+				if (ok && cancel) {
+					el_ok_button.className = "row50";
+					el_cancel_button.className = "row50";
+				}
+			});
+		}
+
+		__windows.push(el_modal);
+		document.body.appendChild(el_modal);
+		__raiseWindow(el_modal);
+
+		return promise;
+	};
+
 	self.showWindow = function(el_window, raise=true) {
 		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered")) {
 			var view = __getViewGeometry();
@@ -210,7 +277,7 @@ function Ui() {
 		var last_el_window = null;
 		var max_z_index = 0;
 		__windows.forEach(function(el_window) {
-			var z_index = parseInt(window.getComputedStyle(el_window, null).zIndex);
+			var z_index = parseInt(window.getComputedStyle(el_window, null).zIndex) || 0;
 			if (max_z_index < z_index && window.getComputedStyle(el_window, null).visibility !== "hidden") {
 				last_el_window = el_window;
 				max_z_index = z_index;
@@ -220,8 +287,13 @@ function Ui() {
 	};
 
 	var __raiseWindow = function(el_window) {
-		el_window.focus();
-		if (parseInt(el_window.style.zIndex) !== __top_z_index) {
+		if (el_window.className === "modal") {
+			el_window.querySelector(".modal-window").focus();
+		} else {
+			el_window.focus();
+		}
+		tools.debug("Focused window:", el_window);
+		if (el_window.className !== "modal" && parseInt(el_window.style.zIndex) !== __top_z_index) {
 			var z_index = __top_z_index + 1;
 			el_window.style.zIndex = z_index;
 			__top_z_index = z_index;

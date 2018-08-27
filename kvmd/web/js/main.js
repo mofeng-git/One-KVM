@@ -1,3 +1,5 @@
+var ui;
+
 function main() {
 	if (
 		!window.navigator
@@ -7,8 +9,8 @@ function main() {
 	) {
 		$("bad-browser-modal").style.visibility = "visible";
 	} else {
-		var ui = new Ui();
+		ui = new Ui();
 		new Session(new Atx(), new Hid(), new Msd());
-		new Stream(ui);
+		new Stream();
 	}
 }
