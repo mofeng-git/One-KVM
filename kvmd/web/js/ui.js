@@ -71,16 +71,15 @@ function Ui() {
 				el_buttons.className = "modal-buttons";
 				el_window.appendChild(el_buttons);
 
-				var close = function(retval) {
+				function close (retval) {
 					el_modal.outerHTML = "";
 					var index = __windows.indexOf(el_modal);
 					if (index !== -1) {
 						__windows.splice(index, 1);
 					}
-					tools.info(__windows);
 					__raiseLastWindow();
 					resolve(retval);
-				};
+				}
 
 				if (cancel) {
 					var el_cancel_button = document.createElement("button");
@@ -98,6 +97,15 @@ function Ui() {
 					el_ok_button.className = "row50";
 					el_cancel_button.className = "row50";
 				}
+
+				el_window.onkeyup = function(event) {
+					event.preventDefault();
+					if (ok && event.code === "Enter") {
+						el_ok_button.click();
+					} else if (cancel && event.code === "Escape") {
+						el_cancel_button.click();
+					}
+				};
 			});
 		}
 
