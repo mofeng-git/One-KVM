@@ -10,16 +10,39 @@ div.modal {
 	z-index: 2147483647;
 }
 
-div.modal-content {
+div.modal div.modal-window {
 	display: table;
 	outline: none;
 	margin: 15% auto;
 	overflow: hidden;
-	border: var(--important-border);
+	border: var(--intensive-border);
 	border-radius: 8px;
 	box-sizing: border-box;
 	box-shadow: var(--big-shadow);
-	white-space: nowrap;
 	background-color: var(--bg-color-light);
-	padding: 9px;
+	padding: 0;
+}
+
+div.modal div.modal-window div.modal-header {
+	text-align: center;
+	font-weight: bold;
+	padding: 3px 9px 3px 9px;
+	border-bottom: var(--normal-border);
+}
+
+div.modal div.modal-window div.modal-content {
+	max-width: 500px;
+	max-height: 500px;
+	padding: 16px 9px 16px 9px;
+}
+
+div.modal div.modal-window div.modal-buttons {
+	border-top: var(--dark-border);
+	margin: 0;
+	padding: 0;
+	font-size: 0;
+}
+
+div.modal div.modal-window div.modal-buttons button {
+	height: 40px;
 }

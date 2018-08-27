@@ -70,6 +70,18 @@ select:active {
 	background-image: url("../svg/select-arrow-intensive.svg") !important;
 }
 
+.row50 {
+	display: inline-block;
+	width: 50%;
+}
+.row25 {
+	display: inline-block;
+	width: 25%;
+}
+.row50:not(:first-child), .row25:not(:first-child) {
+	border-left: var(--dark-border);
+}
+
 img#logo {
 	-webkit-filter: invert(0.7);
 	filter: invert(0.7);
@@ -141,17 +153,6 @@ div.ctl-dropdown-content div.buttons-row {
 	margin: 0;
 	padding: 0;
 	font-size: 0;
-}
-div.ctl-dropdown-content .row50 {
-	display: inline-block;
-	width: 50%;
-}
-div.ctl-dropdown-content .row25 {
-	display: inline-block;
-	width: 25%;
-}
-div.ctl-dropdown-content .row50:not(:first-child), .row25:not(:first-child) {
-	border-left: var(--dark-border);
 }
 div.ctl-dropdown-content hr {
 	margin: 0;

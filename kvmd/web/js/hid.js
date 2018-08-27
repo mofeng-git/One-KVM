@@ -123,32 +123,35 @@ function Hid() {
 
 				var confirm_msg = (
 					"You are going to automatically type " + codes_count
-					+ " characters from the system clipboard.\nAre you sure you want to continue?\n"
-					+ "It will take " + (__codes_delay * codes_count * 2 / 1000) + " seconds."
+					+ " characters from the system clipboard."
+					+ "It will take " + (__codes_delay * codes_count * 2 / 1000) + " seconds.<br>"
+					+ "<br>Are you sure you want to continue?<br>"
 				);
 
-				if (codes_count <= 256 || confirm(confirm_msg)) {
-					$("pak-button").disabled = true;
-					$("pak-led").className = "led-pak-typing";
-					$("pak-led").title = "Autotyping...";
+				modal.confirm(confirm_msg).then(function(ok) {
+					if (ok) {
+						$("pak-button").disabled = true;
+						$("pak-led").className = "led-pak-typing";
+						$("pak-led").title = "Autotyping...";
 
-					tools.debug("Paste-as-keys:", clipboard_text);
+						tools.debug("Paste-as-keys:", clipboard_text);
 
-					var index = 0;
-					var iterate = function() {
-						__emitShortcut(clipboard_codes[index]).then(function() {
-							++index;
-							if (index < clipboard_codes.length && __ws) {
-								iterate();
-							} else {
-								$("pak-button").disabled = false;
-								$("pak-led").className = "led-off";
-								$("pak-led").title = "";
-							}
-						});
-					};
-					iterate();
-				}
+						var index = 0;
+						var iterate = function() {
+							__emitShortcut(clipboard_codes[index]).then(function() {
+								++index;
+								if (index < clipboard_codes.length && __ws) {
+									iterate();
+								} else {
+									$("pak-button").disabled = false;
+									$("pak-led").className = "led-off";
+									$("pak-led").title = "";
+								}
+							});
+						};
+						iterate();
+					}
+				});
 			}
 		});
 	};

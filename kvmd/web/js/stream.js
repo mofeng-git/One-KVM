@@ -60,7 +60,7 @@ function Stream(ui) {
 		var http = tools.makeRequest("POST", "/kvmd/streamer/reset", function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
-					alert("Can't reset stream:", http.responseText);
+					modal.error("Can't reset stream:<br>", http.responseText);
 				}
 			}
 		});
@@ -73,7 +73,7 @@ function Stream(ui) {
 			var http = tools.makeRequest("POST", "/kvmd/streamer/set_params?resolution=" + resolution, function() {
 				if (http.readyState === 4) {
 					if (http.status !== 200) {
-						alert("Can't change stream:", http.responseText);
+						modal.error("Can't configure stream:<br>", http.responseText);
 					}
 				}
 			});

@@ -38,17 +38,19 @@ function Atx() {
 	};
 
 	var __clickButton = function(button, timeout, confirm_msg) {
-		if (confirm(confirm_msg)) {
-			var http = tools.makeRequest("POST", "/kvmd/atx/click?button=" + button, function() {
-				if (http.readyState === 4) {
-					if (http.status === 409) {
-						alert("Performing another ATX operation for other client, please try again later");
-					} else if (http.status !== 200) {
-						alert("Click error:", http.responseText);
+		modal.confirm(confirm_msg).then(function(ok) {
+			if (ok) {
+				var http = tools.makeRequest("POST", "/kvmd/atx/click?button=" + button, function() {
+					if (http.readyState === 4) {
+						if (http.status === 409) {
+							modal.error("Performing another ATX operation for other client.<br>Please try again later");
+						} else if (http.status !== 200) {
+							modal.error("Click error:<br>", http.responseText);
+						}
 					}
-				}
-			}, timeout);
-		}
+				}, timeout);
+			}
+		});
 	};
 
 	var __setButtonsBusy = function(busy) {

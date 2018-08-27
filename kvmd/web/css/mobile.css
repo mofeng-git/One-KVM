@@ -36,6 +36,10 @@
 		background-color: var(--bg-color-normal) !important;
 	}
 
+	div.modal div.modal-window div.modal-buttons button {
+		height: 50px !important;
+	}
+
 	div#stream-window {
 		padding-top: 9px !important;
 		border-top: 0 !important;

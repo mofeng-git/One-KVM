@@ -8,6 +8,7 @@ globals:
     Stream: true
     Ui: true
     tools: true
+    modal: true
     "$": true
     "$$": true
 
