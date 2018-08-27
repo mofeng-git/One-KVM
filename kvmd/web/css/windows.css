@@ -46,7 +46,6 @@ div.window-header-grabbed {
 }
 
 button.window-button-close {
-	outline: none;
 	position: absolute;
 	top: -2px;
 	right: -6px;
@@ -54,19 +53,5 @@ button.window-button-close {
 	height: 24px;
 	padding-left: 0;
 	color: var(--fg-color-inactive);
-	background-color: var(--bg-color-normal);
 	display: inline-block;
-	border: none;
-	cursor: pointer;
-}
-button.window-button-close:hover {
-	color: var(--fg-color-intensive);
-	background-color: var(--bg-color-dark) !important;
-}
-button.window-button-close:disabled {
-	color: var(--fg-color-inactive);
-	cursor: default;
-}
-button.window-button-close:active {
-	color: var(--fg-color-selected) !important;
 }

@@ -28,10 +28,10 @@
 }
 
 @media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
-	div.ctl-dropdown-content button, select {
+	button, select {
 		height: 45px !important;
 	}
-	div.ctl-dropdown-content button:enabled:hover, select:enabled:hover {
+	button:enabled:hover, select:enabled:hover {
 		color: var(--fg-color-normal) !important;
 		background-color: var(--bg-color-normal) !important;
 	}
