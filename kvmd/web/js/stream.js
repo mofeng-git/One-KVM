@@ -27,7 +27,7 @@ function Stream() {
 	// XXX: In current implementation we don't need this event because Stream() has own state poller
 
 	var __startPoller = function() {
-		var http = tools.makeRequest("GET", "/streamer/?action=snapshot", function() {
+		var http = tools.makeRequest("GET", "/streamer/snapshot", function() {
 			if (http.readyState === 2 || http.readyState === 4) {
 				var status = http.status;
 				http.onreadystatechange = null;
@@ -117,7 +117,7 @@ function Stream() {
 
 				__normal_size = result.size;
 				__applySizeFactor();
-				$("stream-image").src = "/streamer/?action=stream&time=" + new Date().getTime();
+				$("stream-image").src = "/streamer/stream/" + new Date().getTime();
 			}
 		});
 	};
