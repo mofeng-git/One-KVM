@@ -20,7 +20,7 @@ INLINE void cmdResetHid() { // 0 bytes
 	CMD_SERIAL.read(); // unused
 	CMD_SERIAL.read(); // unused
 	BootKeyboard.releaseAll();
-	AbsoluteMouse.releaseAll();
+	SingleAbsoluteMouse.releaseAll();
 }
 
 INLINE void cmdKeyEvent() { // 2 bytes
@@ -42,7 +42,7 @@ INLINE void cmdMouseMoveEvent() { // 4 bytes
 	x |= (int)CMD_SERIAL.read();
 	int y = (int)CMD_SERIAL.read() << 8;
 	y |= (int)CMD_SERIAL.read();
-	AbsoluteMouse.moveTo(x, y);
+	SingleAbsoluteMouse.moveTo(x, y);
 }
 
 INLINE void cmdMouseButtonEvent() { // 1 byte
@@ -52,16 +52,16 @@ INLINE void cmdMouseButtonEvent() { // 1 byte
 	CMD_SERIAL.read(); // unused
 	if (state & CMD_MOUSE_LEFT) {
 		if (state & CMD_MOUSE_LEFT_STATE) {
-			AbsoluteMouse.press(MOUSE_LEFT);
+			SingleAbsoluteMouse.press(MOUSE_LEFT);
 		} else {
-			AbsoluteMouse.release(MOUSE_LEFT);
+			SingleAbsoluteMouse.release(MOUSE_LEFT);
 		}
 	}
 	if (state & CMD_MOUSE_RIGHT) {
 		if (state & CMD_MOUSE_RIGHT_STATE) {
-			AbsoluteMouse.press(MOUSE_RIGHT);
+			SingleAbsoluteMouse.press(MOUSE_RIGHT);
 		} else {
-			AbsoluteMouse.release(MOUSE_RIGHT);
+			SingleAbsoluteMouse.release(MOUSE_RIGHT);
 		}
 	}
 }
@@ -71,7 +71,7 @@ INLINE void cmdMouseWheelEvent() { // 2 bytes
 	signed char delta_y = CMD_SERIAL.read();
 	CMD_SERIAL.read(); // unused
 	CMD_SERIAL.read(); // unused
-	AbsoluteMouse.move(0, 0, delta_y);
+	SingleAbsoluteMouse.move(0, 0, delta_y);
 }
 
 
@@ -79,7 +79,7 @@ INLINE void cmdMouseWheelEvent() { // 2 bytes
 void setup() {
 	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
 	BootKeyboard.begin();
-	AbsoluteMouse.begin();
+	SingleAbsoluteMouse.begin();
 	CMD_SERIAL.write(0);
 }
 
