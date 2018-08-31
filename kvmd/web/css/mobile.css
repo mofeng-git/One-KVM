@@ -3,7 +3,7 @@
 	https://gist.github.com/gokulkrishh/242e68d1ee94ad05f488
 */
 
-@media only screen and (min-device-width : 768px) and (max-device-width : 1024px) {
+@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
 	div.window {
 		padding-top: 45px !important;
 	}
@@ -25,15 +25,15 @@
 		color: var(--fg-color-normal);
 		background-color: var(--bg-color-gray);
 	}
+
+	div#stream-mouse-buttons {
+		display: block !important;
+	}
 }
 
 @media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
 	button, select {
 		height: 45px !important;
-	}
-	button:enabled:hover, select:enabled:hover {
-		color: var(--fg-color-normal) !important;
-		background-color: var(--bg-color-normal) !important;
 	}
 
 	div.modal-buttons button {

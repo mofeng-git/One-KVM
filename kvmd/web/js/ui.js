@@ -8,6 +8,12 @@ function Ui() {
 	var __ctl_items = [];
 
 	var __init__ = function() {
+		Array.prototype.forEach.call(document.querySelectorAll("button"), function(el_button) {
+			// XXX: Workaround for iOS Safari:
+			// https://stackoverflow.com/questions/3885018/active-pseudo-class-doesnt-work-in-mobile-safari
+			el_button.ontouchstart = function() {};
+		});
+
 		Array.prototype.forEach.call($$("ctl-item"), function(el_item) {
 			el_item.onclick = () => __toggleMenu(el_item);
 			__ctl_items.push(el_item);
@@ -85,12 +91,14 @@ function Ui() {
 					var el_cancel_button = document.createElement("button");
 					el_cancel_button.innerHTML = "Cancel";
 					el_cancel_button.onclick = () => close(false);
+					el_cancel_button.ontouchstart = function() {};
 					el_buttons.appendChild(el_cancel_button);
 				}
 				if (ok) {
 					var el_ok_button = document.createElement("button");
 					el_ok_button.innerHTML = "OK";
 					el_ok_button.onclick = () => close(true);
+					el_cancel_button.ontouchstart = function() {};
 					el_buttons.appendChild(el_ok_button);
 				}
 				if (ok && cancel) {

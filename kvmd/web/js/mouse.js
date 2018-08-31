@@ -21,8 +21,14 @@ function Mouse() {
 		$("stream-box").onmousemove = __moveHandler;
 		$("stream-box").onwheel = __wheelHandler;
 
-		$("stream-box").ontouchstart = (event) => __touchHandler(event, true);
-		$("stream-box").ontouchend = (event) => __touchHandler(event, false);
+		$("stream-box").ontouchstart = (event) => __touchMoveHandler(event);
+		Array.prototype.forEach.call(document.querySelectorAll("[data-mouse-button]"), function(el_button) {
+			var button = el_button.getAttribute("data-mouse-button");
+			el_button.onmousedown = () => __sendButton(button, true);
+			el_button.onmouseup = () => __sendButton(button, false);
+			el_button.ontouchstart = () => __sendButton(button, true);
+			el_button.ontouchend = () => __sendButton(button, false);
+		});
 
 		setInterval(__sendMove, 100);
 	};
@@ -58,46 +64,25 @@ function Mouse() {
 		}
 	};
 
-	var __touchHandler = function(event, state) {
-		if (state) {
+	var __buttonHandler = function(event, state) {
+		// https://www.w3schools.com/jsref/event_button.asp
+		event.preventDefault();
+		switch (event.button) {
+			case 0: __sendButton("left", state); break;
+			case 2: __sendButton("right", state); break;
+		}
+	};
+
+	var __touchMoveHandler = function(event) {
+		event.stopPropagation();
+		event.preventDefault();
+		if (event.touches[0].target && event.touches[0].target.getBoundingClientRect) {
 			var rect = event.touches[0].target.getBoundingClientRect();
 			__current_pos = {
 				x: Math.round(event.touches[0].clientX - rect.left),
 				y: Math.round(event.touches[0].clientY - rect.top),
 			};
 			__sendMove();
-		}
-		var button = "left"; // TODO
-		tools.debug("Mouse button", (state ? "pressed:" : "released:"), button);
-		if (__ws) {
-			__ws.send(JSON.stringify({
-				event_type: "mouse_button",
-				button: button,
-				state: state,
-			}));
-		}
-		event.stopPropagation();
-		event.preventDefault();
-	};
-
-	var __buttonHandler = function(event, state) {
-		// https://www.w3schools.com/jsref/event_button.asp
-		var button = null;
-		switch (event.button) {
-			case 0: button = "left"; break;
-			case 2: button = "right"; break;
-		}
-		if (button) {
-			event.preventDefault();
-			tools.debug("Mouse button", (state ? "pressed:" : "released:"), button);
-			__sendMove();
-			if (__ws) {
-				__ws.send(JSON.stringify({
-					event_type: "mouse_button",
-					button: button,
-					state: state,
-				}));
-			}
 		}
 	};
 
@@ -107,6 +92,19 @@ function Mouse() {
 			x: Math.round(event.clientX - rect.left),
 			y: Math.round(event.clientY - rect.top),
 		};
+	};
+
+
+	var __sendButton = function(button, state) {
+		tools.debug("Mouse button", (state ? "pressed:" : "released:"), button);
+		__sendMove();
+		if (__ws) {
+			__ws.send(JSON.stringify({
+				event_type: "mouse_button",
+				button: button,
+				state: state,
+			}));
+		}
 	};
 
 	var __sendMove = function() {

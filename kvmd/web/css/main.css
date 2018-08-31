@@ -14,8 +14,10 @@ a {
 	text-decoration: underline dotted;
 	color: var(--fg-color-normal);
 }
-a:hover {
-	text-decoration: underline;
+@media (hover: hover) {
+	a:hover {
+		text-decoration: underline;
+	}
 }
 
 hr {
@@ -35,16 +37,24 @@ button, select {
 	outline: none;
 	cursor: pointer;
 }
-button:enabled:hover, select:enabled:hover {
-	color: var(--fg-color-intensive);
-	background-color: var(--bg-color-dark) !important;
+@media (hover: hover) {
+	button:enabled:hover, select:enabled:hover {
+		color: var(--fg-color-intensive);
+		background-color: var(--bg-color-dark) !important;
+	}
+	button:active, select:active {
+		color: var(--fg-color-selected) !important;
+	}
+}
+@media (hover: none) {
+	button:active, select:active {
+		color: var(--fg-color-intensive);
+		background-color: var(--bg-color-dark);
+	}
 }
 button:disabled, select:disabled {
 	color: var(--fg-color-inactive);
 	cursor: default;
-}
-button:active, select:active {
-	color: var(--fg-color-selected) !important;
 }
 
 select {
