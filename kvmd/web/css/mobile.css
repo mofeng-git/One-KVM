@@ -25,6 +25,12 @@
 		color: var(--fg-color-normal);
 		background-color: var(--bg-color-gray);
 	}
+	div#keyboard-desktop {
+		display: none !important;
+	}
+	div#keyboard-mobile {
+		display: block !important;
+	}
 
 	div#stream-mouse-buttons {
 		display: block !important;

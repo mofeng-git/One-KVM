@@ -48,7 +48,7 @@ function Hid() {
 			$("pak-button").title = $("pak-led").title = "Your browser does not support the Clipboard API.\nUse Google Chrome or Chromium.";
 		}
 
-		Array.prototype.forEach.call($$("shortcut"), function(el_shortcut) {
+		Array.prototype.forEach.call(document.querySelectorAll("[data-shortcut]"), function(el_shortcut) {
 			el_shortcut.onclick = () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" "));
 		});
 	};

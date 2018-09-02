@@ -217,25 +217,25 @@
 				<div class="ctl-dropdown-content">
 					<button disabled id="pak-button">&bull; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
 					<hr>
-					<button class="shortcut" data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
+					<button data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
 					<hr>
-					<button class="shortcut" data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
-					<button class="shortcut" data-shortcut="ControlLeft Escape">&bull; Ctrl+Esc</button>
-					<button class="shortcut" data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
-					<button class="shortcut" data-shortcut="AltLeft Escape">&bull; Alt+Escape</button>
-					<button class="shortcut" data-shortcut="AltLeft Space">&bull; Alt+Space</button>
-					<button class="shortcut" data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
-					<button class="shortcut" data-shortcut="AltLeft F4">&bull; Alt+F4</button>
+					<button data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
+					<button data-shortcut="ControlLeft Escape">&bull; Ctrl+Esc</button>
+					<button data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
+					<button data-shortcut="AltLeft Escape">&bull; Alt+Escape</button>
+					<button data-shortcut="AltLeft Space">&bull; Alt+Space</button>
+					<button data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
+					<button data-shortcut="AltLeft F4">&bull; Alt+F4</button>
 					<hr>
-					<button class="shortcut" data-shortcut="AltLeft PrintScreen">&bull; Alt+PrtSc</button>
-					<button class="shortcut" data-shortcut="PrintScreen">&bull; PrtSc</button>
+					<button data-shortcut="AltLeft PrintScreen">&bull; Alt+PrtSc</button>
+					<button data-shortcut="PrintScreen">&bull; PrtSc</button>
 					<hr>
-					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyR">&bull; Alt+SysRq+R</button>
-					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyE">&bull; Alt+SysRq+E</button>
-					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyI">&bull; Alt+SysRq+I</button>
-					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyS">&bull; Alt+SysRq+S</button>
-					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyU">&bull; Alt+SysRq+U</button>
-					<button class="shortcut" data-shortcut="AltLeft PrintScreen KeyB">&bull; Alt+SysRq+B</button>
+					<button data-shortcut="AltLeft PrintScreen KeyR">&bull; Alt+SysRq+R</button>
+					<button data-shortcut="AltLeft PrintScreen KeyE">&bull; Alt+SysRq+E</button>
+					<button data-shortcut="AltLeft PrintScreen KeyI">&bull; Alt+SysRq+I</button>
+					<button data-shortcut="AltLeft PrintScreen KeyS">&bull; Alt+SysRq+S</button>
+					<button data-shortcut="AltLeft PrintScreen KeyU">&bull; Alt+SysRq+U</button>
+					<button data-shortcut="AltLeft PrintScreen KeyB">&bull; Alt+SysRq+B</button>
 				</div>
 			</div>
 		</li>
@@ -257,123 +257,231 @@
 			<div class="window-grab">Virtual Keyboard</div>
 			<button class="window-button-close">&times;</button>
 		</div>
-		<div id="keyboard" align="center">
+		<div id="keyboard-desktop" class="keyboard" align="center">
 			<div class="keyboard-block">
 				<div class="keyboard-row">
-					<div id="Escape" class="key small"><p>Esc</p></div>
+					<div data-key="Escape" class="key small"><p>Esc</p></div>
 					<div class="empty-key" style="width:24px"></div>
-					<div id="F1" class="key small"><p>F1</p></div>
-					<div id="F2" class="key small"><p>F2</p></div>
-					<div id="F3" class="key small"><p>F3</p></div>
-					<div id="F4" class="key small"><p>F4</p></div>
+					<div data-key="F1" class="key small"><p>F1</p></div>
+					<div data-key="F2" class="key small"><p>F2</p></div>
+					<div data-key="F3" class="key small"><p>F3</p></div>
+					<div data-key="F4" class="key small"><p>F4</p></div>
 					<div class="empty-key" style="width:10px"></div>
-					<div id="F5" class="key small"><p>F5</p></div>
-					<div id="F6" class="key small"><p>F6</p></div>
-					<div id="F7" class="key small"><p>F7</p></div>
-					<div id="F8" class="key small"><p>F8</p></div>
+					<div data-key="F5" class="key small"><p>F5</p></div>
+					<div data-key="F6" class="key small"><p>F6</p></div>
+					<div data-key="F7" class="key small"><p>F7</p></div>
+					<div data-key="F8" class="key small"><p>F8</p></div>
 					<div class="empty-key" style="width:10px"></div>
-					<div id="F9" class="key small"><p>F9</p></div>
-					<div id="F10" class="key small"><p>F10</p></div>
-					<div id="F11" class="key small"><p>F11</p></div>
-					<div id="F12" class="key small"><p>F12</p></div>
+					<div data-key="F9" class="key small"><p>F9</p></div>
+					<div data-key="F10" class="key small"><p>F10</p></div>
+					<div data-key="F11" class="key small"><p>F11</p></div>
+					<div data-key="F12" class="key small"><p>F12</p></div>
+				</div>
+				<hr>
+				<div class="keyboard-row">
+					<div data-key="Backquote" class="key"><p>~<br>`</p></div>
+					<div data-key="Digit1" class="key"><p>!<br>1</p></div>
+					<div data-key="Digit2" class="key"><p>@<br>2</p></div>
+					<div data-key="Digit3" class="key"><p>#<br>3</p></div>
+					<div data-key="Digit4" class="key"><p>$<br>4</p></div>
+					<div data-key="Digit5" class="key"><p>%<br>5</p></div>
+					<div data-key="Digit6" class="key"><p>^<br>6</p></div>
+					<div data-key="Digit7" class="key"><p>&amp;<br>7</p></div>
+					<div data-key="Digit8" class="key"><p>*<br>8</p></div>
+					<div data-key="Digit9" class="key"><p>(<br>9</p></div>
+					<div data-key="Digit0" class="key"><p>)<br>0</p></div>
+					<div data-key="Minus" class="key"><p>_<br>-</p></div>
+					<div data-key="Equal" class="key"><p>+<br>=</p></div>
+					<div data-key="Backspace" class="key wide-2 right"><p>&#8612;</p></div>
 				</div>
 				<div class="keyboard-row">
-					<div id="Backquote" class="key"><p>~<br>`</p></div>
-					<div id="Digit1" class="key"><p>!<br>1</p></div>
-					<div id="Digit2" class="key"><p>@<br>2</p></div>
-					<div id="Digit3" class="key"><p>#<br>3</p></div>
-					<div id="Digit4" class="key"><p>$<br>4</p></div>
-					<div id="Digit5" class="key"><p>%<br>5</p></div>
-					<div id="Digit6" class="key"><p>^<br>6</p></div>
-					<div id="Digit7" class="key"><p>&amp;<br>7</p></div>
-					<div id="Digit8" class="key"><p>*<br>8</p></div>
-					<div id="Digit9" class="key"><p>(<br>9</p></div>
-					<div id="Digit0" class="key"><p>)<br>0</p></div>
-					<div id="Minus" class="key"><p>_<br>-</p></div>
-					<div id="Equal" class="key"><p>+<br>=</p></div>
-					<div id="Backspace" class="key wide-2 right"><p>&#8612;</p></div>
+					<div data-key="Tab" class="key wide-2 left"><p>&#8676;<br>&#8677;</p></div>
+					<div data-key="KeyQ" class="key single"><p>Q</p></div>
+					<div data-key="KeyW" class="key single"><p>W</p></div>
+					<div data-key="KeyE" class="key single"><p>E</p></div>
+					<div data-key="KeyR" class="key single"><p>R</p></div>
+					<div data-key="KeyT" class="key single"><p>T</p></div>
+					<div data-key="KeyY" class="key single"><p>Y</p></div>
+					<div data-key="KeyU" class="key single"><p>U</p></div>
+					<div data-key="KeyI" class="key single"><p>I</p></div>
+					<div data-key="KeyO" class="key single"><p>O</p></div>
+					<div data-key="KeyP" class="key single"><p>P</p></div>
+					<div data-key="BracketLeft" class="key"><p>{<br>[</p></div>
+					<div data-key="BracketRight" class="key"><p>}<br>]</p></div>
+					<div data-key="Backslash" class="key"><p>|<br>\</p></div>
 				</div>
 				<div class="keyboard-row">
-					<div id="Tab" class="key wide-2 left"><p>&#8676;<br>&#8677;</p></div>
-					<div id="KeyQ" class="key single"><p>Q</p></div>
-					<div id="KeyW" class="key single"><p>W</p></div>
-					<div id="KeyE" class="key single"><p>E</p></div>
-					<div id="KeyR" class="key single"><p>R</p></div>
-					<div id="KeyT" class="key single"><p>T</p></div>
-					<div id="KeyY" class="key single"><p>Y</p></div>
-					<div id="KeyU" class="key single"><p>U</p></div>
-					<div id="KeyI" class="key single"><p>I</p></div>
-					<div id="KeyO" class="key single"><p>O</p></div>
-					<div id="KeyP" class="key single"><p>P</p></div>
-					<div id="BracketLeft" class="key"><p>{<br>[</p></div>
-					<div id="BracketRight" class="key"><p>}<br>]</p></div>
-					<div id="Backslash" class="key"><p>|<br>\</p></div>
+					<div data-key="CapsLock" class="key wide-3 left small"><p>Caps Lock</p></div>
+					<div data-key="KeyA" class="key single"><p>A</p></div>
+					<div data-key="KeyS" class="key single"><p>S</p></div>
+					<div data-key="KeyD" class="key single"><p>D</p></div>
+					<div data-key="KeyF" class="key single"><p>F</p></div>
+					<div data-key="KeyG" class="key single"><p>G</p></div>
+					<div data-key="KeyH" class="key single"><p>H</p></div>
+					<div data-key="KeyJ" class="key single"><p>J</p></div>
+					<div data-key="KeyK" class="key single"><p>K</p></div>
+					<div data-key="KeyL" class="key single"><p>L</p></div>
+					<div data-key="Semicolon" class="key"><p>:<br>;</p></div>
+					<div data-key="Quote" class="key"><p>"<br>'</p></div>
+					<div data-key="Enter" class="key wide-3 right small"><p>Enter<br>&crarr;</p></div>
 				</div>
 				<div class="keyboard-row">
-					<div id="CapsLock" class="key wide-3 left small"><p>Caps Lock</p></div>
-					<div id="KeyA" class="key single"><p>A</p></div>
-					<div id="KeyS" class="key single"><p>S</p></div>
-					<div id="KeyD" class="key single"><p>D</p></div>
-					<div id="KeyF" class="key single"><p>F</p></div>
-					<div id="KeyG" class="key single"><p>G</p></div>
-					<div id="KeyH" class="key single"><p>H</p></div>
-					<div id="KeyJ" class="key single"><p>J</p></div>
-					<div id="KeyK" class="key single"><p>K</p></div>
-					<div id="KeyL" class="key single"><p>L</p></div>
-					<div id="Semicolon" class="key"><p>:<br>;</p></div>
-					<div id="Quote" class="key"><p>"<br>'</p></div>
-					<div id="Enter" class="key wide-3 right small"><p>Enter<br>&crarr;</p></div>
+					<div data-key="ShiftLeft" class="modifier wide-4 left small"><p><b>&bull;</b><br>Shift</p></div>
+					<div data-key="KeyZ" class="key single"><p>Z</p></div>
+					<div data-key="KeyX" class="key single"><p>X</p></div>
+					<div data-key="KeyC" class="key single"><p>C</p></div>
+					<div data-key="KeyV" class="key single"><p>V</p></div>
+					<div data-key="KeyB" class="key single"><p>B</p></div>
+					<div data-key="KeyN" class="key single"><p>N</p></div>
+					<div data-key="KeyM" class="key single"><p>M</p></div>
+					<div data-key="Comma" class="key"><p>&lt;<br>,</p></div>
+					<div data-key="Period" class="key"><p>&gt;<br>.</p></div>
+					<div data-key="Slash" class="key"><p>?<br>/</p></div>
+					<div data-key="ShiftRight" class="modifier wide-4 right small"><p><b>&bull;</b><br>Shift</p></div>
 				</div>
 				<div class="keyboard-row">
-					<div id="ShiftLeft" class="modifier wide-4 left small"><p><b>&bull;</b><br>Shift</p></div>
-					<div id="KeyZ" class="key single"><p>Z</p></div>
-					<div id="KeyX" class="key single"><p>X</p></div>
-					<div id="KeyC" class="key single"><p>C</p></div>
-					<div id="KeyV" class="key single"><p>V</p></div>
-					<div id="KeyB" class="key single"><p>B</p></div>
-					<div id="KeyN" class="key single"><p>N</p></div>
-					<div id="KeyM" class="key single"><p>M</p></div>
-					<div id="Comma" class="key"><p>&lt;<br>,</p></div>
-					<div id="Period" class="key"><p>&gt;<br>.</p></div>
-					<div id="Slash" class="key"><p>?<br>/</p></div>
-					<div id="ShiftRight" class="modifier wide-4 right small"><p><b>&bull;</b><br>Shift</p></div>
-				</div>
-				<div class="keyboard-row">
-					<div id="ControlLeft" class="modifier wide-1 left small"><p><b>&bull;</b><br>Ctrl</p></div>
-					<div id="MetaLeft" class="modifier wide-1 left small"><p><b>&bull;</b><br>Win</p></div>
-					<div id="AltLeft" class="modifier wide-1 left small"><p><b>&bull;</b><br>Alt</p></div>
-					<div id="Space" class="key wide-5"></div>
-					<div id="AltRight" class="modifier wide-1 right small"><p><b>&bull;</b><br>Alt</p></div>
-					<div id="MetaRight" class="modifier wide-1 right small"><p><b>&bull;</b><br>Win</p></div>
-					<div id="ControlRight" class="modifier wide-1 right small"><p><b>&bull;</b><br>Ctrl</p></div>
+					<div data-key="ControlLeft" class="modifier wide-1 left small"><p><b>&bull;</b><br>Ctrl</p></div>
+					<div data-key="MetaLeft" class="modifier wide-1 left small"><p><b>&bull;</b><br>Win</p></div>
+					<div data-key="AltLeft" class="modifier wide-1 left small"><p><b>&bull;</b><br>Alt</p></div>
+					<div data-key="Space" class="key wide-5"></div>
+					<div data-key="AltRight" class="modifier wide-1 right small"><p><b>&bull;</b><br>Alt</p></div>
+					<div data-key="MetaRight" class="modifier wide-1 right small"><p><b>&bull;</b><br>Win</p></div>
+					<div data-key="ControlRight" class="modifier wide-1 right small"><p><b>&bull;</b><br>Ctrl</p></div>
 				</div>
 			</div>
 			<div class="keyboard-block">
 				<div class="keyboard-row">
-					<div id="PrintScreen" class="modifier small"><p><b>&bull;</b><br>Pt/Sq</p></div>
-					<div id="ScrollLock" class="key small"><p>ScrLk</p></div>
-					<div id="Pause" class="key small"><p>P/Brk</p></div>
+					<div data-key="PrintScreen" class="modifier small"><p><b>&bull;</b><br>Pt/Sq</p></div>
+					<div data-key="ScrollLock" class="key small"><p>ScrLk</p></div>
+					<div data-key="Pause" class="key small"><p>P/Brk</p></div>
+				</div>
+				<hr>
+				<div class="keyboard-row">
+					<div data-key="Insert" class="key small"><p>Ins</p></div>
+					<div data-key="Home" class="key small"><p>Home</p></div>
+					<div data-key="PageUp" class="key small"><p>PgUp</p></div>
 				</div>
 				<div class="keyboard-row">
-					<div id="Insert" class="key small"><p>Ins</p></div>
-					<div id="Home" class="key small"><p>Home</p></div>
-					<div id="PageUp" class="key small"><p>PgUp</p></div>
-				</div>
-				<div class="keyboard-row">
-					<div id="Delete" class="key small"><p>Del</p></div>
-					<div id="End" class="key small"><p>End</p></div>
-					<div id="PageDown" class="key small"><p>PgDn</p></div>
+					<div data-key="Delete" class="key small"><p>Del</p></div>
+					<div data-key="End" class="key small"><p>End</p></div>
+					<div data-key="PageDown" class="key small"><p>PgDn</p></div>
 				</div>
 				<div class="keyboard-row"></div>
 				<div class="keyboard-row">
 					<div class="empty-key"></div>
-					<div id="ArrowUp" class="key"><p>&uarr;</p></div>
+					<div data-key="ArrowUp" class="key"><p>&uarr;</p></div>
 					<div class="empty-key"></div>
 				</div>
 				<div class="keyboard-row">
-					<div id="ArrowLeft" class="key"><p>&larr;</p></div>
-					<div id="ArrowDown" class="key"><p>&darr;</p></div>
-					<div id="ArrowRight" class="key"><p>&rarr;</p></div>
+					<div data-key="ArrowLeft" class="key"><p>&larr;</p></div>
+					<div data-key="ArrowDown" class="key"><p>&darr;</p></div>
+					<div data-key="ArrowRight" class="key"><p>&rarr;</p></div>
+				</div>
+			</div>
+		</div>
+
+		<div id="keyboard-mobile" class="keyboard" align="center">
+			<div class="keyboard-block">
+				<div class="keyboard-row">
+					<div data-key="Escape" class="key margin-0 small"><p>Esc</p></div>
+					<div class="empty-key" style="width:0px"></div>
+					<div data-key="F1" class="key wide-0 margin-0 small"><p>F1</p></div>
+					<div data-key="F2" class="key wide-0 margin-0 small"><p>F2</p></div>
+					<div data-key="F3" class="key wide-0 margin-0 small"><p>F3</p></div>
+					<div data-key="F4" class="key wide-0 margin-0 small"><p>F4</p></div>
+					<div data-key="F5" class="key wide-0 margin-0 small"><p>F5</p></div>
+					<div data-key="F6" class="key wide-0 margin-0 small"><p>F6</p></div>
+					<div data-key="F7" class="key wide-0 margin-0 small"><p>F7</p></div>
+					<div data-key="F8" class="key wide-0 margin-0 small"><p>F8</p></div>
+					<div data-key="F9" class="key wide-0 margin-0 small"><p>F9</p></div>
+					<div data-key="F10" class="key wide-0 margin-0 small"><p>F10</p></div>
+					<div data-key="F11" class="key wide-0 margin-0 small"><p>F11</p></div>
+					<div data-key="F12" class="key wide-0 margin-0 small"><p>F12</p></div>
+					<div class="empty-key" style="width:4px"></div>
+					<div data-key="PrintScreen" class="modifier margin-0 small"><p><b>&bull;</b><br>Pt/Sq</p></div>
+					<div data-key="ScrollLock" class="key margin-0 small"><p>ScrLk</p></div>
+					<div data-key="Pause" class="key margin-0 small"><p>P/Brk</p></div>
+					<div data-key="Insert" class="key margin-0 small"><p>Ins</p></div>
+					<div data-key="Home" class="key margin-0 small"><p>Home</p></div>
+					<div data-key="End" class="key margin-0 small"><p>End</p></div>
+					<div data-key="Delete" class="key margin-0 small"><p>Del</p></div>
+				</div>
+				<hr>
+				<div class="keyboard-row">
+					<div data-key="Backquote" class="key"><p>~<br>`</p></div>
+					<div data-key="Digit1" class="key"><p>!<br>1</p></div>
+					<div data-key="Digit2" class="key"><p>@<br>2</p></div>
+					<div data-key="Digit3" class="key"><p>#<br>3</p></div>
+					<div data-key="Digit4" class="key"><p>$<br>4</p></div>
+					<div data-key="Digit5" class="key"><p>%<br>5</p></div>
+					<div data-key="Digit6" class="key"><p>^<br>6</p></div>
+					<div data-key="Digit7" class="key"><p>&amp;<br>7</p></div>
+					<div data-key="Digit8" class="key"><p>*<br>8</p></div>
+					<div data-key="Digit9" class="key"><p>(<br>9</p></div>
+					<div data-key="Digit0" class="key"><p>)<br>0</p></div>
+					<div data-key="Minus" class="key"><p>_<br>-</p></div>
+					<div data-key="Equal" class="key"><p>+<br>=</p></div>
+					<div data-key="Backspace" class="key wide-3 right" style="width:101px"><p>&#8612;</p></div>
+				</div>
+				<div class="keyboard-row">
+					<div data-key="Tab" class="key wide-2 left"><p>&#8676;<br>&#8677;</p></div>
+					<div data-key="KeyQ" class="key single"><p>Q</p></div>
+					<div data-key="KeyW" class="key single"><p>W</p></div>
+					<div data-key="KeyE" class="key single"><p>E</p></div>
+					<div data-key="KeyR" class="key single"><p>R</p></div>
+					<div data-key="KeyT" class="key single"><p>T</p></div>
+					<div data-key="KeyY" class="key single"><p>Y</p></div>
+					<div data-key="KeyU" class="key single"><p>U</p></div>
+					<div data-key="KeyI" class="key single"><p>I</p></div>
+					<div data-key="KeyO" class="key single"><p>O</p></div>
+					<div data-key="KeyP" class="key single"><p>P</p></div>
+					<div data-key="BracketLeft" class="key"><p>{<br>[</p></div>
+					<div data-key="BracketRight" class="key"><p>}<br>]</p></div>
+					<div data-key="Backslash" class="key wide-2 left" style="width:78px"><p>|<br>\</p></div>
+				</div>
+				<div class="keyboard-row">
+					<div data-key="CapsLock" class="key wide-3 left small"><p>Caps Lock</p></div>
+					<div data-key="KeyA" class="key single"><p>A</p></div>
+					<div data-key="KeyS" class="key single"><p>S</p></div>
+					<div data-key="KeyD" class="key single"><p>D</p></div>
+					<div data-key="KeyF" class="key single"><p>F</p></div>
+					<div data-key="KeyG" class="key single"><p>G</p></div>
+					<div data-key="KeyH" class="key single"><p>H</p></div>
+					<div data-key="KeyJ" class="key single"><p>J</p></div>
+					<div data-key="KeyK" class="key single"><p>K</p></div>
+					<div data-key="KeyL" class="key single"><p>L</p></div>
+					<div data-key="Semicolon" class="key"><p>:<br>;</p></div>
+					<div data-key="Quote" class="key"><p>"<br>'</p></div>
+					<div data-key="Enter" class="key wide-4 right small" style="width:116px"><p>Enter<br>&crarr;</p></div>
+				</div>
+				<div class="keyboard-row">
+					<div data-key="ShiftLeft" class="modifier wide-4 left small"><p><b>&bull;</b><br>Shift</p></div>
+					<div data-key="KeyZ" class="key single"><p>Z</p></div>
+					<div data-key="KeyX" class="key single"><p>X</p></div>
+					<div data-key="KeyC" class="key single"><p>C</p></div>
+					<div data-key="KeyV" class="key single"><p>V</p></div>
+					<div data-key="KeyB" class="key single"><p>B</p></div>
+					<div data-key="KeyN" class="key single"><p>N</p></div>
+					<div data-key="KeyM" class="key single"><p>M</p></div>
+					<div data-key="Comma" class="key"><p>&lt;<br>,</p></div>
+					<div data-key="Period" class="key"><p>&gt;<br>.</p></div>
+					<div data-key="Slash" class="key"><p>?<br>/</p></div>
+					<div data-key="PageUp" class="key small"><p>PgUp</p></div>
+					<div data-key="ArrowUp" class="key"><p>&uarr;</p></div>
+					<div data-key="PageDown" class="key small"><p>PgDn</p></div>
+				</div>
+				<div class="keyboard-row">
+					<div data-key="ControlLeft" class="modifier wide-1 left small"><p><b>&bull;</b><br>Ctrl</p></div>
+					<div data-key="MetaLeft" class="modifier wide-1 left small"><p><b>&bull;</b><br>Win</p></div>
+					<div data-key="AltLeft" class="modifier wide-1 left small"><p><b>&bull;</b><br>Alt</p></div>
+					<div data-key="Space" class="key" style="width:190px"></div>
+					<div data-key="AltRight" class="modifier right small"><p><b>&bull;</b><br>Alt</p></div>
+					<div data-key="MetaRight" class="modifier right small"><p><b>&bull;</b><br>Win</p></div>
+					<div data-key="ControlRight" class="modifier right small"><p><b>&bull;</b><br>Ctrl</p></div>
+					<div data-key="ShiftRight" class="modifier right small"><p><b>&bull;</b><br>Shift</p></div>
+					<div data-key="ArrowLeft" class="key"><p>&larr;</p></div>
+					<div data-key="ArrowDown" class="key"><p>&darr;</p></div>
+					<div data-key="ArrowRight" class="key"><p>&rarr;</p></div>
 				</div>
 			</div>
 		</div>

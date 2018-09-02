@@ -5,8 +5,8 @@ function Keyboard() {
 
 	var __ws = null;
 
-	var __keys = [];
-	var __modifiers = [];
+	var __keys = [].slice.call(document.querySelectorAll("div#keyboard-desktop div.keyboard-block div.keyboard-row div.key"));
+	var __modifiers = [].slice.call(document.querySelectorAll("div#keyboard-desktop div.keyboard-block div.keyboard-row div.modifier"));
 
 	var __mac_cmd_hook = ((
 		window.navigator.oscpu
@@ -38,12 +38,10 @@ function Keyboard() {
 			};
 			el_key.ontouchstart = (event) => __touchHandler(event, el_key, true);
 			el_key.ontouchend = (event) => __touchHandler(event, el_key, false);
-			__keys.push(el_key);
 		});
 
 		Array.prototype.forEach.call($$("modifier"), function(el_key) {
 			el_key.onmousedown = () => __toggleModifierHandler(el_key);
-			__modifiers.push(el_key);
 		});
 
 		if (__mac_cmd_hook) {
@@ -64,7 +62,7 @@ function Keyboard() {
 	self.releaseAll = function() {
 		__keys.concat(__modifiers).forEach(function(el_key) {
 			if (__isActive(el_key)) {
-				self.fireEvent(el_key.id, false);
+				self.fireEvent(el_key.getAttribute("data-key"), false);
 			}
 		});
 	};
@@ -88,7 +86,7 @@ function Keyboard() {
 
 	var __keyboardHandler = function(event, state) {
 		event.preventDefault();
-		var el_key = $(event.code);
+		var el_key = document.querySelector("[data-key='" + event.code + "']");
 		if (el_key && !event.repeat) {
 			__commonHandler(el_key, state, "pressed");
 			if (__mac_cmd_hook) {
@@ -97,8 +95,7 @@ function Keyboard() {
 				if ((event.code === "MetaLeft" || event.code === "MetaRight") && !state) {
 					__keys.forEach(function(el_key) {
 						if (__isActive(el_key)) {
-							// __commonHandler(el_key, false, "pressed");
-							self.fireEvent(el_key.id, false);
+							self.fireEvent(el_key.getAttribute("data-key"), false);
 						}
 					});
 				}
@@ -126,7 +123,7 @@ function Keyboard() {
 		__modifiers.forEach(function(el_key) {
 			if (__isHolded(el_key)) {
 				__deactivate(el_key);
-				__sendKey(el_key.id, false);
+				__sendKey(el_key, false);
 			}
 		});
 	};
@@ -134,32 +131,57 @@ function Keyboard() {
 	var __commonHandler = function(el_key, state, cls) {
 		if (state && !__isActive(el_key)) {
 			__deactivate(el_key);
-			el_key.classList.add(cls);
-			__sendKey(el_key.id, true);
+			__activate(el_key, cls);
+			__sendKey(el_key, true);
 		} else {
 			__deactivate(el_key);
-			__sendKey(el_key.id, false);
+			__sendKey(el_key, false);
 		}
 	};
 
 	var __isPressed = function(el_key) {
-		return el_key.classList.contains("pressed");
+		var is_pressed = false;
+		Array.prototype.forEach.call(__resolveKeys(el_key), function(el_key) {
+			is_pressed = (is_pressed || el_key.classList.contains("pressed"));
+		});
+		return is_pressed;
 	};
 
 	var __isHolded = function(el_key) {
-		return el_key.classList.contains("holded");
+		var is_holded = false;
+		Array.prototype.forEach.call(__resolveKeys(el_key), function(el_key) {
+			is_holded = (is_holded || el_key.classList.contains("holded"));
+		});
+		return is_holded;
 	};
 
 	var __isActive = function(el_key) {
-		return (__isPressed(el_key) || __isHolded(el_key));
+		var is_active = false;
+		Array.prototype.forEach.call(__resolveKeys(el_key), function(el_key) {
+			is_active = (is_active || el_key.classList.contains("pressed") || el_key.classList.contains("holded"));
+		});
+		return is_active;
+	};
+
+	var __activate = function(el_key, cls) {
+		Array.prototype.forEach.call(__resolveKeys(el_key), function(el_key) {
+			el_key.classList.add(cls);
+		});
 	};
 
 	var __deactivate = function(el_key) {
-		el_key.classList.remove("pressed");
-		el_key.classList.remove("holded");
+		Array.prototype.forEach.call(__resolveKeys(el_key), function(el_key) {
+			el_key.classList.remove("pressed");
+			el_key.classList.remove("holded");
+		});
 	};
 
-	var __sendKey = function(code, state) {
+	var __resolveKeys = function(el_key) {
+		return document.querySelectorAll("[data-key='" + el_key.getAttribute("data-key") + "']");
+	};
+
+	var __sendKey = function(el_key, state) {
+		var code = el_key.getAttribute("data-key");
 		tools.debug("Key", (state ? "pressed:" : "released:"), code);
 		if (__ws) {
 			__ws.send(JSON.stringify({

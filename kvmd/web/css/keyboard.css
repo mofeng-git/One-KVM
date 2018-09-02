@@ -1,32 +1,32 @@
-div#keyboard {
+div.keyboard {
 	zoom: 0.8;
 }
 
-div#keyboard div.keyboard-block {
-	padding-right: 15px;
+div.keyboard div.keyboard-block {
 	display: table-cell;
-}
-div#keyboard div.keyboard-block:last-child {
 	padding-right: 0;
 }
+div.keyboard div.keyboard-block:not(:first-child) {
+	padding-left: 15px;
+}
 
-div#keyboard div.keyboard-row {
+div.keyboard div.keyboard-row {
 	white-space: nowrap;
 	height: 40px;
 	margin-bottom: 5px;
 }
-div#keyboard div.keyboard-row:last-child {
+div.keyboard div.keyboard-row:last-child {
 	margin-bottom: 0;
 }
 
-div#keyboard div.key, div.modifier, div.empty-key {
+div.keyboard div.key, div.modifier, div.empty-key {
 	box-sizing: border-box;
 	display: inline-block;
 	margin-right: 5px;
 	padding: 0;
 	width: 40px;
 }
-div#keyboard div.key, div.modifier {
+div.keyboard div.key, div.modifier {
 	font-size: 0.9em;
 	text-align: center;
 	vertical-align: top;
@@ -38,57 +38,70 @@ div#keyboard div.key, div.modifier {
 	cursor: pointer;
 	height: 40px;
 }
-div#keyboard div.key:hover, div.modifier:hover {
+div.keyboard div.key:hover, div.modifier:hover {
 	color: var(--fg-color-intensive);
 	background-color: var(--bg-color-ctl);
 }
-div#keyboard div.pressed {
+div.keyboard div.pressed {
 	box-shadow: none;
 	color: var(--fg-color-selected) !important;
 	background-color: var(--bg-color-dark) !important;
 }
-div#keyboard div.holded {
+div.keyboard div.holded {
 	box-shadow: none;
 	color: var(--fg-color-normal) !important;
 	background-color: var(--bg-color-intensive) !important;
 }
-div#keyboard div.key:last-child, div.empty-key:last-child, div.modifier:last-child {
+div.keyboard div.key:last-child, div.empty-key:last-child, div.modifier:last-child {
 	margin-right: 0;
 }
-div#keyboard div.wide-1 {
+div.keyboard div.margin-0 {
+	margin-right: 0px;
+}
+div.keyboard div.wide-0 {
+	width: 26px;
+}
+div.keyboard div.wide-1 {
 	width: 61px;
 }
-div#keyboard div.wide-2 {
+div.keyboard div.wide-2 {
 	width: 64px;
 }
-div#keyboard div.wide-3 {
+div.keyboard div.wide-3 {
 	width: 77px;
 }
-div#keyboard div.wide-4 {
+div.keyboard div.wide-4 {
 	width: 102px;
 }
-div#keyboard div.wide-5 {
+div.keyboard div.wide-5 {
 	width: 288px;
 }
-div#keyboard div.left {
+div.keyboard div.left {
 	text-align: left !important;
 	padding-left: 6px !important;
 }
-div#keyboard div.right {
+div.keyboard div.right {
 	text-align: right !important;
 	padding-right: 6px !important;
 }
-div#keyboard div.small {
+div.keyboard div.small {
 	font-size: 0.7em;
 }
 
-div#keyboard p {
+div.keyboard p {
 	margin: 0;
 	position: relative;
 	top: 50%;
 	-webkit-transform: translateY(-50%);
 	transform: translateY(-50%);
 }
-div#keyboard b {
+div.keyboard b {
 	color: var(--bg-color-intensive);
+}
+
+div#keyboard-desktop {
+	display: block;
+}
+div#keyboard-mobile {
+	display: none;
 }
