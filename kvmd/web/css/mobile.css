@@ -21,46 +21,8 @@
 		background-color: var(--bg-color-ctl) !important;
 	}
 
-	div#keyboard div.key:hover, div.modifier:hover {
-		color: var(--fg-color-normal);
-		background-color: var(--bg-color-gray);
-	}
-	div#keyboard-desktop {
-		display: none !important;
-	}
-	div#keyboard-mobile {
-		display: block !important;
-	}
-
-	div#stream-mouse-buttons {
-		display: block !important;
-	}
-}
-
-@media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
-	button, select {
-		height: 45px !important;
-	}
-
-	div.modal-buttons button {
-		height: 50px !important;
-	}
-
-	div#stream-window {
-		padding-top: 9px !important;
-		border-top: 0 !important;
-		border-radius: 0 0 8px 8px !important;
-		top: 50px !important;
-		left: 50% !important;
-		-webkit-transform: translateX(-50%) !important;
-		transform: translateX(-50%) !important;
-	}
-	div#stream-window-header {
-		display: none !important;
-	}
-
-	div#keyboard {
-		zoom: 1.1 !important;
+	div.keyboard {
+		zoom: 1.28 !important;
 	}
 	div#keyboard-window {
 		visibility: visible !important;
@@ -79,6 +41,42 @@
 	}
 	div#keyboard-window-header {
 		display: none !important
+	}
+	div.keyboard div.key:hover, div.modifier:hover {
+		color: var(--fg-color-normal);
+		background-color: var(--bg-color-gray);
+	}
+	div#keyboard-desktop {
+		display: none !important;
+	}
+	div#keyboard-mobile {
+		display: block !important;
+	}
+
+	div#stream-window {
+		padding-top: 9px !important;
+		border-top: 0 !important;
+		border-radius: 0 0 8px 8px !important;
+		top: 50px !important;
+		left: 50% !important;
+		-webkit-transform: translateX(-50%) !important;
+		transform: translateX(-50%) !important;
+	}
+	div#stream-window-header {
+		display: none !important;
+	}
+	div#stream-mouse-buttons {
+		display: block !important;
+	}
+}
+
+@media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+	button, select {
+		height: 45px !important;
+	}
+
+	div.modal-buttons button {
+		height: 50px !important;
 	}
 
 	@supports (-webkit-appearance:none) {
