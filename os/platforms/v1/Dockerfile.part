@@ -1,6 +1,6 @@
 RUN pkg-install \
 	nginx-mainline \
-	nginx-mainline-mod-lua-fixedrepo \
+	nginx-mainline-mod-lua \
 	apache-tools \
 	mjpg-streamer \
 	python \
