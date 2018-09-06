@@ -35,26 +35,18 @@ div.stream-box-mouse-enabled {
 	cursor: url("../svg/stream-mouse-cursor.svg"), pointer;
 }
 
-div.stream-params {
-	-webkit-user-select: text;
-	-moz-user-select: text;
-	user-select: text;
-	font-size: 12px;
-	margin: 5px 15px 5px 15px;
-}
-
-div.stream-params select#stream-resolution-select {
+select#stream-resolution-select {
 	margin: 8px 0 8px 0;
 }
 
-div.stream-params span#stream-size-value {
+span#stream-size-value {
 }
-div.stream-params div#stream-size-slider-box {
+div#stream-size-slider-box {
 	margin-top: 5px;
 	display: flex;
 }
 @supports (-webkit-appearance:none) {
-	div.stream-params div#stream-size-slider-box input[type=range] {
+	div#stream-size-slider-box input[type=range] {
 		cursor: pointer;
 		outline: none;
 		width: 100%;
@@ -65,7 +57,7 @@ div.stream-params div#stream-size-slider-box {
 	}
 }
 @supports not (-webkit-appearance:none) {
-	div.stream-params div#stream-size-slider-box input[type=range] {
+	div#stream-size-slider-box input[type=range] {
 		cursor: pointer;
 		outline: none;
 		width: 100%;
@@ -74,12 +66,12 @@ div.stream-params div#stream-size-slider-box {
 		margin-right: 0;
 	}
 }
-div.stream-params div#stream-size-slider-box input[type=range]::-webkit-slider-runnable-track {
+div#stream-size-slider-box input[type=range]::-webkit-slider-runnable-track {
 	height: 5px;
 	background: var(--bg-color-light);
 	border-radius: 3px;
 }
-div.stream-params div#stream-size-slider-box input[type=range]::-webkit-slider-thumb {
+div#stream-size-slider-box input[type=range]::-webkit-slider-thumb {
 	border: var(--intensive-border);
 	height: 18px;
 	width: 18px;
@@ -88,12 +80,12 @@ div.stream-params div#stream-size-slider-box input[type=range]::-webkit-slider-t
 	-webkit-appearance: none;
 	margin-top: -7px;
 }
-div.stream-params div#stream-size-slider-box input[type=range]::-moz-range-track {
+div#stream-size-slider-box input[type=range]::-moz-range-track {
 	height: 5px;
 	background: var(--bg-color-light);
 	border-radius: 3px;
 }
-div.stream-params div#stream-size-slider-box input[type=range]::-moz-range-thumb {
+div#stream-size-slider-box input[type=range]::-moz-range-thumb {
 	border: var(--intensive-border);
 	height: 18px;
 	width: 18px;

@@ -172,6 +172,9 @@ div.ctl-dropdown-content hr {
 	border: none;
 	border-top: var(--dark-border);
 }
+div.ctl-dropdown-content-buttons {
+	background-color: var(--bg-color-normal);
+}
 div.ctl-dropdown-content-text {
 	margin: 10px 15px 10px 15px;
 	font-size: 14px;

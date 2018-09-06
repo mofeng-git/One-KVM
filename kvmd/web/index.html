@@ -65,21 +65,23 @@
 					System &#8628;
 				</a>
 				<div class="ctl-dropdown-content">
-					<button id="show-about-button">&bull; Show about</button>
+					<div class="ctl-dropdown-content-buttons">
+						<button id="show-about-button">&bull; Show about</button>
+						<hr>
+						<button id="show-keyboard-button">&bull; Show keyboard</button>
+						<hr>
+						<button id="show-stream-button">&bull; Show stream</button>
+						<button disabled id="stream-reset-button">&bull; Reset stream</button>
+					</div>
 					<hr>
-					<button id="show-keyboard-button">&bull; Show keyboard</button>
-					<hr>
-					<button id="show-stream-button">&bull; Show stream</button>
-					<button disabled id="stream-reset-button">&bull; Reset stream</button>
-					<hr>
-					<div data-dont-hide-menu class="stream-params">
+					<div data-dont-hide-menu class="ctl-dropdown-content-text">
 						Resolution:
-						<select disabled data-dont-hide-menu id="stream-resolution-select">
+						<select disabled id="stream-resolution-select">
 							<option>640x480</option>
 						</select>
 					</div>
 					<hr>
-					<div data-dont-hide-menu class="stream-params">
+					<div data-dont-hide-menu class="ctl-dropdown-content-text">
 						Stream size: <span id="stream-size-value">100%</span>
 						<div id="stream-size-slider-box">
 							<input id="stream-size-slider" type="range" min="50" max="150" value="100" step="10" />
@@ -96,7 +98,7 @@
 					<img data-dont-hide-menu id="atx-hdd-led" class="led-off" src="svg/atx-hdd-led.svg" />
 					ATX &#8628;
 				</a>
-				<div class="ctl-dropdown-content">
+				<div class="ctl-dropdown-content ctl-dropdown-content-buttons">
 					<button disabled id="atx-power-button">&bull; Click Power <sup><i>short</i></sup></button>
 					<button disabled id="atx-power-button-long">&bull; Click Power <sup><i>long</i></sup></button>
 					<hr>
@@ -173,7 +175,7 @@
 					<hr>
 
 					<input type="file" id="msd-select-new-image-file" />
-					<div class="buttons-row">
+					<div class="ctl-dropdown-content-buttons buttons-row">
 						<button disabled id="msd-select-new-image-button" class="row50">Upload new image</button>
 						<button disabled id="msd-upload-new-image-button" class="row25">Start</button>
 						<button disabled id="msd-abort-uploading-button" class="row25">Abort</button>
@@ -200,7 +202,7 @@
 						<hr>
 					</div>
 
-					<div class="buttons-row">
+					<div class="ctl-dropdown-content-buttons buttons-row">
 						<button disabled data-force-hide-menu id="msd-switch-to-kvm-button" class="row50">&bull; Switch drive to KVM</button>
 						<button disabled data-force-hide-menu id="msd-switch-to-server-button" class="row50">&bull; Switch drive to Server</button>
 					</div>
@@ -214,7 +216,7 @@
 					<img data-dont-hide-menu id="pak-led" class="led-off" src="svg/gear-led.svg" />
 					Shortcuts &#8628;
 				</a>
-				<div class="ctl-dropdown-content">
+				<div class="ctl-dropdown-content ctl-dropdown-content-buttons">
 					<button disabled id="pak-button">&bull; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
 					<hr>
 					<button data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
@@ -477,8 +479,8 @@
 					<div data-key="Space" class="key" style="width:190px"></div>
 					<div data-key="AltRight" class="modifier right small"><p><b>&bull;</b><br>Alt</p></div>
 					<div data-key="MetaRight" class="modifier right small"><p><b>&bull;</b><br>Win</p></div>
-					<div data-key="ControlRight" class="modifier right small"><p><b>&bull;</b><br>Ctrl</p></div>
 					<div data-key="ShiftRight" class="modifier right small"><p><b>&bull;</b><br>Shift</p></div>
+					<div data-key="ControlRight" class="modifier right small"><p><b>&bull;</b><br>Ctrl</p></div>
 					<div data-key="ArrowLeft" class="key"><p>&larr;</p></div>
 					<div data-key="ArrowDown" class="key"><p>&darr;</p></div>
 					<div data-key="ArrowRight" class="key"><p>&rarr;</p></div>

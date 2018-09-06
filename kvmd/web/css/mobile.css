@@ -80,7 +80,7 @@
 	}
 
 	@supports (-webkit-appearance:none) {
-		div.stream-params div#stream-size-slider-box input[type=range] {
+		div#stream-size-slider-box input[type=range] {
 			margin: 20px 0 20px 0 !important;
 		}
 	}
