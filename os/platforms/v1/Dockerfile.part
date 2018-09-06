@@ -1,11 +1,15 @@
 RUN pkg-install \
 	nginx-mainline \
-	nginx-mainline-mod-lua \
 	apache-tools \
 	mjpg-streamer \
 	python \
-	python-raspberry-gpio
+	python-raspberry-gpio \
+	customizepkg
 RUN systemctl enable nginx
+
+COPY stages/pikvm/customizepkg.nginx /etc/customizepkg.d/nginx-mainline-mod-ndk
+COPY stages/pikvm/customizepkg.nginx /etc/customizepkg.d/nginx-mainline-mod-lua
+RUN env MAKEPKGOPTS="--skipchecksums --skippgpcheck" pkg-install nginx-mainline-mod-lua
 
 ARG KVMD_VERSION
 ENV KVMD_VERSION $KVMD_VERSION
