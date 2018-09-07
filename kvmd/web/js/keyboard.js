@@ -29,19 +29,17 @@ function Keyboard() {
 		$("stream-window").onblur = __updateLeds;
 
 		Array.prototype.forEach.call($$("key"), function(el_key) {
-			el_key.onmousedown = () => __clickHandler(el_key, true);
-			el_key.onmouseup = () => __clickHandler(el_key, false);
+			tools.setOnDown(el_key, () => __clickHandler(el_key, true));
+			tools.setOnUp(el_key, () => __clickHandler(el_key, false));
 			el_key.onmouseout = function() {
 				if (__isPressed(el_key)) {
 					__clickHandler(el_key, false);
 				}
 			};
-			el_key.ontouchstart = (event) => __touchHandler(event, el_key, true);
-			el_key.ontouchend = (event) => __touchHandler(event, el_key, false);
 		});
 
 		Array.prototype.forEach.call($$("modifier"), function(el_key) {
-			el_key.onmousedown = () => __toggleModifierHandler(el_key);
+			tools.setOnDown(el_key, () => __toggleModifierHandler(el_key));
 		});
 
 		if (__mac_cmd_hook) {
@@ -68,10 +66,7 @@ function Keyboard() {
 	};
 
 	self.fireEvent = function(code, state) {
-		$("keyboard-window").dispatchEvent(new KeyboardEvent(
-			(state ? "keydown" : "keyup"),
-			{code: code}
-		));
+		__keyboardHandler({code: code}, state);
 	};
 
 	var __updateLeds = function() {
@@ -85,7 +80,9 @@ function Keyboard() {
 	};
 
 	var __keyboardHandler = function(event, state) {
-		event.preventDefault();
+		if (event.preventDefault) {
+			event.preventDefault();
+		}
 		var el_key = document.querySelector("[data-key='" + event.code + "']");
 		if (el_key && !event.repeat) {
 			__commonHandler(el_key, state, "pressed");
@@ -102,12 +99,6 @@ function Keyboard() {
 			}
 			__unholdModifiers();
 		}
-	};
-
-	var __touchHandler = function(event, el_key, state) {
-		event.stopPropagation();
-		event.preventDefault();
-		__clickHandler(el_key, state);
 	};
 
 	var __clickHandler = function(el_key, state) {

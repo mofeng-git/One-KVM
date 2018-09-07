@@ -11,13 +11,13 @@ function Msd() {
 		$("msd-led").title = "Unknown state";
 
 		$("msd-select-new-image-file").onchange = __selectNewImageFile;
-		$("msd-select-new-image-button").onclick = () => $("msd-select-new-image-file").click();
+		tools.setOnClick($("msd-select-new-image-button"), () => $("msd-select-new-image-file").click());
 
-		$("msd-upload-new-image-button").onclick = __clickUploadNewImageButton;
-		$("msd-abort-uploading-button").onclick = __clickAbortUploadingButton;
+		tools.setOnClick($("msd-upload-new-image-button"), __clickUploadNewImageButton);
+		tools.setOnClick($("msd-abort-uploading-button"), __clickAbortUploadingButton);
 
-		$("msd-switch-to-kvm-button").onclick = () => __clickSwitchButton("kvm");
-		$("msd-switch-to-server-button").onclick = () => __clickSwitchButton("server");
+		tools.setOnClick($("msd-switch-to-kvm-button"), () => __clickSwitchButton("kvm"));
+		tools.setOnClick($("msd-switch-to-server-button"), () => __clickSwitchButton("server"));
 	};
 
 	/********************************************************************************/

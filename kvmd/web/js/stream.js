@@ -14,7 +14,7 @@ function Stream() {
 	var __init__ = function() {
 		$("stream-led").title = "Stream inactive";
 
-		$("stream-reset-button").onclick = __clickResetButton;
+		tools.setOnClick($("stream-reset-button"), __clickResetButton);
 		$("stream-resolution-select").onchange = __changeResolution;
 		$("stream-size-slider").oninput = __resize;
 		$("stream-size-slider").onchange = __resize;

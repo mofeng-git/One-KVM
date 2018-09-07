@@ -10,6 +10,25 @@ var tools = new function() {
 		return http;
 	};
 
+	this.setOnClick = function(el, callback) {
+		el.onclick = el.ontouchend = function(event) {
+			event.preventDefault();
+			callback();
+		};
+	};
+	this.setOnDown = function(el, callback) {
+		el.onmousedown = el.ontouchstart = function(event) {
+			event.preventDefault();
+			callback();
+		};
+	};
+	this.setOnUp = function(el, callback) {
+		el.onmouseup = el.ontouchend = function(event) {
+			event.preventDefault();
+			callback();
+		};
+	};
+
 	this.debug = function(...args) {
 		if (__debug) {
 			console.log("LOG/DEBUG", ...args);  // eslint-disable-line no-console

@@ -14,7 +14,7 @@ a {
 	text-decoration: underline dotted;
 	color: var(--fg-color-normal);
 }
-@media (hover: hover) {
+@media (hover: hover), (min--moz-device-pixel-ratio: 0) {
 	a:hover {
 		text-decoration: underline;
 	}
@@ -37,13 +37,16 @@ button, select {
 	outline: none;
 	cursor: pointer;
 }
-@media (hover: hover) {
+@media (hover: hover), (min--moz-device-pixel-ratio: 0) {
 	button:enabled:hover, select:enabled:hover {
 		color: var(--fg-color-intensive);
 		background-color: var(--bg-color-dark) !important;
 	}
 	button:active, select:active {
 		color: var(--fg-color-selected) !important;
+	}
+	select:enabled:hover {
+		background-image: url("../svg/select-arrow-intensive.svg") !important;
 	}
 }
 @media (hover: none) {
@@ -67,9 +70,6 @@ select {
 	background-image: url("../svg/select-arrow-normal.svg");
 	background-position: center right;
 	background-repeat: no-repeat;
-}
-select:enabled:hover {
-	background-image: url("../svg/select-arrow-intensive.svg") !important;
 }
 select:disabled {
 	background-image: url("../svg/select-arrow-inactive.svg") !important;
@@ -200,9 +200,5 @@ ul#footer li.footer-right {
 	float: right;
 }
 ul#footer li a {
-	text-decoration: underline dotted;
 	color: var(--fg-color-inactive);
-}
-ul#footer li a:hover {
-	text-decoration: underline;
 }

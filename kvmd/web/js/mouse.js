@@ -24,10 +24,8 @@ function Mouse() {
 		$("stream-box").ontouchstart = (event) => __touchMoveHandler(event);
 		Array.prototype.forEach.call(document.querySelectorAll("[data-mouse-button]"), function(el_button) {
 			var button = el_button.getAttribute("data-mouse-button");
-			el_button.onmousedown = () => __sendButton(button, true);
-			el_button.onmouseup = () => __sendButton(button, false);
-			el_button.ontouchstart = () => __sendButton(button, true);
-			el_button.ontouchend = () => __sendButton(button, false);
+			tools.setOnDown(el_button, () => __sendButton(button, true));
+			tools.setOnUp(el_button, () => __sendButton(button, false));
 		});
 
 		setInterval(__sendMove, 100);
@@ -74,7 +72,6 @@ function Mouse() {
 	};
 
 	var __touchMoveHandler = function(event) {
-		event.stopPropagation();
 		event.preventDefault();
 		if (event.touches[0].target && event.touches[0].target.getBoundingClientRect) {
 			var rect = event.touches[0].target.getBoundingClientRect();

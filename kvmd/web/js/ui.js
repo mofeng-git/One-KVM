@@ -15,7 +15,7 @@ function Ui() {
 		});
 
 		Array.prototype.forEach.call($$("ctl-item"), function(el_item) {
-			el_item.onclick = () => __toggleMenu(el_item);
+			tools.setOnClick(el_item, () => __toggleMenu(el_item));
 			__ctl_items.push(el_item);
 		});
 
@@ -25,22 +25,22 @@ function Ui() {
 
 			var el_button = el_window.querySelector(".window-header .window-button-close");
 			if (el_button) {
-				el_button.onclick = function() {
+				tools.setOnClick(el_button, function() {
 					el_window.style.visibility = "hidden";
 					__raiseLastWindow();
-				};
+				});
 			}
 		});
 
 		window.onmouseup = __globalMouseButtonHandler;
-		// window.oncontextmenu = __globalMouseButtonHandler;
+		window.ontouchend = __globalMouseButtonHandler;
 
 		window.addEventListener("resize", () => __organizeWindowsOnResize(false));
 		window.addEventListener("orientationchange", () => __organizeWindowsOnResize(true));
 
-		$("show-about-button").onclick = () => self.showWindow($("about-window"));
-		$("show-keyboard-button").onclick = () => self.showWindow($("keyboard-window"));
-		$("show-stream-button").onclick = () => self.showWindow($("stream-window"));
+		tools.setOnClick($("show-about-button"), () => self.showWindow($("about-window")));
+		tools.setOnClick($("show-keyboard-button"), () => self.showWindow($("keyboard-window")));
+		tools.setOnClick($("show-stream-button"), () => self.showWindow($("stream-window")));
 
 		self.showWindow($("stream-window"));
 	};
@@ -90,15 +90,13 @@ function Ui() {
 				if (cancel) {
 					var el_cancel_button = document.createElement("button");
 					el_cancel_button.innerHTML = "Cancel";
-					el_cancel_button.onclick = () => close(false);
-					el_cancel_button.ontouchstart = function() {};
+					tools.setOnClick(el_cancel_button, () => close(false));
 					el_buttons.appendChild(el_cancel_button);
 				}
 				if (ok) {
 					var el_ok_button = document.createElement("button");
 					el_ok_button.innerHTML = "OK";
-					el_ok_button.onclick = () => close(true);
-					el_cancel_button.ontouchstart = function() {};
+					tools.setOnClick(el_ok_button, () => close(true));
 					el_buttons.appendChild(el_ok_button);
 				}
 				if (ok && cancel) {
@@ -165,6 +163,7 @@ function Ui() {
 		__ctl_items.forEach(function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
 			if (el_item === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
+				el_item.focus();
 				el_item.classList.add("ctl-item-selected");
 				el_menu.style.visibility = "visible";
 				all_hidden &= false;
@@ -283,7 +282,7 @@ function Ui() {
 		}
 
 		el_window.setAttribute("data-centered", "");
-		el_window.onclick = () => __raiseWindow(el_window);
+		tools.setOnClick(el_window, () => __raiseWindow(el_window));
 
 		el_grab.onmousedown = startMoving;
 		el_grab.ontouchstart = startMoving;
@@ -303,17 +302,16 @@ function Ui() {
 	};
 
 	var __raiseWindow = function(el_window) {
-		if (el_window.className === "modal") {
-			el_window.querySelector(".modal-window").focus();
-		} else {
-			el_window.focus();
-		}
-		tools.debug("Focused window:", el_window);
-		if (el_window.className !== "modal" && parseInt(el_window.style.zIndex) !== __top_z_index) {
-			var z_index = __top_z_index + 1;
-			el_window.style.zIndex = z_index;
-			__top_z_index = z_index;
-			tools.debug("Raised window:", el_window);
+		var el_to_focus = (el_window.className === "modal" ? el_window.querySelector(".modal-window") : el_window);
+		if (document.activeElement !== el_to_focus) {
+			el_to_focus.focus();
+			tools.debug("Focused window:", el_window);
+			if (el_window.className !== "modal" && parseInt(el_window.style.zIndex) !== __top_z_index) {
+				var z_index = __top_z_index + 1;
+				el_window.style.zIndex = z_index;
+				__top_z_index = z_index;
+				tools.debug("Raised window:", el_window);
+			}
 		}
 	};
 

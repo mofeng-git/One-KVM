@@ -7,9 +7,9 @@ function Atx() {
 		$("atx-power-led").title = "Power Led";
 		$("atx-hdd-led").title = "Disk Activity Led";
 
-		$("atx-power-button").onclick = () => __clickButton("power", null, "Are you sure to click the power button?");
-		$("atx-power-button-long").onclick = () => __clickButton("power_long", 15000, "Are you sure to perform the long press of the power button?");
-		$("atx-reset-button").onclick = () => __clickButton("reset", null, "Are you sure to reboot the server?");
+		tools.setOnClick($("atx-power-button"), () => __clickButton("power", null, "Are you sure to click the power button?"));
+		tools.setOnClick($("atx-power-button-long"), () => __clickButton("power_long", 15000, "Are you sure to perform the long press of the power button?"));
+		tools.setOnClick($("atx-reset-button"), () => __clickButton("reset", null, "Are you sure to reboot the server?"));
 	};
 
 	/********************************************************************************/

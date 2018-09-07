@@ -43,13 +43,13 @@ function Hid() {
 
 		if (window.navigator.clipboard && window.navigator.clipboard.readText) {
 			__chars_to_codes = __buildCharsToCodes();
-			$("pak-button").onclick = __pasteAsKeys;
+			tools.setOnClick($("pak-button"), __pasteAsKeys);
 		} else {
 			$("pak-button").title = $("pak-led").title = "Your browser does not support the Clipboard API.\nUse Google Chrome or Chromium.";
 		}
 
 		Array.prototype.forEach.call(document.querySelectorAll("[data-shortcut]"), function(el_shortcut) {
-			el_shortcut.onclick = () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" "));
+			tools.setOnClick(el_shortcut, () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" ")));
 		});
 	};
 
