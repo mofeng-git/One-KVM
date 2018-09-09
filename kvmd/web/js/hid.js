@@ -43,7 +43,7 @@ function Hid() {
 
 		if (window.navigator.clipboard && window.navigator.clipboard.readText) {
 			__chars_to_codes = __buildCharsToCodes();
-			tools.setOnClick($("pak-button"), __pasteAsKeys);
+			tools.setOnClick($("pak-button"), __pasteAsKeysFromClipboard);
 		} else {
 			$("pak-button").title = $("pak-led").title = "Your browser does not support the Clipboard API.\nUse Google Chrome or Chromium.";
 		}
@@ -131,53 +131,55 @@ function Hid() {
 		return chars_to_codes;
 	};
 
-	var __pasteAsKeys = function() {
-		window.navigator.clipboard.readText().then(function(clipboard_text) {
-			clipboard_text = clipboard_text.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
-			if (clipboard_text) {
-				var clipboard_codes = [];
-				var codes_count = 0;
-				[...clipboard_text].forEach(function(ch) {
-					var codes = __chars_to_codes[ch];
-					if (codes) {
-						codes_count += codes.length;
-						clipboard_codes.push(codes);
-					}
-				});
+	var __pasteAsKeysFromClipboard = function() {
+		window.navigator.clipboard.readText().then(__pasteAsKeys);
+	};
 
-				var confirm_msg = (
-					"You are going to automatically type " + codes_count
-					+ " characters from the system clipboard."
-					+ " It will take " + (__codes_delay * codes_count * 2 / 1000) + " seconds.<br>"
-					+ "<br>Are you sure you want to continue?<br>"
-				);
+	var __pasteAsKeys = function(text) {
+		text = text.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
+		if (text) {
+			var clipboard_codes = [];
+			var codes_count = 0;
+			[...text].forEach(function(ch) {
+				var codes = __chars_to_codes[ch];
+				if (codes) {
+					codes_count += codes.length;
+					clipboard_codes.push(codes);
+				}
+			});
 
-				ui.confirm(confirm_msg).then(function(ok) {
-					if (ok) {
-						$("pak-button").disabled = true;
-						$("pak-led").className = "led-pak-typing";
-						$("pak-led").title = "Autotyping...";
+			var confirm_msg = (
+				"You are going to automatically type " + codes_count
+				+ " characters from the system clipboard."
+				+ " It will take " + (__codes_delay * codes_count * 2 / 1000) + " seconds.<br>"
+				+ "<br>Are you sure you want to continue?<br>"
+			);
 
-						tools.debug("Paste-as-keys:", clipboard_text);
+			ui.confirm(confirm_msg).then(function(ok) {
+				if (ok) {
+					$("pak-button").disabled = true;
+					$("pak-led").className = "led-pak-typing";
+					$("pak-led").title = "Autotyping...";
 
-						var index = 0;
-						var iterate = function() {
-							__emitShortcut(clipboard_codes[index]).then(function() {
-								++index;
-								if (index < clipboard_codes.length && __ws) {
-									iterate();
-								} else {
-									$("pak-button").disabled = false;
-									$("pak-led").className = "led-off";
-									$("pak-led").title = "";
-								}
-							});
-						};
-						iterate();
-					}
-				});
-			}
-		});
+					tools.debug("Paste-as-keys:", text);
+
+					var index = 0;
+					var iterate = function() {
+						__emitShortcut(clipboard_codes[index]).then(function() {
+							++index;
+							if (index < clipboard_codes.length && __ws) {
+								iterate();
+							} else {
+								$("pak-button").disabled = false;
+								$("pak-led").className = "led-off";
+								$("pak-led").title = "";
+							}
+						});
+					};
+					iterate();
+				}
+			});
+		}
 	};
 
 	__init__();
