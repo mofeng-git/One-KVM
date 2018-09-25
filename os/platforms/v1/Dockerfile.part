@@ -1,4 +1,0 @@
-COPY stages/pikvm-v1/config.txt /boot/
-COPY stages/pikvm-v1/udev.rules /etc/udev/rules.d/pikvm.rules
-
-RUN cp /usr/share/kvmd/configs/kvmd/v1.yaml /etc/kvmd.yaml

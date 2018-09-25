@@ -1,3 +1,0 @@
-gpu_mem=16
-dtparam=act_led_gpio=27
-enable_uart=1
