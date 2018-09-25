@@ -75,4 +75,3 @@ clean:
 
 clean-all: clean
 	rm -rf .tox .mypy_cache
-	make -C hid clean-all
