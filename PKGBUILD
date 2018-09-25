@@ -6,7 +6,7 @@ pkgname=kvmd
 pkgver=0.66
 pkgrel=1
 pkgdesc="The main Pi-KVM daemon"
-url="https://github.com/pi-kvm/pi-kvm"
+url="https://github.com/pi-kvm/kvmd"
 license=(GPL)
 arch=(any)
 depends=(
@@ -27,7 +27,7 @@ md5sums=(SKIP)
 build() {
 	cd $srcdir
 	rm -rf $pkgname-build
-	cp -r pi-kvm-$pkgver/kvmd $pkgname-build
+	cp -r kvmd-$pkgver $pkgname-build
 	cd $pkgname-build
 	python setup.py build
 }
