@@ -20,7 +20,8 @@ all:
 
 
 run:
-	docker build --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
+	sudo modprobe loop
+	docker build $(TESTENV_OPTS) --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
 	- docker run --rm \
 			--volume `pwd`/kvmd:/kvmd:ro \
 			--volume `pwd`/web:/usr/share/kvmd/web:ro \

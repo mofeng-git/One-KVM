@@ -1,0 +1,5 @@
+gpu_mem=16
+start_x=1
+enable_uart=1
+dtoverlay=tc358743,i2c_pins_28_29=1
+dtparam=act_led_gpio=27

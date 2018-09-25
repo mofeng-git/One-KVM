@@ -35,7 +35,7 @@ div.stream-box-mouse-enabled {
 	cursor: url("../svg/stream-mouse-cursor.svg"), pointer;
 }
 
-select#stream-resolution-select {
+select#stream-quality-select {
 	margin: 8px 0 8px 0;
 }
 

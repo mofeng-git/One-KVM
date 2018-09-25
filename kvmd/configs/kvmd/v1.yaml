@@ -36,15 +36,21 @@ kvmd:
         init_restart_after: 1.0
         shutdown_delay: 10.0
 
-        resolutions:
-            - 800x600 - 720x576
+        quality: 80
 
         cmd:
-            - "/usr/bin/mjpg_streamer"
-            - "-i"
-            - "input_uvc.so -d /dev/kvmd-streamer -e 2 -t pal -y -n -r {resolution}"
-            - "-o"
-            - "output_http.so -l localhost -p 8082"
+            - "/usr/bin/ustreamer"
+            - "--device=/dev/kvmd-streamer"
+            - "--tv-standard=pal"
+            - "--format=yuyv"
+            - "--encoder=omx"
+            - "--jpeg-quality={quality}"
+            - "--width=720"
+            - "--height=576"
+            - "--fake-width=800"
+            - "--fake-height=600"
+            - "--host=localhost"
+            - "--port=8082"
 
 logging:
     version: 1

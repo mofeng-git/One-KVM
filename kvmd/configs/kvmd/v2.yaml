@@ -1,11 +1,11 @@
 kvmd:
     server:
-        host: 0.0.0.0
+        host: localhost
         port: 8081
         heartbeat: 3.0
 
     hid:
-        device: /dev/ttyS10
+        device: /dev/ttyAMA0
         speed: 115200
 
     atx:
@@ -28,12 +28,12 @@ kvmd:
 
     streamer:
         pinout:
-            cap: 21
-            conv: 25
+            cap: -1
+            conv: -1
 
-        sync_delay: 1.0
+        sync_delay: 0.0
         init_delay: 1.0
-        init_restart_after: 1.0
+        init_restart_after: 0.0
         shutdown_delay: 10.0
 
         quality: 80
@@ -41,10 +41,11 @@ kvmd:
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-streamer"
+            - "--format=uyvy"
+            - "--encoder=omx"
             - "--jpeg-quality={quality}"
-            - "--width=800"
-            - "--height=600"
-            - "--host=0.0.0.0"
+            - "--dv-timings"
+            - "--host=localhost"
             - "--port=8082"
 
 logging:

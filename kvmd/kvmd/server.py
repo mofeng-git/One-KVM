@@ -128,7 +128,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__system_tasks: List[asyncio.Task] = []
 
         self.__reset_streamer = False
-        self.__streamer_resolution = streamer.get_current_resolution()
+        self.__streamer_quality = streamer.get_current_quality()
 
     def run(self, host: str, port: int) -> None:
         self.__hid.start()
@@ -166,7 +166,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     # ===== INFO
 
-    async def __info_handler(self, _: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
+    async def __info_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(_get_system_info())
 
     # ===== WEBSOCKET
@@ -305,12 +305,15 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     @_wrap_exceptions_for_web("Can't set stream params")
     async def __streamer_set_params_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        resolution = request.query.get("resolution")
-        if resolution:
-            if resolution in self.__streamer.get_available_resolutions():
-                self.__streamer_resolution = resolution
-            else:
-                raise BadRequest("Unknown resolution %r" % (resolution))
+        quality = request.query.get("quality")
+        if quality:
+            try:
+                quality_int = int(quality)
+                if not (1 <= quality_int <= 100):
+                    raise ValueError()
+            except Exception:
+                raise BadRequest("Invalid quality %r" % (quality))
+            self.__streamer_quality = quality_int
         return _json()
 
     async def __streamer_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -356,7 +359,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             cur = len(self.__sockets)
             if prev == 0 and cur > 0:
                 if not self.__streamer.is_running():
-                    await self.__streamer.start(self.__streamer_resolution)
+                    await self.__streamer.start(self.__streamer_quality)
                     await self.__broadcast_event("streamer_state", **self.__streamer.get_state())
             elif prev > 0 and cur == 0:
                 shutdown_at = time.time() + self.__streamer_shutdown_delay
@@ -365,10 +368,10 @@ class Server:  # pylint: disable=too-many-instance-attributes
                     await self.__streamer.stop()
                     await self.__broadcast_event("streamer_state", **self.__streamer.get_state())
 
-            if self.__reset_streamer or self.__streamer_resolution != self.__streamer.get_current_resolution():
+            if self.__reset_streamer or self.__streamer_quality != self.__streamer.get_current_quality():
                 if self.__streamer.is_running():
                     await self.__streamer.stop()
-                    await self.__streamer.start(self.__streamer_resolution, no_init_restart=True)
+                    await self.__streamer.start(self.__streamer_quality, no_init_restart=True)
                     await self.__broadcast_event("streamer_state", **self.__streamer.get_state())
                 self.__reset_streamer = False
 

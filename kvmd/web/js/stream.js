@@ -5,8 +5,7 @@ function Stream() {
 
 	var __prev_state = false;
 
-	var __resolution = "640x480";
-	var __resolutions = ["640x480"];
+	var __quality = 80;
 
 	var __normal_size = {width: 640, height: 480};
 	var __size_factor = 1;
@@ -14,8 +13,13 @@ function Stream() {
 	var __init__ = function() {
 		$("stream-led").title = "Stream inactive";
 
+		var quality = 10;
+		for (; quality <= 100; quality += 10) {
+			$("stream-quality-select").innerHTML += "<option value=\"" + quality + "\">" + quality + "%</option>";
+		}
+
 		tools.setOnClick($("stream-reset-button"), __clickResetButton);
-		$("stream-resolution-select").onchange = __changeResolution;
+		$("stream-quality-select").onchange = __changeQuality;
 		$("stream-size-slider").oninput = __resize;
 		$("stream-size-slider").onchange = __resize;
 
@@ -27,12 +31,10 @@ function Stream() {
 	// XXX: In current implementation we don't need this event because Stream() has own state poller
 
 	var __startPoller = function() {
-		var http = tools.makeRequest("GET", "/streamer/snapshot", function() {
-			if (http.readyState === 2 || http.readyState === 4) {
-				var status = http.status;
-				http.onreadystatechange = null;
-				http.abort();
-				if (status !== 200) {
+		var http = tools.makeRequest("GET", "/streamer/ping", function() {
+			if (http.readyState === 4) {
+				var response = (http.status === 200 ? JSON.parse(http.responseText) : null);
+				if (http.status !== 200 || !response.stream.online) {
 					tools.info("Refreshing stream ...");
 					__prev_state = false;
 					$("stream-image").className = "stream-image-inactive";
@@ -40,8 +42,9 @@ function Stream() {
 					$("stream-led").className = "led-off";
 					$("stream-led").title = "Stream inactive";
 					$("stream-reset-button").disabled = true;
-					$("stream-resolution-select").disabled = true;
-				} else if (!__prev_state) {
+					$("stream-quality-select").disabled = true;
+				} else if (http.status === 200 && !__prev_state) {
+					__normal_size = response.stream.resolution;
 					__refreshImage();
 					__prev_state = true;
 					$("stream-image").className = "stream-image-active";
@@ -49,6 +52,7 @@ function Stream() {
 					$("stream-led").className = "led-on";
 					$("stream-led").title = "Stream is active";
 					$("stream-reset-button").disabled = false;
+					$("stream-quality-select").disabled = false;
 				}
 			}
 		});
@@ -66,11 +70,11 @@ function Stream() {
 		});
 	};
 
-	var __changeResolution = function() {
-		var resolution = $("stream-resolution-select").value;
-		if (__resolution != resolution) {
-			$("stream-resolution-select").disabled = true;
-			var http = tools.makeRequest("POST", "/kvmd/streamer/set_params?resolution=" + resolution, function() {
+	var __changeQuality = function() {
+		var quality = parseInt($("stream-quality-select").value);
+		if (__quality != quality) {
+			$("stream-quality-select").disabled = true;
+			var http = tools.makeRequest("POST", "/kvmd/streamer/set_params?quality=" + quality, function() {
 				if (http.readyState === 4) {
 					if (http.status !== 200) {
 						ui.error("Can't configure stream:<br>", http.responseText);
@@ -99,25 +103,14 @@ function Stream() {
 			if (http.readyState === 4 && http.status === 200) {
 				var result = JSON.parse(http.responseText).result;
 
-				if (__resolutions != result.resolutions) {
-					tools.info("Resolutions list changed:", result.resolutions);
-					$("stream-resolution-select").innerHTML = "";
-					result.resolutions.forEach(function(resolution) {
-						$("stream-resolution-select").innerHTML += "<option value=\"" + resolution + "\">" + resolution + "</option>";
-					});
-					$("stream-resolution-select").disabled = (result.resolutions.length == 1);
-					__resolutions = result.resolutions;
+				if (__quality != result.quality) {
+					tools.info("Quality changed:", result.quality);
+					document.querySelector("#stream-quality-select [value=\"" + result.quality + "\"]").selected = true;
+					__quality = result.quality;
 				}
 
-				if (__resolution != result.resolution) {
-					tools.info("Resolution changed:", result.resolution);
-					document.querySelector("#stream-resolution-select [value=\"" + result.resolution + "\"]").selected = true;
-					__resolution = result.resolution;
-				}
-
-				__normal_size = result.size;
 				__applySizeFactor();
-				$("stream-image").src = "/streamer/stream/" + new Date().getTime();
+				$("stream-image").src = "/streamer/stream?t=" + new Date().getTime();
 			}
 		});
 	};
