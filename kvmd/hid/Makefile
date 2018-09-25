@@ -14,8 +14,5 @@ upload:
 serial:
 	platformio serialports monitor
 
-regen:
-	python3 genmap.py
-
 clean:
 	rm -rf .pioenvs .piolibdeps

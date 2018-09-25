@@ -40,6 +40,10 @@ shell:
 	make run TESTENV_CMD=/bin/bash
 
 
+regen:
+	python3 genmap.py
+
+
 release:
 	make clean
 	make tox
@@ -66,7 +70,9 @@ push:
 clean:
 	rm -rf build site dist pkg src *.egg-info kvmd-*.tar.gz
 	find -name __pycache__ | xargs rm -rf
+	make -C hid clean
 
 
 clean-all: clean
 	rm -rf .tox .mypy_cache
+	make -C hid clean-all
