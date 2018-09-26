@@ -43,7 +43,7 @@ kvmd:
             - "--device=/dev/kvmd-streamer"
             - "--tv-standard=pal"
             - "--format=yuyv"
-            - "--encoder=omx"
+            - "--encoder=cpu"
             - "--jpeg-quality={quality}"
             - "--width=720"
             - "--height=576"
