@@ -44,7 +44,7 @@ kvmd:
             - "--tv-standard=pal"
             - "--format=yuyv"
             - "--encoder=cpu"
-            - "--jpeg-quality={quality}"
+            - "--quality={quality}"
             - "--width=720"
             - "--height=576"
             - "--fake-width=800"

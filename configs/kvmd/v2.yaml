@@ -36,14 +36,14 @@ kvmd:
         init_restart_after: 0.0
         shutdown_delay: 10.0
 
-        quality: 80
+        quality: 20
 
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-streamer"
             - "--format=uyvy"
             - "--encoder=omx"
-            - "--jpeg-quality={quality}"
+            - "--quality={quality}"
             - "--dv-timings"
             - "--host=localhost"
             - "--port=8082"

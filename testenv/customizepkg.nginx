@@ -1,0 +1,1 @@
+replace#global#_nginxver=.*#_nginxver=`pacman -Q nginx-mainline | grep -Po "\\d+\\.\\d+\\.\\d+"`

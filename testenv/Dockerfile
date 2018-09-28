@@ -27,14 +27,19 @@ RUN useradd -r -d / packer \
 	&& cd - \
 	&& rm -rf /tmp/packer-color
 
+COPY testenv/customizepkg.nginx /etc/customizepkg.d/nginx-mainline-mod-ndk
+COPY testenv/customizepkg.nginx /etc/customizepkg.d/nginx-mainline-mod-lua
+
 RUN pacman -Syy \
+	&& user-packer -S --noconfirm \
+		customizepkg \
 	&& user-packer -S --noconfirm \
 		python \
 		python-pip \
 		nginx-mainline \
-		nginx-mainline-mod-lua \
 		ustreamer \
 		socat \
+	&& env MAKEPKGOPTS="--skipchecksums --skippgpcheck" user-packer -S --noconfirm nginx-mainline-mod-lua \
 	&& pacman -Sc --noconfirm
 
 COPY testenv/requirements.txt requirements.txt

@@ -5,7 +5,7 @@ function Stream() {
 
 	var __prev_state = false;
 
-	var __quality = 80;
+	var __quality = 10;
 
 	var __normal_size = {width: 640, height: 480};
 	var __size_factor = 1;
@@ -14,6 +14,7 @@ function Stream() {
 		$("stream-led").title = "Stream inactive";
 
 		var quality = 10;
+		$("stream-quality-select").innerHTML = "";
 		for (; quality <= 100; quality += 10) {
 			$("stream-quality-select").innerHTML += "<option value=\"" + quality + "\">" + quality + "%</option>";
 		}
@@ -34,7 +35,7 @@ function Stream() {
 		var http = tools.makeRequest("GET", "/streamer/ping", function() {
 			if (http.readyState === 4) {
 				var response = (http.status === 200 ? JSON.parse(http.responseText) : null);
-				if (http.status !== 200 || !response.stream.online) {
+				if (http.status !== 200) {
 					tools.info("Refreshing stream ...");
 					__prev_state = false;
 					$("stream-image").className = "stream-image-inactive";
@@ -43,20 +44,27 @@ function Stream() {
 					$("stream-led").title = "Stream inactive";
 					$("stream-reset-button").disabled = true;
 					$("stream-quality-select").disabled = true;
-				} else if (http.status === 200 && !__prev_state) {
-					__normal_size = response.stream.resolution;
-					__refreshImage();
-					__prev_state = true;
-					$("stream-image").className = "stream-image-active";
-					$("stream-box").classList.remove("stream-box-inactive");
-					$("stream-led").className = "led-on";
-					$("stream-led").title = "Stream is active";
-					$("stream-reset-button").disabled = false;
-					$("stream-quality-select").disabled = false;
+				} else if (http.status === 200) {
+					if (__prev_state) {
+						if (__normal_size != response.stream.resolution) {
+							__normal_size = response.stream.resolution;
+							__applySizeFactor();
+						}
+					} else {
+						__normal_size = response.stream.resolution;
+						__refreshImage();
+						__prev_state = true;
+						$("stream-image").className = "stream-image-active";
+						$("stream-box").classList.remove("stream-box-inactive");
+						$("stream-led").className = "led-on";
+						$("stream-led").title = "Stream is active";
+						$("stream-reset-button").disabled = false;
+						$("stream-quality-select").disabled = false;
+					}
 				}
 			}
 		});
-		setTimeout(__startPoller, 1500);
+		setTimeout(__startPoller, 1000);
 	};
 
 	var __clickResetButton = function() {

@@ -41,7 +41,7 @@ kvmd:
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-streamer"
-            - "--jpeg-quality={quality}"
+            - "--quality={quality}"
             - "--width=800"
             - "--height=600"
             - "--host=0.0.0.0"
