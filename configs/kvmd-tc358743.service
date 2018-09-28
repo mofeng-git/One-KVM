@@ -1,0 +1,13 @@
+[Unit]
+Description=Loads EDID data to TC358743
+After=systemd-modules-load.service
+Before=kvmd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/v4l2-ctl --set-edid=file=/usr/share/kvmd/configs/tc358743/edid.hex --fix-edid-checksums
+ExecStop=/bin/true
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
