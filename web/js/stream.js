@@ -19,10 +19,13 @@ function Stream() {
 			$("stream-quality-select").innerHTML += "<option value=\"" + quality + "\">" + quality + "%</option>";
 		}
 
-		tools.setOnClick($("stream-reset-button"), __clickResetButton);
+		tools.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
+
 		$("stream-quality-select").onchange = __changeQuality;
 		$("stream-size-slider").oninput = __resize;
 		$("stream-size-slider").onchange = __resize;
+
+		tools.setOnClick($("stream-reset-button"), __clickResetButton);
 
 		__startPoller();
 	};
@@ -42,8 +45,9 @@ function Stream() {
 					$("stream-box").classList.add("stream-box-inactive");
 					$("stream-led").className = "led-off";
 					$("stream-led").title = "Stream inactive";
-					$("stream-reset-button").disabled = true;
+					$("stream-screenshot-button").disabled = true;
 					$("stream-quality-select").disabled = true;
+					$("stream-reset-button").disabled = true;
 				} else if (http.status === 200) {
 					if (__prev_state) {
 						if (__normal_size != response.stream.resolution) {
@@ -58,13 +62,23 @@ function Stream() {
 						$("stream-box").classList.remove("stream-box-inactive");
 						$("stream-led").className = "led-on";
 						$("stream-led").title = "Stream is active";
-						$("stream-reset-button").disabled = false;
+						$("stream-screenshot-button").disabled = false;
 						$("stream-quality-select").disabled = false;
+						$("stream-reset-button").disabled = false;
 					}
 				}
 			}
 		});
 		setTimeout(__startPoller, 1000);
+	};
+
+	var __clickScreenshotButton = function() {
+		var el_a = document.createElement("a");
+		el_a.href = "/streamer/snapshot";
+		el_a.download = "screenshot.jpg";
+		document.body.appendChild(el_a);
+		el_a.click();
+		setTimeout(() => document.body.removeChild(el_a), 0);
 	};
 
 	var __clickResetButton = function() {
