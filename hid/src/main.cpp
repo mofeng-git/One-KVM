@@ -4,13 +4,16 @@
 #include "inline.h"
 #include "keymap.h"
 
-#define CMD_SERIAL Serial1
-#define CMD_SERIAL_SPEED 115200
+
+#define CMD_SERIAL			Serial1
+#define CMD_SERIAL_SPEED	115200
 
 #define CMD_MOUSE_LEFT			0b10000000
 #define CMD_MOUSE_LEFT_STATE	0b00001000
 #define CMD_MOUSE_RIGHT			0b01000000
 #define CMD_MOUSE_RIGHT_STATE	0b00000100
+
+#define REPORT_INTERVAL 100
 
 
 // -----------------------------------------------------------------------------
@@ -80,10 +83,12 @@ void setup() {
 	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
 	BootKeyboard.begin();
 	SingleAbsoluteMouse.begin();
-	CMD_SERIAL.write(0);
 }
 
 void loop() {
+	static unsigned long last_report = 0;
+	bool cmd_processed = false;
+
 	if (CMD_SERIAL.available() >= 5) {
 		switch ((uint8_t)CMD_SERIAL.read()) {
 			case 0: cmdResetHid(); break;
@@ -93,6 +98,16 @@ void loop() {
 			case 4: cmdMouseWheelEvent(); break;
 			default: break;
 		}
+		cmd_processed = true;
+	}
+
+	unsigned long now = millis();
+	if (
+		cmd_processed
+		|| (now >= last_report && now - last_report >= REPORT_INTERVAL)
+		|| (now < last_report && ((unsigned long) -1) - last_report + now >= REPORT_INTERVAL)
+	) {
 		CMD_SERIAL.write(0);
+		last_report = now;
 	}
 }

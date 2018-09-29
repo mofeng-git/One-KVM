@@ -1,7 +1,4 @@
 all:
-	@ cat Makefile
-
-build:
 	platformio run
 
 update:
@@ -16,3 +13,6 @@ serial:
 
 clean:
 	rm -rf .pioenvs .piolibdeps
+
+help:
+	@ cat Makefile

@@ -153,13 +153,14 @@ class Hid(multiprocessing.Process):
                             else:
                                 raise RuntimeError("Unknown HID event")
                             hid_ready = False
+
+                    if tty.in_waiting:
+                        while tty.in_waiting:
+                            tty.read(tty.in_waiting)
+                        hid_ready = True
                     else:
-                        if tty.in_waiting:
-                            while tty.in_waiting:
-                                tty.read(tty.in_waiting)
-                            hid_ready = True
-                        else:
-                            time.sleep(0.05)
+                        time.sleep(0.05)
+
                     if self.__stop_event.is_set() and self.__queue.qsize() == 0:
                         break
         except Exception:
