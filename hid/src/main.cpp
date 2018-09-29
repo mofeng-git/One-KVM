@@ -17,11 +17,14 @@
 
 
 // -----------------------------------------------------------------------------
+INLINE void readNoop() {
+	for (int count = 0; count < 4; ++count) {
+		CMD_SERIAL.read();
+	}
+}
+
 INLINE void cmdResetHid() { // 0 bytes
-	CMD_SERIAL.read(); // unused
-	CMD_SERIAL.read(); // unused
-	CMD_SERIAL.read(); // unused
-	CMD_SERIAL.read(); // unused
+	readNoop();
 	BootKeyboard.releaseAll();
 	SingleAbsoluteMouse.releaseAll();
 }
@@ -96,7 +99,7 @@ void loop() {
 			case 2: cmdMouseMoveEvent(); break;
 			case 3: cmdMouseButtonEvent(); break;
 			case 4: cmdMouseWheelEvent(); break;
-			default: break;
+			default: readNoop(); break;
 		}
 		cmd_processed = true;
 	}
