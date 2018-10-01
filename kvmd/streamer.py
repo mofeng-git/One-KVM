@@ -106,17 +106,17 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 logger.info("Started streamer pid=%d: %s", proc.pid, cmd)
 
                 empty = 0
-                while proc.returncode is None:
-                    line = (await proc.stdout.readline()).decode(errors="ignore").strip()
+                async for line_bytes in proc.stdout:  # type: ignore
+                    line = line_bytes.decode(errors="ignore").strip()
                     if line:
-                        logger.info("streamer: %s", line)
+                        logger.info("Streamer: %s", line)
                         empty = 0
                     else:
                         empty += 1
                         if empty == 100:  # asyncio bug
-                            break
+                            raise RuntimeError("Streamer/asyncio: too many empty lines")
 
-                raise RuntimeError("WTF")
+                raise RuntimeError("Streamer unexpectedly died")
 
             except asyncio.CancelledError:
                 break
