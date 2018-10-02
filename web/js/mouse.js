@@ -7,6 +7,7 @@ function Mouse() {
 
 	var __current_pos = {x: 0, y:0};
 	var __sent_pos = {x: 0, y:0};
+	var __wheel_delta = {x: 0, y: 0};
 
 	var __stream_hovered = false;
 
@@ -132,13 +133,23 @@ function Mouse() {
 		if (event.preventDefault) {
 			event.preventDefault();
 		}
-		var delta = {x: event.deltaX, y: event.deltaY};
-		tools.debug("Mouse wheel:", delta);
-		if (__ws) {
-			__ws.send(JSON.stringify({
-				event_type: "mouse_wheel",
-				delta: delta,
-			}));
+
+		var delta = {x: 0, y: 0};
+
+		__wheel_delta.y += event.deltaY;
+		if (Math.abs(__wheel_delta.y) >= 100) {
+			delta.y = __wheel_delta.y / Math.abs(__wheel_delta.y) * (-5);
+			__wheel_delta.y = 0;
+		}
+
+		if (delta.y) {
+			tools.debug("Mouse wheel:", delta);
+			if (__ws) {
+				__ws.send(JSON.stringify({
+					event_type: "mouse_wheel",
+					delta: delta,
+				}));
+			}
 		}
 	};
 
