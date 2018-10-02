@@ -86,6 +86,7 @@
 							<input id="stream-size-slider" type="range" min="50" max="150" value="100" step="10" />
 						</div>
 					</div>
+					<hr>
 					<div class="ctl-dropdown-content-buttons">
 						<button disabled id="stream-reset-button">&bull; Reset stream</button>
 					</div>
@@ -218,28 +219,42 @@
 					<img data-dont-hide-menu id="pak-led" class="led-off" src="svg/gear-led.svg" />
 					Shortcuts &#8628;
 				</a>
-				<div class="ctl-dropdown-content ctl-dropdown-content-buttons">
-					<button disabled id="pak-button">&bull; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
+				<div class="ctl-dropdown-content">
+					<div class="ctl-dropdown-content-buttons">
+						<button disabled id="pak-button">&bull; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
+					</div>
 					<hr>
-					<button data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
+					<div class="ctl-dropdown-content-buttons buttons-row">
+						<button data-shortcut="CapsLock" class="row50">&bull; CapsLock</button>
+						<button data-shortcut="MetaLeft" class="row50">&bull; Left Win</button>
+					</div>
 					<hr>
-					<button data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
-					<button data-shortcut="ControlLeft Escape">&bull; Ctrl+Esc</button>
-					<button data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
-					<button data-shortcut="AltLeft Escape">&bull; Alt+Escape</button>
-					<button data-shortcut="AltLeft Space">&bull; Alt+Space</button>
-					<button data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
-					<button data-shortcut="AltLeft F4">&bull; Alt+F4</button>
+					<div class="ctl-dropdown-content-buttons">
+						<button data-shortcut="AltLeft ShiftLeft">&bull; Alt+Shift</button>
+						<button data-shortcut="ControlLeft ShiftLeft">&bull; Ctrl+Shift</button>
+						<button data-shortcut="ShiftLeft ShiftRight">&bull; Shift+Shift</button>
+						<button data-shortcut="MetaLeft Space">&bull; Win+Space</button>
+						<hr>
+						<button data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
+						<button data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
+						<button data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
+						<button data-shortcut="AltLeft F4">&bull; Alt+F4</button>
+						<hr>
+						<button data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
+					</div>
 					<hr>
-					<button data-shortcut="AltLeft PrintScreen">&bull; Alt+PrtSc</button>
-					<button data-shortcut="PrintScreen">&bull; PrtSc</button>
-					<hr>
-					<button data-shortcut="AltLeft PrintScreen KeyR">&bull; Alt+SysRq+R</button>
-					<button data-shortcut="AltLeft PrintScreen KeyE">&bull; Alt+SysRq+E</button>
-					<button data-shortcut="AltLeft PrintScreen KeyI">&bull; Alt+SysRq+I</button>
-					<button data-shortcut="AltLeft PrintScreen KeyS">&bull; Alt+SysRq+S</button>
-					<button data-shortcut="AltLeft PrintScreen KeyU">&bull; Alt+SysRq+U</button>
-					<button data-shortcut="AltLeft PrintScreen KeyB">&bull; Alt+SysRq+B</button>
+					<div class="ctl-dropdown-content-text">
+						Alt+SysRq+... <sup><i>linux magic (<a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">help</a>)</i></sup>
+					</div>
+					<div class="ctl-dropdown-content-buttons buttons-row">
+						<hr>
+						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyR" class="row16">R</button>
+						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyE" class="row16">E</button>
+						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyI" class="row16">I</button>
+						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyS" class="row16">S</button>
+						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyU" class="row16">U</button>
+						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyB" class="row16">B</button>
+					</div>
 				</div>
 			</div>
 		</li>
