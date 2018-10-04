@@ -47,7 +47,7 @@ kvmd:
             - "--dv-timings"
             - "--host=localhost"
             - "--port=8082"
-            - "--drop-same-frames=3"
+            - "--drop-same-frames=30"
 
 logging:
     version: 1
