@@ -48,6 +48,7 @@ function Stream() {
 					$("stream-screenshot-button").disabled = true;
 					$("stream-quality-select").disabled = true;
 					$("stream-reset-button").disabled = true;
+					__updateStreamHeader(false);
 				} else if (http.status === 200) {
 					if (__prev_state) {
 						if (__normal_size != response.stream.resolution) {
@@ -66,10 +67,20 @@ function Stream() {
 						$("stream-quality-select").disabled = false;
 						$("stream-reset-button").disabled = false;
 					}
+					__updateStreamHeader(true);
 				}
 			}
 		});
 		setTimeout(__startPoller, 1000);
+	};
+
+	var __updateStreamHeader = function(online) {
+		var el_grab = document.querySelector("#stream-window-header .window-grab");
+		if (online) {
+			el_grab.innerHTML = "Stream &ndash; " + __normal_size.width + "x" + __normal_size.height;
+		} else {
+			el_grab.innerHTML = "Stream &ndash; offline";
+		}
 	};
 
 	var __clickScreenshotButton = function() {
