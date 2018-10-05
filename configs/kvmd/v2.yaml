@@ -21,8 +21,13 @@ kvmd:
         state_poll: 0.1
 
     msd:
+        pinout:
+            target: 12
+            reset: 13
+
         device: "/dev/kvmd-msd"
         init_delay: 2.0
+        reset_delay: 1.0
         write_meta: true
         chunk_size: 65536
 

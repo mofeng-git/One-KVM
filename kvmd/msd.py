@@ -16,6 +16,7 @@ import aiofiles
 import aiofiles.base
 
 from . import aioregion
+from . import gpio
 
 from .logging import get_logger
 
@@ -164,15 +165,25 @@ def _msd_operated(method: Callable) -> Callable:
 class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
+        target: int,
+        reset: int,
+
         device_path: str,
         init_delay: float,
+        reset_delay: float,
         write_meta: bool,
+
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
+        self.__target = gpio.set_output(target)
+        self.__reset = gpio.set_output(reset)
+
         self._device_path = device_path
         self.__init_delay = init_delay
+        self.__reset_delay = reset_delay
         self.__write_meta = write_meta
+
         self.__loop = loop
 
         self.__device_info: Optional[_MassStorageDeviceInfo] = None
@@ -202,7 +213,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         with self.__region:
             if self.__device_info:
                 raise MsdAlreadyConnectedToKvmError()
-            # TODO: disable gpio
+            gpio.write(self.__target, False)
             if not no_delay:
                 await asyncio.sleep(self.__init_delay)
             await self.__load_device_info()
@@ -213,9 +224,16 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         with self.__region:
             if not self.__device_info:
                 raise MsdAlreadyConnectedToPcError()
-            # TODO: enable gpio
+            gpio.write(self.__target, True)
             self.__device_info = None
             get_logger().info("Mass-storage device switched to Server")
+
+    @_msd_operated
+    async def reset(self) -> None:
+        with self.__region:
+            gpio.write(self.__reset, True)
+            await asyncio.sleep(self.__reset_delay)
+            gpio.write(self.__reset, False)
 
     def get_state(self) -> Dict:
         info = (self.__saved_device_info._asdict() if self.__saved_device_info else None)
@@ -237,7 +255,8 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     async def cleanup(self) -> None:
         await self.__close_device_file()
-        # TODO: disable gpio
+        gpio.write(self.__target, False)
+        gpio.write(self.__reset, False)
 
     @_msd_operated
     async def __aenter__(self) -> "MassStorageDevice":
@@ -298,6 +317,6 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
                 await self.__device_file.close()
         except Exception:
             get_logger().exception("Can't close mass-storage device file")
-            # TODO: reset device file
+            await self.reset()
         self.__device_file = None
         self.__written = 0

@@ -147,6 +147,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         app.router.add_get("/msd", self.__msd_state_handler)
         app.router.add_post("/msd/connect", self.__msd_connect_handler)
         app.router.add_post("/msd/write", self.__msd_write_handler)
+        app.router.add_post("/msd/reset", self.__msd_reset_handler)
 
         app.router.add_get("/streamer", self.__streamer_state_handler)
         app.router.add_post("/streamer/set_params", self.__streamer_set_params_handler)
@@ -297,6 +298,11 @@ class Server:  # pylint: disable=too-many-instance-attributes
             if written != 0:
                 logger.info("Written %d bytes to mass-storage device", written)
         return _json({"written": written})
+
+    @_wrap_exceptions_for_web("Mass-storage error")
+    async def __msd_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        await self.__msd.reset()
+        return _json()
 
     # ===== STREAMER
 

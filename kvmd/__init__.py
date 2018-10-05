@@ -37,8 +37,11 @@ def main() -> None:
         )
 
         msd = MassStorageDevice(
+            target=int(config["msd"]["pinout"]["target"]),
+            reset=int(config["msd"]["pinout"]["reset"]),
             device_path=str(config["msd"]["device"]),
             init_delay=float(config["msd"]["init_delay"]),
+            reset_delay=float(config["msd"]["reset_delay"]),
             write_meta=bool(config["msd"]["write_meta"]),
             loop=loop,
         )

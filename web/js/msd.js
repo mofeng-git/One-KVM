@@ -18,6 +18,8 @@ function Msd() {
 
 		tools.setOnClick($("msd-switch-to-kvm-button"), () => __clickSwitchButton("kvm"));
 		tools.setOnClick($("msd-switch-to-server-button"), () => __clickSwitchButton("server"));
+
+		tools.setOnClick($("msd-reset-button"), __clickResetButton);
 	};
 
 	/********************************************************************************/
@@ -86,6 +88,18 @@ function Msd() {
 		__applyState();
 	};
 
+	var __clickResetButton = function() {
+		var http = tools.makeRequest("POST", "/kvmd/msd/reset", function() {
+			if (http.readyState === 4) {
+				if (http.status !== 200) {
+					ui.error("MSD reset error:<br>", http.responseText);
+				}
+			}
+			__applyState();
+		});
+		__applyState();
+	};
+
 	var __applyState = function() {
 		if (__state.connected_to === "server") {
 			$("msd-another-another-user-uploads").style.display = "none";
@@ -123,6 +137,7 @@ function Msd() {
 		$("msd-select-new-image-button").disabled = (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || __upload_http);
 		$("msd-upload-new-image-button").disabled = (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || !__image_file);
 		$("msd-abort-uploading-button").disabled = (!__state.in_operate || !__upload_http);
+		$("msd-reset-button").disabled = (!__state.in_operate || __upload_http);
 
 		$("msd-new-image").style.display = (__image_file ? "block" : "none");
 		$("msd-progress").setAttribute("data-label", "Waiting for upload ...");
