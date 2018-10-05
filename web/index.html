@@ -15,6 +15,7 @@
 	<link rel="stylesheet" href="css/modals.css">
 	<link rel="stylesheet" href="css/leds.css">
 	<link rel="stylesheet" href="css/stream.css">
+	<link rel="stylesheet" href="css/shortcuts.css">
 	<link rel="stylesheet" href="css/msd.css">
 	<link rel="stylesheet" href="css/keyboard.css">
 	<link rel="stylesheet" href="css/about.css">
@@ -222,7 +223,9 @@
 				</a>
 				<div class="ctl-dropdown-content">
 					<div class="ctl-dropdown-content-buttons">
-						<button disabled id="pak-button">&bull; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
+						<textarea data-dont-hide-menu id="pak-text" placeholder="Paste your text here"></textarea>
+						<hr>
+						<button disabled id="pak-button">&bull; &uarr; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
 						<hr>
 						<div class="buttons-row">
 							<button data-shortcut="CapsLock" class="row50">&bull; CapsLock</button>

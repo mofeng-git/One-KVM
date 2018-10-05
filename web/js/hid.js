@@ -41,12 +41,8 @@ function Hid() {
 		window.onpagehide = __releaseAll;
 		window.onblur = __releaseAll;
 
-		if (window.navigator.clipboard && window.navigator.clipboard.readText) {
-			__chars_to_codes = __buildCharsToCodes();
-			tools.setOnClick($("pak-button"), __pasteAsKeysFromClipboard);
-		} else {
-			$("pak-button").title = $("pak-led").title = "Your browser does not support the Clipboard API.\nUse Google Chrome or Chromium.";
-		}
+		__chars_to_codes = __buildCharsToCodes();
+		tools.setOnClick($("pak-button"), __pasteAsKeys);
 
 		Array.prototype.forEach.call(document.querySelectorAll("[data-shortcut]"), function(el_shortcut) {
 			tools.setOnClick(el_shortcut, () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" ")));
@@ -59,7 +55,7 @@ function Hid() {
 		__ws = ws;
 		__keyboard.setSocket(ws);
 		__mouse.setSocket(ws);
-		$("pak-button").disabled = !(window.navigator.clipboard && window.navigator.clipboard.readText && ws);
+		$("pak-text").disabled = $("pak-button").disabled = !ws;
 	};
 
 	var __releaseAll = function() {
@@ -131,12 +127,8 @@ function Hid() {
 		return chars_to_codes;
 	};
 
-	var __pasteAsKeysFromClipboard = function() {
-		window.navigator.clipboard.readText().then(__pasteAsKeys);
-	};
-
-	var __pasteAsKeys = function(text) {
-		text = text.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
+	var __pasteAsKeys = function() {
+		var text = $("pak-text").value.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
 		if (text) {
 			var clipboard_codes = [];
 			var codes_count = 0;
@@ -157,6 +149,7 @@ function Hid() {
 
 			ui.confirm(confirm_msg).then(function(ok) {
 				if (ok) {
+					$("pak-text").disabled = true;
 					$("pak-button").disabled = true;
 					$("pak-led").className = "led-pak-typing";
 					$("pak-led").title = "Autotyping...";
@@ -170,6 +163,8 @@ function Hid() {
 							if (index < clipboard_codes.length && __ws) {
 								iterate();
 							} else {
+								$("pak-text").value = "";
+								$("pak-text").disabled = false;
 								$("pak-button").disabled = false;
 								$("pak-led").className = "led-off";
 								$("pak-led").title = "";
@@ -177,6 +172,8 @@ function Hid() {
 						});
 					};
 					iterate();
+				} else {
+					$("pak-text").value = "";
 				}
 			});
 		}
