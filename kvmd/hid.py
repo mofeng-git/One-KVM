@@ -14,6 +14,8 @@ import yaml
 import serial
 import setproctitle
 
+from . import gpio
+
 from .logging import get_logger
 
 
@@ -44,17 +46,21 @@ class _MouseWheelEvent(NamedTuple):
     delta_y: int
 
 
-class Hid(multiprocessing.Process):
+class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
+        reset: int,
         device_path: str,
         speed: int,
+        reset_delay: float,
     ) -> None:
 
         super().__init__(daemon=True)
 
+        self.__reset = gpio.set_output(reset)
         self.__device_path = device_path
         self.__speed = speed
+        self.__reset_delay = reset_delay
 
         self.__pressed_keys: Set[str] = set()
         self.__pressed_mouse_buttons: Set[str] = set()
@@ -67,7 +73,11 @@ class Hid(multiprocessing.Process):
         get_logger().info("Starting HID daemon ...")
         super().start()
 
-    # TODO: add reset or power switching
+    async def reset(self) -> None:
+        async with self.__lock:
+            gpio.write(self.__reset, True)
+            await asyncio.sleep(self.__reset_delay)
+            gpio.write(self.__reset, False)
 
     async def send_key_event(self, key: str, state: bool) -> None:
         if not self.__stop_event.is_set():
@@ -114,6 +124,7 @@ class Hid(multiprocessing.Process):
             else:
                 get_logger().warning("Emergency cleaning up HID events ...")
                 self.__emergency_clear_events()
+            gpio.write(self.__reset, False)
 
     def __unsafe_clear_events(self) -> None:
         for button in self.__pressed_mouse_buttons:

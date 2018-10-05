@@ -23,8 +23,10 @@ def main() -> None:
         loop = asyncio.get_event_loop()
 
         hid = Hid(
+            reset=int(config["hid"]["pinout"]["reset"]),
             device_path=str(config["hid"]["device"]),
             speed=int(config["hid"]["speed"]),
+            reset_delay=float(config["hid"]["reset_delay"]),
         )
 
         atx = Atx(

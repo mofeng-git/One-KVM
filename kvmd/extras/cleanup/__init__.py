@@ -16,6 +16,7 @@ def main() -> None:
     logger.info("Cleaning up ...")
     with gpio.bcm():
         for (name, pin) in [
+            ("hid_reset", config["hid"]["pinout"]["reset"]),
             ("msd_target", config["msd"]["pinout"]["target"]),
             ("msd_reset", config["msd"]["pinout"]["reset"]),
             ("atx_power_switch", config["atx"]["pinout"]["power_switch"]),

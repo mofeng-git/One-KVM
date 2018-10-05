@@ -42,7 +42,9 @@ function Hid() {
 		window.onblur = __releaseAll;
 
 		__chars_to_codes = __buildCharsToCodes();
-		tools.setOnClick($("pak-button"), __pasteAsKeys);
+		tools.setOnClick($("pak-button"), __clickPasteAsKeysButton);
+
+		tools.setOnClick($("hid-reset-button"), __clickResetButton);
 
 		Array.prototype.forEach.call(document.querySelectorAll("[data-shortcut]"), function(el_shortcut) {
 			tools.setOnClick(el_shortcut, () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" ")));
@@ -55,7 +57,7 @@ function Hid() {
 		__ws = ws;
 		__keyboard.setSocket(ws);
 		__mouse.setSocket(ws);
-		$("pak-text").disabled = $("pak-button").disabled = !ws;
+		$("pak-text").disabled = $("pak-button").disabled = $("hid-reset-button").disabled = !ws;
 	};
 
 	var __releaseAll = function() {
@@ -127,7 +129,7 @@ function Hid() {
 		return chars_to_codes;
 	};
 
-	var __pasteAsKeys = function() {
+	var __clickPasteAsKeysButton = function() {
 		var text = $("pak-text").value.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
 		if (text) {
 			var clipboard_codes = [];
@@ -177,6 +179,16 @@ function Hid() {
 				}
 			});
 		}
+	};
+
+	var __clickResetButton = function() {
+		var http = tools.makeRequest("POST", "/kvmd/hid/reset", function() {
+			if (http.readyState === 4) {
+				if (http.status !== 200) {
+					ui.error("HID reset error:<br>", http.responseText);
+				}
+			}
+		});
 	};
 
 	__init__();

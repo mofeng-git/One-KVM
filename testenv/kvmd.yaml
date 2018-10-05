@@ -5,8 +5,12 @@ kvmd:
         heartbeat: 3.0
 
     hid:
+        pinout:
+            reset: 4
+
         device: /dev/ttyS10
         speed: 115200
+        reset_delay: 0.1
 
     atx:
         pinout:

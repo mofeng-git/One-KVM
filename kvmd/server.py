@@ -141,6 +141,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         app.router.add_get("/ws", self.__ws_handler)
 
+        app.router.add_post("/hid/reset", self.__hid_reset_handler)
+
         app.router.add_get("/atx", self.__atx_state_handler)
         app.router.add_post("/atx/click", self.__atx_click_handler)
 
@@ -227,6 +229,12 @@ class Server:  # pylint: disable=too-many-instance-attributes
         except Exception:
             return
         await self.__hid.send_mouse_wheel_event(delta_y)
+
+    # ===== HID
+
+    async def __hid_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        await self.__hid.reset()
+        return _json()
 
     # ===== ATX
 
