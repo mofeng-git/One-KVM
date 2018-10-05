@@ -4,10 +4,11 @@ function Stream() {
 	/********************************************************************************/
 
 	var __prev_state = false;
+	var __normal_size = {width: 640, height: 480};
+	var __client_id = "";
+	var __fps = 0;
 
 	var __quality = 10;
-
-	var __normal_size = {width: 640, height: 480};
 	var __size_factor = 1;
 
 	var __init__ = function() {
@@ -38,9 +39,11 @@ function Stream() {
 		var http = tools.makeRequest("GET", "/streamer/ping", function() {
 			if (http.readyState === 4) {
 				var response = (http.status === 200 ? JSON.parse(http.responseText) : null);
+
 				if (http.status !== 200) {
 					tools.info("Refreshing stream ...");
 					__prev_state = false;
+					__fps = 0;
 					$("stream-image").className = "stream-image-inactive";
 					$("stream-box").classList.add("stream-box-inactive");
 					$("stream-led").className = "led-off";
@@ -49,6 +52,7 @@ function Stream() {
 					$("stream-quality-select").disabled = true;
 					$("stream-reset-button").disabled = true;
 					__updateStreamHeader(false);
+
 				} else if (http.status === 200) {
 					if (__prev_state) {
 						if (__normal_size != response.stream.resolution) {
@@ -67,6 +71,18 @@ function Stream() {
 						$("stream-quality-select").disabled = false;
 						$("stream-reset-button").disabled = false;
 					}
+
+					var client_id = tools.getCookie("stream_client_id");
+					if (client_id) {
+						__client_id = client_id;
+					}
+
+					if (response.stream.clients_stat.hasOwnProperty(__client_id)) {
+						__fps = response.stream.clients_stat[__client_id].fps;
+					} else {
+						__fps = 0;
+					}
+
 					__updateStreamHeader(true);
 				}
 			}
@@ -77,7 +93,7 @@ function Stream() {
 	var __updateStreamHeader = function(online) {
 		var el_grab = document.querySelector("#stream-window-header .window-grab");
 		if (online) {
-			el_grab.innerHTML = "Stream &ndash; " + __normal_size.width + "x" + __normal_size.height;
+			el_grab.innerHTML = "Stream &ndash; " + __normal_size.width + "x" + __normal_size.height + " / " + __fps + " fps";
 		} else {
 			el_grab.innerHTML = "Stream &ndash; offline";
 		}

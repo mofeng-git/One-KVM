@@ -10,6 +10,13 @@ var tools = new function() {
 		return http;
 	};
 
+	this.getCookie = function(name) {
+		var matches = document.cookie.match(new RegExp(
+			"(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, "\\$1") + "=([^;]*)" // eslint-disable-line no-useless-escape
+		));
+		return (matches ? decodeURIComponent(matches[1]) : "");
+	};
+
 	this.setOnClick = function(el, callback) {
 		el.onclick = el.ontouchend = function(event) {
 			event.preventDefault();
