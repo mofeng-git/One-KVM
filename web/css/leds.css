@@ -37,7 +37,7 @@ img.led-hdd-busy {
 }
 
 img.led-msd-writing,
-img.led-pak-typing {
+img.led-hid-pak-typing {
 	-webkit-filter: var(--led-filter-yellow);
 	filter: var(--led-filter-yellow);
 	-webkit-animation: var(--led-spin-fast);

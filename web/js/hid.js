@@ -42,7 +42,7 @@ function Hid() {
 		window.onblur = __releaseAll;
 
 		__chars_to_codes = __buildCharsToCodes();
-		tools.setOnClick($("pak-button"), __clickPasteAsKeysButton);
+		tools.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
 
 		tools.setOnClick($("hid-reset-button"), __clickResetButton);
 
@@ -57,7 +57,7 @@ function Hid() {
 		__ws = ws;
 		__keyboard.setSocket(ws);
 		__mouse.setSocket(ws);
-		$("pak-text").disabled = $("pak-button").disabled = $("hid-reset-button").disabled = !ws;
+		$("hid-pak-text").disabled = $("hid-pak-button").disabled = $("hid-reset-button").disabled = !ws;
 	};
 
 	var __releaseAll = function() {
@@ -130,7 +130,7 @@ function Hid() {
 	};
 
 	var __clickPasteAsKeysButton = function() {
-		var text = $("pak-text").value.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
+		var text = $("hid-pak-text").value.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
 		if (text) {
 			var clipboard_codes = [];
 			var codes_count = 0;
@@ -151,10 +151,10 @@ function Hid() {
 
 			ui.confirm(confirm_msg).then(function(ok) {
 				if (ok) {
-					$("pak-text").disabled = true;
-					$("pak-button").disabled = true;
-					$("pak-led").className = "led-pak-typing";
-					$("pak-led").title = "Autotyping...";
+					$("hid-pak-text").disabled = true;
+					$("hid-pak-button").disabled = true;
+					$("hid-pak-led").className = "led-hid-pak-typing";
+					$("hid-pak-led").title = "Autotyping...";
 
 					tools.debug("Paste-as-keys:", text);
 
@@ -165,17 +165,17 @@ function Hid() {
 							if (index < clipboard_codes.length && __ws) {
 								iterate();
 							} else {
-								$("pak-text").value = "";
-								$("pak-text").disabled = false;
-								$("pak-button").disabled = false;
-								$("pak-led").className = "led-off";
-								$("pak-led").title = "";
+								$("hid-pak-text").value = "";
+								$("hid-pak-text").disabled = false;
+								$("hid-pak-button").disabled = false;
+								$("hid-pak-led").className = "led-off";
+								$("hid-pak-led").title = "";
 							}
 						});
 					};
 					iterate();
 				} else {
-					$("pak-text").value = "";
+					$("hid-pak-text").value = "";
 				}
 			});
 		}

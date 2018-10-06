@@ -1,4 +1,4 @@
-textarea#pak-text {
+textarea#hid-pak-text {
 	display: block;
 	resize: none;
 	width: 100%;
@@ -10,12 +10,12 @@ textarea#pak-text {
 	-webkit-appearance:none;
 }
 
-textarea#pak-text::-moz-placeholder {
+textarea#hid-pak-text::-moz-placeholder {
 	line-height: 40px;
 	text-align: center;
 }
 
-textarea#pak-text::-webkit-input-placeholder {
+textarea#hid-pak-text::-webkit-input-placeholder {
 	line-height: 40px;
 	text-align: center;
 }
