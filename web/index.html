@@ -14,6 +14,7 @@
 	<link rel="stylesheet" href="css/windows.css">
 	<link rel="stylesheet" href="css/modals.css">
 	<link rel="stylesheet" href="css/leds.css">
+	<link rel="stylesheet" href="css/switches.css">
 	<link rel="stylesheet" href="css/stream.css">
 	<link rel="stylesheet" href="css/hid.css">
 	<link rel="stylesheet" href="css/msd.css">
@@ -76,15 +77,30 @@
 					</div>
 					<hr>
 					<div data-dont-hide-menu class="ctl-dropdown-content-text">
-						Quality:
+						Stream quality:
 						<select disabled id="stream-quality-select"></select>
 					</div>
 					<hr>
 					<div data-dont-hide-menu class="ctl-dropdown-content-text">
 						Stream size: <span id="stream-size-value">100%</span>
 						<div id="stream-size-slider-box">
-							<input id="stream-size-slider" type="range" min="50" max="150" value="100" step="10" />
+							<input id="stream-size-slider" type="range" />
 						</div>
+					</div>
+					<hr>
+					<div data-dont-hide-menu class="ctl-dropdown-content-text">
+						<table id="stream-auto-resize-box"><tr>
+							<td>Auto-resize stream:</td>
+							<td align="right">
+								<div class="switch-box">
+									<input type="checkbox" class="switch-checkbox" id="stream-auto-resize-checkbox" checked />
+									<label class="switch-label" for="stream-auto-resize-checkbox">
+										<span class="switch-inner"></span>
+										<span class="switch"></span>
+									</label>
+								</div>
+							</td>
+						</tr></table>
 					</div>
 					<hr>
 					<div class="ctl-dropdown-content-buttons">

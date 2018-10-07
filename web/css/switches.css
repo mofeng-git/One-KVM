@@ -1,0 +1,76 @@
+div.switch-box {
+	display: inline-block;
+	vertical-align: middle;
+	position: relative;
+	width: 50px;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+}
+
+div.switch-box input[type=checkbox].switch-checkbox {
+	display: none;
+}
+
+div.switch-box label.switch-label {
+	display: block;
+	overflow: hidden;
+	cursor: pointer;
+	border: none;
+	border-radius: 15px;
+}
+
+div.switch-box span.switch-inner {
+	display: block;
+	width: 200%;
+	margin-left: -100%;
+}
+
+div.switch-box span.switch-inner:before, span.switch-inner:after {
+	display: block;
+	float: left;
+	width: 50%;
+	height: 20px;
+	padding: 0;
+	line-height: 22px;
+	font-size: 10px;
+	font-family: sans-serif !important;
+	font-weight: bold;
+	box-sizing: border-box;
+}
+
+div.switch-box span.switch-inner:before {
+	content: "ON";
+	padding-left: 5px;
+	background-color: var(--bg-color-gray);
+	color: var(--fg-color-normal);
+	text-align: left;
+}
+
+div.switch-box span.switch-inner:after {
+	content: "OFF";
+	padding-right: 5px;
+	background-color: var(--bg-color-gray);
+	color: var(--fg-color-inactive);
+	text-align: right;
+}
+
+div.switch-box span.switch {
+	display: block;
+	width: 15px;
+	margin: 0px;
+	background: var(--bg-color-intensive);
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 31px;
+	border: var(--intensive-border);
+	border-radius: 15px;
+}
+
+div.switch-box input[type=checkbox].switch-checkbox:checked + label.switch-label span.switch-inner {
+	margin-left: 0;
+}
+
+div.switch-box input[type=checkbox].switch-checkbox:checked + label.switch-label span.switch {
+	right: 0px;
+}

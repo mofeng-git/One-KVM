@@ -122,9 +122,9 @@ function Ui() {
 		return promise;
 	};
 
-	self.showWindow = function(el_window, raise=true) {
-		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered")) {
-			var view = __getViewGeometry();
+	self.showWindow = function(el_window, raise=true, center=false) {
+		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered") || center) {
+			var view = self.getViewGeometry();
 			var rect = el_window.getBoundingClientRect();
 			el_window.style.top = Math.max($("ctl").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
 			el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
@@ -136,8 +136,17 @@ function Ui() {
 		}
 	};
 
+	self.getViewGeometry = function() {
+		return {
+			top: $("ctl").clientHeight,
+			bottom: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
+			left: 0,
+			right: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
+		};
+	};
+
 	var __isWindowOnPage = function(el_window) {
-		var view = __getViewGeometry();
+		var view = self.getViewGeometry();
 		var rect = el_window.getBoundingClientRect();
 
 		return (
@@ -146,15 +155,6 @@ function Ui() {
 			&& (rect.left + el_window.clientWidth / 1.5) >= view.left
 			&& (rect.right - el_window.clientWidth / 1.5) <= view.right
 		);
-	};
-
-	var __getViewGeometry = function() {
-		return {
-			top: $("ctl").clientHeight,
-			bottom: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
-			left: 0,
-			right: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
-		};
 	};
 
 	var __toggleMenu = function(el_a) {
@@ -211,7 +211,7 @@ function Ui() {
 	};
 
 	var __organizeWindowsOnResize = function(orientation) {
-		var view = __getViewGeometry();
+		var view = self.getViewGeometry();
 		Array.prototype.forEach.call($$("window"), function(el_window) {
 			if (el_window.style.visibility === "visible" && (orientation || el_window.hasAttribute("data-centered"))) {
 				var rect = el_window.getBoundingClientRect();

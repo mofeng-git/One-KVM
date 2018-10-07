@@ -39,8 +39,6 @@ select#stream-quality-select {
 	margin: 8px 0 8px 0;
 }
 
-span#stream-size-value {
-}
 div#stream-size-slider-box {
 	margin-top: 5px;
 	display: flex;
@@ -91,6 +89,11 @@ div#stream-size-slider-box input[type=range]::-moz-range-thumb {
 	width: 18px;
 	border-radius: 25px;
 	background: var(--bg-color-intensive);
+}
+
+table#stream-auto-resize-box {
+	width: 100%;
+	border-collapse: collapse;
 }
 
 div#stream-mouse-buttons {

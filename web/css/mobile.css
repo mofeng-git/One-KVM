@@ -83,5 +83,8 @@
 		div#stream-size-slider-box input[type=range] {
 			margin: 20px 0 20px 0 !important;
 		}
+		table#stream-auto-resize-box {
+			margin: 20px 0 20px 0 !important;
+		}
 	}
 }
