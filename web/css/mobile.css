@@ -54,7 +54,7 @@
 	}
 
 	div#stream-window {
-		padding-top: 9px !important;
+		padding-top: 3px !important;
 		border-top: 0 !important;
 		border-radius: 0 0 8px 8px !important;
 		top: 50px !important;
@@ -64,6 +64,14 @@
 	}
 	div#stream-window-header {
 		display: none !important;
+	}
+	div#stream-info {
+		display: block !important;
+		margin: 0;
+		padding: 0;
+		padding-bottom: 3px;
+		font-size: 0.8em;
+		color: var(--fg-color-dark);
 	}
 	div#stream-mouse-buttons {
 		display: block !important;
@@ -80,9 +88,10 @@
 	}
 
 	@supports (-webkit-appearance:none) {
-		div#stream-size-slider-box input[type=range] {
+		input[type=range].slider {
 			margin: 20px 0 20px 0 !important;
 		}
+
 		table#stream-auto-resize-box {
 			margin: 20px 0 20px 0 !important;
 		}

@@ -14,6 +14,7 @@
 	<link rel="stylesheet" href="css/windows.css">
 	<link rel="stylesheet" href="css/modals.css">
 	<link rel="stylesheet" href="css/leds.css">
+	<link rel="stylesheet" href="css/sliders.css">
 	<link rel="stylesheet" href="css/switches.css">
 	<link rel="stylesheet" href="css/stream.css">
 	<link rel="stylesheet" href="css/hid.css">
@@ -77,14 +78,16 @@
 					</div>
 					<hr>
 					<div data-dont-hide-menu class="ctl-dropdown-content-text">
-						Stream quality:
-						<select disabled id="stream-quality-select"></select>
+						Stream quality: <span id="stream-quality-value">80%</span>
+						<div class="stream-slider-box">
+							<input disabled type="range" id="stream-quality-slider" class="slider" />
+						</div>
 					</div>
 					<hr>
 					<div data-dont-hide-menu class="ctl-dropdown-content-text">
 						Stream size: <span id="stream-size-value">100%</span>
-						<div id="stream-size-slider-box">
-							<input id="stream-size-slider" type="range" />
+						<div class="stream-slider-box">
+							<input type="range" id="stream-size-slider" class="slider" />
 						</div>
 					</div>
 					<hr>
@@ -93,7 +96,7 @@
 							<td>Auto-resize stream:</td>
 							<td align="right">
 								<div class="switch-box">
-									<input type="checkbox" class="switch-checkbox" id="stream-auto-resize-checkbox" checked />
+									<input type="checkbox" id="stream-auto-resize-checkbox" class="switch-checkbox" checked />
 									<label class="switch-label" for="stream-auto-resize-checkbox">
 										<span class="switch-inner"></span>
 										<span class="switch"></span>
@@ -280,6 +283,7 @@
 
 	<div id="stream-window" class="window" style="z-index: 1" tabindex="0">
 		<div id="stream-window-header" class="window-header"><div class="window-grab">Stream</div></div>
+		<div id="stream-info"></div>
 		<div id="stream-box" class="stream-box-inactive">
 			<img id="stream-image" class="stream-image-inactive" src="png/blank-stream.png" />
 		</div>
