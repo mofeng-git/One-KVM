@@ -17,20 +17,20 @@
 	--bg-color-stream-screen: black;
 
 	--border-color-normal: var(--bg-color-normal);
-	--border-color-grey: var(--bg-color-ctl);
+	--border-color-gray: var(--bg-color-ctl);
 	--border-color-dark: var(--bg-color-dark);
 	--border-color-intensive: #5b90bb;
 	--border-color-important: #ff6467;
 
-	--dark-border: thin solid var(--border-color-dark);
-	--grey-border: thin solid var(--border-color-grey);
-	--normal-border: thin solid var(--border-color-normal);
-	--black-border: thin solid black;
-	--inactive-border: 2px solid var(--border-color-normal);
-	--intensive-border: 2px solid var(--border-color-intensive);
-	--thin-intensive-border: thin solid var(--border-color-intensive);
+	--border-dark-thin: thin solid var(--border-color-dark);
+	--border-gray-thin: thin solid var(--border-color-gray);
+	--border-normal-thin: thin solid var(--border-color-normal);
+	--border-black-thin: thin solid black;
+	--border-inactive-2px: 2px solid var(--border-color-normal);
+	--border-intensive-2px: 2px solid var(--border-color-intensive);
+	--border-intensive-thin: thin solid var(--border-color-intensive);
 
-	--micro-shadow: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
-	--small-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
-	--big-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.4);
+	--shadow-micro: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
+	--shadow-small: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+	--shadow-big: 0 8px 16px 0 rgba(0, 0, 0, 0.4);
 }

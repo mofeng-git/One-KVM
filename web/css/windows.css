@@ -3,16 +3,16 @@ div.window {
 	outline: none;
 	overflow: hidden;
 	position: fixed;
-	border: var(--dark-border);
+	border: var(--border-dark-thin);
 	border-radius: 8px;
 	box-sizing: border-box;
-	box-shadow: var(--big-shadow);
+	box-shadow: var(--shadow-big);
 	white-space: nowrap;
 	background-color: var(--bg-color-light);
 	padding: 30px 9px 9px 9px;
 }
 div.window:focus {
-	border: var(--intensive-border) !important;
+	border: var(--border-intensive-2px) !important;
 }
 
 div.window-header {
@@ -25,7 +25,7 @@ div.window-header {
 	height: 20px;
 	font-size: 0.8em;
 	color: var(--fg-color-dark);
-	border-bottom: var(--normal-border);
+	border-bottom: var(--border-normal-thin);
 }
 
 div.window-grab {
@@ -42,7 +42,7 @@ div.window-grab {
 div.window-header-grabbed {
 	color: var(--fg-color-intensive);
 	background-color: var(--bg-color-intensive);
-	border-bottom: var(--thin-intensive-border);
+	border-bottom: var(--border-intensive-thin);
 }
 
 button.window-button-close {

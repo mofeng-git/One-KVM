@@ -28,7 +28,7 @@ input[type=range].slider::-webkit-slider-runnable-track {
 }
 
 input[type=range].slider::-webkit-slider-thumb {
-	border: var(--intensive-border);
+	border: var(--border-intensive-2px);
 	height: 18px;
 	width: 18px;
 	border-radius: 25px;
@@ -37,7 +37,7 @@ input[type=range].slider::-webkit-slider-thumb {
 	margin-top: -7px;
 }
 input[type=range].slider:disabled::-webkit-slider-thumb {
-	border: var(--inactive-border);
+	border: var(--border-inactive-2px);
 	background: var(--bg-color-normal);
 }
 
@@ -48,13 +48,13 @@ input[type=range].slider::-moz-range-track {
 }
 
 input[type=range].slider::-moz-range-thumb {
-	border: var(--intensive-border);
+	border: var(--border-intensive-2px);
 	height: 18px;
 	width: 18px;
 	border-radius: 25px;
 	background: var(--bg-color-intensive);
 }
 input[type=range].slider:disabled::-moz-range-thumb {
-	border: var(--inactive-border);
+	border: var(--border-inactive-2px);
 	background: var(--bg-color-normal);
 }

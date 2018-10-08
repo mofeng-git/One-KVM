@@ -22,7 +22,7 @@ a {
 
 hr {
 	border: none;
-	border-top: var(--normal-border);
+	border-top: var(--border-normal-thin);
 }
 
 button, select {
@@ -93,7 +93,7 @@ select:active {
 	width: 16.66%
 }
 .row50:not(:first-child), .row25:not(:first-child), .row16:not(:first-child) {
-	border-left: var(--dark-border);
+	border-left: var(--border-dark-thin);
 }
 
 img#logo {
@@ -104,7 +104,7 @@ img#logo {
 }
 
 ul#ctl {
-	box-shadow: var(--small-shadow);
+	box-shadow: var(--shadow-small);
 	list-style-type: none;
 	margin: 0;
 	padding: 0;
@@ -132,7 +132,7 @@ ul#ctl li a.ctl-item {
 	line-height: 50px;
 	outline: none;
 	cursor: pointer;
-	border-left: var(--black-border);
+	border-left: var(--border-black-thin);
 	display: inline-block;
 	color: var(--fg-color-normal);
 	padding-left: 16px;
@@ -150,13 +150,13 @@ div.ctl-dropdown-content {
 	visibility: hidden;
 	overflow: hidden;
 	white-space: nowrap;
-	border: var(--intensive-border);
-	border-top: var(--dark-border);
+	border: var(--border-intensive-2px);
+	border-top: var(--border-dark-thin);
 	border-radius: 0 0 8px 8px;
 	position: absolute;
 	background-color: var(--bg-color-ctl);
 	min-width: 180px;
-	box-shadow: var(--big-shadow);
+	box-shadow: var(--shadow-big);
 	z-index: 2147483645;
 }
 div.ctl-dropdown-content button, select {
@@ -174,7 +174,7 @@ div.ctl-dropdown-content hr {
 	height: 0px;
 	padding: 0;
 	border: none;
-	border-top: var(--dark-border);
+	border-top: var(--border-dark-thin);
 }
 div.ctl-dropdown-content-buttons {
 	background-color: var(--bg-color-normal);

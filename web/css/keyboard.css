@@ -30,8 +30,8 @@ div.keyboard div.key, div.modifier {
 	font-size: 0.9em;
 	text-align: center;
 	vertical-align: top;
-	box-shadow: var(--micro-shadow);
-	border: var(--grey-border);
+	box-shadow: var(--shadow-micro);
+	border: var(--border-gray-thin);
 	border-radius: 6px;
 	color: var(--fg-color-normal);
 	background-color: var(--bg-color-gray);

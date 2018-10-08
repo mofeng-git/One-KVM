@@ -63,7 +63,7 @@ div.switch-box span.switch {
 	top: 0;
 	bottom: 0;
 	right: 31px;
-	border: var(--intensive-border);
+	border: var(--border-intensive-2px);
 	border-radius: 15px;
 }
 
