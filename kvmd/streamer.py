@@ -1,3 +1,4 @@
+import os
 import asyncio
 import asyncio.subprocess
 
@@ -63,6 +64,18 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             "is_running": self.is_running(),
             "quality": self.__quality,
         }
+
+    def get_app(self) -> str:
+        return os.path.basename(self.__cmd[0])
+
+    async def get_version(self) -> str:
+        proc = await asyncio.create_subprocess_exec(
+            *[self.__cmd[0], "--version"],
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        (stdout, _) = await proc.communicate()
+        return stdout.decode(errors="ignore").strip()
 
     async def cleanup(self) -> None:
         if self.is_running():

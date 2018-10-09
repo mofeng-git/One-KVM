@@ -20,11 +20,10 @@ function Session(atx, hid, msd) {
 		var http = tools.makeRequest("GET", "/kvmd/info", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
-					var version = JSON.parse(http.responseText).result.version;
-					$("kvmd-version").innerHTML = "kvmd " + version.kvmd;
-					$("about-version-kvmd").innerHTML = version.kvmd;
-					$("about-version-python").innerHTML = version.python;
-					$("about-version-platform").innerHTML = version.platform;
+					var info = JSON.parse(http.responseText).result;
+					$("kvmd-version").innerHTML = "Web-UI " + info.version.kvmd;
+					$("about-version-kvmd").innerHTML = info.version.kvmd;
+					$("about-version-streamer").innerHTML = info.version.streamer + " (" + info.streamer + ")";
 				} else {
 					setTimeout(__loadKvmdVersion, 1000);
 				}

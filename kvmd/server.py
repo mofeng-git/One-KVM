@@ -1,8 +1,6 @@
 import os
 import signal
 import asyncio
-import platform
-import functools
 import json
 import time
 
@@ -31,17 +29,6 @@ from .logging import get_logger
 
 # =====
 __version__ = "0.78"
-
-
-@functools.lru_cache()
-def _get_system_info() -> Dict[str, Dict[str, str]]:
-    return {
-        "version": {
-            "platform": platform.platform(),
-            "python": platform.python_version(),
-            "kvmd": __version__,
-        },
-    }
 
 
 # =====
@@ -170,7 +157,13 @@ class Server:  # pylint: disable=too-many-instance-attributes
     # ===== INFO
 
     async def __info_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json(_get_system_info())
+        return _json({
+            "version": {
+                "kvmd": __version__,
+                "streamer": await self.__streamer.get_version(),
+            },
+            "streamer": self.__streamer.get_app(),
+        })
 
     # ===== WEBSOCKET
 
