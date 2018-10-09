@@ -71,10 +71,10 @@ function Keyboard() {
 
 	var __updateLeds = function() {
 		if (__ws && (document.activeElement === $("stream-window") || document.activeElement === $("keyboard-window"))) {
-			$("hid-keyboard-led").className = "led-on";
+			$("hid-keyboard-led").className = "led-green";
 			$("hid-keyboard-led").title = "Keyboard captured";
 		} else {
-			$("hid-keyboard-led").className = "led-off";
+			$("hid-keyboard-led").className = "led-gray";
 			$("hid-keyboard-led").title = "Keyboard free";
 		}
 	};

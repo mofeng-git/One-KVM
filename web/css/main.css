@@ -15,6 +15,7 @@ a {
 	color: var(--fg-color-normal);
 }
 @media (hover: hover), (min--moz-device-pixel-ratio: 0) {
+	/* If we have a mouse cursor */
 	a:hover {
 		text-decoration: underline;
 	}
@@ -38,6 +39,7 @@ button, select {
 	cursor: pointer;
 }
 @media (hover: hover), (min--moz-device-pixel-ratio: 0) {
+	/* If we have a mouse cursor */
 	button:enabled:hover, select:enabled:hover {
 		color: var(--fg-color-intensive);
 		background-color: var(--bg-color-dark) !important;
@@ -50,6 +52,7 @@ button, select {
 	}
 }
 @media (hover: none) {
+	/* If we DON'T have a mouse cursor */
 	button:active, select:active {
 		color: var(--fg-color-intensive);
 		background-color: var(--bg-color-dark);
@@ -141,6 +144,12 @@ ul#ctl li a.ctl-item {
 }
 ul#ctl li a.ctl-item:hover:not(.active) {
 	background-color: var(--bg-color-hovered);
+}
+@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
+	/* iPad 8 */
+	ul#ctl li a.ctl-item:hover:not(.active) {
+		background-color: var(--bg-color-ctl) !important;
+	}
 }
 ul#ctl li a.ctl-item-selected {
 	box-shadow: 0 5px 0 var(--border-color-intensive) inset;

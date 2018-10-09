@@ -103,18 +103,18 @@ function Msd() {
 	var __applyState = function() {
 		if (__state.connected_to === "server") {
 			$("msd-another-another-user-uploads").style.display = "none";
-			$("msd-led").className = "led-on";
+			$("msd-led").className = "led-green";
 			$("msd-status").innerHTML = $("msd-led").title = "Connected to Server";
 			$("msd-another-another-user-uploads").style.display = "none";
 		} else if (__state.busy) {
 			if (!__upload_http) {
 				$("msd-another-another-user-uploads").style.display = "block";
 			}
-			$("msd-led").className = "led-msd-writing";
+			$("msd-led").className = "led-yellow-rotating-fast";
 			$("msd-status").innerHTML = $("msd-led").title = "Uploading new image";
 		} else {
 			$("msd-another-another-user-uploads").style.display = "none";
-			$("msd-led").className = "led-off";
+			$("msd-led").className = "led-gray";
 			if (__state.in_operate) {
 				$("msd-status").innerHTML = $("msd-led").title = "Connected to KVM";
 			} else {

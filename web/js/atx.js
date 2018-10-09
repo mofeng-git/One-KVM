@@ -28,13 +28,13 @@ function Atx() {
 
 	self.setState = function(state) {
 		__setButtonsBusy(state.busy);
-		$("atx-power-led").className = (state.leds.power ? "led-on" : "led-off");
-		$("atx-hdd-led").className = (state.leds.hdd ? "led-hdd-busy" : "led-off");
+		$("atx-power-led").className = (state.leds.power ? "led-green" : "led-gray");
+		$("atx-hdd-led").className = (state.leds.hdd ? "led-red" : "led-gray");
 	};
 
 	self.clearState = function() {
-		$("atx-power-led").className = "led-off";
-		$("atx-hdd-led").className = "led-off";
+		$("atx-power-led").className = "led-gray";
+		$("atx-hdd-led").className = "led-gray";
 	};
 
 	var __clickButton = function(button, timeout, confirm_msg) {

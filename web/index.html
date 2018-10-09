@@ -16,6 +16,7 @@
 	<link rel="stylesheet" href="css/leds.css">
 	<link rel="stylesheet" href="css/sliders.css">
 	<link rel="stylesheet" href="css/switches.css">
+	<link rel="stylesheet" href="css/progress.css">
 	<link rel="stylesheet" href="css/stream.css">
 	<link rel="stylesheet" href="css/hid.css">
 	<link rel="stylesheet" href="css/msd.css">
@@ -62,10 +63,10 @@
 		<li class="ctl-right-actions">
 			<div class="ctl-dropdown">
 				<a class="ctl-item" href="#">
-					<img data-dont-hide-menu id="link-led" class="led-off" src="svg/link-led.svg" />
-					<img data-dont-hide-menu id="stream-led" class="led-off" src="svg/stream-led.svg" />
-					<img data-dont-hide-menu id="hid-keyboard-led" class="led-off" src="svg/hid-keyboard-led.svg" />
-					<img data-dont-hide-menu id="hid-mouse-led" class="led-off" src="svg/hid-mouse-led.svg" />
+					<img data-dont-hide-menu id="link-led" class="led-gray" src="svg/link-led.svg" />
+					<img data-dont-hide-menu id="stream-led" class="led-gray" src="svg/stream-led.svg" />
+					<img data-dont-hide-menu id="hid-keyboard-led" class="led-gray" src="svg/hid-keyboard-led.svg" />
+					<img data-dont-hide-menu id="hid-mouse-led" class="led-gray" src="svg/hid-mouse-led.svg" />
 					System &#8628;
 				</a>
 				<div data-dont-hide-menu class="ctl-dropdown-content">
@@ -118,8 +119,8 @@
 		<li class="ctl-right-actions">
 			<div class="ctl-dropdown">
 				<a class="ctl-item" href="#">
-					<img data-dont-hide-menu id="atx-power-led" class="led-off" src="svg/atx-power-led.svg" />
-					<img data-dont-hide-menu id="atx-hdd-led" class="led-off" src="svg/atx-hdd-led.svg" />
+					<img data-dont-hide-menu id="atx-power-led" class="led-gray" src="svg/atx-power-led.svg" />
+					<img data-dont-hide-menu id="atx-hdd-led" class="led-gray" src="svg/atx-hdd-led.svg" />
 					ATX &#8628;
 				</a>
 				<div class="ctl-dropdown-content ctl-dropdown-content-buttons">
@@ -134,7 +135,7 @@
 		<li class="ctl-right-actions">
 			<div class="ctl-dropdown">
 				<a class="ctl-item" href="#">
-					<img data-dont-hide-menu id="msd-led" class="led-off" src="svg/msd-led.svg" />
+					<img data-dont-hide-menu id="msd-led" class="led-gray" src="svg/msd-led.svg" />
 					Mass Storage &#8628;
 				</a>
 				<div data-dont-hide-menu id="msd-menu" class="ctl-dropdown-content">
@@ -177,7 +178,7 @@
 					<table class="msd-info">
 						<tr>
 							<td>Status: </td>
-							<td id="msd-status"></td>
+							<td id="msd-status" class="msd-info-value"></td>
 						</tr>
 					</table>
 					<hr>
@@ -185,15 +186,15 @@
 					<table class="msd-info">
 						<tr>
 							<td>Current image:</td>
-							<td id="msd-current-image-name"></td>
+							<td id="msd-current-image-name" class="msd-info-value"></td>
 						</tr>
 						<tr>
 							<td>Image size:</td>
-							<td id="msd-current-image-size"></td>
+							<td id="msd-current-image-size" class="msd-info-value"></td>
 						</tr>
 						<tr>
 							<td>Storage size:</td>
-							<td id="msd-storage-size"></td>
+							<td id="msd-storage-size" class="msd-info-value"></td>
 						</tr>
 					</table>
 					<hr>
@@ -210,17 +211,17 @@
 						<table class="msd-info">
 							<tr>
 								<td>New name:</td>
-								<td id="msd-new-image-name"></td>
+								<td id="msd-new-image-name" class="msd-info-value"></td>
 							</tr>
 							<tr>
 								<td>Upload size:</td>
-								<td id="msd-new-image-size"></td>
+								<td id="msd-new-image-size" class="msd-info-value"></td>
 							</tr>
 						</table>
 						<hr>
 						<div class="ctl-dropdown-content-text">
-							<div id="msd-progress">
-								<span id="msd-progress-value"></span>
+							<div id="msd-progress" class="progress">
+								<span id="msd-progress-value" class="progress-value"></span>
 							</div>
 						</div>
 						<hr>
@@ -237,7 +238,7 @@
 		<li class="ctl-right-actions">
 			<div class="ctl-dropdown">
 				<a class="ctl-item" href="#">
-					<img data-dont-hide-menu id="hid-pak-led" class="led-off" src="svg/gear-led.svg" />
+					<img data-dont-hide-menu id="hid-pak-led" class="led-gray" src="svg/gear-led.svg" />
 					Shortcuts &#8628;
 				</a>
 				<div data-dont-hide-menu class="ctl-dropdown-content">
@@ -537,15 +538,15 @@
 			<table>
 				<tr>
 					<td>Kvmd:</td>
-					<td id="about-version-kvmd"></td>
+					<td id="about-version-kvmd" class="version"></td>
 				</tr>
 				<tr>
 					<td>Python:</td>
-					<td id="about-version-python"></td>
+					<td id="about-version-python" class="version"></td>
 				</tr>
 				<tr>
 					<td>Platform:</td>
-					<td id="about-version-platform"></td>
+					<td id="about-version-platform" class="version"></td>
 				</tr>
 			</table>
 			<p>

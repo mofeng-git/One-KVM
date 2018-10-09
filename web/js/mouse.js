@@ -55,10 +55,10 @@ function Mouse() {
 
 	var __updateLeds = function() {
 		if (__ws && __stream_hovered) {
-			$("hid-mouse-led").className = "led-on";
+			$("hid-mouse-led").className = "led-green";
 			$("hid-mouse-led").title = "Mouse tracked";
 		} else {
-			$("hid-mouse-led").className = "led-off";
+			$("hid-mouse-led").className = "led-gray";
 			$("hid-mouse-led").title = "Mouse free";
 		}
 	};

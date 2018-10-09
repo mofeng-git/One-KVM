@@ -4,26 +4,6 @@
 */
 
 @media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
-	div.window {
-		padding-top: 45px !important;
-	}
-	div.window-header {
-		height: 35px !important;
-	}
-	div.window-grab {
-		height: 35px !important;
-	}
-	button.window-button-close {
-		height: 40px !important;
-	}
-
-	ul#ctl li a.ctl-item:hover:not(.active) {
-		background-color: var(--bg-color-ctl) !important;
-	}
-
-	div.keyboard {
-		zoom: 1.28 !important;
-	}
 	div#keyboard-window {
 		visibility: visible !important;
 		padding-top: 9px !important;
@@ -41,16 +21,6 @@
 	}
 	div#keyboard-window-header {
 		display: none !important
-	}
-	div.keyboard div.key:hover, div.modifier:hover {
-		color: var(--fg-color-normal);
-		background-color: var(--bg-color-gray);
-	}
-	div#keyboard-desktop {
-		display: none !important;
-	}
-	div#keyboard-mobile {
-		display: block !important;
 	}
 
 	div#stream-window {
@@ -83,11 +53,7 @@
 		height: 45px !important;
 	}
 
-	div.modal-buttons button {
-		height: 50px !important;
-	}
-
-	@supports (-webkit-appearance:none) {
+	@supports (-webkit-appearance: none) {
 		input[type=range].slider {
 			margin: 20px 0 20px 0 !important;
 		}

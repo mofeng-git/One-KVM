@@ -153,7 +153,7 @@ function Hid() {
 				if (ok) {
 					$("hid-pak-text").disabled = true;
 					$("hid-pak-button").disabled = true;
-					$("hid-pak-led").className = "led-hid-pak-typing";
+					$("hid-pak-led").className = "led-yellow-rotating-fast";
 					$("hid-pak-led").title = "Autotyping...";
 
 					tools.debug("Paste-as-keys:", text);
@@ -168,7 +168,7 @@ function Hid() {
 								$("hid-pak-text").value = "";
 								$("hid-pak-text").disabled = false;
 								$("hid-pak-button").disabled = false;
-								$("hid-pak-led").className = "led-off";
+								$("hid-pak-led").className = "led-gray";
 								$("hid-pak-led").title = "";
 							}
 						});

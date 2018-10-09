@@ -105,3 +105,21 @@ div#keyboard-desktop {
 div#keyboard-mobile {
 	display: none;
 }
+@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
+	/* iPad */
+	div.keyboard {
+		zoom: 1.28 !important;
+	}
+
+	div.keyboard div.key:hover, div.modifier:hover {
+		color: var(--fg-color-normal);
+		background-color: var(--bg-color-gray);
+	}
+
+	div#keyboard-desktop {
+		display: none !important;
+	}
+	div#keyboard-mobile {
+		display: block !important;
+	}
+}

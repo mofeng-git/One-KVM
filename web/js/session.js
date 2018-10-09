@@ -33,12 +33,12 @@ function Session(atx, hid, msd) {
 	};
 
 	var __startPoller = function() {
-		$("link-led").className = "led-link-connecting";
+		$("link-led").className = "led-yellow";
 		$("link-led").title = "Connecting...";
 		var http = tools.makeRequest("GET", "/wsauth", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
-					__ws = new WebSocket((location.protocol == "https:" ? "wss" : "ws") + "://" + location.host + "/kvmd/ws");
+					__ws = new WebSocket((location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/kvmd/ws");
 					__ws.onopen = __wsOpenHandler;
 					__ws.onmessage = __wsMessageHandler;
 					__ws.onerror = __wsErrorHandler;
@@ -51,7 +51,7 @@ function Session(atx, hid, msd) {
 	};
 
 	var __wsOpenHandler = function(event) {
-		$("link-led").className = "led-on";
+		$("link-led").className = "led-green";
 		$("link-led").title = "Connected";
 		tools.debug("WebSocket opened:", event);
 		atx.loadInitialState();
@@ -85,7 +85,7 @@ function Session(atx, hid, msd) {
 	};
 
 	var __wsCloseHandler = function(event) {
-		$("link-led").className = "led-off";
+		$("link-led").className = "led-gray";
 		tools.debug("WebSocket closed:", event);
 		if (__ping_timer) {
 			clearInterval(__ping_timer);
@@ -95,7 +95,7 @@ function Session(atx, hid, msd) {
 		atx.clearState();
 		__ws = null;
 		setTimeout(function() {
-			$("link-led").className = "led-link-connecting";
+			$("link-led").className = "led-yellow";
 			setTimeout(__startPoller, 500);
 		}, 500);
 	};

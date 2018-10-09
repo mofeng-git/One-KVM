@@ -46,7 +46,7 @@ function Stream() {
 					tools.info("Refreshing stream ...");
 					$("stream-image").className = "stream-image-inactive";
 					$("stream-box").classList.add("stream-box-inactive");
-					$("stream-led").className = "led-off";
+					$("stream-led").className = "led-gray";
 					$("stream-led").title = "Stream inactive";
 					$("stream-screenshot-button").disabled = true;
 					$("stream-quality-slider").disabled = true;
@@ -56,7 +56,7 @@ function Stream() {
 					__prev_state = false;
 
 				} else if (http.status === 200) {
-					if ($("stream-quality-slider").value != response.source.quality && !__quality_timer) {
+					if ($("stream-quality-slider").value !== response.source.quality && !__quality_timer) {
 						$("stream-quality-slider").value = response.source.quality;
 						$("stream-quality-value").innerHTML = response.source.quality + "%";
 					}
@@ -88,7 +88,7 @@ function Stream() {
 						$("stream-image").src = "/streamer/stream?t=" + new Date().getTime();
 						$("stream-image").className = "stream-image-active";
 						$("stream-box").classList.remove("stream-box-inactive");
-						$("stream-led").className = "led-on";
+						$("stream-led").className = "led-green";
 						$("stream-led").title = "Stream is active";
 						$("stream-screenshot-button").disabled = false;
 						$("stream-quality-slider").disabled = false;

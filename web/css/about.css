@@ -4,10 +4,7 @@ div#about {
 	user-select: text;
 }
 
-div#about
-td#about-version-kvmd,
-td#about-version-python,
-td#about-version-platform {
+div#about td.version {
 	font-weight: bold;
 }
 

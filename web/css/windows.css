@@ -15,7 +15,7 @@ div.window:focus {
 	border: var(--border-intensive-2px) !important;
 }
 
-div.window-header {
+div.window div.window-header {
 	overflow: hidden;
 	top: 0;
 	left: 0;
@@ -28,7 +28,7 @@ div.window-header {
 	border-bottom: var(--border-normal-thin);
 }
 
-div.window-grab {
+div.window div.window-header div.window-grab {
 	overflow: hidden;
 	top: 0;
 	left: 0;
@@ -39,13 +39,13 @@ div.window-grab {
 	padding: 3px 0 2px 20px;
 }
 
-div.window-header-grabbed {
+div.window div.window-header-grabbed {
 	color: var(--fg-color-intensive);
 	background-color: var(--bg-color-intensive);
 	border-bottom: var(--border-intensive-thin);
 }
 
-button.window-button-close {
+div.window div.window-header button.window-button-close {
 	position: absolute;
 	top: -2px;
 	right: -6px;
@@ -54,4 +54,20 @@ button.window-button-close {
 	padding-left: 0;
 	color: var(--fg-color-inactive);
 	display: inline-block;
+}
+
+@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
+	/* iPad */
+	div.window {
+		padding-top: 45px !important;
+	}
+	div.window div.window-header {
+		height: 35px !important;
+	}
+	div.window div.window-header div.window-grab {
+		height: 35px !important;
+	}
+	div.window div.window-header  button.window-button-close {
+		height: 40px !important;
+	}
 }
