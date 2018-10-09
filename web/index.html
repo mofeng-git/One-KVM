@@ -68,30 +68,30 @@
 					<img data-dont-hide-menu id="hid-mouse-led" class="led-off" src="svg/hid-mouse-led.svg" />
 					System &#8628;
 				</a>
-				<div class="ctl-dropdown-content">
+				<div data-dont-hide-menu class="ctl-dropdown-content">
 					<div class="ctl-dropdown-content-buttons">
-						<button disabled id="stream-screenshot-button">&bull; Take a screenshot</button>
+						<button disabled data-force-hide-menu id="stream-screenshot-button">&bull; Take a screenshot</button>
 						<hr>
-						<button id="show-stream-button">&bull; Show stream</button>
-						<button id="show-keyboard-button">&bull; Show keyboard</button>
-						<button id="show-about-button">&bull; Show about</button>
+						<button data-force-hide-menu id="show-stream-button">&bull; Show stream</button>
+						<button data-force-hide-menu id="show-keyboard-button">&bull; Show keyboard</button>
+						<button data-force-hide-menu id="show-about-button">&bull; Show about</button>
 					</div>
 					<hr>
-					<div data-dont-hide-menu class="ctl-dropdown-content-text">
+					<div class="ctl-dropdown-content-text">
 						Stream quality: <span id="stream-quality-value">80%</span>
 						<div class="stream-slider-box">
 							<input disabled type="range" id="stream-quality-slider" class="slider" />
 						</div>
 					</div>
 					<hr>
-					<div data-dont-hide-menu class="ctl-dropdown-content-text">
+					<div class="ctl-dropdown-content-text">
 						Stream size: <span id="stream-size-value">100%</span>
 						<div class="stream-slider-box">
 							<input type="range" id="stream-size-slider" class="slider" />
 						</div>
 					</div>
 					<hr>
-					<div data-dont-hide-menu class="ctl-dropdown-content-text">
+					<div class="ctl-dropdown-content-text">
 						<table id="stream-auto-resize-box"><tr>
 							<td>Auto-resize stream:</td>
 							<td align="right">
@@ -107,9 +107,9 @@
 					</div>
 					<div class="ctl-dropdown-content-buttons">
 						<hr>
-						<button disabled id="stream-reset-button">&bull; Reset stream</button>
-						<button disabled id="hid-reset-button">&bull; Reset keyboard &amp; mouse</button>
-						<button disabled id="msd-reset-button">&bull; Reset mass storage</button>
+						<button disabled data-force-hide-menu id="stream-reset-button">&bull; Reset stream</button>
+						<button disabled data-force-hide-menu id="hid-reset-button">&bull; Reset keyboard &amp; mouse</button>
+						<button disabled data-force-hide-menu id="msd-reset-button">&bull; Reset mass storage</button>
 					</div>
 				</div>
 			</div>
@@ -240,28 +240,28 @@
 					<img data-dont-hide-menu id="hid-pak-led" class="led-off" src="svg/gear-led.svg" />
 					Shortcuts &#8628;
 				</a>
-				<div class="ctl-dropdown-content">
+				<div data-dont-hide-menu class="ctl-dropdown-content">
 					<div class="ctl-dropdown-content-buttons">
-						<textarea data-dont-hide-menu id="hid-pak-text" placeholder="Paste your text here"></textarea>
+						<textarea id="hid-pak-text" placeholder="Paste your text here"></textarea>
 						<hr>
-						<button disabled id="hid-pak-button">&bull; &uarr; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
+						<button disabled data-force-hide-menu id="hid-pak-button">&bull; &uarr; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
 						<hr>
 						<div class="buttons-row">
-							<button data-shortcut="CapsLock" class="row50">&bull; CapsLock</button>
-							<button data-shortcut="MetaLeft" class="row50">&bull; Left Win</button>
+							<button data-force-hide-menu data-shortcut="CapsLock" class="row50">&bull; CapsLock</button>
+							<button data-force-hide-menu data-shortcut="MetaLeft" class="row50">&bull; Left Win</button>
 						</div>
 						<hr>
-						<button data-shortcut="AltLeft ShiftLeft">&bull; Alt+Shift</button>
-						<button data-shortcut="ControlLeft ShiftLeft">&bull; Ctrl+Shift</button>
-						<button data-shortcut="ShiftLeft ShiftRight">&bull; Shift+Shift</button>
-						<button data-shortcut="MetaLeft Space">&bull; Win+Space</button>
+						<button data-force-hide-menu data-shortcut="AltLeft ShiftLeft">&bull; Alt+Shift</button>
+						<button data-force-hide-menu data-shortcut="ControlLeft ShiftLeft">&bull; Ctrl+Shift</button>
+						<button data-force-hide-menu data-shortcut="ShiftLeft ShiftRight">&bull; Shift+Shift</button>
+						<button data-force-hide-menu data-shortcut="MetaLeft Space">&bull; Win+Space</button>
 						<hr>
-						<button data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
-						<button data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
-						<button data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
-						<button data-shortcut="AltLeft F4">&bull; Alt+F4</button>
+						<button data-force-hide-menu data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
+						<button data-force-hide-menu data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
+						<button data-force-hide-menu data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
+						<button data-force-hide-menu data-shortcut="AltLeft F4">&bull; Alt+F4</button>
 						<hr>
-						<button data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
+						<button data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
 					</div>
 					<hr>
 					<div class="ctl-dropdown-content-text">
@@ -269,12 +269,12 @@
 					</div>
 					<hr>
 					<div class="ctl-dropdown-content-buttons buttons-row">
-						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyR" class="row16">R</button>
-						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyE" class="row16">E</button>
-						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyI" class="row16">I</button>
-						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyS" class="row16">S</button>
-						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyU" class="row16">U</button>
-						<button data-dont-hide-menu data-shortcut="AltLeft PrintScreen KeyB" class="row16">B</button>
+						<button data-shortcut="AltLeft PrintScreen KeyR" class="row16">R</button>
+						<button data-shortcut="AltLeft PrintScreen KeyE" class="row16">E</button>
+						<button data-shortcut="AltLeft PrintScreen KeyI" class="row16">I</button>
+						<button data-shortcut="AltLeft PrintScreen KeyS" class="row16">S</button>
+						<button data-shortcut="AltLeft PrintScreen KeyU" class="row16">U</button>
+						<button data-shortcut="AltLeft PrintScreen KeyB" class="row16">B</button>
 					</div>
 				</div>
 			</div>
