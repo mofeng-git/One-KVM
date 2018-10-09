@@ -114,7 +114,7 @@ function Stream() {
 	var __clickScreenshotButton = function() {
 		var el_a = document.createElement("a");
 		el_a.href = "/streamer/snapshot";
-		el_a.download = "screenshot.jpg";
+		el_a.target = "_blank";
 		document.body.appendChild(el_a);
 		el_a.click();
 		setTimeout(() => document.body.removeChild(el_a), 0);
