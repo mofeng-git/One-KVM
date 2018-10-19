@@ -14,10 +14,10 @@ kvmd:
 
     atx:
         pinout:
-            power_led: 16
-            hdd_led: 12
-            power_switch: 26
-            reset_switch: 20
+            power_led: 24
+            hdd_led: 22
+            power_switch: 23
+            reset_switch: 27
 
         click_delay: 0.1
         long_click_delay: 5.5
@@ -37,8 +37,8 @@ kvmd:
 
     streamer:
         pinout:
-            cap: 21
-            conv: 25
+            cap: 17
+            conv: 18
 
         sync_delay: 1.0
         init_delay: 1.0
