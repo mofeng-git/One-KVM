@@ -28,7 +28,7 @@ from .logging import get_logger
 
 
 # =====
-__version__ = "0.79"
+__version__ = "0.80"
 
 
 # =====
