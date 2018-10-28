@@ -2,6 +2,7 @@ import asyncio
 
 from .application import init
 from .logging import get_logger
+from .logging import Log
 
 from .hid import Hid
 from .atx import Atx
@@ -21,6 +22,11 @@ def main() -> None:
     config = init()
     with gpio.bcm():
         loop = asyncio.get_event_loop()
+
+        log = Log(
+            services=list(config["log"]["services"]),
+            loop=loop,
+        )
 
         hid = Hid(
             reset=int(config["hid"]["pinout"]["reset"]),
@@ -60,6 +66,7 @@ def main() -> None:
         )
 
         Server(
+            log=log,
             hid=hid,
             atx=atx,
             msd=msd,

@@ -25,6 +25,7 @@ from .msd import MassStorageDevice
 from .streamer import Streamer
 
 from .logging import get_logger
+from .logging import Log
 
 
 # =====
@@ -68,6 +69,28 @@ class BadRequest(Exception):
     pass
 
 
+def _valid_bool(name: str, flag: Optional[str]) -> bool:
+    flag = str(flag).strip().lower()
+    if flag in ["1", "true", "yes"]:
+        return True
+    elif flag in ["0", "false", "no"]:
+        return False
+    raise BadRequest("Invalid param '%s'" % (name))
+
+
+def _valid_int(name: str, value: Optional[str], min_value: Optional[int]=None, max_value: Optional[int]=None) -> int:
+    try:
+        value_int = int(value)  # type: ignore
+        if (
+            (min_value is not None and value_int < min_value)
+            or (max_value is not None and value_int > max_value)
+        ):
+            raise ValueError()
+        return value_int
+    except Exception:
+        raise BadRequest("Invalid param %r" % (name))
+
+
 def _wrap_exceptions_for_web(msg: str) -> Callable:
     def make_wrapper(method: Callable) -> Callable:
         async def wrap(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -82,8 +105,9 @@ def _wrap_exceptions_for_web(msg: str) -> Callable:
 
 
 class Server:  # pylint: disable=too-many-instance-attributes
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
+        log: Log,
         hid: Hid,
         atx: Atx,
         msd: MassStorageDevice,
@@ -97,6 +121,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
+        self.__log = log
         self.__hid = hid
         self.__atx = atx
         self.__msd = msd
@@ -125,6 +150,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         app = aiohttp.web.Application(loop=self.__loop)
 
         app.router.add_get("/info", self.__info_handler)
+        app.router.add_get("/log", self.__log_handler)
 
         app.router.add_get("/ws", self.__ws_handler)
 
@@ -154,7 +180,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         aiohttp.web.run_app(app, host=host, port=port, print=self.__run_app_print)
 
-    # ===== INFO
+    # ===== SYSTEM
 
     async def __info_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json({
@@ -164,6 +190,20 @@ class Server:  # pylint: disable=too-many-instance-attributes
             },
             "streamer": self.__streamer.get_app(),
         })
+
+    @_wrap_exceptions_for_web("Log error")
+    async def __log_handler(self, request: aiohttp.web.Request) -> aiohttp.web.StreamResponse:
+        seek = _valid_int("seek", request.query.get("seek", "0"), 0)
+        follow = _valid_bool("follow", request.query.get("follow", "false"))
+        response = aiohttp.web.StreamResponse(status=200, reason="OK", headers={"Content-Type": "text/plain"})
+        await response.prepare(request)
+        async for record in self.__log.log(seek, follow):
+            await response.write(("[%s %s] --- %s" % (
+                record["dt"].strftime("%Y-%m-%d %H:%M:%S"),
+                record["service"],
+                record["msg"],
+            )).encode("utf-8") + b"\r\n")
+        return response
 
     # ===== WEBSOCKET
 
@@ -243,7 +283,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             "reset": self.__atx.click_reset,
         }.get(button)
         if not clicker:
-            raise BadRequest("Missing or invalid 'button=%s'" % (button))
+            raise BadRequest("Invalid param 'button'")
         await self.__broadcast_event("atx_click", button=button)  # type: ignore
         await clicker()
         await self.__broadcast_event("atx_click", button=None)  # type: ignore
@@ -266,7 +306,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             state = self.__msd.get_state()
             await self.__broadcast_event("msd_state", **state)
         else:
-            raise BadRequest("Missing or invalid 'to=%s'" % (to))
+            raise BadRequest("Invalid param 'to'")
         return _json(state)
 
     @_wrap_exceptions_for_web("Can't write data to mass-storage device")
@@ -314,13 +354,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __streamer_set_params_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         quality = request.query.get("quality")
         if quality:
-            try:
-                quality_int = int(quality)
-                if not (1 <= quality_int <= 100):
-                    raise ValueError()
-            except Exception:
-                raise BadRequest("Invalid quality %r" % (quality))
-            self.__streamer_quality = quality_int
+            self.__streamer_quality = _valid_int("quality", quality, 1, 100)
         return _json()
 
     async def __streamer_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:

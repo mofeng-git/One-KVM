@@ -4,11 +4,15 @@ kvmd:
         port: 8081
         heartbeat: 3.0
 
+    log:
+        services:
+            - kvmd.service
+
     hid:
         pinout:
             reset: 4
 
-        device: /dev/ttyAMA0
+        device: /dev/ttyS10
         speed: 115200
         reset_delay: 0.1
 

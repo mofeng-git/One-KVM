@@ -4,6 +4,11 @@ kvmd:
         port: 8081
         heartbeat: 3.0
 
+    log:
+        services:
+            - kvmd.service
+            - kvmd-tc358743.service
+
     hid:
         pinout:
             reset: 4
@@ -69,8 +74,7 @@ logging:
         console:
             (): logging.Formatter
             style: "{"
-            datefmt: "%H:%M:%S"
-            format: "[{asctime}] {name:20.20} {levelname:>7} --- {message}"
+            format: "{name:20.20} {levelname:>7} --- {message}"
 
     handlers:
         console:

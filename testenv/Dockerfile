@@ -36,6 +36,7 @@ RUN pacman -Syy \
 	&& user-packer -S --noconfirm \
 		python \
 		python-pip \
+		python-systemd \
 		nginx-mainline \
 		ustreamer \
 		socat \

@@ -18,6 +18,7 @@ depends=(
 	python-raspberry-gpio
 	python-pyserial
 	python-setproctitle
+	python-systemd
 )
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")

@@ -5,5 +5,6 @@ pyudev
 pyyaml
 pyserial
 setproctitle
+systemd-python
 bumpversion
 tox
