@@ -1,6 +1,6 @@
 kvmd:
     server:
-        host: localhost
+        host: 127.0.0.1
         port: 8081
         heartbeat: 3.0
 
@@ -59,7 +59,7 @@ kvmd:
             - "--encoder=omx"
             - "--quality={quality}"
             - "--dv-timings"
-            - "--host=localhost"
+            - "--host=127.0.0.1"
             - "--port=8082"
             - "--drop-same-frames=30"
 

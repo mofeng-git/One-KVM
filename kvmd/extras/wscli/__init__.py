@@ -41,7 +41,7 @@ async def _run_client(loop: asyncio.AbstractEventLoop, url: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-u", "--url", default="http://localhost:8081/ws")
+    parser.add_argument("-u", "--url", default="http://127.0.0.1:8081/ws")
     options = parser.parse_args()
 
     loop = asyncio.get_event_loop()

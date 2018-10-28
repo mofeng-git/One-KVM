@@ -1,6 +1,6 @@
 kvmd:
     server:
-        host: localhost
+        host: 127.0.0.1
         port: 8081
         heartbeat: 3.0
 
