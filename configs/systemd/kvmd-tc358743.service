@@ -5,7 +5,7 @@ Before=kvmd.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/v4l2-ctl --device=/dev/kvmd-streamer --set-edid=file=/usr/share/kvmd/configs/tc358743/edid.hex --fix-edid-checksums
+ExecStart=/usr/bin/v4l2-ctl --device=/dev/kvmd-streamer --set-edid=file=/etc/kvmd/tc358743-edid.hex --fix-edid-checksums
 ExecStop=/bin/true
 RemainAfterExit=true
 

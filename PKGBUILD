@@ -36,9 +36,9 @@ build() {
 package() {
 	cd $srcdir/$pkgname-build
 	python setup.py install --root="$pkgdir"
-	install -Dm644 configs/kvmd.service "$pkgdir/usr/lib/systemd/system/kvmd.service"
-	install -Dm644 configs/kvmd-tc358743.service "$pkgdir/usr/lib/systemd/system/kvmd-tc358743.service"
-	mkdir -p "$pkgdir/usr/share/kvmd"
+	install -Dm644 configs/systemd/kvmd.service "$pkgdir/usr/lib/systemd/system/kvmd.service"
+	install -Dm644 configs/systemd/kvmd-tc358743.service "$pkgdir/usr/lib/systemd/system/kvmd-tc358743.service"
+	mkdir -p "$pkgdir/usr/share/kvmd" "$pkgdir/etc/kvmd"
 	cp -r web "$pkgdir/usr/share/kvmd"
 	cp -r configs "$pkgdir/usr/share/kvmd"
 }
