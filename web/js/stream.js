@@ -84,8 +84,13 @@ function Stream() {
 					__updateStreamHeader(true);
 
 					if (!__prev_state) {
-						tools.info("Stream acquired");
-						$("stream-image").src = "/streamer/stream?t=" + new Date().getTime();
+						var path = "/streamer/stream?t=" + new Date().getTime();
+						if (tools.browser.is_chrome || tools.browser.is_blink) {
+							// uStreamer fix for https://bugs.chromium.org/p/chromium/issues/detail?id=527446
+							tools.info("Using advance_headers=1");
+							path += "&advance_headers=1";
+						}
+						$("stream-image").src = path;
 						$("stream-image").className = "stream-image-active";
 						$("stream-box").classList.remove("stream-box-inactive");
 						$("stream-led").className = "led-green";
@@ -94,6 +99,7 @@ function Stream() {
 						$("stream-quality-slider").disabled = false;
 						$("stream-reset-button").disabled = false;
 						__prev_state = true;
+						tools.info("Stream acquired");
 					}
 				}
 			}
