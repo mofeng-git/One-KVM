@@ -41,6 +41,7 @@ function Mouse() {
 		} else {
 			$("stream-box").classList.remove("stream-box-mouse-enabled");
 		}
+		__updateLeds();
 	};
 
 	var __hoverStream = function() {
@@ -54,7 +55,8 @@ function Mouse() {
 	};
 
 	var __updateLeds = function() {
-		if (__ws && __stream_hovered) {
+		if (__ws && (__stream_hovered || tools.browser.is_ios)) {
+			// Mouse is always available on iOS via touchscreen
 			$("hid-mouse-led").className = "led-green";
 			$("hid-mouse-led").title = "Mouse tracked";
 		} else {
