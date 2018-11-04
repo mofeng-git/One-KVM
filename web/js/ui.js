@@ -41,6 +41,7 @@ function Ui() {
 		tools.setOnClick($("show-about-button"), () => self.showWindow($("about-window")));
 		tools.setOnClick($("show-keyboard-button"), () => self.showWindow($("keyboard-window")));
 		tools.setOnClick($("show-stream-button"), () => self.showWindow($("stream-window")));
+		tools.setOnClick($("open-log-button"), () => window.open("kvmd/log?seek=3600&follow=1", "_blank"));
 
 		self.showWindow($("stream-window"));
 	};
