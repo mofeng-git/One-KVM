@@ -29,7 +29,7 @@ from .logging import Log
 
 
 # =====
-__version__ = "0.84"
+__version__ = "0.85"
 
 
 # =====
