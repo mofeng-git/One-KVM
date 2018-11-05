@@ -141,6 +141,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         self.__reset_streamer = False
         self.__streamer_quality = streamer.get_current_quality()
+        self.__streamer_soft_fps = streamer.get_current_soft_fps()
 
     def run(self, host: str, port: int) -> None:
         self.__hid.start()
@@ -355,6 +356,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
         quality = request.query.get("quality")
         if quality:
             self.__streamer_quality = _valid_int("quality", quality, 1, 100)
+        soft_fps = request.query.get("soft_fps")
+        if soft_fps:
+            self.__streamer_soft_fps = _valid_int("soft_fps", soft_fps, 1, 30)
         return _json()
 
     async def __streamer_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -400,7 +404,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             cur = len(self.__sockets)
             if prev == 0 and cur > 0:
                 if not self.__streamer.is_running():
-                    await self.__streamer.start(self.__streamer_quality)
+                    await self.__streamer.start(self.__streamer_quality, self.__streamer_soft_fps)
                     await self.__broadcast_event("streamer_state", **self.__streamer.get_state())
             elif prev > 0 and cur == 0:
                 shutdown_at = time.time() + self.__streamer_shutdown_delay
@@ -409,10 +413,14 @@ class Server:  # pylint: disable=too-many-instance-attributes
                     await self.__streamer.stop()
                     await self.__broadcast_event("streamer_state", **self.__streamer.get_state())
 
-            if self.__reset_streamer or self.__streamer_quality != self.__streamer.get_current_quality():
+            if (
+                self.__reset_streamer
+                or self.__streamer_quality != self.__streamer.get_current_quality()
+                or self.__streamer_soft_fps != self.__streamer.get_current_soft_fps()
+            ):
                 if self.__streamer.is_running():
                     await self.__streamer.stop()
-                    await self.__streamer.start(self.__streamer_quality, no_init_restart=True)
+                    await self.__streamer.start(self.__streamer_quality, self.__streamer_soft_fps, no_init_restart=True)
                     await self.__broadcast_event("streamer_state", **self.__streamer.get_state())
                 self.__reset_streamer = False
 

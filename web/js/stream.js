@@ -9,6 +9,7 @@ function Stream() {
 	var __client_id = "";
 	var __fps = 0;
 	var __quality_timer = null;
+	var __soft_fps_timer = null;
 
 	var __init__ = function() {
 		$("stream-led").title = "Stream inactive";
@@ -19,6 +20,13 @@ function Stream() {
 		$("stream-quality-slider").value = 80;
 		$("stream-quality-slider").oninput = __setQuality;
 		$("stream-quality-slider").onchange = __setQuality;
+
+		$("stream-soft-fps-slider").min = 1;
+		$("stream-soft-fps-slider").max = 30;
+		$("stream-soft-fps-slider").step = 1;
+		$("stream-soft-fps-slider").value = 30;
+		$("stream-soft-fps-slider").oninput = __setSoftFps;
+		$("stream-soft-fps-slider").onchange = __setSoftFps;
 
 		$("stream-size-slider").min = 20;
 		$("stream-size-slider").max = 200;
@@ -50,6 +58,7 @@ function Stream() {
 					$("stream-led").title = "Stream inactive";
 					$("stream-screenshot-button").disabled = true;
 					$("stream-quality-slider").disabled = true;
+					$("stream-soft-fps-slider").disabled = true;
 					$("stream-reset-button").disabled = true;
 					__updateStreamHeader(false);
 					__fps = 0;
@@ -60,6 +69,11 @@ function Stream() {
 						$("stream-quality-slider").value = response.source.quality;
 						$("stream-quality-value").innerHTML = response.source.quality + "%";
 					}
+					if ($("stream-soft-fps-slider").value !== response.source.soft_fps && !__soft_fps_timer) {
+						$("stream-soft-fps-slider").value = response.source.soft_fps;
+						$("stream-soft-fps-value").innerHTML = response.source.soft_fps;
+					}
+
 
 					if (__resolution.width !== response.source.resolution.width || __resolution.height !== response.source.resolution.height) {
 						__resolution = response.source.resolution;
@@ -101,6 +115,7 @@ function Stream() {
 						$("stream-led").title = "Stream is active";
 						$("stream-screenshot-button").disabled = false;
 						$("stream-quality-slider").disabled = false;
+						$("stream-soft-fps-slider").disabled = false;
 						$("stream-reset-button").disabled = false;
 						__prev_state = true;
 						tools.info("Stream acquired");
@@ -155,6 +170,25 @@ function Stream() {
 						ui.error("Can't configure stream:<br>", http.responseText);
 					}
 					__quality_timer = null;
+				}
+			});
+		}, 1000);
+	};
+
+	var __setSoftFps = function() {
+		var soft_fps = $("stream-soft-fps-slider").value;
+		$("stream-soft-fps-value").innerHTML = soft_fps;
+		if (__soft_fps_timer) {
+			clearTimeout(__soft_fps_timer);
+		}
+		__soft_fps_timer = setTimeout(function() {
+			$("stream-soft-fps-slider").disabled = true;
+			var http = tools.makeRequest("POST", "/kvmd/streamer/set_params?soft_fps=" + soft_fps, function() {
+				if (http.readyState === 4) {
+					if (http.status !== 200) {
+						ui.error("Can't configure stream:<br>", http.responseText);
+					}
+					__soft_fps_timer = null;
 				}
 			});
 		}, 1000);
