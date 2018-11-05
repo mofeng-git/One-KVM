@@ -2,10 +2,10 @@ import asyncio
 
 from typing import Dict
 
-from .logging import get_logger
+from ...logging import get_logger
 
-from . import aioregion
-from . import gpio
+from ... import aioregion
+from ... import gpio
 
 
 # =====

@@ -6,9 +6,9 @@ from typing import List
 from typing import Dict
 from typing import Optional
 
-from .logging import get_logger
+from ...logging import get_logger
 
-from . import gpio
+from ... import gpio
 
 
 # =====

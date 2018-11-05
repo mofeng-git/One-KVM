@@ -13,7 +13,12 @@ from typing import Optional
 import aiohttp.web
 import setproctitle
 
-from .aioregion import RegionIsBusyError
+from ...logging import get_logger
+from ...logging import Log
+
+from ...aioregion import RegionIsBusyError
+
+from ... import __version__
 
 from .hid import Hid
 
@@ -23,13 +28,6 @@ from .msd import MsdOperationError
 from .msd import MassStorageDevice
 
 from .streamer import Streamer
-
-from .logging import get_logger
-from .logging import Log
-
-
-# =====
-__version__ = "0.86"
 
 
 # =====

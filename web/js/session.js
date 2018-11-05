@@ -21,7 +21,7 @@ function Session(atx, hid, msd) {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
 					var info = JSON.parse(http.responseText).result;
-					$("kvmd-version").innerHTML = "Web-UI " + info.version.kvmd;
+					$("kvmd-version").innerHTML = "kvmd v" + info.version.kvmd;
 					$("about-version-kvmd").innerHTML = info.version.kvmd;
 					$("about-version-streamer").innerHTML = info.version.streamer + " (" + info.streamer + ")";
 				} else {

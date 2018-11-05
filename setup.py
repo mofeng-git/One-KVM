@@ -21,9 +21,10 @@ def main() -> None:
 
         packages=[
             "kvmd",
-            "kvmd.extras",
-            "kvmd.extras.cleanup",
-            "kvmd.extras.wscli",
+            "kvmd.apps",
+            "kvmd.apps.kvmd",
+            "kvmd.apps.cleanup",
+            "kvmd.apps.wscli",
         ],
 
         package_data={
@@ -32,9 +33,9 @@ def main() -> None:
 
         entry_points={
             "console_scripts": [
-                "kvmd = kvmd:main",
-                "kvmd-cleanup = kvmd.extras.cleanup:main",
-                "kvmd-wscli = kvmd.extras.wscli:main",
+                "kvmd = kvmd.apps.kvmd:main",
+                "kvmd-cleanup = kvmd.apps.cleanup:main",
+                "kvmd-wscli = kvmd.apps.wscli:main",
             ],
         },
 

@@ -15,10 +15,10 @@ import pyudev
 import aiofiles
 import aiofiles.base
 
-from . import aioregion
-from . import gpio
+from ...logging import get_logger
 
-from .logging import get_logger
+from ... import aioregion
+from ... import gpio
 
 
 # =====

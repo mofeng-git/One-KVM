@@ -14,14 +14,14 @@ import yaml
 import serial
 import setproctitle
 
-from . import gpio
+from ...logging import get_logger
 
-from .logging import get_logger
+from ... import gpio
 
 
 # =====
 def _get_keymap() -> Dict[str, int]:
-    return yaml.load(pkgutil.get_data(__name__, "data/keymap.yaml").decode())  # type: ignore
+    return yaml.load(pkgutil.get_data("kvmd", "data/keymap.yaml").decode())  # type: ignore
 
 
 _KEYMAP = _get_keymap()
