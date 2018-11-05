@@ -86,9 +86,13 @@ function Stream() {
 					if (!__prev_state) {
 						var path = "/streamer/stream?t=" + new Date().getTime();
 						if (tools.browser.is_chrome || tools.browser.is_blink) {
-							// uStreamer fix for https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-							tools.info("Using advance_headers=1");
+							// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
+							tools.info("Stream: using advance_headers=1");
 							path += "&advance_headers=1";
+						} else if (tools.browser.is_safari || tools.browser.is_ios) {
+							// uStreamer fix for WebKit
+							tools.info("Stream: using dual_final_frames=1");
+							path += "&dual_final_frames=1";
 						}
 						$("stream-image").src = path;
 						$("stream-image").className = "stream-image-active";
