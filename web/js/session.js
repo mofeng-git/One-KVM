@@ -52,7 +52,7 @@ function Session(atx, hid, msd) {
 	var __wsOpenHandler = function(event) {
 		$("link-led").className = "led-green";
 		$("link-led").title = "Connected";
-		tools.debug("WebSocket opened:", event);
+		tools.debug("Session: socket opened:", event);
 		atx.loadInitialState();
 		msd.loadInitialState();
 		hid.setSocket(__ws);
@@ -61,7 +61,7 @@ function Session(atx, hid, msd) {
 	};
 
 	var __wsMessageHandler = function(event) {
-		// tools.debug("WebSocket: received data:", event.data);
+		// tools.debug("Session: received socket data:", event.data);
 		event = JSON.parse(event.data);
 		if (event.msg_type === "pong") {
 			__missed_heartbeats = 0;
@@ -75,7 +75,7 @@ function Session(atx, hid, msd) {
 	};
 
 	var __wsErrorHandler = function(event) {
-		tools.error("WebSocket error:", event);
+		tools.error("Session: socket error:", event);
 		if (__ws) {
 			__ws.onclose = null;
 			__ws.close();
@@ -85,7 +85,7 @@ function Session(atx, hid, msd) {
 
 	var __wsCloseHandler = function(event) {
 		$("link-led").className = "led-gray";
-		tools.debug("WebSocket closed:", event);
+		tools.debug("Session: socket closed:", event);
 		if (__ping_timer) {
 			clearInterval(__ping_timer);
 			__ping_timer = null;
@@ -107,7 +107,7 @@ function Session(atx, hid, msd) {
 			}
 			__ws.send(JSON.stringify({"event_type": "ping"}));
 		} catch (err) {
-			tools.error("Ping error:", err.message);
+			tools.error("Session: ping error:", err.message);
 			if (__ws) {
 				__ws.onclose = null;
 				__ws.close();

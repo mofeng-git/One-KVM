@@ -306,12 +306,12 @@ function Ui() {
 		var el_to_focus = (el_window.className === "modal" ? el_window.querySelector(".modal-window") : el_window);
 		if (document.activeElement !== el_to_focus) {
 			el_to_focus.focus();
-			tools.debug("Focused window:", el_window);
+			tools.debug("UI: focused window:", el_window);
 			if (el_window.className !== "modal" && parseInt(el_window.style.zIndex) !== __top_z_index) {
 				var z_index = __top_z_index + 1;
 				el_window.style.zIndex = z_index;
 				__top_z_index = z_index;
-				tools.debug("Raised window:", el_window);
+				tools.debug("UI: raised window:", el_window);
 			}
 		}
 	};

@@ -96,7 +96,7 @@ function Mouse() {
 
 
 	var __sendButton = function(button, state) {
-		tools.debug("Mouse button", (state ? "pressed:" : "released:"), button);
+		tools.debug("Mouse: button", (state ? "pressed:" : "released:"), button);
 		__sendMove();
 		if (__ws) {
 			__ws.send(JSON.stringify({
@@ -115,7 +115,7 @@ function Mouse() {
 				x: __translate(pos.x, 0, el_stream_image.clientWidth, -32768, 32767),
 				y: __translate(pos.y, 0, el_stream_image.clientHeight, -32768, 32767),
 			};
-			tools.debug("Mouse move:", to);
+			tools.debug("Mouse: moved:", to);
 			if (__ws) {
 				__ws.send(JSON.stringify({
 					event_type: "mouse_move",
@@ -145,7 +145,7 @@ function Mouse() {
 		}
 
 		if (delta.y) {
-			tools.debug("Mouse wheel:", delta);
+			tools.debug("Mouse: scrolled:", delta);
 			if (__ws) {
 				__ws.send(JSON.stringify({
 					event_type: "mouse_wheel",

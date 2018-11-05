@@ -173,7 +173,7 @@ function Keyboard() {
 
 	var __sendKey = function(el_key, state) {
 		var code = el_key.getAttribute("data-key");
-		tools.debug("Key", (state ? "pressed:" : "released:"), code);
+		tools.debug("Keyboard: key", (state ? "pressed:" : "released:"), code);
 		if (__ws) {
 			__ws.send(JSON.stringify({
 				event_type: "key",

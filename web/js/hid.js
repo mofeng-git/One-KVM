@@ -66,7 +66,7 @@ function Hid() {
 
 	var __emitShortcut = function(codes) {
 		return new Promise(function(resolve) {
-			tools.debug("Emitting keys:", codes);
+			tools.debug("HID: emitting keys:", codes);
 
 			var raw_events = [];
 			[[codes, true], [codes.slice().reverse(), false]].forEach(function(op) {
@@ -156,7 +156,7 @@ function Hid() {
 					$("hid-pak-led").className = "led-yellow-rotating-fast";
 					$("hid-pak-led").title = "Autotyping...";
 
-					tools.debug("Paste-as-keys:", text);
+					tools.debug("HID: paste-as-keys:", text);
 
 					var index = 0;
 					var iterate = function() {

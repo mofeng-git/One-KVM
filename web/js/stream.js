@@ -51,7 +51,7 @@ function Stream() {
 				var response = (http.status === 200 ? JSON.parse(http.responseText) : null);
 
 				if (http.status !== 200) {
-					tools.info("Refreshing stream ...");
+					tools.info("Stream: refreshing ...");
 					$("stream-image").className = "stream-image-inactive";
 					$("stream-box").classList.add("stream-box-inactive");
 					$("stream-led").className = "led-gray";
@@ -101,11 +101,11 @@ function Stream() {
 						var path = "/streamer/stream?t=" + new Date().getTime();
 						if (tools.browser.is_chrome || tools.browser.is_blink) {
 							// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-							tools.info("Stream: using advance_headers=1");
+							tools.info("Stream: using advance_headers=1 to fix Blink MJPG bugs");
 							path += "&advance_headers=1";
 						} else if (tools.browser.is_safari || tools.browser.is_ios) {
 							// uStreamer fix for WebKit
-							tools.info("Stream: using dual_final_frames=1");
+							tools.info("Stream: using dual_final_frames=1 to fix WebKit MJPG bugs");
 							path += "&dual_final_frames=1";
 						}
 						$("stream-image").src = path;
@@ -118,7 +118,7 @@ function Stream() {
 						$("stream-soft-fps-slider").disabled = false;
 						$("stream-reset-button").disabled = false;
 						__prev_state = true;
-						tools.info("Stream acquired");
+						tools.info("Stream: acquired");
 					}
 				}
 			}
@@ -207,7 +207,7 @@ function Stream() {
 		var view = ui.getViewGeometry();
 
 		for (var size = 100; size >= el_slider.min; size -= el_slider.step) {
-			tools.info("Adjusting size:", size);
+			tools.info("Stream: adjusting size:", size);
 			$("stream-size-slider").value = size;
 			__resize(true);
 
