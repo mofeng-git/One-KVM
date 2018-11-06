@@ -36,12 +36,38 @@ var tools = new function() {
 		};
 	};
 
+	this.setOnUpSlider = function(el, delay, display_callback, execute_callback) {
+		el.execution_timer = null;
+		el.activated = false;
+
+		var clear_timer = function() {
+			if (el.execution_timer) {
+				clearTimeout(el.execution_timer);
+				el.execution_timer = null;
+			}
+		};
+
+		el.oninput = el.onchange = () => display_callback(el.value);
+
+		el.onmousedown = el.ontouchstart = function() {
+			clear_timer();
+			el.activated = true;
+		};
+
+		el.onmouseup = el.ontouchend = function(event) {
+			event.preventDefault();
+			clear_timer();
+			el.execution_timer = setTimeout(function() {
+				execute_callback(el.value);
+			}, delay);
+		};
+	};
+
 	this.debug = function(...args) {
 		if (__debug) {
 			console.log("LOG/DEBUG", ...args);  // eslint-disable-line no-console
 		}
 	};
-
 	this.info = (...args) => console.log("LOG/INFO", ...args);  // eslint-disable-line no-console
 	this.error = (...args) => console.error("LOG/ERROR", ...args);  // eslint-disable-line no-console
 
