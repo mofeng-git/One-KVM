@@ -7,7 +7,7 @@ function Stream() {
 	var __resolution = {width: 640, height: 480};
 	var __size_factor = 1;
 	var __client_id = "";
-	var __fps = 0;
+	var __fps = -1;
 
 	var __init__ = function() {
 		$("stream-led").title = "Stream inactive";
@@ -60,7 +60,7 @@ function Stream() {
 						$("stream-screenshot-button").disabled = true;
 						__setStreamerControlsDisabled(true);
 						__updateStreamHeader(false);
-						__fps = 0;
+						__fps = -1;
 						__prev_state = false;
 					}
 
@@ -98,7 +98,7 @@ function Stream() {
 					if (response.stream.clients_stat.hasOwnProperty(__client_id)) {
 						__fps = response.stream.clients_stat[__client_id].fps;
 					} else {
-						__fps = 0;
+						__fps = -1;
 					}
 
 					__updateStreamHeader(true);
@@ -134,7 +134,8 @@ function Stream() {
 		var el_grab = document.querySelector("#stream-window-header .window-grab");
 		var el_info = $("stream-info");
 		if (online) {
-			el_grab.innerHTML = el_info.innerHTML = "Stream &ndash; " + __resolution.width + "x" + __resolution.height + " / " + __fps + " fps";
+			var fps_suffix = (__fps >= 0 ? " / " + __fps + " fps" : "");
+			el_grab.innerHTML = el_info.innerHTML = "Stream &ndash; " + __resolution.width + "x" + __resolution.height + fps_suffix;
 		} else {
 			el_grab.innerHTML = el_info.innerHTML = "Stream &ndash; offline";
 		}
