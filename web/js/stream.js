@@ -47,7 +47,7 @@ function Stream() {
 	// XXX: In current implementation we don't need this event because Stream() has own state poller
 
 	var __startPoller = function() {
-		var http = tools.makeRequest("GET", "/streamer/ping", function() {
+		var http = tools.makeRequest("GET", "/streamer/state", function() {
 			if (http.readyState === 4) {
 				var response = (http.status === 200 ? JSON.parse(http.responseText) : null);
 
