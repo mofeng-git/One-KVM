@@ -50,8 +50,8 @@ regen:
 
 release:
 	make clean
-	#make tox
-	#make clean
+	make tox
+	make clean
 	make push
 	make bump
 	make push
