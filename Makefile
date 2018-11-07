@@ -19,6 +19,10 @@ all:
 	cat Makefile
 
 
+run-no-cache:
+	make run TESTENV_OPTS=--no-cache
+
+
 run:
 	sudo modprobe loop
 	docker build $(TESTENV_OPTS) --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
