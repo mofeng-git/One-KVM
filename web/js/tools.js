@@ -10,6 +10,15 @@ var tools = new function() {
 		return http;
 	};
 
+	this.makeId = function() {
+		var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		var id = "";
+		for (var count = 0; count < 16; ++count) {
+			id += chars.charAt(Math.floor(Math.random() * chars.length));
+		}
+		return id;
+	};
+
 	this.getCookie = function(name) {
 		var matches = document.cookie.match(new RegExp(
 			"(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, "\\$1") + "=([^;]*)" // eslint-disable-line no-useless-escape

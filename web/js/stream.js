@@ -6,6 +6,7 @@ function Stream() {
 	var __prev_state = false;
 	var __resolution = {width: 640, height: 480};
 	var __size_factor = 1;
+	var __key = tools.makeId();
 	var __client_id = "";
 	var __fps = -1;
 
@@ -60,6 +61,8 @@ function Stream() {
 						$("stream-screenshot-button").disabled = true;
 						__setStreamerControlsDisabled(true);
 						__updateStreamHeader(false);
+						__key = tools.makeId();
+						__client_id = "";
 						__fps = -1;
 						__prev_state = false;
 					}
@@ -90,9 +93,10 @@ function Stream() {
 						}
 					}
 
-					var client_id = tools.getCookie("stream_client_id");
-					if (client_id) {
-						__client_id = client_id;
+					var stream_client = tools.getCookie("stream_client");
+					if (!__client_id && stream_client && stream_client.startsWith(__key + "/")) {
+						tools.info("Stream: found acceptable stream_client cookie:", stream_client);
+						__client_id = stream_client.slice(stream_client.indexOf("/") + 1);
 					}
 
 					if (response.stream.clients_stat.hasOwnProperty(__client_id)) {
@@ -104,7 +108,7 @@ function Stream() {
 					__updateStreamHeader(true);
 
 					if (!__prev_state) {
-						var path = "/streamer/stream?t=" + new Date().getTime();
+						var path = "/streamer/stream?key=" + __key;
 						if (tools.browser.is_chrome || tools.browser.is_blink) {
 							// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
 							tools.info("Stream: using advance_headers=1 to fix Blink MJPG bugs");
