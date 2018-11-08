@@ -1,14 +1,14 @@
-function Stream() {
-	// var self = this;
+function Streamer() {
+	var self = this;
 
 	/********************************************************************************/
 
-	var __prev_state = false;
 	var __resolution = {width: 640, height: 480};
 	var __size_factor = 1;
 	var __client_key = tools.makeId();
 	var __client_id = "";
 	var __client_fps = -1;
+	var __prev = false;
 
 	var __init__ = function() {
 		$("stream-led").title = "Stream inactive";
@@ -17,17 +17,13 @@ function Stream() {
 		$("stream-quality-slider").max = 100;
 		$("stream-quality-slider").step = 5;
 		$("stream-quality-slider").value = 80;
-		tools.setOnUpSlider($("stream-quality-slider"), 1000, function(value) {
-			$("stream-quality-value").innerHTML = value + "%";
-		}, __sendQuality);
+		tools.setOnUpSlider($("stream-quality-slider"), 1000, __updateQualityValue, (value) => __sendParam("quality", value));
 
 		$("stream-desired-fps-slider").min = 0;
 		$("stream-desired-fps-slider").max = 30;
 		$("stream-desired-fps-slider").step = 1;
 		$("stream-desired-fps-slider").value = 0;
-		tools.setOnUpSlider($("stream-desired-fps-slider"), 1000, function(value) {
-			$("stream-desired-fps-value").innerHTML = (value == 0 ? "Unlimited" : value);
-		}, __sendSoftFps);
+		tools.setOnUpSlider($("stream-desired-fps-slider"), 1000, __updateDesiredFpsValue, (value) => __sendParam("desired_fps", value));
 
 		$("stream-size-slider").min = 20;
 		$("stream-size-slider").max = 200;
@@ -38,103 +34,122 @@ function Stream() {
 
 		tools.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
 		tools.setOnClick($("stream-reset-button"), __clickResetButton);
-
-		__startPoller();
 	};
 
 	/********************************************************************************/
 
-	// XXX: In current implementation we don't need this event because Stream() has own state poller
-
-	var __startPoller = function() {
-		var http = tools.makeRequest("GET", "/streamer/state", function() {
+	self.loadInitialState = function() {
+		var http = tools.makeRequest("GET", "/kvmd/streamer", function() {
 			if (http.readyState === 4) {
-				var response = (http.status === 200 ? JSON.parse(http.responseText) : null);
-
-				if (http.status !== 200) {
-					if (__prev_state) {
-						tools.info("Stream: refreshing ...");
-						$("stream-image").className = "stream-image-inactive";
-						$("stream-box").classList.add("stream-box-inactive");
-						$("stream-led").className = "led-gray";
-						$("stream-led").title = "Stream inactive";
-						$("stream-screenshot-button").disabled = true;
-						__setStreamerControlsDisabled(true);
-						__updateStreamHeader(false);
-						__client_key = tools.makeId();
-						__client_id = "";
-						__client_fps = -1;
-						__prev_state = false;
-					}
-
-				} else if (http.status === 200) {
-					var source = response.result.source;
-					var stream = response.result.stream;
-
-					if (!$("stream-desired-fps-slider").activated) {
-						$("stream-desired-fps-slider").disabled = false;
-						if ($("stream-desired-fps-slider").value !== source.desired_fps) {
-							$("stream-desired-fps-slider").value = source.desired_fps;
-							$("stream-desired-fps-value").innerHTML = (source.desired_fps == 0 ? "Unlimited" : source.desired_fps);
-						}
-					}
-
-					if (!$("stream-quality-slider").activated) {
-						$("stream-quality-slider").disabled = false;
-						if ($("stream-quality-slider").value !== source.quality) {
-							$("stream-quality-slider").value = source.quality;
-							$("stream-quality-value").innerHTML = source.quality + "%";
-						}
-					}
-
-					if (__resolution.width !== source.resolution.width || __resolution.height !== source.resolution.height) {
-						__resolution = source.resolution;
-						if ($("stream-auto-resize-checkbox").checked) {
-							__adjustSizeFactor();
-						} else {
-							__applySizeFactor();
-						}
-					}
-
-					var stream_client = tools.getCookie("stream_client");
-					if (!__client_id && stream_client && stream_client.startsWith(__client_key + "/")) {
-						tools.info("Stream: found acceptable stream_client cookie:", stream_client);
-						__client_id = stream_client.slice(stream_client.indexOf("/") + 1);
-					}
-
-					if (stream.clients_stat.hasOwnProperty(__client_id)) {
-						__client_fps = stream.clients_stat[__client_id].fps;
-					} else {
-						__client_fps = -1;
-					}
-
-					__updateStreamHeader(true);
-
-					if (!__prev_state) {
-						var path = "/streamer/stream?key=" + __client_key;
-						if (tools.browser.is_chrome || tools.browser.is_blink) {
-							// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-							tools.info("Stream: using advance_headers=1 to fix Blink MJPG bugs");
-							path += "&advance_headers=1";
-						} else if (tools.browser.is_safari || tools.browser.is_ios) {
-							// uStreamer fix for WebKit
-							tools.info("Stream: using dual_final_frames=1 to fix WebKit MJPG bugs");
-							path += "&dual_final_frames=1";
-						}
-						$("stream-image").src = path;
-						$("stream-image").className = "stream-image-active";
-						$("stream-box").classList.remove("stream-box-inactive");
-						$("stream-led").className = "led-green";
-						$("stream-led").title = "Stream is active";
-						$("stream-screenshot-button").disabled = false;
-						$("stream-reset-button").disabled = false;
-						__prev_state = true;
-						tools.info("Stream: acquired");
-					}
+				if (http.status === 200) {
+					self.setState(JSON.parse(http.responseText).result);
+				} else {
+					self.clearState();
+					setTimeout(self.loadInitialState, 1000);
 				}
 			}
 		});
-		setTimeout(__startPoller, 1000);
+	};
+
+	self.setState = function(state) {
+		if (state.state) {
+			var source = state.state.source;
+			var stream = state.state.stream;
+
+			if (!__prev) {
+				$("stream-quality-slider").activated = false;
+				$("stream-desired-fps-slider").activated = false;
+			}
+
+			if (!$("stream-quality-slider").activated) {
+				$("stream-quality-slider").disabled = false;
+				if ($("stream-quality-slider").value !== source.quality) {
+					$("stream-quality-slider").value = source.quality;
+					__updateQualityValue(source.quality);
+				}
+			}
+
+			if (!$("stream-desired-fps-slider").activated) {
+				$("stream-desired-fps-slider").disabled = false;
+				if ($("stream-desired-fps-slider").value !== source.desired_fps) {
+					$("stream-desired-fps-slider").value = source.desired_fps;
+					__updateDesiredFpsValue(source.desired_fps);
+				}
+			}
+
+			if (__resolution.width !== source.resolution.width || __resolution.height !== source.resolution.height) {
+				__resolution = source.resolution;
+				if ($("stream-auto-resize-checkbox").checked) {
+					__adjustSizeFactor();
+				} else {
+					__applySizeFactor();
+				}
+			}
+
+			var stream_client = tools.getCookie("stream_client");
+			if (!__client_id && stream_client && stream_client.startsWith(__client_key + "/")) {
+				tools.info("Stream: found acceptable stream_client cookie:", stream_client);
+				__client_id = stream_client.slice(stream_client.indexOf("/") + 1);
+			}
+
+			if (stream.clients_stat.hasOwnProperty(__client_id)) {
+				__client_fps = stream.clients_stat[__client_id].fps;
+			} else {
+				__client_fps = -1;
+			}
+
+			if (!__prev) {
+				var path = "/streamer/stream?key=" + __client_key;
+				if (tools.browser.is_chrome || tools.browser.is_blink) {
+					// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
+					tools.info("Stream: using advance_headers=1 to fix Blink MJPG bugs");
+					path += "&advance_headers=1";
+				} else if (tools.browser.is_safari || tools.browser.is_ios) {
+					// uStreamer fix for WebKit
+					tools.info("Stream: using dual_final_frames=1 to fix WebKit MJPG bugs");
+					path += "&dual_final_frames=1";
+				}
+				$("stream-image").src = path;
+				$("stream-image").className = "stream-image-active";
+				$("stream-box").classList.remove("stream-box-inactive");
+				$("stream-led").className = "led-green";
+				$("stream-led").title = "Stream is active";
+				$("stream-screenshot-button").disabled = false;
+				$("stream-reset-button").disabled = false;
+				tools.info("Stream: acquired");
+				__prev = true;
+			}
+
+			__updateStreamHeader(true);
+
+		} else {
+			self.clearState();
+		}
+	};
+
+	self.clearState = function() {
+		tools.info("Stream: refreshing ...");
+		$("stream-image").className = "stream-image-inactive";
+		$("stream-box").classList.add("stream-box-inactive");
+		$("stream-led").className = "led-gray";
+		$("stream-led").title = "Stream inactive";
+		$("stream-screenshot-button").disabled = true;
+		$("stream-reset-button").disabled = true;
+		$("stream-quality-slider").disabled = true;
+		$("stream-desired-fps-slider").disabled = true;
+		__client_key = tools.makeId();
+		__client_id = "";
+		__client_fps = -1;
+		__prev = false;
+		__updateStreamHeader(false);
+	};
+
+	var __updateQualityValue = function(value) {
+		$("stream-quality-value").innerHTML = value + "%";
+	};
+
+	var __updateDesiredFpsValue = function(value) {
+		$("stream-desired-fps-value").innerHTML = (value == 0 ? "Unlimited" : value);
 	};
 
 	var __updateStreamHeader = function(online) {
@@ -158,7 +173,6 @@ function Stream() {
 	};
 
 	var __clickResetButton = function() {
-		__setStreamerControlsDisabled(true);
 		var http = tools.makeRequest("POST", "/kvmd/streamer/reset", function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
@@ -168,34 +182,14 @@ function Stream() {
 		});
 	};
 
-	var __sendQuality = function(value) {
-		__setStreamerControlsDisabled(true);
-		var http = tools.makeRequest("POST", "/kvmd/streamer/set_params?quality=" + value, function() {
+	var __sendParam = function(name, value) {
+		var http = tools.makeRequest("POST", "/kvmd/streamer/set_params?" + name + "=" + value, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					ui.error("Can't configure stream:<br>", http.responseText);
 				}
-				$("stream-quality-slider").activated = false;
 			}
 		});
-	};
-
-	var __sendSoftFps = function(value) {
-		__setStreamerControlsDisabled(true);
-		var http = tools.makeRequest("POST", "/kvmd/streamer/set_params?desired_fps=" + value, function() {
-			if (http.readyState === 4) {
-				if (http.status !== 200) {
-					ui.error("Can't configure stream:<br>", http.responseText);
-				}
-				$("stream-desired-fps-slider").activated = false;
-			}
-		});
-	};
-
-	var __setStreamerControlsDisabled = function(disabled) {
-		$("stream-reset-button").disabled = disabled;
-		$("stream-quality-slider").disabled = disabled;
-		$("stream-desired-fps-slider").disabled = disabled;
 	};
 
 	var __resize = function(center=false) {

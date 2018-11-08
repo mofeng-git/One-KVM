@@ -5,7 +5,7 @@ globals:
     Mouse: true
     Msd: true
     Session: true
-    Stream: true
+    Streamer: true
     Ui: true
     ui: true
     tools: true

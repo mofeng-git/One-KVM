@@ -10,7 +10,6 @@ function main() {
 		$("bad-browser-modal").style.visibility = "visible";
 	} else {
 		ui = new Ui();
-		new Session(new Atx(), new Hid(), new Msd());
-		new Stream();
+		new Session(new Streamer(), new Atx(), new Hid(), new Msd());
 	}
 }

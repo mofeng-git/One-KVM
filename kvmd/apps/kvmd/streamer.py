@@ -6,6 +6,8 @@ from typing import List
 from typing import Dict
 from typing import Optional
 
+import aiohttp
+
 from ...logging import get_logger
 
 from ... import gpio
@@ -13,17 +15,25 @@ from ... import gpio
 
 # =====
 class Streamer:  # pylint: disable=too-many-instance-attributes
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         cap_power: int,
         conv_power: int,
         sync_delay: float,
         init_delay: float,
         init_restart_after: float,
+
         quality: int,
         desired_fps: int,
+
+        host: str,
+        port: int,
+        timeout: float,
+
         cmd: List[str],
+
         loop: asyncio.AbstractEventLoop,
+        http_session: aiohttp.ClientSession,
     ) -> None:
 
         self.__cap_power = (gpio.set_output(cap_power) if cap_power > 0 else cap_power)
@@ -31,23 +41,30 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__sync_delay = sync_delay
         self.__init_delay = init_delay
         self.__init_restart_after = init_restart_after
-        self.__quality = quality
-        self.__desired_fps = desired_fps
+
+        self.__params = {
+            "quality": quality,
+            "desired_fps": desired_fps,
+        }
+
+        self.__host = host
+        self.__port = port
+        self.__timeout = timeout
+
         self.__cmd = cmd
 
         self.__loop = loop
+        self.__http_session = http_session
 
         self.__proc_task: Optional[asyncio.Task] = None
 
-    async def start(self, quality: int, desired_fps: int, no_init_restart: bool=False) -> None:
+    async def start(self, params: Dict, no_init_restart: bool=False) -> None:
         logger = get_logger()
         logger.info("Starting streamer ...")
 
-        assert 1 <= quality <= 100
-        self.__quality = quality
-
-        assert 0 <= desired_fps <= 30
-        self.__desired_fps = desired_fps
+        self.__params = {key: params[key] for key in self.__params}  # Only known params
+        assert 1 <= self.__params["quality"] <= 100
+        assert 0 <= self.__params["desired_fps"] <= 30
 
         await self.__inner_start()
         if self.__init_restart_after > 0.0 and not no_init_restart:
@@ -63,17 +80,23 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     def is_running(self) -> bool:
         return bool(self.__proc_task)
 
-    def get_current_quality(self) -> int:
-        return self.__quality
+    def get_params(self) -> Dict:
+        return dict(self.__params)
 
-    def get_current_desired_fps(self) -> int:
-        return self.__desired_fps
-
-    def get_state(self) -> Dict:
+    async def get_state(self) -> Dict:
+        url = "http://%s:%d/state" % (self.__host, self.__port)
+        state = None
+        try:
+            async with self.__http_session.get(url, timeout=self.__timeout) as response:
+                response.raise_for_status()
+                state = (await response.json())["result"]
+        except aiohttp.ClientConnectorError:
+            pass
+        except Exception:
+            get_logger().exception("Invalid streamer response from /state")
         return {
-            "is_running": self.is_running(),
-            "quality": self.__quality,
-            "desired_fps": self.__desired_fps,
+            "params": self.get_params(),
+            "state": state,
         }
 
     def get_app(self) -> str:
@@ -121,7 +144,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         while True:  # pylint: disable=too-many-nested-blocks
             proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
             try:
-                cmd = [part.format(quality=self.__quality, desired_fps=self.__desired_fps) for part in self.__cmd]
+                cmd = [part.format(host=self.__host, port=self.__port, **self.__params) for part in self.__cmd]
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
