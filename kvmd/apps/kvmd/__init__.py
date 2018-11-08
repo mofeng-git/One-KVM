@@ -57,7 +57,7 @@ def main() -> None:
             init_delay=float(config["streamer"]["init_delay"]),
             init_restart_after=float(config["streamer"]["init_restart_after"]),
             quality=int(config["streamer"]["quality"]),
-            soft_fps=int(config["streamer"]["soft_fps"]),
+            desired_fps=int(config["streamer"]["desired_fps"]),
             cmd=list(map(str, config["streamer"]["cmd"])),
             loop=loop,
         )

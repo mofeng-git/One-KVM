@@ -21,7 +21,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         init_delay: float,
         init_restart_after: float,
         quality: int,
-        soft_fps: int,
+        desired_fps: int,
         cmd: List[str],
         loop: asyncio.AbstractEventLoop,
     ) -> None:
@@ -32,22 +32,22 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__init_delay = init_delay
         self.__init_restart_after = init_restart_after
         self.__quality = quality
-        self.__soft_fps = soft_fps
+        self.__desired_fps = desired_fps
         self.__cmd = cmd
 
         self.__loop = loop
 
         self.__proc_task: Optional[asyncio.Task] = None
 
-    async def start(self, quality: int, soft_fps: int, no_init_restart: bool=False) -> None:
+    async def start(self, quality: int, desired_fps: int, no_init_restart: bool=False) -> None:
         logger = get_logger()
         logger.info("Starting streamer ...")
 
         assert 1 <= quality <= 100
         self.__quality = quality
 
-        assert 1 <= soft_fps <= 30
-        self.__soft_fps = soft_fps
+        assert 0 <= desired_fps <= 30
+        self.__desired_fps = desired_fps
 
         await self.__inner_start()
         if self.__init_restart_after > 0.0 and not no_init_restart:
@@ -66,14 +66,14 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     def get_current_quality(self) -> int:
         return self.__quality
 
-    def get_current_soft_fps(self) -> int:
-        return self.__soft_fps
+    def get_current_desired_fps(self) -> int:
+        return self.__desired_fps
 
     def get_state(self) -> Dict:
         return {
             "is_running": self.is_running(),
             "quality": self.__quality,
-            "soft_fps": self.__soft_fps,
+            "desired_fps": self.__desired_fps,
         }
 
     def get_app(self) -> str:
@@ -121,7 +121,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         while True:  # pylint: disable=too-many-nested-blocks
             proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
             try:
-                cmd = [part.format(quality=self.__quality, soft_fps=self.__soft_fps) for part in self.__cmd]
+                cmd = [part.format(quality=self.__quality, desired_fps=self.__desired_fps) for part in self.__cmd]
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
