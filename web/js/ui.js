@@ -283,7 +283,7 @@ function Ui() {
 		}
 
 		el_window.setAttribute("data-centered", "");
-		tools.setOnClick(el_window, () => __raiseWindow(el_window));
+		el_window.onclick = el_window.ontouchend = () => __raiseWindow(el_window);
 
 		el_grab.onmousedown = startMoving;
 		el_grab.ontouchstart = startMoving;
