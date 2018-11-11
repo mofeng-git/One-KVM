@@ -2,13 +2,21 @@ div#about {
 	-webkit-user-select: text;
 	-moz-user-select: text;
 	user-select: text;
+	padding: 5px 5px 5px 5px;
 }
 
-div#about td.version {
-	font-weight: bold;
+div#about td.logo {
+	padding-right: 25px;
 }
 
-div#about p {
+div#about td.title {
+	font-size: 1.2em;
+}
+
+div#about td.copyright {
+	font-size: 0.8em;
+}
+
+div#about tr.version {
 	font-family: monospace;
-	padding: 0 10px 0 10px;
 }

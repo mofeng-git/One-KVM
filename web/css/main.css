@@ -99,10 +99,13 @@ select:active {
 	border-left: var(--border-dark-thin);
 }
 
-img#logo {
+img.svg-gray {
 	-webkit-filter: invert(0.7);
 	filter: invert(0.7);
 	vertical-align: middle;
+}
+
+img#logo {
 	padding-left: 16px;
 }
 

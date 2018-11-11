@@ -46,11 +46,11 @@
 				Please use one of the following browsers:
 				<hr>
 				<ul>
-					<li><a target="_blank" href="https://www.google.com/chrome">Google Chrome</a> <sup><i>recommended</i></sup></li>
-					<li><a target="_blank" href="https://www.chromium.org/Home">Chromium</a> <sup><i>recommended</i></sup></li>
-					<li><a target="_blank" href="https://www.mozilla.org/firefox">Mozilla Firefox</a></li>
-					<li><a target="_blank" href="https://www.apple.com/safari">Apple Safari</a></li>
-					<li><a target="_blank" href="https://www.opera.com">Opera</a></li>
+					<li><a target="_blank" href="https://google.com/chrome">Google Chrome</a> <sup><i>recommended</i></sup></li>
+					<li><a target="_blank" href="https://chromium.org/Home">Chromium</a> <sup><i>recommended</i></sup></li>
+					<li><a target="_blank" href="https://mozilla.org/firefox">Mozilla Firefox</a></li>
+					<li><a target="_blank" href="https://apple.com/safari">Apple Safari</a></li>
+					<li><a target="_blank" href="https://opera.com">Opera</a></li>
 					<li><a target="_blank" href="https://vivaldi.com">Vivaldi</a></li>
 				</ul>
 			</div>
@@ -58,7 +58,7 @@
 	</div>
 
 	<ul id="ctl">
-		<li class="ctl-logo"><img id="logo" src="svg/logo.svg" alt="&pi;-kvm" /></li>
+		<li class="ctl-logo"><img id="logo" class="svg-gray" src="svg/logo.svg" alt="&pi;-kvm" /></li>
 
 		<li class="ctl-right-actions">
 			<div class="ctl-dropdown">
@@ -542,34 +542,53 @@
 
 	<div id="about-window" class="window" tabindex="0">
 		<div class="window-header">
-			<div class="window-grab">About Pi-KVM</div>
+			<div class="window-grab">About</div>
 			<button class="window-button-close">&times;</button>
 		</div>
 		<div id="about">
 			<table>
 				<tr>
-					<td>Kvmd:</td>
-					<td id="about-version-kvmd" class="version"></td>
-				</tr>
-				<tr>
-					<td>Streamer:</td>
-					<td id="about-version-streamer" class="version"></td>
+					<td valign="top" class="logo">
+						<img class="svg-gray" src="svg/logo.svg" alt="Open Source Hardware" height="40" />
+					</td>
+					<td valign="top">
+						<table>
+							<tr>
+								<td class="title">Open Source &amp; Open Hardware IP-KVM</td>
+							</tr>
+							<tr>
+								<td class="copyright">Copyright &copy; 2018 Pi-KVM Developers Team</td>
+							</tr>
+							<tr>
+								<td><br></td>
+							</tr>
+							<tr class="version">
+								<td>KVMD:</td>
+								<td id="about-version-kvmd"></td>
+							</tr>
+							<tr class="version">
+								<td>Streamer:</td>
+								<td id="about-version-streamer"></td>
+							</tr>
+						</table>
+					</td>
 				</tr>
 			</table>
-			<p>
-				This program is free software: you can redistribute it and/or modify<br>
-				it under the terms of the GNU General Public License as published by<br>
-				the Free Software Foundation, either version 3 of the License, or<br>
-				(at your option) any later version.<br>
-				<br>
-				This program is distributed in the hope that it will be useful,<br>
-				but WITHOUT ANY WARRANTY; without even the implied warranty of<br>
-				MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the<br>
-				GNU General Public License for more details.<br>
-				<br>
-				You should have received a copy of the GNU General Public License<br>
-				along with this program. If not, see <a target="_blank" href="https://www.gnu.org/licenses">https://www.gnu.org/licenses</a>.
-			</p>
+			<hr>
+			This is a web interface for KVMD. For better experience<br>
+			we recommend you to use a fresh version of one<br>
+			of the following browsers:<br>
+			<ul>
+				<li><a target="_blank" href="https://google.com/chrome">Google Chrome</a> <sup><i>recommended</i></sup></li>
+				<li><a target="_blank" href="https://chromium.org/Home">Chromium</a> <sup><i>recommended</i></sup></li>
+				<li><a target="_blank" href="https://mozilla.org/firefox">Mozilla Firefox</a></li>
+				<li><a target="_blank" href="https://apple.com/safari">Apple Safari</a></li>
+				<li><a target="_blank" href="https://opera.com">Opera</a></li>
+				<li><a target="_blank" href="https://vivaldi.com">Vivaldi</a></li>
+			</ul>
+			<hr>
+			Please visit our site <a target="_blank" href="https://github.com/pi-kvm">https://github.com/pi-kvm</a> to get documentation,<br>
+			source codes, hardware schematics and legal information.<br>
 		</div>
 	</div>
 
