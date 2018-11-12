@@ -13,7 +13,7 @@ function Streamer() {
 	var __init__ = function() {
 		$("stream-led").title = "Stream inactive";
 
-		$("stream-quality-slider").min = 10;
+		$("stream-quality-slider").min = 5;
 		$("stream-quality-slider").max = 100;
 		$("stream-quality-slider").step = 5;
 		$("stream-quality-slider").value = 80;
