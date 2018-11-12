@@ -40,6 +40,7 @@ RUN pacman -Syy \
 		nginx-mainline \
 		ustreamer \
 		socat \
+		lua51-cjson \
 	&& env MAKEPKGOPTS="--skipchecksums --skippgpcheck" user-packer -S --noconfirm nginx-mainline-mod-lua \
 	&& pacman -Sc --noconfirm
 
