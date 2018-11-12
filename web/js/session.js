@@ -1,4 +1,4 @@
-function Session(streamer, atx, hid, msd) {
+function Session(hid, atx, msd, streamer) {
 	// var self = this;
 
 	/********************************************************************************/
