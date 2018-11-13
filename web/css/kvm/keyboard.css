@@ -40,7 +40,7 @@ div.keyboard div.key, div.modifier {
 }
 div.keyboard div.key:hover, div.modifier:hover {
 	color: var(--fg-color-intensive);
-	background-color: var(--bg-color-ctl);
+	background-color: var(--bg-color-menu);
 }
 div.keyboard div.pressed {
 	box-shadow: none;
@@ -97,6 +97,27 @@ div.keyboard p {
 }
 div.keyboard b {
 	color: var(--bg-color-intensive);
+}
+
+@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
+	div#keyboard-window {
+		visibility: visible !important;
+		padding-top: 9px !important;
+		padding-bottom: 30px !important;
+		border-bottom: 0 !important;
+		border-left: 0 !important;
+		border-right: 0 !important;
+		border-radius: 0 !important;
+		top: unset !important;
+		bottom: 0 !important;
+		width: 100% !important;
+		left: 50% !important;
+		-webkit-transform: translateX(-50%) !important;
+		transform: translateX(-50%) !important;
+	}
+	div#keyboard-window-header {
+		display: none !important
+	}
 }
 
 div#keyboard-desktop {

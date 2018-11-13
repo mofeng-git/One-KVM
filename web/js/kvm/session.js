@@ -1,4 +1,4 @@
-function Session(hid, atx, msd, streamer) {
+function Session() {
 	// var self = this;
 
 	/********************************************************************************/
@@ -7,6 +7,11 @@ function Session(hid, atx, msd, streamer) {
 
 	var __ping_timer = null;
 	var __missed_heartbeats = 0;
+
+	var __hid = new Hid();
+	var __atx = new Atx();
+	var __msd = new Msd();
+	var __streamer = new Streamer();
 
 	var __init__ = function() {
 		$("link-led").title = "Not connected yet...";
@@ -53,10 +58,10 @@ function Session(hid, atx, msd, streamer) {
 		$("link-led").className = "led-green";
 		$("link-led").title = "Connected";
 		tools.debug("Session: socket opened:", event);
-		streamer.loadInitialState();
-		atx.loadInitialState();
-		msd.loadInitialState();
-		hid.setSocket(__ws);
+		__streamer.loadInitialState();
+		__atx.loadInitialState();
+		__msd.loadInitialState();
+		__hid.setSocket(__ws);
 		__missed_heartbeats = 0;
 		__ping_timer = setInterval(__pingServer, 1000);
 	};
@@ -68,11 +73,11 @@ function Session(hid, atx, msd, streamer) {
 			__missed_heartbeats = 0;
 		} else if (event.msg_type === "event") {
 			if (event.msg.event === "streamer_state") {
-				streamer.setState(event.msg.event_attrs);
+				__streamer.setState(event.msg.event_attrs);
 			} else if (event.msg.event === "atx_state") {
-				atx.setState(event.msg.event_attrs);
+				__atx.setState(event.msg.event_attrs);
 			} else if (event.msg.event === "msd_state") {
-				msd.setState(event.msg.event_attrs);
+				__msd.setState(event.msg.event_attrs);
 			}
 		}
 	};
@@ -93,9 +98,9 @@ function Session(hid, atx, msd, streamer) {
 			clearInterval(__ping_timer);
 			__ping_timer = null;
 		}
-		streamer.clearState();
-		atx.clearState();
-		hid.setSocket(null);
+		__streamer.clearState();
+		__atx.clearState();
+		__hid.setSocket(null);
 		__ws = null;
 		setTimeout(function() {
 			$("link-led").className = "led-yellow";

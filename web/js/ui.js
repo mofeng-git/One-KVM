@@ -5,7 +5,7 @@ function Ui() {
 
 	var __top_z_index = 0;
 	var __windows = [];
-	var __ctl_items = [];
+	var __menu_items = [];
 
 	var __init__ = function() {
 		Array.prototype.forEach.call(document.querySelectorAll("button"), function(el_button) {
@@ -14,9 +14,9 @@ function Ui() {
 			el_button.ontouchstart = function() {};
 		});
 
-		Array.prototype.forEach.call($$("ctl-item"), function(el_item) {
+		Array.prototype.forEach.call($$("menu-item"), function(el_item) {
 			tools.setOnClick(el_item, () => __toggleMenu(el_item));
-			__ctl_items.push(el_item);
+			__menu_items.push(el_item);
 		});
 
 		Array.prototype.forEach.call($$("window"), function(el_window) {
@@ -37,13 +37,6 @@ function Ui() {
 
 		window.addEventListener("resize", () => __organizeWindowsOnResize(false));
 		window.addEventListener("orientationchange", () => __organizeWindowsOnResize(true));
-
-		tools.setOnClick($("show-about-button"), () => self.showWindow($("about-window")));
-		tools.setOnClick($("show-keyboard-button"), () => self.showWindow($("keyboard-window")));
-		tools.setOnClick($("show-stream-button"), () => self.showWindow($("stream-window")));
-		tools.setOnClick($("open-log-button"), () => window.open("kvmd/log?seek=3600&follow=1", "_blank"));
-
-		self.showWindow($("stream-window"));
 	};
 
 	/********************************************************************************/
@@ -127,7 +120,7 @@ function Ui() {
 		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered") || center) {
 			var view = self.getViewGeometry();
 			var rect = el_window.getBoundingClientRect();
-			el_window.style.top = Math.max($("ctl").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
+			el_window.style.top = Math.max($("menu").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
 			el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
 			el_window.setAttribute("data-centered", "");
 		}
@@ -139,7 +132,7 @@ function Ui() {
 
 	self.getViewGeometry = function() {
 		return {
-			top: $("ctl").clientHeight,
+			top: $("menu").clientHeight,
 			bottom: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
 			left: 0,
 			right: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
@@ -161,15 +154,15 @@ function Ui() {
 	var __toggleMenu = function(el_a) {
 		var all_hidden = true;
 
-		__ctl_items.forEach(function(el_item) {
-			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
+		__menu_items.forEach(function(el_item) {
+			var el_menu = el_item.parentElement.querySelector(".menu-dropdown-content");
 			if (el_item === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
 				el_item.focus();
-				el_item.classList.add("ctl-item-selected");
+				el_item.classList.add("menu-item-selected");
 				el_menu.style.visibility = "visible";
 				all_hidden &= false;
 			} else {
-				el_item.classList.remove("ctl-item-selected");
+				el_item.classList.remove("menu-item-selected");
 				el_menu.style.visibility = "hidden";
 			}
 		});
@@ -190,15 +183,15 @@ function Ui() {
 
 	var __closeAllMenues = function() {
 		document.onkeyup = null;
-		__ctl_items.forEach(function(el_item) {
-			var el_menu = el_item.parentElement.querySelector(".ctl-dropdown-content");
-			el_item.classList.remove("ctl-item-selected");
+		__menu_items.forEach(function(el_item) {
+			var el_menu = el_item.parentElement.querySelector(".menu-dropdown-content");
+			el_item.classList.remove("menu-item-selected");
 			el_menu.style.visibility = "hidden";
 		});
 	};
 
 	var __globalMouseButtonHandler = function(event) {
-		if (!event.target.matches(".ctl-item")) {
+		if (!event.target.matches(".menu-item")) {
 			for (var el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
 				if (el_item.hasAttribute("data-force-hide-menu")) {
 					break;
@@ -216,7 +209,7 @@ function Ui() {
 		Array.prototype.forEach.call($$("window"), function(el_window) {
 			if (el_window.style.visibility === "visible" && (orientation || el_window.hasAttribute("data-centered"))) {
 				var rect = el_window.getBoundingClientRect();
-				el_window.style.top = Math.max($("ctl").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
+				el_window.style.top = Math.max($("menu").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
 				el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
 				el_window.setAttribute("data-centered", "");
 			}

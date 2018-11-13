@@ -3,7 +3,7 @@
 	--bg-color-light: #484b51;
 	--bg-color-gray: #3b3e43;
 	--bg-color-dark: #17191d;
-	--bg-color-ctl: #202225;
+	--bg-color-menu: #202225;
 	--bg-color-intensive: #436a8a;
 	--bg-color-hovered: #1a1c1f;
 	--bg-color-selected: #171717;
@@ -14,10 +14,8 @@
 	--fg-color-inactive: #6c7481;
 	--fg-color-selected: var(--fg-color-inactive);
 
-	--bg-color-stream-screen: black;
-
 	--border-color-normal: var(--bg-color-normal);
-	--border-color-gray: var(--bg-color-ctl);
+	--border-color-gray: var(--bg-color-menu);
 	--border-color-dark: var(--bg-color-dark);
 	--border-color-intensive: #5b90bb;
 	--border-color-important: #ff6467;
