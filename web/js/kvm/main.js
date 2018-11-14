@@ -1,14 +1,7 @@
 var ui;
 
 function main() {
-	if (
-		!window.navigator
-		|| window.navigator.userAgent.indexOf("MSIE ") > 0
-		|| window.navigator.userAgent.indexOf("Trident/") > 0
-		|| window.navigator.userAgent.indexOf("Edge/") > 0
-	) {
-		$("bad-browser-modal").style.visibility = "visible";
-	} else {
+	if (check_browser()) {
 		ui = new Ui();
 
 		tools.setOnClick($("show-about-button"), () => ui.showWindow($("about-window")));
