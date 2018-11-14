@@ -5,12 +5,15 @@ TESTENV_LOOP ?= /dev/loop7
 TESTENV_CMD ?= /bin/bash -c " \
 		(socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
 		&& rm -rf /etc/nginx/* \
-		&& cp -r /configs/nginx/* /etc/nginx \
+		&& cp -r /usr/share/kvmd/configs/nginx/* /etc/nginx \
+		&& mkdir -p /etc/kvmd \
+		&& cp /usr/share/kvmd/configs/kvmd/logging.yaml /etc/kvmd/logging.yaml \
+		&& cp /testenv/kvmd.yaml /etc/kvmd \
 		&& nginx -c /etc/nginx/nginx.conf \
 		&& ln -s $(TESTENV_VIDEO) /dev/kvmd-streamer \
 		&& (losetup -d /dev/kvmd-msd || true) \
 		&& losetup /dev/kvmd-msd /root/loop.img \
-		&& python -m kvmd.apps.kvmd -c testenv/kvmd.yaml \
+		&& python -m kvmd.apps.kvmd -c /etc/kvmd/kvmd.yaml \
 	"
 
 
@@ -29,8 +32,8 @@ run:
 	- docker run --rm \
 			--volume `pwd`/kvmd:/kvmd:ro \
 			--volume `pwd`/web:/usr/share/kvmd/web:ro \
+			--volume `pwd`/configs:/usr/share/kvmd/configs:ro \
 			--volume `pwd`/testenv:/testenv:ro \
-			--volume `pwd`/configs:/configs:ro \
 			--device $(TESTENV_LOOP):/dev/kvmd-msd \
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
 			--publish 8080:80/tcp \

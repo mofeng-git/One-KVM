@@ -10,7 +10,7 @@ from ... import gpio
 
 # =====
 def main() -> None:
-    config = init()
+    config = init()["kvmd"]
     logger = get_logger(0)
 
     logger.info("Cleaning up ...")

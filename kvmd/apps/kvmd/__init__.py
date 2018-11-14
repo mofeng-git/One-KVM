@@ -17,7 +17,7 @@ from .server import Server
 
 # =====
 def main() -> None:
-    config = init()
+    config = init()["kvmd"]
     with gpio.bcm():
         loop = asyncio.get_event_loop()
         http_session = aiohttp.ClientSession(loop=loop)
