@@ -26,6 +26,13 @@ hr {
 	border-top: var(--border-normal-thin);
 }
 
+pre {
+	color: var(--fg-color-dark);
+	background-color: var(--bg-color-dark);
+	padding: 10px;
+	border-radius: 8px;
+}
+
 button, select {
 	box-shadow: none;
 	border: none;
