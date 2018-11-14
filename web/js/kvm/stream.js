@@ -95,7 +95,7 @@ function Streamer() {
 			if (stream.clients_stat.hasOwnProperty(__client_id)) {
 				__client_fps = stream.clients_stat[__client_id].fps;
 			} else {
-				__client_fps = -1;
+				self.clearState();
 			}
 
 			if (!__prev) {
