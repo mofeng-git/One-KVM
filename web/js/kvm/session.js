@@ -39,7 +39,7 @@ function Session() {
 	var __startPoller = function() {
 		$("link-led").className = "led-yellow";
 		$("link-led").title = "Connecting...";
-		var http = tools.makeRequest("GET", "/wsauth", function() {
+		var http = tools.makeRequest("GET", "/ws_auth", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
 					__ws = new WebSocket((location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/kvmd/ws");

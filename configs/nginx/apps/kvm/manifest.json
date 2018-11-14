@@ -1,0 +1,6 @@
+{
+	"name": "KVM",
+	"description": "Open KVM session in a web browser",
+	"path": "/kvm.html",
+	"place": 0
+}
