@@ -23,6 +23,7 @@ depends=(
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
 md5sums=(SKIP)
+install=kvmd.install
 
 
 build() {

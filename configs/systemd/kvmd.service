@@ -3,6 +3,8 @@ Description=The main Pi-KVM daemon
 After=network.target network-online.target nss-lookup.target
 
 [Service]
+User=kvmd
+Group=kvmd
 Type=simple
 Restart=always
 RestartSec=3

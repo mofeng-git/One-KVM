@@ -1,0 +1,7 @@
+post_install() {
+	id kvmd &>/dev/null || useradd -r -c "The main Pi-KVM daemon" -s /sbin/nologin kvmd
+}
+
+post_remove() {
+	userdel kvmd &>/dev/null
+}
