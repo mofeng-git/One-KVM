@@ -1,8 +1,14 @@
+# Don't touch this file otherwise your device may stop working.
+# You can find a workable configuration in /usr/share/kvmd/configs/kvmd.
+
 kvmd:
     server:
         host: 127.0.0.1
         port: 8081
         heartbeat: 3.0
+
+    info:
+        meta: /etc/kvmd/meta.yaml
 
     log:
         services:
@@ -26,7 +32,6 @@ kvmd:
 
         click_delay: 0.1
         long_click_delay: 5.5
-
         state_poll: 0.1
 
     msd:
@@ -49,6 +54,7 @@ kvmd:
         init_delay: 1.0
         init_restart_after: 1.0
         shutdown_delay: 10.0
+        state_poll: 1.0
 
         quality: 80
         desired_fps: 0
@@ -71,7 +77,5 @@ kvmd:
             - "--fake-height=600"
             - "--host={host}"
             - "--port={port}"
-
-        state_poll: 1.0
 
 logging: !include logging.yaml

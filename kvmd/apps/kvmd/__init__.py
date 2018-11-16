@@ -42,6 +42,7 @@ def main() -> None:
             reset_switch=int(config["atx"]["pinout"]["reset_switch"]),
             click_delay=float(config["atx"]["click_delay"]),
             long_click_delay=float(config["atx"]["long_click_delay"]),
+            state_poll=float(config["atx"]["state_poll"]),
         )
 
         msd = MassStorageDevice(
@@ -62,6 +63,7 @@ def main() -> None:
             sync_delay=float(config["streamer"]["sync_delay"]),
             init_delay=float(config["streamer"]["init_delay"]),
             init_restart_after=float(config["streamer"]["init_restart_after"]),
+            state_poll=float(config["streamer"]["state_poll"]),
 
             quality=int(config["streamer"]["quality"]),
             desired_fps=int(config["streamer"]["desired_fps"]),
@@ -83,9 +85,8 @@ def main() -> None:
             msd=msd,
             streamer=streamer,
 
+            meta_path=str(config["info"]["meta"]),
             heartbeat=float(config["server"]["heartbeat"]),
-            atx_state_poll=float(config["atx"]["state_poll"]),
-            streamer_state_poll=float(config["streamer"]["state_poll"]),
             streamer_shutdown_delay=float(config["streamer"]["shutdown_delay"]),
             msd_chunk_size=int(config["msd"]["chunk_size"]),
 

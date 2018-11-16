@@ -18,6 +18,8 @@ from ...logging import Log
 
 from ...aioregion import RegionIsBusyError
 
+from ...yaml import load_yaml_file
+
 from ... import __version__
 
 from .hid import Hid
@@ -111,9 +113,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
         msd: MassStorageDevice,
         streamer: Streamer,
 
+        meta_path: str,
         heartbeat: float,
-        atx_state_poll: float,
-        streamer_state_poll: float,
         streamer_shutdown_delay: float,
         msd_chunk_size: int,
 
@@ -126,9 +127,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__msd = msd
         self.__streamer = streamer
 
+        self.__meta_path = meta_path
         self.__heartbeat = heartbeat
-        self.__atx_state_poll = atx_state_poll
-        self.__streamer_state_poll = streamer_state_poll
         self.__streamer_shutdown_delay = streamer_shutdown_delay
         self.__msd_chunk_size = msd_chunk_size
 
@@ -190,6 +190,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 "streamer": await self.__streamer.get_version(),
             },
             "streamer": self.__streamer.get_app(),
+            "meta": load_yaml_file(self.__meta_path),
         })
 
     @_wrap_exceptions_for_web("Log error")
@@ -198,7 +199,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         follow = _valid_bool("follow", request.query.get("follow", "false"))
         response = aiohttp.web.StreamResponse(status=200, reason="OK", headers={"Content-Type": "text/plain"})
         await response.prepare(request)
-        async for record in self.__log.log(seek, follow):
+        async for record in self.__log.poll_log(seek, follow):
             await response.write(("[%s %s] --- %s" % (
                 record["dt"].strftime("%Y-%m-%d %H:%M:%S"),
                 record["service"],
@@ -431,17 +432,15 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     @_system_task
     async def __poll_atx_state(self) -> None:
-        while True:
+        async for state in self.__atx.poll_state():
             if self.__sockets:
-                await self.__broadcast_event("atx_state", **self.__atx.get_state())
-            await asyncio.sleep(self.__atx_state_poll)
+                await self.__broadcast_event("atx_state", **state)
 
     @_system_task
     async def __poll_streamer_state(self) -> None:
-        while True:
+        async for state in self.__streamer.poll_state():
             if self.__sockets:
-                await self.__broadcast_event("streamer_state", **(await self.__streamer.get_state()))
-            await asyncio.sleep(self.__streamer_state_poll)
+                await self.__broadcast_event("streamer_state", **state)
 
     async def __broadcast_event(self, event: str, **kwargs: Dict) -> None:
         await asyncio.gather(*[

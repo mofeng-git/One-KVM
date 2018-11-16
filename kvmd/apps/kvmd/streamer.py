@@ -4,6 +4,7 @@ import asyncio.subprocess
 
 from typing import List
 from typing import Dict
+from typing import AsyncGenerator
 from typing import Optional
 
 import aiohttp
@@ -15,13 +16,15 @@ from ... import gpio
 
 # =====
 class Streamer:  # pylint: disable=too-many-instance-attributes
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
         cap_power: int,
         conv_power: int,
+
         sync_delay: float,
         init_delay: float,
         init_restart_after: float,
+        state_poll: float,
 
         quality: int,
         desired_fps: int,
@@ -38,9 +41,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__cap_power = (gpio.set_output(cap_power) if cap_power > 0 else cap_power)
         self.__conv_power = (gpio.set_output(conv_power) if conv_power > 0 else conv_power)
+
         self.__sync_delay = sync_delay
         self.__init_delay = init_delay
         self.__init_restart_after = init_restart_after
+        self.__state_poll = state_poll
 
         self.__params = {
             "quality": quality,
@@ -98,6 +103,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             "params": self.get_params(),
             "state": state,
         }
+
+    async def poll_state(self) -> AsyncGenerator[Dict, None]:
+        while True:
+            yield (await self.get_state())
+            await asyncio.sleep(self.__state_poll)
 
     def get_app(self) -> str:
         return os.path.basename(self.__cmd[0])

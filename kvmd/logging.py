@@ -33,7 +33,7 @@ class Log:
         self.__services = services
         self.__loop = loop
 
-    async def log(self, seek: int, follow: bool) -> AsyncGenerator[Dict, None]:
+    async def poll_log(self, seek: int, follow: bool) -> AsyncGenerator[Dict, None]:
         reader = systemd.journal.Reader()
         reader.this_boot()
         reader.this_machine()

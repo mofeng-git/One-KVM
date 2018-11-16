@@ -1,6 +1,7 @@
 import asyncio
 
 from typing import Dict
+from typing import AsyncGenerator
 
 from ...logging import get_logger
 
@@ -13,16 +14,17 @@ class AtxIsBusy(aioregion.RegionIsBusyError):
     pass
 
 
-class Atx:
+class Atx:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         power_led: int,
         hdd_led: int,
-
         power_switch: int,
         reset_switch: int,
+
         click_delay: float,
         long_click_delay: float,
+        state_poll: float,
     ) -> None:
 
         self.__power_led = gpio.set_input(power_led)
@@ -32,6 +34,8 @@ class Atx:
         self.__reset_switch = gpio.set_output(reset_switch)
         self.__click_delay = click_delay
         self.__long_click_delay = long_click_delay
+
+        self.__state_poll = state_poll
 
         self.__region = aioregion.AioExclusiveRegion(AtxIsBusy)
 
@@ -43,6 +47,11 @@ class Atx:
                 "hdd": (not gpio.read(self.__hdd_led)),
             },
         }
+
+    async def poll_state(self) -> AsyncGenerator[Dict, None]:
+        while True:
+            yield self.get_state()
+            await asyncio.sleep(self.__state_poll)
 
     async def click_power(self) -> None:
         await self.__click(self.__power_switch, self.__click_delay)
