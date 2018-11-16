@@ -1,5 +1,7 @@
 FROM base/archlinux
 
+RUN dd if=/dev/zero of=/root/loop.img bs=1024 count=1048576
+
 RUN pacman -Syu --noconfirm \
 	&& pacman -S --noconfirm \
 		git \
@@ -10,6 +12,8 @@ RUN pacman -Syu --noconfirm \
 		expac \
 		jshon \
 		sudo \
+		systemd \
+		pkgconf \
 	&& pacman -Sc --noconfirm
 
 RUN useradd -r -d / packer \
@@ -33,20 +37,23 @@ COPY testenv/customizepkg.nginx /etc/customizepkg.d/nginx-mainline-mod-lua
 RUN pacman -Syy \
 	&& user-packer -S --noconfirm \
 		customizepkg \
+	&& mkdir /.npm \
+	&& chmod 777 /.npm \
 	&& user-packer -S --noconfirm \
 		python \
 		python-pip \
 		python-systemd \
 		nginx-mainline \
+		lua51-cjson \
 		ustreamer \
 		socat \
-		lua51-cjson \
+		htmlhint \
+		eslint \
+	&& rm -rf /.npm \
 	&& env MAKEPKGOPTS="--skipchecksums --skippgpcheck" user-packer -S --noconfirm nginx-mainline-mod-lua \
 	&& pacman -Sc --noconfirm
 
 COPY testenv/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
-
-RUN dd if=/dev/zero of=/root/loop.img bs=1024 count=1048576
 
 CMD /bin/bash

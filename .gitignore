@@ -1,7 +1,7 @@
 /build/
 /dist/
 /kvmd.egg-info/
-/.tox/
-/.mypy_cache/
+/testenv/.tox/
+/testenv/.mypy_cache/
 *.pyc
 *.swp

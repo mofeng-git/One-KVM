@@ -22,13 +22,14 @@ all:
 	cat Makefile
 
 
-run-no-cache:
-	make run TESTENV_OPTS=--no-cache
+tox: _testenv
+	- docker run --rm \
+			--volume `pwd`:/kvmd \
+		-it $(TESTENV_IMAGE) bash -c "cd kvmd && tox -c testenv/tox.ini"
 
 
-run:
+run: _testenv
 	sudo modprobe loop
-	docker build $(TESTENV_OPTS) --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
 	- docker run --rm \
 			--volume `pwd`/kvmd:/kvmd:ro \
 			--volume `pwd`/web:/usr/share/kvmd/web:ro \
@@ -41,6 +42,10 @@ run:
 			--publish 8082:8082/tcp \
 		-it $(TESTENV_IMAGE) $(TESTENV_CMD)
 	- docker run --rm --device=$(TESTENV_LOOP):/dev/kvmd-msd -it $(TESTENV_IMAGE) losetup -d /dev/kvmd-msd
+
+
+run-no-cache:
+	make run TESTENV_OPTS=--no-cache
 
 
 shell:
@@ -60,11 +65,6 @@ release:
 	make push
 	make clean
 
-
-tox:
-	tox
-
-
 bump:
 	bumpversion minor
 
@@ -76,9 +76,16 @@ push:
 
 clean:
 	rm -rf build site dist pkg src *.egg-info kvmd-*.tar.gz
-	find -name __pycache__ | xargs rm -rf
+	find kvmd -name __pycache__ | xargs rm -rf
+	rm -rf __pycache__
 	make -C hid clean
 
 
-clean-all: clean
-	rm -rf .tox .mypy_cache
+clean-all: _testenv clean
+	- docker run --rm \
+			--volume `pwd`:/kvmd \
+		-it $(TESTENV_IMAGE) bash -c "cd kvmd && rm -rf testenv/{.tox,.mypy_cache}"
+
+
+_testenv:
+	docker build $(TESTENV_OPTS) --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
