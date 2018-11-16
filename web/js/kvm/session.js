@@ -26,7 +26,19 @@ function Session() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
 					var info = JSON.parse(http.responseText).result;
-					$("kvmd-version").innerHTML = "kvmd v" + info.version.kvmd;
+					if (info.meta) {
+						$("about-meta").innerHTML = (
+							"// The server metadata.\n"
+							+ "// You can get this json using handle /kvmd/info.\n"
+							+ "// In the standard configuration this data\n"
+							+ "// is specified in the file /etc/kvmd/meta.yaml.\n\n"
+							+ JSON.stringify(info.meta, undefined, 4)
+						);
+						if (info.meta.server && info.meta.server.host) {
+							document.title = "Pi-KVM Session - " + info.meta.server.host;
+							$("kvmd-meta-server-host").innerHTML = "Server: " + info.meta.server.host;
+						}
+					}
 					$("about-version-kvmd").innerHTML = info.version.kvmd;
 					$("about-version-streamer").innerHTML = info.version.streamer + " (" + info.streamer + ")";
 				} else {

@@ -20,3 +20,27 @@ div#about td.copyright {
 div#about tr.version {
 	font-family: monospace;
 }
+
+div#about textarea {
+	display: block;
+	resize: none;
+	width: 100%;
+	height: 150px;
+	padding: 0;
+	color: var(--fg-color-normal);
+	background-color: var(--bg-color-menu);
+	border: none;
+	outline: 0 !important;
+	box-sizing: border-box;
+	padding: 5px;
+	font-family: monospace;
+	-webkit-appearance:none;
+}
+div#about textarea::-moz-placeholder {
+	line-height: 150px;
+	text-align: center;
+}
+div#about textarea::-webkit-input-placeholder {
+	line-height: 150px;
+	text-align: center;
+}
