@@ -7,7 +7,7 @@ TESTENV_CMD ?= /bin/bash -c " \
 		&& rm -rf /etc/nginx/* \
 		&& cp -r /usr/share/kvmd/configs/nginx/* /etc/nginx \
 		&& mkdir -p /etc/kvmd \
-		&& cp /usr/share/kvmd/configs/kvmd/{meta.yaml,logging.yaml} /etc/kvmd \
+		&& cp /usr/share/kvmd/configs/kvmd/*.yaml /etc/kvmd \
 		&& cp /testenv/kvmd.yaml /etc/kvmd \
 		&& nginx -c /etc/nginx/nginx.conf \
 		&& ln -s $(TESTENV_VIDEO) /dev/kvmd-streamer \
