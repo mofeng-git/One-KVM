@@ -10,11 +10,6 @@ kvmd:
     info:
         meta: /etc/kvmd/meta.yaml
 
-    log:
-        services:
-            - kvmd.service
-            - kvmd-tc358743.service
-
     hid:
         pinout:
             reset: 4

@@ -22,10 +22,7 @@ def main() -> None:
         loop = asyncio.get_event_loop()
         http_session = aiohttp.ClientSession(loop=loop)
 
-        log = Log(
-            services=list(config["log"]["services"]),
-            loop=loop,
-        )
+        log = Log(loop)
 
         hid = Hid(
             reset=int(config["hid"]["pinout"]["reset"]),

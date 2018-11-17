@@ -1,9 +1,9 @@
 import sys
+import re
 import asyncio
 import logging
 import time
 
-from typing import List
 from typing import Dict
 from typing import AsyncGenerator
 
@@ -24,13 +24,7 @@ def get_logger(depth: int=1) -> logging.Logger:
 
 
 class Log:
-    def __init__(
-        self,
-        services: List[str],
-        loop: asyncio.AbstractEventLoop,
-    ) -> None:
-
-        self.__services = services
+    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
         self.__loop = loop
 
     async def poll_log(self, seek: int, follow: bool) -> AsyncGenerator[Dict, None]:
@@ -38,7 +32,14 @@ class Log:
         reader.this_boot()
         reader.this_machine()
         reader.log_level(systemd.journal.LOG_DEBUG)
-        for service in self.__services:
+
+        services = set(
+            service
+            for service in systemd.journal.Reader().query_unique("_SYSTEMD_UNIT")
+            if re.match(r"kvmd(-\w+)?\.service", service)
+        ).union(["kvmd.service"])
+
+        for service in services:
             reader.add_match(_SYSTEMD_UNIT=service)
         if seek > 0:
             reader.seek_realtime(float(time.time() - seek))
