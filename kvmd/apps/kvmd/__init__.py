@@ -4,10 +4,10 @@ import aiohttp
 
 from ...application import init
 from ...logging import get_logger
-from ...logging import Log
 
 from ... import gpio
 
+from .logreader import LogReader
 from .info import InfoManager
 from .hid import Hid
 from .atx import Atx
@@ -23,13 +23,13 @@ def main() -> None:
         loop = asyncio.get_event_loop()
         http_session = aiohttp.ClientSession(loop=loop)
 
-        log = Log(loop)
-
         info_manager = InfoManager(
             meta_path=str(config["info"]["meta"]),
             extras_path=str(config["info"]["extras"]),
             loop=loop,
         )
+
+        log_reader = LogReader(loop)
 
         hid = Hid(
             reset=int(config["hid"]["pinout"]["reset"]),
@@ -83,8 +83,8 @@ def main() -> None:
         )
 
         Server(
-            log=log,
             info_manager=info_manager,
+            log_reader=log_reader,
 
             hid=hid,
             atx=atx,

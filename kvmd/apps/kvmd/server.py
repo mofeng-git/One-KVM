@@ -14,21 +14,17 @@ import aiohttp.web
 import setproctitle
 
 from ...logging import get_logger
-from ...logging import Log
 
 from ...aioregion import RegionIsBusyError
 
 from ... import __version__
 
 from .info import InfoManager
-
+from .logreader import LogReader
 from .hid import Hid
-
 from .atx import Atx
-
 from .msd import MsdOperationError
 from .msd import MassStorageDevice
-
 from .streamer import Streamer
 
 
@@ -107,8 +103,8 @@ def _wrap_exceptions_for_web(msg: str) -> Callable:
 class Server:  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments
         self,
-        log: Log,
         info_manager: InfoManager,
+        log_reader: LogReader,
 
         hid: Hid,
         atx: Atx,
@@ -122,8 +118,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
-        self.__log = log
         self.__info_manager = info_manager
+        self.__log_reader = log_reader
 
         self.__hid = hid
         self.__atx = atx
@@ -202,7 +198,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         follow = _valid_bool("follow", request.query.get("follow", "false"))
         response = aiohttp.web.StreamResponse(status=200, reason="OK", headers={"Content-Type": "text/plain"})
         await response.prepare(request)
-        async for record in self.__log.poll_log(seek, follow):
+        async for record in self.__log_reader.poll_log(seek, follow):
             await response.write(("[%s %s] --- %s" % (
                 record["dt"].strftime("%Y-%m-%d %H:%M:%S"),
                 record["service"],
