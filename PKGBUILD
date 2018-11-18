@@ -37,12 +37,16 @@ build() {
 package() {
 	cd $srcdir/$pkgname-build
 	python setup.py install --root="$pkgdir"
+
+	mkdir -p "$pkgdir/usr/lib/systemd/system"
 	install -Dm644 configs/systemd/kvmd.service "$pkgdir/usr/lib/systemd/system/kvmd.service"
 	install -Dm644 configs/systemd/kvmd-tc358743.service "$pkgdir/usr/lib/systemd/system/kvmd-tc358743.service"
+
 	mkdir -p "$pkgdir/usr/share/kvmd"
-	mkdir -p "$pkgdir/etc/kvmd"
 	cp -r web "$pkgdir/usr/share/kvmd"
 	cp -r extras "$pkgdir/usr/share/kvmd"
 	cp -r configs "$pkgdir/usr/share/kvmd/configs.default"
 	find "$pkgdir" -name ".gitignore" -delete
+
+	mkdir -p "$pkgdir/etc/kvmd"
 }
