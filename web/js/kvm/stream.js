@@ -149,7 +149,7 @@ function Streamer() {
 	};
 
 	var __updateDesiredFpsValue = function(value) {
-		$("stream-desired-fps-value").innerHTML = (value == 0 ? "Unlimited" : value);
+		$("stream-desired-fps-value").innerHTML = (value === 0 ? "Unlimited" : value);
 	};
 
 	var __updateStreamHeader = function(online) {
