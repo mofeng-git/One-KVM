@@ -1,8 +1,0 @@
-{
-	"name": "KVM",
-	"description": "Open KVM session in a web browser",
-	"icon": "/svg/kvm.svg",
-	"path": "/kvm.html",
-	"place": 0,
-	"keyboard_cap": true
-}

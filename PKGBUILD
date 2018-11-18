@@ -42,6 +42,7 @@ package() {
 	mkdir -p "$pkgdir/usr/share/kvmd"
 	mkdir -p "$pkgdir/etc/kvmd"
 	cp -r web "$pkgdir/usr/share/kvmd"
-	cp -r configs "$pkgdir/usr/share/kvmd"
+	cp -r extras "$pkgdir/usr/share/kvmd"
+	cp -r configs "$pkgdir/usr/share/kvmd/configs.default"
 	find "$pkgdir" -name ".gitignore" -delete
 }

@@ -43,8 +43,8 @@ RUN pacman -Syy \
 		python \
 		python-pip \
 		python-systemd \
+		python-dbus \
 		nginx-mainline \
-		lua51-cjson \
 		ustreamer \
 		socat \
 		htmlhint \
@@ -55,5 +55,8 @@ RUN pacman -Syy \
 
 COPY testenv/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
+
+RUN rm -rf /etc/nginx/* \
+	&& mkdir /etc/kvmd
 
 CMD /bin/bash

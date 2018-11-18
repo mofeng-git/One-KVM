@@ -18,9 +18,9 @@ from ...logging import Log
 
 from ...aioregion import RegionIsBusyError
 
-from ...yaml import load_yaml_file
-
 from ... import __version__
+
+from .info import InfoManager
 
 from .hid import Hid
 
@@ -108,12 +108,13 @@ class Server:  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments
         self,
         log: Log,
+        info_manager: InfoManager,
+
         hid: Hid,
         atx: Atx,
         msd: MassStorageDevice,
         streamer: Streamer,
 
-        meta_path: str,
         heartbeat: float,
         streamer_shutdown_delay: float,
         msd_chunk_size: int,
@@ -122,12 +123,13 @@ class Server:  # pylint: disable=too-many-instance-attributes
     ) -> None:
 
         self.__log = log
+        self.__info_manager = info_manager
+
         self.__hid = hid
         self.__atx = atx
         self.__msd = msd
         self.__streamer = streamer
 
-        self.__meta_path = meta_path
         self.__heartbeat = heartbeat
         self.__streamer_shutdown_delay = streamer_shutdown_delay
         self.__msd_chunk_size = msd_chunk_size
@@ -190,7 +192,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 "streamer": await self.__streamer.get_version(),
             },
             "streamer": self.__streamer.get_app(),
-            "meta": load_yaml_file(self.__meta_path),
+            "meta": await self.__info_manager.get_meta(),
+            "extras": await self.__info_manager.get_extras(),
         })
 
     @_wrap_exceptions_for_web("Log error")

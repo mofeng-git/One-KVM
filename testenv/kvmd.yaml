@@ -6,6 +6,7 @@ kvmd:
 
     info:
         meta: /etc/kvmd/meta.yaml
+        extras: /usr/share/kvmd/extras
 
     hid:
         pinout:

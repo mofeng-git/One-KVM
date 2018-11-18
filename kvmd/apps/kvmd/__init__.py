@@ -8,6 +8,7 @@ from ...logging import Log
 
 from ... import gpio
 
+from .info import InfoManager
 from .hid import Hid
 from .atx import Atx
 from .msd import MassStorageDevice
@@ -23,6 +24,12 @@ def main() -> None:
         http_session = aiohttp.ClientSession(loop=loop)
 
         log = Log(loop)
+
+        info_manager = InfoManager(
+            meta_path=str(config["info"]["meta"]),
+            extras_path=str(config["info"]["extras"]),
+            loop=loop,
+        )
 
         hid = Hid(
             reset=int(config["hid"]["pinout"]["reset"]),
@@ -77,12 +84,13 @@ def main() -> None:
 
         Server(
             log=log,
+            info_manager=info_manager,
+
             hid=hid,
             atx=atx,
             msd=msd,
             streamer=streamer,
 
-            meta_path=str(config["info"]["meta"]),
             heartbeat=float(config["server"]["heartbeat"]),
             streamer_shutdown_delay=float(config["streamer"]["shutdown_delay"]),
             msd_chunk_size=int(config["msd"]["chunk_size"]),
