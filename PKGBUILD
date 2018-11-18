@@ -19,6 +19,7 @@ depends=(
 	python-pyserial
 	python-setproctitle
 	python-systemd
+	python-dbus
 )
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
