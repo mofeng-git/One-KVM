@@ -6,9 +6,6 @@ from setuptools import setup
 
 # =====
 def main() -> None:
-    with open("requirements.txt") as requirements_file:
-        install_requires = list(filter(None, requirements_file.read().splitlines()))
-
     setup(
         name="kvmd",
         version="0.103",
@@ -38,8 +35,6 @@ def main() -> None:
                 "kvmd-wscli = kvmd.apps.wscli:main",
             ],
         },
-
-        install_requires=install_requires,
 
         classifiers=[
             "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",

@@ -1,9 +1,0 @@
-RPi.GPIO
-aiohttp
-aiofiles
-pyudev
-pyyaml
-pyserial
-setproctitle
-systemd-python
-dbus-python
