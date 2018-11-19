@@ -155,7 +155,7 @@ function Ui() {
 		var all_hidden = true;
 
 		__menu_items.forEach(function(el_item) {
-			var el_menu = el_item.parentElement.querySelector(".menu-dropdown-content");
+			var el_menu = el_item.parentElement.querySelector(".menu-item-content");
 			if (el_item === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
 				el_item.focus();
 				el_item.classList.add("menu-item-selected");
@@ -184,7 +184,7 @@ function Ui() {
 	var __closeAllMenues = function() {
 		document.onkeyup = null;
 		__menu_items.forEach(function(el_item) {
-			var el_menu = el_item.parentElement.querySelector(".menu-dropdown-content");
+			var el_menu = el_item.parentElement.querySelector(".menu-item-content");
 			el_item.classList.remove("menu-item-selected");
 			el_menu.style.visibility = "hidden";
 		});

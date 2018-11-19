@@ -19,13 +19,13 @@ div.switch-box label.switch-label {
 	border-radius: 15px;
 }
 
-div.switch-box span.switch-inner {
+div.switch-box label.switch-label span.switch-inner {
 	display: block;
 	width: 200%;
 	margin-left: -100%;
 }
 
-div.switch-box span.switch-inner:before, span.switch-inner:after {
+div.switch-box label.switch-label span.switch-inner:before, span.switch-inner:after {
 	display: block;
 	float: left;
 	width: 50%;
@@ -38,7 +38,7 @@ div.switch-box span.switch-inner:before, span.switch-inner:after {
 	box-sizing: border-box;
 }
 
-div.switch-box span.switch-inner:before {
+div.switch-box label.switch-label span.switch-inner:before {
 	content: "ON";
 	padding-left: 5px;
 	background-color: var(--bg-color-gray);
@@ -46,7 +46,7 @@ div.switch-box span.switch-inner:before {
 	text-align: left;
 }
 
-div.switch-box span.switch-inner:after {
+div.switch-box label.switch-label span.switch-inner:after {
 	content: "OFF";
 	padding-right: 5px;
 	background-color: var(--bg-color-gray);
@@ -54,7 +54,7 @@ div.switch-box span.switch-inner:after {
 	text-align: right;
 }
 
-div.switch-box span.switch {
+div.switch-box label.switch-label span.switch {
 	display: block;
 	width: 15px;
 	margin: 0px;

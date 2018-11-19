@@ -4,6 +4,8 @@ body {
 	color: var(--fg-color-normal);
 	background-color: var(--bg-color-normal);
 	font-family: sans-serif !important;
+}
+body.body-no-select {
 	-webkit-user-select: none;
 	-moz-user-select: none;
 	user-select: none;
@@ -94,6 +96,12 @@ select:active {
 	button, select {
 		height: 45px !important;
 	}
+}
+
+div.buttons-row {
+	margin: 0;
+	padding: 0;
+	font-size: 0;
 }
 
 .row50 {

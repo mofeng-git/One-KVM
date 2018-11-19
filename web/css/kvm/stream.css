@@ -2,23 +2,6 @@ div#stream-info {
 	display: none;
 }
 
-img#stream-image {
-	width: 640px;
-	height: 480px;
-	display: block;
-	background-color: black;
-}
-
-img.stream-image-active {
-	-webkit-filter: none;
-	filter: none;
-}
-
-img.stream-image-inactive {
-	-webkit-filter: grayscale(100%) brightness(75%) sepia(75%);
-	filter: grayscale(100%) brightness(75%) sepia(75%);
-}
-
 div#stream-box {
 	position: relative;
 	display: inline-block;
@@ -37,6 +20,23 @@ div.stream-box-inactive::after {
 }
 div.stream-box-mouse-enabled {
 	cursor: url("../../svg/stream-mouse-cursor.svg"), pointer;
+}
+
+img#stream-image {
+	width: 640px;
+	height: 480px;
+	display: block;
+	background-color: black;
+}
+
+img.stream-image-active {
+	-webkit-filter: none;
+	filter: none;
+}
+
+img.stream-image-inactive {
+	-webkit-filter: grayscale(100%) brightness(75%) sepia(75%);
+	filter: grayscale(100%) brightness(75%) sepia(75%);
 }
 
 div.stream-slider-box {

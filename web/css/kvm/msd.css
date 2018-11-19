@@ -2,11 +2,11 @@ div#msd-menu {
 	width: 450px;
 }
 
-div.msd-message, input.msd-message {
+div#msd-menu div.msd-message, input.msd-message {
 	display: none;
 }
 
-table.msd-info {
+div#msd-menu table.msd-info {
 	-webkit-user-select: text;
 	-moz-user-select: text;
 	user-select: text;
@@ -15,7 +15,7 @@ table.msd-info {
 	font-size: 12px;
 }
 
-table.msd-info td.msd-info-value {
+div#msd-menu table.msd-info td.msd-info-value {
 	font-weight: bold;
 	max-width: 310px;
 	overflow: hidden;

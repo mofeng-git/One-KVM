@@ -42,7 +42,7 @@
 	<script>window.onload = main;</script>
 </head>
 
-<body>
+<body class="body-no-select">
 	<div id="bad-browser-modal" class="modal">
 		<div class="modal-window">
 			<div class="modal-content">
@@ -66,234 +66,226 @@
 			<img class="svg-gray" src="svg/logo.svg" alt="&pi;-kvm" />
 		</li>
 
-		<li class="menu-right-actions">
-			<div class="menu-dropdown">
-				<a class="menu-item" href="#">
-					<img data-dont-hide-menu id="link-led" class="led-gray" src="svg/link-led.svg" />
-					<img data-dont-hide-menu id="stream-led" class="led-gray" src="svg/stream-led.svg" />
-					<img data-dont-hide-menu id="hid-keyboard-led" class="led-gray" src="svg/hid-keyboard-led.svg" />
-					<img data-dont-hide-menu id="hid-mouse-led" class="led-gray" src="svg/hid-mouse-led.svg" />
-					System &#8628;
-				</a>
-				<div data-dont-hide-menu class="menu-dropdown-content">
-					<div class="menu-dropdown-content-buttons">
-						<button disabled data-force-hide-menu id="stream-screenshot-button">&bull; Take a screenshot</button>
-						<hr>
-						<button data-force-hide-menu id="show-stream-button">&bull; Show stream</button>
-						<button data-force-hide-menu id="show-keyboard-button">&bull; Show keyboard</button>
-						<button data-force-hide-menu id="show-about-button">&bull; Show about</button>
-					</div>
+		<li class="menu-right-items">
+			<a class="menu-item" href="#">
+				<img data-dont-hide-menu id="link-led" class="led-gray" src="svg/link-led.svg" />
+				<img data-dont-hide-menu id="stream-led" class="led-gray" src="svg/stream-led.svg" />
+				<img data-dont-hide-menu id="hid-keyboard-led" class="led-gray" src="svg/hid-keyboard-led.svg" />
+				<img data-dont-hide-menu id="hid-mouse-led" class="led-gray" src="svg/hid-mouse-led.svg" />
+				System &#8628;
+			</a>
+			<div data-dont-hide-menu class="menu-item-content">
+				<div class="menu-item-content-buttons">
+					<button disabled data-force-hide-menu id="stream-screenshot-button">&bull; Take a screenshot</button>
 					<hr>
-					<div class="menu-dropdown-content-text">
-						Stream quality: <span id="stream-quality-value">80%</span>
-						<div class="stream-slider-box">
-							<input disabled type="range" id="stream-quality-slider" class="slider" />
-						</div>
+					<button data-force-hide-menu id="show-stream-button">&bull; Show stream</button>
+					<button data-force-hide-menu id="show-keyboard-button">&bull; Show keyboard</button>
+					<button data-force-hide-menu id="show-about-button">&bull; Show about</button>
+				</div>
+				<hr>
+				<div class="menu-item-content-text">
+					Stream quality: <span id="stream-quality-value">80%</span>
+					<div class="stream-slider-box">
+						<input disabled type="range" id="stream-quality-slider" class="slider" />
 					</div>
+				</div>
+				<hr>
+				<div class="menu-item-content-text">
+					Stream FPS: <span id="stream-desired-fps-value">30</span>
+					<div class="stream-slider-box">
+						<input disabled type="range" id="stream-desired-fps-slider" class="slider" />
+					</div>
+				</div>
+				<hr>
+				<div class="menu-item-content-text">
+					Stream size: <span id="stream-size-value">100%</span>
+					<div class="stream-slider-box">
+						<input type="range" id="stream-size-slider" class="slider" />
+					</div>
+				</div>
+				<hr>
+				<div class="menu-item-content-text">
+					<table id="stream-auto-resize-box"><tr>
+						<td>Auto-resize stream:</td>
+						<td align="right">
+							<div class="switch-box">
+								<input type="checkbox" id="stream-auto-resize-checkbox" class="switch-checkbox" checked />
+								<label class="switch-label" for="stream-auto-resize-checkbox">
+									<span class="switch-inner"></span>
+									<span class="switch"></span>
+								</label>
+							</div>
+						</td>
+					</tr></table>
+				</div>
+				<div class="menu-item-content-buttons">
 					<hr>
-					<div class="menu-dropdown-content-text">
-						Stream FPS: <span id="stream-desired-fps-value">30</span>
-						<div class="stream-slider-box">
-							<input disabled type="range" id="stream-desired-fps-slider" class="slider" />
-						</div>
-					</div>
-					<hr>
-					<div class="menu-dropdown-content-text">
-						Stream size: <span id="stream-size-value">100%</span>
-						<div class="stream-slider-box">
-							<input type="range" id="stream-size-slider" class="slider" />
-						</div>
-					</div>
-					<hr>
-					<div class="menu-dropdown-content-text">
-						<table id="stream-auto-resize-box"><tr>
-							<td>Auto-resize stream:</td>
-							<td align="right">
-								<div class="switch-box">
-									<input type="checkbox" id="stream-auto-resize-checkbox" class="switch-checkbox" checked />
-									<label class="switch-label" for="stream-auto-resize-checkbox">
-										<span class="switch-inner"></span>
-										<span class="switch"></span>
-									</label>
-								</div>
-							</td>
-						</tr></table>
-					</div>
-					<div class="menu-dropdown-content-buttons">
-						<hr>
-						<button disabled data-force-hide-menu id="stream-reset-button">&bull; Reset stream</button>
-						<button disabled data-force-hide-menu id="hid-reset-button">&bull; Reset keyboard &amp; mouse</button>
-						<button disabled data-force-hide-menu id="msd-reset-button">&bull; Reset mass storage</button>
-					</div>
-					<hr>
-					<div class="menu-dropdown-content-buttons">
-						<button data-force-hide-menu id="open-log-button">&bull; Open log</button>
-					</div>
+					<button disabled data-force-hide-menu id="stream-reset-button">&bull; Reset stream</button>
+					<button disabled data-force-hide-menu id="hid-reset-button">&bull; Reset keyboard &amp; mouse</button>
+					<button disabled data-force-hide-menu id="msd-reset-button">&bull; Reset mass storage</button>
+				</div>
+				<hr>
+				<div class="menu-item-content-buttons">
+					<button data-force-hide-menu id="open-log-button">&bull; Open log</button>
 				</div>
 			</div>
 		</li>
 
-		<li class="menu-right-actions">
-			<div class="menu-dropdown">
-				<a class="menu-item" href="#">
-					<img data-dont-hide-menu id="atx-power-led" class="led-gray" src="svg/atx-power-led.svg" />
-					<img data-dont-hide-menu id="atx-hdd-led" class="led-gray" src="svg/atx-hdd-led.svg" />
-					ATX &#8628;
-				</a>
-				<div class="menu-dropdown-content menu-dropdown-content-buttons">
-					<button disabled id="atx-power-button">&bull; Click Power <sup><i>short</i></sup></button>
-					<button disabled id="atx-power-button-long">&bull; Click Power <sup><i>long</i></sup></button>
-					<hr>
-					<button disabled id="atx-reset-button">&bull; Click Reset</button>
-				</div>
+		<li class="menu-right-items">
+			<a class="menu-item" href="#">
+				<img data-dont-hide-menu id="atx-power-led" class="led-gray" src="svg/atx-power-led.svg" />
+				<img data-dont-hide-menu id="atx-hdd-led" class="led-gray" src="svg/atx-hdd-led.svg" />
+				ATX &#8628;
+			</a>
+			<div class="menu-item-content menu-item-content-buttons">
+				<button disabled id="atx-power-button">&bull; Click Power <sup><i>short</i></sup></button>
+				<button disabled id="atx-power-button-long">&bull; Click Power <sup><i>long</i></sup></button>
+				<hr>
+				<button disabled id="atx-reset-button">&bull; Click Reset</button>
 			</div>
 		</li>
 
-		<li class="menu-right-actions">
-			<div class="menu-dropdown">
-				<a class="menu-item" href="#">
-					<img data-dont-hide-menu id="msd-led" class="led-gray" src="svg/msd-led.svg" />
-					Mass Storage &#8628;
-				</a>
-				<div data-dont-hide-menu id="msd-menu" class="menu-dropdown-content">
-					<div id="msd-not-in-operate" class="msd-message">
-						<div class="menu-dropdown-content-text">
-							<table>
-								<tr>
-									<td><img src="svg/warning.svg" /></td>
-									<td><b>Mass Storage Device is not operational</b></td>
-								</tr>
-							</table>
-						</div>
-						<hr>
-					</div>
-
-					<div id="msd-current-image-broken" class="msd-message">
-						<div class="menu-dropdown-content-text">
-							<table>
-								<tr>
-									<td><img src="svg/warning.svg" /></td>
-									<td><b>Current image is broken!</b><br><sub>Perhaps uploading was interrupted</sub></td>
-								</tr>
-							</table>
-						</div>
-						<hr>
-					</div>
-
-					<div id="msd-another-another-user-uploads" class="msd-message">
-						<div class="menu-dropdown-content-text">
-							<table>
-								<tr>
-									<td><img src="svg/info.svg" /></td>
-									<td><b>Another user uploads an image</b></td>
-								</tr>
-							</table>
-						</div>
-						<hr>
-					</div>
-
-					<table class="msd-info">
-						<tr>
-							<td>Status: </td>
-							<td id="msd-status" class="msd-info-value"></td>
-						</tr>
-					</table>
-					<hr>
-
-					<table class="msd-info">
-						<tr>
-							<td>Current image:</td>
-							<td id="msd-current-image-name" class="msd-info-value"></td>
-						</tr>
-						<tr>
-							<td>Image size:</td>
-							<td id="msd-current-image-size" class="msd-info-value"></td>
-						</tr>
-						<tr>
-							<td>Storage size:</td>
-							<td id="msd-storage-size" class="msd-info-value"></td>
-						</tr>
-					</table>
-					<hr>
-
-					<input type="file" id="msd-select-new-image-file" class="msd-message" />
-					<div class="menu-dropdown-content-buttons buttons-row">
-						<button disabled id="msd-select-new-image-button" class="row50">Upload new image</button>
-						<button disabled id="msd-upload-new-image-button" class="row25">Start</button>
-						<button disabled id="msd-abort-uploading-button" class="row25">Abort</button>
-					</div>
-					<hr>
-
-					<div id="msd-new-image" class="msd-message">
-						<table class="msd-info">
+		<li class="menu-right-items">
+			<a class="menu-item" href="#">
+				<img data-dont-hide-menu id="msd-led" class="led-gray" src="svg/msd-led.svg" />
+				Mass Storage &#8628;
+			</a>
+			<div data-dont-hide-menu id="msd-menu" class="menu-item-content">
+				<div id="msd-not-in-operate" class="msd-message">
+					<div class="menu-item-content-text">
+						<table>
 							<tr>
-								<td>New name:</td>
-								<td id="msd-new-image-name" class="msd-info-value"></td>
-							</tr>
-							<tr>
-								<td>Upload size:</td>
-								<td id="msd-new-image-size" class="msd-info-value"></td>
+								<td><img src="svg/warning.svg" /></td>
+								<td><b>Mass Storage Device is not operational</b></td>
 							</tr>
 						</table>
-						<hr>
-						<div class="menu-dropdown-content-text">
-							<div id="msd-progress" class="progress">
-								<span id="msd-progress-value" class="progress-value"></span>
-							</div>
-						</div>
-						<hr>
 					</div>
+					<hr>
+				</div>
 
-					<div class="menu-dropdown-content-buttons buttons-row">
-						<button disabled data-force-hide-menu id="msd-switch-to-kvm-button" class="row50">&bull; Switch drive to KVM</button>
-						<button disabled data-force-hide-menu id="msd-switch-to-server-button" class="row50">&bull; Switch drive to Server</button>
+				<div id="msd-current-image-broken" class="msd-message">
+					<div class="menu-item-content-text">
+						<table>
+							<tr>
+								<td><img src="svg/warning.svg" /></td>
+								<td><b>Current image is broken!</b><br><sub>Perhaps uploading was interrupted</sub></td>
+							</tr>
+						</table>
 					</div>
+					<hr>
+				</div>
+
+				<div id="msd-another-another-user-uploads" class="msd-message">
+					<div class="menu-item-content-text">
+						<table>
+							<tr>
+								<td><img src="svg/info.svg" /></td>
+								<td><b>Another user uploads an image</b></td>
+							</tr>
+						</table>
+					</div>
+					<hr>
+				</div>
+
+				<table class="msd-info">
+					<tr>
+						<td>Status: </td>
+						<td id="msd-status" class="msd-info-value"></td>
+					</tr>
+				</table>
+				<hr>
+
+				<table class="msd-info">
+					<tr>
+						<td>Current image:</td>
+						<td id="msd-current-image-name" class="msd-info-value"></td>
+					</tr>
+					<tr>
+						<td>Image size:</td>
+						<td id="msd-current-image-size" class="msd-info-value"></td>
+					</tr>
+					<tr>
+						<td>Storage size:</td>
+						<td id="msd-storage-size" class="msd-info-value"></td>
+					</tr>
+				</table>
+				<hr>
+
+				<input type="file" id="msd-select-new-image-file" class="msd-message" />
+				<div class="menu-item-content-buttons buttons-row">
+					<button disabled id="msd-select-new-image-button" class="row50">Upload new image</button>
+					<button disabled id="msd-upload-new-image-button" class="row25">Start</button>
+					<button disabled id="msd-abort-uploading-button" class="row25">Abort</button>
+				</div>
+				<hr>
+
+				<div id="msd-new-image" class="msd-message">
+					<table class="msd-info">
+						<tr>
+							<td>New name:</td>
+							<td id="msd-new-image-name" class="msd-info-value"></td>
+						</tr>
+						<tr>
+							<td>Upload size:</td>
+							<td id="msd-new-image-size" class="msd-info-value"></td>
+						</tr>
+					</table>
+					<hr>
+					<div class="menu-item-content-text">
+						<div id="msd-progress" class="progress">
+							<span id="msd-progress-value" class="progress-value"></span>
+						</div>
+					</div>
+					<hr>
+				</div>
+
+				<div class="menu-item-content-buttons buttons-row">
+					<button disabled data-force-hide-menu id="msd-switch-to-kvm-button" class="row50">&bull; Switch drive to KVM</button>
+					<button disabled data-force-hide-menu id="msd-switch-to-server-button" class="row50">&bull; Switch drive to Server</button>
 				</div>
 			</div>
 		</li>
 
-		<li class="menu-right-actions">
-			<div class="menu-dropdown">
-				<a class="menu-item" href="#">
-					<img data-dont-hide-menu id="hid-pak-led" class="led-gray" src="svg/gear-led.svg" />
-					Shortcuts &#8628;
-				</a>
-				<div data-dont-hide-menu class="menu-dropdown-content">
-					<div class="menu-dropdown-content-buttons">
-						<textarea id="hid-pak-text" placeholder="Paste your text here"></textarea>
-						<hr>
-						<button disabled data-force-hide-menu id="hid-pak-button">&bull; &uarr; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
-						<hr>
-						<div class="buttons-row">
-							<button data-force-hide-menu data-shortcut="CapsLock" class="row50">&bull; CapsLock</button>
-							<button data-force-hide-menu data-shortcut="MetaLeft" class="row50">&bull; Left Win</button>
-						</div>
-						<hr>
-						<button data-force-hide-menu data-shortcut="AltLeft ShiftLeft">&bull; Alt+Shift</button>
-						<button data-force-hide-menu data-shortcut="ControlLeft ShiftLeft">&bull; Ctrl+Shift</button>
-						<button data-force-hide-menu data-shortcut="ShiftLeft ShiftRight">&bull; Shift+Shift</button>
-						<button data-force-hide-menu data-shortcut="MetaLeft Space">&bull; Win+Space</button>
-						<hr>
-						<button data-force-hide-menu data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
-						<button data-force-hide-menu data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
-						<button data-force-hide-menu data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
-						<button data-force-hide-menu data-shortcut="AltLeft F4">&bull; Alt+F4</button>
-						<hr>
-						<button data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
+		<li class="menu-right-items">
+			<a class="menu-item" href="#">
+				<img data-dont-hide-menu id="hid-pak-led" class="led-gray" src="svg/gear-led.svg" />
+				Shortcuts &#8628;
+			</a>
+			<div data-dont-hide-menu class="menu-item-content">
+				<div class="menu-item-content-buttons">
+					<textarea id="hid-pak-text" placeholder="Paste your text here"></textarea>
+					<hr>
+					<button disabled data-force-hide-menu id="hid-pak-button">&bull; &uarr; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
+					<hr>
+					<div class="buttons-row">
+						<button data-force-hide-menu data-shortcut="CapsLock" class="row50">&bull; CapsLock</button>
+						<button data-force-hide-menu data-shortcut="MetaLeft" class="row50">&bull; Left Win</button>
 					</div>
 					<hr>
-					<div class="menu-dropdown-content-text">
-						&darr; Alt+SysRq+... <sup><i>linux magic (<a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">help</a>)</i></sup>
-					</div>
+					<button data-force-hide-menu data-shortcut="AltLeft ShiftLeft">&bull; Alt+Shift</button>
+					<button data-force-hide-menu data-shortcut="ControlLeft ShiftLeft">&bull; Ctrl+Shift</button>
+					<button data-force-hide-menu data-shortcut="ShiftLeft ShiftRight">&bull; Shift+Shift</button>
+					<button data-force-hide-menu data-shortcut="MetaLeft Space">&bull; Win+Space</button>
 					<hr>
-					<div class="menu-dropdown-content-buttons buttons-row">
-						<button data-shortcut="AltLeft PrintScreen KeyR" class="row16">R</button>
-						<button data-shortcut="AltLeft PrintScreen KeyE" class="row16">E</button>
-						<button data-shortcut="AltLeft PrintScreen KeyI" class="row16">I</button>
-						<button data-shortcut="AltLeft PrintScreen KeyS" class="row16">S</button>
-						<button data-shortcut="AltLeft PrintScreen KeyU" class="row16">U</button>
-						<button data-shortcut="AltLeft PrintScreen KeyB" class="row16">B</button>
-					</div>
+					<button data-force-hide-menu data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
+					<button data-force-hide-menu data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
+					<button data-force-hide-menu data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
+					<button data-force-hide-menu data-shortcut="AltLeft F4">&bull; Alt+F4</button>
+					<hr>
+					<button data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
+				</div>
+				<hr>
+				<div class="menu-item-content-text">
+					&darr; Alt+SysRq+... <sup><i>linux magic (<a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">help</a>)</i></sup>
+				</div>
+				<hr>
+				<div class="menu-item-content-buttons buttons-row">
+					<button data-shortcut="AltLeft PrintScreen KeyR" class="row16">R</button>
+					<button data-shortcut="AltLeft PrintScreen KeyE" class="row16">E</button>
+					<button data-shortcut="AltLeft PrintScreen KeyI" class="row16">I</button>
+					<button data-shortcut="AltLeft PrintScreen KeyS" class="row16">S</button>
+					<button data-shortcut="AltLeft PrintScreen KeyU" class="row16">U</button>
+					<button data-shortcut="AltLeft PrintScreen KeyB" class="row16">B</button>
 				</div>
 			</div>
 		</li>

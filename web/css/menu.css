@@ -10,20 +10,24 @@ ul.menu {
 	height: 50px;
 	z-index: 2147483646;
 }
+
 ul.menu li.menu-logo {
 	line-height: 50px;
 	margin-top: -2px;
 	margin-left: 16px;
 	float: left;
 }
-ul.menu li.menu-right-actions {
+
+ul.menu li.menu-right-items {
 	float: right;
 }
+
 ul.menu img {
 	vertical-align: middle;
 	margin-right: 10px;
 	height: 20px;
 }
+
 ul.menu li a.menu-item {
 	line-height: 50px;
 	outline: none;
@@ -35,6 +39,7 @@ ul.menu li a.menu-item {
 	padding-right: 16px;
 	text-decoration: none;
 }
+
 ul.menu li a.menu-item:hover:not(.active) {
 	background-color: var(--bg-color-hovered);
 }
@@ -44,11 +49,13 @@ ul.menu li a.menu-item:hover:not(.active) {
 		background-color: var(--bg-color-menu) !important;
 	}
 }
+
 ul.menu li a.menu-item-selected {
 	box-shadow: 0 5px 0 var(--border-color-intensive) inset;
 	background-color: var(--bg-color-selected) !important;
 }
-div.menu-dropdown-content {
+
+ul.menu li div.menu-item-content {
 	visibility: hidden;
 	overflow: hidden;
 	white-space: nowrap;
@@ -61,16 +68,22 @@ div.menu-dropdown-content {
 	box-shadow: var(--shadow-big);
 	z-index: 2147483645;
 }
-div.menu-dropdown-content button, select {
+
+ul.menu li div.menu-item-content-buttons {
+	background-color: var(--bg-color-normal);
+}
+
+ul.menu li div.menu-item-content-text {
+	margin: 10px 15px 10px 15px;
+	font-size: 14px;
+}
+
+ul.menu li div.menu-item-content button, select {
 	text-align: left;
 	padding: 0 16px;
 }
-div.menu-dropdown-content div.buttons-row {
-	margin: 0;
-	padding: 0;
-	font-size: 0;
-}
-div.menu-dropdown-content hr {
+
+ul.menu li div.menu-item-content hr {
 	margin: 0;
 	display: block;
 	height: 0px;
@@ -78,11 +91,3 @@ div.menu-dropdown-content hr {
 	border: none;
 	border-top: var(--border-dark-thin);
 }
-div.menu-dropdown-content-buttons {
-	background-color: var(--bg-color-normal);
-}
-div.menu-dropdown-content-text {
-	margin: 10px 15px 10px 15px;
-	font-size: 14px;
-}
-
