@@ -292,7 +292,9 @@ function Ui() {
 				max_z_index = z_index;
 			}
 		});
-		__raiseWindow(last_el_window);
+		if (last_el_window) {
+			__raiseWindow(last_el_window);
+		}
 	};
 
 	var __raiseWindow = function(el_window) {

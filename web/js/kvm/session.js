@@ -28,7 +28,7 @@ function Session() {
 					var info = JSON.parse(http.responseText).result;
 					if (info.meta) {
 						$("about-meta").innerHTML = (
-							"// The server metadata.\n"
+							"// Pi-KVM metadata.\n"
 							+ "// You can get this json using handle /kvmd/info.\n"
 							+ "// In the standard configuration this data\n"
 							+ "// is specified in the file /etc/kvmd/meta.yaml.\n\n"

@@ -13,14 +13,7 @@ body.body-no-select {
 }
 
 a {
-	text-decoration: underline dotted;
 	color: var(--fg-color-normal);
-}
-@media (hover: hover), (min--moz-device-pixel-ratio: 0) {
-	/* If we have a mouse cursor */
-	a:hover {
-		text-decoration: underline;
-	}
 }
 
 hr {
@@ -28,11 +21,25 @@ hr {
 	border-top: var(--border-normal-thin);
 }
 
-pre {
+p.text {
+	display: table-cell;
+	text-align: justify;
+}
+
+pre.code {
+	overflow-x: auto;
 	color: var(--fg-color-dark);
 	background-color: var(--bg-color-dark);
 	padding: 10px;
-	border-radius: 8px;
+}
+pre.code span.code-comment {
+	color: var(--fg-color-inactive);
+}
+
+img.svg-gray {
+	-webkit-filter: invert(0.7);
+	filter: invert(0.7);
+	vertical-align: middle;
 }
 
 button, select {
@@ -118,12 +125,6 @@ div.buttons-row {
 }
 .row50:not(:first-child), .row25:not(:first-child), .row16:not(:first-child) {
 	border-left: var(--border-dark-thin);
-}
-
-img.svg-gray {
-	-webkit-filter: invert(0.7);
-	filter: invert(0.7);
-	vertical-align: middle;
 }
 
 ul.footer {
