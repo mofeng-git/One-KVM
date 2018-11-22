@@ -22,17 +22,34 @@ hr {
 }
 
 p.text {
-	display: table-cell;
 	text-align: justify;
 }
+p:not(:first-child).text {
+	margin-top: 0;
+}
+p:last-child.text {
+	margin-bottom: 0;
+}
 
-pre.code {
+div.code {
+	white-space: nowrap;
 	overflow-x: auto;
+	font-family: monospace;
+	border-radius: 4px;
 	color: var(--fg-color-dark);
 	background-color: var(--bg-color-dark);
 	padding: 10px;
 }
-pre.code span.code-comment {
+div.code::-webkit-scrollbar {
+    width: 8px;
+	height: 8px;
+}
+div.code::-webkit-scrollbar-thumb {
+	border-radius: 4px;
+	background: var(--fg-color-inactive);
+}
+
+div.code span.code-comment {
 	color: var(--fg-color-inactive);
 }
 

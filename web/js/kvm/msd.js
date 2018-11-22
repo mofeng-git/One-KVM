@@ -73,7 +73,7 @@ function Msd() {
 			__applyState();
 		});
 		__applyState();
-		$("msd-switch-to-" + to + "-button").disabled = true;
+		$(`msd-switch-to-${to}-button`).disabled = true;
 	};
 
 	var __selectNewImageFile = function() {

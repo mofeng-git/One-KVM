@@ -141,13 +141,14 @@ function Hid() {
 					clipboard_codes.push(codes);
 				}
 			});
+			var time = __codes_delay * codes_count * 2 / 1000;
 
-			var confirm_msg = (
-				"You are going to automatically type " + codes_count
-				+ " characters from the system clipboard."
-				+ " It will take " + (__codes_delay * codes_count * 2 / 1000) + " seconds.<br>"
-				+ "<br>Are you sure you want to continue?<br>"
-			);
+			var confirm_msg = `
+				You are going to automatically type ${codes_count} characters from the system clipboard.
+				It will take ${time} seconds.<br>
+				<br>
+				Are you sure you want to continue?
+			`;
 
 			ui.confirm(confirm_msg).then(function(ok) {
 				if (ok) {

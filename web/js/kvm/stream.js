@@ -156,8 +156,8 @@ function Streamer() {
 		var el_grab = document.querySelector("#stream-window-header .window-grab");
 		var el_info = $("stream-info");
 		if (online) {
-			var fps_suffix = (__client_fps >= 0 ? " / " + __client_fps + " fps" : "");
-			el_grab.innerHTML = el_info.innerHTML = "Stream &ndash; " + __resolution.width + "x" + __resolution.height + fps_suffix;
+			var fps_suffix = (__client_fps >= 0 ? ` / ${__client_fps} fps` : "");
+			el_grab.innerHTML = el_info.innerHTML = `Stream &ndash; ${__resolution.width}x${__resolution.height}${fps_suffix}`;
 		} else {
 			el_grab.innerHTML = el_info.innerHTML = "Stream &ndash; offline";
 		}
@@ -183,7 +183,7 @@ function Streamer() {
 	};
 
 	var __sendParam = function(name, value) {
-		var http = tools.makeRequest("POST", "/kvmd/streamer/set_params?" + name + "=" + value, function() {
+		var http = tools.makeRequest("POST", `/kvmd/streamer/set_params?${name}=${value}`, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					ui.error("Can't configure stream:<br>", http.responseText);

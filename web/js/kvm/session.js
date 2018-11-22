@@ -15,13 +15,13 @@ function Session() {
 
 	var __init__ = function() {
 		$("link-led").title = "Not connected yet...";
-		__loadKvmdVersion();
+		__loadKvmdInfo();
 		__startPoller();
 	};
 
 	/********************************************************************************/
 
-	var __loadKvmdVersion = function() {
+	var __loadKvmdInfo = function() {
 		var http = tools.makeRequest("GET", "/kvmd/info", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
@@ -40,9 +40,9 @@ function Session() {
 						}
 					}
 					$("about-version-kvmd").innerHTML = info.version.kvmd;
-					$("about-version-streamer").innerHTML = info.version.streamer + " (" + info.streamer + ")";
+					$("about-version-streamer").innerHTML = `${info.version.streamer} (${info.streamer})`;
 				} else {
-					setTimeout(__loadKvmdVersion, 1000);
+					setTimeout(__loadKvmdInfo, 1000);
 				}
 			}
 		});
@@ -54,7 +54,8 @@ function Session() {
 		var http = tools.makeRequest("GET", "/ws_auth", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
-					__ws = new WebSocket((location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/kvmd/ws");
+					var proto = (location.protocol === "https:" ? "wss" : "ws");
+					__ws = new WebSocket(`${proto}://${location.host}/kvmd/ws`);
 					__ws.onopen = __wsOpenHandler;
 					__ws.onmessage = __wsMessageHandler;
 					__ws.onerror = __wsErrorHandler;

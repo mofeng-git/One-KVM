@@ -83,7 +83,7 @@ function Keyboard() {
 		if (event.preventDefault) {
 			event.preventDefault();
 		}
-		var el_key = document.querySelector("[data-key='" + event.code + "']");
+		var el_key = document.querySelector(`[data-key='${event.code}']`);
 		if (el_key && !event.repeat) {
 			__commonHandler(el_key, state, "pressed");
 			if (__mac_cmd_hook) {
@@ -168,7 +168,8 @@ function Keyboard() {
 	};
 
 	var __resolveKeys = function(el_key) {
-		return document.querySelectorAll("[data-key='" + el_key.getAttribute("data-key") + "']");
+		var code = el_key.getAttribute("data-key");
+		return document.querySelectorAll(`[data-key='${code}']`);
 	};
 
 	var __sendKey = function(el_key, state) {

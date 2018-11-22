@@ -3,7 +3,7 @@ textarea#hid-pak-text {
 	resize: none;
 	width: 100%;
 	height: 40px;
-	color: var(--fg-color-dark);
+	color: var(--fg-color-intensive);
 	background-color: var(--bg-color-light);
 	border: none;
 	outline: 0 !important;
