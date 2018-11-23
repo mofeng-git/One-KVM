@@ -1,0 +1,84 @@
+div#start-box {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+	min-height: 100vh;
+}
+
+div#start {
+	text-align: left;
+	outline: none;
+	word-wrap: break-word;
+	max-width: 800px;
+	border: var(--border-dark-thin);
+	border-radius: 8px;
+	box-sizing: border-box;
+	box-shadow: var(--shadow-big);
+	background-color: var(--bg-color-light);
+	padding: 15px;
+}
+
+div#start div#apps-box {
+	display: table;
+	margin: 0 auto;
+}
+
+div#start div#apps-box ul#apps {
+	list-style-type: none;
+	padding: 0;
+	margin: 0;
+}
+
+div#start div#apps-box ul#apps li {
+	float: left;
+	margin-left: 5px;
+	margin-right: 5px;
+}
+
+div#start div#apps-box ul#apps li div.app {
+	height: 100px;
+	width: 100px;
+	text-align: center;
+	background-color: var(--bg-color-normal);
+	box-shadow: var(--shadow-micro);
+	border: var(--border-dark-thin);
+	border-radius: 8px;
+}
+
+div#start div#apps-box ul#apps li div:hover.app {
+	border: var(--border-intensive-thin);
+	box-shadow: none;
+}
+
+div#start div#apps-box ul#apps li div.app img {
+	display: block;
+	margin: auto;
+	height: 50px;
+	padding-bottom: 5px;
+}
+
+div#start div#apps-box ul#apps li div.app a {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	height: 100%;
+	text-decoration: none;
+	font-weight: bold;
+}
+
+div#start td.logo {
+	padding-right: 25px;
+}
+div#start td.title {
+	font-size: 1.2em;
+}
+div#start td.copyright {
+	font-size: 0.8em;
+}
+div#start tr.server {
+	font-size: 1.4em;
+	font-weight: bold;
+	font-family: monospace;
+}

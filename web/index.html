@@ -2,7 +2,93 @@
 <html lang="en">
 <head>
 	<meta charset="utf-8" />
-	<title>Redirect</title>
-	<meta http-equiv="refresh" content="0;/kvm/">
+	<title>Pi-KVM Index</title>
+
+	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+	<link rel="manifest" href="/site.webmanifest">
+	<link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+	<meta name="msapplication-TileColor" content="#2b5797">
+	<meta name="theme-color" content="#ffffff">
+
+	<link rel="stylesheet" href="css/vars.css">
+	<link rel="stylesheet" href="css/main.css">
+	<link rel="stylesheet" href="css/modals.css">
+	<link rel="stylesheet" href="css/index/index.css">
+
+	<script src="js/bb.js"></script>
+	<script src="js/tools.js"></script>
+	<script src="js/index/main.js"></script>
+
+	<script>window.onload = main;</script>
 </head>
+
+<body>
+	<div id="bad-browser-modal" class="modal">
+		<div class="modal-window">
+			<div class="modal-content">
+				Hello. You are using an incompatible or legacy browser.<br>
+				Please use one of the following browsers:
+				<hr>
+				<ul>
+					<li><a target="_blank" href="https://google.com/chrome">Google Chrome</a> <sup><i>recommended</i></sup></li>
+					<li><a target="_blank" href="https://chromium.org/Home">Chromium</a> <sup><i>recommended</i></sup></li>
+					<li><a target="_blank" href="https://mozilla.org/firefox">Mozilla Firefox</a></li>
+					<li><a target="_blank" href="https://apple.com/safari">Apple Safari</a></li>
+					<li><a target="_blank" href="https://opera.com">Opera</a></li>
+					<li><a target="_blank" href="https://vivaldi.com">Vivaldi</a></li>
+				</ul>
+			</div>
+		</div>
+	</div>
+
+	<div id="start-box">
+		<div id="start">
+			<table>
+				<tr>
+					<td valign="top" class="logo">
+						<img class="svg-gray" src="svg/logo.svg" alt="Open Source Hardware" height="40" />
+					</td>
+					<td valign="top">
+						<table>
+							<tr>
+								<td colspan="2" class="title">Open Source &amp; Open Hardware IP-KVM</td>
+							</tr>
+							<tr>
+								<td colspan="2" class="copyright">Copyright &copy; 2018 Pi-KVM Developers Team</td>
+							</tr>
+						</table>
+					</td>
+				</tr>
+			</table>
+			<hr>
+			<table>
+				<tr class="server">
+					<td>Server:</td>
+					<td><a id="kvmd-meta-server-host" target="_blank" href="/kvmd/info"></a></td>
+				</tr>
+			</table>
+			<hr>
+			<div id="apps-box">
+				<ul id="apps"></ul>
+			</div>
+			<hr>
+			<p class="text">
+				Please note that when you are working with a KVM session or another application that captures the keyboard,
+				you can't use some keyboard shortcuts such as Ctrl+Alt+Del (which will be caught by your OS) or Ctrl+W (caught by your browser).
+			</p>
+			<p class="text">
+				To override this limitation you can use <a target="_blank" href="https://google.com/chrome">Google Chrome</a>
+				or <a target="_blank" href="https://chromium.org/Home">Chromium</a> in application mode.
+			</p>
+			<div id="app-text" class="code"></div>
+			<hr>
+			<p class="text">
+				Full documentation, source code, hardware schematics and legal information
+				can be found in our <a target="_blank" href="https://github.com/pi-kvm">official website</a>.
+			</p>
+		</div>
+	</div>
+</body>
 </html>
