@@ -1,8 +1,8 @@
 body {
 	margin: 0;
 	overflow: hidden;
-	color: var(--fg-color-normal);
-	background-color: var(--bg-color-normal);
+	color: var(--cs-page-default-fg);
+	background-color: var(--cs-page-default-bg);
 	font-family: sans-serif !important;
 }
 body.body-no-select {
@@ -13,12 +13,12 @@ body.body-no-select {
 }
 
 a {
-	color: var(--fg-color-normal);
+	color: var(--cs-page-default-fg);
 }
 
 hr {
 	border: none;
-	border-top: var(--border-normal-thin);
+	border-top: var(--border-default-thin);
 }
 
 p.text {
@@ -36,8 +36,8 @@ div.code {
 	overflow-x: auto;
 	font-family: monospace;
 	border-radius: 4px;
-	color: var(--fg-color-dark);
-	background-color: var(--bg-color-dark);
+	color: var(--cs-code-default-fg);
+	background-color: var(--cs-code-default-bg);
 	padding: 10px;
 }
 div.code::-webkit-scrollbar {
@@ -46,11 +46,11 @@ div.code::-webkit-scrollbar {
 }
 div.code::-webkit-scrollbar-thumb {
 	border-radius: 4px;
-	background: var(--fg-color-inactive);
+	background: var(--cs-scroll-default-bg);
 }
 
 div.code span.code-comment {
-	color: var(--fg-color-inactive);
+	color: var(--cs-code-comment-fg);
 }
 
 img.svg-gray {
@@ -62,8 +62,8 @@ img.svg-gray {
 button, select {
 	box-shadow: none;
 	border: none;
-	color: var(--fg-color-normal);
-	background-color: var(--bg-color-normal);
+	color: var(--cs-control-default-fg);
+	background-color: var(--cs-control-default-bg);
 	display: block;
 	width: 100%;
 	height: 30px;
@@ -74,11 +74,11 @@ button, select {
 @media (hover: hover), (min--moz-device-pixel-ratio: 0) {
 	/* If we have a mouse cursor */
 	button:enabled:hover, select:enabled:hover {
-		color: var(--fg-color-intensive);
-		background-color: var(--bg-color-dark) !important;
+		color: var(--cs-control-hovered-fg);
+		background-color: var(--cs-control-hovered-bg) !important;
 	}
 	button:active, select:active {
-		color: var(--fg-color-selected) !important;
+		color: var(--cs-control-pressed-fg) !important;
 	}
 	select:enabled:hover {
 		background-image: url("../svg/select-arrow-intensive.svg") !important;
@@ -87,12 +87,12 @@ button, select {
 @media (hover: none) {
 	/* If we DON'T have a mouse cursor */
 	button:active, select:active {
-		color: var(--fg-color-intensive);
-		background-color: var(--bg-color-dark);
+		color: var(--cs-control-hovered-fg);
+		background-color: var(--cs-control-hovered-bg);
 	}
 }
 button:disabled, select:disabled {
-	color: var(--fg-color-inactive);
+	color: var(--cs-control-disabled-fg);
 	cursor: default;
 }
 
@@ -111,8 +111,8 @@ select:disabled {
 	background-image: url("../svg/select-arrow-inactive.svg") !important;
 }
 select:active {
-	color: var(--fg-color-intensive) !important;
-	background-color: var(--bg-color-dark) !important;
+	color: var(--cs-control-intensive-fg) !important;
+	background-color: var(--cs-bg-control-intensive) !important;
 	background-image: url("../svg/select-arrow-intensive.svg") !important;
 }
 
@@ -141,7 +141,7 @@ div.buttons-row {
 	width: 16.66%
 }
 .row50:not(:first-child), .row25:not(:first-child), .row16:not(:first-child) {
-	border-left: var(--border-dark-thin);
+	border-left: var(--border-control-thin);
 }
 
 ul.footer {
@@ -151,7 +151,7 @@ ul.footer {
 	width: 100%;
 	padding: 0;
 	font-size: 0.7em;
-	color: var(--fg-color-inactive);
+	color: var(--cs-page-obscure-fg);
 	z-index: -10;
 }
 ul.footer li {
@@ -164,5 +164,5 @@ ul.footer li.footer-right {
 	float: right;
 }
 ul.footer li a {
-	color: var(--fg-color-inactive);
+	color: var(--cs-page-obscure-fg);
 }

@@ -31,26 +31,26 @@ div.keyboard div.key, div.modifier {
 	text-align: center;
 	vertical-align: top;
 	box-shadow: var(--shadow-micro);
-	border: var(--border-gray-thin);
+	border: var(--border-key-thin);
 	border-radius: 6px;
-	color: var(--fg-color-normal);
-	background-color: var(--bg-color-gray);
+	color: var(--cs-key-default-fg);
+	background-color: var(--cs-key-default-bg);
 	cursor: pointer;
 	height: 40px;
 }
 div.keyboard div.key:hover, div.modifier:hover {
-	color: var(--fg-color-intensive);
-	background-color: var(--bg-color-menu);
+	color: var(--cs-key-hovered-fg);
+	background-color: var(--cs-key-hovered-bg);
 }
 div.keyboard div.pressed {
 	box-shadow: none;
-	color: var(--fg-color-selected) !important;
-	background-color: var(--bg-color-dark) !important;
+	color: var(--cs-key-pressed-fg) !important;
+	background-color: var(--cs-key-pressed-bg) !important;
 }
 div.keyboard div.holded {
 	box-shadow: none;
-	color: var(--fg-color-normal) !important;
-	background-color: var(--bg-color-intensive) !important;
+	color: var(--cs-key-default-fg) !important;
+	background-color: var(--cs-key-holded-bg) !important;
 }
 div.keyboard div.key:last-child, div.empty-key:last-child, div.modifier:last-child {
 	margin-right: 0;
@@ -96,7 +96,7 @@ div.keyboard p {
 	transform: translateY(-50%);
 }
 div.keyboard b {
-	color: var(--bg-color-intensive);
+	color: var(--cs-key-holded-bg);
 }
 
 @media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
@@ -133,8 +133,8 @@ div#keyboard-mobile {
 	}
 
 	div.keyboard div.key:hover, div.modifier:hover {
-		color: var(--fg-color-normal);
-		background-color: var(--bg-color-gray);
+		color: var(--cs-key-default-fg);
+		background-color: var(--cs-key-default-bg);
 	}
 
 	div#keyboard-desktop {

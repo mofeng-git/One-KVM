@@ -3,7 +3,7 @@ ul.menu {
 	list-style-type: none;
 	margin: 0;
 	padding: 0;
-	background-color: var(--bg-color-menu);
+	background-color: var(--cs-menu-default-bg);
 	position: fixed;
 	top: 0;
 	width: 100%;
@@ -32,27 +32,27 @@ ul.menu li a.menu-item {
 	line-height: 50px;
 	outline: none;
 	cursor: pointer;
-	border-left: var(--border-black-thin);
+	border-left: var(--border-menu-thin);
 	display: inline-block;
-	color: var(--fg-color-normal);
+	color: var(--cs-menu-default-fg);
 	padding-left: 16px;
 	padding-right: 16px;
 	text-decoration: none;
 }
 
 ul.menu li a.menu-item:hover:not(.active) {
-	background-color: var(--bg-color-hovered);
+	background-color: var(--cs-menu-hovered-bg);
 }
 @media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
 	/* iPad 8 */
 	ul.menu li a.menu-item:hover:not(.active) {
-		background-color: var(--bg-color-menu) !important;
+		background-color: var(--cs-menu-default-bg) !important;
 	}
 }
 
 ul.menu li a.menu-item-selected {
-	box-shadow: 0 5px 0 var(--border-color-intensive) inset;
-	background-color: var(--bg-color-selected) !important;
+	box-shadow: var(--shadow-menu-pressed);
+	background-color: var(--cs-menu-pressed-bg) !important;
 }
 
 ul.menu li div.menu-item-content {
@@ -60,17 +60,17 @@ ul.menu li div.menu-item-content {
 	overflow: hidden;
 	white-space: nowrap;
 	border: var(--border-intensive-2px);
-	border-top: var(--border-dark-thin);
+	border-top: var(--border-control-thin);
 	border-radius: 0 0 8px 8px;
 	position: absolute;
-	background-color: var(--bg-color-menu);
+	background-color: var(--cs-menu-default-bg);
 	min-width: 180px;
 	box-shadow: var(--shadow-big);
 	z-index: 2147483645;
 }
 
 ul.menu li div.menu-item-content-buttons {
-	background-color: var(--bg-color-normal);
+	background-color: var(--cs-control-default-bg);
 }
 
 ul.menu li div.menu-item-content-text {
@@ -89,5 +89,5 @@ ul.menu li div.menu-item-content hr {
 	height: 0px;
 	padding: 0;
 	border: none;
-	border-top: var(--border-dark-thin);
+	border-top: var(--border-control-thin);
 }

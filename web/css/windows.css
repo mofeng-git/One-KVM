@@ -3,12 +3,13 @@ div.window {
 	outline: none;
 	overflow: hidden;
 	position: fixed;
-	border: var(--border-dark-thin);
+	border: var(--border-window-thin);
 	border-radius: 8px;
 	box-sizing: border-box;
 	box-shadow: var(--shadow-big);
 	white-space: nowrap;
-	background-color: var(--bg-color-light);
+	color: var(--cs-window-default-fg);
+	background-color: var(--cs-window-default-bg);
 	padding: 30px 9px 9px 9px;
 }
 div.window:focus {
@@ -24,8 +25,8 @@ div.window div.window-header {
 	padding: 0;
 	height: 20px;
 	font-size: 0.8em;
-	color: var(--fg-color-dark);
-	border-bottom: var(--border-normal-thin);
+	color: var(--cs-window-header-default-fg);
+	border-bottom: var(--border-default-thin);
 }
 
 div.window div.window-header div.window-grab {
@@ -40,8 +41,8 @@ div.window div.window-header div.window-grab {
 }
 
 div.window div.window-header-grabbed {
-	color: var(--fg-color-intensive);
-	background-color: var(--bg-color-intensive);
+	color: var(--cs-window-header-grabbed-fg);
+	background-color: var(--cs-window-header-grabbed-bg);
 	border-bottom: var(--border-intensive-thin);
 }
 
@@ -52,7 +53,7 @@ div.window div.window-header button.window-button-close {
 	width: 44px;
 	height: 24px;
 	padding-left: 0;
-	color: var(--fg-color-inactive);
+	color: var(--cs-window-closer-default-fg);
 	display: inline-block;
 }
 

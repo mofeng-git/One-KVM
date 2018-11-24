@@ -12,11 +12,11 @@ div#start {
 	outline: none;
 	word-wrap: break-word;
 	max-width: 800px;
-	border: var(--border-dark-thin);
+	border: var(--border-window-thin);
 	border-radius: 8px;
 	box-sizing: border-box;
 	box-shadow: var(--shadow-big);
-	background-color: var(--bg-color-light);
+	background-color: var(--cs-window-default-bg);
 	padding: 15px;
 }
 
@@ -41,9 +41,9 @@ div#start div#apps-box ul#apps li div.app {
 	height: 100px;
 	width: 100px;
 	text-align: center;
-	background-color: var(--bg-color-normal);
+	background-color: var(--cs-control-default-bg);
 	box-shadow: var(--shadow-micro);
-	border: var(--border-dark-thin);
+	border: var(--border-key-thin);
 	border-radius: 8px;
 }
 

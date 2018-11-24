@@ -1,12 +1,12 @@
 div.progress {
-	background-color: var(--bg-color-selected);
+	background-color: var(--cs-progress-default-bg);
 	height: 1.5em;
 	width: 100%;
 	position: relative;
 }
 
 div.progress:before {
-	color: var(--fg-color-intensive);
+	color: var(--cs-progress-default-fg);
 	content: attr(data-label);
 	font-size: 0.8em;
 	position: absolute;
@@ -17,7 +17,7 @@ div.progress:before {
 }
 
 div.progress span.progress-value {
-	background-color: var(--bg-color-intensive);
+	background-color: var(--cs-progress-bar-bg);
 	display: inline-block;
 	height: 100%;
 }

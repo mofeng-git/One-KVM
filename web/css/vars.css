@@ -1,34 +1,59 @@
 :root {
-	--bg-color-normal: #36393f;
-	--bg-color-light: #484b51;
-	--bg-color-gray: #3b3e43;
-	--bg-color-dark: #17191d;
-	--bg-color-menu: #202225;
-	--bg-color-intensive: #436a8a;
-	--bg-color-hovered: #1a1c1f;
-	--bg-color-selected: #171717;
+	--cs-page-default-bg: #36393f;
+	--cs-page-default-fg: #c3c3c3;
+	--cs-page-obscure-fg: #6c7481;
 
-	--fg-color-normal: #c3c3c3;
-	--fg-color-dark: #aaaaaa;
-	--fg-color-intensive: white;
-	--fg-color-inactive: #6c7481;
-	--fg-color-selected: var(--fg-color-inactive);
+	--cs-control-default-bg: #36393f;
+	--cs-control-default-fg: #c3c3c3;
+	--cs-control-intensive-fg: white;
+	--cs-control-hovered-bg: #17191d;
+	--cs-control-hovered-fg: white;
+	--cs-control-pressed-fg: #6c7481;
+	--cs-control-disabled-fg: #6c7481;
 
-	--border-color-normal: var(--bg-color-normal);
-	--border-color-gray: var(--bg-color-menu);
-	--border-color-dark: var(--bg-color-dark);
-	--border-color-intensive: #5b90bb;
-	--border-color-important: #ff6467;
+	--cs-menu-default-bg: #202225;
+	--cs-menu-default-fg: #c3c3c3;
+	--cs-menu-hovered-bg: #1a1c1f;
+	--cs-menu-pressed-bg: #171717;
 
-	--border-dark-thin: thin solid var(--border-color-dark);
-	--border-gray-thin: thin solid var(--border-color-gray);
-	--border-normal-thin: thin solid var(--border-color-normal);
-	--border-black-thin: thin solid black;
-	--border-inactive-2px: 2px solid var(--border-color-normal);
-	--border-intensive-2px: 2px solid var(--border-color-intensive);
-	--border-intensive-thin: thin solid var(--border-color-intensive);
+	--cs-window-default-bg: #484b51;
+	--cs-window-default-fg: #c3c3c3;
+	--cs-window-header-default-fg: #aaaaaa;
+	--cs-window-header-grabbed-bg: #436a8a;
+	--cs-window-header-grabbed-fg: white;
+	--cs-window-closer-default-fg: #6c7481;
+
+	--cs-code-default-bg: #17191d;
+	--cs-code-default-fg: #aaaaaa;
+	--cs-code-comment-fg: #6c7481;
+
+	--cs-scroll-default-bg: #6c7481;
+	--cs-thumb-default-bg: #436a8a;
+	--cs-thumb-disabled-bg: #202225;
+
+	--cs-progress-default-bg: #171717;
+	--cs-progress-default-fg: white;
+	--cs-progress-bar-bg: #436a8a;
+
+	--cs-key-default-bg: #3b3e43;
+	--cs-key-default-fg: #c3c3c3;
+	--cs-key-hovered-bg: #202225;
+	--cs-key-hovered-fg: white;
+	--cs-key-pressed-bg: #17191d;
+	--cs-key-pressed-fg: #6c7481;
+	--cs-key-holded-bg: #436a8a;
 
 	--shadow-micro: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
 	--shadow-small: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
 	--shadow-big: 0 8px 16px 0 rgba(0, 0, 0, 0.4);
+	--shadow-menu-pressed: 0 5px 0 #5b90bb inset;
+
+	--border-default-thin: thin solid #36393f;
+	--border-default-2px: 2px solid #36393f;
+	--border-menu-thin: thin solid black;
+	--border-control-thin: thin solid #17191d;
+	--border-window-thin: thin solid #17191d;
+	--border-key-thin: thin solid #202225;
+	--border-intensive-2px: 2px solid #5b90bb;
+	--border-intensive-thin: thin solid #5b90bb;
 }

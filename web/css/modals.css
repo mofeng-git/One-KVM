@@ -15,11 +15,11 @@ div.modal div.modal-window {
 	outline: none;
 	margin: 15% auto;
 	overflow: hidden;
-	border: var(--border-dark-thin);
+	border: var(--border-window-thin);
 	border-radius: 8px;
 	box-sizing: border-box;
 	box-shadow: var(--shadow-big);
-	background-color: var(--bg-color-light);
+	background-color: var(--cs-window-default-bg);
 	padding: 0;
 }
 div.modal div.modal-window:focus {
@@ -30,7 +30,7 @@ div.modal div.modal-window div.modal-header {
 	text-align: center;
 	font-weight: bold;
 	padding: 3px 9px 3px 9px;
-	border-bottom: var(--border-normal-thin);
+	border-bottom: var(--border-default-thin);
 }
 
 div.modal div.modal-window div.modal-content {
@@ -40,7 +40,7 @@ div.modal div.modal-window div.modal-content {
 }
 
 div.modal div.modal-window div.modal-buttons {
-	border-top: var(--border-dark-thin);
+	border-top: var(--border-control-thin);
 	margin: 0;
 	padding: 0;
 	font-size: 0;

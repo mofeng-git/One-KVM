@@ -5,7 +5,7 @@ div#stream-info {
 div#stream-box {
 	position: relative;
 	display: inline-block;
-	border: var(--border-dark-thin);
+	border: var(--border-window-thin);
 }
 div.stream-box-inactive::after {
 	cursor: wait;
@@ -82,7 +82,7 @@ div#stream-mouse-buttons {
 		padding: 0;
 		padding-bottom: 3px;
 		font-size: 0.8em;
-		color: var(--fg-color-dark);
+		color: var(--cs-window-header-default-fg);
 	}
 	div#stream-mouse-buttons {
 		display: block !important;
