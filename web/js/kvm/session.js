@@ -15,39 +15,29 @@ function Session() {
 
 	var __init__ = function() {
 		$("link-led").title = "Not connected yet...";
-		__loadKvmdInfo();
 		__startPoller();
 	};
 
 	/********************************************************************************/
 
-	var __loadKvmdInfo = function() {
-		var http = tools.makeRequest("GET", "/kvmd/info", function() {
-			if (http.readyState === 4) {
-				if (http.status === 200) {
-					var info = JSON.parse(http.responseText).result;
-					if (info.meta) {
-						var text = JSON.stringify(info.meta, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
-						$("about-meta").innerHTML = `
-							<span class="code-comment">// The Pi-KVM metadata.<br>
-							// You can get this json using handle /kvmd/info.<br>
-							// In the standard configuration this data<br>
-							// is specified in the file /etc/kvmd/meta.yaml.</span><br>
-							<br>
-							${text}
-						`;
-						if (info.meta.server && info.meta.server.host) {
-							document.title = "Pi-KVM Session - " + info.meta.server.host;
-							$("kvmd-meta-server-host").innerHTML = "Server: " + info.meta.server.host;
-						}
-					}
-					$("about-version-kvmd").innerHTML = info.version.kvmd;
-					$("about-version-streamer").innerHTML = `${info.version.streamer} (${info.streamer})`;
-				} else {
-					setTimeout(__loadKvmdInfo, 1000);
-				}
+	var __setKvmdInfo = function(state) {
+		if (state.meta) {
+			var text = JSON.stringify(state.meta, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
+			$("about-meta").innerHTML = `
+				<span class="code-comment">// The Pi-KVM metadata.<br>
+				// You can get this json using handle <a target="_blank" href="/kvmd/info">/kvmd/info</a>.<br>
+				// In the standard configuration this data<br>
+				// is specified in the file /etc/kvmd/meta.yaml.</span><br>
+				<br>
+				${text}
+			`;
+			if (state.meta.server && state.meta.server.host) {
+				document.title = "Pi-KVM Session - " + state.meta.server.host;
+				$("kvmd-meta-server-host").innerHTML = "Server: " + state.meta.server.host;
 			}
-		});
+		}
+		$("about-version-kvmd").innerHTML = state.version.kvmd;
+		$("about-version-streamer").innerHTML = `${state.version.streamer} (${state.streamer})`;
 	};
 
 	var __startPoller = function() {
@@ -73,9 +63,6 @@ function Session() {
 		$("link-led").className = "led-green";
 		$("link-led").title = "Connected";
 		tools.debug("Session: socket opened:", event);
-		__streamer.loadInitialState();
-		__atx.loadInitialState();
-		__msd.loadInitialState();
 		__hid.setSocket(__ws);
 		__missed_heartbeats = 0;
 		__ping_timer = setInterval(__pingServer, 1000);
@@ -87,7 +74,9 @@ function Session() {
 		if (event.msg_type === "pong") {
 			__missed_heartbeats = 0;
 		} else if (event.msg_type === "event") {
-			if (event.msg.event === "streamer_state") {
+			if (event.msg.event === "info_state") {
+				__setKvmdInfo(event.msg.event_attrs);
+			} else if (event.msg.event === "streamer_state") {
 				__streamer.setState(event.msg.event_attrs);
 			} else if (event.msg.event === "atx_state") {
 				__atx.setState(event.msg.event_attrs);

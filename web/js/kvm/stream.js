@@ -38,19 +38,6 @@ function Streamer() {
 
 	/********************************************************************************/
 
-	self.loadInitialState = function() {
-		var http = tools.makeRequest("GET", "/kvmd/streamer", function() {
-			if (http.readyState === 4) {
-				if (http.status === 200) {
-					self.setState(JSON.parse(http.responseText).result);
-				} else {
-					self.clearState();
-					setTimeout(self.loadInitialState, 1000);
-				}
-			}
-		});
-	};
-
 	self.setState = function(state) {
 		if (state.state) {
 			var source = state.state.source;

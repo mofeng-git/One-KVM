@@ -24,18 +24,6 @@ function Msd() {
 
 	/********************************************************************************/
 
-	self.loadInitialState = function() {
-		var http = tools.makeRequest("GET", "/kvmd/msd", function() {
-			if (http.readyState === 4) {
-				if (http.status === 200) {
-					self.setState(JSON.parse(http.responseText).result);
-				} else {
-					setTimeout(self.loadInitialState, 1000);
-				}
-			}
-		});
-	};
-
 	self.setState = function(state) {
 		__state = state;
 		__applyState();

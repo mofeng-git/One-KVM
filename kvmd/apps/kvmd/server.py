@@ -4,6 +4,8 @@ import asyncio
 import json
 import time
 
+from enum import Enum
+
 from typing import List
 from typing import Dict
 from typing import Set
@@ -100,6 +102,13 @@ def _wrap_exceptions_for_web(msg: str) -> Callable:
     return make_wrapper
 
 
+class _Events(Enum):
+    INFO_STATE = "info_state"
+    STREAMER_STATE = "streamer_state"
+    ATX_STATE = "atx_state"
+    MSD_STATE = "msd_state"
+
+
 class Server:  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments
         self,
@@ -179,10 +188,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         aiohttp.web.run_app(app, host=host, port=port, print=self.__run_app_print)
 
-    # ===== SYSTEM
-
-    async def __info_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json({
+    async def __make_info(self) -> Dict:
+        return {
             "version": {
                 "kvmd": __version__,
                 "streamer": await self.__streamer.get_version(),
@@ -190,7 +197,12 @@ class Server:  # pylint: disable=too-many-instance-attributes
             "streamer": self.__streamer.get_app(),
             "meta": await self.__info_manager.get_meta(),
             "extras": await self.__info_manager.get_extras(),
-        })
+        }
+
+    # ===== SYSTEM
+
+    async def __info_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        return _json(await self.__make_info())
 
     @_wrap_exceptions_for_web("Log error")
     async def __log_handler(self, request: aiohttp.web.Request) -> aiohttp.web.StreamResponse:
@@ -213,6 +225,12 @@ class Server:  # pylint: disable=too-many-instance-attributes
         ws = aiohttp.web.WebSocketResponse(heartbeat=self.__heartbeat)
         await ws.prepare(request)
         await self.__register_socket(ws)
+        await asyncio.gather(*[
+            self.__broadcast_event(_Events.INFO_STATE, (await self.__make_info())),
+            self.__broadcast_event(_Events.STREAMER_STATE, (await self.__streamer.get_state())),
+            self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state()),
+            self.__broadcast_event(_Events.MSD_STATE, self.__msd.get_state()),
+        ])
         async for msg in ws:
             if msg.type == aiohttp.web.WSMsgType.TEXT:
                 try:
@@ -285,9 +303,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
         }.get(button)
         if not clicker:
             raise BadRequest("Invalid param 'button'")
-        await self.__broadcast_event("atx_click", button=button)  # type: ignore
+        await self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state())
         await clicker()
-        await self.__broadcast_event("atx_click", button=None)  # type: ignore
+        await self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state())
         return _json({"clicked": button})
 
     # ===== MSD
@@ -301,11 +319,11 @@ class Server:  # pylint: disable=too-many-instance-attributes
         if to == "kvm":
             await self.__msd.connect_to_kvm()
             state = self.__msd.get_state()
-            await self.__broadcast_event("msd_state", **state)
+            await self.__broadcast_event(_Events.MSD_STATE, state)
         elif to == "server":
             await self.__msd.connect_to_pc()
             state = self.__msd.get_state()
-            await self.__broadcast_event("msd_state", **state)
+            await self.__broadcast_event(_Events.MSD_STATE, state)
         else:
             raise BadRequest("Invalid param 'to'")
         return _json(state)
@@ -326,7 +344,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 raise BadRequest("Missing 'image_data' field")
 
             async with self.__msd:
-                await self.__broadcast_event("msd_state", **self.__msd.get_state())
+                await self.__broadcast_event(_Events.MSD_STATE, self.__msd.get_state())
                 logger.info("Writing image %r to mass-storage device ...", image_name)
                 await self.__msd.write_image_info(image_name, False)
                 while True:
@@ -336,7 +354,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                     written = await self.__msd.write_image_chunk(chunk)
                 await self.__msd.write_image_info(image_name, True)
         finally:
-            await self.__broadcast_event("msd_state", **self.__msd.get_state())
+            await self.__broadcast_event(_Events.MSD_STATE, self.__msd.get_state())
             if written != 0:
                 logger.info("Written %d bytes to mass-storage device", written)
         return _json({"written": written})
@@ -433,21 +451,21 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __poll_atx_state(self) -> None:
         async for state in self.__atx.poll_state():
             if self.__sockets:
-                await self.__broadcast_event("atx_state", **state)
+                await self.__broadcast_event(_Events.ATX_STATE, state)
 
     @_system_task
     async def __poll_streamer_state(self) -> None:
         async for state in self.__streamer.poll_state():
             if self.__sockets:
-                await self.__broadcast_event("streamer_state", **state)
+                await self.__broadcast_event(_Events.STREAMER_STATE, state)
 
-    async def __broadcast_event(self, event: str, **kwargs: Dict) -> None:
+    async def __broadcast_event(self, event_type: _Events, event_attrs: Dict) -> None:
         await asyncio.gather(*[
             ws.send_str(json.dumps({
                 "msg_type": "event",
                 "msg": {
-                    "event": event,
-                    "event_attrs": kwargs,
+                    "event": event_type.value,
+                    "event_attrs": event_attrs,
                 },
             }))
             for ws in list(self.__sockets)

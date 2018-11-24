@@ -14,18 +14,6 @@ function Atx() {
 
 	/********************************************************************************/
 
-	self.loadInitialState = function() {
-		var http = tools.makeRequest("GET", "/kvmd/atx", function() {
-			if (http.readyState === 4) {
-				if (http.status === 200) {
-					__setButtonsBusy(JSON.parse(http.responseText).result.busy);
-				} else {
-					setTimeout(self.loadInitialState, 1000);
-				}
-			}
-		});
-	};
-
 	self.setState = function(state) {
 		__setButtonsBusy(state.busy);
 		$("atx-power-led").className = (state.leds.power ? "led-green" : "led-gray");
