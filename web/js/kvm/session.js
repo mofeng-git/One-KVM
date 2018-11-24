@@ -27,13 +27,15 @@ function Session() {
 				if (http.status === 200) {
 					var info = JSON.parse(http.responseText).result;
 					if (info.meta) {
-						$("about-meta").innerHTML = (
-							"// Pi-KVM metadata.\n"
-							+ "// You can get this json using handle /kvmd/info.\n"
-							+ "// In the standard configuration this data\n"
-							+ "// is specified in the file /etc/kvmd/meta.yaml.\n\n"
-							+ JSON.stringify(info.meta, undefined, 4)
-						);
+						var text = JSON.stringify(info.meta, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
+						$("about-meta").innerHTML = `
+							<span class="code-comment">// The Pi-KVM metadata.<br>
+							// You can get this json using handle /kvmd/info.<br>
+							// In the standard configuration this data<br>
+							// is specified in the file /etc/kvmd/meta.yaml.</span><br>
+							<br>
+							${text}
+						`;
 						if (info.meta.server && info.meta.server.host) {
 							document.title = "Pi-KVM Session - " + info.meta.server.host;
 							$("kvmd-meta-server-host").innerHTML = "Server: " + info.meta.server.host;

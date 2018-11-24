@@ -23,37 +23,6 @@ div#about tr.version {
 	font-family: monospace;
 }
 
-
-div#about textarea {
-	display: block;
-	resize: none;
-	width: 100%;
+div#about div#about-meta {
 	height: 200px;
-	padding: 0;
-	color: var(--cs-code-default-fg);
-	background-color: var(--cs-code-default-bg);
-	border: none;
-	border-radius: 4px;
-	outline: 0 !important;
-	box-sizing: border-box;
-	padding: 5px;
-	font-family: monospace;
-	-webkit-appearance:none;
-}
-
-div#about textarea::-moz-placeholder {
-	line-height: 190px;
-	text-align: center;
-}
-div#about textarea::-webkit-input-placeholder {
-	line-height: 190px;
-	text-align: center;
-}
-
-div#about textarea::-webkit-scrollbar {
-    width: 8px;
-}
-div#about textarea::-webkit-scrollbar-thumb {
-	border-radius: 4px;
-	background: var(--cs-scroll-default-bg);
 }
