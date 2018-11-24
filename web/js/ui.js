@@ -32,6 +32,11 @@ function Ui() {
 			}
 		});
 
+		var el_menu_logo = $("menu-logo");
+		if (el_menu_logo) {
+			el_menu_logo.onclick = () => window.history.back();
+		}
+
 		window.onmouseup = __globalMouseButtonHandler;
 		window.ontouchend = __globalMouseButtonHandler;
 

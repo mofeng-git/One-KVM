@@ -1,4 +1,4 @@
-ul.menu {
+ul#menu {
 	box-shadow: var(--shadow-small);
 	list-style-type: none;
 	margin: 0;
@@ -11,24 +11,38 @@ ul.menu {
 	z-index: 2147483646;
 }
 
-ul.menu li.menu-logo {
-	line-height: 50px;
-	margin-top: -2px;
-	margin-left: 16px;
-	float: left;
-}
-
-ul.menu li.menu-right-items {
+ul#menu li.menu-right-items {
 	float: right;
 }
 
-ul.menu img {
+ul#menu li.menu-left-items {
+	float: left;
+}
+
+ul#menu li a#menu-logo {
+	line-height: 50px;
+	outline: none;
+	cursor: pointer;
+	border-right: var(--border-menu-thin);
+	display: inline-block;
+	color: var(--cs-menu-default-fg);
+	padding-left: 16px;
+	padding-right: 16px;
+	text-decoration: none;
+}
+
+ul#menu img {
 	vertical-align: middle;
 	margin-right: 10px;
 	height: 20px;
 }
 
-ul.menu li a.menu-item {
+ul#menu li a#menu-logo img {
+	margin-top: -2px;
+	height: 24px;
+}
+
+ul#menu li a.menu-item {
 	line-height: 50px;
 	outline: none;
 	cursor: pointer;
@@ -40,22 +54,22 @@ ul.menu li a.menu-item {
 	text-decoration: none;
 }
 
-ul.menu li a.menu-item:hover:not(.active) {
+ul#menu li a#menu-logo:hover:not(.active), a.menu-item:hover:not(.active) {
 	background-color: var(--cs-menu-hovered-bg);
 }
 @media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
 	/* iPad 8 */
-	ul.menu li a.menu-item:hover:not(.active) {
+	ul#menu li a#menu-item:hover:not(.active), a.menu-item:hover:not(.active) {
 		background-color: var(--cs-menu-default-bg) !important;
 	}
 }
 
-ul.menu li a.menu-item-selected {
+ul#menu li a.menu-item-selected {
 	box-shadow: var(--shadow-menu-pressed);
 	background-color: var(--cs-menu-pressed-bg) !important;
 }
 
-ul.menu li div.menu-item-content {
+ul#menu li div.menu-item-content {
 	visibility: hidden;
 	overflow: hidden;
 	white-space: nowrap;
@@ -69,21 +83,21 @@ ul.menu li div.menu-item-content {
 	z-index: 2147483645;
 }
 
-ul.menu li div.menu-item-content-buttons {
+ul#menu li div.menu-item-content-buttons {
 	background-color: var(--cs-control-default-bg);
 }
 
-ul.menu li div.menu-item-content-text {
+ul#menu li div.menu-item-content-text {
 	margin: 10px 15px 10px 15px;
 	font-size: 14px;
 }
 
-ul.menu li div.menu-item-content button, select {
+ul#menu li div.menu-item-content button, select {
 	text-align: left;
 	padding: 0 16px;
 }
 
-ul.menu li div.menu-item-content hr {
+ul#menu li div.menu-item-content hr {
 	margin: 0;
 	display: block;
 	height: 0px;
