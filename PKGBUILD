@@ -20,6 +20,7 @@ depends=(
 	python-setproctitle
 	python-systemd
 	python-dbus
+	v4l-utils
 )
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
