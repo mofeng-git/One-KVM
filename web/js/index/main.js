@@ -7,7 +7,7 @@ function __setAppText() {
 	var url = window.location.href;
 	$("app-text").innerHTML = `
 		<span class="code-comment"># On Linux using Chromium/Chrome via any terminal:<br>
-		$</span> &bsol;which chromium 2>/dev/null || which chrome 2>/dev/null&bsol; --app="${url}"<br>
+		$</span> \`which chromium 2>/dev/null || which chrome 2>/dev/null\` --app="${url}"<br>
 		<br>
 		<span class="code-comment"># On MacOS using Terminal application:<br>
 		$</span> /Applications/Google&bsol; Chrome.app/Contents/MacOS/Google&bsol; Chrome --app="${url}"<br>
