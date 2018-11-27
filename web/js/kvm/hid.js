@@ -38,8 +38,8 @@ function Hid() {
 			);
 		}
 
-		window.onpagehide = __releaseAll;
-		window.onblur = __releaseAll;
+		window.addEventListener("pagehide", __releaseAll);
+		window.addEventListener("blur", __releaseAll);
 
 		__chars_to_codes = __buildCharsToCodes();
 

@@ -39,6 +39,11 @@ function Ui() {
 		window.onmouseup = __globalMouseButtonHandler;
 		window.ontouchend = __globalMouseButtonHandler;
 
+		window.addEventListener("focus", () => __activateLastWindow());
+		window.addEventListener("pagehide", () => __deactivateAllWindows());
+		window.addEventListener("pagehide", __closeAllMenues);
+		window.addEventListener("blur", () => __deactivateAllWindows());
+		window.addEventListener("blur", __closeAllMenues);
 		window.addEventListener("resize", () => __organizeWindowsOnResize(false));
 		window.addEventListener("orientationchange", () => __organizeWindowsOnResize(true));
 	};

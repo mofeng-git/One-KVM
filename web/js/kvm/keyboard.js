@@ -21,6 +21,10 @@ function Keyboard() {
 		$("stream-window").onfocus = __updateLeds;
 		$("stream-window").onblur = __updateLeds;
 
+		window.addEventListener("focus", __updateLeds);
+		window.addEventListener("pagehide", __updateLeds);
+		window.addEventListener("blur", __updateLeds);
+
 		Array.prototype.forEach.call($$("key"), function(el_key) {
 			tools.setOnDown(el_key, () => __clickHandler(el_key, true));
 			tools.setOnUp(el_key, () => __clickHandler(el_key, false));
@@ -63,7 +67,18 @@ function Keyboard() {
 	};
 
 	var __updateLeds = function() {
-		if (__ws && (document.activeElement === $("stream-window") || document.activeElement === $("keyboard-window"))) {
+		tools.info("Update leds");
+		if (
+			__ws
+			&& (
+				document.activeElement === $("stream-window")
+				|| document.activeElement === $("keyboard-window")
+			)
+			&& (
+				$("stream-window").classList.contains("window-active")
+				|| $("keyboard-window").classList.contains("window-active")
+			)
+		) {
 			$("hid-keyboard-led").className = "led-green";
 			$("hid-keyboard-led").title = "Keyboard captured";
 		} else {
