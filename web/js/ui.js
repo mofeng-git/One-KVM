@@ -299,7 +299,7 @@ function Ui() {
 			el_last_window = (document.activeElement.closest(".modal-window") || document.activeElement.closest(".window"));
 		}
 
-		if (el_last_window === el_except) {
+		if (!el_last_window || el_last_window === el_except) {
 			var max_z_index = 0;
 			__windows.forEach(function(el_window) {
 				var z_index = parseInt(window.getComputedStyle(el_window, null).zIndex) || 0;
