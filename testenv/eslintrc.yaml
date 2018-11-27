@@ -9,7 +9,7 @@ globals:
     Ui: true
     ui: true
     tools: true
-    check_browser: true
+    checkBrowser: true
     "$": true
     "$$": true
 

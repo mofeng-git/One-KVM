@@ -1,6 +1,8 @@
 function main() {
-	__setAppText();
-	__loadKvmdInfo();
+	if (checkBrowser()) {
+		__setAppText();
+		__loadKvmdInfo();
+	}
 }
 
 function __setAppText() {

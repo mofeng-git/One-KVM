@@ -1,7 +1,7 @@
 var ui;
 
 function main() {
-	if (check_browser()) {
+	if (checkBrowser()) {
 		ui = new Ui();
 
 		tools.setOnClick($("show-about-button"), () => ui.showWindow($("about-window")));
