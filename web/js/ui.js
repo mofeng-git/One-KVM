@@ -27,14 +27,14 @@ function Ui() {
 			if (el_button) {
 				tools.setOnClick(el_button, function() {
 					el_window.style.visibility = "hidden";
-					__raiseLastWindow();
+					__activateLastWindow(el_window);
 				});
 			}
 		});
 
 		var el_menu_logo = $("menu-logo");
 		if (el_menu_logo) {
-			el_menu_logo.onclick = () => window.history.back();
+			tools.setOnClick(el_menu_logo, () => window.history.back());
 		}
 
 		window.onmouseup = __globalMouseButtonHandler;
@@ -76,13 +76,14 @@ function Ui() {
 				el_buttons.className = "modal-buttons";
 				el_window.appendChild(el_buttons);
 
-				function close (retval) {
+				function close(retval) {
+					el_window.style.visibility = "hidden";
 					el_modal.outerHTML = "";
 					var index = __windows.indexOf(el_modal);
 					if (index !== -1) {
 						__windows.splice(index, 1);
 					}
-					__raiseLastWindow();
+					__activateLastWindow(el_modal);
 					resolve(retval);
 				}
 
@@ -116,12 +117,12 @@ function Ui() {
 
 		__windows.push(el_modal);
 		document.body.appendChild(el_modal);
-		__raiseWindow(el_modal);
+		__activateWindow(el_modal);
 
 		return promise;
 	};
 
-	self.showWindow = function(el_window, raise=true, center=false) {
+	self.showWindow = function(el_window, activate=true, center=false) {
 		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered") || center) {
 			var view = self.getViewGeometry();
 			var rect = el_window.getBoundingClientRect();
@@ -130,8 +131,8 @@ function Ui() {
 			el_window.setAttribute("data-centered", "");
 		}
 		el_window.style.visibility = "visible";
-		if (raise) {
-			__raiseWindow(el_window);
+		if (activate) {
+			__activateWindow(el_window);
 		}
 	};
 
@@ -162,6 +163,7 @@ function Ui() {
 		__menu_items.forEach(function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".menu-item-content");
 			if (el_item === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
+				__deactivateAllWindows();
 				el_item.focus();
 				el_item.classList.add("menu-item-selected");
 				el_menu.style.visibility = "visible";
@@ -174,13 +176,13 @@ function Ui() {
 
 		if (all_hidden) {
 			document.onkeyup = null;
-			__raiseLastWindow();
+			__activateLastWindow();
 		} else {
 			document.onkeyup = function(event) {
 				if (event.code === "Escape") {
 					event.preventDefault();
 					__closeAllMenues();
-					__raiseLastWindow();
+					__activateLastWindow();
 				}
 			};
 		}
@@ -205,7 +207,7 @@ function Ui() {
 				}
 			}
 			__closeAllMenues();
-			__raiseLastWindow();
+			__activateLastWindow();
 		}
 	};
 
@@ -229,7 +231,7 @@ function Ui() {
 
 		function startMoving(event) {
 			__closeAllMenues();
-			__raiseWindow(el_window);
+			__activateWindow(el_window);
 			event = (event || window.event);
 			event.preventDefault();
 
@@ -281,39 +283,73 @@ function Ui() {
 		}
 
 		el_window.setAttribute("data-centered", "");
-		el_window.onclick = el_window.ontouchend = () => __raiseWindow(el_window);
+		el_window.onclick = el_window.ontouchend = () => __activateWindow(el_window);
 
 		el_grab.onmousedown = startMoving;
 		el_grab.ontouchstart = startMoving;
 	};
 
-	var __raiseLastWindow = function() {
-		var last_el_window = null;
-		var max_z_index = 0;
-		__windows.forEach(function(el_window) {
-			var z_index = parseInt(window.getComputedStyle(el_window, null).zIndex) || 0;
-			if (max_z_index < z_index && window.getComputedStyle(el_window, null).visibility !== "hidden") {
-				last_el_window = el_window;
-				max_z_index = z_index;
-			}
-		});
-		if (last_el_window) {
-			__raiseWindow(last_el_window);
+	var __activateLastWindow = function(el_except=null) {
+		var el_last_window = null;
+
+		if (document.activeElement) {
+			el_last_window = (document.activeElement.closest(".modal-window") || document.activeElement.closest(".window"));
+		}
+
+		if (el_last_window === el_except) {
+			var max_z_index = 0;
+			__windows.forEach(function(el_window) {
+				var z_index = parseInt(window.getComputedStyle(el_window, null).zIndex) || 0;
+				var visibility = window.getComputedStyle(el_window, null).visibility;
+				if (max_z_index < z_index && visibility !== "hidden" && el_window !== el_except) {
+					el_last_window = el_window;
+					max_z_index = z_index;
+				}
+			});
+		}
+
+		if (el_last_window) {
+			tools.info("Activating last window:", el_last_window);
+			__activateWindow(el_last_window);
 		}
 	};
 
-	var __raiseWindow = function(el_window) {
-		var el_to_focus = (el_window.className === "modal" ? el_window.querySelector(".modal-window") : el_window);
-		if (document.activeElement !== el_to_focus) {
-			el_to_focus.focus();
-			tools.debug("UI: focused window:", el_window);
+	var __activateWindow = function(el_window) {
+		if (window.getComputedStyle(el_window, null).visibility !== "hidden") {
+			var el_to_focus;
+			var el_window_contains_focus;
+
+			if (el_window.className === "modal") {
+				el_to_focus = el_window.querySelector(".modal-window");
+				el_window_contains_focus = (document.activeElement && document.activeElement.closest(".modal-window"));
+			} else { // .window
+				el_to_focus = el_window;
+				el_window_contains_focus = (document.activeElement && document.activeElement.closest(".window"));
+			}
+
+			__deactivateAllWindows(el_to_focus);
+			el_to_focus.classList.add("window-active");
+
 			if (el_window.className !== "modal" && parseInt(el_window.style.zIndex) !== __top_z_index) {
 				var z_index = __top_z_index + 1;
 				el_window.style.zIndex = z_index;
 				__top_z_index = z_index;
-				tools.debug("UI: raised window:", el_window);
+				tools.debug("UI: activated window:", el_window);
+			}
+
+			if (el_window !== el_window_contains_focus) {
+				el_to_focus.focus();
+				tools.debug("UI: focused window:", el_window);
 			}
 		}
+	};
+
+	var __deactivateAllWindows = function(el_except=null) {
+		__windows.forEach(function(el_window) {
+			if (el_window !== el_except) {
+				el_window.classList.remove("window-active");
+			}
+		});
 	};
 
 	__init__();

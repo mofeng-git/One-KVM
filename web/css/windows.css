@@ -12,7 +12,7 @@ div.window {
 	background-color: var(--cs-window-default-bg);
 	padding: 30px 9px 9px 9px;
 }
-div.window:focus {
+div.window-active {
 	border: var(--border-intensive-2px) !important;
 }
 

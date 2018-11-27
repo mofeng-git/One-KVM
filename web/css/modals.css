@@ -22,7 +22,7 @@ div.modal div.modal-window {
 	background-color: var(--cs-window-default-bg);
 	padding: 0;
 }
-div.modal div.modal-window:focus {
+div.modal div.modal-window-active {
 	border: var(--border-intensive-2px) !important;
 }
 
