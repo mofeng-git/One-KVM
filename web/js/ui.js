@@ -32,9 +32,8 @@ function Ui() {
 			}
 		});
 
-		var el_menu_logo = $("menu-logo");
-		if (el_menu_logo) {
-			tools.setOnClick(el_menu_logo, () => window.history.back());
+		if ($("menu-logo")) {
+			tools.setOnClick($("menu-logo"), () => window.history.back());
 		}
 
 		window.onmouseup = __globalMouseButtonHandler;
@@ -126,10 +125,12 @@ function Ui() {
 		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered") || center) {
 			var view = self.getViewGeometry();
 			var rect = el_window.getBoundingClientRect();
+
 			el_window.style.top = Math.max($("menu").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
 			el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
 			el_window.setAttribute("data-centered", "");
 		}
+
 		el_window.style.visibility = "visible";
 		if (activate) {
 			__activateWindow(el_window);
@@ -213,9 +214,11 @@ function Ui() {
 
 	var __organizeWindowsOnResize = function(orientation) {
 		var view = self.getViewGeometry();
+
 		Array.prototype.forEach.call($$("window"), function(el_window) {
 			if (el_window.style.visibility === "visible" && (orientation || el_window.hasAttribute("data-centered"))) {
 				var rect = el_window.getBoundingClientRect();
+
 				el_window.style.top = Math.max($("menu").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
 				el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
 				el_window.setAttribute("data-centered", "");
@@ -331,9 +334,8 @@ function Ui() {
 			el_to_focus.classList.add("window-active");
 
 			if (el_window.className !== "modal" && parseInt(el_window.style.zIndex) !== __top_z_index) {
-				var z_index = __top_z_index + 1;
-				el_window.style.zIndex = z_index;
-				__top_z_index = z_index;
+				__top_z_index += 1;
+				el_window.style.zIndex = __top_z_index;
 				tools.debug("UI: activated window:", el_window);
 			}
 

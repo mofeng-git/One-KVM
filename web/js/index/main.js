@@ -4,16 +4,15 @@ function main() {
 }
 
 function __setAppText() {
-	var url = window.location.href;
 	$("app-text").innerHTML = `
 		<span class="code-comment"># On Linux using Chromium/Chrome via any terminal:<br>
-		$</span> \`which chromium 2>/dev/null || which chrome 2>/dev/null\` --app="${url}"<br>
+		$</span> \`which chromium 2>/dev/null || which chrome 2>/dev/null\` --app="${window.location.href}"<br>
 		<br>
 		<span class="code-comment"># On MacOS using Terminal application:<br>
-		$</span> /Applications/Google&bsol; Chrome.app/Contents/MacOS/Google&bsol; Chrome --app="${url}"<br>
+		$</span> /Applications/Google&bsol; Chrome.app/Contents/MacOS/Google&bsol; Chrome --app="${window.location.href}"<br>
 		<br>
 		<span class="code-comment"># On Windows via cmd.exe:<br>
-		C:&bsol;&gt;</span> start chrome --app="${url}"
+		C:&bsol;&gt;</span> start chrome --app="${window.location.href}"
 	`;
 }
 

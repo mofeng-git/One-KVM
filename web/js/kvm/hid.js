@@ -42,8 +42,8 @@ function Hid() {
 		window.onblur = __releaseAll;
 
 		__chars_to_codes = __buildCharsToCodes();
-		tools.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
 
+		tools.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
 		tools.setOnClick($("hid-reset-button"), __clickResetButton);
 
 		Array.prototype.forEach.call(document.querySelectorAll("[data-shortcut]"), function(el_shortcut) {
@@ -54,10 +54,12 @@ function Hid() {
 	/********************************************************************************/
 
 	self.setSocket = function(ws) {
+		$("hid-pak-text").disabled = !ws;
+		$("hid-pak-button").disabled = !ws;
+		$("hid-reset-button").disabled = !ws;
 		__ws = ws;
 		__keyboard.setSocket(ws);
 		__mouse.setSocket(ws);
-		$("hid-pak-text").disabled = $("hid-pak-button").disabled = $("hid-reset-button").disabled = !ws;
 	};
 
 	var __releaseAll = function() {

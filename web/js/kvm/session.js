@@ -39,6 +39,7 @@ function Session() {
 				document.title = "Pi-KVM Session";
 			}
 		}
+
 		$("about-version-kvmd").innerHTML = state.version.kvmd;
 		$("about-version-streamer").innerHTML = `${state.version.streamer} (${state.streamer})`;
 	};
@@ -46,6 +47,7 @@ function Session() {
 	var __startPoller = function() {
 		$("link-led").className = "led-yellow";
 		$("link-led").title = "Connecting...";
+
 		var http = tools.makeRequest("GET", "/ws_auth", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
@@ -63,9 +65,9 @@ function Session() {
 	};
 
 	var __wsOpenHandler = function(event) {
+		tools.debug("Session: socket opened:", event);
 		$("link-led").className = "led-green";
 		$("link-led").title = "Connected";
-		tools.debug("Session: socket opened:", event);
 		__hid.setSocket(__ws);
 		__missed_heartbeats = 0;
 		__ping_timer = setInterval(__pingServer, 1000);
@@ -99,16 +101,20 @@ function Session() {
 	};
 
 	var __wsCloseHandler = function(event) {
-		$("link-led").className = "led-gray";
 		tools.debug("Session: socket closed:", event);
+
+		$("link-led").className = "led-gray";
+
 		if (__ping_timer) {
 			clearInterval(__ping_timer);
 			__ping_timer = null;
 		}
+
 		__streamer.clearState();
 		__atx.clearState();
 		__hid.setSocket(null);
 		__ws = null;
+
 		setTimeout(function() {
 			$("link-led").className = "led-yellow";
 			setTimeout(__startPoller, 500);

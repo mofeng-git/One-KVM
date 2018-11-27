@@ -116,6 +116,7 @@ function Streamer() {
 
 	self.clearState = function() {
 		tools.info("Stream: refreshing ...");
+
 		$("stream-image").className = "stream-image-inactive";
 		$("stream-box").classList.add("stream-box-inactive");
 		$("stream-led").className = "led-gray";
@@ -124,6 +125,7 @@ function Streamer() {
 		$("stream-reset-button").disabled = true;
 		$("stream-quality-slider").disabled = true;
 		$("stream-desired-fps-slider").disabled = true;
+
 		__client_key = tools.makeId();
 		__client_id = "";
 		__client_fps = -1;

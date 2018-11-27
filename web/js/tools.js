@@ -108,6 +108,14 @@ var tools = new function() {
 		// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios
 		var is_ios = (!!navigator.platform && /iPad|iPhone|iPod/.test(navigator.platform));
 
+		// Any browser on Mac
+		var is_mac = ((
+			window.navigator.oscpu
+			|| window.navigator.platform
+			|| window.navigator.appVersion
+			|| "Unknown"
+		).indexOf("Mac") !== -1);
+
 		return {
 			"is_opera": is_opera,
 			"is_firefox": is_firefox,
@@ -115,6 +123,7 @@ var tools = new function() {
 			"is_chrome": is_chrome,
 			"is_blink": is_blink,
 			"is_ios": is_ios,
+			"is_mac": is_mac,
 		};
 	};
 	this.info("Browser:", this.browser);

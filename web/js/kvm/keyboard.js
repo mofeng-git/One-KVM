@@ -8,13 +8,6 @@ function Keyboard() {
 	var __keys = [].slice.call(document.querySelectorAll("div#keyboard-desktop div.keyboard-block div.keyboard-row div.key"));
 	var __modifiers = [].slice.call(document.querySelectorAll("div#keyboard-desktop div.keyboard-block div.keyboard-row div.modifier"));
 
-	var __mac_cmd_hook = ((
-		window.navigator.oscpu
-		|| window.navigator.platform
-		|| window.navigator.appVersion
-		|| "Unknown"
-	).indexOf("Mac") !== -1);
-
 	var __init__ = function() {
 		$("hid-keyboard-led").title = "Keyboard free";
 
@@ -42,7 +35,7 @@ function Keyboard() {
 			tools.setOnDown(el_key, () => __toggleModifierHandler(el_key));
 		});
 
-		if (__mac_cmd_hook) {
+		if (tools.browser.is_mac) {
 			tools.info("Keyboard: enabled Mac-CMD-Hook");
 		}
 	};
@@ -86,7 +79,7 @@ function Keyboard() {
 		var el_key = document.querySelector(`[data-key='${event.code}']`);
 		if (el_key && !event.repeat) {
 			__commonHandler(el_key, state, "pressed");
-			if (__mac_cmd_hook) {
+			if (tools.browser.is_mac) {
 				// https://bugs.chromium.org/p/chromium/issues/detail?id=28089
 				// https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
 				if ((event.code === "MetaLeft" || event.code === "MetaRight") && !state) {
