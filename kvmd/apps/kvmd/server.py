@@ -183,6 +183,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             self.__loop.create_task(self.__stream_controller()),
             self.__loop.create_task(self.__poll_dead_sockets()),
             self.__loop.create_task(self.__poll_atx_state()),
+            self.__loop.create_task(self.__poll_msd_state()),
             self.__loop.create_task(self.__poll_streamer_state()),
         ])
 
@@ -303,9 +304,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         }.get(button)
         if not clicker:
             raise BadRequest("Invalid param 'button'")
-        await self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state())
         await clicker()
-        await self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state())
         return _json({"clicked": button})
 
     # ===== MSD
@@ -317,16 +316,11 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __msd_connect_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         to = request.query.get("to")
         if to == "kvm":
-            await self.__msd.connect_to_kvm()
-            state = self.__msd.get_state()
-            await self.__broadcast_event(_Events.MSD_STATE, state)
+            return _json(await self.__msd.connect_to_kvm())
         elif to == "server":
-            await self.__msd.connect_to_pc()
-            state = self.__msd.get_state()
-            await self.__broadcast_event(_Events.MSD_STATE, state)
+            return _json(await self.__msd.connect_to_pc())
         else:
             raise BadRequest("Invalid param 'to'")
-        return _json(state)
 
     @_wrap_exceptions_for_web("Can't write data to mass-storage device")
     async def __msd_write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -334,17 +328,16 @@ class Server:  # pylint: disable=too-many-instance-attributes
         reader = await request.multipart()
         written = 0
         try:
-            field = await reader.next()
-            if not field or field.name != "image_name":
-                raise BadRequest("Missing 'image_name' field")
-            image_name = (await field.read()).decode("utf-8")[:256]
-
-            field = await reader.next()
-            if not field or field.name != "image_data":
-                raise BadRequest("Missing 'image_data' field")
-
             async with self.__msd:
-                await self.__broadcast_event(_Events.MSD_STATE, self.__msd.get_state())
+                field = await reader.next()
+                if not field or field.name != "image_name":
+                    raise BadRequest("Missing 'image_name' field")
+                image_name = (await field.read()).decode("utf-8")[:256]
+
+                field = await reader.next()
+                if not field or field.name != "image_data":
+                    raise BadRequest("Missing 'image_data' field")
+
                 logger.info("Writing image %r to mass-storage device ...", image_name)
                 await self.__msd.write_image_info(image_name, False)
                 while True:
@@ -354,7 +347,6 @@ class Server:  # pylint: disable=too-many-instance-attributes
                     written = await self.__msd.write_image_chunk(chunk)
                 await self.__msd.write_image_info(image_name, True)
         finally:
-            await self.__broadcast_event(_Events.MSD_STATE, self.__msd.get_state())
             if written != 0:
                 logger.info("Written %d bytes to mass-storage device", written)
         return _json({"written": written})
@@ -450,27 +442,31 @@ class Server:  # pylint: disable=too-many-instance-attributes
     @_system_task
     async def __poll_atx_state(self) -> None:
         async for state in self.__atx.poll_state():
-            if self.__sockets:
-                await self.__broadcast_event(_Events.ATX_STATE, state)
+            await self.__broadcast_event(_Events.ATX_STATE, state)
+
+    @_system_task
+    async def __poll_msd_state(self) -> None:
+        async for state in self.__msd.poll_state():
+            await self.__broadcast_event(_Events.MSD_STATE, state)
 
     @_system_task
     async def __poll_streamer_state(self) -> None:
         async for state in self.__streamer.poll_state():
-            if self.__sockets:
-                await self.__broadcast_event(_Events.STREAMER_STATE, state)
+            await self.__broadcast_event(_Events.STREAMER_STATE, state)
 
     async def __broadcast_event(self, event_type: _Events, event_attrs: Dict) -> None:
-        await asyncio.gather(*[
-            ws.send_str(json.dumps({
-                "msg_type": "event",
-                "msg": {
-                    "event": event_type.value,
-                    "event_attrs": event_attrs,
-                },
-            }))
-            for ws in list(self.__sockets)
-            if not ws.closed and ws._req.transport  # pylint: disable=protected-access
-        ], return_exceptions=True)
+        if self.__sockets:
+            await asyncio.gather(*[
+                ws.send_str(json.dumps({
+                    "msg_type": "event",
+                    "msg": {
+                        "event": event_type.value,
+                        "event_attrs": event_attrs,
+                    },
+                }))
+                for ws in list(self.__sockets)
+                if not ws.closed and ws._req.transport  # pylint: disable=protected-access
+            ], return_exceptions=True)
 
     async def __register_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:

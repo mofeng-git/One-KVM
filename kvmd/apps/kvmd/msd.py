@@ -1,12 +1,14 @@
 import os
 import struct
 import asyncio
+import asyncio.queues
 import types
 
 from typing import Dict
 from typing import NamedTuple
 from typing import Callable
 from typing import Type
+from typing import AsyncGenerator
 from typing import Optional
 from typing import Any
 
@@ -192,6 +194,8 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__device_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__written = 0
 
+        self.__state_queue: asyncio.queues.Queue = asyncio.Queue()
+
         logger = get_logger(0)
         if self._device_path:
             logger.info("Using %r as mass-storage device", self._device_path)
@@ -207,33 +211,6 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
                 self._device_path = ""
         else:
             logger.warning("Mass-storage device is not operational")
-
-    @_msd_operated
-    async def connect_to_kvm(self, no_delay: bool=False) -> None:
-        with self.__region:
-            if self.__device_info:
-                raise MsdAlreadyConnectedToKvmError()
-            gpio.write(self.__target, False)
-            if not no_delay:
-                await asyncio.sleep(self.__init_delay)
-            await self.__load_device_info()
-            get_logger().info("Mass-storage device switched to KVM: %s", self.__device_info)
-
-    @_msd_operated
-    async def connect_to_pc(self) -> None:
-        with self.__region:
-            if not self.__device_info:
-                raise MsdAlreadyConnectedToPcError()
-            gpio.write(self.__target, True)
-            self.__device_info = None
-            get_logger().info("Mass-storage device switched to Server")
-
-    @_msd_operated
-    async def reset(self) -> None:
-        with self.__region:
-            gpio.write(self.__reset, True)
-            await asyncio.sleep(self.__reset_delay)
-            gpio.write(self.__reset, False)
 
     def get_state(self) -> Dict:
         info = (self.__saved_device_info._asdict() if self.__saved_device_info else None)
@@ -253,10 +230,49 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             "info": info,
         }
 
+    async def poll_state(self) -> AsyncGenerator[Dict, None]:
+        while True:
+            yield (await self.__state_queue.get())
+
     async def cleanup(self) -> None:
         await self.__close_device_file()
         gpio.write(self.__target, False)
         gpio.write(self.__reset, False)
+
+    @_msd_operated
+    async def connect_to_kvm(self, no_delay: bool=False) -> Dict:
+        with self.__region:
+            if self.__device_info:
+                raise MsdAlreadyConnectedToKvmError()
+            gpio.write(self.__target, False)
+            if not no_delay:
+                await asyncio.sleep(self.__init_delay)
+            await self.__load_device_info()
+            state = self.get_state()
+            await self.__state_queue.put(state)
+            get_logger().info("Mass-storage device switched to KVM: %s", self.__device_info)
+            return state
+
+    @_msd_operated
+    async def connect_to_pc(self) -> Dict:
+        with self.__region:
+            if not self.__device_info:
+                raise MsdAlreadyConnectedToPcError()
+            gpio.write(self.__target, True)
+            self.__device_info = None
+            state = self.get_state()
+            await self.__state_queue.put(state)
+            get_logger().info("Mass-storage device switched to Server")
+            return state
+
+    @_msd_operated
+    async def reset(self) -> None:
+        with self.__region:
+            get_logger().info("Mass-storage device reset")
+            gpio.write(self.__reset, True)
+            await asyncio.sleep(self.__reset_delay)
+            gpio.write(self.__reset, False)
+            await self.__state_queue.put(self.get_state())
 
     @_msd_operated
     async def __aenter__(self) -> "MassStorageDevice":
@@ -268,6 +284,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             self.__written = 0
             return self
         finally:
+            await self.__state_queue.put(self.get_state())
             self.__region.exit()
 
     async def write_image_info(self, name: str, complete: bool) -> None:
@@ -296,6 +313,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         try:
             await self.__close_device_file()
         finally:
+            await self.__state_queue.put(self.get_state())
             self.__region.exit()
 
     async def __write_to_device_file(self, data: bytes) -> None:
