@@ -54,16 +54,16 @@ class Atx:  # pylint: disable=too-many-instance-attributes
             await asyncio.sleep(self.__state_poll)
 
     async def click_power(self) -> None:
+        get_logger().info("Clicking power ...")
         await self.__click(self.__power_switch, self.__click_delay)
-        get_logger().info("Clicked power")
 
     async def click_power_long(self) -> None:
+        get_logger().info("Clicking power (long press) ...")
         await self.__click(self.__power_switch, self.__long_click_delay)
-        get_logger().info("Clicked power (long press)")
 
     async def click_reset(self) -> None:
+        get_logger().info("Clicking reset")
         await self.__click(self.__reset_switch, self.__click_delay)
-        get_logger().info("Clicked reset")
 
     async def __click(self, pin: int, delay: float) -> None:
         self.__region.enter()
