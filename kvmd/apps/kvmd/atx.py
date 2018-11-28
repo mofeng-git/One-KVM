@@ -66,7 +66,13 @@ class Atx:  # pylint: disable=too-many-instance-attributes
         get_logger().info("Clicked reset")
 
     async def __click(self, pin: int, delay: float) -> None:
-        with self.__region:
+        self.__region.enter()
+        asyncio.ensure_future(self.__inner_click(pin, delay))
+
+    async def __inner_click(self, pin: int, delay: float) -> None:
+        try:
             for flag in (True, False):
                 gpio.write(pin, flag)
                 await asyncio.sleep(delay)
+        finally:
+            self.__region.exit()

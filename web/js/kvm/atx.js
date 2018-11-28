@@ -8,7 +8,7 @@ function Atx() {
 		$("atx-hdd-led").title = "Disk Activity Led";
 
 		tools.setOnClick($("atx-power-button"), () => __clickButton("power", "Are you sure to click the power button?"));
-		tools.setOnClick($("atx-power-button-long"), () => __clickButton("power_long", "Are you sure to perform the long press of the power button?", 15000));
+		tools.setOnClick($("atx-power-button-long"), () => __clickButton("power_long", "Are you sure to perform the long press of the power button?"));
 		tools.setOnClick($("atx-reset-button"), () => __clickButton("reset", "Are you sure to reboot the server?"));
 	};
 
@@ -28,7 +28,7 @@ function Atx() {
 		$("atx-hdd-led").className = "led-gray";
 	};
 
-	var __clickButton = function(button, confirm_msg, timeout=null) {
+	var __clickButton = function(button, confirm_msg) {
 		ui.confirm(confirm_msg).then(function(ok) {
 			if (ok) {
 				var http = tools.makeRequest("POST", "/kvmd/atx/click?button=" + button, function() {
@@ -39,7 +39,7 @@ function Atx() {
 							ui.error("Click error:<br>", http.responseText);
 						}
 					}
-				}, timeout);
+				});
 			}
 		});
 	};
