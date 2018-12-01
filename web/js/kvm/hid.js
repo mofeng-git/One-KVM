@@ -54,9 +54,9 @@ function Hid() {
 	/********************************************************************************/
 
 	self.setSocket = function(ws) {
-		$("hid-pak-text").disabled = !ws;
-		$("hid-pak-button").disabled = !ws;
-		$("hid-reset-button").disabled = !ws;
+		ui.switchDisabled($("hid-pak-text"), !ws);
+		ui.switchDisabled($("hid-pak-button"), !ws);
+		ui.switchDisabled($("hid-reset-button"), !ws);
 		__ws = ws;
 		__keyboard.setSocket(ws);
 		__mouse.setSocket(ws);
@@ -154,8 +154,8 @@ function Hid() {
 
 			ui.confirm(confirm_msg).then(function(ok) {
 				if (ok) {
-					$("hid-pak-text").disabled = true;
-					$("hid-pak-button").disabled = true;
+					ui.switchDisabled($("hid-pak-text"), true);
+					ui.switchDisabled($("hid-pak-button"), true);
 					$("hid-pak-led").className = "led-yellow-rotating-fast";
 					$("hid-pak-led").title = "Autotyping...";
 
@@ -169,8 +169,8 @@ function Hid() {
 								iterate();
 							} else {
 								$("hid-pak-text").value = "";
-								$("hid-pak-text").disabled = false;
-								$("hid-pak-button").disabled = false;
+								ui.switchDisabled($("hid-pak-text"), false);
+								ui.switchDisabled($("hid-pak-button"), false);
 								$("hid-pak-led").className = "led-gray";
 								$("hid-pak-led").title = "";
 							}

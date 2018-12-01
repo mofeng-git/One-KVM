@@ -61,7 +61,7 @@ function Msd() {
 			__applyState();
 		});
 		__applyState();
-		$(`msd-switch-to-${to}-button`).disabled = true;
+		ui.switchDisabled($(`msd-switch-to-${to}-button`), true);
 	};
 
 	var __selectNewImageFile = function() {
@@ -120,12 +120,12 @@ function Msd() {
 		$("msd-current-image-size").innerHTML = (__state.in_operate && __state.info.image ? __formatSize(__state.info.image.size) : "None");
 		$("msd-storage-size").innerHTML = (__state.in_operate ? __formatSize(__state.info.size) : "Unavailable");
 
-		$("msd-switch-to-kvm-button").disabled = (!__state.in_operate || __state.connected_to === "kvm" || __state.busy);
-		$("msd-switch-to-server-button").disabled = (!__state.in_operate || __state.connected_to === "server" || __state.busy);
-		$("msd-select-new-image-button").disabled = (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || __upload_http);
-		$("msd-upload-new-image-button").disabled = (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || !__image_file);
-		$("msd-abort-uploading-button").disabled = (!__state.in_operate || !__upload_http);
-		$("msd-reset-button").disabled = (!__state.in_operate || __upload_http);
+		ui.switchDisabled($("msd-switch-to-kvm-button"), (!__state.in_operate || __state.connected_to === "kvm" || __state.busy));
+		ui.switchDisabled($("msd-switch-to-server-button"), (!__state.in_operate || __state.connected_to === "server" || __state.busy));
+		ui.switchDisabled($("msd-select-new-image-button"), (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || __upload_http));
+		ui.switchDisabled($("msd-upload-new-image-button"), (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || !__image_file));
+		ui.switchDisabled($("msd-abort-uploading-button"), (!__state.in_operate || !__upload_http));
+		ui.switchDisabled($("msd-reset-button"), (!__state.in_operate || __upload_http));
 
 		$("msd-new-image").style.display = (__image_file ? "block" : "none");
 		$("msd-progress").setAttribute("data-label", "Waiting for upload ...");

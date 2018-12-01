@@ -21,9 +21,8 @@ function Keyboard() {
 		$("stream-window").onfocus = __updateLeds;
 		$("stream-window").onblur = __updateLeds;
 
-		window.addEventListener("focus", __updateLeds);
-		window.addEventListener("pagehide", __updateLeds);
-		window.addEventListener("blur", __updateLeds);
+		window.addEventListener("focusin", __updateLeds);
+		window.addEventListener("focusout", __updateLeds);
 
 		Array.prototype.forEach.call($$("key"), function(el_key) {
 			tools.setOnDown(el_key, () => __clickHandler(el_key, true));
@@ -67,14 +66,9 @@ function Keyboard() {
 	};
 
 	var __updateLeds = function() {
-		tools.info("Update leds");
+		tools.debug("Keyboard: update leds");
 		if (
-			__ws
-			&& (
-				document.activeElement === $("stream-window")
-				|| document.activeElement === $("keyboard-window")
-			)
-			&& (
+			__ws && (
 				$("stream-window").classList.contains("window-active")
 				|| $("keyboard-window").classList.contains("window-active")
 			)

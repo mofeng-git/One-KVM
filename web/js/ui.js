@@ -15,11 +15,13 @@ function Ui() {
 		});
 
 		Array.prototype.forEach.call($$("menu-item"), function(el_item) {
+			el_item.parentElement.querySelector(".menu-item-content").setAttribute("tabindex", "-1");
 			tools.setOnClick(el_item, () => __toggleMenu(el_item));
 			__menu_items.push(el_item);
 		});
 
 		Array.prototype.forEach.call($$("window"), function(el_window) {
+			el_window.setAttribute("tabindex", "-1");
 			__makeWindowMovable(el_window);
 			__windows.push(el_window);
 
@@ -39,11 +41,9 @@ function Ui() {
 		window.onmouseup = __globalMouseButtonHandler;
 		window.ontouchend = __globalMouseButtonHandler;
 
-		window.addEventListener("focus", () => __activateLastWindow());
-		window.addEventListener("pagehide", () => __deactivateAllWindows());
-		window.addEventListener("pagehide", __closeAllMenues);
-		window.addEventListener("blur", () => __deactivateAllWindows());
-		window.addEventListener("blur", __closeAllMenues);
+		window.addEventListener("focusin", __focusIn);
+		window.addEventListener("focusout", __focusOut);
+
 		window.addEventListener("resize", () => __organizeWindowsOnResize(false));
 		window.addEventListener("orientationchange", () => __organizeWindowsOnResize(true));
 	};
@@ -126,6 +126,20 @@ function Ui() {
 		return promise;
 	};
 
+	self.switchDisabled = function(el, disabled) {
+		if (disabled && document.activeElement === el) {
+			var el_to_focus = (
+				el.closest(".modal-window")
+				|| el.closest(".window")
+				|| el.closest(".menu-item-content")
+			);
+			if (el_to_focus) {
+				el_to_focus.focus();
+			}
+		}
+		el.disabled = disabled;
+	};
+
 	self.showWindow = function(el_window, activate=true, center=false) {
 		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered") || center) {
 			var view = self.getViewGeometry();
@@ -169,10 +183,9 @@ function Ui() {
 		__menu_items.forEach(function(el_item) {
 			var el_menu = el_item.parentElement.querySelector(".menu-item-content");
 			if (el_item === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
-				__deactivateAllWindows();
-				el_item.focus();
 				el_item.classList.add("menu-item-selected");
 				el_menu.style.visibility = "visible";
+				el_menu.focus();
 				all_hidden &= false;
 			} else {
 				el_item.classList.remove("menu-item-selected");
@@ -203,6 +216,30 @@ function Ui() {
 		});
 	};
 
+	var __focusIn = function(event) {
+		var el_parent;
+		if ((el_parent = event.target.closest(".modal-window")) !== null) {
+			el_parent.classList.add("window-active");
+		} else if ((el_parent = event.target.closest(".window")) !== null) {
+			el_parent.classList.add("window-active");
+		} else if ((el_parent = event.target.closest(".menu-item-content")) !== null) {
+			el_parent.classList.add("menu-item-content-active");
+		}
+		tools.debug("Focus in:", el_parent);
+	};
+
+	var __focusOut = function(event) {
+		var el_parent;
+		if ((el_parent = event.target.closest(".modal-window")) !== null) {
+			el_parent.classList.remove("window-active");
+		} else if ((el_parent = event.target.closest(".window")) !== null) {
+			el_parent.classList.remove("window-active");
+		} else if ((el_parent = event.target.closest(".menu-item-content")) !== null) {
+			el_parent.classList.remove("menu-item-content-active");
+		}
+		tools.debug("Focus out:", el_parent);
+	};
+
 	var __globalMouseButtonHandler = function(event) {
 		if (!event.target.matches(".menu-item")) {
 			for (var el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
@@ -229,6 +266,59 @@ function Ui() {
 				el_window.setAttribute("data-centered", "");
 			}
 		});
+	};
+
+	var __activateLastWindow = function(el_except_window=null) {
+		var el_last_window = null;
+
+		if (document.activeElement) {
+			el_last_window = (document.activeElement.closest(".modal-window") || document.activeElement.closest(".window"));
+		}
+
+		if (!el_last_window || el_last_window === el_except_window) {
+			var max_z_index = 0;
+
+			__windows.forEach(function(el_window) {
+				var z_index = parseInt(window.getComputedStyle(el_window, null).zIndex) || 0;
+				var visibility = window.getComputedStyle(el_window, null).visibility;
+
+				if (max_z_index < z_index && visibility !== "hidden" && el_window !== el_except_window) {
+					el_last_window = el_window;
+					max_z_index = z_index;
+				}
+			});
+		}
+
+		if (el_last_window) {
+			tools.debug("Activating last window:", el_last_window);
+			__activateWindow(el_last_window);
+		}
+	};
+
+	var __activateWindow = function(el_window) {
+		if (window.getComputedStyle(el_window, null).visibility !== "hidden") {
+			var el_to_focus;
+			var el_window_contains_focus;
+
+			if (el_window.className === "modal") {
+				el_to_focus = el_window.querySelector(".modal-window");
+				el_window_contains_focus = (document.activeElement && document.activeElement.closest(".modal-window"));
+			} else { // .window
+				el_to_focus = el_window;
+				el_window_contains_focus = (document.activeElement && document.activeElement.closest(".window"));
+			}
+
+			if (el_window.className !== "modal" && parseInt(el_window.style.zIndex) !== __top_z_index) {
+				__top_z_index += 1;
+				el_window.style.zIndex = __top_z_index;
+				tools.debug("UI: activated window:", el_window);
+			}
+
+			if (el_window !== el_window_contains_focus) {
+				el_to_focus.focus();
+				tools.debug("UI: focused window:", el_window);
+			}
+		}
 	};
 
 	var __makeWindowMovable = function(el_window) {
@@ -295,68 +385,6 @@ function Ui() {
 
 		el_grab.onmousedown = startMoving;
 		el_grab.ontouchstart = startMoving;
-	};
-
-	var __activateLastWindow = function(el_except=null) {
-		var el_last_window = null;
-
-		if (document.activeElement) {
-			el_last_window = (document.activeElement.closest(".modal-window") || document.activeElement.closest(".window"));
-		}
-
-		if (!el_last_window || el_last_window === el_except) {
-			var max_z_index = 0;
-			__windows.forEach(function(el_window) {
-				var z_index = parseInt(window.getComputedStyle(el_window, null).zIndex) || 0;
-				var visibility = window.getComputedStyle(el_window, null).visibility;
-				if (max_z_index < z_index && visibility !== "hidden" && el_window !== el_except) {
-					el_last_window = el_window;
-					max_z_index = z_index;
-				}
-			});
-		}
-
-		if (el_last_window) {
-			tools.info("Activating last window:", el_last_window);
-			__activateWindow(el_last_window);
-		}
-	};
-
-	var __activateWindow = function(el_window) {
-		if (window.getComputedStyle(el_window, null).visibility !== "hidden") {
-			var el_to_focus;
-			var el_window_contains_focus;
-
-			if (el_window.className === "modal") {
-				el_to_focus = el_window.querySelector(".modal-window");
-				el_window_contains_focus = (document.activeElement && document.activeElement.closest(".modal-window"));
-			} else { // .window
-				el_to_focus = el_window;
-				el_window_contains_focus = (document.activeElement && document.activeElement.closest(".window"));
-			}
-
-			__deactivateAllWindows(el_to_focus);
-			el_to_focus.classList.add("window-active");
-
-			if (el_window.className !== "modal" && parseInt(el_window.style.zIndex) !== __top_z_index) {
-				__top_z_index += 1;
-				el_window.style.zIndex = __top_z_index;
-				tools.debug("UI: activated window:", el_window);
-			}
-
-			if (el_window !== el_window_contains_focus) {
-				el_to_focus.focus();
-				tools.debug("UI: focused window:", el_window);
-			}
-		}
-	};
-
-	var __deactivateAllWindows = function(el_except=null) {
-		__windows.forEach(function(el_window) {
-			if (el_window !== el_except) {
-				el_window.classList.remove("window-active");
-			}
-		});
 	};
 
 	__init__();

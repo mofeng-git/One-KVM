@@ -18,9 +18,9 @@ function Atx() {
 		$("atx-power-led").className = (state.leds.power ? "led-green" : "led-gray");
 		$("atx-hdd-led").className = (state.leds.hdd ? "led-red" : "led-gray");
 
-		$("atx-power-button").disabled = state.busy;
-		$("atx-power-button-long").disabled = state.busy;
-		$("atx-reset-button").disabled = state.busy;
+		ui.switchDisabled($("atx-power-button"), state.busy);
+		ui.switchDisabled($("atx-power-button-long"), state.busy);
+		ui.switchDisabled($("atx-reset-button"), state.busy);
 	};
 
 	self.clearState = function() {

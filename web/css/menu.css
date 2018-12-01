@@ -71,16 +71,21 @@ ul#menu li a.menu-item-selected {
 
 ul#menu li div.menu-item-content {
 	visibility: hidden;
+	outline: none;
 	overflow: hidden;
 	white-space: nowrap;
-	border: var(--border-intensive-2px);
-	border-top: var(--border-control-thin);
+	border: var(--border-menu-item-content-default-2px);
+	border-top: var(--border-menu-item-content-top-thin);
 	border-radius: 0 0 8px 8px;
 	position: absolute;
 	background-color: var(--cs-menu-default-bg);
 	min-width: 180px;
 	box-shadow: var(--shadow-big);
 	z-index: 2147483645;
+}
+ul#menu li div.menu-item-content-active {
+	border: var(--border-menu-item-content-active-2px) !important;
+	border-top: var(--border-menu-item-content-top-thin) !important;
 }
 
 ul#menu li div.menu-item-content-buttons {

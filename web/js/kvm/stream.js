@@ -49,7 +49,7 @@ function Streamer() {
 			}
 
 			if (!$("stream-quality-slider").activated) {
-				$("stream-quality-slider").disabled = false;
+				ui.switchDisabled($("stream-quality-slider"), false);
 				if ($("stream-quality-slider").value !== source.quality) {
 					$("stream-quality-slider").value = source.quality;
 					__updateQualityValue(source.quality);
@@ -57,7 +57,7 @@ function Streamer() {
 			}
 
 			if (!$("stream-desired-fps-slider").activated) {
-				$("stream-desired-fps-slider").disabled = false;
+				ui.switchDisabled($("stream-desired-fps-slider"), false);
 				if ($("stream-desired-fps-slider").value !== source.desired_fps) {
 					$("stream-desired-fps-slider").value = source.desired_fps;
 					__updateDesiredFpsValue(source.desired_fps);
@@ -101,8 +101,8 @@ function Streamer() {
 				$("stream-box").classList.remove("stream-box-inactive");
 				$("stream-led").className = "led-green";
 				$("stream-led").title = "Stream is active";
-				$("stream-screenshot-button").disabled = false;
-				$("stream-reset-button").disabled = false;
+				ui.switchDisabled($("stream-screenshot-button"), false);
+				ui.switchDisabled($("stream-reset-button"), false);
 				tools.info("Stream: acquired");
 				__prev = true;
 			}
@@ -121,10 +121,10 @@ function Streamer() {
 		$("stream-box").classList.add("stream-box-inactive");
 		$("stream-led").className = "led-gray";
 		$("stream-led").title = "Stream inactive";
-		$("stream-screenshot-button").disabled = true;
-		$("stream-reset-button").disabled = true;
-		$("stream-quality-slider").disabled = true;
-		$("stream-desired-fps-slider").disabled = true;
+		ui.switchDisabled($("stream-screenshot-button"), true);
+		ui.switchDisabled($("stream-reset-button"), true);
+		ui.switchDisabled($("stream-quality-slider"), true);
+		ui.switchDisabled($("stream-desired-fps-slider"), true);
 
 		__client_key = tools.makeId();
 		__client_id = "";
