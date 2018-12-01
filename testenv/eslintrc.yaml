@@ -6,8 +6,8 @@ globals:
     Msd: true
     Session: true
     Streamer: true
-    Ui: true
-    ui: true
+    WindowManager: true
+    wm: true
     tools: true
     checkBrowser: true
     "$": true

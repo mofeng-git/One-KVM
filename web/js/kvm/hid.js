@@ -54,9 +54,9 @@ function Hid() {
 	/********************************************************************************/
 
 	self.setSocket = function(ws) {
-		ui.switchDisabled($("hid-pak-text"), !ws);
-		ui.switchDisabled($("hid-pak-button"), !ws);
-		ui.switchDisabled($("hid-reset-button"), !ws);
+		wm.switchDisabled($("hid-pak-text"), !ws);
+		wm.switchDisabled($("hid-pak-button"), !ws);
+		wm.switchDisabled($("hid-reset-button"), !ws);
 		__ws = ws;
 		__keyboard.setSocket(ws);
 		__mouse.setSocket(ws);
@@ -152,10 +152,10 @@ function Hid() {
 				Are you sure you want to continue?
 			`;
 
-			ui.confirm(confirm_msg).then(function(ok) {
+			wm.confirm(confirm_msg).then(function(ok) {
 				if (ok) {
-					ui.switchDisabled($("hid-pak-text"), true);
-					ui.switchDisabled($("hid-pak-button"), true);
+					wm.switchDisabled($("hid-pak-text"), true);
+					wm.switchDisabled($("hid-pak-button"), true);
 					$("hid-pak-led").className = "led-yellow-rotating-fast";
 					$("hid-pak-led").title = "Autotyping...";
 
@@ -169,8 +169,8 @@ function Hid() {
 								iterate();
 							} else {
 								$("hid-pak-text").value = "";
-								ui.switchDisabled($("hid-pak-text"), false);
-								ui.switchDisabled($("hid-pak-button"), false);
+								wm.switchDisabled($("hid-pak-text"), false);
+								wm.switchDisabled($("hid-pak-button"), false);
 								$("hid-pak-led").className = "led-gray";
 								$("hid-pak-led").title = "";
 							}
@@ -188,7 +188,7 @@ function Hid() {
 		var http = tools.makeRequest("POST", "/kvmd/hid/reset", function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
-					ui.error("HID reset error:<br>", http.responseText);
+					wm.error("HID reset error:<br>", http.responseText);
 				}
 			}
 		});

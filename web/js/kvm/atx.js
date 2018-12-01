@@ -18,9 +18,9 @@ function Atx() {
 		$("atx-power-led").className = (state.leds.power ? "led-green" : "led-gray");
 		$("atx-hdd-led").className = (state.leds.hdd ? "led-red" : "led-gray");
 
-		ui.switchDisabled($("atx-power-button"), state.busy);
-		ui.switchDisabled($("atx-power-button-long"), state.busy);
-		ui.switchDisabled($("atx-reset-button"), state.busy);
+		wm.switchDisabled($("atx-power-button"), state.busy);
+		wm.switchDisabled($("atx-power-button-long"), state.busy);
+		wm.switchDisabled($("atx-reset-button"), state.busy);
 	};
 
 	self.clearState = function() {
@@ -29,14 +29,14 @@ function Atx() {
 	};
 
 	var __clickButton = function(button, confirm_msg) {
-		ui.confirm(confirm_msg).then(function(ok) {
+		wm.confirm(confirm_msg).then(function(ok) {
 			if (ok) {
 				var http = tools.makeRequest("POST", "/kvmd/atx/click?button=" + button, function() {
 					if (http.readyState === 4) {
 						if (http.status === 409) {
-							ui.error("Performing another ATX operation for other client.<br>Please try again later");
+							wm.error("Performing another ATX operation for other client.<br>Please try again later");
 						} else if (http.status !== 200) {
-							ui.error("Click error:<br>", http.responseText);
+							wm.error("Click error:<br>", http.responseText);
 						}
 					}
 				});

@@ -55,20 +55,20 @@ function Msd() {
 		var http = tools.makeRequest("POST", "/kvmd/msd/connect?to=" + to, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
-					ui.error("Switch error:<br>", http.responseText);
+					wm.error("Switch error:<br>", http.responseText);
 				}
 			}
 			__applyState();
 		});
 		__applyState();
-		ui.switchDisabled($(`msd-switch-to-${to}-button`), true);
+		wm.switchDisabled($(`msd-switch-to-${to}-button`), true);
 	};
 
 	var __selectNewImageFile = function() {
 		var el_input = $("msd-select-new-image-file");
 		var image_file = (el_input.files.length ? el_input.files[0] : null);
 		if (image_file && image_file.size > __state.info.size) {
-			ui.error("New image is too big for your Mass Storage Device.<br>Maximum:", __formatSize(__state.info.size));
+			wm.error("New image is too big for your Mass Storage Device.<br>Maximum:", __formatSize(__state.info.size));
 			el_input.value = "";
 			image_file = null;
 		}
@@ -80,7 +80,7 @@ function Msd() {
 		var http = tools.makeRequest("POST", "/kvmd/msd/reset", function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
-					ui.error("MSD reset error:<br>", http.responseText);
+					wm.error("MSD reset error:<br>", http.responseText);
 				}
 			}
 			__applyState();
@@ -120,12 +120,12 @@ function Msd() {
 		$("msd-current-image-size").innerHTML = (__state.in_operate && __state.info.image ? __formatSize(__state.info.image.size) : "None");
 		$("msd-storage-size").innerHTML = (__state.in_operate ? __formatSize(__state.info.size) : "Unavailable");
 
-		ui.switchDisabled($("msd-switch-to-kvm-button"), (!__state.in_operate || __state.connected_to === "kvm" || __state.busy));
-		ui.switchDisabled($("msd-switch-to-server-button"), (!__state.in_operate || __state.connected_to === "server" || __state.busy));
-		ui.switchDisabled($("msd-select-new-image-button"), (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || __upload_http));
-		ui.switchDisabled($("msd-upload-new-image-button"), (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || !__image_file));
-		ui.switchDisabled($("msd-abort-uploading-button"), (!__state.in_operate || !__upload_http));
-		ui.switchDisabled($("msd-reset-button"), (!__state.in_operate || __upload_http));
+		wm.switchDisabled($("msd-switch-to-kvm-button"), (!__state.in_operate || __state.connected_to === "kvm" || __state.busy));
+		wm.switchDisabled($("msd-switch-to-server-button"), (!__state.in_operate || __state.connected_to === "server" || __state.busy));
+		wm.switchDisabled($("msd-select-new-image-button"), (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || __upload_http));
+		wm.switchDisabled($("msd-upload-new-image-button"), (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || !__image_file));
+		wm.switchDisabled($("msd-abort-uploading-button"), (!__state.in_operate || !__upload_http));
+		wm.switchDisabled($("msd-reset-button"), (!__state.in_operate || __upload_http));
 
 		$("msd-new-image").style.display = (__image_file ? "block" : "none");
 		$("msd-progress").setAttribute("data-label", "Waiting for upload ...");
@@ -146,7 +146,7 @@ function Msd() {
 	var __uploadStateChange = function() {
 		if (__upload_http.readyState === 4) {
 			if (__upload_http.status !== 200) {
-				ui.error("Can't upload image to the Mass Storage Device:<br>", __upload_http.responseText);
+				wm.error("Can't upload image to the Mass Storage Device:<br>", __upload_http.responseText);
 			}
 			$("msd-select-new-image-file").value = "";
 			__image_file = null;

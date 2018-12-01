@@ -49,7 +49,7 @@ function Streamer() {
 			}
 
 			if (!$("stream-quality-slider").activated) {
-				ui.switchDisabled($("stream-quality-slider"), false);
+				wm.switchDisabled($("stream-quality-slider"), false);
 				if ($("stream-quality-slider").value !== source.quality) {
 					$("stream-quality-slider").value = source.quality;
 					__updateQualityValue(source.quality);
@@ -57,7 +57,7 @@ function Streamer() {
 			}
 
 			if (!$("stream-desired-fps-slider").activated) {
-				ui.switchDisabled($("stream-desired-fps-slider"), false);
+				wm.switchDisabled($("stream-desired-fps-slider"), false);
 				if ($("stream-desired-fps-slider").value !== source.desired_fps) {
 					$("stream-desired-fps-slider").value = source.desired_fps;
 					__updateDesiredFpsValue(source.desired_fps);
@@ -101,8 +101,8 @@ function Streamer() {
 				$("stream-box").classList.remove("stream-box-inactive");
 				$("stream-led").className = "led-green";
 				$("stream-led").title = "Stream is active";
-				ui.switchDisabled($("stream-screenshot-button"), false);
-				ui.switchDisabled($("stream-reset-button"), false);
+				wm.switchDisabled($("stream-screenshot-button"), false);
+				wm.switchDisabled($("stream-reset-button"), false);
 				tools.info("Stream: acquired");
 				__prev = true;
 			}
@@ -121,10 +121,10 @@ function Streamer() {
 		$("stream-box").classList.add("stream-box-inactive");
 		$("stream-led").className = "led-gray";
 		$("stream-led").title = "Stream inactive";
-		ui.switchDisabled($("stream-screenshot-button"), true);
-		ui.switchDisabled($("stream-reset-button"), true);
-		ui.switchDisabled($("stream-quality-slider"), true);
-		ui.switchDisabled($("stream-desired-fps-slider"), true);
+		wm.switchDisabled($("stream-screenshot-button"), true);
+		wm.switchDisabled($("stream-reset-button"), true);
+		wm.switchDisabled($("stream-quality-slider"), true);
+		wm.switchDisabled($("stream-desired-fps-slider"), true);
 
 		__client_key = tools.makeId();
 		__client_id = "";
@@ -165,7 +165,7 @@ function Streamer() {
 		var http = tools.makeRequest("POST", "/kvmd/streamer/reset", function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
-					ui.error("Can't reset stream:<br>", http.responseText);
+					wm.error("Can't reset stream:<br>", http.responseText);
 				}
 			}
 		});
@@ -175,7 +175,7 @@ function Streamer() {
 		var http = tools.makeRequest("POST", `/kvmd/streamer/set_params?${name}=${value}`, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
-					ui.error("Can't configure stream:<br>", http.responseText);
+					wm.error("Can't configure stream:<br>", http.responseText);
 				}
 			}
 		});
@@ -191,7 +191,7 @@ function Streamer() {
 	var __adjustSizeFactor = function() {
 		var el_window = $("stream-window");
 		var el_slider = $("stream-size-slider");
-		var view = ui.getViewGeometry();
+		var view = wm.getViewGeometry();
 
 		for (var size = 100; size >= el_slider.min; size -= el_slider.step) {
 			tools.info("Stream: adjusting size:", size);
@@ -214,7 +214,7 @@ function Streamer() {
 		var el_stream_image = $("stream-image");
 		el_stream_image.style.width = __resolution.width * __size_factor + "px";
 		el_stream_image.style.height = __resolution.height * __size_factor + "px";
-		ui.showWindow($("stream-window"), false, center);
+		wm.showWindow($("stream-window"), false, center);
 	};
 
 	__init__();
