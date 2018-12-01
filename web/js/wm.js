@@ -16,7 +16,7 @@ function WindowManager() {
 
 		Array.prototype.forEach.call($$("menu-item"), function(el_item) {
 			el_item.parentElement.querySelector(".menu-item-content").setAttribute("tabindex", "-1");
-			tools.setOnClick(el_item, () => __toggleMenu(el_item));
+			tools.setOnDown(el_item, () => __toggleMenu(el_item));
 			__menu_items.push(el_item);
 		});
 
