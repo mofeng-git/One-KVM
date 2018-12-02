@@ -34,10 +34,6 @@ function WindowManager() {
 			}
 		});
 
-		if ($("menu-logo")) {
-			tools.setOnClick($("menu-logo"), () => window.history.back());
-		}
-
 		window.onmouseup = __globalMouseButtonHandler;
 		window.ontouchend = __globalMouseButtonHandler;
 
