@@ -104,9 +104,9 @@ def _wrap_exceptions_for_web(msg: str) -> Callable:
 
 class _Events(Enum):
     INFO_STATE = "info_state"
-    STREAMER_STATE = "streamer_state"
     ATX_STATE = "atx_state"
     MSD_STATE = "msd_state"
+    STREAMER_STATE = "streamer_state"
 
 
 class Server:  # pylint: disable=too-many-instance-attributes
@@ -228,9 +228,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
         await self.__register_socket(ws)
         await asyncio.gather(*[
             self.__broadcast_event(_Events.INFO_STATE, (await self.__make_info())),
-            self.__broadcast_event(_Events.STREAMER_STATE, (await self.__streamer.get_state())),
             self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state()),
             self.__broadcast_event(_Events.MSD_STATE, self.__msd.get_state()),
+            self.__broadcast_event(_Events.STREAMER_STATE, (await self.__streamer.get_state())),
         ])
         async for msg in ws:
             if msg.type == aiohttp.web.WSMsgType.TEXT:
@@ -396,9 +396,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await self.__remove_socket(ws)
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
-        await self.__hid.cleanup()
         await self.__streamer.cleanup()
         await self.__msd.cleanup()
+        await self.__hid.cleanup()
 
     @_system_task
     async def __hid_watchdog(self) -> None:
