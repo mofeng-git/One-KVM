@@ -33,6 +33,8 @@ function __loadKvmdInfo() {
 						return 0;
 					}
 				});
+
+				$("apps-box").innerHTML = "<ul id=\"apps\"></ul>";
 				apps.forEach(function(app) {
 					$("apps").innerHTML += `
 						<li>
