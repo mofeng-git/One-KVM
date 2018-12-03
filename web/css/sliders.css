@@ -69,10 +69,10 @@ input[type=range].slider::-moz-range-thumb {
 	height: 18px;
 	width: 18px;
 	border-radius: 25px;
-	background: var(--cs-thumb-disabled-bg);
+	background: var(--cs-thumb-default-bg);
 }
 input[type=range].slider:disabled::-moz-range-thumb {
 	cursor: default;
 	border: var(--border-default-2px);
-	background: var(--cs-control-default-bg);
+	background: var(--cs-thumb-disabled-bg);
 }
