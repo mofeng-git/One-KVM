@@ -81,12 +81,12 @@ function Session() {
 		} else if (event.msg_type === "event") {
 			if (event.msg.event === "info_state") {
 				__setKvmdInfo(event.msg.event_attrs);
-			} else if (event.msg.event === "streamer_state") {
-				__streamer.setState(event.msg.event_attrs);
 			} else if (event.msg.event === "atx_state") {
 				__atx.setState(event.msg.event_attrs);
 			} else if (event.msg.event === "msd_state") {
 				__msd.setState(event.msg.event_attrs);
+			} else if (event.msg.event === "streamer_state") {
+				__streamer.setState(event.msg.event_attrs);
 			}
 		}
 	};
@@ -110,9 +110,10 @@ function Session() {
 			__ping_timer = null;
 		}
 
-		__streamer.clearState();
-		__atx.clearState();
 		__hid.setSocket(null);
+		__atx.setState(null);
+		__msd.setState(null);
+		__streamer.setState(null);
 		__ws = null;
 
 		setTimeout(function() {

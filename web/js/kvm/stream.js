@@ -39,7 +39,7 @@ function Streamer() {
 	/********************************************************************************/
 
 	self.setState = function(state) {
-		if (state.state) {
+		if (state && state.state) {
 			var source = state.state.source;
 			var stream = state.state.stream;
 
@@ -82,7 +82,7 @@ function Streamer() {
 			if (stream.clients_stat.hasOwnProperty(__client_id)) {
 				__client_fps = stream.clients_stat[__client_id].fps;
 			} else {
-				self.clearState();
+				__clearState();
 			}
 
 			if (!__prev) {
@@ -110,11 +110,11 @@ function Streamer() {
 			__updateStreamHeader(true);
 
 		} else {
-			self.clearState();
+			__clearState();
 		}
 	};
 
-	self.clearState = function() {
+	var __clearState = function() {
 		tools.info("Stream: refreshing ...");
 
 		$("stream-image").className = "stream-image-inactive";

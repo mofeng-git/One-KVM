@@ -89,49 +89,75 @@ function Msd() {
 	};
 
 	var __applyState = function() {
-		if (__state.connected_to === "server") {
-			$("msd-another-another-user-uploads").style.display = "none";
-			$("msd-led").className = "led-green";
-			$("msd-status").innerHTML = $("msd-led").title = "Connected to Server";
-			$("msd-another-another-user-uploads").style.display = "none";
-		} else if (__state.busy) {
-			if (!__upload_http) {
-				$("msd-another-another-user-uploads").style.display = "block";
+		if (__state) {
+			if (__state.connected_to === "server") {
+				$("msd-another-another-user-uploads").style.display = "none";
+				$("msd-led").className = "led-green";
+				$("msd-status").innerHTML = $("msd-led").title = "Connected to Server";
+			} else if (__state.busy) {
+				if (!__upload_http) {
+					$("msd-another-another-user-uploads").style.display = "block";
+				}
+				$("msd-led").className = "led-yellow-rotating-fast";
+				$("msd-status").innerHTML = $("msd-led").title = "Uploading new image";
+			} else {
+				$("msd-another-another-user-uploads").style.display = "none";
+				$("msd-led").className = "led-gray";
+				if (__state.in_operate) {
+					$("msd-status").innerHTML = $("msd-led").title = "Connected to KVM";
+				} else {
+					$("msd-status").innerHTML = $("msd-led").title = "Unavailable";
+				}
 			}
-			$("msd-led").className = "led-yellow-rotating-fast";
-			$("msd-status").innerHTML = $("msd-led").title = "Uploading new image";
+
+			$("msd-not-in-operate").style.display = (__state.in_operate ? "none" : "block");
+			$("msd-current-image-broken").style.display = (
+				__state.in_operate && __state.info.image &&
+				!__state.info.image.complete && !__state.busy ? "block" : "none"
+			);
+
+			$("msd-current-image-name").innerHTML = (__state.in_operate && __state.info.image ? __state.info.image.name : "None");
+			$("msd-current-image-size").innerHTML = (__state.in_operate && __state.info.image ? __formatSize(__state.info.image.size) : "None");
+			$("msd-storage-size").innerHTML = (__state.in_operate ? __formatSize(__state.info.size) : "Unavailable");
+
+			wm.switchDisabled($("msd-switch-to-kvm-button"), (!__state.in_operate || __state.connected_to === "kvm" || __state.busy));
+			wm.switchDisabled($("msd-switch-to-server-button"), (!__state.in_operate || __state.connected_to === "server" || __state.busy));
+			wm.switchDisabled($("msd-select-new-image-button"), (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || __upload_http));
+			wm.switchDisabled($("msd-upload-new-image-button"), (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || !__image_file));
+			wm.switchDisabled($("msd-abort-uploading-button"), (!__state.in_operate || !__upload_http));
+			wm.switchDisabled($("msd-reset-button"), (!__state.in_operate || __upload_http));
+
+			$("msd-new-image").style.display = (__image_file ? "block" : "none");
+			$("msd-progress").setAttribute("data-label", "Waiting for upload ...");
+			$("msd-progress-value").style.width = "0%";
+			$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
+			$("msd-new-image-size").innerHTML = (__image_file ? __formatSize(__image_file.size) : "");
+
 		} else {
 			$("msd-another-another-user-uploads").style.display = "none";
 			$("msd-led").className = "led-gray";
-			if (__state.in_operate) {
-				$("msd-status").innerHTML = $("msd-led").title = "Connected to KVM";
-			} else {
-				$("msd-status").innerHTML = $("msd-led").title = "Unavailable";
-			}
+			$("msd-status").innerHTML = "";
+			$("msd-led").title = "";
+			$("msd-not-in-operate").style.display = "none";
+			$("msd-current-image-broken").style.display = "none";
+			$("msd-current-image-name").innerHTML = "";
+			$("msd-current-image-size").innerHTML = "";
+			$("msd-storage-size").innerHTML = "";
+
+			wm.switchDisabled($("msd-switch-to-kvm-button"), true);
+			wm.switchDisabled($("msd-switch-to-server-button"), true);
+			wm.switchDisabled($("msd-select-new-image-button"), true);
+			wm.switchDisabled($("msd-upload-new-image-button"), true);
+			wm.switchDisabled($("msd-abort-uploading-button"), true);
+			wm.switchDisabled($("msd-reset-button"), true);
+
+			$("msd-select-new-image-file").value = "";
+			$("msd-new-image").style.display = "none";
+			$("msd-progress").setAttribute("data-label", "");
+			$("msd-progress-value").style.width = "0%";
+			$("msd-new-image-name").innerHTML = "";
+			$("msd-new-image-size").innerHTML = "";
 		}
-
-		$("msd-not-in-operate").style.display = (__state.in_operate ? "none" : "block");
-		$("msd-current-image-broken").style.display = (
-			__state.in_operate && __state.info.image &&
-			!__state.info.image.complete && !__state.busy ? "block" : "none"
-		);
-
-		$("msd-current-image-name").innerHTML = (__state.in_operate && __state.info.image ? __state.info.image.name : "None");
-		$("msd-current-image-size").innerHTML = (__state.in_operate && __state.info.image ? __formatSize(__state.info.image.size) : "None");
-		$("msd-storage-size").innerHTML = (__state.in_operate ? __formatSize(__state.info.size) : "Unavailable");
-
-		wm.switchDisabled($("msd-switch-to-kvm-button"), (!__state.in_operate || __state.connected_to === "kvm" || __state.busy));
-		wm.switchDisabled($("msd-switch-to-server-button"), (!__state.in_operate || __state.connected_to === "server" || __state.busy));
-		wm.switchDisabled($("msd-select-new-image-button"), (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || __upload_http));
-		wm.switchDisabled($("msd-upload-new-image-button"), (!__state.in_operate || __state.connected_to !== "kvm" || __state.busy || !__image_file));
-		wm.switchDisabled($("msd-abort-uploading-button"), (!__state.in_operate || !__upload_http));
-		wm.switchDisabled($("msd-reset-button"), (!__state.in_operate || __upload_http));
-
-		$("msd-new-image").style.display = (__image_file ? "block" : "none");
-		$("msd-progress").setAttribute("data-label", "Waiting for upload ...");
-		$("msd-progress-value").style.width = "0%";
-		$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
-		$("msd-new-image-size").innerHTML = (__image_file ? __formatSize(__image_file.size) : "");
 	};
 
 	var __formatSize = function(size) {

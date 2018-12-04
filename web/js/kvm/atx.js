@@ -15,17 +15,12 @@ function Atx() {
 	/********************************************************************************/
 
 	self.setState = function(state) {
-		$("atx-power-led").className = (state.leds.power ? "led-green" : "led-gray");
-		$("atx-hdd-led").className = (state.leds.hdd ? "led-red" : "led-gray");
+		$("atx-power-led").className = ((state && state.leds.power) ? "led-green" : "led-gray");
+		$("atx-hdd-led").className = ((state && state.leds.hdd) ? "led-red" : "led-gray");
 
-		wm.switchDisabled($("atx-power-button"), state.busy);
-		wm.switchDisabled($("atx-power-button-long"), state.busy);
-		wm.switchDisabled($("atx-reset-button"), state.busy);
-	};
-
-	self.clearState = function() {
-		$("atx-power-led").className = "led-gray";
-		$("atx-hdd-led").className = "led-gray";
+		wm.switchDisabled($("atx-power-button"), (!state || state.busy));
+		wm.switchDisabled($("atx-power-button-long"), (!state || state.busy));
+		wm.switchDisabled($("atx-reset-button"), (!state || state.busy));
 	};
 
 	var __clickButton = function(button, confirm_msg) {
