@@ -1,7 +1,5 @@
 import asyncio
 
-import aiohttp
-
 from ...application import init
 from ...logging import get_logger
 
@@ -21,7 +19,6 @@ def main() -> None:
     config = init()["kvmd"]
     with gpio.bcm():
         loop = asyncio.get_event_loop()
-        http_session = aiohttp.ClientSession(loop=loop)
 
         info_manager = InfoManager(
             meta_path=str(config["info"]["meta"]),
@@ -72,14 +69,14 @@ def main() -> None:
             quality=int(config["streamer"]["quality"]),
             desired_fps=int(config["streamer"]["desired_fps"]),
 
-            host=str(config["streamer"]["host"]),
-            port=int(config["streamer"]["port"]),
+            host=str(config["streamer"].get("host", "localhost")),
+            port=int(config["streamer"].get("port", 0)),
+            unix_path=str(config["streamer"].get("unix", "")),
             timeout=float(config["streamer"]["timeout"]),
 
             cmd=list(map(str, config["streamer"]["cmd"])),
 
             loop=loop,
-            http_session=http_session,
         )
 
         Server(

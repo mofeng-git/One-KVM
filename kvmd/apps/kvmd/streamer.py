@@ -31,12 +31,12 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         host: str,
         port: int,
+        unix_path: str,
         timeout: float,
 
         cmd: List[str],
 
         loop: asyncio.AbstractEventLoop,
-        http_session: aiohttp.ClientSession,
     ) -> None:
 
         self.__cap_power = (gpio.set_output(cap_power) if cap_power > 0 else cap_power)
@@ -52,14 +52,19 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             "desired_fps": desired_fps,
         }
 
+        assert port or unix_path
         self.__host = host
         self.__port = port
+        self.__unix_path = unix_path
         self.__timeout = timeout
 
         self.__cmd = cmd
 
         self.__loop = loop
-        self.__http_session = http_session
+        if self.__unix_path:
+            self.__http_session = aiohttp.ClientSession(connector=aiohttp.UnixConnector(path=self.__unix_path))
+        else:
+            self.__http_session = aiohttp.ClientSession()
 
         self.__proc_task: Optional[asyncio.Task] = None
 
@@ -154,7 +159,15 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         while True:  # pylint: disable=too-many-nested-blocks
             proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
             try:
-                cmd = [part.format(host=self.__host, port=self.__port, **self.__params) for part in self.__cmd]
+                cmd = [
+                    part.format(
+                        host=self.__host,
+                        port=self.__port,
+                        unix=self.__unix_path,
+                        **self.__params,
+                    )
+                    for part in self.__cmd
+                ]
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
