@@ -94,8 +94,11 @@ def main() -> None:
 
             loop=loop,
         ).run(
-            host=str(config["server"]["host"]),
-            port=int(config["server"]["port"]),
+            host=str(config["server"].get("host", "localhost")),
+            port=int(config["server"].get("port", 0)),
+            unix_path=str(config["server"].get("unix", "")),
+            unix_rm=bool(config["server"].get("unix_rm", False)),
+            unix_mode=int(config["server"].get("unix_mode", 0)),
         )
 
     get_logger().info("Bye-bye")

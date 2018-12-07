@@ -1,5 +1,6 @@
 import os
 import signal
+import socket
 import asyncio
 import json
 import time
@@ -149,7 +150,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__reset_streamer = False
         self.__streamer_params = streamer.get_params()
 
-    def run(self, host: str, port: int) -> None:
+    def run(self, host: str, port: int, unix_path: str, unix_rm: bool, unix_mode: int) -> None:
         self.__hid.start()
 
         setproctitle.setproctitle("[main] " + setproctitle.getproctitle())
@@ -187,7 +188,19 @@ class Server:  # pylint: disable=too-many-instance-attributes
             self.__loop.create_task(self.__poll_streamer_state()),
         ])
 
-        aiohttp.web.run_app(app, host=host, port=port, print=self.__run_app_print)
+        assert port or unix_path
+        if unix_path:
+            kwargs: Dict = {}
+            if unix_rm and os.path.exists(unix_path):
+                os.remove(unix_path)
+            server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server_socket.bind(unix_path)
+            if unix_mode:
+                os.chmod(unix_path, unix_mode)
+            kwargs = {"sock": server_socket}
+        else:
+            kwargs = {"host": host, "port": port}
+        aiohttp.web.run_app(app, print=self.__run_app_print, **kwargs)
 
     async def __make_info(self) -> Dict:
         return {

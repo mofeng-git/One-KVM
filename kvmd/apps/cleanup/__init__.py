@@ -37,4 +37,9 @@ def main() -> None:
     except subprocess.CalledProcessError:
         pass
 
+    unix_path = config["server"]["unix"]
+    if unix_path and os.path.exists(unix_path):
+        logger.info("Removing socket %r ...", unix_path)
+        os.remove(unix_path)
+
     logger.info("Bye-bye")
