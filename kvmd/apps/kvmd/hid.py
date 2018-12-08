@@ -1,3 +1,5 @@
+import os
+import signal
 import asyncio
 import multiprocessing
 import multiprocessing.queues
@@ -135,13 +137,15 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
         self.__pressed_keys.clear()
 
     def __emergency_clear_events(self) -> None:
-        try:
-            with serial.Serial(self.__device_path, self.__speed) as tty:
-                self.__send_clear_hid(tty)
-        except Exception:
-            get_logger().exception("Can't execute emergency clear HID events")
+        if os.path.exists(self.__device_path):
+            try:
+                with serial.Serial(self.__device_path, self.__speed) as tty:
+                    self.__send_clear_hid(tty)
+            except Exception:
+                get_logger().exception("Can't execute emergency clear HID events")
 
     def run(self) -> None:  # pylint: disable=too-many-branches
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         setproctitle.setproctitle("[hid] " + setproctitle.getproctitle())
         try:
             with serial.Serial(self.__device_path, self.__speed) as tty:

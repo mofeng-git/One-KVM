@@ -1,4 +1,5 @@
 import os
+import signal
 import asyncio
 import asyncio.subprocess
 
@@ -61,12 +62,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__cmd = cmd
 
         self.__loop = loop
-        if self.__unix_path:
-            self.__http_session = aiohttp.ClientSession(connector=aiohttp.UnixConnector(path=self.__unix_path))
-        else:
-            self.__http_session = aiohttp.ClientSession()
 
         self.__proc_task: Optional[asyncio.Task] = None
+
+        self.__http_session: Optional[aiohttp.ClientSession] = None
 
     async def start(self, params: Dict, no_init_restart: bool=False) -> None:
         logger = get_logger()
@@ -94,10 +93,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         return dict(self.__params)
 
     async def get_state(self) -> Dict:
+        self.__ensure_session()
         url = "http://%s:%d/state" % (self.__host, self.__port)
         state = None
         try:
-            async with self.__http_session.get(url, timeout=self.__timeout) as response:
+            async with self.__http_session.get(url, timeout=self.__timeout) as response:  # type: ignore
                 response.raise_for_status()
                 state = (await response.json())["result"]
         except aiohttp.ClientConnectorError:
@@ -122,6 +122,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             *[self.__cmd[0], "--version"],
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
+            preexec_fn=(lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)),
         )
         (stdout, _) = await proc.communicate()
         return stdout.decode(errors="ignore").strip()
@@ -129,6 +130,16 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     async def cleanup(self) -> None:
         if self.is_running():
             await self.stop()
+        if self.__http_session:
+            await self.__http_session.close()
+            self.__http_session = None
+
+    def __ensure_session(self) -> None:
+        if not self.__http_session:
+            if self.__unix_path:
+                self.__http_session = aiohttp.ClientSession(connector=aiohttp.UnixConnector(path=self.__unix_path))
+            else:
+                self.__http_session = aiohttp.ClientSession()
 
     async def __inner_start(self) -> None:
         assert not self.__proc_task
@@ -172,6 +183,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
+                    preexec_fn=(lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)),
                 )
                 logger.info("Started streamer pid=%d: %s", proc.pid, cmd)
 
