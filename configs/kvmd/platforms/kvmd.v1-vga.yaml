@@ -61,7 +61,7 @@ kvmd:
 
         cmd:
             - "/usr/bin/ustreamer"
-            - "--device=/dev/kvmd-streamer"
+            - "--device=/dev/kvmd-video"
             - "--tv-standard=pal"
             - "--format=yuyv"
             - "--encoder=cpu"

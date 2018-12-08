@@ -8,7 +8,7 @@ TESTENV_CMD ?= /bin/bash -c " \
 		&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 		&& cp /testenv/kvmd.yaml /etc/kvmd \
 		&& nginx -c /etc/nginx/nginx.conf \
-		&& ln -s $(TESTENV_VIDEO) /dev/kvmd-streamer \
+		&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 		&& (losetup -d /dev/kvmd-msd || true) \
 		&& losetup /dev/kvmd-msd /root/loop.img \
 		&& python -m kvmd.apps.kvmd -c /etc/kvmd/kvmd.yaml \
