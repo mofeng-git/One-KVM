@@ -47,7 +47,7 @@ def _system_task(method: Callable) -> Callable:
 def _json(result: Optional[Dict]=None, status: int=200) -> aiohttp.web.Response:
     return aiohttp.web.Response(
         text=json.dumps({
-            "ok": (True if status == 200 else False),
+            "ok": (status == 200),
             "result": (result or {}),
         }, sort_keys=True, indent=4),
         status=status,
