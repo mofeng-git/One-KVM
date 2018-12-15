@@ -98,6 +98,7 @@ ul#menu li div.menu-item-content-text {
 }
 
 ul#menu li div.menu-item-content button, select {
+	border-radius: 0;
 	text-align: left;
 	padding: 0 16px;
 }

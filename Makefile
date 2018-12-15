@@ -6,6 +6,7 @@ TESTENV_CMD ?= /bin/bash -c " \
 		(socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
 		&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/nginx \
 		&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
+		&& cp /usr/share/kvmd/configs.default/kvmd/htpasswd /etc/kvmd \
 		&& cp /testenv/kvmd.yaml /etc/kvmd \
 		&& nginx -c /etc/nginx/nginx.conf \
 		&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \

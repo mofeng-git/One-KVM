@@ -1,12 +1,15 @@
 var tools = new function() {
 	var __debug = (new URL(window.location.href)).searchParams.get("debug");
 
-	this.makeRequest = function(method, url, callback, timeout=null) {
+	this.makeRequest = function(method, url, callback, body=null, content_type=null) {
 		var http = new XMLHttpRequest();
 		http.open(method, url, true);
+		if (content_type) {
+			http.setRequestHeader("Content-Type", content_type);
+		}
 		http.onreadystatechange = callback;
-		http.timeout = (timeout ? timeout : 5000);
-		http.send();
+		http.timeout = 5000;
+		http.send(body);
 		return http;
 	};
 

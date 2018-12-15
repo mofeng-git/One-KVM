@@ -62,6 +62,7 @@ img.svg-gray {
 button, select {
 	box-shadow: none;
 	border: none;
+	border-radius: 4px;
 	color: var(--cs-control-default-fg);
 	background-color: var(--cs-control-default-bg);
 	display: block;
@@ -116,8 +117,18 @@ select:active {
 	background-image: url("../svg/select-arrow-intensive.svg") !important;
 }
 
+input[type=text], input[type=password] {
+	overflow-x: auto;
+	font-family: monospace;
+	border: thin;
+	border-radius: 4px;
+	color: var(--cs-code-default-fg);
+	background-color: var(--cs-code-default-bg);
+	padding: 2px;
+}
+
 @media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
-	button, select {
+	button, select, input[type=text], input[type=password] {
 		height: 45px !important;
 	}
 }

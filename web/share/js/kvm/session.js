@@ -14,8 +14,7 @@ function Session() {
 	var __streamer = new Streamer();
 
 	var __init__ = function() {
-		$("link-led").title = "Not connected yet...";
-		__startPoller();
+		__startSession();
 	};
 
 	/********************************************************************************/
@@ -44,24 +43,15 @@ function Session() {
 		$("about-version-streamer").innerHTML = `${state.version.streamer} (${state.streamer})`;
 	};
 
-	var __startPoller = function() {
+	var __startSession = function() {
 		$("link-led").className = "led-yellow";
 		$("link-led").title = "Connecting...";
-
-		var http = tools.makeRequest("GET", "/ws_auth", function() {
-			if (http.readyState === 4) {
-				if (http.status === 200) {
-					var proto = (location.protocol === "https:" ? "wss" : "ws");
-					__ws = new WebSocket(`${proto}://${location.host}/kvmd/ws`);
-					__ws.onopen = __wsOpenHandler;
-					__ws.onmessage = __wsMessageHandler;
-					__ws.onerror = __wsErrorHandler;
-					__ws.onclose = __wsCloseHandler;
-				} else {
-					__wsCloseHandler(null);
-				}
-			}
-		});
+		var proto = (location.protocol === "https:" ? "wss" : "ws");
+		__ws = new WebSocket(`${proto}://${location.host}/kvmd/ws`);
+		__ws.onopen = __wsOpenHandler;
+		__ws.onmessage = __wsMessageHandler;
+		__ws.onerror = __wsErrorHandler;
+		__ws.onclose = __wsCloseHandler;
 	};
 
 	var __wsOpenHandler = function(event) {
@@ -118,7 +108,7 @@ function Session() {
 
 		setTimeout(function() {
 			$("link-led").className = "led-yellow";
-			setTimeout(__startPoller, 500);
+			setTimeout(__startSession, 500);
 		}, 500);
 	};
 

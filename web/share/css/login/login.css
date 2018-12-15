@@ -1,0 +1,25 @@
+div#login-box {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+	min-height: 100vh;
+}
+
+div#login {
+	text-align: left;
+	outline: none;
+	word-wrap: break-word;
+	max-width: 400px;
+	border: var(--border-window-thin);
+	border-radius: 8px;
+	box-sizing: border-box;
+	box-shadow: var(--shadow-big);
+	background-color: var(--cs-window-default-bg);
+	padding: 15px;
+}
+
+input[type="text"]#user-input, input[type="password"]#passwd-input {
+	text-align: center;
+}

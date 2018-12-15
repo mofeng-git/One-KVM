@@ -5,8 +5,9 @@ from ...logging import get_logger
 
 from ... import gpio
 
-from .logreader import LogReader
+from .auth import AuthManager
 from .info import InfoManager
+from .logreader import LogReader
 from .hid import Hid
 from .atx import Atx
 from .msd import MassStorageDevice
@@ -19,6 +20,10 @@ def main() -> None:
     config = init()["kvmd"]
     with gpio.bcm():
         loop = asyncio.get_event_loop()
+
+        auth_manager = AuthManager(
+            htpasswd_path=str(config["auth"]["htpasswd"]),
+        )
 
         info_manager = InfoManager(
             meta_path=str(config["info"]["meta"]),
@@ -80,6 +85,7 @@ def main() -> None:
         )
 
         Server(
+            auth_manager=auth_manager,
             info_manager=info_manager,
             log_reader=log_reader,
 

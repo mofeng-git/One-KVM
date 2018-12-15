@@ -47,6 +47,7 @@ div.modal div.modal-window div.modal-buttons {
 }
 
 div.modal div.modal-window div.modal-buttons button {
+	border-radius: 0;
 	height: 40px;
 }
 @media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {

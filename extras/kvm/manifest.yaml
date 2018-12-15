@@ -1,6 +1,6 @@
 name: KVM
 description: Open KVM session in a web browser
-icon: svg/kvm.svg
+icon: share/svg/kvm.svg
 path: kvm
 keyboard_cap: true
 daemon: kvmd

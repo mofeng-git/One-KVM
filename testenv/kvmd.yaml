@@ -4,6 +4,9 @@ kvmd:
         port: 8081
         heartbeat: 3.0
 
+    auth:
+        htpasswd: /etc/kvmd/htpasswd
+
     info:
         meta: /etc/kvmd/meta.yaml
         extras: /usr/share/kvmd/extras
