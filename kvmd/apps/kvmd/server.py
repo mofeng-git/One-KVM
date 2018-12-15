@@ -198,6 +198,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         msd: MassStorageDevice,
         streamer: Streamer,
 
+        access_log_format: str,
         heartbeat: float,
         streamer_shutdown_delay: float,
         msd_chunk_size: int,
@@ -214,6 +215,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__msd = msd
         self.__streamer = streamer
 
+        self.__access_log_format = access_log_format
         self.__heartbeat = heartbeat
         self.__streamer_shutdown_delay = streamer_shutdown_delay
         self.__msd_chunk_size = msd_chunk_size
@@ -251,17 +253,23 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         assert port or unix_path
         if unix_path:
-            kwargs: Dict = {}
+            socket_kwargs: Dict = {}
             if unix_rm and os.path.exists(unix_path):
                 os.remove(unix_path)
             server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             server_socket.bind(unix_path)
             if unix_mode:
                 os.chmod(unix_path, unix_mode)
-            kwargs = {"sock": server_socket}
+            socket_kwargs = {"sock": server_socket}
         else:
-            kwargs = {"host": host, "port": port}
-        aiohttp.web.run_app(app, print=self.__run_app_print, **kwargs)
+            socket_kwargs = {"host": host, "port": port}
+
+        aiohttp.web.run_app(
+            app=app,
+            access_log_format=self.__access_log_format,
+            print=self.__run_app_print,
+            **socket_kwargs,
+        )
 
     async def __make_info(self) -> Dict:
         return {

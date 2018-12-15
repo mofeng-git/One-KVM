@@ -94,6 +94,7 @@ def main() -> None:
             msd=msd,
             streamer=streamer,
 
+            access_log_format=str(config["server"]["access_log_format"]),
             heartbeat=float(config["server"]["heartbeat"]),
             streamer_shutdown_delay=float(config["streamer"]["shutdown_delay"]),
             msd_chunk_size=int(config["msd"]["chunk_size"]),
