@@ -51,6 +51,8 @@ package() {
 	cp -r configs "$pkgdir/usr/share/kvmd/configs.default"
 	sed -i -e "s/^#PROD//g" "$pkgdir/usr/share/kvmd/configs.default/nginx/nginx.conf"
 	find "$pkgdir" -name ".gitignore" -delete
+	find "$pkgdir/usr/share/kvmd/configs.default" -type f -exec chmod 444 '{}' \;
+	chmod 440 "$pkgdir/usr/share/kvmd/configs.default/kvmd/htpasswd"
 
 	mkdir -p "$pkgdir/etc/kvmd"
 }
