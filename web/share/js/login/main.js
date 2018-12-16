@@ -39,9 +39,9 @@ function __login() {
 }
 
 function __setDisabled(disabled) {
-	$("user-input").disabled = disabled;
-	$("passwd-input").disabled = disabled;
-	$("login-button").disabled = disabled;
+	wm.switchDisabled($("user-input"), disabled);
+	wm.switchDisabled($("passwd-input"), disabled);
+	wm.switchDisabled($("login-button"), disabled);
 }
 
 function __tryAgain() {
