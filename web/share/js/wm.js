@@ -141,7 +141,7 @@ function WindowManager() {
 			var view = self.getViewGeometry();
 			var rect = el_window.getBoundingClientRect();
 
-			el_window.style.top = Math.max($("menu").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
+			el_window.style.top = Math.max(__getMenuHeight(), Math.round((view.bottom - rect.height) / 2)) + "px";
 			el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
 			el_window.setAttribute("data-centered", "");
 		}
@@ -154,11 +154,16 @@ function WindowManager() {
 
 	self.getViewGeometry = function() {
 		return {
-			top: $("menu").clientHeight,
+			top: __getMenuHeight(),
 			bottom: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
 			left: 0,
 			right: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
 		};
+	};
+
+	var __getMenuHeight = function() {
+		var el_menu = $("menu");
+		return (el_menu ? el_menu.clientHeight : 0);
 	};
 
 	var __isWindowOnPage = function(el_window) {
@@ -257,7 +262,7 @@ function WindowManager() {
 			if (el_window.style.visibility === "visible" && (orientation || el_window.hasAttribute("data-centered"))) {
 				var rect = el_window.getBoundingClientRect();
 
-				el_window.style.top = Math.max($("menu").clientHeight, Math.round((view.bottom - rect.height) / 2)) + "px";
+				el_window.style.top = Math.max(__getMenuHeight(), Math.round((view.bottom - rect.height) / 2)) + "px";
 				el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
 				el_window.setAttribute("data-centered", "");
 			}

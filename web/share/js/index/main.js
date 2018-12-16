@@ -1,4 +1,8 @@
+var wm;
+
 function main() {
+	wm = new WindowManager();
+
 	if (checkBrowser()) {
 		__setAppText();
 		__loadKvmdInfo();
@@ -36,19 +40,11 @@ function __loadKvmdInfo() {
 
 				$("apps-box").innerHTML = "<ul id=\"apps\"></ul>";
 				apps.forEach(function(app) {
-					$("apps").innerHTML += `
-						<li>
-							<div class="app">
-								<a href="${app.path}">
-									<div>
-										<img class="svg-gray" src="${app.icon}">
-										${app.name}
-									</div>
-								</a>
-							</div>
-						</li>
-					`;
+					$("apps").innerHTML += __makeApp(null, app.path, app.icon, app.name);
 				});
+
+				$("apps").innerHTML += __makeApp("logout-button", "#", "share/svg/logout.svg", "Logout");
+				tools.setOnClick($("logout-button"), __logout);
 
 				if (info.meta && info.meta.server && info.meta.server.host) {
 					$("kvmd-meta-server-host").innerHTML = info.meta.server.host;
@@ -59,6 +55,31 @@ function __loadKvmdInfo() {
 				}
 			} else {
 				setTimeout(__loadKvmdInfo, 1000);
+			}
+		}
+	});
+}
+
+function __makeApp(id, path, icon, name) {
+	return `<li>
+		<div ${id ? "id=\"" + id + "\"" : ""} class="app">
+			<a href="${path}">
+				<div>
+					<img class="svg-gray" src="${icon}">
+					${name}
+				</div>
+			</a>
+		</div>
+	</li>`;
+}
+
+function __logout() {
+	var http = tools.makeRequest("POST", "/kvmd/auth/logout", function() {
+		if (http.readyState === 4) {
+			if (http.status === 200) {
+				document.location.href = "/login";
+			} else {
+				wm.error("Logout error:<br>", http.responseText);
 			}
 		}
 	});
