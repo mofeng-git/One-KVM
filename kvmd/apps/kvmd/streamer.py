@@ -100,7 +100,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             async with self.__http_session.get(url, timeout=self.__timeout) as response:  # type: ignore
                 response.raise_for_status()
                 state = (await response.json())["result"]
-        except aiohttp.ClientConnectorError:
+        except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
             pass
         except Exception:
             get_logger().exception("Invalid streamer response from /state")
