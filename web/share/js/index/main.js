@@ -53,6 +53,8 @@ function __loadKvmdInfo() {
 					$("kvmd-meta-server-host").innerHTML = "";
 					document.title = "Pi-KVM Index";
 				}
+			} else if (http.status === 401 || http.status === 403) {
+				document.location.href = "/login";
 			} else {
 				setTimeout(__loadKvmdInfo, 1000);
 			}
@@ -76,7 +78,7 @@ function __makeApp(id, path, icon, name) {
 function __logout() {
 	var http = tools.makeRequest("POST", "/kvmd/auth/logout", function() {
 		if (http.readyState === 4) {
-			if (http.status === 200) {
+			if (http.status === 200 || http.status === 401 || http.status === 403) {
 				document.location.href = "/login";
 			} else {
 				wm.error("Logout error:<br>", http.responseText);

@@ -46,12 +46,25 @@ function Session() {
 	var __startSession = function() {
 		$("link-led").className = "led-yellow";
 		$("link-led").title = "Connecting...";
-		var proto = (location.protocol === "https:" ? "wss" : "ws");
-		__ws = new WebSocket(`${proto}://${location.host}/kvmd/ws`);
-		__ws.onopen = __wsOpenHandler;
-		__ws.onmessage = __wsMessageHandler;
-		__ws.onerror = __wsErrorHandler;
-		__ws.onclose = __wsCloseHandler;
+
+		var http = tools.makeRequest("GET", "/kvmd/auth/check", function() {
+			if (http.readyState === 4) {
+				if (http.status === 200) {
+					var proto = (location.protocol === "https:" ? "wss" : "ws");
+					__ws = new WebSocket(`${proto}://${location.host}/kvmd/ws`);
+					__ws.onopen = __wsOpenHandler;
+					__ws.onmessage = __wsMessageHandler;
+					__ws.onerror = __wsErrorHandler;
+					__ws.onclose = __wsCloseHandler;
+				} else if (http.status === 401 || http.status === 403) {
+					wm.error("Unexpected logout occured, please login again").then(function() {
+						document.location.href = "/login";
+					});
+				} else {
+					__wsCloseHandler(null);
+				}
+			}
+		});
 	};
 
 	var __wsOpenHandler = function(event) {
