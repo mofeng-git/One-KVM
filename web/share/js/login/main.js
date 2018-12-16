@@ -6,7 +6,7 @@ function main() {
 
 		tools.setOnClick($("login-button"), __login);
 		$("user-input").onkeyup = $("passwd-input").onkeyup = function(event) {
-			if (event.code == "Enter") {
+			if (event.code === "Enter") {
 				event.preventDefault();
 				__login();
 			}
