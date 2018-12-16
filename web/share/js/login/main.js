@@ -18,21 +18,24 @@ function main() {
 
 function __login() {
 	var user = $("user-input").value;
-	var passwd = $("passwd-input").value;
-	var body = `user=${encodeURIComponent(user)}&passwd=${encodeURIComponent(passwd)}`;
-
-	var http = tools.makeRequest("POST", "/kvmd/auth/login", function() {
-		if (http.readyState === 4) {
-			if (http.status === 200) {
-				document.location.href = "/";
-			} else if (http.status === 403) {
-				wm.error("Invalid username or password").then(__tryAgain);
-			} else {
-				wm.error("Login error:<br>", http.responseText).then(__tryAgain);
+	if (user.length === 0) {
+		$("user-input").focus();
+	} else {
+		var passwd = $("passwd-input").value;
+		var body = `user=${encodeURIComponent(user)}&passwd=${encodeURIComponent(passwd)}`;
+		var http = tools.makeRequest("POST", "/kvmd/auth/login", function() {
+			if (http.readyState === 4) {
+				if (http.status === 200) {
+					document.location.href = "/";
+				} else if (http.status === 403) {
+					wm.error("Invalid username or password").then(__tryAgain);
+				} else {
+					wm.error("Login error:<br>", http.responseText).then(__tryAgain);
+				}
 			}
-		}
-	}, body, "application/x-www-form-urlencoded");
-	__setDisabled(true);
+		}, body, "application/x-www-form-urlencoded");
+		__setDisabled(true);
+	}
 }
 
 function __setDisabled(disabled) {
