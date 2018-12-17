@@ -21,7 +21,6 @@ def main() -> None:
             "kvmd.apps",
             "kvmd.apps.kvmd",
             "kvmd.apps.cleanup",
-            "kvmd.apps.wscli",
         ],
 
         package_data={
@@ -32,7 +31,6 @@ def main() -> None:
             "console_scripts": [
                 "kvmd = kvmd.apps.kvmd:main",
                 "kvmd-cleanup = kvmd.apps.cleanup:main",
-                "kvmd-wscli = kvmd.apps.wscli:main",
             ],
         },
 
