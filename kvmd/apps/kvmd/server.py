@@ -35,6 +35,23 @@ from .streamer import Streamer
 
 
 # =====
+try:
+    from aiohttp.web import AccessLogger  # type: ignore  # pylint: disable=ungrouped-imports
+except ImportError:
+    from aiohttp.helpers import AccessLogger  # type: ignore  # pylint: disable=ungrouped-imports
+
+
+_ATTR_KVMD_USER = "kvmd_user"
+
+
+def _format_P(request: aiohttp.web.BaseRequest, *_, **__) -> str:  # type: ignore  # pylint: disable=invalid-name
+    return (getattr(request, _ATTR_KVMD_USER, None) or "-")
+
+
+AccessLogger._format_P = staticmethod(_format_P)  # type: ignore  # pylint: disable=protected-access
+
+
+# =====
 class HttpError(Exception):
     pass
 
@@ -97,8 +114,10 @@ def _exposed(http_method: str, path: str, auth_required: bool=True) -> Callable:
                 if auth_required:
                     token = request.cookies.get(_COOKIE_AUTH_TOKEN, "")
                     if token:
-                        if not self._auth_manager.check(_valid_token(token)):
+                        user = self._auth_manager.check(_valid_token(token))
+                        if not user:
                             raise ForbiddenError("Forbidden")
+                        setattr(request, _ATTR_KVMD_USER, user)
                     else:
                         raise UnauthorizedError("Unauthorized")
 

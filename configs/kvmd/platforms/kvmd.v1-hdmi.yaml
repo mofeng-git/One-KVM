@@ -6,7 +6,7 @@ kvmd:
         host: 127.0.0.1
         port: 8081
         heartbeat: 3.0
-        access_log_format: "[%{X-Real-IP}i] '%r' => %s; size=%b --- referer='%{Referer}i'; user_agent='%{User-Agent}i'"
+        access_log_format: "[%P / %{X-Real-IP}i] '%r' => %s; size=%b --- referer='%{Referer}i'; user_agent='%{User-Agent}i'"
 
     auth:
         htpasswd: /etc/kvmd/htpasswd

@@ -33,5 +33,5 @@ class AuthManager:
         if user:
             get_logger().info("Logged out user %r", user)
 
-    def check(self, token: str) -> bool:
-        return (token in self.__tokens)
+    def check(self, token: str) -> Optional[str]:
+        return self.__tokens.get(token)
