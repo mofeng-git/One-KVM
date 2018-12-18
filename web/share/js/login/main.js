@@ -8,7 +8,7 @@ function main() {
 		$("user-input").onkeyup = $("passwd-input").onkeyup = function(event) {
 			if (event.code === "Enter") {
 				event.preventDefault();
-				__login();
+				$("login-button").click();
 			}
 		};
 
