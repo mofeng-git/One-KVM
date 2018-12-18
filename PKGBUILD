@@ -3,7 +3,7 @@
 
 
 pkgname=kvmd
-pkgver=0.117
+pkgver=0.118
 pkgrel=1
 pkgdesc="The main Pi-KVM daemon"
 url="https://github.com/pi-kvm/kvmd"
