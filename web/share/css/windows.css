@@ -47,6 +47,7 @@ div.window div.window-header-grabbed {
 }
 
 div.window div.window-header button.window-button-close {
+	border: none;
 	position: absolute;
 	top: -2px;
 	right: -6px;

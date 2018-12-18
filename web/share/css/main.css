@@ -61,10 +61,11 @@ img.svg-gray {
 
 button, select {
 	box-shadow: none;
-	border: none;
+	border: var(--border-key-thin);
 	border-radius: 4px;
 	color: var(--cs-control-default-fg);
 	background-color: var(--cs-control-default-bg);
+	box-shadow: var(--shadow-micro);
 	display: block;
 	width: 100%;
 	height: 30px;
@@ -76,10 +77,12 @@ button, select {
 	/* If we have a mouse cursor */
 	button:enabled:hover, select:enabled:hover {
 		color: var(--cs-control-hovered-fg);
-		background-color: var(--cs-control-hovered-bg) !important;
+		background-color: var(--cs-control-hovered-bg);
 	}
 	button:active, select:active {
 		color: var(--cs-control-pressed-fg) !important;
+		background-color: var(--cs-control-pressed-bg) !important;
+		box-shadow: none;
 	}
 	select:enabled:hover {
 		background-image: url("../svg/select-arrow-intensive.svg") !important;
@@ -154,7 +157,7 @@ div.buttons-row {
 .row50:not(:first-child), .row25:not(:first-child), .row16:not(:first-child) {
 	border-top-left-radius: 0;
 	border-bottom-left-radius: 0;
-	border-left: var(--border-control-thin);
+	border-left: var(--border-control-thin) !important;
 }
 .row50:not(:last-child), .row25:not(:last-child), .row16:not(:last-child) {
 	border-top-right-radius: 0;

@@ -47,6 +47,8 @@ div.modal div.modal-window div.modal-buttons {
 }
 
 div.modal div.modal-window div.modal-buttons button {
+	box-shadow: none;
+	border: none;
 	border-radius: 0;
 	height: 40px;
 }

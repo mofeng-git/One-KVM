@@ -6,8 +6,9 @@
 	--cs-control-default-bg: #36393f;
 	--cs-control-default-fg: #c3c3c3;
 	--cs-control-intensive-fg: white;
-	--cs-control-hovered-bg: #17191d;
+	--cs-control-hovered-bg: #202225;
 	--cs-control-hovered-fg: white;
+	--cs-control-pressed-bg: #17191d;
 	--cs-control-pressed-fg: #6c7481;
 	--cs-control-disabled-fg: #6c7481;
 
