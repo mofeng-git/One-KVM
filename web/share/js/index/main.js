@@ -39,6 +39,9 @@ function __loadKvmdInfo() {
 				});
 
 				$("apps-box").innerHTML = "<ul id=\"apps\"></ul>";
+
+				$("apps").innerHTML += __makeApp(null, "kvm", "share/svg/kvm.svg", "KVM");
+
 				apps.forEach(function(app) {
 					$("apps").innerHTML += __makeApp(null, app.path, app.icon, app.name);
 				});
