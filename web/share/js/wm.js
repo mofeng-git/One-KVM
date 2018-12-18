@@ -8,19 +8,19 @@ function WindowManager() {
 	var __menu_items = [];
 
 	var __init__ = function() {
-		Array.prototype.forEach.call(document.querySelectorAll("button"), function(el_button) {
+		tools.forEach($$$("button"), function(el_button) {
 			// XXX: Workaround for iOS Safari:
 			// https://stackoverflow.com/questions/3885018/active-pseudo-class-doesnt-work-in-mobile-safari
 			el_button.ontouchstart = function() {};
 		});
 
-		Array.prototype.forEach.call($$("menu-item"), function(el_item) {
+		tools.forEach($$("menu-item"), function(el_item) {
 			el_item.parentElement.querySelector(".menu-item-content").setAttribute("tabindex", "-1");
 			tools.setOnDown(el_item, () => __toggleMenu(el_item));
 			__menu_items.push(el_item);
 		});
 
-		Array.prototype.forEach.call($$("window"), function(el_window) {
+		tools.forEach($$("window"), function(el_window) {
 			el_window.setAttribute("tabindex", "-1");
 			__makeWindowMovable(el_window);
 			__windows.push(el_window);
@@ -258,7 +258,7 @@ function WindowManager() {
 	var __organizeWindowsOnResize = function(orientation) {
 		var view = self.getViewGeometry();
 
-		Array.prototype.forEach.call($$("window"), function(el_window) {
+		tools.forEach($$("window"), function(el_window) {
 			if (el_window.style.visibility === "visible" && (orientation || el_window.hasAttribute("data-centered"))) {
 				var rect = el_window.getBoundingClientRect();
 

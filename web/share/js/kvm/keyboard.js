@@ -5,8 +5,8 @@ function Keyboard() {
 
 	var __ws = null;
 
-	var __keys = [].slice.call(document.querySelectorAll("div#keyboard-desktop div.keyboard-block div.keyboard-row div.key"));
-	var __modifiers = [].slice.call(document.querySelectorAll("div#keyboard-desktop div.keyboard-block div.keyboard-row div.modifier"));
+	var __keys = [].slice.call($$$("div#keyboard-desktop div.keyboard-block div.keyboard-row div.key"));
+	var __modifiers = [].slice.call($$$("div#keyboard-desktop div.keyboard-block div.keyboard-row div.modifier"));
 
 	var __init__ = function() {
 		$("hid-keyboard-led").title = "Keyboard free";
@@ -24,7 +24,7 @@ function Keyboard() {
 		window.addEventListener("focusin", __updateLeds);
 		window.addEventListener("focusout", __updateLeds);
 
-		Array.prototype.forEach.call($$("key"), function(el_key) {
+		tools.forEach($$("key"), function(el_key) {
 			tools.setOnDown(el_key, () => __clickHandler(el_key, true));
 			tools.setOnUp(el_key, () => __clickHandler(el_key, false));
 			el_key.onmouseout = function() {
@@ -34,7 +34,7 @@ function Keyboard() {
 			};
 		});
 
-		Array.prototype.forEach.call($$("modifier"), function(el_key) {
+		tools.forEach($$("modifier"), function(el_key) {
 			tools.setOnDown(el_key, () => __toggleModifierHandler(el_key));
 		});
 
@@ -134,7 +134,7 @@ function Keyboard() {
 
 	var __isPressed = function(el_key) {
 		var is_pressed = false;
-		Array.prototype.forEach.call(__resolveKeys(el_key), function(el_key) {
+		tools.forEach(__resolveKeys(el_key), function(el_key) {
 			is_pressed = (is_pressed || el_key.classList.contains("pressed"));
 		});
 		return is_pressed;
@@ -142,7 +142,7 @@ function Keyboard() {
 
 	var __isHolded = function(el_key) {
 		var is_holded = false;
-		Array.prototype.forEach.call(__resolveKeys(el_key), function(el_key) {
+		tools.forEach(__resolveKeys(el_key), function(el_key) {
 			is_holded = (is_holded || el_key.classList.contains("holded"));
 		});
 		return is_holded;
@@ -150,20 +150,20 @@ function Keyboard() {
 
 	var __isActive = function(el_key) {
 		var is_active = false;
-		Array.prototype.forEach.call(__resolveKeys(el_key), function(el_key) {
+		tools.forEach(__resolveKeys(el_key), function(el_key) {
 			is_active = (is_active || el_key.classList.contains("pressed") || el_key.classList.contains("holded"));
 		});
 		return is_active;
 	};
 
 	var __activate = function(el_key, cls) {
-		Array.prototype.forEach.call(__resolveKeys(el_key), function(el_key) {
+		tools.forEach(__resolveKeys(el_key), function(el_key) {
 			el_key.classList.add(cls);
 		});
 	};
 
 	var __deactivate = function(el_key) {
-		Array.prototype.forEach.call(__resolveKeys(el_key), function(el_key) {
+		tools.forEach(__resolveKeys(el_key), function(el_key) {
 			el_key.classList.remove("pressed");
 			el_key.classList.remove("holded");
 		});
@@ -171,7 +171,7 @@ function Keyboard() {
 
 	var __resolveKeys = function(el_key) {
 		var code = el_key.getAttribute("data-key");
-		return document.querySelectorAll(`[data-key='${code}']`);
+		return $$$(`[data-key='${code}']`);
 	};
 
 	var __sendKey = function(el_key, state) {

@@ -1,6 +1,8 @@
 var tools = new function() {
 	var __debug = (new URL(window.location.href)).searchParams.get("debug");
 
+	this.forEach = (...args) => Array.prototype.forEach.call(...args);
+
 	this.makeRequest = function(method, url, callback, body=null, content_type=null) {
 		var http = new XMLHttpRequest();
 		http.open(method, url, true);
@@ -134,3 +136,4 @@ var tools = new function() {
 
 var $ = (id) => document.getElementById(id);
 var $$ = (cls) => document.getElementsByClassName(cls);
+var $$$ = (selector) => document.querySelectorAll(selector);

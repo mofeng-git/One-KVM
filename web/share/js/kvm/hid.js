@@ -46,7 +46,7 @@ function Hid() {
 		tools.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
 		tools.setOnClick($("hid-reset-button"), __clickResetButton);
 
-		Array.prototype.forEach.call(document.querySelectorAll("[data-shortcut]"), function(el_shortcut) {
+		tools.forEach($$$("[data-shortcut]"), function(el_shortcut) {
 			tools.setOnClick(el_shortcut, () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" ")));
 		});
 	};

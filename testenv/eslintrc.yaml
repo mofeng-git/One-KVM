@@ -12,6 +12,7 @@ globals:
     checkBrowser: true
     "$": true
     "$$": true
+    "$$$": true
 
 env:
     browser: true

@@ -23,7 +23,7 @@ function Mouse() {
 		$("stream-box").onwheel = __wheelHandler;
 		$("stream-box").ontouchstart = (event) => __touchMoveHandler(event);
 
-		Array.prototype.forEach.call(document.querySelectorAll("[data-mouse-button]"), function(el_button) {
+		tools.forEach($$$("[data-mouse-button]"), function(el_button) {
 			var button = el_button.getAttribute("data-mouse-button");
 			tools.setOnDown(el_button, () => __sendButton(button, true));
 			tools.setOnUp(el_button, () => __sendButton(button, false));
