@@ -19,7 +19,7 @@ kvmd:
         pinout:
             reset: 4
 
-        device: /dev/ttyAMA0
+        device: "/dev/kvmd-hid"
         speed: 115200
         reset_delay: 0.1
 
