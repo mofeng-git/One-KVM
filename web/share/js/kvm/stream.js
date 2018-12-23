@@ -87,14 +87,14 @@ function Streamer() {
 
 			if (!__prev) {
 				var path = "/streamer/stream?key=" + __client_key;
-				if (tools.browser.is_chrome || tools.browser.is_blink) {
-					// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-					tools.info("Stream: using advance_headers=1 to fix Blink MJPG bugs");
-					path += "&advance_headers=1";
-				} else if (tools.browser.is_safari || tools.browser.is_ios) {
+				if (tools.browser.is_safari || tools.browser.is_ios) {
 					// uStreamer fix for WebKit
 					tools.info("Stream: using dual_final_frames=1 to fix WebKit MJPG bugs");
 					path += "&dual_final_frames=1";
+				} else if (tools.browser.is_chrome || tools.browser.is_blink) {
+					// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
+					tools.info("Stream: using advance_headers=1 to fix Blink MJPG bugs");
+					path += "&advance_headers=1";
 				}
 				$("stream-image").src = path;
 				$("stream-image").className = "stream-image-active";

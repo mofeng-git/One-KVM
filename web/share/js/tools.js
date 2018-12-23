@@ -104,7 +104,7 @@ var tools = new function() {
 		})(!window["safari"] || (typeof safari !== "undefined" && safari.pushNotification))); // eslint-disable-line no-undef
 
 		// Chrome 1+
-		var is_chrome = (!!window.chrome && !!window.chrome.webstore);
+		var is_chrome = !!window.chrome;
 
 		// Blink engine detection
 		var is_blink = ((is_chrome || is_opera) && !!window.CSS);
