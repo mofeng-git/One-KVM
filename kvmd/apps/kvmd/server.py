@@ -545,22 +545,22 @@ class Server:  # pylint: disable=too-many-instance-attributes
                     },
                 }))
                 for ws in list(self.__sockets)
-                if not ws.closed and ws._req.transport  # pylint: disable=protected-access
+                if not ws.closed and ws._req is not None and ws._req.transport is not None  # pylint: disable=protected-access
             ], return_exceptions=True)
 
     async def __register_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
             self.__sockets.add(ws)
-            get_logger().info("Registered new client socket: remote=%s; id=%d; active=%d",
-                              ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
+            remote: Optional[str] = (ws._req.remote if ws._req is not None else None)  # pylint: disable=protected-access
+            get_logger().info("Registered new client socket: remote=%s; id=%d; active=%d", remote, id(ws), len(self.__sockets))
 
     async def __remove_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
             await self.__hid.clear_events()
             try:
                 self.__sockets.remove(ws)
-                get_logger().info("Removed client socket: remote=%s; id=%d; active=%d",
-                                  ws._req.remote, id(ws), len(self.__sockets))  # pylint: disable=protected-access
+                remote: Optional[str] = (ws._req.remote if ws._req is not None else None)  # pylint: disable=protected-access
+                get_logger().info("Removed client socket: remote=%s; id=%d; active=%d", remote, id(ws), len(self.__sockets))
                 await ws.close()
             except Exception:
                 pass
@@ -602,7 +602,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __poll_dead_sockets(self) -> None:
         while True:
             for ws in list(self.__sockets):
-                if ws.closed or not ws._req.transport:  # pylint: disable=protected-access
+                if ws.closed or ws._req is None or ws._req.transport is None:  # pylint: disable=protected-access
                     await self.__remove_socket(ws)
             await asyncio.sleep(0.1)
 
