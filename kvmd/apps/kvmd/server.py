@@ -14,6 +14,7 @@ from typing import Dict
 from typing import Set
 from typing import Callable
 from typing import Optional
+from typing import Any
 
 import aiohttp.web
 import setproctitle
@@ -153,7 +154,7 @@ def _system_task(method: Callable) -> Callable:
     return wrap
 
 
-def _valid_user(user: Optional[str]) -> str:
+def _valid_user(user: Any) -> str:
     if isinstance(user, str):
         stripped = user.strip()
         if re.match(r"^[a-z_][a-z0-9_-]*$", stripped):
@@ -161,7 +162,7 @@ def _valid_user(user: Optional[str]) -> str:
     raise BadRequestError("Invalid user characters %r" % (user))
 
 
-def _valid_passwd(passwd: Optional[str]) -> str:
+def _valid_passwd(passwd: Any) -> str:
     if isinstance(passwd, str):
         if re.match(r"[\x20-\x7e]*$", passwd):
             return passwd
@@ -264,7 +265,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 if getattr(method, _ATTR_SYSTEM_TASK, False):
                     self.__system_tasks.append(self.__loop.create_task(method()))
                 elif getattr(method, _ATTR_EXPOSED, False):
-                    app.router.add_route(
+                    # router = app.router
+                    router = getattr(app, "router")  # FIXME: Dirty hack to avoid pylint crash
+                    router.add_route(
                         getattr(method, _ATTR_EXPOSED_METHOD),
                         getattr(method, _ATTR_EXPOSED_PATH),
                         method,
