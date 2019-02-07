@@ -47,6 +47,7 @@ function Mouse() {
 
 	self.setState = function(state) {
 		__ok = state.ok;
+		__updateLeds();
 	};
 
 	var __hoverStream = function() {

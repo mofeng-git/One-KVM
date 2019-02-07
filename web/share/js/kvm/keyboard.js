@@ -56,6 +56,7 @@ function Keyboard() {
 
 	self.setState = function(state) {
 		__ok = state.ok;
+		__updateLeds();
 	};
 
 	self.releaseAll = function() {
