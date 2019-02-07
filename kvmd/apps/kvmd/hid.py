@@ -202,7 +202,7 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
         if os.path.exists(self.__device_path):
             try:
                 with self.__get_serial() as tty:
-                    self.__process_request(tty, b"\x10\x00\x00\x00\x00")
+                    self.__process_command(tty, b"\x10\x00\x00\x00\x00")
             except Exception:
                 get_logger().exception("Can't execute emergency clear HID events")
 
@@ -217,12 +217,12 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
                         event = self.__events_queue.get(timeout=0.05)
                     except queue.Empty:
                         if passed >= 20:  # 20 * 0.05 = 1 sec
-                            self.__process_request(tty, b"\x01\x00\x00\x00\x00")  # Ping
+                            self.__process_command(tty, b"\x01\x00\x00\x00\x00")  # Ping
                             passed = 0
                         else:
                             passed += 1
                     else:
-                        self.__process_request(tty, event.make_command())
+                        self.__process_command(tty, event.make_command())
                         passed = 0
         except Exception:
             get_logger().exception("Unhandled exception")
@@ -231,7 +231,7 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
     def __get_serial(self) -> serial.Serial:
         return serial.Serial(self.__device_path, self.__speed, timeout=self.__read_timeout)
 
-    def __process(self, tty: serial.Serial, command: bytes) -> None:
+    def __process_command(self, tty: serial.Serial, command: bytes) -> None:
         self.__process_request(tty, self.__make_request(command))
 
     def __process_request(self, tty: serial.Serial, request: bytes) -> None:  # pylint: disable=too-many-branches
