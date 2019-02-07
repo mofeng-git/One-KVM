@@ -28,7 +28,7 @@ kvmd:
         pinout:
             cap: 17
             conv: 18
-        init_restart_after: 1.0
+        init_restart_after: 1
         host: 127.0.0.1
         port: 8082
         cmd:
