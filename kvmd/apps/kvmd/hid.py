@@ -11,6 +11,7 @@ import time
 from typing import Dict
 from typing import Set
 from typing import NamedTuple
+from typing import AsyncGenerator
 
 import yaml
 import serial
@@ -33,47 +34,106 @@ class _KeyEvent(NamedTuple):
     key: str
     state: bool
 
+    @staticmethod
+    def is_valid(key: str) -> bool:
+        return (key in _KEYMAP)
+
+    def make_command(self) -> bytes:
+        code = _KEYMAP[self.key]
+        key_bytes = bytes([code])
+        assert len(key_bytes) == 1, (self, key_bytes, code)
+        state_bytes = (b"\x01" if self.state else b"\x00")
+        return b"\x11" + key_bytes + state_bytes + b"\x00\x00"
+
 
 class _MouseMoveEvent(NamedTuple):
     to_x: int
     to_y: int
+
+    def make_command(self) -> bytes:
+        to_x = min(max(-32768, self.to_x), 32767)
+        to_y = min(max(-32768, self.to_y), 32767)
+        return b"\x12" + struct.pack(">hh", to_x, to_y)
 
 
 class _MouseButtonEvent(NamedTuple):
     button: str
     state: bool
 
+    @staticmethod
+    def is_valid(button: str) -> bool:
+        return (button in ["left", "right"])
+
+    def make_command(self) -> bytes:
+        code = 0
+        if self.button == "left":
+            code = (0b10000000 | (0b00001000 if self.state else 0))
+        elif self.button == "right":
+            code = (0b01000000 | (0b00000100 if self.state else 0))
+        assert code, self
+        return b"\x13" + bytes([code]) + b"\x00\x00\x00"
+
 
 class _MouseWheelEvent(NamedTuple):
     delta_y: int
 
+    def make_command(self) -> bytes:
+        delta_y = min(max(-128, self.delta_y), 127)
+        return b"\x14\x00" + struct.pack(">b", delta_y) + b"\x00\x00"
+
 
 class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         reset: int,
+        reset_delay: float,
+
         device_path: str,
         speed: int,
-        reset_delay: float,
+        read_timeout: float,
+        read_retries: int,
+        common_retries: int,
+        retries_delay: float,
+        noop: bool,
+
+        state_poll: float,
     ) -> None:
 
         super().__init__(daemon=True)
 
         self.__reset = gpio.set_output(reset)
+        self.__reset_delay = reset_delay
+
         self.__device_path = device_path
         self.__speed = speed
-        self.__reset_delay = reset_delay
+        self.__read_timeout = read_timeout
+        self.__read_retries = read_retries
+        self.__common_retries = common_retries
+        self.__retries_delay = retries_delay
+        self.__noop = noop
+
+        self.__state_poll = state_poll
 
         self.__pressed_keys: Set[str] = set()
         self.__pressed_mouse_buttons: Set[str] = set()
         self.__lock = asyncio.Lock()
-        self.__queue: multiprocessing.queues.Queue = multiprocessing.Queue()
+        self.__events_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
+
+        self.__ok_shared = multiprocessing.Value("i", 1)
 
         self.__stop_event = multiprocessing.Event()
 
     def start(self) -> None:
         get_logger().info("Starting HID daemon ...")
         super().start()
+
+    def get_state(self) -> Dict:
+        return {"ok": bool(self.__ok_shared.value)}
+
+    async def poll_state(self) -> AsyncGenerator[Dict, None]:
+        while self.is_alive():
+            yield self.get_state()
+            await asyncio.sleep(self.__state_poll)
 
     async def reset(self) -> None:
         async with self.__lock:
@@ -84,32 +144,34 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
     async def send_key_event(self, key: str, state: bool) -> None:
         if not self.__stop_event.is_set():
             async with self.__lock:
-                if state and key not in self.__pressed_keys:
-                    self.__pressed_keys.add(key)
-                    self.__queue.put(_KeyEvent(key, state))
-                elif not state and key in self.__pressed_keys:
-                    self.__pressed_keys.remove(key)
-                    self.__queue.put(_KeyEvent(key, state))
+                if _KeyEvent.is_valid(key):
+                    if state and key not in self.__pressed_keys:
+                        self.__pressed_keys.add(key)
+                        self.__events_queue.put(_KeyEvent(key, state))
+                    elif not state and key in self.__pressed_keys:
+                        self.__pressed_keys.remove(key)
+                        self.__events_queue.put(_KeyEvent(key, state))
 
     async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
         if not self.__stop_event.is_set():
             async with self.__lock:
-                self.__queue.put(_MouseMoveEvent(to_x, to_y))
+                self.__events_queue.put(_MouseMoveEvent(to_x, to_y))
 
     async def send_mouse_button_event(self, button: str, state: bool) -> None:
         if not self.__stop_event.is_set():
             async with self.__lock:
-                if state and button not in self.__pressed_mouse_buttons:
-                    self.__pressed_mouse_buttons.add(button)
-                    self.__queue.put(_MouseButtonEvent(button, state))
-                elif not state and button in self.__pressed_mouse_buttons:
-                    self.__pressed_mouse_buttons.remove(button)
-                    self.__queue.put(_MouseButtonEvent(button, state))
+                if _MouseButtonEvent.is_valid(button):
+                    if state and button not in self.__pressed_mouse_buttons:
+                        self.__pressed_mouse_buttons.add(button)
+                        self.__events_queue.put(_MouseButtonEvent(button, state))
+                    elif not state and button in self.__pressed_mouse_buttons:
+                        self.__pressed_mouse_buttons.remove(button)
+                        self.__events_queue.put(_MouseButtonEvent(button, state))
 
     async def send_mouse_wheel_event(self, delta_y: int) -> None:
         if not self.__stop_event.is_set():
             async with self.__lock:
-                self.__queue.put(_MouseWheelEvent(delta_y))
+                self.__events_queue.put(_MouseWheelEvent(delta_y))
 
     async def clear_events(self) -> None:
         if not self.__stop_event.is_set():
@@ -120,7 +182,7 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
         async with self.__lock:
             if self.is_alive():
                 self.__unsafe_clear_events()
-                get_logger().info("Stopping keyboard daemon ...")
+                get_logger().info("Stopping HID daemon ...")
                 self.__stop_event.set()
                 self.join()
             else:
@@ -130,17 +192,17 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
 
     def __unsafe_clear_events(self) -> None:
         for button in self.__pressed_mouse_buttons:
-            self.__queue.put(_MouseButtonEvent(button, False))
+            self.__events_queue.put(_MouseButtonEvent(button, False))
         self.__pressed_mouse_buttons.clear()
         for key in self.__pressed_keys:
-            self.__queue.put(_KeyEvent(key, False))
+            self.__events_queue.put(_KeyEvent(key, False))
         self.__pressed_keys.clear()
 
     def __emergency_clear_events(self) -> None:
         if os.path.exists(self.__device_path):
             try:
-                with serial.Serial(self.__device_path, self.__speed) as tty:
-                    self.__send_clear_hid(tty)
+                with self.__get_serial() as tty:
+                    self.__process_request(tty, b"\x10\x00\x00\x00\x00")
             except Exception:
                 get_logger().exception("Can't execute emergency clear HID events")
 
@@ -148,70 +210,102 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         setproctitle.setproctitle("[hid] " + setproctitle.getproctitle())
         try:
-            with serial.Serial(self.__device_path, self.__speed) as tty:
-                hid_ready = False
-                while True:
-                    if hid_ready:
-                        try:
-                            event = self.__queue.get(timeout=0.05)
-                        except queue.Empty:
-                            pass
+            with self.__get_serial() as tty:
+                passed = 0
+                while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
+                    try:
+                        event = self.__events_queue.get(timeout=0.05)
+                    except queue.Empty:
+                        if passed >= 20:  # 20 * 0.05 = 1 sec
+                            self.__process_request(tty, b"\x01\x00\x00\x00\x00")  # Ping
+                            passed = 0
                         else:
-                            if isinstance(event, _KeyEvent):
-                                self.__send_key_event(tty, event)
-                            elif isinstance(event, _MouseMoveEvent):
-                                self.__send_mouse_move_event(tty, event)
-                            elif isinstance(event, _MouseButtonEvent):
-                                self.__send_mouse_button_event(tty, event)
-                            elif isinstance(event, _MouseWheelEvent):
-                                self.__send_mouse_wheel_event(tty, event)
-                            else:
-                                raise RuntimeError("Unknown HID event")
-                            hid_ready = False
-
-                    if tty.in_waiting:
-                        while tty.in_waiting:
-                            tty.read(tty.in_waiting)
-                        hid_ready = True
+                            passed += 1
                     else:
-                        time.sleep(0.05)
-
-                    if self.__stop_event.is_set() and self.__queue.qsize() == 0:
-                        break
+                        self.__process_request(tty, event.make_command())
+                        passed = 0
         except Exception:
             get_logger().exception("Unhandled exception")
             raise
 
-    def __send_key_event(self, tty: serial.Serial, event: _KeyEvent) -> None:
-        code = _KEYMAP.get(event.key)
-        if code:
-            key_bytes = bytes([code])
-            assert len(key_bytes) == 1, (event, key_bytes)
-            tty.write(
-                b"\01"
-                + key_bytes
-                + (b"\01" if event.state else b"\00")
-                + b"\00\00"
-            )
+    def __get_serial(self) -> serial.Serial:
+        return serial.Serial(self.__device_path, self.__speed, timeout=self.__read_timeout)
 
-    def __send_mouse_move_event(self, tty: serial.Serial, event: _MouseMoveEvent) -> None:
-        to_x = min(max(-32768, event.to_x), 32767)
-        to_y = min(max(-32768, event.to_y), 32767)
-        tty.write(b"\02" + struct.pack(">hh", to_x, to_y))
+    def __process(self, tty: serial.Serial, command: bytes) -> None:
+        self.__process_request(tty, self.__make_request(command))
 
-    def __send_mouse_button_event(self, tty: serial.Serial, event: _MouseButtonEvent) -> None:
-        if event.button == "left":
-            code = (0b10000000 | (0b00001000 if event.state else 0))
-        elif event.button == "right":
-            code = (0b01000000 | (0b00000100 if event.state else 0))
-        else:
-            code = 0
-        if code:
-            tty.write(b"\03" + bytes([code]) + b"\00\00\00")
+    def __process_request(self, tty: serial.Serial, request: bytes) -> None:  # pylint: disable=too-many-branches
+        logger = get_logger()
 
-    def __send_mouse_wheel_event(self, tty: serial.Serial, event: _MouseWheelEvent) -> None:
-        delta_y = min(max(-128, event.delta_y), 127)
-        tty.write(b"\04\00" + struct.pack(">b", delta_y) + b"\00\00")
+        common_retries = self.__common_retries
+        read_retries = self.__read_retries
+        error_occured = False
 
-    def __send_clear_hid(self, tty: serial.Serial) -> None:
-        tty.write(b"\00\00\00\00\00")
+        while common_retries and read_retries:
+            if not self.__noop:
+                if tty.in_waiting:
+                    tty.read(tty.in_waiting)
+
+                assert tty.write(request) == len(request)
+                response = tty.read(4)
+            else:
+                response = b"\x33\x20"  # Magic + OK
+                response += struct.pack(">H", self.__make_crc16(response))
+
+            if len(response) < 4:
+                logger.error("No response from HID: request=%r", request)
+                read_retries -= 1
+            else:
+                assert len(response) == 4, response
+                if self.__make_crc16(response[-4:-2]) != struct.unpack(">H", response[-2:])[0]:
+                    get_logger().error("Invalid response CRC; requesting response again ...")
+                    request = self.__make_request(b"\x02\x00\x00\x00\x00")  # Repeat an answer
+                else:
+                    code = response[1]
+                    if code == 0x48:  # Request timeout
+                        logger.error("Got request timeout from HID: request=%r", request)
+                    elif code == 0x40:  # CRC Error
+                        logger.error("Got CRC error of request from HID: request=%r", request)
+                    elif code == 0x45:  # Unknown command
+                        logger.error("HID did not recognize the request=%r", request)
+                        self.__ok_shared.value = 1
+                        return
+                    elif code == 0x24:  # Rebooted?
+                        logger.error("No previous command state inside HID, seems it was rebooted")
+                        self.__ok_shared.value = 1
+                        return
+                    elif code == 0x20:  # Done
+                        if error_occured:
+                            logger.info("Success!")
+                        self.__ok_shared.value = 1
+                        return
+                    else:
+                        logger.error("Invalid response from HID: request=%r; code=0x%x", request, code)
+
+                common_retries -= 1
+            error_occured = True
+            self.__ok_shared.value = 0
+
+            if common_retries and read_retries:
+                logger.error("Retries left: common_retries=%d; read_retries=%d", common_retries, read_retries)
+                time.sleep(self.__retries_delay)
+
+        logger.error("Can't process HID request due many errors: %r", request)
+
+    def __make_request(self, command: bytes) -> bytes:
+        request = b"\x33" + command
+        request += struct.pack(">H", self.__make_crc16(request))
+        assert len(request) == 8, (request, command)
+        return request
+
+    def __make_crc16(self, data: bytes) -> int:
+        crc = 0xFFFF
+        for byte in data:
+            crc = crc ^ byte
+            for _ in range(8):
+                if crc & 0x0001 == 0:
+                    crc = crc >> 1
+                else:
+                    crc = crc >> 1
+                    crc = crc ^ 0xA001
+        return crc

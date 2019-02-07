@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <HID-Project.h>
+#include <TimerOne.h>
 
 #include "inline.h"
 #include "keymap.h"
@@ -7,35 +8,42 @@
 
 #define CMD_SERIAL			Serial1
 #define CMD_SERIAL_SPEED	115200
+#define CMD_RECV_TIMEOUT	100000
 
-#define CMD_MOUSE_LEFT			0b10000000
-#define CMD_MOUSE_LEFT_STATE	0b00001000
-#define CMD_MOUSE_RIGHT			0b01000000
-#define CMD_MOUSE_RIGHT_STATE	0b00000100
-
-#define REPORT_INTERVAL 100
+#define PROTO_MAGIC						0x33
+#define PROTO_CRC_POLINOM				0xA001
+// -----------------------------------------
+#define PROTO_RESP_OK					0x20
+#define PROTO_RESP_NONE					0x24
+#define PROTO_RESP_CRC_ERROR			0x40
+#define PROTO_RESP_INVALID_ERROR		0x45
+#define PROTO_RESP_TIMEOUT_ERROR		0x48
+// -----------------------------------------
+#define PROTO_CMD_PING					0x01
+#define PROTO_CMD_REPEAT				0x02
+#define PROTO_CMD_RESET_HID				0x10
+#define PROTO_CMD_KEY_EVENT				0x11
+#define PROTO_CMD_MOUSE_MOVE_EVENT		0x12
+#define PROTO_CMD_MOUSE_BUTTON_EVENT	0x13
+#define PROTO_CMD_MOUSE_WHEEL_EVENT		0x14
+// -----------------------------------------
+#define PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT	0b10000000
+#define PROTO_CMD_MOUSE_BUTTON_LEFT_STATE	0b00001000
+#define PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT	0b01000000
+#define PROTO_CMD_MOUSE_BUTTON_RIGHT_STATE	0b00000100
 
 
 // -----------------------------------------------------------------------------
-INLINE void readNoop() {
-	for (int count = 0; count < 4; ++count) {
-		CMD_SERIAL.read();
-	}
-}
-
-INLINE void cmdResetHid() { // 0 bytes
-	readNoop();
+INLINE void cmdResetHid(const uint8_t *buffer) { // 0 bytes
 	BootKeyboard.releaseAll();
 	SingleAbsoluteMouse.releaseAll();
 }
 
-INLINE void cmdKeyEvent() { // 2 bytes
-	KeyboardKeycode code = keymap((uint8_t)CMD_SERIAL.read());
-	uint8_t state = CMD_SERIAL.read();
-	CMD_SERIAL.read(); // unused
-	CMD_SERIAL.read(); // unused
+INLINE void cmdKeyEvent(const uint8_t *buffer) { // 2 bytes
+	KeyboardKeycode code = keymap(buffer[0]);
+
 	if (code != KEY_ERROR_UNDEFINED) {
-		if (state) {
+		if (buffer[1]) {
 			BootKeyboard.press(code);
 		} else {
 			BootKeyboard.release(code);
@@ -43,28 +51,29 @@ INLINE void cmdKeyEvent() { // 2 bytes
 	}
 }
 
-INLINE void cmdMouseMoveEvent() { // 4 bytes
-	int x = (int)CMD_SERIAL.read() << 8;
-	x |= (int)CMD_SERIAL.read();
-	int y = (int)CMD_SERIAL.read() << 8;
-	y |= (int)CMD_SERIAL.read();
+INLINE void cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
+	int x = (int)buffer[0] << 8;
+	x |= (int)buffer[1];
+
+	int y = (int)buffer[2] << 8;
+	y |= (int)buffer[3];
+
 	SingleAbsoluteMouse.moveTo(x, y);
 }
 
-INLINE void cmdMouseButtonEvent() { // 1 byte
-	uint8_t state = CMD_SERIAL.read();
-	CMD_SERIAL.read(); // unused
-	CMD_SERIAL.read(); // unused
-	CMD_SERIAL.read(); // unused
-	if (state & CMD_MOUSE_LEFT) {
-		if (state & CMD_MOUSE_LEFT_STATE) {
+INLINE void cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
+	uint8_t state = buffer[0];
+
+	if (state & PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT) {
+		if (state & PROTO_CMD_MOUSE_BUTTON_LEFT_STATE) {
 			SingleAbsoluteMouse.press(MOUSE_LEFT);
 		} else {
 			SingleAbsoluteMouse.release(MOUSE_LEFT);
 		}
 	}
-	if (state & CMD_MOUSE_RIGHT) {
-		if (state & CMD_MOUSE_RIGHT_STATE) {
+
+	if (state & PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT) {
+		if (state & PROTO_CMD_MOUSE_BUTTON_RIGHT_STATE) {
 			SingleAbsoluteMouse.press(MOUSE_RIGHT);
 		} else {
 			SingleAbsoluteMouse.release(MOUSE_RIGHT);
@@ -72,45 +81,113 @@ INLINE void cmdMouseButtonEvent() { // 1 byte
 	}
 }
 
-INLINE void cmdMouseWheelEvent() { // 2 bytes
-	CMD_SERIAL.read(); // delta_x is not supported by hid-project now
-	signed char delta_y = CMD_SERIAL.read();
-	CMD_SERIAL.read(); // unused
-	CMD_SERIAL.read(); // unused
+INLINE void cmdMouseWheelEvent(const uint8_t *buffer) { // 2 bytes
+	// delta_x is not supported by hid-project now
+	signed char delta_y = buffer[1];
+
 	SingleAbsoluteMouse.move(0, 0, delta_y);
 }
 
 
 // -----------------------------------------------------------------------------
+INLINE uint16_t makeCrc16(const uint8_t *buffer, const unsigned length) {
+	uint16_t crc = 0xFFFF;
+
+	for (unsigned byte_count = 0; byte_count < length; ++byte_count) {
+		crc = crc ^ buffer[byte_count];
+		for (unsigned bit_count = 0; bit_count < 8; ++bit_count) {
+			if ((crc & 0x0001) == 0) {
+				crc = crc >> 1;
+			} else {
+				crc = crc >> 1;
+				crc = crc ^ PROTO_CRC_POLINOM;
+			}
+		}
+	}
+	return crc;
+}
+
+
+// -----------------------------------------------------------------------------
+volatile bool cmd_recv_timed_out = false;
+
+INLINE void recvTimerStop(bool flag) {
+	Timer1.stop();
+	cmd_recv_timed_out = flag;
+}
+
+INLINE void resetCmdRecvTimeout() {
+	recvTimerStop(false);
+	Timer1.initialize(CMD_RECV_TIMEOUT);
+}
+
+INLINE void sendCmdResponse(uint8_t code=0) {
+	static uint8_t prev_code = PROTO_RESP_NONE;
+	if (code == 0) {
+		code = prev_code; // Repeat the last code
+	} else {
+		prev_code = code;
+	}
+
+	uint8_t buffer[4];
+	buffer[0] = PROTO_MAGIC;
+	buffer[1] = code;
+	uint16_t crc = makeCrc16(buffer, 2);
+	buffer[2] = (uint8_t)(crc >> 8);
+	buffer[3] = (uint8_t)(crc & 0xFF);
+
+	recvTimerStop(false);
+	CMD_SERIAL.write(buffer, 4);
+}
+
+void intRecvTimedOut() {
+	recvTimerStop(true);
+}
+
 void setup() {
-	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
 	BootKeyboard.begin();
 	SingleAbsoluteMouse.begin();
+
+	Timer1.attachInterrupt(intRecvTimedOut);
+	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
 }
 
 void loop() {
-	static unsigned long last_report = 0;
-	bool cmd_processed = false;
+	uint8_t buffer[8];
+	unsigned index = 0;
 
-	if (CMD_SERIAL.available() >= 5) {
-		switch ((uint8_t)CMD_SERIAL.read()) {
-			case 0: cmdResetHid(); break;
-			case 1: cmdKeyEvent(); break;
-			case 2: cmdMouseMoveEvent(); break;
-			case 3: cmdMouseButtonEvent(); break;
-			case 4: cmdMouseWheelEvent(); break;
-			default: readNoop(); break;
+	while (true) {
+		if (CMD_SERIAL.available() > 0) {
+			buffer[index] = (uint8_t)CMD_SERIAL.read();
+			if (index == 7) {
+				uint16_t crc = (uint16_t)buffer[6] << 8;
+				crc |= (uint16_t)buffer[7];
+
+				if (makeCrc16(buffer, 6) == crc) {
+#	define HANDLE(_handler) { _handler(buffer + 2); sendCmdResponse(PROTO_RESP_OK); break; }
+					switch (buffer[1]) {
+						case PROTO_CMD_RESET_HID:			HANDLE(cmdResetHid);
+						case PROTO_CMD_KEY_EVENT:			HANDLE(cmdKeyEvent);
+						case PROTO_CMD_MOUSE_MOVE_EVENT:	HANDLE(cmdMouseMoveEvent);
+						case PROTO_CMD_MOUSE_BUTTON_EVENT:	HANDLE(cmdMouseButtonEvent);
+						case PROTO_CMD_MOUSE_WHEEL_EVENT:	HANDLE(cmdMouseWheelEvent);
+
+						case PROTO_CMD_PING:	sendCmdResponse(PROTO_RESP_OK); break;
+						case PROTO_CMD_REPEAT:	sendCmdResponse(); break;
+						default:				sendCmdResponse(PROTO_RESP_INVALID_ERROR); break;
+					}
+#	undef HANDLE
+				} else {
+					sendCmdResponse(PROTO_RESP_CRC_ERROR);
+				}
+				index = 0;
+			} else {
+				resetCmdRecvTimeout();
+				index += 1;
+			}
+		} else if (index > 0 && cmd_recv_timed_out) {
+			sendCmdResponse(PROTO_RESP_TIMEOUT_ERROR);
+			index = 0;
 		}
-		cmd_processed = true;
-	}
-
-	unsigned long now = millis();
-	if (
-		cmd_processed
-		|| (now >= last_report && now - last_report >= REPORT_INTERVAL)
-		|| (now < last_report && ((unsigned long) -1) - last_report + now >= REPORT_INTERVAL)
-	) {
-		CMD_SERIAL.write(0);
-		last_report = now;
 	}
 }

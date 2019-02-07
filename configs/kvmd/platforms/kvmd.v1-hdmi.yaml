@@ -19,9 +19,16 @@ kvmd:
         pinout:
             reset: 4
 
+        reset_delay: 0.1
+
         device: "/dev/kvmd-hid"
         speed: 115200
-        reset_delay: 0.1
+        read_timeout: 2.0
+        read_retries: 10
+        common_retries: 100
+        retries_delay: 0.1
+
+        state_poll: 1.0
 
     atx:
         pinout:

@@ -84,6 +84,8 @@ function Session() {
 		} else if (event.msg_type === "event") {
 			if (event.msg.event === "info_state") {
 				__setKvmdInfo(event.msg.event_attrs);
+			} else if (event.msg.event === "hid_state") {
+				__hid.setState(event.msg.event_attrs);
 			} else if (event.msg.event === "atx_state") {
 				__atx.setState(event.msg.event_attrs);
 			} else if (event.msg.event === "msd_state") {

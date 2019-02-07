@@ -4,6 +4,7 @@ function Keyboard() {
 	/********************************************************************************/
 
 	var __ws = null;
+	var __ok = true;
 
 	var __keys = [].slice.call($$$("div#keyboard-desktop div.keyboard-block div.keyboard-row div.key"));
 	var __modifiers = [].slice.call($$$("div#keyboard-desktop div.keyboard-block div.keyboard-row div.modifier"));
@@ -53,6 +54,10 @@ function Keyboard() {
 		__updateLeds();
 	};
 
+	self.setState = function(state) {
+		__ok = state.ok;
+	};
+
 	self.releaseAll = function() {
 		__keys.concat(__modifiers).forEach(function(el_key) {
 			if (__isActive(el_key)) {
@@ -73,8 +78,13 @@ function Keyboard() {
 				|| $("keyboard-window").classList.contains("window-active")
 			)
 		) {
-			$("hid-keyboard-led").className = "led-green";
-			$("hid-keyboard-led").title = "Keyboard captured";
+			if (__ok) {
+				$("hid-keyboard-led").className = "led-green";
+				$("hid-keyboard-led").title = "Keyboard captured";
+			} else {
+				$("hid-keyboard-led").className = "led-yellow";
+				$("hid-keyboard-led").title = "Keyboard captured, HID offline";
+			}
 		} else {
 			$("hid-keyboard-led").className = "led-gray";
 			$("hid-keyboard-led").title = "Keyboard free";

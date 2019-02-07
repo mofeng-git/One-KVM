@@ -144,6 +144,7 @@ def _system_task(method: Callable) -> Callable:
     async def wrap(self: "Server") -> None:
         try:
             await method(self)
+            raise RuntimeError("Dead system task: %s" % (method))
         except asyncio.CancelledError:
             pass
         except Exception:
@@ -201,6 +202,7 @@ def _valid_int(name: str, value: Optional[str], min_value: Optional[int]=None, m
 
 class _Events(Enum):
     INFO_STATE = "info_state"
+    HID_STATE = "hid_state"
     ATX_STATE = "atx_state"
     MSD_STATE = "msd_state"
     STREAMER_STATE = "streamer_state"
@@ -357,6 +359,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         await self.__register_socket(ws)
         await asyncio.gather(*[
             self.__broadcast_event(_Events.INFO_STATE, (await self.__make_info())),
+            self.__broadcast_event(_Events.HID_STATE, self.__hid.get_state()),
             self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state()),
             self.__broadcast_event(_Events.MSD_STATE, self.__msd.get_state()),
             self.__broadcast_event(_Events.STREAMER_STATE, (await self.__streamer.get_state())),
@@ -568,12 +571,6 @@ class Server:  # pylint: disable=too-many-instance-attributes
     # ===== SYSTEM TASKS
 
     @_system_task
-    async def __hid_watchdog(self) -> None:
-        while self.__hid.is_alive():
-            await asyncio.sleep(0.1)
-        raise RuntimeError("HID is dead")
-
-    @_system_task
     async def __stream_controller(self) -> None:
         prev = 0
         shutdown_at = 0.0
@@ -605,6 +602,11 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 if ws.closed or ws._req is None or ws._req.transport is None:  # pylint: disable=protected-access
                     await self.__remove_socket(ws)
             await asyncio.sleep(0.1)
+
+    @_system_task
+    async def __poll_hid_state(self) -> None:
+        async for state in self.__hid.poll_state():
+            await self.__broadcast_event(_Events.HID_STATE, state)
 
     @_system_task
     async def __poll_atx_state(self) -> None:

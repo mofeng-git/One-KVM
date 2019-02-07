@@ -35,9 +35,18 @@ def main() -> None:
 
         hid = Hid(
             reset=int(config["hid"]["pinout"]["reset"]),
+
+            reset_delay=float(config["hid"]["reset_delay"]),
+
             device_path=str(config["hid"]["device"]),
             speed=int(config["hid"]["speed"]),
-            reset_delay=float(config["hid"]["reset_delay"]),
+            read_timeout=float(config["hid"]["read_timeout"]),
+            read_retries=int(config["hid"]["read_retries"]),
+            common_retries=int(config["hid"]["common_retries"]),
+            retries_delay=float(config["hid"]["retries_delay"]),
+            noop=bool(config["hid"].get("noop", False)),
+
+            state_poll=float(config["hid"]["state_poll"]),
         )
 
         atx = Atx(

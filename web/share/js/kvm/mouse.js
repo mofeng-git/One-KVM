@@ -4,6 +4,7 @@ function Mouse() {
 	/********************************************************************************/
 
 	var __ws = null;
+	var __ok = true;
 
 	var __current_pos = {x: 0, y:0};
 	var __sent_pos = {x: 0, y:0};
@@ -44,6 +45,10 @@ function Mouse() {
 		__updateLeds();
 	};
 
+	self.setState = function(state) {
+		__ok = state.ok;
+	};
+
 	var __hoverStream = function() {
 		__stream_hovered = true;
 		__updateLeds();
@@ -57,8 +62,13 @@ function Mouse() {
 	var __updateLeds = function() {
 		if (__ws && (__stream_hovered || tools.browser.is_ios)) {
 			// Mouse is always available on iOS via touchscreen
-			$("hid-mouse-led").className = "led-green";
-			$("hid-mouse-led").title = "Mouse tracked";
+			if (__ok) { 
+				$("hid-mouse-led").className = "led-green";
+				$("hid-mouse-led").title = "Mouse tracked";
+			} else {
+				$("hid-mouse-led").className = "led-yellow";
+				$("hid-mouse-led").title = "Mouse tracked, HID offline";
+			}
 		} else {
 			$("hid-mouse-led").className = "led-gray";
 			$("hid-mouse-led").title = "Mouse free";

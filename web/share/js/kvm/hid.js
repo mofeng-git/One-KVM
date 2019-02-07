@@ -62,6 +62,11 @@ function Hid() {
 		__mouse.setSocket(ws);
 	};
 
+	self.setState = function(state) {
+		__keyboard.setState(state);
+		__mouse.setState(state);
+	};
+
 	var __releaseAll = function() {
 		__keyboard.releaseAll();
 	};
