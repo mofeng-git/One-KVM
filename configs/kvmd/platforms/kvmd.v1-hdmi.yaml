@@ -5,30 +5,11 @@ kvmd:
     server:
         host: 127.0.0.1
         port: 8081
-        heartbeat: 3.0
-        access_log_format: "[%P / %{X-Real-IP}i] '%r' => %s; size=%b --- referer='%{Referer}i'; user_agent='%{User-Agent}i'"
-
-    auth:
-        htpasswd: /etc/kvmd/htpasswd
-
-    info:
-        meta: /etc/kvmd/meta.yaml
-        extras: /usr/share/kvmd/extras
 
     hid:
         pinout:
             reset: 4
-
-        reset_delay: 0.1
-
-        device: "/dev/kvmd-hid"
-        speed: 115200
-        read_timeout: 2.0
-        read_retries: 10
-        common_retries: 100
-        retries_delay: 0.1
-
-        state_poll: 1.0
+        device: /dev/kvmd-hid
 
     atx:
         pinout:
@@ -37,39 +18,15 @@ kvmd:
             power_switch: 23
             reset_switch: 27
 
-        click_delay: 0.1
-        long_click_delay: 5.5
-        state_poll: 0.1
-
     msd:
         pinout:
             target: 12
             reset: 13
-
-        device: "/dev/kvmd-msd"
-        init_delay: 2.0
-        reset_delay: 1.0
-        write_meta: true
-        chunk_size: 65536
+        device: /dev/kvmd-msd
 
     streamer:
-        pinout:
-            cap: -1
-            conv: -1
-
-        sync_delay: 0.0
-        init_delay: 1.0
-        init_restart_after: 0.0
-        shutdown_delay: 10.0
-        state_poll: 1.0
-
-        quality: 80
-        desired_fps: 0
-
         host: 127.0.0.1
         port: 8082
-        timeout: 2.0
-
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"

@@ -22,12 +22,12 @@ def main() -> None:
         loop = asyncio.get_event_loop()
 
         auth_manager = AuthManager(
-            htpasswd_path=str(config["auth"]["htpasswd"]),
+            htpasswd_path=str(config.get("auth", {}).get("htpasswd", "/etc/kvmd/htpasswd")),
         )
 
         info_manager = InfoManager(
-            meta_path=str(config["info"]["meta"]),
-            extras_path=str(config["info"]["extras"]),
+            meta_path=str(config.get("info", {}).get("meta", "/etc/kvmd/meta.yaml")),
+            extras_path=str(config.get("info", {}).get("extras", "/usr/share/kvmd/extras")),
             loop=loop,
         )
 
@@ -35,18 +35,17 @@ def main() -> None:
 
         hid = Hid(
             reset=int(config["hid"]["pinout"]["reset"]),
-
-            reset_delay=float(config["hid"]["reset_delay"]),
+            reset_delay=float(config["hid"].get("reset_delay", 0.1)),
 
             device_path=str(config["hid"]["device"]),
-            speed=int(config["hid"]["speed"]),
-            read_timeout=float(config["hid"]["read_timeout"]),
-            read_retries=int(config["hid"]["read_retries"]),
-            common_retries=int(config["hid"]["common_retries"]),
-            retries_delay=float(config["hid"]["retries_delay"]),
+            speed=int(config["hid"].get("speed", 115200)),
+            read_timeout=float(config["hid"].get("read_timeout", 2)),
+            read_retries=int(config["hid"].get("read_retries", 10)),
+            common_retries=int(config["hid"].get("common_retries", 100)),
+            retries_delay=float(config["hid"].get("retries_delay", 0.1)),
             noop=bool(config["hid"].get("noop", False)),
 
-            state_poll=float(config["hid"]["state_poll"]),
+            state_poll=float(config["hid"].get("state_poll", 0.1)),
         )
 
         atx = Atx(
@@ -55,9 +54,9 @@ def main() -> None:
 
             power_switch=int(config["atx"]["pinout"]["power_switch"]),
             reset_switch=int(config["atx"]["pinout"]["reset_switch"]),
-            click_delay=float(config["atx"]["click_delay"]),
-            long_click_delay=float(config["atx"]["long_click_delay"]),
-            state_poll=float(config["atx"]["state_poll"]),
+            click_delay=float(config["atx"].get("click_delay", 0.1)),
+            long_click_delay=float(config["atx"].get("long_click_delay", 5.5)),
+            state_poll=float(config["atx"].get("state_poll", 0.1)),
         )
 
         msd = MassStorageDevice(
@@ -65,28 +64,28 @@ def main() -> None:
             reset=int(config["msd"]["pinout"]["reset"]),
 
             device_path=str(config["msd"]["device"]),
-            init_delay=float(config["msd"]["init_delay"]),
-            reset_delay=float(config["msd"]["reset_delay"]),
-            write_meta=bool(config["msd"]["write_meta"]),
+            init_delay=float(config["msd"].get("init_delay", 2)),
+            reset_delay=float(config["msd"].get("reset_delay", 1)),
+            write_meta=bool(config["msd"].get("write_meta", True)),
 
             loop=loop,
         )
 
         streamer = Streamer(
-            cap_power=int(config["streamer"]["pinout"]["cap"]),
-            conv_power=int(config["streamer"]["pinout"]["conv"]),
-            sync_delay=float(config["streamer"]["sync_delay"]),
-            init_delay=float(config["streamer"]["init_delay"]),
-            init_restart_after=float(config["streamer"]["init_restart_after"]),
-            state_poll=float(config["streamer"]["state_poll"]),
+            cap_power=int(config["streamer"].get("pinout", {}).get("cap", -1)),
+            conv_power=int(config["streamer"].get("pinout", {}).get("conv", -1)),
+            sync_delay=float(config["streamer"].get("sync_delay", 1)),
+            init_delay=float(config["streamer"].get("init_delay", 1)),
+            init_restart_after=float(config["streamer"].get("init_restart_after", 0)),
+            state_poll=float(config["streamer"].get("state_poll", 1)),
 
-            quality=int(config["streamer"]["quality"]),
-            desired_fps=int(config["streamer"]["desired_fps"]),
+            quality=int(config["streamer"].get("quality", 80)),
+            desired_fps=int(config["streamer"].get("desired_fps", 0)),
 
             host=str(config["streamer"].get("host", "localhost")),
             port=int(config["streamer"].get("port", 0)),
             unix_path=str(config["streamer"].get("unix", "")),
-            timeout=float(config["streamer"]["timeout"]),
+            timeout=float(config["streamer"].get("timeout", 2)),
 
             cmd=list(map(str, config["streamer"]["cmd"])),
 
@@ -103,10 +102,13 @@ def main() -> None:
             msd=msd,
             streamer=streamer,
 
-            access_log_format=str(config["server"]["access_log_format"]),
-            heartbeat=float(config["server"]["heartbeat"]),
-            streamer_shutdown_delay=float(config["streamer"]["shutdown_delay"]),
-            msd_chunk_size=int(config["msd"]["chunk_size"]),
+            access_log_format=str(config["server"].get(
+                "access_log_format",
+                "[%P / %{X-Real-IP}i] '%r' => %s; size=%b --- referer='%{Referer}i'; user_agent='%{User-Agent}i'",
+            )),
+            heartbeat=float(config["server"].get("heartbeat", 3)),
+            streamer_shutdown_delay=float(config["streamer"].get("shutdown_delay", 10)),
+            msd_chunk_size=int(config["msd"].get("chunk_size", 65536)),
 
             loop=loop,
         ).run(
