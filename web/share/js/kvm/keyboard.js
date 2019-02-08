@@ -72,24 +72,30 @@ function Keyboard() {
 	};
 
 	var __updateLeds = function() {
-		tools.debug("Keyboard: update leds");
-		if (
-			__ws && (
-				$("stream-window").classList.contains("window-active")
-				|| $("keyboard-window").classList.contains("window-active")
-			)
-		) {
+		var is_captured = (
+			$("stream-window").classList.contains("window-active")
+			|| $("keyboard-window").classList.contains("window-active")
+		);
+		var led = "led-gray";
+		var title = "Keyboard free";
+
+		if (__ws) {
 			if (__ok) {
-				$("hid-keyboard-led").className = "led-green";
-				$("hid-keyboard-led").title = "Keyboard captured";
+				if (is_captured) {
+					led = "led-green";
+					title = "Keyboard captured";
+				}
 			} else {
-				$("hid-keyboard-led").className = "led-yellow";
-				$("hid-keyboard-led").title = "Keyboard captured, HID offline";
+				led = "led-yellow";
+				title = (is_captured ? "Keyboard captured, HID offline" : "Keyboard free, HID offline");
 			}
 		} else {
-			$("hid-keyboard-led").className = "led-gray";
-			$("hid-keyboard-led").title = "Keyboard free";
+			if (is_captured) {
+				title = "Keyboard captured, Pi-KVM offline";
+			}
 		}
+		$("hid-keyboard-led").className = led;
+		$("hid-keyboard-led").title = title;
 	};
 
 	var __keyboardHandler = function(event, state) {

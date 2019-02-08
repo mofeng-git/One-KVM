@@ -61,19 +61,27 @@ function Mouse() {
 	};
 
 	var __updateLeds = function() {
-		if (__ws && (__stream_hovered || tools.browser.is_ios)) {
-			// Mouse is always available on iOS via touchscreen
-			if (__ok) { 
-				$("hid-mouse-led").className = "led-green";
-				$("hid-mouse-led").title = "Mouse tracked";
+		var is_captured = (__stream_hovered || tools.browser.is_ios);
+		var led = "led-gray";
+		var title = "Mouse free";
+
+		if (__ws) {
+			if (__ok) {
+				if (is_captured) {
+					led = "led-green";
+					title = "Mouse captured";
+				}
 			} else {
-				$("hid-mouse-led").className = "led-yellow";
-				$("hid-mouse-led").title = "Mouse tracked, HID offline";
+				led = "led-yellow";
+				title = (is_captured ? "Mouse captured, HID offline" : "Mouse free, HID offline");
 			}
 		} else {
-			$("hid-mouse-led").className = "led-gray";
-			$("hid-mouse-led").title = "Mouse free";
+			if (is_captured) {
+				title = "Mouse captured, Pi-KVM offline";
+			}
 		}
+		$("hid-mouse-led").className = led;
+		$("hid-mouse-led").title = title;
 	};
 
 	var __buttonHandler = function(event, state) {
