@@ -6,7 +6,7 @@ from typing import Dict
 import dbus  # pylint: disable=import-error
 import dbus.exceptions  # pylint: disable=import-error
 
-from ...yaml import load_yaml_file
+from ...yamlconf.loader import load_yaml_file
 
 
 # =====

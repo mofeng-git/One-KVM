@@ -21,6 +21,7 @@ depends=(
 	python-setproctitle
 	python-systemd
 	python-dbus
+	python-pygments
 	v4l-utils
 )
 makedepends=(python-setuptools)

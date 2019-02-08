@@ -17,77 +17,77 @@ from .server import Server
 
 # =====
 def main() -> None:
-    config = init()["kvmd"]
+    config = init()[2].kvmd
     with gpio.bcm():
         loop = asyncio.get_event_loop()
 
         auth_manager = AuthManager(
-            htpasswd_path=str(config.get("auth", {}).get("htpasswd", "/etc/kvmd/htpasswd")),
+            htpasswd_path=config.auth.htpasswd,
         )
 
         info_manager = InfoManager(
-            meta_path=str(config.get("info", {}).get("meta", "/etc/kvmd/meta.yaml")),
-            extras_path=str(config.get("info", {}).get("extras", "/usr/share/kvmd/extras")),
+            meta_path=config.info.meta,
+            extras_path=config.info.extras,
             loop=loop,
         )
 
         log_reader = LogReader(loop)
 
         hid = Hid(
-            reset=int(config["hid"]["pinout"]["reset"]),
-            reset_delay=float(config["hid"].get("reset_delay", 0.1)),
+            reset=config.hid.pinout.reset,
+            reset_delay=config.hid.reset_delay,
 
-            device_path=str(config["hid"]["device"]),
-            speed=int(config["hid"].get("speed", 115200)),
-            read_timeout=float(config["hid"].get("read_timeout", 2)),
-            read_retries=int(config["hid"].get("read_retries", 10)),
-            common_retries=int(config["hid"].get("common_retries", 100)),
-            retries_delay=float(config["hid"].get("retries_delay", 0.1)),
-            noop=bool(config["hid"].get("noop", False)),
+            device_path=config.hid.device,
+            speed=config.hid.speed,
+            read_timeout=config.hid.read_timeout,
+            read_retries=config.hid.read_retries,
+            common_retries=config.hid.common_retries,
+            retries_delay=config.hid.retries_delay,
+            noop=config.hid.noop,
 
-            state_poll=float(config["hid"].get("state_poll", 0.1)),
+            state_poll=config.hid.state_poll,
         )
 
         atx = Atx(
-            power_led=int(config["atx"]["pinout"]["power_led"]),
-            hdd_led=int(config["atx"]["pinout"]["hdd_led"]),
+            power_led=config.atx.pinout.power_led,
+            hdd_led=config.atx.pinout.hdd_led,
+            power_switch=config.atx.pinout.power_switch,
+            reset_switch=config.atx.pinout.reset_switch,
 
-            power_switch=int(config["atx"]["pinout"]["power_switch"]),
-            reset_switch=int(config["atx"]["pinout"]["reset_switch"]),
-            click_delay=float(config["atx"].get("click_delay", 0.1)),
-            long_click_delay=float(config["atx"].get("long_click_delay", 5.5)),
-            state_poll=float(config["atx"].get("state_poll", 0.1)),
+            click_delay=config.atx.click_delay,
+            long_click_delay=config.atx.long_click_delay,
+            state_poll=config.atx.state_poll,
         )
 
         msd = MassStorageDevice(
-            target=int(config["msd"]["pinout"]["target"]),
-            reset=int(config["msd"]["pinout"]["reset"]),
+            target=config.msd.pinout.target,
+            reset=config.msd.pinout.reset,
 
-            device_path=str(config["msd"]["device"]),
-            init_delay=float(config["msd"].get("init_delay", 2)),
-            reset_delay=float(config["msd"].get("reset_delay", 1)),
-            write_meta=bool(config["msd"].get("write_meta", True)),
+            device_path=config.msd.device,
+            init_delay=config.msd.init_delay,
+            reset_delay=config.msd.reset_delay,
+            write_meta=config.msd.write_meta,
 
             loop=loop,
         )
 
         streamer = Streamer(
-            cap_power=int(config["streamer"].get("pinout", {}).get("cap", -1)),
-            conv_power=int(config["streamer"].get("pinout", {}).get("conv", -1)),
-            sync_delay=float(config["streamer"].get("sync_delay", 1)),
-            init_delay=float(config["streamer"].get("init_delay", 1)),
-            init_restart_after=float(config["streamer"].get("init_restart_after", 0)),
-            state_poll=float(config["streamer"].get("state_poll", 1)),
+            cap_power=config.streamer.pinout.cap,
+            conv_power=config.streamer.pinout.conv,
+            sync_delay=config.streamer.sync_delay,
+            init_delay=config.streamer.init_delay,
+            init_restart_after=config.streamer.init_restart_after,
+            state_poll=config.streamer.state_poll,
 
-            quality=int(config["streamer"].get("quality", 80)),
-            desired_fps=int(config["streamer"].get("desired_fps", 0)),
+            quality=config.streamer.quality,
+            desired_fps=config.streamer.desired_fps,
 
-            host=str(config["streamer"].get("host", "localhost")),
-            port=int(config["streamer"].get("port", 0)),
-            unix_path=str(config["streamer"].get("unix", "")),
-            timeout=float(config["streamer"].get("timeout", 2)),
+            host=config.streamer.host,
+            port=config.streamer.port,
+            unix_path=config.streamer.unix,
+            timeout=config.streamer.timeout,
 
-            cmd=list(map(str, config["streamer"]["cmd"])),
+            cmd=config.streamer.cmd,
 
             loop=loop,
         )
@@ -102,21 +102,18 @@ def main() -> None:
             msd=msd,
             streamer=streamer,
 
-            access_log_format=str(config["server"].get(
-                "access_log_format",
-                "[%P / %{X-Real-IP}i] '%r' => %s; size=%b --- referer='%{Referer}i'; user_agent='%{User-Agent}i'",
-            )),
-            heartbeat=float(config["server"].get("heartbeat", 3)),
-            streamer_shutdown_delay=float(config["streamer"].get("shutdown_delay", 10)),
-            msd_chunk_size=int(config["msd"].get("chunk_size", 65536)),
+            access_log_format=config.server.access_log_format,
+            heartbeat=config.server.heartbeat,
+            streamer_shutdown_delay=config.streamer.shutdown_delay,
+            msd_chunk_size=config.msd.chunk_size,
 
             loop=loop,
         ).run(
-            host=str(config["server"].get("host", "localhost")),
-            port=int(config["server"].get("port", 0)),
-            unix_path=str(config["server"].get("unix", "")),
-            unix_rm=bool(config["server"].get("unix_rm", False)),
-            unix_mode=int(config["server"].get("unix_mode", 0)),
+            host=config.server.host,
+            port=config.server.port,
+            unix_path=config.server.unix,
+            unix_rm=config.server.unix_rm,
+            unix_mode=config.server.unix_mode,
         )
 
     get_logger().info("Bye-bye")

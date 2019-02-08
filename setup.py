@@ -18,6 +18,7 @@ def main() -> None:
 
         packages=[
             "kvmd",
+            "kvmd.yamlconf",
             "kvmd.apps",
             "kvmd.apps.kvmd",
             "kvmd.apps.cleanup",
