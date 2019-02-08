@@ -21,8 +21,8 @@ def main() -> None:
             ("msd_reset", config["msd"]["pinout"]["reset"]),
             ("atx_power_switch", config["atx"]["pinout"]["power_switch"]),
             ("atx_reset_switch", config["atx"]["pinout"]["reset_switch"]),
-            ("streamer_cap", config["streamer"]["pinout"]["cap"]),
-            ("streamer_conv", config["streamer"]["pinout"]["conv"]),
+            ("streamer_cap", config["streamer"]["pinout"].get("cap", -1)),
+            ("streamer_conv", config["streamer"]["pinout"].get("conv", -1)),
         ]:
             if pin > 0:
                 logger.info("Writing value=0 to pin=%d (%s)", pin, name)
