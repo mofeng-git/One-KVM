@@ -12,7 +12,7 @@ TESTENV_CMD ?= /bin/bash -c " \
 		&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 		&& (losetup -d /dev/kvmd-msd || true) \
 		&& losetup /dev/kvmd-msd /root/loop.img \
-		&& python -m kvmd.apps.kvmd -c /etc/kvmd/kvmd.yaml \
+		&& python -m kvmd.apps.kvmd \
 	"
 
 

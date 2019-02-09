@@ -21,6 +21,7 @@ def main() -> None:
             "kvmd.yamlconf",
             "kvmd.apps",
             "kvmd.apps.kvmd",
+            "kvmd.apps.htpasswd",
             "kvmd.apps.cleanup",
         ],
 
@@ -31,6 +32,7 @@ def main() -> None:
         entry_points={
             "console_scripts": [
                 "kvmd = kvmd.apps.kvmd:main",
+                "kvmd-htpasswd = kvmd.apps.htpasswd:main",
                 "kvmd-cleanup = kvmd.apps.cleanup:main",
             ],
         },

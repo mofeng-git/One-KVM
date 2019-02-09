@@ -23,8 +23,8 @@ from .yamlconf.loader import load_yaml_file
 
 
 # =====
-def init() -> Tuple[argparse.ArgumentParser, List[str], Section]:
-    args_parser = argparse.ArgumentParser(add_help=False)
+def init(prog: str=sys.argv[0], add_help: bool=True) -> Tuple[argparse.ArgumentParser, List[str], Section]:
+    args_parser = argparse.ArgumentParser(prog=prog, add_help=add_help)
     args_parser.add_argument("-c", "--config", dest="config_path", default="/etc/kvmd/kvmd.yaml", metavar="<file>")
     args_parser.add_argument("-o", "--set-options", dest="set_options", default=[], nargs="+")
     args_parser.add_argument("-m", "--dump-config", dest="dump_config", action="store_true")
