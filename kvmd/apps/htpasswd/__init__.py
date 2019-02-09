@@ -12,7 +12,7 @@ import passlib.apache
 
 from ...yamlconf import Section
 
-from ...application import init
+from .. import init
 
 
 # =====

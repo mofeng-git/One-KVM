@@ -1,9 +1,10 @@
 import asyncio
 
-from ...application import init
 from ...logging import get_logger
 
 from ... import gpio
+
+from .. import init
 
 from .auth import AuthManager
 from .info import InfoManager

@@ -2,10 +2,11 @@ import os
 import subprocess
 import time
 
-from ...application import init
 from ...logging import get_logger
 
 from ... import gpio
+
+from .. import init
 
 
 # =====
