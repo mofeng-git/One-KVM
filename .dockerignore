@@ -1,0 +1,3 @@
+/testenv/.tox/
+/testenv/.mypy_cache/
+/.git/
