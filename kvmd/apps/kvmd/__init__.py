@@ -18,7 +18,7 @@ from .server import Server
 
 # =====
 def main() -> None:
-    config = init("kvmd")[2].kvmd
+    config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
     with gpio.bcm():
         loop = asyncio.get_event_loop()
 

@@ -8,6 +8,7 @@ from typing import Tuple
 from typing import List
 from typing import Dict
 from typing import Sequence
+from typing import Optional
 from typing import Union
 
 import pygments
@@ -23,11 +24,19 @@ from ..yamlconf.loader import load_yaml_file
 
 
 # =====
-def init(prog: str=sys.argv[0], add_help: bool=True) -> Tuple[argparse.ArgumentParser, List[str], Section]:
-    args_parser = argparse.ArgumentParser(prog=prog, add_help=add_help)
-    args_parser.add_argument("-c", "--config", dest="config_path", default="/etc/kvmd/kvmd.yaml", metavar="<file>")
-    args_parser.add_argument("-o", "--set-options", dest="set_options", default=[], nargs="+")
-    args_parser.add_argument("-m", "--dump-config", dest="dump_config", action="store_true")
+def init(
+    prog: str=sys.argv[0],
+    description: Optional[str]=None,
+    add_help: bool=True,
+) -> Tuple[argparse.ArgumentParser, List[str], Section]:
+
+    args_parser = argparse.ArgumentParser(prog=prog, description=description, add_help=add_help)
+    args_parser.add_argument("-c", "--config", dest="config_path", default="/etc/kvmd/kvmd.yaml", metavar="<file>",
+                             help="Set config file path")
+    args_parser.add_argument("-o", "--set-options", dest="set_options", default=[], nargs="+",
+                             help="Override config options list (like sec/sub/opt=value)")
+    args_parser.add_argument("-m", "--dump-config", dest="dump_config", action="store_true",
+                             help="View current configuration (include all overrides)")
     (options, remaining) = args_parser.parse_known_args(sys.argv)
 
     options.config_path = os.path.expanduser(options.config_path)

@@ -11,7 +11,7 @@ from .. import init
 
 # =====
 def main() -> None:
-    config = init("kvmd-cleanup")[2].kvmd
+    config = init("kvmd-cleanup", description="Kill KVMD and clear resources")[2].kvmd
     logger = get_logger(0)
 
     logger.info("Cleaning up ...")
