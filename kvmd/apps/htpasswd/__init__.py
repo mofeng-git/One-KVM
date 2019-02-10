@@ -19,11 +19,17 @@ from .. import init
 @contextlib.contextmanager
 def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.HtpasswdFile, None, None]:
     path = config.kvmd.auth.htpasswd
-    (tmp_fd, tmp_path) = tempfile.mkstemp(prefix=".", dir=os.path.dirname(path))
+    (tmp_fd, tmp_path) = tempfile.mkstemp(
+        prefix=".%s." % (os.path.basename(path)),
+        dir=os.path.dirname(path),
+    )
     try:
+        stat = os.stat(path)
         try:
             with open(path, "rb") as htpasswd_file:
                 os.write(tmp_fd, htpasswd_file.read())
+                os.fchown(tmp_fd, stat.st_uid, stat.st_gid)
+                os.fchmod(tmp_fd, stat.st_mode)
         finally:
             os.close(tmp_fd)
         htpasswd = passlib.apache.HtpasswdFile(tmp_path)
