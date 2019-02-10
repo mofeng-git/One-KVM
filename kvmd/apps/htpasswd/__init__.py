@@ -55,13 +55,13 @@ def _cmd_list(config: Section, _: argparse.Namespace) -> None:
 
 
 def _cmd_set(config: Section, options: argparse.Namespace) -> None:
-    if options.read_stdin:
-        passwd = input()
-    else:
-        passwd = getpass.getpass("Password: ", stream=sys.stderr)
-        if getpass.getpass("Repeat: ", stream=sys.stderr) != passwd:
-            raise SystemExit("Sorry, passwords do not match")
     with _get_htpasswd_for_write(config) as htpasswd:
+        if options.read_stdin:
+            passwd = input()
+        else:
+            passwd = getpass.getpass("Password: ", stream=sys.stderr)
+            if getpass.getpass("Repeat: ", stream=sys.stderr) != passwd:
+                raise SystemExit("Sorry, passwords do not match")
         htpasswd.set_password(options.user, passwd)
 
 
