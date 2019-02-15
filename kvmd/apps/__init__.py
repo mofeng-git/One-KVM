@@ -111,87 +111,83 @@ def _get_config_scheme() -> Dict:
     return {
         "kvmd": {
             "server": {
-                "host": Option(default="localhost"),
-                "port": Option(default=0),
-                "unix": Option(default="", type=_as_optional_path),
-                "unix_rm": Option(default=False),
-                "unix_mode": Option(default=0),
-                "heartbeat": Option(default=3.0),
-                "access_log_format": Option(default="[%P / %{X-Real-IP}i] '%r' => %s; size=%b ---"
-                                                    " referer='%{Referer}i'; user_agent='%{User-Agent}i'"),
+                "host":              Option("localhost"),
+                "port":              Option(0),
+                "unix":              Option("", type=_as_optional_path, rename="unix_path"),
+                "unix_rm":           Option(False),
+                "unix_mode":         Option(0),
+                "heartbeat":         Option(3.0),
+                "access_log_format": Option("[%P / %{X-Real-IP}i] '%r' => %s; size=%b ---"
+                                            " referer='%{Referer}i'; user_agent='%{User-Agent}i'"),
             },
 
             "auth": {
-                "htpasswd": Option(default="/etc/kvmd/htpasswd", type=_as_path),
+                "htpasswd": Option("/etc/kvmd/htpasswd", type=_as_path, rename="htpasswd_path"),
             },
 
             "info": {
-                "meta":   Option(default="/etc/kvmd/meta.yaml", type=_as_path),
-                "extras": Option(default="/usr/share/kvmd/extras", type=_as_path),
+                "meta":   Option("/etc/kvmd/meta.yaml", type=_as_path, rename="meta_path"),
+                "extras": Option("/usr/share/kvmd/extras", type=_as_path, rename="extras_path"),
             },
 
             "hid": {
-                "pinout": {
-                    "reset": Option(default=0, type=_as_pin),
-                },
-                "reset_delay":    Option(default=0.1),
-                "device":         Option(default="", type=_as_path),
-                "speed":          Option(default=115200),
-                "read_timeout":   Option(default=2.0),
-                "read_retries":   Option(default=10),
-                "common_retries": Option(default=100),
-                "retries_delay":  Option(default=0.1),
-                "noop":           Option(default=False),
-                "state_poll":     Option(default=0.1),
+                "reset_pin":   Option(0, type=_as_pin),
+                "reset_delay": Option(0.1),
+
+                "device":         Option("", type=_as_path, rename="device_path"),
+                "speed":          Option(115200),
+                "read_timeout":   Option(2.0),
+                "read_retries":   Option(10),
+                "common_retries": Option(100),
+                "retries_delay":  Option(0.1),
+                "noop":           Option(False),
+
+                "state_poll": Option(0.1),
             },
 
             "atx": {
-                "pinout": {
-                    "power_led":    Option(default=0, type=_as_pin),
-                    "hdd_led":      Option(default=0, type=_as_pin),
-                    "power_switch": Option(default=0, type=_as_pin),
-                    "reset_switch": Option(default=0, type=_as_pin),
-                },
-                "click_delay":      Option(default=0.1),
-                "long_click_delay": Option(default=5.5),
-                "state_poll":       Option(default=0.1),
+                "power_led_pin": Option(0, type=_as_pin),
+                "hdd_led_pin":   Option(0, type=_as_pin),
+
+                "power_switch_pin": Option(0, type=_as_pin),
+                "reset_switch_pin": Option(0, type=_as_pin),
+                "click_delay":      Option(0.1),
+                "long_click_delay": Option(5.5),
+
+                "state_poll": Option(0.1),
             },
 
             "msd": {
-                "pinout": {
-                    "target": Option(default=0, type=_as_pin),
-                    "reset":  Option(default=0, type=_as_pin),
-                },
-                "device":      Option(default="", type=_as_path),
-                "init_delay":  Option(default=2.0),
-                "reset_delay": Option(default=1.0),
-                "write_meta":  Option(default=True),
-                "chunk_size":  Option(default=65536),
+                "target_pin":  Option(0, type=_as_pin),
+                "reset_pin":   Option(0, type=_as_pin),
+                "device":      Option("", type=_as_path, rename="device_path"),
+                "init_delay":  Option(2.0),
+                "reset_delay": Option(1.0),
+                "write_meta":  Option(True),
+                "chunk_size":  Option(65536),
             },
 
             "streamer": {
-                "pinout": {
-                    "cap":  Option(default=-1, type=_as_optional_pin),
-                    "conv": Option(default=-1, type=_as_optional_pin),
-                },
+                "cap_pin":  Option(-1, type=_as_optional_pin),
+                "conv_pin": Option(-1, type=_as_optional_pin),
 
-                "sync_delay":         Option(default=1.0),
-                "init_delay":         Option(default=1.0),
-                "init_restart_after": Option(default=0.0),
-                "shutdown_delay":     Option(default=10.0),
-                "state_poll":         Option(default=1.0),
+                "sync_delay":         Option(1.0),
+                "init_delay":         Option(1.0),
+                "init_restart_after": Option(0.0),
+                "shutdown_delay":     Option(10.0),
+                "state_poll":         Option(1.0),
 
-                "quality":     Option(default=80),
-                "desired_fps": Option(default=0),
+                "quality":     Option(80),
+                "desired_fps": Option(0),
 
-                "host":    Option(default="localhost"),
-                "port":    Option(default=0),
-                "unix":    Option(default="", type=_as_optional_path),
-                "timeout": Option(default=2.0),
+                "host":    Option("localhost"),
+                "port":    Option(0),
+                "unix":    Option("", type=_as_optional_path, rename="unix_path"),
+                "timeout": Option(2.0),
 
-                "cmd": Option(default=["/bin/true"], type=_as_string_list),
+                "cmd": Option(["/bin/true"], type=_as_string_list),
             },
         },
 
-        "logging": Option(default={}),
+        "logging": Option({}),
     }

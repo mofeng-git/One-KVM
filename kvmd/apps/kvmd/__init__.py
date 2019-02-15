@@ -20,101 +20,18 @@ from .server import Server
 def main() -> None:
     config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
     with gpio.bcm():
+        # pylint: disable=protected-access
         loop = asyncio.get_event_loop()
-
-        auth_manager = AuthManager(
-            htpasswd_path=config.auth.htpasswd,
-        )
-
-        info_manager = InfoManager(
-            meta_path=config.info.meta,
-            extras_path=config.info.extras,
-            loop=loop,
-        )
-
-        log_reader = LogReader(loop)
-
-        hid = Hid(
-            reset=config.hid.pinout.reset,
-            reset_delay=config.hid.reset_delay,
-
-            device_path=config.hid.device,
-            speed=config.hid.speed,
-            read_timeout=config.hid.read_timeout,
-            read_retries=config.hid.read_retries,
-            common_retries=config.hid.common_retries,
-            retries_delay=config.hid.retries_delay,
-            noop=config.hid.noop,
-
-            state_poll=config.hid.state_poll,
-        )
-
-        atx = Atx(
-            power_led=config.atx.pinout.power_led,
-            hdd_led=config.atx.pinout.hdd_led,
-            power_switch=config.atx.pinout.power_switch,
-            reset_switch=config.atx.pinout.reset_switch,
-
-            click_delay=config.atx.click_delay,
-            long_click_delay=config.atx.long_click_delay,
-            state_poll=config.atx.state_poll,
-        )
-
-        msd = MassStorageDevice(
-            target=config.msd.pinout.target,
-            reset=config.msd.pinout.reset,
-
-            device_path=config.msd.device,
-            init_delay=config.msd.init_delay,
-            reset_delay=config.msd.reset_delay,
-            write_meta=config.msd.write_meta,
-
-            loop=loop,
-        )
-
-        streamer = Streamer(
-            cap_power=config.streamer.pinout.cap,
-            conv_power=config.streamer.pinout.conv,
-            sync_delay=config.streamer.sync_delay,
-            init_delay=config.streamer.init_delay,
-            init_restart_after=config.streamer.init_restart_after,
-            state_poll=config.streamer.state_poll,
-
-            quality=config.streamer.quality,
-            desired_fps=config.streamer.desired_fps,
-
-            host=config.streamer.host,
-            port=config.streamer.port,
-            unix_path=config.streamer.unix,
-            timeout=config.streamer.timeout,
-
-            cmd=config.streamer.cmd,
-
-            loop=loop,
-        )
-
         Server(
-            auth_manager=auth_manager,
-            info_manager=info_manager,
-            log_reader=log_reader,
+            auth_manager=AuthManager(**config.auth._unpack_renamed()),
+            info_manager=InfoManager(loop=loop, **config.info._unpack_renamed()),
+            log_reader=LogReader(loop=loop),
 
-            hid=hid,
-            atx=atx,
-            msd=msd,
-            streamer=streamer,
-
-            access_log_format=config.server.access_log_format,
-            heartbeat=config.server.heartbeat,
-            streamer_shutdown_delay=config.streamer.shutdown_delay,
-            msd_chunk_size=config.msd.chunk_size,
+            hid=Hid(**config.hid._unpack_renamed()),
+            atx=Atx(**config.atx._unpack_renamed()),
+            msd=MassStorageDevice(loop=loop, **config.msd._unpack_renamed()),
+            streamer=Streamer(loop=loop, **config.streamer._unpack_renamed()),
 
             loop=loop,
-        ).run(
-            host=config.server.host,
-            port=config.server.port,
-            unix_path=config.server.unix,
-            unix_rm=config.server.unix_rm,
-            unix_mode=config.server.unix_mode,
-        )
-
+        ).run(**config.server._unpack_renamed())
     get_logger().info("Bye-bye")

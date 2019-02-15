@@ -209,7 +209,7 @@ class _Events(Enum):
 
 
 class Server:  # pylint: disable=too-many-instance-attributes
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self,
         auth_manager: AuthManager,
         info_manager: InfoManager,
@@ -219,11 +219,6 @@ class Server:  # pylint: disable=too-many-instance-attributes
         atx: Atx,
         msd: MassStorageDevice,
         streamer: Streamer,
-
-        access_log_format: str,
-        heartbeat: float,
-        streamer_shutdown_delay: float,
-        msd_chunk_size: int,
 
         loop: asyncio.AbstractEventLoop,
     ) -> None:
@@ -237,13 +232,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__msd = msd
         self.__streamer = streamer
 
-        self.__access_log_format = access_log_format
-        self.__heartbeat = heartbeat
-        self.__streamer_shutdown_delay = streamer_shutdown_delay
-        self.__msd_chunk_size = msd_chunk_size
-
         self.__loop = loop
 
+        self.__heartbeat: Optional[float] = None  # Assigned in run() for consistance
         self.__sockets: Set[aiohttp.web.WebSocketResponse] = set()
         self.__sockets_lock = asyncio.Lock()
 
@@ -252,11 +243,22 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__reset_streamer = False
         self.__streamer_params = streamer.get_params()
 
-    def run(self, host: str, port: int, unix_path: str, unix_rm: bool, unix_mode: int) -> None:
+    def run(
+        self,
+        host: str,
+        port: int,
+        unix_path: str,
+        unix_rm: bool,
+        unix_mode: int,
+        heartbeat: float,
+        access_log_format: str,
+    ) -> None:
+
         self.__hid.start()
 
         setproctitle.setproctitle("[main] " + setproctitle.getproctitle())
 
+        self.__heartbeat = heartbeat
         app = aiohttp.web.Application(loop=self.__loop)
         app.on_shutdown.append(self.__on_shutdown)
         app.on_cleanup.append(self.__on_cleanup)
@@ -290,7 +292,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         aiohttp.web.run_app(
             app=app,
-            access_log_format=self.__access_log_format,
+            access_log_format=access_log_format,
             print=self.__run_app_print,
             **socket_kwargs,
         )
@@ -354,6 +356,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
     @_exposed("GET", "/ws")
     async def __ws_handler(self, request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
         logger = get_logger(0)
+        assert self.__heartbeat is not None
         ws = aiohttp.web.WebSocketResponse(heartbeat=self.__heartbeat)
         await ws.prepare(request)
         await self.__register_socket(ws)
@@ -476,7 +479,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 logger.info("Writing image %r to mass-storage device ...", image_name)
                 await self.__msd.write_image_info(image_name, False)
                 while True:
-                    chunk = await field.read_chunk(self.__msd_chunk_size)
+                    chunk = await field.read_chunk(self.__msd.chunk_size)
                     if not chunk:
                         break
                     written = await self.__msd.write_image_chunk(chunk)
@@ -581,7 +584,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 if not self.__streamer.is_running():
                     await self.__streamer.start(self.__streamer_params)
             elif prev > 0 and cur == 0:
-                shutdown_at = time.time() + self.__streamer_shutdown_delay
+                shutdown_at = time.time() + self.__streamer.shutdown_delay
             elif prev == 0 and cur == 0 and time.time() > shutdown_at:
                 if self.__streamer.is_running():
                     await self.__streamer.stop()

@@ -85,7 +85,7 @@ class _MouseWheelEvent(NamedTuple):
 class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments
         self,
-        reset: int,
+        reset_pin: int,
         reset_delay: float,
 
         device_path: str,
@@ -101,7 +101,7 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
 
         super().__init__(daemon=True)
 
-        self.__reset = gpio.set_output(reset)
+        self.__reset_pin = gpio.set_output(reset_pin)
         self.__reset_delay = reset_delay
 
         self.__device_path = device_path
@@ -137,9 +137,9 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
 
     async def reset(self) -> None:
         async with self.__lock:
-            gpio.write(self.__reset, True)
+            gpio.write(self.__reset_pin, True)
             await asyncio.sleep(self.__reset_delay)
-            gpio.write(self.__reset, False)
+            gpio.write(self.__reset_pin, False)
 
     async def send_key_event(self, key: str, state: bool) -> None:
         if not self.__stop_event.is_set():
@@ -188,7 +188,7 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
             else:
                 get_logger().warning("Emergency cleaning up HID events ...")
                 self.__emergency_clear_events()
-            gpio.write(self.__reset, False)
+            gpio.write(self.__reset_pin, False)
 
     def __unsafe_clear_events(self) -> None:
         for button in self.__pressed_mouse_buttons:

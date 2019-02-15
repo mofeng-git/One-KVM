@@ -4,28 +4,24 @@ kvmd:
         port: 8081
 
     hid:
-        pinout:
-            reset: 4
+        reset_pin: 4
         device: /dev/ttyS10
         noop: true
 
     atx:
-        pinout:
-            power_led: 24
-            hdd_led: 22
-            power_switch: 23
-            reset_switch: 27
+        power_led_pin: 24
+        hdd_led_pin: 22
+        power_switch_pin: 23
+        reset_switch_pin: 27
 
     msd:
-        pinout:
-            target: 12
-            reset: 13
+        target_pin: 12
+        reset_pin: 13
         device: /dev/kvmd-msd
 
     streamer:
-        pinout:
-            cap: 17
-            conv: 18
+        cap_pin: 17
+        conv_pin: 18
         init_restart_after: 1
         host: 127.0.0.1
         port: 8082

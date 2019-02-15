@@ -44,35 +44,52 @@ class Section(dict):
         dict.__init__(self)
         self.__meta: Dict[str, Dict[str, Any]] = {}
 
-    def _set_meta(self, name: str, default: Any, help: str) -> None:  # pylint: disable=redefined-builtin
-        self.__meta[name] = {
+    def _unpack_renamed(self) -> Dict[str, Any]:
+        unpacked: Dict[str, Any] = {}
+        for (key, value) in self.items():
+            assert not isinstance(value, Section), (key, value)
+            key = (self.__meta[key]["rename"] or key)
+            unpacked[key] = value
+        return unpacked
+
+    def _set_meta(self, key: str, default: Any, help: str, rename: str) -> None:  # pylint: disable=redefined-builtin
+        self.__meta[key] = {
             "default": default,
             "help":    help,
+            "rename":  rename,
         }
 
-    def _get_default(self, name: str) -> Any:
-        return self.__meta[name]["default"]
+    def _get_default(self, key: str) -> Any:
+        return self.__meta[key]["default"]
 
-    def _get_help(self, name: str) -> str:
-        return self.__meta[name]["help"]
+    def _get_help(self, key: str) -> str:
+        return self.__meta[key]["help"]
 
-    def __getattribute__(self, name: str) -> Any:
-        if name in self:
-            return self[name]
+    def __getattribute__(self, key: str) -> Any:
+        if key in self:
+            return self[key]
         else:  # For pickling
-            return dict.__getattribute__(self, name)
+            return dict.__getattribute__(self, key)
 
 
 class Option:
     __type = type
 
-    def __init__(self, default: Any, help: str="", type: Optional[Callable[[Any], Any]]=None) -> None:  # pylint: disable=redefined-builtin
+    def __init__(
+        self,
+        default: Any,
+        help: str="",  # pylint: disable=redefined-builtin
+        type: Optional[Callable[[Any], Any]]=None,  # pylint: disable=redefined-builtin
+        rename: str="",
+    ) -> None:
+
         self.default = default
         self.help = help
         self.type: Callable[[Any], Any] = (type or (self.__type(default) if default is not None else str))  # type: ignore
+        self.rename = rename
 
     def __repr__(self) -> str:
-        return "<Option(default={self.default}, type={self.type}, help={self.help})>".format(self=self)
+        return "<Option(default={self.default}, type={self.type}, help={self.help}, rename={self.rename})>".format(self=self)
 
 
 # =====
@@ -93,9 +110,10 @@ def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, .
                 raise ValueError("Invalid value '{value}' for key '{key}'".format(key=full_name, value=value))
             config[key] = value
             config._set_meta(  # pylint: disable=protected-access
-                name=key,
+                key=key,
                 default=option.default,
                 help=option.help,
+                rename=option.rename,
             )
         elif isinstance(option, dict):
             config[key] = make_config(raw.get(key, {}), option, full_key)

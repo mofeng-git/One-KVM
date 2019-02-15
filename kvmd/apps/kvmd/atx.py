@@ -17,21 +17,22 @@ class AtxIsBusy(aioregion.RegionIsBusyError):
 class Atx:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
-        power_led: int,
-        hdd_led: int,
-        power_switch: int,
-        reset_switch: int,
+        power_led_pin: int,
+        hdd_led_pin: int,
 
+        power_switch_pin: int,
+        reset_switch_pin: int,
         click_delay: float,
         long_click_delay: float,
+
         state_poll: float,
     ) -> None:
 
-        self.__power_led = gpio.set_input(power_led)
-        self.__hdd_led = gpio.set_input(hdd_led)
+        self.__power_led_pin = gpio.set_input(power_led_pin)
+        self.__hdd_led_pin = gpio.set_input(hdd_led_pin)
 
-        self.__power_switch = gpio.set_output(power_switch)
-        self.__reset_switch = gpio.set_output(reset_switch)
+        self.__power_switch_pin = gpio.set_output(power_switch_pin)
+        self.__reset_switch_pin = gpio.set_output(reset_switch_pin)
         self.__click_delay = click_delay
         self.__long_click_delay = long_click_delay
 
@@ -43,8 +44,8 @@ class Atx:  # pylint: disable=too-many-instance-attributes
         return {
             "busy": self.__region.is_busy(),
             "leds": {
-                "power": (not gpio.read(self.__power_led)),
-                "hdd": (not gpio.read(self.__hdd_led)),
+                "power": (not gpio.read(self.__power_led_pin)),
+                "hdd": (not gpio.read(self.__hdd_led_pin)),
             },
         }
 
@@ -55,15 +56,15 @@ class Atx:  # pylint: disable=too-many-instance-attributes
 
     async def click_power(self) -> None:
         get_logger().info("Clicking power ...")
-        await self.__click(self.__power_switch, self.__click_delay)
+        await self.__click(self.__power_switch_pin, self.__click_delay)
 
     async def click_power_long(self) -> None:
         get_logger().info("Clicking power (long press) ...")
-        await self.__click(self.__power_switch, self.__long_click_delay)
+        await self.__click(self.__power_switch_pin, self.__long_click_delay)
 
     async def click_reset(self) -> None:
         get_logger().info("Clicking reset")
-        await self.__click(self.__reset_switch, self.__click_delay)
+        await self.__click(self.__reset_switch_pin, self.__click_delay)
 
     async def __click(self, pin: int, delay: float) -> None:
         self.__region.enter()

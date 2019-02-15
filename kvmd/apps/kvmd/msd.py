@@ -167,24 +167,26 @@ def _msd_operated(method: Callable) -> Callable:
 class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
-        target: int,
-        reset: int,
+        target_pin: int,
+        reset_pin: int,
 
         device_path: str,
         init_delay: float,
         reset_delay: float,
         write_meta: bool,
+        chunk_size: int,
 
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
-        self.__target = gpio.set_output(target)
-        self.__reset = gpio.set_output(reset)
+        self.__target_pin = gpio.set_output(target_pin)
+        self.__reset_pin = gpio.set_output(reset_pin)
 
         self._device_path = device_path
         self.__init_delay = init_delay
         self.__reset_delay = reset_delay
         self.__write_meta = write_meta
+        self.chunk_size = chunk_size
 
         self.__loop = loop
 
@@ -236,15 +238,15 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     async def cleanup(self) -> None:
         await self.__close_device_file()
-        gpio.write(self.__target, False)
-        gpio.write(self.__reset, False)
+        gpio.write(self.__target_pin, False)
+        gpio.write(self.__reset_pin, False)
 
     @_msd_operated
     async def connect_to_kvm(self, no_delay: bool=False) -> Dict:
         with self.__region:
             if self.__device_info:
                 raise MsdAlreadyConnectedToKvmError()
-            gpio.write(self.__target, False)
+            gpio.write(self.__target_pin, False)
             if not no_delay:
                 await asyncio.sleep(self.__init_delay)
             await self.__load_device_info()
@@ -258,7 +260,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         with self.__region:
             if not self.__device_info:
                 raise MsdAlreadyConnectedToPcError()
-            gpio.write(self.__target, True)
+            gpio.write(self.__target_pin, True)
             self.__device_info = None
             state = self.get_state()
             await self.__state_queue.put(state)
@@ -269,9 +271,9 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     async def reset(self) -> None:
         with self.__region:
             get_logger().info("Mass-storage device reset")
-            gpio.write(self.__reset, True)
+            gpio.write(self.__reset_pin, True)
             await asyncio.sleep(self.__reset_delay)
-            gpio.write(self.__reset, False)
+            gpio.write(self.__reset_pin, False)
             await self.__state_queue.put(self.get_state())
 
     @_msd_operated
