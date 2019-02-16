@@ -27,11 +27,11 @@ def main() -> None:
                     js_key=parts[2],
                 ))
 
-    with open("kvmd/data/keymap.yaml", "w") as kvmd_yaml_file:
+    with open("kvmd/data/keymap.yaml", "w") as keymap_yaml_file:
         yaml.dump({
             km.js_key: km.kvmd_code
             for km in keymap
-        }, kvmd_yaml_file, indent=4, default_flow_style=False)
+        }, keymap_yaml_file, indent=4, default_flow_style=False)
 
     with open("hid/src/keymap.h", "w") as hid_header_file:
         hid_header_file.write("#pragma once\n\n#include <HID-Project.h>\n\n#include \"inline.h\"\n\n\n")
