@@ -9,8 +9,8 @@ Type=simple
 Restart=always
 RestartSec=3
 
-ExecStart=/usr/bin/kvmd --config /etc/kvmd/kvmd.yaml
-ExecStopPost=/usr/bin/kvmd-cleanup --config /etc/kvmd/kvmd.yaml
+ExecStart=/usr/bin/kvmd
+ExecStopPost=/usr/bin/kvmd-cleanup
 
 [Install]
 WantedBy=multi-user.target

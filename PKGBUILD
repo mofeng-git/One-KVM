@@ -43,13 +43,13 @@ package() {
 	python setup.py install --root="$pkgdir"
 
 	mkdir -p "$pkgdir/usr/lib/systemd/system"
-	cp configs/systemd/*.service "$pkgdir/usr/lib/systemd/system"
+	cp configs/os/systemd/*.service "$pkgdir/usr/lib/systemd/system"
 
 	mkdir -p "$pkgdir/usr/share/kvmd"
 	cp -r web "$pkgdir/usr/share/kvmd"
 	cp -r extras "$pkgdir/usr/share/kvmd"
 	cp -r configs "$pkgdir/usr/share/kvmd/configs.default"
-	rm -rf "$pkgdir/usr/share/kvmd/configs.default/systemd"
+	rm -rf "$pkgdir/usr/share/kvmd/configs.default/os/systemd"
 	sed -i -e "s/^#PROD//g" "$pkgdir/usr/share/kvmd/configs.default/nginx/nginx.conf"
 	find "$pkgdir" -name ".gitignore" -delete
 	find "$pkgdir/usr/share/kvmd/configs.default" -type f -exec chmod 444 '{}' \;

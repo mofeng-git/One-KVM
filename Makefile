@@ -85,7 +85,7 @@ _run: _testenv
 			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/nginx \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/htpasswd /etc/kvmd \
-			&& cp /testenv/kvmd.yaml /etc/kvmd \
+			&& cp /testenv/main.yaml /etc/kvmd \
 			&& nginx -c /etc/nginx/nginx.conf \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 			&& (losetup -d /dev/kvmd-msd || true) \

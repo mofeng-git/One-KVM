@@ -31,7 +31,7 @@ def init(
 ) -> Tuple[argparse.ArgumentParser, List[str], Section]:
 
     args_parser = argparse.ArgumentParser(prog=prog, description=description, add_help=add_help)
-    args_parser.add_argument("-c", "--config", dest="config_path", default="/etc/kvmd/kvmd.yaml", metavar="<file>",
+    args_parser.add_argument("-c", "--config", dest="config_path", default="/etc/kvmd/main.yaml", metavar="<file>",
                              help="Set config file path")
     args_parser.add_argument("-o", "--set-options", dest="set_options", default=[], nargs="+",
                              help="Override config options list (like sec/sub/opt=value)")
