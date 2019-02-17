@@ -36,6 +36,10 @@ depends=(
 	nginx-mainline
 	openssl
 )
+optdepends=(
+	dkms
+	tc358743-dkms
+)
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
 md5sums=(SKIP)
@@ -100,10 +104,7 @@ for _platform in $_PLATFORMS; do
 			ln -sf \"$_cfgdir/os/modules-load/$_platform.conf\" \"$pkgdir/etc/modules-load.d/pikvm.conf\"
 
 			ln -sf \"$_cfgdir/kvmd/main/$_platform.yaml\" \"$pkgdir/etc/kvmd/main.yaml\"
-			if [ $_platform == v1-hdmi ]; then
-				depends+=(dkms tc358743-dkms)
-				ln -sf \"$_cfgdir/kvmd/tc358743-edid.hex\" \"$pkgdir/etc/kvmd/tc358743-edid.hex\"
-			fi
+			[ $_platform == v1-hdmi ] && ln -sf \"$_cfgdir/kvmd/tc358743-edid.hex\" \"$pkgdir/etc/kvmd/tc358743-edid.hex\"
 		}"
 	done
 done
