@@ -11,7 +11,7 @@ mkdir -p /etc/kvmd/nginx/ssl
 cd /etc/kvmd/nginx/ssl
 
 openssl req -new -x509 -nodes -newkey rsa:4096 -keyout server.key -out server.crt -days 3650 \
-	subj "/C=RU/ST=Moscow/L=Moscow/O=Pi-KVM/OU=Pi-KVM/CN=localhost"
+	-subj "/C=RU/ST=Moscow/L=Moscow/O=Pi-KVM/OU=Pi-KVM/CN=localhost"
 chown -R root:http /etc/kvmd/nginx/ssl
 
 chmod 400 server.key
