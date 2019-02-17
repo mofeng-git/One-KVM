@@ -2,8 +2,8 @@
 # Author: Maxim Devaev <mdevaev@gmail.com>
 
 
-_PLATFORMS="v1-vga v1-hdmi"
-_BOARDS="rpi2 rpi3"
+[ -n "$_PLATFORMS" ] || _PLATFORMS="v1-vga v1-hdmi"
+[ -n "$_BOARDS" ] || _BOARDS="rpi2 rpi3"
 
 
 pkgname=(kvmd)
