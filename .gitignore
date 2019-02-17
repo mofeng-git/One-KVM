@@ -1,7 +1,14 @@
+/pkg/
+/src/
+/site/
 /build/
 /dist/
 /kvmd.egg-info/
 /testenv/.tox/
 /testenv/.mypy_cache/
+/v*.tar.gz
+/*.pkg.tar.xz
+/*.egg-info
+/*kvmd-*.tar.gz
 *.pyc
 *.swp

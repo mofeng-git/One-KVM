@@ -2,7 +2,17 @@
 # Author: Maxim Devaev <mdevaev@gmail.com>
 
 
-pkgname=kvmd
+_PLATFORMS="v1-vga v1-hdmi"
+_BOARDS="rpi2 rpi3"
+
+
+pkgname=(kvmd)
+for _platform in $_PLATFORMS; do
+	for _board in $_BOARDS; do
+		pkgname+=(kvmd-platform-$_platform-$_board)
+	done
+done
+pkgbase=kvmd
 pkgver=0.128
 pkgrel=1
 pkgdesc="The main Pi-KVM daemon"
@@ -23,37 +33,57 @@ depends=(
 	python-dbus
 	python-pygments
 	v4l-utils
+	nginx
 )
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
 md5sums=(SKIP)
-install=$pkgname.install
 
 
 build() {
-	cd $srcdir
+	cd "$srcdir"
 	rm -rf $pkgname-build
 	cp -r kvmd-$pkgver $pkgname-build
 	cd $pkgname-build
 	python setup.py build
 }
 
-package() {
-	cd $srcdir/$pkgname-build
+package_kvmd() {
+	install=$pkgname.install
+
+	cd "$srcdir/$pkgname-build"
 	python setup.py install --root="$pkgdir"
 
 	mkdir -p "$pkgdir/usr/lib/systemd/system"
 	cp configs/os/systemd/*.service "$pkgdir/usr/lib/systemd/system"
 
+	_cfgdir="$pkgdir/usr/share/kvmd/configs.default"
 	mkdir -p "$pkgdir/usr/share/kvmd"
 	cp -r web "$pkgdir/usr/share/kvmd"
 	cp -r extras "$pkgdir/usr/share/kvmd"
-	cp -r configs "$pkgdir/usr/share/kvmd/configs.default"
-	rm -rf "$pkgdir/usr/share/kvmd/configs.default/os/systemd"
-	sed -i -e "s/^#PROD//g" "$pkgdir/usr/share/kvmd/configs.default/nginx/nginx.conf"
-	find "$pkgdir" -name ".gitignore" -delete
-	find "$pkgdir/usr/share/kvmd/configs.default" -type f -exec chmod 444 '{}' \;
-	chmod 440 "$pkgdir/usr/share/kvmd/configs.default/kvmd/htpasswd"
+	cp -r configs "$_cfgdir"
 
-	mkdir -p "$pkgdir/etc/kvmd"
+	rm -rf "$_cfgdir/os/systemd"
+	find "$pkgdir" -name ".gitignore" -delete
+	sed -i -e "s/^#PROD//g" "$_cfgdir/nginx/nginx.conf"
+	find "$_cfgdir" -type f -exec chmod 444 '{}' \;
+	chmod 440 "$_cfgdir/kvmd/htpasswd"
+
+	mkdir -p "$pkgdir/etc/kvmd/nginx"
+	for path in "$_cfgdir/nginx/*.conf"; do
+		ln -sf "/usr/share/kvmd/configs.default/nginx/`basename $path`" "$pkgdir/etc/kvmd/nginx"
+	done
 }
+
+export pkgdir
+for _platform in $_PLATFORMS; do
+	for _board in $_BOARDS; do
+		eval "package_kvmd-platform-$_platform-$_board() {
+			mkdir -p \"$pkgdir/etc/\"{sysctl.d,udev/rules.d,modules-load.d}
+			_osdir=\"/usr/share/kvmd/configs.default/os\"
+			ln -sf \"$_osdir/sysctl.conf\" \"$pkgdir/etc/sysctl.d/99-pikvm.conf\"
+			ln -sf \"$_osdir/udev/$_platform-$_board.rules\" \"$pkgdir/etc/udev/rules.d/99-pikvm.rules\"
+			ln -sf \"$_osdir/modules-load/$_platform.conf\" \"$pkgdir/etc/modules-load.d/pikvm.conf\"
+		}"
+	done
+done
