@@ -1,5 +1,8 @@
 post_install() {
 	id kvmd &>/dev/null || useradd -r -c "The main Pi-KVM daemon" -s /sbin/nologin kvmd
+	groupmems -g gpio -a kvmd
+	groupmems -g uucp -a kvmd
+	groupmems -g systemd-journal -a kvmd
 
 	chown root:kvmd \
 		/usr/share/kvmd/configs.default/kvmd/htpasswd \

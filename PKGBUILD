@@ -35,6 +35,7 @@ depends=(
 	v4l-utils
 	nginx-mainline
 	openssl
+	raspberrypi-io-access
 )
 optdepends=(
 	dkms
