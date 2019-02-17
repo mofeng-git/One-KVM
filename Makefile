@@ -82,11 +82,11 @@ _run: _testenv
 			--publish 8082:8082/tcp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
 			(socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
-			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/nginx \
+			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/kvmd/nginx \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/htpasswd /etc/kvmd \
 			&& cp /testenv/main.yaml /etc/kvmd \
-			&& nginx -c /etc/nginx/nginx.conf \
+			&& nginx -c /etc/kvmd/nginx/nginx.conf \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 			&& (losetup -d /dev/kvmd-msd || true) \
 			&& losetup /dev/kvmd-msd /root/loop.img \

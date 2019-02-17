@@ -50,7 +50,6 @@ RUN pacman -Syy \
 COPY testenv/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
-RUN rm -rf /etc/nginx/* \
-	&& mkdir /etc/kvmd
+RUN mkdir -p /etc/kvmd/nginx
 
 CMD /bin/bash

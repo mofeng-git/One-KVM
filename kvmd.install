@@ -1,5 +1,16 @@
 post_install() {
 	id kvmd &>/dev/null || useradd -r -c "The main Pi-KVM daemon" -s /sbin/nologin kvmd
+
+	chown root:kvmd \
+		/usr/share/kvmd/configs.default/kvmd/htpasswd \
+		/etc/kvmd/htpasswd
+
+	cd /etc/kvmd/nginx/ssl
+	openssl req -new -x509 -nodes -newkey rsa:4096 -keyout server.key -out server.crt -days 3650 \
+		-subj "/C=RU/ST=Moscow/L=Moscow/O=Pi-KVM/OU=Pi-KVM/CN=localhost"
+	chown -R root:http /etc/kvmd/nginx/ssl
+	chmod 400 server.key
+	chmod 444 server.crt
 }
 
 post_remove() {
