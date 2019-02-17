@@ -104,7 +104,9 @@ for _platform in $_PLATFORMS; do
 			ln -sf \"$_cfgdir/os/modules-load/$_platform.conf\" \"$pkgdir/etc/modules-load.d/pikvm.conf\"
 
 			ln -sf \"$_cfgdir/kvmd/main/$_platform.yaml\" \"$pkgdir/etc/kvmd/main.yaml\"
-			[ $_platform == v1-hdmi ] && ln -sf \"$_cfgdir/kvmd/tc358743-edid.hex\" \"$pkgdir/etc/kvmd/tc358743-edid.hex\"
+			if [ $_platform == v1-hdmi ]; then
+				ln -sf \"$_cfgdir/kvmd/tc358743-edid.hex\" \"$pkgdir/etc/kvmd/tc358743-edid.hex\"
+			fi
 		}"
 	done
 done
