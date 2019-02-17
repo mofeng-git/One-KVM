@@ -59,6 +59,7 @@ package_kvmd() {
 
 	cd "$srcdir/$pkgname-build"
 	python setup.py install --root="$pkgdir"
+	install -Dm755 scripts/* "$pkgdir/usr/bin"
 
 	mkdir -p "$pkgdir/usr/lib/systemd/system"
 	cp configs/os/systemd/*.service "$pkgdir/usr/lib/systemd/system"

@@ -1,0 +1,19 @@
+#!/bin/bash
+set -x
+set -e
+
+if [ `whoami` != root ]; then
+	echo "Only root can do that"
+	exit 1
+fi
+
+mkdir -p /etc/kvmd/nginx/ssl
+cd /etc/kvmd/nginx/ssl
+
+openssl req -new -x509 -nodes -newkey rsa:4096 -keyout server.key -out server.crt -days 3650 \
+	subj "/C=RU/ST=Moscow/L=Moscow/O=Pi-KVM/OU=Pi-KVM/CN=localhost"
+chown -R root:http /etc/kvmd/nginx/ssl
+
+chmod 400 server.key
+chmod 444 server.crt
+chmod 750 /etc/kvmd/nginx/ssl
