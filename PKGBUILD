@@ -53,6 +53,7 @@ build() {
 	python setup.py build
 }
 
+
 package_kvmd() {
 	install=$pkgname.install
 
@@ -89,23 +90,23 @@ package_kvmd() {
 	done
 }
 
-export pkgdir
+
 for _platform in $_PLATFORMS; do
 	for _board in $_BOARDS; do
 		eval "package_kvmd-platform-$_platform-$_board() {
 			pkgdesc=\"Pi-KVM platform configs - $_platform for $_board\"
 
-			mkdir -p \"$pkgdir/etc/\"{sysctl.d,udev/rules.d,modules-load.d}
+			mkdir -p \"\$pkgdir/etc/\"{kvmd,sysctl.d,udev/rules.d,modules-load.d}
 
 			_cfgdir=\"/usr/share/kvmd/configs.default/os\"
 
-			ln -sf \"$_cfgdir/os/sysctl.conf\" \"$pkgdir/etc/sysctl.d/99-pikvm.conf\"
-			ln -sf \"$_cfgdir/os/udev/$_platform-$_board.rules\" \"$pkgdir/etc/udev/rules.d/99-pikvm.rules\"
-			ln -sf \"$_cfgdir/os/modules-load/$_platform.conf\" \"$pkgdir/etc/modules-load.d/pikvm.conf\"
+			ln -sf \"\$_cfgdir/os/sysctl.conf\" \"\$pkgdir/etc/sysctl.d/99-pikvm.conf\"
+			ln -sf \"\$_cfgdir/os/udev/$_platform-$_board.rules\" \"\$pkgdir/etc/udev/rules.d/99-pikvm.rules\"
+			ln -sf \"\$_cfgdir/os/modules-load/$_platform.conf\" \"\$pkgdir/etc/modules-load.d/pikvm.conf\"
 
-			ln -sf \"$_cfgdir/kvmd/main/$_platform.yaml\" \"$pkgdir/etc/kvmd/main.yaml\"
+			ln -sf \"\$_cfgdir/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
 			if [ $_platform == v1-hdmi ]; then
-				ln -sf \"$_cfgdir/kvmd/tc358743-edid.hex\" \"$pkgdir/etc/kvmd/tc358743-edid.hex\"
+				ln -sf \"\$_cfgdir/kvmd/tc358743-edid.hex\" \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 			fi
 		}"
 	done
