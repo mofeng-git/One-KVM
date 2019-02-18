@@ -6,6 +6,8 @@ kvmd:
         host: 127.0.0.1
         port: 8081
 
+    auth: !include auth.yaml
+
     hid:
         reset_pin: 4
         device: /dev/kvmd-hid

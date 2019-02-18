@@ -3,6 +3,8 @@ kvmd:
         host: 0.0.0.0
         port: 8081
 
+    auth: !include auth.yaml
+
     hid:
         reset_pin: 4
         device: /dev/ttyS10
