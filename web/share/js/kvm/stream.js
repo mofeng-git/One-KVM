@@ -1,7 +1,29 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The The main Pi-KVM daemon.                                      #
+#                                                                            #
+#    Copyright (C) 2018  Maxim Devaev <mdevaev@gmail.com>                    #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
 function Streamer() {
 	var self = this;
 
-	/********************************************************************************/
+	/************************************************************************/
 
 	var __resolution = {width: 640, height: 480};
 	var __size_factor = 1;
@@ -36,7 +58,7 @@ function Streamer() {
 		tools.setOnClick($("stream-reset-button"), __clickResetButton);
 	};
 
-	/********************************************************************************/
+	/************************************************************************/
 
 	self.setState = function(state) {
 		if (state && state.state) {
