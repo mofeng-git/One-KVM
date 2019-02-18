@@ -84,8 +84,8 @@ package_kvmd() {
 	for path in "$_cfgdir/kvmd"/*.yaml; do
 		ln -sf "/usr/share/kvmd/configs.default/kvmd/`basename $path`" "$pkgdir/etc/kvmd"
 	done
-	rm "$pkgdir/etc/kvmd/meta.yaml"
-	cp "$_cfgdir/kvmd/meta.yaml" "$pkgdir/etc/kvmd"
+	rm "$pkgdir/etc/kvmd"/{auth.yaml,meta.yaml}
+	cp "$_cfgdir/kvmd"/{auth.yaml,meta.yaml} "$pkgdir/etc/kvmd"
 	cp -a "$_cfgdir/kvmd/htpasswd" "$pkgdir/etc/kvmd"
 	for path in "$_cfgdir/nginx"/*.conf; do
 		ln -sf "/usr/share/kvmd/configs.default/nginx/`basename $path`" "$pkgdir/etc/kvmd/nginx"
@@ -98,7 +98,7 @@ for _platform in $_PLATFORMS; do
 		eval "package_kvmd-platform-$_platform-$_board() {
 			pkgdesc=\"Pi-KVM platform configs - $_platform for $_board\"
 
-			mkdir -p \"\$pkgdir/etc/\"{kvmd,sysctl.d,udev/rules.d,modules-load.d}
+			mkdir -p \"\$pkgdir/etc\"/{kvmd,sysctl.d,udev/rules.d,modules-load.d}
 
 			_cfgdir=\"/usr/share/kvmd/configs.default\"
 
