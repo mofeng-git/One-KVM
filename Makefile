@@ -18,6 +18,8 @@ tox: _testenv
 
 run:
 	make _run TESTENV_CMD="python -m kvmd.apps.kvmd"
+run-cleanup:
+	make _run TESTENV_CMD="python -m kvmd.apps.cleanup"
 run-no-cache:
 	make _run TESTENV_CMD="python -m kvmd.apps.kvmd" TESTENV_OPTS=--no-cache
 

@@ -39,13 +39,13 @@ def main() -> None:
     logger.info("Cleaning up ...")
     with gpio.bcm():
         for (name, pin) in [
-            ("hid_reset", config.hid.pinout.reset),
-            ("msd_target", config.msd.pinout.target),
-            ("msd_reset", config.msd.pinout.reset),
-            ("atx_power_switch", config.atx.pinout.power_switch),
-            ("atx_reset_switch", config.atx.pinout.reset_switch),
-            ("streamer_cap", config.streamer.pinout.cap),
-            ("streamer_conv", config.streamer.pinout.conv),
+            ("hid_reset_pin", config.hid.reset_pin),
+            ("msd_target_pin", config.msd.target_pin),
+            ("msd_reset_pin", config.msd.reset_pin),
+            ("atx_power_switch_pin", config.atx.power_switch_pin),
+            ("atx_reset_switch_pin", config.atx.reset_switch_pin),
+            ("streamer_cap_pin", config.streamer.cap_pin),
+            ("streamer_conv_pin", config.streamer.conv_pin),
         ]:
             if pin > 0:
                 logger.info("Writing value=0 to pin=%d (%s)", pin, name)
