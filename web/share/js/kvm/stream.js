@@ -62,6 +62,7 @@ function Streamer() {
 
 	self.setState = function(state) {
 		if (state && state.state) {
+			var encoder = state.state.encoder;
 			var source = state.state.source;
 			var stream = state.state.stream;
 
@@ -72,9 +73,9 @@ function Streamer() {
 
 			if (!$("stream-quality-slider").activated) {
 				wm.switchDisabled($("stream-quality-slider"), false);
-				if ($("stream-quality-slider").value !== source.quality) {
-					$("stream-quality-slider").value = source.quality;
-					__updateQualityValue(source.quality);
+				if ($("stream-quality-slider").value !== encoder.quality) {
+					$("stream-quality-slider").value = encoder.quality;
+					__updateQualityValue(encoder.quality);
 				}
 			}
 
