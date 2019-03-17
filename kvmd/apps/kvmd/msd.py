@@ -54,9 +54,14 @@ class MsdOperationError(MsdError):
     pass
 
 
-class MsdIsNotOperationalError(MsdOperationError):
+class MsdDisabledError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("Missing path for mass-storage device")
+        super().__init__("Mass-storage device is disabled")
+
+
+class MsdOfflineError(MsdOperationError):
+    def __init__(self) -> None:
+        super().__init__("Mass-storage device is not found")
 
 
 class MsdAlreadyConnectedToPcError(MsdOperationError):
@@ -69,7 +74,7 @@ class MsdAlreadyConnectedToKvmError(MsdOperationError):
         super().__init__("Mass-storage is already connected to KVM")
 
 
-class MsdIsNotConnectedToKvmError(MsdOperationError):
+class MsdNotConnectedToKvmError(MsdOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is not connected to KVM")
 
@@ -177,10 +182,12 @@ def _explore_device(device_path: str) -> Optional[_MassStorageDeviceInfo]:
     )
 
 
-def _msd_operated(method: Callable) -> Callable:
+def _msd_working(method: Callable) -> Callable:
     async def wrap(self: "MassStorageDevice", *args: Any, **kwargs: Any) -> Any:
+        if not self._enabled:  # pylint: disable=protected-access
+            raise MsdDisabledError()
         if not self._device_path:  # pylint: disable=protected-access
-            MsdIsNotOperationalError()
+            raise MsdOfflineError()
         return (await method(self, *args, **kwargs))
     return wrap
 
@@ -189,6 +196,8 @@ def _msd_operated(method: Callable) -> Callable:
 class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
+        enabled: bool,
+
         target_pin: int,
         reset_pin: int,
 
@@ -201,8 +210,15 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
-        self.__target_pin = gpio.set_output(target_pin)
-        self.__reset_pin = gpio.set_output(reset_pin)
+        self._enabled = enabled
+
+        if self._enabled:
+            self.__target_pin = gpio.set_output(target_pin)
+            self.__reset_pin = gpio.set_output(reset_pin)
+            assert bool(device_path)
+        else:
+            self.__target_pin = -1
+            self.__reset_pin = -1
 
         self._device_path = device_path
         self.__init_delay = init_delay
@@ -221,7 +237,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__state_queue: asyncio.queues.Queue = asyncio.Queue()
 
         logger = get_logger(0)
-        if self._device_path:
+        if self._enabled:
             logger.info("Using %r as mass-storage device", self._device_path)
             try:
                 logger.info("Enabled image metadata writing")
@@ -231,10 +247,10 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
                     log = logger.error
                 else:
                     log = logger.exception
-                log("Mass-storage device is not operational: %s", err)
+                log("Mass-storage device is offline: %s", err)
                 self._device_path = ""
         else:
-            logger.warning("Mass-storage device is not operational")
+            logger.info("Mass-storage device is disabled")
 
     def get_state(self) -> Dict:
         info = (self.__saved_device_info._asdict() if self.__saved_device_info else None)
@@ -243,11 +259,12 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             info["image"] = (info["image"]._asdict() if info["image"] else None)
 
         connected_to: Optional[str] = None
-        if self._device_path:
+        if self._enabled and self._device_path:
             connected_to = ("kvm" if self.__device_info else "server")
 
         return {
-            "in_operate": bool(self._device_path),
+            "enabled": self._enabled,
+            "online": (self._enabled and bool(self._device_path)),
             "connected_to": connected_to,
             "busy": bool(self.__device_file),
             "written": self.__written,
@@ -256,14 +273,18 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         while True:
-            yield (await self.__state_queue.get())
+            if self._enabled:
+                yield (await self.__state_queue.get())
+            else:
+                await asyncio.sleep(60)
 
     async def cleanup(self) -> None:
-        await self.__close_device_file()
-        gpio.write(self.__target_pin, False)
-        gpio.write(self.__reset_pin, False)
+        if self._enabled:
+            await self.__close_device_file()
+            gpio.write(self.__target_pin, False)
+            gpio.write(self.__reset_pin, False)
 
-    @_msd_operated
+    @_msd_working
     async def connect_to_kvm(self, no_delay: bool=False) -> Dict:
         with self.__region:
             if self.__device_info:
@@ -277,7 +298,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             get_logger().info("Mass-storage device switched to KVM: %s", self.__device_info)
             return state
 
-    @_msd_operated
+    @_msd_working
     async def connect_to_pc(self) -> Dict:
         with self.__region:
             if not self.__device_info:
@@ -289,7 +310,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             get_logger().info("Mass-storage device switched to Server")
             return state
 
-    @_msd_operated
+    @_msd_working
     async def reset(self) -> None:
         with self.__region:
             get_logger().info("Mass-storage device reset")
@@ -298,12 +319,12 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             gpio.write(self.__reset_pin, False)
             await self.__state_queue.put(self.get_state())
 
-    @_msd_operated
+    @_msd_working
     async def __aenter__(self) -> "MassStorageDevice":
         self.__region.enter()
         try:
             if not self.__device_info:
-                raise MsdIsNotConnectedToKvmError()
+                raise MsdNotConnectedToKvmError()
             self.__device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
             self.__written = 0
             return self

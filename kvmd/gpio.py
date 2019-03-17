@@ -43,18 +43,22 @@ def bcm() -> Generator[None, None, None]:
 
 
 def set_output(pin: int, initial: bool=False) -> int:
+    assert pin > 0, pin
     GPIO.setup(pin, GPIO.OUT, initial=initial)
     return pin
 
 
 def set_input(pin: int) -> int:
+    assert pin > 0, pin
     GPIO.setup(pin, GPIO.IN)
     return pin
 
 
 def read(pin: int) -> bool:
+    assert pin > 0, pin
     return bool(GPIO.input(pin))
 
 
 def write(pin: int, flag: bool) -> None:
+    assert pin > 0, pin
     GPIO.output(pin, flag)

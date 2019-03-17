@@ -37,6 +37,14 @@ function Atx() {
 	/************************************************************************/
 
 	self.setState = function(state) {
+		if (state) {
+			if (state.enabled) {
+				$("atx-dropdown").classList.remove("feature-disabled");
+			} else {
+				$("atx-dropdown").classList.add("feature-disabled");
+			}
+		}
+
 		$("atx-power-led").className = ((state && state.leds.power) ? "led-green" : "led-gray");
 		$("atx-hdd-led").className = ((state && state.leds.hdd) ? "led-red" : "led-gray");
 

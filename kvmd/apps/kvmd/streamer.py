@@ -63,8 +63,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
-        self.__cap_pin = (gpio.set_output(cap_pin) if cap_pin > 0 else cap_pin)
-        self.__conv_pin = (gpio.set_output(conv_pin) if conv_pin > 0 else conv_pin)
+        self.__cap_pin = (gpio.set_output(cap_pin) if cap_pin > 0 else 0)
+        self.__conv_pin = (gpio.set_output(conv_pin) if conv_pin > 0 else 0)
 
         self.__sync_delay = sync_delay
         self.__init_delay = init_delay

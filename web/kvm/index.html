@@ -129,7 +129,7 @@
 					<hr>
 					<button disabled data-force-hide-menu id="stream-reset-button">&bull; Reset stream</button>
 					<button disabled data-force-hide-menu id="hid-reset-button">&bull; Reset keyboard &amp; mouse</button>
-					<button disabled data-force-hide-menu id="msd-reset-button">&bull; Reset mass storage</button>
+					<button disabled data-force-hide-menu id="msd-reset-button" class="feature-disabled">&bull; Reset mass storage</button>
 				</div>
 				<hr>
 				<div class="menu-item-content-buttons">
@@ -138,7 +138,7 @@
 			</div>
 		</li>
 
-		<li class="menu-right-items">
+		<li id="atx-dropdown" class="menu-right-items feature-disabled">
 			<a class="menu-item" href="#">
 				<img data-dont-hide-menu id="atx-power-led" class="led-gray" src="../share/svg/atx-power-led.svg" />
 				<img data-dont-hide-menu id="atx-hdd-led" class="led-gray" src="../share/svg/atx-hdd-led.svg" />
@@ -152,18 +152,18 @@
 			</div>
 		</li>
 
-		<li class="menu-right-items">
+		<li id="msd-dropdown" class="menu-right-items feature-disabled">
 			<a class="menu-item" href="#">
 				<img data-dont-hide-menu id="msd-led" class="led-gray" src="../share/svg/msd-led.svg" />
 				Mass Storage &#8628;
 			</a>
 			<div data-dont-hide-menu id="msd-menu" class="menu-item-content">
-				<div id="msd-not-in-operate" class="msd-message">
+				<div id="msd-offline" class="msd-message">
 					<div class="menu-item-content-text">
 						<table>
 							<tr>
 								<td><img src="../share/svg/warning.svg" /></td>
-								<td><b>Mass Storage Device is not operational</b></td>
+								<td><b>Mass Storage Device is offline</b></td>
 							</tr>
 						</table>
 					</div>

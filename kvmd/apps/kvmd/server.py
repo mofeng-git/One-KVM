@@ -51,6 +51,7 @@ from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
 from .hid import Hid
+from .atx import AtxOperationError
 from .atx import Atx
 from .msd import MsdOperationError
 from .msd import MassStorageDevice
@@ -148,7 +149,7 @@ def _exposed(http_method: str, path: str, auth_required: bool=True) -> Callable:
 
             except RegionIsBusyError as err:
                 return _json_exception(err, 409)
-            except (BadRequestError, MsdOperationError) as err:
+            except (BadRequestError, AtxOperationError, MsdOperationError) as err:
                 return _json_exception(err, 400)
             except UnauthorizedError as err:
                 return _json_exception(err, 401)

@@ -208,3 +208,7 @@ ul.footer li.footer-right {
 ul.footer li a {
 	color: var(--cs-page-obscure-fg);
 }
+
+.feature-disabled {
+	display: none;
+}

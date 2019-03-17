@@ -23,7 +23,9 @@
 import asyncio
 
 from typing import Dict
+from typing import Callable
 from typing import AsyncGenerator
+from typing import Any
 
 from ...logging import get_logger
 
@@ -32,13 +34,36 @@ from ... import gpio
 
 
 # =====
-class AtxIsBusy(aioregion.RegionIsBusyError):
+class AtxError(Exception):
     pass
+
+
+class AtxOperationError(AtxError):
+    pass
+
+
+class AtxDisabledError(AtxOperationError):
+    def __init__(self) -> None:
+        super().__init__("ATX is disabled")
+
+
+class AtxIsBusyError(AtxOperationError, aioregion.RegionIsBusyError):
+    pass
+
+
+def _atx_working(method: Callable) -> Callable:
+    async def wrap(self: "Atx", *args: Any, **kwargs: Any) -> Any:
+        if not self._enabled:  # pylint: disable=protected-access
+            raise AtxDisabledError()
+        return (await method(self, *args, **kwargs))
+    return wrap
 
 
 class Atx:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
+        enabled: bool,
+
         power_led_pin: int,
         hdd_led_pin: int,
 
@@ -50,31 +75,43 @@ class Atx:  # pylint: disable=too-many-instance-attributes
         state_poll: float,
     ) -> None:
 
-        self.__power_led_pin = gpio.set_input(power_led_pin)
-        self.__hdd_led_pin = gpio.set_input(hdd_led_pin)
+        self._enabled = enabled
 
-        self.__power_switch_pin = gpio.set_output(power_switch_pin)
-        self.__reset_switch_pin = gpio.set_output(reset_switch_pin)
+        if self._enabled:
+            self.__power_led_pin = gpio.set_input(power_led_pin)
+            self.__hdd_led_pin = gpio.set_input(hdd_led_pin)
+            self.__power_switch_pin = gpio.set_output(power_switch_pin)
+            self.__reset_switch_pin = gpio.set_output(reset_switch_pin)
+        else:
+            self.__power_led_pin = -1
+            self.__hdd_led_pin = -1
+            self.__power_switch_pin = -1
+            self.__reset_switch_pin = -1
+
         self.__click_delay = click_delay
         self.__long_click_delay = long_click_delay
 
         self.__state_poll = state_poll
 
-        self.__region = aioregion.AioExclusiveRegion(AtxIsBusy)
+        self.__region = aioregion.AioExclusiveRegion(AtxIsBusyError)
 
     def get_state(self) -> Dict:
         return {
+            "enabled": self._enabled,
             "busy": self.__region.is_busy(),
             "leds": {
-                "power": (not gpio.read(self.__power_led_pin)),
-                "hdd": (not gpio.read(self.__hdd_led_pin)),
+                "power": ((not gpio.read(self.__power_led_pin)) if self._enabled else False),
+                "hdd": ((not gpio.read(self.__hdd_led_pin)) if self._enabled else False),
             },
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         while True:
-            yield self.get_state()
-            await asyncio.sleep(self.__state_poll)
+            if self._enabled:
+                yield self.get_state()
+                await asyncio.sleep(self.__state_poll)
+            else:
+                await asyncio.sleep(60)
 
     async def click_power(self) -> None:
         get_logger().info("Clicking power ...")
@@ -88,6 +125,7 @@ class Atx:  # pylint: disable=too-many-instance-attributes
         get_logger().info("Clicking reset")
         await self.__click(self.__reset_switch_pin, self.__click_delay)
 
+    @_atx_working
     async def __click(self, pin: int, delay: float) -> None:
         self.__region.enter()
         asyncio.ensure_future(self.__inner_click(pin, delay))

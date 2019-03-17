@@ -103,7 +103,7 @@ def _as_pin(pin: int) -> int:
 
 
 def _as_optional_pin(pin: int) -> int:
-    if not isinstance(pin, int) or pin == 0:
+    if not isinstance(pin, int) or pin < -1:
         raise ValueError("Invalid optional pin number")
     return pin
 
@@ -168,11 +168,13 @@ def _get_config_scheme() -> Dict:
             },
 
             "atx": {
-                "power_led_pin": Option(0, type=_as_pin),
-                "hdd_led_pin":   Option(0, type=_as_pin),
+                "enabled": Option(True),
 
-                "power_switch_pin": Option(0, type=_as_pin),
-                "reset_switch_pin": Option(0, type=_as_pin),
+                "power_led_pin": Option(-1, type=_as_optional_pin),
+                "hdd_led_pin":   Option(-1, type=_as_optional_pin),
+                "power_switch_pin": Option(-1, type=_as_optional_pin),
+                "reset_switch_pin": Option(-1, type=_as_optional_pin),
+
                 "click_delay":      Option(0.1),
                 "long_click_delay": Option(5.5),
 
@@ -180,9 +182,12 @@ def _get_config_scheme() -> Dict:
             },
 
             "msd": {
-                "target_pin":  Option(0, type=_as_pin),
-                "reset_pin":   Option(0, type=_as_pin),
-                "device":      Option("", type=_as_path, rename="device_path"),
+                "enabled": Option(True),
+
+                "target_pin": Option(-1, type=_as_optional_pin),
+                "reset_pin":  Option(-1, type=_as_optional_pin),
+
+                "device":      Option("", type=_as_optional_path, rename="device_path"),
                 "init_delay":  Option(2.0),
                 "reset_delay": Option(1.0),
                 "write_meta":  Option(True),
@@ -190,8 +195,8 @@ def _get_config_scheme() -> Dict:
             },
 
             "streamer": {
-                "cap_pin":  Option(-1, type=_as_optional_pin),
-                "conv_pin": Option(-1, type=_as_optional_pin),
+                "cap_pin":  Option(0, type=_as_optional_pin),
+                "conv_pin": Option(0, type=_as_optional_pin),
 
                 "sync_delay":         Option(1.0),
                 "init_delay":         Option(1.0),
