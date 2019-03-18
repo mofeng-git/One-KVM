@@ -1,6 +1,6 @@
 # ========================================================================== #
 #                                                                            #
-#    KVMD - The The main Pi-KVM daemon.                                      #
+#    KVMD - The main Pi-KVM daemon.                                          #
 #                                                                            #
 #    Copyright (C) 2018  Maxim Devaev <mdevaev@gmail.com>                    #
 #                                                                            #

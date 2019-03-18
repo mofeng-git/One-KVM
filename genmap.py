@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ========================================================================== #
 #                                                                            #
-#    KVMD - The The main Pi-KVM daemon.                                      #
+#    KVMD - The main Pi-KVM daemon.                                          #
 #                                                                            #
 #    Copyright (C) 2018  Maxim Devaev <mdevaev@gmail.com>                    #
 #                                                                            #
@@ -54,7 +54,7 @@ def main() -> None:
         keymap_yaml_file.write(textwrap.dedent("""
             # ========================================================================== #
             #                                                                            #
-            #    KVMD - The The main Pi-KVM daemon.                                      #
+            #    KVMD - The main Pi-KVM daemon.                                          #
             #                                                                            #
             #    Copyright (C) 2018  Maxim Devaev <mdevaev@gmail.com>                    #
             #                                                                            #
@@ -84,7 +84,7 @@ def main() -> None:
         hid_header_file.write(textwrap.dedent("""
             /*****************************************************************************
             #                                                                            #
-            #    KVMD - The The main Pi-KVM daemon.                                      #
+            #    KVMD - The main Pi-KVM daemon.                                          #
             #                                                                            #
             #    Copyright (C) 2018  Maxim Devaev <mdevaev@gmail.com>                    #
             #                                                                            #
