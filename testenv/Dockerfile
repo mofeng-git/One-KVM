@@ -1,9 +1,10 @@
-FROM base/archlinux
+FROM archlinux/base
 
 RUN dd if=/dev/zero of=/root/loop.img bs=1024 count=1048576
 
 RUN pacman -Syu --noconfirm \
 	&& pacman -S --noconfirm \
+		base-devel \
 		git \
 		patch \
 		make \
@@ -14,7 +15,7 @@ RUN pacman -Syu --noconfirm \
 		sudo \
 		systemd \
 		pkgconf \
-	&& pacman -Sc --noconfirm
+	&& (pacman -Sc --noconfirm || true)
 
 RUN useradd -r -d / packer \
 	&& cd /tmp \
@@ -45,7 +46,7 @@ RUN pacman -Syy \
 		htmlhint \
 		eslint \
 	&& rm -rf /.npm \
-	&& pacman -Sc --noconfirm
+	&& (pacman -Sc --noconfirm || true)
 
 COPY testenv/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
