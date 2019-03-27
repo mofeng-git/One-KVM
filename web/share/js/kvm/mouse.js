@@ -26,7 +26,7 @@ function Mouse() {
 	/************************************************************************/
 
 	var __ws = null;
-	var __ok = true;
+	var __online = true;
 
 	var __current_pos = {x: 0, y:0};
 	var __sent_pos = {x: 0, y:0};
@@ -68,7 +68,7 @@ function Mouse() {
 	};
 
 	self.setState = function(state) {
-		__ok = state.ok;
+		__online = state.online;
 		__updateLeds();
 	};
 
@@ -88,7 +88,7 @@ function Mouse() {
 		var title = "Mouse free";
 
 		if (__ws) {
-			if (__ok) {
+			if (__online) {
 				if (is_captured) {
 					led = "led-green";
 					title = "Mouse captured";

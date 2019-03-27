@@ -26,7 +26,7 @@ function Keyboard() {
 	/************************************************************************/
 
 	var __ws = null;
-	var __ok = true;
+	var __online = true;
 
 	var __keys = [].slice.call($$$("div#keyboard-desktop div.keyboard-block div.keyboard-row div.key"));
 	var __modifiers = [].slice.call($$$("div#keyboard-desktop div.keyboard-block div.keyboard-row div.modifier"));
@@ -77,7 +77,7 @@ function Keyboard() {
 	};
 
 	self.setState = function(state) {
-		__ok = state.ok;
+		__online = state.online;
 		__updateLeds();
 	};
 
@@ -102,7 +102,7 @@ function Keyboard() {
 		var title = "Keyboard free";
 
 		if (__ws) {
-			if (__ok) {
+			if (__online) {
 				if (is_captured) {
 					led = "led-green";
 					title = "Keyboard captured";

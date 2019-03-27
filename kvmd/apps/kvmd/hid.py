@@ -141,7 +141,7 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
         self.__lock = asyncio.Lock()
         self.__events_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
 
-        self.__ok_shared = multiprocessing.Value("i", 1)
+        self.__online_shared = multiprocessing.Value("i", 1)
 
         self.__stop_event = multiprocessing.Event()
 
@@ -150,7 +150,7 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
         super().start()
 
     def get_state(self) -> Dict:
-        return {"ok": bool(self.__ok_shared.value)}
+        return {"online": bool(self.__online_shared.value)}
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         while self.is_alive():
@@ -290,23 +290,23 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
                         logger.error("Got CRC error of request from HID: request=%r", request)
                     elif code == 0x45:  # Unknown command
                         logger.error("HID did not recognize the request=%r", request)
-                        self.__ok_shared.value = 1
+                        self.__online_shared.value = 1
                         return
                     elif code == 0x24:  # Rebooted?
                         logger.error("No previous command state inside HID, seems it was rebooted")
-                        self.__ok_shared.value = 1
+                        self.__online_shared.value = 1
                         return
                     elif code == 0x20:  # Done
                         if error_occured:
                             logger.info("Success!")
-                        self.__ok_shared.value = 1
+                        self.__online_shared.value = 1
                         return
                     else:
                         logger.error("Invalid response from HID: request=%r; code=0x%x", request, code)
 
                 common_retries -= 1
             error_occured = True
-            self.__ok_shared.value = 0
+            self.__online_shared.value = 0
 
             if common_retries and read_retries:
                 logger.error("Retries left: common_retries=%d; read_retries=%d", common_retries, read_retries)

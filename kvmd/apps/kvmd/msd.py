@@ -253,18 +253,19 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             logger.info("Mass-storage device is disabled")
 
     def get_state(self) -> Dict:
+        online = (self._enabled and bool(self._device_path))
         info = (self.__saved_device_info._asdict() if self.__saved_device_info else None)
-        if info:
-            info["hw"] = (info["hw"]._asdict() if info["hw"] else None)
-            info["image"] = (info["image"]._asdict() if info["image"] else None)
-
         connected_to: Optional[str] = None
-        if self._enabled and self._device_path:
+
+        if online:
+            if info:
+                info["hw"] = (info["hw"]._asdict() if info["hw"] else None)
+                info["image"] = (info["image"]._asdict() if info["image"] else None)
             connected_to = ("kvm" if self.__device_info else "server")
 
         return {
             "enabled": self._enabled,
-            "online": (self._enabled and bool(self._device_path)),
+            "online": online,
             "connected_to": connected_to,
             "busy": bool(self.__device_file),
             "written": self.__written,

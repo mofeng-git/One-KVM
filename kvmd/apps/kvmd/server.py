@@ -443,6 +443,10 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     # ===== HID
 
+    @_exposed("GET", "/hid")
+    async def __hid_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        return _json(self.__hid.get_state())
+
     @_exposed("POST", "/hid/reset")
     async def __hid_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         await self.__hid.reset()
