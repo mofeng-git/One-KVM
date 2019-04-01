@@ -129,6 +129,15 @@ def _as_string_list(values: Union[str, Sequence]) -> List[str]:
     return list(map(str, values))
 
 
+def _as_auth_type(auth_type: str) -> str:
+    if not isinstance(auth_type, str):
+        raise ValueError("Invalid auth type")
+    auth_type = str(auth_type).strip()
+    if auth_type not in ["basic"]:
+        raise ValueError("Invalid auth type")
+    return auth_type
+
+
 def _get_config_scheme() -> Dict:
     return {
         "kvmd": {
@@ -144,7 +153,10 @@ def _get_config_scheme() -> Dict:
             },
 
             "auth": {
-                "htpasswd": Option("/etc/kvmd/htpasswd", type=_as_path, rename="htpasswd_path"),
+                "type": Option("basic", type=_as_auth_type, rename="auth_type"),
+                "basic": {
+                    "htpasswd": Option("/etc/kvmd/htpasswd", type=_as_path, rename="htpasswd_path"),
+                },
             },
 
             "info": {

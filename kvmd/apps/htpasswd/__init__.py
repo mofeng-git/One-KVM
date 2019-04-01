@@ -38,9 +38,15 @@ from .. import init
 
 
 # =====
+def _get_htpasswd_path(config: Section) -> str:
+    if config.kvmd.auth.auth_type != "basic":
+        print("Warning: KVMD does not use basic auth", file=sys.stderr)
+    return config.kvmd.auth.basic.htpasswd
+
+
 @contextlib.contextmanager
 def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.HtpasswdFile, None, None]:
-    path = config.kvmd.auth.htpasswd
+    path = _get_htpasswd_path(config)
     (tmp_fd, tmp_path) = tempfile.mkstemp(
         prefix=".%s." % (os.path.basename(path)),
         dir=os.path.dirname(path),
@@ -72,7 +78,7 @@ def _valid_user(user: str) -> str:
 
 # ====
 def _cmd_list(config: Section, _: argparse.Namespace) -> None:
-    for user in passlib.apache.HtpasswdFile(config.kvmd.auth.htpasswd).users():
+    for user in passlib.apache.HtpasswdFile(_get_htpasswd_path(config)).users():
         print(user)
 
 
@@ -97,7 +103,7 @@ def main() -> None:
     (parent_parser, argv, config) = init(add_help=False)
     parser = argparse.ArgumentParser(
         prog="kvmd-htpasswd",
-        description="Manage KVMD users",
+        description="Manage KVMD users (basic auth only)",
         parents=[parent_parser],
     )
     parser.set_defaults(cmd=(lambda *_: parser.print_help()))

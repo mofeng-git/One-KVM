@@ -32,13 +32,14 @@ from ...logging import get_logger
 
 # =====
 class AuthManager:
-    def __init__(self, htpasswd_path: str) -> None:
-        self.__htpasswd_path = htpasswd_path
+    def __init__(self, auth_type: str, basic: Dict) -> None:
+        self.__login = {
+            "basic": lambda: _BasicLogin(**basic),
+        }[auth_type]().login
         self.__tokens: Dict[str, str] = {}  # {token: user}
 
     def login(self, user: str, passwd: str) -> Optional[str]:
-        htpasswd = passlib.apache.HtpasswdFile(self.__htpasswd_path)
-        if htpasswd.check_password(user, passwd):
+        if self.__login(user, passwd):
             for (token, token_user) in self.__tokens.items():
                 if user == token_user:
                     return token
@@ -57,3 +58,13 @@ class AuthManager:
 
     def check(self, token: str) -> Optional[str]:
         return self.__tokens.get(token)
+
+
+class _BasicLogin:
+    def __init__(self, htpasswd_path: str) -> None:
+        get_logger().info("Using basic auth %r", htpasswd_path)
+        self.__htpasswd_path = htpasswd_path
+
+    def login(self, user: str, passwd: str) -> bool:
+        htpasswd = passlib.apache.HtpasswdFile(self.__htpasswd_path)
+        return htpasswd.check_password(user, passwd)

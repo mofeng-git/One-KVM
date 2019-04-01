@@ -66,12 +66,15 @@ class Section(dict):
         dict.__init__(self)
         self.__meta: Dict[str, Dict[str, Any]] = {}
 
-    def _unpack_renamed(self) -> Dict[str, Any]:
+    def _unpack_renamed(self, _section: Optional["Section"]=None) -> Dict[str, Any]:
+        if _section is None:
+            _section = self
         unpacked: Dict[str, Any] = {}
-        for (key, value) in self.items():
-            assert not isinstance(value, Section), (key, value)
-            key = (self.__meta[key]["rename"] or key)
-            unpacked[key] = value
+        for (key, value) in _section.items():
+            if isinstance(value, Section):
+                unpacked[key] = value._unpack_renamed()  # pylint: disable=protected-access
+            else:  # Option
+                unpacked[_section._get_rename(key)] = value  # pylint: disable=protected-access
         return unpacked
 
     def _set_meta(self, key: str, default: Any, help: str, rename: str) -> None:  # pylint: disable=redefined-builtin
@@ -86,6 +89,9 @@ class Section(dict):
 
     def _get_help(self, key: str) -> str:
         return self.__meta[key]["help"]
+
+    def _get_rename(self, key: str) -> str:
+        return (self.__meta[key]["rename"] or key)
 
     def __getattribute__(self, key: str) -> Any:
         if key in self:
