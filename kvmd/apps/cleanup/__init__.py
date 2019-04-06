@@ -63,9 +63,15 @@ def main(argv: Optional[List[str]]=None) -> None:
     except subprocess.CalledProcessError:
         pass
 
-    unix_path = config.server.unix
-    if unix_path and os.path.exists(unix_path):
-        logger.info("Removing socket %r ...", unix_path)
-        os.remove(unix_path)
+    for (owner, unix_path) in [
+        ("KVMD", config.server.unix),
+        ("streamer", config.streamer.unix),
+    ]:
+        if unix_path and os.path.exists(unix_path):
+            logger.info("Removing %s socket %r ...", owner, unix_path)
+            try:
+                os.remove(unix_path)
+            except Exception:
+                logger.exception("Can't remove %s socket %r", owner, unix_path)
 
     logger.info("Bye-bye")
