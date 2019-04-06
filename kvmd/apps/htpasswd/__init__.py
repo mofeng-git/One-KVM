@@ -27,7 +27,9 @@ import tempfile
 import contextlib
 import argparse
 
+from typing import List
 from typing import Generator
+from typing import Optional
 
 import passlib.apache
 
@@ -74,7 +76,7 @@ def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.Htpassw
 
 # ====
 def _cmd_list(config: Section, _: argparse.Namespace) -> None:
-    for user in passlib.apache.HtpasswdFile(_get_htpasswd_path(config)).users():
+    for user in sorted(passlib.apache.HtpasswdFile(_get_htpasswd_path(config)).users()):
         print(user)
 
 
@@ -95,8 +97,8 @@ def _cmd_delete(config: Section, options: argparse.Namespace) -> None:
 
 
 # =====
-def main() -> None:
-    (parent_parser, argv, config) = init(add_help=False)
+def main(argv: Optional[List[str]]=None) -> None:
+    (parent_parser, argv, config) = init(add_help=False, argv=argv)
     parser = argparse.ArgumentParser(
         prog="kvmd-htpasswd",
         description="Manage KVMD users (basic auth only)",
