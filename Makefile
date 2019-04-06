@@ -23,7 +23,7 @@ tox: _testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/htpasswd /etc/kvmd \
 			&& cp /src/testenv/main.yaml /etc/kvmd \
 			&& cd /src \
-			&& tox -c testenv/tox.ini \
+			&& tox -c testenv/tox.ini -p auto \
 		"
 
 
