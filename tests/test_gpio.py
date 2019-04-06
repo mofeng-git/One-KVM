@@ -20,40 +20,30 @@
 # ========================================================================== #
 
 
-import asyncio
-
-from ...logging import get_logger
-
-from ... import gpio
-
-from .. import init
-
-from .auth import AuthManager
-from .info import InfoManager
-from .logreader import LogReader
-from .hid import Hid
-from .atx import Atx
-from .msd import MassStorageDevice
-from .streamer import Streamer
-from .server import Server
+from kvmd import gpio
 
 
 # =====
-def main() -> None:
-    config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
+def test_gpio__loopback_initial_false() -> None:
+    # pylint: disable=singleton-comparison
     with gpio.bcm():
-        # pylint: disable=protected-access
-        loop = asyncio.get_event_loop()
-        Server(
-            auth_manager=AuthManager(**config.auth._unpack()),
-            info_manager=InfoManager(loop=loop, **config.info._unpack()),
-            log_reader=LogReader(loop=loop),
+        assert gpio.set_output(0) == 0
+        assert gpio.read(0) == False  # noqa: E712
+        gpio.write(0, True)
+        assert gpio.read(0) == True  # noqa: E712
 
-            hid=Hid(**config.hid._unpack()),
-            atx=Atx(**config.atx._unpack()),
-            msd=MassStorageDevice(loop=loop, **config.msd._unpack()),
-            streamer=Streamer(loop=loop, **config.streamer._unpack()),
 
-            loop=loop,
-        ).run(**config.server._unpack())
-    get_logger().info("Bye-bye")
+def test_gpio__loopback_initial_true() -> None:
+    # pylint: disable=singleton-comparison
+    with gpio.bcm():
+        assert gpio.set_output(0, True) == 0
+        assert gpio.read(0) == True  # noqa: E712
+        gpio.write(0, False)
+        assert gpio.read(0) == False  # noqa: E712
+
+
+def test_gpio__input() -> None:
+    # pylint: disable=singleton-comparison
+    with gpio.bcm():
+        assert gpio.set_input(0) == 0
+        assert gpio.read(0) == False  # noqa: E712

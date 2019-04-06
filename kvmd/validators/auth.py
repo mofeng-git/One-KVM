@@ -20,40 +20,24 @@
 # ========================================================================== #
 
 
-import asyncio
+from typing import Any
 
-from ...logging import get_logger
-
-from ... import gpio
-
-from .. import init
-
-from .auth import AuthManager
-from .info import InfoManager
-from .logreader import LogReader
-from .hid import Hid
-from .atx import Atx
-from .msd import MassStorageDevice
-from .streamer import Streamer
-from .server import Server
+from . import check_string_in_list
+from . import check_re_match
 
 
 # =====
-def main() -> None:
-    config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
-    with gpio.bcm():
-        # pylint: disable=protected-access
-        loop = asyncio.get_event_loop()
-        Server(
-            auth_manager=AuthManager(**config.auth._unpack()),
-            info_manager=InfoManager(loop=loop, **config.info._unpack()),
-            log_reader=LogReader(loop=loop),
+def valid_user(arg: Any) -> str:
+    return check_re_match(arg, "username characters", r"^[a-z_][a-z0-9_-]*$")
 
-            hid=Hid(**config.hid._unpack()),
-            atx=Atx(**config.atx._unpack()),
-            msd=MassStorageDevice(loop=loop, **config.msd._unpack()),
-            streamer=Streamer(loop=loop, **config.streamer._unpack()),
 
-            loop=loop,
-        ).run(**config.server._unpack())
-    get_logger().info("Bye-bye")
+def valid_passwd(arg: Any) -> str:
+    return check_re_match(arg, "passwd characters", r"^[\x20-\x7e]*\Z$", strip=False, hide=True)
+
+
+def valid_auth_token(arg: Any) -> str:
+    return check_re_match(arg, "auth token", r"^[0-9a-f]{64}$", hide=True)
+
+
+def valid_auth_type(arg: Any) -> str:
+    return check_string_in_list(arg, "auth type", ["basic"])

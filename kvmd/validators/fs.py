@@ -20,40 +20,33 @@
 # ========================================================================== #
 
 
-import asyncio
+import os
 
-from ...logging import get_logger
+from typing import Any
 
-from ... import gpio
+from . import raise_error
+from . import check_not_none_string
 
-from .. import init
-
-from .auth import AuthManager
-from .info import InfoManager
-from .logreader import LogReader
-from .hid import Hid
-from .atx import Atx
-from .msd import MassStorageDevice
-from .streamer import Streamer
-from .server import Server
+from .basic import valid_number
 
 
 # =====
-def main() -> None:
-    config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
-    with gpio.bcm():
-        # pylint: disable=protected-access
-        loop = asyncio.get_event_loop()
-        Server(
-            auth_manager=AuthManager(**config.auth._unpack()),
-            info_manager=InfoManager(loop=loop, **config.info._unpack()),
-            log_reader=LogReader(loop=loop),
+def valid_abs_path(arg: Any, exists: bool=False) -> str:
+    name = ("existent absolute path" if exists else "absolute path")
 
-            hid=Hid(**config.hid._unpack()),
-            atx=Atx(**config.atx._unpack()),
-            msd=MassStorageDevice(loop=loop, **config.msd._unpack()),
-            streamer=Streamer(loop=loop, **config.streamer._unpack()),
+    if len(str(arg).strip()) == 0:
+        arg = None
+    arg = check_not_none_string(arg, name)
 
-            loop=loop,
-        ).run(**config.server._unpack())
-    get_logger().info("Bye-bye")
+    arg = os.path.abspath(arg)
+    if exists and not os.access(arg, os.F_OK):
+        raise_error(arg, name)
+    return arg
+
+
+def valid_abs_path_exists(arg: Any) -> str:
+    return valid_abs_path(arg, exists=True)
+
+
+def valid_unix_mode(arg: Any) -> int:
+    return int(valid_number(arg, min=0, name="UNIX mode"))

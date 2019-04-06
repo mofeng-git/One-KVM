@@ -6,6 +6,7 @@
 /kvmd.egg-info/
 /testenv/.tox/
 /testenv/.mypy_cache/
+/testenv/.coverage
 /v*.tar.gz
 /*.pkg.tar.xz
 /*.egg-info

@@ -38,6 +38,7 @@ def main() -> None:
 
         packages=[
             "kvmd",
+            "kvmd.validators",
             "kvmd.yamlconf",
             "kvmd.apps",
             "kvmd.apps.kvmd",

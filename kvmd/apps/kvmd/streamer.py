@@ -63,8 +63,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         loop: asyncio.AbstractEventLoop,
     ) -> None:
 
-        self.__cap_pin = (gpio.set_output(cap_pin) if cap_pin > 0 else 0)
-        self.__conv_pin = (gpio.set_output(conv_pin) if conv_pin > 0 else 0)
+        self.__cap_pin = (gpio.set_output(cap_pin) if cap_pin >= 0 else -1)
+        self.__conv_pin = (gpio.set_output(conv_pin) if conv_pin >= 0 else -1)
 
         self.__sync_delay = sync_delay
         self.__init_delay = init_delay
@@ -179,9 +179,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     async def __set_hw_enabled(self, enabled: bool) -> None:
         # XXX: This sequence is very important to enable converter and cap board
-        if self.__cap_pin > 0:
+        if self.__cap_pin >= 0:
             gpio.write(self.__cap_pin, enabled)
-        if self.__conv_pin > 0:
+        if self.__conv_pin >= 0:
             if enabled:
                 await asyncio.sleep(self.__sync_delay)
             gpio.write(self.__conv_pin, enabled)

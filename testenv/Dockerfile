@@ -4,17 +4,11 @@ RUN dd if=/dev/zero of=/root/loop.img bs=1024 count=1048576
 
 RUN pacman -Syu --noconfirm \
 	&& pacman -S --noconfirm \
+		base \
 		base-devel \
 		git \
-		patch \
-		make \
-		fakeroot \
-		binutils \
 		expac \
 		jshon \
-		sudo \
-		systemd \
-		pkgconf \
 	&& (pacman -Sc --noconfirm || true)
 
 RUN useradd -r -d / packer \

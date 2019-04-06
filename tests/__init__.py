@@ -20,40 +20,40 @@
 # ========================================================================== #
 
 
-import asyncio
+import sys
 
-from ...logging import get_logger
+from typing import Dict
+from typing import Optional
 
-from ... import gpio
-
-from .. import init
-
-from .auth import AuthManager
-from .info import InfoManager
-from .logreader import LogReader
-from .hid import Hid
-from .atx import Atx
-from .msd import MassStorageDevice
-from .streamer import Streamer
-from .server import Server
+import fake_rpi.RPi
 
 
 # =====
-def main() -> None:
-    config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
-    with gpio.bcm():
-        # pylint: disable=protected-access
-        loop = asyncio.get_event_loop()
-        Server(
-            auth_manager=AuthManager(**config.auth._unpack()),
-            info_manager=InfoManager(loop=loop, **config.info._unpack()),
-            log_reader=LogReader(loop=loop),
+class _GPIO(fake_rpi.RPi._GPIO):  # pylint: disable=protected-access
+    def __init__(self) -> None:
+        super().__init__()
+        self.__states: Dict[int, int] = {}
 
-            hid=Hid(**config.hid._unpack()),
-            atx=Atx(**config.atx._unpack()),
-            msd=MassStorageDevice(loop=loop, **config.msd._unpack()),
-            streamer=Streamer(loop=loop, **config.streamer._unpack()),
+    @fake_rpi.RPi.printf
+    def setup(self, channel: int, state: int, initial: int=0, pull_up_down: Optional[int]=None) -> None:
+        _ = state  # Makes linter happy
+        _ = pull_up_down  # Makes linter happy
+        self.__states[int(channel)] = int(initial)
 
-            loop=loop,
-        ).run(**config.server._unpack())
-    get_logger().info("Bye-bye")
+    @fake_rpi.RPi.printf
+    def output(self, channel: int, state: int) -> None:
+        self.__states[int(channel)] = int(state)
+
+    @fake_rpi.RPi.printf
+    def input(self, channel: int) -> int:  # pylint: disable=arguments-differ
+        return self.__states[int(channel)]
+
+    @fake_rpi.RPi.printf
+    def cleanup(self, channel: Optional[int]=None) -> None:  # pylint: disable=arguments-differ
+        _ = channel  # Makes linter happy
+        self.__states = {}
+
+
+# =====
+fake_rpi.RPi.GPIO = _GPIO()
+sys.modules["RPi"] = fake_rpi.RPi

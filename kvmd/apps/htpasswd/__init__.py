@@ -22,7 +22,6 @@
 
 import sys
 import os
-import re
 import getpass
 import tempfile
 import contextlib
@@ -34,12 +33,16 @@ import passlib.apache
 
 from ...yamlconf import Section
 
+from ...validators import ValidatorError
+from ...validators.auth import valid_user
+from ...validators.auth import valid_passwd
+
 from .. import init
 
 
 # =====
 def _get_htpasswd_path(config: Section) -> str:
-    if config.kvmd.auth.auth_type != "basic":
+    if config.kvmd.auth.type != "basic":
         print("Warning: KVMD does not use basic auth", file=sys.stderr)
     return config.kvmd.auth.basic.htpasswd
 
@@ -69,13 +72,6 @@ def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.Htpassw
             os.remove(tmp_path)
 
 
-def _valid_user(user: str) -> str:
-    stripped = user.strip()
-    if re.match(r"^[a-z_][a-z0-9_-]*$", stripped):
-        return stripped
-    raise SystemExit("Invalid user %r" % (user))
-
-
 # ====
 def _cmd_list(config: Section, _: argparse.Namespace) -> None:
     for user in passlib.apache.HtpasswdFile(_get_htpasswd_path(config)).users():
@@ -85,10 +81,10 @@ def _cmd_list(config: Section, _: argparse.Namespace) -> None:
 def _cmd_set(config: Section, options: argparse.Namespace) -> None:
     with _get_htpasswd_for_write(config) as htpasswd:
         if options.read_stdin:
-            passwd = input()
+            passwd = valid_passwd(input())
         else:
-            passwd = getpass.getpass("Password: ", stream=sys.stderr)
-            if getpass.getpass("Repeat: ", stream=sys.stderr) != passwd:
+            passwd = valid_passwd(getpass.getpass("Password: ", stream=sys.stderr))
+            if valid_passwd(getpass.getpass("Repeat: ", stream=sys.stderr)) != passwd:
                 raise SystemExit("Sorry, passwords do not match")
         htpasswd.set_password(options.user, passwd)
 
@@ -113,13 +109,16 @@ def main() -> None:
     cmd_list_parser.set_defaults(cmd=_cmd_list)
 
     cmd_set_parser = subparsers.add_parser("set", help="Create user or change password")
-    cmd_set_parser.add_argument("user", type=_valid_user)
+    cmd_set_parser.add_argument("user", type=valid_user)
     cmd_set_parser.add_argument("-i", "--read-stdin", action="store_true", help="Read password from stdin")
     cmd_set_parser.set_defaults(cmd=_cmd_set)
 
     cmd_delete_parser = subparsers.add_parser("del", help="Delete user")
-    cmd_delete_parser.add_argument("user", type=_valid_user)
+    cmd_delete_parser.add_argument("user", type=valid_user)
     cmd_delete_parser.set_defaults(cmd=_cmd_delete)
 
     options = parser.parse_args(argv[1:])
-    options.cmd(config, options)
+    try:
+        options.cmd(config, options)
+    except ValidatorError as err:
+        raise SystemExit(str(err))

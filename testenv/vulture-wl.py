@@ -1,5 +1,0 @@
-manufacturer  # unused variable (kvmd/msd.py:58)
-product  # unused variable (kvmd/msd.py:59)
-real  # unused variable (kvmd/msd.py:71)
-hw  # unused variable (kvmd/msd.py:73)
-image  # unused variable (kvmd/msd.py:74)

@@ -20,40 +20,29 @@
 # ========================================================================== #
 
 
-import asyncio
+from typing import Any
 
-from ...logging import get_logger
+from . import check_string_in_list
 
-from ... import gpio
-
-from .. import init
-
-from .auth import AuthManager
-from .info import InfoManager
-from .logreader import LogReader
-from .hid import Hid
-from .atx import Atx
-from .msd import MassStorageDevice
-from .streamer import Streamer
-from .server import Server
+from .basic import valid_number
 
 
 # =====
-def main() -> None:
-    config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
-    with gpio.bcm():
-        # pylint: disable=protected-access
-        loop = asyncio.get_event_loop()
-        Server(
-            auth_manager=AuthManager(**config.auth._unpack()),
-            info_manager=InfoManager(loop=loop, **config.info._unpack()),
-            log_reader=LogReader(loop=loop),
+def valid_atx_button(arg: Any) -> str:
+    return check_string_in_list(arg, "ATX button", ["power", "power_long", "reset"])
 
-            hid=Hid(**config.hid._unpack()),
-            atx=Atx(**config.atx._unpack()),
-            msd=MassStorageDevice(loop=loop, **config.msd._unpack()),
-            streamer=Streamer(loop=loop, **config.streamer._unpack()),
 
-            loop=loop,
-        ).run(**config.server._unpack())
-    get_logger().info("Bye-bye")
+def valid_kvm_target(arg: Any) -> str:
+    return check_string_in_list(arg, "KVM target", ["kvm", "server"])
+
+
+def valid_log_seek(arg: Any) -> int:
+    return int(valid_number(arg, min=0, name="log seek"))
+
+
+def valid_stream_quality(arg: Any) -> int:
+    return int(valid_number(arg, min=1, max=100, name="stream quality"))
+
+
+def valid_stream_fps(arg: Any) -> int:
+    return int(valid_number(arg, min=0, max=30, name="stream FPS"))

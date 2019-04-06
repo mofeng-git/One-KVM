@@ -20,46 +20,53 @@
 # ========================================================================== #
 
 
-import textwrap
-import operator
-
-from typing import List
 from typing import Any
 
-import yaml
+import pytest
 
-from . import Section
+from kvmd.validators import ValidatorError
+from kvmd.validators.hw import valid_tty_speed
+from kvmd.validators.hw import valid_gpio_pin
+from kvmd.validators.hw import valid_gpio_pin_optional
 
 
 # =====
-_INDENT = 4
+@pytest.mark.parametrize("arg", ["1200 ", 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200])
+def test_ok__valid_tty_speed(arg: Any) -> None:
+    value = valid_tty_speed(arg)
+    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert value == int(str(arg).strip())
 
 
-def make_config_dump(config: Section) -> str:
-    return "\n".join(_inner_make_dump(config))
+@pytest.mark.parametrize("arg", ["test", "", None, 0, 1200.1])
+def test_fail__valid_tty_speed(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_tty_speed(arg))
 
 
-def _inner_make_dump(config: Section, _level: int=0) -> List[str]:
-    lines = []
-    for (key, value) in sorted(config.items(), key=operator.itemgetter(0)):
-        indent = " " * _INDENT * _level
-        if isinstance(value, Section):
-            lines.append("%s%s:" % (indent, key))
-            lines += _inner_make_dump(value, _level + 1)
-            lines.append("")
-        else:
-            default = config._get_default(key)  # pylint: disable=protected-access
-            comment = config._get_help(key)  # pylint: disable=protected-access
-            if default == value:
-                lines.append("%s%s: %s # %s" % (indent, key, _make_yaml(value, _level), comment))
-            else:
-                lines.append("%s# %s: %s # %s" % (indent, key, _make_yaml(default, _level), comment))
-                lines.append("%s%s: %s" % (indent, key, _make_yaml(value, _level)))
-    return lines
+# =====
+@pytest.mark.parametrize("arg", ["0 ", 0, 1, 13])
+def test_ok__valid_gpio_pin(arg: Any) -> None:
+    value = valid_gpio_pin(arg)
+    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert value == int(str(arg).strip())
 
 
-def _make_yaml(value: Any, level: int) -> str:
-    dump = yaml.dump(value, indent=_INDENT, allow_unicode=True).replace("\n...\n", "").strip()
-    if isinstance(value, dict) and dump[0] != "{" or isinstance(value, list) and dump[0] != "[":
-        dump = "\n" + textwrap.indent(dump, prefix=" " * _INDENT * (level + 1))
-    return dump
+@pytest.mark.parametrize("arg", ["test", "", None, -1, -13, 1.1])
+def test_fail__valid_gpio_pin(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_gpio_pin(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", ["0 ", -1, 0, 1, 13])
+def test_ok__valid_gpio_pin_optional(arg: Any) -> None:
+    value = valid_gpio_pin_optional(arg)
+    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert value == int(str(arg).strip())
+
+
+@pytest.mark.parametrize("arg", ["test", "", None, -2, -13, 1.1])
+def test_fail__valid_gpio_pin_optional(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_gpio_pin_optional(arg))

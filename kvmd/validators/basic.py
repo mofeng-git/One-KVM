@@ -20,40 +20,54 @@
 # ========================================================================== #
 
 
-import asyncio
+from typing import Type
+from typing import Union
+from typing import Any
 
-from ...logging import get_logger
-
-from ... import gpio
-
-from .. import init
-
-from .auth import AuthManager
-from .info import InfoManager
-from .logreader import LogReader
-from .hid import Hid
-from .atx import Atx
-from .msd import MassStorageDevice
-from .streamer import Streamer
-from .server import Server
+from . import ValidatorError
+from . import raise_error
+from . import check_not_none_string
+from . import check_in_list
 
 
 # =====
-def main() -> None:
-    config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
-    with gpio.bcm():
-        # pylint: disable=protected-access
-        loop = asyncio.get_event_loop()
-        Server(
-            auth_manager=AuthManager(**config.auth._unpack()),
-            info_manager=InfoManager(loop=loop, **config.info._unpack()),
-            log_reader=LogReader(loop=loop),
+def valid_bool(arg: Any) -> bool:
+    true_args = ["1", "true", "yes"]
+    false_args = ["0", "false", "no"]
 
-            hid=Hid(**config.hid._unpack()),
-            atx=Atx(**config.atx._unpack()),
-            msd=MassStorageDevice(loop=loop, **config.msd._unpack()),
-            streamer=Streamer(loop=loop, **config.streamer._unpack()),
+    name = "bool (%r or %r)" % (true_args, false_args)
 
-            loop=loop,
-        ).run(**config.server._unpack())
-    get_logger().info("Bye-bye")
+    arg = check_not_none_string(arg, name).lower()
+    arg = check_in_list(arg, name, true_args + false_args)
+    return (arg in true_args)
+
+
+def valid_number(
+    arg: Any,
+    min: Union[int, float, None]=None,  # pylint: disable=redefined-builtin
+    max: Union[int, float, None]=None,  # pylint: disable=redefined-builtin
+    type: Union[Type[int], Type[float]]=int,  # pylint: disable=redefined-builtin
+    name: str="",
+) -> Union[int, float]:
+
+    name = (name or type.__name__)
+
+    arg = check_not_none_string(arg, name)
+    try:
+        arg = type(arg)
+    except Exception:
+        raise_error(arg, name)
+
+    if min is not None and arg < min:
+        raise ValidatorError("The argument '%s' must be %s and greater or equial than %s" % (arg, name, min))
+    if max is not None and arg > max:
+        raise ValidatorError("The argument '%s' must be %s and lesser or equal then %s" % (arg, name, max))
+    return arg
+
+
+def valid_int_f1(arg: Any) -> int:
+    return int(valid_number(arg, min=1))
+
+
+def valid_float_f01(arg: Any) -> float:
+    return float(valid_number(arg, min=0.1, type=float))

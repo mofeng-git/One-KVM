@@ -26,7 +26,6 @@ from typing import IO
 from typing import Any
 
 import yaml
-import yaml.loader
 import yaml.nodes
 
 
@@ -37,17 +36,17 @@ def load_yaml_file(path: str) -> Any:
             return yaml.load(yaml_file, _YamlLoader)
         except Exception:
             # Reraise internal exception as standard ValueError and show the incorrect file
-            raise ValueError("Incorrect YAML syntax in file '{}'".format(path))
+            raise ValueError("Incorrect YAML syntax in file %r" % (path))
 
 
-class _YamlLoader(yaml.loader.Loader):  # pylint: disable=too-many-ancestors
+class _YamlLoader(yaml.SafeLoader):
     def __init__(self, yaml_file: IO) -> None:
-        yaml.loader.Loader.__init__(self, yaml_file)
+        super().__init__(yaml_file)
         self.__root = os.path.dirname(yaml_file.name)
 
     def include(self, node: yaml.nodes.Node) -> str:
-        path = os.path.join(self.__root, self.construct_scalar(node))  # pylint: disable=no-member
+        path = os.path.join(self.__root, self.construct_scalar(node))
         return load_yaml_file(path)
 
 
-_YamlLoader.add_constructor("!include", _YamlLoader.include)  # pylint: disable=no-member
+_YamlLoader.add_constructor("!include", _YamlLoader.include)

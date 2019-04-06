@@ -1,0 +1,6 @@
+_MassStorageDeviceInfo.manufacturer
+_MassStorageDeviceInfo.product
+_MassStorageDeviceInfo.real
+_MassStorageDeviceInfo.hw
+_MassStorageDeviceInfo.image
+fake_rpi.RPi.GPIO

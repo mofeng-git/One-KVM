@@ -1,3 +1,5 @@
+-include testenv/config.mk
+
 TESTENV_IMAGE ?= kvmd-testenv
 TESTENV_HID ?= /dev/ttyS10
 TESTENV_VIDEO ?= /dev/video0
@@ -11,23 +13,32 @@ all:
 
 
 tox: _testenv
-	- docker run --rm \
-			--volume `pwd`:/kvmd \
-		-it $(TESTENV_IMAGE) bash -c "cd kvmd && tox -c testenv/tox.ini"
+	docker run --rm \
+			--volume `pwd`:/src:ro \
+			--volume `pwd`/testenv:/src/testenv:rw \
+			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
+			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
+		-it $(TESTENV_IMAGE) bash -c " \
+			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/htpasswd /etc/kvmd \
+			&& cp /src/testenv/main.yaml /etc/kvmd \
+			&& cd /src \
+			&& tox -c testenv/tox.ini \
+		"
 
 
 run:
-	make _run TESTENV_CMD="python -m kvmd.apps.kvmd"
+	make _run_app TESTENV_CMD="python -m kvmd.apps.kvmd"
 run-cleanup:
-	make _run TESTENV_CMD="python -m kvmd.apps.cleanup"
+	make _run_app TESTENV_CMD="python -m kvmd.apps.cleanup"
 run-no-cache:
-	make _run TESTENV_CMD="python -m kvmd.apps.kvmd" TESTENV_OPTS=--no-cache
+	make _run_app TESTENV_CMD="python -m kvmd.apps.kvmd" TESTENV_OPTS=--no-cache
 
 
 shell:
-	make _run
+	make _run_app
 shell-no-cache:
-	make _run TESTENV_OPTS=--no-cache
+	make _run_app TESTENV_OPTS=--no-cache
 
 
 regen:
@@ -61,15 +72,15 @@ clean:
 
 clean-all: _testenv clean
 	- docker run --rm \
-			--volume `pwd`:/kvmd \
-		-it $(TESTENV_IMAGE) bash -c "cd kvmd && rm -rf testenv/{.tox,.mypy_cache}"
+			--volume `pwd`:/src \
+		-it $(TESTENV_IMAGE) bash -c "cd src && rm -rf testenv/{.tox,.mypy_cache,.coverage}"
 
 
 _testenv:
 	docker build $(TESTENV_OPTS) --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
 
 
-_run: _testenv
+_run_app: _testenv
 	sudo modprobe loop
 	- docker run --rm \
 			--volume `pwd`/kvmd:/kvmd:ro \

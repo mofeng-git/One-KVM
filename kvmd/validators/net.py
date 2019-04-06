@@ -20,40 +20,48 @@
 # ========================================================================== #
 
 
-import asyncio
+import socket
 
-from ...logging import get_logger
+from typing import Any
 
-from ... import gpio
+from . import check_not_none_string
+from . import check_re_match
+from . import check_any
 
-from .. import init
-
-from .auth import AuthManager
-from .info import InfoManager
-from .logreader import LogReader
-from .hid import Hid
-from .atx import Atx
-from .msd import MassStorageDevice
-from .streamer import Streamer
-from .server import Server
+from .basic import valid_number
 
 
 # =====
-def main() -> None:
-    config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
-    with gpio.bcm():
-        # pylint: disable=protected-access
-        loop = asyncio.get_event_loop()
-        Server(
-            auth_manager=AuthManager(**config.auth._unpack()),
-            info_manager=InfoManager(loop=loop, **config.info._unpack()),
-            log_reader=LogReader(loop=loop),
+def valid_ip_or_host(arg: Any) -> str:
+    name = "IP address or RFC-1123 hostname"
+    return check_any(
+        arg=check_not_none_string(arg, name),
+        name=name,
+        validators=[
+            valid_ip,
+            valid_rfc_host,
+        ],
+    )
 
-            hid=Hid(**config.hid._unpack()),
-            atx=Atx(**config.atx._unpack()),
-            msd=MassStorageDevice(loop=loop, **config.msd._unpack()),
-            streamer=Streamer(loop=loop, **config.streamer._unpack()),
 
-            loop=loop,
-        ).run(**config.server._unpack())
-    get_logger().info("Bye-bye")
+def valid_ip(arg: Any) -> str:
+    name = "IP address"
+    return check_any(
+        arg=check_not_none_string(arg, name),
+        name=name,
+        validators=[
+            lambda arg: (arg, socket.inet_pton(socket.AF_INET, arg))[0],
+            lambda arg: (arg, socket.inet_pton(socket.AF_INET6, arg))[0],
+        ],
+    )
+
+
+def valid_rfc_host(arg: Any) -> str:
+    # http://stackoverflow.com/questions/106179/regular-expression-to-match-hostname-or-ip-address
+    pattern = r"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*" \
+              r"([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$"
+    return check_re_match(arg, "RFC-1123 hostname", pattern)
+
+
+def valid_port(arg: Any) -> int:
+    return int(valid_number(arg, min=0, max=65535, name="TCP/UDP port"))

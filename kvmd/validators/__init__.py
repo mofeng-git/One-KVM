@@ -20,52 +20,64 @@
 # ========================================================================== #
 
 
-import os
-import subprocess
-import time
+import re
 
 from typing import List
-from typing import Optional
-
-from ...logging import get_logger
-
-from ... import gpio
-
-from .. import init
+from typing import Callable
+from typing import NoReturn
+from typing import Any
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
-    config = init("kvmd-cleanup", description="Kill KVMD and clear resources", argv=argv)[2].kvmd
-    logger = get_logger(0)
+class ValidatorError(ValueError):
+    pass
 
-    logger.info("Cleaning up ...")
-    with gpio.bcm():
-        for (name, pin) in [
-            ("hid_reset_pin", config.hid.reset_pin),
-            ("msd_target_pin", config.msd.target_pin),
-            ("msd_reset_pin", config.msd.reset_pin),
-            ("atx_power_switch_pin", config.atx.power_switch_pin),
-            ("atx_reset_switch_pin", config.atx.reset_switch_pin),
-            ("streamer_cap_pin", config.streamer.cap_pin),
-            ("streamer_conv_pin", config.streamer.conv_pin),
-        ]:
-            if pin >= 0:
-                logger.info("Writing value=0 to pin=%d (%s)", pin, name)
-                gpio.set_output(pin, initial=False)
 
-    streamer = os.path.basename(config.streamer.cmd[0])
-    logger.info("Trying to find and kill %r ...", streamer)
-    try:
-        subprocess.check_output(["killall", streamer], stderr=subprocess.STDOUT)
-        time.sleep(3)
-        subprocess.check_output(["killall", "-9", streamer], stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError:
-        pass
+# =====
+def raise_error(arg: Any, name: str, hide: bool=False) -> NoReturn:
+    arg_str = " "
+    if not hide:
+        arg_str = (" %r " if isinstance(arg, (str, bytes)) else " '%s' ") % (arg)
+    raise ValidatorError("The argument" + arg_str + "is not a valid " + name)
 
-    unix_path = config.server.unix
-    if unix_path and os.path.exists(unix_path):
-        logger.info("Removing socket %r ...", unix_path)
-        os.remove(unix_path)
 
-    logger.info("Bye-bye")
+def check_not_none(arg: Any, name: str) -> Any:
+    if arg is None:
+        raise ValidatorError("Empty argument is not a valid %s" % (name))
+    return arg
+
+
+def check_not_none_string(arg: Any, name: str, strip: bool=True) -> str:
+    arg = str(check_not_none(arg, name))
+    if strip:
+        arg = arg.strip()
+    return arg
+
+
+def check_in_list(arg: Any, name: str, variants: List) -> Any:
+    if arg not in variants:
+        raise_error(arg, name)
+    return arg
+
+
+def check_string_in_list(arg: Any, name: str, variants: List[str], lower: bool=True) -> Any:
+    arg = check_not_none_string(arg, name)
+    if lower:
+        arg = arg.lower()
+    return check_in_list(arg, name, variants)
+
+
+def check_re_match(arg: Any, name: str, pattern: str, strip: bool=True, hide: bool=False) -> str:
+    arg = check_not_none_string(arg, name, strip=strip)
+    if re.match(pattern, arg, flags=re.MULTILINE) is None:
+        raise_error(arg, name, hide=hide)
+    return arg
+
+
+def check_any(arg: Any, name: str, validators: List[Callable[[Any], Any]]) -> Any:
+    for validator in validators:
+        try:
+            return validator(arg)
+        except Exception:
+            pass
+    raise_error(arg, name)

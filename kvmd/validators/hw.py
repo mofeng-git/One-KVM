@@ -20,40 +20,23 @@
 # ========================================================================== #
 
 
-import asyncio
+from typing import Any
 
-from ...logging import get_logger
+from . import check_in_list
 
-from ... import gpio
-
-from .. import init
-
-from .auth import AuthManager
-from .info import InfoManager
-from .logreader import LogReader
-from .hid import Hid
-from .atx import Atx
-from .msd import MassStorageDevice
-from .streamer import Streamer
-from .server import Server
+from .basic import valid_number
 
 
 # =====
-def main() -> None:
-    config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
-    with gpio.bcm():
-        # pylint: disable=protected-access
-        loop = asyncio.get_event_loop()
-        Server(
-            auth_manager=AuthManager(**config.auth._unpack()),
-            info_manager=InfoManager(loop=loop, **config.info._unpack()),
-            log_reader=LogReader(loop=loop),
+def valid_tty_speed(arg: Any) -> int:
+    name = "TTY speed"
+    arg = int(valid_number(arg, name=name))
+    return check_in_list(arg, name, [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200])
 
-            hid=Hid(**config.hid._unpack()),
-            atx=Atx(**config.atx._unpack()),
-            msd=MassStorageDevice(loop=loop, **config.msd._unpack()),
-            streamer=Streamer(loop=loop, **config.streamer._unpack()),
 
-            loop=loop,
-        ).run(**config.server._unpack())
-    get_logger().info("Bye-bye")
+def valid_gpio_pin(arg: Any) -> int:
+    return int(valid_number(arg, min=0, name="GPIO pin"))
+
+
+def valid_gpio_pin_optional(arg: Any) -> int:
+    return int(valid_number(arg, min=-1, name="optional GPIO pin"))
