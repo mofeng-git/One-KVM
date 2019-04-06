@@ -28,22 +28,22 @@ def test_gpio__loopback_initial_false() -> None:
     # pylint: disable=singleton-comparison
     with gpio.bcm():
         assert gpio.set_output(0) == 0
-        assert gpio.read(0) == False  # noqa: E712
+        assert gpio.read(0) is False
         gpio.write(0, True)
-        assert gpio.read(0) == True  # noqa: E712
+        assert gpio.read(0) is True
 
 
 def test_gpio__loopback_initial_true() -> None:
     # pylint: disable=singleton-comparison
     with gpio.bcm():
         assert gpio.set_output(0, True) == 0
-        assert gpio.read(0) == True  # noqa: E712
+        assert gpio.read(0) is True
         gpio.write(0, False)
-        assert gpio.read(0) == False  # noqa: E712
+        assert gpio.read(0) is False
 
 
 def test_gpio__input() -> None:
     # pylint: disable=singleton-comparison
     with gpio.bcm():
         assert gpio.set_input(0) == 0
-        assert gpio.read(0) == False  # noqa: E712
+        assert gpio.read(0) is False
