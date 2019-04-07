@@ -87,7 +87,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__loop = loop
 
-        self.__proc_task: Optional[asyncio.Task] = None
+        self.__streamer_task: Optional[asyncio.Task] = None
 
         self.__http_session: Optional[aiohttp.ClientSession] = None
 
@@ -111,7 +111,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         await self.__inner_stop()
 
     def is_running(self) -> bool:
-        return bool(self.__proc_task)
+        return bool(self.__streamer_task)
 
     def get_params(self) -> Dict:
         return dict(self.__params)
@@ -166,16 +166,16 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 self.__http_session = aiohttp.ClientSession()
 
     async def __inner_start(self) -> None:
-        assert not self.__proc_task
+        assert not self.__streamer_task
         await self.__set_hw_enabled(True)
-        self.__proc_task = self.__loop.create_task(self.__process())
+        self.__streamer_task = self.__loop.create_task(self.__run_streamer())
 
     async def __inner_stop(self) -> None:
-        assert self.__proc_task
-        self.__proc_task.cancel()
-        await asyncio.gather(self.__proc_task, return_exceptions=True)
+        assert self.__streamer_task
+        self.__streamer_task.cancel()
+        await asyncio.gather(self.__streamer_task, return_exceptions=True)
         await self.__set_hw_enabled(False)
-        self.__proc_task = None
+        self.__streamer_task = None
 
     async def __set_hw_enabled(self, enabled: bool) -> None:
         # XXX: This sequence is very important to enable converter and cap board
@@ -188,21 +188,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         if enabled:
             await asyncio.sleep(self.__init_delay)
 
-    async def __process(self) -> None:  # pylint: disable=too-many-branches
+    async def __run_streamer(self) -> None:  # pylint: disable=too-many-branches
         logger = get_logger(0)
 
         while True:  # pylint: disable=too-many-nested-blocks
             proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
             try:
-                cmd = [
-                    part.format(
-                        host=self.__host,
-                        port=self.__port,
-                        unix=self.__unix_path,
-                        **self.__params,
-                    )
-                    for part in self.__cmd
-                ]
+                cmd = self.__make_cmd()
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
@@ -237,6 +229,17 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             finally:
                 if proc and proc.returncode is None:
                     await self.__kill(proc)
+
+    def __make_cmd(self) -> List[str]:
+        return [
+            part.format(
+                host=self.__host,
+                port=self.__port,
+                unix=self.__unix_path,
+                **self.__params,
+            )
+            for part in self.__cmd
+        ]
 
     async def __kill(self, proc: asyncio.subprocess.Process) -> None:  # pylint: disable=no-member
         try:
