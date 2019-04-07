@@ -60,7 +60,6 @@ def test_main(tmpdir) -> None:  # type: ignore
         "--set-options",
         "kvmd/server/port=0",
         "kvmd/server/unix=" + kvmd_sock_path,
-        "kvmd/hid/device=/dev/null",
         "kvmd/streamer/port=0",
         "kvmd/streamer/unix=" + ustreamer_sock_path,
         "kvmd/streamer/cmd=[\"%s\"]" % (ustreamer_fake_name),

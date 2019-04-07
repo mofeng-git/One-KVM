@@ -28,6 +28,7 @@ import multiprocessing.queues
 import queue
 import struct
 import pkgutil
+import errno
 import time
 
 from typing import Dict
@@ -188,10 +189,11 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
                 self.__unsafe_clear_events()
                 get_logger().info("Stopping HID daemon ...")
                 self.__stop_event.set()
-                self.join()
             else:
                 get_logger().warning("Emergency cleaning up HID events ...")
                 self.__emergency_clear_events()
+            if self.exitcode is not None:
+                self.join()
             gpio.write(self.__reset_pin, False)
 
     async def __send_bool_event(self, cls: Any, pressed: Set[str], name: str, state: bool) -> None:
@@ -230,26 +232,40 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
                 get_logger().exception("Can't execute emergency clear HID events")
 
     def run(self) -> None:  # pylint: disable=too-many-branches
+        logger = get_logger(0)
+
+        logger.info("Started HID pid=%d", os.getpid())
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         setproctitle.setproctitle("[hid] " + setproctitle.getproctitle())
-        try:
-            with self.__get_serial() as tty:
-                passed = 0
-                while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
-                    try:
-                        event = self.__events_queue.get(timeout=0.05)
-                    except queue.Empty:
-                        if passed >= 20:  # 20 * 0.05 = 1 sec
-                            self.__process_command(tty, b"\x01\x00\x00\x00\x00")  # Ping
-                            passed = 0
+
+        while not self.__stop_event.is_set():
+            try:
+                with self.__get_serial() as tty:
+                    passed = 0
+                    while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
+                        try:
+                            event = self.__events_queue.get(timeout=0.05)
+                        except queue.Empty:
+                            if passed >= 20:  # 20 * 0.05 = 1 sec
+                                self.__process_command(tty, b"\x01\x00\x00\x00\x00")  # Ping
+                                passed = 0
+                            else:
+                                passed += 1
                         else:
-                            passed += 1
-                    else:
-                        self.__process_command(tty, event.make_command())
-                        passed = 0
-        except Exception:
-            get_logger().exception("Unhandled exception")
-            raise
+                            self.__process_command(tty, event.make_command())
+                            passed = 0
+
+            except serial.SerialException as err:
+                if err.errno == errno.ENOENT:
+                    logger.error("Missing HID serial device: %s", self.__device_path)
+                else:
+                    logger.exception("Unexpected HID error")
+
+            except Exception:
+                logger.exception("Unexpected HID error")
+
+            finally:
+                time.sleep(1)
 
     def __get_serial(self) -> serial.Serial:
         return serial.Serial(self.__device_path, self.__speed, timeout=self.__read_timeout)

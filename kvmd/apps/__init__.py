@@ -153,7 +153,7 @@ def _get_config_scheme() -> Dict:
                 "reset_pin":   Option(-1,  type=valid_gpio_pin),
                 "reset_delay": Option(0.1, type=valid_float_f01),
 
-                "device":         Option("",     type=valid_abs_path_exists, unpack_as="device_path"),
+                "device":         Option("",     type=valid_abs_path, unpack_as="device_path"),
                 "speed":          Option(115200, type=valid_tty_speed),
                 "read_timeout":   Option(2.0,    type=valid_float_f01),
                 "read_retries":   Option(10,     type=valid_int_f1),
