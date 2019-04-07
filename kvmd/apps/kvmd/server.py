@@ -36,6 +36,7 @@ from typing import Set
 from typing import Callable
 from typing import Optional
 
+import aiohttp
 import aiohttp.web
 import setproctitle
 
@@ -127,6 +128,13 @@ def _json_exception(err: Exception, status: int) -> aiohttp.web.Response:
         "error": name,
         "error_msg": msg,
     }, status=status)
+
+
+async def _get_multipart_field(reader: aiohttp.MultipartReader, name: str) -> aiohttp.BodyPartReader:
+    field = await reader.next()
+    if not field or field.name != name:
+        raise ValidatorError("Missing %r field" % (name))
+    return field
 
 
 _ATTR_EXPOSED = "exposed"
@@ -450,19 +458,15 @@ class Server:  # pylint: disable=too-many-instance-attributes
         written = 0
         try:
             async with self.__msd:
-                field = await reader.next()
-                if not field or field.name != "image_name":
-                    raise ValidatorError("Missing 'image_name' field")
-                image_name = (await field.read()).decode("utf-8")[:256]
+                name_field = await _get_multipart_field(reader, "image_name")
+                image_name = (await name_field.read()).decode("utf-8")[:256]
 
-                field = await reader.next()
-                if not field or field.name != "image_data":
-                    raise ValidatorError("Missing 'image_data' field")
+                data_field = await _get_multipart_field(reader, "image_data")
 
                 logger.info("Writing image %r to mass-storage device ...", image_name)
                 await self.__msd.write_image_info(image_name, False)
                 while True:
-                    chunk = await field.read_chunk(self.__msd.chunk_size)
+                    chunk = await data_field.read_chunk(self.__msd.chunk_size)
                     if not chunk:
                         break
                     written = await self.__msd.write_image_chunk(chunk)
