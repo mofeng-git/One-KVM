@@ -21,8 +21,7 @@
 
 
 import os
-import string
-import random
+import secrets
 import multiprocessing
 import multiprocessing.queues
 import time
@@ -36,10 +35,7 @@ from kvmd.apps.cleanup import main
 def test_main(tmpdir) -> None:  # type: ignore
     queue: multiprocessing.queues.Queue = multiprocessing.Queue()
 
-    ustreamer_fake_name = "ustr-" + "".join(
-        random.choice(string.ascii_lowercase + string.digits)
-        for _ in range(5)
-    )
+    ustreamer_fake_name = "ustr-" + secrets.token_hex(3)
 
     ustreamer_sock_path = os.path.abspath(str(tmpdir.join("ustreamer-fake.sock")))
     kvmd_sock_path = os.path.abspath(str(tmpdir.join("kvmd-fake.sock")))
