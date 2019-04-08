@@ -117,11 +117,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         return dict(self.__params)
 
     async def get_state(self) -> Dict:
-        self.__ensure_session()
+        session = self.__ensure_session()
         url = "http://%s:%d/state" % (self.__host, self.__port)
         state = None
         try:
-            async with self.__http_session.get(url, timeout=self.__timeout) as response:  # type: ignore
+            async with session.get(url, timeout=self.__timeout) as response:
                 response.raise_for_status()
                 state = (await response.json())["result"]
         except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
@@ -158,12 +158,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             await self.__http_session.close()
             self.__http_session = None
 
-    def __ensure_session(self) -> None:
+    def __ensure_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:
             if self.__unix_path:
                 self.__http_session = aiohttp.ClientSession(connector=aiohttp.UnixConnector(path=self.__unix_path))
             else:
                 self.__http_session = aiohttp.ClientSession()
+        return self.__http_session
 
     async def __inner_start(self) -> None:
         assert not self.__streamer_task
