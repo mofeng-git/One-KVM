@@ -54,7 +54,7 @@ def _htpasswd_fixture(request) -> Generator[passlib.apache.HtpasswdFile, None, N
     os.remove(path)
 
 
-def _run_main(htpasswd: passlib.apache.HtpasswdFile, cmd: List[str]) -> None:
+def _run_htpasswd(htpasswd: passlib.apache.HtpasswdFile, cmd: List[str]) -> None:
     main([
         "kvmd-htpasswd",
         *cmd,
@@ -64,32 +64,32 @@ def _run_main(htpasswd: passlib.apache.HtpasswdFile, cmd: List[str]) -> None:
 
 
 # =====
-def test_ok__main_list(htpasswd: passlib.apache.HtpasswdFile, capsys) -> None:  # type: ignore
-    _run_main(htpasswd, ["list"])
+def test_ok__list(htpasswd: passlib.apache.HtpasswdFile, capsys) -> None:  # type: ignore
+    _run_htpasswd(htpasswd, ["list"])
     (out, err) = capsys.readouterr()
     assert len(err) == 0
     assert sorted(filter(None, out.split("\n"))) == sorted(htpasswd.users()) == sorted(set(htpasswd.users()))
 
 
 # =====
-def test_ok__main_set__change_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__set_change_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
 
         mocker.patch.object(builtins, "input", (lambda: " test "))
-        _run_main(htpasswd, ["set", "admin", "--read-stdin"])
+        _run_htpasswd(htpasswd, ["set", "admin", "--read-stdin"])
 
         htpasswd.load(force=True)
         assert htpasswd.check_password("admin", " test ")
         assert old_users == set(htpasswd.users())
 
 
-def test_ok__main_set__add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__set_add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         mocker.patch.object(builtins, "input", (lambda: " test "))
-        _run_main(htpasswd, ["set", "new", "--read-stdin"])
+        _run_htpasswd(htpasswd, ["set", "new", "--read-stdin"])
 
         htpasswd.load(force=True)
         assert htpasswd.check_password("new", " test ")
@@ -97,20 +97,20 @@ def test_ok__main_set__add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) 
 
 
 # =====
-def test_ok__main_set__change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
 
         mocker.patch.object(getpass, "getpass", (lambda *_, **__: " test "))
-        _run_main(htpasswd, ["set", "admin"])
+        _run_htpasswd(htpasswd, ["set", "admin"])
 
         htpasswd.load(force=True)
         assert htpasswd.check_password("admin", " test ")
         assert old_users == set(htpasswd.users())
 
 
-def test_fail__main_set__change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_fail__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
@@ -129,7 +129,7 @@ def test_fail__main_set__change_getpass(htpasswd: passlib.apache.HtpasswdFile, m
 
         mocker.patch.object(getpass, "getpass", fake_getpass)
         with pytest.raises(SystemExit, match="Sorry, passwords do not match"):
-            _run_main(htpasswd, ["set", "admin"])
+            _run_htpasswd(htpasswd, ["set", "admin"])
         assert count == 2
 
         htpasswd.load(force=True)
@@ -138,13 +138,13 @@ def test_fail__main_set__change_getpass(htpasswd: passlib.apache.HtpasswdFile, m
 
 
 # =====
-def test_ok__main_del(htpasswd: passlib.apache.HtpasswdFile) -> None:
+def test_ok__del(htpasswd: passlib.apache.HtpasswdFile) -> None:
     old_users = set(htpasswd.users())
 
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
 
-    _run_main(htpasswd, ["del", "admin"])
+    _run_htpasswd(htpasswd, ["del", "admin"])
 
     htpasswd.load(force=True)
     assert not htpasswd.check_password("admin", _make_passwd("admin"))

@@ -31,5 +31,5 @@ from kvmd.logging import get_logger
     (1, "_pytest.python"),
     (2, "pluggy.callers"),
 ])
-def test_get_logger(depth: int, name: str) -> None:
+def test_ok__get_logger(depth: int, name: str) -> None:
     assert get_logger(depth).name == name

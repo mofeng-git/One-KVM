@@ -30,7 +30,7 @@ from kvmd.aioregion import AioExclusiveRegion
 
 # =====
 @pytest.mark.asyncio
-async def test_ok__aioregion__one(event_loop: asyncio.AbstractEventLoop) -> None:
+async def test_ok__access_one(event_loop: asyncio.AbstractEventLoop) -> None:
     _ = event_loop
     region = AioExclusiveRegion(RegionIsBusyError)
 
@@ -48,7 +48,7 @@ async def test_ok__aioregion__one(event_loop: asyncio.AbstractEventLoop) -> None
 
 
 @pytest.mark.asyncio
-async def test_fail__aioregion__one(event_loop: asyncio.AbstractEventLoop) -> None:
+async def test_fail__access_one(event_loop: asyncio.AbstractEventLoop) -> None:
     _ = event_loop
     region = AioExclusiveRegion(RegionIsBusyError)
 
@@ -69,7 +69,7 @@ async def test_fail__aioregion__one(event_loop: asyncio.AbstractEventLoop) -> No
 
 # =====
 @pytest.mark.asyncio
-async def test_ok__aioregion__two(event_loop: asyncio.AbstractEventLoop) -> None:
+async def test_ok__access_two(event_loop: asyncio.AbstractEventLoop) -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func1() -> None:
@@ -92,7 +92,7 @@ async def test_ok__aioregion__two(event_loop: asyncio.AbstractEventLoop) -> None
 
 
 @pytest.mark.asyncio
-async def test_fail__aioregion__two(event_loop: asyncio.AbstractEventLoop) -> None:
+async def test_fail__access_two(event_loop: asyncio.AbstractEventLoop) -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func1() -> None:

@@ -26,11 +26,11 @@ from kvmd.keymap import KEYMAP
 
 
 # =====
-def test_keymap__ok() -> None:
+def test_ok__keymap() -> None:
     assert type(KEYMAP["KeyA"]) == int  # pylint: disable=unidiomatic-typecheck
     assert KEYMAP["KeyA"] == 1
 
 
-def test_keymap__fail() -> None:
+def test_fail__keymap() -> None:
     with pytest.raises(KeyError):
         print(KEYMAP["keya"])

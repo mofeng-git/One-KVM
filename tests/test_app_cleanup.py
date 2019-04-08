@@ -32,7 +32,7 @@ from kvmd.apps.cleanup import main
 
 
 # =====
-def test_main(tmpdir) -> None:  # type: ignore
+def test_ok(tmpdir) -> None:  # type: ignore
     queue: multiprocessing.queues.Queue = multiprocessing.Queue()
 
     ustreamer_fake_name = "ustr-" + secrets.token_hex(3)

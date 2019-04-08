@@ -24,7 +24,7 @@ from kvmd import gpio
 
 
 # =====
-def test_gpio__loopback_initial_false() -> None:
+def test_ok__loopback_initial_false() -> None:
     # pylint: disable=singleton-comparison
     with gpio.bcm():
         assert gpio.set_output(0) == 0
@@ -33,7 +33,7 @@ def test_gpio__loopback_initial_false() -> None:
         assert gpio.read(0) is True
 
 
-def test_gpio__loopback_initial_true() -> None:
+def test_ok__loopback_initial_true() -> None:
     # pylint: disable=singleton-comparison
     with gpio.bcm():
         assert gpio.set_output(0, True) == 0
@@ -42,7 +42,7 @@ def test_gpio__loopback_initial_true() -> None:
         assert gpio.read(0) is False
 
 
-def test_gpio__input() -> None:
+def test_ok__input() -> None:
     # pylint: disable=singleton-comparison
     with gpio.bcm():
         assert gpio.set_input(0) == 0
