@@ -138,9 +138,9 @@ def _get_config_scheme() -> Dict:
             },
 
             "auth": {
-                "type": Option("basic", type=valid_auth_type, unpack_as="auth_type"),
-                "basic": {
-                    "htpasswd": Option("/etc/kvmd/htpasswd", type=valid_abs_path_exists, unpack_as="htpasswd_path"),
+                "type": Option("htpasswd", type=valid_auth_type, unpack_as="auth_type"),
+                "htpasswd": {
+                    "file": Option("/etc/kvmd/htpasswd", type=valid_abs_path_exists, unpack_as="path"),
                 },
             },
 

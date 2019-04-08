@@ -44,9 +44,9 @@ from .. import init
 
 # =====
 def _get_htpasswd_path(config: Section) -> str:
-    if config.kvmd.auth.type != "basic":
-        print("Warning: KVMD does not use basic auth", file=sys.stderr)
-    return config.kvmd.auth.basic.htpasswd
+    if config.kvmd.auth.type != "htpasswd":
+        print("Warning: KVMD does not use htpasswd auth", file=sys.stderr)
+    return config.kvmd.auth.htpasswd.file
 
 
 @contextlib.contextmanager
@@ -101,7 +101,7 @@ def main(argv: Optional[List[str]]=None) -> None:
     (parent_parser, argv, config) = init(add_help=False, argv=argv)
     parser = argparse.ArgumentParser(
         prog="kvmd-htpasswd",
-        description="Manage KVMD users (basic auth only)",
+        description="Manage KVMD users (htpasswd auth only)",
         parents=[parent_parser],
     )
     parser.set_defaults(cmd=(lambda *_: parser.print_help()))

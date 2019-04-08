@@ -40,4 +40,4 @@ def valid_auth_token(arg: Any) -> str:
 
 
 def valid_auth_type(arg: Any) -> str:
-    return check_string_in_list(arg, "auth type", ["basic"])
+    return check_string_in_list(arg, "auth type", ["htpasswd"])

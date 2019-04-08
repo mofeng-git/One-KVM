@@ -108,7 +108,7 @@ def test_fail__valid_auth_token(arg: Any) -> None:
         print(valid_auth_token(arg))
 
 
-@pytest.mark.parametrize("arg", ["BASIC ", "basic"])
+@pytest.mark.parametrize("arg", ["HTPASSWD ", "htpasswd"])
 def test_ok__valid_auth_type(arg: Any) -> None:
     assert valid_auth_type(arg) == arg.strip().lower()
 
