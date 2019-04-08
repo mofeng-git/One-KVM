@@ -79,7 +79,7 @@ def test_ok__valid_ip(arg: Any) -> None:
     "",
     None,
 ])
-def test__fail_valid_ip(arg: Any) -> None:
+def test_fail__valid_ip(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_ip(arg))
 

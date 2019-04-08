@@ -64,7 +64,7 @@ def _run_main(htpasswd: passlib.apache.HtpasswdFile, cmd: List[str]) -> None:
 
 
 # =====
-def test_main__list(htpasswd: passlib.apache.HtpasswdFile, capsys) -> None:  # type: ignore
+def test_ok__main_list(htpasswd: passlib.apache.HtpasswdFile, capsys) -> None:  # type: ignore
     _run_main(htpasswd, ["list"])
     (out, err) = capsys.readouterr()
     assert len(err) == 0
@@ -72,7 +72,7 @@ def test_main__list(htpasswd: passlib.apache.HtpasswdFile, capsys) -> None:  # t
 
 
 # =====
-def test_main__set__change_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__main_set__change_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
@@ -85,7 +85,7 @@ def test_main__set__change_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) 
         assert old_users == set(htpasswd.users())
 
 
-def test_main__set__add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__main_set__add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         mocker.patch.object(builtins, "input", (lambda: " test "))
@@ -97,7 +97,7 @@ def test_main__set__add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> 
 
 
 # =====
-def test_main__set__change_getpass__ok(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__main_set__change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
@@ -110,7 +110,7 @@ def test_main__set__change_getpass__ok(htpasswd: passlib.apache.HtpasswdFile, mo
         assert old_users == set(htpasswd.users())
 
 
-def test_main__set__change_getpass__fail(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_fail__main_set__change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
@@ -138,7 +138,7 @@ def test_main__set__change_getpass__fail(htpasswd: passlib.apache.HtpasswdFile, 
 
 
 # =====
-def test_main__del(htpasswd: passlib.apache.HtpasswdFile) -> None:
+def test_ok__main_del(htpasswd: passlib.apache.HtpasswdFile) -> None:
     old_users = set(htpasswd.users())
 
     if old_users:
