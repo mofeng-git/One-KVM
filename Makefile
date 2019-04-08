@@ -13,7 +13,7 @@ all:
 
 
 tox: _testenv
-	docker run --rm \
+	time docker run --rm \
 			--volume `pwd`:/src:ro \
 			--volume `pwd`/testenv:/src/testenv:rw \
 			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \

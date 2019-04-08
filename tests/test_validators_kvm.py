@@ -24,12 +24,18 @@ from typing import Any
 
 import pytest
 
+from kvmd.keymap import KEYMAP
+
 from kvmd.validators import ValidatorError
 from kvmd.validators.kvm import valid_atx_button
 from kvmd.validators.kvm import valid_kvm_target
 from kvmd.validators.kvm import valid_log_seek
 from kvmd.validators.kvm import valid_stream_quality
 from kvmd.validators.kvm import valid_stream_fps
+from kvmd.validators.kvm import valid_hid_key
+from kvmd.validators.kvm import valid_hid_mouse_move
+from kvmd.validators.kvm import valid_hid_mouse_button
+from kvmd.validators.kvm import valid_hid_mouse_wheel
 
 
 # =====
@@ -96,3 +102,68 @@ def test_ok__valid_stream_fps(arg: Any) -> None:
 def test_fail__valid_stream_fps(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_stream_fps(arg))
+
+
+# =====
+def test_ok__valid_hid_key() -> None:
+    for key in KEYMAP:
+        print(valid_hid_key(key))
+        print(valid_hid_key(key + " "))
+
+
+@pytest.mark.parametrize("arg", ["test", "", None, "keya"])
+def test_fail__valid_hid_key(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_hid_key(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", [-20000, "1 ", "-1", 1, -1, 0, "20000 "])
+def test_ok__valid_hid_mouse_move(arg: Any) -> None:
+    assert valid_hid_mouse_move(arg) == int(str(arg).strip())
+
+
+def test_ok__valid_hid_mouse_move__m50000() -> None:
+    assert valid_hid_mouse_move(-50000) == -32768
+
+
+def test_ok__valid_hid_mouse_move__p50000() -> None:
+    assert valid_hid_mouse_move(50000) == 32767
+
+
+@pytest.mark.parametrize("arg", ["test", "", None, 1.1])
+def test_fail__valid_hid_mouse_move(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_hid_mouse_move(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", ["LEFT ", "RIGHT "])
+def test_ok__valid_hid_mouse_button(arg: Any) -> None:
+    assert valid_hid_mouse_button(arg) == arg.strip().lower()
+
+
+@pytest.mark.parametrize("arg", ["test", "", None])
+def test_fail__valid_hid_mouse_button(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_hid_mouse_button(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", [-100, "1 ", "-1", 1, -1, 0, "100 "])
+def test_ok__valid_hid_mouse_wheel(arg: Any) -> None:
+    assert valid_hid_mouse_wheel(arg) == int(str(arg).strip())
+
+
+def test_ok__valid_hid_mouse_wheel__m200() -> None:
+    assert valid_hid_mouse_wheel(-200) == -128
+
+
+def test_ok__valid_hid_mouse_wheel__p200() -> None:
+    assert valid_hid_mouse_wheel(200) == 127
+
+
+@pytest.mark.parametrize("arg", ["test", "", None, 1.1])
+def test_fail__valid_hid_mouse_wheel(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_hid_mouse_wheel(arg))

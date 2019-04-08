@@ -23,8 +23,11 @@
 import re
 
 from typing import List
+from typing import Mapping
+from typing import Sequence
 from typing import Callable
 from typing import NoReturn
+from typing import Union
 from typing import Any
 
 
@@ -54,13 +57,13 @@ def check_not_none_string(arg: Any, name: str, strip: bool=True) -> str:
     return arg
 
 
-def check_in_list(arg: Any, name: str, variants: List) -> Any:
+def check_in_list(arg: Any, name: str, variants: Union[Sequence, Mapping]) -> Any:
     if arg not in variants:
         raise_error(arg, name)
     return arg
 
 
-def check_string_in_list(arg: Any, name: str, variants: List[str], lower: bool=True) -> Any:
+def check_string_in_list(arg: Any, name: str, variants: Union[Sequence[str], Mapping[str, Any]], lower: bool=True) -> Any:
     arg = check_not_none_string(arg, name)
     if lower:
         arg = arg.lower()

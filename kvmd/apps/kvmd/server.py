@@ -47,14 +47,20 @@ from ...aioregion import RegionIsBusyError
 from ...validators import ValidatorError
 
 from ...validators.basic import valid_bool
+
 from ...validators.auth import valid_user
 from ...validators.auth import valid_passwd
 from ...validators.auth import valid_auth_token
+
 from ...validators.kvm import valid_atx_button
 from ...validators.kvm import valid_kvm_target
 from ...validators.kvm import valid_log_seek
 from ...validators.kvm import valid_stream_quality
 from ...validators.kvm import valid_stream_fps
+from ...validators.kvm import valid_hid_key
+from ...validators.kvm import valid_hid_mouse_move
+from ...validators.kvm import valid_hid_mouse_button
+from ...validators.kvm import valid_hid_mouse_wheel
 
 from ... import __version__
 
@@ -384,28 +390,32 @@ class Server:  # pylint: disable=too-many-instance-attributes
         return ws
 
     async def __handle_ws_key_event(self, event: Dict) -> None:
-        key = str(event.get("key", ""))[:64].strip()
-        state = event.get("state")
-        if key and state in [True, False]:
-            await self.__hid.send_key_event(key, state)
+        try:
+            key = valid_hid_key(event["key"])
+            state = valid_bool(event["state"])
+        except Exception:
+            return
+        await self.__hid.send_key_event(key, state)
 
     async def __handle_ws_mouse_move_event(self, event: Dict) -> None:
         try:
-            to_x = int(event["to"]["x"])
-            to_y = int(event["to"]["y"])
+            to_x = valid_hid_mouse_move(event["to"]["x"])
+            to_y = valid_hid_mouse_move(event["to"]["y"])
         except Exception:
             return
         await self.__hid.send_mouse_move_event(to_x, to_y)
 
     async def __handle_ws_mouse_button_event(self, event: Dict) -> None:
-        button = str(event.get("button", ""))[:64].strip()
-        state = event.get("state")
-        if button and state in [True, False]:
-            await self.__hid.send_mouse_button_event(button, state)
+        try:
+            button = valid_hid_mouse_button(event["button"])
+            state = valid_bool(event["state"])
+        except Exception:
+            return
+        await self.__hid.send_mouse_button_event(button, state)
 
     async def __handle_ws_mouse_wheel_event(self, event: Dict) -> None:
         try:
-            delta_y = int(event["delta"]["y"])
+            delta_y = valid_hid_mouse_wheel(event["delta"]["y"])
         except Exception:
             return
         await self.__hid.send_mouse_wheel_event(delta_y)

@@ -20,50 +20,17 @@
 # ========================================================================== #
 
 
-from typing import Any
+import pkgutil
 
-from .. import keymap
+from typing import Dict
 
-from . import check_string_in_list
-
-from .basic import valid_number
+import yaml
 
 
 # =====
-def valid_atx_button(arg: Any) -> str:
-    return check_string_in_list(arg, "ATX button", ["power", "power_long", "reset"])
-
-
-def valid_kvm_target(arg: Any) -> str:
-    return check_string_in_list(arg, "KVM target", ["kvm", "server"])
-
-
-def valid_log_seek(arg: Any) -> int:
-    return int(valid_number(arg, min=0, name="log seek"))
-
-
-def valid_stream_quality(arg: Any) -> int:
-    return int(valid_number(arg, min=1, max=100, name="stream quality"))
-
-
-def valid_stream_fps(arg: Any) -> int:
-    return int(valid_number(arg, min=0, max=30, name="stream FPS"))
+def _get_keymap() -> Dict[str, int]:
+    return yaml.safe_load(pkgutil.get_data("kvmd", "data/keymap.yaml").decode())  # type: ignore
 
 
 # =====
-def valid_hid_key(arg: Any) -> str:
-    return check_string_in_list(arg, "HID key", keymap.KEYMAP, lower=False)
-
-
-def valid_hid_mouse_move(arg: Any) -> int:
-    arg = valid_number(arg, name="HID mouse move")
-    return min(max(-32768, arg), 32767)
-
-
-def valid_hid_mouse_button(arg: Any) -> str:
-    return check_string_in_list(arg, "HID mouse button", ["left", "right"])
-
-
-def valid_hid_mouse_wheel(arg: Any) -> int:
-    arg = valid_number(arg, name="HID mouse wheel")
-    return min(max(-128, arg), 127)
+KEYMAP = _get_keymap()
