@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # ========================================================================== #
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
@@ -21,58 +20,30 @@
 # ========================================================================== #
 
 
-from setuptools import setup
+from typing import Dict
+
+import passlib.apache
+
+from ...yamlconf import Option
+
+from ...validators.fs import valid_abs_path_exists
+
+from . import BaseAuthService
 
 
 # =====
-def main() -> None:
-    setup(
-        name="kvmd",
-        version="0.149",
-        url="https://github.com/pi-kvm/pi-kvm",
-        license="GPLv3",
-        author="Maxim Devaev",
-        author_email="mdevaev@gmail.com",
-        description="The main Pi-KVM daemon",
-        platforms="any",
+class Plugin(BaseAuthService):
+    PLUGIN_NAME = "htpasswd"
 
-        packages=[
-            "kvmd",
-            "kvmd.validators",
-            "kvmd.yamlconf",
-            "kvmd.plugins",
-            "kvmd.plugins.auth",
-            "kvmd.apps",
-            "kvmd.apps.kvmd",
-            "kvmd.apps.htpasswd",
-            "kvmd.apps.cleanup",
-        ],
+    def __init__(self, path: str) -> None:  # pylint: disable=super-init-not-called
+        self.__path = path
 
-        package_data={
-            "kvmd": ["data/*.yaml"],
-        },
+    @classmethod
+    def get_options(cls) -> Dict[str, Option]:
+        return {
+            "file": Option("/etc/kvmd/htpasswd", type=valid_abs_path_exists, unpack_as="path"),
+        }
 
-        entry_points={
-            "console_scripts": [
-                "kvmd = kvmd.apps.kvmd:main",
-                "kvmd-htpasswd = kvmd.apps.htpasswd:main",
-                "kvmd-cleanup = kvmd.apps.cleanup:main",
-            ],
-        },
-
-        classifiers=[
-            "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-            "Development Status :: 3 - Alpha",
-            "Programming Language :: Python :: 3.6",
-            "Programming Language :: Python :: 3.7",
-            "Topic :: System :: Systems Administration",
-            "Operating System :: POSIX :: Linux",
-            "Intended Audience :: System Administrators",
-            "Intended Audience :: End Users/Desktop",
-            "Intended Audience :: Telecommunications Industry",
-        ],
-    )
-
-
-if __name__ == "__main__":
-    main()
+    async def login(self, user: str, passwd: str) -> bool:
+        htpasswd = passlib.apache.HtpasswdFile(self.__path)
+        return htpasswd.check_password(user, passwd)

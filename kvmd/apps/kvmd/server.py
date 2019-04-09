@@ -311,7 +311,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
     @_exposed("POST", "/auth/login", auth_required=False)
     async def __auth_login_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         credentials = await request.post()
-        token = self._auth_manager.login(
+        token = await self._auth_manager.login(
             user=valid_user(credentials.get("user", "")),
             passwd=valid_passwd(credentials.get("passwd", "")),
         )
@@ -533,9 +533,18 @@ class Server:  # pylint: disable=too-many-instance-attributes
             await self.__remove_socket(ws)
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
-        await self.__streamer.cleanup()
-        await self.__msd.cleanup()
-        await self.__hid.cleanup()
+        logger = get_logger(0)
+        for obj in [
+            self._auth_manager,
+            self.__streamer,
+            self.__msd,
+            self.__hid,
+        ]:
+            logger.info("Cleaning up %s ...", type(obj).__name__)
+            try:
+                await obj.cleanup()  # type: ignore
+            except Exception:
+                logger.exception("Cleanup error")
 
     async def __broadcast_event(self, event_type: _Events, event_attrs: Dict) -> None:
         if self.__sockets:

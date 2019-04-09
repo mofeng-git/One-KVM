@@ -22,7 +22,6 @@
 
 from typing import Any
 
-from . import check_string_in_list
 from . import check_re_match
 
 
@@ -37,7 +36,3 @@ def valid_passwd(arg: Any) -> str:
 
 def valid_auth_token(arg: Any) -> str:
     return check_re_match(arg, "auth token", r"^[0-9a-f]{64}$", hide=True)
-
-
-def valid_auth_type(arg: Any) -> str:
-    return check_string_in_list(arg, "auth type", ["htpasswd"])

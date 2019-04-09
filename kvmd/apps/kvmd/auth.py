@@ -22,33 +22,56 @@
 
 import secrets
 
+from typing import List
 from typing import Dict
 from typing import Optional
 
-import passlib.apache
-
 from ...logging import get_logger
+
+from ...plugins.auth import BaseAuthService
+from ...plugins.auth import get_auth_service_class
 
 
 # =====
 class AuthManager:
-    def __init__(self, auth_type: str, htpasswd: Dict) -> None:
-        self.__login = {
-            "htpasswd": lambda: _HtpasswdLogin(**htpasswd),
-        }[auth_type]().login
+    def __init__(
+        self,
+        internal_users: List[str],
+
+        internal_type: str,
+        external_type: str,
+
+        internal: Dict,
+        external: Dict,
+    ) -> None:
+
+        self.__internal_users = internal_users
+        self.__internal_service = get_auth_service_class(internal_type)(**internal)
+        get_logger().info("Using internal login service %r", self.__internal_service.PLUGIN_NAME)
+
+        self.__external_service: Optional[BaseAuthService] = None
+        if external_type:
+            self.__external_service = get_auth_service_class(external_type)(**external)
+            get_logger().info("Using external login service %r", self.__external_service.PLUGIN_NAME)
+
         self.__tokens: Dict[str, str] = {}  # {token: user}
 
-    def login(self, user: str, passwd: str) -> Optional[str]:
-        if self.__login(user, passwd):
+    async def login(self, user: str, passwd: str) -> Optional[str]:
+        if user not in self.__internal_users and self.__external_service:
+            service = self.__external_service
+        else:
+            service = self.__internal_service
+
+        if (await service.login(user, passwd)):
             for (token, token_user) in self.__tokens.items():
                 if user == token_user:
                     return token
             token = secrets.token_hex(32)
             self.__tokens[token] = user
-            get_logger().info("Logged in user %r", user)
+            get_logger().info("Logged in user %r via login service %r", user, service.PLUGIN_NAME)
             return token
         else:
-            get_logger().error("Access denied for user %r", user)
+            get_logger().error("Access denied for user %r from login service %r", user, service.PLUGIN_NAME)
             return None
 
     def logout(self, token: str) -> None:
@@ -59,12 +82,7 @@ class AuthManager:
     def check(self, token: str) -> Optional[str]:
         return self.__tokens.get(token)
 
-
-class _HtpasswdLogin:
-    def __init__(self, path: str) -> None:
-        get_logger().info("Using htpasswd auth file %r", path)
-        self.__path = path
-
-    def login(self, user: str, passwd: str) -> bool:
-        htpasswd = passlib.apache.HtpasswdFile(self.__path)
-        return htpasswd.check_password(user, passwd)
+    async def cleanup(self) -> None:
+        await self.__internal_service.cleanup()
+        if self.__external_service:
+            await self.__external_service.cleanup()

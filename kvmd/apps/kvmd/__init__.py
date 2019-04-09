@@ -22,6 +22,9 @@
 
 import asyncio
 
+from typing import List
+from typing import Optional
+
 from ...logging import get_logger
 
 from ... import gpio
@@ -39,13 +42,19 @@ from .server import Server
 
 
 # =====
-def main() -> None:
-    config = init("kvmd", description="The main Pi-KVM daemon")[2].kvmd
+def main(argv: Optional[List[str]]=None) -> None:
+    config = init("kvmd", description="The main Pi-KVM daemon", argv=argv)[2].kvmd
     with gpio.bcm():
         # pylint: disable=protected-access
         loop = asyncio.get_event_loop()
         Server(
-            auth_manager=AuthManager(**config.auth._unpack()),
+            auth_manager=AuthManager(
+                internal_users=config.auth.internal_users,
+                internal_type=config.auth.internal_type,
+                external_type=config.auth.external_type,
+                internal=config.auth.internal._unpack(),
+                external=(config.auth.external._unpack() if config.auth.external_type else {}),
+            ),
             info_manager=InfoManager(loop=loop, **config.info._unpack()),
             log_reader=LogReader(loop=loop),
 

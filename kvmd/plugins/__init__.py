@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # ========================================================================== #
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
@@ -21,58 +20,52 @@
 # ========================================================================== #
 
 
-from setuptools import setup
+import importlib
+import functools
+import os
+
+from typing import Dict
+from typing import Type
+from typing import Any
+
+from ..yamlconf import Option
 
 
 # =====
-def main() -> None:
-    setup(
-        name="kvmd",
-        version="0.149",
-        url="https://github.com/pi-kvm/pi-kvm",
-        license="GPLv3",
-        author="Maxim Devaev",
-        author_email="mdevaev@gmail.com",
-        description="The main Pi-KVM daemon",
-        platforms="any",
-
-        packages=[
-            "kvmd",
-            "kvmd.validators",
-            "kvmd.yamlconf",
-            "kvmd.plugins",
-            "kvmd.plugins.auth",
-            "kvmd.apps",
-            "kvmd.apps.kvmd",
-            "kvmd.apps.htpasswd",
-            "kvmd.apps.cleanup",
-        ],
-
-        package_data={
-            "kvmd": ["data/*.yaml"],
-        },
-
-        entry_points={
-            "console_scripts": [
-                "kvmd = kvmd.apps.kvmd:main",
-                "kvmd-htpasswd = kvmd.apps.htpasswd:main",
-                "kvmd-cleanup = kvmd.apps.cleanup:main",
-            ],
-        },
-
-        classifiers=[
-            "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-            "Development Status :: 3 - Alpha",
-            "Programming Language :: Python :: 3.6",
-            "Programming Language :: Python :: 3.7",
-            "Topic :: System :: Systems Administration",
-            "Operating System :: POSIX :: Linux",
-            "Intended Audience :: System Administrators",
-            "Intended Audience :: End Users/Desktop",
-            "Intended Audience :: Telecommunications Industry",
-        ],
-    )
+class UnknownPluginError(Exception):
+    pass
 
 
-if __name__ == "__main__":
-    main()
+# =====
+class BasePlugin:
+    PLUGIN_NAME: str = ""
+
+    def __init__(self, **_: Any) -> None:
+        pass
+
+    @classmethod
+    def get_options(cls) -> Dict[str, Option]:
+        return {}
+
+
+# =====
+def get_plugin_class(sub: str, name: str) -> Type[BasePlugin]:
+    classes = _get_plugin_classes(sub)
+    try:
+        return classes[name]
+    except KeyError:
+        raise UnknownPluginError("Unknown plugin '%s/%s'" % (sub, name))
+
+
+# =====
+@functools.lru_cache()
+def _get_plugin_classes(sub: str) -> Dict[str, Type[BasePlugin]]:
+    classes: Dict[str, Type[BasePlugin]] = {}  # noqa: E701
+    sub_path = os.path.join(os.path.dirname(__file__), sub)
+    for file_name in os.listdir(sub_path):
+        if not file_name.startswith("__") and file_name.endswith(".py"):
+            module_name = file_name[:-3]
+            module = importlib.import_module("kvmd.plugins.{}.{}".format(sub, module_name))
+            plugin_class = getattr(module, "Plugin")
+            classes[plugin_class.PLUGIN_NAME] = plugin_class
+    return classes

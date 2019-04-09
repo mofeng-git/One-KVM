@@ -28,7 +28,6 @@ from kvmd.validators import ValidatorError
 from kvmd.validators.auth import valid_user
 from kvmd.validators.auth import valid_passwd
 from kvmd.validators.auth import valid_auth_token
-from kvmd.validators.auth import valid_auth_type
 
 
 # =====
@@ -106,14 +105,3 @@ def test_ok__valid_auth_token(arg: Any) -> None:
 def test_fail__valid_auth_token(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_auth_token(arg))
-
-
-@pytest.mark.parametrize("arg", ["HTPASSWD ", "htpasswd"])
-def test_ok__valid_auth_type(arg: Any) -> None:
-    assert valid_auth_type(arg) == arg.strip().lower()
-
-
-@pytest.mark.parametrize("arg", ["test", "", None])
-def test_fail__valid_auth_type(arg: Any) -> None:
-    with pytest.raises(ValidatorError):
-        print(valid_auth_type(arg))

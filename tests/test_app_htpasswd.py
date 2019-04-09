@@ -59,7 +59,7 @@ def _run_htpasswd(htpasswd: passlib.apache.HtpasswdFile, cmd: List[str]) -> None
         "kvmd-htpasswd",
         *cmd,
         "--set-options",
-        "kvmd/auth/htpasswd/file=" + htpasswd.path,
+        "kvmd/auth/internal/file=" + htpasswd.path,
     ])
 
 

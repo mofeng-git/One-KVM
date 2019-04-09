@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # ========================================================================== #
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
@@ -21,58 +20,50 @@
 # ========================================================================== #
 
 
-from setuptools import setup
+from typing import AsyncGenerator
+
+import aiohttp.web
+
+import pytest
+
+from kvmd.plugins.auth import get_auth_service_class
 
 
 # =====
-def main() -> None:
-    setup(
-        name="kvmd",
-        version="0.149",
-        url="https://github.com/pi-kvm/pi-kvm",
-        license="GPLv3",
-        author="Maxim Devaev",
-        author_email="mdevaev@gmail.com",
-        description="The main Pi-KVM daemon",
-        platforms="any",
+async def _handle_auth_post(request: aiohttp.web.BaseRequest) -> aiohttp.web.Response:
+    status = 400
+    if request.method == "POST":
+        credentials = (await request.json())
+        if credentials["user"] == "admin" and credentials["passwd"] == "foobar":
+            status = 200
+    return aiohttp.web.Response(text=str(status), status=status)
 
-        packages=[
-            "kvmd",
-            "kvmd.validators",
-            "kvmd.yamlconf",
-            "kvmd.plugins",
-            "kvmd.plugins.auth",
-            "kvmd.apps",
-            "kvmd.apps.kvmd",
-            "kvmd.apps.htpasswd",
-            "kvmd.apps.cleanup",
-        ],
 
-        package_data={
-            "kvmd": ["data/*.yaml"],
-        },
+@pytest.fixture(name="auth_server_port")
+async def _auth_server_port_fixture(aiohttp_server) -> AsyncGenerator[int, None]:  # type: ignore
+    app = aiohttp.web.Application()
+    app.router.add_post("/auth_post", _handle_auth_post)
+    server = await aiohttp_server(app)
+    try:
+        yield server.port
+    finally:
+        await server.close()
 
-        entry_points={
-            "console_scripts": [
-                "kvmd = kvmd.apps.kvmd:main",
-                "kvmd-htpasswd = kvmd.apps.htpasswd:main",
-                "kvmd-cleanup = kvmd.apps.cleanup:main",
-            ],
-        },
 
-        classifiers=[
-            "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-            "Development Status :: 3 - Alpha",
-            "Programming Language :: Python :: 3.6",
-            "Programming Language :: Python :: 3.7",
-            "Topic :: System :: Systems Administration",
-            "Operating System :: POSIX :: Linux",
-            "Intended Audience :: System Administrators",
-            "Intended Audience :: End Users/Desktop",
-            "Intended Audience :: Telecommunications Industry",
-        ],
+# =====
+@pytest.mark.asyncio
+async def test_ok__http_service(auth_server_port: int) -> None:
+    service = get_auth_service_class("http")(
+        url="http://localhost:%d/auth_post" % (auth_server_port),
+        verify=False,
+        post=True,
+        user="",
+        passwd="",
+        timeout=5.0,
     )
 
+    assert not (await service.login("admin", "foo"))
+    assert not (await service.login("user", "foo"))
+    assert (await service.login("admin", "foobar"))
 
-if __name__ == "__main__":
-    main()
+    await service.cleanup()

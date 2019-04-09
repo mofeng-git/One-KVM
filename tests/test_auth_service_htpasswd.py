@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # ========================================================================== #
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
@@ -21,58 +20,36 @@
 # ========================================================================== #
 
 
-from setuptools import setup
+import os
+
+import passlib.apache
+
+import pytest
+
+from kvmd.plugins.auth import get_auth_service_class
 
 
 # =====
-def main() -> None:
-    setup(
-        name="kvmd",
-        version="0.149",
-        url="https://github.com/pi-kvm/pi-kvm",
-        license="GPLv3",
-        author="Maxim Devaev",
-        author_email="mdevaev@gmail.com",
-        description="The main Pi-KVM daemon",
-        platforms="any",
+@pytest.mark.asyncio
+async def test_ok__htpasswd_service(tmpdir) -> None:  # type: ignore
+    path = os.path.abspath(str(tmpdir.join("htpasswd")))
 
-        packages=[
-            "kvmd",
-            "kvmd.validators",
-            "kvmd.yamlconf",
-            "kvmd.plugins",
-            "kvmd.plugins.auth",
-            "kvmd.apps",
-            "kvmd.apps.kvmd",
-            "kvmd.apps.htpasswd",
-            "kvmd.apps.cleanup",
-        ],
+    htpasswd = passlib.apache.HtpasswdFile(path, new=True)
+    htpasswd.set_password("admin", "foo")
+    htpasswd.save()
 
-        package_data={
-            "kvmd": ["data/*.yaml"],
-        },
+    service = get_auth_service_class("htpasswd")(path=path)
 
-        entry_points={
-            "console_scripts": [
-                "kvmd = kvmd.apps.kvmd:main",
-                "kvmd-htpasswd = kvmd.apps.htpasswd:main",
-                "kvmd-cleanup = kvmd.apps.cleanup:main",
-            ],
-        },
+    assert (await service.login("admin", "foo"))
+    assert not (await service.login("user", "foo"))
 
-        classifiers=[
-            "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-            "Development Status :: 3 - Alpha",
-            "Programming Language :: Python :: 3.6",
-            "Programming Language :: Python :: 3.7",
-            "Topic :: System :: Systems Administration",
-            "Operating System :: POSIX :: Linux",
-            "Intended Audience :: System Administrators",
-            "Intended Audience :: End Users/Desktop",
-            "Intended Audience :: Telecommunications Industry",
-        ],
-    )
+    htpasswd.set_password("admin", "bar")
+    htpasswd.set_password("user", "bar")
+    htpasswd.save()
 
+    assert (await service.login("admin", "bar"))
+    assert (await service.login("user", "bar"))
+    assert not (await service.login("admin", "foo"))
+    assert not (await service.login("user", "foo"))
 
-if __name__ == "__main__":
-    main()
+    await service.cleanup()

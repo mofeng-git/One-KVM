@@ -35,6 +35,9 @@ import pygments
 import pygments.lexers.data
 import pygments.formatters
 
+from ..plugins import UnknownPluginError
+from ..plugins.auth import get_auth_service_class
+
 from ..yamlconf import ConfigError
 from ..yamlconf import make_config
 from ..yamlconf import Section
@@ -54,8 +57,6 @@ from ..validators.fs import valid_unix_mode
 
 from ..validators.net import valid_ip_or_host
 from ..validators.net import valid_port
-
-from ..validators.auth import valid_auth_type
 
 from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
@@ -84,29 +85,11 @@ def init(
     args_parser.add_argument("-m", "--dump-config", dest="dump_config", action="store_true",
                              help="View current configuration (include all overrides)")
     (options, remaining) = args_parser.parse_known_args(argv)
-    raw_config: Dict = {}
 
-    if options.config_path:
-        options.config_path = os.path.expanduser(options.config_path)
-        raw_config = load_yaml_file(options.config_path)
-
-    scheme = _get_config_scheme()
-    try:
-        _merge_dicts(raw_config, build_raw_from_options(options.set_options))
-        config = make_config(raw_config, scheme)
-    except ConfigError as err:
-        raise SystemExit("Config error: " + str(err))
-
+    config = _init_config(options.config_path, options.set_options)
     if options.dump_config:
-        dump = make_config_dump(config)
-        if sys.stdout.isatty():
-            dump = pygments.highlight(
-                dump,
-                pygments.lexers.data.YamlLexer(),
-                pygments.formatters.TerminalFormatter(bg="dark"),  # pylint: disable=no-member
-            )
-        print(dump)
-        sys.exit(0)
+        _dump_config(config)
+        raise SystemExit()
 
     logging.captureWarnings(True)
     logging.config.dictConfig(config.logging)
@@ -114,6 +97,35 @@ def init(
 
 
 # =====
+def _init_config(config_path: str, options: List[str]) -> Section:
+    config_path = os.path.expanduser(config_path)
+    raw_config: Dict = load_yaml_file(config_path)
+
+    scheme = _get_config_scheme()
+    try:
+        _merge_dicts(raw_config, build_raw_from_options(options))
+        config = make_config(raw_config, scheme)
+
+        scheme["kvmd"]["auth"]["internal"] = get_auth_service_class(config.kvmd.auth.internal_type).get_options()
+        if config.kvmd.auth.external_type:
+            scheme["kvmd"]["auth"]["external"] = get_auth_service_class(config.kvmd.auth.external_type).get_options()
+
+        return make_config(raw_config, scheme)
+    except (ConfigError, UnknownPluginError) as err:
+        raise SystemExit("Config error: %s" % (str(err)))
+
+
+def _dump_config(config: Section) -> None:
+    dump = make_config_dump(config)
+    if sys.stdout.isatty():
+        dump = pygments.highlight(
+            dump,
+            pygments.lexers.data.YamlLexer(),
+            pygments.formatters.TerminalFormatter(bg="dark"),  # pylint: disable=no-member
+        )
+    print(dump)
+
+
 def _merge_dicts(dest: Dict, src: Dict) -> None:
     for key in src:
         if key in dest:
@@ -138,10 +150,11 @@ def _get_config_scheme() -> Dict:
             },
 
             "auth": {
-                "type": Option("htpasswd", type=valid_auth_type, unpack_as="auth_type"),
-                "htpasswd": {
-                    "file": Option("/etc/kvmd/htpasswd", type=valid_abs_path_exists, unpack_as="path"),
-                },
+                "internal_users": Option([]),
+                "internal_type":  Option("htpasswd"),
+                "external_type":  Option(""),
+                # "internal": {},
+                # "external": {},
             },
 
             "info": {
