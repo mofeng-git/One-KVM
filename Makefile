@@ -4,12 +4,26 @@ TESTENV_IMAGE ?= kvmd-testenv
 TESTENV_HID ?= /dev/ttyS10
 TESTENV_VIDEO ?= /dev/video0
 TESTENV_LOOP ?= /dev/loop7
-TESTENV_CMD ?= /bin/bash
 
 
 # =====
 all:
-	cat Makefile
+	@ echo "Useful commands:"
+	@ echo "    make                # Print this help"
+	@ echo "    make tox            # Run tests and linters"
+	@ echo "    make tox E=pytest   # Run selected test environment"
+	@ echo "    make shell          # Run shell in the docker test environment"
+	@ echo "    make run            # Run kvmd"
+	@ echo "    make run CMD=...    # Run specified command in the docker test environment"
+	@ echo "    make regen          # Regen some sources like keymap"
+	@ echo "    make bump           # Bump minor version"
+	@ echo "    make bump V=major   # Bump major version"
+	@ echo "    make release        # Publish the new release (include bump minor)"
+	@ echo "    make clean          # Remove garbage"
+	@ echo "    make clean-all      # Remove garbage and test results"
+	@ echo
+	@ echo "Also you can add option NC=1 to rebuild docker test environment"
+
 
 
 tox: _testenv
@@ -23,22 +37,16 @@ tox: _testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/htpasswd /etc/kvmd \
 			&& cp /src/testenv/main.yaml /etc/kvmd \
 			&& cd /src \
-			&& tox -c testenv/tox.ini -p auto \
+			&& tox -c testenv/tox.ini $(if $(E), -e $(E), -p auto) \
 		"
 
 
 run:
-	make _run_app TESTENV_CMD="python -m kvmd.apps.kvmd"
-run-cleanup:
-	make _run_app TESTENV_CMD="python -m kvmd.apps.cleanup"
-run-no-cache:
-	make _run_app TESTENV_CMD="python -m kvmd.apps.kvmd" TESTENV_OPTS=--no-cache
+	make _run_cmd CMD="python -m kvmd.apps.kvmd"
 
 
 shell:
-	make _run_app
-shell-no-cache:
-	make _run_app TESTENV_OPTS=--no-cache
+	make _run_cmd CMD=/bin/bash
 
 
 regen:
@@ -54,8 +62,9 @@ release:
 	make push
 	make clean
 
+
 bump:
-	bumpversion minor
+	bumpversion $(if $(V), $(V), minor)
 
 
 push:
@@ -65,8 +74,7 @@ push:
 
 clean:
 	rm -rf build site dist pkg src v*.tar.gz *.pkg.tar.xz *.egg-info kvmd-*.tar.gz
-	find kvmd -name __pycache__ | xargs rm -rf
-	rm -rf __pycache__
+	find -name __pycache__ | xargs rm -rf
 	make -C hid clean
 
 
@@ -76,18 +84,19 @@ clean-all: _testenv clean
 		-it $(TESTENV_IMAGE) bash -c "cd src && rm -rf testenv/{.tox,.mypy_cache,.coverage}"
 
 
+# =====
 _testenv:
-	docker build $(TESTENV_OPTS) --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
+	docker build $(if $(NC), --no-cache,) --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
 
 
-_run_app: _testenv
+_run_cmd: _testenv
 	sudo modprobe loop
 	- docker run --rm \
+			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
 			--volume `pwd`/web:/usr/share/kvmd/web:ro \
 			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
-			--volume `pwd`/testenv:/testenv:ro \
 			--device $(TESTENV_LOOP):/dev/kvmd-msd \
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
 			--publish 8080:80/tcp \
@@ -103,6 +112,6 @@ _run_app: _testenv
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 			&& (losetup -d /dev/kvmd-msd || true) \
 			&& losetup /dev/kvmd-msd /root/loop.img \
-			&& $(TESTENV_CMD) \
+			&& $(if $(CMD), $(CMD), /bin/bash) \
 		"
 	- docker run --rm --device=$(TESTENV_LOOP):/dev/kvmd-msd -it $(TESTENV_IMAGE) losetup -d /dev/kvmd-msd
