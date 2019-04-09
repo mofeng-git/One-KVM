@@ -206,8 +206,6 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         reset_delay: float,
         write_meta: bool,
         chunk_size: int,
-
-        loop: asyncio.AbstractEventLoop,
     ) -> None:
 
         self._enabled = enabled
@@ -226,8 +224,6 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__write_meta = write_meta
         self.chunk_size = chunk_size
 
-        self.__loop = loop
-
         self.__device_info: Optional[_MassStorageDeviceInfo] = None
         self.__saved_device_info: Optional[_MassStorageDeviceInfo] = None
         self.__region = aioregion.AioExclusiveRegion(MsdIsBusyError)
@@ -241,7 +237,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             logger.info("Using %r as mass-storage device", self._device_path)
             try:
                 logger.info("Enabled image metadata writing")
-                loop.run_until_complete(self.connect_to_kvm(no_delay=True))
+                asyncio.get_event_loop().run_until_complete(self.connect_to_kvm(no_delay=True))
             except Exception as err:
                 if isinstance(err, MsdError):
                     log = logger.error
@@ -366,10 +362,10 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         assert self.__device_file
         await self.__device_file.write(data)
         await self.__device_file.flush()
-        await self.__loop.run_in_executor(None, os.fsync, self.__device_file.fileno())
+        await asyncio.get_running_loop().run_in_executor(None, os.fsync, self.__device_file.fileno())
 
     async def __load_device_info(self) -> None:
-        device_info = await self.__loop.run_in_executor(None, _explore_device, self._device_path)
+        device_info = await asyncio.get_running_loop().run_in_executor(None, _explore_device, self._device_path)
         if not device_info:
             raise MsdError("Can't explore device %r" % (self._device_path))
         self.__device_info = self.__saved_device_info = device_info

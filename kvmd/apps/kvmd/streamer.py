@@ -61,8 +61,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         timeout: float,
 
         cmd: List[str],
-
-        loop: asyncio.AbstractEventLoop,
     ) -> None:
 
         self.__cap_pin = (gpio.set_output(cap_pin) if cap_pin >= 0 else -1)
@@ -86,8 +84,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__timeout = timeout
 
         self.__cmd = cmd
-
-        self.__loop = loop
 
         self.__streamer_task: Optional[asyncio.Task] = None
 
@@ -174,7 +170,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     async def __inner_start(self) -> None:
         assert not self.__streamer_task
         await self.__set_hw_enabled(True)
-        self.__streamer_task = self.__loop.create_task(self.__run_streamer())
+        self.__streamer_task = asyncio.get_running_loop().create_task(self.__run_streamer())
 
     async def __inner_stop(self) -> None:
         assert self.__streamer_task

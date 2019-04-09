@@ -37,19 +37,16 @@ class InfoManager:
         self,
         meta_path: str,
         extras_path: str,
-        loop: asyncio.AbstractEventLoop,
     ) -> None:
 
         self.__meta_path = meta_path
         self.__extras_path = extras_path
 
-        self.__loop = loop
-
     async def get_meta(self) -> Dict:
-        return (await self.__loop.run_in_executor(None, load_yaml_file, self.__meta_path))
+        return (await asyncio.get_running_loop().run_in_executor(None, load_yaml_file, self.__meta_path))
 
     async def get_extras(self) -> Dict:
-        return (await self.__loop.run_in_executor(None, self.__sync_get_extras))
+        return (await asyncio.get_running_loop().run_in_executor(None, self.__sync_get_extras))
 
     def __sync_get_extras(self) -> Dict:
         try:

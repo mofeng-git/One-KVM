@@ -30,8 +30,7 @@ from kvmd.aioregion import AioExclusiveRegion
 
 # =====
 @pytest.mark.asyncio
-async def test_ok__access_one(event_loop: asyncio.AbstractEventLoop) -> None:
-    _ = event_loop
+async def test_ok__access_one() -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func() -> None:
@@ -48,8 +47,7 @@ async def test_ok__access_one(event_loop: asyncio.AbstractEventLoop) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fail__access_one(event_loop: asyncio.AbstractEventLoop) -> None:
-    _ = event_loop
+async def test_fail__access_one() -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func() -> None:
@@ -69,19 +67,19 @@ async def test_fail__access_one(event_loop: asyncio.AbstractEventLoop) -> None:
 
 # =====
 @pytest.mark.asyncio
-async def test_ok__access_two(event_loop: asyncio.AbstractEventLoop) -> None:
+async def test_ok__access_two() -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func1() -> None:
         with region:
-            await asyncio.sleep(1, loop=event_loop)
+            await asyncio.sleep(1)
         print("done func1()")
 
     async def func2() -> None:
         await asyncio.sleep(2)
         print("waiking up func2()")
         with region:
-            await asyncio.sleep(1, loop=event_loop)
+            await asyncio.sleep(1)
         print("done func2()")
 
     await asyncio.gather(func1(), func2())
@@ -92,21 +90,21 @@ async def test_ok__access_two(event_loop: asyncio.AbstractEventLoop) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fail__access_two(event_loop: asyncio.AbstractEventLoop) -> None:
+async def test_fail__access_two() -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func1() -> None:
         with region:
-            await asyncio.sleep(2, loop=event_loop)
+            await asyncio.sleep(2)
         print("done func1()")
 
     async def func2() -> None:
         await asyncio.sleep(1)
         with region:
-            await asyncio.sleep(1, loop=event_loop)
+            await asyncio.sleep(1)
         print("done func2()")
 
-    results = await asyncio.gather(func1(), func2(), loop=event_loop, return_exceptions=True)
+    results = await asyncio.gather(func1(), func2(), return_exceptions=True)
     assert results[0] is None
     assert type(results[1]) == RegionIsBusyError  # pylint: disable=unidiomatic-typecheck
 

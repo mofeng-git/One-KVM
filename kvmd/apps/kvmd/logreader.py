@@ -32,9 +32,6 @@ import systemd.journal
 
 # =====
 class LogReader:
-    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
-        self.__loop = loop
-
     async def poll_log(self, seek: int, follow: bool) -> AsyncGenerator[Dict, None]:
         reader = systemd.journal.Reader()
         reader.this_boot()

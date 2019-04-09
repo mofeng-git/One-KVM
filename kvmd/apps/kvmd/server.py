@@ -217,8 +217,6 @@ class Server:  # pylint: disable=too-many-instance-attributes
         atx: Atx,
         msd: MassStorageDevice,
         streamer: Streamer,
-
-        loop: asyncio.AbstractEventLoop,
     ) -> None:
 
         self._auth_manager = auth_manager
@@ -229,8 +227,6 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__atx = atx
         self.__msd = msd
         self.__streamer = streamer
-
-        self.__loop = loop
 
         self.__heartbeat: Optional[float] = None  # Assigned in run() for consistance
         self.__sockets: Set[aiohttp.web.WebSocketResponse] = set()
@@ -257,23 +253,6 @@ class Server:  # pylint: disable=too-many-instance-attributes
         setproctitle.setproctitle("[main] " + setproctitle.getproctitle())
 
         self.__heartbeat = heartbeat
-        app = aiohttp.web.Application(loop=self.__loop)
-        app.on_shutdown.append(self.__on_shutdown)
-        app.on_cleanup.append(self.__on_cleanup)
-
-        for name in dir(self):
-            method = getattr(self, name)
-            if inspect.ismethod(method):
-                if getattr(method, _ATTR_SYSTEM_TASK, False):
-                    self.__system_tasks.append(self.__loop.create_task(method()))
-                elif getattr(method, _ATTR_EXPOSED, False):
-                    # router = app.router
-                    router = getattr(app, "router")  # FIXME: Dirty hack to avoid pylint crash
-                    router.add_route(
-                        getattr(method, _ATTR_EXPOSED_METHOD),
-                        getattr(method, _ATTR_EXPOSED_PATH),
-                        method,
-                    )
 
         assert port or unix_path
         if unix_path:
@@ -289,7 +268,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             socket_kwargs = {"host": host, "port": port}
 
         aiohttp.web.run_app(
-            app=app,
+            app=self.__make_app(),
             access_log_format=access_log_format,
             print=self.__run_app_print,
             **socket_kwargs,
@@ -513,7 +492,27 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__reset_streamer = True
         return _json()
 
-    # =====
+    # ===== SYSTEM STUFF
+
+    async def __make_app(self) -> aiohttp.web.Application:
+        app = aiohttp.web.Application()
+        app.on_shutdown.append(self.__on_shutdown)
+        app.on_cleanup.append(self.__on_cleanup)
+
+        for name in dir(self):
+            method = getattr(self, name)
+            if inspect.ismethod(method):
+                if getattr(method, _ATTR_SYSTEM_TASK, False):
+                    self.__system_tasks.append(asyncio.create_task(method()))
+                elif getattr(method, _ATTR_EXPOSED, False):
+                    # router = app.router
+                    router = getattr(app, "router")  # FIXME: Dirty hack to avoid pylint crash
+                    router.add_route(
+                        getattr(method, _ATTR_EXPOSED_METHOD),
+                        getattr(method, _ATTR_EXPOSED_PATH),
+                        method,
+                    )
+        return app
 
     def __run_app_print(self, text: str) -> None:
         logger = get_logger()
