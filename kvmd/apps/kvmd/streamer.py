@@ -36,6 +36,8 @@ from ...logging import get_logger
 
 from ... import gpio
 
+from ... import __version__
+
 
 # =====
 class Streamer:  # pylint: disable=too-many-instance-attributes
@@ -118,10 +120,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     async def get_state(self) -> Dict:
         session = self.__ensure_session()
-        url = "http://%s:%d/state" % (self.__host, self.__port)
         state = None
         try:
-            async with session.get(url, timeout=self.__timeout) as response:
+            async with session.get(
+                url="http://%s:%d/state" % (self.__host, self.__port),
+                headers={"User-Agent": "KVMD/%s" % (__version__)},
+                timeout=self.__timeout,
+            ) as response:
                 response.raise_for_status()
                 state = (await response.json())["result"]
         except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
