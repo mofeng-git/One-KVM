@@ -42,7 +42,7 @@ tox: _testenv
 
 
 run:
-	make _run_cmd CMD="python -m kvmd.apps.kvmd"
+	make _run_cmd CMD="$(if $(CMD), $(CMD), python -m kvmd.apps.kvmd)"
 
 
 shell:
