@@ -53,10 +53,10 @@ from ..validators.basic import valid_float_f01
 
 from ..validators.auth import valid_users_list
 
-from ..validators.fs import valid_abs_path
-from ..validators.fs import valid_abs_path_exists
-from ..validators.fs import valid_unix_mode
-from ..validators.fs import valid_command
+from ..validators.os import valid_abs_path
+from ..validators.os import valid_abs_path_exists
+from ..validators.os import valid_unix_mode
+from ..validators.os import valid_command
 
 from ..validators.net import valid_ip_or_host
 from ..validators.net import valid_port

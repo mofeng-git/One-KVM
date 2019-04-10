@@ -28,10 +28,10 @@ from typing import Any
 import pytest
 
 from kvmd.validators import ValidatorError
-from kvmd.validators.fs import valid_abs_path
-from kvmd.validators.fs import valid_abs_path_exists
-from kvmd.validators.fs import valid_unix_mode
-from kvmd.validators.fs import valid_command
+from kvmd.validators.os import valid_abs_path
+from kvmd.validators.os import valid_abs_path_exists
+from kvmd.validators.os import valid_unix_mode
+from kvmd.validators.os import valid_command
 
 
 # =====

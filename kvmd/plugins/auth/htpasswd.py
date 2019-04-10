@@ -26,7 +26,7 @@ import passlib.apache
 
 from ...yamlconf import Option
 
-from ...validators.fs import valid_abs_path_exists
+from ...validators.os import valid_abs_path_exists
 
 from . import BaseAuthService
 
