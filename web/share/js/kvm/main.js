@@ -24,6 +24,12 @@ var wm;
 
 function main() {
 	if (checkBrowser()) {
+		window.onbeforeunload = function(event) {
+			var text = "Are you sure you want to close Pi-KVM session?";
+			event.returnValue = text;
+			return text;
+		};
+
 		wm = new WindowManager();
 
 		tools.setOnClick($("show-about-button"), () => wm.showWindow($("about-window")));
