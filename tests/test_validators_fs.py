@@ -22,6 +22,7 @@
 
 import os
 
+from typing import List
 from typing import Any
 
 import pytest
@@ -30,6 +31,7 @@ from kvmd.validators import ValidatorError
 from kvmd.validators.fs import valid_abs_path
 from kvmd.validators.fs import valid_abs_path_exists
 from kvmd.validators.fs import valid_unix_mode
+from kvmd.validators.fs import valid_command
 
 
 # =====
@@ -89,3 +91,28 @@ def test_ok__valid_unix_mode(arg: Any) -> None:
 def test_fail__valid_unix_mode(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_unix_mode(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg, retval", [
+    (["/bin/true"],          ["/bin/true"]),
+    (["/bin/true", 1, 2, 3], ["/bin/true", "1", "2", "3"]),
+    ("/bin/true, 1, 2, 3,",  ["/bin/true", "1", "2", "3"]),
+    ("/bin/true",            ["/bin/true"]),
+])
+def test_ok__valid_command(arg: Any, retval: List[str]) -> None:
+    assert valid_command(arg) == retval
+
+
+@pytest.mark.parametrize("arg", [
+    ["/bin/blahblahblah"],
+    ["/bin/blahblahblah", 1, 2, 3],
+    [" "],
+    [],
+    "/bin/blahblahblah, 1, 2, 3,",
+    "/bin/blahblahblah",
+    " ",
+])
+def test_fail__valid_command(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_command(arg))

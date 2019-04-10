@@ -51,9 +51,12 @@ from ..validators.basic import valid_number
 from ..validators.basic import valid_int_f1
 from ..validators.basic import valid_float_f01
 
+from ..validators.auth import valid_users_list
+
 from ..validators.fs import valid_abs_path
 from ..validators.fs import valid_abs_path_exists
 from ..validators.fs import valid_unix_mode
+from ..validators.fs import valid_command
 
 from ..validators.net import valid_ip_or_host
 from ..validators.net import valid_port
@@ -150,7 +153,7 @@ def _get_config_scheme() -> Dict:
             },
 
             "auth": {
-                "internal_users": Option([]),
+                "internal_users": Option([], type=valid_users_list),
                 "internal_type":  Option("htpasswd"),
                 "external_type":  Option(""),
                 # "internal": {},
@@ -222,7 +225,7 @@ def _get_config_scheme() -> Dict:
                 "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
                 "timeout": Option(2.0, type=valid_float_f01),
 
-                "cmd": Option(["/bin/true"]),  # TODO: Validator
+                "cmd": Option(["/bin/true"], type=valid_command),
             },
         },
 

@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+from typing import List
 from typing import Any
 
 import pytest
@@ -29,6 +30,7 @@ from kvmd.validators.basic import valid_bool
 from kvmd.validators.basic import valid_number
 from kvmd.validators.basic import valid_int_f1
 from kvmd.validators.basic import valid_float_f01
+from kvmd.validators.basic import valid_string_list
 
 
 # =====
@@ -105,3 +107,38 @@ def test_ok__valid_float_f01(arg: Any) -> None:
 def test_fail__valid_float_f01(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_float_f01(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg, retval", [
+    ("a, b, c",       ["a", "b", "c"]),
+    ("a b c",         ["a", "b", "c"]),
+    (["a", "b", "c"], ["a", "b", "c"]),
+    ("",              []),
+    (" ",             []),
+    (", ",            []),
+    (", a, ",         ["a"]),
+    ([],              []),
+])
+def test_ok__valid_string_list(arg: Any, retval: List) -> None:
+    assert valid_string_list(arg) == retval
+
+
+@pytest.mark.parametrize("arg, retval", [
+    ("1, 2, 3", [1, 2, 3]),
+    ("1 2 3",   [1, 2, 3]),
+    ([1, 2, 3], [1, 2, 3]),
+    ("",        []),
+    (" ",       []),
+    (", ",      []),
+    (", 1, ",   [1]),
+    ([],        []),
+])
+def test_ok__valid_string_list__subval(arg: Any, retval: List) -> None:  # pylint: disable=invalid-name
+    assert valid_string_list(arg, subval=int) == retval
+
+
+@pytest.mark.parametrize("arg", [None, [None]])
+def test_fail__valid_string_list(arg: Any) -> None:  # pylint: disable=invalid-name
+    with pytest.raises(ValidatorError):
+        print(valid_string_list(arg))

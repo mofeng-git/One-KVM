@@ -20,7 +20,12 @@
 # ========================================================================== #
 
 
+import re
+
+from typing import List
 from typing import Type
+from typing import Callable
+from typing import Optional
 from typing import Union
 from typing import Any
 
@@ -71,3 +76,27 @@ def valid_int_f1(arg: Any) -> int:
 
 def valid_float_f01(arg: Any) -> float:
     return float(valid_number(arg, min=0.1, type=float))
+
+
+def valid_string_list(
+    arg: Any,
+    delim: str=r"[,\t ]+",
+    subval: Optional[Callable[[Any], Any]]=None,
+    name: str="",
+) -> List[str]:
+
+    if not name:
+        name = "string list"
+
+    if subval is None:
+        subval = (lambda item: check_not_none_string(item, name + " item"))
+
+    if not isinstance(arg, (list, tuple)):
+        arg = check_not_none_string(arg, name)
+        arg = list(filter(None, re.split(delim, arg)))
+    if subval is not None:
+        try:
+            arg = list(map(subval, arg))
+        except Exception:
+            raise ValidatorError("Failed sub-validator on one of the item of %r" % (arg))
+    return arg

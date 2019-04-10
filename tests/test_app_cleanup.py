@@ -35,7 +35,8 @@ from kvmd.apps.cleanup import main
 def test_ok(tmpdir) -> None:  # type: ignore
     queue: multiprocessing.queues.Queue = multiprocessing.Queue()
 
-    ustreamer_fake_name = "ustr-" + secrets.token_hex(3)
+    ustreamer_tmp_path = os.path.abspath(str(tmpdir.join("ustr-" + secrets.token_hex(3))))
+    os.symlink("/usr/bin/ustreamer", ustreamer_tmp_path)
 
     ustreamer_sock_path = os.path.abspath(str(tmpdir.join("ustreamer-fake.sock")))
     open(ustreamer_sock_path, "w").close()
@@ -43,7 +44,7 @@ def test_ok(tmpdir) -> None:  # type: ignore
     open(kvmd_sock_path, "w").close()
 
     def ustreamer_fake() -> None:
-        setproctitle.setproctitle(ustreamer_fake_name)
+        setproctitle.setproctitle(os.path.basename(ustreamer_tmp_path))
         queue.put(True)
         while True:
             time.sleep(1)
@@ -60,7 +61,7 @@ def test_ok(tmpdir) -> None:  # type: ignore
         "kvmd/server/unix=" + kvmd_sock_path,
         "kvmd/streamer/port=0",
         "kvmd/streamer/unix=" + ustreamer_sock_path,
-        "kvmd/streamer/cmd=[\"%s\"]" % (ustreamer_fake_name),
+        "kvmd/streamer/cmd=" + ustreamer_tmp_path,
     ])
 
     assert not os.path.exists(ustreamer_sock_path)

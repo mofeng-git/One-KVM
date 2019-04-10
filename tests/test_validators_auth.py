@@ -20,12 +20,14 @@
 # ========================================================================== #
 
 
+from typing import List
 from typing import Any
 
 import pytest
 
 from kvmd.validators import ValidatorError
 from kvmd.validators.auth import valid_user
+from kvmd.validators.auth import valid_users_list
 from kvmd.validators.auth import valid_passwd
 from kvmd.validators.auth import valid_auth_token
 
@@ -56,6 +58,27 @@ def test_ok__valid_user(arg: Any) -> None:
 def test_fail__valid_user(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_user(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg, retval", [
+    ("foo, bar, ",     ["foo", "bar"]),
+    ("foo bar",      ["foo", "bar"]),
+    (["foo", "bar"], ["foo", "bar"]),
+    ("",             []),
+    (" ",            []),
+    (", ",           []),
+    (", foo, ",      ["foo"]),
+    ([],             []),
+])
+def test_ok__valid_users_list(arg: Any, retval: List) -> None:
+    assert valid_users_list(arg) == retval
+
+
+@pytest.mark.parametrize("arg", [None, [None], [""], [" "], ["user,"]])
+def test_fail__valid_users_list(arg: Any) -> None:  # pylint: disable=invalid-name
+    with pytest.raises(ValidatorError):
+        print(valid_users_list(arg))
 
 
 # =====
