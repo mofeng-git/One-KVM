@@ -74,7 +74,7 @@ push:
 
 clean:
 	rm -rf build site dist pkg src v*.tar.gz *.pkg.tar.xz *.egg-info kvmd-*.tar.gz
-	find -name __pycache__ | xargs rm -rf
+	find kvmd tests -name __pycache__ | xargs rm -rf
 	make -C hid clean
 
 
