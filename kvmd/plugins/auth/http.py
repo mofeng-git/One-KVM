@@ -90,6 +90,7 @@ class Plugin(BaseAuthService):
         try:
             async with session.request(**kwargs) as response:
                 response.raise_for_status()
+                assert response.status == 200
             return True
         except Exception:
             get_logger().exception("Failed HTTP auth request for user %r", user)
