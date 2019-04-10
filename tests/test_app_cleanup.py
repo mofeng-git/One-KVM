@@ -38,7 +38,9 @@ def test_ok(tmpdir) -> None:  # type: ignore
     ustreamer_fake_name = "ustr-" + secrets.token_hex(3)
 
     ustreamer_sock_path = os.path.abspath(str(tmpdir.join("ustreamer-fake.sock")))
+    open(ustreamer_sock_path, "w").close()
     kvmd_sock_path = os.path.abspath(str(tmpdir.join("kvmd-fake.sock")))
+    open(kvmd_sock_path, "w").close()
 
     def ustreamer_fake() -> None:
         setproctitle.setproctitle(ustreamer_fake_name)
@@ -60,9 +62,9 @@ def test_ok(tmpdir) -> None:  # type: ignore
         "kvmd/streamer/unix=" + ustreamer_sock_path,
         "kvmd/streamer/cmd=[\"%s\"]" % (ustreamer_fake_name),
     ])
-    assert not proc.is_alive()
 
     assert not os.path.exists(ustreamer_sock_path)
     assert not os.path.exists(kvmd_sock_path)
 
+    assert not proc.is_alive()
     proc.join()
