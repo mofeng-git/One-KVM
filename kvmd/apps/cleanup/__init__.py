@@ -60,7 +60,7 @@ def main(argv: Optional[List[str]]=None) -> None:
         subprocess.check_output(["killall", streamer], stderr=subprocess.STDOUT)
         time.sleep(3)
         subprocess.check_output(["killall", "-9", streamer], stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError:  # pragma: nocover
         pass
 
     for (owner, unix_path) in [
@@ -71,7 +71,7 @@ def main(argv: Optional[List[str]]=None) -> None:
             logger.info("Removing %s socket %r ...", owner, unix_path)
             try:
                 os.remove(unix_path)
-            except Exception:
+            except Exception:  # pragma: nocover
                 logger.exception("Can't remove %s socket %r", owner, unix_path)
 
     logger.info("Bye-bye")
