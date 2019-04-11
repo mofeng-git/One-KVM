@@ -35,12 +35,14 @@ async def test_ok__htpasswd_service(tmpdir) -> None:  # type: ignore
     path = os.path.abspath(str(tmpdir.join("htpasswd")))
 
     htpasswd = passlib.apache.HtpasswdFile(path, new=True)
-    htpasswd.set_password("admin", "foo")
+    htpasswd.set_password("admin", "pass")
     htpasswd.save()
 
     async with get_configured_auth_service("htpasswd", file=path) as service:
-        assert (await service.login("admin", "foo"))
         assert not (await service.login("user", "foo"))
+        assert not (await service.login("admin", "foo"))
+        assert not (await service.login("user", "pass"))
+        assert (await service.login("admin", "pass"))
 
         htpasswd.set_password("admin", "bar")
         htpasswd.set_password("user", "bar")

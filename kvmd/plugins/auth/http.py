@@ -46,7 +46,6 @@ class Plugin(BaseAuthService):
         self,
         url: str,
         verify: bool,
-        post: bool,
         user: str,
         passwd: str,
         timeout: float,
@@ -54,7 +53,6 @@ class Plugin(BaseAuthService):
 
         self.__url = url
         self.__verify = verify
-        self.__post = post
         self.__user = user
         self.__passwd = passwd
         self.__timeout = timeout
@@ -64,31 +62,29 @@ class Plugin(BaseAuthService):
     @classmethod
     def get_options(cls) -> Dict[str, Option]:
         return {
-            "url":     Option("http://localhost/auth_post"),
+            "url":     Option("http://localhost/auth"),
             "verify":  Option(True, type=valid_bool),
-            "post":    Option(True, type=valid_bool),
             "user":    Option(""),
             "passwd":  Option(""),
             "timeout": Option(5.0, type=valid_float_f01),
         }
 
     async def login(self, user: str, passwd: str) -> bool:
-        kwargs: Dict = {
-            "method": "GET",
-            "url": self.__url,
-            "timeout": self.__timeout,
-            "headers": {
-                "User-Agent": "KVMD/%s" % (__version__),
-                "X-KVMD-User": user,
-            },
-        }
-        if self.__post:
-            kwargs["method"] = "POST"
-            kwargs["json"] = {"user": user, "passwd": passwd}
-
         session = self.__ensure_session()
         try:
-            async with session.request(**kwargs) as response:
+            async with session.request(
+                method="POST",
+                url=self.__url,
+                timeout=self.__timeout,
+                json={
+                    "user": user,
+                    "passwd": passwd
+                },
+                headers={
+                    "User-Agent": "KVMD/%s" % (__version__),
+                    "X-KVMD-User": user,
+                },
+            ) as response:
                 response.raise_for_status()
                 assert response.status == 200
             return True
