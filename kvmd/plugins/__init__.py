@@ -41,11 +41,11 @@ class BasePlugin:
     PLUGIN_NAME: str = ""
 
     def __init__(self, **_: Any) -> None:
-        pass
+        pass  # pragma: nocover
 
     @classmethod
     def get_options(cls) -> Dict[str, Option]:
-        return {}
+        return {}  # pragma: nocover
 
 
 # =====

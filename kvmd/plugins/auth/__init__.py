@@ -29,7 +29,7 @@ from .. import get_plugin_class
 # =====
 class BaseAuthService(BasePlugin):
     async def login(self, user: str, passwd: str) -> bool:
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: nocover
 
     async def cleanup(self) -> None:
         pass
