@@ -54,18 +54,18 @@ def _htpasswd_fixture(request) -> Generator[passlib.apache.HtpasswdFile, None, N
     os.remove(path)
 
 
-def _run_htpasswd(htpasswd: passlib.apache.HtpasswdFile, cmd: List[str]) -> None:
-    main([
-        "kvmd-htpasswd",
-        *cmd,
-        "--set-options",
-        "kvmd/auth/internal/file=" + htpasswd.path,
-    ])
+def _run_htpasswd(cmd: List[str], htpasswd_path: str, internal_type: str="htpasswd") -> None:
+    cmd = ["kvmd-htpasswd", *cmd, "--set-options"]
+    if internal_type != "htpasswd":  # By default
+        cmd.append("kvmd/auth/internal_type=" + internal_type)
+    if htpasswd_path:
+        cmd.append("kvmd/auth/internal/file=" + htpasswd_path)
+    main(cmd)
 
 
 # =====
 def test_ok__list(htpasswd: passlib.apache.HtpasswdFile, capsys) -> None:  # type: ignore
-    _run_htpasswd(htpasswd, ["list"])
+    _run_htpasswd(["list"], htpasswd.path)
     (out, err) = capsys.readouterr()
     assert len(err) == 0
     assert sorted(filter(None, out.split("\n"))) == sorted(htpasswd.users()) == sorted(set(htpasswd.users()))
@@ -78,7 +78,7 @@ def test_ok__set_change_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> 
         assert htpasswd.check_password("admin", _make_passwd("admin"))
 
         mocker.patch.object(builtins, "input", (lambda: " test "))
-        _run_htpasswd(htpasswd, ["set", "admin", "--read-stdin"])
+        _run_htpasswd(["set", "admin", "--read-stdin"], htpasswd.path)
 
         htpasswd.load(force=True)
         assert htpasswd.check_password("admin", " test ")
@@ -89,7 +89,7 @@ def test_ok__set_add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> Non
     old_users = set(htpasswd.users())
     if old_users:
         mocker.patch.object(builtins, "input", (lambda: " test "))
-        _run_htpasswd(htpasswd, ["set", "new", "--read-stdin"])
+        _run_htpasswd(["set", "new", "--read-stdin"], htpasswd.path)
 
         htpasswd.load(force=True)
         assert htpasswd.check_password("new", " test ")
@@ -103,7 +103,7 @@ def test_ok__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -
         assert htpasswd.check_password("admin", _make_passwd("admin"))
 
         mocker.patch.object(getpass, "getpass", (lambda *_, **__: " test "))
-        _run_htpasswd(htpasswd, ["set", "admin"])
+        _run_htpasswd(["set", "admin"], htpasswd.path)
 
         htpasswd.load(force=True)
         assert htpasswd.check_password("admin", " test ")
@@ -129,7 +129,7 @@ def test_fail__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker)
 
         mocker.patch.object(getpass, "getpass", fake_getpass)
         with pytest.raises(SystemExit, match="Sorry, passwords do not match"):
-            _run_htpasswd(htpasswd, ["set", "admin"])
+            _run_htpasswd(["set", "admin"], htpasswd.path)
         assert count == 2
 
         htpasswd.load(force=True)
@@ -144,8 +144,27 @@ def test_ok__del(htpasswd: passlib.apache.HtpasswdFile) -> None:
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
 
-    _run_htpasswd(htpasswd, ["del", "admin"])
+    _run_htpasswd(["del", "admin"], htpasswd.path)
 
     htpasswd.load(force=True)
     assert not htpasswd.check_password("admin", _make_passwd("admin"))
     assert old_users.difference(["admin"]) == set(htpasswd.users())
+
+
+# =====
+def test_fail__not_htpasswd() -> None:
+    with pytest.raises(SystemExit, match="Error: KVMD internal auth not using 'htpasswd'"):
+        _run_htpasswd(["list"], "", internal_type="http")
+
+
+def test_fail__unknown_plugin() -> None:
+    with pytest.raises(SystemExit, match="Config error: Unknown plugin 'auth/foobar'"):
+        _run_htpasswd(["list"], "", internal_type="foobar")
+
+
+def test_fail__invalid_passwd(mocker, tmpdir) -> None:  # type: ignore
+    path = os.path.abspath(str(tmpdir.join("htpasswd")))
+    open(path, "w").close()
+    mocker.patch.object(builtins, "input", (lambda: "\n"))
+    with pytest.raises(SystemExit, match="The argument is not a valid passwd characters"):
+        _run_htpasswd(["set", "admin", "--read-stdin"], path)
