@@ -46,7 +46,7 @@ def build_raw_from_options(options: List[str]) -> Dict[str, Any]:
             raise ConfigError("No value for key %r" % (key))
 
         section = raw
-        subs = list(map(str.strip, key.split("/")))
+        subs = list(filter(None, map(str.strip, key.split("/"))))
         for sub in subs[:-1]:
             section.setdefault(sub, {})
             section = section[sub]
