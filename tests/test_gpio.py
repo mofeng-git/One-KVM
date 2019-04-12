@@ -20,30 +20,39 @@
 # ========================================================================== #
 
 
+import pytest
+
 from kvmd import gpio
 
 
 # =====
-def test_ok__loopback_initial_false() -> None:
-    # pylint: disable=singleton-comparison
+@pytest.mark.parametrize("pin", [0, 1, 13])
+def test_ok__loopback_initial_false(pin: int) -> None:
     with gpio.bcm():
-        assert gpio.set_output(0) == 0
-        assert gpio.read(0) is False
-        gpio.write(0, True)
-        assert gpio.read(0) is True
+        assert gpio.set_output(pin) == pin
+        assert gpio.read(pin) is False
+        gpio.write(pin, True)
+        assert gpio.read(pin) is True
 
 
-def test_ok__loopback_initial_true() -> None:
-    # pylint: disable=singleton-comparison
+@pytest.mark.parametrize("pin", [0, 1, 13])
+def test_ok__loopback_initial_true(pin: int) -> None:
     with gpio.bcm():
-        assert gpio.set_output(0, True) == 0
-        assert gpio.read(0) is True
-        gpio.write(0, False)
-        assert gpio.read(0) is False
+        assert gpio.set_output(pin, True) == pin
+        assert gpio.read(pin) is True
+        gpio.write(pin, False)
+        assert gpio.read(pin) is False
 
 
-def test_ok__input() -> None:
-    # pylint: disable=singleton-comparison
+@pytest.mark.parametrize("pin", [0, 1, 13])
+def test_ok__input(pin: int) -> None:
     with gpio.bcm():
-        assert gpio.set_input(0) == 0
-        assert gpio.read(0) is False
+        assert gpio.set_input(pin) == pin
+        assert gpio.read(pin) is False
+
+
+def test_fail__invalid_pin() -> None:
+    with pytest.raises(AssertionError):
+        gpio.set_output(-1)
+    with pytest.raises(AssertionError):
+        gpio.set_input(-1)
