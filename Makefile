@@ -49,8 +49,12 @@ shell:
 	make _run_cmd CMD=/bin/bash
 
 
-regen:
-	python3 genmap.py
+regen: _testenv
+	for file in kvmd/data/keymap.yaml hid/src/keymap.h; do \
+		docker run --user `id -u`:`id -g` --rm \
+			--volume `pwd`:/src \
+		-it $(TESTENV_IMAGE) bash -c "cd src && ./genmap.py keymap.in $$file.mako $$file"; \
+	done
 
 
 release:

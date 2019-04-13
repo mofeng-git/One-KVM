@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # ========================================================================== #
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
@@ -20,55 +19,7 @@
 #                                                                            #
 # ========================================================================== #
 
-
-import sys
-import textwrap
-
-from typing import List
-from typing import NamedTuple
-
-import mako.template
-
-
-# =====
-class _KeyMapping(NamedTuple):
-    kvmd_code: int
-    arduino_hid_key: str
-    web_key: str
-
-
-def _read_keymap_in(path: str) -> List[_KeyMapping]:
-    keymap: List[_KeyMapping] = []
-    with open(path) as keymap_file:
-        for line in keymap_file:
-            line = line.strip()
-            if len(line) > 0 and not line.startswith("#"):
-                parts = list(map(str.strip, line.split()))
-                if len(parts) >= 3:
-                    keymap.append(_KeyMapping(
-                        kvmd_code=int(parts[0]),
-                        arduino_hid_key=parts[1],
-                        web_key=parts[2],
-                    ))
-    return keymap
-
-
-def _render_keymap(keymap: List[_KeyMapping], template_path: str, out_path: str) -> None:
-    with open(template_path) as template_file:
-        with open(out_path, "w") as out_file:
-            template = textwrap.dedent(template_file.read())
-            rendered = mako.template.Template(template).render(keymap=keymap)
-            out_file.write(rendered)
-
-
-# =====
-def main() -> None:
-    assert len(sys.argv) == 4, "%s <keymap.in> <template> <out>" % (sys.argv[0])
-
-    keymap = _read_keymap_in(sys.argv[1])
-    _render_keymap(keymap, sys.argv[2], sys.argv[3])
-
-
-# =====
-if __name__ == "__main__":
-    main()
+<%! import operator %>
+% for km in sorted(keymap, key=operator.attrgetter("web_key")):
+${km.web_key}: ${km.kvmd_code}
+% endfor

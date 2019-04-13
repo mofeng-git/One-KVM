@@ -32,8 +32,10 @@ RUN pacman -Syy \
 	&& user-packer -S --noconfirm \
 		python \
 		python-pip \
+		python-tox \
 		python-systemd \
 		python-dbus \
+		python-mako \
 		nginx-mainline \
 		ustreamer \
 		socat \
@@ -41,9 +43,6 @@ RUN pacman -Syy \
 		eslint \
 	&& rm -rf /.npm \
 	&& (pacman -Sc --noconfirm || true)
-
-COPY testenv/requirements.txt requirements.txt
-RUN pip install -r requirements.txt
 
 RUN mkdir -p /etc/kvmd/nginx
 

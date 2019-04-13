@@ -18,11 +18,11 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
 #                                                                            #
 # ========================================================================== #
-#
-#
+
+
 # https://github.com/NicoHood/HID/blob/master/src/HID-APIs/ImprovedKeylayouts.h
 # https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code
-#
+
 # ----------------------------------
 #  KVMD    | Arduino HID       | JS
 # ----------------------------------

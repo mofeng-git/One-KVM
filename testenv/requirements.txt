@@ -7,7 +7,4 @@ pyudev
 pyyaml
 pyserial
 setproctitle
-systemd-python
-dbus-python
 pygments
-tox
