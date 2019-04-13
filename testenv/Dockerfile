@@ -11,7 +11,7 @@ RUN pacman -Syu --noconfirm \
 		jshon \
 	&& (pacman -Sc --noconfirm || true)
 
-RUN useradd -r -c "Packer build user" -s /sbin/nologin packer \
+RUN useradd -r -c "Packer build user" -m -d /var/packer -s /sbin/nologin packer \
 	&& cd /tmp \
 	&& sudo -u packer git clone https://aur.archlinux.org/packer-kit.git \
 	&& cd packer-kit \
@@ -20,23 +20,18 @@ RUN useradd -r -c "Packer build user" -s /sbin/nologin packer \
 	&& cd - \
 	&& rm -rf /tmp/packer-kit
 
-RUN pacman -Syy \
-	&& mkdir /.npm /home/packer \
-	&& chmod 777 /.npm /home/packer \
-	&& packer-user -S --needed --noconfirm \
-		python \
-		python-pip \
-		python-tox \
-		python-systemd \
-		python-dbus \
-		python-mako \
-		nginx-mainline \
-		ustreamer \
-		socat \
-		htmlhint \
-		eslint \
-	&& rm -rf /.npm /home/packer \
-	&& (pacman -Sc --noconfirm || true)
+RUN pkg-install \
+	python \
+	python-pip \
+	python-tox \
+	python-systemd \
+	python-dbus \
+	python-mako \
+	nginx-mainline \
+	ustreamer \
+	socat \
+	htmlhint \
+	eslint
 
 RUN mkdir -p /etc/kvmd/nginx
 
