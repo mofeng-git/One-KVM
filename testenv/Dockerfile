@@ -3,7 +3,7 @@ FROM archlinux/base
 RUN dd if=/dev/zero of=/root/loop.img bs=1024 count=1048576
 
 RUN pacman -Syu --noconfirm \
-	&& pacman -S --noconfirm \
+	&& pacman -S --needed --noconfirm \
 		base \
 		base-devel \
 		git \
@@ -11,25 +11,19 @@ RUN pacman -Syu --noconfirm \
 		jshon \
 	&& (pacman -Sc --noconfirm || true)
 
-RUN useradd -r -d / packer \
+RUN useradd -r -c "Packer build user" -s /sbin/nologin packer \
 	&& cd /tmp \
-	&& sudo -u packer git clone https://aur.archlinux.org/packer-color.git \
-	&& cd packer-color \
+	&& sudo -u packer git clone https://aur.archlinux.org/packer-kit.git \
+	&& cd packer-kit \
 	&& sudo -u packer makepkg \
-	&& pacman --noconfirm -U packer-color-*.pkg.tar.xz \
-	&& ln -s /usr/bin/packer-color /usr/local/bin/packer \
-	&& cp /usr/bin/packer-color /usr/local/bin/user-packer \
-	&& sed -i -e "s|makepkg \$MAKEPKGOPTS |chown -R packer:packer \$dir; makepkg \$MAKEPKGOPTS |g" \
-		/usr/local/bin/user-packer \
-	&& sed -i -e "s|makepkg \$MAKEPKGOPTS --asroot -f|sudo -u packer makepkg \$MAKEPKGOPTS -f|g" \
-		/usr/local/bin/user-packer \
+	&& pacman --noconfirm -U packer-kit-*.pkg.tar.xz \
 	&& cd - \
-	&& rm -rf /tmp/packer-color
+	&& rm -rf /tmp/packer-kit
 
 RUN pacman -Syy \
-	&& mkdir /.npm \
-	&& chmod 777 /.npm \
-	&& user-packer -S --noconfirm \
+	&& mkdir /.npm /home/packer \
+	&& chmod 777 /.npm /home/packer \
+	&& packer-user -S --needed --noconfirm \
 		python \
 		python-pip \
 		python-tox \
@@ -41,7 +35,7 @@ RUN pacman -Syy \
 		socat \
 		htmlhint \
 		eslint \
-	&& rm -rf /.npm \
+	&& rm -rf /.npm /home/packer \
 	&& (pacman -Sc --noconfirm || true)
 
 RUN mkdir -p /etc/kvmd/nginx
