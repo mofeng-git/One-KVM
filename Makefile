@@ -30,6 +30,7 @@ tox: _testenv
 	time docker run --rm \
 			--volume `pwd`:/src:ro \
 			--volume `pwd`/testenv:/src/testenv:rw \
+			--volume `pwd`/testenv/tests:/src/testenv/tests:ro \
 			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
 		-it $(TESTENV_IMAGE) bash -c " \
