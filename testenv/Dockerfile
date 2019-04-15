@@ -33,6 +33,9 @@ RUN pkg-install \
 	htmlhint \
 	eslint
 
+COPY testenv/requirements.txt requirements.txt
+RUN pip install -r requirements.txt
+
 RUN mkdir -p /etc/kvmd/nginx
 
 CMD /bin/bash
