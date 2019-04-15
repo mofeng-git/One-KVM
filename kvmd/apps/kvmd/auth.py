@@ -36,16 +36,16 @@ from ...plugins.auth import get_auth_service_class
 class AuthManager:
     def __init__(
         self,
-        internal_users: List[str],
 
         internal_type: str,
-        external_type: str,
-
         internal: Dict,
+
+        external_type: str,
         external: Dict,
+
+        internal_users: List[str],
     ) -> None:
 
-        self.__internal_users = internal_users
         self.__internal_service = get_auth_service_class(internal_type)(**internal)
         get_logger().info("Using internal login service %r", self.__internal_service.PLUGIN_NAME)
 
@@ -53,6 +53,8 @@ class AuthManager:
         if external_type:
             self.__external_service = get_auth_service_class(external_type)(**external)
             get_logger().info("Using external login service %r", self.__external_service.PLUGIN_NAME)
+
+        self.__internal_users = internal_users
 
         self.__tokens: Dict[str, str] = {}  # {token: user}
 

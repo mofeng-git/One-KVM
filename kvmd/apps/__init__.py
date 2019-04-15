@@ -153,11 +153,11 @@ def _get_config_scheme() -> Dict:
             },
 
             "auth": {
-                "internal_users": Option([], type=valid_users_list),
                 "internal_type":  Option("htpasswd"),
-                "external_type":  Option(""),
                 # "internal": {},
+                "external_type":  Option(""),
                 # "external": {},
+                "internal_users": Option([], type=valid_users_list),
             },
 
             "info": {
