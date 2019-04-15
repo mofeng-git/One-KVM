@@ -21,6 +21,7 @@
 
 
 import asyncio
+import operator
 
 from typing import Dict
 from typing import Callable
@@ -60,12 +61,14 @@ def _atx_working(method: Callable) -> Callable:
 
 
 class Atx:  # pylint: disable=too-many-instance-attributes
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         enabled: bool,
 
         power_led_pin: int,
         hdd_led_pin: int,
+        power_led_inverted: bool,
+        hdd_led_inverted: bool,
 
         power_switch_pin: int,
         reset_switch_pin: int,
@@ -88,6 +91,9 @@ class Atx:  # pylint: disable=too-many-instance-attributes
             self.__power_switch_pin = -1
             self.__reset_switch_pin = -1
 
+        self.__power_led_inverted = power_led_inverted
+        self.__hdd_led_inverted = hdd_led_inverted
+
         self.__click_delay = click_delay
         self.__long_click_delay = long_click_delay
 
@@ -96,12 +102,18 @@ class Atx:  # pylint: disable=too-many-instance-attributes
         self.__region = aioregion.AioExclusiveRegion(AtxIsBusyError)
 
     def get_state(self) -> Dict:
+        if self._enabled:
+            power_led_state = operator.xor(self.__power_led_inverted, gpio.read(self.__power_led_pin))
+            hdd_led_state = operator.xor(self.__hdd_led_inverted, gpio.read(self.__hdd_led_pin))
+        else:
+            power_led_state = hdd_led_state = False
+
         return {
             "enabled": self._enabled,
             "busy": self.__region.is_busy(),
             "leds": {
-                "power": ((not gpio.read(self.__power_led_pin)) if self._enabled else False),
-                "hdd": ((not gpio.read(self.__hdd_led_pin)) if self._enabled else False),
+                "power": power_led_state,
+                "hdd": hdd_led_state,
             },
         }
 

@@ -183,11 +183,13 @@ def _get_config_scheme() -> Dict:
             "atx": {
                 "enabled": Option(True, type=valid_bool),
 
-                "power_led_pin":    Option(-1, type=valid_gpio_pin, only_if="enabled"),
-                "hdd_led_pin":      Option(-1, type=valid_gpio_pin, only_if="enabled"),
+                "power_led_pin":      Option(-1, type=valid_gpio_pin, only_if="enabled"),
+                "hdd_led_pin":        Option(-1, type=valid_gpio_pin, only_if="enabled"),
+                "power_led_inverted": Option(True, type=valid_bool),
+                "hdd_led_inverted":   Option(True, type=valid_bool),
+
                 "power_switch_pin": Option(-1, type=valid_gpio_pin, only_if="enabled"),
                 "reset_switch_pin": Option(-1, type=valid_gpio_pin, only_if="enabled"),
-
                 "click_delay":      Option(0.1, type=valid_float_f01),
                 "long_click_delay": Option(5.5, type=valid_float_f01),
 
