@@ -47,9 +47,9 @@ def main(argv: Optional[List[str]]=None) -> None:
         Server(
             auth_manager=AuthManager(
                 internal_type=config.auth.internal_type,
-                internal=config.auth.internal._unpack(),
+                internal_kwargs=config.auth.internal._unpack(),
                 external_type=config.auth.external_type,
-                external=(config.auth.external._unpack() if config.auth.external_type else {}),
+                external_kwargs=(config.auth.external._unpack() if config.auth.external_type else {}),
                 internal_users=config.auth.internal_users,
             ),
             info_manager=InfoManager(**config.info._unpack()),

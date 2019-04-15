@@ -38,20 +38,20 @@ class AuthManager:
         self,
 
         internal_type: str,
-        internal: Dict,
+        internal_kwargs: Dict,
 
         external_type: str,
-        external: Dict,
+        external_kwargs: Dict,
 
         internal_users: List[str],
     ) -> None:
 
-        self.__internal_service = get_auth_service_class(internal_type)(**internal)
+        self.__internal_service = get_auth_service_class(internal_type)(**internal_kwargs)
         get_logger().info("Using internal login service %r", self.__internal_service.PLUGIN_NAME)
 
         self.__external_service: Optional[BaseAuthService] = None
         if external_type:
-            self.__external_service = get_auth_service_class(external_type)(**external)
+            self.__external_service = get_auth_service_class(external_type)(**external_kwargs)
             get_logger().info("Using external login service %r", self.__external_service.PLUGIN_NAME)
 
         self.__internal_users = internal_users

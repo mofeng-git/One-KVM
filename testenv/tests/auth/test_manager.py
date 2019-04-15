@@ -24,6 +24,7 @@ import os
 import contextlib
 
 from typing import List
+from typing import Dict
 from typing import AsyncGenerator
 from typing import Optional
 
@@ -39,6 +40,12 @@ from kvmd.plugins.auth import get_auth_service_class
 
 
 # =====
+def _make_service_kwargs(path: str) -> Dict:
+    cls = get_auth_service_class("htpasswd")
+    scheme = cls.get_options()
+    return make_config({"file": path}, scheme)._unpack()  # pylint: disable=protected-access
+
+
 @contextlib.asynccontextmanager
 async def _get_configured_manager(
     internal_path: str,
@@ -46,22 +53,14 @@ async def _get_configured_manager(
     internal_users: Optional[List[str]]=None,
 ) -> AsyncGenerator[AuthManager, None]:
 
-    internal_class = get_auth_service_class("htpasswd")
-    internal = make_config({"file": internal_path}, internal_class.get_options())._unpack()  # pylint: disable=protected-access
-    internal.update(internal)
-
-    if external_path:
-        external_class = get_auth_service_class("htpasswd")
-        external = make_config({"file": external_path}, external_class.get_options())._unpack()  # pylint: disable=protected-access
-        external.update(external)
-
     manager = AuthManager(
         internal_type="htpasswd",
-        internal=internal,
+        internal_kwargs=_make_service_kwargs(internal_path),
         external_type=("htpasswd" if external_path else ""),
-        external=(external if external_path else {}),
+        external_kwargs=(_make_service_kwargs(external_path) if external_path else {}),
         internal_users=(internal_users or []),
     )
+
     try:
         yield manager
     finally:
