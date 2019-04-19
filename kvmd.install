@@ -1,14 +1,22 @@
 post_install() {
+	post_upgrade
+
+	echo "==> Generating KVMD certificate ..."
+	kvmd-gencert
+}
+
+post_upgrade() {
+	echo "==> Configuring KVMD user and groups ..."
+
 	id kvmd &>/dev/null || useradd -r -c "The main Pi-KVM daemon" -s /sbin/nologin kvmd
-	groupmems -g gpio -a kvmd
-	groupmems -g uucp -a kvmd
-	groupmems -g systemd-journal -a kvmd
+
+	for group in gpio uucp systemd-journal; do
+		(groupmems -l -g "$group" | grep kvmd >/dev/null) || groupmems -g "$group" -a kvmd
+	done
 
 	chown root:kvmd \
 		/usr/share/kvmd/configs.default/kvmd/htpasswd \
 		/etc/kvmd/htpasswd
-
-	kvmd-gencert
 }
 
 post_remove() {
