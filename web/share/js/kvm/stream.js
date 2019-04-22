@@ -185,11 +185,15 @@ function Streamer() {
 	};
 
 	var __clickResetButton = function() {
-		var http = tools.makeRequest("POST", "/kvmd/streamer/reset", function() {
-			if (http.readyState === 4) {
-				if (http.status !== 200) {
-					wm.error("Can't reset stream:<br>", http.responseText);
-				}
+		wm.confirm("Are you sure you want to reset stream?").then(function (ok) {
+			if (ok) {
+				var http = tools.makeRequest("POST", "/kvmd/streamer/reset", function() {
+					if (http.readyState === 4) {
+						if (http.status !== 200) {
+							wm.error("Can't reset stream:<br>", http.responseText);
+						}
+					}
+				});
 			}
 		});
 	};

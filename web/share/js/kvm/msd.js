@@ -99,15 +99,19 @@ function Msd() {
 	};
 
 	var __clickResetButton = function() {
-		var http = tools.makeRequest("POST", "/kvmd/msd/reset", function() {
-			if (http.readyState === 4) {
-				if (http.status !== 200) {
-					wm.error("MSD reset error:<br>", http.responseText);
-				}
+		wm.confirm("Are you sure you want to reset Mass Storage Device?").then(function(ok) {
+			if (ok) {
+				var http = tools.makeRequest("POST", "/kvmd/msd/reset", function() {
+					if (http.readyState === 4) {
+						if (http.status !== 200) {
+							wm.error("MSD reset error:<br>", http.responseText);
+						}
+					}
+					__applyState();
+				});
+				__applyState();
 			}
-			__applyState();
 		});
-		__applyState();
 	};
 
 	var __applyState = function() {
