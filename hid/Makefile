@@ -1,16 +1,14 @@
 all:
-	platformio run
+	platformio run --environment $(if $(E), $(E), serial_prod)
 
 update:
 	platformio platform update
 
 install: upload
 upload:
-	platformio run --target upload
+	platformio run --environment $(if $(E), $(E), serial_prod) --target upload
 
-serial:
-	platformio serialports monitor
-
+clean-all: clean
 clean:
 	rm -rf .pioenvs .piolibdeps
 

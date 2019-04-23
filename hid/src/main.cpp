@@ -28,7 +28,7 @@
 #include "keymap.h"
 
 
-#define CMD_SERIAL			Serial1
+// #define CMD_SERIAL		Serial1
 #define CMD_SERIAL_SPEED	115200
 #define CMD_RECV_TIMEOUT	100000
 
