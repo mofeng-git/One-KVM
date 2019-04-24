@@ -28,6 +28,8 @@ function Mouse() {
 	var __ws = null;
 	var __online = true;
 
+	var __keypad = null;
+
 	var __current_pos = {x: 0, y:0};
 	var __sent_pos = {x: 0, y:0};
 	var __wheel_delta = {x: 0, y: 0};
@@ -35,22 +37,18 @@ function Mouse() {
 	var __stream_hovered = false;
 
 	var __init__ = function() {
+		__keypad = new Keypad("div#stream-mouse-buttons", __sendButton);
+
 		$("hid-mouse-led").title = "Mouse free";
 
 		$("stream-box").onmouseenter = __hoverStream;
 		$("stream-box").onmouseleave = __leaveStream;
-		$("stream-box").onmousedown = (event) => __buttonHandler(event, true);
-		$("stream-box").onmouseup = (event) => __buttonHandler(event, false);
+		$("stream-box").onmousedown = (event) => __streamButtonHandler(event, true);
+		$("stream-box").onmouseup = (event) => __streamButtonHandler(event, false);
 		$("stream-box").oncontextmenu = (event) => event.preventDefault();
-		$("stream-box").onmousemove = __moveHandler;
-		$("stream-box").onwheel = __wheelHandler;
-		$("stream-box").ontouchstart = (event) => __touchMoveHandler(event);
-
-		tools.forEach($$$("[data-mouse-button]"), function(el_button) {
-			var button = el_button.getAttribute("data-mouse-button");
-			tools.setOnDown(el_button, () => __sendButton(button, true));
-			tools.setOnUp(el_button, () => __sendButton(button, false));
-		});
+		$("stream-box").onmousemove = __streamMoveHandler;
+		$("stream-box").onwheel = __streamWheelHandler;
+		$("stream-box").ontouchstart = (event) => __streamTouchMoveHandler(event);
 
 		setInterval(__sendMove, 100);
 	};
@@ -70,6 +68,10 @@ function Mouse() {
 	self.setState = function(state) {
 		__online = state.online;
 		__updateLeds();
+	};
+
+	self.releaseAll = function() {
+		__keypad.releaseAll();
 	};
 
 	var __hoverStream = function() {
@@ -106,16 +108,16 @@ function Mouse() {
 		$("hid-mouse-led").title = title;
 	};
 
-	var __buttonHandler = function(event, state) {
+	var __streamButtonHandler = function(event, state) {
 		// https://www.w3schools.com/jsref/event_button.asp
 		event.preventDefault();
 		switch (event.button) {
-			case 0: __sendButton("left", state); break;
-			case 2: __sendButton("right", state); break;
+			case 0: __keypad.emit("left", state); break;
+			case 2: __keypad.emit("right", state); break;
 		}
 	};
 
-	var __touchMoveHandler = function(event) {
+	var __streamTouchMoveHandler = function(event) {
 		event.preventDefault();
 		if (event.touches[0].target && event.touches[0].target.getBoundingClientRect) {
 			var rect = event.touches[0].target.getBoundingClientRect();
@@ -127,7 +129,7 @@ function Mouse() {
 		}
 	};
 
-	var __moveHandler = function(event) {
+	var __streamMoveHandler = function(event) {
 		var rect = event.target.getBoundingClientRect();
 		__current_pos = {
 			x: Math.round(event.clientX - rect.left),
@@ -172,7 +174,7 @@ function Mouse() {
 		return Math.round((x - a) / (b - a) * (d - c) + c);
 	};
 
-	var __wheelHandler = function(event) {
+	var __streamWheelHandler = function(event) {
 		// https://learn.javascript.ru/mousewheel
 		if (event.preventDefault) {
 			event.preventDefault();

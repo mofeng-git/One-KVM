@@ -25,6 +25,12 @@ var tools = new function() {
 
 	this.forEach = (...args) => Array.prototype.forEach.call(...args);
 
+	this.setDefault = function(dict, key, value) {
+		if (!(key in dict)) {
+			dict[key] = value;
+		}
+	};
+
 	this.makeRequest = function(method, url, callback, body=null, content_type=null) {
 		var http = new XMLHttpRequest();
 		http.open(method, url, true);

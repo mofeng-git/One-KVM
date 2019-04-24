@@ -6,6 +6,7 @@ globals:
     Msd: true
     Session: true
     Streamer: true
+    Keypad: true
     WindowManager: true
     wm: true
     tools: true

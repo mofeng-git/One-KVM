@@ -20,107 +20,6 @@
 *****************************************************************************/
 
 
-div.keyboard {
-	zoom: 0.8;
-}
-
-div.keyboard div.keyboard-block {
-	display: table-cell;
-	padding-right: 0;
-}
-div.keyboard div.keyboard-block:not(:first-child) {
-	padding-left: 15px;
-}
-
-div.keyboard div.keyboard-row {
-	white-space: nowrap;
-	height: 40px;
-	margin-bottom: 5px;
-}
-div.keyboard div.keyboard-row:last-child {
-	margin-bottom: 0;
-}
-
-div.keyboard div.key, div.modifier, div.empty-key {
-	box-sizing: border-box;
-	display: inline-block;
-	margin-right: 5px;
-	padding: 0;
-	width: 40px;
-}
-div.keyboard div.key, div.modifier {
-	font-size: 0.9em;
-	text-align: center;
-	vertical-align: top;
-	box-shadow: var(--shadow-micro);
-	border: var(--border-key-thin);
-	border-radius: 6px;
-	color: var(--cs-key-default-fg);
-	background-color: var(--cs-key-default-bg);
-	cursor: pointer;
-	height: 40px;
-}
-div.keyboard div.key:hover, div.modifier:hover {
-	color: var(--cs-key-hovered-fg);
-	background-color: var(--cs-key-hovered-bg);
-}
-div.keyboard div.pressed {
-	box-shadow: none;
-	color: var(--cs-key-pressed-fg) !important;
-	background-color: var(--cs-key-pressed-bg) !important;
-}
-div.keyboard div.holded {
-	box-shadow: none;
-	color: var(--cs-key-default-fg) !important;
-	background-color: var(--cs-key-holded-bg) !important;
-}
-div.keyboard div.key:last-child, div.empty-key:last-child, div.modifier:last-child {
-	margin-right: 0;
-}
-div.keyboard div.margin-0 {
-	margin-right: 0px;
-}
-div.keyboard div.wide-0 {
-	width: 26px;
-}
-div.keyboard div.wide-1 {
-	width: 61px;
-}
-div.keyboard div.wide-2 {
-	width: 64px;
-}
-div.keyboard div.wide-3 {
-	width: 77px;
-}
-div.keyboard div.wide-4 {
-	width: 102px;
-}
-div.keyboard div.wide-5 {
-	width: 288px;
-}
-div.keyboard div.left {
-	text-align: left !important;
-	padding-left: 6px !important;
-}
-div.keyboard div.right {
-	text-align: right !important;
-	padding-right: 6px !important;
-}
-div.keyboard div.small {
-	font-size: 0.7em;
-}
-
-div.keyboard p {
-	margin: 0;
-	position: relative;
-	top: 50%;
-	-webkit-transform: translateY(-50%);
-	transform: translateY(-50%);
-}
-div.keyboard b {
-	color: var(--cs-key-holded-bg);
-}
-
 @media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
 	div#keyboard-window {
 		visibility: visible !important;
@@ -149,16 +48,6 @@ div#keyboard-mobile {
 	display: none;
 }
 @media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
-	/* iPad */
-	div.keyboard {
-		zoom: 1.28 !important;
-	}
-
-	div.keyboard div.key:hover, div.modifier:hover {
-		color: var(--cs-key-default-fg);
-		background-color: var(--cs-key-default-bg);
-	}
-
 	div#keyboard-desktop {
 		display: none !important;
 	}

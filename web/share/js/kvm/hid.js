@@ -91,6 +91,7 @@ function Hid() {
 
 	var __releaseAll = function() {
 		__keyboard.releaseAll();
+		__mouse.releaseAll();
 	};
 
 	var __emitShortcut = function(codes) {
@@ -107,7 +108,7 @@ function Hid() {
 
 			var index = 0;
 			var iterate = () => setTimeout(function() {
-				__keyboard.fireEvent(raw_events[index].code, raw_events[index].state);
+				__keyboard.emit(raw_events[index].code, raw_events[index].state);
 				++index;
 				if (index < raw_events.length) {
 					iterate();
