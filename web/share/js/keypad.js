@@ -30,11 +30,8 @@ function Keypad(keys_parent, key_callback) {
 	var __modifiers = {};
 
 	var __init__ = function() {
-		var code;
-		var el_key;
-
-		for (el_key of $$$(keys_parent + " div.key")) {
-			code = el_key.getAttribute("data-code");
+		for (let el_key of $$$(keys_parent + " div.key")) {
+			let code = el_key.getAttribute("data-code");
 
 			tools.setDefault(__keys, code, []);
 			__keys[code].push(el_key);
@@ -42,19 +39,17 @@ function Keypad(keys_parent, key_callback) {
 			tools.setDefault(__merged, code, []);
 			__merged[code].push(el_key);
 
-			(function(el_key) {
-				tools.setOnDown(el_key, () => __clickHandler(el_key, true));
-				tools.setOnUp(el_key, () => __clickHandler(el_key, false));
-				el_key.onmouseout = function() {
-					if (__isPressed(el_key)) {
-						__clickHandler(el_key, false);
-					}
-				};
-			})(el_key);
+			tools.setOnDown(el_key, () => __clickHandler(el_key, true));
+			tools.setOnUp(el_key, () => __clickHandler(el_key, false));
+			el_key.onmouseout = function() {
+				if (__isPressed(el_key)) {
+					__clickHandler(el_key, false);
+				}
+			};
 		}
 
-		for (el_key of $$$(keys_parent + " div.modifier")) {
-			code = el_key.getAttribute("data-code");
+		for (let el_key of $$$(keys_parent + " div.modifier")) {
+			let code = el_key.getAttribute("data-code");
 
 			tools.setDefault(__modifiers, code, []);
 			__modifiers[code].push(el_key);
@@ -62,17 +57,15 @@ function Keypad(keys_parent, key_callback) {
 			tools.setDefault(__merged, code, []);
 			__merged[code].push(el_key);
 
-			(function(el_key) {
-				tools.setOnDown(el_key, () => __toggleModifierHandler(el_key));
-			})(el_key);
+			tools.setOnDown(el_key, () => __toggleModifierHandler(el_key));
 		}
 	};
 
 	/************************************************************************/
 
 	self.releaseAll = function(release_hook=false) {
-		for (var dict of [__keys, __modifiers]) {
-			for (var code in dict) {
+		for (let dict of [__keys, __modifiers]) {
+			for (let code in dict) {
 				if (__isActive(dict[code][0])) {
 					self.emit(code, false, release_hook);
 				}
@@ -84,7 +77,7 @@ function Keypad(keys_parent, key_callback) {
 		if (code in __merged) {
 			__commonHandler(__merged[code][0], state, false);
 			if (release_hook) {
-				for (code in __keys) {
+				for (let code in __keys) {
 					if (__isActive(__keys[code][0])) {
 						self.emit(code, false);
 					}
@@ -115,8 +108,8 @@ function Keypad(keys_parent, key_callback) {
 	};
 
 	var __unholdModifiers = function() {
-		for (var code in __modifiers) {
-			var el_key = __modifiers[code][0];
+		for (let code in __modifiers) {
+			let el_key = __modifiers[code][0];
 			if (__isHolded(el_key)) {
 				__deactivate(el_key);
 				__process(el_key, false);
@@ -125,49 +118,54 @@ function Keypad(keys_parent, key_callback) {
 	};
 
 	var __isPressed = function(el_key) {
-		var is_pressed = false;
-		for (el_key of __resolveKeys(el_key)) {
+		let is_pressed = false;
+		let el_keys = __resolveKeys(el_key);
+		for (let el_key of el_keys) {
 			is_pressed = (is_pressed || el_key.classList.contains("pressed"));
 		}
 		return is_pressed;
 	};
 
 	var __isHolded = function(el_key) {
-		var is_holded = false;
-		for (el_key of __resolveKeys(el_key)) {
+		let is_holded = false;
+		let el_keys = __resolveKeys(el_key);
+		for (let el_key of el_keys) {
 			is_holded = (is_holded || el_key.classList.contains("holded"));
 		}
 		return is_holded;
 	};
 
 	var __isActive = function(el_key) {
-		var is_active = false;
-		for (el_key of __resolveKeys(el_key)) {
+		let is_active = false;
+		let el_keys = __resolveKeys(el_key);
+		for (let el_key of el_keys) {
 			is_active = (is_active || el_key.classList.contains("pressed") || el_key.classList.contains("holded"));
 		}
 		return is_active;
 	};
 
 	var __activate = function(el_key, cls) {
-		for (el_key of __resolveKeys(el_key)) {
+		let el_keys = __resolveKeys(el_key);
+		for (let el_key of el_keys) {
 			el_key.classList.add(cls);
 		}
 	};
 
 	var __deactivate = function(el_key) {
-		for (el_key of __resolveKeys(el_key)) {
+		let el_keys = __resolveKeys(el_key);
+		for (let el_key of el_keys) {
 			el_key.classList.remove("pressed");
 			el_key.classList.remove("holded");
 		}
 	};
 
 	var __resolveKeys = function(el_key) {
-		var code = el_key.getAttribute("data-code");
+		let code = el_key.getAttribute("data-code");
 		return __merged[code];
 	};
 
 	var __process = function(el_key, state) {
-		var code = el_key.getAttribute("data-code");
+		let code = el_key.getAttribute("data-code");
 		key_callback(code, state);
 	};
 

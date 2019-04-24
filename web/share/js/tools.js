@@ -21,9 +21,7 @@
 
 
 var tools = new function() {
-	var __debug = (new URL(window.location.href)).searchParams.get("debug");
-
-	this.forEach = (...args) => Array.prototype.forEach.call(...args);
+	let __debug = (new URL(window.location.href)).searchParams.get("debug");
 
 	this.setDefault = function(dict, key, value) {
 		if (!(key in dict)) {
@@ -32,7 +30,7 @@ var tools = new function() {
 	};
 
 	this.makeRequest = function(method, url, callback, body=null, content_type=null) {
-		var http = new XMLHttpRequest();
+		let http = new XMLHttpRequest();
 		http.open(method, url, true);
 		if (content_type) {
 			http.setRequestHeader("Content-Type", content_type);
@@ -44,16 +42,16 @@ var tools = new function() {
 	};
 
 	this.makeId = function() {
-		var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-		var id = "";
-		for (var count = 0; count < 16; ++count) {
+		let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		let id = "";
+		for (let count = 0; count < 16; ++count) {
 			id += chars.charAt(Math.floor(Math.random() * chars.length));
 		}
 		return id;
 	};
 
 	this.getCookie = function(name) {
-		var matches = document.cookie.match(new RegExp(
+		let matches = document.cookie.match(new RegExp(
 			"(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, "\\$1") + "=([^;]*)" // eslint-disable-line no-useless-escape
 		));
 		return (matches ? decodeURIComponent(matches[1]) : "");
@@ -82,7 +80,7 @@ var tools = new function() {
 		el.execution_timer = null;
 		el.activated = false;
 
-		var clear_timer = function() {
+		let clear_timer = function() {
 			if (el.execution_timer) {
 				clearTimeout(el.execution_timer);
 				el.execution_timer = null;
@@ -117,32 +115,32 @@ var tools = new function() {
 		// https://stackoverflow.com/questions/9847580/how-to-detect-safari-chrome-ie-firefox-and-opera-browser/9851769
 
 		// Opera 8.0+
-		var is_opera = (
+		let is_opera = (
 			(!!window.opr && !!opr.addons) // eslint-disable-line no-undef
 			|| !!window.opera
 			|| (navigator.userAgent.indexOf(" OPR/") >= 0)
 		);
 
 		// Firefox 1.0+
-		var is_firefox = (typeof InstallTrigger !== "undefined");
+		let is_firefox = (typeof InstallTrigger !== "undefined");
 
 		// Safari 3.0+ "[object HTMLElementConstructor]" 
-		var is_safari = (/constructor/i.test(window.HTMLElement) || (function (p) {
+		let is_safari = (/constructor/i.test(window.HTMLElement) || (function (p) {
 			return p.toString() === "[object SafariRemoteNotification]";
 		})(!window["safari"] || (typeof safari !== "undefined" && safari.pushNotification))); // eslint-disable-line no-undef
 
 		// Chrome 1+
-		var is_chrome = !!window.chrome;
+		let is_chrome = !!window.chrome;
 
 		// Blink engine detection
-		var is_blink = ((is_chrome || is_opera) && !!window.CSS);
+		let is_blink = ((is_chrome || is_opera) && !!window.CSS);
 
 		// iOS browsers
 		// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios
-		var is_ios = (!!navigator.platform && /iPad|iPhone|iPod/.test(navigator.platform));
+		let is_ios = (!!navigator.platform && /iPad|iPhone|iPod/.test(navigator.platform));
 
 		// Any browser on Mac
-		var is_mac = ((
+		let is_mac = ((
 			window.navigator.oscpu
 			|| window.navigator.platform
 			|| window.navigator.appVersion

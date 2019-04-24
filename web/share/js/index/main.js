@@ -45,15 +45,15 @@ function __setAppText() {
 }
 
 function __loadKvmdInfo() {
-	var http = tools.makeRequest("GET", "/kvmd/info", function() {
+	let http = tools.makeRequest("GET", "/kvmd/info", function() {
 		if (http.readyState === 4) {
 			if (http.status === 200) {
-				var info = JSON.parse(http.responseText).result;
+				let info = JSON.parse(http.responseText).result;
 
-				var apps = Object.values(info.extras).sort(function(a, b) {
-					if (a["place"] < b["place"]) {
+				let apps = Object.values(info.extras).sort(function(a, b) {
+					if (a.place < b.place) {
 						return -1;
-					} else if (a["place"] > b["place"]) {
+					} else if (a.place > b.place) {
 						return 1;
 					} else {
 						return 0;
@@ -64,9 +64,9 @@ function __loadKvmdInfo() {
 
 				$("apps").innerHTML += __makeApp(null, "kvm", "share/svg/kvm.svg", "KVM");
 
-				apps.forEach(function(app) {
+				for (let app of apps) {
 					$("apps").innerHTML += __makeApp(null, app.path, app.icon, app.name);
-				});
+				}
 
 				$("apps").innerHTML += __makeApp("logout-button", "#", "share/svg/logout.svg", "Logout");
 				tools.setOnClick($("logout-button"), __logout);
@@ -101,7 +101,7 @@ function __makeApp(id, path, icon, name) {
 }
 
 function __logout() {
-	var http = tools.makeRequest("POST", "/kvmd/auth/logout", function() {
+	let http = tools.makeRequest("POST", "/kvmd/auth/logout", function() {
 		if (http.readyState === 4) {
 			if (http.status === 200 || http.status === 401 || http.status === 403) {
 				document.location.href = "/login";

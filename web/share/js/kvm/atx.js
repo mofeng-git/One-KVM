@@ -56,7 +56,7 @@ function Atx() {
 	var __clickButton = function(button, confirm_msg) {
 		wm.confirm(confirm_msg).then(function(ok) {
 			if (ok) {
-				var http = tools.makeRequest("POST", "/kvmd/atx/click?button=" + button, function() {
+				let http = tools.makeRequest("POST", "/kvmd/atx/click?button=" + button, function() {
 					if (http.readyState === 4) {
 						if (http.status === 409) {
 							wm.error("Performing another ATX operation for other client.<br>Please try again later");

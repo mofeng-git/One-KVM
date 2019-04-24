@@ -27,7 +27,7 @@ function checkBrowser() {
 		|| window.navigator.userAgent.indexOf("Trident/") > 0
 		|| window.navigator.userAgent.indexOf("Edge/") > 0
 	) {
-		var el_modal = document.createElement("div");
+		let el_modal = document.createElement("div");
 		el_modal.className = "modal";
 		el_modal.style.visibility = "visible";
 		el_modal.innerHTML = `

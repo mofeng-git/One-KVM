@@ -43,7 +43,7 @@ function Session() {
 
 	var __setKvmdInfo = function(state) {
 		if (state.meta) {
-			var text = JSON.stringify(state.meta, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
+			let text = JSON.stringify(state.meta, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
 			$("about-meta").innerHTML = `
 				<span class="code-comment">// The Pi-KVM metadata.<br>
 				// You can get this json using handle <a target="_blank" href="/kvmd/info">/kvmd/info</a>.<br>
@@ -69,10 +69,10 @@ function Session() {
 		$("link-led").className = "led-yellow";
 		$("link-led").title = "Connecting...";
 
-		var http = tools.makeRequest("GET", "/kvmd/auth/check", function() {
+		let http = tools.makeRequest("GET", "/kvmd/auth/check", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
-					var proto = (location.protocol === "https:" ? "wss" : "ws");
+					let proto = (location.protocol === "https:" ? "wss" : "ws");
 					__ws = new WebSocket(`${proto}://${location.host}/kvmd/ws`);
 					__ws.onopen = __wsOpenHandler;
 					__ws.onmessage = __wsMessageHandler;

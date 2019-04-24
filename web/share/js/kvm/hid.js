@@ -34,25 +34,25 @@ function Hid() {
 	var __mouse = new Mouse();
 
 	var __init__ = function() {
-		var __hidden_attr = null;
-		var __visibility_change_attr = null;
+		let hidden_attr = null;
+		let visibility_change_attr = null;
 
 		if (typeof document.hidden !== "undefined") {
-			__hidden_attr = "hidden";
-			__visibility_change_attr = "visibilitychange";
+			hidden_attr = "hidden";
+			visibility_change_attr = "visibilitychange";
 		} else if (typeof document.webkitHidden !== "undefined") {
-			__hidden_attr = "webkitHidden";
-			__visibility_change_attr = "webkitvisibilitychange";
+			hidden_attr = "webkitHidden";
+			visibility_change_attr = "webkitvisibilitychange";
 		} else if (typeof document.mozHidden !== "undefined") {
-			__hidden_attr = "mozHidden";
-			__visibility_change_attr = "mozvisibilitychange";
+			hidden_attr = "mozHidden";
+			visibility_change_attr = "mozvisibilitychange";
 		}
 
-		if (__visibility_change_attr) {
+		if (visibility_change_attr) {
 			document.addEventListener(
-				__visibility_change_attr,
+				visibility_change_attr,
 				function() {
-					if (document[__hidden_attr]) {
+					if (document[hidden_attr]) {
 						__releaseAll();
 					}
 				},
@@ -68,9 +68,9 @@ function Hid() {
 		tools.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
 		tools.setOnClick($("hid-reset-button"), __clickResetButton);
 
-		tools.forEach($$$("[data-shortcut]"), function(el_shortcut) {
+		for (let el_shortcut of $$$("[data-shortcut]")) {
 			tools.setOnClick(el_shortcut, () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" ")));
-		});
+		}
 	};
 
 	/************************************************************************/
@@ -98,16 +98,16 @@ function Hid() {
 		return new Promise(function(resolve) {
 			tools.debug("HID: emitting keys:", codes);
 
-			var raw_events = [];
+			let raw_events = [];
 			[[codes, true], [codes.slice().reverse(), false]].forEach(function(op) {
-				var [op_codes, state] = op;
-				op_codes.forEach(function(code) {
+				let [op_codes, state] = op;
+				for (let code of op_codes) {
 					raw_events.push({code: code, state: state});
-				});
+				}
 			});
 
-			var index = 0;
-			var iterate = () => setTimeout(function() {
+			let index = 0;
+			let iterate = () => setTimeout(function() {
 				__keyboard.emit(raw_events[index].code, raw_events[index].state);
 				++index;
 				if (index < raw_events.length) {
@@ -121,7 +121,7 @@ function Hid() {
 	};
 
 	var __buildCharsToCodes = function() {
-		var chars_to_codes = {
+		let chars_to_codes = {
 			"\n": ["Enter"],
 			"\t": ["Tab"],
 			" ": ["Space"],
@@ -148,10 +148,10 @@ function Hid() {
 			"=": ["Equal"],       "+": ["ShiftLeft", "Equal"],
 		};
 
-		for (var ch = "a".charCodeAt(0); ch <= "z".charCodeAt(0); ++ch) {
-			var low = String.fromCharCode(ch);
-			var up = low.toUpperCase();
-			var code = "Key" + up;
+		for (let ch = "a".charCodeAt(0); ch <= "z".charCodeAt(0); ++ch) {
+			let low = String.fromCharCode(ch);
+			let up = low.toUpperCase();
+			let code = "Key" + up;
 			chars_to_codes[low] = [code];
 			chars_to_codes[up] = ["ShiftLeft", code];
 		}
@@ -160,20 +160,20 @@ function Hid() {
 	};
 
 	var __clickPasteAsKeysButton = function() {
-		var text = $("hid-pak-text").value.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
+		let text = $("hid-pak-text").value.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
 		if (text) {
-			var clipboard_codes = [];
-			var codes_count = 0;
-			[...text].forEach(function(ch) {
-				var codes = __chars_to_codes[ch];
+			let clipboard_codes = [];
+			let codes_count = 0;
+			for (let ch of text) {
+				let codes = __chars_to_codes[ch];
 				if (codes) {
 					codes_count += codes.length;
 					clipboard_codes.push(codes);
 				}
-			});
-			var time = __codes_delay * codes_count * 2 / 1000;
+			}
+			let time = __codes_delay * codes_count * 2 / 1000;
 
-			var confirm_msg = `
+			let confirm_msg = `
 				You are going to automatically type ${codes_count} characters from the system clipboard.
 				It will take ${time} seconds.<br>
 				<br>
@@ -189,8 +189,8 @@ function Hid() {
 
 					tools.debug("HID: paste-as-keys:", text);
 
-					var index = 0;
-					var iterate = function() {
+					let index = 0;
+					let iterate = function() {
 						__emitShortcut(clipboard_codes[index]).then(function() {
 							++index;
 							if (index < clipboard_codes.length && __ws) {
@@ -215,7 +215,7 @@ function Hid() {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset HID (keyboard & mouse)?").then(function(ok) {
 			if (ok) {
-				var http = tools.makeRequest("POST", "/kvmd/hid/reset", function() {
+				let http = tools.makeRequest("POST", "/kvmd/hid/reset", function() {
 					if (http.readyState === 4) {
 						if (http.status !== 200) {
 							wm.error("HID reset error:<br>", http.responseText);

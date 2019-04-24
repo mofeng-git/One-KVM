@@ -62,9 +62,9 @@ function Streamer() {
 
 	self.setState = function(state) {
 		if (state && state.state) {
-			var encoder = state.state.encoder;
-			var source = state.state.source;
-			var stream = state.state.stream;
+			let encoder = state.state.encoder;
+			let source = state.state.source;
+			let stream = state.state.stream;
 
 			if (!__prev) {
 				$("stream-quality-slider").activated = false;
@@ -96,7 +96,7 @@ function Streamer() {
 				}
 			}
 
-			var stream_client = tools.getCookie("stream_client");
+			let stream_client = tools.getCookie("stream_client");
 			if (!__client_id && stream_client && stream_client.startsWith(__client_key + "/")) {
 				tools.info("Stream: found acceptable stream_client cookie:", stream_client);
 				__client_id = stream_client.slice(stream_client.indexOf("/") + 1);
@@ -109,7 +109,7 @@ function Streamer() {
 			}
 
 			if (!__prev) {
-				var path = "/streamer/stream?key=" + __client_key;
+				let path = "/streamer/stream?key=" + __client_key;
 				if (tools.browser.is_safari || tools.browser.is_ios) {
 					// uStreamer fix for WebKit
 					tools.info("Stream: using dual_final_frames=1 to fix WebKit MJPG bugs");
@@ -165,10 +165,10 @@ function Streamer() {
 	};
 
 	var __updateStreamHeader = function(online) {
-		var el_grab = document.querySelector("#stream-window-header .window-grab");
-		var el_info = $("stream-info");
+		let el_grab = document.querySelector("#stream-window-header .window-grab");
+		let el_info = $("stream-info");
 		if (online) {
-			var fps_suffix = (__client_fps >= 0 ? ` / ${__client_fps} fps` : "");
+			let fps_suffix = (__client_fps >= 0 ? ` / ${__client_fps} fps` : "");
 			el_grab.innerHTML = el_info.innerHTML = `Stream &ndash; ${__resolution.width}x${__resolution.height}${fps_suffix}`;
 		} else {
 			el_grab.innerHTML = el_info.innerHTML = "Stream &ndash; offline";
@@ -176,7 +176,7 @@ function Streamer() {
 	};
 
 	var __clickScreenshotButton = function() {
-		var el_a = document.createElement("a");
+		let el_a = document.createElement("a");
 		el_a.href = "/streamer/snapshot";
 		el_a.target = "_blank";
 		document.body.appendChild(el_a);
@@ -187,7 +187,7 @@ function Streamer() {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset stream?").then(function (ok) {
 			if (ok) {
-				var http = tools.makeRequest("POST", "/kvmd/streamer/reset", function() {
+				let http = tools.makeRequest("POST", "/kvmd/streamer/reset", function() {
 					if (http.readyState === 4) {
 						if (http.status !== 200) {
 							wm.error("Can't reset stream:<br>", http.responseText);
@@ -199,7 +199,7 @@ function Streamer() {
 	};
 
 	var __sendParam = function(name, value) {
-		var http = tools.makeRequest("POST", `/kvmd/streamer/set_params?${name}=${value}`, function() {
+		let http = tools.makeRequest("POST", `/kvmd/streamer/set_params?${name}=${value}`, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					wm.error("Can't configure stream:<br>", http.responseText);
@@ -209,23 +209,23 @@ function Streamer() {
 	};
 
 	var __resize = function(center=false) {
-		var size = $("stream-size-slider").value;
+		let size = $("stream-size-slider").value;
 		$("stream-size-value").innerHTML = size + "%";
 		__size_factor = size / 100;
 		__applySizeFactor(center);
 	};
 
 	var __adjustSizeFactor = function() {
-		var el_window = $("stream-window");
-		var el_slider = $("stream-size-slider");
-		var view = wm.getViewGeometry();
+		let el_window = $("stream-window");
+		let el_slider = $("stream-size-slider");
+		let view = wm.getViewGeometry();
 
-		for (var size = 100; size >= el_slider.min; size -= el_slider.step) {
+		for (let size = 100; size >= el_slider.min; size -= el_slider.step) {
 			tools.info("Stream: adjusting size:", size);
 			$("stream-size-slider").value = size;
 			__resize(true);
 
-			var rect = el_window.getBoundingClientRect();
+			let rect = el_window.getBoundingClientRect();
 			if (
 				rect.bottom <= view.bottom
 				&& rect.top >= view.top
@@ -238,7 +238,7 @@ function Streamer() {
 	};
 
 	var __applySizeFactor = function(center=false) {
-		var el_stream_image = $("stream-image");
+		let el_stream_image = $("stream-image");
 		el_stream_image.style.width = __resolution.width * __size_factor + "px";
 		el_stream_image.style.height = __resolution.height * __size_factor + "px";
 		wm.showWindow($("stream-window"), false, center);

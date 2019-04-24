@@ -30,31 +30,31 @@ function WindowManager() {
 	var __menu_items = [];
 
 	var __init__ = function() {
-		tools.forEach($$$("button"), function(el_button) {
+		for (let el_button of $$$("button")) {
 			// XXX: Workaround for iOS Safari:
 			// https://stackoverflow.com/questions/3885018/active-pseudo-class-doesnt-work-in-mobile-safari
 			el_button.ontouchstart = function() {};
-		});
+		}
 
-		tools.forEach($$("menu-item"), function(el_item) {
+		for (let el_item of $$("menu-item")) {
 			el_item.parentElement.querySelector(".menu-item-content").setAttribute("tabindex", "-1");
 			tools.setOnDown(el_item, () => __toggleMenu(el_item));
 			__menu_items.push(el_item);
-		});
+		}
 
-		tools.forEach($$("window"), function(el_window) {
+		for (let el_window of $$("window")) {
 			el_window.setAttribute("tabindex", "-1");
 			__makeWindowMovable(el_window);
 			__windows.push(el_window);
 
-			var el_button = el_window.querySelector(".window-header .window-button-close");
+			let el_button = el_window.querySelector(".window-header .window-button-close");
 			if (el_button) {
 				tools.setOnClick(el_button, function() {
 					el_window.style.visibility = "hidden";
 					__activateLastWindow(el_window);
 				});
 			}
-		});
+		}
 
 		window.onmouseup = __globalMouseButtonHandler;
 		window.ontouchend = __globalMouseButtonHandler;
@@ -72,36 +72,36 @@ function WindowManager() {
 	self.confirm = (...args) => __modalDialog("Question", args.join(" "), true, true);
 
 	var __modalDialog = function(header, text, ok, cancel) {
-		var el_modal = document.createElement("div");
+		let el_modal = document.createElement("div");
 		el_modal.className = "modal";
 		el_modal.style.visibility = "visible";
 
-		var el_window = document.createElement("div");
+		let el_window = document.createElement("div");
 		el_window.className = "modal-window";
 		el_window.setAttribute("tabindex", "-1");
 		el_modal.appendChild(el_window);
 
-		var el_header = document.createElement("div");
+		let el_header = document.createElement("div");
 		el_header.className = "modal-header";
 		el_header.innerHTML = header;
 		el_window.appendChild(el_header);
 
-		var el_content = document.createElement("div");
+		let el_content = document.createElement("div");
 		el_content.className = "modal-content";
 		el_content.innerHTML = text;
 		el_window.appendChild(el_content);
 
-		var promise = null;
+		let promise = null;
 		if (ok || cancel) {
 			promise = new Promise(function(resolve) {
-				var el_buttons = document.createElement("div");
+				let el_buttons = document.createElement("div");
 				el_buttons.className = "modal-buttons";
 				el_window.appendChild(el_buttons);
 
 				function close(retval) {
 					el_window.style.visibility = "hidden";
 					el_modal.outerHTML = "";
-					var index = __windows.indexOf(el_modal);
+					let index = __windows.indexOf(el_modal);
 					if (index !== -1) {
 						__windows.splice(index, 1);
 					}
@@ -146,7 +146,7 @@ function WindowManager() {
 
 	self.switchDisabled = function(el, disabled) {
 		if (disabled && document.activeElement === el) {
-			var el_to_focus = (
+			let el_to_focus = (
 				el.closest(".modal-window")
 				|| el.closest(".window")
 				|| el.closest(".menu-item-content")
@@ -160,8 +160,8 @@ function WindowManager() {
 
 	self.showWindow = function(el_window, activate=true, center=false) {
 		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered") || center) {
-			var view = self.getViewGeometry();
-			var rect = el_window.getBoundingClientRect();
+			let view = self.getViewGeometry();
+			let rect = el_window.getBoundingClientRect();
 
 			el_window.style.top = Math.max(__getMenuHeight(), Math.round((view.bottom - rect.height) / 2)) + "px";
 			el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
@@ -184,13 +184,13 @@ function WindowManager() {
 	};
 
 	var __getMenuHeight = function() {
-		var el_menu = $("menu");
+		let el_menu = $("menu");
 		return (el_menu ? el_menu.clientHeight : 0);
 	};
 
 	var __isWindowOnPage = function(el_window) {
-		var view = self.getViewGeometry();
-		var rect = el_window.getBoundingClientRect();
+		let view = self.getViewGeometry();
+		let rect = el_window.getBoundingClientRect();
 
 		return (
 			(rect.bottom - el_window.clientHeight / 1.5) <= view.bottom
@@ -201,10 +201,10 @@ function WindowManager() {
 	};
 
 	var __toggleMenu = function(el_a) {
-		var all_hidden = true;
+		let all_hidden = true;
 
-		__menu_items.forEach(function(el_item) {
-			var el_menu = el_item.parentElement.querySelector(".menu-item-content");
+		for (let el_item of __menu_items) {
+			let el_menu = el_item.parentElement.querySelector(".menu-item-content");
 			if (el_item === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
 				el_item.classList.add("menu-item-selected");
 				el_menu.style.visibility = "visible";
@@ -214,7 +214,7 @@ function WindowManager() {
 				el_item.classList.remove("menu-item-selected");
 				el_menu.style.visibility = "hidden";
 			}
-		});
+		}
 
 		if (all_hidden) {
 			document.onkeyup = null;
@@ -232,15 +232,15 @@ function WindowManager() {
 
 	var __closeAllMenues = function() {
 		document.onkeyup = null;
-		__menu_items.forEach(function(el_item) {
-			var el_menu = el_item.parentElement.querySelector(".menu-item-content");
+		for (let el_item of __menu_items) {
+			let el_menu = el_item.parentElement.querySelector(".menu-item-content");
 			el_item.classList.remove("menu-item-selected");
 			el_menu.style.visibility = "hidden";
-		});
+		}
 	};
 
 	var __focusIn = function(event) {
-		var el_parent;
+		let el_parent;
 		if ((el_parent = event.target.closest(".modal-window")) !== null) {
 			el_parent.classList.add("window-active");
 		} else if ((el_parent = event.target.closest(".window")) !== null) {
@@ -252,7 +252,7 @@ function WindowManager() {
 	};
 
 	var __focusOut = function(event) {
-		var el_parent;
+		let el_parent;
 		if ((el_parent = event.target.closest(".modal-window")) !== null) {
 			el_parent.classList.remove("window-active");
 		} else if ((el_parent = event.target.closest(".window")) !== null) {
@@ -265,7 +265,7 @@ function WindowManager() {
 
 	var __globalMouseButtonHandler = function(event) {
 		if (!event.target.matches(".menu-item")) {
-			for (var el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
+			for (let el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
 				if (el_item.hasAttribute("data-force-hide-menu")) {
 					break;
 				} else if (el_item.hasAttribute("data-dont-hide-menu")) {
@@ -278,38 +278,38 @@ function WindowManager() {
 	};
 
 	var __organizeWindowsOnResize = function(orientation) {
-		var view = self.getViewGeometry();
+		let view = self.getViewGeometry();
 
-		tools.forEach($$("window"), function(el_window) {
+		for (let el_window of $$("window")) {
 			if (el_window.style.visibility === "visible" && (orientation || el_window.hasAttribute("data-centered"))) {
-				var rect = el_window.getBoundingClientRect();
+				let rect = el_window.getBoundingClientRect();
 
 				el_window.style.top = Math.max(__getMenuHeight(), Math.round((view.bottom - rect.height) / 2)) + "px";
 				el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
 				el_window.setAttribute("data-centered", "");
 			}
-		});
+		}
 	};
 
 	var __activateLastWindow = function(el_except_window=null) {
-		var el_last_window = null;
+		let el_last_window = null;
 
 		if (document.activeElement) {
 			el_last_window = (document.activeElement.closest(".modal-window") || document.activeElement.closest(".window"));
 		}
 
 		if (!el_last_window || el_last_window === el_except_window) {
-			var max_z_index = 0;
+			let max_z_index = 0;
 
-			__windows.forEach(function(el_window) {
-				var z_index = parseInt(window.getComputedStyle(el_window, null).zIndex) || 0;
-				var visibility = window.getComputedStyle(el_window, null).visibility;
+			for (let el_window of __windows) {
+				let z_index = parseInt(window.getComputedStyle(el_window, null).zIndex) || 0;
+				let visibility = window.getComputedStyle(el_window, null).visibility;
 
 				if (max_z_index < z_index && visibility !== "hidden" && el_window !== el_except_window) {
 					el_last_window = el_window;
 					max_z_index = z_index;
 				}
-			});
+			}
 		}
 
 		if (el_last_window) {
@@ -320,8 +320,8 @@ function WindowManager() {
 
 	var __activateWindow = function(el_window) {
 		if (window.getComputedStyle(el_window, null).visibility !== "hidden") {
-			var el_to_focus;
-			var el_window_contains_focus;
+			let el_to_focus;
+			let el_window_contains_focus;
 
 			if (el_window.className === "modal") {
 				el_to_focus = el_window.querySelector(".modal-window");
@@ -345,10 +345,10 @@ function WindowManager() {
 	};
 
 	var __makeWindowMovable = function(el_window) {
-		var el_header = el_window.querySelector(".window-header");
-		var el_grab = el_window.querySelector(".window-header .window-grab");
+		let el_header = el_window.querySelector(".window-header");
+		let el_grab = el_window.querySelector(".window-header .window-grab");
 
-		var prev_pos = {x: 0, y: 0};
+		let prev_pos = {x: 0, y: 0};
 
 		function startMoving(event) {
 			__closeAllMenues();
@@ -375,9 +375,9 @@ function WindowManager() {
 			event = (event || window.event);
 			event.preventDefault();
 
-			var event_pos = getEventPosition(event);
-			var x = prev_pos.x - event_pos.x;
-			var y = prev_pos.y - event_pos.y;
+			let event_pos = getEventPosition(event);
+			let x = prev_pos.x - event_pos.x;
+			let y = prev_pos.y - event_pos.y;
 
 			el_window.style.top = (el_window.offsetTop - y) + "px";
 			el_window.style.left = (el_window.offsetLeft - x) + "px";

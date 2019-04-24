@@ -52,7 +52,7 @@ function Msd() {
 	};
 
 	var __clickUploadNewImageButton = function() {
-		var form_data = new FormData();
+		let form_data = new FormData();
 		form_data.append("image_name", __image_file.name);
 		form_data.append("image_data", __image_file);
 
@@ -74,7 +74,7 @@ function Msd() {
 	};
 
 	var __clickSwitchButton = function(to) {
-		var http = tools.makeRequest("POST", "/kvmd/msd/connect?to=" + to, function() {
+		let http = tools.makeRequest("POST", "/kvmd/msd/connect?to=" + to, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					wm.error("Switch error:<br>", http.responseText);
@@ -87,8 +87,8 @@ function Msd() {
 	};
 
 	var __selectNewImageFile = function() {
-		var el_input = $("msd-select-new-image-file");
-		var image_file = (el_input.files.length ? el_input.files[0] : null);
+		let el_input = $("msd-select-new-image-file");
+		let image_file = (el_input.files.length ? el_input.files[0] : null);
 		if (image_file && image_file.size > __state.info.size) {
 			wm.error("New image is too big for your Mass Storage Device.<br>Maximum:", __formatSize(__state.info.size));
 			el_input.value = "";
@@ -101,7 +101,7 @@ function Msd() {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset Mass Storage Device?").then(function(ok) {
 			if (ok) {
-				var http = tools.makeRequest("POST", "/kvmd/msd/reset", function() {
+				let http = tools.makeRequest("POST", "/kvmd/msd/reset", function() {
 					if (http.readyState === 4) {
 						if (http.status !== 200) {
 							wm.error("MSD reset error:<br>", http.responseText);
@@ -196,7 +196,7 @@ function Msd() {
 
 	var __formatSize = function(size) {
 		if (size > 0) {
-			var index = Math.floor( Math.log(size) / Math.log(1024) );
+			let index = Math.floor( Math.log(size) / Math.log(1024) );
 			return (size / Math.pow(1024, index)).toFixed(2) * 1 + " " + ["B", "kB", "MB", "GB", "TB"][index];
 		} else {
 			return 0;
@@ -217,7 +217,7 @@ function Msd() {
 
 	var __uploadProgress = function(event) {
 		if(event.lengthComputable) {
-			var percent = Math.round((event.loaded * 100) / event.total);
+			let percent = Math.round((event.loaded * 100) / event.total);
 			$("msd-progress").setAttribute("data-label", percent + "%");
 			$("msd-progress-value").style.width = percent + "%";
 		}

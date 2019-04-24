@@ -81,12 +81,12 @@ function Keyboard() {
 	};
 
 	var __updateLeds = function() {
-		var is_captured = (
+		let is_captured = (
 			$("stream-window").classList.contains("window-active")
 			|| $("keyboard-window").classList.contains("window-active")
 		);
-		var led = "led-gray";
-		var title = "Keyboard free";
+		let led = "led-gray";
+		let title = "Keyboard free";
 
 		if (__ws) {
 			if (__online) {

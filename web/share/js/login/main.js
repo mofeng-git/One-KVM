@@ -39,13 +39,13 @@ function main() {
 }
 
 function __login() {
-	var user = $("user-input").value;
+	let user = $("user-input").value;
 	if (user.length === 0) {
 		$("user-input").focus();
 	} else {
-		var passwd = $("passwd-input").value;
-		var body = `user=${encodeURIComponent(user)}&passwd=${encodeURIComponent(passwd)}`;
-		var http = tools.makeRequest("POST", "/kvmd/auth/login", function() {
+		let passwd = $("passwd-input").value;
+		let body = `user=${encodeURIComponent(user)}&passwd=${encodeURIComponent(passwd)}`;
+		let http = tools.makeRequest("POST", "/kvmd/auth/login", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
 					document.location.href = "/";

@@ -85,9 +85,9 @@ function Mouse() {
 	};
 
 	var __updateLeds = function() {
-		var is_captured = (__stream_hovered || tools.browser.is_ios);
-		var led = "led-gray";
-		var title = "Mouse free";
+		let is_captured = (__stream_hovered || tools.browser.is_ios);
+		let led = "led-gray";
+		let title = "Mouse free";
 
 		if (__ws) {
 			if (__online) {
@@ -120,7 +120,7 @@ function Mouse() {
 	var __streamTouchMoveHandler = function(event) {
 		event.preventDefault();
 		if (event.touches[0].target && event.touches[0].target.getBoundingClientRect) {
-			var rect = event.touches[0].target.getBoundingClientRect();
+			let rect = event.touches[0].target.getBoundingClientRect();
 			__current_pos = {
 				x: Math.round(event.touches[0].clientX - rect.left),
 				y: Math.round(event.touches[0].clientY - rect.top),
@@ -130,7 +130,7 @@ function Mouse() {
 	};
 
 	var __streamMoveHandler = function(event) {
-		var rect = event.target.getBoundingClientRect();
+		let rect = event.target.getBoundingClientRect();
 		__current_pos = {
 			x: Math.round(event.clientX - rect.left),
 			y: Math.round(event.clientY - rect.top),
@@ -151,10 +151,10 @@ function Mouse() {
 	};
 
 	var __sendMove = function() {
-		var pos = __current_pos;
+		let pos = __current_pos;
 		if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
-			var el_stream_image = $("stream-image");
-			var to = {
+			let el_stream_image = $("stream-image");
+			let to = {
 				x: __translate(pos.x, 0, el_stream_image.clientWidth, -32768, 32767),
 				y: __translate(pos.y, 0, el_stream_image.clientHeight, -32768, 32767),
 			};
@@ -180,7 +180,7 @@ function Mouse() {
 			event.preventDefault();
 		}
 
-		var delta = {x: 0, y: 0};
+		let delta = {x: 0, y: 0};
 
 		__wheel_delta.y += event.deltaY;
 		if (Math.abs(__wheel_delta.y) >= 100) {
