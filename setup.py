@@ -28,7 +28,7 @@ from setuptools import setup
 def main() -> None:
     setup(
         name="kvmd",
-        version="0.155",
+        version="0.156",
         url="https://github.com/pi-kvm/kvmd",
         license="GPLv3",
         author="Maxim Devaev",
