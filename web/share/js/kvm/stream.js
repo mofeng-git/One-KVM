@@ -187,7 +187,7 @@ function Streamer() {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset stream?").then(function (ok) {
 			if (ok) {
-				let http = tools.makeRequest("POST", "/kvmd/streamer/reset", function() {
+				let http = tools.makeRequest("POST", "/api/streamer/reset", function() {
 					if (http.readyState === 4) {
 						if (http.status !== 200) {
 							wm.error("Can't reset stream:<br>", http.responseText);
@@ -199,7 +199,7 @@ function Streamer() {
 	};
 
 	var __sendParam = function(name, value) {
-		let http = tools.makeRequest("POST", `/kvmd/streamer/set_params?${name}=${value}`, function() {
+		let http = tools.makeRequest("POST", `/api/streamer/set_params?${name}=${value}`, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					wm.error("Can't configure stream:<br>", http.responseText);

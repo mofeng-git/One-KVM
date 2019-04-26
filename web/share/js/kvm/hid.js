@@ -215,7 +215,7 @@ function Hid() {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset HID (keyboard & mouse)?").then(function(ok) {
 			if (ok) {
-				let http = tools.makeRequest("POST", "/kvmd/hid/reset", function() {
+				let http = tools.makeRequest("POST", "/api/hid/reset", function() {
 					if (http.readyState === 4) {
 						if (http.status !== 200) {
 							wm.error("HID reset error:<br>", http.responseText);

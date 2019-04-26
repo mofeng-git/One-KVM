@@ -57,7 +57,7 @@ function Msd() {
 		form_data.append("image_data", __image_file);
 
 		__upload_http = new XMLHttpRequest();
-		__upload_http.open("POST", "/kvmd/msd/write", true);
+		__upload_http.open("POST", "/api/msd/write", true);
 		__upload_http.upload.timeout = 5000;
 		__upload_http.onreadystatechange = __uploadStateChange;
 		__upload_http.upload.onprogress = __uploadProgress;
@@ -74,7 +74,7 @@ function Msd() {
 	};
 
 	var __clickSwitchButton = function(to) {
-		let http = tools.makeRequest("POST", "/kvmd/msd/connect?to=" + to, function() {
+		let http = tools.makeRequest("POST", "/api/msd/connect?to=" + to, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					wm.error("Switch error:<br>", http.responseText);
@@ -101,7 +101,7 @@ function Msd() {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset Mass Storage Device?").then(function(ok) {
 			if (ok) {
-				let http = tools.makeRequest("POST", "/kvmd/msd/reset", function() {
+				let http = tools.makeRequest("POST", "/api/msd/reset", function() {
 					if (http.readyState === 4) {
 						if (http.status !== 200) {
 							wm.error("MSD reset error:<br>", http.responseText);

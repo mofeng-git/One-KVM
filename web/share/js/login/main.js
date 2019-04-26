@@ -45,7 +45,7 @@ function __login() {
 	} else {
 		let passwd = $("passwd-input").value;
 		let body = `user=${encodeURIComponent(user)}&passwd=${encodeURIComponent(passwd)}`;
-		let http = tools.makeRequest("POST", "/kvmd/auth/login", function() {
+		let http = tools.makeRequest("POST", "/api/auth/login", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
 					document.location.href = "/";

@@ -45,7 +45,7 @@ function __setAppText() {
 }
 
 function __loadKvmdInfo() {
-	let http = tools.makeRequest("GET", "/kvmd/info", function() {
+	let http = tools.makeRequest("GET", "/api/info", function() {
 		if (http.readyState === 4) {
 			if (http.status === 200) {
 				let info = JSON.parse(http.responseText).result;
@@ -101,7 +101,7 @@ function __makeApp(id, path, icon, name) {
 }
 
 function __logout() {
-	let http = tools.makeRequest("POST", "/kvmd/auth/logout", function() {
+	let http = tools.makeRequest("POST", "/api/auth/logout", function() {
 		if (http.readyState === 4) {
 			if (http.status === 200 || http.status === 401 || http.status === 403) {
 				document.location.href = "/login";
