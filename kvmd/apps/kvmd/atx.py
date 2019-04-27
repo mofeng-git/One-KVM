@@ -125,19 +125,55 @@ class Atx:  # pylint: disable=too-many-instance-attributes
             else:
                 await asyncio.sleep(60)
 
+    # =====
+
+    @_atx_working
+    async def power_on(self) -> bool:
+        if not self.get_state()["leds"]["power"]:
+            await self.click_power()
+            return True
+        return False
+
+    @_atx_working
+    async def power_off(self) -> bool:
+        if self.get_state()["leds"]["power"]:
+            await self.click_power_long()
+            return True
+        return False
+
+    @_atx_working
+    async def power_off_soft(self) -> bool:
+        if self.get_state()["leds"]["power"]:
+            await self.click_power()
+            return True
+        return False
+
+    @_atx_working
+    async def power_reset(self) -> bool:
+        if self.get_state()["leds"]["power"]:
+            await self.click_reset()
+            return True
+        return False
+
+    # =====
+
+    @_atx_working
     async def click_power(self) -> None:
         get_logger().info("Clicking power ...")
         await self.__click(self.__power_switch_pin, self.__click_delay)
 
+    @_atx_working
     async def click_power_long(self) -> None:
         get_logger().info("Clicking power (long press) ...")
         await self.__click(self.__power_switch_pin, self.__long_click_delay)
 
+    @_atx_working
     async def click_reset(self) -> None:
         get_logger().info("Clicking reset")
         await self.__click(self.__reset_switch_pin, self.__click_delay)
 
-    @_atx_working
+    # =====
+
     async def __click(self, pin: int, delay: float) -> None:
         self.__region.enter()
         asyncio.ensure_future(self.__inner_click(pin, delay))

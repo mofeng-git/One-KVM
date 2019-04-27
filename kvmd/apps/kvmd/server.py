@@ -52,6 +52,7 @@ from ...validators.auth import valid_user
 from ...validators.auth import valid_passwd
 from ...validators.auth import valid_auth_token
 
+from ...validators.kvm import valid_atx_power_action
 from ...validators.kvm import valid_atx_button
 from ...validators.kvm import valid_kvm_target
 from ...validators.kvm import valid_log_seek
@@ -429,6 +430,17 @@ class Server:  # pylint: disable=too-many-instance-attributes
     @_exposed("GET", "/atx")
     async def __atx_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(self.__atx.get_state())
+
+    @_exposed("POST", "/atx/power")
+    async def __atx_power_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        action = valid_atx_power_action(request.query.get("action"))
+        done = await ({
+            "on": self.__atx.power_on,
+            "off": self.__atx.power_off,
+            "off_soft": self.__atx.power_off_soft,
+            "reset": self.__atx.power_reset,
+        }[action])()
+        return _json({"action": action, "done": done})
 
     @_exposed("POST", "/atx/click")
     async def __atx_click_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:

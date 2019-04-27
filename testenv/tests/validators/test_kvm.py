@@ -27,6 +27,7 @@ import pytest
 from kvmd.keymap import KEYMAP
 
 from kvmd.validators import ValidatorError
+from kvmd.validators.kvm import valid_atx_power_action
 from kvmd.validators.kvm import valid_atx_button
 from kvmd.validators.kvm import valid_kvm_target
 from kvmd.validators.kvm import valid_log_seek
@@ -36,6 +37,18 @@ from kvmd.validators.kvm import valid_hid_key
 from kvmd.validators.kvm import valid_hid_mouse_move
 from kvmd.validators.kvm import valid_hid_mouse_button
 from kvmd.validators.kvm import valid_hid_mouse_wheel
+
+
+# =====
+@pytest.mark.parametrize("arg", ["ON ", "OFF ", "OFF_soft ", "RESET "])
+def test_ok__valid_atx_power_action(arg: Any) -> None:
+    assert valid_atx_power_action(arg) == arg.strip().lower()
+
+
+@pytest.mark.parametrize("arg", ["test", "", None])
+def test_fail__valid_atx_power_action(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_atx_power_action(arg))
 
 
 # =====

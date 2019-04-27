@@ -30,6 +30,10 @@ from .basic import valid_number
 
 
 # =====
+def valid_atx_power_action(arg: Any) -> str:
+    return check_string_in_list(arg, "ATX power action", ["on", "off", "off_soft", "reset"])
+
+
 def valid_atx_button(arg: Any) -> str:
     return check_string_in_list(arg, "ATX button", ["power", "power_long", "reset"])
 
