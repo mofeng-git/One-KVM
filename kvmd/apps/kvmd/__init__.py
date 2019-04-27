@@ -41,7 +41,13 @@ from .server import Server
 
 # =====
 def main(argv: Optional[List[str]]=None) -> None:
-    config = init("kvmd", description="The main Pi-KVM daemon", argv=argv)[2].kvmd
+    config = init(
+        prog="kvmd",
+        description="The main Pi-KVM daemon",
+        sections=["logging", "kvmd"],
+        argv=argv,
+    )[2].kvmd
+
     with gpio.bcm():
         # pylint: disable=protected-access
         Server(
@@ -60,4 +66,5 @@ def main(argv: Optional[List[str]]=None) -> None:
             msd=MassStorageDevice(**config.msd._unpack()),
             streamer=Streamer(**config.streamer._unpack()),
         ).run(**config.server._unpack())
+
     get_logger().info("Bye-bye")

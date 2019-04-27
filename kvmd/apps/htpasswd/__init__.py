@@ -98,7 +98,11 @@ def _cmd_delete(config: Section, options: argparse.Namespace) -> None:
 
 # =====
 def main(argv: Optional[List[str]]=None) -> None:
-    (parent_parser, argv, config) = init(add_help=False, argv=argv)
+    (parent_parser, argv, config) = init(
+        add_help=False,
+        sections=["logging", "kvmd"],
+        argv=argv,
+    )
     parser = argparse.ArgumentParser(
         prog="kvmd-htpasswd",
         description="Manage KVMD users (htpasswd auth only)",

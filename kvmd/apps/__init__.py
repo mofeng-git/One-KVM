@@ -74,6 +74,7 @@ def init(
     prog: Optional[str]=None,
     description: Optional[str]=None,
     add_help: bool=True,
+    sections: Optional[List[str]]=None,
     argv: Optional[List[str]]=None,
 ) -> Tuple[argparse.ArgumentParser, List[str], Section]:
 
@@ -89,7 +90,7 @@ def init(
                              help="View current configuration (include all overrides)")
     (options, remaining) = args_parser.parse_known_args(argv)
 
-    config = _init_config(options.config_path, options.set_options)
+    config = _init_config(options.config_path, (sections or []), options.set_options)
     if options.dump_config:
         _dump_config(config)
         raise SystemExit()
@@ -100,13 +101,13 @@ def init(
 
 
 # =====
-def _init_config(config_path: str, options: List[str]) -> Section:
+def _init_config(config_path: str, sections: List[str], override_options: List[str]) -> Section:
     config_path = os.path.expanduser(config_path)
     raw_config: Dict = load_yaml_file(config_path)
 
-    scheme = _get_config_scheme()
+    scheme = _get_config_scheme(sections)
     try:
-        _merge_dicts(raw_config, build_raw_from_options(options))
+        _merge_dicts(raw_config, build_raw_from_options(override_options))
         config = make_config(raw_config, scheme)
 
         scheme["kvmd"]["auth"]["internal"] = get_auth_service_class(config.kvmd.auth.internal_type).get_options()
@@ -138,8 +139,10 @@ def _merge_dicts(dest: Dict, src: Dict) -> None:
         dest[key] = src[key]
 
 
-def _get_config_scheme() -> Dict:
-    return {
+def _get_config_scheme(sections: List[str]) -> Dict:
+    scheme = {
+        "logging": Option({}),
+
         "kvmd": {
             "server": {
                 "host":              Option("localhost", type=valid_ip_or_host),
@@ -230,6 +233,13 @@ def _get_config_scheme() -> Dict:
                 "cmd": Option(["/bin/true"], type=valid_command),
             },
         },
-
-        "logging": Option({}),
     }
+
+    if sections:
+        return {
+            section: sub
+            for (section, sub) in scheme.items()
+            if section in sections
+        }
+    else:
+        return scheme

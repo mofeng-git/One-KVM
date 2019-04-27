@@ -36,7 +36,13 @@ from .. import init
 
 # =====
 def main(argv: Optional[List[str]]=None) -> None:
-    config = init("kvmd-cleanup", description="Kill KVMD and clear resources", argv=argv)[2].kvmd
+    config = init(
+        prog="kvmd-cleanup",
+        description="Kill KVMD and clear resources",
+        sections=["logging", "kvmd"],
+        argv=argv,
+    )[2].kvmd
+
     logger = get_logger(0)
 
     logger.info("Cleaning up ...")
