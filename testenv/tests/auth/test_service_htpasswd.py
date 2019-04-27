@@ -39,16 +39,16 @@ async def test_ok__htpasswd_service(tmpdir) -> None:  # type: ignore
     htpasswd.save()
 
     async with get_configured_auth_service("htpasswd", file=path) as service:
-        assert not (await service.login("user", "foo"))
-        assert not (await service.login("admin", "foo"))
-        assert not (await service.login("user", "pass"))
-        assert (await service.login("admin", "pass"))
+        assert not (await service.authorize("user", "foo"))
+        assert not (await service.authorize("admin", "foo"))
+        assert not (await service.authorize("user", "pass"))
+        assert (await service.authorize("admin", "pass"))
 
         htpasswd.set_password("admin", "bar")
         htpasswd.set_password("user", "bar")
         htpasswd.save()
 
-        assert (await service.login("admin", "bar"))
-        assert (await service.login("user", "bar"))
-        assert not (await service.login("admin", "foo"))
-        assert not (await service.login("user", "foo"))
+        assert (await service.authorize("admin", "bar"))
+        assert (await service.authorize("user", "bar"))
+        assert not (await service.authorize("admin", "foo"))
+        assert not (await service.authorize("user", "foo"))

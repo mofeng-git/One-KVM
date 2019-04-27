@@ -82,11 +82,11 @@ except ImportError:
     from aiohttp.helpers import AccessLogger  # type: ignore  # pylint: disable=ungrouped-imports
 
 
-_ATTR_KVMD_USER = "kvmd_user"
+_ATTR_KVMD_AUTH_INFO = "kvmd_auth_info"
 
 
 def _format_P(request: aiohttp.web.BaseRequest, *_, **__) -> str:  # type: ignore  # pylint: disable=invalid-name
-    return (getattr(request, _ATTR_KVMD_USER, None) or "-")
+    return (getattr(request, _ATTR_KVMD_AUTH_INFO, None) or "-")
 
 
 AccessLogger._format_P = staticmethod(_format_P)  # type: ignore  # pylint: disable=protected-access
@@ -148,6 +148,9 @@ _ATTR_EXPOSED_METHOD = "exposed_method"
 _ATTR_EXPOSED_PATH = "exposed_path"
 _ATTR_SYSTEM_TASK = "system_task"
 
+_HEADER_AUTH_USER = "X-KVMD-User"
+_HEADER_AUTH_PASSWD = "X-KVMD-Passwd"
+
 _COOKIE_AUTH_TOKEN = "auth_token"
 
 
@@ -156,12 +159,23 @@ def _exposed(http_method: str, path: str, auth_required: bool=True) -> Callable:
         async def wrap(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
             try:
                 if auth_required:
+                    user = request.headers.get(_HEADER_AUTH_USER, "")
+                    passwd = request.headers.get(_HEADER_AUTH_PASSWD, "")
                     token = request.cookies.get(_COOKIE_AUTH_TOKEN, "")
-                    if token:
+
+                    if user:
+                        user = valid_user(user)
+                        setattr(request, _ATTR_KVMD_AUTH_INFO, "%s (xhdr)" % (user))
+                        if not (await self._auth_manager.authorize(user, valid_passwd(passwd))):
+                            raise ForbiddenError("Forbidden")
+
+                    elif token:
                         user = self._auth_manager.check(valid_auth_token(token))
                         if not user:
+                            setattr(request, _ATTR_KVMD_AUTH_INFO, "- (token)")
                             raise ForbiddenError("Forbidden")
-                        setattr(request, _ATTR_KVMD_USER, user)
+                        setattr(request, _ATTR_KVMD_AUTH_INFO, "%s (token)" % (user))
+
                     else:
                         raise UnauthorizedError("Unauthorized")
 

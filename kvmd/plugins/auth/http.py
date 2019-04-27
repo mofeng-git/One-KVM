@@ -69,7 +69,7 @@ class Plugin(BaseAuthService):
             "timeout": Option(5.0, type=valid_float_f01),
         }
 
-    async def login(self, user: str, passwd: str) -> bool:
+    async def authorize(self, user: str, passwd: str) -> bool:
         session = self.__ensure_session()
         try:
             async with session.request(

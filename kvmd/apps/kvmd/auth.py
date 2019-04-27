@@ -47,33 +47,40 @@ class AuthManager:
     ) -> None:
 
         self.__internal_service = get_auth_service_class(internal_type)(**internal_kwargs)
-        get_logger().info("Using internal login service %r", self.__internal_service.PLUGIN_NAME)
+        get_logger().info("Using internal auth service %r", self.__internal_service.PLUGIN_NAME)
 
         self.__external_service: Optional[BaseAuthService] = None
         if external_type:
             self.__external_service = get_auth_service_class(external_type)(**external_kwargs)
-            get_logger().info("Using external login service %r", self.__external_service.PLUGIN_NAME)
+            get_logger().info("Using external auth service %r", self.__external_service.PLUGIN_NAME)
 
         self.__internal_users = internal_users
 
         self.__tokens: Dict[str, str] = {}  # {token: user}
 
-    async def login(self, user: str, passwd: str) -> Optional[str]:
+    async def authorize(self, user: str, passwd: str) -> bool:
         if user not in self.__internal_users and self.__external_service:
             service = self.__external_service
         else:
             service = self.__internal_service
 
-        if (await service.login(user, passwd)):
+        ok = (await service.authorize(user, passwd))
+        if ok:
+            get_logger().info("Authorized user %r via auth service %r", user, service.PLUGIN_NAME)
+        else:
+            get_logger().error("Got access denied for user %r from auth service %r", user, service.PLUGIN_NAME)
+        return ok
+
+    async def login(self, user: str, passwd: str) -> Optional[str]:
+        if (await self.authorize(user, passwd)):
             for (token, token_user) in self.__tokens.items():
                 if user == token_user:
                     return token
             token = secrets.token_hex(32)
             self.__tokens[token] = user
-            get_logger().info("Logged in user %r via login service %r", user, service.PLUGIN_NAME)
+            get_logger().info("Logged in user %r", user)
             return token
         else:
-            get_logger().error("Access denied for user %r from login service %r", user, service.PLUGIN_NAME)
             return None
 
     def logout(self, token: str) -> None:

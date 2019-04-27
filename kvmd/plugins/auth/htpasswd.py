@@ -44,6 +44,6 @@ class Plugin(BaseAuthService):
             "file": Option("/etc/kvmd/htpasswd", type=valid_abs_path_exists, unpack_as="path"),
         }
 
-    async def login(self, user: str, passwd: str) -> bool:
+    async def authorize(self, user: str, passwd: str) -> bool:
         htpasswd = passlib.apache.HtpasswdFile(self.__path)
         return htpasswd.check_password(user, passwd)

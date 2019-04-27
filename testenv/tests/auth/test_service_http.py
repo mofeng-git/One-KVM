@@ -73,7 +73,7 @@ async def test_ok(auth_server_port: int, kwargs: Dict) -> None:
         ("auth_plus_basic" if kwargs.get("user") else "auth"),
     )
     async with get_configured_auth_service("http", url=url, **kwargs) as service:
-        assert not (await service.login("user", "foobar"))
-        assert not (await service.login("admin", "foobar"))
-        assert not (await service.login("user", "pass"))
-        assert (await service.login("admin", "pass"))
+        assert not (await service.authorize("user", "foobar"))
+        assert not (await service.authorize("admin", "foobar"))
+        assert not (await service.authorize("user", "pass"))
+        assert (await service.authorize("admin", "pass"))
