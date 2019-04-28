@@ -30,12 +30,32 @@ from setuptools.command.easy_install import ScriptWriter
 
 # =====
 def main() -> None:
+    def get_args(cls, dist, header=None):  # type: ignore
+        if header is None:
+            header = cls.get_header()
+
+        spec = str(dist.as_requirement())
+        for group_type in ["console", "gui"]:
+            group = group_type + "_scripts"
+            for (name, ep) in dist.get_entry_map(group).items():
+                cls._ensure_safe_name(name)
+                script_text = cls.template.format(
+                    spec=spec,
+                    group=group,
+                    name=name,
+                    module=ep.module_name,
+                )
+                args = cls._get_script_args(group_type, name, header, script_text)
+                for res in args:
+                    yield res
+
+    ScriptWriter.get_args = classmethod(get_args)
     ScriptWriter.template = textwrap.dedent("""
-        # EASY-INSTALL-ENTRY-SCRIPT: %(spec)r,%(group)r,%(name)r
+        # EASY-INSTALL-ENTRY-SCRIPT: {spec},{group},{name}
 
-        __requires__ = %(spec)r
+        __requires__ = "{spec}"
 
-        from kvmd.apps.%(name)r import main
+        from {module} import main
 
         if __name__ == "__main__":
             main()
