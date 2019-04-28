@@ -1,6 +1,8 @@
 # Don't touch this file otherwise your device may stop working.
 # You can find a working configuration in /usr/share/kvmd/configs.default/kvmd.
 
+logging: !include logging.yaml
+
 kvmd:
     server:
         host: 127.0.0.1
@@ -40,4 +42,7 @@ kvmd:
             - "--port={port}"
             - "--drop-same-frames=30"
 
-logging: !include logging.yaml
+ipmi:
+    kvmd:
+        host: 127.0.0.1
+        port: 8081

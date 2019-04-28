@@ -15,8 +15,8 @@ post_upgrade() {
 	done
 
 	chown root:kvmd \
-		/usr/share/kvmd/configs.default/kvmd/htpasswd \
-		/etc/kvmd/htpasswd
+		/usr/share/kvmd/configs.default/kvmd/*passwd \
+		/etc/kvmd/*passwd
 }
 
 post_remove() {

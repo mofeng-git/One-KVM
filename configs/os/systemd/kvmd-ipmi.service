@@ -1,0 +1,15 @@
+[Unit]
+Description=IPMI to KVMD proxy
+After=kvmd.service
+
+[Service]
+User=kvmd
+Group=kvmd
+Type=simple
+Restart=always
+RestartSec=3
+
+ExecStart=/usr/bin/kvmd-ipmi
+
+[Install]
+WantedBy=multi-user.target

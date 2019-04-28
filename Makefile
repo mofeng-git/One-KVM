@@ -35,7 +35,7 @@ tox: _testenv
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
 		-it $(TESTENV_IMAGE) bash -c " \
 			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
-			&& cp /usr/share/kvmd/configs.default/kvmd/htpasswd /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /src/testenv/main.yaml /etc/kvmd \
 			&& cd /src \
 			&& tox -c testenv/tox.ini $(if $(E), -e $(E), -p auto) \
@@ -107,11 +107,12 @@ _run_cmd: _testenv
 			--publish 8080:80/tcp \
 			--publish 8081:8081/tcp \
 			--publish 8082:8082/tcp \
+			--publish 6230:623/udp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
 			(socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
 			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/kvmd/nginx \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
-			&& cp /usr/share/kvmd/configs.default/kvmd/htpasswd /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /testenv/main.yaml /etc/kvmd \
 			&& nginx -c /etc/kvmd/nginx/nginx.conf \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \

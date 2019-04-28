@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # ========================================================================== #
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
@@ -21,59 +20,29 @@
 # ========================================================================== #
 
 
-from setuptools import setup
+from typing import List
+from typing import Optional
+
+from .. import init
+
+from .auth import IpmiAuthManager
+from .server import IpmiServer
 
 
 # =====
-def main() -> None:
-    setup(
-        name="kvmd",
-        version="0.156",
-        url="https://github.com/pi-kvm/kvmd",
-        license="GPLv3",
-        author="Maxim Devaev",
-        author_email="mdevaev@gmail.com",
-        description="The main Pi-KVM daemon",
-        platforms="any",
+def main(argv: Optional[List[str]]=None) -> None:
+    config = init(
+        prog="kvmd-ipmi",
+        description="IPMI to KVMD proxy",
+        sections=["logging", "ipmi"],
+        argv=argv,
+    )[2].ipmi
 
-        packages=[
-            "kvmd",
-            "kvmd.validators",
-            "kvmd.yamlconf",
-            "kvmd.plugins",
-            "kvmd.plugins.auth",
-            "kvmd.apps",
-            "kvmd.apps.kvmd",
-            "kvmd.apps.htpasswd",
-            "kvmd.apps.cleanup",
-            "kvmd.apps.ipmi",
-        ],
-
-        package_data={
-            "kvmd": ["data/*.yaml"],
+    # pylint: disable=protected-access
+    IpmiServer(
+        auth_manager=IpmiAuthManager(**config.auth._unpack()),
+        **{  # Dirty mypy hack
+            **config.server._unpack(),
+            **config.kvmd._unpack(),
         },
-
-        entry_points={
-            "console_scripts": [
-                "kvmd = kvmd.apps.kvmd:main",
-                "kvmd-htpasswd = kvmd.apps.htpasswd:main",
-                "kvmd-cleanup = kvmd.apps.cleanup:main",
-                "kvmd-ipmi = kvmd.apps.ipmi:main",
-            ],
-        },
-
-        classifiers=[
-            "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-            "Development Status :: 4 - Beta",
-            "Programming Language :: Python :: 3.7",
-            "Topic :: System :: Systems Administration",
-            "Operating System :: POSIX :: Linux",
-            "Intended Audience :: System Administrators",
-            "Intended Audience :: End Users/Desktop",
-            "Intended Audience :: Telecommunications Industry",
-        ],
-    )
-
-
-if __name__ == "__main__":
-    main()
+    ).run()  # type: ignore

@@ -110,11 +110,13 @@ def _init_config(config_path: str, sections: List[str], override_options: List[s
         _merge_dicts(raw_config, build_raw_from_options(override_options))
         config = make_config(raw_config, scheme)
 
-        scheme["kvmd"]["auth"]["internal"] = get_auth_service_class(config.kvmd.auth.internal_type).get_options()
-        if config.kvmd.auth.external_type:
-            scheme["kvmd"]["auth"]["external"] = get_auth_service_class(config.kvmd.auth.external_type).get_options()
+        if "kvmd" in sections:
+            scheme["kvmd"]["auth"]["internal"] = get_auth_service_class(config.kvmd.auth.internal_type).get_options()
+            if config.kvmd.auth.external_type:
+                scheme["kvmd"]["auth"]["external"] = get_auth_service_class(config.kvmd.auth.external_type).get_options()
+            config = make_config(raw_config, scheme)
 
-        return make_config(raw_config, scheme)
+        return config
     except (ConfigError, UnknownPluginError) as err:
         raise SystemExit("Config error: %s" % (str(err)))
 
@@ -231,6 +233,25 @@ def _get_config_scheme(sections: List[str]) -> Dict:
                 "timeout": Option(2.0, type=valid_float_f01),
 
                 "cmd": Option(["/bin/true"], type=valid_command),
+            },
+        },
+
+        "ipmi": {
+            "server": {
+                "host":    Option("::", type=valid_ip_or_host),
+                "port":    Option(623,  type=valid_port),
+                "timeout": Option(10.0, type=valid_float_f01),
+            },
+
+            "kvmd": {
+                "host":    Option("localhost", type=valid_ip_or_host, unpack_as="kvmd_host"),
+                "port":    Option(0,   type=valid_port, unpack_as="kvmd_port"),
+                "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="kvmd_unix_path"),
+                "timeout": Option(5.0, type=valid_float_f01, unpack_as="kvmd_timeout"),
+            },
+
+            "auth": {
+                "file": Option("/etc/kvmd/ipmipasswd", type=valid_abs_path_exists, unpack_as="path"),
             },
         },
     }
