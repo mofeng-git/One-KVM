@@ -21,11 +21,26 @@
 # ========================================================================== #
 
 
+import os
+import textwrap
+
 from setuptools import setup
+from setuptools.command.easy_install import ScriptWriter
 
 
 # =====
 def main() -> None:
+    ScriptWriter.template = textwrap.dedent("""
+        # EASY-INSTALL-ENTRY-SCRIPT: %(spec)r,%(group)r,%(name)r
+
+        __requires__ = %(spec)r
+
+        from kvmd.apps.%(name)r import main
+
+        if __name__ == "__main__":
+            main()
+    """).strip()
+
     setup(
         name="kvmd",
         version="0.158",
@@ -52,6 +67,12 @@ def main() -> None:
         package_data={
             "kvmd": ["data/*.yaml"],
         },
+
+        scripts=[
+            os.path.join("scripts", name)
+            for name in os.listdir("scripts")
+            if not name.startswith(".")
+        ],
 
         entry_points={
             "console_scripts": [
