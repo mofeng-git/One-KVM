@@ -40,8 +40,6 @@ from . import BaseAuthService
 
 # =====
 class Plugin(BaseAuthService):
-    PLUGIN_NAME = "http"
-
     def __init__(  # pylint: disable=super-init-not-called
         self,
         url: str,
@@ -60,7 +58,7 @@ class Plugin(BaseAuthService):
         self.__http_session: Optional[aiohttp.ClientSession] = None
 
     @classmethod
-    def get_options(cls) -> Dict[str, Option]:
+    def get_plugin_options(cls) -> Dict[str, Option]:
         return {
             "url":     Option("http://localhost/auth"),
             "verify":  Option(True, type=valid_bool),

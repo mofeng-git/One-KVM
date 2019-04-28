@@ -33,13 +33,11 @@ from . import BaseAuthService
 
 # =====
 class Plugin(BaseAuthService):
-    PLUGIN_NAME = "htpasswd"
-
     def __init__(self, path: str) -> None:  # pylint: disable=super-init-not-called
         self.__path = path
 
     @classmethod
-    def get_options(cls) -> Dict[str, Option]:
+    def get_plugin_options(cls) -> Dict[str, Option]:
         return {
             "file": Option("/etc/kvmd/htpasswd", type=valid_abs_path_exists, unpack_as="path"),
         }

@@ -47,12 +47,12 @@ class AuthManager:
     ) -> None:
 
         self.__internal_service = get_auth_service_class(internal_type)(**internal_kwargs)
-        get_logger().info("Using internal auth service %r", self.__internal_service.PLUGIN_NAME)
+        get_logger().info("Using internal auth service %r", self.__internal_service.get_plugin_name())
 
         self.__external_service: Optional[BaseAuthService] = None
         if external_type:
             self.__external_service = get_auth_service_class(external_type)(**external_kwargs)
-            get_logger().info("Using external auth service %r", self.__external_service.PLUGIN_NAME)
+            get_logger().info("Using external auth service %r", self.__external_service.get_plugin_name())
 
         self.__internal_users = internal_users
 
@@ -66,9 +66,9 @@ class AuthManager:
 
         ok = (await service.authorize(user, passwd))
         if ok:
-            get_logger().info("Authorized user %r via auth service %r", user, service.PLUGIN_NAME)
+            get_logger().info("Authorized user %r via auth service %r", user, service.get_plugin_name())
         else:
-            get_logger().error("Got access denied for user %r from auth service %r", user, service.PLUGIN_NAME)
+            get_logger().error("Got access denied for user %r from auth service %r", user, service.get_plugin_name())
         return ok
 
     async def login(self, user: str, passwd: str) -> Optional[str]:

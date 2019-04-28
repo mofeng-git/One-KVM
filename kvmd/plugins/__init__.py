@@ -22,7 +22,6 @@
 
 import importlib
 import functools
-import os
 
 from typing import Dict
 from typing import Type
@@ -38,34 +37,23 @@ class UnknownPluginError(Exception):
 
 # =====
 class BasePlugin:
-    PLUGIN_NAME: str = ""
-
     def __init__(self, **_: Any) -> None:
         pass  # pragma: nocover
 
     @classmethod
-    def get_options(cls) -> Dict[str, Option]:
+    def get_plugin_name(cls) -> str:
+        name = cls.__module__
+        return name[name.rindex(".") + 1:]
+
+    @classmethod
+    def get_plugin_options(cls) -> Dict[str, Option]:
         return {}  # pragma: nocover
 
 
-# =====
-def get_plugin_class(sub: str, name: str) -> Type[BasePlugin]:
-    classes = _get_plugin_classes(sub)
-    try:
-        return classes[name]
-    except KeyError:
-        raise UnknownPluginError("Unknown plugin '%s/%s'" % (sub, name))
-
-
-# =====
 @functools.lru_cache()
-def _get_plugin_classes(sub: str) -> Dict[str, Type[BasePlugin]]:
-    classes: Dict[str, Type[BasePlugin]] = {}  # noqa: E701
-    sub_path = os.path.join(os.path.dirname(__file__), sub)
-    for file_name in os.listdir(sub_path):
-        if not file_name.startswith("__") and file_name.endswith(".py"):
-            module_name = file_name[:-3]
-            module = importlib.import_module("kvmd.plugins.{}.{}".format(sub, module_name))
-            plugin_class = getattr(module, "Plugin")
-            classes[plugin_class.PLUGIN_NAME] = plugin_class
-    return classes
+def get_plugin_class(sub: str, name: str) -> Type[BasePlugin]:
+    try:
+        module = importlib.import_module("kvmd.plugins.{}.{}".format(sub, name))
+    except ModuleNotFoundError:
+        raise UnknownPluginError("Unknown plugin '%s/%s'" % (sub, name))
+    return getattr(module, "Plugin")

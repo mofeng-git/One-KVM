@@ -42,7 +42,7 @@ from kvmd.plugins.auth import get_auth_service_class
 # =====
 def _make_service_kwargs(path: str) -> Dict:
     cls = get_auth_service_class("htpasswd")
-    scheme = cls.get_options()
+    scheme = cls.get_plugin_options()
     return make_config({"file": path}, scheme)._unpack()  # pylint: disable=protected-access
 
 

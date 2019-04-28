@@ -35,7 +35,7 @@ from kvmd.plugins.auth import get_auth_service_class
 @contextlib.asynccontextmanager
 async def get_configured_auth_service(name: str, **kwargs: Any) -> AsyncGenerator[BaseAuthService, None]:
     service_class = get_auth_service_class(name)
-    config = make_config(kwargs, service_class.get_options())
+    config = make_config(kwargs, service_class.get_plugin_options())
     service = service_class(**config._unpack())  # pylint: disable=protected-access
     try:
         yield service
