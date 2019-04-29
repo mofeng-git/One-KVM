@@ -110,10 +110,10 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
 
     def __chassis_control_handler(self, request: Dict, session: IpmiServerSession) -> None:
         handle = {
-            0: "/atx/power?action=off",
+            0: "/atx/power?action=off_hard",
             1: "/atx/power?action=on",
-            3: "/atx/power?action=reset",
-            5: "/atx/power?action=off_soft",
+            3: "/atx/power?action=reset_hard",
+            5: "/atx/power?action=off",
         }.get(request["data"][0], "")
         if handle:
             if self.__make_request("POST", handle, session)[0] == 409:

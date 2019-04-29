@@ -31,7 +31,7 @@ from .basic import valid_number
 
 # =====
 def valid_atx_power_action(arg: Any) -> str:
-    return check_string_in_list(arg, "ATX power action", ["on", "off", "off_soft", "reset"])
+    return check_string_in_list(arg, "ATX power action", ["on", "off", "off_hard", "reset_hard"])
 
 
 def valid_atx_button(arg: Any) -> str:

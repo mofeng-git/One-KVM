@@ -137,19 +137,19 @@ class Atx:  # pylint: disable=too-many-instance-attributes
     @_atx_working
     async def power_off(self) -> bool:
         if self.get_state()["leds"]["power"]:
-            await self.click_power_long()
-            return True
-        return False
-
-    @_atx_working
-    async def power_off_soft(self) -> bool:
-        if self.get_state()["leds"]["power"]:
             await self.click_power()
             return True
         return False
 
     @_atx_working
-    async def power_reset(self) -> bool:
+    async def power_off_hard(self) -> bool:
+        if self.get_state()["leds"]["power"]:
+            await self.click_power_long()
+            return True
+        return False
+
+    @_atx_working
+    async def power_reset_hard(self) -> bool:
         if self.get_state()["leds"]["power"]:
             await self.click_reset()
             return True

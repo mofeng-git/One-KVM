@@ -437,8 +437,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
         done = await ({
             "on": self.__atx.power_on,
             "off": self.__atx.power_off,
-            "off_soft": self.__atx.power_off_soft,
-            "reset": self.__atx.power_reset,
+            "off_hard": self.__atx.power_off_hard,
+            "reset_hard": self.__atx.power_reset_hard,
         }[action])()
         return _json({"action": action, "done": done})
 

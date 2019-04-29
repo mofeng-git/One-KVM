@@ -40,7 +40,7 @@ from kvmd.validators.kvm import valid_hid_mouse_wheel
 
 
 # =====
-@pytest.mark.parametrize("arg", ["ON ", "OFF ", "OFF_soft ", "RESET "])
+@pytest.mark.parametrize("arg", ["ON ", "OFF ", "OFF_HARD ", "RESET_HARD "])
 def test_ok__valid_atx_power_action(arg: Any) -> None:
     assert valid_atx_power_action(arg) == arg.strip().lower()
 
