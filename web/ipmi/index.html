@@ -24,7 +24,7 @@
 <html lang="en">
 <head>
 	<meta charset="utf-8" />
-	<title>Pi-KVM Index</title>
+	<title>Pi-KVM IPMI Info</title>
 
 	<link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
 	<link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
@@ -34,17 +34,12 @@
 	<meta name="msapplication-TileColor" content="#2b5797">
 	<meta name="theme-color" content="#ffffff">
 
-	<link rel="stylesheet" href="share/css/vars.css">
-	<link rel="stylesheet" href="share/css/main.css">
-	<link rel="stylesheet" href="share/css/windows.css">
-	<link rel="stylesheet" href="share/css/modals.css">
-	<link rel="stylesheet" href="share/css/start.css">
-	<link rel="stylesheet" href="share/css/index/index.css">
+	<link rel="stylesheet" href="../share/css/vars.css">
+	<link rel="stylesheet" href="../share/css/main.css">
+	<link rel="stylesheet" href="../share/css/start.css">
 
-	<script src="share/js/bb.js"></script>
-	<script src="share/js/tools.js"></script>
-	<script src="share/js/wm.js"></script>
-	<script src="share/js/index/main.js"></script>
+	<script src="../share/js/tools.js"></script>
+	<script src="../share/js/ipmi/main.js"></script>
 
 	<script>window.onload = main;</script>
 </head>
@@ -52,49 +47,25 @@
 <body>
 	<div class="start-box">
 		<div class="start">
-			<table>
-				<tr>
-					<td valign="top" class="logo">
-						<img class="svg-gray" src="share/svg/logo.svg" alt="Open Source Hardware" height="40" />
-					</td>
-					<td valign="top">
-						<table>
-							<tr>
-								<td colspan="2" class="title">Open Source &amp; Open Hardware IP-KVM</td>
-							</tr>
-							<tr>
-								<td colspan="2" class="copyright">Copyright &copy; 2018 Pi-KVM Developers Team</td>
-							</tr>
-						</table>
-					</td>
-				</tr>
-			</table>
-			<hr>
-			<table>
-				<tr class="server">
-					<td>Server:</td>
-					<td><a id="kvmd-meta-server-host" target="_blank" href="/api/info"></a></td>
-				</tr>
-			</table>
-			<hr>
-			<div id="apps-box">
-				<h4>Loading ...</h4>
-			</div>
+			<a style="display: inline-block; margin-top: 4px; color:#5c90bc; text-decoration: none;" href="/">
+				&nbsp;&nbsp;&larr;&nbsp;&nbsp; [ Pi-KVM Index ]
+			</a>
 			<hr>
 			<p class="text">
-				Please note that when you are working with a KVM session or another application that captures the keyboard,
-				you can't use some keyboard shortcuts such as Ctrl+Alt+Del (which will be caught by your OS) or Ctrl+W (caught by your browser).
+				This Pi-KVM device has running kvmd-ipmi daemon and provides IPMI 2.0 port (default 623)
+				for some basic BMC operations like on/off/reset for the server.
 			</p>
 			<p class="text">
-				To override this limitation you can use <a target="_blank" href="https://google.com/chrome">Google Chrome</a>
-				or <a target="_blank" href="https://chromium.org/Home">Chromium</a> in application mode.
+				<b>WARNING!</b> We strongly don't recommend you to use IPMI in untrusted networks because
+				this protocol is completely unsafe by design. In short, the authentication process for IPMI mandates
+				that the server send a salted SHA1 or MD5 hash of the requested user's password to the client,
+				prior to the client authenticating.
 			</p>
-			<div id="app-text" class="code"></div>
-			<hr>
 			<p class="text">
-				Full documentation, source code, hardware schematics and legal information
-				can be found in our <a target="_blank" href="https://github.com/pi-kvm">official website</a>.
+				<b>NEVER</b> use the same passwords for KVMD and IPMI users. And even better not to use IPMI.
+				Instead, you can directly use KVMD API via curl. We gave here some examples for this:
 			</p>
+			<div id="ipmi-text" class="code" style="max-height:200px;"></div>
 		</div>
 	</div>
 </body>

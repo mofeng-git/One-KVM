@@ -20,65 +20,24 @@
 *****************************************************************************/
 
 
-div#apps-box {
-	display: table;
-	margin: 0 auto;
-}
-
-div#apps-box ul#apps {
-	list-style-type: none;
-	padding: 0;
-	margin: 0;
-}
-
-div#apps-box ul#apps li {
-	float: left;
-	margin-left: 5px;
-	margin-right: 5px;
-}
-
-div#apps-box ul#apps li div.app {
-	height: 100px;
-	width: 100px;
-	text-align: center;
-	background-color: var(--cs-control-default-bg);
-	box-shadow: var(--shadow-micro);
-	border: var(--border-key-thin);
-	border-radius: 8px;
-}
-
-div#apps-box ul#apps li div:hover.app {
-	border: var(--border-intensive-thin);
-	box-shadow: none;
-}
-
-div#apps-box ul#apps li div.app img {
-	display: block;
-	margin: auto;
-	height: 50px;
-	padding-bottom: 5px;
-}
-
-div#apps-box ul#apps li div.app a {
+div.start-box {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	height: 100%;
-	text-decoration: none;
-	font-weight: bold;
+	align-items: center;
+	text-align: center;
+	min-height: 100vh;
 }
 
-td.logo {
-	padding-right: 25px;
-}
-td.title {
-	font-size: 1.2em;
-}
-td.copyright {
-	font-size: 0.8em;
-}
-tr.server {
-	font-size: 1.4em;
-	font-weight: bold;
-	font-family: monospace;
+div.start-box div.start {
+	text-align: left;
+	outline: none;
+	word-wrap: break-word;
+	max-width: 800px;
+	border: var(--border-window-thin);
+	border-radius: 8px;
+	box-sizing: border-box;
+	box-shadow: var(--shadow-big);
+	background-color: var(--cs-window-default-bg);
+	padding: 15px;
 }
