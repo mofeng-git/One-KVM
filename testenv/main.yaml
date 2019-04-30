@@ -39,7 +39,7 @@ kvmd:
 
 ipmi:
     kvmd:
-        host: 127.0.0.1
+        host: kvmd
         port: 8081
 
 logging: !include logging.yaml
