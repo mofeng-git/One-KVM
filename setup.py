@@ -24,16 +24,27 @@
 import os
 import textwrap
 
+import setuptools.command.easy_install
 from setuptools import setup
-from setuptools.command.easy_install import ScriptWriter
 
 
 # =====
-def main() -> None:
+class _ScriptWriter(setuptools.command.easy_install.ScriptWriter):
+    template = textwrap.dedent("""
+        # EASY-INSTALL-ENTRY-SCRIPT: {spec},{group},{name}
+
+        __requires__ = "{spec}"
+
+        from {module} import main
+
+        if __name__ == "__main__":
+            main()
+    """).strip()
+
+    @classmethod
     def get_args(cls, dist, header=None):  # type: ignore
         if header is None:
             header = cls.get_header()
-
         spec = str(dist.as_requirement())
         for group_type in ["console", "gui"]:
             group = group_type + "_scripts"
@@ -45,21 +56,14 @@ def main() -> None:
                     name=name,
                     module=ep.module_name,
                 )
-                args = cls._get_script_args(group_type, name, header, script_text)
-                for res in args:
-                    yield res
+                yield from cls._get_script_args(group_type, name, header, script_text)
 
-    ScriptWriter.get_args = classmethod(get_args)
-    ScriptWriter.template = textwrap.dedent("""
-        # EASY-INSTALL-ENTRY-SCRIPT: {spec},{group},{name}
 
-        __requires__ = "{spec}"
-
-        from {module} import main
-
-        if __name__ == "__main__":
-            main()
-    """).strip()
+# =====
+def main() -> None:
+    setuptools.command.easy_install.ScriptWriter = _ScriptWriter
+    setuptools.command.easy_install.get_script_args = _ScriptWriter.get_script_args
+    setuptools.command.easy_install.get_script_header = _ScriptWriter.get_script_header
 
     setup(
         name="kvmd",
