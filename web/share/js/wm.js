@@ -62,8 +62,8 @@ function WindowManager() {
 		window.addEventListener("focusin", __focusIn);
 		window.addEventListener("focusout", __focusOut);
 
-		window.addEventListener("resize", () => __organizeWindowsOnResize(false));
-		window.addEventListener("orientationchange", () => __organizeWindowsOnResize(true));
+		window.addEventListener("resize", __organizeWindowsOnResize);
+		window.addEventListener("orientationchange", __organizeWindowsOnResize);
 	};
 
 	/************************************************************************/
@@ -159,15 +159,10 @@ function WindowManager() {
 	};
 
 	self.showWindow = function(el_window, activate=true, center=false) {
-		if (!__isWindowOnPage(el_window) || el_window.hasAttribute("data-centered") || center) {
-			let view = self.getViewGeometry();
-			let rect = el_window.getBoundingClientRect();
-
-			el_window.style.top = Math.max(__getMenuHeight(), Math.round((view.bottom - rect.height) / 2)) + "px";
-			el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
-			el_window.setAttribute("data-centered", "");
+		if (el_window.style.visibility === "hidden") {
+			center = true;
 		}
-
+		__organizeWindow(el_window, center);
 		el_window.style.visibility = "visible";
 		if (activate) {
 			__activateWindow(el_window);
@@ -175,29 +170,13 @@ function WindowManager() {
 	};
 
 	self.getViewGeometry = function() {
+		let el_menu = $("menu");
 		return {
-			top: __getMenuHeight(),
+			top: (el_menu ? el_menu.clientHeight : 0), // Menu height
 			bottom: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
 			left: 0,
 			right: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
 		};
-	};
-
-	var __getMenuHeight = function() {
-		let el_menu = $("menu");
-		return (el_menu ? el_menu.clientHeight : 0);
-	};
-
-	var __isWindowOnPage = function(el_window) {
-		let view = self.getViewGeometry();
-		let rect = el_window.getBoundingClientRect();
-
-		return (
-			(rect.bottom - el_window.clientHeight / 1.5) <= view.bottom
-			&& rect.top >= view.top
-			&& (rect.left + el_window.clientWidth / 1.5) >= view.left
-			&& (rect.right - el_window.clientWidth / 1.5) <= view.right
-		);
 	};
 
 	var __toggleMenu = function(el_a) {
@@ -277,16 +256,33 @@ function WindowManager() {
 		}
 	};
 
-	var __organizeWindowsOnResize = function(orientation) {
-		let view = self.getViewGeometry();
-
+	var __organizeWindowsOnResize = function() {
 		for (let el_window of $$("window")) {
-			if (el_window.style.visibility === "visible" && (orientation || el_window.hasAttribute("data-centered"))) {
-				let rect = el_window.getBoundingClientRect();
+			if (el_window.style.visibility === "visible") {
+				__organizeWindow(el_window);
+			}
+		}
+	};
 
-				el_window.style.top = Math.max(__getMenuHeight(), Math.round((view.bottom - rect.height) / 2)) + "px";
-				el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
-				el_window.setAttribute("data-centered", "");
+	var __organizeWindow = function(el_window, center=false) {
+		let view = self.getViewGeometry();
+		let rect = el_window.getBoundingClientRect();
+
+		if (el_window.hasAttribute("data-centered") || center) {
+			el_window.style.top = Math.max(view.top, Math.round((view.bottom - rect.height) / 2)) + "px";
+			el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
+			el_window.setAttribute("data-centered", "");
+		} else {
+			if (rect.top <= view.top) {
+				el_window.style.top = view.top + "px";
+			} else if (rect.bottom > view.bottom) {
+				el_window.style.top = view.bottom - rect.height + "px";
+			}
+
+			if (rect.left <= view.left) {
+				el_window.style.left = view.left + "px";
+			} else if (rect.right > view.right) {
+				el_window.style.left = view.right - rect.width + "px";
 			}
 		}
 	};

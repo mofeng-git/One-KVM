@@ -208,11 +208,11 @@ function Streamer() {
 		});
 	};
 
-	var __resize = function(center=false) {
+	var __resize = function() {
 		let size = $("stream-size-slider").value;
 		$("stream-size-value").innerHTML = size + "%";
 		__size_factor = size / 100;
-		__applySizeFactor(center);
+		__applySizeFactor();
 	};
 
 	var __adjustSizeFactor = function() {
@@ -223,7 +223,7 @@ function Streamer() {
 		for (let size = 100; size >= el_slider.min; size -= el_slider.step) {
 			tools.info("Stream: adjusting size:", size);
 			$("stream-size-slider").value = size;
-			__resize(true);
+			__resize();
 
 			let rect = el_window.getBoundingClientRect();
 			if (
@@ -237,11 +237,11 @@ function Streamer() {
 		}
 	};
 
-	var __applySizeFactor = function(center=false) {
+	var __applySizeFactor = function() {
 		let el_stream_image = $("stream-image");
 		el_stream_image.style.width = __resolution.width * __size_factor + "px";
 		el_stream_image.style.height = __resolution.height * __size_factor + "px";
-		wm.showWindow($("stream-window"), false, center);
+		wm.showWindow($("stream-window"), false);
 	};
 
 	__init__();
