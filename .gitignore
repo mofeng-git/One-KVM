@@ -7,6 +7,8 @@
 /testenv/.tox/
 /testenv/.mypy_cache/
 /testenv/.coverage
+/testenv/run/*.sock
+/testenv/run/*.pid
 /v*.tar.gz
 /*.pkg.tar.xz
 /*.egg-info

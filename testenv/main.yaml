@@ -1,7 +1,8 @@
 kvmd:
     server:
-        host: 0.0.0.0
-        port: 8081
+        unix: /run/kvmd.sock
+        unix_rm: true
+        unix_mode: 0666
 
     auth: !include auth.yaml
 
@@ -25,8 +26,7 @@ kvmd:
         cap_pin: 17
         conv_pin: 18
         init_restart_after: 1
-        host: 127.0.0.1
-        port: 8082
+        unix: /run/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
@@ -34,12 +34,12 @@ kvmd:
             - "--desired-fps={desired_fps}"
             - "--width=800"
             - "--height=600"
-            - "--host=0.0.0.0"
-            - "--port={port}"
+            - "--unix={unix}"
+            - "--unix-rm"
+            - "--unix-mode=0666"
 
 ipmi:
     kvmd:
-        host: kvmd
-        port: 8081
+        unix: /run/kvmd.sock
 
 logging: !include logging.yaml

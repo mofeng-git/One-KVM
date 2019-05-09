@@ -5,8 +5,9 @@ logging: !include logging.yaml
 
 kvmd:
     server:
-        host: 127.0.0.1
-        port: 8081
+        unix: /run/kvmd.sock
+        unix_rm: true
+        unix_mode: 0660
 
     auth: !include auth.yaml
 
@@ -26,8 +27,7 @@ kvmd:
         device: /dev/kvmd-msd
 
     streamer:
-        host: 127.0.0.1
-        port: 8082
+        unix: /run/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
@@ -38,11 +38,11 @@ kvmd:
             - "--workers=3"
             - "--quality={quality}"
             - "--desired-fps={desired_fps}"
-            - "--host={host}"
-            - "--port={port}"
             - "--drop-same-frames=30"
+            - "--unix={unix}"
+            - "--unix-rm"
+            - "--unix-mode=0660"
 
 ipmi:
     kvmd:
-        host: 127.0.0.1
-        port: 8081
+        unix: /run/kvmd.sock

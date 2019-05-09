@@ -50,6 +50,7 @@ tox: testenv
 run: testenv
 	sudo modprobe loop
 	- docker run --rm --name kvmd \
+			--volume `pwd`/testenv/run:/run:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
 			--volume `pwd`/web:/usr/share/kvmd/web:ro \
@@ -58,8 +59,6 @@ run: testenv
 			--device $(TESTENV_LOOP):/dev/kvmd-msd \
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
 			--publish 8080:80/tcp \
-			--publish 8081:8081/tcp \
-			--publish 8082:8082/tcp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
 			(socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
 			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/kvmd/nginx \
@@ -76,7 +75,8 @@ run: testenv
 
 
 run-ipmi: testenv
-	- docker run --rm --name kvmd-ipmi --link kvmd:kvmd \
+	- docker run --rm --name kvmd-ipmi \
+			--volume `pwd`/testenv/run:/run:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
@@ -117,8 +117,8 @@ push:
 
 
 clean:
-	rm -rf build site dist pkg src v*.tar.gz *.pkg.tar.xz *.egg-info kvmd-*.tar.gz
-	find kvmd tests -name __pycache__ | xargs rm -rf
+	rm -rf testenv/run/*.{pid,sock} build site dist pkg src v*.tar.gz *.pkg.tar.xz *.egg-info kvmd-*.tar.gz
+	find kvmd testenv/tests -name __pycache__ | xargs rm -rf
 	make -C hid clean
 
 
@@ -126,3 +126,6 @@ clean-all: testenv clean
 	- docker run --rm \
 			--volume `pwd`:/src \
 		-it $(TESTENV_IMAGE) bash -c "cd src && rm -rf testenv/{.tox,.mypy_cache,.coverage}"
+
+
+.PHONY: testenv
