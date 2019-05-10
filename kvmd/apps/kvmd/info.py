@@ -28,6 +28,8 @@ from typing import Dict
 import dbus  # pylint: disable=import-error
 import dbus.exceptions  # pylint: disable=import-error
 
+from ...logging import get_logger
+
 from ...yamlconf.loader import load_yaml_file
 
 
@@ -57,7 +59,8 @@ class InfoManager:
                 get_unit_state = obj.get_dbus_method("GetUnitFileState", "org.freedesktop.systemd1.Manager")
                 return (get_unit_state(daemon + ".service") in ["enabled", "enabled-runtime", "static", "indirect", "generated"])
 
-        except dbus.exceptions.DBusException:
+        except dbus.exceptions.DBusException as err:
+            get_logger(0).error("Can't get services info: %s: %s", type(err).__name__, str(err))
             is_enabled = (lambda daemon: True)
 
         extras: Dict[str, Dict] = {}
