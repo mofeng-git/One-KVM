@@ -4,6 +4,7 @@
 /build/
 /dist/
 /kvmd.egg-info/
+/testenv/run/
 /testenv/.tox/
 /testenv/.mypy_cache/
 /.git/

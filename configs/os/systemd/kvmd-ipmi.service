@@ -1,10 +1,10 @@
 [Unit]
-Description=IPMI to KVMD proxy
+Description=Pi-KVM - IPMI to KVMD proxy
 After=kvmd.service
 
 [Service]
-User=kvmd
-Group=kvmd
+User=kvmd-ipmi
+Group=kvmd-ipmi
 Type=simple
 Restart=always
 RestartSec=3

@@ -1,5 +1,5 @@
 [Unit]
-Description=Loads EDID data to TC358743
+Description=Pi-KVM - EDID loader for TC358743
 After=systemd-modules-load.service
 Before=kvmd.service
 

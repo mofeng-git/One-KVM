@@ -50,7 +50,7 @@ tox: testenv
 run: testenv
 	sudo modprobe loop
 	- docker run --rm --name kvmd \
-			--volume `pwd`/testenv/run:/run:rw \
+			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
 			--volume `pwd`/web:/usr/share/kvmd/web:ro \
@@ -65,7 +65,7 @@ run: testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /testenv/main.yaml /etc/kvmd \
-			&& nginx -c /etc/kvmd/nginx/nginx.conf \
+			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 			&& (losetup -d /dev/kvmd-msd || true) \
 			&& losetup /dev/kvmd-msd /root/loop.img \
@@ -76,7 +76,7 @@ run: testenv
 
 run-ipmi: testenv
 	- docker run --rm --name kvmd-ipmi \
-			--volume `pwd`/testenv/run:/run:rw \
+			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \

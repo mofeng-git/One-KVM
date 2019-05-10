@@ -65,6 +65,7 @@ package_kvmd() {
 
 	mkdir -p "$pkgdir/usr/lib/systemd/system"
 	cp configs/os/systemd/*.service "$pkgdir/usr/lib/systemd/system"
+	cp configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
 	mkdir -p "$pkgdir/usr/share/kvmd"
 	cp -r web "$pkgdir/usr/share/kvmd"
@@ -78,7 +79,7 @@ package_kvmd() {
 	find "$pkgdir" -name ".gitignore" -delete
 	sed -i -e "s/^#PROD//g" "$_cfgdir/nginx/nginx.conf"
 	find "$_cfgdir" -type f -exec chmod 444 '{}' \;
-	chmod 440 "$_cfgdir/kvmd"/*passwd
+	chmod 400 "$_cfgdir/kvmd"/*passwd
 
 	mkdir -p "$pkgdir/etc/kvmd/nginx/ssl"
 	chmod 750 "$pkgdir/etc/kvmd/nginx/ssl"
@@ -87,7 +88,8 @@ package_kvmd() {
 	done
 	rm "$pkgdir/etc/kvmd"/{auth.yaml,meta.yaml}
 	cp "$_cfgdir/kvmd"/{auth.yaml,meta.yaml} "$pkgdir/etc/kvmd"
-	cp -a "$_cfgdir/kvmd/"*passwd "$pkgdir/etc/kvmd"
+	cp "$_cfgdir/kvmd/"*passwd "$pkgdir/etc/kvmd"
+	chmod 600 "$_cfgdir/kvmd/"*passwd
 	for path in "$_cfgdir/nginx"/*.conf; do
 		ln -sf "/usr/share/kvmd/configs.default/nginx/`basename $path`" "$pkgdir/etc/kvmd/nginx"
 	done

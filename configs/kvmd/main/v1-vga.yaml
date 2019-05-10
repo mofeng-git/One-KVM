@@ -5,7 +5,7 @@ logging: !include logging.yaml
 
 kvmd:
     server:
-        unix: /run/kvmd.sock
+        unix: /run/kvmd/kvmd.sock
         unix_rm: true
         unix_mode: 0660
 
@@ -30,7 +30,7 @@ kvmd:
         cap_pin: 17
         conv_pin: 18
         init_restart_after: 1
-        unix: /run/ustreamer.sock
+        unix: /run/kvmd/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
@@ -49,4 +49,4 @@ kvmd:
 
 ipmi:
     kvmd:
-        unix: /run/kvmd.sock
+        unix: /run/kvmd/kvmd.sock

@@ -37,7 +37,6 @@ RUN pkg-install \
 COPY testenv/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
-RUN useradd -r -c "Pi-KVM Nginx Server" -s /sbin/nologin kvmd-nginx
 RUN mkdir -p /etc/kvmd/nginx
 
 CMD /bin/bash
