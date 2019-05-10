@@ -91,7 +91,7 @@ package_kvmd() {
 	rm "$pkgdir/etc/kvmd"/{auth.yaml,meta.yaml}
 	cp "$_cfgdir/kvmd"/{auth.yaml,meta.yaml} "$pkgdir/etc/kvmd"
 	cp "$_cfgdir/kvmd/"*passwd "$pkgdir/etc/kvmd"
-	chmod 600 "$_cfgdir/kvmd/"*passwd
+	chmod 600 "$pkgdir/etc/kvmd/"*passwd
 	for path in "$_cfgdir/nginx"/*.conf; do
 		ln -sf "/usr/share/kvmd/configs.default/nginx/`basename $path`" "$pkgdir/etc/kvmd/nginx"
 	done
