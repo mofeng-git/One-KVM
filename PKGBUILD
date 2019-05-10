@@ -65,6 +65,8 @@ package_kvmd() {
 
 	mkdir -p "$pkgdir/usr/lib/systemd/system"
 	cp configs/os/systemd/*.service "$pkgdir/usr/lib/systemd/system"
+
+	mkdir -p "$pkgdir/usr/lib/tmpfiles.d"
 	cp configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
 	mkdir -p "$pkgdir/usr/share/kvmd"
