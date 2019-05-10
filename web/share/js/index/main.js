@@ -65,7 +65,9 @@ function __loadKvmdInfo() {
 				$("apps").innerHTML += __makeApp(null, "kvm", "share/svg/kvm.svg", "KVM");
 
 				for (let app of apps) {
-					$("apps").innerHTML += __makeApp(null, app.path, app.icon, app.name);
+					if (app.enabled) {
+						$("apps").innerHTML += __makeApp(null, app.path, app.icon, app.name);
+					}
 				}
 
 				$("apps").innerHTML += __makeApp("logout-button", "#", "share/svg/logout.svg", "Logout");
