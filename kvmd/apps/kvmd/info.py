@@ -27,6 +27,7 @@ import contextlib
 from typing import Dict
 
 import dbus  # pylint: disable=import-error
+import dbus.exceptions
 
 from ...logging import get_logger
 
@@ -63,11 +64,22 @@ class InfoManager:
     def __is_daemon_enabled(self, name: str) -> bool:
         if not name.startswith(".service"):
             name += ".service"
+
         try:
             with contextlib.closing(dbus.SystemBus()) as bus:
                 systemd = bus.get_object("org.freedesktop.systemd1", "/org/freedesktop/systemd1")  # pylint: disable=no-member
-                get_unit_state = systemd.get_dbus_method("GetUnitFileState", "org.freedesktop.systemd1.Manager")
-                return (get_unit_state(name) in ["enabled", "enabled-runtime", "static", "indirect", "generated"])
+                manager = dbus.Interface(systemd, dbus_interface="org.freedesktop.systemd1.Manager")
+
+                try:
+                    unit_proxy = bus.get_object("org.freedesktop.systemd1", manager.GetUnit(name))  # pylint: disable=no-member
+                    unit_properties = dbus.Interface(unit_proxy, dbus_interface="org.freedesktop.DBus.Properties")
+                    enabled = (unit_properties.Get("org.freedesktop.systemd1.Unit", "ActiveState") == "active")
+                except dbus.exceptions.DBusException as err:
+                    if "NoSuchUnit" not in str(err):
+                        raise
+                    enabled = False
+
+                return (enabled or (manager.GetUnitFileState(name) in ["enabled", "enabled-runtime", "static", "indirect", "generated"]))
         except Exception as err:
             get_logger(0).error("Can't get info about the service %r: %s: %s", name, type(err).__name__, str(err))
             return True
