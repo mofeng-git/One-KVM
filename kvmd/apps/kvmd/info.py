@@ -22,11 +22,11 @@
 
 import os
 import asyncio
+import contextlib
 
 from typing import Dict
 
 import dbus  # pylint: disable=import-error
-import dbus.exceptions  # pylint: disable=import-error
 
 from ...logging import get_logger
 
@@ -48,26 +48,26 @@ class InfoManager:
         return (await asyncio.get_running_loop().run_in_executor(None, load_yaml_file, self.__meta_path))
 
     async def get_extras(self) -> Dict:
-        return (await asyncio.get_running_loop().run_in_executor(None, self.__sync_get_extras))
+        return (await asyncio.get_running_loop().run_in_executor(None, self.__inner_get_extras))
 
-    def __sync_get_extras(self) -> Dict:
-        try:
-            bus = dbus.SystemBus()
-
-            def is_enabled(daemon: str) -> bool:
-                obj = bus.get_object("org.freedesktop.systemd1", "/org/freedesktop/systemd1")
-                get_unit_state = obj.get_dbus_method("GetUnitFileState", "org.freedesktop.systemd1.Manager")
-                return (get_unit_state(daemon + ".service") in ["enabled", "enabled-runtime", "static", "indirect", "generated"])
-
-        except dbus.exceptions.DBusException as err:
-            get_logger(0).error("Can't get services info: %s: %s", type(err).__name__, str(err))
-            is_enabled = (lambda daemon: True)
-
+    def __inner_get_extras(self) -> Dict:
         extras: Dict[str, Dict] = {}
         for app in os.listdir(self.__extras_path):
             if app[0] != "." and os.path.isdir(os.path.join(self.__extras_path, app)):
                 extras[app] = load_yaml_file(os.path.join(self.__extras_path, app, "manifest.yaml"))
                 daemon = extras[app].get("daemon", "")
                 if isinstance(daemon, str) and daemon.strip():
-                    extras[app]["enabled"] = is_enabled(daemon.strip())
+                    extras[app]["enabled"] = self.__is_daemon_enabled(daemon)
         return extras
+
+    def __is_daemon_enabled(self, name: str) -> bool:
+        if not name.startswith(".service"):
+            name += ".service"
+        try:
+            with contextlib.closing(dbus.SystemBus()) as bus:
+                systemd = bus.get_object("org.freedesktop.systemd1", "/org/freedesktop/systemd1")  # pylint: disable=no-member
+                get_unit_state = systemd.get_dbus_method("GetUnitFileState", "org.freedesktop.systemd1.Manager")
+                return (get_unit_state(name) in ["enabled", "enabled-runtime", "static", "indirect", "generated"])
+        except Exception as err:
+            get_logger(0).error("Can't get info about the service %r: %s: %s", name, type(err).__name__, str(err))
+            return True
