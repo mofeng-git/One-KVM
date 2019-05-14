@@ -73,27 +73,27 @@ package_kvmd() {
 	cp -r web "$pkgdir/usr/share/kvmd"
 	cp -r extras "$pkgdir/usr/share/kvmd"
 
-	local cfg_default="$pkgdir/usr/share/kvmd/configs.default"
-	mkdir -p "$cfg_default"
-	cp -r configs/* "$cfg_default"
+	local _cfg_default="$pkgdir/usr/share/kvmd/configs.default"
+	mkdir -p "$_cfg_default"
+	cp -r configs/* "$_cfg_default"
 
-	rm -rf "$cfg_default/os/systemd"
+	rm -rf "$_cfg_default/os/systemd"
 	find "$pkgdir" -name ".gitignore" -delete
-	sed -i -e "s/^#PROD//g" "$cfg_default/nginx/nginx.conf"
-	find "$cfg_default" -type f -exec chmod 444 '{}' \;
-	chmod 400 "$cfg_default/kvmd"/*passwd
+	sed -i -e "s/^#PROD//g" "$_cfg_default/nginx/nginx.conf"
+	find "$_cfg_default" -type f -exec chmod 444 '{}' \;
+	chmod 400 "$_cfg_default/kvmd"/*passwd
 
 	mkdir -p "$pkgdir/etc/kvmd/nginx/ssl"
 	chmod 750 "$pkgdir/etc/kvmd/nginx/ssl"
-	for path in "$cfg_default/kvmd"/*.yaml; do
-		ln -sf "/usr/share/kvmd/configs.default/kvmd/`basename $path`" "$pkgdir/etc/kvmd"
+	for _path in "$_cfg_default/kvmd"/*.yaml; do
+		ln -sf "/usr/share/kvmd/configs.default/kvmd/`basename $_path`" "$pkgdir/etc/kvmd"
 	done
 	rm "$pkgdir/etc/kvmd"/{auth.yaml,meta.yaml}
-	cp "$cfg_default/kvmd"/{auth.yaml,meta.yaml} "$pkgdir/etc/kvmd"
-	cp "$cfg_default/kvmd/"*passwd "$pkgdir/etc/kvmd"
+	cp "$_cfg_default/kvmd"/{auth.yaml,meta.yaml} "$pkgdir/etc/kvmd"
+	cp "$_cfg_default/kvmd/"*passwd "$pkgdir/etc/kvmd"
 	chmod 600 "$pkgdir/etc/kvmd/"*passwd
-	for path in "$cfg_default/nginx"/*.conf; do
-		ln -sf "/usr/share/kvmd/configs.default/nginx/`basename $path`" "$pkgdir/etc/kvmd/nginx"
+	for _path in "$_cfg_default/nginx"/*.conf; do
+		ln -sf "/usr/share/kvmd/configs.default/nginx/`basename $_path`" "$pkgdir/etc/kvmd/nginx"
 	done
 }
 
@@ -105,15 +105,15 @@ for _platform in $PIKVM_PLATFORM; do
 
 			mkdir -p \"\$pkgdir/etc\"/{kvmd,sysctl.d,udev/rules.d,modules-load.d}
 
-			local cfg_default=\"/usr/share/kvmd/configs.default\"
+			local _cfg_default=\"/usr/share/kvmd/configs.default\"
 
-			ln -sf \"\$cfg_default/os/sysctl.conf\" \"\$pkgdir/etc/sysctl.d/99-pikvm.conf\"
-			ln -sf \"\$cfg_default/os/udev/$_platform-$_board.rules\" \"\$pkgdir/etc/udev/rules.d/99-pikvm.rules\"
-			ln -sf \"\$cfg_default/os/modules-load/$_platform.conf\" \"\$pkgdir/etc/modules-load.d/pikvm.conf\"
+			ln -sf \"\$_cfg_default/os/sysctl.conf\" \"\$pkgdir/etc/sysctl.d/99-pikvm.conf\"
+			ln -sf \"\$_cfg_default/os/udev/$_platform-$_board.rules\" \"\$pkgdir/etc/udev/rules.d/99-pikvm.rules\"
+			ln -sf \"\$_cfg_default/os/modules-load/$_platform.conf\" \"\$pkgdir/etc/modules-load.d/pikvm.conf\"
 
-			ln -sf \"\$cfg_default/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
+			ln -sf \"\$_cfg_default/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
 			if [ $_platform == v1-hdmi ]; then
-				ln -sf \"\$cfg_default/kvmd/tc358743-edid.hex\" \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
+				ln -sf \"\$_cfg_default/kvmd/tc358743-edid.hex\" \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 			fi
 		}"
 	done
