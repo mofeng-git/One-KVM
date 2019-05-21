@@ -1,0 +1,46 @@
+# Don't touch this file otherwise your device may stop working.
+# You can find a working configuration in /usr/share/kvmd/configs.default/kvmd.
+
+logging: !include logging.yaml
+
+kvmd:
+    server:
+        unix: /run/kvmd/kvmd.sock
+        unix_rm: true
+        unix_mode: 0660
+
+    auth: !include auth.yaml
+
+    hid:
+        reset_pin: 4
+        device: /dev/kvmd-hid
+
+    atx:
+        power_led_pin: 24
+        hdd_led_pin: 22
+        power_switch_pin: 23
+        reset_switch_pin: 27
+
+    msd:
+        enabled: false
+
+    streamer:
+        unix: /run/kvmd/ustreamer.sock
+        cmd:
+            - "/usr/bin/ustreamer"
+            - "--device=/dev/kvmd-video"
+            - "--persistent"
+            - "--dv-timings"
+            - "--format=uyvy"
+            - "--encoder=omx"
+            - "--workers=3"
+            - "--quality={quality}"
+            - "--desired-fps={desired_fps}"
+            - "--drop-same-frames=30"
+            - "--unix={unix}"
+            - "--unix-rm"
+            - "--unix-mode=0660"
+
+ipmi:
+    kvmd:
+        unix: /run/kvmd/kvmd.sock

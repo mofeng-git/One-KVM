@@ -2,7 +2,7 @@
 # Author: Maxim Devaev <mdevaev@gmail.com>
 
 
-[ -n "$PIKVM_PLATFORM" ] || PIKVM_PLATFORM="v1-vga v1-hdmi"
+[ -n "$PIKVM_PLATFORM" ] || PIKVM_PLATFORM="v0-vga v0-hdmi v1-vga v1-hdmi"
 [ -n "$PIKVM_BOARD" ] || PIKVM_BOARD="rpi2 rpi3"
 
 
