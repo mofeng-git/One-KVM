@@ -24,10 +24,10 @@ import os
 import struct
 import asyncio
 import asyncio.queues
+import dataclasses
 import types
 
 from typing import Dict
-from typing import NamedTuple
 from typing import Callable
 from typing import Type
 from typing import AsyncGenerator
@@ -84,19 +84,22 @@ class MsdIsBusyError(MsdOperationError, aioregion.RegionIsBusyError):
 
 
 # =====
-class _HardwareInfo(NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class _HardwareInfo:
     manufacturer: str
     product: str
     serial: str
 
 
-class _ImageInfo(NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class _ImageInfo:
     name: str
     size: int
     complete: bool
 
 
-class _MassStorageDeviceInfo(NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class _MassStorageDeviceInfo:
     path: str
     real: str
     size: int
@@ -250,13 +253,13 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     def get_state(self) -> Dict:
         online = (self._enabled and bool(self._device_path))
-        info = (self.__saved_device_info._asdict() if self.__saved_device_info else None)
+        info = (dataclasses.asdict(self.__saved_device_info) if self.__saved_device_info else None)
         connected_to: Optional[str] = None
 
         if online:
             if info:
-                info["hw"] = (info["hw"]._asdict() if info["hw"] else None)
-                info["image"] = (info["image"]._asdict() if info["image"] else None)
+                info["hw"] = (dataclasses.asdict(info["hw"]) if info["hw"] else None)
+                info["image"] = (dataclasses.asdict(info["image"]) if info["image"] else None)
             connected_to = ("kvm" if self.__device_info else "server")
 
         return {

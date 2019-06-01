@@ -20,9 +20,10 @@
 # ========================================================================== #
 
 
+import dataclasses
+
 from typing import List
 from typing import Dict
-from typing import NamedTuple
 
 
 # =====
@@ -31,7 +32,8 @@ class IpmiPasswdError(Exception):
         super().__init__("Incorrect IPMI passwd file: " + msg)
 
 
-class IpmiUserCredentials(NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class IpmiUserCredentials:
     ipmi_user: str
     ipmi_passwd: str
     kvmd_user: str

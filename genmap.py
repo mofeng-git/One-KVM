@@ -23,15 +23,16 @@
 
 import sys
 import textwrap
+import dataclasses
 
 from typing import List
-from typing import NamedTuple
 
 import mako.template
 
 
 # =====
-class _KeyMapping(NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class _KeyMapping:
     kvmd_code: int
     arduino_hid_key: str
     web_key: str

@@ -50,19 +50,19 @@ class _BaseEvent:
         raise NotImplementedError
 
 
-@dataclasses.dataclass  # pylint: disable=abstract-method
+@dataclasses.dataclass(frozen=True)  # pylint: disable=abstract-method
 class _BoolEvent(_BaseEvent):
     name: str
     state: bool
 
 
-@dataclasses.dataclass  # pylint: disable=abstract-method
+@dataclasses.dataclass(frozen=True)  # pylint: disable=abstract-method
 class _IntEvent(_BaseEvent):
     x: int
     y: int
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class _KeyEvent(_BoolEvent):
     def __post_init__(self) -> None:
         assert self.name in keymap.KEYMAP
@@ -75,7 +75,7 @@ class _KeyEvent(_BoolEvent):
         return b"\x11" + key_bytes + state_bytes + b"\x00\x00"
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class _MouseMoveEvent(_IntEvent):
     def __post_init__(self) -> None:
         assert -32768 <= self.x <= 32767
@@ -85,7 +85,7 @@ class _MouseMoveEvent(_IntEvent):
         return b"\x12" + struct.pack(">hh", self.x, self.y)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class _MouseButtonEvent(_BoolEvent):
     def __post_init__(self) -> None:
         assert self.name in ["left", "right"]
@@ -100,7 +100,7 @@ class _MouseButtonEvent(_BoolEvent):
         return b"\x13" + bytes([code]) + b"\x00\x00\x00"
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class _MouseWheelEvent(_IntEvent):
     def __post_init__(self) -> None:
         assert self.x == 0  # Горизонтальная прокрутка пока не поддерживается
