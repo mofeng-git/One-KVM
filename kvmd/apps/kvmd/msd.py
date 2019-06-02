@@ -154,11 +154,15 @@ def _parse_image_info_bytes(data: bytes) -> Optional[_ImageInfo]:
 
 def _explore_device(device_path: str) -> Optional[_MassStorageDeviceInfo]:
     # udevadm info -a -p  $(udevadm info -q path -n /dev/sda)
-    ctx = pyudev.Context()
+    try:
+        device = pyudev.Devices.from_device_file(pyudev.Context(), device_path)
+    except Exception:
+        get_logger().exception("UDEV error")
+        return None
 
-    device = pyudev.Devices.from_device_file(ctx, device_path)
     if device.subsystem != "block":
         return None
+
     try:
         size = device.attributes.asint("size") * 512
     except KeyError:
@@ -240,7 +244,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             logger.info("Using %r as mass-storage device", self._device_path)
             try:
                 logger.info("Enabled image metadata writing")
-                asyncio.get_event_loop().run_until_complete(self.connect_to_kvm(no_delay=True))
+                asyncio.get_event_loop().run_until_complete(self.connect_to_kvm(initial=True))
             except Exception as err:
                 if isinstance(err, MsdError):
                     log = logger.error
@@ -276,14 +280,19 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             gpio.write(self.__reset_pin, False)
 
     @_msd_working
-    async def connect_to_kvm(self, no_delay: bool=False) -> Dict:
+    async def connect_to_kvm(self, initial: bool=False) -> Dict:
         with self.__region:
             if self.__device_info:
                 raise MsdAlreadyConnectedToKvmError()
             gpio.write(self.__target_pin, False)
-            if not no_delay:
+            if not initial:
                 await asyncio.sleep(self.__init_delay)
-            await self.__load_device_info()
+            try:
+                await self.__load_device_info()
+            except MsdError:
+                if not initial:
+                    gpio.write(self.__target_pin, True)
+                raise
             state = self.get_state()
             await self.__state_queue.put(state)
             get_logger().info("Mass-storage device switched to KVM: %s", self.__device_info)

@@ -219,7 +219,7 @@ def _get_config_scheme(sections: List[str]) -> Dict:
                 "conv_pin": Option(-1, type=valid_gpio_pin_optional),
 
                 "sync_delay":         Option(1.0,  type=valid_float_f01),
-                "init_delay":         Option(1.0,  type=valid_float_f01),
+                "init_delay":         Option(3.0,  type=valid_float_f01),
                 "init_restart_after": Option(0.0,  type=(lambda arg: valid_number(arg, min=0.0, type=float))),
                 "shutdown_delay":     Option(10.0, type=valid_float_f01),
                 "state_poll":         Option(1.0,  type=valid_float_f01),
