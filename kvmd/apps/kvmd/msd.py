@@ -253,22 +253,13 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     def get_state(self) -> Dict:
         online = (self._enabled and bool(self._device_path))
-        info = (dataclasses.asdict(self.__saved_device_info) if self.__saved_device_info else None)
-        connected_to: Optional[str] = None
-
-        if online:
-            if info:
-                info["hw"] = (dataclasses.asdict(info["hw"]) if info["hw"] else None)
-                info["image"] = (dataclasses.asdict(info["image"]) if info["image"] else None)
-            connected_to = ("kvm" if self.__device_info else "server")
-
         return {
             "enabled": self._enabled,
             "online": online,
-            "connected_to": connected_to,
+            "connected_to": (("kvm" if self.__device_info else "server") if online else None),
             "busy": bool(self.__device_file),
             "written": self.__written,
-            "info": info,
+            "info": (dataclasses.asdict(self.__saved_device_info) if self.__saved_device_info else None),
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
