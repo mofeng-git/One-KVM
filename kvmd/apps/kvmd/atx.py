@@ -53,11 +53,11 @@ class AtxIsBusyError(AtxOperationError, aioregion.RegionIsBusyError):
 
 
 def _atx_working(method: Callable) -> Callable:
-    async def wrap(self: "Atx", *args: Any, **kwargs: Any) -> Any:
+    async def wrapper(self: "Atx", *args: Any, **kwargs: Any) -> Any:
         if not self._enabled:  # pylint: disable=protected-access
             raise AtxDisabledError()
         return (await method(self, *args, **kwargs))
-    return wrap
+    return wrapper
 
 
 class Atx:  # pylint: disable=too-many-instance-attributes

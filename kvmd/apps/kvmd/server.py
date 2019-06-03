@@ -156,14 +156,14 @@ _COOKIE_AUTH_TOKEN = "auth_token"
 
 
 def _atomic(handler: Callable) -> Callable:
-    async def wrap(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def wrapper(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
         return (await asyncio.shield(handler(self, request)))
-    return wrap
+    return wrapper
 
 
 def _exposed(http_method: str, path: str, atomic: bool=False, auth_required: bool=True) -> Callable:
     def make_wrapper(handler: Callable) -> Callable:
-        async def wrap(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
+        async def wrapper(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
             try:
                 if auth_required:
                     user = request.headers.get(_HEADER_AUTH_USER, "")
@@ -198,17 +198,17 @@ def _exposed(http_method: str, path: str, atomic: bool=False, auth_required: boo
                 return _json_exception(err, 403)
 
         if atomic:
-            wrap = _atomic(wrap)
+            wrapper = _atomic(wrapper)
 
-        setattr(wrap, _ATTR_EXPOSED, True)
-        setattr(wrap, _ATTR_EXPOSED_METHOD, http_method)
-        setattr(wrap, _ATTR_EXPOSED_PATH, path)
-        return wrap
+        setattr(wrapper, _ATTR_EXPOSED, True)
+        setattr(wrapper, _ATTR_EXPOSED_METHOD, http_method)
+        setattr(wrapper, _ATTR_EXPOSED_PATH, path)
+        return wrapper
     return make_wrapper
 
 
 def _system_task(method: Callable) -> Callable:
-    async def wrap(self: "Server") -> None:
+    async def wrapper(self: "Server") -> None:
         try:
             await method(self)
             raise RuntimeError("Dead system task: %s" % (method))
@@ -218,8 +218,8 @@ def _system_task(method: Callable) -> Callable:
             get_logger().exception("Unhandled exception, killing myself ...")
             os.kill(os.getpid(), signal.SIGTERM)
 
-    setattr(wrap, _ATTR_SYSTEM_TASK, True)
-    return wrap
+    setattr(wrapper, _ATTR_SYSTEM_TASK, True)
+    return wrapper
 
 
 class _Events(Enum):

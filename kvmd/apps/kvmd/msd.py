@@ -190,13 +190,13 @@ def _explore_device(device_path: str) -> Optional[_MassStorageDeviceInfo]:
 
 
 def _msd_working(method: Callable) -> Callable:
-    async def wrap(self: "MassStorageDevice", *args: Any, **kwargs: Any) -> Any:
+    async def wrapper(self: "MassStorageDevice", *args: Any, **kwargs: Any) -> Any:
         if not self._enabled:  # pylint: disable=protected-access
             raise MsdDisabledError()
         if not self._device_path:  # pylint: disable=protected-access
             raise MsdOfflineError()
         return (await method(self, *args, **kwargs))
-    return wrap
+    return wrapper
 
 
 # =====
