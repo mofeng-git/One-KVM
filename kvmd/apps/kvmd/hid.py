@@ -40,6 +40,7 @@ import setproctitle
 
 from ...logging import get_logger
 
+from ... import aiotools
 from ... import gpio
 from ... import keymap
 
@@ -164,6 +165,8 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
             yield self.get_state()
             await asyncio.sleep(self.__state_poll)
 
+    @aiotools.task
+    @aiotools.atomic
     async def reset(self) -> None:
         async with self.__lock:
             gpio.write(self.__reset_pin, True)
@@ -187,6 +190,7 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
             async with self.__lock:
                 self.__unsafe_clear_events()
 
+    @aiotools.atomic
     async def cleanup(self) -> None:
         async with self.__lock:
             if self.is_alive():

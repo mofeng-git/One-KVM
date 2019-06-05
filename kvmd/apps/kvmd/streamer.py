@@ -34,6 +34,7 @@ import aiohttp
 
 from ...logging import get_logger
 
+from ... import aiotools
 from ... import gpio
 
 from ... import __version__
@@ -152,6 +153,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         (stdout, _) = await proc.communicate()
         return stdout.decode(errors="ignore").strip()
 
+    @aiotools.atomic
     async def cleanup(self) -> None:
         if self.is_running():
             await self.stop()

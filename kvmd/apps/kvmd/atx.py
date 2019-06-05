@@ -30,6 +30,7 @@ from typing import Any
 
 from ...logging import get_logger
 
+from ... import aiotools
 from ... import aioregion
 from ... import gpio
 
@@ -174,14 +175,10 @@ class Atx:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
+    @aiotools.task
+    @aiotools.atomic
     async def __click(self, pin: int, delay: float) -> None:
-        self.__region.enter()
-        asyncio.ensure_future(self.__inner_click(pin, delay))
-
-    async def __inner_click(self, pin: int, delay: float) -> None:
-        try:
-            for flag in (True, False):
+        with self.__region:
+            for flag in [True, False]:
                 gpio.write(pin, flag)
                 await asyncio.sleep(delay)
-        finally:
-            self.__region.exit()

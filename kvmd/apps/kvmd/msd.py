@@ -42,6 +42,7 @@ import aiofiles.base
 from ...logging import get_logger
 
 from ... import aioregion
+from ... import aiotools
 from ... import gpio
 
 
@@ -273,6 +274,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             else:
                 await asyncio.sleep(60)
 
+    @aiotools.atomic
     async def cleanup(self) -> None:
         if self._enabled:
             await self.__close_device_file()
@@ -280,6 +282,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             gpio.write(self.__reset_pin, False)
 
     @_msd_working
+    @aiotools.atomic
     async def connect_to_kvm(self, initial: bool=False) -> Dict:
         with self.__region:
             if self.__device_info:
@@ -299,6 +302,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             return state
 
     @_msd_working
+    @aiotools.atomic
     async def connect_to_pc(self) -> Dict:
         with self.__region:
             if not self.__device_info:
@@ -311,15 +315,17 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             return state
 
     @_msd_working
+    @aiotools.task
+    @aiotools.atomic
     async def reset(self) -> None:
         with self.__region:
             get_logger().info("Mass-storage device reset")
             gpio.write(self.__reset_pin, True)
             await asyncio.sleep(self.__reset_delay)
             gpio.write(self.__reset_pin, False)
-            await self.__state_queue.put(self.get_state())
 
     @_msd_working
+    @aiotools.atomic
     async def __aenter__(self) -> "MassStorageDevice":
         self.__region.enter()
         try:
@@ -332,6 +338,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             await self.__state_queue.put(self.get_state())
             self.__region.exit()
 
+    @aiotools.atomic
     async def write_image_info(self, name: str, complete: bool) -> None:
         assert self.__device_file
         assert self.__device_info
@@ -344,11 +351,13 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             else:
                 get_logger().error("Can't write image info because device is full")
 
+    @aiotools.atomic
     async def write_image_chunk(self, chunk: bytes) -> int:
         await self.__write_to_device_file(chunk)
         self.__written += len(chunk)
         return self.__written
 
+    @aiotools.atomic
     async def __aexit__(
         self,
         _exc_type: Type[BaseException],
@@ -380,6 +389,6 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
                 await self.__device_file.close()
         except Exception:
             get_logger().exception("Can't close mass-storage device file")
-            await self.reset()
+            await (await self.reset())
         self.__device_file = None
         self.__written = 0

@@ -155,13 +155,7 @@ _HEADER_AUTH_PASSWD = "X-KVMD-Passwd"
 _COOKIE_AUTH_TOKEN = "auth_token"
 
 
-def _atomic(handler: Callable) -> Callable:
-    async def wrapper(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
-        return (await asyncio.shield(handler(self, request)))
-    return wrapper
-
-
-def _exposed(http_method: str, path: str, atomic: bool=False, auth_required: bool=True) -> Callable:
+def _exposed(http_method: str, path: str, auth_required: bool=True) -> Callable:
     def make_wrapper(handler: Callable) -> Callable:
         async def wrapper(self: "Server", request: aiohttp.web.Request) -> aiohttp.web.Response:
             try:
@@ -196,9 +190,6 @@ def _exposed(http_method: str, path: str, atomic: bool=False, auth_required: boo
                 return _json_exception(err, 401)
             except ForbiddenError as err:
                 return _json_exception(err, 403)
-
-        if atomic:
-            wrapper = _atomic(wrapper)
 
         setattr(wrapper, _ATTR_EXPOSED, True)
         setattr(wrapper, _ATTR_EXPOSED_METHOD, http_method)
@@ -311,7 +302,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     # ===== AUTH
 
-    @_exposed("POST", "/auth/login", atomic=True, auth_required=False)
+    @_exposed("POST", "/auth/login", auth_required=False)
     async def __auth_login_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         credentials = await request.post()
         token = await self._auth_manager.login(
@@ -429,7 +420,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __hid_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(self.__hid.get_state())
 
-    @_exposed("POST", "/hid/reset", atomic=True)
+    @_exposed("POST", "/hid/reset")
     async def __hid_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         await self.__hid.reset()
         return _json()
@@ -440,18 +431,18 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __atx_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(self.__atx.get_state())
 
-    @_exposed("POST", "/atx/power", atomic=True)
+    @_exposed("POST", "/atx/power")
     async def __atx_power_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         action = valid_atx_power_action(request.query.get("action"))
-        done = await ({
+        processing = await ({
             "on": self.__atx.power_on,
             "off": self.__atx.power_off,
             "off_hard": self.__atx.power_off_hard,
             "reset_hard": self.__atx.power_reset_hard,
         }[action])()
-        return _json({"action": action, "done": done})
+        return _json({"processing": processing})
 
-    @_exposed("POST", "/atx/click", atomic=True)
+    @_exposed("POST", "/atx/click")
     async def __atx_click_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         button = valid_atx_button(request.query.get("button"))
         await ({
@@ -459,7 +450,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             "power_long": self.__atx.click_power_long,
             "reset": self.__atx.click_reset,
         }[button])()
-        return _json({"clicked": button})
+        return _json()
 
     # ===== MSD
 
@@ -467,7 +458,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __msd_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(self.__msd.get_state())
 
-    @_exposed("POST", "/msd/connect", atomic=True)
+    @_exposed("POST", "/msd/connect")
     async def __msd_connect_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         to = valid_kvm_target(request.query.get("to"))
         return _json(await ({
@@ -500,7 +491,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 logger.info("Written %d bytes to mass-storage device", written)
         return _json({"written": written})
 
-    @_exposed("POST", "/msd/reset", atomic=True)
+    @_exposed("POST", "/msd/reset")
     async def __msd_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         await self.__msd.reset()
         return _json()

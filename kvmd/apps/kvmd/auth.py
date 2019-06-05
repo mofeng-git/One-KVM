@@ -26,6 +26,8 @@ from typing import List
 from typing import Dict
 from typing import Optional
 
+from ... import aiotools
+
 from ...logging import get_logger
 
 from ...plugins.auth import BaseAuthService
@@ -91,6 +93,7 @@ class AuthManager:
     def check(self, token: str) -> Optional[str]:
         return self.__tokens.get(token)
 
+    @aiotools.atomic
     async def cleanup(self) -> None:
         await self.__internal_service.cleanup()
         if self.__external_service:
