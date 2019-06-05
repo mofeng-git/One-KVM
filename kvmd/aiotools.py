@@ -26,6 +26,7 @@ import functools
 import typing
 
 from typing import Callable
+from typing import Coroutine
 from typing import TypeVar
 from typing import Any
 
@@ -41,8 +42,25 @@ def atomic(method: _AtomicF) -> _AtomicF:
     return typing.cast(_AtomicF, wrapper)
 
 
-def task(method: Callable[..., Any]) -> Callable[..., asyncio.Task]:
+def tasked(method: Callable[..., Any]) -> Callable[..., asyncio.Task]:
     @functools.wraps(method)
     async def wrapper(*args: object, **kwargs: object) -> asyncio.Task:
-        return asyncio.create_task(method(*args, **kwargs))
+        return create_short_task(method(*args, **kwargs))
     return typing.cast(Callable[..., asyncio.Task], wrapper)
+
+
+_ATTR_SHORT_TASK = "_aiotools_short_task"
+
+
+def create_short_task(coro: Coroutine) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    setattr(task, _ATTR_SHORT_TASK, True)
+    return task
+
+
+async def gather_short_tasks() -> None:
+    await asyncio.gather(*[
+        task
+        for task in asyncio.Task.all_tasks()
+        if getattr(task, _ATTR_SHORT_TASK, False)
+    ])

@@ -40,6 +40,8 @@ import aiohttp
 import aiohttp.web
 import setproctitle
 
+from ... import aiotools
+
 from ...logging import get_logger
 
 from ...aioregion import RegionIsBusyError
@@ -144,9 +146,9 @@ async def _get_multipart_field(reader: aiohttp.MultipartReader, name: str) -> ai
     return field
 
 
-_ATTR_EXPOSED = "exposed"
-_ATTR_EXPOSED_METHOD = "exposed_method"
-_ATTR_EXPOSED_PATH = "exposed_path"
+_ATTR_EXPOSED = "_server_exposed"
+_ATTR_EXPOSED_METHOD = "_server_exposed_method"
+_ATTR_EXPOSED_PATH = "_server_exposed_path"
 _ATTR_SYSTEM_TASK = "system_task"
 
 _HEADER_AUTH_USER = "X-KVMD-User"
@@ -548,6 +550,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     async def __on_shutdown(self, _: aiohttp.web.Application) -> None:
         logger = get_logger(0)
+
+        logger.info("Waiting short tasks ...")
+        await aiotools.gather_short_tasks()
 
         logger.info("Cancelling system tasks ...")
         for task in self.__system_tasks:

@@ -315,7 +315,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             return state
 
     @_msd_working
-    @aiotools.task
+    @aiotools.tasked
     @aiotools.atomic
     async def reset(self) -> None:
         with self.__region:

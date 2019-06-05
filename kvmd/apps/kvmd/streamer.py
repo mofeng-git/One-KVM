@@ -172,7 +172,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     async def __inner_start(self) -> None:
         assert not self.__streamer_task
         await self.__set_hw_enabled(True)
-        self.__streamer_task = asyncio.get_running_loop().create_task(self.__run_streamer())
+        self.__streamer_task = asyncio.create_task(self.__run_streamer())
 
     async def __inner_stop(self) -> None:
         assert self.__streamer_task

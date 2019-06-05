@@ -175,7 +175,7 @@ class Atx:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    @aiotools.task
+    @aiotools.tasked
     @aiotools.atomic
     async def __click(self, pin: int, delay: float) -> None:
         with self.__region:

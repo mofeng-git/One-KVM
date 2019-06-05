@@ -165,7 +165,7 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
             yield self.get_state()
             await asyncio.sleep(self.__state_poll)
 
-    @aiotools.task
+    @aiotools.tasked
     @aiotools.atomic
     async def reset(self) -> None:
         async with self.__lock:
