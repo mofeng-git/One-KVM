@@ -36,7 +36,7 @@ var tools = new function() {
 			http.setRequestHeader("Content-Type", content_type);
 		}
 		http.onreadystatechange = callback;
-		http.timeout = 5000;
+		http.timeout = 15000;
 		http.send(body);
 		return http;
 	};

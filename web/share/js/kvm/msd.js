@@ -58,7 +58,7 @@ function Msd() {
 
 		__upload_http = new XMLHttpRequest();
 		__upload_http.open("POST", "/api/msd/write", true);
-		__upload_http.upload.timeout = 5000;
+		__upload_http.upload.timeout = 15000;
 		__upload_http.onreadystatechange = __uploadStateChange;
 		__upload_http.upload.onprogress = __uploadProgress;
 		__upload_http.send(form_data);
