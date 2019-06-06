@@ -41,8 +41,8 @@ import aiofiles.base
 
 from ...logging import get_logger
 
-from ... import aioregion
 from ... import aiotools
+from ... import aioregion
 from ... import gpio
 
 
@@ -245,7 +245,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             logger.info("Using %r as mass-storage device", self._device_path)
             try:
                 logger.info("Enabled image metadata writing")
-                asyncio.get_event_loop().run_until_complete(self.connect_to_kvm(initial=True))
+                aiotools.run_sync(self.connect_to_kvm(initial=True))
             except Exception as err:
                 if isinstance(err, MsdError):
                     log = logger.error
@@ -374,10 +374,10 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         assert self.__device_file
         await self.__device_file.write(data)
         await self.__device_file.flush()
-        await asyncio.get_running_loop().run_in_executor(None, os.fsync, self.__device_file.fileno())
+        await aiotools.run_async(os.fsync, self.__device_file.fileno())
 
     async def __load_device_info(self) -> None:
-        device_info = await asyncio.get_running_loop().run_in_executor(None, _explore_device, self._device_path)
+        device_info = await aiotools.run_async(_explore_device, self._device_path)
         if not device_info:
             raise MsdError("Can't explore device %r" % (self._device_path))
         self.__device_info = self.__saved_device_info = device_info

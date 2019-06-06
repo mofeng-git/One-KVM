@@ -37,14 +37,14 @@ _AtomicF = TypeVar("_AtomicF", bound=Callable[..., Any])
 
 def atomic(method: _AtomicF) -> _AtomicF:
     @functools.wraps(method)
-    async def wrapper(*args: object, **kwargs: object) -> Any:
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
         return (await asyncio.shield(method(*args, **kwargs)))
     return typing.cast(_AtomicF, wrapper)
 
 
 def tasked(method: Callable[..., Any]) -> Callable[..., asyncio.Task]:
     @functools.wraps(method)
-    async def wrapper(*args: object, **kwargs: object) -> asyncio.Task:
+    async def wrapper(*args: Any, **kwargs: Any) -> asyncio.Task:
         return create_short_task(method(*args, **kwargs))
     return typing.cast(Callable[..., asyncio.Task], wrapper)
 
@@ -64,3 +64,14 @@ async def gather_short_tasks() -> None:
         for task in asyncio.Task.all_tasks()
         if getattr(task, _ATTR_SHORT_TASK, False)
     ])
+
+
+_RetvalT = TypeVar("_RetvalT")
+
+
+async def run_async(method: Callable[..., _RetvalT], *args: Any) -> _RetvalT:
+    return (await asyncio.get_running_loop().run_in_executor(None, method, *args))
+
+
+def run_sync(coro: Coroutine[Any, Any, _RetvalT]) -> _RetvalT:
+    return asyncio.get_event_loop().run_until_complete(coro)

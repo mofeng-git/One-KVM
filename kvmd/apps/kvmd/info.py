@@ -21,7 +21,6 @@
 
 
 import os
-import asyncio
 import contextlib
 
 from typing import Dict
@@ -32,6 +31,8 @@ import dbus.exceptions
 from ...logging import get_logger
 
 from ...yamlconf.loader import load_yaml_file
+
+from ... import aiotools
 
 
 # =====
@@ -46,10 +47,10 @@ class InfoManager:
         self.__extras_path = extras_path
 
     async def get_meta(self) -> Dict:
-        return (await asyncio.get_running_loop().run_in_executor(None, load_yaml_file, self.__meta_path))
+        return (await aiotools.run_async(load_yaml_file, self.__meta_path))
 
     async def get_extras(self) -> Dict:
-        return (await asyncio.get_running_loop().run_in_executor(None, self.__inner_get_extras))
+        return (await aiotools.run_async(self.__inner_get_extras))
 
     def __inner_get_extras(self) -> Dict:
         extras: Dict[str, Dict] = {}

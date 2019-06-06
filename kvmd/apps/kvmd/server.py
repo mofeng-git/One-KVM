@@ -40,8 +40,6 @@ import aiohttp
 import aiohttp.web
 import setproctitle
 
-from ... import aiotools
-
 from ...logging import get_logger
 
 from ...aioregion import RegionIsBusyError
@@ -64,6 +62,8 @@ from ...validators.kvm import valid_hid_key
 from ...validators.kvm import valid_hid_mouse_move
 from ...validators.kvm import valid_hid_mouse_button
 from ...validators.kvm import valid_hid_mouse_wheel
+
+from ... import aiotools
 
 from ... import __version__
 
