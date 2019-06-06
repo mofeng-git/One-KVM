@@ -195,10 +195,10 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
         async with self.__lock:
             if self.is_alive():
                 self.__unsafe_clear_events()
-                get_logger().info("Stopping HID daemon ...")
+                get_logger(0).info("Stopping HID daemon ...")
                 self.__stop_event.set()
             else:
-                get_logger().warning("Emergency cleaning up HID events ...")
+                get_logger(0).warning("Emergency cleaning up HID events ...")
                 self.__emergency_clear_events()
             if self.exitcode is not None:
                 self.join()
