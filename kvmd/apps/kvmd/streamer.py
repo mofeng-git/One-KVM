@@ -211,7 +211,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 async for line_bytes in self.__streamer_proc.stdout:  # type: ignore
                     line = line_bytes.decode(errors="ignore").strip()
                     if line:
-                        logger.info("Streamer: %s", line)
+                        logger.info("Console: %s", line)
                         empty = 0
                     else:
                         empty += 1
