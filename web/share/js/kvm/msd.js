@@ -159,7 +159,7 @@ function Msd() {
 			wm.switchDisabled($("msd-select-new-image-button"), (!__state.online || __state.connected_to !== "kvm" || __state.busy || __upload_http));
 			wm.switchDisabled($("msd-upload-new-image-button"), (!__state.online || __state.connected_to !== "kvm" || __state.busy || !__image_file));
 			wm.switchDisabled($("msd-abort-uploading-button"), (!__state.online || !__upload_http));
-			wm.switchDisabled($("msd-reset-button"), (!__state.online || __upload_http));
+			wm.switchDisabled($("msd-reset-button"), (!__state.enabled || __state.busy));
 
 			$("msd-new-image").style.display = (__image_file ? "block" : "none");
 			$("msd-progress").setAttribute("data-label", "Waiting for upload ...");

@@ -207,11 +207,12 @@ def _get_config_scheme(sections: List[str]) -> Dict:
                 "target_pin": Option(-1, type=valid_gpio_pin, only_if="enabled"),
                 "reset_pin":  Option(-1, type=valid_gpio_pin, only_if="enabled"),
 
-                "device":      Option("",    type=valid_abs_path, only_if="enabled", unpack_as="device_path"),
-                "init_delay":  Option(2.0,   type=valid_float_f01),
-                "reset_delay": Option(1.0,   type=valid_float_f01),
-                "write_meta":  Option(True,  type=valid_bool),
-                "chunk_size":  Option(65536, type=(lambda arg: valid_number(arg, min=1024))),
+                "device":       Option("",    type=valid_abs_path, only_if="enabled", unpack_as="device_path"),
+                "init_delay":   Option(1.0,   type=valid_float_f01),
+                "init_retries": Option(5,     type=valid_int_f1),
+                "reset_delay":  Option(1.0,   type=valid_float_f01),
+                "write_meta":   Option(True,  type=valid_bool),
+                "chunk_size":   Option(65536, type=(lambda arg: valid_number(arg, min=1024))),
             },
 
             "streamer": {
