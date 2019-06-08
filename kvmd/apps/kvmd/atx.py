@@ -108,7 +108,6 @@ class Atx:  # pylint: disable=too-many-instance-attributes
             hdd_led_state = operator.xor(self.__hdd_led_inverted, gpio.read(self.__hdd_led_pin))
         else:
             power_led_state = hdd_led_state = False
-
         return {
             "enabled": self._enabled,
             "busy": self.__region.is_busy(),
@@ -119,9 +118,13 @@ class Atx:  # pylint: disable=too-many-instance-attributes
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
+        prev_state: Dict = {}
         while True:
             if self._enabled:
-                yield self.get_state()
+                state = self.get_state()
+                if state != prev_state:
+                    yield state
+                    prev_state = state
                 await asyncio.sleep(self.__state_poll)
             else:
                 await asyncio.sleep(60)

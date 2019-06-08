@@ -139,8 +139,12 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
+        prev_state: Dict = {}
         while True:
-            yield (await self.get_state())
+            state = await self.get_state()
+            if state != prev_state:
+                yield state
+                prev_state = state
             await asyncio.sleep(self.__state_poll)
 
     def get_app(self) -> str:

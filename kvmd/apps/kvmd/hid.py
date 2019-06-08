@@ -161,8 +161,12 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
         return {"online": bool(self.__online_shared.value)}
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
+        prev_state: Dict = {}
         while self.is_alive():
-            yield self.get_state()
+            state = self.get_state()
+            if state != prev_state:
+                yield self.get_state()
+                prev_state = state
             await asyncio.sleep(self.__state_poll)
 
     @aiotools.tasked
