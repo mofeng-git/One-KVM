@@ -20,6 +20,8 @@
 # ========================================================================== #
 
 
+import asyncio
+
 from typing import Dict
 from typing import Optional
 
@@ -86,6 +88,8 @@ class Plugin(BaseAuthService):
                 response.raise_for_status()
                 assert response.status == 200
             return True
+        except asyncio.CancelledError:  # pylint: disable=try-except-raise
+            raise
         except Exception:
             get_logger().exception("Failed HTTP auth request for user %r", user)
             return False

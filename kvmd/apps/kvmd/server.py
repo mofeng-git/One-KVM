@@ -574,6 +574,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
             logger.info("Cleaning up %s ...", type(obj).__name__)
             try:
                 await obj.cleanup()  # type: ignore
+            except asyncio.CancelledError:  # pylint: disable=try-except-raise
+                raise
             except Exception:
                 logger.exception("Cleanup error")
 
@@ -605,6 +607,8 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 remote: Optional[str] = (ws._req.remote if ws._req is not None else None)  # pylint: disable=protected-access
                 get_logger().info("Removed client socket: remote=%s; id=%d; active=%d", remote, id(ws), len(self.__sockets))
                 await ws.close()
+            except asyncio.CancelledError:  # pylint: disable=try-except-raise
+                raise
             except Exception:
                 pass
 

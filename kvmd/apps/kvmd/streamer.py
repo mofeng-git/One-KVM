@@ -128,6 +128,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 state = (await response.json())["result"]
         except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
             pass
+        except asyncio.CancelledError:  # pylint: disable=try-except-raise
+            raise
         except Exception:
             get_logger().exception("Invalid streamer response from /state")
         return {
