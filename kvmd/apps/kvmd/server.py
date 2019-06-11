@@ -465,7 +465,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         to = valid_kvm_target(request.query.get("to"))
         return _json(await ({
             "kvm": self.__msd.connect_to_kvm,
-            "server": self.__msd.connect_to_pc,
+            "server": self.__msd.connect_to_server,
         }[to])())
 
     @_exposed("POST", "/msd/write")

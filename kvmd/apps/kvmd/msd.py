@@ -65,17 +65,17 @@ class MsdOfflineError(MsdOperationError):
         super().__init__("Mass-storage device is not found")
 
 
-class MsdAlreadyConnectedToServerError(MsdOperationError):
+class MsdAlreadyOnServerError(MsdOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is already connected to Server")
 
 
-class MsdAlreadyConnectedToKvmError(MsdOperationError):
+class MsdAlreadyOnKvmError(MsdOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is already connected to KVM")
 
 
-class MsdNotConnectedToKvmError(MsdOperationError):
+class MsdNotOnKvmError(MsdOperationError):
     def __init__(self) -> None:
         super().__init__("Mass-storage is not connected to KVM")
 
@@ -283,7 +283,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         try:
             with self.__region:
                 if self.__on_kvm:
-                    raise MsdAlreadyConnectedToKvmError()
+                    raise MsdAlreadyOnKvmError()
                 notify = True
 
                 gpio.write(self.__target_pin, False)
@@ -304,13 +304,13 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     @_msd_working
     @aiotools.atomic
-    async def connect_to_pc(self) -> Dict:
+    async def connect_to_server(self) -> Dict:
         notify = False
         state: Dict = {}
         try:
             with self.__region:
                 if not self.__on_kvm:
-                    raise MsdAlreadyConnectedToServerError()
+                    raise MsdAlreadyOnServerError()
                 notify = True
 
                 gpio.write(self.__target_pin, True)
@@ -353,7 +353,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__region.enter()
         try:
             if not self.__on_kvm:
-                raise MsdNotConnectedToKvmError()
+                raise MsdNotOnKvmError()
             self.__device_file = await aiofiles.open(self._device_info.path, mode="w+b", buffering=0)
             self.__written = 0
             return self
