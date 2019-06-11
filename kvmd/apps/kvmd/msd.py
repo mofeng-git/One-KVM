@@ -254,10 +254,11 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         return {
             "enabled": self._enabled,
             "online": online,
-            "connected_to": (("kvm" if self.__on_kvm else "server") if online else None),
             "busy": self.__region.is_busy(),
+            "uploading": bool(self.__device_file),
             "written": self.__written,
             "info": (dataclasses.asdict(self._device_info) if online else None),
+            "connected_to": (("kvm" if self.__on_kvm else "server") if online else None),
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
@@ -289,12 +290,9 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
                     gpio.write(self.__target_pin, True)
                 raise
             self.__on_kvm = True
-
-            state = self.get_state()
-            await self.__state_queue.put(state)
-
             get_logger().info("Mass-storage device switched to KVM: %s", self._device_info)
-            return state
+
+        return (await self.__queue_current_state())
 
     @_msd_working
     @aiotools.atomic
@@ -305,33 +303,33 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
             gpio.write(self.__target_pin, True)
             self.__on_kvm = False
-
-            state = self.get_state()
-            await self.__state_queue.put(state)
-
             get_logger().info("Mass-storage device switched to Server")
-            return state
+
+        return (await self.__queue_current_state())
 
     @aiotools.tasked
     @aiotools.atomic
     async def reset(self) -> None:
-        with self.__region:
-            if not self._enabled:
-                raise MsdDisabledError()
+        notify = False
+        try:
+            with self.__region:
+                if not self._enabled:
+                    raise MsdDisabledError()
 
-            get_logger(0).info("Mass-storage device reset")
+                notify = True
+                get_logger(0).info("Mass-storage device reset")
 
-            gpio.write(self.__reset_pin, True)
-            await asyncio.sleep(self.__reset_delay)
-            gpio.write(self.__target_pin, False)
-            self.__on_kvm = True
-            await asyncio.sleep(self.__reset_delay)
-            gpio.write(self.__reset_pin, False)
+                gpio.write(self.__reset_pin, True)
+                await asyncio.sleep(self.__reset_delay)
+                gpio.write(self.__target_pin, False)
+                self.__on_kvm = True
+                await asyncio.sleep(self.__reset_delay)
+                gpio.write(self.__reset_pin, False)
 
-            try:
                 await self.__load_device_info()
-            finally:
-                await self.__state_queue.put(self.get_state())
+        finally:
+            if notify:
+                await self.__queue_current_state()
 
     @_msd_working
     @aiotools.atomic
@@ -348,7 +346,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             self.__region.exit()
             raise
         finally:
-            await self.__state_queue.put(self.get_state())
+            await self.__queue_current_state()
 
     @aiotools.atomic
     async def write_image_info(self, name: str, complete: bool) -> None:
@@ -379,8 +377,13 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             await self.__close_device_file()
             await self.__load_device_info()
         finally:
-            await self.__state_queue.put(self.get_state())
             self.__region.exit()
+            await self.__queue_current_state()
+
+    async def __queue_current_state(self) -> Dict:
+        state = self.get_state()
+        await self.__state_queue.put(state)
+        return state
 
     async def __write_to_device_file(self, data: bytes) -> None:
         assert self.__device_file
