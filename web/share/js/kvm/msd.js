@@ -154,10 +154,10 @@ function Msd() {
 			$("msd-current-image-size").innerHTML = (__state.online && __state.info.image ? __formatSize(__state.info.image.size) : "None");
 			$("msd-storage-size").innerHTML = (__state.online ? __formatSize(__state.info.size) : "Unavailable");
 
-			wm.switchDisabled($("msd-switch-to-kvm-button"), (!__state.online || __state.connected_to === "kvm" || __state.uploading));
-			wm.switchDisabled($("msd-switch-to-server-button"), (!__state.online || __state.connected_to === "server" || __state.uploading));
-			wm.switchDisabled($("msd-select-new-image-button"), (!__state.online || __state.connected_to !== "kvm" || __state.uploading || __upload_http));
-			wm.switchDisabled($("msd-upload-new-image-button"), (!__state.online || __state.connected_to !== "kvm" || __state.uploading || !__image_file));
+			wm.switchDisabled($("msd-switch-to-kvm-button"), (!__state.online || __state.connected_to === "kvm" || __state.busy));
+			wm.switchDisabled($("msd-switch-to-server-button"), (!__state.online || __state.connected_to === "server" || __state.busy));
+			wm.switchDisabled($("msd-select-new-image-button"), (!__state.online || __state.connected_to !== "kvm" || __state.busy || __upload_http));
+			wm.switchDisabled($("msd-upload-new-image-button"), (!__state.online || __state.connected_to !== "kvm" || __state.busy || !__image_file));
 			wm.switchDisabled($("msd-abort-uploading-button"), (!__state.online || !__upload_http));
 			wm.switchDisabled($("msd-reset-button"), (!__state.enabled || __state.busy));
 
