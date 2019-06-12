@@ -533,14 +533,11 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 if getattr(method, _ATTR_SYSTEM_TASK, False):
                     self.__system_tasks.append(asyncio.create_task(method()))
                 elif getattr(method, _ATTR_EXPOSED, False):
-                    # router = app.router
-                    router = getattr(app, "router")  # FIXME: Dirty hack to avoid pylint crash
-                    router.add_route(
+                    app.router.add_route(
                         getattr(method, _ATTR_EXPOSED_METHOD),
                         getattr(method, _ATTR_EXPOSED_PATH),
                         method,
                     )
-
         return app
 
     def __run_app_print(self, text: str) -> None:
