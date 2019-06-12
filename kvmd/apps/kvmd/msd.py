@@ -30,6 +30,7 @@ import dataclasses
 import types
 
 from typing import Dict
+from typing import IO
 from typing import Callable
 from typing import Type
 from typing import AsyncGenerator
@@ -145,15 +146,21 @@ def _parse_image_info_bytes(data: bytes) -> Optional[_ImageInfo]:
     return None
 
 
+def _ioctl_uint32(device_file: IO, request: int) -> int:
+    buf = b"\0" * 4
+    buf = fcntl.ioctl(device_file.fileno(), request, buf)
+    result = struct.unpack("I", buf)[0]
+    assert result > 0, (device_file, request, buf)
+    return result
+
+
 def _explore_device(device_path: str) -> _MassStorageDeviceInfo:
     if not stat.S_ISBLK(os.stat(device_path).st_mode):
         raise RuntimeError("Not a block device: %s" % (device_path))
 
     with open(device_path, "rb") as device_file:
-        buf = b"\0" * 8
-        buf = fcntl.ioctl(device_file.fileno(), 0x80081272, buf)  # BLKGETSIZE64
-        size = struct.unpack("L", buf)[0]
-        assert size > 0, (size, buf)
+        # size = BLKGETSIZE * BLKSSZGET
+        size = _ioctl_uint32(device_file, 0x1260) * _ioctl_uint32(device_file, 0x1268)
         device_file.seek(size - _IMAGE_INFO_SIZE)
         image_info = _parse_image_info_bytes(device_file.read())
 
