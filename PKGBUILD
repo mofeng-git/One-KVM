@@ -25,7 +25,6 @@ depends=(
 	python-aiohttp
 	python-aiofiles
 	python-passlib
-	python-pyudev
 	python-raspberry-gpio
 	python-pyserial
 	python-setproctitle

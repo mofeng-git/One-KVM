@@ -3,7 +3,6 @@ fake_rpi
 aiohttp
 aiofiles
 passlib
-pyudev
 pyyaml
 pyserial
 setproctitle

@@ -21,6 +21,8 @@
 
 
 import os
+import stat
+import fcntl
 import struct
 import asyncio
 import asyncio.queues
@@ -33,8 +35,6 @@ from typing import Type
 from typing import AsyncGenerator
 from typing import Optional
 from typing import Any
-
-import pyudev
 
 import aiofiles
 import aiofiles.base
@@ -86,13 +86,6 @@ class MsdIsBusyError(MsdOperationError, aioregion.RegionIsBusyError):
 
 # =====
 @dataclasses.dataclass(frozen=True)
-class _HardwareInfo:
-    manufacturer: str
-    product: str
-    serial: str
-
-
-@dataclasses.dataclass(frozen=True)
 class _ImageInfo:
     name: str
     size: int
@@ -104,7 +97,6 @@ class _MassStorageDeviceInfo:
     path: str
     real: str
     size: int
-    hw: Optional[_HardwareInfo]
     image: Optional[_ImageInfo]
 
 
@@ -154,23 +146,14 @@ def _parse_image_info_bytes(data: bytes) -> Optional[_ImageInfo]:
 
 
 def _explore_device(device_path: str) -> _MassStorageDeviceInfo:
-    # udevadm info -a -p  $(udevadm info -q path -n /dev/sda)
-    device = pyudev.Devices.from_device_file(pyudev.Context(), device_path)
-
-    if device.subsystem != "block":
-        raise RuntimeError("Not a block device")
-
-    hw_info: Optional[_HardwareInfo] = None
-    usb_device = device.find_parent("usb", "usb_device")
-    if usb_device:
-        hw_info = _HardwareInfo(**{
-            attr: usb_device.attributes.asstring(attr).strip()
-            for attr in ["manufacturer", "product", "serial"]
-        })
-
-    size = device.attributes.asint("size") * 512
+    if not stat.S_ISBLK(os.stat(device_path).st_mode):
+        raise RuntimeError("Not a block device: %s" % (device_path))
 
     with open(device_path, "rb") as device_file:
+        buf = b"\0" * 8
+        buf = fcntl.ioctl(device_file.fileno(), 0x80081272, buf)  # BLKGETSIZE64
+        size = struct.unpack("L", buf)[0]
+        assert size > 0, (size, buf)
         device_file.seek(size - _IMAGE_INFO_SIZE)
         image_info = _parse_image_info_bytes(device_file.read())
 
@@ -179,7 +162,6 @@ def _explore_device(device_path: str) -> _MassStorageDeviceInfo:
         real=os.path.realpath(device_path),
         size=size,
         image=image_info,
-        hw=hw_info,
     )
 
 
@@ -193,7 +175,6 @@ def _msd_working(method: Callable) -> Callable:
     return wrapper
 
 
-# =====
 class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
