@@ -47,18 +47,21 @@ def main(argv: Optional[List[str]]=None) -> None:
 
     logger.info("Cleaning up ...")
     with gpio.bcm():
-        for (name, pin) in [
-            ("hid_reset_pin", config.hid.reset_pin),
-            ("msd_target_pin", config.msd.target_pin),
-            ("msd_reset_pin", config.msd.reset_pin),
-            ("atx_power_switch_pin", config.atx.power_switch_pin),
-            ("atx_reset_switch_pin", config.atx.reset_switch_pin),
-            ("streamer_cap_pin", config.streamer.cap_pin),
-            ("streamer_conv_pin", config.streamer.conv_pin),
+        for (name, pin, enabled) in [
+            ("hid_reset_pin",        config.hid.reset_pin,        True),
+            ("atx_power_switch_pin", config.atx.power_switch_pin, config.atx.enabled),
+            ("atx_reset_switch_pin", config.atx.reset_switch_pin, config.atx.enabled),
+            ("msd_target_pin",       config.msd.target_pin,       config.msd.enabled),
+            ("msd_reset_pin",        config.msd.reset_pin,        config.msd.enabled),
+            ("streamer_cap_pin",     config.streamer.cap_pin,     True),
+            ("streamer_conv_pin",    config.streamer.conv_pin,    True),
         ]:
-            if pin >= 0:
-                logger.info("Writing value=0 to pin=%d (%s)", pin, name)
-                gpio.set_output(pin, initial=False)
+            if enabled and pin >= 0:
+                logger.info("Writing value=0 to GPIO pin=%d (%s)", pin, name)
+                try:
+                    gpio.set_output(pin, initial=False)
+                except Exception:
+                    logger.exception("Can't clear GPIO pin=%d (%s)", pin, name)
 
     streamer = os.path.basename(config.streamer.cmd[0])
     logger.info("Trying to find and kill %r ...", streamer)
