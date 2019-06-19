@@ -162,11 +162,14 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def cleanup(self) -> None:
-        if self.is_running():
-            await self.stop()
-        if self.__http_session:
-            await self.__http_session.close()
-            self.__http_session = None
+        try:
+            if self.is_running():
+                await self.stop()
+            if self.__http_session:
+                await self.__http_session.close()
+                self.__http_session = None
+        finally:
+            await self.__set_hw_enabled(False)
 
     def __ensure_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:

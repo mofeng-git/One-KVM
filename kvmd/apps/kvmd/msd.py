@@ -58,27 +58,27 @@ class MsdOperationError(MsdError):
 
 class MsdDisabledError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("Mass-storage device is disabled")
+        super().__init__("MSD is disabled")
 
 
 class MsdOfflineError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("Mass-storage device is not found")
+        super().__init__("MSD is not found")
 
 
 class MsdAlreadyOnServerError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("Mass-storage is already connected to Server")
+        super().__init__("MSD is already connected to Server")
 
 
 class MsdAlreadyOnKvmError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("Mass-storage is already connected to KVM")
+        super().__init__("MSD is already connected to KVM")
 
 
 class MsdNotOnKvmError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("Mass-storage is not connected to KVM")
+        super().__init__("MSD is not connected to KVM")
 
 
 class MsdIsBusyError(MsdOperationError, aioregion.RegionIsBusyError):
@@ -226,16 +226,16 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
         logger = get_logger(0)
         if self._enabled:
-            logger.info("Using %r as mass-storage device", self.__device_path)
+            logger.info("Using %r as MSD", self.__device_path)
             try:
                 aiotools.run_sync(self.__load_device_info())
                 if self.__write_meta:
                     logger.info("Enabled image metadata writing")
             except Exception as err:
                 log = (logger.error if isinstance(err, MsdError) else logger.exception)
-                log("Mass-storage device is offline: %s", err)
+                log("MSD is offline: %s", err)
         else:
-            logger.info("Mass-storage device is disabled")
+            logger.info("MSD is disabled")
 
     def get_state(self) -> Dict:
         online = (self._enabled and bool(self._device_info))
@@ -282,7 +282,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
                         gpio.write(self.__target_pin, True)
                     raise
                 self.__on_kvm = True
-                get_logger().info("Mass-storage device switched to KVM: %s", self._device_info)
+                get_logger().info("MSD switched to KVM: %s", self._device_info)
 
             state = self.get_state()
             return state
@@ -303,7 +303,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
                 gpio.write(self.__target_pin, True)
                 self.__on_kvm = False
-                get_logger().info("Mass-storage device switched to Server")
+                get_logger().info("MSD switched to Server")
 
             state = self.get_state()
             return state
@@ -311,28 +311,34 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             if notify:
                 await self.__state_queue.put(state or self.get_state())
 
-    @aiotools.tasked
     @aiotools.atomic
     async def reset(self) -> None:
-        notify = False
+        if not self._enabled:
+            raise MsdDisabledError()
+        with aiotools.unregion_only_on_exception(self.__region):
+            await self.__inner_reset()
+
+    @aiotools.tasked
+    @aiotools.muted("Can't reset MSD or operation was not completed")
+    async def __inner_reset(self) -> None:
         try:
-            with self.__region:
-                if not self._enabled:
-                    raise MsdDisabledError()
-                notify = True
+            gpio.write(self.__reset_pin, True)
+            await asyncio.sleep(self.__reset_delay)
+            gpio.write(self.__reset_pin, False)
 
-                gpio.write(self.__reset_pin, True)
-                await asyncio.sleep(self.__reset_delay)
-                gpio.write(self.__target_pin, False)
-                self.__on_kvm = True
-                await asyncio.sleep(self.__reset_delay)
-                gpio.write(self.__reset_pin, False)
+            gpio.write(self.__target_pin, False)
+            self.__on_kvm = True
 
-                await self.__load_device_info()
-                get_logger(0).info("Mass-storage device reset has been successful")
+            await self.__load_device_info()
+            get_logger(0).info("MSD reset has been successful")
         finally:
-            if notify:
-                await self.__state_queue.put(self.get_state())
+            try:
+                gpio.write(self.__reset_pin, False)
+            finally:
+                try:
+                    await self.__state_queue.put(self.get_state())
+                finally:
+                    self.__region.exit()
 
     @_msd_working
     @aiotools.atomic
@@ -392,12 +398,12 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
     async def __close_device_file(self) -> None:
         try:
             if self.__device_file:
-                get_logger().info("Closing mass-storage device file ...")
+                get_logger().info("Closing device file ...")
                 await self.__device_file.close()
         except asyncio.CancelledError:  # pylint: disable=try-except-raise
             raise
         except Exception:
-            get_logger().exception("Can't close mass-storage device file")
+            get_logger().exception("Can't close device file")
         finally:
             self.__device_file = None
             self.__written = 0

@@ -67,4 +67,4 @@ def main(argv: Optional[List[str]]=None) -> None:
             streamer=Streamer(**config.streamer._unpack()),
         ).run(**config.server._unpack())
 
-    get_logger().info("Bye-bye")
+    get_logger(0).info("Bye-bye")

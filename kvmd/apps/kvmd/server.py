@@ -480,7 +480,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
                 data_field = await _get_multipart_field(reader, "image_data")
 
-                logger.info("Writing image %r to mass-storage device ...", image_name)
+                logger.info("Writing image %r to MSD ...", image_name)
                 await self.__msd.write_image_info(image_name, False)
                 while True:
                     chunk = await data_field.read_chunk(self.__msd.chunk_size)
@@ -490,7 +490,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
                 await self.__msd.write_image_info(image_name, True)
         finally:
             if written != 0:
-                logger.info("Written %d bytes to mass-storage device", written)
+                logger.info("Written %d bytes to MSD", written)
         return _json({"written": written})
 
     @_exposed("POST", "/msd/reset")
@@ -549,12 +549,14 @@ class Server:  # pylint: disable=too-many-instance-attributes
         logger = get_logger(0)
 
         logger.info("Waiting short tasks ...")
-        await aiotools.gather_short_tasks()
+        await asyncio.gather(*aiotools.get_short_tasks(), return_exceptions=True)
 
         logger.info("Cancelling system tasks ...")
         for task in self.__system_tasks:
             task.cancel()
-        await asyncio.gather(*self.__system_tasks)
+
+        logger.info("Waiting system tasks ...")
+        await asyncio.gather(*self.__system_tasks, return_exceptions=True)
 
         logger.info("Disconnecting clients ...")
         for ws in list(self.__sockets):
@@ -566,15 +568,14 @@ class Server:  # pylint: disable=too-many-instance-attributes
             self._auth_manager,
             self.__streamer,
             self.__msd,
+            self.__atx,
             self.__hid,
         ]:
             logger.info("Cleaning up %s ...", type(obj).__name__)
             try:
                 await obj.cleanup()  # type: ignore
-            except asyncio.CancelledError:  # pylint: disable=try-except-raise
-                raise
             except Exception:
-                logger.exception("Cleanup error")
+                logger.exception("Cleanup error on %s", type(obj).__name__)
 
     async def __broadcast_event(self, event_type: _Events, event_attrs: Dict) -> None:
         if self.__sockets:

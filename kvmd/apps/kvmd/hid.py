@@ -169,13 +169,24 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
                 prev_state = state
             await asyncio.sleep(self.__state_poll)
 
-    @aiotools.tasked
     @aiotools.atomic
     async def reset(self) -> None:
-        async with self.__lock:
+        async with aiotools.unlock_only_on_exception(self.__lock):
+            await self.__inner_reset()
+
+    @aiotools.tasked
+    @aiotools.muted("Can't reset HID or operation was not completed")
+    async def __inner_reset(self) -> None:
+        try:
             gpio.write(self.__reset_pin, True)
             await asyncio.sleep(self.__reset_delay)
-            gpio.write(self.__reset_pin, False)
+        finally:
+            try:
+                gpio.write(self.__reset_pin, False)
+                await asyncio.sleep(1)
+            finally:
+                self.__lock.release()
+        get_logger(0).info("Reset HID performed")
 
     async def send_key_event(self, key: str, state: bool) -> None:
         await self.__send_bool_event(_KeyEvent(key, state), self.__pressed_keys)
@@ -196,17 +207,20 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
 
     @aiotools.atomic
     async def cleanup(self) -> None:
+        logger = get_logger(0)
         async with self.__lock:
-            if self.is_alive():
-                self.__unsafe_clear_events()
-                get_logger(0).info("Stopping HID daemon ...")
-                self.__stop_event.set()
-            else:
-                get_logger(0).warning("Emergency cleaning up HID events ...")
-                self.__emergency_clear_events()
-            if self.exitcode is not None:
-                self.join()
-            gpio.write(self.__reset_pin, False)
+            try:
+                if self.is_alive():
+                    self.__unsafe_clear_events()
+                    logger.info("Stopping HID daemon ...")
+                    self.__stop_event.set()
+                else:
+                    logger.warning("Emergency cleaning up HID events ...")
+                    self.__emergency_clear_events()
+                if self.exitcode is not None:
+                    self.join()
+            finally:
+                gpio.write(self.__reset_pin, False)
 
     async def __send_bool_event(self, event: _BoolEvent, pressed: Set[str]) -> None:
         if not self.__stop_event.is_set():

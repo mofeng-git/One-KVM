@@ -129,6 +129,16 @@ class Atx:  # pylint: disable=too-many-instance-attributes
             else:
                 await asyncio.sleep(60)
 
+    async def cleanup(self) -> None:
+        for (name, pin) in [
+            ("power", self.__power_switch_pin),
+            ("reset", self.__reset_switch_pin),
+        ]:
+            try:
+                gpio.write(pin, False)
+            except Exception:
+                get_logger(0).exception("Can't cleanup %s pin %d", name, pin)
+
     # =====
 
     @_atx_working
@@ -163,25 +173,33 @@ class Atx:  # pylint: disable=too-many-instance-attributes
 
     @_atx_working
     async def click_power(self) -> None:
-        get_logger().info("Clicking power ...")
-        await self.__click(self.__power_switch_pin, self.__click_delay)
+        await self.__click("power", self.__power_switch_pin, self.__click_delay)
 
     @_atx_working
     async def click_power_long(self) -> None:
-        get_logger().info("Clicking power (long press) ...")
-        await self.__click(self.__power_switch_pin, self.__long_click_delay)
+        await self.__click("power_long", self.__power_switch_pin, self.__long_click_delay)
 
     @_atx_working
     async def click_reset(self) -> None:
-        get_logger().info("Clicking reset")
-        await self.__click(self.__reset_switch_pin, self.__click_delay)
+        await self.__click("reset", self.__reset_switch_pin, self.__click_delay)
 
     # =====
 
-    @aiotools.tasked
     @aiotools.atomic
-    async def __click(self, pin: int, delay: float) -> None:
-        with self.__region:
-            for flag in [True, False]:
-                gpio.write(pin, flag)
-                await asyncio.sleep(delay)
+    async def __click(self, name: str, pin: int, delay: float) -> None:
+        with aiotools.unregion_only_on_exception(self.__region):
+            await self.__inner_click(name, pin, delay)
+
+    @aiotools.tasked
+    @aiotools.muted("Can't perform ATX click or operation was not completed")
+    async def __inner_click(self, name: str, pin: int, delay: float) -> None:
+        try:
+            gpio.write(pin, True)
+            await asyncio.sleep(delay)
+        finally:
+            try:
+                gpio.write(pin, False)
+                await asyncio.sleep(1)
+            finally:
+                self.__region.exit()
+        get_logger(0).info("Clicked ATX button %r", name)
