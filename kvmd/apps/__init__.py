@@ -108,6 +108,7 @@ def _init_config(config_path: str, sections: List[str], override_options: List[s
     scheme = _get_config_scheme(sections)
     try:
         _merge_dicts(raw_config, build_raw_from_options(override_options))
+        _merge_dicts(raw_config, (raw_config.get("override") or {}))
         config = make_config(raw_config, scheme)
 
         if "kvmd" in sections:
@@ -143,6 +144,8 @@ def _merge_dicts(dest: Dict, src: Dict) -> None:
 
 def _get_config_scheme(sections: List[str]) -> Dict:
     scheme = {
+        "override": Option({}),
+
         "logging": Option({}),
 
         "kvmd": {

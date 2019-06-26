@@ -43,3 +43,4 @@ ipmi:
         unix: /run/kvmd/kvmd.sock
 
 logging: !include logging.yaml
+override: !include override.yaml

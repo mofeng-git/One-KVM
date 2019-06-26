@@ -1,5 +1,8 @@
 # Don't touch this file otherwise your device may stop working.
+# Use override.yaml to modify required settings.
 # You can find a working configuration in /usr/share/kvmd/configs.default/kvmd.
+
+override: !include override.yaml
 
 logging: !include logging.yaml
 

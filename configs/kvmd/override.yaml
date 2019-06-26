@@ -1,0 +1,7 @@
+# Use this file to override system settings and other configs like this:
+#
+# kvmd:
+#     server:
+#         heartbeat: 5.0
+#
+# It will be applied AFTER other configs and "!include" directives and BEFORE validation.

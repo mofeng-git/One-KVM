@@ -87,8 +87,8 @@ package_kvmd() {
 	for _path in "$_cfg_default/kvmd"/*.yaml; do
 		ln -sf "/usr/share/kvmd/configs.default/kvmd/`basename $_path`" "$pkgdir/etc/kvmd"
 	done
-	rm "$pkgdir/etc/kvmd"/{auth.yaml,meta.yaml}
-	cp "$_cfg_default/kvmd"/{auth.yaml,meta.yaml} "$pkgdir/etc/kvmd"
+	rm "$pkgdir/etc/kvmd"/{override.yaml,logging.yaml,auth.yaml,meta.yaml}
+	cp "$_cfg_default/kvmd"/{override.yaml,logging.yaml,auth.yaml,meta.yaml} "$pkgdir/etc/kvmd"
 	cp "$_cfg_default/kvmd/"*passwd "$pkgdir/etc/kvmd"
 	chmod 600 "$pkgdir/etc/kvmd/"*passwd
 	for _path in "$_cfg_default/nginx"/*.conf; do
