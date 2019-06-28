@@ -155,7 +155,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
         logger = get_logger(0)
 
         assert handle.startswith("/")
-        url = "http://%s:%d%s" % (self.__kvmd_host, self.__kvmd_port, handle)
+        url = f"http://{self.__kvmd_host}:{self.__kvmd_port}{handle}"
 
         credentials = self.__auth_manager.get_credentials(ipmi_session.username.decode())
         logger.info("Performing %r request to %r from user %r (IPMI) as %r (KVMD)",
@@ -169,7 +169,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
                     headers={
                         "X-KVMD-User": credentials.kvmd_user,
                         "X-KVMD-Passwd": credentials.kvmd_passwd,
-                        "User-Agent": "KVMD-IPMI/%s" % (__version__),
+                        "User-Agent": f"KVMD-IPMI/{__version__}",
                     },
                     timeout=self.__kvmd_timeout,
                 ) as response:

@@ -40,7 +40,7 @@ def valid_bool(arg: Any) -> bool:
     true_args = ["1", "true", "yes"]
     false_args = ["0", "false", "no"]
 
-    name = "bool (%r or %r)" % (true_args, false_args)
+    name = f"bool ({true_args!r} or {false_args!r})"
 
     arg = check_not_none_string(arg, name).lower()
     arg = check_in_list(arg, name, true_args + false_args)
@@ -64,9 +64,9 @@ def valid_number(
         raise_error(arg, name)
 
     if min is not None and arg < min:
-        raise ValidatorError("The argument '%s' must be %s and greater or equial than %s" % (arg, name, min))
+        raise ValidatorError(f"The argument '{arg}' must be {name} and greater or equial than {min}")
     if max is not None and arg > max:
-        raise ValidatorError("The argument '%s' must be %s and lesser or equal then %s" % (arg, name, max))
+        raise ValidatorError(f"The argument '{arg}' must be {name} and lesser or equal then {max}")
     return arg
 
 
@@ -98,5 +98,5 @@ def valid_string_list(
         try:
             arg = list(map(subval, arg))
         except Exception:
-            raise ValidatorError("Failed sub-validator on one of the item of %r" % (arg))
+            raise ValidatorError(f"Failed sub-validator on one of the item of {arg!r}")
     return arg

@@ -64,7 +64,7 @@ def _render_keymap(keymap: List[_KeyMapping], template_path: str, out_path: str)
 
 # =====
 def main() -> None:
-    assert len(sys.argv) == 4, "%s <keymap.in> <template> <out>" % (sys.argv[0])
+    assert len(sys.argv) == 4, f"{sys.argv[0]} <keymap.in> <template> <out>"
 
     keymap = _read_keymap_in(sys.argv[1])
     _render_keymap(keymap, sys.argv[2], sys.argv[3])

@@ -45,7 +45,8 @@ from .. import init
 # =====
 def _get_htpasswd_path(config: Section) -> str:
     if config.kvmd.auth.internal_type != "htpasswd":
-        raise SystemExit("Error: KVMD internal auth not using 'htpasswd' (now configured %r)" % (config.kvmd.auth.internal_type))
+        raise SystemExit(f"Error: KVMD internal auth not using 'htpasswd'"
+                         f" (now configured {config.kvmd.auth.internal_type!r})")
     return config.kvmd.auth.internal.file
 
 
@@ -53,7 +54,7 @@ def _get_htpasswd_path(config: Section) -> str:
 def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.HtpasswdFile, None, None]:
     path = _get_htpasswd_path(config)
     (tmp_fd, tmp_path) = tempfile.mkstemp(
-        prefix=".%s." % (os.path.basename(path)),
+        prefix=f".{os.path.basename(path)}.",
         dir=os.path.dirname(path),
     )
     try:

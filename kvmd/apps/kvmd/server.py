@@ -142,7 +142,7 @@ def _json_exception(err: Exception, status: int) -> aiohttp.web.Response:
 async def _get_multipart_field(reader: aiohttp.MultipartReader, name: str) -> aiohttp.BodyPartReader:
     field = await reader.next()
     if not field or field.name != name:
-        raise ValidatorError("Missing %r field" % (name))
+        raise ValidatorError(f"Missing {name!r} field")
     return field
 
 
@@ -168,7 +168,7 @@ def _exposed(http_method: str, path: str, auth_required: bool=True) -> Callable:
 
                     if user:
                         user = valid_user(user)
-                        setattr(request, _ATTR_KVMD_AUTH_INFO, "%s (xhdr)" % (user))
+                        setattr(request, _ATTR_KVMD_AUTH_INFO, f"{user} (xhdr)")
                         if not (await self._auth_manager.authorize(user, valid_passwd(passwd))):
                             raise ForbiddenError("Forbidden")
 
@@ -177,7 +177,7 @@ def _exposed(http_method: str, path: str, auth_required: bool=True) -> Callable:
                         if not user:
                             setattr(request, _ATTR_KVMD_AUTH_INFO, "- (token)")
                             raise ForbiddenError("Forbidden")
-                        setattr(request, _ATTR_KVMD_AUTH_INFO, "%s (token)" % (user))
+                        setattr(request, _ATTR_KVMD_AUTH_INFO, f"{user} (token)")
 
                     else:
                         raise UnauthorizedError("Unauthorized")
@@ -204,7 +204,7 @@ def _system_task(method: Callable) -> Callable:
     async def wrapper(self: "Server") -> None:
         try:
             await method(self)
-            raise RuntimeError("Dead system task: %s" % (method))
+            raise RuntimeError(f"Dead system task: {method}")
         except asyncio.CancelledError:
             pass
         except Exception:

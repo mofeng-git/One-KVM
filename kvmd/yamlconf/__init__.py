@@ -41,9 +41,9 @@ def build_raw_from_options(options: List[str]) -> Dict[str, Any]:
     for option in options:
         (key, value) = (option.split("=", 1) + [None])[:2]  # type: ignore
         if len(key.strip()) == 0:
-            raise ConfigError("Empty option key (required 'key=value' instead of %r)" % (option))
+            raise ConfigError(f"Empty option key (required 'key=value' instead of {option!r})")
         if value is None:
-            raise ConfigError("No value for key %r" % (key))
+            raise ConfigError(f"No value for key {key!r}")
 
         section = raw
         subs = list(filter(None, map(str.strip, key.split("/"))))
@@ -61,7 +61,7 @@ def _parse_value(value: str) -> Any:
         and value not in ["true", "false", "null"]
         and not value.startswith(("{", "[", "\""))
     ):
-        value = "\"%s\"" % (value)
+        value = f"\"{value}\""
     return json.loads(value)
 
 
@@ -124,13 +124,13 @@ class Option:
         self.help = help
 
     def __repr__(self) -> str:
-        return "<Option(default={0.default}, type={0.type}, only_if={0.only_if}, unpack_as={0.unpack_as})>".format(self)
+        return f"<Option(default={self.default}, type={self.type}, only_if={self.only_if}, unpack_as={self.unpack_as})>"
 
 
 # =====
 def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, ...]=()) -> Section:
     if not isinstance(raw, dict):
-        raise ConfigError("The node %r must be a dictionary" % ("/".join(_keys) or "/"))
+        raise ConfigError(f"The node {('/'.join(_keys) or '/')!r} must be a dictionary")
 
     config = Section()
 
@@ -150,7 +150,7 @@ def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, .
 
             if only_if and no_only_if:  # pylint: disable=no-else-raise
                 # Перекрестный only_if запрещен
-                raise RuntimeError("Found only_if recursuon on key %r" % (make_full_name(key)))
+                raise RuntimeError(f"Found only_if recursuon on key {make_full_name(key)!r}")
             elif only_if and (
                 (not only_if_negative and not process_option(only_if, no_only_if=True))
                 or (only_if_negative and process_option(only_if, no_only_if=True))
@@ -162,7 +162,7 @@ def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, .
                 try:
                     value = option.type(value)
                 except ValueError as err:
-                    raise ConfigError("Invalid value %r for key %r: %s" % (value, make_full_name(key), str(err)))
+                    raise ConfigError(f"Invalid value {value!r} for key {make_full_name(key)!r}: {err}")
 
             config[key] = value
             config._set_meta(  # pylint: disable=protected-access
@@ -179,6 +179,6 @@ def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, .
         elif isinstance(scheme[key], dict):
             config[key] = make_config(raw.get(key, {}), scheme[key], make_full_key(key))
         else:
-            raise RuntimeError("Incorrect scheme definition for key %r:"
-                               " the value is %r, not dict() or Option()" % (make_full_name(key), type(scheme[key])))
+            raise RuntimeError(f"Incorrect scheme definition for key {make_full_name(key)!r}:"
+                               f" the value is {type(scheme[key])!r}, not dict() or Option()")
     return config

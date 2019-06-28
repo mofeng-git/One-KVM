@@ -119,7 +119,7 @@ def _init_config(config_path: str, sections: List[str], override_options: List[s
 
         return config
     except (ConfigError, UnknownPluginError) as err:
-        raise SystemExit("Config error: %s" % (str(err)))
+        raise SystemExit(f"Config error: {err}")
 
 
 def _dump_config(config: Section) -> None:

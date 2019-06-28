@@ -40,13 +40,13 @@ class ValidatorError(ValueError):
 def raise_error(arg: Any, name: str, hide: bool=False) -> NoReturn:
     arg_str = " "
     if not hide:
-        arg_str = (" %r " if isinstance(arg, (str, bytes)) else " '%s' ") % (arg)
-    raise ValidatorError("The argument" + arg_str + "is not a valid " + name)
+        arg_str = (f" {arg!r} " if isinstance(arg, (str, bytes)) else f" '{arg}' ")
+    raise ValidatorError(f"The argument{arg_str}is not a valid {name}")
 
 
 def check_not_none(arg: Any, name: str) -> Any:
     if arg is None:
-        raise ValidatorError("Empty argument is not a valid %s" % (name))
+        raise ValidatorError(f"Empty argument is not a valid {name}")
     return arg
 
 

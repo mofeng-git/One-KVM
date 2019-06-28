@@ -81,7 +81,7 @@ class Plugin(BaseAuthService):
                     "passwd": passwd
                 },
                 headers={
-                    "User-Agent": "KVMD/%s" % (__version__),
+                    "User-Agent": f"KVMD/{__version__}",
                     "X-KVMD-User": user,
                 },
             ) as response:

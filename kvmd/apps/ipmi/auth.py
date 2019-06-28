@@ -61,12 +61,12 @@ class IpmiAuthManager:
                 continue
 
             if " -> " not in line:
-                raise IpmiPasswdError("Missing ' -> ' operator at line #%d" % (number))
+                raise IpmiPasswdError(f"Missing ' -> ' operator at line #{number}")
 
             (left, right) = map(str.lstrip, line.split(" -> ", 1))
             for (name, pair) in [("left", left), ("right", right)]:
                 if ":" not in pair:
-                    raise IpmiPasswdError("Missing ':' operator in %s credentials at line #%d" % (name, number))
+                    raise IpmiPasswdError(f"Missing ':' operator in {name} credentials at line #{number}")
 
             (ipmi_user, ipmi_passwd) = left.split(":")
             ipmi_user = ipmi_user.strip()
@@ -75,7 +75,7 @@ class IpmiAuthManager:
             kvmd_user = kvmd_user.strip()
 
             if ipmi_user in credentials:
-                raise IpmiPasswdError("Found duplicating user %r (left) at line #%d" % (ipmi_user, number))
+                raise IpmiPasswdError(f"Found duplicating user {ipmi_user!r} (left) at line #{number}")
 
             credentials[ipmi_user] = IpmiUserCredentials(
                 ipmi_user=ipmi_user,

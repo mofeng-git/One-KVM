@@ -156,7 +156,7 @@ def _ioctl_uint32(device_file: IO, request: int) -> int:
 
 def _explore_device(device_path: str) -> _MassStorageDeviceInfo:
     if not stat.S_ISBLK(os.stat(device_path).st_mode):
-        raise RuntimeError("Not a block device: %s" % (device_path))
+        raise RuntimeError(f"Not a block device: {device_path}")
 
     with open(device_path, "rb") as device_file:
         # size = BLKGETSIZE * BLKSSZGET

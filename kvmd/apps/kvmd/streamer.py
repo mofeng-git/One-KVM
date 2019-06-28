@@ -121,8 +121,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         state = None
         try:
             async with session.get(
-                url="http://%s:%d/state" % (self.__host, self.__port),
-                headers={"User-Agent": "KVMD/%s" % (__version__)},
+                url=f"http://{self.__host}:{self.__port}/state",
+                headers={"User-Agent": f"KVMD/{__version__}"},
                 timeout=self.__timeout,
             ) as response:
                 response.raise_for_status()

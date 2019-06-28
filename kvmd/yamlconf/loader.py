@@ -36,7 +36,7 @@ def load_yaml_file(path: str) -> Any:
             return yaml.load(yaml_file, _YamlLoader)
         except Exception:
             # Reraise internal exception as standard ValueError and show the incorrect file
-            raise ValueError("Incorrect YAML syntax in file %r" % (path))
+            raise ValueError(f"Incorrect YAML syntax in file {path!r}")
 
 
 class _YamlLoader(yaml.SafeLoader):

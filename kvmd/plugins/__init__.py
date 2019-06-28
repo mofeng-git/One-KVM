@@ -53,7 +53,7 @@ class BasePlugin:
 @functools.lru_cache()
 def get_plugin_class(sub: str, name: str) -> Type[BasePlugin]:
     try:
-        module = importlib.import_module("kvmd.plugins.{}.{}".format(sub, name))
+        module = importlib.import_module(f"kvmd.plugins.{sub}.{name}")
     except ModuleNotFoundError:
-        raise UnknownPluginError("Unknown plugin '%s/%s'" % (sub, name))
+        raise UnknownPluginError(f"Unknown plugin '{sub}/{name}'")
     return getattr(module, "Plugin")

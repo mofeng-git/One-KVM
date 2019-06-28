@@ -39,7 +39,8 @@ def make_config_dump(config: Section, indent: int=4) -> str:
 def _inner_make_dump(config: Section, indent: int, _level: int=0) -> Generator[str, None, None]:
     for (key, value) in sorted(config.items(), key=operator.itemgetter(0)):
         if isinstance(value, Section):
-            yield "%s%s:" % (" " * indent * _level, key)
+            prefix = " " * indent * _level
+            yield f"{prefix}{key}:"
             yield from _inner_make_dump(value, indent, _level + 1)
             yield ""
         else:
@@ -66,7 +67,7 @@ def _make_yaml_kv(key: str, value: Any, indent: int, level: int, comment: str=""
     prefix = " " * indent * level
     if commented:
         prefix = prefix + "# "
-    text = textwrap.indent("%s:%s" % (key, text), prefix=prefix)
+    text = textwrap.indent(f"{key}:{text}", prefix=prefix)
 
     if comment:
         lines = text.split("\n")
