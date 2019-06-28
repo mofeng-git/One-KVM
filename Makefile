@@ -28,7 +28,7 @@ all:
 
 
 testenv:
-	docker build $(if $(NC), --no-cache,) --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
+	docker build $(if $(NC),--no-cache,) --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
 
 
 tox: testenv
@@ -43,7 +43,7 @@ tox: testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /src/testenv/main.yaml /etc/kvmd \
 			&& cd /src \
-			&& tox -c testenv/tox.ini $(if $(E), -e $(E), -p auto) \
+			&& tox -c testenv/tox.ini $(if $(E),-e $(E),-p auto) \
 		"
 
 
@@ -69,7 +69,7 @@ run: testenv
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 			&& (losetup -d /dev/kvmd-msd || true) \
 			&& losetup /dev/kvmd-msd /root/loop.img \
-			&& $(if $(CMD), $(CMD), python -m kvmd.apps.kvmd) \
+			&& $(if $(CMD),$(CMD),python -m kvmd.apps.kvmd) \
 		"
 	- docker run --rm --device=$(TESTENV_LOOP):/dev/kvmd-msd -it $(TESTENV_IMAGE) losetup -d /dev/kvmd-msd
 
@@ -85,7 +85,7 @@ run-ipmi: testenv
 			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /testenv/main.yaml /etc/kvmd \
-			&& $(if $(CMD), $(CMD), python -m kvmd.apps.ipmi) \
+			&& $(if $(CMD),$(CMD),python -m kvmd.apps.ipmi) \
 		"
 
 
@@ -108,7 +108,7 @@ release:
 
 
 bump:
-	bumpversion $(if $(V), $(V), minor)
+	bumpversion $(if $(V),$(V),minor)
 
 
 push:
