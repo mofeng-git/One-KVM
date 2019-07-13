@@ -20,7 +20,7 @@
 *****************************************************************************/
 
 
-var tools = new function() {
+export var tools = new function() {
 	let __debug = (new URL(window.location.href)).searchParams.get("debug");
 
 	this.setDefault = function(dict, key, value) {
@@ -160,6 +160,6 @@ var tools = new function() {
 	this.info("Browser:", this.browser);
 };
 
-var $ = (id) => document.getElementById(id);
-var $$ = (cls) => document.getElementsByClassName(cls);
-var $$$ = (selector) => document.querySelectorAll(selector);
+export var $ = (id) => document.getElementById(id);
+export var $$ = (cls) => document.getElementsByClassName(cls);
+export var $$$ = (selector) => document.querySelectorAll(selector);

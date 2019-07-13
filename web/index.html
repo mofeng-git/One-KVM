@@ -41,12 +41,10 @@
 	<link rel="stylesheet" href="share/css/start.css">
 	<link rel="stylesheet" href="share/css/index/index.css">
 
-	<script src="share/js/bb.js"></script>
-	<script src="share/js/tools.js"></script>
-	<script src="share/js/wm.js"></script>
-	<script src="share/js/index/main.js"></script>
-
-	<script>window.onload = main;</script>
+	<script type="module">
+		import {main} from "./share/js/index/main.js";
+		main();
+	</script>
 </head>
 
 <body>

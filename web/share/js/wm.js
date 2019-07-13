@@ -20,7 +20,16 @@
 *****************************************************************************/
 
 
-function WindowManager() {
+import {tools, $, $$, $$$} from "./tools.js";
+
+
+export var wm;
+
+export function initWindowManager() {
+	wm = new __WindowManager();
+}
+
+function __WindowManager() {
 	var self = this;
 
 	/************************************************************************/

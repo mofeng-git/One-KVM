@@ -50,20 +50,10 @@
 	<link rel="stylesheet" href="../share/css/kvm/keyboard.css">
 	<link rel="stylesheet" href="../share/css/kvm/about.css">
 
-	<script src="../share/js/bb.js"></script>
-	<script src="../share/js/tools.js"></script>
-	<script src="../share/js/wm.js"></script>
-	<script src="../share/js/keypad.js"></script>
-	<script src="../share/js/kvm/stream.js"></script>
-	<script src="../share/js/kvm/atx.js"></script>
-	<script src="../share/js/kvm/keyboard.js"></script>
-	<script src="../share/js/kvm/mouse.js"></script>
-	<script src="../share/js/kvm/hid.js"></script>
-	<script src="../share/js/kvm/msd.js"></script>
-	<script src="../share/js/kvm/session.js"></script>
-	<script src="../share/js/kvm/main.js"></script>
-
-	<script>window.onload = main;</script>
+	<script type="module">
+		import {main} from "/share/js/kvm/main.js";
+		main();
+	</script>
 </head>
 
 <body class="body-no-select">

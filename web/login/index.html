@@ -40,12 +40,10 @@
 	<link rel="stylesheet" href="../share/css/modals.css">
 	<link rel="stylesheet" href="../share/css/login/login.css">
 
-	<script src="../share/js/bb.js"></script>
-	<script src="../share/js/tools.js"></script>
-	<script src="../share/js/wm.js"></script>
-	<script src="../share/js/login/main.js"></script>
-
-	<script>window.onload = main;</script>
+	<script type="module">
+		import {main} from "/share/js/login/main.js";
+		main();
+	</script>
 </head>
 
 <body>

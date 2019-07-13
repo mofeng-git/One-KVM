@@ -20,7 +20,11 @@
 *****************************************************************************/
 
 
-function Mouse() {
+import {tools, $} from "../tools.js";
+import {Keypad} from "../keypad.js";
+
+
+export function Mouse() {
 	var self = this;
 
 	/************************************************************************/

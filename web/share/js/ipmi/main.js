@@ -20,7 +20,10 @@
 *****************************************************************************/
 
 
-function main() {
+import {$} from "../tools.js";
+
+
+export function main() {
 	let host = window.location.hostname;
 	let site = window.location.protocol + "//" + window.location.host;
 	$("ipmi-text").innerHTML = `

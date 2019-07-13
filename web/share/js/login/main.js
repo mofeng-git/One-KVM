@@ -20,11 +20,14 @@
 *****************************************************************************/
 
 
-var wm;
+import {tools, $} from "../tools.js";
+import {checkBrowser} from "../bb.js";
+import {wm, initWindowManager} from "../wm.js";
 
-function main() {
+
+export function main() {
 	if (checkBrowser()) {
-		wm = new WindowManager();
+		initWindowManager();
 
 		tools.setOnClick($("login-button"), __login);
 		$("user-input").onkeyup = $("passwd-input").onkeyup = function(event) {

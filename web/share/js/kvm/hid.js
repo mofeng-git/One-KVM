@@ -20,7 +20,14 @@
 *****************************************************************************/
 
 
-function Hid() {
+import {tools, $, $$$} from "../tools.js";
+import {wm} from "../wm.js";
+
+import {Keyboard} from "./keyboard.js";
+import {Mouse} from "./mouse.js";
+
+
+export function Hid() {
 	var self = this;
 
 	/************************************************************************/

@@ -20,10 +20,13 @@
 *****************************************************************************/
 
 
-var wm;
+import {tools, $} from "../tools.js";
+import {checkBrowser} from "../bb.js";
+import {wm, initWindowManager} from "../wm.js";
 
-function main() {
-	wm = new WindowManager();
+
+export function main() {
+	initWindowManager();
 
 	if (checkBrowser()) {
 		__setAppText();

@@ -20,7 +20,10 @@
 *****************************************************************************/
 
 
-function Keypad(keys_parent, key_callback) {
+import {tools, $$$} from "./tools.js";
+
+
+export function Keypad(keys_parent, key_callback) {
 	var self = this;
 
 	/************************************************************************/

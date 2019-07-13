@@ -20,7 +20,11 @@
 *****************************************************************************/
 
 
-function Keyboard() {
+import {tools, $} from "../tools.js";
+import {Keypad} from "../keypad.js";
+
+
+export function Keyboard() {
 	var self = this;
 
 	/************************************************************************/

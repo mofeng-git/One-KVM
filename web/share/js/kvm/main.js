@@ -20,9 +20,14 @@
 *****************************************************************************/
 
 
-var wm;
+import {tools, $} from "../tools.js";
+import {checkBrowser} from "../bb.js";
+import {wm, initWindowManager} from "../wm.js";
 
-function main() {
+import {Session} from "./session.js";
+
+
+export function main() {
 	if (checkBrowser()) {
 		window.onbeforeunload = function(event) {
 			let text = "Are you sure you want to close Pi-KVM session?";
@@ -30,7 +35,7 @@ function main() {
 			return text;
 		};
 
-		wm = new WindowManager();
+		initWindowManager();
 
 		tools.setOnClick($("show-about-button"), () => wm.showWindow($("about-window")));
 		tools.setOnClick($("show-keyboard-button"), () => wm.showWindow($("keyboard-window")));

@@ -20,7 +20,7 @@
 *****************************************************************************/
 
 
-function checkBrowser() {
+export function checkBrowser() {
 	if (
 		!window.navigator
 		|| window.navigator.userAgent.indexOf("MSIE ") > 0

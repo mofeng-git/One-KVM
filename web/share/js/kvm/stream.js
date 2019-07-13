@@ -20,7 +20,11 @@
 *****************************************************************************/
 
 
-function Streamer() {
+import {tools, $} from "../tools.js";
+import {wm} from "../wm.js";
+
+
+export function Streamer() {
 	var self = this;
 
 	/************************************************************************/
@@ -103,7 +107,7 @@ function Streamer() {
 				__client_id = stream_client.slice(stream_client.indexOf("/") + 1);
 			}
 
-			if (stream.clients_stat.hasOwnProperty(__client_id)) {
+			if (Object.prototype.hasOwnProperty.call(stream.clients_stat, __client_id)) {
 				__client_fps = stream.clients_stat[__client_id].fps;
 			} else {
 				__clearState();

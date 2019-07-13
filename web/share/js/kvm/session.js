@@ -20,7 +20,16 @@
 *****************************************************************************/
 
 
-function Session() {
+import {tools, $} from "../tools.js";
+import {wm} from "../wm.js";
+
+import {Hid} from "./hid.js";
+import {Atx} from "./atx.js";
+import {Msd} from "./msd.js";
+import {Streamer} from "./stream.js";
+
+
+export function Session() {
 	// var self = this;
 
 	/************************************************************************/

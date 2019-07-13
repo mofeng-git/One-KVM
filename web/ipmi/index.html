@@ -38,10 +38,12 @@
 	<link rel="stylesheet" href="../share/css/main.css">
 	<link rel="stylesheet" href="../share/css/start.css">
 
-	<script src="../share/js/tools.js"></script>
 	<script src="../share/js/ipmi/main.js"></script>
 
-	<script>window.onload = main;</script>
+	<script type="module">
+		import {main} from "/share/js/ipmi/main.js";
+		main();
+	</script>
 </head>
 
 <body>
