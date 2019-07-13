@@ -104,14 +104,14 @@ def test_fail__valid_stream_quality(arg: Any) -> None:
 
 
 # =====
-@pytest.mark.parametrize("arg", ["1 ", 30])
+@pytest.mark.parametrize("arg", ["1 ", 120])
 def test_ok__valid_stream_fps(arg: Any) -> None:
     value = valid_stream_fps(arg)
     assert type(value) == int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
-@pytest.mark.parametrize("arg", ["test", "", None, 31, 1.1])
+@pytest.mark.parametrize("arg", ["test", "", None, 121, 1.1])
 def test_fail__valid_stream_fps(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_stream_fps(arg))

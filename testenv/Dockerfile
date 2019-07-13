@@ -13,26 +13,29 @@ RUN pacman -Syu --noconfirm \
 
 RUN useradd -r -c "Packer build user" -m -d /var/packer -s /sbin/nologin packer \
 	&& cd /tmp \
-	&& sudo -u packer git clone https://aur.archlinux.org/packer-kit.git \
+	&& sudo -u packer git clone https://github.com/pi-kvm/packer-kit.git \
 	&& cd packer-kit \
 	&& sudo -u packer makepkg \
 	&& pacman --noconfirm -U packer-kit-*.pkg.tar.xz \
 	&& cd - \
 	&& rm -rf /tmp/packer-kit
 
-RUN pkg-install \
+RUN pkg-install -S \
 	python \
 	python-pip \
 	python-tox \
 	python-systemd \
 	python-dbus \
 	python-mako \
-	libevent-patched \
 	nginx-mainline \
-	ustreamer \
 	socat \
 	htmlhint \
 	eslint
+
+ARG USTREAMER_VERSION
+ENV USTREAMER_VERSION $USTREAMER_VERSION
+RUN echo $USTREAMER_VERSION
+RUN pkg-install -S ustreamer
 
 COPY testenv/requirements.txt requirements.txt
 RUN pip install -r requirements.txt

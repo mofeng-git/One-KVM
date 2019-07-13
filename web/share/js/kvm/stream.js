@@ -42,7 +42,7 @@ function Streamer() {
 		tools.setOnUpSlider($("stream-quality-slider"), 1000, __updateQualityValue, (value) => __sendParam("quality", value));
 
 		$("stream-desired-fps-slider").min = 0;
-		$("stream-desired-fps-slider").max = 30;
+		$("stream-desired-fps-slider").max = 120;
 		$("stream-desired-fps-slider").step = 1;
 		$("stream-desired-fps-slider").value = 0;
 		tools.setOnUpSlider($("stream-desired-fps-slider"), 1000, __updateDesiredFpsValue, (value) => __sendParam("desired_fps", value));
@@ -80,6 +80,7 @@ function Streamer() {
 			}
 
 			if (!$("stream-desired-fps-slider").activated) {
+				$("stream-desired-fps-slider").max = state.limits.max_fps;
 				wm.switchDisabled($("stream-desired-fps-slider"), false);
 				if ($("stream-desired-fps-slider").value !== source.desired_fps) {
 					$("stream-desired-fps-slider").value = source.desired_fps;

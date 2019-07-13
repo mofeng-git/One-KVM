@@ -228,8 +228,9 @@ def _get_config_scheme(sections: List[str]) -> Dict:
                 "shutdown_delay":     Option(10.0, type=valid_float_f01),
                 "state_poll":         Option(1.0,  type=valid_float_f01),
 
-                "quality":     Option(80, type=valid_stream_quality),
-                "desired_fps": Option(0,  type=valid_stream_fps),
+                "quality":     Option(80,  type=valid_stream_quality),
+                "desired_fps": Option(0,   type=valid_stream_fps),
+                "max_fps":     Option(120, type=valid_stream_fps),
 
                 "host":    Option("localhost", type=valid_ip_or_host),
                 "port":    Option(0,   type=valid_port),

@@ -51,7 +51,7 @@ def valid_stream_quality(arg: Any) -> int:
 
 
 def valid_stream_fps(arg: Any) -> int:
-    return int(valid_number(arg, min=0, max=30, name="stream FPS"))
+    return int(valid_number(arg, min=0, max=120, name="stream FPS"))
 
 
 # =====

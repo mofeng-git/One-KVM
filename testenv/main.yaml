@@ -26,14 +26,15 @@ kvmd:
         cap_pin: 17
         conv_pin: 18
         init_restart_after: 1
+        desired_fps: 30
+        max_fps: 40
         unix: /run/kvmd/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
             - "--quality={quality}"
             - "--desired-fps={desired_fps}"
-            - "--width=800"
-            - "--height=600"
+            - "--resolution=800x600"
             - "--unix={unix}"
             - "--unix-rm"
             - "--unix-mode=0666"

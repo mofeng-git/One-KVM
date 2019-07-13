@@ -55,6 +55,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         quality: int,
         desired_fps: int,
+        max_fps: int,
 
         host: str,
         port: int,
@@ -77,6 +78,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             "quality": quality,
             "desired_fps": desired_fps,
         }
+        self.__max_fps = max_fps
 
         assert port or unix_path
         self.__host = host
@@ -95,9 +97,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         logger = get_logger()
         logger.info("Starting streamer ...")
 
-        self.__params = {key: params[key] for key in self.__params}  # Only known params
-        assert 1 <= self.__params["quality"] <= 100
-        assert 0 <= self.__params["desired_fps"] <= 30
+        self.__params = {
+            key: min(max(params.get(key, self.__params[key]), a), b)
+            for (key, a, b) in [
+                ("quality", 0, 100),
+                ("desired_fps", 0, self.__max_fps),
+            ]
+        }
 
         await self.__inner_start()
         if self.__init_restart_after > 0.0 and not no_init_restart:
@@ -134,6 +140,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         except Exception:
             get_logger().exception("Invalid streamer response from /state")
         return {
+            "limits": {"max_fps": self.__max_fps},
             "params": self.get_params(),
             "state": state,
         }

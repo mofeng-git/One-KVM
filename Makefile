@@ -5,6 +5,10 @@ TESTENV_HID ?= /dev/ttyS10
 TESTENV_VIDEO ?= /dev/video0
 TESTENV_LOOP ?= /dev/loop7
 
+USTREAMER_VERSION = $(shell curl --silent "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=ustreamer" \
+    | grep "^pkgver=" \
+    | grep -Po "\d+\.\d+[^\"']*")
+
 
 # =====
 all:
@@ -28,7 +32,12 @@ all:
 
 
 testenv:
-	docker build $(if $(NC),--no-cache,) --rm --tag $(TESTENV_IMAGE) -f testenv/Dockerfile .
+	docker build \
+			$(if $(NC),--no-cache,) \
+			--rm \
+			--tag $(TESTENV_IMAGE) \
+			--build-arg USTREAMER_VERSION=$(USTREAMER_VERSION) \
+		-f testenv/Dockerfile .
 
 
 tox: testenv
