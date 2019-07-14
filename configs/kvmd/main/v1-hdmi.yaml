@@ -30,6 +30,8 @@ kvmd:
         device: /dev/kvmd-msd
 
     streamer:
+        desired_fps: 30
+        max_fps: 60
         unix: /run/kvmd/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"
