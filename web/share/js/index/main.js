@@ -20,6 +20,9 @@
 *****************************************************************************/
 
 
+"use strict";
+
+
 import {tools, $} from "../tools.js";
 import {checkBrowser} from "../bb.js";
 import {wm, initWindowManager} from "../wm.js";
@@ -78,7 +81,7 @@ function __loadKvmdInfo() {
 
 				if (info.meta && info.meta.server && info.meta.server.host) {
 					$("kvmd-meta-server-host").innerHTML = info.meta.server.host;
-					document.title = "Pi-KVM Index: " + info.meta.server.host;
+					document.title = `Pi-KVM Index: ${info.meta.server.host}`;
 				} else {
 					$("kvmd-meta-server-host").innerHTML = "";
 					document.title = "Pi-KVM Index";

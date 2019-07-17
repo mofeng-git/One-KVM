@@ -20,6 +20,9 @@
 *****************************************************************************/
 
 
+"use strict";
+
+
 import {tools, $} from "../tools.js";
 import {checkBrowser} from "../bb.js";
 import {wm, initWindowManager} from "../wm.js";

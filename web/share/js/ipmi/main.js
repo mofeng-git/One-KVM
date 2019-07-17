@@ -20,12 +20,15 @@
 *****************************************************************************/
 
 
+"use strict";
+
+
 import {$} from "../tools.js";
 
 
 export function main() {
 	let host = window.location.hostname;
-	let site = window.location.protocol + "//" + window.location.host;
+	let site = `${window.location.protocol}//${window.location.host}`;
 	$("ipmi-text").innerHTML = `
 		<span class="code-comment"># Power on the server if it's off:<br>
 		$</span> ipmitool -I lanplus -U admin -P admin -H ${host} power on<br>

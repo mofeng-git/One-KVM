@@ -20,6 +20,9 @@
 *****************************************************************************/
 
 
+"use strict";
+
+
 import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
 
@@ -62,8 +65,8 @@ export function Session() {
 				${text}
 			`;
 			if (state.meta.server && state.meta.server.host) {
-				$("kvmd-meta-server-host").innerHTML = "Server: " + state.meta.server.host;
-				document.title = "Pi-KVM Session: " + state.meta.server.host;
+				$("kvmd-meta-server-host").innerHTML = `Server: ${state.meta.server.host}`;
+				document.title = `Pi-KVM Session: ${state.meta.server.host}`;
 			} else {
 				$("kvmd-meta-server-host").innerHTML = "";
 				document.title = "Pi-KVM Session";

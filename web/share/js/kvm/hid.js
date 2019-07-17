@@ -20,6 +20,9 @@
 *****************************************************************************/
 
 
+"use strict";
+
+
 import {tools, $, $$$} from "../tools.js";
 import {wm} from "../wm.js";
 
@@ -132,27 +135,27 @@ export function Hid() {
 			"\n": ["Enter"],
 			"\t": ["Tab"],
 			" ": ["Space"],
-			"`": ["Backquote"],   "~": ["ShiftLeft", "Backquote"],
-			"\\": ["Backslash"],  "|": ["ShiftLeft", "Backslash"],
-			"[": ["BracketLeft"], "{": ["ShiftLeft", "BracketLeft"],
-			"]": ["BracketLeft"], "}": ["ShiftLeft", "BracketRight"],
-			",": ["Comma"],       "<": ["ShiftLeft", "Comma"],
-			".": ["Period"],      ">": ["ShiftLeft", "Period"],
-			"1": ["Digit1"],      "!": ["ShiftLeft", "Digit1"],
-			"2": ["Digit2"],      "@": ["ShiftLeft", "Digit2"],
-			"3": ["Digit3"],      "#": ["ShiftLeft", "Digit3"],
-			"4": ["Digit4"],      "$": ["ShiftLeft", "Digit4"],
-			"5": ["Digit5"],      "%": ["ShiftLeft", "Digit5"],
-			"6": ["Digit6"],      "^": ["ShiftLeft", "Digit6"],
-			"7": ["Digit7"],      "&": ["ShiftLeft", "Digit7"],
-			"8": ["Digit8"],      "*": ["ShiftLeft", "Digit8"],
-			"9": ["Digit9"],      "(": ["ShiftLeft", "Digit9"],
-			"0": ["Digit0"],      ")": ["ShiftLeft", "Digit0"],
-			"-": ["Minus"],       "_": ["ShiftLeft", "Minus"],
-			"'": ["Quote"],       "\"": ["ShiftLeft", "Quote"],
-			";": ["Semicolon"],   ":": ["ShiftLeft", "Semicolon"],
-			"/": ["Slash"],       "?": ["ShiftLeft", "Slash"],
-			"=": ["Equal"],       "+": ["ShiftLeft", "Equal"],
+			"`": ["Backquote"],		"~": ["ShiftLeft", "Backquote"],
+			"\\": ["Backslash"],	"|": ["ShiftLeft", "Backslash"],
+			"[": ["BracketLeft"],	"{": ["ShiftLeft", "BracketLeft"],
+			"]": ["BracketLeft"],	"}": ["ShiftLeft", "BracketRight"],
+			",": ["Comma"],			"<": ["ShiftLeft", "Comma"],
+			".": ["Period"],		">": ["ShiftLeft", "Period"],
+			"1": ["Digit1"],		"!": ["ShiftLeft", "Digit1"],
+			"2": ["Digit2"],		"@": ["ShiftLeft", "Digit2"],
+			"3": ["Digit3"],		"#": ["ShiftLeft", "Digit3"],
+			"4": ["Digit4"],		"$": ["ShiftLeft", "Digit4"],
+			"5": ["Digit5"],		"%": ["ShiftLeft", "Digit5"],
+			"6": ["Digit6"],		"^": ["ShiftLeft", "Digit6"],
+			"7": ["Digit7"],		"&": ["ShiftLeft", "Digit7"],
+			"8": ["Digit8"],		"*": ["ShiftLeft", "Digit8"],
+			"9": ["Digit9"],		"(": ["ShiftLeft", "Digit9"],
+			"0": ["Digit0"],		")": ["ShiftLeft", "Digit0"],
+			"-": ["Minus"],			"_": ["ShiftLeft", "Minus"],
+			"'": ["Quote"],			"\"": ["ShiftLeft", "Quote"],
+			";": ["Semicolon"],		":": ["ShiftLeft", "Semicolon"],
+			"/": ["Slash"],			"?": ["ShiftLeft", "Slash"],
+			"=": ["Equal"],			"+": ["ShiftLeft", "Equal"],
 		};
 
 		for (let ch = "a".charCodeAt(0); ch <= "z".charCodeAt(0); ++ch) {

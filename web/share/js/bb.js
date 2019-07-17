@@ -20,6 +20,9 @@
 *****************************************************************************/
 
 
+"use strict";
+
+
 export function checkBrowser() {
 	if (
 		!window.navigator

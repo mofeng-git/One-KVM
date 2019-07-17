@@ -20,6 +20,9 @@
 *****************************************************************************/
 
 
+"use strict";
+
+
 export var tools = new function() {
 	let __debug = (new URL(window.location.href)).searchParams.get("debug");
 
