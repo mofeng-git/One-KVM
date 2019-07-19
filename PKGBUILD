@@ -65,6 +65,9 @@ package_kvmd() {
 	mkdir -p "$pkgdir/usr/lib/systemd/system"
 	cp configs/os/systemd/*.service "$pkgdir/usr/lib/systemd/system"
 
+	mkdir -p "$pkgdir/usr/lib/sysusers.d"
+	cp configs/os/sysusers.conf "$pkgdir/usr/lib/sysusers.d/kvmd.conf"
+
 	mkdir -p "$pkgdir/usr/lib/tmpfiles.d"
 	cp configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
@@ -106,9 +109,9 @@ for _platform in $PIKVM_PLATFORM; do
 
 			local _cfg_default=\"/usr/share/kvmd/configs.default\"
 
-			ln -sf \"\$_cfg_default/os/sysctl.conf\" \"\$pkgdir/etc/sysctl.d/99-pikvm.conf\"
-			ln -sf \"\$_cfg_default/os/udev/$_platform-$_board.rules\" \"\$pkgdir/etc/udev/rules.d/99-pikvm.rules\"
-			ln -sf \"\$_cfg_default/os/modules-load/$_platform.conf\" \"\$pkgdir/etc/modules-load.d/pikvm.conf\"
+			ln -sf \"\$_cfg_default/os/sysctl.conf\" \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
+			ln -sf \"\$_cfg_default/os/udev/$_platform-$_board.rules\" \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
+			ln -sf \"\$_cfg_default/os/modules-load/$_platform.conf\" \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
 
 			ln -sf \"\$_cfg_default/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
 			if [ $_platform == v1-hdmi ]; then

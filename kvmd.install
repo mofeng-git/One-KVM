@@ -6,38 +6,10 @@ post_install() {
 }
 
 post_upgrade() {
-	echo "==> Configuring KVMD users and groups ..."
-
-	_create_user kvmd "Pi-KVM - The main daemon"
-	_add_user_to_group kvmd gpio
-	_add_user_to_group kvmd uucp
-	_add_user_to_group kvmd systemd-journal
-
-	_create_user kvmd-ipmi "Pi-KVM - IPMI to KVMD proxy"
-	_add_user_to_group kvmd-ipmi kvmd
-
-	_create_user kvmd-nginx "Pi-KVM - HTTP entrypoint"
-	_add_user_to_group kvmd-nginx kvmd
+	echo "==> Ensuring KVMD users and groups ..."
+	systemd-sysusers /usr/lib/sysusers.d/kvmd.conf
 
 	chown kvmd:kvmd /etc/kvmd/htpasswd
 	chown kvmd-ipmi:kvmd-ipmi /etc/kvmd/ipmipasswd
 	chmod 600 /etc/kvmd/*passwd
-}
-
-post_remove() {
-	_delete_user kvmd-nginx
-	_delete_user kvmd-ipmi
-	_delete_user kvmd
-}
-
-_create_user() {
-	id "$1" &>/dev/null || useradd -r -c "$2" -s /sbin/nologin "$1"
-}
-
-_delete_user() {
-	userdel "$1" &>/dev/null
-}
-
-_add_user_to_group() {
-	(groupmems -l -g "$2" | grep "$1" >/dev/null) || groupmems -g "$2" -a "$1"
 }
