@@ -63,7 +63,7 @@ package_kvmd() {
 	python setup.py install --root="$pkgdir"
 
 	mkdir -p "$pkgdir/usr/lib/systemd/system"
-	cp configs/os/systemd/*.service "$pkgdir/usr/lib/systemd/system"
+	cp configs/os/services/*.service "$pkgdir/usr/lib/systemd/system"
 
 	mkdir -p "$pkgdir/usr/lib/sysusers.d"
 	cp configs/os/sysusers.conf "$pkgdir/usr/lib/sysusers.d/kvmd.conf"
@@ -79,7 +79,6 @@ package_kvmd() {
 	mkdir -p "$_cfg_default"
 	cp -r configs/* "$_cfg_default"
 
-	rm -rf "$_cfg_default/os/systemd"
 	find "$pkgdir" -name ".gitignore" -delete
 	sed -i -e "s/^#PROD//g" "$_cfg_default/nginx/nginx.conf"
 	find "$_cfg_default" -type f -exec chmod 444 '{}' \;
