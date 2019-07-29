@@ -37,6 +37,7 @@ depends=(
 	nginx-mainline
 	openssl
 	raspberrypi-io-access
+	ustreamer
 )
 optdepends=(
 	dkms
