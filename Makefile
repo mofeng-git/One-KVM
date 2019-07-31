@@ -9,6 +9,12 @@ USTREAMER_MIN_VERSION ?= 1.1
 
 
 # =====
+define optbool
+$(filter $(shell echo $(1) | tr A-Z a-z),yes on 1)
+endef
+
+
+# =====
 all:
 	@ echo "Useful commands:"
 	@ echo "    make                  # Print this help"
@@ -31,7 +37,7 @@ all:
 
 testenv:
 	docker build \
-			$(if $(NC),--no-cache,) \
+			$(if $(call optbool,$(NC)),--no-cache,) \
 			--rm \
 			--tag $(TESTENV_IMAGE) \
 			--build-arg USTREAMER_MIN_VERSION=$(USTREAMER_MIN_VERSION) \
