@@ -39,10 +39,6 @@ depends=(
 	raspberrypi-io-access
 	ustreamer
 )
-optdepends=(
-	dkms
-	tc358743-dkms
-)
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
 md5sums=(SKIP)
@@ -104,6 +100,10 @@ for _platform in $PIKVM_PLATFORM; do
 	for _board in $PIKVM_BOARD; do
 		eval "package_kvmd-platform-$_platform-$_board() {
 			pkgdesc=\"Pi-KVM platform configs - $_platform for $_board\"
+			depends=(kvmd)
+			if [[ $_platform =~ ^.*-hdmi$ ]]; then
+				depends=(\"\${depends[@]}\" tc358743-dkms)
+			fi
 
 			mkdir -p \"\$pkgdir/etc\"/{kvmd,sysctl.d,udev/rules.d,modules-load.d}
 
@@ -114,7 +114,7 @@ for _platform in $PIKVM_PLATFORM; do
 			ln -sf \"\$_cfg_default/os/modules-load/$_platform.conf\" \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
 
 			ln -sf \"\$_cfg_default/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
-			if [ $_platform == v1-hdmi ]; then
+			if [[ $_platform =~ ^.*-hdmi$ ]]; then
 				ln -sf \"\$_cfg_default/kvmd/tc358743-edid.hex\" \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 			fi
 		}"
