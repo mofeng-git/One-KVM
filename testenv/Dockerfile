@@ -30,7 +30,7 @@ RUN npm install htmlhint -g
 ARG USTREAMER_MIN_VERSION
 ENV USTREAMER_MIN_VERSION $USTREAMER_MIN_VERSION
 RUN echo $USTREAMER_MIN_VERSION
-RUN git clone https://github.com/pi-kvm/ustreamer \
+RUN git clone https://github.com/pikvm/ustreamer \
 	&& cd ustreamer \
 	&& make PREFIX=/usr install \
 	&& cd - \
