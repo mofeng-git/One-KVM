@@ -38,6 +38,7 @@ kvmd:
             - "--unix={unix}"
             - "--unix-rm"
             - "--unix-mode=0666"
+            - "--no-log-colors"
 
 ipmi:
     kvmd:
