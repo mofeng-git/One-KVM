@@ -28,13 +28,13 @@ from ...logging import get_logger
 from ... import gpio
 
 from ...plugins.hid import get_hid_class
+from ...plugins.atx import get_atx_class
 
 from .. import init
 
 from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
-from .atx import Atx
 from .msd import MassStorageDevice
 from .streamer import Streamer
 from .server import Server
@@ -63,7 +63,7 @@ def main(argv: Optional[List[str]]=None) -> None:
             log_reader=LogReader(),
 
             hid=get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type"])),
-            atx=Atx(**config.atx._unpack()),
+            atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),
             msd=MassStorageDevice(**config.msd._unpack()),
             streamer=Streamer(**config.streamer._unpack()),
         ).run(**config.server._unpack())

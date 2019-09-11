@@ -38,6 +38,7 @@ import pygments.formatters
 from ..plugins import UnknownPluginError
 from ..plugins.auth import get_auth_service_class
 from ..plugins.hid import get_hid_class
+from ..plugins.atx import get_atx_class
 
 from ..yamlconf import ConfigError
 from ..yamlconf import make_config
@@ -117,6 +118,7 @@ def _init_config(config_path: str, sections: List[str], override_options: List[s
                 scheme["kvmd"]["auth"]["external"].update(get_auth_service_class(config.kvmd.auth.external.type).get_plugin_options())
 
             scheme["kvmd"]["hid"].update(get_hid_class(config.kvmd.hid.type).get_plugin_options())
+            scheme["kvmd"]["atx"].update(get_atx_class(config.kvmd.atx.type).get_plugin_options())
 
             config = make_config(raw_config, scheme)
 
@@ -183,19 +185,7 @@ def _get_config_scheme(sections: List[str]) -> Dict:
             },
 
             "atx": {
-                "enabled": Option(True, type=valid_bool),
-
-                "power_led_pin":      Option(-1, type=valid_gpio_pin, only_if="enabled"),
-                "hdd_led_pin":        Option(-1, type=valid_gpio_pin, only_if="enabled"),
-                "power_led_inverted": Option(True, type=valid_bool),
-                "hdd_led_inverted":   Option(True, type=valid_bool),
-
-                "power_switch_pin": Option(-1, type=valid_gpio_pin, only_if="enabled"),
-                "reset_switch_pin": Option(-1, type=valid_gpio_pin, only_if="enabled"),
-                "click_delay":      Option(0.1, type=valid_float_f01),
-                "long_click_delay": Option(5.5, type=valid_float_f01),
-
-                "state_poll": Option(0.1, type=valid_float_f01),
+                "type": Option("gpio"),
             },
 
             "msd": {

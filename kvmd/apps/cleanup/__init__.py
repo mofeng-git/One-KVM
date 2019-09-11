@@ -51,8 +51,10 @@ def main(argv: Optional[List[str]]=None) -> None:
             *([
                 ("hid_reset_pin", config.hid.reset_pin, True),
             ] if config.hid.type == "tty" else []),
-            ("atx_power_switch_pin", config.atx.power_switch_pin, config.atx.enabled),
-            ("atx_reset_switch_pin", config.atx.reset_switch_pin, config.atx.enabled),
+            *([
+                ("atx_power_switch_pin", config.atx.power_switch_pin, True),
+                ("atx_reset_switch_pin", config.atx.reset_switch_pin, True),
+            ] if config.atx.type == "gpio" else []),
             ("msd_target_pin",       config.msd.target_pin,       config.msd.enabled),
             ("msd_reset_pin",        config.msd.reset_pin,        config.msd.enabled),
             ("streamer_cap_pin",     config.streamer.cap_pin,     True),

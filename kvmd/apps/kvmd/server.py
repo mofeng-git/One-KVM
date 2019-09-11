@@ -46,6 +46,9 @@ from ...aioregion import RegionIsBusyError
 
 from ...plugins.hid import BaseHid
 
+from ...plugins.atx import AtxOperationError
+from ...plugins.atx import BaseAtx
+
 from ...validators import ValidatorError
 
 from ...validators.basic import valid_bool
@@ -72,8 +75,6 @@ from ... import __version__
 from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
-from .atx import AtxOperationError
-from .atx import Atx
 from .msd import MsdOperationError
 from .msd import MassStorageDevice
 from .streamer import Streamer
@@ -232,7 +233,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         log_reader: LogReader,
 
         hid: BaseHid,
-        atx: Atx,
+        atx: BaseAtx,
         msd: MassStorageDevice,
         streamer: Streamer,
     ) -> None:

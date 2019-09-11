@@ -24,9 +24,7 @@ import asyncio
 import operator
 
 from typing import Dict
-from typing import Callable
 from typing import AsyncGenerator
-from typing import Any
 
 from ...logging import get_logger
 
@@ -34,37 +32,22 @@ from ... import aiotools
 from ... import aioregion
 from ... import gpio
 
+from ...yamlconf import Option
+
+from ...validators.basic import valid_bool
+from ...validators.basic import valid_float_f01
+
+from ...validators.hw import valid_gpio_pin
+
+
+from . import AtxIsBusyError
+from . import BaseAtx
+
 
 # =====
-class AtxError(Exception):
-    pass
-
-
-class AtxOperationError(AtxError):
-    pass
-
-
-class AtxDisabledError(AtxOperationError):
-    def __init__(self) -> None:
-        super().__init__("ATX is disabled")
-
-
-class AtxIsBusyError(AtxOperationError, aioregion.RegionIsBusyError):
-    pass
-
-
-def _atx_working(method: Callable) -> Callable:
-    async def wrapper(self: "Atx", *args: Any, **kwargs: Any) -> Any:
-        if not self._enabled:  # pylint: disable=protected-access
-            raise AtxDisabledError()
-        return (await method(self, *args, **kwargs))
-    return wrapper
-
-
-class Atx:  # pylint: disable=too-many-instance-attributes
-    def __init__(  # pylint: disable=too-many-arguments
+class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
+    def __init__(  # pylint: disable=too-many-arguments,super-init-not-called
         self,
-        enabled: bool,
 
         power_led_pin: int,
         hdd_led_pin: int,
@@ -79,18 +62,10 @@ class Atx:  # pylint: disable=too-many-instance-attributes
         state_poll: float,
     ) -> None:
 
-        self._enabled = enabled
-
-        if self._enabled:
-            self.__power_led_pin = gpio.set_input(power_led_pin)
-            self.__hdd_led_pin = gpio.set_input(hdd_led_pin)
-            self.__power_switch_pin = gpio.set_output(power_switch_pin)
-            self.__reset_switch_pin = gpio.set_output(reset_switch_pin)
-        else:
-            self.__power_led_pin = -1
-            self.__hdd_led_pin = -1
-            self.__power_switch_pin = -1
-            self.__reset_switch_pin = -1
+        self.__power_led_pin = gpio.set_input(power_led_pin)
+        self.__hdd_led_pin = gpio.set_input(hdd_led_pin)
+        self.__power_switch_pin = gpio.set_output(power_switch_pin)
+        self.__reset_switch_pin = gpio.set_output(reset_switch_pin)
 
         self.__power_led_inverted = power_led_inverted
         self.__hdd_led_inverted = hdd_led_inverted
@@ -102,32 +77,40 @@ class Atx:  # pylint: disable=too-many-instance-attributes
 
         self.__region = aioregion.AioExclusiveRegion(AtxIsBusyError)
 
-    def get_state(self) -> Dict:
-        if self._enabled:
-            power_led_state = operator.xor(self.__power_led_inverted, gpio.read(self.__power_led_pin))
-            hdd_led_state = operator.xor(self.__hdd_led_inverted, gpio.read(self.__hdd_led_pin))
-        else:
-            power_led_state = hdd_led_state = False
+    @classmethod
+    def get_plugin_options(cls) -> Dict[str, Option]:
         return {
-            "enabled": self._enabled,
+            "power_led_pin":      Option(-1, type=valid_gpio_pin),
+            "hdd_led_pin":        Option(-1, type=valid_gpio_pin),
+            "power_led_inverted": Option(True, type=valid_bool),
+            "hdd_led_inverted":   Option(True, type=valid_bool),
+
+            "power_switch_pin": Option(-1, type=valid_gpio_pin),
+            "reset_switch_pin": Option(-1, type=valid_gpio_pin),
+            "click_delay":      Option(0.1, type=valid_float_f01),
+            "long_click_delay": Option(5.5, type=valid_float_f01),
+
+            "state_poll": Option(0.1, type=valid_float_f01),
+        }
+
+    def get_state(self) -> Dict:
+        return {
+            "enabled": True,
             "busy": self.__region.is_busy(),
             "leds": {
-                "power": power_led_state,
-                "hdd": hdd_led_state,
+                "power": operator.xor(self.__power_led_inverted, gpio.read(self.__power_led_pin)),
+                "hdd": operator.xor(self.__hdd_led_inverted, gpio.read(self.__hdd_led_pin)),
             },
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         prev_state: Dict = {}
         while True:
-            if self._enabled:
-                state = self.get_state()
-                if state != prev_state:
-                    yield state
-                    prev_state = state
-                await asyncio.sleep(self.__state_poll)
-            else:
-                await asyncio.sleep(60)
+            state = self.get_state()
+            if state != prev_state:
+                yield state
+                prev_state = state
+            await asyncio.sleep(self.__state_poll)
 
     async def cleanup(self) -> None:
         for (name, pin) in [
@@ -141,28 +124,24 @@ class Atx:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    @_atx_working
     async def power_on(self) -> bool:
         if not self.get_state()["leds"]["power"]:
             await self.click_power()
             return True
         return False
 
-    @_atx_working
     async def power_off(self) -> bool:
         if self.get_state()["leds"]["power"]:
             await self.click_power()
             return True
         return False
 
-    @_atx_working
     async def power_off_hard(self) -> bool:
         if self.get_state()["leds"]["power"]:
             await self.click_power_long()
             return True
         return False
 
-    @_atx_working
     async def power_reset_hard(self) -> bool:
         if self.get_state()["leds"]["power"]:
             await self.click_reset()
@@ -171,15 +150,12 @@ class Atx:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    @_atx_working
     async def click_power(self) -> None:
         await self.__click("power", self.__power_switch_pin, self.__click_delay)
 
-    @_atx_working
     async def click_power_long(self) -> None:
         await self.__click("power_long", self.__power_switch_pin, self.__long_click_delay)
 
-    @_atx_working
     async def click_reset(self) -> None:
         await self.__click("reset", self.__reset_switch_pin, self.__click_delay)
 
