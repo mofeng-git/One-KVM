@@ -26,8 +26,6 @@ from typing import Dict
 from typing import Type
 from typing import AsyncGenerator
 
-from ... import aioregion
-
 from .. import BasePlugin
 from .. import get_plugin_class
 
@@ -61,8 +59,9 @@ class MsdNotOnKvmError(MsdOperationError):
         super().__init__("MSD is not connected to KVM")
 
 
-class MsdIsBusyError(MsdOperationError, aioregion.RegionIsBusyError):
-    pass
+class MsdIsBusyError(MsdOperationError):
+    def __init__(self) -> None:
+        super().__init__("Performing another MSD operation, please try again later")
 
 
 # =====

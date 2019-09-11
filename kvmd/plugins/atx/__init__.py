@@ -24,8 +24,6 @@ from typing import Dict
 from typing import AsyncGenerator
 from typing import Type
 
-from ... import aioregion
-
 from .. import BasePlugin
 from .. import get_plugin_class
 
@@ -39,8 +37,9 @@ class AtxOperationError(AtxError):
     pass
 
 
-class AtxIsBusyError(AtxOperationError, aioregion.RegionIsBusyError):
-    pass
+class AtxIsBusyError(AtxOperationError):
+    def __init__(self) -> None:
+        super().__init__("Performing another ATX operation, please try again later")
 
 
 # =====

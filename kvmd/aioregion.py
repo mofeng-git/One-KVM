@@ -26,13 +26,8 @@ from typing import Type
 
 
 # =====
-class RegionIsBusyError(Exception):
-    def __init__(self) -> None:
-        super().__init__("Performing another operation, please try again later")
-
-
 class AioExclusiveRegion:
-    def __init__(self, exc_type: Type[RegionIsBusyError]) -> None:
+    def __init__(self, exc_type: Type[Exception]) -> None:
         self.__exc_type = exc_type
         self.__busy = False
 

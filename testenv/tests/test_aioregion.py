@@ -24,8 +24,12 @@ import asyncio
 
 import pytest
 
-from kvmd.aioregion import RegionIsBusyError
 from kvmd.aioregion import AioExclusiveRegion
+
+
+# =====
+class RegionIsBusyError(Exception):
+    pass
 
 
 # =====

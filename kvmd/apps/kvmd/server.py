@@ -42,14 +42,14 @@ import setproctitle
 
 from ...logging import get_logger
 
-from ...aioregion import RegionIsBusyError
-
 from ...plugins.hid import BaseHid
 
 from ...plugins.atx import AtxOperationError
+from ...plugins.atx import AtxIsBusyError
 from ...plugins.atx import BaseAtx
 
 from ...plugins.msd import MsdOperationError
+from ...plugins.msd import MsdIsBusyError
 from ...plugins.msd import BaseMsd
 
 from ...validators import ValidatorError
@@ -187,7 +187,7 @@ def _exposed(http_method: str, path: str, auth_required: bool=True) -> Callable:
 
                 return (await handler(self, request))
 
-            except RegionIsBusyError as err:
+            except (AtxIsBusyError, MsdIsBusyError) as err:
                 return _json_exception(err, 409)
             except (ValidatorError, AtxOperationError, MsdOperationError) as err:
                 return _json_exception(err, 400)
