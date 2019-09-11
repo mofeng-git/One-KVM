@@ -169,6 +169,7 @@ def _get_config_scheme(sections: List[str]) -> Dict:
                 "internal": {
                     "type":  Option("htpasswd"),
                     "force_users": Option([], type=valid_users_list),
+                    # Dynamic content
                 },
                 "external": {
                     "type": Option(""),
@@ -181,15 +182,18 @@ def _get_config_scheme(sections: List[str]) -> Dict:
             },
 
             "hid": {
-                "type": Option("tty"),
+                "type": Option("serial"),
+                # Dynamic content
             },
 
             "atx": {
                 "type": Option("gpio"),
+                # Dynamic content
             },
 
             "msd": {
                 "type": Option("relay"),
+                # Dynamic content
             },
 
             "streamer": {

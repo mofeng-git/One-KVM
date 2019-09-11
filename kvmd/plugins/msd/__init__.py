@@ -110,4 +110,4 @@ class BaseMsd(BasePlugin):
 
 # =====
 def get_msd_class(name: str) -> Type[BaseMsd]:
-    return get_plugin_class("msd", (name or "none"))  # type: ignore
+    return get_plugin_class("msd", (name or "disabled"))  # type: ignore
