@@ -45,7 +45,7 @@ class AuthManager:
         external_type: str,
         external_kwargs: Dict,
 
-        internal_users: List[str],
+        force_internal_users: List[str],
     ) -> None:
 
         self.__internal_service = get_auth_service_class(internal_type)(**internal_kwargs)
@@ -56,12 +56,12 @@ class AuthManager:
             self.__external_service = get_auth_service_class(external_type)(**external_kwargs)
             get_logger().info("Using external auth service %r", self.__external_service.get_plugin_name())
 
-        self.__internal_users = internal_users
+        self.__force_internal_users = force_internal_users
 
         self.__tokens: Dict[str, str] = {}  # {token: user}
 
     async def authorize(self, user: str, passwd: str) -> bool:
-        if user not in self.__internal_users and self.__external_service:
+        if user not in self.__force_internal_users and self.__external_service:
             service = self.__external_service
         else:
             service = self.__internal_service

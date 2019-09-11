@@ -50,7 +50,7 @@ def _make_service_kwargs(path: str) -> Dict:
 async def _get_configured_manager(
     internal_path: str,
     external_path: str="",
-    internal_users: Optional[List[str]]=None,
+    force_internal_users: Optional[List[str]]=None,
 ) -> AsyncGenerator[AuthManager, None]:
 
     manager = AuthManager(
@@ -58,7 +58,7 @@ async def _get_configured_manager(
         internal_kwargs=_make_service_kwargs(internal_path),
         external_type=("htpasswd" if external_path else ""),
         external_kwargs=(_make_service_kwargs(external_path) if external_path else {}),
-        internal_users=(internal_users or []),
+        force_internal_users=(force_internal_users or []),
     )
 
     try:

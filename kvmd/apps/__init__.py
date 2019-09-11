@@ -112,11 +112,11 @@ def _init_config(config_path: str, sections: List[str], override_options: List[s
         config = make_config(raw_config, scheme)
 
         if "kvmd" in sections:
-            scheme["kvmd"]["auth"]["internal"] = get_auth_service_class(config.kvmd.auth.internal_type).get_plugin_options()
-            if config.kvmd.auth.external_type:
-                scheme["kvmd"]["auth"]["external"] = get_auth_service_class(config.kvmd.auth.external_type).get_plugin_options()
+            scheme["kvmd"]["auth"]["internal"].update(get_auth_service_class(config.kvmd.auth.internal.type).get_plugin_options())
+            if config.kvmd.auth.external.type:
+                scheme["kvmd"]["auth"]["external"].update(get_auth_service_class(config.kvmd.auth.external.type).get_plugin_options())
 
-            scheme["kvmd"]["hid"]["params"] = get_hid_class(config.kvmd.hid.type).get_plugin_options()
+            scheme["kvmd"]["hid"].update(get_hid_class(config.kvmd.hid.type).get_plugin_options())
 
             config = make_config(raw_config, scheme)
 
@@ -164,11 +164,13 @@ def _get_config_scheme(sections: List[str]) -> Dict:
             },
 
             "auth": {
-                "internal_type":  Option("htpasswd"),
-                # "internal": {},
-                "external_type":  Option(""),
-                # "external": {},
-                "internal_users": Option([], type=valid_users_list),
+                "internal": {
+                    "type":  Option("htpasswd"),
+                    "force_users": Option([], type=valid_users_list),
+                },
+                "external": {
+                    "type": Option(""),
+                },
             },
 
             "info": {
@@ -178,7 +180,6 @@ def _get_config_scheme(sections: List[str]) -> Dict:
 
             "hid": {
                 "type": Option("tty"),
-                # "params": {},
             },
 
             "atx": {

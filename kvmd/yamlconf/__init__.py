@@ -71,15 +71,16 @@ class Section(dict):
         dict.__init__(self)
         self.__meta: Dict[str, Dict[str, Any]] = {}
 
-    def _unpack(self, _section: Optional["Section"]=None) -> Dict[str, Any]:
-        if _section is None:
-            _section = self
+    def _unpack(self, ignore: Optional[List[str]]=None) -> Dict[str, Any]:
+        if ignore is None:
+            ignore = []
         unpacked: Dict[str, Any] = {}
-        for (key, value) in _section.items():
-            if isinstance(value, Section):
-                unpacked[key] = value._unpack()  # pylint: disable=protected-access
-            else:  # Option
-                unpacked[_section._get_unpack_as(key)] = value  # pylint: disable=protected-access
+        for (key, value) in self.items():
+            if key not in ignore:
+                if isinstance(value, Section):
+                    unpacked[key] = value._unpack()  # pylint: disable=protected-access
+                else:  # Option
+                    unpacked[self._get_unpack_as(key)] = value  # pylint: disable=protected-access
         return unpacked
 
     def _set_meta(self, key: str, default: Any, unpack_as: str, help: str) -> None:  # pylint: disable=redefined-builtin

@@ -44,9 +44,9 @@ from .. import init
 
 # =====
 def _get_htpasswd_path(config: Section) -> str:
-    if config.kvmd.auth.internal_type != "htpasswd":
+    if config.kvmd.auth.internal.type != "htpasswd":
         raise SystemExit(f"Error: KVMD internal auth not using 'htpasswd'"
-                         f" (now configured {config.kvmd.auth.internal_type!r})")
+                         f" (now configured {config.kvmd.auth.internal.type!r})")
     return config.kvmd.auth.internal.file
 
 

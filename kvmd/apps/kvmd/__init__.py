@@ -53,16 +53,16 @@ def main(argv: Optional[List[str]]=None) -> None:
         # pylint: disable=protected-access
         Server(
             auth_manager=AuthManager(
-                internal_type=config.auth.internal_type,
-                internal_kwargs=config.auth.internal._unpack(),
-                external_type=config.auth.external_type,
-                external_kwargs=(config.auth.external._unpack() if config.auth.external_type else {}),
-                internal_users=config.auth.internal_users,
+                internal_type=config.auth.internal.type,
+                internal_kwargs=config.auth.internal._unpack(ignore=["type", "force_users"]),
+                external_type=config.auth.external.type,
+                external_kwargs=(config.auth.external._unpack(ignore=["type"]) if config.auth.external.type else {}),
+                force_internal_users=config.auth.internal.force_users,
             ),
             info_manager=InfoManager(**config.info._unpack()),
             log_reader=LogReader(),
 
-            hid=get_hid_class(config.hid.type)(**config.hid.params._unpack()),
+            hid=get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type"])),
             atx=Atx(**config.atx._unpack()),
             msd=MassStorageDevice(**config.msd._unpack()),
             streamer=Streamer(**config.streamer._unpack()),

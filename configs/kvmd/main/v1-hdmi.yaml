@@ -15,10 +15,8 @@ kvmd:
     auth: !include auth.yaml
 
     hid:
-        type: tty
-        params:
-            reset_pin: 4
-            device: /dev/kvmd-hid
+        reset_pin: 4
+        device: /dev/kvmd-hid
 
     atx:
         power_led_pin: 24

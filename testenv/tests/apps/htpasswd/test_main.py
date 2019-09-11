@@ -57,7 +57,7 @@ def _htpasswd_fixture(request) -> Generator[passlib.apache.HtpasswdFile, None, N
 def _run_htpasswd(cmd: List[str], htpasswd_path: str, internal_type: str="htpasswd") -> None:
     cmd = ["kvmd-htpasswd", *cmd, "--set-options"]
     if internal_type != "htpasswd":  # By default
-        cmd.append("kvmd/auth/internal_type=" + internal_type)
+        cmd.append("kvmd/auth/internal/type=" + internal_type)
     if htpasswd_path:
         cmd.append("kvmd/auth/internal/file=" + htpasswd_path)
     main(cmd)
