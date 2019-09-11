@@ -20,52 +20,48 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Optional
+from typing import Dict
+from typing import AsyncGenerator
+from typing import Type
 
-from ...logging import get_logger
-
-from ... import gpio
-
-from ...plugins.hid import get_hid_class
-
-from .. import init
-
-from .auth import AuthManager
-from .info import InfoManager
-from .logreader import LogReader
-from .atx import Atx
-from .msd import MassStorageDevice
-from .streamer import Streamer
-from .server import Server
+from .. import BasePlugin
+from .. import get_plugin_class
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
-    config = init(
-        prog="kvmd",
-        description="The main Pi-KVM daemon",
-        sections=["logging", "kvmd"],
-        argv=argv,
-    )[2].kvmd
+class BaseHid(BasePlugin):
+    def start(self) -> None:
+        pass
 
-    with gpio.bcm():
-        # pylint: disable=protected-access
-        Server(
-            auth_manager=AuthManager(
-                internal_type=config.auth.internal_type,
-                internal_kwargs=config.auth.internal._unpack(),
-                external_type=config.auth.external_type,
-                external_kwargs=(config.auth.external._unpack() if config.auth.external_type else {}),
-                internal_users=config.auth.internal_users,
-            ),
-            info_manager=InfoManager(**config.info._unpack()),
-            log_reader=LogReader(),
+    def get_state(self) -> Dict:
+        raise NotImplementedError
 
-            hid=get_hid_class(config.hid.type)(**config.hid.params._unpack()),
-            atx=Atx(**config.atx._unpack()),
-            msd=MassStorageDevice(**config.msd._unpack()),
-            streamer=Streamer(**config.streamer._unpack()),
-        ).run(**config.server._unpack())
+    async def poll_state(self) -> AsyncGenerator[Dict, None]:
+        yield {}
+        raise NotImplementedError
 
-    get_logger(0).info("Bye-bye")
+    async def reset(self) -> None:
+        raise NotImplementedError
+
+    async def send_key_event(self, key: str, state: bool) -> None:
+        raise NotImplementedError
+
+    async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        raise NotImplementedError
+
+    async def send_mouse_button_event(self, button: str, state: bool) -> None:
+        raise NotImplementedError
+
+    async def send_mouse_wheel_event(self, delta_y: int) -> None:
+        raise NotImplementedError
+
+    async def clear_events(self) -> None:
+        raise NotImplementedError
+
+    async def cleanup(self) -> None:
+        pass
+
+
+# =====
+def get_hid_class(name: str) -> Type[BaseHid]:
+    return get_plugin_class("hid", name)  # type: ignore

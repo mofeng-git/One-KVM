@@ -44,6 +44,19 @@ from ... import aiotools
 from ... import gpio
 from ... import keymap
 
+from ...yamlconf import Option
+
+from ...validators.basic import valid_bool
+from ...validators.basic import valid_int_f1
+from ...validators.basic import valid_float_f01
+
+from ...validators.os import valid_abs_path
+
+from ...validators.hw import valid_tty_speed
+from ...validators.hw import valid_gpio_pin
+
+from . import BaseHid
+
 
 # =====
 class _BaseEvent:
@@ -112,8 +125,8 @@ class _MouseWheelEvent(_IntEvent):
 
 
 # =====
-class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
-    def __init__(  # pylint: disable=too-many-arguments
+class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
+    def __init__(  # pylint: disable=too-many-arguments,super-init-not-called
         self,
         reset_pin: int,
         reset_delay: float,
@@ -129,7 +142,7 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
         state_poll: float,
     ) -> None:
 
-        super().__init__(daemon=True)
+        multiprocessing.Process.__init__(self, daemon=True)
 
         self.__reset_pin = gpio.set_output(reset_pin)
         self.__reset_delay = reset_delay
@@ -153,9 +166,26 @@ class Hid(multiprocessing.Process):  # pylint: disable=too-many-instance-attribu
         self.__online_shared = multiprocessing.Value("i", 1)
         self.__stop_event = multiprocessing.Event()
 
+    @classmethod
+    def get_plugin_options(cls) -> Dict[str, Option]:
+        return {
+            "reset_pin":   Option(-1,  type=valid_gpio_pin),
+            "reset_delay": Option(0.1, type=valid_float_f01),
+
+            "device":         Option("",     type=valid_abs_path, unpack_as="device_path"),
+            "speed":          Option(115200, type=valid_tty_speed),
+            "read_timeout":   Option(2.0,    type=valid_float_f01),
+            "read_retries":   Option(10,     type=valid_int_f1),
+            "common_retries": Option(100,    type=valid_int_f1),
+            "retries_delay":  Option(0.1,    type=valid_float_f01),
+            "noop":           Option(False,  type=valid_bool),
+
+            "state_poll": Option(0.1, type=valid_float_f01),
+        }
+
     def start(self) -> None:
         get_logger().info("Starting HID daemon ...")
-        super().start()
+        multiprocessing.Process.start(self)
 
     def get_state(self) -> Dict:
         return {"online": bool(self.__online_shared.value)}

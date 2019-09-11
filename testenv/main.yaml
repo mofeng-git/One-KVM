@@ -7,9 +7,11 @@ kvmd:
     auth: !include auth.yaml
 
     hid:
-        reset_pin: 4
-        device: /dev/ttyS10
-        noop: true
+        type: tty
+        params:
+            reset_pin: 4
+            device: /dev/ttyS10
+            noop: true
 
     atx:
         power_led_pin: 24

@@ -81,6 +81,7 @@ def main() -> None:
             "kvmd.yamlconf",
             "kvmd.plugins",
             "kvmd.plugins.auth",
+            "kvmd.plugins.hid",
             "kvmd.apps",
             "kvmd.apps.kvmd",
             "kvmd.apps.htpasswd",

@@ -37,6 +37,7 @@ import pygments.formatters
 
 from ..plugins import UnknownPluginError
 from ..plugins.auth import get_auth_service_class
+from ..plugins.hid import get_hid_class
 
 from ..yamlconf import ConfigError
 from ..yamlconf import make_config
@@ -64,7 +65,6 @@ from ..validators.net import valid_port
 from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
 
-from ..validators.hw import valid_tty_speed
 from ..validators.hw import valid_gpio_pin
 from ..validators.hw import valid_gpio_pin_optional
 
@@ -115,6 +115,9 @@ def _init_config(config_path: str, sections: List[str], override_options: List[s
             scheme["kvmd"]["auth"]["internal"] = get_auth_service_class(config.kvmd.auth.internal_type).get_plugin_options()
             if config.kvmd.auth.external_type:
                 scheme["kvmd"]["auth"]["external"] = get_auth_service_class(config.kvmd.auth.external_type).get_plugin_options()
+
+            scheme["kvmd"]["hid"]["params"] = get_hid_class(config.kvmd.hid.type).get_plugin_options()
+
             config = make_config(raw_config, scheme)
 
         return config
@@ -174,18 +177,8 @@ def _get_config_scheme(sections: List[str]) -> Dict:
             },
 
             "hid": {
-                "reset_pin":   Option(-1,  type=valid_gpio_pin),
-                "reset_delay": Option(0.1, type=valid_float_f01),
-
-                "device":         Option("",     type=valid_abs_path, unpack_as="device_path"),
-                "speed":          Option(115200, type=valid_tty_speed),
-                "read_timeout":   Option(2.0,    type=valid_float_f01),
-                "read_retries":   Option(10,     type=valid_int_f1),
-                "common_retries": Option(100,    type=valid_int_f1),
-                "retries_delay":  Option(0.1,    type=valid_float_f01),
-                "noop":           Option(False,  type=valid_bool),
-
-                "state_poll": Option(0.1, type=valid_float_f01),
+                "type": Option("tty"),
+                # "params": {},
             },
 
             "atx": {
