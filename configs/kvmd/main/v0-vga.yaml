@@ -25,7 +25,7 @@ kvmd:
         reset_switch_pin: 27
 
     msd:
-        enabled: false
+        type: none
 
     streamer:
         unix: /run/kvmd/ustreamer.sock

@@ -39,6 +39,7 @@ from ..plugins import UnknownPluginError
 from ..plugins.auth import get_auth_service_class
 from ..plugins.hid import get_hid_class
 from ..plugins.atx import get_atx_class
+from ..plugins.msd import get_msd_class
 
 from ..yamlconf import ConfigError
 from ..yamlconf import make_config
@@ -50,7 +51,6 @@ from ..yamlconf.loader import load_yaml_file
 
 from ..validators.basic import valid_bool
 from ..validators.basic import valid_number
-from ..validators.basic import valid_int_f1
 from ..validators.basic import valid_float_f01
 
 from ..validators.auth import valid_users_list
@@ -66,7 +66,6 @@ from ..validators.net import valid_port
 from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
 
-from ..validators.hw import valid_gpio_pin
 from ..validators.hw import valid_gpio_pin_optional
 
 
@@ -119,6 +118,7 @@ def _init_config(config_path: str, sections: List[str], override_options: List[s
 
             scheme["kvmd"]["hid"].update(get_hid_class(config.kvmd.hid.type).get_plugin_options())
             scheme["kvmd"]["atx"].update(get_atx_class(config.kvmd.atx.type).get_plugin_options())
+            scheme["kvmd"]["msd"].update(get_msd_class(config.kvmd.msd.type).get_plugin_options())
 
             config = make_config(raw_config, scheme)
 
@@ -189,17 +189,7 @@ def _get_config_scheme(sections: List[str]) -> Dict:
             },
 
             "msd": {
-                "enabled": Option(True, type=valid_bool),
-
-                "target_pin": Option(-1, type=valid_gpio_pin, only_if="enabled"),
-                "reset_pin":  Option(-1, type=valid_gpio_pin, only_if="enabled"),
-
-                "device":       Option("",    type=valid_abs_path, only_if="enabled", unpack_as="device_path"),
-                "init_delay":   Option(1.0,   type=valid_float_f01),
-                "init_retries": Option(5,     type=valid_int_f1),
-                "reset_delay":  Option(1.0,   type=valid_float_f01),
-                "write_meta":   Option(True,  type=valid_bool),
-                "chunk_size":   Option(65536, type=(lambda arg: valid_number(arg, min=1024))),
+                "type": Option("relay"),
             },
 
             "streamer": {

@@ -47,20 +47,25 @@ def main(argv: Optional[List[str]]=None) -> None:
 
     logger.info("Cleaning up ...")
     with gpio.bcm():
-        for (name, pin, enabled) in [
+        for (name, pin) in [
             *([
-                ("hid_reset_pin", config.hid.reset_pin, True),
+                ("tty_hid_reset_pin", config.hid.reset_pin),
             ] if config.hid.type == "tty" else []),
+
             *([
-                ("atx_power_switch_pin", config.atx.power_switch_pin, True),
-                ("atx_reset_switch_pin", config.atx.reset_switch_pin, True),
+                ("gpio_atx_power_switch_pin", config.atx.power_switch_pin),
+                ("gpio_atx_reset_switch_pin", config.atx.reset_switch_pin),
             ] if config.atx.type == "gpio" else []),
-            ("msd_target_pin",       config.msd.target_pin,       config.msd.enabled),
-            ("msd_reset_pin",        config.msd.reset_pin,        config.msd.enabled),
-            ("streamer_cap_pin",     config.streamer.cap_pin,     True),
-            ("streamer_conv_pin",    config.streamer.conv_pin,    True),
+
+            *([
+                ("relay_msd_target_pin", config.msd.target_pin),
+                ("relay_msd_reset_pin", config.msd.reset_pin),
+            ] if config.msd.type == "relay" else []),
+
+            ("streamer_cap_pin", config.streamer.cap_pin),
+            ("streamer_conv_pin", config.streamer.conv_pin),
         ]:
-            if enabled and pin >= 0:
+            if pin >= 0:
                 logger.info("Writing value=0 to GPIO pin=%d (%s)", pin, name)
                 try:
                     gpio.set_output(pin, initial=False)

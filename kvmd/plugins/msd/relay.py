@@ -46,43 +46,24 @@ from ... import aiotools
 from ... import aioregion
 from ... import gpio
 
+from ...yamlconf import Option
 
-# =====
-class MsdError(Exception):
-    pass
+from ...validators.basic import valid_bool
+from ...validators.basic import valid_number
+from ...validators.basic import valid_int_f1
+from ...validators.basic import valid_float_f01
 
+from ...validators.os import valid_abs_path
 
-class MsdOperationError(MsdError):
-    pass
+from ...validators.hw import valid_gpio_pin
 
-
-class MsdDisabledError(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("MSD is disabled")
-
-
-class MsdOfflineError(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("MSD is not found")
-
-
-class MsdAlreadyOnServerError(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("MSD is already connected to Server")
-
-
-class MsdAlreadyOnKvmError(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("MSD is already connected to KVM")
-
-
-class MsdNotOnKvmError(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("MSD is not connected to KVM")
-
-
-class MsdIsBusyError(MsdOperationError, aioregion.RegionIsBusyError):
-    pass
+from . import MsdError
+from . import MsdOfflineError
+from . import MsdAlreadyOnServerError
+from . import MsdAlreadyOnKvmError
+from . import MsdNotOnKvmError
+from . import MsdIsBusyError
+from . import BaseMsd
 
 
 # =====
@@ -94,7 +75,7 @@ class _ImageInfo:
 
 
 @dataclasses.dataclass(frozen=True)
-class _MassStorageDeviceInfo:
+class _DeviceInfo:
     path: str
     real: str
     size: int
@@ -154,7 +135,7 @@ def _ioctl_uint32(device_file: IO, request: int) -> int:
     return result
 
 
-def _explore_device(device_path: str) -> _MassStorageDeviceInfo:
+def _explore_device(device_path: str) -> _DeviceInfo:
     if not stat.S_ISBLK(os.stat(device_path).st_mode):
         raise RuntimeError(f"Not a block device: {device_path}")
 
@@ -164,7 +145,7 @@ def _explore_device(device_path: str) -> _MassStorageDeviceInfo:
         device_file.seek(size - _IMAGE_INFO_SIZE)
         image_info = _parse_image_info_bytes(device_file.read())
 
-    return _MassStorageDeviceInfo(
+    return _DeviceInfo(
         path=device_path,
         real=os.path.realpath(device_path),
         size=size,
@@ -173,20 +154,16 @@ def _explore_device(device_path: str) -> _MassStorageDeviceInfo:
 
 
 def _msd_working(method: Callable) -> Callable:
-    async def wrapper(self: "MassStorageDevice", *args: Any, **kwargs: Any) -> Any:
-        if not self._enabled:  # pylint: disable=protected-access
-            raise MsdDisabledError()
+    async def wrapper(self: "Plugin", *args: Any, **kwargs: Any) -> Any:
         if not self._device_info:  # pylint: disable=protected-access
             raise MsdOfflineError()
         return (await method(self, *args, **kwargs))
     return wrapper
 
 
-class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
-    def __init__(
+class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
+    def __init__(  # pylint: disable=super-init-not-called
         self,
-        enabled: bool,
-
         target_pin: int,
         reset_pin: int,
 
@@ -198,26 +175,19 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         chunk_size: int,
     ) -> None:
 
-        self._enabled = enabled
-
-        if self._enabled:
-            self.__target_pin = gpio.set_output(target_pin)
-            self.__reset_pin = gpio.set_output(reset_pin)
-            assert bool(device_path)
-        else:
-            self.__target_pin = -1
-            self.__reset_pin = -1
+        self.__target_pin = gpio.set_output(target_pin)
+        self.__reset_pin = gpio.set_output(reset_pin)
 
         self.__device_path = device_path
         self.__init_delay = init_delay
         self.__init_retries = init_retries
         self.__reset_delay = reset_delay
         self.__write_meta = write_meta
-        self.chunk_size = chunk_size
+        self.__chunk_size = chunk_size
 
         self.__region = aioregion.AioExclusiveRegion(MsdIsBusyError)
 
-        self._device_info: Optional[_MassStorageDeviceInfo] = None
+        self._device_info: Optional[_DeviceInfo] = None
         self.__device_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__written = 0
         self.__on_kvm = True
@@ -225,22 +195,33 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         self.__state_queue: asyncio.queues.Queue = asyncio.Queue()
 
         logger = get_logger(0)
-        if self._enabled:
-            logger.info("Using %r as MSD", self.__device_path)
-            try:
-                aiotools.run_sync(self.__load_device_info())
-                if self.__write_meta:
-                    logger.info("Enabled image metadata writing")
-            except Exception as err:
-                log = (logger.error if isinstance(err, MsdError) else logger.exception)
-                log("MSD is offline: %s", err)
-        else:
-            logger.info("MSD is disabled")
+        logger.info("Using %r as MSD", self.__device_path)
+        try:
+            aiotools.run_sync(self.__load_device_info())
+            if self.__write_meta:
+                logger.info("Enabled image metadata writing")
+        except Exception as err:
+            log = (logger.error if isinstance(err, MsdError) else logger.exception)
+            log("MSD is offline: %s", err)
+
+    @classmethod
+    def get_plugin_options(cls) -> Dict[str, Option]:
+        return {
+            "target_pin": Option(-1, type=valid_gpio_pin),
+            "reset_pin":  Option(-1, type=valid_gpio_pin),
+
+            "device":       Option("",    type=valid_abs_path, unpack_as="device_path"),
+            "init_delay":   Option(1.0,   type=valid_float_f01),
+            "init_retries": Option(5,     type=valid_int_f1),
+            "reset_delay":  Option(1.0,   type=valid_float_f01),
+            "write_meta":   Option(True,  type=valid_bool),
+            "chunk_size":   Option(65536, type=(lambda arg: valid_number(arg, min=1024))),
+        }
 
     def get_state(self) -> Dict:
-        online = (self._enabled and bool(self._device_info))
+        online = bool(self._device_info)
         return {
-            "enabled": self._enabled,
+            "enabled": True,
             "online": online,
             "busy": self.__region.is_busy(),
             "uploading": bool(self.__device_file),
@@ -251,17 +232,13 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         while True:
-            if self._enabled:
-                yield (await self.__state_queue.get())
-            else:
-                await asyncio.sleep(60)
+            yield (await self.__state_queue.get())
 
     @aiotools.atomic
     async def cleanup(self) -> None:
-        if self._enabled:
-            await self.__close_device_file()
-            gpio.write(self.__target_pin, False)
-            gpio.write(self.__reset_pin, False)
+        await self.__close_device_file()
+        gpio.write(self.__target_pin, False)
+        gpio.write(self.__reset_pin, False)
 
     @_msd_working
     @aiotools.atomic
@@ -313,8 +290,6 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def reset(self) -> None:
-        if not self._enabled:
-            raise MsdDisabledError()
         with aiotools.unregion_only_on_exception(self.__region):
             await self.__inner_reset()
 
@@ -342,7 +317,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
 
     @_msd_working
     @aiotools.atomic
-    async def __aenter__(self) -> "MassStorageDevice":
+    async def __aenter__(self) -> "Plugin":
         assert self._device_info
         self.__region.enter()
         try:
@@ -356,6 +331,9 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
             raise
         finally:
             await self.__state_queue.put(self.get_state())
+
+    def get_chunk_size(self) -> int:
+        return self.__chunk_size
 
     @aiotools.atomic
     async def write_image_info(self, name: str, complete: bool) -> None:
@@ -382,6 +360,7 @@ class MassStorageDevice:  # pylint: disable=too-many-instance-attributes
         _exc: BaseException,
         _tb: types.TracebackType,
     ) -> None:
+
         try:
             await self.__close_device_file()
             await self.__load_device_info()

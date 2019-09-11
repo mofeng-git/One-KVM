@@ -49,6 +49,9 @@ from ...plugins.hid import BaseHid
 from ...plugins.atx import AtxOperationError
 from ...plugins.atx import BaseAtx
 
+from ...plugins.msd import MsdOperationError
+from ...plugins.msd import BaseMsd
+
 from ...validators import ValidatorError
 
 from ...validators.basic import valid_bool
@@ -75,8 +78,6 @@ from ... import __version__
 from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
-from .msd import MsdOperationError
-from .msd import MassStorageDevice
 from .streamer import Streamer
 
 
@@ -234,7 +235,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         hid: BaseHid,
         atx: BaseAtx,
-        msd: MassStorageDevice,
+        msd: BaseMsd,
         streamer: Streamer,
     ) -> None:
 
@@ -486,8 +487,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
                 logger.info("Writing image %r to MSD ...", image_name)
                 await self.__msd.write_image_info(image_name, False)
+                chunk_size = self.__msd.get_chunk_size()
                 while True:
-                    chunk = await data_field.read_chunk(self.__msd.chunk_size)
+                    chunk = await data_field.read_chunk(chunk_size)
                     if not chunk:
                         break
                     written = await self.__msd.write_image_chunk(chunk)
