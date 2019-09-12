@@ -42,6 +42,8 @@ import setproctitle
 
 from ...logging import get_logger
 
+from ...plugins import BasePlugin
+
 from ...plugins.hid import BaseHid
 
 from ...plugins.atx import AtxOperationError
@@ -570,18 +572,20 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
         logger = get_logger(0)
-        for obj in [
-            self._auth_manager,
-            self.__streamer,
-            self.__msd,
-            self.__atx,
-            self.__hid,
+        for (name, obj) in [
+            ("Auth manager", self._auth_manager),
+            ("Streamer", self.__streamer),
+            ("MSD", self.__msd),
+            ("ATX", self.__atx),
+            ("HID", self.__hid),
         ]:
-            logger.info("Cleaning up %s ...", type(obj).__name__)
+            if isinstance(obj, BasePlugin):
+                name = f"{name} ({obj.get_plugin_name()})"
+            logger.info("Cleaning up %s ...", name)
             try:
                 await obj.cleanup()  # type: ignore
             except Exception:
-                logger.exception("Cleanup error on %s", type(obj).__name__)
+                logger.exception("Cleanup error on %s", name)
 
     async def __broadcast_event(self, event_type: _Events, event_attrs: Dict) -> None:
         if self.__sockets:
