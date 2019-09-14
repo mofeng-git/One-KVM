@@ -259,7 +259,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         gpio.write(self.__target_pin, True)
                     raise
                 self.__on_kvm = True
-                get_logger().info("MSD switched to KVM: %s", self._device_info)
+                get_logger(0).info("MSD switched to KVM: %s", self._device_info)
 
             state = self.get_state()
             return state
@@ -280,7 +280,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                 gpio.write(self.__target_pin, True)
                 self.__on_kvm = False
-                get_logger().info("MSD switched to Server")
+                get_logger(0).info("MSD switched to Server")
 
             state = self.get_state()
             return state
