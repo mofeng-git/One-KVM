@@ -39,8 +39,11 @@ def main(argv: Optional[List[str]]=None) -> None:
     config = init(
         prog="kvmd-cleanup",
         description="Kill KVMD and clear resources",
-        sections=["logging", "kvmd"],
         argv=argv,
+        sections=["logging", "kvmd"],
+        with_hid=True,
+        with_atx=True,
+        with_msd=True,
     )[2].kvmd
 
     logger = get_logger(0)

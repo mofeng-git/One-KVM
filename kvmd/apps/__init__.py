@@ -74,8 +74,9 @@ def init(
     prog: Optional[str]=None,
     description: Optional[str]=None,
     add_help: bool=True,
-    sections: Optional[List[str]]=None,
     argv: Optional[List[str]]=None,
+    sections: Optional[List[str]]=None,
+    **plugins: bool,
 ) -> Tuple[argparse.ArgumentParser, List[str], Section]:
 
     argv = (argv or sys.argv)
@@ -90,7 +91,7 @@ def init(
                              help="View current configuration (include all overrides)")
     (options, remaining) = args_parser.parse_known_args(argv)
 
-    config = _init_config(options.config_path, (sections or []), options.set_options)
+    config = _init_config(options.config_path, options.set_options, (sections or []), **plugins)
     if options.dump_config:
         _dump_config(config)
         raise SystemExit()
@@ -101,7 +102,16 @@ def init(
 
 
 # =====
-def _init_config(config_path: str, sections: List[str], override_options: List[str]) -> Section:
+def _init_config(
+    config_path: str,
+    override_options: List[str],
+    sections: List[str],
+    with_auth: bool=False,
+    with_hid: bool=False,
+    with_atx: bool=False,
+    with_msd: bool=False,
+) -> Section:
+
     config_path = os.path.expanduser(config_path)
     raw_config: Dict = load_yaml_file(config_path)
 
@@ -112,13 +122,19 @@ def _init_config(config_path: str, sections: List[str], override_options: List[s
         config = make_config(raw_config, scheme)
 
         if "kvmd" in sections:
-            scheme["kvmd"]["auth"]["internal"].update(get_auth_service_class(config.kvmd.auth.internal.type).get_plugin_options())
-            if config.kvmd.auth.external.type:
-                scheme["kvmd"]["auth"]["external"].update(get_auth_service_class(config.kvmd.auth.external.type).get_plugin_options())
+            if with_auth:
+                scheme["kvmd"]["auth"]["internal"].update(get_auth_service_class(config.kvmd.auth.internal.type).get_plugin_options())
+                if config.kvmd.auth.external.type:
+                    scheme["kvmd"]["auth"]["external"].update(get_auth_service_class(config.kvmd.auth.external.type).get_plugin_options())
 
-            scheme["kvmd"]["hid"].update(get_hid_class(config.kvmd.hid.type).get_plugin_options())
-            scheme["kvmd"]["atx"].update(get_atx_class(config.kvmd.atx.type).get_plugin_options())
-            scheme["kvmd"]["msd"].update(get_msd_class(config.kvmd.msd.type).get_plugin_options())
+            if with_hid:
+                scheme["kvmd"]["hid"].update(get_hid_class(config.kvmd.hid.type).get_plugin_options())
+
+            if with_atx:
+                scheme["kvmd"]["atx"].update(get_atx_class(config.kvmd.atx.type).get_plugin_options())
+
+            if with_msd:
+                scheme["kvmd"]["msd"].update(get_msd_class(config.kvmd.msd.type).get_plugin_options())
 
             config = make_config(raw_config, scheme)
 
