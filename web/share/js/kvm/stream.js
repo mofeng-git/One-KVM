@@ -37,7 +37,6 @@ export function Streamer() {
 	var __client_key = tools.makeId();
 	var __client_id = "";
 	var __client_fps = -1;
-	var __prev = false;
 
 	var __init__ = function() {
 		$("stream-led").title = "Stream inactive";
@@ -69,34 +68,31 @@ export function Streamer() {
 
 	self.setState = function(state) {
 		if (state && state.state) {
-			let encoder = state.state.encoder;
-			let source = state.state.source;
-			let stream = state.state.stream;
-
-			if (!__prev) {
-				$("stream-quality-slider").activated = false;
-				$("stream-desired-fps-slider").activated = false;
-			}
+			let max_fps = state.limits.max_fps;
+			state = state.state;
 
 			if (!$("stream-quality-slider").activated) {
 				wm.switchDisabled($("stream-quality-slider"), false);
-				if ($("stream-quality-slider").value !== encoder.quality) {
-					$("stream-quality-slider").value = encoder.quality;
-					__updateQualityValue(encoder.quality);
+				if ($("stream-quality-slider").value !== state.encoder.quality) {
+					$("stream-quality-slider").value = state.encoder.quality;
+					__updateQualityValue(state.encoder.quality);
 				}
 			}
 
 			if (!$("stream-desired-fps-slider").activated) {
-				$("stream-desired-fps-slider").max = state.limits.max_fps;
+				$("stream-desired-fps-slider").max = max_fps;
 				wm.switchDisabled($("stream-desired-fps-slider"), false);
-				if ($("stream-desired-fps-slider").value !== source.desired_fps) {
-					$("stream-desired-fps-slider").value = source.desired_fps;
-					__updateDesiredFpsValue(source.desired_fps);
+				if ($("stream-desired-fps-slider").value !== state.source.desired_fps) {
+					$("stream-desired-fps-slider").value = state.source.desired_fps;
+					__updateDesiredFpsValue(state.source.desired_fps);
 				}
 			}
 
-			if (__resolution.width !== source.resolution.width || __resolution.height !== source.resolution.height) {
-				__resolution = source.resolution;
+			if (
+				__resolution.width !== state.source.resolution.width
+				|| __resolution.height !== state.source.resolution.height
+			) {
+				__resolution = state.source.resolution;
 				if ($("stream-auto-resize-checkbox").checked) {
 					__adjustSizeFactor();
 				} else {
@@ -104,72 +100,65 @@ export function Streamer() {
 				}
 			}
 
-			let stream_client = tools.getCookie("stream_client");
-			if (!__client_id && stream_client && stream_client.startsWith(__client_key + "/")) {
-				tools.info("Stream: found acceptable stream_client cookie:", stream_client);
-				__client_id = stream_client.slice(stream_client.indexOf("/") + 1);
-			}
-
-			if (Object.prototype.hasOwnProperty.call(stream.clients_stat, __client_id)) {
-				__client_fps = stream.clients_stat[__client_id].fps;
-			} else {
-				__clearState();
-			}
-
-			if (!__prev) {
-				let path = "/streamer/stream?key=" + __client_key;
-				if (tools.browser.is_safari || tools.browser.is_ios) {
-					// uStreamer fix for WebKit
-					tools.info("Stream: using dual_final_frames=1 to fix WebKit MJPG bugs");
-					path += "&dual_final_frames=1";
-				} else if (tools.browser.is_chrome || tools.browser.is_blink) {
-					// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-					tools.info("Stream: using advance_headers=1 to fix Blink MJPG bugs");
-					path += "&advance_headers=1";
-				}
-				$("stream-image").src = path;
+			if (__ensureStream(state.stream.clients_stat)) {
 				$("stream-image").className = "stream-image-active";
 				$("stream-box").classList.remove("stream-box-inactive");
 				$("stream-led").className = "led-green";
 				$("stream-led").title = "Stream is active";
 				wm.switchDisabled($("stream-screenshot-button"), false);
 				wm.switchDisabled($("stream-reset-button"), false);
-				tools.info("Stream: acquired");
-				__prev = true;
+				$("stream-quality-slider").activated = false;
+				$("stream-desired-fps-slider").activated = false;
+				tools.info("Stream: active");
 			}
 
 			__updateStreamHeader(true);
 
 		} else {
-			__clearState();
+			$("stream-image").className = "stream-image-inactive";
+			$("stream-box").classList.add("stream-box-inactive");
+			$("stream-led").className = "led-gray";
+			$("stream-led").title = "Stream inactive";
+			wm.switchDisabled($("stream-screenshot-button"), true);
+			wm.switchDisabled($("stream-reset-button"), true);
+			wm.switchDisabled($("stream-quality-slider"), true);
+			wm.switchDisabled($("stream-desired-fps-slider"), true);
+			tools.info("Stream: inactive");
+
+			__updateStreamHeader(false);
 		}
 	};
 
-	var __clearState = function() {
-		tools.info("Stream: refreshing ...");
+	var __ensureStream = function(clients_stat) {
+		let stream_client = tools.getCookie("stream_client");
+		if (!__client_id && stream_client && stream_client.startsWith(__client_key + "/")) {
+			tools.info("Stream: found acceptable stream_client cookie:", stream_client);
+			__client_id = stream_client.slice(stream_client.indexOf("/") + 1);
+		}
 
-		$("stream-image").className = "stream-image-inactive";
-		$("stream-box").classList.add("stream-box-inactive");
-		$("stream-led").className = "led-gray";
-		$("stream-led").title = "Stream inactive";
-		wm.switchDisabled($("stream-screenshot-button"), true);
-		wm.switchDisabled($("stream-reset-button"), true);
-		wm.switchDisabled($("stream-quality-slider"), true);
-		wm.switchDisabled($("stream-desired-fps-slider"), true);
+		if (__client_id && __client_id in clients_stat) {
+			__client_fps = clients_stat[__client_id].fps;
+			return false;
+		} else {
+			__client_key = tools.makeId();
+			__client_id = "";
+			__client_fps = -1;
 
-		__client_key = tools.makeId();
-		__client_id = "";
-		__client_fps = -1;
-		__prev = false;
-		__updateStreamHeader(false);
-	};
+			let path = `/streamer/stream?key=${__client_key}`;
+			if (tools.browser.is_safari || tools.browser.is_ios) {
+				// uStreamer fix for WebKit
+				tools.info("Stream: using dual_final_frames=1 to fix WebKit MJPG bugs");
+				path += "&dual_final_frames=1";
+			} else if (tools.browser.is_chrome || tools.browser.is_blink) {
+				// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
+				tools.info("Stream: using advance_headers=1 to fix Blink MJPG bugs");
+				path += "&advance_headers=1";
+			}
 
-	var __updateQualityValue = function(value) {
-		$("stream-quality-value").innerHTML = value + "%";
-	};
-
-	var __updateDesiredFpsValue = function(value) {
-		$("stream-desired-fps-value").innerHTML = (value === 0 ? "Unlimited" : value);
+			tools.info("Stream: refreshing ...");
+			$("stream-image").src = path;
+			return true;
+		}
 	};
 
 	var __updateStreamHeader = function(online) {
@@ -181,6 +170,14 @@ export function Streamer() {
 		} else {
 			el_grab.innerHTML = el_info.innerHTML = "Stream &ndash; offline";
 		}
+	};
+
+	var __updateQualityValue = function(value) {
+		$("stream-quality-value").innerHTML = value + "%";
+	};
+
+	var __updateDesiredFpsValue = function(value) {
+		$("stream-desired-fps-value").innerHTML = (value === 0 ? "Unlimited" : value);
 	};
 
 	var __clickScreenshotButton = function() {

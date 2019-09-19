@@ -24,13 +24,13 @@
 
 
 export var tools = new function() {
-	let __debug = (new URL(window.location.href)).searchParams.get("debug");
-
 	this.setDefault = function(dict, key, value) {
 		if (!(key in dict)) {
 			dict[key] = value;
 		}
 	};
+
+	/************************************************************************/
 
 	this.makeRequest = function(method, url, callback, body=null, content_type=null) {
 		let http = new XMLHttpRequest();
@@ -44,6 +44,8 @@ export var tools = new function() {
 		return http;
 	};
 
+	/************************************************************************/
+
 	this.makeId = function() {
 		let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 		let id = "";
@@ -52,6 +54,8 @@ export var tools = new function() {
 		}
 		return id;
 	};
+
+	/************************************************************************/
 
 	this.getCookie = function(name) {
 		let matches = document.cookie.match(new RegExp(
@@ -106,13 +110,24 @@ export var tools = new function() {
 		};
 	};
 
+	/************************************************************************/
+
+	let __debug = (new URL(window.location.href)).searchParams.get("debug");
+
 	this.debug = function(...args) {
 		if (__debug) {
-			console.log("LOG/DEBUG", ...args);  // eslint-disable-line no-console
+			__log("DEBUG", ...args);
 		}
 	};
-	this.info = (...args) => console.log("LOG/INFO", ...args);  // eslint-disable-line no-console
-	this.error = (...args) => console.error("LOG/ERROR", ...args);  // eslint-disable-line no-console
+	this.info = (...args) => __log("INFO", ...args);
+	this.error = (...args) => __log("ERROR", ...args);
+
+	let __log = function(label, ...args) {
+		let now = (new Date()).toISOString().split("T")[1].replace("Z", "");
+		console.log(`[${now}] LOG/${label} --`, ...args);
+	};
+
+	/************************************************************************/
 
 	this.browser = new function() {
 		// https://stackoverflow.com/questions/9847580/how-to-detect-safari-chrome-ie-firefox-and-opera-browser/9851769
