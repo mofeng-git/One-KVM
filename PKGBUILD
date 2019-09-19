@@ -37,7 +37,7 @@ depends=(
 	nginx-mainline
 	openssl
 	raspberrypi-io-access
-	ustreamer
+	ustreamer>=1.5
 )
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
