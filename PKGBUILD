@@ -39,7 +39,7 @@ depends=(
 	platformio
 	make
 	raspberrypi-io-access
-	ustreamer>=1.5
+	"ustreamer>=1.5"
 )
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")

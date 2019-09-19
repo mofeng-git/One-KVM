@@ -5,7 +5,7 @@ TESTENV_HID ?= /dev/ttyS10
 TESTENV_VIDEO ?= /dev/video0
 TESTENV_LOOP ?= /dev/loop7
 
-USTREAMER_MIN_VERSION ?= $(shell grep -o 'ustreamer>=.*' PKGBUILD | sed 's/ustreamer>=//g')
+USTREAMER_MIN_VERSION ?= $(shell grep -o 'ustreamer>=[^"]\+' PKGBUILD | sed 's/ustreamer>=//g')
 
 
 # =====
