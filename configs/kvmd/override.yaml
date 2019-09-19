@@ -5,3 +5,5 @@
 #         heartbeat: 5.0
 #
 # It will be applied AFTER other configs and "!include" directives and BEFORE validation.
+
+{}

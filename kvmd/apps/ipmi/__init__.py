@@ -35,7 +35,6 @@ def main(argv: Optional[List[str]]=None) -> None:
         prog="kvmd-ipmi",
         description="IPMI to KVMD proxy",
         argv=argv,
-        sections=["logging", "ipmi"],
     )[2].ipmi
 
     # pylint: disable=protected-access

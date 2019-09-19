@@ -102,8 +102,7 @@ def main(argv: Optional[List[str]]=None) -> None:
     (parent_parser, argv, config) = init(
         add_help=False,
         argv=argv,
-        sections=["logging", "kvmd"],
-        with_auth=True,
+        load_auth=True,
     )
     parser = argparse.ArgumentParser(
         prog="kvmd-htpasswd",

@@ -162,7 +162,7 @@ def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, .
                 value = raw.get(key, option.default)
                 try:
                     value = option.type(value)
-                except ValueError as err:
+                except (TypeError, ValueError) as err:
                     raise ConfigError(f"Invalid value {value!r} for key {make_full_name(key)!r}: {err}")
 
             config[key] = value

@@ -46,11 +46,10 @@ def main(argv: Optional[List[str]]=None) -> None:
         prog="kvmd",
         description="The main Pi-KVM daemon",
         argv=argv,
-        sections=["logging", "kvmd"],
-        with_auth=True,
-        with_hid=True,
-        with_atx=True,
-        with_msd=True,
+        load_auth=True,
+        load_hid=True,
+        load_atx=True,
+        load_msd=True,
     )[2].kvmd
 
     with gpio.bcm():

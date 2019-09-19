@@ -75,8 +75,7 @@ def init(
     description: Optional[str]=None,
     add_help: bool=True,
     argv: Optional[List[str]]=None,
-    sections: Optional[List[str]]=None,
-    **plugins: bool,
+    **load: bool,
 ) -> Tuple[argparse.ArgumentParser, List[str], Section]:
 
     argv = (argv or sys.argv)
@@ -91,10 +90,17 @@ def init(
                              help="View current configuration (include all overrides)")
     (options, remaining) = args_parser.parse_known_args(argv)
 
-    config = _init_config(options.config_path, options.set_options, (sections or []), **plugins)
     if options.dump_config:
-        _dump_config(config)
+        _dump_config(_init_config(
+            config_path=options.config_path,
+            override_options=options.set_options,
+            load_auth=True,
+            load_hid=True,
+            load_atx=True,
+            load_msd=True,
+        ))
         raise SystemExit()
+    config = _init_config(options.config_path, options.set_options, **load)
 
     logging.captureWarnings(True)
     logging.config.dictConfig(config.logging)
@@ -105,37 +111,39 @@ def init(
 def _init_config(
     config_path: str,
     override_options: List[str],
-    sections: List[str],
-    with_auth: bool=False,
-    with_hid: bool=False,
-    with_atx: bool=False,
-    with_msd: bool=False,
+    load_auth: bool=False,
+    load_hid: bool=False,
+    load_atx: bool=False,
+    load_msd: bool=False,
 ) -> Section:
 
     config_path = os.path.expanduser(config_path)
     raw_config: Dict = load_yaml_file(config_path)
 
-    scheme = _get_config_scheme(sections)
+    scheme = _get_config_scheme()
     try:
         _merge_dicts(raw_config, build_raw_from_options(override_options))
-        _merge_dicts(raw_config, (raw_config.get("override") or {}))
+        _merge_dicts(raw_config, (raw_config.pop("override", {}) or {}))
         config = make_config(raw_config, scheme)
 
-        if "kvmd" in sections:
-            if with_auth:
-                scheme["kvmd"]["auth"]["internal"].update(get_auth_service_class(config.kvmd.auth.internal.type).get_plugin_options())
-                if config.kvmd.auth.external.type:
-                    scheme["kvmd"]["auth"]["external"].update(get_auth_service_class(config.kvmd.auth.external.type).get_plugin_options())
+        rebuild = False
 
-            if with_hid:
-                scheme["kvmd"]["hid"].update(get_hid_class(config.kvmd.hid.type).get_plugin_options())
+        if load_auth:
+            scheme["kvmd"]["auth"]["internal"].update(get_auth_service_class(config.kvmd.auth.internal.type).get_plugin_options())
+            if config.kvmd.auth.external.type:
+                scheme["kvmd"]["auth"]["external"].update(get_auth_service_class(config.kvmd.auth.external.type).get_plugin_options())
+            rebuild = True
 
-            if with_atx:
-                scheme["kvmd"]["atx"].update(get_atx_class(config.kvmd.atx.type).get_plugin_options())
+        for (load, section, get_class) in [
+            (load_hid, "hid", get_hid_class),
+            (load_atx, "atx", get_atx_class),
+            (load_msd, "msd", get_msd_class),
+        ]:
+            if load:
+                scheme["kvmd"][section].update(get_class(getattr(config.kvmd, section).type).get_plugin_options())
+                rebuild = True
 
-            if with_msd:
-                scheme["kvmd"]["msd"].update(get_msd_class(config.kvmd.msd.type).get_plugin_options())
-
+        if rebuild:
             config = make_config(raw_config, scheme)
 
         return config
@@ -163,10 +171,8 @@ def _merge_dicts(dest: Dict, src: Dict) -> None:
         dest[key] = src[key]
 
 
-def _get_config_scheme(sections: List[str]) -> Dict:
-    scheme = {
-        "override": Option({}),
-
+def _get_config_scheme() -> Dict:
+    return {
         "logging": Option({}),
 
         "kvmd": {
@@ -254,12 +260,3 @@ def _get_config_scheme(sections: List[str]) -> Dict:
             },
         },
     }
-
-    if sections:
-        return {
-            section: sub
-            for (section, sub) in scheme.items()
-            if section in sections
-        }
-    else:
-        return scheme
