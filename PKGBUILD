@@ -36,6 +36,8 @@ depends=(
 	v4l-utils
 	nginx-mainline
 	openssl
+	platformio
+	make
 	raspberrypi-io-access
 	ustreamer>=1.5
 )
@@ -69,8 +71,7 @@ package_kvmd() {
 	cp configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
 	mkdir -p "$pkgdir/usr/share/kvmd"
-	cp -r web "$pkgdir/usr/share/kvmd"
-	cp -r extras "$pkgdir/usr/share/kvmd"
+	cp -r {hid,web,extras} "$pkgdir/usr/share/kvmd"
 
 	local _cfg_default="$pkgdir/usr/share/kvmd/configs.default"
 	mkdir -p "$_cfg_default"
