@@ -101,8 +101,6 @@ export function Streamer() {
 			}
 
 			if (__ensureStream(state.stream.clients_stat)) {
-				$("stream-image").className = "stream-image-active";
-				$("stream-box").classList.remove("stream-box-inactive");
 				$("stream-led").className = "led-green";
 				$("stream-led").title = "Stream is active";
 				wm.switchDisabled($("stream-screenshot-button"), false);
@@ -112,11 +110,9 @@ export function Streamer() {
 				tools.info("Stream: active");
 			}
 
-			__updateStreamHeader(true);
+			__updateStreamWindow(true, state.source.online);
 
 		} else {
-			$("stream-image").className = "stream-image-inactive";
-			$("stream-box").classList.add("stream-box-inactive");
 			$("stream-led").className = "led-gray";
 			$("stream-led").title = "Stream inactive";
 			wm.switchDisabled($("stream-screenshot-button"), true);
@@ -125,7 +121,7 @@ export function Streamer() {
 			wm.switchDisabled($("stream-desired-fps-slider"), true);
 			tools.info("Stream: inactive");
 
-			__updateStreamHeader(false);
+			__updateStreamWindow(false, false);
 		}
 	};
 
@@ -161,14 +157,29 @@ export function Streamer() {
 		}
 	};
 
-	var __updateStreamHeader = function(online) {
+	var __updateStreamWindow = function(is_active, online) {
+		if (online) {
+			$("stream-image").className = "stream-image-active";
+			$("stream-box").classList.remove("stream-box-inactive");
+		} else {
+			$("stream-image").className = "stream-image-inactive";
+			$("stream-box").classList.add("stream-box-inactive");
+		}
+
 		let el_grab = document.querySelector("#stream-window-header .window-grab");
 		let el_info = $("stream-info");
-		if (online) {
-			let fps_suffix = (__client_fps >= 0 ? ` / ${__client_fps} fps` : "");
-			el_grab.innerHTML = el_info.innerHTML = `Stream &ndash; ${__resolution.width}x${__resolution.height}${fps_suffix}`;
+		if (is_active) {
+			let title = "Stream &ndash; ";
+			if (!online) {
+				title += "no signal / ";
+			}
+			title += `${__resolution.width}x${__resolution.height}`;
+			if (__client_fps >= 0) {
+				title += ` / ${__client_fps} fps`;
+			}
+			el_grab.innerHTML = el_info.innerHTML = title;
 		} else {
-			el_grab.innerHTML = el_info.innerHTML = "Stream &ndash; offline";
+			el_grab.innerHTML = el_info.innerHTML = "Stream &ndash; inactive";
 		}
 	};
 

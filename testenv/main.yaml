@@ -35,6 +35,7 @@ kvmd:
             - "--quality={quality}"
             - "--desired-fps={desired_fps}"
             - "--resolution=800x600"
+            - "--last-as-blank=0"
             - "--unix={unix}"
             - "--unix-rm"
             - "--unix-mode=0666"

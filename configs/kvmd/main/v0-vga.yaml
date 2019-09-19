@@ -39,6 +39,7 @@ kvmd:
             - "--desired-fps={desired_fps}"
             - "--resolution=720x756"
             - "--fake-resolution=800x600"
+            - "--last-as-blank=0"
             - "--unix={unix}"
             - "--unix-rm"
             - "--unix-mode=0660"
