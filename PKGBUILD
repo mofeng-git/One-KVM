@@ -103,7 +103,7 @@ for _platform in $PIKVM_PLATFORM; do
 			pkgdesc=\"Pi-KVM platform configs - $_platform for $_board\"
 			depends=(kvmd)
 			if [[ $_platform =~ ^.*-hdmi$ ]]; then
-				depends=(\"\${depends[@]}\" tc358743-dkms)
+				depends=(\"\${depends[@]}\" \"tc358743-dkms>=0.3\")
 			fi
 
 			mkdir -p \"\$pkgdir/etc\"/{kvmd,sysctl.d,udev/rules.d,modules-load.d}
