@@ -13,7 +13,7 @@ for _platform in $PIKVM_PLATFORM; do
 	done
 done
 pkgbase=kvmd
-pkgver=1.10
+pkgver=1.11
 pkgrel=1
 pkgdesc="The main Pi-KVM daemon"
 url="https://github.com/pikvm/kvmd"
