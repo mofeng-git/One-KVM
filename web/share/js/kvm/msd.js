@@ -45,8 +45,8 @@ export function Msd() {
 		tools.setOnClick($("msd-upload-new-image-button"), __clickUploadNewImageButton);
 		tools.setOnClick($("msd-abort-uploading-button"), __clickAbortUploadingButton);
 
-		tools.setOnClick($("msd-switch-to-kvm-button"), () => __clickSwitchButton("kvm"));
-		tools.setOnClick($("msd-switch-to-server-button"), () => __clickSwitchButton("server"));
+		tools.setOnClick($("msd-connect-button"), () => __clickConnectButton(true));
+		tools.setOnClick($("msd-disconnect-button"), () => __clickConnectButton(false));
 
 		tools.setOnClick($("msd-reset-button"), __clickResetButton);
 	};
@@ -80,8 +80,9 @@ export function Msd() {
 		$("msd-progress-value").style.width = "0%";
 	};
 
-	var __clickSwitchButton = function(to) {
-		let http = tools.makeRequest("POST", "/api/msd/connect?to=" + to, function() {
+	var __clickConnectButton = function(connect) {
+		let action = (connect ? "connect" : "disconnect");
+		let http = tools.makeRequest("POST", `/api/msd/${action}`, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					wm.error("Switch error:<br>", http.responseText);
@@ -90,14 +91,14 @@ export function Msd() {
 			__applyState();
 		});
 		__applyState();
-		wm.switchDisabled($(`msd-switch-to-${to}-button`), true);
+		wm.switchDisabled($(`msd-${action}-button`), true);
 	};
 
 	var __selectNewImageFile = function() {
 		let el_input = $("msd-select-new-image-file");
 		let image_file = (el_input.files.length ? el_input.files[0] : null);
-		if (image_file && image_file.size > __state.info.size) {
-			wm.error("New image is too big for your Mass Storage Device.<br>Maximum:", __formatSize(__state.info.size));
+		if (image_file && image_file.size > __state.storage.size) {
+			wm.error("New image is too big for your Mass Storage Device.<br>Maximum:", __formatSize(__state.storage.size));
 			el_input.value = "";
 			image_file = null;
 		}
@@ -131,7 +132,7 @@ export function Msd() {
 				$("msd-reset-button").classList.add("feature-disabled");
 			}
 
-			if (__state.connected_to === "server") {
+			if (__state.connected) {
 				$("msd-another-another-user-uploads").style.display = "none";
 				$("msd-led").className = "led-green";
 				$("msd-status").innerHTML = $("msd-led").title = "Connected to Server";
@@ -145,7 +146,7 @@ export function Msd() {
 				$("msd-another-another-user-uploads").style.display = "none";
 				$("msd-led").className = "led-gray";
 				if (__state.online) {
-					$("msd-status").innerHTML = $("msd-led").title = "Connected to KVM";
+					$("msd-status").innerHTML = $("msd-led").title = "Disconnected";
 				} else {
 					$("msd-status").innerHTML = $("msd-led").title = "Unavailable";
 				}
@@ -153,18 +154,18 @@ export function Msd() {
 
 			$("msd-offline").style.display = (__state.online ? "none" : "block");
 			$("msd-current-image-broken").style.display = (
-				__state.online && __state.info.image &&
-				!__state.info.image.complete && !__state.uploading ? "block" : "none"
+				__state.online && __state.current &&
+				!__state.current.complete && !__state.uploading ? "block" : "none"
 			);
 
-			$("msd-current-image-name").innerHTML = (__state.online && __state.info.image ? __state.info.image.name : "None");
-			$("msd-current-image-size").innerHTML = (__state.online && __state.info.image ? __formatSize(__state.info.image.size) : "None");
-			$("msd-storage-size").innerHTML = (__state.online ? __formatSize(__state.info.size) : "Unavailable");
+			$("msd-current-image-name").innerHTML = (__state.online && __state.current ? __state.current.name : "None");
+			$("msd-current-image-size").innerHTML = (__state.online && __state.current ? __formatSize(__state.current.size) : "None");
+			$("msd-storage-size").innerHTML = (__state.online ? __formatSize(__state.storage.size) : "Unavailable");
 
-			wm.switchDisabled($("msd-switch-to-kvm-button"), (!__state.online || __state.connected_to === "kvm" || __state.busy));
-			wm.switchDisabled($("msd-switch-to-server-button"), (!__state.online || __state.connected_to === "server" || __state.busy));
-			wm.switchDisabled($("msd-select-new-image-button"), (!__state.online || __state.connected_to !== "kvm" || __state.busy || __upload_http));
-			wm.switchDisabled($("msd-upload-new-image-button"), (!__state.online || __state.connected_to !== "kvm" || __state.busy || !__image_file));
+			wm.switchDisabled($("msd-connect-button"), (!__state.online || __state.connected || __state.busy));
+			wm.switchDisabled($("msd-disconnect-button"), (!__state.online || !__state.connected || __state.busy));
+			wm.switchDisabled($("msd-select-new-image-button"), (!__state.online || __state.connected || __state.busy || __upload_http));
+			wm.switchDisabled($("msd-upload-new-image-button"), (!__state.online || __state.connected || __state.busy || !__image_file));
 			wm.switchDisabled($("msd-abort-uploading-button"), (!__state.online || !__upload_http));
 			wm.switchDisabled($("msd-reset-button"), (!__state.enabled || __state.busy));
 
@@ -185,8 +186,8 @@ export function Msd() {
 			$("msd-current-image-size").innerHTML = "";
 			$("msd-storage-size").innerHTML = "";
 
-			wm.switchDisabled($("msd-switch-to-kvm-button"), true);
-			wm.switchDisabled($("msd-switch-to-server-button"), true);
+			wm.switchDisabled($("msd-connect-button"), true);
+			wm.switchDisabled($("msd-disconnect-button"), true);
 			wm.switchDisabled($("msd-select-new-image-button"), true);
 			wm.switchDisabled($("msd-upload-new-image-button"), true);
 			wm.switchDisabled($("msd-abort-uploading-button"), true);

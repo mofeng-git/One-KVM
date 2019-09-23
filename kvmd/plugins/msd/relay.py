@@ -48,7 +48,6 @@ from ... import gpio
 
 from ...yamlconf import Option
 
-from ...validators.basic import valid_bool
 from ...validators.basic import valid_number
 from ...validators.basic import valid_int_f1
 from ...validators.basic import valid_float_f01
@@ -59,9 +58,9 @@ from ...validators.hw import valid_gpio_pin
 
 from . import MsdError
 from . import MsdOfflineError
-from . import MsdAlreadyOnServerError
-from . import MsdAlreadyOnKvmError
-from . import MsdNotOnKvmError
+from . import MsdAlreadyConnectedError
+from . import MsdAlreadyDisconnectedError
+from . import MsdConnectedError
 from . import MsdIsBusyError
 from . import BaseMsd
 
@@ -77,8 +76,8 @@ class _ImageInfo:
 @dataclasses.dataclass(frozen=True)
 class _DeviceInfo:
     path: str
-    real: str
     size: int
+    free: int
     image: Optional[_ImageInfo]
 
 
@@ -147,8 +146,8 @@ def _explore_device(device_path: str) -> _DeviceInfo:
 
     return _DeviceInfo(
         path=device_path,
-        real=os.path.realpath(device_path),
         size=size,
+        free=(size - image_info.size if image_info else size),
         image=image_info,
     )
 
@@ -171,7 +170,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         init_delay: float,
         init_retries: int,
         reset_delay: float,
-        write_meta: bool,
         chunk_size: int,
     ) -> None:
 
@@ -182,7 +180,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__init_delay = init_delay
         self.__init_retries = init_retries
         self.__reset_delay = reset_delay
-        self.__write_meta = write_meta
         self.__chunk_size = chunk_size
 
         self.__region = aioregion.AioExclusiveRegion(MsdIsBusyError)
@@ -198,8 +195,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         logger.info("Using %r as MSD", self.__device_path)
         try:
             aiotools.run_sync(self.__load_device_info())
-            if self.__write_meta:
-                logger.info("Enabled image metadata writing")
         except Exception as err:
             log = (logger.error if isinstance(err, MsdError) else logger.exception)
             log("MSD is offline: %s", err)
@@ -214,20 +209,29 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "init_delay":   Option(1.0,   type=valid_float_f01),
             "init_retries": Option(5,     type=valid_int_f1),
             "reset_delay":  Option(1.0,   type=valid_float_f01),
-            "write_meta":   Option(True,  type=valid_bool),
-            "chunk_size":   Option(65536, type=(lambda arg: valid_number(arg, min=1024))),
+
+            "chunk_size": Option(65536, type=(lambda arg: valid_number(arg, min=1024))),
         }
 
     def get_state(self) -> Dict:
-        online = bool(self._device_info)
+        current: Optional[Dict] = None
+        storage: Optional[Dict] = None
+        if self._device_info:
+            storage = {
+                "size": self._device_info.size,
+                "free": self._device_info.free,
+            }
+            if self._device_info.image:
+                current = dataclasses.asdict(self._device_info.image)
         return {
             "enabled": True,
-            "online": online,
+            "online": bool(self._device_info),
             "busy": self.__region.is_busy(),
             "uploading": bool(self.__device_file),
             "written": self.__written,
-            "info": (dataclasses.asdict(self._device_info) if online else None),
-            "connected_to": (("kvm" if self.__on_kvm else "server") if online else None),
+            "current": current,
+            "storage": storage,
+            "connected": (not self.__on_kvm),
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
@@ -242,13 +246,34 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @_msd_working
     @aiotools.atomic
-    async def connect_to_kvm(self) -> Dict:
+    async def connect(self) -> Dict:
+        notify = False
+        state: Dict = {}
+        try:
+            with self.__region:
+                if not self.__on_kvm:
+                    raise MsdAlreadyConnectedError()
+                notify = True
+
+                gpio.write(self.__target_pin, True)
+                self.__on_kvm = False
+                get_logger(0).info("MSD switched to Server")
+
+            state = self.get_state()
+            return state
+        finally:
+            if notify:
+                await self.__state_queue.put(state or self.get_state())
+
+    @_msd_working
+    @aiotools.atomic
+    async def disconnect(self) -> Dict:
         notify = False
         state: Dict = {}
         try:
             with self.__region:
                 if self.__on_kvm:
-                    raise MsdAlreadyOnKvmError()
+                    raise MsdAlreadyDisconnectedError()
                 notify = True
 
                 gpio.write(self.__target_pin, False)
@@ -260,27 +285,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     raise
                 self.__on_kvm = True
                 get_logger(0).info("MSD switched to KVM: %s", self._device_info)
-
-            state = self.get_state()
-            return state
-        finally:
-            if notify:
-                await self.__state_queue.put(state or self.get_state())
-
-    @_msd_working
-    @aiotools.atomic
-    async def connect_to_server(self) -> Dict:
-        notify = False
-        state: Dict = {}
-        try:
-            with self.__region:
-                if not self.__on_kvm:
-                    raise MsdAlreadyOnServerError()
-                notify = True
-
-                gpio.write(self.__target_pin, True)
-                self.__on_kvm = False
-                get_logger(0).info("MSD switched to Server")
 
             state = self.get_state()
             return state
@@ -310,10 +314,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             try:
                 gpio.write(self.__reset_pin, False)
             finally:
-                try:
-                    await self.__state_queue.put(self.get_state())
-                finally:
-                    self.__region.exit()
+                self.__region.exit()
+                await self.__state_queue.put(self.get_state())
 
     @_msd_working
     @aiotools.atomic
@@ -322,7 +324,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__region.enter()
         try:
             if not self.__on_kvm:
-                raise MsdNotOnKvmError()
+                raise MsdConnectedError()
             self.__device_file = await aiofiles.open(self._device_info.path, mode="w+b", buffering=0)
             self.__written = 0
             return self
@@ -339,13 +341,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     async def write_image_info(self, name: str, complete: bool) -> None:
         assert self.__device_file
         assert self._device_info
-        if self.__write_meta:
-            if self._device_info.size - self.__written > _IMAGE_INFO_SIZE:
-                await self.__device_file.seek(self._device_info.size - _IMAGE_INFO_SIZE)
-                await self.__write_to_device_file(_make_image_info_bytes(name, self.__written, complete))
-                await self.__device_file.seek(0)
-            else:
-                get_logger().error("Can't write image info because device is full")
+        if self._device_info.size - self.__written > _IMAGE_INFO_SIZE:
+            await self.__device_file.seek(self._device_info.size - _IMAGE_INFO_SIZE)
+            await self.__write_to_device_file(_make_image_info_bytes(name, self.__written, complete))
+            await self.__device_file.seek(0)
+        else:
+            get_logger().error("Can't write image info because device is full")
 
     @aiotools.atomic
     async def write_image_chunk(self, chunk: bytes) -> int:

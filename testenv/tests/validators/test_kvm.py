@@ -29,7 +29,6 @@ from kvmd.keymap import KEYMAP
 from kvmd.validators import ValidatorError
 from kvmd.validators.kvm import valid_atx_power_action
 from kvmd.validators.kvm import valid_atx_button
-from kvmd.validators.kvm import valid_kvm_target
 from kvmd.validators.kvm import valid_log_seek
 from kvmd.validators.kvm import valid_stream_quality
 from kvmd.validators.kvm import valid_stream_fps
@@ -61,18 +60,6 @@ def test_ok__valid_atx_button(arg: Any) -> None:
 def test_fail__valid_atx_button(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_atx_button(arg))
-
-
-# =====
-@pytest.mark.parametrize("arg", ["KVM ", "SERVER "])
-def test_ok__valid_kvm_target(arg: Any) -> None:
-    assert valid_kvm_target(arg) == arg.strip().lower()
-
-
-@pytest.mark.parametrize("arg", ["test", "", None])
-def test_fail__valid_kvm_target(arg: Any) -> None:
-    with pytest.raises(ValidatorError):
-        print(valid_kvm_target(arg))
 
 
 # =====

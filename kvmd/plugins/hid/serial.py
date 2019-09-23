@@ -184,7 +184,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         }
 
     def start(self) -> None:
-        get_logger().info("Starting HID daemon ...")
+        get_logger(0).info("Starting HID daemon ...")
         multiprocessing.Process.start(self)
 
     def get_state(self) -> Dict:

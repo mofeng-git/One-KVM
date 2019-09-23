@@ -64,7 +64,6 @@ from ...validators.auth import valid_auth_token
 
 from ...validators.kvm import valid_atx_power_action
 from ...validators.kvm import valid_atx_button
-from ...validators.kvm import valid_kvm_target
 from ...validators.kvm import valid_log_seek
 from ...validators.kvm import valid_stream_quality
 from ...validators.kvm import valid_stream_fps
@@ -468,12 +467,12 @@ class Server:  # pylint: disable=too-many-instance-attributes
         return _json(self.__msd.get_state())
 
     @_exposed("POST", "/msd/connect")
-    async def __msd_connect_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        to = valid_kvm_target(request.query.get("to"))
-        return _json(await ({
-            "kvm": self.__msd.connect_to_kvm,
-            "server": self.__msd.connect_to_server,
-        }[to])())
+    async def __msd_connect_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        return _json(await self.__msd.connect())
+
+    @_exposed("POST", "/msd/disconnect")
+    async def __msd_disconnect_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        return _json(await self.__msd.disconnect())
 
     @_exposed("POST", "/msd/write")
     async def __msd_write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:

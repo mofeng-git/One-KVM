@@ -46,8 +46,9 @@ class Plugin(BaseMsd):
             "busy": False,
             "uploading": False,
             "written": False,
-            "info": None,
-            "connected_to": None,
+            "current": None,
+            "storage": None,
+            "connected": False,
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
@@ -55,10 +56,10 @@ class Plugin(BaseMsd):
             yield self.get_state()
             await asyncio.sleep(60)
 
-    async def connect_to_kvm(self) -> Dict:
+    async def connect(self) -> Dict:
         raise MsdDisabledError()
 
-    async def connect_to_server(self) -> Dict:
+    async def disconnect(self) -> Dict:
         raise MsdDisabledError()
 
     async def reset(self) -> None:

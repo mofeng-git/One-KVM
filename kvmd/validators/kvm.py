@@ -38,10 +38,6 @@ def valid_atx_button(arg: Any) -> str:
     return check_string_in_list(arg, "ATX button", ["power", "power_long", "reset"])
 
 
-def valid_kvm_target(arg: Any) -> str:
-    return check_string_in_list(arg, "KVM target", ["kvm", "server"])
-
-
 def valid_log_seek(arg: Any) -> int:
     return int(valid_number(arg, min=0, name="log seek"))
 

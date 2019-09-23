@@ -44,19 +44,19 @@ class MsdOfflineError(MsdOperationError):
         super().__init__("MSD is not found")
 
 
-class MsdAlreadyOnServerError(MsdOperationError):
+class MsdAlreadyConnectedError(MsdOperationError):
     def __init__(self) -> None:
         super().__init__("MSD is already connected to Server")
 
 
-class MsdAlreadyOnKvmError(MsdOperationError):
+class MsdAlreadyDisconnectedError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("MSD is already connected to KVM")
+        super().__init__("MSD is already disconnected from Server")
 
 
-class MsdNotOnKvmError(MsdOperationError):
+class MsdConnectedError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("MSD is not connected to KVM")
+        super().__init__("MSD connected to Server, but should not")
 
 
 class MsdIsBusyError(MsdOperationError):
@@ -76,10 +76,10 @@ class BaseMsd(BasePlugin):
     async def cleanup(self) -> None:
         pass
 
-    async def connect_to_kvm(self) -> Dict:
+    async def connect(self) -> Dict:
         raise NotImplementedError
 
-    async def connect_to_server(self) -> Dict:
+    async def disconnect(self) -> Dict:
         raise NotImplementedError
 
     async def reset(self) -> None:
