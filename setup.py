@@ -86,6 +86,8 @@ def main() -> None:
             "kvmd.plugins.msd",
             "kvmd.apps",
             "kvmd.apps.kvmd",
+            "kvmd.apps.otg",
+            "kvmd.apps.otgmsd",
             "kvmd.apps.htpasswd",
             "kvmd.apps.cleanup",
             "kvmd.apps.ipmi",
@@ -104,6 +106,8 @@ def main() -> None:
         entry_points={
             "console_scripts": [
                 "kvmd = kvmd.apps.kvmd:main",
+                "kvmd-otg = kvmd.apps.otg:main",
+                "kvmd-otg-msd = kvmd.apps.otgmsd:main",
                 "kvmd-htpasswd = kvmd.apps.htpasswd:main",
                 "kvmd-cleanup = kvmd.apps.cleanup:main",
                 "kvmd-ipmi = kvmd.apps.ipmi:main",

@@ -241,6 +241,17 @@ def _get_config_scheme() -> Dict:
             },
         },
 
+        "otg": {
+            "gadget":        Option("pikvm"),
+            "vendor_id":     Option(0x1D6B, type=valid_number),  # Linux Foundation
+            "product_id":    Option(0x0104, type=valid_number),  # Multifunction Composite Gadget
+            "manufacturer":  Option("Pi-KVM"),
+            "product":       Option("Composite KVM Device"),
+            "serial_number": Option("CAFEBABE"),
+            "udc":           Option(""),
+            "acm":           Option(True, type=valid_bool),
+        },
+
         "ipmi": {
             "server": {
                 "host":    Option("::", type=valid_ip_or_host),

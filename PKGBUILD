@@ -28,6 +28,7 @@ depends=(
 	python-raspberry-gpio
 	python-pyserial
 	python-setproctitle
+	python-psutil
 	python-systemd
 	python-dbus
 	python-pygments

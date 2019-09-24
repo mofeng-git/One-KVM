@@ -18,6 +18,7 @@ RUN pacman -Syu --noconfirm \
 		python-tox \
 		python-systemd \
 		python-dbus \
+		python-psutil \
 		python-mako \
 		nginx-mainline \
 		socat \
