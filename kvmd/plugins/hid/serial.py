@@ -218,23 +218,6 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                 self.__lock.release()
         get_logger(0).info("Reset HID performed")
 
-    async def send_key_event(self, key: str, state: bool) -> None:
-        await self.__send_bool_event(_KeyEvent(key, state), self.__pressed_keys)
-
-    async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        await self.__send_int_event(_MouseMoveEvent(to_x, to_y))
-
-    async def send_mouse_button_event(self, button: str, state: bool) -> None:
-        await self.__send_bool_event(_MouseButtonEvent(button, state), self.__pressed_mouse_buttons)
-
-    async def send_mouse_wheel_event(self, delta_y: int) -> None:
-        await self.__send_int_event(_MouseWheelEvent(0, delta_y))
-
-    async def clear_events(self) -> None:
-        if not self.__stop_event.is_set():
-            async with self.__lock:
-                self.__unsafe_clear_events()
-
     @aiotools.atomic
     async def cleanup(self) -> None:
         logger = get_logger(0)
@@ -251,6 +234,25 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                     self.join()
             finally:
                 gpio.write(self.__reset_pin, False)
+
+    # =====
+
+    async def send_key_event(self, key: str, state: bool) -> None:
+        await self.__send_bool_event(_KeyEvent(key, state), self.__pressed_keys)
+
+    async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        await self.__send_int_event(_MouseMoveEvent(to_x, to_y))
+
+    async def send_mouse_button_event(self, button: str, state: bool) -> None:
+        await self.__send_bool_event(_MouseButtonEvent(button, state), self.__pressed_mouse_buttons)
+
+    async def send_mouse_wheel_event(self, delta_y: int) -> None:
+        await self.__send_int_event(_MouseWheelEvent(0, delta_y))
+
+    async def clear_events(self) -> None:
+        if not self.__stop_event.is_set():
+            async with self.__lock:
+                self.__unsafe_clear_events()
 
     async def __send_bool_event(self, event: _BoolEvent, pressed: Set[str]) -> None:
         if not self.__stop_event.is_set():

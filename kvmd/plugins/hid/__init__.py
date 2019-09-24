@@ -43,6 +43,11 @@ class BaseHid(BasePlugin):
     async def reset(self) -> None:
         raise NotImplementedError
 
+    async def cleanup(self) -> None:
+        pass
+
+    # =====
+
     async def send_key_event(self, key: str, state: bool) -> None:
         raise NotImplementedError
 
@@ -57,9 +62,6 @@ class BaseHid(BasePlugin):
 
     async def clear_events(self) -> None:
         raise NotImplementedError
-
-    async def cleanup(self) -> None:
-        pass
 
 
 # =====

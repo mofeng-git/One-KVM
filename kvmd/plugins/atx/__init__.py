@@ -51,6 +51,11 @@ class BaseAtx(BasePlugin):
         yield {}
         raise NotImplementedError
 
+    async def cleanup(self) -> None:
+        pass
+
+    # =====
+
     async def power_on(self) -> bool:
         raise NotImplementedError
 
@@ -63,6 +68,8 @@ class BaseAtx(BasePlugin):
     async def power_reset_hard(self) -> bool:
         raise NotImplementedError
 
+    # =====
+
     async def click_power(self) -> None:
         raise NotImplementedError
 
@@ -71,9 +78,6 @@ class BaseAtx(BasePlugin):
 
     async def click_reset(self) -> None:
         raise NotImplementedError
-
-    async def cleanup(self) -> None:
-        pass
 
 
 # =====
