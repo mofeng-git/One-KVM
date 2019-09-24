@@ -20,15 +20,15 @@
 # ========================================================================== #
 
 
+import time
+import argparse
+
 from os import listdir
 from os import mkdir
-from os import makedirs
 from os import symlink
 from os import rmdir
 from os import unlink
 from os.path import join
-
-import argparse
 
 from typing import List
 from typing import Optional
@@ -59,7 +59,7 @@ def _find_udc(udc: str) -> str:
 
 def _check_config(config: Section) -> None:
     if (
-        not config.otg.acm
+        not config.otg.acm.enabled
         and config.kvmd.hid.type != "otg"
         and config.kvmd.msd.type != "otg"
     ):
@@ -89,11 +89,12 @@ def _cmd_start(config: Section) -> None:
     _write(join(lang_path, "serialnumber"), config.otg.serial_number)
 
     config_path = join(gadget_path, "configs/c.1")
-    makedirs(join(config_path, "strings/0x409"))
-    _write(join(gadget_path, "configs/c.1/strings/0x409/configuration"), "Config 1: ECM network")
-    _write(join(gadget_path, "configs/c.1/MaxPower"), "250")
+    mkdir(config_path)
+    mkdir(join(config_path, "strings/0x409"))
+    _write(join(config_path, "strings/0x409/configuration"), "Config 1: ECM network")
+    _write(join(config_path, "MaxPower"), "250")
 
-    if config.otg.acm:
+    if config.otg.acm.enabled:
         func_path = join(gadget_path, "functions/acm.usb0")
         mkdir(func_path)
         symlink(func_path, join(config_path, "acm.usb0"))
@@ -125,6 +126,8 @@ def _cmd_start(config: Section) -> None:
         symlink(func_path, join(config_path, "mass_storage.usb0"))
 
     _write(join(gadget_path, "UDC"), udc)
+
+    time.sleep(config.otg.init_delay)
 
 
 def _cmd_stop(config: Section) -> None:

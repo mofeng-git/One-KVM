@@ -193,6 +193,7 @@ def _get_config_scheme() -> Dict:
                     "force_users": Option([], type=valid_users_list),
                     # Dynamic content
                 },
+
                 "external": {
                     "type": Option(""),
                 },
@@ -249,7 +250,11 @@ def _get_config_scheme() -> Dict:
             "product":       Option("Composite KVM Device"),
             "serial_number": Option("CAFEBABE"),
             "udc":           Option(""),
-            "acm":           Option(True, type=valid_bool),
+            "init_delay":    Option(3.0, type=valid_float_f01),
+
+            "acm": {
+                "enabled": Option(True, type=valid_bool),
+            },
         },
 
         "ipmi": {
