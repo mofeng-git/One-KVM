@@ -183,6 +183,7 @@ def _get_config_scheme() -> Dict:
                 "unix_rm":           Option(False, type=valid_bool),
                 "unix_mode":         Option(0,     type=valid_unix_mode),
                 "heartbeat":         Option(3.0,   type=valid_float_f01),
+                "sync_chunk_size":   Option(65536, type=(lambda arg: valid_number(arg, min=1024))),
                 "access_log_format": Option("[%P / %{X-Real-IP}i] '%r' => %s; size=%b ---"
                                             " referer='%{Referer}i'; user_agent='%{User-Agent}i'"),
             },

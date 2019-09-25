@@ -67,6 +67,7 @@ from ...validators.kvm import valid_atx_button
 from ...validators.kvm import valid_log_seek
 from ...validators.kvm import valid_stream_quality
 from ...validators.kvm import valid_stream_fps
+from ...validators.kvm import valid_msd_image_name
 from ...validators.kvm import valid_hid_key
 from ...validators.kvm import valid_hid_mouse_move
 from ...validators.kvm import valid_hid_mouse_button
@@ -250,6 +251,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self.__streamer = streamer
 
         self.__heartbeat: Optional[float] = None  # Assigned in run() for consistance
+        self.__sync_chunk_size: Optional[int] = None  # Ditto
         self.__sockets: Set[aiohttp.web.WebSocketResponse] = set()
         self.__sockets_lock = asyncio.Lock()
 
@@ -266,6 +268,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         unix_rm: bool,
         unix_mode: int,
         heartbeat: float,
+        sync_chunk_size: int,
         access_log_format: str,
     ) -> None:
 
@@ -274,6 +277,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         setproctitle.setproctitle("[main] " + setproctitle.getproctitle())
 
         self.__heartbeat = heartbeat
+        self.__sync_chunk_size = sync_chunk_size
 
         assert port or unix_path
         if unix_path:
@@ -474,31 +478,40 @@ class Server:  # pylint: disable=too-many-instance-attributes
     async def __msd_disconnect_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return _json(await self.__msd.disconnect())
 
+    @_exposed("POST", "/msd/select")
+    async def __msd_select_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        return _json(await self.__msd.select(valid_msd_image_name(request.query.get("image_name"))))
+
+    @_exposed("POST", "/msd/remove")
+    async def __msd_remove_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        return _json(await self.__msd.remove(valid_msd_image_name(request.query.get("image_name"))))
+
     @_exposed("POST", "/msd/write")
     async def __msd_write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        assert self.__sync_chunk_size is not None
         logger = get_logger(0)
         reader = await request.multipart()
+        image_name = ""
         written = 0
         try:
             async with self.__msd:
                 name_field = await _get_multipart_field(reader, "image_name")
-                image_name = (await name_field.read()).decode("utf-8")[:256]
+                image_name = valid_msd_image_name((await name_field.read()).decode("utf-8"))
 
                 data_field = await _get_multipart_field(reader, "image_data")
 
                 logger.info("Writing image %r to MSD ...", image_name)
                 await self.__msd.write_image_info(image_name, False)
-                chunk_size = self.__msd.get_chunk_size()
                 while True:
-                    chunk = await data_field.read_chunk(chunk_size)
+                    chunk = await data_field.read_chunk(self.__sync_chunk_size)
                     if not chunk:
                         break
                     written = await self.__msd.write_image_chunk(chunk)
                 await self.__msd.write_image_info(image_name, True)
         finally:
             if written != 0:
-                logger.info("Written %d bytes to MSD", written)
-        return _json({"written": written})
+                logger.info("Written image %r with size=%d bytes to MSD", image_name, written)
+        return _json({"image": {"name": image_name, "size": written}})
 
     @_exposed("POST", "/msd/reset")
     async def __msd_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:

@@ -42,6 +42,7 @@ class Plugin(BaseMsd):
     def get_state(self) -> Dict:
         return {
             "enabled": False,
+            "multi": False,
             "online": False,
             "busy": False,
             "uploading": False,
@@ -56,19 +57,24 @@ class Plugin(BaseMsd):
             yield self.get_state()
             await asyncio.sleep(60)
 
+    async def reset(self) -> None:
+        raise MsdDisabledError()
+
+    # =====
+
     async def connect(self) -> Dict:
         raise MsdDisabledError()
 
     async def disconnect(self) -> Dict:
         raise MsdDisabledError()
 
-    async def reset(self) -> None:
+    async def select(self, name: str) -> Dict:
+        raise MsdDisabledError()
+
+    async def remove(self, name: str) -> Dict:
         raise MsdDisabledError()
 
     async def __aenter__(self) -> BaseMsd:
-        raise MsdDisabledError()
-
-    def get_chunk_size(self) -> int:
         raise MsdDisabledError()
 
     async def write_image_info(self, name: str, complete: bool) -> None:

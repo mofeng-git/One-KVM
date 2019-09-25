@@ -48,7 +48,6 @@ from ... import gpio
 
 from ...yamlconf import Option
 
-from ...validators.basic import valid_number
 from ...validators.basic import valid_int_f1
 from ...validators.basic import valid_float_f01
 
@@ -62,6 +61,7 @@ from . import MsdAlreadyConnectedError
 from . import MsdAlreadyDisconnectedError
 from . import MsdConnectedError
 from . import MsdIsBusyError
+from . import MsdMultiNotSupported
 from . import BaseMsd
 
 
@@ -170,7 +170,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         init_delay: float,
         init_retries: int,
         reset_delay: float,
-        chunk_size: int,
     ) -> None:
 
         self.__target_pin = gpio.set_output(target_pin)
@@ -180,7 +179,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__init_delay = init_delay
         self.__init_retries = init_retries
         self.__reset_delay = reset_delay
-        self.__chunk_size = chunk_size
 
         self.__region = aioregion.AioExclusiveRegion(MsdIsBusyError)
 
@@ -209,8 +207,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "init_delay":   Option(1.0,   type=valid_float_f01),
             "init_retries": Option(5,     type=valid_int_f1),
             "reset_delay":  Option(1.0,   type=valid_float_f01),
-
-            "chunk_size": Option(65536, type=(lambda arg: valid_number(arg, min=1024))),
         }
 
     def get_state(self) -> Dict:
@@ -225,6 +221,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 current = dataclasses.asdict(self._device_info.image)
         return {
             "enabled": True,
+            "multi": False,
             "online": bool(self._device_info),
             "busy": self.__region.is_busy(),
             "uploading": bool(self.__device_file),
@@ -239,10 +236,37 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             yield (await self.__state_queue.get())
 
     @aiotools.atomic
+    async def reset(self) -> None:
+        with aiotools.unregion_only_on_exception(self.__region):
+            await self.__inner_reset()
+
+    @aiotools.tasked
+    @aiotools.muted("Can't reset MSD or operation was not completed")
+    async def __inner_reset(self) -> None:
+        try:
+            gpio.write(self.__reset_pin, True)
+            await asyncio.sleep(self.__reset_delay)
+            gpio.write(self.__reset_pin, False)
+
+            gpio.write(self.__target_pin, False)
+            self.__on_kvm = True
+
+            await self.__load_device_info()
+            get_logger(0).info("MSD reset has been successful")
+        finally:
+            try:
+                gpio.write(self.__reset_pin, False)
+            finally:
+                self.__region.exit()
+                await self.__state_queue.put(self.get_state())
+
+    @aiotools.atomic
     async def cleanup(self) -> None:
         await self.__close_device_file()
         gpio.write(self.__target_pin, False)
         gpio.write(self.__reset_pin, False)
+
+    # =====
 
     @_msd_working
     @aiotools.atomic
@@ -292,30 +316,13 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if notify:
                 await self.__state_queue.put(state or self.get_state())
 
-    @aiotools.atomic
-    async def reset(self) -> None:
-        with aiotools.unregion_only_on_exception(self.__region):
-            await self.__inner_reset()
+    @_msd_working
+    async def select(self, name: str) -> Dict:
+        raise MsdMultiNotSupported()
 
-    @aiotools.tasked
-    @aiotools.muted("Can't reset MSD or operation was not completed")
-    async def __inner_reset(self) -> None:
-        try:
-            gpio.write(self.__reset_pin, True)
-            await asyncio.sleep(self.__reset_delay)
-            gpio.write(self.__reset_pin, False)
-
-            gpio.write(self.__target_pin, False)
-            self.__on_kvm = True
-
-            await self.__load_device_info()
-            get_logger(0).info("MSD reset has been successful")
-        finally:
-            try:
-                gpio.write(self.__reset_pin, False)
-            finally:
-                self.__region.exit()
-                await self.__state_queue.put(self.get_state())
+    @_msd_working
+    async def remove(self, name: str) -> Dict:
+        raise MsdMultiNotSupported()
 
     @_msd_working
     @aiotools.atomic
@@ -333,9 +340,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             raise
         finally:
             await self.__state_queue.put(self.get_state())
-
-    def get_chunk_size(self) -> int:
-        return self.__chunk_size
 
     @aiotools.atomic
     async def write_image_info(self, name: str, complete: bool) -> None:

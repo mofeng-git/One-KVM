@@ -64,6 +64,11 @@ class MsdIsBusyError(MsdOperationError):
         super().__init__("Performing another MSD operation, please try again later")
 
 
+class MsdMultiNotSupported(MsdOperationError):
+    def __init__(self) -> None:
+        super().__init__("This MSD does not support storing multiple images")
+
+
 # =====
 class BaseMsd(BasePlugin):
     def get_state(self) -> Dict:
@@ -73,8 +78,13 @@ class BaseMsd(BasePlugin):
         yield {}
         raise NotImplementedError
 
+    async def reset(self) -> None:
+        raise NotImplementedError
+
     async def cleanup(self) -> None:
         pass
+
+    # =====
 
     async def connect(self) -> Dict:
         raise NotImplementedError
@@ -82,13 +92,13 @@ class BaseMsd(BasePlugin):
     async def disconnect(self) -> Dict:
         raise NotImplementedError
 
-    async def reset(self) -> None:
+    async def select(self, name: str) -> Dict:
+        raise NotImplementedError
+
+    async def remove(self, name: str) -> Dict:
         raise NotImplementedError
 
     async def __aenter__(self) -> "BaseMsd":
-        raise NotImplementedError
-
-    def get_chunk_size(self) -> int:
         raise NotImplementedError
 
     async def write_image_info(self, name: str, complete: bool) -> None:
