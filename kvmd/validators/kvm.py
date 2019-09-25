@@ -81,4 +81,4 @@ def valid_hid_mouse_button(arg: Any) -> str:
 
 def valid_hid_mouse_wheel(arg: Any) -> int:
     arg = valid_number(arg, name="HID mouse wheel")
-    return min(max(-128, arg), 127)
+    return min(max(-127, arg), 127)
