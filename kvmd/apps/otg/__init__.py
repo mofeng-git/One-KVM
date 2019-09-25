@@ -100,11 +100,11 @@ def _cmd_start(config: Section) -> None:
         symlink(func_path, join(config_path, "acm.usb0"))
 
     if config.kvmd.hid.type == "otg":
-        func_path = join(gadget_path, "functions/hid.usb0")
+        func_path = join(gadget_path, "functions/hid.usb0")  # Keyboard
         mkdir(func_path)
         _write(join(func_path, "protocol"), "1")
         _write(join(func_path, "subclass"), "1")
-        _write(join(func_path, "report_length"), "1")
+        _write(join(func_path, "report_length"), "8")
         with open(join(func_path, "report_desc"), "wb") as report_file:
             report_file.write(
                 b"\x05\x01\x09\x06\xa1\x01\x05\x07\x19\xe0\x29\xe7\x15\x00"
