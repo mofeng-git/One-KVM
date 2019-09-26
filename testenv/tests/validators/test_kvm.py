@@ -181,7 +181,7 @@ def test_ok__valid_hid_mouse_wheel(arg: Any) -> None:
 
 
 def test_ok__valid_hid_mouse_wheel__m200() -> None:
-    assert valid_hid_mouse_wheel(-200) == -128
+    assert valid_hid_mouse_wheel(-200) == -127
 
 
 def test_ok__valid_hid_mouse_wheel__p200() -> None:
