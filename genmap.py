@@ -33,7 +33,7 @@ import mako.template
 # =====
 @dataclasses.dataclass(frozen=True)
 class _KeyMapping:
-    kvmd_code: int
+    arduino_hid_code: int
     arduino_hid_key: str
     web_key: str
 
@@ -47,7 +47,7 @@ def _read_keymap_in(path: str) -> List[_KeyMapping]:
                 parts = list(map(str.strip, line.split()))
                 if len(parts) >= 3:
                     keymap.append(_KeyMapping(
-                        kvmd_code=int(parts[0]),
+                        arduino_hid_code=int(parts[0]),
                         arduino_hid_key=parts[1],
                         web_key=parts[2],
                     ))

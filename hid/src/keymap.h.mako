@@ -30,7 +30,7 @@
 INLINE KeyboardKeycode keymap(uint8_t code) {
 	switch(code) {
 % for km in sorted(keymap, key=operator.attrgetter("arduino_hid_key")):
-		case ${km.kvmd_code}: return ${km.arduino_hid_key};
+		case ${km.arduino_hid_code}: return ${km.arduino_hid_key};
 % endfor
 		default: return KEY_ERROR_UNDEFINED;
 	}

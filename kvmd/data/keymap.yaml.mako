@@ -21,5 +21,5 @@
 
 <%! import operator %>
 % for km in sorted(keymap, key=operator.attrgetter("web_key")):
-${km.web_key}: ${km.kvmd_code}
+${km.web_key}: ${km.arduino_hid_code}
 % endfor
