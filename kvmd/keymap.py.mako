@@ -32,13 +32,23 @@ class SerialKey:
 
 
 @dataclasses.dataclass(frozen=True)
+class OtgKey:
+    code: int
+    is_modifier: bool
+
+
+@dataclasses.dataclass(frozen=True)
 class Key:
     serial: SerialKey
+    otg: OtgKey
 
 <%! import operator %>
 # =====
 KEYMAP: Dict[str, Key] = {
-% for km in sorted(keymap, key=operator.attrgetter("web_key")):
-    "${km.web_key}": Key(serial=SerialKey(code=${km.serial_hid_code})),
+% for km in sorted(keymap, key=operator.attrgetter("serial_code")):
+    "${km.web_key}": Key(
+        serial=SerialKey(code=${km.serial_code}),
+        otg=OtgKey(code=${km.otg_code}, is_modifier=${km.otg_is_modifier}),
+    ),
 % endfor
 }

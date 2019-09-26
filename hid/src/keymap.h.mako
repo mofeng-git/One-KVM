@@ -29,8 +29,8 @@
 <%! import operator %>
 INLINE KeyboardKeycode keymap(uint8_t code) {
 	switch(code) {
-% for km in sorted(keymap, key=operator.attrgetter("serial_hid_key")):
-		case ${km.serial_hid_code}: return ${km.serial_hid_key};
+% for km in sorted(keymap, key=operator.attrgetter("arduino_key")):
+		case ${km.serial_code}: return ${km.arduino_key};
 % endfor
 		default: return KEY_ERROR_UNDEFINED;
 	}

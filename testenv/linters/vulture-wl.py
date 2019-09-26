@@ -1,15 +1,11 @@
-_MassStorageDeviceInfo.manufacturer
-_MassStorageDeviceInfo.product
-_MassStorageDeviceInfo.real
-_MassStorageDeviceInfo.hw
-_MassStorageDeviceInfo.image
-
 IpmiServer.handle_raw_request
 
 fake_rpi.RPi.GPIO
 
-_KeyMapping.serial_hid_code
-_KeyMapping.serial_hid_key
 _KeyMapping.web_key
+_KeyMapping.serial_code
+_KeyMapping.arduino_key
+_KeyMapping.otg_code
+_KeyMapping.otg_is_modifier
 
 _ScriptWriter.get_args

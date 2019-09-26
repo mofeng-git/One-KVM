@@ -33,9 +33,11 @@ import mako.template
 # =====
 @dataclasses.dataclass(frozen=True)
 class _KeyMapping:
-    serial_hid_code: int
-    serial_hid_key: str
     web_key: str
+    serial_code: int
+    arduino_key: str
+    otg_code: int
+    otg_is_modifier: bool
 
 
 def _read_keymap_in(path: str) -> List[_KeyMapping]:
@@ -45,11 +47,13 @@ def _read_keymap_in(path: str) -> List[_KeyMapping]:
             line = line.strip()
             if len(line) > 0 and not line.startswith("#"):
                 parts = list(map(str.strip, line.split()))
-                if len(parts) >= 3:
+                if len(parts) >= 5:
                     keymap.append(_KeyMapping(
-                        serial_hid_code=int(parts[0]),
-                        serial_hid_key=parts[1],
-                        web_key=parts[2],
+                        web_key=parts[0],
+                        serial_code=int(parts[1]),
+                        arduino_key=parts[2],
+                        otg_code=int(parts[3], 16),
+                        otg_is_modifier=(parts[4].lower() == "m"),
                     ))
     return keymap
 
