@@ -103,7 +103,7 @@ run-ipmi: testenv
 
 
 regen: testenv
-	for file in kvmd/data/keymap.yaml hid/src/keymap.h; do \
+	for file in kvmd/keymap.py hid/src/keymap.h; do \
 		docker run --user `id -u`:`id -g` --rm \
 			--volume `pwd`:/src \
 		-it $(TESTENV_IMAGE) bash -c "cd src && ./genmap.py keymap.in $$file.mako $$file"; \

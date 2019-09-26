@@ -82,7 +82,7 @@ class _KeyEvent(_BoolEvent):
         assert self.name in keymap.KEYMAP
 
     def make_command(self) -> bytes:
-        code = keymap.KEYMAP[self.name]
+        code = keymap.KEYMAP[self.name].serial.code
         key_bytes = bytes([code])
         assert len(key_bytes) == 1, (self, key_bytes, code)
         state_bytes = (b"\x01" if self.state else b"\x00")

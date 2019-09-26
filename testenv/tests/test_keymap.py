@@ -27,8 +27,7 @@ from kvmd.keymap import KEYMAP
 
 # =====
 def test_ok__keymap() -> None:
-    assert type(KEYMAP["KeyA"]) == int  # pylint: disable=unidiomatic-typecheck
-    assert KEYMAP["KeyA"] == 1
+    assert KEYMAP["KeyA"].serial.code == 1
 
 
 def test_fail__keymap() -> None:

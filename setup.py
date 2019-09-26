@@ -93,10 +93,6 @@ def main() -> None:
             "kvmd.apps.ipmi",
         ],
 
-        package_data={
-            "kvmd": ["data/*.yaml"],
-        },
-
         scripts=[
             os.path.join("scripts", name)
             for name in os.listdir("scripts")

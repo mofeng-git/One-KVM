@@ -20,89 +20,25 @@
 # ========================================================================== #
 
 
-AltLeft: 79
-AltRight: 83
-ArrowDown: 75
-ArrowLeft: 74
-ArrowRight: 73
-ArrowUp: 76
-Backquote: 49
-Backslash: 46
-Backspace: 39
-BracketLeft: 44
-BracketRight: 45
-CapsLock: 53
-Comma: 50
-ControlLeft: 77
-ControlRight: 81
-Delete: 70
-Digit0: 36
-Digit1: 27
-Digit2: 28
-Digit3: 29
-Digit4: 30
-Digit5: 31
-Digit6: 32
-Digit7: 33
-Digit8: 34
-Digit9: 35
-End: 71
-Enter: 37
-Equal: 43
-Escape: 38
-F1: 54
-F10: 63
-F11: 64
-F12: 65
-F2: 55
-F3: 56
-F4: 57
-F5: 58
-F6: 59
-F7: 60
-F8: 61
-F9: 62
-Home: 68
-Insert: 67
-KeyA: 1
-KeyB: 2
-KeyC: 3
-KeyD: 4
-KeyE: 5
-KeyF: 6
-KeyG: 7
-KeyH: 8
-KeyI: 9
-KeyJ: 10
-KeyK: 11
-KeyL: 12
-KeyM: 13
-KeyN: 14
-KeyO: 15
-KeyP: 16
-KeyQ: 17
-KeyR: 18
-KeyS: 19
-KeyT: 20
-KeyU: 21
-KeyV: 22
-KeyW: 23
-KeyX: 24
-KeyY: 25
-KeyZ: 26
-MetaLeft: 80
-MetaRight: 84
-Minus: 42
-PageDown: 72
-PageUp: 69
-Pause: 85
-Period: 51
-PrintScreen: 66
-Quote: 48
-ScrollLock: 86
-Semicolon: 47
-ShiftLeft: 78
-ShiftRight: 82
-Slash: 52
-Space: 41
-Tab: 40
+import dataclasses
+
+from typing import Dict
+
+
+# =====
+@dataclasses.dataclass(frozen=True)
+class SerialKey:
+    code: int
+
+
+@dataclasses.dataclass(frozen=True)
+class Key:
+    serial: SerialKey
+
+<%! import operator %>
+# =====
+KEYMAP: Dict[str, Key] = {
+% for km in sorted(keymap, key=operator.attrgetter("web_key")):
+    "${km.web_key}": Key(serial=SerialKey(code=${km.serial_hid_code})),
+% endfor
+}
