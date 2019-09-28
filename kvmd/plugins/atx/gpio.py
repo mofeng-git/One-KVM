@@ -78,7 +78,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__region = aioregion.AioExclusiveRegion(AtxIsBusyError)
 
     @classmethod
-    def get_plugin_options(cls) -> Dict[str, Option]:
+    def get_plugin_options(cls) -> Dict:
         return {
             "power_led_pin":      Option(-1, type=valid_gpio_pin),
             "hdd_led_pin":        Option(-1, type=valid_gpio_pin),

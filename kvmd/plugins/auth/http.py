@@ -60,7 +60,7 @@ class Plugin(BaseAuthService):
         self.__http_session: Optional[aiohttp.ClientSession] = None
 
     @classmethod
-    def get_plugin_options(cls) -> Dict[str, Option]:
+    def get_plugin_options(cls) -> Dict:
         return {
             "url":     Option("http://localhost/auth"),
             "verify":  Option(True, type=valid_bool),

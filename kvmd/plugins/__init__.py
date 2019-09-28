@@ -27,8 +27,6 @@ from typing import Dict
 from typing import Type
 from typing import Any
 
-from ..yamlconf import Option
-
 
 # =====
 class UnknownPluginError(Exception):
@@ -46,7 +44,7 @@ class BasePlugin:
         return name[name.rindex(".") + 1:]
 
     @classmethod
-    def get_plugin_options(cls) -> Dict[str, Option]:
+    def get_plugin_options(cls) -> Dict:
         return {}  # pragma: nocover
 
 

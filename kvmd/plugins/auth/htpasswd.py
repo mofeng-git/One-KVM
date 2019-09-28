@@ -37,7 +37,7 @@ class Plugin(BaseAuthService):
         self.__path = path
 
     @classmethod
-    def get_plugin_options(cls) -> Dict[str, Option]:
+    def get_plugin_options(cls) -> Dict:
         return {
             "file": Option("/etc/kvmd/htpasswd", type=valid_abs_path_exists, unpack_as="path"),
         }

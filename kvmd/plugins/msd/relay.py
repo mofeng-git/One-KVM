@@ -198,7 +198,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             log("MSD is offline: %s", err)
 
     @classmethod
-    def get_plugin_options(cls) -> Dict[str, Option]:
+    def get_plugin_options(cls) -> Dict:
         return {
             "target_pin": Option(-1, type=valid_gpio_pin),
             "reset_pin":  Option(-1, type=valid_gpio_pin),

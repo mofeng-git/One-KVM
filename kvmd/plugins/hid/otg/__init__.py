@@ -55,7 +55,7 @@ class Plugin(BaseHid):
         self.__lock = asyncio.Lock()
 
     @classmethod
-    def get_plugin_options(cls) -> Dict[str, Option]:
+    def get_plugin_options(cls) -> Dict:
         return {
             "keyboard": {
                 "device":        Option("",  type=valid_abs_path, unpack_as="device_path"),

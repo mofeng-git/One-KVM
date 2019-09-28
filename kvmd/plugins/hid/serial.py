@@ -167,7 +167,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__stop_event = multiprocessing.Event()
 
     @classmethod
-    def get_plugin_options(cls) -> Dict[str, Option]:
+    def get_plugin_options(cls) -> Dict:
         return {
             "reset_pin":   Option(-1,  type=valid_gpio_pin),
             "reset_delay": Option(0.1, type=valid_float_f01),
