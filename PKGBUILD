@@ -2,15 +2,19 @@
 # Author: Maxim Devaev <mdevaev@gmail.com>
 
 
-[ -n "$PIKVM_PLATFORM" ] || PIKVM_PLATFORM="v0-vga v0-hdmi v1-vga v1-hdmi"
-[ -n "$PIKVM_BOARD" ] || PIKVM_BOARD="rpi2 rpi3"
+_variants=(v2-hdmi-rpi4)
+for _platform in v0-vga v0-hdmi v1-vga v1-hdmi; do
+	for _board in rpi2 rpi3; do
+		_variants+=($_platform:$_board)
+	done
+done
 
 
 pkgname=(kvmd)
-for _platform in $PIKVM_PLATFORM; do
-	for _board in $PIKVM_BOARD; do
-		pkgname+=(kvmd-platform-$_platform-$_board)
-	done
+for _variant in "${_variants[@]}"; do
+	_platform=${_variant%:*}
+	_board=${_variant#*:}
+	pkgname+=(kvmd-platform-$_platform-$_board)
 done
 pkgbase=kvmd
 pkgver=1.11
@@ -97,28 +101,27 @@ package_kvmd() {
 	done
 }
 
+for _variant in "${_variants[@]}"; do
+	_platform=${_variant%:*}
+	_board=${_variant#*:}
+	eval "package_kvmd-platform-$_platform-$_board() {
+		pkgdesc=\"Pi-KVM platform configs - $_platform for $_board\"
+		depends=(kvmd)
+		if [[ $_platform =~ ^.*-hdmi$ ]]; then
+			depends=(\"\${depends[@]}\" \"tc358743-dkms>=0.3\")
+		fi
 
-for _platform in $PIKVM_PLATFORM; do
-	for _board in $PIKVM_BOARD; do
-		eval "package_kvmd-platform-$_platform-$_board() {
-			pkgdesc=\"Pi-KVM platform configs - $_platform for $_board\"
-			depends=(kvmd)
-			if [[ $_platform =~ ^.*-hdmi$ ]]; then
-				depends=(\"\${depends[@]}\" \"tc358743-dkms>=0.3\")
-			fi
+		mkdir -p \"\$pkgdir/etc\"/{kvmd,sysctl.d,udev/rules.d,modules-load.d}
 
-			mkdir -p \"\$pkgdir/etc\"/{kvmd,sysctl.d,udev/rules.d,modules-load.d}
+		local _cfg_default=\"/usr/share/kvmd/configs.default\"
 
-			local _cfg_default=\"/usr/share/kvmd/configs.default\"
+		ln -sf \"\$_cfg_default/os/sysctl.conf\" \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
+		ln -sf \"\$_cfg_default/os/udev/$_platform-$_board.rules\" \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
+		ln -sf \"\$_cfg_default/os/modules-load/$_platform.conf\" \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
 
-			ln -sf \"\$_cfg_default/os/sysctl.conf\" \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
-			ln -sf \"\$_cfg_default/os/udev/$_platform-$_board.rules\" \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
-			ln -sf \"\$_cfg_default/os/modules-load/$_platform.conf\" \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
-
-			ln -sf \"\$_cfg_default/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
-			if [[ $_platform =~ ^.*-hdmi$ ]]; then
-				ln -sf \"\$_cfg_default/kvmd/tc358743-edid.hex\" \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
-			fi
-		}"
-	done
+		ln -sf \"\$_cfg_default/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
+		if [[ $_platform =~ ^.*-hdmi$ ]]; then
+			ln -sf \"\$_cfg_default/kvmd/tc358743-edid.hex\" \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
+		fi
+	}"
 done
