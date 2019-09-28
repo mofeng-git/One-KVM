@@ -17,7 +17,7 @@ kvmd:
     hid:
         type: otg
         keyboard:
-            device: /dev/kvmd/kvmd-hid-keyboard
+            device: /dev/kvmd-hid-keyboard
 
     atx:
         type: disabled
