@@ -2,7 +2,7 @@
 # Author: Maxim Devaev <mdevaev@gmail.com>
 
 
-_variants=(v2-hdmi-rpi4)
+_variants=(v2-hdmi:rpi4)
 for _platform in v0-vga v0-hdmi v1-vga v1-hdmi; do
 	for _board in rpi2 rpi3; do
 		_variants+=($_platform:$_board)
