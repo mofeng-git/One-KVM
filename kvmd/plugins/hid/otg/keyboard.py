@@ -136,7 +136,6 @@ class KeyboardProcess(DeviceProcess):
                 for key in self.__pressed_keys
             ]
 
-            print(self.__pressed_modifiers, self.__pressed_keys)
             ok = self._write_report(bytes([modifiers, 0] + keys))
 
         if not ok:

@@ -44,9 +44,9 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
         self,
         name: str,
         device_path: str,
-        timeout: float,
-        retries: int,
-        retries_delay: float,
+        select_timeout: float,
+        write_retries: int,
+        write_retries_delay: float,
         noop: bool,
     ) -> None:
 
@@ -55,9 +55,9 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
         self.__name = name
 
         self.__device_path = device_path
-        self.__timeout = timeout
-        self.__retries = retries
-        self.__retries_delay = retries_delay
+        self.__select_timeout = select_timeout
+        self.__write_retries = write_retries
+        self.__write_retries_delay = write_retries_delay
         self.__noop = noop
 
         self.__fd = -1
@@ -118,7 +118,7 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
         assert self.__fd >= 0
         logger = get_logger()
 
-        retries = self.__retries
+        retries = self.__write_retries
         while retries:
             try:
                 written = os.write(self.__fd, report)
@@ -128,23 +128,19 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
                 else:
                     logger.error("HID-%s write error: written (%s) != report length (%d)",
                                  self.__name, written, len(report))
-                    self._close_device()
             except Exception as err:
-                if isinstance(err, OSError) and errno == errno.EAGAIN:
-                    msg = "Can't write report to HID-%s {}: %s: %s"
-                    msg.format(" (maybe unplugged)" if retries == 1 else "")
-                    logger.error(msg, self.__name, type(err).__name__, err)  # TODO: debug
+                if isinstance(err, OSError) and err.errno == errno.EAGAIN:  # pylint: disable=no-member
+                    logger.error("HID-%s is busy/unplugged: %s: %s", self.__name, type(err).__name__, err)  # TODO debug
                 else:
                     logger.exception("Can't write report to HID-%s", self.__name)
-                    self._close_device()
 
             retries -= 1
-            self.__online_shared.value = 0
 
             if retries:
-                logger.error("Retries left (HID-%s, write_report): %d", self.__name, retries)
-                time.sleep(self.__retries_delay)
+                logger.error("HID-%s write retries left: %d", self.__name, retries)  # TODO debug
+                time.sleep(self.__write_retries_delay)
 
+        self._close_device()
         return False
 
     def _ensure_device(self) -> bool:
@@ -158,33 +154,22 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
                 self.__fd = os.open(self.__device_path, os.O_WRONLY|os.O_NONBLOCK)
             except FileNotFoundError:
                 logger.error("Missing HID-%s device: %s", self.__name, self.__device_path)
-            except Exception:
-                logger.exception("Can't open HID-%s device: %s", self.__name, self.__device_path)
+            except Exception as err:
+                logger.error("Can't open HID-%s device: %s: %s: %s",
+                             self.__name, self.__device_path, type(err).__name__, err)
 
         if self.__fd >= 0:
-            retries = self.__retries
-            while retries:
-                try:
-                    if select.select([], [self.__fd], [], self.__timeout)[1]:
-                        self.__online_shared.value = 1
-                        return True
-                    else:
-                        msg = "HID-%s is unavailable for writing"
-                        if retries == 1:
-                            msg += " (maybe unplugged)"
-                        logger.error(msg, self.__name)  # TODO: debug
-                except Exception as err:
-                    logger.error("Can't select() HID-%s: %s: %s", self.__name, type(err).__name__, err)
-
-                retries -= 1
-                self.__online_shared.value = 0
-
-                if retries:
-                    logger.error("Retries left (HID-%s, ensure_device): %d", self.__name, retries)
-                    time.sleep(self.__retries_delay)
-
+            try:
+                if select.select([], [self.__fd], [], self.__select_timeout)[1]:
+                    self.__online_shared.value = 1
+                    return True
+                else:
+                    logger.error("HID-%s is busy/unplugged", self.__name)  # TODO debug
+            except Exception as err:
+                logger.error("Can't select() HID-%s: %s: %s", self.__name, type(err).__name__, err)
             self._close_device()
 
+        self.__online_shared.value = 0
         return False
 
     def _close_device(self) -> None:
