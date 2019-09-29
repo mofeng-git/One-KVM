@@ -139,8 +139,8 @@ export function Mouse() {
 	var __streamMoveHandler = function(event) {
 		let rect = event.target.getBoundingClientRect();
 		__current_pos = {
-			x: Math.min(Math.round(event.clientX - rect.left), 0),
-			y: Math.min(Math.round(event.clientY - rect.top), 0),
+			x: Math.max(Math.round(event.clientX - rect.left), 0),
+			y: Math.max(Math.round(event.clientY - rect.top), 0),
 		};
 	};
 
