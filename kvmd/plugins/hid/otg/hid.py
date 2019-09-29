@@ -88,7 +88,7 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
                         self._process_event(event)
                         passed = 0
             except Exception:
-                logger.error("Unexpected HID-%s error", self.__name)
+                logger.exception("Unexpected HID-%s error", self.__name)
                 self._close_device()
             finally:
                 time.sleep(1)
@@ -96,7 +96,7 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
         self._close_device()
 
     def is_online(self) -> bool:
-        return bool(self.__online_shared.value)
+        return bool(self.__online_shared.value and self.is_alive())
 
     def _stop(self) -> None:
         if self.is_alive():
