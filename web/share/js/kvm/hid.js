@@ -95,8 +95,8 @@ export function Hid() {
 	};
 
 	self.setState = function(state) {
-		__keyboard.setState(state);
-		__mouse.setState(state);
+		__keyboard.setState(state.keyboard);
+		__mouse.setState(state.mouse);
 	};
 
 	var __releaseAll = function() {

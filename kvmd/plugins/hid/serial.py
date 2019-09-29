@@ -118,7 +118,7 @@ class _MouseButtonEvent(_BoolEvent):
 class _MouseWheelEvent(_IntEvent):
     def __post_init__(self) -> None:
         assert self.x == 0  # Горизонтальная прокрутка пока не поддерживается
-        assert -128 <= self.y <= 127
+        assert -127 <= self.y <= 127
 
     def make_command(self) -> bytes:
         return b"\x14\x00" + struct.pack(">b", self.y) + b"\x00\x00"
@@ -188,7 +188,12 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         multiprocessing.Process.start(self)
 
     def get_state(self) -> Dict:
-        return {"online": bool(self.__online_shared.value)}
+        online = bool(self.__online_shared.value)
+        return {
+            "online": online,
+            "keyboard": {"online": online},
+            "mouse": {"online": online},
+        }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         prev_state: Dict = {}
