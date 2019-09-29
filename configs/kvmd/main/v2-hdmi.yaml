@@ -23,7 +23,7 @@ kvmd:
         type: disabled
 
     msd:
-        type: disabled
+        type: otg
 
     streamer:
         desired_fps: 30
