@@ -130,7 +130,7 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
                                  self.__name, written, len(report))
             except Exception as err:
                 if isinstance(err, OSError) and err.errno == errno.EAGAIN:  # pylint: disable=no-member
-                    logger.error("HID-%s busy/unplugged (write): %s: %s",  # TODO debug
+                    logger.debug("HID-%s busy/unplugged (write): %s: %s",
                                  self.__name, type(err).__name__, err)
                 else:
                     logger.exception("Can't write report to HID-%s", self.__name)
@@ -138,7 +138,7 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
             retries -= 1
 
             if retries:
-                logger.error("HID-%s write retries left: %d", self.__name, retries)  # TODO debug
+                logger.debug("HID-%s write retries left: %d", self.__name, retries)
                 time.sleep(self.__write_retries_delay)
 
         self._close_device()
@@ -165,7 +165,7 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
                     self.__online_shared.value = 1
                     return True
                 else:
-                    logger.error("HID-%s is busy/unplugged (select)", self.__name)  # TODO debug
+                    logger.debug("HID-%s is busy/unplugged (select)", self.__name)
             except Exception as err:
                 logger.error("Can't select() HID-%s: %s: %s", self.__name, type(err).__name__, err)
             self._close_device()
