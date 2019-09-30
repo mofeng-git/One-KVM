@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+import re
 import time
 import argparse
 
@@ -66,7 +67,7 @@ def _check_config(config: Section) -> None:
         raise RuntimeError("Nothing to do")
 
 
-def _cmd_start(config: Section) -> None:
+def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     # https://www.kernel.org/doc/Documentation/usb/gadget_configfs.txt
     # https://www.isticktoit.net/?p=1383
 
@@ -115,6 +116,26 @@ def _cmd_start(config: Section) -> None:
             )
         symlink(func_path, join(config_path, "hid.usb0"))
 
+        # https://github.com/NicoHood/HID/blob/0835e6a/src/SingleReport/SingleAbsoluteMouse.cpp
+        # Репорт взят отсюда ^^^, но изменен диапазон значений координат перемещений.
+        # Автор предлагает использовать -32768...32767, но семерка почему-то не хочет работать
+        # с отрицательными значениями координат, как не хочет хавать 65536 и 32768.
+        # Так что мы ей скармливаем диапазон 0...32767, и передаем рукожопам из микрософта привет,
+        # потому что линуксы прекрасно работают с любыми двухбайтовыми диапазонами.
+        func_path = join(gadget_path, "functions/hid.usb1")  # Mouse
+        mkdir(func_path)
+        _write(join(func_path, "protocol"), "0")
+        _write(join(func_path, "subclass"), "0")
+        _write(join(func_path, "report_length"), "6")
+        with open(join(func_path, "report_desc"), "wb") as report_file:
+            report_file.write(
+                b"\x05\x01\x09\x02\xA1\x01\x05\x09\x19\x01\x29\x08"
+                b"\x15\x00\x25\x01\x95\x08\x75\x01\x81\x02\x05\x01\x09\x30"
+                b"\x09\x31\x16\x00\x00\x26\xFF\x7F\x75\x10\x95\x02\x81\x02"
+                b"\x09\x38\x15\x81\x25\x7f\x75\x08\x95\x01\x81\x06\xc0"
+            )
+        symlink(func_path, join(config_path, "hid.usb1"))
+
     if config.kvmd.msd.type == "otg":
         func_path = join(gadget_path, "functions/mass_storage.usb0")
         mkdir(func_path)
@@ -141,14 +162,14 @@ def _cmd_stop(config: Section) -> None:
 
     config_path = join(gadget_path, "configs/c.1")
     for func in listdir(config_path):
-        if func.endswith(".usb0"):
+        if re.search(r"\.usb\d+$", func):
             unlink(join(config_path, func))
     rmdir(join(config_path, "strings/0x409"))
     rmdir(config_path)
 
     funcs_path = join(gadget_path, "functions")
     for func in listdir(funcs_path):
-        if func.endswith(".usb0"):
+        if re.search(r"\.usb\d+$", func):
             rmdir(join(funcs_path, func))
 
     rmdir(join(gadget_path, "strings/0x409"))
