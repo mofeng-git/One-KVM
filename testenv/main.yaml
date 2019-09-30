@@ -25,6 +25,8 @@ kvmd:
     streamer:
         cap_pin: 17
         conv_pin: 18
+        sync_delay: 0
+        init_delay: 1
         init_restart_after: 1
         desired_fps: 30
         max_fps: 40

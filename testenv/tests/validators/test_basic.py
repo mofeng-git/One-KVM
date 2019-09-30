@@ -29,6 +29,7 @@ from kvmd.validators import ValidatorError
 from kvmd.validators.basic import valid_bool
 from kvmd.validators.basic import valid_number
 from kvmd.validators.basic import valid_int_f1
+from kvmd.validators.basic import valid_float_f0
 from kvmd.validators.basic import valid_float_f01
 from kvmd.validators.basic import valid_string_list
 
@@ -93,6 +94,20 @@ def test_ok__valid_int_f1(arg: Any) -> None:
 def test_fail__valid_int_f1(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_int_f1(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", [0, 1, 5, "5 ", "5.0 "])
+def test_ok__valid_float_f0(arg: Any) -> None:
+    value = valid_float_f0(arg)
+    assert type(value) == float  # pylint: disable=unidiomatic-typecheck
+    assert value == float(str(arg).strip())
+
+
+@pytest.mark.parametrize("arg", ["test", "", None, -6, "-6"])
+def test_fail__valid_float_f0(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_float_f0(arg))
 
 
 # =====

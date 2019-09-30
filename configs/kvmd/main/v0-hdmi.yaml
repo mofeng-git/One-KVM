@@ -28,6 +28,8 @@ kvmd:
         type: disabled
 
     streamer:
+        sync_delay: 0
+        init_delay: 1
         desired_fps: 30
         max_fps: 60
         unix: /run/kvmd/ustreamer.sock

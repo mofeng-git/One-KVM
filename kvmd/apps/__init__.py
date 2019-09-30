@@ -51,6 +51,7 @@ from ..yamlconf.loader import load_yaml_file
 
 from ..validators.basic import valid_bool
 from ..validators.basic import valid_number
+from ..validators.basic import valid_float_f0
 from ..validators.basic import valid_float_f01
 
 from ..validators.auth import valid_users_list
@@ -224,9 +225,9 @@ def _get_config_scheme() -> Dict:
                 "cap_pin":  Option(-1, type=valid_gpio_pin_optional),
                 "conv_pin": Option(-1, type=valid_gpio_pin_optional),
 
-                "sync_delay":         Option(1.0,  type=valid_float_f01),
-                "init_delay":         Option(3.0,  type=valid_float_f01),
-                "init_restart_after": Option(0.0,  type=(lambda arg: valid_number(arg, min=0.0, type=float))),
+                "sync_delay":         Option(1.0,  type=valid_float_f0),
+                "init_delay":         Option(3.0,  type=valid_float_f0),
+                "init_restart_after": Option(0.0,  type=valid_float_f0),
                 "shutdown_delay":     Option(10.0, type=valid_float_f01),
                 "state_poll":         Option(1.0,  type=valid_float_f01),
 

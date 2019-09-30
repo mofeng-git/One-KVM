@@ -74,6 +74,10 @@ def valid_int_f1(arg: Any) -> int:
     return int(valid_number(arg, min=1))
 
 
+def valid_float_f0(arg: Any) -> float:
+    return float(valid_number(arg, min=0, type=float))
+
+
 def valid_float_f01(arg: Any) -> float:
     return float(valid_number(arg, min=0.1, type=float))
 
