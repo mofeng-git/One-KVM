@@ -49,10 +49,12 @@
 #define PROTO_CMD_MOUSE_BUTTON_EVENT	0x13
 #define PROTO_CMD_MOUSE_WHEEL_EVENT		0x14
 // -----------------------------------------
-#define PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT	0b10000000
-#define PROTO_CMD_MOUSE_BUTTON_LEFT_STATE	0b00001000
-#define PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT	0b01000000
-#define PROTO_CMD_MOUSE_BUTTON_RIGHT_STATE	0b00000100
+#define PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT		0b10000000
+#define PROTO_CMD_MOUSE_BUTTON_LEFT_STATE		0b00001000
+#define PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT		0b01000000
+#define PROTO_CMD_MOUSE_BUTTON_RIGHT_STATE		0b00000100
+#define PROTO_CMD_MOUSE_BUTTON_MIDDLE_SELECT	0b00100000
+#define PROTO_CMD_MOUSE_BUTTON_MIDDLE_STATE		0b00000010
 
 
 // -----------------------------------------------------------------------------
@@ -86,21 +88,21 @@ INLINE void cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
 INLINE void cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
 	uint8_t state = buffer[0];
 
-	if (state & PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT) {
-		if (state & PROTO_CMD_MOUSE_BUTTON_LEFT_STATE) {
-			SingleAbsoluteMouse.press(MOUSE_LEFT);
-		} else {
-			SingleAbsoluteMouse.release(MOUSE_LEFT);
+#	define PROCESS_BUTTON(name) { \
+			if (state & PROTO_CMD_MOUSE_BUTTON_##name##_SELECT) { \
+				if (state & PROTO_CMD_MOUSE_BUTTON_##name##_STATE) { \
+					SingleAbsoluteMouse.press(MOUSE_##name); \
+				} else { \
+					SingleAbsoluteMouse.release(MOUSE_##name); \
+				} \
+			} \
 		}
-	}
 
-	if (state & PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT) {
-		if (state & PROTO_CMD_MOUSE_BUTTON_RIGHT_STATE) {
-			SingleAbsoluteMouse.press(MOUSE_RIGHT);
-		} else {
-			SingleAbsoluteMouse.release(MOUSE_RIGHT);
-		}
-	}
+	PROCESS_BUTTON(LEFT);
+	PROCESS_BUTTON(RIGHT);
+	PROCESS_BUTTON(MIDDLE);
+
+#	undef PROCESS_BUTTON
 }
 
 INLINE void cmdMouseWheelEvent(const uint8_t *buffer) { // 2 bytes

@@ -102,7 +102,7 @@ class _MouseMoveEvent(_IntEvent):
 @dataclasses.dataclass(frozen=True)
 class _MouseButtonEvent(_BoolEvent):
     def __post_init__(self) -> None:
-        assert self.name in ["left", "right"]
+        assert self.name in ["left", "right", "middle"]
 
     def make_command(self) -> bytes:
         code = 0
@@ -110,6 +110,8 @@ class _MouseButtonEvent(_BoolEvent):
             code = (0b10000000 | (0b00001000 if self.state else 0))
         elif self.name == "right":
             code = (0b01000000 | (0b00000100 if self.state else 0))
+        elif self.name == "middle":
+            code = (0b00100000 | (0b00000010 if self.state else 0))
         assert code, self
         return b"\x13" + bytes([code]) + b"\x00\x00\x00"
 
