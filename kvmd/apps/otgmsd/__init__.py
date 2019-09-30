@@ -61,7 +61,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="KVMD OTG MSD Helper")
     parser.add_argument("--reset", action="store_true", help="Send SIGUSR1 to MSD kernel thread")
     parser.add_argument("--set-image", dest="image_path", default=None, help="Change active image path")
-    parser.add_argument("--gadget", default="pikvm", help="USB gadget name")
+    parser.add_argument("--gadget", default="kvmd", help="USB gadget name")
     options = parser.parse_args()
 
     if options.reset:

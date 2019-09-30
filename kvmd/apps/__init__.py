@@ -245,7 +245,7 @@ def _get_config_scheme() -> Dict:
         },
 
         "otg": {
-            "gadget":        Option("pikvm"),
+            "gadget":        Option("kvmd"),
             "vendor_id":     Option(0x1D6B, type=valid_number),  # Linux Foundation
             "product_id":    Option(0x0104, type=valid_number),  # Multifunction Composite Gadget
             "manufacturer":  Option("Pi-KVM"),
