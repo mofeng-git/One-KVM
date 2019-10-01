@@ -11,6 +11,7 @@ RestartSec=3
 
 ExecStart=/usr/bin/kvmd
 ExecStopPost=/usr/bin/kvmd-cleanup
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target

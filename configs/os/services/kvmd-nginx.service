@@ -12,6 +12,7 @@ ExecStart=/usr/bin/nginx -p /etc/kvmd/nginx -c /etc/kvmd/nginx/nginx.conf -g 'pi
 ExecReload=/usr/bin/nginx -s reload -p /etc/kvmd/nginx -c /etc/kvmd/nginx/nginx.conf
 KillSignal=SIGQUIT
 KillMode=mixed
+TimeoutStopSec=3
 
 [Install]
 WantedBy=multi-user.target
