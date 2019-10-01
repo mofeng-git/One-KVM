@@ -20,13 +20,12 @@
 # ========================================================================== #
 
 
+import os
 import re
 import time
 import argparse
 
-import os
-
-from os.path import join
+from os.path import join  # pylint: disable=ungrouped-imports
 
 from typing import List
 from typing import Optional
@@ -38,6 +37,10 @@ from ...yamlconf import Section
 from ...validators import ValidatorError
 
 from .. import init
+
+from .hid import Hid
+from .hid.keyboard import KEYBOARD_HID
+from .hid.mouse import MOUSE_HID
 
 
 # =====
@@ -101,43 +104,14 @@ def _create_acm(gadget_path: str, config_path: str) -> None:
     _symlink(func_path, join(config_path, "acm.usb0"))
 
 
-def _create_keyboard(gadget_path: str, config_path: str) -> None:
-    func_path = join(gadget_path, "functions/hid.usb0")  # Keyboard
+def _create_hid(gadget_path: str, config_path: str, hid: Hid, instance: int) -> None:
+    func_path = join(gadget_path, f"functions/hid.usb{instance}")
     _mkdir(func_path)
-    _write(join(func_path, "protocol"), "1")
-    _write(join(func_path, "subclass"), "1")
-    _write(join(func_path, "report_length"), "8")
-    _write_bytes(
-        join(func_path, "report_desc"),
-        b"\x05\x01\x09\x06\xa1\x01\x05\x07\x19\xe0\x29\xe7\x15\x00"
-        b"\x25\x01\x75\x01\x95\x08\x81\x02\x95\x01\x75\x08\x81\x03"
-        b"\x95\x05\x75\x01\x05\x08\x19\x01\x29\x05\x91\x02\x95\x01"
-        b"\x75\x03\x91\x03\x95\x06\x75\x08\x15\x00\x25\x65\x05\x07"
-        b"\x19\x00\x29\x65\x81\x00\xc0"
-    )
-    _symlink(func_path, join(config_path, "hid.usb0"))
-
-
-def _create_mouse(gadget_path: str, config_path: str) -> None:
-    # https://github.com/NicoHood/HID/blob/0835e6a/src/SingleReport/SingleAbsoluteMouse.cpp
-    # Репорт взят отсюда ^^^, но изменен диапазон значений координат перемещений.
-    # Автор предлагает использовать -32768...32767, но семерка почему-то не хочет работать
-    # с отрицательными значениями координат, как не хочет хавать 65536 и 32768.
-    # Так что мы ей скармливаем диапазон 0...32767, и передаем рукожопам из микрософта привет,
-    # потому что линуксы прекрасно работают с любыми двухбайтовыми диапазонами.
-    func_path = join(gadget_path, "functions/hid.usb1")  # Mouse
-    _mkdir(func_path)
-    _write(join(func_path, "protocol"), "0")
-    _write(join(func_path, "subclass"), "0")
-    _write(join(func_path, "report_length"), "6")
-    _write_bytes(
-        join(func_path, "report_desc"),
-        b"\x05\x01\x09\x02\xA1\x01\x05\x09\x19\x01\x29\x08\x15\x00"
-        b"\x25\x01\x95\x08\x75\x01\x81\x02\x05\x01\x09\x30\x09\x31"
-        b"\x16\x00\x00\x26\xFF\x7F\x75\x10\x95\x02\x81\x02\x09\x38"
-        b"\x15\x81\x25\x7f\x75\x08\x95\x01\x81\x06\xc0"
-    )
-    _symlink(func_path, join(config_path, "hid.usb1"))
+    _write(join(func_path, "protocol"), str(hid.protocol))
+    _write(join(func_path, "subclass"), str(hid.subclass))
+    _write(join(func_path, "report_length"), str(hid.report_length))
+    _write_bytes(join(func_path, "report_desc"), hid.report_descriptor)
+    _symlink(func_path, join(config_path, f"hid.usb{instance}"))
 
 
 def _create_msd(gadget_path: str, config_path: str) -> None:
@@ -188,8 +162,8 @@ def _cmd_start(config: Section) -> None:
 
     if config.kvmd.hid.type == "otg":
         logger.info("Required HID")
-        _create_keyboard(gadget_path, config_path)
-        _create_mouse(gadget_path, config_path)
+        _create_hid(gadget_path, config_path, KEYBOARD_HID, 0)
+        _create_hid(gadget_path, config_path, MOUSE_HID, 1)
 
     if config.kvmd.msd.type == "otg":
         logger.info("Required MSD")

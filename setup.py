@@ -88,6 +88,7 @@ def main() -> None:
             "kvmd.apps",
             "kvmd.apps.kvmd",
             "kvmd.apps.otg",
+            "kvmd.apps.otg.hid",
             "kvmd.apps.otgmsd",
             "kvmd.apps.htpasswd",
             "kvmd.apps.cleanup",
