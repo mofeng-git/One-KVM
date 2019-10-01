@@ -274,7 +274,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
         self.__hid.start()
 
-        setproctitle.setproctitle("[main] " + setproctitle.getproctitle())
+        setproctitle.setproctitle(f"kvmd/main: {setproctitle.getproctitle()}")
 
         self.__heartbeat = heartbeat
         self.__sync_chunk_size = sync_chunk_size

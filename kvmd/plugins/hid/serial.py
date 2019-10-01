@@ -302,7 +302,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
         logger.info("Started HID pid=%d", os.getpid())
         signal.signal(signal.SIGINT, signal.SIG_IGN)
-        setproctitle.setproctitle("[hid] " + setproctitle.getproctitle())
+        setproctitle.setproctitle(f"kvmd/hid: {setproctitle.getproctitle()}")
 
         while not self.__stop_event.is_set():
             try:

@@ -70,7 +70,7 @@ class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instan
 
         logger.info("Started HID-%s pid=%d", self.__name, os.getpid())
         signal.signal(signal.SIGINT, signal.SIG_IGN)
-        setproctitle.setproctitle(f"[hid-{self.__name}] {setproctitle.getproctitle()}")
+        setproctitle.setproctitle(f"kvmd/hid-{self.__name}: {setproctitle.getproctitle()}")
 
         while not self.__stop_event.is_set():
             try:
