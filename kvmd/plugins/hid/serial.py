@@ -119,10 +119,11 @@ class _MouseButtonEvent(_BoolEvent):
 @dataclasses.dataclass(frozen=True)
 class _MouseWheelEvent(_IntEvent):
     def __post_init__(self) -> None:
-        assert self.x == 0  # Горизонтальная прокрутка пока не поддерживается
+        assert -127 <= self.x <= 127
         assert -127 <= self.y <= 127
 
     def make_command(self) -> bytes:
+        # Горизонтальная прокрутка пока не поддерживается
         return b"\x14\x00" + struct.pack(">b", self.y) + b"\x00\x00"
 
 
@@ -253,8 +254,8 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
     async def send_mouse_button_event(self, button: str, state: bool) -> None:
         await self.__send_bool_event(_MouseButtonEvent(button, state), self.__pressed_mouse_buttons)
 
-    async def send_mouse_wheel_event(self, delta_y: int) -> None:
-        await self.__send_int_event(_MouseWheelEvent(0, delta_y))
+    async def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        await self.__send_int_event(_MouseWheelEvent(delta_x, delta_y))
 
     async def clear_events(self) -> None:
         if not self.__stop_event.is_set():

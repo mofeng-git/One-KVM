@@ -190,13 +190,19 @@ export function Mouse() {
 
 		let delta = {x: 0, y: 0};
 
-		__wheel_delta.y += event.deltaY;
+		__wheel_delta.x += event.deltaX; // Horizontal scrolling
+		if (Math.abs(__wheel_delta.x) >= 100) {
+			delta.x = __wheel_delta.x / Math.abs(__wheel_delta.x) * (-5);
+			__wheel_delta.x = 0;
+		}
+
+		__wheel_delta.y += event.deltaY; // Vertical scrolling
 		if (Math.abs(__wheel_delta.y) >= 100) {
 			delta.y = __wheel_delta.y / Math.abs(__wheel_delta.y) * (-5);
 			__wheel_delta.y = 0;
 		}
 
-		if (delta.y) {
+		if (delta.x || delta.y) {
 			tools.debug("Mouse: scrolled:", delta);
 			if (__ws) {
 				__ws.send(JSON.stringify({

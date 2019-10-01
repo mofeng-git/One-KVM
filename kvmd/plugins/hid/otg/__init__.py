@@ -121,8 +121,8 @@ class Plugin(BaseHid):
     async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
         self.__mouse_proc.send_move_event(to_x, to_y)
 
-    async def send_mouse_wheel_event(self, delta_y: int) -> None:
-        self.__mouse_proc.send_wheel_event(delta_y)
+    async def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        self.__mouse_proc.send_wheel_event(delta_x, delta_y)
 
     async def clear_events(self) -> None:
         self.__keyboard_proc.send_clear_event()

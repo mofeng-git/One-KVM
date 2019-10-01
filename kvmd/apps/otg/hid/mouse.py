@@ -28,7 +28,7 @@ MOUSE_HID = Hid(
     protocol=0,
     subclass=0,
 
-    report_length=6,
+    report_length=7,
 
     report_descriptor=bytes([
         # https://github.com/NicoHood/HID/blob/0835e6a/src/SingleReport/SingleAbsoluteMouse.cpp
@@ -65,6 +65,15 @@ MOUSE_HID = Hid(
 
         # Wheel
         0x09, 0x38,  # USAGE (Wheel)
+        0x15, 0x81,  # LOGICAL_MINIMUM (-127)
+        0x25, 0x7F,  # LOGICAL_MAXIMUM (127)
+        0x75, 0x08,  # REPORT_SIZE (8)
+        0x95, 0x01,  # REPORT_COUNT (1)
+        0x81, 0x06,  # INPUT (Data,Var,Rel)
+
+        # Horizontal wheel
+        0x05, 0x0C,  # USAGE PAGE (Consumer Devices)
+        0x0A, 0x38, 0x02,  # USAGE (AC Pan)
         0x15, 0x81,  # LOGICAL_MINIMUM (-127)
         0x25, 0x7F,  # LOGICAL_MAXIMUM (127)
         0x75, 0x08,  # REPORT_SIZE (8)

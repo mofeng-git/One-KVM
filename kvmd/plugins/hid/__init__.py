@@ -57,7 +57,7 @@ class BaseHid(BasePlugin):
     async def send_mouse_button_event(self, button: str, state: bool) -> None:
         raise NotImplementedError
 
-    async def send_mouse_wheel_event(self, delta_y: int) -> None:
+    async def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         raise NotImplementedError
 
     async def clear_events(self) -> None:

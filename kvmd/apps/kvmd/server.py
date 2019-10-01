@@ -421,10 +421,11 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     async def __handle_ws_mouse_wheel_event(self, event: Dict) -> None:
         try:
+            delta_x = valid_hid_mouse_wheel(event["delta"]["x"])
             delta_y = valid_hid_mouse_wheel(event["delta"]["y"])
         except Exception:
             return
-        await self.__hid.send_mouse_wheel_event(delta_y)
+        await self.__hid.send_mouse_wheel_event(delta_x, delta_y)
 
     # ===== HID
 

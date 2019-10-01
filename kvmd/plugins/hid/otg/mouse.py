@@ -66,9 +66,11 @@ class _MoveEvent(BaseEvent):
 
 @dataclasses.dataclass(frozen=True)
 class _WheelEvent(BaseEvent):
+    delta_x: int
     delta_y: int
 
     def __post_init__(self) -> None:
+        assert -127 <= self.delta_x <= 127
         assert -127 <= self.delta_y <= 127
 
 
@@ -86,7 +88,7 @@ class MouseProcess(DeviceProcess):
         get_logger().info("Clearing HID-mouse events ...")
         if self._ensure_device():
             try:
-                self._write_report(self.__make_report(0, self.__x, self.__y, 0))  # Release all buttons
+                self._write_report(self.__make_report(0, self.__x, self.__y, 0, 0))  # Release all buttons
             finally:
                 self._close_device()
 
@@ -103,8 +105,8 @@ class MouseProcess(DeviceProcess):
     def send_move_event(self, to_x: int, to_y: int) -> None:
         self._queue_event(_MoveEvent(to_x, to_y))
 
-    def send_wheel_event(self, delta_y: int) -> None:
-        self._queue_event(_WheelEvent(delta_y))
+    def send_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        self._queue_event(_WheelEvent(delta_x, delta_y))
 
     # =====
 
@@ -124,34 +126,35 @@ class MouseProcess(DeviceProcess):
         self.__clear_state()
         if reopen:
             self._close_device()
-        self.__send_current_state(0)
+        self.__send_current_state(0, 0)
 
     def __process_button_event(self, event: _ButtonEvent) -> None:
         if event.code & self.__pressed_buttons:
             # Ранее нажатую кнопку отжимаем
             self.__pressed_buttons &= ~event.code
-            if not self.__send_current_state(0):
+            if not self.__send_current_state(0, 0):
                 return
         if event.state:
             # Нажимаем если нужно
             self.__pressed_buttons |= event.code
-            self.__send_current_state(0)
+            self.__send_current_state(0, 0)
 
     def __process_move_event(self, event: _MoveEvent) -> None:
         self.__x = event.to_x
         self.__y = event.to_y
-        self.__send_current_state(0)
+        self.__send_current_state(0, 0)
 
     def __process_wheel_event(self, event: _WheelEvent) -> None:
-        self.__send_current_state(event.delta_y)
+        self.__send_current_state(event.delta_x, event.delta_y)
 
-    def __send_current_state(self, delta_y: int) -> bool:
+    def __send_current_state(self, delta_x: int, delta_y: int) -> bool:
         ok = False
         if self._ensure_device():
             ok = self._write_report(self.__make_report(
                 buttons=self.__pressed_buttons,
                 to_x=self.__x,
                 to_y=self.__y,
+                delta_x=delta_x,
                 delta_y=delta_y,
             ))
         if not ok:
@@ -163,7 +166,7 @@ class MouseProcess(DeviceProcess):
         self.__x = 0
         self.__y = 0
 
-    def __make_report(self, buttons: int, to_x: int, to_y: int, delta_y: int) -> bytes:
+    def __make_report(self, buttons: int, to_x: int, to_y: int, delta_x: int, delta_y: int) -> bytes:
         to_x = (to_x + 32768) // 2
         to_y = (to_y + 32768) // 2
-        return struct.pack("<BHHb", buttons, to_x, to_y, delta_y)
+        return struct.pack("<BHHbb", buttons, to_x, to_y, delta_y, delta_x)
