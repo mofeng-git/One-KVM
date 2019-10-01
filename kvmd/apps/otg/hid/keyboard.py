@@ -25,8 +25,8 @@ from . import Hid
 
 # =====
 KEYBOARD_HID = Hid(
-    protocol=1,
-    subclass=1,
+    protocol=1,  # Keyboard protocol
+    subclass=1,  # Boot interface subclass
 
     report_length=8,
 

@@ -383,10 +383,10 @@ class Server:  # pylint: disable=too-many-instance-attributes
                         await ws.send_str(json.dumps({"msg_type": "pong"}))
                     elif event_type == "key":
                         await self.__handle_ws_key_event(event)
-                    elif event_type == "mouse_move":
-                        await self.__handle_ws_mouse_move_event(event)
                     elif event_type == "mouse_button":
                         await self.__handle_ws_mouse_button_event(event)
+                    elif event_type == "mouse_move":
+                        await self.__handle_ws_mouse_move_event(event)
                     elif event_type == "mouse_wheel":
                         await self.__handle_ws_mouse_wheel_event(event)
                     else:
@@ -403,14 +403,6 @@ class Server:  # pylint: disable=too-many-instance-attributes
             return
         await self.__hid.send_key_event(key, state)
 
-    async def __handle_ws_mouse_move_event(self, event: Dict) -> None:
-        try:
-            to_x = valid_hid_mouse_move(event["to"]["x"])
-            to_y = valid_hid_mouse_move(event["to"]["y"])
-        except Exception:
-            return
-        await self.__hid.send_mouse_move_event(to_x, to_y)
-
     async def __handle_ws_mouse_button_event(self, event: Dict) -> None:
         try:
             button = valid_hid_mouse_button(event["button"])
@@ -418,6 +410,14 @@ class Server:  # pylint: disable=too-many-instance-attributes
         except Exception:
             return
         await self.__hid.send_mouse_button_event(button, state)
+
+    async def __handle_ws_mouse_move_event(self, event: Dict) -> None:
+        try:
+            to_x = valid_hid_mouse_move(event["to"]["x"])
+            to_y = valid_hid_mouse_move(event["to"]["y"])
+        except Exception:
+            return
+        await self.__hid.send_mouse_move_event(to_x, to_y)
 
     async def __handle_ws_mouse_wheel_event(self, event: Dict) -> None:
         try:

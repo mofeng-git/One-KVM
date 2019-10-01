@@ -25,8 +25,8 @@ from . import Hid
 
 # =====
 MOUSE_HID = Hid(
-    protocol=0,
-    subclass=0,
+    protocol=0,  # None protocol
+    subclass=0,  # No subclass
 
     report_length=7,
 

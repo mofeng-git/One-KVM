@@ -45,8 +45,8 @@
 #define PROTO_CMD_REPEAT				0x02
 #define PROTO_CMD_RESET_HID				0x10
 #define PROTO_CMD_KEY_EVENT				0x11
+#define PROTO_CMD_MOUSE_BUTTON_EVENT	0x13  // Legacy sequence
 #define PROTO_CMD_MOUSE_MOVE_EVENT		0x12
-#define PROTO_CMD_MOUSE_BUTTON_EVENT	0x13
 #define PROTO_CMD_MOUSE_WHEEL_EVENT		0x14
 // -----------------------------------------
 #define PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT		0b10000000
@@ -75,16 +75,6 @@ INLINE void cmdKeyEvent(const uint8_t *buffer) { // 2 bytes
 	}
 }
 
-INLINE void cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
-	int x = (int)buffer[0] << 8;
-	x |= (int)buffer[1];
-
-	int y = (int)buffer[2] << 8;
-	y |= (int)buffer[3];
-
-	SingleAbsoluteMouse.moveTo(x, y);
-}
-
 INLINE void cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
 	uint8_t state = buffer[0];
 
@@ -105,6 +95,16 @@ INLINE void cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
 #	undef PROCESS_BUTTON
 }
 
+INLINE void cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
+	int x = (int)buffer[0] << 8;
+	x |= (int)buffer[1];
+
+	int y = (int)buffer[2] << 8;
+	y |= (int)buffer[3];
+
+	SingleAbsoluteMouse.moveTo(x, y);
+}
+
 INLINE void cmdMouseWheelEvent(const uint8_t *buffer) { // 2 bytes
 	// delta_x is not supported by hid-project now
 	signed char delta_y = buffer[1];
@@ -114,7 +114,7 @@ INLINE void cmdMouseWheelEvent(const uint8_t *buffer) { // 2 bytes
 
 
 // -----------------------------------------------------------------------------
-INLINE uint16_t makeCrc16(const uint8_t *buffer, const unsigned length) {
+INLINE uint16_t makeCrc16(const uint8_t *buffer, unsigned length) {
 	uint16_t crc = 0xFFFF;
 
 	for (unsigned byte_count = 0; byte_count < length; ++byte_count) {
@@ -192,8 +192,8 @@ void loop() {
 					switch (buffer[1]) {
 						case PROTO_CMD_RESET_HID:			HANDLE(cmdResetHid);
 						case PROTO_CMD_KEY_EVENT:			HANDLE(cmdKeyEvent);
-						case PROTO_CMD_MOUSE_MOVE_EVENT:	HANDLE(cmdMouseMoveEvent);
 						case PROTO_CMD_MOUSE_BUTTON_EVENT:	HANDLE(cmdMouseButtonEvent);
+						case PROTO_CMD_MOUSE_MOVE_EVENT:	HANDLE(cmdMouseMoveEvent);
 						case PROTO_CMD_MOUSE_WHEEL_EVENT:	HANDLE(cmdMouseWheelEvent);
 
 						case PROTO_CMD_PING:	sendCmdResponse(PROTO_RESP_OK); break;

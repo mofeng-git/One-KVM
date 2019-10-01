@@ -82,19 +82,6 @@ class _KeyEvent(_BaseEvent):
 
 
 @dataclasses.dataclass(frozen=True)
-class _MouseMoveEvent(_BaseEvent):
-    to_x: int
-    to_y: int
-
-    def __post_init__(self) -> None:
-        assert -32768 <= self.to_x <= 32767
-        assert -32768 <= self.to_y <= 32767
-
-    def make_command(self) -> bytes:
-        return struct.pack(">Bhh", 0x12, self.to_x, self.to_y)
-
-
-@dataclasses.dataclass(frozen=True)
 class _MouseButtonEvent(_BaseEvent):
     name: str
     state: bool
@@ -111,6 +98,19 @@ class _MouseButtonEvent(_BaseEvent):
         if self.state:
             code |= state_pressed
         return struct.pack(">BBxxx", 0x13, code)
+
+
+@dataclasses.dataclass(frozen=True)
+class _MouseMoveEvent(_BaseEvent):
+    to_x: int
+    to_y: int
+
+    def __post_init__(self) -> None:
+        assert -32768 <= self.to_x <= 32767
+        assert -32768 <= self.to_y <= 32767
+
+    def make_command(self) -> bytes:
+        return struct.pack(">Bhh", 0x12, self.to_x, self.to_y)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -248,11 +248,11 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
     async def send_key_event(self, key: str, state: bool) -> None:
         await self.__queue_event(_KeyEvent(key, state))
 
-    async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        await self.__queue_event(_MouseMoveEvent(to_x, to_y))
-
     async def send_mouse_button_event(self, button: str, state: bool) -> None:
         await self.__queue_event(_MouseButtonEvent(button, state))
+
+    async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        await self.__queue_event(_MouseMoveEvent(to_x, to_y))
 
     async def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         await self.__queue_event(_MouseWheelEvent(delta_x, delta_y))
