@@ -27,8 +27,8 @@ from typing import Any
 
 from ....logging import get_logger
 
-from .hid import BaseEvent
-from .hid import DeviceProcess
+from .device import BaseEvent
+from .device import BaseDeviceProcess
 
 
 # =====
@@ -75,7 +75,7 @@ class _WheelEvent(BaseEvent):
 
 
 # =====
-class MouseProcess(DeviceProcess):
+class MouseProcess(BaseDeviceProcess):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(name="mouse", **kwargs)
 

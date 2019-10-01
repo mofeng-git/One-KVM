@@ -31,8 +31,8 @@ from ....logging import get_logger
 
 from .... import keymap
 
-from .hid import BaseEvent
-from .hid import DeviceProcess
+from .device import BaseEvent
+from .device import BaseDeviceProcess
 
 
 # =====
@@ -51,7 +51,7 @@ class _KeyEvent(BaseEvent):
 
 
 # =====
-class KeyboardProcess(DeviceProcess):
+class KeyboardProcess(BaseDeviceProcess):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(name="keyboard", **kwargs)
 

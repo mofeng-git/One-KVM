@@ -39,7 +39,7 @@ class BaseEvent:
     pass
 
 
-class DeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
+class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         name: str,
