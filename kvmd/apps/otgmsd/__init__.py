@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # ========================================================================== #
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
@@ -30,19 +29,24 @@ import psutil
 
 
 # =====
-def _set_msd_image(gadget: str, path: str) -> None:
-    lun_file_path = os.path.join("/sys/kernel/config/usb_gadget", gadget, "functions/mass_storage.usb0/lun.0/file")
+def _set_param(gadget: str, param: str, value: str) -> None:
+    param_path = os.path.join(
+        "/sys/kernel/config/usb_gadget",
+        gadget,
+        "functions/mass_storage.usb0/lun.0",
+        param,
+    )
     try:
-        with open(lun_file_path, "w") as lun_file:
-            lun_file.write(path + "\n")
+        with open(param_path, "w") as param_file:
+            param_file.write(value + "\n")
     except OSError as err:
         if err.errno == errno.EBUSY:
-            raise SystemExit(f"Can't change image because device is locked: {str(err)}")
+            raise SystemExit(f"Can't change {param!r} value because device is locked: {err}")
         raise
 
 
 def _reset_msd() -> None:
-    # https://github.com/torvalds/linux/blob/3039fadf2bfdc104dc963820c305778c7c1a6229/drivers/usb/gadget/function/f_mass_storage.c#L2924
+    # https://github.com/torvalds/linux/blob/3039fad/drivers/usb/gadget/function/f_mass_storage.c#L2924
     found = False
     for proc in psutil.process_iter():
         attrs = proc.as_dict(attrs=["name", "exe", "pid"])
@@ -51,7 +55,7 @@ def _reset_msd() -> None:
                 proc.send_signal(signal.SIGUSR1)
                 found = True
             except Exception as err:
-                SystemExit(f"Can't send SIGUSR1 to MSD kernel thread with pid={attrs['pid']}: {str(err)}")
+                SystemExit(f"Can't send SIGUSR1 to MSD kernel thread with pid={attrs['pid']}: {err}")
     if not found:
         raise SystemExit("Can't find MSD kernel thread")
 
@@ -60,12 +64,20 @@ def _reset_msd() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="KVMD OTG MSD Helper")
     parser.add_argument("--reset", action="store_true", help="Send SIGUSR1 to MSD kernel thread")
-    parser.add_argument("--set-image", dest="image_path", default=None, help="Change active image path")
+    parser.add_argument("--set-cdrom", dest="cdrom", default=None, choices=["0", "1"], help="Set CD-ROM flag")
+    parser.add_argument("--set-ro", dest="ro", default=None, choices=["0", "1"], help="Set read-only flag")
+    parser.add_argument("--set-image", dest="image_path", default=None, help="Change image path (or eject for the empty)")
     parser.add_argument("--gadget", default="kvmd", help="USB gadget name")
     options = parser.parse_args()
 
     if options.reset:
         _reset_msd()
 
+    if options.cdrom is not None:
+        _set_param(options.gadget, "cdrom", options.cdrom)
+
+    if options.ro is not None:
+        _set_param(options.gadget, "ro", options.ro)
+
     if options.image_path is not None:
-        _set_msd_image(options.gadget, options.image_path)
+        _set_param(options.gadget, "file", options.image_path)
