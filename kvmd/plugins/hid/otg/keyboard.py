@@ -45,9 +45,21 @@ class _ResetEvent(BaseEvent):
 
 
 @dataclasses.dataclass(frozen=True)
+class _ModifierEvent(BaseEvent):
+    modifier: keymap.OtgKey
+    state: bool
+
+    def __post_init__(self) -> None:
+        assert self.modifier.is_modifier
+
+
+@dataclasses.dataclass(frozen=True)
 class _KeyEvent(BaseEvent):
     key: keymap.OtgKey
     state: bool
+
+    def __post_init__(self) -> None:
+        assert not self.key.is_modifier
 
 
 # =====
@@ -74,8 +86,11 @@ class KeyboardProcess(BaseDeviceProcess):
         self._queue_event(_ResetEvent())
 
     def send_key_event(self, key: str, state: bool) -> None:
-        assert key in keymap.KEYMAP
-        self._queue_event(_KeyEvent(key=keymap.KEYMAP[key].otg, state=state))
+        otg_key = keymap.KEYMAP[key].otg
+        if otg_key.is_modifier:
+            self._queue_event(_ModifierEvent(otg_key, state))
+        else:
+            self._queue_event(_KeyEvent(otg_key, state))
 
     # =====
 
@@ -84,6 +99,8 @@ class KeyboardProcess(BaseDeviceProcess):
             self.__process_clear_event()
         elif isinstance(event, _ResetEvent):
             self.__process_clear_event(reopen=True)
+        elif isinstance(event, _ModifierEvent):
+            self.__process_modifier_event(event)
         elif isinstance(event, _KeyEvent):
             self.__process_key_event(event)
 
@@ -94,41 +111,41 @@ class KeyboardProcess(BaseDeviceProcess):
             self._close_device()
         self.__send_current_state()
 
-    def __process_key_event(self, event: _KeyEvent) -> None:
-        if event.key.is_modifier:
-            if event.key in self.__pressed_modifiers:
-                # Ранее нажатый модификатор отжимаем
-                self.__pressed_modifiers.remove(event.key)
-                if not self.__send_current_state():
-                    return
-            if event.state:
-                # Нажимаем если нужно
-                self.__pressed_modifiers.add(event.key)
-                self.__send_current_state()
+    def __process_modifier_event(self, event: _ModifierEvent) -> None:
+        if event.modifier in self.__pressed_modifiers:
+            # Ранее нажатый модификатор отжимаем
+            self.__pressed_modifiers.remove(event.modifier)
+            if not self.__send_current_state():
+                return
+        if event.state:
+            # Нажимаем если нужно
+            self.__pressed_modifiers.add(event.modifier)
+            self.__send_current_state()
 
-        else:  # regular key
-            if event.key in self.__pressed_keys:
-                # Ранее нажатую клавишу отжимаем
-                self.__pressed_keys[self.__pressed_keys.index(event.key)] = None
-                if not self.__send_current_state():
-                    return
-            elif event.state and None not in self.__pressed_keys:
-                # Если нужно нажать что-то новое, но свободных слотов нет - отжимаем всё
-                self.__clear_keys()
-                if not self.__send_current_state():
-                    return
-            if event.state:
-                # Нажимаем если нужно
-                self.__pressed_keys[self.__pressed_keys.index(None)] = event.key
-                self.__send_current_state()
+    def __process_key_event(self, event: _KeyEvent) -> None:
+        if event.key in self.__pressed_keys:
+            # Ранее нажатую клавишу отжимаем
+            self.__pressed_keys[self.__pressed_keys.index(event.key)] = None
+            if not self.__send_current_state():
+                return
+        elif event.state and None not in self.__pressed_keys:
+            # Если нужно нажать что-то новое, но свободных слотов нет - отжимаем всё
+            self.__clear_keys()
+            if not self.__send_current_state():
+                return
+        if event.state:
+            # Нажимаем если нужно
+            self.__pressed_keys[self.__pressed_keys.index(None)] = event.key
+            self.__send_current_state()
+
+    # =====
 
     def __send_current_state(self) -> bool:
         ok = False
         if self._ensure_device():
             modifiers = 0
-            for key in self.__pressed_modifiers:
-                assert key.is_modifier
-                modifiers |= key.code
+            for modifier in self.__pressed_modifiers:
+                modifiers |= modifier.code
 
             assert len(self.__pressed_keys) == 6
             keys = [

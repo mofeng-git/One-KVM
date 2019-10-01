@@ -32,14 +32,6 @@ from .device import BaseDeviceProcess
 
 
 # =====
-_BUTTONS = {
-    "left":   0x1,
-    "right":  0x2,
-    "middle": 0x4,
-}
-
-
-# =====
 class _ClearEvent(BaseEvent):
     pass
 
@@ -59,19 +51,11 @@ class _MoveEvent(BaseEvent):
     to_x: int
     to_y: int
 
-    def __post_init__(self) -> None:
-        assert -32768 <= self.to_x <= 32767
-        assert -32768 <= self.to_y <= 32767
-
 
 @dataclasses.dataclass(frozen=True)
 class _WheelEvent(BaseEvent):
     delta_x: int
     delta_y: int
-
-    def __post_init__(self) -> None:
-        assert -127 <= self.delta_x <= 127
-        assert -127 <= self.delta_y <= 127
 
 
 # =====
@@ -99,13 +83,23 @@ class MouseProcess(BaseDeviceProcess):
         self._queue_event(_ResetEvent())
 
     def send_button_event(self, button: str, state: bool) -> None:
-        assert button in _BUTTONS
-        self._queue_event(_ButtonEvent(code=_BUTTONS[button], state=state))
+        code: int = {
+            "left":   0x1,
+            "right":  0x2,
+            "middle": 0x4,
+        }[button]
+        self._queue_event(_ButtonEvent(code, state))
 
     def send_move_event(self, to_x: int, to_y: int) -> None:
+        assert -32768 <= to_x <= 32767
+        assert -32768 <= to_y <= 32767
+        to_x = (to_x + 32768) // 2
+        to_y = (to_y + 32768) // 2
         self._queue_event(_MoveEvent(to_x, to_y))
 
     def send_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        assert -127 <= delta_x <= 127
+        assert -127 <= delta_y <= 127
         self._queue_event(_WheelEvent(delta_x, delta_y))
 
     # =====
@@ -147,6 +141,8 @@ class MouseProcess(BaseDeviceProcess):
     def __process_wheel_event(self, event: _WheelEvent) -> None:
         self.__send_current_state(event.delta_x, event.delta_y)
 
+    # =====
+
     def __send_current_state(self, delta_x: int, delta_y: int) -> bool:
         ok = False
         if self._ensure_device():
@@ -167,6 +163,6 @@ class MouseProcess(BaseDeviceProcess):
         self.__y = 0
 
     def __make_report(self, buttons: int, to_x: int, to_y: int, delta_x: int, delta_y: int) -> bytes:
-        to_x = (to_x + 32768) // 2
-        to_y = (to_y + 32768) // 2
+        # XXX: Delta Y before X: it's ok.
+        # See /kvmd/apps/otg/hid/keyboard.py for details
         return struct.pack("<BHHbb", buttons, to_x, to_y, delta_y, delta_x)
