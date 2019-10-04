@@ -10,7 +10,7 @@ upload:
 
 clean-all: clean
 clean:
-	rm -rf .pioenvs .piolibdeps
+	rm -rf .pio
 
 help:
 	@ cat Makefile

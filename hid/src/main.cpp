@@ -98,9 +98,11 @@ INLINE void cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
 INLINE void cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
 	int x = (int)buffer[0] << 8;
 	x |= (int)buffer[1];
+	x = (x + 32768) / 2; // See /kvmd/apps/otg/hid/keyboard.py for details
 
 	int y = (int)buffer[2] << 8;
 	y |= (int)buffer[3];
+	y = (y + 32768) / 2; // See /kvmd/apps/otg/hid/keyboard.py for details
 
 	SingleAbsoluteMouse.moveTo(x, y);
 }
