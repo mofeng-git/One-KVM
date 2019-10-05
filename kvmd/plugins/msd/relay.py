@@ -228,6 +228,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "written": self.__written,
             "current": current,
             "storage": storage,
+            "cdrom": None,
             "connected": (not self.__on_kvm),
         }
 
@@ -317,7 +318,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 await self.__state_queue.put(state or self.get_state())
 
     @_msd_working
-    async def select(self, name: str) -> Dict:
+    async def select(self, name: str, cdrom: bool) -> Dict:
         raise MsdMultiNotSupported()
 
     @_msd_working

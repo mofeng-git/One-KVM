@@ -92,7 +92,7 @@ class BaseMsd(BasePlugin):
     async def disconnect(self) -> Dict:
         raise NotImplementedError
 
-    async def select(self, name: str) -> Dict:
+    async def select(self, name: str, cdrom: bool) -> Dict:
         raise NotImplementedError
 
     async def remove(self, name: str) -> Dict:

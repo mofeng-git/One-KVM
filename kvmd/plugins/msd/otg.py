@@ -46,9 +46,10 @@ class Plugin(BaseMsd):
             "online": False,
             "busy": False,
             "uploading": False,
-            "written": False,
+            "written": 0,
             "current": None,
             "storage": None,
+            "cdrom": None,
             "connected": False,
         }
 
@@ -68,7 +69,7 @@ class Plugin(BaseMsd):
     async def disconnect(self) -> Dict:
         raise MsdCliOnlyError()
 
-    async def select(self, name: str) -> Dict:
+    async def select(self, name: str, cdrom: bool) -> Dict:
         raise MsdCliOnlyError()
 
     async def remove(self, name: str) -> Dict:

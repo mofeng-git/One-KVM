@@ -481,7 +481,9 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     @_exposed("POST", "/msd/select")
     async def __msd_select_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json(await self.__msd.select(valid_msd_image_name(request.query.get("image_name"))))
+        image_name = valid_msd_image_name(request.query.get("image_name"))
+        cdrom = valid_bool(request.query.get("cdrom", "true"))
+        return _json(await self.__msd.select(image_name, cdrom))
 
     @_exposed("POST", "/msd/remove")
     async def __msd_remove_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
