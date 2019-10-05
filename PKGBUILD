@@ -43,6 +43,7 @@ depends=(
 	openssl
 	platformio
 	make
+	patch
 	raspberrypi-io-access
 	"ustreamer>=1.5"
 )
