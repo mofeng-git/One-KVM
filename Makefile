@@ -54,7 +54,8 @@ tox: testenv
 		-it $(TESTENV_IMAGE) bash -c " \
 			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
-			&& cp /src/testenv/main.yaml /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/main/v1-vga.yaml /etc/kvmd/main.yaml \
+			&& cp /src/testenv/v1-vga.override.yaml /etc/kvmd/override.yaml \
 			&& cd /src \
 			&& tox -c testenv/tox.ini $(if $(E),-e $(E),-p auto) \
 		"
@@ -77,7 +78,8 @@ run: testenv
 			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/kvmd/nginx \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
-			&& cp /testenv/main.yaml /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/main/v1-vga.yaml /etc/kvmd/main.yaml \
+			&& cp /testenv/v1-vga.override.yaml /etc/kvmd/override.yaml \
 			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 			&& (losetup -d /dev/kvmd-msd || true) \
@@ -92,12 +94,14 @@ run-ipmi: testenv
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
+			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
 			--publish 6230:623/udp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
 			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
-			&& cp /testenv/main.yaml /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/main/v1-vga.yaml /etc/kvmd/main.yaml \
+			&& cp /testenv/v1-vga.override.yaml /etc/kvmd/override.yaml \
 			&& $(if $(CMD),$(CMD),python -m kvmd.apps.ipmi) \
 		"
 

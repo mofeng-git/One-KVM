@@ -1,0 +1,22 @@
+kvmd:
+    server:
+        unix_mode: 0666
+
+    hid:
+        device: /dev/ttyS10
+        noop: true
+
+    streamer:
+        desired_fps: 30
+        max_fps: 40
+        cmd:
+            - "/usr/bin/ustreamer"
+            - "--device=/dev/kvmd-video"
+            - "--quality={quality}"
+            - "--desired-fps={desired_fps}"
+            - "--resolution=800x600"
+            - "--last-as-blank=0"
+            - "--unix={unix}"
+            - "--unix-rm"
+            - "--unix-mode=0666"
+            - "--no-log-colors"
