@@ -123,8 +123,8 @@ def _init_config(
 
     scheme = _get_config_scheme()
     try:
-        _merge_dicts(raw_config, build_raw_from_options(override_options))
         _merge_dicts(raw_config, (raw_config.pop("override", {}) or {}))
+        _merge_dicts(raw_config, build_raw_from_options(override_options))
         config = make_config(raw_config, scheme)
 
         rebuild = False
