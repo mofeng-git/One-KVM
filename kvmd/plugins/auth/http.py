@@ -46,6 +46,7 @@ class Plugin(BaseAuthService):
         self,
         url: str,
         verify: bool,
+        secret: str,
         user: str,
         passwd: str,
         timeout: float,
@@ -53,6 +54,7 @@ class Plugin(BaseAuthService):
 
         self.__url = url
         self.__verify = verify
+        self.__secret = secret
         self.__user = user
         self.__passwd = passwd
         self.__timeout = timeout
@@ -64,6 +66,7 @@ class Plugin(BaseAuthService):
         return {
             "url":     Option("http://localhost/auth"),
             "verify":  Option(True, type=valid_bool),
+            "secret":  Option(""),
             "user":    Option(""),
             "passwd":  Option(""),
             "timeout": Option(5.0, type=valid_float_f01),
@@ -79,6 +82,7 @@ class Plugin(BaseAuthService):
                 json={
                     "user": user,
                     "passwd": passwd,
+                    "secret": self.__secret,
                 },
                 headers={
                     "User-Agent": f"KVMD/{__version__}",
