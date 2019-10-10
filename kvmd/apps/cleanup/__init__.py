@@ -21,13 +21,17 @@
 
 
 import os
-import subprocess
+import signal
 import time
 
 from typing import List
 from typing import Optional
 
+import psutil
+
 from ...logging import get_logger
+
+from ...yamlconf import Section
 
 from ... import gpio
 
@@ -35,19 +39,9 @@ from .. import init
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
-    config = init(
-        prog="kvmd-cleanup",
-        description="Kill KVMD and clear resources",
-        argv=argv,
-        load_hid=True,
-        load_atx=True,
-        load_msd=True,
-    )[2].kvmd
-
+def _clear_gpio(config: Section) -> None:
     logger = get_logger(0)
 
-    logger.info("Cleaning up ...")
     with gpio.bcm():
         for (name, pin) in [
             *([
@@ -74,15 +68,30 @@ def main(argv: Optional[List[str]]=None) -> None:
                 except Exception:
                     logger.exception("Can't clear GPIO pin=%d (%s)", pin, name)
 
-    streamer = os.path.basename(config.streamer.cmd[0])
-    logger.info("Trying to find and kill %r ...", streamer)
-    try:
-        subprocess.check_output(["killall", streamer], stderr=subprocess.STDOUT)
-        time.sleep(3)
-        subprocess.check_output(["killall", "-9", streamer], stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError:  # pragma: nocover
-        pass
 
+def _kill_streamer(config: Section) -> None:
+    logger = get_logger(0)
+
+    streamer = os.path.basename(config.streamer.cmd[0])
+
+    logger.info("Trying to find and kill %r ...", streamer)
+    for proc in psutil.process_iter():
+        attrs = proc.as_dict(attrs=["name"])
+        if os.path.basename(attrs.get("name", "")) == streamer:
+            try:
+                proc.send_signal(signal.SIGTERM)
+            except Exception:
+                logger.exception("Can't send SIGTERM to streamer with pid=%d", proc.pid)
+            time.sleep(3)
+            if proc.is_running():
+                try:
+                    proc.send_signal(signal.SIGKILL)
+                except Exception:
+                    logger.exception("Can't send SIGKILL to streamer with pid=%d", proc.pid)
+
+
+def _remove_sockets(config: Section) -> None:
+    logger = get_logger(0)
     for (owner, unix_path) in [
         ("KVMD", config.server.unix),
         ("streamer", config.streamer.unix),
@@ -93,5 +102,30 @@ def main(argv: Optional[List[str]]=None) -> None:
                 os.remove(unix_path)
             except Exception:  # pragma: nocover
                 logger.exception("Can't remove %s socket %r", owner, unix_path)
+
+
+# =====
+def main(argv: Optional[List[str]]=None) -> None:
+    config = init(
+        prog="kvmd-cleanup",
+        description="Kill KVMD and clear resources",
+        argv=argv,
+        load_hid=True,
+        load_atx=True,
+        load_msd=True,
+    )[2].kvmd
+
+    logger = get_logger(0)
+    logger.info("Cleaning up ...")
+
+    for method in [
+        _clear_gpio,
+        _kill_streamer,
+        _remove_sockets,
+    ]:
+        try:
+            method(config)
+        except Exception:
+            pass
 
     logger.info("Bye-bye")
