@@ -37,7 +37,7 @@ kvmd:
             - "--encoder=cpu"
             - "--quality={quality}"
             - "--desired-fps={desired_fps}"
-            - "--resolution=720x756"
+            - "--resolution=720x576"
             - "--fake-resolution=800x600"
             - "--last-as-blank=0"
             - "--unix={unix}"
