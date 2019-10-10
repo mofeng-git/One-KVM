@@ -19,4 +19,5 @@ kvmd:
             - "--unix={unix}"
             - "--unix-rm"
             - "--unix-mode=0666"
+            - "--exit-on-parent-death"
             - "--no-log-colors"

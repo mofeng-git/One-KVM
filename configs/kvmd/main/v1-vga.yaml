@@ -48,6 +48,7 @@ kvmd:
             - "--unix={unix}"
             - "--unix-rm"
             - "--unix-mode=0660"
+            - "--exit-on-parent-death"
             - "--no-log-colors"
 
 ipmi:
