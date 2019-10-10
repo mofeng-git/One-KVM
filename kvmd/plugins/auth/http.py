@@ -78,7 +78,7 @@ class Plugin(BaseAuthService):
                 timeout=self.__timeout,
                 json={
                     "user": user,
-                    "passwd": passwd
+                    "passwd": passwd,
                 },
                 headers={
                     "User-Agent": f"KVMD/{__version__}",
