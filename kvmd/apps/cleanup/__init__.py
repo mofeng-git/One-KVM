@@ -72,22 +72,23 @@ def _clear_gpio(config: Section) -> None:
 def _kill_streamer(config: Section) -> None:
     logger = get_logger(0)
 
-    streamer = os.path.basename(config.streamer.cmd[0])
+    if config.streamer.process_name_prefix:
+        prefix = config.streamer.process_name_prefix + ":"
+        logger.info("Trying to find and kill the streamer %r ...", prefix + " <app>")
 
-    logger.info("Trying to find and kill %r ...", streamer)
-    for proc in psutil.process_iter():
-        attrs = proc.as_dict(attrs=["name"])
-        if os.path.basename(attrs.get("name", "")) == streamer:
-            try:
-                proc.send_signal(signal.SIGTERM)
-            except Exception:
-                logger.exception("Can't send SIGTERM to streamer with pid=%d", proc.pid)
-            time.sleep(3)
-            if proc.is_running():
+        for proc in psutil.process_iter():
+            attrs = proc.as_dict(attrs=["name"])
+            if attrs.get("name", "").startswith(prefix):
                 try:
-                    proc.send_signal(signal.SIGKILL)
+                    proc.send_signal(signal.SIGTERM)
                 except Exception:
-                    logger.exception("Can't send SIGKILL to streamer with pid=%d", proc.pid)
+                    logger.exception("Can't send SIGTERM to streamer with pid=%d", proc.pid)
+                time.sleep(3)
+                if proc.is_running():
+                    try:
+                        proc.send_signal(signal.SIGKILL)
+                    except Exception:
+                        logger.exception("Can't send SIGKILL to streamer with pid=%d", proc.pid)
 
 
 def _remove_sockets(config: Section) -> None:
