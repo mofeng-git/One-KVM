@@ -115,7 +115,6 @@ for _variant in "${_variants[@]}"; do
 		backup=(
 			etc/sysctl.d/99-kvmd.conf
 			etc/udev/rules.d/99-kvmd.rules
-			etc/modules-load.d/kvmd.conf
 			etc/kvmd/main.yaml
 		)
 
@@ -126,6 +125,7 @@ for _variant in "${_variants[@]}"; do
 		cp configs/os/sysctl.conf \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
 		cp configs/os/udev/$_platform-$_board.rules \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
 		if [ -f configs/os/modules-load/$_platform.conf ]; then
+			backup=(\"\${backup[@]}\" etc/modules-load.d/kvmd.conf)
 			cp configs/os/modules-load/$_platform.conf \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
 		fi
 
