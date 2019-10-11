@@ -44,7 +44,7 @@ depends=(
 	make
 	patch
 	raspberrypi-io-access
-	"ustreamer>=1.8"
+	"ustreamer>=1.9"
 )
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")

@@ -20,4 +20,5 @@ kvmd:
             - "--unix-rm"
             - "--unix-mode=0666"
             - "--exit-on-parent-death"
+            - "--process-name-prefix={process_name_prefix}"
             - "--no-log-colors"

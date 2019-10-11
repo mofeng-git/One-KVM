@@ -13,6 +13,7 @@ RUN pacman -Syu --noconfirm \
 		libjpeg \
 		libevent \
 		libutil-linux \
+		libbsd \
 		python \
 		python-pip \
 		python-tox \

@@ -240,6 +240,8 @@ def _get_config_scheme() -> Dict:
                 "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
                 "timeout": Option(2.0, type=valid_float_f01),
 
+                "process_name_prefix": Option("kvmd/streamer"),
+
                 "cmd": Option(["/bin/true"], type=valid_command),
             },
         },

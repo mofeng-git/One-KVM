@@ -62,6 +62,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         unix_path: str,
         timeout: float,
 
+        process_name_prefix: str,
+
         cmd: List[str],
     ) -> None:
 
@@ -85,6 +87,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__port = port
         self.__unix_path = unix_path
         self.__timeout = timeout
+
+        self.__process_name_prefix = process_name_prefix
 
         self.__cmd = cmd
 
@@ -248,6 +252,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 host=self.__host,
                 port=self.__port,
                 unix=self.__unix_path,
+                process_name_prefix=self.__process_name_prefix,
                 **self.__params,
             )
             for part in self.__cmd
