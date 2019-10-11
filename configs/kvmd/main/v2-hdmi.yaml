@@ -22,7 +22,10 @@ kvmd:
             device: /dev/kvmd-hid-mouse
 
     atx:
-        type: disabled
+        power_led_pin: 24
+        hdd_led_pin: 22
+        power_switch_pin: 23
+        reset_switch_pin: 27
 
     msd:
         type: otg
