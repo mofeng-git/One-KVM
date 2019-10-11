@@ -17,7 +17,7 @@ for _variant in "${_variants[@]}"; do
 	pkgname+=(kvmd-platform-$_platform-$_board)
 done
 pkgbase=kvmd
-pkgver=1.21
+pkgver=1.22
 pkgrel=1
 pkgdesc="The main Pi-KVM daemon"
 url="https://github.com/pikvm/kvmd"
@@ -94,7 +94,7 @@ package_kvmd() {
 
 	mkdir -p "$pkgdir/etc/kvmd/nginx/ssl"
 	chmod 750 "$pkgdir/etc/kvmd/nginx/ssl"
-	cp "$_cfg_default/kvmd/nginx"/*.conf "$pkgdir/etc/kvmd/nginx"
+	cp "$_cfg_default/nginx"/*.conf "$pkgdir/etc/kvmd/nginx"
 
 	cp "$_cfg_default/kvmd"/*.yaml "$pkgdir/etc/kvmd"
 	chmod 644 "$pkgdir/etc/kvmd"/*.yaml
@@ -119,15 +119,17 @@ for _variant in "${_variants[@]}"; do
 			etc/kvmd/main.yaml
 		)
 
-		cd \"\$srcdir/\$pkgname-build\"
+		cd \"kvmd-\$pkgver\"
 
 		mkdir -p \"\$pkgdir/etc\"/{kvmd,sysctl.d,udev/rules.d,modules-load.d}
 
 		cp configs/os/sysctl.conf \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
 		cp configs/os/udev/$_platform-$_board.rules \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
-		cp configs/os/modules-load/$_platform.conf \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
+		if [ -f configs/os/modules-load/$_platform.conf ]; then
+			cp configs/os/modules-load/$_platform.conf \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
+		fi
 
-		cp configs/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
+		cp configs/kvmd/main/$_platform.yaml \"\$pkgdir/etc/kvmd/main.yaml\"
 		chmod 444 \"\$pkgdir/etc/kvmd/main.yaml\"
 
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
