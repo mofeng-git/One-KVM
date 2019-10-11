@@ -49,6 +49,11 @@ depends=(
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
 md5sums=(SKIP)
+backup=(
+	etc/kvmd/{override,logging,auth,meta}.yaml
+	etc/kvmd/{ht,ipmi}passwd
+	etc/kvmd/nginx/{loc-{login,nocache,proxy,websocket},mime-types,ssl,nginx}.conf
+)
 
 
 build() {
@@ -89,14 +94,10 @@ package_kvmd() {
 
 	mkdir -p "$pkgdir/etc/kvmd/nginx/ssl"
 	chmod 750 "$pkgdir/etc/kvmd/nginx/ssl"
-	for _path in "$_cfg_default/kvmd"/*.yaml; do
-		ln -sf "/usr/share/kvmd/configs.default/kvmd/`basename $_path`" "$pkgdir/etc/kvmd"
-	done
-	rm "$pkgdir/etc/kvmd"/{override.yaml,logging.yaml,auth.yaml,meta.yaml}
-	cp "$_cfg_default/kvmd"/{override.yaml,logging.yaml,auth.yaml,meta.yaml} "$pkgdir/etc/kvmd"
-	cp "$_cfg_default/kvmd/"*passwd "$pkgdir/etc/kvmd"
-	chmod 600 "$pkgdir/etc/kvmd/"*passwd
-	for _path in "$_cfg_default/nginx"/*.conf; do
+	cp "$_cfg_default/kvmd"/{override,logging,auth,meta}.yaml "$pkgdir/etc/kvmd"
+	cp "$_cfg_default/kvmd"/{ht,ipmi}passwd "$pkgdir/etc/kvmd"
+	chmod 600 "$pkgdir/etc/kvmd/"{ht,ipmi}passwd
+	for _path in "$_cfg_default/nginx"/{loc-{login,nocache,proxy,websocket},mime-types,ssl,nginx}.conf; do
 		ln -sf "/usr/share/kvmd/configs.default/nginx/`basename $_path`" "$pkgdir/etc/kvmd/nginx"
 	done
 }
@@ -110,6 +111,12 @@ for _variant in "${_variants[@]}"; do
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
 			depends=(\"\${depends[@]}\" \"tc358743-dkms>=0.3\")
 		fi
+		backup=(
+			etc/sysctl.d/99-kvmd.conf
+			etc/udev/rules.d/99-kvmd.rules
+			etc/modules-load.d/kvmd.conf
+			etc/kvmd/main.yaml
+		)
 
 		mkdir -p \"\$pkgdir/etc\"/{kvmd,sysctl.d,udev/rules.d,modules-load.d}
 
@@ -121,6 +128,7 @@ for _variant in "${_variants[@]}"; do
 
 		ln -sf \"\$_cfg_default/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
+			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex)
 			ln -sf \"\$_cfg_default/kvmd/tc358743-edid.hex\" \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 		fi
 	}"
