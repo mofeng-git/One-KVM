@@ -94,12 +94,13 @@ package_kvmd() {
 
 	mkdir -p "$pkgdir/etc/kvmd/nginx/ssl"
 	chmod 750 "$pkgdir/etc/kvmd/nginx/ssl"
-	cp "$_cfg_default/kvmd"/{override,logging,auth,meta}.yaml "$pkgdir/etc/kvmd"
-	cp "$_cfg_default/kvmd"/{ht,ipmi}passwd "$pkgdir/etc/kvmd"
-	chmod 600 "$pkgdir/etc/kvmd/"{ht,ipmi}passwd
-	for _path in "$_cfg_default/nginx"/{loc-{login,nocache,proxy,websocket},mime-types,ssl,nginx}.conf; do
-		ln -sf "/usr/share/kvmd/configs.default/nginx/`basename $_path`" "$pkgdir/etc/kvmd/nginx"
-	done
+	cp "$_cfg_default/kvmd/nginx"/*.conf "$pkgdir/etc/kvmd/nginx"
+
+	cp "$_cfg_default/kvmd"/*.yaml "$pkgdir/etc/kvmd"
+	chmod 644 "$pkgdir/etc/kvmd"/*.yaml
+
+	cp "$_cfg_default/kvmd"/*passwd "$pkgdir/etc/kvmd"
+	chmod 600 "$pkgdir/etc/kvmd/"/*passwd
 }
 
 for _variant in "${_variants[@]}"; do
@@ -118,18 +119,20 @@ for _variant in "${_variants[@]}"; do
 			etc/kvmd/main.yaml
 		)
 
+		cd \"\$srcdir/\$pkgname-build\"
+
 		mkdir -p \"\$pkgdir/etc\"/{kvmd,sysctl.d,udev/rules.d,modules-load.d}
 
-		local _cfg_default=\"/usr/share/kvmd/configs.default\"
+		cp configs/os/sysctl.conf \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
+		cp configs/os/udev/$_platform-$_board.rules \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
+		cp configs/os/modules-load/$_platform.conf \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
 
-		ln -sf \"\$_cfg_default/os/sysctl.conf\" \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
-		ln -sf \"\$_cfg_default/os/udev/$_platform-$_board.rules\" \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
-		ln -sf \"\$_cfg_default/os/modules-load/$_platform.conf\" \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
+		cp configs/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
+		chmod 444 \"\$pkgdir/etc/kvmd/main.yaml\"
 
-		ln -sf \"\$_cfg_default/kvmd/main/$_platform.yaml\" \"\$pkgdir/etc/kvmd/main.yaml\"
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
 			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex)
-			ln -sf \"\$_cfg_default/kvmd/tc358743-edid.hex\" \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
+			cp configs/kvmd/tc358743-edid.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 		fi
 	}"
 done
