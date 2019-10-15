@@ -72,14 +72,9 @@ package_kvmd() {
 	cd "$srcdir/$pkgname-build"
 	python setup.py install --root="$pkgdir"
 
-	mkdir -p "$pkgdir/usr/lib/systemd/system"
-	cp configs/os/services/*.service "$pkgdir/usr/lib/systemd/system"
-
-	mkdir -p "$pkgdir/usr/lib/sysusers.d"
-	cp configs/os/sysusers.conf "$pkgdir/usr/lib/sysusers.d/kvmd.conf"
-
-	mkdir -p "$pkgdir/usr/lib/tmpfiles.d"
-	cp configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
+	install -D -t "$pkgdir/usr/lib/systemd/system" configs/os/services/*.service
+	install -DT configs/os/sysusers.conf "$pkgdir/usr/lib/sysusers.d/kvmd.conf"
+	install -DT configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
 	mkdir -p "$pkgdir/usr/share/kvmd"
 	cp -r {hid,web,extras} "$pkgdir/usr/share/kvmd"
@@ -95,13 +90,10 @@ package_kvmd() {
 
 	mkdir -p "$pkgdir/etc/kvmd/nginx/ssl"
 	chmod 750 "$pkgdir/etc/kvmd/nginx/ssl"
-	cp "$_cfg_default/nginx"/*.conf "$pkgdir/etc/kvmd/nginx"
+	install -D -t "$pkgdir/etc/kvmd/nginx" "$_cfg_default/nginx"/*.conf
 
-	cp "$_cfg_default/kvmd"/*.yaml "$pkgdir/etc/kvmd"
-	chmod 644 "$pkgdir/etc/kvmd"/*.yaml
-
-	cp "$_cfg_default/kvmd"/*passwd "$pkgdir/etc/kvmd"
-	chmod 600 "$pkgdir/etc/kvmd/"/*passwd
+	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*.yaml
+	install -Dm600 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*passwd
 }
 
 for _variant in "${_variants[@]}"; do
@@ -121,21 +113,19 @@ for _variant in "${_variants[@]}"; do
 
 		cd \"kvmd-\$pkgver\"
 
-		mkdir -p \"\$pkgdir/etc\"/{kvmd,sysctl.d,udev/rules.d,modules-load.d}
+		install -DT configs/os/sysctl.conf \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
+		install -DT configs/os/udev/$_platform-$_board.rules \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
 
-		cp configs/os/sysctl.conf \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
-		cp configs/os/udev/$_platform-$_board.rules \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
 		if [ -f configs/os/modules-load/$_platform.conf ]; then
 			backup=(\"\${backup[@]}\" etc/modules-load.d/kvmd.conf)
-			cp configs/os/modules-load/$_platform.conf \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
+			install -DT configs/os/modules-load/$_platform.conf \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
 		fi
-
-		cp configs/kvmd/main/$_platform.yaml \"\$pkgdir/etc/kvmd/main.yaml\"
-		chmod 444 \"\$pkgdir/etc/kvmd/main.yaml\"
 
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
 			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex)
-			cp configs/kvmd/tc358743-edid.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
+			install -DT configs/kvmd/tc358743-edid.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 		fi
+
+		install -DTm444 configs/kvmd/main/$_platform.yaml \"\$pkgdir/etc/kvmd/main.yaml\"
 	}"
 done
