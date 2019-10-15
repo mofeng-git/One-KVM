@@ -28,6 +28,8 @@ from kvmd.validators import ValidatorError
 from kvmd.validators.hw import valid_tty_speed
 from kvmd.validators.hw import valid_gpio_pin
 from kvmd.validators.hw import valid_gpio_pin_optional
+from kvmd.validators.hw import valid_otg_gadget
+from kvmd.validators.hw import valid_otg_id
 
 
 # =====
@@ -70,3 +72,45 @@ def test_ok__valid_gpio_pin_optional(arg: Any) -> None:
 def test_fail__valid_gpio_pin_optional(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_gpio_pin_optional(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", [
+    "test-",
+    "glados",
+    "test",
+    "_",
+    "_foo_bar_",
+    " aix",
+])
+def test_ok__valid_otg_gadget(arg: Any) -> None:
+    assert valid_otg_gadget(arg) == arg.strip()
+
+
+@pytest.mark.parametrize("arg", [
+    "тест",
+    "-molestia",
+    "te~st",
+    "-",
+    "-foo_bar",
+    "  ",
+    "",
+    None,
+])
+def test_fail__valid_otg_gadget(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_otg_gadget(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", ["0 ", 0, 1, 13, 65535])
+def test_ok__valid_otg_id(arg: Any) -> None:
+    value = valid_otg_id(arg)
+    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert value == int(str(arg).strip())
+
+
+@pytest.mark.parametrize("arg", ["test", "", None, -1, -13, 1.1, 65534.5, 65536])
+def test_fail__valid_otg_id(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_otg_id(arg))

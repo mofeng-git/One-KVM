@@ -23,6 +23,7 @@
 from typing import Any
 
 from . import check_in_list
+from . import check_re_match
 
 from .basic import valid_number
 
@@ -40,3 +41,11 @@ def valid_gpio_pin(arg: Any) -> int:
 
 def valid_gpio_pin_optional(arg: Any) -> int:
     return int(valid_number(arg, min=-1, name="optional GPIO pin"))
+
+
+def valid_otg_gadget(arg: Any) -> str:
+    return check_re_match(arg, "OTG gadget name", r"^[a-z_][a-z0-9_-]*$")[:255]
+
+
+def valid_otg_id(arg: Any) -> int:
+    return int(valid_number(arg, min=0, max=65535, name="OTG ID"))

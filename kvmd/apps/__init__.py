@@ -68,6 +68,8 @@ from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
 
 from ..validators.hw import valid_gpio_pin_optional
+from ..validators.hw import valid_otg_gadget
+from ..validators.hw import valid_otg_id
 
 
 # =====
@@ -247,9 +249,9 @@ def _get_config_scheme() -> Dict:
         },
 
         "otg": {
-            "gadget":        Option("kvmd"),
-            "vendor_id":     Option(0x1D6B, type=valid_number),  # Linux Foundation
-            "product_id":    Option(0x0104, type=valid_number),  # Multifunction Composite Gadget
+            "gadget":        Option("kvmd", type=valid_otg_gadget),
+            "vendor_id":     Option(0x1D6B, type=valid_otg_id),  # Linux Foundation
+            "product_id":    Option(0x0104, type=valid_otg_id),  # Multifunction Composite Gadget
             "manufacturer":  Option("Pi-KVM"),
             "product":       Option("Composite KVM Device"),
             "serial_number": Option("CAFEBABE"),
