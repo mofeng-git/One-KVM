@@ -30,6 +30,7 @@ import pytest
 from kvmd.validators import ValidatorError
 from kvmd.validators.os import valid_abs_path
 from kvmd.validators.os import valid_abs_path_exists
+from kvmd.validators.os import valid_printable_filename
 from kvmd.validators.os import valid_unix_mode
 from kvmd.validators.os import valid_command
 
@@ -77,6 +78,53 @@ def test_ok__valid_abs_path_exists(arg: Any, retval: str) -> None:
 def test_fail__valid_abs_path_exists(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_abs_path_exists(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg, retval", [
+    ("archlinux-2018.07.01-i686.iso",   "archlinux-2018.07.01-i686.iso"),
+    ("archlinux-2018.07.01-x86_64.iso", "archlinux-2018.07.01-x86_64.iso"),
+    ("dsl-4.11.rc1.iso",                "dsl-4.11.rc1.iso"),
+    ("systemrescuecd-x86-5.3.1.iso",    "systemrescuecd-x86-5.3.1.iso"),
+    ("ubuntu-16.04.5-desktop-i386.iso", "ubuntu-16.04.5-desktop-i386.iso"),
+    (" тест(){}[ \t].iso\t", "тест(){}[ _].iso"),
+    ("\n" + "x" * 1000,          "x" * 255),
+    ("test",       "test"),
+    ("test test [test] #test$", "test test [test] #test$"),
+    (".test",      ".test"),
+    ("..test",     "..test"),
+    ("..тест..",   "..тест.."),
+    ("..те\\ст..", "..те\\ст.."),
+    (".....",      "....."),
+    (".....txt",   ".....txt"),
+    (" .. .",      ".. ."),
+    ("..\n.",      ".._."),
+])
+def test_ok__valid_printable_filename(arg: Any, retval: str) -> None:
+    assert valid_printable_filename(arg) == retval
+
+
+@pytest.mark.parametrize("arg", [
+    ".",
+    "..",
+    " ..",
+    "test/",
+    "/test",
+    "../test",
+    "./.",
+    "../.",
+    "./..",
+    "../..",
+    "/ ..",
+    ".. /",
+    "/.. /",
+    "",
+    " ",
+    None,
+])
+def test_fail__valid_printable_filename(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        valid_printable_filename(arg)
 
 
 # =====

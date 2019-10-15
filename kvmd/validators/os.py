@@ -51,6 +51,25 @@ def valid_abs_path_exists(arg: Any, name: str="") -> str:
     return valid_abs_path(arg, exists=True, name=name)
 
 
+def valid_printable_filename(arg: Any, name: str="") -> str:
+    if not name:
+        name = "printable filename"
+
+    if len(str(arg).strip()) == 0:
+        arg = None
+    arg = check_not_none_string(arg, name)
+
+    if "/" in arg or "\0" in arg or arg in [".", ".."]:
+        raise_error(arg, name)
+
+    arg = "".join(
+        (ch if ch.isprintable() else "_")
+        for ch in arg[:255]
+    )
+    return arg
+
+
+# =====
 def valid_unix_mode(arg: Any) -> int:
     return int(valid_number(arg, min=0, name="UNIX mode"))
 

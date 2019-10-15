@@ -20,16 +20,15 @@
 # ========================================================================== #
 
 
-import re
-
 from typing import Any
 
 from .. import keymap
 
-from . import check_not_none_string
 from . import check_string_in_list
 
 from .basic import valid_number
+
+from .os import valid_printable_filename
 
 
 # =====
@@ -42,15 +41,7 @@ def valid_atx_button(arg: Any) -> str:
 
 
 def valid_msd_image_name(arg: Any) -> str:
-    if len(str(arg).strip()) == 0:
-        arg = None
-    arg = check_not_none_string(arg, "MSD image name", strip=True)
-    arg = re.sub(r"[^\w\.+@()\[\]-]", "_", arg)
-    if arg == ".":
-        arg = "_"
-    if arg == "..":
-        arg = "__"
-    return arg[:255]
+    return valid_printable_filename(arg, name="MSD image name")  # pragma: nocover
 
 
 def valid_log_seek(arg: Any) -> int:
