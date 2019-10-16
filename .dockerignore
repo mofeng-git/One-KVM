@@ -10,5 +10,6 @@
 /.git/
 /v*.tar.gz
 /*.pkg.tar.xz
+/*.pkg.tar.zst
 /*.egg-info
 /*kvmd-*.tar.gz

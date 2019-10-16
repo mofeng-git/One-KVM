@@ -134,7 +134,7 @@ push:
 
 
 clean:
-	rm -rf testenv/run/*.{pid,sock} build site dist pkg src v*.tar.gz *.pkg.tar.xz *.egg-info kvmd-*.tar.gz
+	rm -rf testenv/run/*.{pid,sock} build site dist pkg src v*.tar.gz *.pkg.tar.{xz,zst} *.egg-info kvmd-*.tar.gz
 	find kvmd testenv/tests -name __pycache__ | xargs rm -rf
 	make -C hid clean
 
