@@ -24,8 +24,17 @@
 set -x
 set -e
 
+export LC_ALL=C
+
 if [ `whoami` != root ]; then
 	echo "Only root can do that"
+	exit 1
+fi
+
+if [ "$1" != --do-the-thing ]; then
+	echo "This script will generate new self-signed SSL certificates for KVMD Nginx"
+	echo "and put them to /etc/kvmd/nginx/ssl. If you're sure of what you're doing,"
+	echo "append the option '--do-the-thing' to execute."
 	exit 1
 fi
 

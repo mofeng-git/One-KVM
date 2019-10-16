@@ -2,7 +2,7 @@ post_install() {
 	post_upgrade
 
 	echo "==> Generating KVMD certificate ..."
-	kvmd-gencert
+	kvmd-gencert --do-the-thing
 }
 
 post_upgrade() {
