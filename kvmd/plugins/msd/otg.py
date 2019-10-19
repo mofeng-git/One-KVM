@@ -27,6 +27,11 @@ from typing import Dict
 from typing import Type
 from typing import AsyncGenerator
 
+from ...yamlconf import Option
+
+from ...validators.os import valid_abs_path_exists
+from ...validators.os import valid_command
+
 from . import MsdOperationError
 from . import BaseMsd
 
@@ -39,6 +44,15 @@ class MsdCliOnlyError(MsdOperationError):
 
 # =====
 class Plugin(BaseMsd):
+    @classmethod
+    def get_plugin_options(cls) -> Dict:
+        sudo = ["/usr/bin/sudo", "--non-interactive"]
+        return {
+            "storage":     Option("/var/lib/kvmd/msd", type=valid_abs_path_exists, unpack_as="storage_path"),
+            "remount_cmd": Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-remount", "{mode}"], type=valid_command),
+            "unlock_cmd":  Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-unlock", "unlock"], type=valid_command),
+        }
+
     def get_state(self) -> Dict:
         return {
             "enabled": False,

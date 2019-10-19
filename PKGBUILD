@@ -44,6 +44,7 @@ depends=(
 	platformio
 	make
 	patch
+	sudo
 	raspberrypi-io-access
 	"ustreamer>=1.9"
 )
@@ -87,6 +88,8 @@ package_kvmd() {
 	sed -i -e "s/^#PROD//g" "$_cfg_default/nginx/nginx.conf"
 	find "$_cfg_default" -type f -exec chmod 444 '{}' \;
 	chmod 400 "$_cfg_default/kvmd"/*passwd
+	chmod 750 "$_cfg_default/os/sudoers"
+	chmod 400 "$_cfg_default/os/sudoers"/*
 
 	mkdir -p "$pkgdir/etc/kvmd/nginx/ssl"
 	chmod 750 "$pkgdir/etc/kvmd/nginx/ssl"
@@ -94,38 +97,54 @@ package_kvmd() {
 
 	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*.yaml
 	install -Dm600 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*passwd
+
+	mkdir -p "$pkgdir/var/lib/kvmd/msd"
 }
+
 
 for _variant in "${_variants[@]}"; do
 	_platform=${_variant%:*}
 	_board=${_variant#*:}
 	eval "package_kvmd-platform-$_platform-$_board() {
+		cd \"kvmd-\$pkgver\"
+
 		pkgdesc=\"Pi-KVM platform configs - $_platform for $_board\"
-		depends=(kvmd)
+		depends=(kvmd=$pkgver-$pkgrel)
+
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
 			depends=(\"\${depends[@]}\" \"tc358743-dkms>=0.3\")
+			conflicts=(tc35874-dkms)
+			if [ $_board == rpi4 ]; then
+				depends=(\"\${depends[@]}\" \"linux-raspberrypi4>=4.19.71-1\")
+			else
+				depends=(\"\${depends[@]}\" \"linux-raspberrypi>=4.19.71-1\")
+			fi
 		fi
+
 		backup=(
 			etc/sysctl.d/99-kvmd.conf
 			etc/udev/rules.d/99-kvmd.rules
 			etc/kvmd/main.yaml
 		)
 
-		cd \"kvmd-\$pkgver\"
-
 		install -DTm644 configs/os/sysctl.conf \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
 		install -DTm644 configs/os/udev/$_platform-$_board.rules \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
+		install -DTm444 configs/kvmd/main/$_platform.yaml \"\$pkgdir/etc/kvmd/main.yaml\"
 
 		if [ -f configs/os/modules-load/$_platform.conf ]; then
 			backup=(\"\${backup[@]}\" etc/modules-load.d/kvmd.conf)
 			install -DTm644 configs/os/modules-load/$_platform.conf \"\$pkgdir/etc/modules-load.d/kvmd.conf\"
 		fi
 
+		if [ -f configs/os/sudoers/$_platform ]; then
+			backup=(\"\${backup[@]}\" etc/sudoers.d/99_kvmd)
+			install -DTm440 configs/os/sudoers/$_platform \"\$pkgdir/etc/sudoers.d/99_kvmd\"
+			chmod 750 \"\$pkgdir/etc/sudoers.d\"
+		fi
+
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
 			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex)
 			install -DTm644 configs/kvmd/tc358743-edid.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 		fi
-
-		install -DTm444 configs/kvmd/main/$_platform.yaml \"\$pkgdir/etc/kvmd/main.yaml\"
 	}"
 done

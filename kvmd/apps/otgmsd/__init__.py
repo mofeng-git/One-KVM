@@ -25,19 +25,35 @@ import signal
 import errno
 import argparse
 
+from typing import List
+from typing import Optional
+
 import psutil
+import yaml
+
+from ...validators.kvm import valid_msd_image_name
+
+from .. import init
 
 
 # =====
-def _set_param(gadget: str, param: str, value: str) -> None:
-    param_path = os.path.join(
+def _make_param_path(gadget: str, param: str) -> str:
+    return os.path.join(
         "/sys/kernel/config/usb_gadget",
         gadget,
         "functions/mass_storage.usb0/lun.0",
         param,
     )
+
+
+def _get_param(gadget: str, param: str) -> str:
+    with open(_make_param_path(gadget, param)) as param_file:
+        return param_file.read().strip()
+
+
+def _set_param(gadget: str, param: str, value: str) -> None:
     try:
-        with open(param_path, "w") as param_file:
+        with open(_make_param_path(gadget, param), "w") as param_file:
             param_file.write(value + "\n")
     except OSError as err:
         if err.errno == errno.EBUSY:
@@ -55,29 +71,57 @@ def _reset_msd() -> None:
                 proc.send_signal(signal.SIGUSR1)
                 found = True
             except Exception as err:
-                SystemExit(f"Can't send SIGUSR1 to MSD kernel thread with pid={attrs['pid']}: {err}")
+                raise SystemExit(f"Can't send SIGUSR1 to MSD kernel thread with pid={attrs['pid']}: {err}")
     if not found:
         raise SystemExit("Can't find MSD kernel thread")
 
 
 # =====
-def main() -> None:
-    parser = argparse.ArgumentParser(description="KVMD OTG MSD Helper")
+def main(argv: Optional[List[str]]=None) -> None:
+    (parent_parser, argv, config) = init(
+        add_help=False,
+        argv=argv,
+        load_msd=True,
+    )
+    parser = argparse.ArgumentParser(
+        prog="kvmd-otg-msd",
+        description="KVMD OTG MSD Helper",
+        parents=[parent_parser],
+    )
     parser.add_argument("--reset", action="store_true", help="Send SIGUSR1 to MSD kernel thread")
-    parser.add_argument("--set-cdrom", dest="cdrom", default=None, choices=["0", "1"], help="Set CD-ROM flag")
-    parser.add_argument("--set-ro", dest="ro", default=None, choices=["0", "1"], help="Set read-only flag")
-    parser.add_argument("--set-image", dest="image_path", default=None, help="Change image path (or eject for the empty)")
-    parser.add_argument("--gadget", default="kvmd", help="USB gadget name")
-    options = parser.parse_args()
+    parser.add_argument("--set-cdrom", default=None, choices=["0", "1"], help="Set CD-ROM flag")
+    parser.add_argument("--set-ro", default=None, choices=["0", "1"], help="Set read-only flag")
+    parser.add_argument("--set-image", default=None, type=valid_msd_image_name, help="Change the image")
+    parser.add_argument("--eject", action="store_true", help="Eject the image")
+    options = parser.parse_args(argv[1:])
+
+    if config.kvmd.msd.type != "otg":
+        raise SystemExit(f"Error: KVMD MSD not using 'otg'"
+                         f" (now configured {config.kvmd.msd.type!r})")
 
     if options.reset:
         _reset_msd()
 
-    if options.cdrom is not None:
-        _set_param(options.gadget, "cdrom", options.cdrom)
+    if options.eject:
+        _set_param(config.otg.gadget, "file", "")
 
-    if options.ro is not None:
-        _set_param(options.gadget, "ro", options.ro)
+    if options.set_cdrom is not None:
+        _set_param(config.otg.gadget, "cdrom", options.set_cdrom)
 
-    if options.image_path is not None:
-        _set_param(options.gadget, "file", options.image_path)
+    if options.set_ro is not None:
+        _set_param(config.otg.gadget, "ro", options.set_ro)
+
+    if options.set_image:
+        path = os.path.join(config.kvmd.msd.storage, "images", options.set_image)
+        if not os.path.isfile(path):
+            raise SystemExit(f"Can't find image {path!r}")
+        _set_param(config.otg.gadget, "file", path)
+
+    print(yaml.dump({  # type: ignore
+        name: _get_param(config.otg.gadget, param)
+        for (param, name) in [
+            ("file", "image"),
+            ("cdrom", "cdrom"),
+            ("ro", "ro"),
+        ]
+    }, default_flow_style=False, sort_keys=False), end="")

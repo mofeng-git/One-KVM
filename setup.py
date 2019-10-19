@@ -93,6 +93,10 @@ def main() -> None:
             "kvmd.apps.htpasswd",
             "kvmd.apps.cleanup",
             "kvmd.apps.ipmi",
+            "kvmd.helpers",
+            "kvmd.helpers.otgmsd",
+            "kvmd.helpers.otgmsd.unlock",
+            "kvmd.helpers.otgmsd.remount",
         ],
 
         scripts=[
@@ -105,10 +109,12 @@ def main() -> None:
             "console_scripts": [
                 "kvmd = kvmd.apps.kvmd:main",
                 "kvmd-otg = kvmd.apps.otg:main",
-                "kvmd-otg-msd = kvmd.apps.otgmsd:main",
+                "kvmd-otgmsd = kvmd.apps.otgmsd:main",
                 "kvmd-htpasswd = kvmd.apps.htpasswd:main",
                 "kvmd-cleanup = kvmd.apps.cleanup:main",
                 "kvmd-ipmi = kvmd.apps.ipmi:main",
+                "kvmd-helper-otgmsd-unlock = kvmd.helpers.otgmsd.unlock:main",
+                "kvmd-helper-otgmsd-remount = kvmd.helpers.otgmsd.remount:main",
             ],
         },
 
