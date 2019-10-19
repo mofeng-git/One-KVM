@@ -112,8 +112,7 @@ for _variant in "${_variants[@]}"; do
 		depends=(kvmd=$pkgver-$pkgrel)
 
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
-			depends=(\"\${depends[@]}\" \"tc358743-dkms>=0.3\")
-			conflicts=(tc35874-dkms)
+			depends=(\"\${depends[@]}\")
 			if [ $_board == rpi4 ]; then
 				depends=(\"\${depends[@]}\" \"linux-raspberrypi4>=4.19.71-1\")
 			else
