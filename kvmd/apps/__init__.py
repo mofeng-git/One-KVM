@@ -261,6 +261,11 @@ def _get_config_scheme() -> Dict:
             "acm": {
                 "enabled": Option(True, type=valid_bool),
             },
+
+            "drives": {
+                "enabled": Option(False, type=valid_bool),
+                "count": Option(1, type=(lambda arg: valid_number(arg, min=1))),
+            },
         },
 
         "ipmi": {

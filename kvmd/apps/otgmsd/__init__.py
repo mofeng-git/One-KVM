@@ -29,31 +29,33 @@ from typing import List
 from typing import Optional
 
 import psutil
-import yaml
 
-from ...validators.kvm import valid_msd_image_name
+from ...validators.basic import valid_bool
+from ...validators.basic import valid_number
+
+from ...validators.os import valid_abs_path_exists
 
 from .. import init
 
 
 # =====
-def _make_param_path(gadget: str, param: str) -> str:
+def _make_param_path(gadget: str, instance: int, param: str) -> str:
     return os.path.join(
         "/sys/kernel/config/usb_gadget",
         gadget,
-        "functions/mass_storage.usb0/lun.0",
+        f"functions/mass_storage.usb{instance}/lun.0",
         param,
     )
 
 
-def _get_param(gadget: str, param: str) -> str:
-    with open(_make_param_path(gadget, param)) as param_file:
+def _get_param(gadget: str, instance: int, param: str) -> str:
+    with open(_make_param_path(gadget, instance, param)) as param_file:
         return param_file.read().strip()
 
 
-def _set_param(gadget: str, param: str, value: str) -> None:
+def _set_param(gadget: str, instance: int, param: str, value: str) -> None:
     try:
-        with open(_make_param_path(gadget, param), "w") as param_file:
+        with open(_make_param_path(gadget, instance, param), "w") as param_file:
             param_file.write(value + "\n")
     except OSError as err:
         if err.errno == errno.EBUSY:
@@ -61,7 +63,7 @@ def _set_param(gadget: str, param: str, value: str) -> None:
         raise
 
 
-def _reset_msd() -> None:
+def _unlock_msd() -> None:
     # https://github.com/torvalds/linux/blob/3039fad/drivers/usb/gadget/function/f_mass_storage.c#L2924
     found = False
     for proc in psutil.process_iter():
@@ -84,44 +86,48 @@ def main(argv: Optional[List[str]]=None) -> None:
         load_msd=True,
     )
     parser = argparse.ArgumentParser(
-        prog="kvmd-otg-msd",
-        description="KVMD OTG MSD Helper",
+        prog="kvmd-otgmsd",
+        description="KVMD OTG-MSD low-level hand tool",
         parents=[parent_parser],
     )
-    parser.add_argument("--reset", action="store_true", help="Send SIGUSR1 to MSD kernel thread")
-    parser.add_argument("--set-cdrom", default=None, choices=["0", "1"], help="Set CD-ROM flag")
-    parser.add_argument("--set-ro", default=None, choices=["0", "1"], help="Set read-only flag")
-    parser.add_argument("--set-image", default=None, type=valid_msd_image_name, help="Change the image")
-    parser.add_argument("--eject", action="store_true", help="Eject the image")
+    parser.add_argument("-i", "--instance", default=0, type=(lambda arg: valid_number(arg, min=0)),
+                        metavar="<N>", help="Drive instance (0 for KVMD drive)")
+    parser.add_argument("--unlock", action="store_true",
+                        help="Send SIGUSR1 to MSD kernel thread")
+    parser.add_argument("--set-cdrom", default=None, type=valid_bool,
+                        metavar="<1|0|yes|no>", help="Set CD-ROM flag")
+    parser.add_argument("--set-rw", default=None, type=valid_bool,
+                        metavar="<1|0|yes|no>", help="Set RW flag")
+    parser.add_argument("--set-image", default=None, type=valid_abs_path_exists,
+                        metavar="<path>", help="Set the image file")
+    parser.add_argument("--eject", action="store_true",
+                        help="Eject the image")
     options = parser.parse_args(argv[1:])
 
     if config.kvmd.msd.type != "otg":
         raise SystemExit(f"Error: KVMD MSD not using 'otg'"
                          f" (now configured {config.kvmd.msd.type!r})")
 
-    if options.reset:
-        _reset_msd()
+    set_param = (lambda param, value: _set_param(config.otg.gadget, options.instance, param, value))
+    get_param = (lambda param: _get_param(config.otg.gadget, options.instance, param))
+
+    if options.unlock:
+        _unlock_msd()
 
     if options.eject:
-        _set_param(config.otg.gadget, "file", "")
+        set_param("file", "")
 
     if options.set_cdrom is not None:
-        _set_param(config.otg.gadget, "cdrom", options.set_cdrom)
+        set_param("cdrom", str(int(options.set_cdrom)))
 
-    if options.set_ro is not None:
-        _set_param(config.otg.gadget, "ro", options.set_ro)
+    if options.set_rw is not None:
+        set_param("ro", str(int(not options.set_rw)))
 
     if options.set_image:
-        path = os.path.join(config.kvmd.msd.storage, "images", options.set_image)
-        if not os.path.isfile(path):
-            raise SystemExit(f"Can't find image {path!r}")
-        _set_param(config.otg.gadget, "file", path)
+        if not os.path.isfile(options.set_image):
+            raise SystemExit(f"Not a file: {options.set_image}")
+        set_param("file", options.set_image)
 
-    print(yaml.dump({  # type: ignore
-        name: _get_param(config.otg.gadget, param)
-        for (param, name) in [
-            ("file", "image"),
-            ("cdrom", "cdrom"),
-            ("ro", "ro"),
-        ]
-    }, default_flow_style=False, sort_keys=False), end="")
+    print("Image file: ", (get_param("file") or "<none>"))
+    print("CD-ROM flag:", ("yes" if int(get_param("cdrom")) else "no"))
+    print("RW flag:    ", ("no" if int(get_param("ro")) else "yes"))

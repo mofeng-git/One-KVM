@@ -114,15 +114,15 @@ def _create_hid(gadget_path: str, config_path: str, hid: Hid, instance: int) -> 
     _symlink(func_path, join(config_path, f"hid.usb{instance}"))
 
 
-def _create_msd(gadget_path: str, config_path: str) -> None:
-    func_path = join(gadget_path, "functions/mass_storage.usb0")
+def _create_msd(gadget_path: str, config_path: str, instance: int, cdrom: bool, rw: bool) -> None:
+    func_path = join(gadget_path, f"functions/mass_storage.usb{instance}")
     _mkdir(func_path)
     _write(join(func_path, "stall"), "0")
-    _write(join(func_path, "lun.0/cdrom"), "1")
-    _write(join(func_path, "lun.0/ro"), "1")
+    _write(join(func_path, "lun.0/cdrom"), ("1" if cdrom else "0"))
+    _write(join(func_path, "lun.0/ro"), ("0" if rw else "1"))
     _write(join(func_path, "lun.0/removable"), "1")
     _write(join(func_path, "lun.0/nofua"), "0")
-    _symlink(func_path, join(config_path, "mass_storage.usb0"))
+    _symlink(func_path, join(config_path, f"mass_storage.usb{instance}"))
 
 
 def _cmd_start(config: Section) -> None:
@@ -167,7 +167,11 @@ def _cmd_start(config: Section) -> None:
 
     if config.kvmd.msd.type == "otg":
         logger.info("Required MSD")
-        _create_msd(gadget_path, config_path)
+        _create_msd(gadget_path, config_path, 0, cdrom=True, rw=False)
+        if config.otg.drives.enabled:
+            logger.info("Required MSD extra drives: %d", config.otg.drives.count)
+            for instance in range(config.otg.drives.count):
+                _create_msd(gadget_path, config_path, instance + 1, cdrom=False, rw=True)
 
     logger.info("Enabling the gadget ...")
     _write(join(gadget_path, "UDC"), udc)

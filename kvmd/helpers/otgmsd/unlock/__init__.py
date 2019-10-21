@@ -31,12 +31,17 @@ _PROCESS_NAME = "file-storage"
 
 
 # =====
+def _log(msg: str) -> None:
+    print(msg, file=sys.stderr)
+
+
 def _unlock() -> None:
     # https://github.com/torvalds/linux/blob/3039fad/drivers/usb/gadget/function/f_mass_storage.c#L2924
     found = False
     for proc in psutil.process_iter():
-        attrs = proc.as_dict(attrs=["name", "exe"])
+        attrs = proc.as_dict(attrs=["name", "exe", "pid"])
         if attrs.get("name") == _PROCESS_NAME and not attrs.get("exe"):
+            _log(f"Sending SIGUSR1 to MSD {_PROCESS_NAME!r} kernel thread with pid={attrs['pid']} ...")
             try:
                 proc.send_signal(signal.SIGUSR1)
                 found = True
@@ -49,6 +54,5 @@ def _unlock() -> None:
 # =====
 def main() -> None:
     if len(sys.argv) != 2 or sys.argv[1] != "unlock":
-        raise SystemExit(f"This program interrupts all IO operations performed by OTG MSD.\n\n"
-                         f"Usage: python -m kvmd.helpers.otgmsd.unlock [-h|--help|unlock]")
+        raise SystemExit(f"Usage: {sys.argv[0]} [unlock]")
     _unlock()
