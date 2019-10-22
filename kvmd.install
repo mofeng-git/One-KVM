@@ -9,6 +9,9 @@ post_upgrade() {
 	echo "==> Ensuring KVMD users and groups ..."
 	systemd-sysusers /usr/lib/sysusers.d/kvmd.conf
 
+	# https://github.com/systemd/systemd/issues/13522
+	usermod --expiredate= kvmd >/dev/null
+
 	chown kvmd:kvmd /etc/kvmd/htpasswd
 	chown kvmd-ipmi:kvmd-ipmi /etc/kvmd/ipmipasswd
 	chmod 600 /etc/kvmd/*passwd
