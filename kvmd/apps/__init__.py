@@ -258,17 +258,17 @@ def _get_config_scheme() -> Dict:
             "serial":       Option("CAFEBABE"),
 
             "gadget":     Option("kvmd", type=valid_otg_gadget),
-            "udc":        Option("", type=(lambda arg: str(arg).strip())),
-            "init_delay": Option(3.0, type=valid_float_f01),
+            "udc":        Option("",     type=(lambda arg: str(arg).strip())),
+            "init_delay": Option(3.0,    type=valid_float_f01),
 
             "msd": {
                 "user": Option("kvmd", type=valid_user),
                 "default": {
                     "stall":     Option(False, type=valid_bool),
-                    "cdrom":     Option(True, type=valid_bool),
+                    "cdrom":     Option(True,  type=valid_bool),
                     "rw":        Option(False, type=valid_bool),
-                    "removable": Option(True, type=valid_bool),
-                    "fua":       Option(True, type=valid_bool),
+                    "removable": Option(True,  type=valid_bool),
+                    "fua":       Option(True,  type=valid_bool),
                 },
             },
 
@@ -278,13 +278,13 @@ def _get_config_scheme() -> Dict:
 
             "drives": {
                 "enabled": Option(False, type=valid_bool),
-                "count":   Option(1, type=(lambda arg: valid_number(arg, min=1))),
+                "count":   Option(1,     type=(lambda arg: valid_number(arg, min=1))),
                 "default": {
                     "stall":     Option(False, type=valid_bool),
                     "cdrom":     Option(False, type=valid_bool),
-                    "rw":        Option(True, type=valid_bool),
-                    "removable": Option(True, type=valid_bool),
-                    "fua":       Option(True, type=valid_bool),
+                    "rw":        Option(True,  type=valid_bool),
+                    "removable": Option(True,  type=valid_bool),
+                    "fua":       Option(True,  type=valid_bool),
                 },
             },
         },

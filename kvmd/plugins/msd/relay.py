@@ -203,10 +203,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "target_pin": Option(-1, type=valid_gpio_pin),
             "reset_pin":  Option(-1, type=valid_gpio_pin),
 
-            "device":       Option("",    type=valid_abs_path, unpack_as="device_path"),
-            "init_delay":   Option(1.0,   type=valid_float_f01),
-            "init_retries": Option(5,     type=valid_int_f1),
-            "reset_delay":  Option(1.0,   type=valid_float_f01),
+            "device":       Option("",  type=valid_abs_path, unpack_as="device_path"),
+            "init_delay":   Option(1.0, type=valid_float_f01),
+            "init_retries": Option(5,   type=valid_int_f1),
+            "reset_delay":  Option(1.0, type=valid_float_f01),
         }
 
     def get_state(self) -> Dict:

@@ -50,7 +50,7 @@ class Plugin(BaseMsd):
         return {
             "storage":     Option("/var/lib/kvmd/msd", type=valid_abs_dir, unpack_as="storage_path"),
             "remount_cmd": Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-remount", "{mode}"], type=valid_command),
-            "unlock_cmd":  Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-unlock", "unlock"], type=valid_command),
+            "unlock_cmd":  Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-unlock", "unlock"],  type=valid_command),
         }
 
     def get_state(self) -> Dict:

@@ -74,8 +74,8 @@ class Plugin(BaseHid):
                 "write_retries_delay": Option(0.1, type=valid_float_f01),
             },
 
-            "noop":       Option(False,  type=valid_bool),
-            "state_poll": Option(0.1, type=valid_float_f01),
+            "noop":       Option(False, type=valid_bool),
+            "state_poll": Option(0.1,   type=valid_float_f01),
         }
 
     def start(self) -> None:
