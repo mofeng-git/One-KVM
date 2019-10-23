@@ -54,6 +54,7 @@ from ..validators.basic import valid_number
 from ..validators.basic import valid_float_f0
 from ..validators.basic import valid_float_f01
 
+from ..validators.auth import valid_user
 from ..validators.auth import valid_users_list
 
 from ..validators.os import valid_abs_path
@@ -249,14 +250,26 @@ def _get_config_scheme() -> Dict:
         },
 
         "otg": {
-            "gadget":        Option("kvmd", type=valid_otg_gadget),
-            "vendor_id":     Option(0x1D6B, type=valid_otg_id),  # Linux Foundation
-            "product_id":    Option(0x0104, type=valid_otg_id),  # Multifunction Composite Gadget
-            "manufacturer":  Option("Pi-KVM"),
-            "product":       Option("Composite KVM Device"),
-            "serial_number": Option("CAFEBABE"),
-            "udc":           Option(""),
-            "init_delay":    Option(3.0, type=valid_float_f01),
+            "vendor_id":    Option(0x1D6B, type=valid_otg_id),  # Linux Foundation
+            "product_id":   Option(0x0104, type=valid_otg_id),  # Multifunction Composite Gadget
+            "manufacturer": Option("Pi-KVM"),
+            "product":      Option("Composite KVM Device"),
+            "serial":       Option("CAFEBABE"),
+
+            "gadget":     Option("kvmd", type=valid_otg_gadget),
+            "udc":        Option("", type=(lambda arg: str(arg).strip())),
+            "init_delay": Option(3.0, type=valid_float_f01),
+
+            "msd": {
+                "user": Option("kvmd", type=valid_user),
+                "default": {
+                    "stall":     Option(False, type=valid_bool),
+                    "cdrom":     Option(True, type=valid_bool),
+                    "rw":        Option(False, type=valid_bool),
+                    "removable": Option(True, type=valid_bool),
+                    "fua":       Option(True, type=valid_bool),
+                },
+            },
 
             "acm": {
                 "enabled": Option(True, type=valid_bool),
@@ -264,7 +277,14 @@ def _get_config_scheme() -> Dict:
 
             "drives": {
                 "enabled": Option(False, type=valid_bool),
-                "count": Option(1, type=(lambda arg: valid_number(arg, min=1))),
+                "count":   Option(1, type=(lambda arg: valid_number(arg, min=1))),
+                "default": {
+                    "stall":     Option(False, type=valid_bool),
+                    "cdrom":     Option(False, type=valid_bool),
+                    "rw":        Option(True, type=valid_bool),
+                    "removable": Option(True, type=valid_bool),
+                    "fua":       Option(True, type=valid_bool),
+                },
             },
         },
 

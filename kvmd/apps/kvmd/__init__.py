@@ -50,10 +50,17 @@ def main(argv: Optional[List[str]]=None) -> None:
         load_hid=True,
         load_atx=True,
         load_msd=True,
-    )[2].kvmd
+    )[2]
 
     with gpio.bcm():
         # pylint: disable=protected-access
+
+        msd_kwargs = config.kvmd.msd._unpack(ignore=["type"])
+        if config.kvmd.msd.type == "otg":
+            msd_kwargs["gadget"] = config.otg.gadget  # XXX: Small crutch to pass gadget name to plugin
+
+        config = config.kvmd
+
         Server(
             auth_manager=AuthManager(
                 internal_type=config.auth.internal.type,
@@ -67,7 +74,7 @@ def main(argv: Optional[List[str]]=None) -> None:
 
             hid=get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type"])),
             atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),
-            msd=get_msd_class(config.msd.type)(**config.msd._unpack(ignore=["type"])),
+            msd=get_msd_class(config.msd.type)(**msd_kwargs),
             streamer=Streamer(**config.streamer._unpack()),
         ).run(**config.server._unpack())
 

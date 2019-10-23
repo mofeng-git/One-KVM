@@ -22,6 +22,7 @@
 
 import os
 import re
+import shutil
 import time
 import argparse
 
@@ -47,6 +48,11 @@ from .hid.mouse import MOUSE_HID
 def _mkdir(path: str) -> None:
     get_logger().info("MKDIR --- %s", path)
     os.mkdir(path)
+
+
+def _chown(path: str, user: str) -> None:
+    get_logger().info("CHOWN --- %s - %s", user, path)
+    shutil.chown(path, user)
 
 
 def _symlink(src: str, dest: str) -> None:
@@ -104,7 +110,7 @@ def _create_acm(gadget_path: str, config_path: str) -> None:
     _symlink(func_path, join(config_path, "acm.usb0"))
 
 
-def _create_hid(gadget_path: str, config_path: str, hid: Hid, instance: int) -> None:
+def _create_hid(gadget_path: str, config_path: str, instance: int, hid: Hid) -> None:
     func_path = join(gadget_path, f"functions/hid.usb{instance}")
     _mkdir(func_path)
     _write(join(func_path, "protocol"), str(hid.protocol))
@@ -114,14 +120,29 @@ def _create_hid(gadget_path: str, config_path: str, hid: Hid, instance: int) -> 
     _symlink(func_path, join(config_path, f"hid.usb{instance}"))
 
 
-def _create_msd(gadget_path: str, config_path: str, instance: int, cdrom: bool, rw: bool) -> None:
+def _create_msd(
+    gadget_path: str,
+    config_path: str,
+    instance: int,
+    user: str,
+    stall: bool,
+    cdrom: bool,
+    rw: bool,
+    removable: bool,
+    fua: bool,
+) -> None:
+
     func_path = join(gadget_path, f"functions/mass_storage.usb{instance}")
     _mkdir(func_path)
-    _write(join(func_path, "stall"), "0")
-    _write(join(func_path, "lun.0/cdrom"), ("1" if cdrom else "0"))
-    _write(join(func_path, "lun.0/ro"), ("0" if rw else "1"))
-    _write(join(func_path, "lun.0/removable"), "1")
-    _write(join(func_path, "lun.0/nofua"), "0")
+    _write(join(func_path, "stall"), str(int(stall)))
+    _write(join(func_path, "lun.0/cdrom"), str(int(cdrom)))
+    _write(join(func_path, "lun.0/ro"), str(int(not rw)))
+    _write(join(func_path, "lun.0/removable"), str(int(removable)))
+    _write(join(func_path, "lun.0/nofua"), str(int(not fua)))
+    if user != "root":
+        _chown(join(func_path, "lun.0/cdrom"), user)
+        _chown(join(func_path, "lun.0/ro"), user)
+        _chown(join(func_path, "lun.0/file"), user)
     _symlink(func_path, join(config_path, f"mass_storage.usb{instance}"))
 
 
@@ -148,7 +169,7 @@ def _cmd_start(config: Section) -> None:
     _mkdir(lang_path)
     _write(join(lang_path, "manufacturer"), config.otg.manufacturer)
     _write(join(lang_path, "product"), config.otg.product)
-    _write(join(lang_path, "serialnumber"), config.otg.serial_number)
+    _write(join(lang_path, "serialnumber"), config.otg.serial)
 
     config_path = join(gadget_path, "configs/c.1")
     _mkdir(config_path)
@@ -162,16 +183,16 @@ def _cmd_start(config: Section) -> None:
 
     if config.kvmd.hid.type == "otg":
         logger.info("Required HID")
-        _create_hid(gadget_path, config_path, KEYBOARD_HID, 0)
-        _create_hid(gadget_path, config_path, MOUSE_HID, 1)
+        _create_hid(gadget_path, config_path, 0, KEYBOARD_HID)
+        _create_hid(gadget_path, config_path, 1, MOUSE_HID)
 
     if config.kvmd.msd.type == "otg":
         logger.info("Required MSD")
-        _create_msd(gadget_path, config_path, 0, cdrom=True, rw=False)
+        _create_msd(gadget_path, config_path, 0, config.otg.msd.user, **config.otg.msd.default._unpack())  # pylint: disable=protected-access
         if config.otg.drives.enabled:
             logger.info("Required MSD extra drives: %d", config.otg.drives.count)
             for instance in range(config.otg.drives.count):
-                _create_msd(gadget_path, config_path, instance + 1, cdrom=False, rw=True)
+                _create_msd(gadget_path, config_path, instance + 1, "root", **config.otg.drives.default._unpack())  # pylint: disable=protected-access
 
     logger.info("Enabling the gadget ...")
     _write(join(gadget_path, "UDC"), udc)

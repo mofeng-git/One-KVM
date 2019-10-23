@@ -74,7 +74,7 @@ def _remount(path: str, rw: bool) -> None:
 
 def _mkdir(path: str) -> None:
     if not os.path.exists(path):
-        _log(f"MKDIR {path} ...")
+        _log(f"MKDIR --- {path}")
         try:
             os.mkdir(path)
         except Exception as err:
@@ -82,7 +82,7 @@ def _mkdir(path: str) -> None:
 
 
 def _chown(path: str, user: str) -> None:
-    _log(f"CHOWN {user} {path} ...")
+    _log(f"CHOWN --- {user} - {path}")
     try:
         shutil.chown(path, user)
     except Exception as err:
