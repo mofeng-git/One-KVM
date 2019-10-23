@@ -29,7 +29,6 @@ import pytest
 
 from kvmd.validators import ValidatorError
 from kvmd.validators.os import valid_abs_path
-from kvmd.validators.os import valid_abs_path_exists
 from kvmd.validators.os import valid_printable_filename
 from kvmd.validators.os import valid_unix_mode
 from kvmd.validators.os import valid_command
@@ -63,21 +62,22 @@ def test_fail__valid_abs_path(arg: Any) -> None:
     ("/root",        "/root"),
     (".",            os.path.abspath(".")),
 ])
-def test_ok__valid_abs_path_exists(arg: Any, retval: str) -> None:
-    assert valid_abs_path_exists(arg) == retval
+def test_ok__valid_abs_path__dir(arg: Any, retval: str) -> None:
+    assert valid_abs_path(arg, type="dir") == retval
 
 
 @pytest.mark.parametrize("arg", [
-    "/f/o/o/b/a/r",
+    "/etc/passwd",
+    "/etc/passwd/",
     "~",
     "/foo~",
     "/foo/~",
     "",
     None,
 ])
-def test_fail__valid_abs_path_exists(arg: Any) -> None:
+def test_fail__valid_abs_path__dir(arg: Any) -> None:
     with pytest.raises(ValidatorError):
-        print(valid_abs_path_exists(arg))
+        print(valid_abs_path(arg, type="dir"))
 
 
 # =====

@@ -26,7 +26,7 @@ import passlib.apache
 
 from ...yamlconf import Option
 
-from ...validators.os import valid_abs_path_exists
+from ...validators.os import valid_abs_file
 
 from . import BaseAuthService
 
@@ -39,7 +39,7 @@ class Plugin(BaseAuthService):
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "file": Option("/etc/kvmd/htpasswd", type=valid_abs_path_exists, unpack_as="path"),
+            "file": Option("/etc/kvmd/htpasswd", type=valid_abs_file, unpack_as="path"),
         }
 
     async def authorize(self, user: str, passwd: str) -> bool:

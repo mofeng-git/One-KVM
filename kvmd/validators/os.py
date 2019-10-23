@@ -21,6 +21,7 @@
 
 
 import os
+import stat
 
 from typing import List
 from typing import Any
@@ -33,22 +34,45 @@ from .basic import valid_string_list
 
 
 # =====
-def valid_abs_path(arg: Any, exists: bool=False, name: str="") -> str:
-    if not name:
-        name = ("existent absolute path" if exists else "absolute path")
+def valid_abs_path(arg: Any, type: str="", name: str="") -> str:  # pylint: disable=redefined-builtin
+    if type:
+        if not name:
+            name = f"absolute path to existent {type}"
+        type = {
+            "file": "reg",
+            "dir": "dir",
+            "link": "lnk",
+            "sock": "sock",
+            "fifo": "fifo",
+            "char": "chr",
+            "block": "blk",
+        }[type]
+    else:
+        if not name:
+            name = "absolute path"
 
     if len(str(arg).strip()) == 0:
         arg = None
-    arg = check_not_none_string(arg, name)
+    arg = os.path.abspath(check_not_none_string(arg, name))
 
-    arg = os.path.abspath(arg)
-    if exists and not os.access(arg, os.F_OK):
-        raise_error(arg, name)
+    if type:
+        try:
+            st = os.stat(arg)
+        except Exception as err:
+            raise_error(arg, f"{name}: {err}")
+        else:
+            if not getattr(stat, f"S_IS{type.upper()}")(st.st_mode):
+                raise_error(arg, name)
+
     return arg
 
 
-def valid_abs_path_exists(arg: Any, name: str="") -> str:
-    return valid_abs_path(arg, exists=True, name=name)
+def valid_abs_file(arg: Any, name: str="") -> str:
+    return valid_abs_path(arg, type="file", name=name)
+
+
+def valid_abs_dir(arg: Any, name: str="") -> str:
+    return valid_abs_path(arg, type="dir", name=name)
 
 
 def valid_printable_filename(arg: Any, name: str="") -> str:
@@ -78,5 +102,5 @@ def valid_command(arg: Any) -> List[str]:
     cmd = valid_string_list(arg, delim=r"[,\t]+", name="command")
     if len(cmd) == 0:
         raise_error(arg, "command")
-    cmd[0] = valid_abs_path_exists(cmd[0], name="command entry point")
+    cmd[0] = valid_abs_file(cmd[0], name="command entry point")
     return cmd

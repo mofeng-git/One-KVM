@@ -58,7 +58,8 @@ from ..validators.auth import valid_user
 from ..validators.auth import valid_users_list
 
 from ..validators.os import valid_abs_path
-from ..validators.os import valid_abs_path_exists
+from ..validators.os import valid_abs_file
+from ..validators.os import valid_abs_dir
 from ..validators.os import valid_unix_mode
 from ..validators.os import valid_command
 
@@ -87,7 +88,7 @@ def init(
 
     args_parser = argparse.ArgumentParser(prog=(prog or argv[0]), description=description, add_help=add_help)
     args_parser.add_argument("-c", "--config", dest="config_path", default="/etc/kvmd/main.yaml", metavar="<file>",
-                             type=valid_abs_path_exists, help="Set config file path")
+                             type=valid_abs_file, help="Set config file path")
     args_parser.add_argument("-o", "--set-options", dest="set_options", default=[], nargs="+",
                              help="Override config options list (like sec/sub/opt=value)")
     args_parser.add_argument("-m", "--dump-config", dest="dump_config", action="store_true",
@@ -205,8 +206,8 @@ def _get_config_scheme() -> Dict:
             },
 
             "info": {
-                "meta":   Option("/etc/kvmd/meta.yaml",    type=valid_abs_path_exists, unpack_as="meta_path"),
-                "extras": Option("/usr/share/kvmd/extras", type=valid_abs_path_exists, unpack_as="extras_path"),
+                "meta":   Option("/etc/kvmd/meta.yaml",    type=valid_abs_file, unpack_as="meta_path"),
+                "extras": Option("/usr/share/kvmd/extras", type=valid_abs_dir, unpack_as="extras_path"),
             },
 
             "hid": {
@@ -303,7 +304,7 @@ def _get_config_scheme() -> Dict:
             },
 
             "auth": {
-                "file": Option("/etc/kvmd/ipmipasswd", type=valid_abs_path_exists, unpack_as="path"),
+                "file": Option("/etc/kvmd/ipmipasswd", type=valid_abs_file, unpack_as="path"),
             },
         },
     }

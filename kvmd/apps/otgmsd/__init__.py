@@ -33,7 +33,7 @@ import psutil
 from ...validators.basic import valid_bool
 from ...validators.basic import valid_number
 
-from ...validators.os import valid_abs_path_exists
+from ...validators.os import valid_abs_file
 
 from .. import init
 
@@ -98,7 +98,7 @@ def main(argv: Optional[List[str]]=None) -> None:
                         metavar="<1|0|yes|no>", help="Set CD-ROM flag")
     parser.add_argument("--set-rw", default=None, type=valid_bool,
                         metavar="<1|0|yes|no>", help="Set RW flag")
-    parser.add_argument("--set-image", default=None, type=valid_abs_path_exists,
+    parser.add_argument("--set-image", default=None, type=valid_abs_file,
                         metavar="<path>", help="Set the image file")
     parser.add_argument("--eject", action="store_true",
                         help="Eject the image")
