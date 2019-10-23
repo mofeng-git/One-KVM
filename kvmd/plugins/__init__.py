@@ -50,6 +50,8 @@ class BasePlugin:
 
 @functools.lru_cache()
 def get_plugin_class(sub: str, name: str) -> Type[BasePlugin]:
+    assert sub
+    assert name
     try:
         module = importlib.import_module(f"kvmd.plugins.{sub}.{name}")
     except ModuleNotFoundError:

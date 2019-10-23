@@ -9,16 +9,16 @@ logging: !include logging.yaml
 kvmd:
     server:
         unix: /run/kvmd/kvmd.sock
-        unix_rm: true
-        unix_mode: 0660
 
     auth: !include auth.yaml
 
     hid:
+        type: serial
         reset_pin: 4
         device: /dev/kvmd-hid
 
     atx:
+        type: gpio
         power_led_pin: 24
         hdd_led_pin: 22
         power_switch_pin: 23
@@ -28,6 +28,9 @@ kvmd:
         type: disabled
 
     streamer:
+        sync_delay: 1.0
+        init_delay: 3.0
+        desired_fps: 0
         unix: /run/kvmd/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"

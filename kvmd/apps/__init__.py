@@ -185,8 +185,8 @@ def _get_config_scheme() -> Dict:
                 "host":              Option("localhost", type=valid_ip_or_host),
                 "port":              Option(0,     type=valid_port),
                 "unix":              Option("",    type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
-                "unix_rm":           Option(False, type=valid_bool),
-                "unix_mode":         Option(0,     type=valid_unix_mode),
+                "unix_rm":           Option(True,  type=valid_bool),
+                "unix_mode":         Option(0o660, type=valid_unix_mode),
                 "heartbeat":         Option(3.0,   type=valid_float_f01),
                 "sync_chunk_size":   Option(65536, type=(lambda arg: valid_number(arg, min=1024))),
                 "access_log_format": Option("[%P / %{X-Real-IP}i] '%r' => %s; size=%b ---"
@@ -201,7 +201,7 @@ def _get_config_scheme() -> Dict:
                 },
 
                 "external": {
-                    "type": Option(""),
+                    "type": Option("", type=(lambda arg: str(arg).strip())),
                 },
             },
 
@@ -211,17 +211,17 @@ def _get_config_scheme() -> Dict:
             },
 
             "hid": {
-                "type": Option("serial"),
+                "type": Option("", type=(lambda arg: str(arg).strip())),
                 # Dynamic content
             },
 
             "atx": {
-                "type": Option("gpio"),
+                "type": Option("", type=(lambda arg: str(arg).strip())),
                 # Dynamic content
             },
 
             "msd": {
-                "type": Option("relay"),
+                "type": Option("", type=(lambda arg: str(arg).strip())),
                 # Dynamic content
             },
 
@@ -229,15 +229,15 @@ def _get_config_scheme() -> Dict:
                 "cap_pin":  Option(-1, type=valid_gpio_pin_optional),
                 "conv_pin": Option(-1, type=valid_gpio_pin_optional),
 
-                "sync_delay":         Option(1.0,  type=valid_float_f0),
-                "init_delay":         Option(3.0,  type=valid_float_f0),
+                "sync_delay":         Option(0.0,  type=valid_float_f0),
+                "init_delay":         Option(1.0,  type=valid_float_f0),
                 "init_restart_after": Option(0.0,  type=valid_float_f0),
                 "shutdown_delay":     Option(10.0, type=valid_float_f01),
                 "state_poll":         Option(1.0,  type=valid_float_f01),
 
-                "quality":     Option(80,  type=valid_stream_quality),
-                "desired_fps": Option(0,   type=valid_stream_fps),
-                "max_fps":     Option(120, type=valid_stream_fps),
+                "quality":     Option(80, type=valid_stream_quality),
+                "desired_fps": Option(30, type=valid_stream_fps),
+                "max_fps":     Option(60, type=valid_stream_fps),
 
                 "host":    Option("localhost", type=valid_ip_or_host),
                 "port":    Option(0,   type=valid_port),

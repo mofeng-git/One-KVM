@@ -82,4 +82,4 @@ class BaseAtx(BasePlugin):
 
 # =====
 def get_atx_class(name: str) -> Type[BaseAtx]:
-    return get_plugin_class("atx", (name or "disabled"))  # type: ignore
+    return get_plugin_class("atx", name)  # type: ignore

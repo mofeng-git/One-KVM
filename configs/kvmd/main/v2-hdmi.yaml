@@ -9,8 +9,6 @@ logging: !include logging.yaml
 kvmd:
     server:
         unix: /run/kvmd/kvmd.sock
-        unix_rm: true
-        unix_mode: 0660
 
     auth: !include auth.yaml
 
@@ -22,6 +20,7 @@ kvmd:
             device: /dev/kvmd-hid-mouse
 
     atx:
+        type: gpio
         power_led_pin: 24
         hdd_led_pin: 22
         power_switch_pin: 23
@@ -31,10 +30,6 @@ kvmd:
         type: otg
 
     streamer:
-        sync_delay: 0
-        init_delay: 1
-        desired_fps: 30
-        max_fps: 60
         unix: /run/kvmd/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"
