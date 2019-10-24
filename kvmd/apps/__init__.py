@@ -49,6 +49,8 @@ from ..yamlconf import build_raw_from_options
 from ..yamlconf.dumper import make_config_dump
 from ..yamlconf.loader import load_yaml_file
 
+from ..validators.basic import valid_stripped_string
+from ..validators.basic import valid_stripped_string_not_empty
 from ..validators.basic import valid_bool
 from ..validators.basic import valid_number
 from ..validators.basic import valid_float_f0
@@ -201,7 +203,7 @@ def _get_config_scheme() -> Dict:
                 },
 
                 "external": {
-                    "type": Option("", type=(lambda arg: str(arg).strip())),
+                    "type": Option("", type=valid_stripped_string),
                 },
             },
 
@@ -211,17 +213,17 @@ def _get_config_scheme() -> Dict:
             },
 
             "hid": {
-                "type": Option("", type=(lambda arg: str(arg).strip())),
+                "type": Option("", type=valid_stripped_string_not_empty),
                 # Dynamic content
             },
 
             "atx": {
-                "type": Option("", type=(lambda arg: str(arg).strip())),
+                "type": Option("", type=valid_stripped_string_not_empty),
                 # Dynamic content
             },
 
             "msd": {
-                "type": Option("", type=(lambda arg: str(arg).strip())),
+                "type": Option("", type=valid_stripped_string_not_empty),
                 # Dynamic content
             },
 
@@ -258,7 +260,7 @@ def _get_config_scheme() -> Dict:
             "serial":       Option("CAFEBABE"),
 
             "gadget":     Option("kvmd", type=valid_otg_gadget),
-            "udc":        Option("",     type=(lambda arg: str(arg).strip())),
+            "udc":        Option("",     type=valid_stripped_string),
             "init_delay": Option(3.0,    type=valid_float_f01),
 
             "msd": {

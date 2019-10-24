@@ -24,18 +24,18 @@ import socket
 
 from typing import Any
 
-from . import check_not_none_string
 from . import check_re_match
 from . import check_any
 
 from .basic import valid_number
+from .basic import valid_stripped_string_not_empty
 
 
 # =====
 def valid_ip_or_host(arg: Any) -> str:
     name = "IP address or RFC-1123 hostname"
     return check_any(
-        arg=check_not_none_string(arg, name),
+        arg=valid_stripped_string_not_empty(arg, name),
         name=name,
         validators=[
             valid_ip,
@@ -47,7 +47,7 @@ def valid_ip_or_host(arg: Any) -> str:
 def valid_ip(arg: Any) -> str:
     name = "IP address"
     return check_any(
-        arg=check_not_none_string(arg, name),
+        arg=valid_stripped_string_not_empty(arg, name),
         name=name,
         validators=[
             lambda arg: (arg, socket.inet_pton(socket.AF_INET, arg))[0],

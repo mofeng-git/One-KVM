@@ -36,13 +36,27 @@ from . import check_in_list
 
 
 # =====
+def valid_stripped_string(arg: Any, name: str="") -> str:
+    if not name:
+        name = "stripped string"
+    return check_not_none_string(arg, name)
+
+
+def valid_stripped_string_not_empty(arg: Any, name: str="") -> str:
+    if not name:
+        name = "not empty stripped string"
+    if len(str(arg).strip()) == 0:
+        arg = None
+    return valid_stripped_string(arg, name)
+
+
 def valid_bool(arg: Any) -> bool:
     true_args = ["1", "true", "yes"]
     false_args = ["0", "false", "no"]
 
     name = f"bool ({true_args!r} or {false_args!r})"
 
-    arg = check_not_none_string(arg, name).lower()
+    arg = valid_stripped_string_not_empty(arg, name).lower()
     arg = check_in_list(arg, name, true_args + false_args)
     return (arg in true_args)
 
@@ -57,7 +71,7 @@ def valid_number(
 
     name = (name or type.__name__)
 
-    arg = check_not_none_string(arg, name)
+    arg = valid_stripped_string_not_empty(arg, name)
     try:
         arg = type(arg)
     except Exception:

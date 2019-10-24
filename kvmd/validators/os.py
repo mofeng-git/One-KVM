@@ -27,10 +27,10 @@ from typing import List
 from typing import Any
 
 from . import raise_error
-from . import check_not_none_string
 
 from .basic import valid_number
 from .basic import valid_string_list
+from .basic import valid_stripped_string_not_empty
 
 
 # =====
@@ -51,9 +51,7 @@ def valid_abs_path(arg: Any, type: str="", name: str="") -> str:  # pylint: disa
         if not name:
             name = "absolute path"
 
-    if len(str(arg).strip()) == 0:
-        arg = None
-    arg = os.path.abspath(check_not_none_string(arg, name))
+    arg = os.path.abspath(valid_stripped_string_not_empty(arg, name))
 
     if type:
         try:
@@ -79,9 +77,7 @@ def valid_printable_filename(arg: Any, name: str="") -> str:
     if not name:
         name = "printable filename"
 
-    if len(str(arg).strip()) == 0:
-        arg = None
-    arg = check_not_none_string(arg, name)
+    arg = valid_stripped_string_not_empty(arg, name)
 
     if "/" in arg or "\0" in arg or arg in [".", ".."]:
         raise_error(arg, name)
