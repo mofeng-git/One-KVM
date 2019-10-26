@@ -63,7 +63,7 @@ def _set_param(gadget: str, instance: int, param: str, value: str) -> None:
         raise
 
 
-def _unlock_msd() -> None:
+def _unlock() -> None:
     # https://github.com/torvalds/linux/blob/3039fad/drivers/usb/gadget/function/f_mass_storage.c#L2924
     found = False
     for proc in psutil.process_iter():
@@ -112,7 +112,7 @@ def main(argv: Optional[List[str]]=None) -> None:
     get_param = (lambda param: _get_param(config.otg.gadget, options.instance, param))
 
     if options.unlock:
-        _unlock_msd()
+        _unlock()
 
     if options.eject:
         set_param("file", "")
