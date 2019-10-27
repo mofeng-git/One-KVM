@@ -93,7 +93,8 @@ package_kvmd() {
 
 	mkdir -p "$pkgdir/etc/kvmd/nginx/ssl"
 	chmod 750 "$pkgdir/etc/kvmd/nginx/ssl"
-	install -Dm644 -t "$pkgdir/etc/kvmd/nginx" "$_cfg_default/nginx"/*.conf
+	install -Dm444 -t "$pkgdir/etc/kvmd/nginx" "$_cfg_default/nginx"/*.conf
+	chmod 644 "$pkgdir/etc/kvmd/nginx/nginx.conf"
 
 	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*.yaml
 	install -Dm600 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*passwd
@@ -143,7 +144,7 @@ for _variant in "${_variants[@]}"; do
 
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
 			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex)
-			install -DTm644 configs/kvmd/tc358743-edid.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
+			install -DTm444 configs/kvmd/tc358743-edid.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 		fi
 	}"
 done
