@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+import os
 import asyncio
 import functools
 import contextlib
@@ -33,6 +34,9 @@ from typing import Generator
 from typing import AsyncGenerator
 from typing import TypeVar
 from typing import Any
+
+import aiofiles
+import aiofiles.base
 
 from . import aioregion
 
@@ -118,3 +122,10 @@ async def unlock_only_on_exception(lock: asyncio.Lock) -> AsyncGenerator[None, N
     except:  # noqa: E722
         lock.release()
         raise
+
+
+# =====
+async def afile_write_now(afile: aiofiles.base.AiofilesContextManager, data: bytes) -> None:
+    await afile.write(data)
+    await afile.flush()
+    await run_async(os.fsync, afile.fileno())

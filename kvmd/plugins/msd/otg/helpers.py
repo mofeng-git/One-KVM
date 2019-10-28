@@ -20,66 +20,60 @@
 # ========================================================================== #
 
 
+import signal
 import asyncio
-import contextlib
+import asyncio.subprocess
 
-from typing import Dict
-from typing import AsyncGenerator
-from typing import Optional
+from typing import List
 
-from . import MsdOperationError
-from . import BaseMsd
+from ....logging import get_logger
 
-
-# =====
-class MsdDisabledError(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("MSD is disabled")
+from .. import MsdError
 
 
 # =====
-class Plugin(BaseMsd):
-    async def get_state(self) -> Dict:
-        return {
-            "enabled": False,
-            "online": False,
-            "busy": False,
-            "storage": None,
-            "drive": None,
-            "features": {
-                "multi": False,
-                "cdrom": False,
-            },
-        }
+async def remount_storage(base_cmd: List[str], rw: bool) -> None:
+    logger = get_logger(0)
+    mode = ("rw" if rw else "ro")
+    cmd = [
+        part.format(mode=mode)
+        for part in base_cmd
+    ]
+    logger.info("Remounting internal storage to %s ...", mode.upper())
+    try:
+        await _run_helper(cmd)
+    except Exception:
+        logger.error("Can't remount internal storage")
+        raise
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        while True:
-            yield (await self.get_state())
-            await asyncio.sleep(60)
 
-    async def reset(self) -> None:
-        raise MsdDisabledError()
+async def unlock_drive(base_cmd: List[str]) -> None:
+    logger = get_logger(0)
+    logger.info("Unlocking the drive ...")
+    try:
+        await _run_helper(base_cmd)
+    except Exception:
+        logger.error("Can't unlock the drive")
+        raise
 
-    # =====
 
-    async def set_params(self, name: Optional[str]=None, cdrom: Optional[bool]=None) -> None:
-        raise MsdDisabledError()
+# =====
+async def _run_helper(cmd: List[str]) -> None:
+    logger = get_logger(0)
+    logger.info("Executing helper %s ...", cmd)
 
-    async def connect(self) -> None:
-        raise MsdDisabledError()
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        preexec_fn=(lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)),
+    )
 
-    async def disconnect(self) -> None:
-        raise MsdDisabledError()
+    stdout = (await proc.communicate())[0].decode(errors="ignore").strip()
+    if stdout:
+        log = (logger.info if proc.returncode == 0 else logger.error)
+        for line in stdout.split("\n"):
+            log("Console: %s", line)
 
-    @contextlib.asynccontextmanager
-    async def write_image(self, name: str) -> AsyncGenerator[None, None]:
-        if True:  # pylint: disable=using-constant-test
-            # XXX: Vulture hack
-            raise MsdDisabledError()
-        yield
-
-    async def write_image_chunk(self, chunk: bytes) -> int:
-        raise MsdDisabledError()
-
-    async def remove(self, name: str) -> None:
-        raise MsdDisabledError()
+    if proc.returncode != 0:
+        raise MsdError(f"Error while helper execution: pid={proc.pid}; retcode={proc.returncode}")

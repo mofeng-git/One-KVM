@@ -20,11 +20,12 @@
 # ========================================================================== #
 
 
-import types
+import contextlib
 
 from typing import Dict
 from typing import Type
 from typing import AsyncGenerator
+from typing import Optional
 
 from .. import BasePlugin
 from .. import get_plugin_class
@@ -44,19 +45,29 @@ class MsdOfflineError(MsdOperationError):
         super().__init__("MSD is not found")
 
 
-class MsdAlreadyConnectedError(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("MSD is already connected to Server")
-
-
-class MsdAlreadyDisconnectedError(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("MSD is already disconnected from Server")
-
-
 class MsdConnectedError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("MSD connected to Server, but should not")
+        super().__init__("MSD is connected to Server, but shouldn't for this operation")
+
+
+class MsdDisconnectedError(MsdOperationError):
+    def __init__(self) -> None:
+        super().__init__("MSD is disconnected from Server, but should be for this operation")
+
+
+class MsdImageNotSelected(MsdOperationError):
+    def __init__(self) -> None:
+        super().__init__("The image is not selected")
+
+
+class MsdUnknownImageError(MsdOperationError):
+    def __init__(self) -> None:
+        super().__init__("The image is not found in the storage")
+
+
+class MsdImageExistsError(MsdOperationError):
+    def __init__(self) -> None:
+        super().__init__("This image is already exists")
 
 
 class MsdIsBusyError(MsdOperationError):
@@ -69,52 +80,51 @@ class MsdMultiNotSupported(MsdOperationError):
         super().__init__("This MSD does not support storing multiple images")
 
 
+class MsdCdromNotSupported(MsdOperationError):
+    def __init__(self) -> None:
+        super().__init__("This MSD does not support CD-ROM emulation")
+
+
 # =====
 class BaseMsd(BasePlugin):
-    def get_state(self) -> Dict:
-        raise NotImplementedError
+    async def get_state(self) -> Dict:
+        raise NotImplementedError()
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        yield {}
-        raise NotImplementedError
+        if True:  # pylint: disable=using-constant-test
+            # XXX: Vulture hack
+            raise NotImplementedError()
+        yield
 
     async def reset(self) -> None:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     async def cleanup(self) -> None:
         pass
 
     # =====
 
-    async def connect(self) -> Dict:
-        raise NotImplementedError
+    async def set_params(self, name: Optional[str]=None, cdrom: Optional[bool]=None) -> None:
+        raise NotImplementedError()
 
-    async def disconnect(self) -> Dict:
-        raise NotImplementedError
+    async def connect(self) -> None:
+        raise NotImplementedError()
 
-    async def select(self, name: str, cdrom: bool) -> Dict:
-        raise NotImplementedError
+    async def disconnect(self) -> None:
+        raise NotImplementedError()
 
-    async def remove(self, name: str) -> Dict:
-        raise NotImplementedError
-
-    async def __aenter__(self) -> "BaseMsd":
-        raise NotImplementedError
-
-    async def write_image_info(self, name: str, complete: bool) -> None:
-        raise NotImplementedError
+    @contextlib.asynccontextmanager
+    async def write_image(self, name: str) -> AsyncGenerator[None, None]:
+        if True:  # pylint: disable=using-constant-test
+            # XXX: Vulture hack
+            raise NotImplementedError()
+        yield
 
     async def write_image_chunk(self, chunk: bytes) -> int:
-        raise NotImplementedError
+        raise NotImplementedError()
 
-    async def __aexit__(
-        self,
-        _exc_type: Type[BaseException],
-        _exc: BaseException,
-        _tb: types.TracebackType,
-    ) -> None:
-
-        raise NotImplementedError
+    async def remove(self, name: str) -> None:
+        raise NotImplementedError()
 
 
 # =====

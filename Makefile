@@ -57,7 +57,7 @@ tox: testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/v1-vga.yaml /etc/kvmd/main.yaml \
 			&& cp /src/testenv/v1-vga.override.yaml /etc/kvmd/override.yaml \
 			&& cd /src \
-			&& tox -c testenv/tox.ini $(if $(E),-e $(E),-p auto) \
+			&& tox -q -c testenv/tox.ini $(if $(E),-e $(E),-p auto) \
 		"
 
 

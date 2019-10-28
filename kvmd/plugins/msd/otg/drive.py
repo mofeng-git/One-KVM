@@ -20,66 +20,61 @@
 # ========================================================================== #
 
 
-import asyncio
-import contextlib
+import os
+import errno
 
-from typing import Dict
-from typing import AsyncGenerator
-from typing import Optional
-
-from . import MsdOperationError
-from . import BaseMsd
+from .. import MsdOperationError
 
 
 # =====
-class MsdDisabledError(MsdOperationError):
+class MsdDriveLockedError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("MSD is disabled")
+        super().__init__("MSD drive is locked on IO operation")
 
 
 # =====
-class Plugin(BaseMsd):
-    async def get_state(self) -> Dict:
-        return {
-            "enabled": False,
-            "online": False,
-            "busy": False,
-            "storage": None,
-            "drive": None,
-            "features": {
-                "multi": False,
-                "cdrom": False,
-            },
-        }
+class Drive:
+    def __init__(self, gadget: str, instance: int, lun: int) -> None:
+        self.__path = os.path.join(
+            "/sys/kernel/config/usb_gadget",
+            gadget,
+            f"functions/mass_storage.usb{instance}/lun.{lun}",
+        )
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        while True:
-            yield (await self.get_state())
-            await asyncio.sleep(60)
-
-    async def reset(self) -> None:
-        raise MsdDisabledError()
+    def get_sysfs_path(self) -> str:
+        return self.__path
 
     # =====
 
-    async def set_params(self, name: Optional[str]=None, cdrom: Optional[bool]=None) -> None:
-        raise MsdDisabledError()
+    def set_image_path(self, path: str) -> None:
+        self.__set_param("file", path)
 
-    async def connect(self) -> None:
-        raise MsdDisabledError()
+    def get_image_path(self) -> str:
+        return self.__get_param("file")
 
-    async def disconnect(self) -> None:
-        raise MsdDisabledError()
+    def set_cdrom_flag(self, flag: bool) -> None:
+        self.__set_param("cdrom", str(int(flag)))
 
-    @contextlib.asynccontextmanager
-    async def write_image(self, name: str) -> AsyncGenerator[None, None]:
-        if True:  # pylint: disable=using-constant-test
-            # XXX: Vulture hack
-            raise MsdDisabledError()
-        yield
+    def get_cdrom_flag(self) -> bool:
+        return bool(int(self.__get_param("cdrom")))
 
-    async def write_image_chunk(self, chunk: bytes) -> int:
-        raise MsdDisabledError()
+    def set_rw_flag(self, flag: bool) -> None:
+        self.__set_param("ro", str(int(not flag)))
 
-    async def remove(self, name: str) -> None:
-        raise MsdDisabledError()
+    def get_rw_flag(self) -> bool:
+        return (not int(self.__get_param("ro")))
+
+    # =====
+
+    def __get_param(self, param: str) -> str:
+        with open(os.path.join(self.__path, param)) as param_file:
+            return param_file.read().strip()
+
+    def __set_param(self, param: str, value: str) -> None:
+        try:
+            with open(os.path.join(self.__path, param), "w") as param_file:
+                param_file.write(value + "\n")
+        except OSError as err:
+            if err.errno == errno.EBUSY:
+                raise MsdDriveLockedError()
+            raise

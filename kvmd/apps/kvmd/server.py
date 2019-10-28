@@ -368,7 +368,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
             self.__broadcast_event(_Events.INFO_STATE, (await self.__make_info())),
             self.__broadcast_event(_Events.HID_STATE, self.__hid.get_state()),
             self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state()),
-            self.__broadcast_event(_Events.MSD_STATE, self.__msd.get_state()),
+            self.__broadcast_event(_Events.MSD_STATE, (await self.__msd.get_state())),
             self.__broadcast_event(_Events.STREAMER_STATE, (await self.__streamer.get_state())),
         ])
         async for msg in ws:
@@ -469,52 +469,60 @@ class Server:  # pylint: disable=too-many-instance-attributes
 
     @_exposed("GET", "/msd")
     async def __msd_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json(self.__msd.get_state())
+        return _json(await self.__msd.get_state())
+
+    @_exposed("POST", "/msd/set_params")
+    async def __msd_set_params_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        params = {
+            key: validator(request.query.get(param))
+            for (param, key, validator) in [
+                ("image", "name", (lambda arg: str(arg).strip() and valid_msd_image_name(arg))),
+                ("cdrom", "cdrom", valid_bool),
+            ]
+            if request.query.get(param) is not None
+        }
+        await self.__msd.set_params(**params)  # type: ignore
+        return _json()
 
     @_exposed("POST", "/msd/connect")
     async def __msd_connect_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json(await self.__msd.connect())
+        await self.__msd.connect()
+        return _json()
 
     @_exposed("POST", "/msd/disconnect")
     async def __msd_disconnect_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json(await self.__msd.disconnect())
-
-    @_exposed("POST", "/msd/select")
-    async def __msd_select_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        image_name = valid_msd_image_name(request.query.get("image_name"))
-        cdrom = valid_bool(request.query.get("cdrom", "true"))
-        return _json(await self.__msd.select(image_name, cdrom))
-
-    @_exposed("POST", "/msd/remove")
-    async def __msd_remove_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        return _json(await self.__msd.remove(valid_msd_image_name(request.query.get("image_name"))))
+        await self.__msd.disconnect()
+        return _json()
 
     @_exposed("POST", "/msd/write")
     async def __msd_write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         assert self.__sync_chunk_size is not None
         logger = get_logger(0)
         reader = await request.multipart()
-        image_name = ""
+        name = ""
         written = 0
         try:
-            async with self.__msd:
-                name_field = await _get_multipart_field(reader, "image_name")
-                image_name = valid_msd_image_name((await name_field.read()).decode("utf-8"))
+            name_field = await _get_multipart_field(reader, "image")
+            name = valid_msd_image_name((await name_field.read()).decode("utf-8"))
 
-                data_field = await _get_multipart_field(reader, "image_data")
+            data_field = await _get_multipart_field(reader, "data")
 
-                logger.info("Writing image %r to MSD ...", image_name)
-                await self.__msd.write_image_info(image_name, False)
+            async with self.__msd.write_image(name):
+                logger.info("Writing image %r to MSD ...", name)
                 while True:
                     chunk = await data_field.read_chunk(self.__sync_chunk_size)
                     if not chunk:
                         break
                     written = await self.__msd.write_image_chunk(chunk)
-                await self.__msd.write_image_info(image_name, True)
         finally:
             if written != 0:
-                logger.info("Written image %r with size=%d bytes to MSD", image_name, written)
-        return _json({"image": {"name": image_name, "size": written}})
+                logger.info("Written image %r with size=%d bytes to MSD", name, written)
+        return _json({"image": {"name": name, "size": written}})
+
+    @_exposed("POST", "/msd/remove")
+    async def __msd_remove_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        await self.__msd.remove(valid_msd_image_name(request.query.get("image")))
+        return _json()
 
     @_exposed("POST", "/msd/reset")
     async def __msd_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:

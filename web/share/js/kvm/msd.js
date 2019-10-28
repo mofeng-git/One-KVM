@@ -60,8 +60,8 @@ export function Msd() {
 
 	var __clickUploadNewImageButton = function() {
 		let form_data = new FormData();
-		form_data.append("image_name", __image_file.name);
-		form_data.append("image_data", __image_file);
+		form_data.append("image", __image_file.name);
+		form_data.append("data", __image_file);
 
 		__upload_http = new XMLHttpRequest();
 		__upload_http.open("POST", "/api/msd/write", true);
@@ -132,11 +132,11 @@ export function Msd() {
 				$("msd-reset-button").classList.add("feature-disabled");
 			}
 
-			if (__state.connected) {
+			if (__state.online && __state.drive.connected) {
 				$("msd-another-another-user-uploads").style.display = "none";
 				$("msd-led").className = "led-green";
 				$("msd-status").innerHTML = $("msd-led").title = "Connected to Server";
-			} else if (__state.uploading) {
+			} else if (__state.online && __state.storage.uploading) {
 				if (!__upload_http) {
 					$("msd-another-another-user-uploads").style.display = "block";
 				}
@@ -153,19 +153,19 @@ export function Msd() {
 			}
 
 			$("msd-offline").style.display = (__state.online ? "none" : "block");
-			$("msd-current-image-broken").style.display = (
-				__state.online && __state.current &&
-				!__state.current.complete && !__state.uploading ? "block" : "none"
+			$("msd-drive-image-broken").style.display = (
+				__state.online && __state.drive.image &&
+				!__state.drive.image.complete && !__state.drive.uploading ? "block" : "none"
 			);
 
-			$("msd-current-image-name").innerHTML = (__state.online && __state.current ? __state.current.name : "None");
-			$("msd-current-image-size").innerHTML = (__state.online && __state.current ? __formatSize(__state.current.size) : "None");
+			$("msd-drive-image-name").innerHTML = (__state.online && __state.drive.image ? __state.drive.image.name : "None");
+			$("msd-drive-image-size").innerHTML = (__state.online && __state.drive.image ? __formatSize(__state.drive.image.size) : "None");
 			$("msd-storage-size").innerHTML = (__state.online ? __formatSize(__state.storage.size) : "Unavailable");
 
-			wm.switchDisabled($("msd-connect-button"), (!__state.online || __state.connected || __state.busy));
-			wm.switchDisabled($("msd-disconnect-button"), (!__state.online || !__state.connected || __state.busy));
-			wm.switchDisabled($("msd-select-new-image-button"), (!__state.online || __state.connected || __state.busy || __upload_http));
-			wm.switchDisabled($("msd-upload-new-image-button"), (!__state.online || __state.connected || __state.busy || !__image_file));
+			wm.switchDisabled($("msd-connect-button"), (!__state.online || __state.drive.connected || __state.busy));
+			wm.switchDisabled($("msd-disconnect-button"), (!__state.online || !__state.drive.connected || __state.busy));
+			wm.switchDisabled($("msd-select-new-image-button"), (!__state.online || __state.drive.connected || __state.busy || __upload_http));
+			wm.switchDisabled($("msd-upload-new-image-button"), (!__state.online || __state.drive.connected || __state.busy || !__image_file));
 			wm.switchDisabled($("msd-abort-uploading-button"), (!__state.online || !__upload_http));
 			wm.switchDisabled($("msd-reset-button"), (!__state.enabled || __state.busy));
 
@@ -181,9 +181,9 @@ export function Msd() {
 			$("msd-status").innerHTML = "";
 			$("msd-led").title = "";
 			$("msd-offline").style.display = "none";
-			$("msd-current-image-broken").style.display = "none";
-			$("msd-current-image-name").innerHTML = "";
-			$("msd-current-image-size").innerHTML = "";
+			$("msd-drive-image-broken").style.display = "none";
+			$("msd-drive-image-name").innerHTML = "";
+			$("msd-drive-image-size").innerHTML = "";
 			$("msd-storage-size").innerHTML = "";
 
 			wm.switchDisabled($("msd-connect-button"), true);
