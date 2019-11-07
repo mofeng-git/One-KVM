@@ -41,6 +41,13 @@ RUN git clone https://github.com/pikvm/ustreamer \
 COPY testenv/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
-RUN mkdir -p /etc/kvmd/nginx
+RUN mkdir -p \
+		/etc/kvmd/nginx \
+		/var/lib/kvmd/msd/{images,meta} \
+		/fake_sysfs/sys/kernel/config/usb_gadget/kvmd/functions/mass_storage.usb0/lun.0 \
+	&& cd /fake_sysfs/sys/kernel/config/usb_gadget/kvmd/functions/mass_storage.usb0/lun.0 \
+	&& touch file  \
+	&& echo 1 > cdrom \
+	&& echo 1 > ro
 
 CMD /bin/bash

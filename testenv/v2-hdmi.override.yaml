@@ -1,0 +1,32 @@
+kvmd:
+    server:
+        unix_mode: 0666
+
+    hid:
+        keyboard:
+            device: /dev/null
+        mouse:
+            device: /dev/null
+        noop: true
+
+    msd:
+        remount_cmd: /bin/true
+        unlock_cmd: /bin/true
+        sysfs_prefix: /fake_sysfs
+
+    streamer:
+        desired_fps: 30
+        max_fps: 40
+        cmd:
+            - "/usr/bin/ustreamer"
+            - "--device=/dev/kvmd-video"
+            - "--quality={quality}"
+            - "--desired-fps={desired_fps}"
+            - "--resolution=800x600"
+            - "--last-as-blank=0"
+            - "--unix={unix}"
+            - "--unix-rm"
+            - "--unix-mode=0666"
+            - "--exit-on-parent-death"
+            - "--process-name-prefix={process_name_prefix}"
+            - "--no-log-colors"

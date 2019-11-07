@@ -34,9 +34,9 @@ class MsdDriveLockedError(MsdOperationError):
 
 # =====
 class Drive:
-    def __init__(self, gadget: str, instance: int, lun: int) -> None:
+    def __init__(self, prefix: str, gadget: str, instance: int, lun: int) -> None:
         self.__path = os.path.join(
-            "/sys/kernel/config/usb_gadget",
+            f"{prefix}/sys/kernel/config/usb_gadget",
             gadget,
             f"functions/mass_storage.usb{instance}/lun.{lun}",
         )
