@@ -62,18 +62,18 @@ function __login() {
 				}
 			}
 		}, body, "application/x-www-form-urlencoded");
-		__setDisabled(true);
+		__setEnabled(false);
 	}
 }
 
-function __setDisabled(disabled) {
-	wm.switchDisabled($("user-input"), disabled);
-	wm.switchDisabled($("passwd-input"), disabled);
-	wm.switchDisabled($("login-button"), disabled);
+function __setEnabled(enabled) {
+	wm.switchEnabled($("user-input"), enabled);
+	wm.switchEnabled($("passwd-input"), enabled);
+	wm.switchEnabled($("login-button"), enabled);
 }
 
 function __tryAgain() {
-	__setDisabled(false);
+	__setEnabled(true);
 	$("passwd-input").focus();
 	$("passwd-input").select();
 }

@@ -97,7 +97,7 @@ export function Msd() {
 			__applyState();
 		});
 		__applyState();
-		wm.switchDisabled($(`msd-${action}-button`), true);
+		wm.switchEnabled($(`msd-${action}-button`), false);
 	};
 
 	var __selectNewImageFile = function() {
@@ -181,17 +181,17 @@ export function Msd() {
 				$("msd-storage-progress-value").style.width = "0%";
 			}
 
-			wm.switchDisabled($("msd-emulate-cdrom-checkbox"), (!__state.online || !__state.features.cdrom, __state.drive.connected || __state.busy));
+			wm.switchEnabled($("msd-emulate-cdrom-checkbox"), (__state.online && __state.features.cdrom && !__state.drive.connected && !__state.busy));
 			if (__state.features.multi) {
-				wm.switchDisabled($("msd-connect-button"), (!__state.online || !__state.drive.image || __state.drive.connected || __state.busy));
+				wm.switchEnabled($("msd-connect-button"), (__state.online && __state.drive.image && !__state.drive.connected && !__state.busy));
 			} else {
-				wm.switchDisabled($("msd-connect-button"), (!__state.online || __state.drive.connected || __state.busy));
+				wm.switchEnabled($("msd-connect-button"), (__state.online && !__state.drive.connected && !__state.busy));
 			}
-			wm.switchDisabled($("msd-disconnect-button"), (!__state.online || !__state.drive.connected || __state.busy));
-			wm.switchDisabled($("msd-select-new-image-button"), (!__state.online || __state.drive.connected || __state.busy || __upload_http));
-			wm.switchDisabled($("msd-upload-new-image-button"), (!__state.online || __state.drive.connected || __state.busy || !__image_file));
-			wm.switchDisabled($("msd-abort-uploading-button"), (!__state.online || !__upload_http));
-			wm.switchDisabled($("msd-reset-button"), (!__state.enabled || __state.busy));
+			wm.switchEnabled($("msd-disconnect-button"), (__state.online && __state.drive.connected && !__state.busy));
+			wm.switchEnabled($("msd-select-new-image-button"), (__state.online && !__state.drive.connected && !__upload_http && !__state.busy));
+			wm.switchEnabled($("msd-upload-new-image-button"), (__state.online && !__state.drive.connected && __image_file && !__state.busy));
+			wm.switchEnabled($("msd-abort-uploading-button"), (__state.online && __upload_http));
+			wm.switchEnabled($("msd-reset-button"), (__state.enabled && !__state.busy));
 
 			$("msd-emulate-cdrom-checkbox").checked = (__state.online && __state.features.cdrom && __state.drive.cdrom);
 			$("msd-new-image").style.display = (__image_file ? "block" : "none");
@@ -211,13 +211,13 @@ export function Msd() {
 			$("msd-drive-image-size").innerHTML = "";
 			$("msd-storage-size").innerHTML = "";
 
-			wm.switchDisabled($("msd-emulate-cdrom-checkbox"), true);
-			wm.switchDisabled($("msd-connect-button"), true);
-			wm.switchDisabled($("msd-disconnect-button"), true);
-			wm.switchDisabled($("msd-select-new-image-button"), true);
-			wm.switchDisabled($("msd-upload-new-image-button"), true);
-			wm.switchDisabled($("msd-abort-uploading-button"), true);
-			wm.switchDisabled($("msd-reset-button"), true);
+			wm.switchEnabled($("msd-emulate-cdrom-checkbox"), false);
+			wm.switchEnabled($("msd-connect-button"), false);
+			wm.switchEnabled($("msd-disconnect-button"), false);
+			wm.switchEnabled($("msd-select-new-image-button"), false);
+			wm.switchEnabled($("msd-upload-new-image-button"), false);
+			wm.switchEnabled($("msd-abort-uploading-button"), false);
+			wm.switchEnabled($("msd-reset-button"), false);
 
 			$("msd-emulate-cdrom-checkbox").checked = false;
 			$("msd-select-new-image-file").value = "";

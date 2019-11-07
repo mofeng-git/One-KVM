@@ -51,9 +51,9 @@ export function Atx() {
 		$("atx-power-led").className = ((state && state.leds.power) ? "led-green" : "led-gray");
 		$("atx-hdd-led").className = ((state && state.leds.hdd) ? "led-red" : "led-gray");
 
-		wm.switchDisabled($("atx-power-button"), (!state || state.busy));
-		wm.switchDisabled($("atx-power-button-long"), (!state || state.busy));
-		wm.switchDisabled($("atx-reset-button"), (!state || state.busy));
+		wm.switchEnabled($("atx-power-button"), (state && !state.busy));
+		wm.switchEnabled($("atx-power-button-long"), (state && !state.busy));
+		wm.switchEnabled($("atx-reset-button"), (state && !state.busy));
 	};
 
 	var __clickButton = function(button, confirm_msg) {

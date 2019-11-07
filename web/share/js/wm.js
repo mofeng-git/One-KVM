@@ -156,8 +156,8 @@ function __WindowManager() {
 		return promise;
 	};
 
-	self.switchDisabled = function(el, disabled) {
-		if (disabled && document.activeElement === el) {
+	self.switchEnabled = function(el, enabled) {
+		if (!enabled && document.activeElement === el) {
 			let el_to_focus = (
 				el.closest(".modal-window")
 				|| el.closest(".window")
@@ -167,7 +167,7 @@ function __WindowManager() {
 				el_to_focus.focus();
 			}
 		}
-		el.disabled = disabled;
+		el.disabled = !enabled;
 	};
 
 	self.showWindow = function(el_window, activate=true, center=false) {

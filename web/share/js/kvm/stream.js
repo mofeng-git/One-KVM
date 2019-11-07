@@ -72,7 +72,7 @@ export function Streamer() {
 			state = state.state;
 
 			if (!$("stream-quality-slider").activated) {
-				wm.switchDisabled($("stream-quality-slider"), false);
+				wm.switchEnabled($("stream-quality-slider"), true);
 				if ($("stream-quality-slider").value !== state.encoder.quality) {
 					$("stream-quality-slider").value = state.encoder.quality;
 					__updateQualityValue(state.encoder.quality);
@@ -81,7 +81,7 @@ export function Streamer() {
 
 			if (!$("stream-desired-fps-slider").activated) {
 				$("stream-desired-fps-slider").max = max_fps;
-				wm.switchDisabled($("stream-desired-fps-slider"), false);
+				wm.switchEnabled($("stream-desired-fps-slider"), true);
 				if ($("stream-desired-fps-slider").value !== state.source.desired_fps) {
 					$("stream-desired-fps-slider").value = state.source.desired_fps;
 					__updateDesiredFpsValue(state.source.desired_fps);
@@ -103,8 +103,8 @@ export function Streamer() {
 			if (__ensureStream(state.stream.clients_stat)) {
 				$("stream-led").className = "led-green";
 				$("stream-led").title = "Stream is active";
-				wm.switchDisabled($("stream-screenshot-button"), false);
-				wm.switchDisabled($("stream-reset-button"), false);
+				wm.switchEnabled($("stream-screenshot-button"), true);
+				wm.switchEnabled($("stream-reset-button"), true);
 				$("stream-quality-slider").activated = false;
 				$("stream-desired-fps-slider").activated = false;
 				tools.info("Stream: active");
@@ -115,10 +115,10 @@ export function Streamer() {
 		} else {
 			$("stream-led").className = "led-gray";
 			$("stream-led").title = "Stream inactive";
-			wm.switchDisabled($("stream-screenshot-button"), true);
-			wm.switchDisabled($("stream-reset-button"), true);
-			wm.switchDisabled($("stream-quality-slider"), true);
-			wm.switchDisabled($("stream-desired-fps-slider"), true);
+			wm.switchEnabled($("stream-screenshot-button"), false);
+			wm.switchEnabled($("stream-reset-button"), false);
+			wm.switchEnabled($("stream-quality-slider"), false);
+			wm.switchEnabled($("stream-desired-fps-slider"), false);
 			tools.info("Stream: inactive");
 
 			__updateStreamWindow(false, false);
