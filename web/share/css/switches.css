@@ -96,3 +96,8 @@ div.switch-box input[type=checkbox].switch-checkbox:checked + label.switch-label
 div.switch-box input[type=checkbox].switch-checkbox:checked + label.switch-label span.switch {
 	right: 0px;
 }
+
+div.switch-box input[type=checkbox].switch-checkbox:disabled + label.switch-label span.switch {
+	background: var(--cs-thumb-disabled-bg);
+	border: var(--border-default-2px);
+}

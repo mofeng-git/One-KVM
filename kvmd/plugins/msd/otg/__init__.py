@@ -188,7 +188,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     del vd["image"]["path"]
 
             return {
-                "enabled": False,  # FIXME
+                "enabled": True,
                 "online": bool(self.__state.vd),
                 "busy": self.__state.is_busy(),
                 "storage": storage,

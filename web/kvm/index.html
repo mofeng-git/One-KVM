@@ -104,7 +104,7 @@
 				</div>
 				<hr>
 				<div class="menu-item-content-text">
-					<table id="stream-auto-resize-box"><tr>
+					<table class="one-line-switch"><tr>
 						<td>Auto-resize stream:</td>
 						<td align="right">
 							<div class="switch-box">
@@ -203,12 +203,39 @@
 						<td>Image size:</td>
 						<td id="msd-drive-image-size" class="msd-info-value"></td>
 					</tr>
-					<tr>
+					<tr class="msd-single-storage msd-feature-disabled">
 						<td>Storage size:</td>
 						<td id="msd-storage-size" class="msd-info-value"></td>
 					</tr>
 				</table>
 				<hr>
+
+				<div class="msd-multi-storage msd-feature-disabled">
+					<div class="menu-item-content-text">
+						<table class="one-line-switch"><tr>
+							<td>Emulate CD-ROM drive: <sup><i>otherwise the flash drive</i></sup></td>
+							<td align="right">
+								<div class="switch-box msd-cdrom-switch-box">
+									<input type="checkbox" id="msd-emulate-cdrom-checkbox" class="switch-checkbox" checked />
+									<label class="switch-label" for="msd-emulate-cdrom-checkbox">
+										<span class="switch-inner"></span>
+										<span class="switch"></span>
+									</label>
+								</div>
+							</td>
+						</tr></table>
+					</div>
+					<hr>
+				</div>
+
+				<div class="msd-multi-storage msd-feature-disabled">
+					<div class="menu-item-content-text">
+						<div id="msd-storage-progress" class="progress">
+							<span id="msd-storage-progress-value" class="progress-value"></span>
+						</div>
+					</div>
+					<hr>
+				</div>
 
 				<input type="file" id="msd-select-new-image-file" class="msd-message" />
 				<div class="menu-item-content-buttons buttons-row">
@@ -231,8 +258,8 @@
 					</table>
 					<hr>
 					<div class="menu-item-content-text">
-						<div id="msd-progress" class="progress">
-							<span id="msd-progress-value" class="progress-value"></span>
+						<div id="msd-uploading-progress" class="progress">
+							<span id="msd-uploading-progress-value" class="progress-value"></span>
 						</div>
 					</div>
 					<hr>

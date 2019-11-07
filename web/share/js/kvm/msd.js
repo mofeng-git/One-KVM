@@ -23,7 +23,7 @@
 "use strict";
 
 
-import {tools, $} from "../tools.js";
+import {tools, $, $$$} from "../tools.js";
 import {wm} from "../wm.js";
 
 
@@ -38,6 +38,8 @@ export function Msd() {
 
 	var __init__ = function() {
 		$("msd-led").title = "Unknown state";
+
+		tools.setOnClick($("msd-emulate-cdrom-checkbox"), __clickCdromSwitch);
 
 		$("msd-select-new-image-file").onchange = __selectNewImageFile;
 		tools.setOnClick($("msd-select-new-image-button"), () => $("msd-select-new-image-file").click());
@@ -58,6 +60,10 @@ export function Msd() {
 		__applyState();
 	};
 
+	var __clickCdromSwitch = function() {
+		__sendParam("cdrom", ($("msd-emulate-cdrom-checkbox").checked ? "1" : "0"));
+	};
+
 	var __clickUploadNewImageButton = function() {
 		let form_data = new FormData();
 		form_data.append("image", __image_file.name);
@@ -76,8 +82,8 @@ export function Msd() {
 		__upload_http.upload.onprogress = null;
 		__upload_http.abort();
 		__upload_http = null;
-		$("msd-progress").setAttribute("data-label", "Aborted");
-		$("msd-progress-value").style.width = "0%";
+		$("msd-uploading-progress").setAttribute("data-label", "Aborted");
+		$("msd-uploading-progress-value").style.width = "0%";
 	};
 
 	var __clickConnectButton = function(connect) {
@@ -124,13 +130,15 @@ export function Msd() {
 
 	var __applyState = function() {
 		if (__state) {
-			if (__state.enabled) {
-				$("msd-dropdown").classList.remove("feature-disabled");
-				$("msd-reset-button").classList.remove("feature-disabled");
-			} else {
-				$("msd-dropdown").classList.add("feature-disabled");
-				$("msd-reset-button").classList.add("feature-disabled");
+			for (let el of $$$(".msd-single-storage")) {
+				el.classList.toggle("msd-feature-disabled", __state.features.multi);
 			}
+			for (let el of $$$(".msd-multi-storage")) {
+				el.classList.toggle("msd-feature-disabled", !__state.features.multi);
+			}
+
+			$("msd-dropdown").classList.toggle("feature-disabled", !__state.enabled);
+			$("msd-reset-button").classList.toggle("feature-disabled", !__state.enabled);
 
 			if (__state.online && __state.drive.connected) {
 				$("msd-another-another-user-uploads").style.display = "none";
@@ -160,18 +168,35 @@ export function Msd() {
 
 			$("msd-drive-image-name").innerHTML = (__state.online && __state.drive.image ? __state.drive.image.name : "None");
 			$("msd-drive-image-size").innerHTML = (__state.online && __state.drive.image ? __formatSize(__state.drive.image.size) : "None");
-			$("msd-storage-size").innerHTML = (__state.online ? __formatSize(__state.storage.size) : "Unavailable");
 
-			wm.switchDisabled($("msd-connect-button"), (!__state.online || __state.drive.connected || __state.busy));
+			if (__state.online) {
+				let size = __state.storage.size;
+				let used = __state.storage.size - __state.storage.free;
+				$("msd-storage-size").innerHTML = __formatSize(size);
+				$("msd-storage-progress").setAttribute("data-label", `Storage: ${__formatSize(used)} of ${__formatSize(size)} used`);
+				$("msd-storage-progress-value").style.width = `${used / size * 100}%`;
+			} else {
+				$("msd-storage-size").innerHTML = "Unavailable";
+				$("msd-storage-progress").setAttribute("data-label", "Storage: unavailable");
+				$("msd-storage-progress-value").style.width = "0%";
+			}
+
+			wm.switchDisabled($("msd-emulate-cdrom-checkbox"), (!__state.online || !__state.features.cdrom, __state.drive.connected || __state.busy));
+			if (__state.features.multi) {
+				wm.switchDisabled($("msd-connect-button"), (!__state.online || !__state.drive.image || __state.drive.connected || __state.busy));
+			} else {
+				wm.switchDisabled($("msd-connect-button"), (!__state.online || __state.drive.connected || __state.busy));
+			}
 			wm.switchDisabled($("msd-disconnect-button"), (!__state.online || !__state.drive.connected || __state.busy));
 			wm.switchDisabled($("msd-select-new-image-button"), (!__state.online || __state.drive.connected || __state.busy || __upload_http));
 			wm.switchDisabled($("msd-upload-new-image-button"), (!__state.online || __state.drive.connected || __state.busy || !__image_file));
 			wm.switchDisabled($("msd-abort-uploading-button"), (!__state.online || !__upload_http));
 			wm.switchDisabled($("msd-reset-button"), (!__state.enabled || __state.busy));
 
+			$("msd-emulate-cdrom-checkbox").checked = (__state.online && __state.features.cdrom && __state.drive.cdrom);
 			$("msd-new-image").style.display = (__image_file ? "block" : "none");
-			$("msd-progress").setAttribute("data-label", "Waiting for upload ...");
-			$("msd-progress-value").style.width = "0%";
+			$("msd-uploading-progress").setAttribute("data-label", "Waiting for upload ...");
+			$("msd-uploading-progress-value").style.width = "0%";
 			$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
 			$("msd-new-image-size").innerHTML = (__image_file ? __formatSize(__image_file.size) : "");
 
@@ -186,6 +211,7 @@ export function Msd() {
 			$("msd-drive-image-size").innerHTML = "";
 			$("msd-storage-size").innerHTML = "";
 
+			wm.switchDisabled($("msd-emulate-cdrom-checkbox"), true);
 			wm.switchDisabled($("msd-connect-button"), true);
 			wm.switchDisabled($("msd-disconnect-button"), true);
 			wm.switchDisabled($("msd-select-new-image-button"), true);
@@ -193,10 +219,11 @@ export function Msd() {
 			wm.switchDisabled($("msd-abort-uploading-button"), true);
 			wm.switchDisabled($("msd-reset-button"), true);
 
+			$("msd-emulate-cdrom-checkbox").checked = false;
 			$("msd-select-new-image-file").value = "";
 			$("msd-new-image").style.display = "none";
-			$("msd-progress").setAttribute("data-label", "");
-			$("msd-progress-value").style.width = "0%";
+			$("msd-uploading-progress").setAttribute("data-label", "");
+			$("msd-uploading-progress-value").style.width = "0%";
 			$("msd-new-image-name").innerHTML = "";
 			$("msd-new-image-size").innerHTML = "";
 		}
@@ -226,9 +253,19 @@ export function Msd() {
 	var __uploadProgress = function(event) {
 		if(event.lengthComputable) {
 			let percent = Math.round((event.loaded * 100) / event.total);
-			$("msd-progress").setAttribute("data-label", percent + "%");
-			$("msd-progress-value").style.width = percent + "%";
+			$("msd-uploading-progress").setAttribute("data-label", percent + "%");
+			$("msd-uploading-progress-value").style.width = percent + "%";
 		}
+	};
+
+	var __sendParam = function(name, value) {
+		let http = tools.makeRequest("POST", `/api/msd/set_params?${name}=${value}`, function() {
+			if (http.readyState === 4) {
+				if (http.status !== 200) {
+					wm.error("Can't configure MSD:<br>", http.responseText);
+				}
+			}
+		});
 	};
 
 	__init__();

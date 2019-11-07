@@ -119,6 +119,18 @@ ul#menu li div.menu-item-content-text {
 	font-size: 14px;
 }
 
+ul#menu li div.menu-item-content-text table.one-line-switch {
+	width: 100%;
+	border-collapse: collapse;
+}
+@media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+	@supports (-webkit-appearance: none) {
+		ul#menu li div.menu-item-content-text table.one-line-switch {
+			margin: 20px 0 20px 0 !important;
+		}
+	}
+}
+
 ul#menu li div.menu-item-content button, select {
 	box-shadow: none;
 	border: none;

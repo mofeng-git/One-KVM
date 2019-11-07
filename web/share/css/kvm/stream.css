@@ -66,18 +66,6 @@ div.stream-slider-box {
 	display: flex;
 }
 
-table#stream-auto-resize-box {
-	width: 100%;
-	border-collapse: collapse;
-}
-@media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
-	@supports (-webkit-appearance: none) {
-		table#stream-auto-resize-box {
-			margin: 20px 0 20px 0 !important;
-		}
-	}
-}
-
 div#stream-mouse-buttons {
 	display: none;
 }
