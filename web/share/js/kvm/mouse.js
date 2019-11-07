@@ -64,11 +64,7 @@ export function Mouse() {
 
 	self.setSocket = function(ws) {
 		__ws = ws;
-		if (ws) {
-			$("stream-box").classList.add("stream-box-mouse-enabled");
-		} else {
-			$("stream-box").classList.remove("stream-box-mouse-enabled");
-		}
+		$("stream-box").classList.toggle("stream-box-mouse-enabled", ws);
 		__updateLeds();
 	};
 

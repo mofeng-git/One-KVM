@@ -45,11 +45,7 @@ export function Atx() {
 
 	self.setState = function(state) {
 		if (state) {
-			if (state.enabled) {
-				$("atx-dropdown").classList.remove("feature-disabled");
-			} else {
-				$("atx-dropdown").classList.add("feature-disabled");
-			}
+			$("atx-dropdown").classList.toggle("feature-disabled", !state.enabled);
 		}
 
 		$("atx-power-led").className = ((state && state.leds.power) ? "led-green" : "led-gray");
