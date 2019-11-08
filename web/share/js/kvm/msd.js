@@ -195,8 +195,10 @@ export function Msd() {
 
 			$("msd-emulate-cdrom-checkbox").checked = (__state.online && __state.features.cdrom && __state.drive.cdrom);
 			$("msd-new-image").style.display = (__image_file ? "block" : "none");
-			$("msd-uploading-progress").setAttribute("data-label", "Waiting for upload ...");
-			$("msd-uploading-progress-value").style.width = "0%";
+			if (!__upload_http) {
+				$("msd-uploading-progress").setAttribute("data-label", "Waiting for upload ...");
+				$("msd-uploading-progress-value").style.width = "0%";
+			}
 			$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
 			$("msd-new-image-size").innerHTML = (__image_file ? __formatSize(__image_file.size) : "");
 

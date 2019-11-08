@@ -24,6 +24,7 @@ import os
 import asyncio
 import contextlib
 import dataclasses
+import time
 
 from typing import List
 from typing import Dict
@@ -56,10 +57,10 @@ from .. import MsdImageExistsError
 from .. import MsdIsBusyError
 from .. import BaseMsd
 
-from .drive import Drive
+from . import fs
+from . import helpers
 
-from .helpers import remount_storage
-from .helpers import unlock_drive
+from .drive import Drive
 
 
 # =====
@@ -152,6 +153,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__new_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__new_file_written = 0
+        self.__new_file_tick = 0.0
 
         self.__changes_queue: asyncio.queues.Queue = asyncio.Queue()
 
@@ -179,7 +181,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 for name in list(storage["images"]):
                     del storage["images"][name]["path"]
                     del storage["images"][name]["in_storage"]
+
                 storage["uploading"] = bool(self.__new_file)
+                if self.__new_file:  # При загрузке файла показываем размер вручную
+                    space = fs.get_fs_space(self.__storage_path, fatal=False)
+                    if space:
+                        storage.update(dataclasses.asdict(space))
 
             vd: Optional[Dict] = None
             if self.__state.vd:
@@ -331,6 +338,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     except Exception:
                         pass
         finally:
+            # Между закрытием файла и эвентом айнотифи состояние может быть не обновлено,
+            # так что форсим обновление вручную, чтобы получить актуальное состояние.
+            await self.__reload_state()
             await self.__changes_queue.put(None)
 
     @aiotools.atomic
@@ -338,6 +348,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         assert self.__new_file
         await aiotools.afile_write_now(self.__new_file, chunk)
         self.__new_file_written += len(chunk)
+        now = time.time()
+        if self.__new_file_tick + 1 < now:
+            # Это нужно для ручного оповещения о свободном пространстве на диске, см. get_state()
+            self.__new_file_tick = now
+            await self.__changes_queue.put(None)
         return self.__new_file_written
 
     async def remove(self, name: str) -> None:
@@ -469,7 +484,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         for name in os.listdir(self.__images_path):
             path = os.path.join(self.__images_path, name)
             if os.path.exists(path):
-                size = self.__get_file_size(path)
+                size = fs.get_file_size(path)
                 if size >= 0:
                     images[name] = _DriveImage(
                         name=name,
@@ -478,10 +493,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         complete=self.__is_image_complete(name),
                         in_storage=True,
                     )
-        st = os.statvfs(self.__storage_path)
+        space = fs.get_fs_space(self.__storage_path, fatal=True)
+        assert space
         return _StorageState(
-            size=(st.f_blocks * st.f_frsize),
-            free=(st.f_bavail * st.f_frsize),
+            size=space.size,
+            free=space.free,
             images=images,
         )
 
@@ -494,7 +510,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             image = _DriveImage(
                 name=name,
                 path=path,
-                size=max(self.__get_file_size(path), 0),
+                size=max(fs.get_file_size(path), 0),
                 complete=(self.__is_image_complete(name) if in_storage else True),
                 in_storage=in_storage,
             )
@@ -505,13 +521,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         )
 
     # =====
-
-    def __get_file_size(self, path: str) -> int:
-        try:
-            return os.path.getsize(path)
-        except Exception as err:
-            get_logger().warning("Can't get size of file %s: %s", path, err)
-            return -1
 
     def __is_image_complete(self, name: str) -> bool:
         return os.path.exists(os.path.join(self.__meta_path, name + ".complete"))
@@ -527,7 +536,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def __remount_storage(self, rw: bool) -> None:
-        await remount_storage(self.__remount_cmd, rw)
+        await helpers.remount_storage(self.__remount_cmd, rw)
 
     async def __unlock_drive(self) -> None:
-        await unlock_drive(self.__unlock_cmd)
+        await helpers.unlock_drive(self.__unlock_cmd)
