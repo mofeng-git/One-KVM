@@ -7,7 +7,7 @@ TESTENV_LOOP ?= /dev/loop7
 
 USTREAMER_MIN_VERSION ?= $(shell grep -o 'ustreamer>=[^"]\+' PKGBUILD | sed 's/ustreamer>=//g')
 
-DEFAULT_PLATFORM ?= v1-vga
+DEFAULT_PLATFORM ?= v2-hdmi-rpi4
 
 
 # =====
@@ -56,8 +56,8 @@ tox: testenv
 		-it $(TESTENV_IMAGE) bash -c " \
 			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
-			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),v1-vga).yaml /etc/kvmd/main.yaml \
-			&& cp /src/testenv/$(if $(P),$(P),v1-vga).override.yaml /etc/kvmd/override.yaml \
+			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
+			&& cp /src/testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& cd /src \
 			&& tox -q -c testenv/tox.ini $(if $(E),-e $(E),-p auto) \
 		"
