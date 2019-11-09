@@ -1,0 +1,57 @@
+# Don't touch this file otherwise your device may stop working.
+# Use override.yaml to modify required settings.
+# You can find a working configuration in /usr/share/kvmd/configs.default/kvmd.
+
+override: !include override.yaml
+
+logging: !include logging.yaml
+
+kvmd:
+    server:
+        unix: /run/kvmd/kvmd.sock
+
+    auth: !include auth.yaml
+
+    hid:
+        type: serial
+        reset_pin: 4
+        device: /dev/kvmd-hid
+
+    atx:
+        type: gpio
+        power_led_pin: 24
+        hdd_led_pin: 22
+        power_switch_pin: 23
+        reset_switch_pin: 27
+
+    msd:
+        type: relay
+        target_pin: 12
+        reset_pin: 13
+        device: /dev/kvmd-msd
+
+    streamer:
+        unix: /run/kvmd/ustreamer.sock
+        cmd:
+            - "/usr/bin/ustreamer"
+            - "--device=/dev/kvmd-video"
+            - "--persistent"
+            - "--dv-timings"
+            - "--format=uyvy"
+            - "--encoder=omx"
+            - "--glitched-resolutions=720x480,720x576"
+            - "--workers=3"
+            - "--quality={quality}"
+            - "--desired-fps={desired_fps}"
+            - "--drop-same-frames=30"
+            - "--last-as-blank=0"
+            - "--unix={unix}"
+            - "--unix-rm"
+            - "--unix-mode=0660"
+            - "--exit-on-parent-death"
+            - "--process-name-prefix={process_name_prefix}"
+            - "--no-log-colors"
+
+ipmi:
+    kvmd:
+        unix: /run/kvmd/kvmd.sock

@@ -129,7 +129,7 @@ for _variant in "${_variants[@]}"; do
 
 		install -DTm644 configs/os/sysctl.conf \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
 		install -DTm644 configs/os/udev/$_platform-$_board.rules \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
-		install -DTm444 configs/kvmd/main/$_platform.yaml \"\$pkgdir/etc/kvmd/main.yaml\"
+		install -DTm444 configs/kvmd/main/$_platform-$_board.yaml \"\$pkgdir/etc/kvmd/main.yaml\"
 
 		if [ -f configs/os/modules-load/$_platform.conf ]; then
 			backup=(\"\${backup[@]}\" etc/modules-load.d/kvmd.conf)
