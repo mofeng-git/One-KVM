@@ -42,6 +42,7 @@ div#login {
 	padding: 15px;
 }
 
-input[type="text"]#user-input, input[type="password"]#passwd-input {
+input[type="text"]#user-input,
+input[type="password"]#passwd-input {
 	text-align: center;
 }

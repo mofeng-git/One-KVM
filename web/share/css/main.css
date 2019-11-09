@@ -81,7 +81,8 @@ img.svg-gray {
 	vertical-align: middle;
 }
 
-button, select {
+button,
+select {
 	box-shadow: none;
 	border: var(--border-key-thin);
 	border-radius: 4px;
@@ -97,11 +98,13 @@ button, select {
 }
 @media (hover: hover), (min--moz-device-pixel-ratio: 0) {
 	/* If we have a mouse cursor */
-	button:enabled:hover, select:enabled:hover {
+	button:enabled:hover,
+	select:enabled:hover {
 		color: var(--cs-control-hovered-fg);
 		background-color: var(--cs-control-hovered-bg);
 	}
-	button:active, select:active {
+	button:active,
+	select:active {
 		color: var(--cs-control-pressed-fg) !important;
 		background-color: var(--cs-control-pressed-bg) !important;
 		box-shadow: none;
@@ -112,12 +115,14 @@ button, select {
 }
 @media (hover: none) {
 	/* If we DON'T have a mouse cursor */
-	button:active, select:active {
+	button:active,
+	select:active {
 		color: var(--cs-control-hovered-fg);
 		background-color: var(--cs-control-hovered-bg);
 	}
 }
-button:disabled, select:disabled {
+button:disabled,
+select:disabled {
 	color: var(--cs-control-disabled-fg);
 	cursor: default;
 }
@@ -153,7 +158,10 @@ input[type=text], input[type=password] {
 }
 
 @media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
-	button, select, input[type=text], input[type=password] {
+	button,
+	select,
+	input[type=text],
+	input[type=password] {
 		height: 45px !important;
 	}
 }
@@ -176,12 +184,16 @@ div.buttons-row {
 	display: inline-block;
 	width: 16.66%
 }
-.row50:not(:first-child), .row25:not(:first-child), .row16:not(:first-child) {
+.row50:not(:first-child),
+.row25:not(:first-child),
+.row16:not(:first-child) {
 	border-top-left-radius: 0;
 	border-bottom-left-radius: 0;
 	border-left: var(--border-control-thin) !important;
 }
-.row50:not(:last-child), .row25:not(:last-child), .row16:not(:last-child) {
+.row50:not(:last-child),
+.row25:not(:last-child),
+.row16:not(:last-child) {
 	border-top-right-radius: 0;
 	border-bottom-right-radius: 0;
 }

@@ -76,12 +76,14 @@ ul#menu li a.menu-item {
 	text-decoration: none;
 }
 
-ul#menu li a#menu-logo:hover:not(.active), a.menu-item:hover:not(.active) {
+ul#menu li a#menu-logo:hover:not(.active),
+ul#menu li a.menu-item:hover:not(.active) {
 	background-color: var(--cs-menu-hovered-bg);
 }
 @media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
 	/* iPad 8 */
-	ul#menu li a#menu-item:hover:not(.active), a.menu-item:hover:not(.active) {
+	ul#menu li a#menu-item:hover:not(.active),
+	ul#menu li a.menu-item:hover:not(.active) {
 		background-color: var(--cs-menu-default-bg) !important;
 	}
 }
@@ -131,7 +133,8 @@ ul#menu li div.menu-item-content-text table.one-line-switch {
 	}
 }
 
-ul#menu li div.menu-item-content button, select {
+ul#menu li div.menu-item-content-buttons button,
+ul#menu li div.menu-item-content-buttons select {
 	box-shadow: none;
 	border: none;
 	border-radius: 0;

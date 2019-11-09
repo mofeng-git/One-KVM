@@ -47,7 +47,8 @@ div.switch-box label.switch-label span.switch-inner {
 	margin-left: -100%;
 }
 
-div.switch-box label.switch-label span.switch-inner:before, span.switch-inner:after {
+div.switch-box label.switch-label span.switch-inner:before,
+div.switch-box label.switch-label span.switch-inner:after {
 	display: block;
 	float: left;
 	width: 50%;

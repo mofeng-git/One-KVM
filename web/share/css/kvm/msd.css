@@ -24,7 +24,9 @@ div#msd-menu {
 	width: 450px;
 }
 
-div#msd-menu .msd-feature-disabled, div.msd-message, input.msd-message {
+div#msd-menu .msd-feature-disabled,
+div#msd-menu div.msd-message,
+div#msd-menu input.msd-message {
 	display: none;
 }
 

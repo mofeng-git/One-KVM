@@ -41,14 +41,17 @@ div.keypad div.keypad-row:last-child {
 	margin-bottom: 0;
 }
 
-div.keypad div.key, div.modifier, div.empty-key {
+div.keypad div.key,
+div.keypad div.modifier,
+div.keypad div.empty-key {
 	box-sizing: border-box;
 	display: inline-block;
 	margin-right: 5px;
 	padding: 0;
 	width: 40px;
 }
-div.keypad div.key, div.modifier {
+div.keypad div.key,
+div.keypad div.modifier {
 	font-size: 0.9em;
 	text-align: center;
 	vertical-align: top;
@@ -60,7 +63,8 @@ div.keypad div.key, div.modifier {
 	cursor: pointer;
 	height: 40px;
 }
-div.keypad div.key:hover, div.modifier:hover {
+div.keypad div.key:hover,
+div.keypad div.modifier:hover {
 	color: var(--cs-key-hovered-fg);
 	background-color: var(--cs-key-hovered-bg);
 }
@@ -74,7 +78,9 @@ div.keypad div.holded {
 	color: var(--cs-key-default-fg) !important;
 	background-color: var(--cs-key-holded-bg) !important;
 }
-div.keypad div.key:last-child, div.empty-key:last-child, div.modifier:last-child {
+div.keypad div.key:last-child,
+div.keypad div.empty-key:last-child,
+div.keypad div.modifier:last-child {
 	margin-right: 0;
 }
 div.keypad div.margin-0 {
@@ -127,7 +133,8 @@ div.keypad b {
 		zoom: 1.28 !important;
 	}
 
-	div.keypad div.key:hover, div.modifier:hover {
+	div.keypad div.key:hover,
+	div.keypad div.modifier:hover {
 		color: var(--cs-key-default-fg);
 		background-color: var(--cs-key-default-bg);
 	}
