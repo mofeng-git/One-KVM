@@ -39,6 +39,9 @@ export function Msd() {
 	var __init__ = function() {
 		$("msd-led").title = "Unknown state";
 
+		$("msd-image-selector").onchange = __selectImage;
+		tools.setOnClick($("msd-remove-image"), __clickRemoveImageButton);
+
 		tools.setOnClick($("msd-emulate-cdrom-checkbox"), __clickCdromSwitch);
 
 		$("msd-select-new-image-file").onchange = __selectNewImageFile;
@@ -60,8 +63,38 @@ export function Msd() {
 		__applyState();
 	};
 
+	var __selectImage = function() {
+		wm.switchEnabled($("msd-remove-image"), false);
+		__sendParam("image", $("msd-image-selector").value);
+	};
+
+	var __clickRemoveImageButton = function() {
+		let name = $("msd-image-selector").value;
+		wm.confirm(`Are you sure you want to remove<br>the image <b>${name}</b>?`).then(function(ok) {
+			if (ok) {
+				let http = tools.makeRequest("POST", `/api/msd/remove?image=${name}`, function() {
+					if (http.readyState === 4) {
+						if (http.status !== 200) {
+							wm.error("Can't remove image:<br>", http.responseText);
+						}
+					}
+				});
+			}
+		});
+	};
+
 	var __clickCdromSwitch = function() {
 		__sendParam("cdrom", ($("msd-emulate-cdrom-checkbox").checked ? "1" : "0"));
+	};
+
+	var __sendParam = function(name, value) {
+		let http = tools.makeRequest("POST", `/api/msd/set_params?${name}=${value}`, function() {
+			if (http.readyState === 4) {
+				if (http.status !== 200) {
+					wm.error("Can't configure MSD:<br>", http.responseText);
+				}
+			}
+		});
 	};
 
 	var __clickUploadNewImageButton = function() {
@@ -77,13 +110,31 @@ export function Msd() {
 		__upload_http.send(form_data);
 	};
 
+	var __uploadStateChange = function() {
+		if (__upload_http.readyState === 4) {
+			if (__upload_http.status !== 200) {
+				wm.error("Can't upload image to the Mass Storage Device:<br>", __upload_http.responseText);
+			}
+			$("msd-select-new-image-file").value = "";
+			__image_file = null;
+			__upload_http = null;
+			__applyState();
+		}
+	};
+
+	var __uploadProgress = function(event) {
+		if(event.lengthComputable) {
+			let percent = Math.round((event.loaded * 100) / event.total);
+			tools.setProgressPercent($("msd-uploading-progress"), `${percent}%`, percent);
+		}
+	};
+
 	var __clickAbortUploadingButton = function() {
 		__upload_http.onreadystatechange = null;
 		__upload_http.upload.onprogress = null;
 		__upload_http.abort();
 		__upload_http = null;
-		$("msd-uploading-progress").setAttribute("data-label", "Aborted");
-		$("msd-uploading-progress-value").style.width = "0%";
+		tools.setProgressPercent($("msd-uploading-progress"), "Aborted", 0);
 	};
 
 	var __clickConnectButton = function(connect) {
@@ -104,7 +155,7 @@ export function Msd() {
 		let el_input = $("msd-select-new-image-file");
 		let image_file = (el_input.files.length ? el_input.files[0] : null);
 		if (image_file && image_file.size > __state.storage.size) {
-			wm.error("New image is too big for your Mass Storage Device.<br>Maximum:", __formatSize(__state.storage.size));
+			wm.error("New image is too big for your Mass Storage Device.<br>Maximum:", tools.formatSize(__state.storage.size));
 			el_input.value = "";
 			image_file = null;
 		}
@@ -130,144 +181,165 @@ export function Msd() {
 
 	var __applyState = function() {
 		if (__state) {
-			for (let el of $$$(".msd-single-storage")) {
-				el.classList.toggle("msd-feature-disabled", __state.features.multi);
-			}
-			for (let el of $$$(".msd-multi-storage")) {
-				el.classList.toggle("msd-feature-disabled", !__state.features.multi);
-			}
-
+			__toggleMsdFeatures();
 			$("msd-dropdown").classList.toggle("feature-disabled", !__state.enabled);
 			$("msd-reset-button").classList.toggle("feature-disabled", !__state.enabled);
 
+			__showMessageOffline(!__state.online);
+			__showMessageImageBroken(__state.online && __state.drive.image && !__state.drive.image.complete && !__state.drive.uploading);
+			if (__state.features.cdrom) {
+				__showMessageTooBigForCdrom(__state.online && __state.drive.image && __state.drive.cdrom && __state.drive.image.size >= 2359296000);
+			}
+			__showMessageOutOfStorage(__state.online && __state.features.multi && __state.drive.image && !__state.drive.image.in_storage);
+
 			if (__state.online && __state.drive.connected) {
-				$("msd-another-another-user-uploads").style.display = "none";
-				$("msd-led").className = "led-green";
-				$("msd-status").innerHTML = $("msd-led").title = "Connected to Server";
+				__showMessageAnotherUserUploads(false);
+				__setStatus("led-green", "Connected to Server");
 			} else if (__state.online && __state.storage.uploading) {
 				if (!__upload_http) {
-					$("msd-another-another-user-uploads").style.display = "block";
+					__showMessageAnotherUserUploads(true);
 				}
-				$("msd-led").className = "led-yellow-rotating-fast";
-				$("msd-status").innerHTML = $("msd-led").title = "Uploading new image";
+				__setStatus("led-yellow-rotating-fast", "Uploading new image");
 			} else {
-				$("msd-another-another-user-uploads").style.display = "none";
-				$("msd-led").className = "led-gray";
-				if (__state.online) {
-					$("msd-status").innerHTML = $("msd-led").title = "Disconnected";
-				} else {
-					$("msd-status").innerHTML = $("msd-led").title = "Unavailable";
-				}
+				__showMessageAnotherUserUploads(false);
+				__setStatus("led-gray", (__state.online ? "Disconnected" : "Unavailable"));
 			}
 
-			$("msd-offline").style.display = (__state.online ? "none" : "block");
-			$("msd-drive-image-broken").style.display = (
-				__state.online && __state.drive.image &&
-				!__state.drive.image.complete && !__state.drive.uploading ? "block" : "none"
-			);
-
-			$("msd-drive-image-name").innerHTML = (__state.online && __state.drive.image ? __state.drive.image.name : "None");
-			$("msd-drive-image-size").innerHTML = (__state.online && __state.drive.image ? __formatSize(__state.drive.image.size) : "None");
-
+			$("msd-image-name").innerHTML = (__state.online && __state.drive.image ? __state.drive.image.name : "None");
+			$("msd-image-size").innerHTML = (__state.online && __state.drive.image ? tools.formatSize(__state.drive.image.size) : "None");
 			if (__state.online) {
 				let size = __state.storage.size;
 				let used = __state.storage.size - __state.storage.free;
-				$("msd-storage-size").innerHTML = __formatSize(size);
-				$("msd-storage-progress").setAttribute("data-label", `Storage: ${__formatSize(used)} of ${__formatSize(size)} used`);
-				$("msd-storage-progress-value").style.width = `${used / size * 100}%`;
+				$("msd-storage-size").innerHTML = tools.formatSize(size);
+				tools.setProgressPercent($("msd-storage-progress"), `Storage: ${tools.formatSize(used)} of ${tools.formatSize(size)} used`, used / size * 100);
 			} else {
 				$("msd-storage-size").innerHTML = "Unavailable";
-				$("msd-storage-progress").setAttribute("data-label", "Storage: unavailable");
-				$("msd-storage-progress-value").style.width = "0%";
+				tools.setProgressPercent($("msd-storage-progress"), "Storage: unavailable", 0);
 			}
 
-			wm.switchEnabled($("msd-emulate-cdrom-checkbox"), (__state.online && __state.features.cdrom && !__state.drive.connected && !__state.busy));
+			wm.switchEnabled($("msd-image-selector"), (__state.online && __state.features.multi && !__state.drive.connected && !__state.busy));
 			if (__state.features.multi) {
-				wm.switchEnabled($("msd-connect-button"), (__state.online && __state.drive.image && !__state.drive.connected && !__state.busy));
-			} else {
-				wm.switchEnabled($("msd-connect-button"), (__state.online && !__state.drive.connected && !__state.busy));
+				__refreshImageSelector();
 			}
+			wm.switchEnabled($("msd-remove-image"), (__state.online && __state.features.multi && __state.drive.image && !__state.drive.connected && !__state.busy));
+
+			wm.switchEnabled($("msd-emulate-cdrom-checkbox"), (__state.online && __state.features.cdrom && !__state.drive.connected && !__state.busy));
+			$("msd-emulate-cdrom-checkbox").checked = (__state.online && __state.features.cdrom && __state.drive.cdrom);
+
+			wm.switchEnabled($("msd-connect-button"), (__state.online && (!__state.features.multi || __state.drive.image) && !__state.drive.connected && !__state.busy));
 			wm.switchEnabled($("msd-disconnect-button"), (__state.online && __state.drive.connected && !__state.busy));
+
 			wm.switchEnabled($("msd-select-new-image-button"), (__state.online && !__state.drive.connected && !__upload_http && !__state.busy));
 			wm.switchEnabled($("msd-upload-new-image-button"), (__state.online && !__state.drive.connected && __image_file && !__state.busy));
 			wm.switchEnabled($("msd-abort-uploading-button"), (__state.online && __upload_http));
+
 			wm.switchEnabled($("msd-reset-button"), (__state.enabled && !__state.busy));
 
-			$("msd-emulate-cdrom-checkbox").checked = (__state.online && __state.features.cdrom && __state.drive.cdrom);
-			$("msd-new-image").style.display = (__image_file ? "block" : "none");
-			if (!__upload_http) {
-				$("msd-uploading-progress").setAttribute("data-label", "Waiting for upload ...");
-				$("msd-uploading-progress-value").style.width = "0%";
-			}
+			$("msd-submenu-new-image").style.display = (__image_file ? "block" : "none");
 			$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
-			$("msd-new-image-size").innerHTML = (__image_file ? __formatSize(__image_file.size) : "");
+			$("msd-new-image-size").innerHTML = (__image_file ? tools.formatSize(__image_file.size) : "");
+			if (!__upload_http) {
+				tools.setProgressPercent($("msd-uploading-progress"), "Waiting for upload ...", 0);
+			}
 
 		} else {
-			$("msd-another-another-user-uploads").style.display = "none";
-			$("msd-led").className = "led-gray";
-			$("msd-status").innerHTML = "";
-			$("msd-led").title = "";
-			$("msd-offline").style.display = "none";
-			$("msd-drive-image-broken").style.display = "none";
-			$("msd-drive-image-name").innerHTML = "";
-			$("msd-drive-image-size").innerHTML = "";
+			__showMessageOffline(false);
+			__showMessageImageBroken(false);
+			__showMessageTooBigForCdrom(false);
+			__showMessageAnotherUserUploads(false);
+			__showMessageOutOfStorage(false);
+
+			__setStatus("led-gray", "");
+
+			$("msd-image-name").innerHTML = "";
+			$("msd-image-size").innerHTML = "";
 			$("msd-storage-size").innerHTML = "";
+			tools.setProgressPercent($("msd-storage-progress"), "", 0);
+
+			wm.switchEnabled($("msd-image-selector"), false);
+			$("msd-image-selector").options.length = 1;
+			wm.switchEnabled($("msd-remove-image"), false);
 
 			wm.switchEnabled($("msd-emulate-cdrom-checkbox"), false);
+			$("msd-emulate-cdrom-checkbox").checked = false;
+
 			wm.switchEnabled($("msd-connect-button"), false);
 			wm.switchEnabled($("msd-disconnect-button"), false);
+
 			wm.switchEnabled($("msd-select-new-image-button"), false);
 			wm.switchEnabled($("msd-upload-new-image-button"), false);
 			wm.switchEnabled($("msd-abort-uploading-button"), false);
+
 			wm.switchEnabled($("msd-reset-button"), false);
 
-			$("msd-emulate-cdrom-checkbox").checked = false;
 			$("msd-select-new-image-file").value = "";
-			$("msd-new-image").style.display = "none";
-			$("msd-uploading-progress").setAttribute("data-label", "");
-			$("msd-uploading-progress-value").style.width = "0%";
+			$("msd-submenu-new-image").style.display = "none";
 			$("msd-new-image-name").innerHTML = "";
 			$("msd-new-image-size").innerHTML = "";
+			tools.setProgressPercent($("msd-uploading-progress"), "", 0);
 		}
 	};
 
-	var __formatSize = function(size) {
-		if (size > 0) {
-			let index = Math.floor( Math.log(size) / Math.log(1024) );
-			return (size / Math.pow(1024, index)).toFixed(2) * 1 + " " + ["B", "kB", "MB", "GB", "TB"][index];
-		} else {
-			return 0;
+	var __toggleMsdFeatures = function() {
+		for (let el of $$$(".msd-single-storage")) {
+			el.classList.toggle("msd-feature-disabled", __state.features.multi);
+		}
+		for (let el of $$$(".msd-multi-storage")) {
+			el.classList.toggle("msd-feature-disabled", !__state.features.multi);
+		}
+		for (let el of $$$(".msd-cdrom-emulation")) {
+			el.classList.toggle("msd-feature-disabled", !__state.features.cdrom);
 		}
 	};
 
-	var __uploadStateChange = function() {
-		if (__upload_http.readyState === 4) {
-			if (__upload_http.status !== 200) {
-				wm.error("Can't upload image to the Mass Storage Device:<br>", __upload_http.responseText);
-			}
-			$("msd-select-new-image-file").value = "";
-			__image_file = null;
-			__upload_http = null;
-			__applyState();
-		}
+	var __showMessageOffline = function(visible) {
+		$("msd-message-offline").style.display = (visible ? "block" : "none");
 	};
 
-	var __uploadProgress = function(event) {
-		if(event.lengthComputable) {
-			let percent = Math.round((event.loaded * 100) / event.total);
-			$("msd-uploading-progress").setAttribute("data-label", percent + "%");
-			$("msd-uploading-progress-value").style.width = percent + "%";
-		}
+	var __showMessageImageBroken = function(visible) {
+		$("msd-message-image-broken").style.display = (visible ? "block" : "none");
 	};
 
-	var __sendParam = function(name, value) {
-		let http = tools.makeRequest("POST", `/api/msd/set_params?${name}=${value}`, function() {
-			if (http.readyState === 4) {
-				if (http.status !== 200) {
-					wm.error("Can't configure MSD:<br>", http.responseText);
+	var __showMessageTooBigForCdrom = function(visible) {
+		$("msd-message-too-big-for-cdrom").style.display = (visible ? "block" : "none");
+	};
+
+	var __showMessageOutOfStorage = function(visible) {
+		$("msd-message-out-of-storage").style.display = (visible ? "block" : "none");
+	};
+
+	var __showMessageAnotherUserUploads = function(visible) {
+		$("msd-message-another-user-uploads").style.display = (visible ? "block" : "none");
+	};
+
+	var __setStatus = function(led_cls, msg) {
+		$("msd-led").className = led_cls;
+		$("msd-status").innerHTML = $("msd-led").title = msg;
+	};
+
+	var __refreshImageSelector = function() {
+		let el = $("msd-image-selector");
+		let select_index = 0;
+		let index = 1;
+
+		el.options.length = 1;
+		if (__state.online) {
+			for (let image of Object.values(__state.storage.images)) {
+				let title = `${image.name} (${tools.formatSize(image.size)}${image.complete ? "" : ", broken"})`;
+				let option = new Option(title, image.name, false, false);
+				el.options[index] = option;
+				if (__state.drive.image && __state.drive.image.name == image.name && __state.drive.image.in_storage) {
+					select_index = index;
 				}
+				++index;
 			}
-		});
+			if (__state.drive.image && !__state.drive.image.in_storage) {
+				let title = `${__state.drive.image.name} (${tools.formatSize(__state.drive.image.size)}, out of storage)`;
+				el.options[index] = new Option(title, "", false, false);
+				select_index = el.options.length - 1;
+			}
+			el.selectedIndex = select_index;
+		}
 	};
 
 	__init__();

@@ -55,6 +55,15 @@ export var tools = new function() {
 		return id;
 	};
 
+	this.formatSize = function(size) {
+		if (size > 0) {
+			let index = Math.floor( Math.log(size) / Math.log(1024) );
+			return (size / Math.pow(1024, index)).toFixed(2) * 1 + " " + ["B", "KiB", "MiB", "GiB", "TiB"][index];
+		} else {
+			return 0;
+		}
+	};
+
 	/************************************************************************/
 
 	this.getCookie = function(name) {
@@ -108,6 +117,11 @@ export var tools = new function() {
 				execute_callback(el.value);
 			}, delay);
 		};
+	};
+
+	this.setProgressPercent = function(el, title, percent) {
+		el.setAttribute("data-label", title);
+		$(`${el.id}-value`).style.width = `${percent}%`;
 	};
 
 	/************************************************************************/

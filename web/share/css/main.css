@@ -96,6 +96,9 @@ select {
 	outline: none;
 	cursor: pointer;
 }
+select {
+	padding-left: 5px;
+}
 @media (hover: hover), (min--moz-device-pixel-ratio: 0) {
 	/* If we have a mouse cursor */
 	button:enabled:hover,
@@ -145,6 +148,10 @@ select:active {
 	color: var(--cs-control-intensive-fg) !important;
 	background-color: var(--cs-bg-control-intensive) !important;
 	background-image: url("../svg/select-arrow-intensive.svg") !important;
+}
+select option {
+	color: var(--cs-control-default-fg);
+	background-color: var(--cs-control-default-bg);
 }
 
 input[type=text], input[type=password] {

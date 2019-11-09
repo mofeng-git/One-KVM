@@ -150,7 +150,7 @@
 				Mass Storage &#8628;
 			</a>
 			<div data-dont-hide-menu id="msd-menu" class="menu-item-content">
-				<div id="msd-offline" class="msd-message">
+				<div id="msd-message-offline" class="msd-message">
 					<div class="menu-item-content-text">
 						<table>
 							<tr>
@@ -161,8 +161,7 @@
 					</div>
 					<hr>
 				</div>
-
-				<div id="msd-drive-image-broken" class="msd-message">
+				<div id="msd-message-image-broken" class="msd-message">
 					<div class="menu-item-content-text">
 						<table>
 							<tr>
@@ -173,8 +172,29 @@
 					</div>
 					<hr>
 				</div>
-
-				<div id="msd-another-another-user-uploads" class="msd-message">
+				<div id="msd-message-too-big-for-cdrom" class="msd-message">
+					<div class="menu-item-content-text">
+						<table>
+							<tr>
+								<td><img src="../share/svg/warning.svg" /></td>
+								<td><b>Current image is too big for CD-ROM!</b><br><sub>The device filesystem will be truncated to 2.2GiB</sub></td>
+							</tr>
+						</table>
+					</div>
+					<hr>
+				</div>
+				<div id="msd-message-out-of-storage" class="msd-message">
+					<div class="menu-item-content-text">
+						<table>
+							<tr>
+								<td><img src="../share/svg/info.svg" /></td>
+								<td><b>Current image is out of storage</b><br><sub>This image was connected manually using <b>kvmd-otgmsd</b></sub></td>
+							</tr>
+						</table>
+					</div>
+					<hr>
+				</div>
+				<div id="msd-message-another-user-uploads" class="msd-message">
 					<div class="menu-item-content-text">
 						<table>
 							<tr>
@@ -194,39 +214,46 @@
 				</table>
 				<hr>
 
-				<table class="msd-info">
+				<table class="msd-info msd-single-storage msd-feature-disabled">
 					<tr>
 						<td>Current image:</td>
-						<td id="msd-drive-image-name" class="msd-info-value"></td>
+						<td id="msd-image-name" class="msd-info-value"></td>
 					</tr>
 					<tr>
 						<td>Image size:</td>
-						<td id="msd-drive-image-size" class="msd-info-value"></td>
+						<td id="msd-image-size" class="msd-info-value"></td>
 					</tr>
-					<tr class="msd-single-storage msd-feature-disabled">
+					<tr>
 						<td>Storage size:</td>
 						<td id="msd-storage-size" class="msd-info-value"></td>
 					</tr>
 				</table>
+				<table class="msd-info msd-multi-storage msd-feature-disabled">
+					<tr>
+						<td>Image:</td>
+						<td width="100%">
+							<select disabled id="msd-image-selector">
+								<option selected value="">&lt;Not selected&gt;</option>
+							</select>
+						</td>
+						<td><button disabled id="msd-remove-image">Remove</button></td>
+					</tr>
+				</table>
+				<table class="msd-info msd-multi-storage msd-feature-disabled">
+					<tr class="msd-cdrom-emulation msd-feature-disabled">
+						<td>Emulate CD-ROM drive:</td>
+						<td>
+							<div class="switch-box msd-cdrom-switch-box">
+								<input type="checkbox" id="msd-emulate-cdrom-checkbox" class="switch-checkbox" checked />
+								<label class="switch-label" for="msd-emulate-cdrom-checkbox">
+									<span class="switch-inner"></span>
+									<span class="switch"></span>
+								</label>
+							</div>
+						</td>
+					</tr>
+				</table>
 				<hr>
-
-				<div class="msd-multi-storage msd-feature-disabled">
-					<div class="menu-item-content-text">
-						<table class="one-line-switch"><tr>
-							<td>Emulate CD-ROM drive: <sup><i>otherwise the flash drive</i></sup></td>
-							<td align="right">
-								<div class="switch-box msd-cdrom-switch-box">
-									<input type="checkbox" id="msd-emulate-cdrom-checkbox" class="switch-checkbox" checked />
-									<label class="switch-label" for="msd-emulate-cdrom-checkbox">
-										<span class="switch-inner"></span>
-										<span class="switch"></span>
-									</label>
-								</div>
-							</td>
-						</tr></table>
-					</div>
-					<hr>
-				</div>
 
 				<div class="msd-multi-storage msd-feature-disabled">
 					<div class="menu-item-content-text">
@@ -245,7 +272,7 @@
 				</div>
 				<hr>
 
-				<div id="msd-new-image" class="msd-message">
+				<div id="msd-submenu-new-image" class="msd-message">
 					<table class="msd-info">
 						<tr>
 							<td>New image:</td>
