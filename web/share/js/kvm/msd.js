@@ -320,27 +320,36 @@ export function Msd() {
 
 	var __refreshImageSelector = function() {
 		let el = $("msd-image-selector");
+		let precom = "\xA0\xA0\xA0\xA0\xA0\u21b3";
 		let select_index = 0;
 		let index = 1;
 
-		el.options.length = 1;
+		el.options.length = 1; // Cleanup
+
 		if (__state.online) {
-			let names = Object.keys(__state.storage.images).sort();
 			for (let name of Object.keys(__state.storage.images).sort()) {
 				let image = __state.storage.images[name];
-				let title = `${name} (${tools.formatSize(image.size)}${image.complete ? "" : ", broken"})`;
-				let option = new Option(title, name, false, false);
+
+				let option = new Option(name, name, false, false);
 				el.options[index] = option;
 				if (__state.drive.image && __state.drive.image.name == name && __state.drive.image.in_storage) {
 					select_index = index;
 				}
-				++index;
+
+				let comment = new Option(`${precom} ${tools.formatSize(image.size)}${image.complete ? "" : ", broken"}`, "", false, false);
+				comment.disabled = true;
+				comment.className = "comment";
+				el.options[index + 1] = comment;
+
+				index += 2;
 			}
+
 			if (__state.drive.image && !__state.drive.image.in_storage) {
-				let title = `${__state.drive.image.name} (${tools.formatSize(__state.drive.image.size)}, out of storage)`;
-				el.options[index] = new Option(title, "", false, false);
-				select_index = el.options.length - 1;
+				el.options[index] = new Option(__state.drive.image.name, "", false, false);
+				el.options[index + 1] = new Option(`${precom} ${tools.formatSize(__state.drive.image.size)}, out of storage`, "", false, false);
+				select_index = el.options.length - 2;
 			}
+
 			el.selectedIndex = select_index;
 		}
 	};

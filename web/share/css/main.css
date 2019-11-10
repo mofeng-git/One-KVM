@@ -154,6 +154,10 @@ select option {
 	color: var(--cs-control-default-fg);
 	background-color: var(--cs-control-default-bg);
 }
+select option.comment {
+	color: var(--cs-control-disabled-fg);
+	font-style: italic;
+}
 
 input[type=text], input[type=password] {
 	overflow-x: auto;
