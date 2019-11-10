@@ -187,7 +187,7 @@ export function Msd() {
 			$("msd-reset-button").classList.toggle("feature-disabled", !__state.enabled);
 
 			__showMessageOffline(!__state.online);
-			__showMessageImageBroken(__state.online && __state.drive.image && !__state.drive.image.complete && !__state.drive.uploading);
+			__showMessageImageBroken(__state.online && __state.drive.image && !__state.drive.image.complete && !__state.storage.uploading);
 			if (__state.features.cdrom) {
 				__showMessageTooBigForCdrom(__state.online && __state.drive.image && __state.drive.cdrom && __state.drive.image.size >= 2359296000);
 			}
@@ -219,7 +219,7 @@ export function Msd() {
 			}
 
 			wm.switchEnabled($("msd-image-selector"), (__state.online && __state.features.multi && !__state.drive.connected && !__state.busy));
-			if (__state.features.multi) {
+			if (__state.features.multi && !__state.storage.uploading) {
 				__refreshImageSelector();
 			}
 			wm.switchEnabled($("msd-remove-image"), (__state.online && __state.features.multi && __state.drive.image && !__state.drive.connected && !__state.busy));
@@ -325,11 +325,13 @@ export function Msd() {
 
 		el.options.length = 1;
 		if (__state.online) {
-			for (let image of Object.values(__state.storage.images)) {
-				let title = `${image.name} (${tools.formatSize(image.size)}${image.complete ? "" : ", broken"})`;
-				let option = new Option(title, image.name, false, false);
+			let names = Object.keys(__state.storage.images).sort();
+			for (let name of Object.keys(__state.storage.images).sort()) {
+				let image = __state.storage.images[name];
+				let title = `${name} (${tools.formatSize(image.size)}${image.complete ? "" : ", broken"})`;
+				let option = new Option(title, name, false, false);
 				el.options[index] = option;
-				if (__state.drive.image && __state.drive.image.name == image.name && __state.drive.image.in_storage) {
+				if (__state.drive.image && __state.drive.image.name == name && __state.drive.image.in_storage) {
 					select_index = index;
 				}
 				++index;
