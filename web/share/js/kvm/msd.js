@@ -64,6 +64,7 @@ export function Msd() {
 	};
 
 	var __selectImage = function() {
+		wm.switchEnabled($("msd-image-selector"), false);
 		wm.switchEnabled($("msd-remove-image"), false);
 		__sendParam("image", $("msd-image-selector").value);
 	};
