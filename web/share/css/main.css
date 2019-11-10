@@ -98,6 +98,7 @@ select {
 }
 select {
 	padding-left: 5px;
+	padding-right: 25px;
 }
 @media (hover: hover), (min--moz-device-pixel-ratio: 0) {
 	/* If we have a mouse cursor */
