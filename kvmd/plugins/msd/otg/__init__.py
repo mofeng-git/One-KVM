@@ -238,7 +238,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__drive.set_image_path("")
                 self.__drive.set_rw_flag(False)
                 self.__drive.set_cdrom_flag(False)
-            except asyncio.CancelledError:
+            except asyncio.CancelledError:  # pylint: disable=try-except-raise
                 raise
             except Exception:
                 get_logger(0).exception("Can't reset MSD")
