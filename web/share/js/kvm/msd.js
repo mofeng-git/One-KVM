@@ -320,28 +320,39 @@ export function Msd() {
 
 	var __refreshImageSelector = function() {
 		let el = $("msd-image-selector");
-		let precom = "\xA0\xA0\xA0\xA0\xA0\u21b3";
-		let select_index = 0;
-		let index = 1;
 
-		el.options.length = 1; // Cleanup
+		if (el.options.length == 0) {
+			el.options[0] = new Option("< Not selected >", "", false, false);
+		} else {
+			el.options.length = 1; // Cleanup
+		}
 
 		if (__state.online) {
+			let precom = "\xA0\xA0\xA0\xA0\xA0\u21b3";
+			let select_index = 0;
+			let index = 1;
+
 			for (let name of Object.keys(__state.storage.images).sort()) {
 				let image = __state.storage.images[name];
+
+				let separator = new Option("\u2500".repeat(30), false, false);
+				separator.disabled = true;
+				separator.className = "comment";
+				el.options[index] = separator;
+				++index;
 
 				let option = new Option(name, name, false, false);
 				el.options[index] = option;
 				if (__state.drive.image && __state.drive.image.name == name && __state.drive.image.in_storage) {
 					select_index = index;
 				}
+				++index;
 
 				let comment = new Option(`${precom} ${tools.formatSize(image.size)}${image.complete ? "" : ", broken"}`, "", false, false);
 				comment.disabled = true;
 				comment.className = "comment";
-				el.options[index + 1] = comment;
-
-				index += 2;
+				el.options[index] = comment;
+				++index;
 			}
 
 			if (__state.drive.image && !__state.drive.image.in_storage) {
