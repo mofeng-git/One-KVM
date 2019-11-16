@@ -337,7 +337,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     self.__region.exit()
                     await self.__state_queue.put(await self.get_state())
 
-    @aiotools.atomic
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__device_file
         await aiotools.afile_write_now(self.__device_file, chunk)
