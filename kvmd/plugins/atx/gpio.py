@@ -80,10 +80,10 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "power_led_pin":      Option(-1,   type=valid_gpio_pin),
-            "hdd_led_pin":        Option(-1,   type=valid_gpio_pin),
-            "power_led_inverted": Option(True, type=valid_bool),
-            "hdd_led_inverted":   Option(True, type=valid_bool),
+            "power_led_pin":      Option(-1,    type=valid_gpio_pin),
+            "hdd_led_pin":        Option(-1,    type=valid_gpio_pin),
+            "power_led_inverted": Option(False, type=valid_bool),
+            "hdd_led_inverted":   Option(False, type=valid_bool),
 
             "power_switch_pin": Option(-1,  type=valid_gpio_pin),
             "reset_switch_pin": Option(-1,  type=valid_gpio_pin),
