@@ -283,13 +283,13 @@ export function Msd() {
 
 	var __toggleMsdFeatures = function() {
 		for (let el of $$$(".msd-single-storage")) {
-			el.classList.toggle("msd-feature-disabled", __state.features.multi);
+			el.classList.toggle("feature-disabled", __state.features.multi);
 		}
 		for (let el of $$$(".msd-multi-storage")) {
-			el.classList.toggle("msd-feature-disabled", !__state.features.multi);
+			el.classList.toggle("feature-disabled", !__state.features.multi);
 		}
 		for (let el of $$$(".msd-cdrom-emulation")) {
-			el.classList.toggle("msd-feature-disabled", !__state.features.cdrom);
+			el.classList.toggle("feature-disabled", !__state.features.cdrom);
 		}
 	};
 
