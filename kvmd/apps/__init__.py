@@ -66,7 +66,9 @@ from ..validators.os import valid_unix_mode
 from ..validators.os import valid_command
 
 from ..validators.net import valid_ip_or_host
+from ..validators.net import valid_ip
 from ..validators.net import valid_port
+from ..validators.net import valid_mac
 
 from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
@@ -210,6 +212,12 @@ def _get_config_scheme() -> Dict:
             "info": {
                 "meta":   Option("/etc/kvmd/meta.yaml",    type=valid_abs_file, unpack_as="meta_path"),
                 "extras": Option("/usr/share/kvmd/extras", type=valid_abs_dir, unpack_as="extras_path"),
+            },
+
+            "wol": {
+                "ip":   Option("255.255.255.255", type=(lambda arg: valid_ip(arg, v6=False))),
+                "port": Option(9, type=valid_port),
+                "mac":  Option("", type=(lambda arg: (valid_mac(arg) if arg else ""))),
             },
 
             "hid": {

@@ -22,6 +22,8 @@
 
 import socket
 
+from typing import List
+from typing import Callable
 from typing import Any
 
 from . import check_re_match
@@ -44,15 +46,18 @@ def valid_ip_or_host(arg: Any) -> str:
     )
 
 
-def valid_ip(arg: Any) -> str:
+def valid_ip(arg: Any, v4: bool=True, v6: bool=True) -> str:
+    assert v4 or v6
+    validators: List[Callable] = []
+    if v4:
+        validators.append(lambda arg: (arg, socket.inet_pton(socket.AF_INET, arg))[0])
+    if v6:
+        validators.append(lambda arg: (arg, socket.inet_pton(socket.AF_INET6, arg))[0])
     name = "IP address"
     return check_any(
         arg=valid_stripped_string_not_empty(arg, name),
         name=name,
-        validators=[
-            lambda arg: (arg, socket.inet_pton(socket.AF_INET, arg))[0],
-            lambda arg: (arg, socket.inet_pton(socket.AF_INET6, arg))[0],
-        ],
+        validators=validators,
     )
 
 
@@ -65,3 +70,8 @@ def valid_rfc_host(arg: Any) -> str:
 
 def valid_port(arg: Any) -> int:
     return int(valid_number(arg, min=0, max=65535, name="TCP/UDP port"))
+
+
+def valid_mac(arg: Any) -> str:
+    pattern = ":".join([r"[0-9a-fA-F]{2}"] * 6)
+    return check_re_match(arg, "MAC address", pattern).lower()

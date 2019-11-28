@@ -82,6 +82,9 @@ from .info import InfoManager
 from .logreader import LogReader
 from .streamer import Streamer
 
+from .wol import WolDisabledError
+from .wol import WakeOnLan
+
 
 # =====
 try:
@@ -191,7 +194,7 @@ def _exposed(http_method: str, path: str, auth_required: bool=True) -> Callable:
 
             except (AtxIsBusyError, MsdIsBusyError) as err:
                 return _json_exception(err, 409)
-            except (ValidatorError, AtxOperationError, MsdOperationError) as err:
+            except (ValidatorError, AtxOperationError, MsdOperationError, WolDisabledError) as err:
                 return _json_exception(err, 400)
             except UnauthorizedError as err:
                 return _json_exception(err, 401)
@@ -222,6 +225,7 @@ def _system_task(method: Callable) -> Callable:
 
 class _Events(Enum):
     INFO_STATE = "info_state"
+    WOL_STATE = "wol_state"
     HID_STATE = "hid_state"
     ATX_STATE = "atx_state"
     MSD_STATE = "msd_state"
@@ -234,6 +238,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         auth_manager: AuthManager,
         info_manager: InfoManager,
         log_reader: LogReader,
+        wol: WakeOnLan,
 
         hid: BaseHid,
         atx: BaseAtx,
@@ -244,6 +249,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         self._auth_manager = auth_manager
         self.__info_manager = info_manager
         self.__log_reader = log_reader
+        self.__wol = wol
 
         self.__hid = hid
         self.__atx = atx
@@ -355,6 +361,17 @@ class Server:  # pylint: disable=too-many-instance-attributes
             )).encode("utf-8") + b"\r\n")
         return response
 
+    # ===== Wake-on-LAN
+
+    @_exposed("GET", "/wol")
+    async def __wol_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        return _json(self.__wol.get_state())
+
+    @_exposed("POST", "/wol/wakeup")
+    async def __wol_wakeup_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+        await self.__wol.wakeup()
+        return _json()
+
     # ===== WEBSOCKET
 
     @_exposed("GET", "/ws")
@@ -366,6 +383,7 @@ class Server:  # pylint: disable=too-many-instance-attributes
         await self.__register_socket(ws)
         await asyncio.gather(*[
             self.__broadcast_event(_Events.INFO_STATE, (await self.__make_info())),
+            self.__broadcast_event(_Events.WOL_STATE, self.__wol.get_state()),
             self.__broadcast_event(_Events.HID_STATE, self.__hid.get_state()),
             self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state()),
             self.__broadcast_event(_Events.MSD_STATE, (await self.__msd.get_state())),

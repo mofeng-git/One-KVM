@@ -36,6 +36,7 @@ from .. import init
 from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
+from .wol import WakeOnLan
 from .streamer import Streamer
 from .server import Server
 
@@ -71,6 +72,7 @@ def main(argv: Optional[List[str]]=None) -> None:
             ),
             info_manager=InfoManager(**config.info._unpack()),
             log_reader=LogReader(),
+            wol=WakeOnLan(**config.wol._unpack()),
 
             hid=get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type"])),
             atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),

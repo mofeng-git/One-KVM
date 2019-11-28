@@ -8,6 +8,7 @@ Group=kvmd
 Type=simple
 Restart=always
 RestartSec=3
+AmbientCapabilities=CAP_NET_RAW
 
 ExecStart=/usr/bin/kvmd
 ExecStopPost=/usr/bin/kvmd-cleanup

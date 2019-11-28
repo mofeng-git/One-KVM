@@ -29,6 +29,7 @@ from kvmd.validators.net import valid_ip_or_host
 from kvmd.validators.net import valid_ip
 from kvmd.validators.net import valid_rfc_host
 from kvmd.validators.net import valid_port
+from kvmd.validators.net import valid_mac
 
 
 # =====
@@ -120,3 +121,24 @@ def test_ok__valid_port(arg: Any) -> None:
 def test_fail__valid_port(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_port(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", [
+    " 00:00:00:00:00:00 ",
+    " 9f:00:00:00:00:00 ",
+    " FF:FF:FF:FF:FF:FF ",
+])
+def test_ok__valid_mac(arg: Any) -> None:
+    assert valid_mac(arg) == arg.strip().lower()
+
+
+@pytest.mark.parametrize("arg", [
+    "00:00:00:00:00:0",
+    "9x:00:00:00:00:00",
+    "",
+    None,
+])
+def test_fail__valid_mac(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_mac(arg))
