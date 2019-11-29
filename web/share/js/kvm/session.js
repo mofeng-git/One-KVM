@@ -30,6 +30,7 @@ import {Hid} from "./hid.js";
 import {Atx} from "./atx.js";
 import {Msd} from "./msd.js";
 import {Streamer} from "./stream.js";
+import {WakeOnLan} from "./wol.js";
 
 
 export function Session() {
@@ -46,6 +47,7 @@ export function Session() {
 	var __atx = new Atx();
 	var __msd = new Msd();
 	var __streamer = new Streamer();
+	var __wol = new WakeOnLan();
 
 	var __init__ = function() {
 		__startSession();
@@ -126,6 +128,8 @@ export function Session() {
 				__msd.setState(event.msg.event_attrs);
 			} else if (event.msg.event === "streamer_state") {
 				__streamer.setState(event.msg.event_attrs);
+			} else if (event.msg.event === "wol_state") {
+				__wol.setState(event.msg.event_attrs);
 			}
 		}
 	};
