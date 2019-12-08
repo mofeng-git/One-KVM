@@ -42,16 +42,13 @@ import setproctitle
 
 from ...logging import get_logger
 
+from ...errors import OperationError
+from ...errors import IsBusyError
+
 from ...plugins import BasePlugin
 
 from ...plugins.hid import BaseHid
-
-from ...plugins.atx import AtxOperationError
-from ...plugins.atx import AtxIsBusyError
 from ...plugins.atx import BaseAtx
-
-from ...plugins.msd import MsdOperationError
-from ...plugins.msd import MsdIsBusyError
 from ...plugins.msd import BaseMsd
 
 from ...validators import ValidatorError
@@ -71,8 +68,6 @@ from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
 from .streamer import Streamer
-
-from .wol import WolDisabledError
 from .wol import WakeOnLan
 
 from .http import UnauthorizedError
@@ -337,9 +332,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
                 return (await exposed.handler(request))
 
-            except (AtxIsBusyError, MsdIsBusyError) as err:
+            except IsBusyError as err:
                 return make_json_exception(err, 409)
-            except (ValidatorError, AtxOperationError, MsdOperationError, WolDisabledError) as err:
+            except (ValidatorError, OperationError) as err:
                 return make_json_exception(err, 400)
             except UnauthorizedError as err:
                 return make_json_exception(err, 401)

@@ -27,11 +27,13 @@ from typing import Optional
 
 from ...logging import get_logger
 
+from ...errors import OperationError
+
 from ... import aiotools
 
 
 # =====
-class WolDisabledError(Exception):
+class WolDisabledError(OperationError):
     def __init__(self) -> None:
         super().__init__("WoL is disabled")
 

@@ -27,6 +27,9 @@ from typing import Type
 from typing import AsyncGenerator
 from typing import Optional
 
+from ...errors import OperationError
+from ...errors import IsBusyError
+
 from .. import BasePlugin
 from .. import get_plugin_class
 
@@ -36,8 +39,13 @@ class MsdError(Exception):
     pass
 
 
-class MsdOperationError(MsdError):
+class MsdOperationError(OperationError, MsdError):
     pass
+
+
+class MsdIsBusyError(IsBusyError, MsdError):
+    def __init__(self) -> None:
+        super().__init__("Performing another MSD operation, please try again later")
 
 
 class MsdOfflineError(MsdOperationError):
@@ -68,11 +76,6 @@ class MsdUnknownImageError(MsdOperationError):
 class MsdImageExistsError(MsdOperationError):
     def __init__(self) -> None:
         super().__init__("This image is already exists")
-
-
-class MsdIsBusyError(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("Performing another MSD operation, please try again later")
 
 
 class MsdMultiNotSupported(MsdOperationError):

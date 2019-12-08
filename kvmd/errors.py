@@ -20,69 +20,9 @@
 # ========================================================================== #
 
 
-from typing import Dict
-from typing import AsyncGenerator
-from typing import Type
-
-from ...errors import OperationError
-from ...errors import IsBusyError
-
-from .. import BasePlugin
-from .. import get_plugin_class
-
-
-# =====
-class AtxError(Exception):
+class OperationError(Exception):
     pass
 
 
-class AtxOperationError(OperationError, AtxError):
+class IsBusyError(Exception):
     pass
-
-
-class AtxIsBusyError(IsBusyError, AtxError):
-    def __init__(self) -> None:
-        super().__init__("Performing another ATX operation, please try again later")
-
-
-# =====
-class BaseAtx(BasePlugin):
-    def get_state(self) -> Dict:
-        raise NotImplementedError
-
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        yield {}
-        raise NotImplementedError
-
-    async def cleanup(self) -> None:
-        pass
-
-    # =====
-
-    async def power_on(self) -> bool:
-        raise NotImplementedError
-
-    async def power_off(self) -> bool:
-        raise NotImplementedError
-
-    async def power_off_hard(self) -> bool:
-        raise NotImplementedError
-
-    async def power_reset_hard(self) -> bool:
-        raise NotImplementedError
-
-    # =====
-
-    async def click_power(self) -> None:
-        raise NotImplementedError
-
-    async def click_power_long(self) -> None:
-        raise NotImplementedError
-
-    async def click_reset(self) -> None:
-        raise NotImplementedError
-
-
-# =====
-def get_atx_class(name: str) -> Type[BaseAtx]:
-    return get_plugin_class("atx", name)  # type: ignore

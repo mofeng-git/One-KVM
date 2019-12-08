@@ -53,10 +53,10 @@ from ...validators.os import valid_abs_path
 from ...validators.hw import valid_gpio_pin
 
 from . import MsdError
+from . import MsdIsBusyError
 from . import MsdOfflineError
 from . import MsdConnectedError
 from . import MsdDisconnectedError
-from . import MsdIsBusyError
 from . import MsdMultiNotSupported
 from . import MsdCdromNotSupported
 from . import BaseMsd
