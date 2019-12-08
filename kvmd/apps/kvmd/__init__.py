@@ -38,7 +38,7 @@ from .info import InfoManager
 from .logreader import LogReader
 from .wol import WakeOnLan
 from .streamer import Streamer
-from .server import Server
+from .server import KvmdServer
 
 
 # =====
@@ -62,7 +62,7 @@ def main(argv: Optional[List[str]]=None) -> None:
 
         config = config.kvmd
 
-        Server(
+        KvmdServer(
             auth_manager=AuthManager(
                 internal_type=config.auth.internal.type,
                 internal_kwargs=config.auth.internal._unpack(ignore=["type", "force_users"]),
@@ -78,6 +78,9 @@ def main(argv: Optional[List[str]]=None) -> None:
             atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),
             msd=get_msd_class(config.msd.type)(**msd_kwargs),
             streamer=Streamer(**config.streamer._unpack()),
-        ).run(**config.server._unpack())
+
+            heartbeat=config.server.heartbeat,
+            sync_chunk_size=config.server.sync_chunk_size,
+        ).run(**config.server._unpack(ignore=["heartbeat", "sync_chunk_size"]))
 
     get_logger(0).info("Bye-bye")
