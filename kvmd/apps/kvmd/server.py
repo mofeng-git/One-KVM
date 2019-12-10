@@ -296,8 +296,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         async def wrapper(request: aiohttp.web.Request) -> aiohttp.web.Response:
             try:
                 if exposed.auth_required:
-                    user = request.headers.get("X-KVMD-User", "")
-                    passwd = request.headers.get("X-KVMD-Passwd", "")
+                    user = request.headers.get(_HEADER_AUTH_USER, "")
+                    passwd = request.headers.get(_HEADER_AUTH_PASSWD, "")
                     token = request.cookies.get(_COOKIE_AUTH_TOKEN, "")
 
                     if user:
