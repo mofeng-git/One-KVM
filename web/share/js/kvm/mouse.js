@@ -147,9 +147,8 @@ export function Mouse() {
 		__sendMove();
 		if (__ws) {
 			__ws.send(JSON.stringify({
-				event_type: "mouse_button",
-				button: button,
-				state: state,
+				"event_type": "mouse_button",
+				"event": {"button": button, "state": state},
 			}));
 		}
 	};
@@ -166,8 +165,8 @@ export function Mouse() {
 			tools.debug("Mouse: moved:", to);
 			if (__ws) {
 				__ws.send(JSON.stringify({
-					event_type: "mouse_move",
-					to: to,
+					"event_type": "mouse_move",
+					"event": {"to": to},
 				}));
 			}
 			__sent_pos = pos;
@@ -202,8 +201,8 @@ export function Mouse() {
 			tools.debug("Mouse: scrolled:", delta);
 			if (__ws) {
 				__ws.send(JSON.stringify({
-					event_type: "mouse_wheel",
-					delta: delta,
+					"event_type": "mouse_wheel",
+					"event": {"delta": delta},
 				}));
 			}
 		}

@@ -249,22 +249,24 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         async for msg in ws:
             if msg.type == aiohttp.web.WSMsgType.TEXT:
                 try:
-                    event = json.loads(msg.data)
+                    data = json.loads(msg.data)
+                    event_type = data.get("event_type")
+                    event = data["event"]
                 except Exception as err:
-                    logger.error("Can't parse JSON event from websocket: %s", err)
+                    logger.error("Can't parse JSON event from websocket: %r", err)
                 else:
-                    handler = self.__ws_handlers.get(event.get("event_type"))
+                    handler = self.__ws_handlers.get(event_type)
                     if handler:
                         await handler(ws, event)
                     else:
-                        logger.error("Unknown websocket event: %r", event)
+                        logger.error("Unknown websocket event: %r", data)
             else:
                 break
         return ws
 
     @exposed_ws("ping")
     async def __ws_ping_handler(self, ws: aiohttp.web.WebSocketResponse, _: Dict) -> None:
-        await ws.send_str(json.dumps({"msg_type": "pong"}))
+        await ws.send_str(json.dumps({"event_type": "pong", "event": {}}))
 
     # ===== SYSTEM STUFF
 
@@ -377,15 +379,12 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             except Exception:
                 logger.exception("Cleanup error on %s", name)
 
-    async def __broadcast_event(self, event_type: _Events, event_attrs: Dict) -> None:
+    async def __broadcast_event(self, event_type: _Events, event: Dict) -> None:
         if self.__sockets:
             await asyncio.gather(*[
                 ws.send_str(json.dumps({
-                    "msg_type": "event",
-                    "msg": {
-                        "event": event_type.value,
-                        "event_attrs": event_attrs,
-                    },
+                    "event_type": event_type.value,
+                    "event": event,
                 }))
                 for ws in list(self.__sockets)
                 if not ws.closed and ws._req is not None and ws._req.transport is not None  # pylint: disable=protected-access

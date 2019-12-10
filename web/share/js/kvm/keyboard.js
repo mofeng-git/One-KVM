@@ -126,9 +126,8 @@ export function Keyboard() {
 		tools.debug("Keyboard: key", (state ? "pressed:" : "released:"), code);
 		if (__ws) {
 			__ws.send(JSON.stringify({
-				event_type: "key",
-				key: code,
-				state: state,
+				"event_type": "key",
+				"event": {"key": code, "state": state},
 			}));
 		}
 	};

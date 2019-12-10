@@ -114,23 +114,15 @@ export function Session() {
 
 	var __wsMessageHandler = function(event) {
 		// tools.debug("Session: received socket data:", event.data);
-		event = JSON.parse(event.data);
-		if (event.msg_type === "pong") {
-			__missed_heartbeats = 0;
-		} else if (event.msg_type === "event") {
-			if (event.msg.event === "info_state") {
-				__setKvmdInfo(event.msg.event_attrs);
-			} else if (event.msg.event === "hid_state") {
-				__hid.setState(event.msg.event_attrs);
-			} else if (event.msg.event === "atx_state") {
-				__atx.setState(event.msg.event_attrs);
-			} else if (event.msg.event === "msd_state") {
-				__msd.setState(event.msg.event_attrs);
-			} else if (event.msg.event === "streamer_state") {
-				__streamer.setState(event.msg.event_attrs);
-			} else if (event.msg.event === "wol_state") {
-				__wol.setState(event.msg.event_attrs);
-			}
+		let data = JSON.parse(event.data);
+		switch (data.event_type) {
+			case "pong": __missed_heartbeats = 0; break;
+			case "info_state": __setKvmdInfo(data.event); break;
+			case "wol_state": __wol.setState(data.event); break;
+			case "hid_state": __hid.setState(data.event); break;
+			case "atx_state": __atx.setState(data.event); break;
+			case "msd_state": __msd.setState(data.event); break;
+			case "streamer_state": __streamer.setState(data.event); break;
 		}
 	};
 
@@ -171,7 +163,7 @@ export function Session() {
 			if (__missed_heartbeats >= 5) {
 				throw new Error("Too many missed heartbeats");
 			}
-			__ws.send(JSON.stringify({"event_type": "ping"}));
+			__ws.send(JSON.stringify({"event_type": "ping", "event": {}}));
 		} catch (err) {
 			tools.error("Session: ping error:", err.message);
 			if (__ws) {
