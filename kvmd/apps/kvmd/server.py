@@ -79,6 +79,7 @@ from .http import get_exposed_http
 from .http import get_exposed_ws
 from .http import make_json_response
 from .http import make_json_exception
+from .http import set_request_auth_info
 from .http import HttpServer
 
 from .api.log import LogApi
@@ -86,23 +87,6 @@ from .api.wol import WolApi
 from .api.hid import HidApi
 from .api.atx import AtxApi
 from .api.msd import MsdApi
-
-
-# =====
-try:
-    from aiohttp.web import AccessLogger  # type: ignore  # pylint: disable=ungrouped-imports
-except ImportError:
-    from aiohttp.helpers import AccessLogger  # type: ignore  # pylint: disable=ungrouped-imports
-
-
-_ATTR_KVMD_AUTH_INFO = "kvmd_auth_info"
-
-
-def _format_P(request: aiohttp.web.BaseRequest, *_, **__) -> str:  # type: ignore  # pylint: disable=invalid-name
-    return (getattr(request, _ATTR_KVMD_AUTH_INFO, None) or "-")
-
-
-AccessLogger._format_P = staticmethod(_format_P)  # type: ignore  # pylint: disable=protected-access
 
 
 # =====
@@ -318,16 +302,16 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
                     if user:
                         user = valid_user(user)
-                        setattr(request, _ATTR_KVMD_AUTH_INFO, f"{user} (xhdr)")
+                        set_request_auth_info(request, f"{user} (xhdr)")
                         if not (await self.__auth_manager.authorize(user, valid_passwd(passwd))):
                             raise ForbiddenError("Forbidden")
 
                     elif token:
                         user = self.__auth_manager.check(valid_auth_token(token))
                         if not user:
-                            setattr(request, _ATTR_KVMD_AUTH_INFO, "- (token)")
+                            set_request_auth_info(request, "- (token)")
                             raise ForbiddenError("Forbidden")
-                        setattr(request, _ATTR_KVMD_AUTH_INFO, f"{user} (token)")
+                        set_request_auth_info(request, f"{user} (token)")
 
                     else:
                         raise UnauthorizedError("Unauthorized")

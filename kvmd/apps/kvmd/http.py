@@ -12,6 +12,11 @@ from typing import Optional
 import aiohttp
 import aiohttp.web
 
+try:
+    from aiohttp.web import AccessLogger  # type: ignore
+except ImportError:
+    from aiohttp.helpers import AccessLogger  # type: ignore
+
 from ...logging import get_logger
 
 from ...validators import ValidatorError
@@ -136,6 +141,21 @@ async def get_multipart_field(reader: aiohttp.MultipartReader, name: str) -> aio
     if not field or field.name != name:
         raise ValidatorError(f"Missing {name!r} field")
     return field
+
+
+# =====
+_REQUEST_AUTH_INFO = "_kvd_auth_info"
+
+
+def _format_P(request: aiohttp.web.BaseRequest, *_, **__) -> str:  # type: ignore  # pylint: disable=invalid-name
+    return (getattr(request, _REQUEST_AUTH_INFO, None) or "-")
+
+
+AccessLogger._format_P = staticmethod(_format_P)  # type: ignore  # pylint: disable=protected-access
+
+
+def set_request_auth_info(request: aiohttp.web.BaseRequest, info: str) -> None:
+    setattr(request, _REQUEST_AUTH_INFO, info)
 
 
 # =====
