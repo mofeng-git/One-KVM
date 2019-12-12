@@ -59,6 +59,7 @@ async def _get_configured_manager(
         external_type=("htpasswd" if external_path else ""),
         external_kwargs=(_make_service_kwargs(external_path) if external_path else {}),
         force_internal_users=(force_internal_users or []),
+        disabled=False,
     )
 
     try:
@@ -77,6 +78,8 @@ async def test_ok__internal(tmpdir) -> None:  # type: ignore
     htpasswd.save()
 
     async with _get_configured_manager(path) as manager:
+        assert manager.is_auth_enabled()
+
         assert manager.check("xxx") is None
         manager.logout("xxx")
 
@@ -115,6 +118,8 @@ async def test_ok__external(tmpdir) -> None:  # type: ignore
     htpasswd2.save()
 
     async with _get_configured_manager(path1, path2, ["admin"]) as manager:
+        assert manager.is_auth_enabled()
+
         assert (await manager.login("local", "foobar")) is None
         assert (await manager.login("admin", "pass2")) is None
 
@@ -131,3 +136,32 @@ async def test_ok__external(tmpdir) -> None:  # type: ignore
         assert manager.check(token) == "user"
         manager.logout(token)
         assert manager.check(token) is None
+
+
+@pytest.mark.asyncio
+async def test_ok__disabled() -> None:
+    try:
+        manager = AuthManager(
+            internal_type="foobar",
+            internal_kwargs={},
+            external_type="",
+            external_kwargs={},
+            force_internal_users=[],
+            disabled=True,
+        )
+
+        assert not manager.is_auth_enabled()
+
+        with pytest.raises(AssertionError):
+            await manager.authorize("admin", "admin")
+
+        with pytest.raises(AssertionError):
+            await manager.login("admin", "admin")
+
+        with pytest.raises(AssertionError):
+            manager.logout("xxx")
+
+        with pytest.raises(AssertionError):
+            manager.check("xxx")
+    finally:
+        manager.cleanup()

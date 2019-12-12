@@ -198,6 +198,8 @@ def _get_config_scheme() -> Dict:
             },
 
             "auth": {
+                "disabled": Option(False, type=valid_bool),
+
                 "internal": {
                     "type":  Option("htpasswd"),
                     "force_users": Option([], type=valid_users_list),
@@ -206,6 +208,7 @@ def _get_config_scheme() -> Dict:
 
                 "external": {
                     "type": Option("", type=valid_stripped_string),
+                    # Dynamic content
                 },
             },
 

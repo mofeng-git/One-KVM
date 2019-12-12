@@ -46,13 +46,20 @@ class AuthManager:
         external_kwargs: Dict,
 
         force_internal_users: List[str],
+        disabled: bool,
     ) -> None:
 
-        self.__internal_service = get_auth_service_class(internal_type)(**internal_kwargs)
-        get_logger().info("Using internal auth service %r", self.__internal_service.get_plugin_name())
+        self.__disabled = disabled
+        if disabled:
+            get_logger().warning("AUTHORIZATION IS DISABLED")
+
+        self.__internal_service: Optional[BaseAuthService] = None
+        if not disabled:
+            self.__internal_service = get_auth_service_class(internal_type)(**internal_kwargs)
+            get_logger().info("Using internal auth service %r", self.__internal_service.get_plugin_name())
 
         self.__external_service: Optional[BaseAuthService] = None
-        if external_type:
+        if not disabled and external_type:
             self.__external_service = get_auth_service_class(external_type)(**external_kwargs)
             get_logger().info("Using external auth service %r", self.__external_service.get_plugin_name())
 
@@ -60,7 +67,13 @@ class AuthManager:
 
         self.__tokens: Dict[str, str] = {}  # {token: user}
 
+    def is_auth_enabled(self) -> bool:
+        return (not self.__disabled)
+
     async def authorize(self, user: str, passwd: str) -> bool:
+        assert not self.__disabled
+        assert self.__internal_service
+
         if user not in self.__force_internal_users and self.__external_service:
             service = self.__external_service
         else:
@@ -74,6 +87,7 @@ class AuthManager:
         return ok
 
     async def login(self, user: str, passwd: str) -> Optional[str]:
+        assert not self.__disabled
         if (await self.authorize(user, passwd)):
             for (token, token_user) in self.__tokens.items():
                 if user == token_user:
@@ -86,15 +100,19 @@ class AuthManager:
             return None
 
     def logout(self, token: str) -> None:
+        assert not self.__disabled
         user = self.__tokens.pop(token, "")
         if user:
             get_logger().info("Logged out user %r", user)
 
     def check(self, token: str) -> Optional[str]:
+        assert not self.__disabled
         return self.__tokens.get(token)
 
     @aiotools.atomic
     async def cleanup(self) -> None:
-        await self.__internal_service.cleanup()
-        if self.__external_service:
-            await self.__external_service.cleanup()
+        if not self.__disabled:
+            assert self.__internal_service
+            await self.__internal_service.cleanup()
+            if self.__external_service:
+                await self.__external_service.cleanup()

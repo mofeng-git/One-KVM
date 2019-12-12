@@ -69,6 +69,7 @@ def main(argv: Optional[List[str]]=None) -> None:
                 external_type=config.auth.external.type,
                 external_kwargs=(config.auth.external._unpack(ignore=["type"]) if config.auth.external.type else {}),
                 force_internal_users=config.auth.internal.force_users,
+                disabled=config.auth.disabled,
             ),
             info_manager=InfoManager(**config.info._unpack()),
             log_reader=LogReader(),

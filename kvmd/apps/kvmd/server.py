@@ -167,19 +167,22 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     @exposed_http("POST", "/auth/login", auth_required=False)
     async def __auth_login_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        credentials = await request.post()
-        token = await self.__auth_manager.login(
-            user=valid_user(credentials.get("user", "")),
-            passwd=valid_passwd(credentials.get("passwd", "")),
-        )
-        if token:
-            return make_json_response({}, set_cookies={_COOKIE_AUTH_TOKEN: token})
-        raise ForbiddenError("Forbidden")
+        if self.__auth_manager.is_auth_enabled():
+            credentials = await request.post()
+            token = await self.__auth_manager.login(
+                user=valid_user(credentials.get("user", "")),
+                passwd=valid_passwd(credentials.get("passwd", "")),
+            )
+            if token:
+                return make_json_response({}, set_cookies={_COOKIE_AUTH_TOKEN: token})
+            raise ForbiddenError("Forbidden")
+        return make_json_response({})
 
     @exposed_http("POST", "/auth/logout")
     async def __auth_logout_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        token = valid_auth_token(request.cookies.get(_COOKIE_AUTH_TOKEN, ""))
-        self.__auth_manager.logout(token)
+        if self.__auth_manager.is_auth_enabled():
+            token = valid_auth_token(request.cookies.get(_COOKIE_AUTH_TOKEN, ""))
+            self.__auth_manager.logout(token)
         return make_json_response({})
 
     @exposed_http("GET", "/auth/check")
@@ -295,7 +298,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     def __add_app_route(self, app: aiohttp.web.Application, exposed: HttpExposed) -> None:
         async def wrapper(request: aiohttp.web.Request) -> aiohttp.web.Response:
             try:
-                if exposed.auth_required:
+                if exposed.auth_required and self.__auth_manager.is_auth_enabled():
                     user = request.headers.get(_HEADER_AUTH_USER, "")
                     passwd = request.headers.get(_HEADER_AUTH_PASSWD, "")
                     token = request.cookies.get(_COOKIE_AUTH_TOKEN, "")
