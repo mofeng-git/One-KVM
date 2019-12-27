@@ -49,7 +49,7 @@ class HidApi:
     async def __state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return make_json_response(self.__hid.get_state())
 
-    @exposed_http("GET", "/hid/reset")
+    @exposed_http("POST", "/hid/reset")
     async def __reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         await self.__hid.reset()
         return make_json_response()
