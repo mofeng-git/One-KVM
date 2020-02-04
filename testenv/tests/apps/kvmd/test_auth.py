@@ -164,4 +164,4 @@ async def test_ok__disabled() -> None:
         with pytest.raises(AssertionError):
             manager.check("xxx")
     finally:
-        manager.cleanup()
+        await manager.cleanup()
