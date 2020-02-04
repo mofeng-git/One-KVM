@@ -31,7 +31,8 @@ KEYBOARD_HID = Hid(
     report_length=8,
 
     report_descriptor=bytes([
-        # https://www.kernel.org/doc/Documentation/usb/gadget_hid.txt
+        # Logitech descriptor. It's very similar to https://www.kernel.org/doc/Documentation/usb/gadget_hid.txt
+        # Dumped using usbhid-dump; parsed using https://eleccelerator.com/usbdescreqparser
 
         # Keyboard
         0x05, 0x01,  # USAGE_PAGE (Generic Desktop)
@@ -51,7 +52,7 @@ KEYBOARD_HID = Hid(
         # Reserved byte
         0x95, 0x01,  # REPORT_COUNT (1)
         0x75, 0x08,  # REPORT_SIZE (8)
-        0x81, 0x03,  # INPUT (Cnst,Var,Abs)
+        0x81, 0x01,  # INPUT (Const,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
 
         # LEDs output
         0x95, 0x05,  # REPORT_COUNT (5)
@@ -64,16 +65,16 @@ KEYBOARD_HID = Hid(
         # Reserved 3 bits in output
         0x95, 0x01,  # REPORT_COUNT (1)
         0x75, 0x03,  # REPORT_SIZE (3)
-        0x91, 0x03,  # OUTPUT (Cnst,Var,Abs)
+        0x91, 0x01,  # OUTPUT (Const,Array,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
 
         # 6 keys
         0x95, 0x06,  # REPORT_COUNT (6)
         0x75, 0x08,  # REPORT_SIZE (8)
         0x15, 0x00,  # LOGICAL_MINIMUM (0)
-        0x25, 0x65,  # LOGICAL_MAXIMUM (101)
+        0x26, 0xFF, 0x00,  # LOGICAL_MAXIMUM (0xFF)
         0x05, 0x07,  # USAGE_PAGE (Keyboard)
         0x19, 0x00,  # USAGE_MINIMUM (Reserved)
-        0x29, 0x65,  # USAGE_MAXIMUM (Keyboard Application)
+        0x2A, 0xFF, 0x00,  # USAGE_MAXIMUM (0xFF)
         0x81, 0x00,  # INPUT (Data,Ary,Abs)
 
         0xC0,  # END_COLLECTION
