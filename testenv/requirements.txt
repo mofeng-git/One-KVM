@@ -8,3 +8,4 @@ pyserial
 setproctitle
 pygments
 pyghmi
+python-pam

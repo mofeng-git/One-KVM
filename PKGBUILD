@@ -38,6 +38,7 @@ depends=(
 	python-dbus
 	python-pygments
 	python-pyghmi
+	python-pam
 	v4l-utils
 	nginx-mainline
 	openssl
