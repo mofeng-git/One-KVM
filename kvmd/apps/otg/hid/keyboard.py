@@ -47,7 +47,7 @@ KEYBOARD_HID = Hid(
         0x25, 0x01,  # LOGICAL_MAXIMUM (1)
         0x75, 0x01,  # REPORT_SIZE (1)
         0x95, 0x08,  # REPORT_COUNT (8)
-        0x81, 0x02,  # INPUT (Data,Var,Abs)
+        0x81, 0x02,  # INPUT (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
 
         # Reserved byte
         0x95, 0x01,  # REPORT_COUNT (1)
@@ -60,7 +60,7 @@ KEYBOARD_HID = Hid(
         0x05, 0x08,  # USAGE_PAGE (LEDs)
         0x19, 0x01,  # USAGE_MINIMUM (Num Lock)
         0x29, 0x05,  # USAGE_MAXIMUM (Kana)
-        0x91, 0x02,  # OUTPUT (Data,Var,Abs)
+        0x91, 0x02,  # OUTPUT (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
 
         # Reserved 3 bits in output
         0x95, 0x01,  # REPORT_COUNT (1)
@@ -75,7 +75,7 @@ KEYBOARD_HID = Hid(
         0x05, 0x07,  # USAGE_PAGE (Keyboard)
         0x19, 0x00,  # USAGE_MINIMUM (Reserved)
         0x2A, 0xFF, 0x00,  # USAGE_MAXIMUM (0xFF)
-        0x81, 0x00,  # INPUT (Data,Ary,Abs)
+        0x81, 0x00,  # INPUT (Data,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
 
         0xC0,  # END_COLLECTION
     ]),
