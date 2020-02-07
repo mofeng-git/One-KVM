@@ -75,6 +75,7 @@ async def _test_user() -> AsyncGenerator[None, None]:
     {"allow_uids_at": _UID},
 ])
 async def test_ok(test_user, kwargs: Dict) -> None:  # type: ignore
+    _ = test_user
     async with get_configured_auth_service("pam", **kwargs) as service:
         assert not (await service.authorize(_USER, "invalid_password"))
         assert (await service.authorize(_USER, _PASSWD))
@@ -87,6 +88,7 @@ async def test_ok(test_user, kwargs: Dict) -> None:  # type: ignore
     {"allow_uids_at": _UID + 1},
 ])
 async def test_fail(test_user, kwargs: Dict) -> None:  # type: ignore
+    _ = test_user
     async with get_configured_auth_service("pam", **kwargs) as service:
         assert not (await service.authorize(_USER, "invalid_password"))
         assert not (await service.authorize(_USER, _PASSWD))
