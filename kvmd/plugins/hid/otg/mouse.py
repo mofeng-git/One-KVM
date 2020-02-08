@@ -70,11 +70,8 @@ class MouseProcess(BaseDeviceProcess):
     def cleanup(self) -> None:
         self._stop()
         get_logger().info("Clearing HID-mouse events ...")
-        if self._ensure_device():
-            try:
-                self._write_report(self.__make_report(0, self.__x, self.__y, 0, 0))  # Release all buttons
-            finally:
-                self._close_device()
+        report = self.__make_report(0, self.__x, self.__y, 0, 0)
+        self._ensure_write(report, close=True)  # Release all buttons
 
     def send_clear_event(self) -> None:
         self._queue_event(_ClearEvent())
@@ -118,9 +115,7 @@ class MouseProcess(BaseDeviceProcess):
 
     def __process_clear_event(self, reopen: bool=False) -> None:
         self.__clear_state()
-        if reopen:
-            self._close_device()
-        self.__send_current_state(0, 0)
+        self.__send_current_state(0, 0, reopen=reopen)
 
     def __process_button_event(self, event: _ButtonEvent) -> None:
         if event.code & self.__pressed_buttons:
@@ -143,19 +138,18 @@ class MouseProcess(BaseDeviceProcess):
 
     # =====
 
-    def __send_current_state(self, delta_x: int, delta_y: int) -> bool:
-        ok = False
-        if self._ensure_device():
-            ok = self._write_report(self.__make_report(
-                buttons=self.__pressed_buttons,
-                to_x=self.__x,
-                to_y=self.__y,
-                delta_x=delta_x,
-                delta_y=delta_y,
-            ))
-        if not ok:
+    def __send_current_state(self, delta_x: int, delta_y: int, reopen: bool=False) -> bool:
+        report = self.__make_report(
+            buttons=self.__pressed_buttons,
+            to_x=self.__x,
+            to_y=self.__y,
+            delta_x=delta_x,
+            delta_y=delta_y,
+        )
+        if not self._ensure_write(report, reopen=reopen):
             self.__clear_state()
-        return ok
+            return False
+        return True
 
     def __clear_state(self) -> None:
         self.__pressed_buttons = 0

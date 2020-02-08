@@ -75,25 +75,19 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         while not self.__stop_event.is_set():
             try:
                 while not self.__stop_event.is_set():
-                    passed = 0
                     try:
-                        event: BaseEvent = self.__events_queue.get(timeout=0.05)
+                        event: BaseEvent = self.__events_queue.get(timeout=1)
                     except queue.Empty:
-                        if passed >= 20:  # 20 * 0.05 = 1 sec
-                            self._ensure_device()  # Check device
-                            passed = 0
-                        else:
-                            passed += 1
+                        self.__ensure_device()  # Check device
                     else:
                         self._process_event(event)
-                        passed = 0
             except Exception:
                 logger.exception("Unexpected HID-%s error", self.__name)
-                self._close_device()
+                self.__close_device()
             finally:
                 time.sleep(1)
 
-        self._close_device()
+        self.__close_device()
 
     def is_online(self) -> bool:
         return bool(self.__online_shared.value and self.is_alive())
@@ -111,7 +105,20 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
     def _queue_event(self, event: BaseEvent) -> None:
         self.__events_queue.put(event)
 
-    def _write_report(self, report: bytes) -> bool:
+    def _ensure_write(self, report: bytes, reopen: bool=False, close: bool=False) -> bool:
+        if reopen:
+            self.__close_device()
+        try:
+            if self.__ensure_device():
+                return self.__write_report(report)
+            return False
+        finally:
+            if close:
+                self.__close_device()
+
+    # =====
+
+    def __write_report(self, report: bytes) -> bool:
         if self.__noop:
             return True
 
@@ -141,10 +148,10 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                 logger.debug("HID-%s write retries left: %d", self.__name, retries)
                 time.sleep(self.__write_retries_delay)
 
-        self._close_device()
+        self.__close_device()
         return False
 
-    def _ensure_device(self) -> bool:
+    def __ensure_device(self) -> bool:
         if self.__noop:
             return True
 
@@ -168,12 +175,12 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                     logger.debug("HID-%s is busy/unplugged (select)", self.__name)
             except Exception as err:
                 logger.error("Can't select() HID-%s: %s: %s", self.__name, type(err).__name__, err)
-            self._close_device()
+            self.__close_device()
 
         self.__online_shared.value = 0
         return False
 
-    def _close_device(self) -> None:
+    def __close_device(self) -> None:
         if self.__fd >= 0:
             try:
                 os.close(self.__fd)

@@ -73,11 +73,7 @@ class KeyboardProcess(BaseDeviceProcess):
     def cleanup(self) -> None:
         self._stop()
         get_logger().info("Clearing HID-keyboard events ...")
-        if self._ensure_device():
-            try:
-                self._write_report(b"\x00" * 8)  # Release all keys and modifiers
-            finally:
-                self._close_device()
+        self._ensure_write(b"\x00" * 8, close=True)  # Release all keys and modifiers
 
     def send_clear_event(self) -> None:
         self._queue_event(_ClearEvent())
@@ -107,9 +103,7 @@ class KeyboardProcess(BaseDeviceProcess):
     def __process_clear_event(self, reopen: bool=False) -> None:
         self.__clear_modifiers()
         self.__clear_keys()
-        if reopen:
-            self._close_device()
-        self.__send_current_state()
+        self.__send_current_state(reopen=reopen)
 
     def __process_modifier_event(self, event: _ModifierEvent) -> None:
         if event.modifier in self.__pressed_modifiers:
@@ -140,28 +134,28 @@ class KeyboardProcess(BaseDeviceProcess):
 
     # =====
 
-    def __send_current_state(self) -> bool:
-        ok = False
-        if self._ensure_device():
-            modifiers = 0
-            for modifier in self.__pressed_modifiers:
-                modifiers |= modifier.code
-
-            assert len(self.__pressed_keys) == 6
-            keys = [
-                (0 if key is None else key.code)
-                for key in self.__pressed_keys
-            ]
-
-            ok = self._write_report(bytes([modifiers, 0] + keys))
-
-        if not ok:
+    def __send_current_state(self, reopen: bool=False) -> bool:
+        if not self._ensure_write(self.__make_report(), reopen=reopen):
             self.__clear_modifiers()
             self.__clear_keys()
-        return ok
+            return False
+        return True
 
     def __clear_modifiers(self) -> None:
         self.__pressed_modifiers.clear()
 
     def __clear_keys(self) -> None:
         self.__pressed_keys = [None] * 6
+
+    def __make_report(self) -> bytes:
+        modifiers = 0
+        for modifier in self.__pressed_modifiers:
+            modifiers |= modifier.code
+
+        assert len(self.__pressed_keys) == 6
+        keys = [
+            (0 if key is None else key.code)
+            for key in self.__pressed_keys
+        ]
+
+        return bytes([modifiers, 0] + keys)
