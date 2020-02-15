@@ -200,7 +200,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         while self.is_alive():
             state = self.get_state()
             if state != prev_state:
-                yield self.get_state()
+                yield state
                 prev_state = state
             await asyncio.sleep(self.__state_poll)
 
