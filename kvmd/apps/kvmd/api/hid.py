@@ -45,7 +45,7 @@ class HidApi:
 
     # =====
 
-    @exposed_http("GET", "/hid/state")
+    @exposed_http("GET", "/hid")
     async def __state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return make_json_response(self.__hid.get_state())
 
