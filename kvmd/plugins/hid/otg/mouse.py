@@ -61,7 +61,12 @@ class _WheelEvent(BaseEvent):
 # =====
 class MouseProcess(BaseDeviceProcess):
     def __init__(self, **kwargs: Any) -> None:
-        super().__init__(name="mouse", **kwargs)
+        super().__init__(
+            name="mouse",
+            read_size=0,
+            initial_state={},
+            **kwargs,
+        )
 
         self.__pressed_buttons: int = 0
         self.__x = 0

@@ -65,12 +65,12 @@ export function Mouse() {
 	self.setSocket = function(ws) {
 		__ws = ws;
 		$("stream-box").classList.toggle("stream-box-mouse-enabled", ws);
-		__updateLeds();
+		__updateOnlineLeds();
 	};
 
 	self.setState = function(state) {
 		__online = state.online;
-		__updateLeds();
+		__updateOnlineLeds();
 	};
 
 	self.releaseAll = function() {
@@ -79,15 +79,15 @@ export function Mouse() {
 
 	var __hoverStream = function() {
 		__stream_hovered = true;
-		__updateLeds();
+		__updateOnlineLeds();
 	};
 
 	var __leaveStream = function() {
 		__stream_hovered = false;
-		__updateLeds();
+		__updateOnlineLeds();
 	};
 
-	var __updateLeds = function() {
+	var __updateOnlineLeds = function() {
 		let is_captured = (__stream_hovered || tools.browser.is_ios);
 		let led = "led-gray";
 		let title = "Mouse free";

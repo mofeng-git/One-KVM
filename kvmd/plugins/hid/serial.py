@@ -191,7 +191,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         online = bool(self.__online_shared.value)
         return {
             "online": online,
-            "keyboard": {"online": online},
+            "keyboard": {"features": {"leds": False}, "online": online},
             "mouse": {"online": online},
         }
 

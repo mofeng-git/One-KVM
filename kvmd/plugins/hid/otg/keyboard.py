@@ -65,7 +65,12 @@ class _KeyEvent(BaseEvent):
 # =====
 class KeyboardProcess(BaseDeviceProcess):
     def __init__(self, **kwargs: Any) -> None:
-        super().__init__(name="keyboard", **kwargs)
+        super().__init__(
+            name="keyboard",
+            read_size=1,
+            initial_state={"leds": {"caps": False, "scroll": False, "num": False}},
+            **kwargs,
+        )
 
         self.__pressed_modifiers: Set[keymap.OtgKey] = set()
         self.__pressed_keys: List[Optional[keymap.OtgKey]] = [None] * 6
@@ -87,6 +92,17 @@ class KeyboardProcess(BaseDeviceProcess):
             self._queue_event(_ModifierEvent(otg_key, state))
         else:
             self._queue_event(_KeyEvent(otg_key, state))
+
+    # =====
+
+    def _process_read_report(self, report: bytes) -> None:
+        # https://wiki.osdev.org/USB_Human_Interface_Devices#LED_lamps
+        assert len(report) == 1, report
+        self._update_state("leds", {
+            "caps": bool(report[0] & 2),
+            "scroll": bool(report[0] & 4),
+            "num": bool(report[0] & 1),
+        })
 
     # =====
 

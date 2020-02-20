@@ -21,7 +21,7 @@
 
 
 # https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code
-# https://github.com/NicoHood/HID/blob/master/src/HID-APIs/ImprovedKeylayouts.h
+# https://github.com/NicoHood/HID/blob/master/src/KeyboardLayouts/ImprovedKeylayouts.h
 # https://gist.github.com/MightyPork/6da26e382a7ad91b5496ee55fdc73db2
 
 # -----------------------------------------------------------------------------------

@@ -53,7 +53,7 @@ ul#menu li a#menu-logo {
 	text-decoration: none;
 }
 
-ul#menu img {
+ul#menu li a.menu-item img {
 	vertical-align: middle;
 	margin-right: 10px;
 	height: 20px;
@@ -149,4 +149,10 @@ ul#menu li div.menu-item-content hr {
 	padding: 0;
 	border: none;
 	border-top: var(--border-control-thin);
+}
+
+ul#menu li div.menu-item-content img.sign {
+	vertical-align: middle;
+	margin-right: 10px;
+	height: 20px;
 }

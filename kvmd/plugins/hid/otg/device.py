@@ -29,6 +29,9 @@ import queue
 import errno
 import time
 
+from typing import Dict
+from typing import Any
+
 import setproctitle
 
 from ....logging import get_logger
@@ -43,6 +46,10 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
     def __init__(
         self,
         name: str,
+        read_size: int,
+        initial_state: Dict,
+        changes_queue: multiprocessing.queues.Queue,
+
         device_path: str,
         select_timeout: float,
         write_retries: int,
@@ -53,6 +60,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         super().__init__(daemon=True)
 
         self.__name = name
+        self.__read_size = read_size
+        self.__changes_queue = changes_queue
 
         self.__device_path = device_path
         self.__select_timeout = select_timeout
@@ -62,7 +71,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         self.__fd = -1
         self.__events_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
-        self.__online_shared = multiprocessing.Value("i", 1)
+        self.__state_shared = multiprocessing.Manager().dict(online=True, **initial_state)  # type: ignore
         self.__stop_event = multiprocessing.Event()
 
     def run(self) -> None:
@@ -75,10 +84,12 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         while not self.__stop_event.is_set():
             try:
                 while not self.__stop_event.is_set():
+                    if self.__ensure_device():  # Check device and process reports if needed
+                        self.__read_all_reports()
                     try:
-                        event: BaseEvent = self.__events_queue.get(timeout=1)
+                        event: BaseEvent = self.__events_queue.get(timeout=0.1)
                     except queue.Empty:
-                        self.__ensure_device()  # Check device
+                        pass
                     else:
                         self._process_event(event)
             except Exception:
@@ -89,8 +100,18 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         self.__close_device()
 
-    def is_online(self) -> bool:
-        return bool(self.__online_shared.value and self.is_alive())
+    def get_state(self) -> Dict:
+        return dict(self.__state_shared)
+
+    # =====
+
+    def _process_event(self, event: BaseEvent) -> None:
+        raise NotImplementedError
+
+    def _process_read_report(self, report: bytes) -> None:
+        pass
+
+    # =====
 
     def _stop(self) -> None:
         if self.is_alive():
@@ -98,9 +119,6 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             self.__stop_event.set()
         if self.exitcode is not None:
             self.join()
-
-    def _process_event(self, event: BaseEvent) -> None:
-        raise NotImplementedError
 
     def _queue_event(self, event: BaseEvent) -> None:
         self.__events_queue.put(event)
@@ -116,6 +134,11 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             if close:
                 self.__close_device()
 
+    def _update_state(self, key: str, value: Any) -> None:
+        if self.__state_shared[key] != value:
+            self.__state_shared[key] = value
+            self.__changes_queue.put(None)
+
     # =====
 
     def __write_report(self, report: bytes) -> bool:
@@ -130,7 +153,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             try:
                 written = os.write(self.__fd, report)
                 if written == len(report):
-                    self.__online_shared.value = 1
+                    self._update_state("online", True)
                     return True
                 else:
                     logger.error("HID-%s write() error: written (%s) != report length (%d)",
@@ -151,6 +174,33 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         self.__close_device()
         return False
 
+    def __read_all_reports(self) -> None:
+        if self.__noop or self.__read_size == 0:
+            return
+
+        assert self.__fd >= 0
+        logger = get_logger()
+
+        read = True
+        while read:
+            try:
+                read = bool(select.select([self.__fd], [], [], 0)[0])
+            except Exception as err:
+                logger.error("Can't select() for read HID-%s: %s: %s", self.__name, type(err).__name__, err)
+                break
+
+            if read:
+                try:
+                    report = os.read(self.__fd, self.__read_size)
+                except Exception as err:
+                    if isinstance(err, OSError) and err.errno == errno.EAGAIN:  # pylint: disable=no-member
+                        logger.debug("HID-%s busy/unplugged (read): %s: %s",
+                                     self.__name, type(err).__name__, err)
+                    else:
+                        logger.exception("Can't read report from HID-%s", self.__name)
+                else:
+                    self._process_read_report(report)
+
     def __ensure_device(self) -> bool:
         if self.__noop:
             return True
@@ -159,25 +209,29 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         if self.__fd < 0:
             try:
-                self.__fd = os.open(self.__device_path, os.O_WRONLY|os.O_NONBLOCK)
+                flags = os.O_NONBLOCK
+                flags |= (os.O_RDWR if self.__read_size else os.O_WRONLY)
+                self.__fd = os.open(self.__device_path, flags)
             except FileNotFoundError:
                 logger.error("Missing HID-%s device: %s", self.__name, self.__device_path)
+                time.sleep(self.__select_timeout)
             except Exception as err:
                 logger.error("Can't open HID-%s device: %s: %s: %s",
                              self.__name, self.__device_path, type(err).__name__, err)
+                time.sleep(self.__select_timeout)
 
         if self.__fd >= 0:
             try:
                 if select.select([], [self.__fd], [], self.__select_timeout)[1]:
-                    self.__online_shared.value = 1
+                    self._update_state("online", True)
                     return True
                 else:
-                    logger.debug("HID-%s is busy/unplugged (select)", self.__name)
+                    logger.debug("HID-%s is busy/unplugged (write select)", self.__name)
             except Exception as err:
-                logger.error("Can't select() HID-%s: %s: %s", self.__name, type(err).__name__, err)
+                logger.error("Can't select() for write HID-%s: %s: %s", self.__name, type(err).__name__, err)
             self.__close_device()
 
-        self.__online_shared.value = 0
+        self._update_state("online", False)
         return False
 
     def __close_device(self) -> None:

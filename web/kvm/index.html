@@ -158,7 +158,7 @@
 					<div class="menu-item-content-text">
 						<table>
 							<tr>
-								<td><img src="../share/svg/warning.svg" /></td>
+								<td><img class="sign" src="../share/svg/warning.svg" /></td>
 								<td><b>Mass Storage Device is offline</b></td>
 							</tr>
 						</table>
@@ -169,7 +169,7 @@
 					<div class="menu-item-content-text">
 						<table>
 							<tr>
-								<td><img src="../share/svg/warning.svg" /></td>
+								<td><img class="sign" src="../share/svg/warning.svg" /></td>
 								<td><b>Current image is broken!</b><br><sub>Perhaps uploading was interrupted</sub></td>
 							</tr>
 						</table>
@@ -180,7 +180,7 @@
 					<div class="menu-item-content-text">
 						<table>
 							<tr>
-								<td><img src="../share/svg/warning.svg" /></td>
+								<td><img class="sign" src="../share/svg/warning.svg" /></td>
 								<td><b>Current image is too big for CD-ROM!</b><br><sub>The device filesystem will be truncated to 2.2GiB</sub></td>
 							</tr>
 						</table>
@@ -191,7 +191,7 @@
 					<div class="menu-item-content-text">
 						<table>
 							<tr>
-								<td><img src="../share/svg/info.svg" /></td>
+								<td><img class="sign" src="../share/svg/info.svg" /></td>
 								<td><b>Current image is out of storage</b><br><sub>This image was connected manually using <b>kvmd-otgmsd</b></sub></td>
 							</tr>
 						</table>
@@ -202,7 +202,7 @@
 					<div class="menu-item-content-text">
 						<table>
 							<tr>
-								<td><img src="../share/svg/info.svg" /></td>
+								<td><img class="sign" src="../share/svg/info.svg" /></td>
 								<td><b>Another user uploads an image</b></td>
 							</tr>
 						</table>
@@ -311,7 +311,11 @@
 					<button disabled data-force-hide-menu id="hid-pak-button">&bull; &#x21b3; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
 					<hr>
 					<div class="buttons-row">
-						<button data-force-hide-menu data-shortcut="CapsLock" class="row50">&bull; CapsLock</button>
+						<button data-force-hide-menu data-shortcut="CapsLock" class="row50">
+							&bull;
+							<img class="inline hid-keyboard-leds hid-keyboard-caps-led led-gray feature-disabled" src="../share/svg/led-square.svg" />
+							CapsLock
+						</button>
 						<button data-force-hide-menu data-shortcut="MetaLeft" class="row50">&bull; Left Win</button>
 					</div>
 					<hr>
@@ -427,7 +431,10 @@
 					<div data-code="Backslash" class="key"><p>|<br>\</p></div>
 				</div>
 				<div class="keypad-row">
-					<div data-code="CapsLock" class="key wide-3 left small"><p>Caps Lock</p></div>
+					<div data-code="CapsLock" class="key wide-3 left small">
+						<img class="inline hid-keyboard-leds hid-keyboard-caps-led led-gray feature-disabled" src="../share/svg/led-square.svg" />
+						<p>Caps Lock</p>
+					</div>
 					<div data-code="KeyA" class="key single"><p>A</p></div>
 					<div data-code="KeyS" class="key single"><p>S</p></div>
 					<div data-code="KeyD" class="key single"><p>D</p></div>
@@ -468,7 +475,10 @@
 			<div class="keypad-block">
 				<div class="keypad-row">
 					<div data-code="PrintScreen" class="modifier small"><p><b>&bull;</b><br>Pt/Sq</p></div>
-					<div data-code="ScrollLock" class="key small"><p>ScrLk</p></div>
+					<div data-code="ScrollLock" class="key small">
+						<img class="inline hid-keyboard-leds hid-keyboard-scroll-led led-gray feature-disabled" src="../share/svg/led-square.svg" />
+						<p>ScrLk</p>
+					</div>
 					<div data-code="Pause" class="key small"><p>P/Brk</p></div>
 				</div>
 				<hr>
@@ -515,7 +525,10 @@
 					<div data-code="F12" class="key wide-0 margin-0 small"><p>F12</p></div>
 					<div class="empty-key" style="width:5px"></div>
 					<div data-code="PrintScreen" class="modifier margin-0 small"><p><b>&bull;</b><br>Pt/Sq</p></div>
-					<div data-code="ScrollLock" class="key margin-0 small"><p>ScrLk</p></div>
+					<div data-code="ScrollLock" class="key margin-0 small">
+						<img class="inline hid-keyboard-leds hid-keyboard-scroll-led led-gray feature-disabled" src="../share/svg/led-square.svg" />
+						<p>ScrLk</p>
+					</div>
 					<div data-code="Pause" class="key margin-0 small"><p>P/Brk</p></div>
 					<div data-code="Insert" class="key margin-0 small"><p>Ins</p></div>
 					<div data-code="Home" class="key margin-0 small"><p>Home</p></div>
@@ -556,7 +569,10 @@
 					<div data-code="Backslash" class="key wide-2 left" style="width:78px"><p>|<br>\</p></div>
 				</div>
 				<div class="keypad-row">
-					<div data-code="CapsLock" class="key wide-3 left small"><p>Caps Lock</p></div>
+					<div data-code="CapsLock" class="key wide-3 left small">
+						<img class="inline hid-keyboard-leds hid-keyboard-caps-led led-gray feature-disabled" src="../share/svg/led-square.svg" />
+						<p>Caps Lock</p>
+					</div>
 					<div data-code="KeyA" class="key single"><p>A</p></div>
 					<div data-code="KeyS" class="key single"><p>S</p></div>
 					<div data-code="KeyD" class="key single"><p>D</p></div>

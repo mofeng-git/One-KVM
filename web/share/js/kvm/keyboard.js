@@ -20,7 +20,7 @@
 *****************************************************************************/
 
 
-import {tools, $} from "../tools.js";
+import {tools, $, $$$} from "../tools.js";
 import {Keypad} from "../keypad.js";
 
 
@@ -42,16 +42,16 @@ export function Keyboard() {
 
 		$("keyboard-window").onkeydown = (event) => __keyboardHandler(event, true);
 		$("keyboard-window").onkeyup = (event) => __keyboardHandler(event, false);
-		$("keyboard-window").onfocus = __updateLeds;
-		$("keyboard-window").onblur = __updateLeds;
+		$("keyboard-window").onfocus = __updateOnlineLeds;
+		$("keyboard-window").onblur = __updateOnlineLeds;
 
 		$("stream-window").onkeydown = (event) => __keyboardHandler(event, true);
 		$("stream-window").onkeyup = (event) => __keyboardHandler(event, false);
-		$("stream-window").onfocus = __updateLeds;
-		$("stream-window").onblur = __updateLeds;
+		$("stream-window").onfocus = __updateOnlineLeds;
+		$("stream-window").onblur = __updateOnlineLeds;
 
-		window.addEventListener("focusin", __updateLeds);
-		window.addEventListener("focusout", __updateLeds);
+		window.addEventListener("focusin", __updateOnlineLeds);
+		window.addEventListener("focusout", __updateOnlineLeds);
 
 		if (tools.browser.is_mac) {
 			// https://bugs.chromium.org/p/chromium/issues/detail?id=28089
@@ -68,12 +68,29 @@ export function Keyboard() {
 			self.releaseAll();
 			__ws = ws;
 		}
-		__updateLeds();
+		__updateOnlineLeds();
 	};
 
 	self.setState = function(state) {
 		__online = state.online;
-		__updateLeds();
+		__updateOnlineLeds();
+
+		for (let el of $$$(".hid-keyboard-leds")) {
+			console.log(el, state.features.leds);
+			el.classList.toggle("feature-disabled", !state.features.leds);
+		}
+
+		for (let led of ["caps", "scroll", "num"]) {
+			for (let el of $$$(`.hid-keyboard-${led}-led`)) {
+				if (state.leds[led]) {
+					el.classList.add("led-green");
+					el.classList.remove("led-gray");
+				} else {
+					el.classList.add("led-gray");
+					el.classList.remove("led-green");
+				}
+			}
+		}
 	};
 
 	self.releaseAll = function() {
@@ -84,7 +101,7 @@ export function Keyboard() {
 		__keyboardHandler({code: code}, state);
 	};
 
-	var __updateLeds = function() {
+	var __updateOnlineLeds = function() {
 		let is_captured = (
 			$("stream-window").classList.contains("window-active")
 			|| $("keyboard-window").classList.contains("window-active")

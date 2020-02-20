@@ -80,6 +80,10 @@ img.svg-gray {
 	filter: invert(0.7);
 	vertical-align: middle;
 }
+img.inline {
+	vertical-align: middle;
+	height: 0.8em;
+}
 
 button,
 select {
