@@ -80,9 +80,12 @@ img.svg-gray {
 	filter: invert(0.7);
 	vertical-align: middle;
 }
-img.inline {
+
+img.inline-lamp {
 	vertical-align: middle;
-	height: 0.8em;
+	height: 8px;
+	margin-left: 2px;
+	margin-right: 2px;
 }
 
 button,

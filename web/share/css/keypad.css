@@ -116,13 +116,14 @@ div.keypad div.small {
 	font-size: 0.7em;
 }
 
-div.keypad p {
+div.keypad div.label {
 	margin: 0;
 	position: relative;
 	top: 50%;
 	-webkit-transform: translateY(-50%);
 	transform: translateY(-50%);
 }
+
 div.keypad b {
 	color: var(--cs-key-holded-bg);
 }
