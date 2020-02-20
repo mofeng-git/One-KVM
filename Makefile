@@ -3,7 +3,7 @@
 TESTENV_IMAGE ?= kvmd-testenv
 TESTENV_HID ?= /dev/ttyS10
 TESTENV_VIDEO ?= /dev/video0
-TESTENV_LOOP ?= /dev/loop7
+TESTENV_LOOP ?= $(shell losetup -f)
 
 USTREAMER_MIN_VERSION ?= $(shell grep -o 'ustreamer>=[^"]\+' PKGBUILD | sed 's/ustreamer>=//g')
 
