@@ -5,7 +5,9 @@ Import("env")
 
 
 # =====
-env_path = join(env["PROJECTLIBDEPS_DIR"], env["PIOENV"])
+deps_path = env.get("PROJECT_LIBDEPS_DIR", env.get("PROJECTLIBDEPS_DIR"))
+assert deps_path, deps_path
+env_path = join(deps_path, env["PIOENV"])
 flag_path = join(env_path, ".patched")
 
 if not exists(flag_path):
