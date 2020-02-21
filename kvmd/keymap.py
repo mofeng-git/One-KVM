@@ -389,4 +389,12 @@ KEYMAP: Dict[str, Key] = {
         serial=SerialKey(code=86),
         otg=OtgKey(code=71, is_modifier=False),
     ),
+    "NumLock": Key(
+        serial=SerialKey(code=87),
+        otg=OtgKey(code=83, is_modifier=False),
+    ),
+    "ContextMenu": Key(
+        serial=SerialKey(code=88),
+        otg=OtgKey(code=101, is_modifier=False),
+    ),
 }

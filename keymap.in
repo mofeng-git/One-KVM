@@ -20,7 +20,7 @@
 # ========================================================================== #
 
 
-# https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code
+# https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code/code_values
 # https://github.com/NicoHood/HID/blob/master/src/KeyboardLayouts/ImprovedKeylayouts.h
 # https://gist.github.com/MightyPork/6da26e382a7ad91b5496ee55fdc73db2
 
@@ -113,8 +113,9 @@ AltRight			83				KEY_RIGHT_ALT			0x40	m
 MetaRight			84				KEY_RIGHT_GUI			0x80	m
 Pause				85				KEY_PAUSE				0x48	-
 ScrollLock			86				KEY_SCROLL_LOCK			0x47	-
+NumLock				87				KEY_NUM_LOCK			0x53	-
+ContextMenu			88				KEY_MENU				0x65	-
 #			KEY_NON_US_NUM
-#			KEY_NUM_LOCK
 #			KEYPAD_DIVIDE
 #			KEYPAD_MULTIPLY
 #			KEYPAD_SUBTRACT
@@ -132,5 +133,3 @@ ScrollLock			86				KEY_SCROLL_LOCK			0x47	-
 #			KEYPAD_0
 #			KEYPAD_DOT
 #			KEY_NON_US
-#			KEY_APPLICATION
-#			KEY_MENU

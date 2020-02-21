@@ -82,8 +82,10 @@ INLINE KeyboardKeycode keymap(uint8_t code) {
 		case 80: return KEY_LEFT_GUI;
 		case 78: return KEY_LEFT_SHIFT;
 		case 13: return KEY_M;
+		case 88: return KEY_MENU;
 		case 42: return KEY_MINUS;
 		case 14: return KEY_N;
+		case 87: return KEY_NUM_LOCK;
 		case 15: return KEY_O;
 		case 16: return KEY_P;
 		case 72: return KEY_PAGE_DOWN;
