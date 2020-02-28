@@ -75,11 +75,6 @@ export function Keyboard() {
 		__online = state.online;
 		__updateOnlineLeds();
 
-		for (let el of $$$(".hid-keyboard-leds")) {
-			console.log(el, state.features.leds);
-			el.classList.toggle("feature-disabled", !state.features.leds);
-		}
-
 		for (let led of ["caps", "scroll", "num"]) {
 			for (let el of $$$(`.hid-keyboard-${led}-led`)) {
 				if (state.leds[led]) {

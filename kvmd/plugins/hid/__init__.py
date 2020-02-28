@@ -33,7 +33,7 @@ class BaseHid(BasePlugin):
     def start(self) -> None:
         pass
 
-    def get_state(self) -> Dict:
+    async def get_state(self) -> Dict:
         raise NotImplementedError
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:

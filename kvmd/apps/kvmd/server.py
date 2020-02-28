@@ -228,7 +228,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         await asyncio.gather(*[
             self.__broadcast_event(_Events.INFO_STATE, (await self.__make_info())),
             self.__broadcast_event(_Events.WOL_STATE, self.__wol.get_state()),
-            self.__broadcast_event(_Events.HID_STATE, self.__hid.get_state()),
+            self.__broadcast_event(_Events.HID_STATE, (await self.__hid.get_state())),
             self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state()),
             self.__broadcast_event(_Events.MSD_STATE, (await self.__msd.get_state())),
             self.__broadcast_event(_Events.STREAMER_STATE, (await self.__streamer.get_state())),

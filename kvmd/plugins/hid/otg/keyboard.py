@@ -68,7 +68,7 @@ class KeyboardProcess(BaseDeviceProcess):
         super().__init__(
             name="keyboard",
             read_size=1,
-            initial_state={"leds": {"caps": False, "scroll": False, "num": False}},
+            initial_state={"caps": False, "scroll": False, "num": False},
             **kwargs,
         )
 
@@ -98,11 +98,11 @@ class KeyboardProcess(BaseDeviceProcess):
     def _process_read_report(self, report: bytes) -> None:
         # https://wiki.osdev.org/USB_Human_Interface_Devices#LED_lamps
         assert len(report) == 1, report
-        self._update_state("leds", {
-            "caps": bool(report[0] & 2),
-            "scroll": bool(report[0] & 4),
-            "num": bool(report[0] & 1),
-        })
+        self._update_state(
+            caps=bool(report[0] & 2),
+            scroll=bool(report[0] & 4),
+            num=bool(report[0] & 1),
+        )
 
     # =====
 

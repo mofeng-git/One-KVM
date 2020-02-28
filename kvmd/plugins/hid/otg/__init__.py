@@ -20,16 +20,11 @@
 # ========================================================================== #
 
 
-import asyncio
-import concurrent.futures
-import multiprocessing
-import multiprocessing.queues
-import queue
-import functools
-
 from typing import Dict
 from typing import AsyncGenerator
 from typing import Any
+
+from .... import aiomulti
 
 from ....yamlconf import Option
 
@@ -54,10 +49,10 @@ class Plugin(BaseHid):
         noop: bool,
     ) -> None:
 
-        self.__changes_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
+        self.__state_notifier = aiomulti.AioProcessNotifier()
 
-        self.__keyboard_proc = KeyboardProcess(noop=noop, changes_queue=self.__changes_queue, **keyboard)
-        self.__mouse_proc = MouseProcess(noop=noop, changes_queue=self.__changes_queue, **mouse)
+        self.__keyboard_proc = KeyboardProcess(noop=noop, state_notifier=self.__state_notifier, **keyboard)
+        self.__mouse_proc = MouseProcess(noop=noop, state_notifier=self.__state_notifier, **mouse)
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
@@ -81,31 +76,30 @@ class Plugin(BaseHid):
         self.__keyboard_proc.start()
         self.__mouse_proc.start()
 
-    def get_state(self) -> Dict:
-        keyboard_state = self.__keyboard_proc.get_state()
-        mouse_state = self.__mouse_proc.get_state()
+    async def get_state(self) -> Dict:
+        keyboard_state = await self.__keyboard_proc.get_state()
+        mouse_state = await self.__mouse_proc.get_state()
         return {
             "online": (keyboard_state["online"] and mouse_state["online"]),
-            "keyboard": {"features": {"leds": True}, **keyboard_state},
+            "keyboard": {
+                "online": keyboard_state["online"],
+                "leds": {
+                    "caps": keyboard_state["caps"],
+                    "scroll": keyboard_state["scroll"],
+                    "num": keyboard_state["num"],
+                },
+            },
             "mouse": mouse_state,
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        loop = asyncio.get_running_loop()
-        wait_for_changes = functools.partial(self.__changes_queue.get, timeout=1)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            prev_state: Dict = {}
-            while True:
-                state = self.get_state()
-                if state != prev_state:
-                    yield state
-                    prev_state = state
-                while True:
-                    try:
-                        await loop.run_in_executor(executor, wait_for_changes)
-                        break
-                    except queue.Empty:
-                        pass
+        prev_state: Dict = {}
+        while True:
+            state = await self.get_state()
+            if state != prev_state:
+                yield state
+                prev_state = state
+            await self.__state_notifier.wait()
 
     async def reset(self) -> None:
         self.__keyboard_proc.send_reset_event()

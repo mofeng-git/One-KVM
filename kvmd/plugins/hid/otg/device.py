@@ -30,11 +30,12 @@ import errno
 import time
 
 from typing import Dict
-from typing import Any
 
 import setproctitle
 
 from ....logging import get_logger
+
+from .... import aiomulti
 
 
 # =====
@@ -48,7 +49,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         name: str,
         read_size: int,
         initial_state: Dict,
-        changes_queue: multiprocessing.queues.Queue,
+        state_notifier: aiomulti.AioProcessNotifier,
 
         device_path: str,
         select_timeout: float,
@@ -61,7 +62,6 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         self.__name = name
         self.__read_size = read_size
-        self.__changes_queue = changes_queue
 
         self.__device_path = device_path
         self.__select_timeout = select_timeout
@@ -71,7 +71,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         self.__fd = -1
         self.__events_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
-        self.__state_shared = multiprocessing.Manager().dict(online=True, **initial_state)  # type: ignore
+        self.__state_flags = aiomulti.AioSharedFlags({"online": True, **initial_state}, state_notifier)
         self.__stop_event = multiprocessing.Event()
 
     def run(self) -> None:
@@ -100,8 +100,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         self.__close_device()
 
-    def get_state(self) -> Dict:
-        return dict(self.__state_shared)
+    async def get_state(self) -> Dict:
+        return (await self.__state_flags.get())
 
     # =====
 
@@ -110,6 +110,9 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
     def _process_read_report(self, report: bytes) -> None:
         pass
+
+    def _update_state(self, **kwargs: bool) -> None:
+        self.__state_flags.update(**kwargs)
 
     # =====
 
@@ -134,11 +137,6 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             if close:
                 self.__close_device()
 
-    def _update_state(self, key: str, value: Any) -> None:
-        if self.__state_shared[key] != value:
-            self.__state_shared[key] = value
-            self.__changes_queue.put(None)
-
     # =====
 
     def __write_report(self, report: bytes) -> bool:
@@ -153,7 +151,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             try:
                 written = os.write(self.__fd, report)
                 if written == len(report):
-                    self._update_state("online", True)
+                    self.__state_flags.update(online=True)
                     return True
                 else:
                     logger.error("HID-%s write() error: written (%s) != report length (%d)",
@@ -223,7 +221,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         if self.__fd >= 0:
             try:
                 if select.select([], [self.__fd], [], self.__select_timeout)[1]:
-                    self._update_state("online", True)
+                    self.__state_flags.update(online=True)
                     return True
                 else:
                     logger.debug("HID-%s is busy/unplugged (write select)", self.__name)
@@ -231,7 +229,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                 logger.error("Can't select() for write HID-%s: %s: %s", self.__name, type(err).__name__, err)
             self.__close_device()
 
-        self._update_state("online", False)
+        self.__state_flags.update(online=False)
         return False
 
     def __close_device(self) -> None:

@@ -32,23 +32,28 @@
 #define CMD_SERIAL_SPEED	115200
 #define CMD_RECV_TIMEOUT	100000
 
-#define PROTO_MAGIC						0x33
-#define PROTO_CRC_POLINOM				0xA001
-// -----------------------------------------
-#define PROTO_RESP_OK					0x20
-#define PROTO_RESP_NONE					0x24
-#define PROTO_RESP_CRC_ERROR			0x40
-#define PROTO_RESP_INVALID_ERROR		0x45
-#define PROTO_RESP_TIMEOUT_ERROR		0x48
-// -----------------------------------------
+#define PROTO_MAGIC			0x33
+#define PROTO_CRC_POLINOM	0xA001
+
+#define PROTO_RESP_OK				0x20
+#define PROTO_RESP_NONE				0x24
+#define PROTO_RESP_CRC_ERROR		0x40
+#define PROTO_RESP_INVALID_ERROR	0x45
+#define PROTO_RESP_TIMEOUT_ERROR	0x48
+
+#define PROTO_RESP_PONG_PREFIX	0x80
+#define PROTO_RESP_PONG_CAPS	0b00000001
+#define PROTO_RESP_PONG_SCROLL	0x00000010
+#define PROTO_RESP_PONG_NUM		0x00000100
+
 #define PROTO_CMD_PING					0x01
 #define PROTO_CMD_REPEAT				0x02
 #define PROTO_CMD_RESET_HID				0x10
 #define PROTO_CMD_KEY_EVENT				0x11
-#define PROTO_CMD_MOUSE_BUTTON_EVENT	0x13  // Legacy sequence
+#define PROTO_CMD_MOUSE_BUTTON_EVENT	0x13 // Legacy sequence
 #define PROTO_CMD_MOUSE_MOVE_EVENT		0x12
 #define PROTO_CMD_MOUSE_WHEEL_EVENT		0x14
-// -----------------------------------------
+
 #define PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT		0b10000000
 #define PROTO_CMD_MOUSE_BUTTON_LEFT_STATE		0b00001000
 #define PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT		0b01000000
@@ -58,12 +63,13 @@
 
 
 // -----------------------------------------------------------------------------
-INLINE void cmdResetHid(const uint8_t *buffer) { // 0 bytes
+INLINE uint8_t cmdResetHid(const uint8_t *buffer) { // 0 bytes
 	BootKeyboard.releaseAll();
 	SingleAbsoluteMouse.releaseAll();
+	return PROTO_RESP_OK;
 }
 
-INLINE void cmdKeyEvent(const uint8_t *buffer) { // 2 bytes
+INLINE uint8_t cmdKeyEvent(const uint8_t *buffer) { // 2 bytes
 	KeyboardKeycode code = keymap(buffer[0]);
 
 	if (code != KEY_ERROR_UNDEFINED) {
@@ -73,9 +79,10 @@ INLINE void cmdKeyEvent(const uint8_t *buffer) { // 2 bytes
 			BootKeyboard.release(code);
 		}
 	}
+	return PROTO_RESP_OK;
 }
 
-INLINE void cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
+INLINE uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
 	uint8_t state = buffer[0];
 
 #	define PROCESS_BUTTON(name) { \
@@ -93,9 +100,10 @@ INLINE void cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
 	PROCESS_BUTTON(MIDDLE);
 
 #	undef PROCESS_BUTTON
+	return PROTO_RESP_OK;
 }
 
-INLINE void cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
+INLINE uint8_t cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
 	int x = (int)buffer[0] << 8;
 	x |= (int)buffer[1];
 	x = (x + 32768) / 2; // See /kvmd/apps/otg/hid/keyboard.py for details
@@ -105,13 +113,33 @@ INLINE void cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
 	y = (y + 32768) / 2; // See /kvmd/apps/otg/hid/keyboard.py for details
 
 	SingleAbsoluteMouse.moveTo(x, y);
+	return PROTO_RESP_OK;
 }
 
-INLINE void cmdMouseWheelEvent(const uint8_t *buffer) { // 2 bytes
+INLINE uint8_t cmdMouseWheelEvent(const uint8_t *buffer) { // 2 bytes
 	// delta_x is not supported by hid-project now
 	signed char delta_y = buffer[1];
 
 	SingleAbsoluteMouse.move(0, 0, delta_y);
+	return PROTO_RESP_OK;
+}
+
+INLINE uint8_t cmdPongLeds(const uint8_t *buffer) { // 0 bytes
+	uint8_t leds = BootKeyboard.getLeds();
+	uint8_t response = PROTO_RESP_PONG_PREFIX;
+
+#	define PROCESS_LED(name) { \
+			if (leds & LED_##name##_LOCK) { \
+				response |= PROTO_RESP_PONG_##name; \
+			} \
+		}
+
+	PROCESS_LED(CAPS);
+	PROCESS_LED(SCROLL);
+	PROCESS_LED(NUM);
+
+#	undef PROCESS_LED
+	return response;
 }
 
 
@@ -190,15 +218,14 @@ void loop() {
 				crc |= (uint16_t)buffer[7];
 
 				if (makeCrc16(buffer, 6) == crc) {
-#	define HANDLE(_handler) { _handler(buffer + 2); sendCmdResponse(PROTO_RESP_OK); break; }
+#	define HANDLE(_handler) { sendCmdResponse(_handler(buffer + 2)); break; }
 					switch (buffer[1]) {
 						case PROTO_CMD_RESET_HID:			HANDLE(cmdResetHid);
 						case PROTO_CMD_KEY_EVENT:			HANDLE(cmdKeyEvent);
 						case PROTO_CMD_MOUSE_BUTTON_EVENT:	HANDLE(cmdMouseButtonEvent);
 						case PROTO_CMD_MOUSE_MOVE_EVENT:	HANDLE(cmdMouseMoveEvent);
 						case PROTO_CMD_MOUSE_WHEEL_EVENT:	HANDLE(cmdMouseWheelEvent);
-
-						case PROTO_CMD_PING:	sendCmdResponse(PROTO_RESP_OK); break;
+						case PROTO_CMD_PING:				HANDLE(cmdPongLeds);
 						case PROTO_CMD_REPEAT:	sendCmdResponse(); break;
 						default:				sendCmdResponse(PROTO_RESP_INVALID_ERROR); break;
 					}

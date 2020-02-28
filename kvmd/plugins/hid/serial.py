@@ -23,9 +23,9 @@
 import os
 import signal
 import asyncio
-import dataclasses
 import multiprocessing
 import multiprocessing.queues
+import dataclasses
 import queue
 import struct
 import errno
@@ -40,6 +40,7 @@ import setproctitle
 from ...logging import get_logger
 
 from ... import aiotools
+from ... import aiomulti
 from ... import gpio
 from ... import keymap
 
@@ -141,8 +142,6 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         common_retries: int,
         retries_delay: float,
         noop: bool,
-
-        state_poll: float,
     ) -> None:
 
         multiprocessing.Process.__init__(self, daemon=True)
@@ -158,12 +157,18 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__retries_delay = retries_delay
         self.__noop = noop
 
-        self.__state_poll = state_poll
-
         self.__lock = asyncio.Lock()
 
         self.__events_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
-        self.__online_shared = multiprocessing.Value("i", 1)
+
+        self.__state_notifier = aiomulti.AioProcessNotifier()
+        self.__state_flags = aiomulti.AioSharedFlags({
+            "online": True,
+            "caps": False,
+            "scroll": False,
+            "num": False,
+        }, self.__state_notifier)
+
         self.__stop_event = multiprocessing.Event()
 
     @classmethod
@@ -179,30 +184,35 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             "common_retries": Option(100,    type=valid_int_f1),
             "retries_delay":  Option(0.1,    type=valid_float_f01),
             "noop":           Option(False,  type=valid_bool),
-
-            "state_poll": Option(0.1, type=valid_float_f01),
         }
 
     def start(self) -> None:
         get_logger(0).info("Starting HID daemon ...")
         multiprocessing.Process.start(self)
 
-    def get_state(self) -> Dict:
-        online = bool(self.__online_shared.value)
+    async def get_state(self) -> Dict:
+        state = await self.__state_flags.get()
         return {
-            "online": online,
-            "keyboard": {"features": {"leds": False}, "online": online},
-            "mouse": {"online": online},
+            "online": state["online"],
+            "keyboard": {
+                "online": state["online"],
+                "leds": {
+                    "caps": state["caps"],
+                    "scroll": state["scroll"],
+                    "num": state["num"],
+                },
+            },
+            "mouse": {"online": state["online"]},
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         prev_state: Dict = {}
-        while self.is_alive():
-            state = self.get_state()
+        while True:
+            state = await self.get_state()
             if state != prev_state:
                 yield state
                 prev_state = state
-            await asyncio.sleep(self.__state_poll)
+            await self.__state_notifier.wait()
 
     @aiotools.atomic
     async def reset(self) -> None:
@@ -275,19 +285,13 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         while not self.__stop_event.is_set():
             try:
                 with self.__get_serial() as tty:
-                    passed = 0
                     while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
                         try:
-                            event: _BaseEvent = self.__events_queue.get(timeout=0.05)
+                            event: _BaseEvent = self.__events_queue.get(timeout=0.1)
                         except queue.Empty:
-                            if passed >= 20:  # 20 * 0.05 = 1 sec
-                                self.__process_command(tty, b"\x01\x00\x00\x00\x00")  # Ping
-                                passed = 0
-                            else:
-                                passed += 1
+                            self.__process_command(tty, b"\x01\x00\x00\x00\x00")  # Ping
                         else:
                             self.__process_command(tty, event.make_command())
-                            passed = 0
 
             except serial.SerialException as err:
                 if err.errno == errno.ENOENT:
@@ -341,16 +345,24 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                         logger.error("Got CRC error of request from HID: request=%r", request)
                     elif code == 0x45:  # Unknown command
                         logger.error("HID did not recognize the request=%r", request)
-                        self.__online_shared.value = 1
+                        self.__state_flags.update(online=True)
                         return
                     elif code == 0x24:  # Rebooted?
                         logger.error("No previous command state inside HID, seems it was rebooted")
-                        self.__online_shared.value = 1
+                        self.__state_flags.update(online=True)
                         return
                     elif code == 0x20:  # Done
                         if error_occured:
                             logger.info("Success!")
-                        self.__online_shared.value = 1
+                        self.__state_flags.update(online=True)
+                        return
+                    elif code & 0x80:  # Pong with leds
+                        self.__state_flags.update(
+                            online=True,
+                            caps=bool(code & 0b00000001),
+                            scroll=bool(code & 0x00000010),
+                            num=bool(code & 0x00000100),
+                        )
                         return
                     else:
                         logger.error("Invalid response from HID: request=%r; code=0x%x", request, code)
@@ -358,7 +370,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                 common_retries -= 1
 
             error_occured = True
-            self.__online_shared.value = 0
+            self.__state_flags.update(online=False)
 
             if common_retries and read_retries:
                 logger.error("Retries left: common_retries=%d; read_retries=%d", common_retries, read_retries)
