@@ -22,6 +22,7 @@
 
 import os
 import asyncio
+import asyncio.queues
 import functools
 import contextlib
 import types
@@ -158,3 +159,17 @@ class AioExclusiveRegion:
         _tb: types.TracebackType,
     ) -> None:
         self.exit()
+
+
+# =====
+class AioNotifier:
+    def __init__(self) -> None:
+        self.__queue: asyncio.queues.Queue = asyncio.Queue()
+
+    async def notify(self) -> None:
+        await self.__queue.put(None)
+
+    async def wait(self) -> None:
+        await self.__queue.get()
+        while not self.__queue.empty():
+            await self.__queue.get()

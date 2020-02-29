@@ -148,6 +148,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         self.__system_tasks: List[asyncio.Task] = []
 
+        self.__streamer_notifier = aiotools.AioNotifier()
         self.__reset_streamer = False
         self.__new_streamer_params: Dict = {}
 
@@ -210,11 +211,13 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             value = request.query.get(name)
             if value:
                 self.__new_streamer_params[name] = validator(value)
+        await self.__streamer_notifier.notify()
         return make_json_response()
 
     @exposed_http("POST", "/streamer/reset")
     async def __streamer_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         self.__reset_streamer = True
+        await self.__streamer_notifier.notify()
         return make_json_response()
 
     # ===== WEBSOCKET
@@ -384,6 +387,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             self.__sockets.add(ws)
             remote: Optional[str] = (ws._req.remote if ws._req is not None else None)  # pylint: disable=protected-access
             get_logger().info("Registered new client socket: remote=%s; id=%d; active=%d", remote, id(ws), len(self.__sockets))
+        await self.__streamer_notifier.notify()
 
     async def __remove_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
@@ -397,6 +401,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 raise
             except Exception:
                 pass
+        await self.__streamer_notifier.notify()
 
     # ===== SYSTEM TASKS
 
@@ -420,7 +425,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 self.__reset_streamer = False
 
             prev = cur
-            await asyncio.sleep(0.1)
+            await self.__streamer_notifier.wait()
 
     async def __poll_state(self, event_type: _Events, poller: AsyncGenerator[Dict, None]) -> None:
         async for state in poller:
