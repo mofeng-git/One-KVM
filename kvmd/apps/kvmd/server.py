@@ -24,7 +24,6 @@ import os
 import signal
 import asyncio
 import json
-import time
 
 from enum import Enum
 
@@ -150,15 +149,16 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self.__system_tasks: List[asyncio.Task] = []
 
         self.__reset_streamer = False
-        self.__streamer_params = streamer.get_params()
+        self.__new_streamer_params: Dict = {}
 
     async def __make_info(self) -> Dict:
+        streamer_info = await self.__streamer.get_info()
         return {
             "version": {
                 "kvmd": __version__,
-                "streamer": await self.__streamer.get_version(),
+                "streamer": streamer_info["version"],
             },
-            "streamer": self.__streamer.get_app(),
+            "streamer": streamer_info["app"],
             "meta": await self.__info_manager.get_meta(),
             "extras": await self.__info_manager.get_extras(),
         }
@@ -209,7 +209,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         ]:
             value = request.query.get(name)
             if value:
-                self.__streamer_params[name] = validator(value)
+                self.__new_streamer_params[name] = validator(value)
         return make_json_response()
 
     @exposed_http("POST", "/streamer/reset")
@@ -400,23 +400,21 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     async def __stream_controller(self) -> None:
         prev = 0
-        shutdown_at = 0.0
-
         while True:
             cur = len(self.__sockets)
             if prev == 0 and cur > 0:
-                if not self.__streamer.is_running():
-                    await self.__streamer.start(self.__streamer_params)
+                await self.__streamer.ensure_start(init_restart=True)
             elif prev > 0 and cur == 0:
-                shutdown_at = time.time() + self.__streamer.shutdown_delay
-            elif prev == 0 and cur == 0 and time.time() > shutdown_at:
-                if self.__streamer.is_running():
-                    await self.__streamer.stop()
+                await self.__streamer.ensure_stop(immediately=False)
 
-            if (self.__reset_streamer or self.__streamer_params != self.__streamer.get_params()):
-                if self.__streamer.is_running():
-                    await self.__streamer.stop()
-                    await self.__streamer.start(self.__streamer_params, no_init_restart=True)
+            if self.__reset_streamer or self.__new_streamer_params:
+                start = self.__streamer.is_working()
+                await self.__streamer.ensure_stop(immediately=True)
+                if self.__new_streamer_params:
+                    self.__streamer.set_params(self.__new_streamer_params)
+                    self.__new_streamer_params = {}
+                if start:
+                    await self.__streamer.ensure_start(init_restart=False)
                 self.__reset_streamer = False
 
             prev = cur
