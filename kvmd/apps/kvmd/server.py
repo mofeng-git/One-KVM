@@ -225,31 +225,34 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         ws = aiohttp.web.WebSocketResponse(heartbeat=self.__heartbeat)
         await ws.prepare(request)
         await self.__register_socket(ws)
-        await asyncio.gather(*[
-            self.__broadcast_event(_Events.INFO_STATE, (await self.__make_info())),
-            self.__broadcast_event(_Events.WOL_STATE, self.__wol.get_state()),
-            self.__broadcast_event(_Events.HID_STATE, (await self.__hid.get_state())),
-            self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state()),
-            self.__broadcast_event(_Events.MSD_STATE, (await self.__msd.get_state())),
-            self.__broadcast_event(_Events.STREAMER_STATE, (await self.__streamer.get_state())),
-        ])
-        async for msg in ws:
-            if msg.type == aiohttp.web.WSMsgType.TEXT:
-                try:
-                    data = json.loads(msg.data)
-                    event_type = data.get("event_type")
-                    event = data["event"]
-                except Exception as err:
-                    logger.error("Can't parse JSON event from websocket: %r", err)
-                else:
-                    handler = self.__ws_handlers.get(event_type)
-                    if handler:
-                        await handler(ws, event)
+        try:
+            await asyncio.gather(*[
+                self.__broadcast_event(_Events.INFO_STATE, (await self.__make_info())),
+                self.__broadcast_event(_Events.WOL_STATE, self.__wol.get_state()),
+                self.__broadcast_event(_Events.HID_STATE, (await self.__hid.get_state())),
+                self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state()),
+                self.__broadcast_event(_Events.MSD_STATE, (await self.__msd.get_state())),
+                self.__broadcast_event(_Events.STREAMER_STATE, (await self.__streamer.get_state())),
+            ])
+            async for msg in ws:
+                if msg.type == aiohttp.web.WSMsgType.TEXT:
+                    try:
+                        data = json.loads(msg.data)
+                        event_type = data.get("event_type")
+                        event = data["event"]
+                    except Exception as err:
+                        logger.error("Can't parse JSON event from websocket: %r", err)
                     else:
-                        logger.error("Unknown websocket event: %r", data)
-            else:
-                break
-        return ws
+                        handler = self.__ws_handlers.get(event_type)
+                        if handler:
+                            await handler(ws, event)
+                        else:
+                            logger.error("Unknown websocket event: %r", data)
+                else:
+                    break
+            return ws
+        finally:
+            await self.__remove_socket(ws)
 
     @exposed_ws("ping")
     async def __ws_ping_handler(self, ws: aiohttp.web.WebSocketResponse, _: Dict) -> None:
@@ -268,7 +271,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         app.on_cleanup.append(self.__on_cleanup)
 
         self.__run_system_task(self.__stream_controller)
-        self.__run_system_task(self.__poll_dead_sockets)
         self.__run_system_task(self.__poll_state, _Events.HID_STATE, self.__hid.poll_state())
         self.__run_system_task(self.__poll_state, _Events.ATX_STATE, self.__atx.poll_state())
         self.__run_system_task(self.__poll_state, _Events.MSD_STATE, self.__msd.poll_state())
@@ -418,13 +420,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 self.__reset_streamer = False
 
             prev = cur
-            await asyncio.sleep(0.1)
-
-    async def __poll_dead_sockets(self) -> None:
-        while True:
-            for ws in list(self.__sockets):
-                if ws.closed or ws._req is None or ws._req.transport is None:  # pylint: disable=protected-access
-                    await self.__remove_socket(ws)
             await asyncio.sleep(0.1)
 
     async def __poll_state(self, event_type: _Events, poller: AsyncGenerator[Dict, None]) -> None:
