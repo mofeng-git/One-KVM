@@ -45,7 +45,6 @@ from ....validators.os import valid_abs_dir
 from ....validators.os import valid_command
 
 from .... import aiotools
-from .... import aioregion
 
 from .. import MsdError
 from .. import MsdIsBusyError
@@ -111,7 +110,7 @@ class _State:
         self.vd: Optional[_VirtualDriveState] = None
 
         self._lock = asyncio.Lock()
-        self._region = aioregion.AioExclusiveRegion(MsdIsBusyError)
+        self._region = aiotools.AioExclusiveRegion(MsdIsBusyError)
 
     @contextlib.asynccontextmanager
     async def busy(self, check_online: bool=True) -> AsyncGenerator[None, None]:

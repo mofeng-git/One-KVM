@@ -29,7 +29,6 @@ from typing import AsyncGenerator
 from ...logging import get_logger
 
 from ... import aiotools
-from ... import aioregion
 from ... import gpio
 
 from ...yamlconf import Option
@@ -75,7 +74,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
 
         self.__state_poll = state_poll
 
-        self.__region = aioregion.AioExclusiveRegion(AtxIsBusyError)
+        self.__region = aiotools.AioExclusiveRegion(AtxIsBusyError)
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
@@ -163,7 +162,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def __click(self, name: str, pin: int, delay: float) -> None:
-        with aiotools.unregion_only_on_exception(self.__region):
+        with self.__region.exit_only_on_exception():
             await self.__inner_click(name, pin, delay)
 
     @aiotools.tasked

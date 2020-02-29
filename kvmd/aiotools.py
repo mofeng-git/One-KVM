@@ -24,6 +24,7 @@ import os
 import asyncio
 import functools
 import contextlib
+import types
 
 import typing
 
@@ -32,13 +33,12 @@ from typing import Callable
 from typing import Coroutine
 from typing import Generator
 from typing import AsyncGenerator
+from typing import Type
 from typing import TypeVar
 from typing import Any
 
 import aiofiles
 import aiofiles.base
-
-from . import aioregion
 
 from .logging import get_logger
 
@@ -104,16 +104,6 @@ def run_sync(coro: Coroutine[Any, Any, _RetvalT]) -> _RetvalT:
 
 
 # =====
-@contextlib.contextmanager
-def unregion_only_on_exception(region: aioregion.AioExclusiveRegion) -> Generator[None, None, None]:
-    region.enter()
-    try:
-        yield
-    except:  # noqa: E722
-        region.exit()
-        raise
-
-
 @contextlib.asynccontextmanager
 async def unlock_only_on_exception(lock: asyncio.Lock) -> AsyncGenerator[None, None]:
     await lock.acquire()
@@ -129,3 +119,42 @@ async def afile_write_now(afile: aiofiles.base.AiofilesContextManager, data: byt
     await afile.write(data)
     await afile.flush()
     await run_async(os.fsync, afile.fileno())
+
+
+# =====
+class AioExclusiveRegion:
+    def __init__(self, exc_type: Type[Exception]) -> None:
+        self.__exc_type = exc_type
+        self.__busy = False
+
+    def is_busy(self) -> bool:
+        return self.__busy
+
+    def enter(self) -> None:
+        if not self.__busy:
+            self.__busy = True
+            return
+        raise self.__exc_type()
+
+    def exit(self) -> None:
+        self.__busy = False
+
+    @contextlib.contextmanager
+    def exit_only_on_exception(self) -> Generator[None, None, None]:
+        self.enter()
+        try:
+            yield
+        except:  # noqa: E722
+            self.exit()
+            raise
+
+    def __enter__(self) -> None:
+        self.enter()
+
+    def __exit__(
+        self,
+        _exc_type: Type[BaseException],
+        _exc: BaseException,
+        _tb: types.TracebackType,
+    ) -> None:
+        self.exit()

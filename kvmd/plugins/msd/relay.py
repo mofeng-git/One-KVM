@@ -40,7 +40,6 @@ import aiofiles.base
 from ...logging import get_logger
 
 from ... import aiotools
-from ... import aioregion
 from ... import gpio
 
 from ...yamlconf import Option
@@ -174,7 +173,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__init_retries = init_retries
         self.__reset_delay = reset_delay
 
-        self.__region = aioregion.AioExclusiveRegion(MsdIsBusyError)
+        self.__region = aiotools.AioExclusiveRegion(MsdIsBusyError)
 
         self.__device_info: Optional[_DeviceInfo] = None
         self.__connected = False
@@ -235,7 +234,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def reset(self) -> None:
-        with aiotools.unregion_only_on_exception(self.__region):
+        with self.__region.exit_only_on_exception():
             await self.__inner_reset()
 
     @aiotools.tasked

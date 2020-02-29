@@ -24,7 +24,7 @@ import asyncio
 
 import pytest
 
-from kvmd.aioregion import AioExclusiveRegion
+from kvmd.aiotools import AioExclusiveRegion
 
 
 # =====
@@ -34,7 +34,7 @@ class RegionIsBusyError(Exception):
 
 # =====
 @pytest.mark.asyncio
-async def test_ok__access_one() -> None:
+async def test_ok__region__access_one() -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func() -> None:
@@ -51,7 +51,7 @@ async def test_ok__access_one() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fail__access_one() -> None:
+async def test_fail__region__access_one() -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func() -> None:
@@ -71,7 +71,7 @@ async def test_fail__access_one() -> None:
 
 # =====
 @pytest.mark.asyncio
-async def test_ok__access_two() -> None:
+async def test_ok__region__access_two() -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func1() -> None:
@@ -94,7 +94,7 @@ async def test_ok__access_two() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fail__access_two() -> None:
+async def test_fail__region__access_two() -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func1() -> None:
