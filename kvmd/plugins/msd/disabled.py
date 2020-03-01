@@ -20,12 +20,13 @@
 # ========================================================================== #
 
 
-import asyncio
 import contextlib
 
 from typing import Dict
 from typing import AsyncGenerator
 from typing import Optional
+
+from ... import aiotools
 
 from . import MsdOperationError
 from . import BaseMsd
@@ -55,7 +56,7 @@ class Plugin(BaseMsd):
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         while True:
             yield (await self.get_state())
-            await asyncio.sleep(60)
+            await aiotools.wait_infinite()
 
     async def reset(self) -> None:
         raise MsdDisabledError()

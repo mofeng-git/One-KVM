@@ -20,10 +20,10 @@
 # ========================================================================== #
 
 
-import asyncio
-
 from typing import Dict
 from typing import AsyncGenerator
+
+from ... import aiotools
 
 from . import AtxOperationError
 from . import BaseAtx
@@ -50,7 +50,7 @@ class Plugin(BaseAtx):
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         while True:
             yield self.get_state()
-            await asyncio.sleep(60)
+            await aiotools.wait_infinite()
 
     # =====
 

@@ -105,6 +105,11 @@ def run_sync(coro: Coroutine[Any, Any, _RetvalT]) -> _RetvalT:
 
 
 # =====
+async def wait_infinite() -> None:
+    await asyncio.get_event_loop().create_future()
+
+
+# =====
 @contextlib.asynccontextmanager
 async def unlock_only_on_exception(lock: asyncio.Lock) -> AsyncGenerator[None, None]:
     await lock.acquire()
