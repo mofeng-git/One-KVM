@@ -234,7 +234,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def reset(self) -> None:
-        with self.__region.exit_only_on_exception():
+        async with self.__region.exit_only_on_exception():
             await self.__inner_reset()
 
     @aiotools.tasked
@@ -254,7 +254,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             try:
                 gpio.write(self.__reset_pin, False)
             finally:
-                self.__region.exit()
+                await self.__region.exit()
                 await self.__state_queue.put(await self.get_state())
 
     @aiotools.atomic
@@ -277,7 +277,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         async with self.__working():
             notify = False
             try:
-                with self.__region:
+                async with self.__region:
                     if self.__connected:
                         raise MsdConnectedError()
                     notify = True
@@ -294,7 +294,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         async with self.__working():
             notify = False
             try:
-                with self.__region:
+                async with self.__region:
                     if not self.__connected:
                         raise MsdDisconnectedError()
                     notify = True
@@ -315,7 +315,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @contextlib.asynccontextmanager
     async def write_image(self, name: str) -> AsyncGenerator[None, None]:
         async with self.__working():
-            self.__region.enter()
+            await self.__region.enter()
             try:
                 assert self.__device_info
                 if self.__connected:
@@ -333,7 +333,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await self.__close_device_file()
                     await self.__load_device_info()
                 finally:
-                    self.__region.exit()
+                    await self.__region.exit()
                     await self.__state_queue.put(await self.get_state())
 
     async def write_image_chunk(self, chunk: bytes) -> int:

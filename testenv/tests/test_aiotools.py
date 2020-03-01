@@ -39,14 +39,14 @@ async def test_ok__region__access_one() -> None:
 
     async def func() -> None:
         assert not region.is_busy()
-        with region:
+        async with region:
             assert region.is_busy()
         assert not region.is_busy()
 
     await func()
 
     assert not region.is_busy()
-    region.exit()
+    await region.exit()
     assert not region.is_busy()
 
 
@@ -56,16 +56,16 @@ async def test_fail__region__access_one() -> None:
 
     async def func() -> None:
         assert not region.is_busy()
-        with region:
+        async with region:
             assert region.is_busy()
-            region.enter()
+            await region.enter()
         assert not region.is_busy()
 
     with pytest.raises(RegionIsBusyError):
         await func()
 
     assert not region.is_busy()
-    region.exit()
+    await region.exit()
     assert not region.is_busy()
 
 
@@ -75,21 +75,21 @@ async def test_ok__region__access_two() -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func1() -> None:
-        with region:
+        async with region:
             await asyncio.sleep(1)
         print("done func1()")
 
     async def func2() -> None:
         await asyncio.sleep(2)
         print("waiking up func2()")
-        with region:
+        async with region:
             await asyncio.sleep(1)
         print("done func2()")
 
     await asyncio.gather(func1(), func2())
 
     assert not region.is_busy()
-    region.exit()
+    await region.exit()
     assert not region.is_busy()
 
 
@@ -98,13 +98,13 @@ async def test_fail__region__access_two() -> None:
     region = AioExclusiveRegion(RegionIsBusyError)
 
     async def func1() -> None:
-        with region:
+        async with region:
             await asyncio.sleep(2)
         print("done func1()")
 
     async def func2() -> None:
         await asyncio.sleep(1)
-        with region:
+        async with region:
             await asyncio.sleep(1)
         print("done func2()")
 
@@ -113,5 +113,5 @@ async def test_fail__region__access_two() -> None:
     assert type(results[1]) == RegionIsBusyError  # pylint: disable=unidiomatic-typecheck
 
     assert not region.is_busy()
-    region.exit()
+    await region.exit()
     assert not region.is_busy()

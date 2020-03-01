@@ -162,7 +162,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def __click(self, name: str, pin: int, delay: float) -> None:
-        with self.__region.exit_only_on_exception():
+        async with self.__region.exit_only_on_exception():
             await self.__inner_click(name, pin, delay)
 
     @aiotools.tasked
@@ -176,5 +176,5 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
                 gpio.write(pin, False)
                 await asyncio.sleep(1)
             finally:
-                self.__region.exit()
+                await self.__region.exit()
         get_logger(0).info("Clicked ATX button %r", name)

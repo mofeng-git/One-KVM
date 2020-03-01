@@ -32,7 +32,6 @@ import typing
 from typing import List
 from typing import Callable
 from typing import Coroutine
-from typing import Generator
 from typing import AsyncGenerator
 from typing import Type
 from typing import TypeVar
@@ -136,34 +135,34 @@ class AioExclusiveRegion:
     def is_busy(self) -> bool:
         return self.__busy
 
-    def enter(self) -> None:
+    async def enter(self) -> None:
         if not self.__busy:
             self.__busy = True
             return
         raise self.__exc_type()
 
-    def exit(self) -> None:
+    async def exit(self) -> None:
         self.__busy = False
 
-    @contextlib.contextmanager
-    def exit_only_on_exception(self) -> Generator[None, None, None]:
-        self.enter()
+    @contextlib.asynccontextmanager
+    async def exit_only_on_exception(self) -> AsyncGenerator[None, None]:
+        await self.enter()
         try:
             yield
         except:  # noqa: E722
-            self.exit()
+            await self.exit()
             raise
 
-    def __enter__(self) -> None:
-        self.enter()
+    async def __aenter__(self) -> None:
+        await self.enter()
 
-    def __exit__(
+    async def __aexit__(
         self,
         _exc_type: Type[BaseException],
         _exc: BaseException,
         _tb: types.TracebackType,
     ) -> None:
-        self.exit()
+        await self.exit()
 
 
 # =====

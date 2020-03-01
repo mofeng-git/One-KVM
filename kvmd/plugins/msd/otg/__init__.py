@@ -114,7 +114,7 @@ class _State:
 
     @contextlib.asynccontextmanager
     async def busy(self, check_online: bool=True) -> AsyncGenerator[None, None]:
-        with self._region:
+        async with self._region:
             async with self._lock:
                 await self.__notifier.notify()
                 if check_online:
@@ -304,7 +304,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @contextlib.asynccontextmanager
     async def write_image(self, name: str) -> AsyncGenerator[None, None]:
         try:
-            with self.__state._region:  # pylint: disable=protected-access
+            async with self.__state._region:  # pylint: disable=protected-access
                 try:
                     async with self.__state._lock:  # pylint: disable=protected-access
                         await self.__state_notifier.notify()
