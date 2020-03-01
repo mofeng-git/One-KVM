@@ -103,8 +103,8 @@ class _VirtualDriveState:
 
 
 class _State:
-    def __init__(self, changes_queue: asyncio.queues.Queue) -> None:
-        self.__changes_queue = changes_queue
+    def __init__(self, notifier: aiotools.AioNotifier) -> None:
+        self.__notifier = notifier
 
         self.storage: Optional[_StorageState] = None
         self.vd: Optional[_VirtualDriveState] = None
@@ -116,13 +116,13 @@ class _State:
     async def busy(self, check_online: bool=True) -> AsyncGenerator[None, None]:
         with self._region:
             async with self._lock:
-                await self.__changes_queue.put(None)
+                await self.__notifier.notify()
                 if check_online:
                     if self.vd is None:
                         raise MsdOfflineError()
                     assert self.storage
                 yield
-        await self.__changes_queue.put(None)
+        await self.__notifier.notify()
 
     def is_busy(self) -> bool:
         return self._region.is_busy()
@@ -154,9 +154,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__new_file_written = 0
         self.__new_file_tick = 0.0
 
-        self.__changes_queue: asyncio.queues.Queue = asyncio.Queue()
-
-        self.__state = _State(self.__changes_queue)
+        self.__state_notifier = aiotools.AioNotifier()
+        self.__state = _State(self.__state_notifier)
 
         logger = get_logger(0)
         logger.info("Using OTG gadget %r as MSD", gadget)
@@ -215,15 +214,15 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 if inotify_task.done():
                     RuntimeError("Inotify task is dead")
 
-                try:
-                    await asyncio.wait_for(self.__changes_queue.get(), timeout=0.1)
-                except asyncio.TimeoutError:
-                    continue
-
                 state = await self.get_state()
                 if state != prev_state:
                     yield state
                     prev_state = state
+
+                await asyncio.wait([
+                    inotify_task,
+                    self.__state_notifier.wait(),
+                ], return_when=asyncio.FIRST_COMPLETED)
         finally:
             if not inotify_task.done():
                 inotify_task.cancel()
@@ -308,7 +307,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             with self.__state._region:  # pylint: disable=protected-access
                 try:
                     async with self.__state._lock:  # pylint: disable=protected-access
-                        await self.__changes_queue.put(None)
+                        await self.__state_notifier.notify()
                         assert self.__state.storage
                         assert self.__state.vd
 
@@ -324,7 +323,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         self.__new_file_written = 0
                         self.__new_file = await aiofiles.open(path, mode="w+b", buffering=0)
 
-                    await self.__changes_queue.put(None)
+                    await self.__state_notifier.notify()
                     yield
                     self.__set_image_complete(name, True)
 
@@ -340,7 +339,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             # Между закрытием файла и эвентом айнотифи состояние может быть не обновлено,
             # так что форсим обновление вручную, чтобы получить актуальное состояние.
             await self.__reload_state()
-            await self.__changes_queue.put(None)
+            await self.__state_notifier.notify()
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__new_file
@@ -350,7 +349,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         if self.__new_file_tick + 1 < now:
             # Это нужно для ручного оповещения о свободном пространстве на диске, см. get_state()
             self.__new_file_tick = now
-            await self.__changes_queue.put(None)
+            await self.__state_notifier.notify()
         return self.__new_file_written
 
     async def remove(self, name: str) -> None:
@@ -399,7 +398,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 while True:
                     # Активно ждем, пока не будут на месте все каталоги.
                     await self.__reload_state()
-                    await self.__changes_queue.put(None)
+                    await self.__state_notifier.notify()
                     if self.__state.vd:
                         break
                     await asyncio.sleep(5)
@@ -411,7 +410,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                     # После установки вотчеров еще раз проверяем стейт, чтобы ничего не потерять
                     await self.__reload_state()
-                    await self.__changes_queue.put(None)
+                    await self.__state_notifier.notify()
 
                     while self.__state.vd:  # Если живы после предыдущей проверки
                         need_restart = False
@@ -427,7 +426,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                             break
                         if need_reload_state:
                             await self.__reload_state()
-                            await self.__changes_queue.put(None)
+                            await self.__state_notifier.notify()
             except asyncio.CancelledError:  # pylint: disable=try-except-raise
                 raise
             except Exception:
