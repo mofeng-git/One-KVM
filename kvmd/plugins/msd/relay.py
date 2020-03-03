@@ -25,7 +25,6 @@ import stat
 import fcntl
 import struct
 import asyncio
-import asyncio.queues
 import contextlib
 import dataclasses
 
@@ -173,15 +172,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__init_retries = init_retries
         self.__reset_delay = reset_delay
 
-        self.__region = aiotools.AioExclusiveRegion(MsdIsBusyError)
-
         self.__device_info: Optional[_DeviceInfo] = None
         self.__connected = False
 
         self.__device_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__written = 0
 
-        self.__state_queue: asyncio.queues.Queue = asyncio.Queue()
+        self.__state_notifier = aiotools.AioNotifier()
+        self.__region = aiotools.AioExclusiveRegion(MsdIsBusyError, self.__state_notifier)
 
         logger = get_logger(0)
         logger.info("Using %r as MSD", self.__device_path)
@@ -229,16 +227,22 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
+        prev_state: Dict = {}
         while True:
-            yield (await self.__state_queue.get())
+            state = await self.get_state()
+            if state != prev_state:
+                yield state
+                prev_state = state
+            await self.__state_notifier.wait()
 
     @aiotools.atomic
     async def reset(self) -> None:
-        async with self.__region.exit_only_on_exception():
-            await self.__inner_reset()
+        await aiotools.run_region_task(
+            "Can't reset MSD or operation was not completed",
+            self.__region, self.__inner_reset,
+        )
 
-    @aiotools.tasked
-    @aiotools.muted("Can't reset MSD or operation was not completed")
+    @aiotools.atomic
     async def __inner_reset(self) -> None:
         try:
             gpio.write(self.__reset_pin, True)
@@ -251,20 +255,19 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             await self.__load_device_info()
             get_logger(0).info("MSD reset has been successful")
         finally:
-            try:
-                gpio.write(self.__reset_pin, False)
-            finally:
-                await self.__region.exit()
-                await self.__state_queue.put(await self.get_state())
+            gpio.write(self.__reset_pin, False)
 
     @aiotools.atomic
     async def cleanup(self) -> None:
-        await self.__close_device_file()
-        gpio.write(self.__target_pin, False)
-        gpio.write(self.__reset_pin, False)
+        try:
+            await self.__close_device_file()
+        finally:
+            gpio.write(self.__target_pin, False)
+            gpio.write(self.__reset_pin, False)
 
     # =====
 
+    @aiotools.atomic
     async def set_params(self, name: Optional[str]=None, cdrom: Optional[bool]=None) -> None:
         async with self.__working():
             if name is not None:
@@ -275,66 +278,50 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @aiotools.atomic
     async def connect(self) -> None:
         async with self.__working():
-            notify = False
-            try:
-                async with self.__region:
-                    if self.__connected:
-                        raise MsdConnectedError()
-                    notify = True
+            async with self.__region:
+                if self.__connected:
+                    raise MsdConnectedError()
 
-                    gpio.write(self.__target_pin, True)
-                    self.__connected = True
-                    get_logger(0).info("MSD switched to Server")
-            finally:
-                if notify:
-                    await self.__state_queue.put(await self.get_state())
+                gpio.write(self.__target_pin, True)
+                self.__connected = True
+                get_logger(0).info("MSD switched to Server")
 
     @aiotools.atomic
     async def disconnect(self) -> None:
         async with self.__working():
-            notify = False
-            try:
-                async with self.__region:
-                    if not self.__connected:
-                        raise MsdDisconnectedError()
-                    notify = True
+            async with self.__region:
+                if not self.__connected:
+                    raise MsdDisconnectedError()
 
-                    gpio.write(self.__target_pin, False)
-                    try:
-                        await self.__load_device_info()
-                    except Exception:
-                        if self.__connected:
-                            gpio.write(self.__target_pin, True)
-                        raise
-                    self.__connected = False
-                    get_logger(0).info("MSD switched to KVM: %s", self.__device_info)
-            finally:
-                if notify:
-                    await self.__state_queue.put(await self.get_state())
+                gpio.write(self.__target_pin, False)
+                try:
+                    await self.__load_device_info()
+                except Exception:
+                    if self.__connected:
+                        gpio.write(self.__target_pin, True)
+                    raise
+                self.__connected = False
+                get_logger(0).info("MSD switched to KVM: %s", self.__device_info)
 
     @contextlib.asynccontextmanager
     async def write_image(self, name: str) -> AsyncGenerator[None, None]:
         async with self.__working():
-            await self.__region.enter()
-            try:
-                assert self.__device_info
-                if self.__connected:
-                    raise MsdConnectedError()
-
-                self.__device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
-                self.__written = 0
-
-                await self.__write_image_info(name, complete=False)
-                await self.__state_queue.put(await self.get_state())
-                yield
-                await self.__write_image_info(name, complete=True)
-            finally:
+            async with self.__region:
                 try:
+                    assert self.__device_info
+                    if self.__connected:
+                        raise MsdConnectedError()
+
+                    self.__device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
+                    self.__written = 0
+
+                    await self.__write_image_info(name, complete=False)
+                    await self.__state_notifier.notify()
+                    yield
+                    await self.__write_image_info(name, complete=True)
+                finally:
                     await self.__close_device_file()
                     await self.__load_device_info()
-                finally:
-                    await self.__region.exit()
-                    await self.__state_queue.put(await self.get_state())
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__device_file
@@ -342,6 +329,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__written += len(chunk)
         return self.__written
 
+    @aiotools.atomic
     async def remove(self, name: str) -> None:
         async with self.__working():
             raise MsdMultiNotSupported()

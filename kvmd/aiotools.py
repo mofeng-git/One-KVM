@@ -24,7 +24,6 @@ import os
 import asyncio
 import asyncio.queues
 import functools
-import contextlib
 import types
 
 import typing
@@ -32,7 +31,6 @@ import typing
 from typing import List
 from typing import Callable
 from typing import Coroutine
-from typing import AsyncGenerator
 from typing import Type
 from typing import TypeVar
 from typing import Optional
@@ -57,27 +55,6 @@ def atomic(method: _MethodT) -> _MethodT:
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
         return (await asyncio.shield(method(*args, **kwargs)))
     return typing.cast(_MethodT, wrapper)
-
-
-def muted(msg: str) -> Callable[[_MethodT], Callable[..., None]]:
-    def make_wrapper(method: _MethodT) -> Callable[..., None]:
-        @functools.wraps(method)
-        async def wrapper(*args: Any, **kwargs: Any) -> None:
-            try:
-                await method(*args, **kwargs)
-            except asyncio.CancelledError:  # pylint: disable=try-except-raise
-                raise
-            except Exception:
-                get_logger(0).exception(msg)
-        return typing.cast(Callable[..., None], wrapper)
-    return make_wrapper
-
-
-def tasked(method: Callable[..., Any]) -> Callable[..., asyncio.Task]:
-    @functools.wraps(method)
-    async def wrapper(*args: Any, **kwargs: Any) -> asyncio.Task:
-        return create_short_task(method(*args, **kwargs))
-    return typing.cast(Callable[..., asyncio.Task], wrapper)
 
 
 # =====
@@ -107,17 +84,6 @@ def run_sync(coro: Coroutine[Any, Any, _RetvalT]) -> _RetvalT:
 # =====
 async def wait_infinite() -> None:
     await asyncio.get_event_loop().create_future()
-
-
-# =====
-@contextlib.asynccontextmanager
-async def unlock_only_on_exception(lock: asyncio.Lock) -> AsyncGenerator[None, None]:
-    await lock.acquire()
-    try:
-        yield
-    except:  # noqa: E722
-        lock.release()
-        raise
 
 
 # =====
@@ -154,6 +120,9 @@ class AioExclusiveRegion:
 
         self.__busy = False
 
+    def get_exc_type(self) -> Type[Exception]:
+        return self.__exc_type
+
     def is_busy(self) -> bool:
         return self.__busy
 
@@ -174,15 +143,6 @@ class AioExclusiveRegion:
         if self.__notifier:
             await self.__notifier.notify()
 
-    @contextlib.asynccontextmanager
-    async def exit_only_on_exception(self) -> AsyncGenerator[None, None]:
-        await self.enter()
-        try:
-            yield
-        except:  # noqa: E722
-            await self.exit()
-            raise
-
     async def __aenter__(self) -> None:
         await self.enter()
 
@@ -194,3 +154,34 @@ class AioExclusiveRegion:
     ) -> None:
 
         await self.exit()
+
+
+async def run_region_task(
+    msg: str,
+    region: AioExclusiveRegion,
+    method: Callable[..., Coroutine[Any, Any, None]],
+    *args: Any,
+    **kwargs: Any,
+) -> None:
+
+    entered = asyncio.Future()  # type: ignore
+
+    async def wrapper() -> None:
+        try:
+            async with region:
+                entered.set_result(None)
+                await method(*args, **kwargs)
+        except asyncio.CancelledError:  # pylint: disable=try-except-raise
+            raise
+        except region.get_exc_type():
+            raise
+        except Exception:
+            get_logger(0).exception(msg)
+
+    task = create_short_task(wrapper())
+    await asyncio.wait([entered, task], return_when=asyncio.FIRST_COMPLETED)
+
+    if entered.done():
+        return
+    if (exc := task.exception()) is not None:  # noqa: E203,E231
+        raise exc

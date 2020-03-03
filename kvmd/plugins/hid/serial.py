@@ -157,7 +157,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__retries_delay = retries_delay
         self.__noop = noop
 
-        self.__lock = asyncio.Lock()
+        self.__reset_wip = False
 
         self.__events_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
 
@@ -216,42 +216,39 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
     @aiotools.atomic
     async def reset(self) -> None:
-        async with aiotools.unlock_only_on_exception(self.__lock):
-            await self.__inner_reset()
-
-    @aiotools.tasked
-    @aiotools.muted("Can't reset HID or operation was not completed")
-    async def __inner_reset(self) -> None:
-        try:
-            gpio.write(self.__reset_pin, True)
-            await asyncio.sleep(self.__reset_delay)
-        finally:
+        if not self.__reset_wip:
             try:
-                gpio.write(self.__reset_pin, False)
-                await asyncio.sleep(1)
+                self.__reset_wip = True
+                gpio.write(self.__reset_pin, True)
+                await asyncio.sleep(self.__reset_delay)
             finally:
-                self.__lock.release()
-        get_logger(0).info("Reset HID performed")
+                try:
+                    gpio.write(self.__reset_pin, False)
+                    await asyncio.sleep(1)
+                finally:
+                    self.__reset_wip = False
+            get_logger().info("Reset HID performed")
+        else:
+            get_logger().info("Another reset HID in progress")
 
     @aiotools.atomic
     async def cleanup(self) -> None:
         logger = get_logger(0)
-        async with self.__lock:
-            try:
-                if self.is_alive():
-                    logger.info("Stopping HID daemon ...")
-                    self.__stop_event.set()
-                if self.exitcode is not None:
-                    self.join()
-                if os.path.exists(self.__device_path):
-                    get_logger().info("Clearing HID events ...")
-                    try:
-                        with self.__get_serial() as tty:
-                            self.__process_command(tty, b"\x10\x00\x00\x00\x00")
-                    except Exception:
-                        logger.exception("Can't clear HID events")
-            finally:
-                gpio.write(self.__reset_pin, False)
+        try:
+            if self.is_alive():
+                logger.info("Stopping HID daemon ...")
+                self.__stop_event.set()
+            if self.exitcode is not None:
+                self.join()
+            if os.path.exists(self.__device_path):
+                get_logger().info("Clearing HID events ...")
+                try:
+                    with self.__get_serial() as tty:
+                        self.__process_command(tty, b"\x10\x00\x00\x00\x00")
+                except Exception:
+                    logger.exception("Can't clear HID events")
+        finally:
+            gpio.write(self.__reset_pin, False)
 
     # =====
 
@@ -272,8 +269,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
     async def __queue_event(self, event: _BaseEvent) -> None:
         if not self.__stop_event.is_set():
-            async with self.__lock:
-                self.__events_queue.put(event)
+            self.__events_queue.put_nowait(event)
 
     def run(self) -> None:  # pylint: disable=too-many-branches
         logger = get_logger(0)

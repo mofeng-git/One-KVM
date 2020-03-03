@@ -352,6 +352,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             await self.__state_notifier.notify()
         return self.__new_file_written
 
+    @aiotools.atomic
     async def remove(self, name: str) -> None:
         async with self.__state.busy():
             assert self.__state.storage
