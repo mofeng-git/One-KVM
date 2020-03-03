@@ -36,7 +36,7 @@ class AioProcessNotifier:
         self.__queue: multiprocessing.queues.Queue = multiprocessing.Queue()
 
     def notify(self) -> None:
-        self.__queue.put(None)
+        self.__queue.put_nowait(None)
 
     async def wait(self) -> None:
         while not (await aiotools.run_async(self.__inner_wait)):
