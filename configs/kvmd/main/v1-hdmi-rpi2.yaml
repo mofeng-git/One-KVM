@@ -52,6 +52,7 @@ kvmd:
             - "--unix-mode=0660"
             - "--exit-on-parent-death"
             - "--process-name-prefix={process_name_prefix}"
+            - "--notify-parent"
             - "--no-log-colors"
 
 ipmi:

@@ -29,6 +29,7 @@ from typing import List
 from typing import Dict
 from typing import AsyncGenerator
 from typing import Optional
+from typing import Any
 
 import aiohttp
 
@@ -197,13 +198,26 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
+        notifier = aiotools.AioNotifier()
+
+        def signal_handler(*_: Any) -> None:
+            get_logger(0).info("Got SIGUSR2, checking the stream state ...")
+            asyncio.ensure_future(notifier.notify())
+
+        get_logger(0).info("Installing SIGUSR2 streamer handler ...")
+        asyncio.get_event_loop().add_signal_handler(signal.SIGUSR2, signal_handler)
+
         prev_state: Dict = {}
         while True:
             state = await self.get_state()
             if state != prev_state:
                 yield state
                 prev_state = state
-            await asyncio.sleep(self.__state_poll)
+
+            await asyncio.wait([
+                asyncio.sleep(self.__state_poll),
+                notifier.wait(),
+            ], return_when=asyncio.FIRST_COMPLETED)
 
     async def get_info(self) -> Dict:
         proc = await asyncio.create_subprocess_exec(
