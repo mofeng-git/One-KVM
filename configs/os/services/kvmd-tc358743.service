@@ -1,6 +1,7 @@
 [Unit]
 Description=Pi-KVM - EDID loader for TC358743
-After=systemd-modules-load.service
+Wants=dev-kvmd\x2dvideo.device
+After=dev-kvmd\x2dvideo.device systemd-modules-load.service
 Before=kvmd.service
 
 [Service]
