@@ -28,8 +28,11 @@ import types
 
 import typing
 
+from typing import Tuple
 from typing import List
+from typing import Set
 from typing import Callable
+from typing import Awaitable
 from typing import Coroutine
 from typing import Type
 from typing import TypeVar
@@ -84,6 +87,10 @@ def run_sync(coro: Coroutine[Any, Any, _RetvalT]) -> _RetvalT:
 # =====
 async def wait_infinite() -> None:
     await asyncio.get_event_loop().create_future()
+
+
+async def wait_first(*aws: Awaitable) -> Tuple[Set[asyncio.Future], Set[asyncio.Future]]:
+    return (await asyncio.wait(list(aws), return_when=asyncio.FIRST_COMPLETED))
 
 
 # =====

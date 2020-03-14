@@ -206,6 +206,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         inotify_task = asyncio.create_task(self.__watch_inotify())
+        waiter_task: Optional[asyncio.Task] = None
         prev_state: Dict = {}
         try:
             while True:
@@ -219,10 +220,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     yield state
                     prev_state = state
 
-                await asyncio.wait([
-                    inotify_task,
-                    self.__state_notifier.wait(),
-                ], return_when=asyncio.FIRST_COMPLETED)
+                if waiter_task is None:
+                    waiter_task = asyncio.create_task(self.__state_notifier.wait())
+                if waiter_task in (await aiotools.wait_first(inotify_task, waiter_task))[0]:
+                    waiter_task = None
         finally:
             if not inotify_task.done():
                 inotify_task.cancel()

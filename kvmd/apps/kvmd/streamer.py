@@ -207,6 +207,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         get_logger(0).info("Installing SIGUSR2 streamer handler ...")
         asyncio.get_event_loop().add_signal_handler(signal.SIGUSR2, signal_handler)
 
+        waiter_task: Optional[asyncio.Task] = None
         prev_state: Dict = {}
         while True:
             state = await self.get_state()
@@ -214,10 +215,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 yield state
                 prev_state = state
 
-            await asyncio.wait([
-                asyncio.sleep(self.__state_poll),
-                notifier.wait(),
-            ], return_when=asyncio.FIRST_COMPLETED)
+            if waiter_task is None:
+                waiter_task = asyncio.create_task(notifier.wait())
+            if waiter_task in (await aiotools.wait_first(asyncio.sleep(self.__state_poll), waiter_task))[0]:
+                waiter_task = None
 
     async def get_info(self) -> Dict:
         proc = await asyncio.create_subprocess_exec(
