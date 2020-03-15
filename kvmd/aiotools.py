@@ -178,8 +178,6 @@ async def run_region_task(
             async with region:
                 entered.set_result(None)
                 await method(*args, **kwargs)
-        except asyncio.CancelledError:  # pylint: disable=try-except-raise
-            raise
         except region.get_exc_type():
             raise
         except Exception:

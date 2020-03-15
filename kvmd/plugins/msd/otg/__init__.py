@@ -237,8 +237,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__drive.set_image_path("")
                 self.__drive.set_rw_flag(False)
                 self.__drive.set_cdrom_flag(False)
-            except asyncio.CancelledError:  # pylint: disable=try-except-raise
-                raise
             except Exception:
                 get_logger(0).exception("Can't reset MSD")
 
@@ -332,8 +330,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await self.__close_new_file()
                     try:
                         await self.__remount_storage(rw=False)
-                    except asyncio.CancelledError:  # pylint: disable=try-except-raise
-                        raise
                     except Exception:
                         pass
         finally:
@@ -383,8 +379,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if self.__new_file:
                 get_logger().info("Closing new image file ...")
                 await self.__new_file.close()
-        except asyncio.CancelledError:  # pylint: disable=try-except-raise
-            raise
         except Exception:
             get_logger().exception("Can't close device file")
         finally:
@@ -429,8 +423,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         if need_reload_state:
                             await self.__reload_state()
                             await self.__state_notifier.notify()
-            except asyncio.CancelledError:  # pylint: disable=try-except-raise
-                raise
             except Exception:
                 logger.exception("Unexpected MSD watcher error")
 
@@ -451,8 +443,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await self.__remount_storage(rw=False)
 
                 storage_state = self.__get_storage_state()
-            except asyncio.CancelledError:  # pylint: disable=try-except-raise
-                raise
             except Exception:
                 logger.exception("Error while reloading MSD state; switching to offline")
                 self.__state.storage = None

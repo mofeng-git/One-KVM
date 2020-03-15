@@ -397,8 +397,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 remote: Optional[str] = (ws._req.remote if ws._req is not None else None)  # pylint: disable=protected-access
                 get_logger().info("Removed client socket: remote=%s; id=%d; active=%d", remote, id(ws), len(self.__sockets))
                 await ws.close()
-            except asyncio.CancelledError:  # pylint: disable=try-except-raise
-                raise
             except Exception:
                 pass
         await self.__streamer_notifier.notify()

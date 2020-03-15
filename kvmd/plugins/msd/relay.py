@@ -359,8 +359,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if self.__device_file:
                 get_logger().info("Closing device file ...")
                 await self.__device_file.close()
-        except asyncio.CancelledError:  # pylint: disable=try-except-raise
-            raise
         except Exception:
             get_logger().exception("Can't close device file")
         finally:
@@ -374,8 +372,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             try:
                 self.__device_info = await aiotools.run_async(_explore_device, self.__device_path)
                 break
-            except asyncio.CancelledError:  # pylint: disable=try-except-raise
-                raise
             except Exception:
                 if retries == 0:
                     self.__device_info = None
