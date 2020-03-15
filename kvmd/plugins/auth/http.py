@@ -88,8 +88,9 @@ class Plugin(BaseAuthService):
                 },
             ) as response:
                 response.raise_for_status()
-                assert response.status == 200
-            return True
+                if response.status == 200:
+                    return True
+                raise RuntimeError(f"Invalid OK response: {response.status} {await response.text()}; expected 200")
         except Exception:
             get_logger().exception("Failed HTTP auth request for user %r", user)
             return False
