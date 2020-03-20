@@ -352,12 +352,12 @@ class RfbClient:  # pylint: disable=too-many-instance-attributes
                             "middle": bool(buttons & 0x2),
                         },
                         wheel={
-                            "x": (32 if buttons & 0x40 else (-32 if buttons & 0x20 else 0)),
-                            "y": (32 if buttons & 0x10 else (-32 if buttons & 0x8 else 0)),
+                            "x": (-4 if buttons & 0x40 else (4 if buttons & 0x20 else 0)),
+                            "y": (-4 if buttons & 0x10 else (4 if buttons & 0x8 else 0)),
                         },
                         move={
                             "x": round(to_x / self._width * 65535 + -32768),
-                            "y": round(to_y / self._width * 65535 + -32768),
+                            "y": round(to_y / self._height * 65535 + -32768),
                         },
                     )
 

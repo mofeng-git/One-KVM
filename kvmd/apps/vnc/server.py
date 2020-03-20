@@ -24,6 +24,7 @@ import asyncio
 import asyncio.queues
 import socket
 import dataclasses
+import contextlib
 import json
 
 from typing import Dict
@@ -281,31 +282,31 @@ class VncServer:
         logger = get_logger(0)
         logger.info("Listening VNC on TCP [%s]:%d ...", self.__host, self.__port)
 
-        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-        sock.bind((self.__host, self.__port))
+        with contextlib.closing(socket.socket(socket.AF_INET6, socket.SOCK_STREAM)) as sock:
+            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+            sock.bind((self.__host, self.__port))
 
-        loop = asyncio.get_event_loop()
-        server = loop.run_until_complete(asyncio.start_server(
-            client_connected_cb=self.__handle_client,
-            sock=sock,
-            backlog=self.__max_clients,
-            loop=loop,
-        ))
+            loop = asyncio.get_event_loop()
+            server = loop.run_until_complete(asyncio.start_server(
+                client_connected_cb=self.__handle_client,
+                sock=sock,
+                backlog=self.__max_clients,
+                loop=loop,
+            ))
 
-        try:
-            loop.run_forever()
-        except (SystemExit, KeyboardInterrupt):
-            pass
-        finally:
-            server.close()
-            loop.run_until_complete(server.wait_closed())
-            tasks = asyncio.Task.all_tasks()
-            for task in tasks:
-                task.cancel()
-            loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
-            loop.close()
-            logger.info("Bye-bye")
+            try:
+                loop.run_forever()
+            except (SystemExit, KeyboardInterrupt):
+                pass
+            finally:
+                server.close()
+                loop.run_until_complete(server.wait_closed())
+                tasks = asyncio.Task.all_tasks()
+                for task in tasks:
+                    task.cancel()
+                loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+                loop.close()
+                logger.info("Bye-bye")
 
     async def __handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         await _Client(reader, writer, self.__kvmd, self.__streamer, self.__symmap, self.__shared_params).run()

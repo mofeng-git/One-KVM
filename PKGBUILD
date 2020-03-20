@@ -41,6 +41,7 @@ depends=(
 	python-pam
 	python-pillow
 	python-xlib
+	freetype2
 	v4l-utils
 	nginx-mainline
 	openssl
