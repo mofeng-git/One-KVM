@@ -322,7 +322,8 @@ def _get_config_scheme() -> Dict:
         },
 
         "vnc": {
-            "keymap": Option("", type=valid_abs_path),
+            "desired_fps": Option(30, type=valid_stream_fps),
+            "keymap":      Option("", type=valid_abs_path),
 
             "server": {
                 "host":        Option("::", type=valid_ip_or_host),

@@ -63,6 +63,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         kvmd: KvmdClient,
         streamer: StreamerClient,
 
+        desired_fps: int,
         symmap: Dict[int, str],
 
         shared_params: _SharedParams,
@@ -72,6 +73,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         self.__kvmd = kvmd
         self.__streamer = streamer
+        self.__desired_fps = desired_fps
         self.__symmap = symmap
         self.__shared_params = shared_params
 
@@ -244,10 +246,9 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     async def _on_set_encodings(self) -> None:
         assert self.__authorized.done()
         (user, passwd) = self.__authorized.result()
-        (quality, desired_fps) = (self._encodings.tight_jpeg_quality, 30)
         get_logger(0).info("[main] Client %s: Applying streamer params: quality=%d%%; desired_fps=%d ...",
-                           self._remote, quality, desired_fps)
-        await self.__kvmd.set_streamer_params(user, passwd, quality=quality, desired_fps=desired_fps)
+                           self._remote, self._encodings.tight_jpeg_quality, self.__desired_fps)
+        await self.__kvmd.set_streamer_params(user, passwd, self._encodings.tight_jpeg_quality, self.__desired_fps)
 
     async def _on_fb_update_request(self) -> None:
         self.__fb_requested = True
@@ -264,6 +265,7 @@ class VncServer:
         kvmd: KvmdClient,
         streamer: StreamerClient,
 
+        desired_fps: int,
         symmap: Dict[int, str],
     ) -> None:
 
@@ -271,12 +273,13 @@ class VncServer:
         self.__port = port
         self.__max_clients = max_clients
 
-        self.__kvmd = kvmd
-        self.__streamer = streamer
-
-        self.__symmap = symmap
-
-        self.__shared_params = _SharedParams()
+        self.__client_kwargs = {
+            "kvmd": kvmd,
+            "streamer": streamer,
+            "desired_fps": desired_fps,
+            "symmap": symmap,
+            "shared_params": _SharedParams(),
+        }
 
     def run(self) -> None:
         logger = get_logger(0)
@@ -309,4 +312,4 @@ class VncServer:
                 logger.info("Bye-bye")
 
     async def __handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        await _Client(reader, writer, self.__kvmd, self.__streamer, self.__symmap, self.__shared_params).run()
+        await _Client(reader, writer, **self.__client_kwargs).run()  # type: ignore

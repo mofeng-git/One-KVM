@@ -43,6 +43,7 @@ def main(argv: Optional[List[str]]=None) -> None:
     VncServer(
         kvmd=KvmdClient(**config.kvmd._unpack()),
         streamer=StreamerClient(**config.streamer._unpack()),
+        desired_fps=config.desired_fps,
         symmap=build_symmap(config.keymap),
         **config.server._unpack(),
     ).run()
