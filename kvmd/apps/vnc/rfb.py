@@ -316,6 +316,8 @@ class RfbClient:  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def __main_loop(self) -> None:
+        logger = get_logger(0)
+
         while True:
             msg_type = await self.__read_number("B")
 
@@ -331,6 +333,8 @@ class RfbClient:  # pylint: disable=too-many-instance-attributes
                     if encodings_count > 1024:
                         raise RfbError(f"Too many encodings: {encodings_count}")
                     self._encodings = _Encodings(frozenset(await self.__read_struct("l" * encodings_count)))
+                    logger.info("[main] Client %s: Features: resize=%d; rename=%d; leds=%d",
+                                self._remote, self._encodings.has_resize, self._encodings.has_rename, self._encodings.has_leds_state)
                     self.__check_tight_jpeg()
                     await self._on_set_encodings()
 
