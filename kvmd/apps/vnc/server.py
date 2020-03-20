@@ -36,6 +36,7 @@ from ...logging import get_logger
 
 from ... import aiotools
 
+from .rfb import RfbError
 from .rfb import RfbClient
 
 from .kvmd import KvmdClient
@@ -125,8 +126,10 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         msg = receive_task.result()
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             await self.__process_ws_event(json.loads(msg.data))
+                        elif msg.type == aiohttp.WSMsgType.CLOSE:
+                            raise RfbError("KVMD closed the wesocket (it may have been stopped)")
                         else:
-                            raise RuntimeError(f"Unknown WS message type: {msg!r}")
+                            raise RuntimeError(f"Unhandled WS message type: {msg!r}")
                         receive_task = None
 
                     if writer_task in done:
