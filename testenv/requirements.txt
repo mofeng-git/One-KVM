@@ -9,3 +9,5 @@ setproctitle
 pygments
 pyghmi
 python-pam
+Pillow
+python-xlib

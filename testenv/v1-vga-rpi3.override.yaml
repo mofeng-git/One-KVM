@@ -23,3 +23,6 @@ kvmd:
             - "--process-name-prefix={process_name_prefix}"
             - "--notify-parent"
             - "--no-log-colors"
+
+vnc:
+    keymap: /usr/share/kvmd/keymaps/ru

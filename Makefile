@@ -53,6 +53,7 @@ tox: testenv
 			--volume `pwd`/testenv/tests:/src/testenv/tests:ro \
 			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
+			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
 		-it $(TESTENV_IMAGE) bash -c " \
 			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
@@ -72,6 +73,7 @@ run: testenv
 			--volume `pwd`/web:/usr/share/kvmd/web:ro \
 			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
+			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
 			--device $(TESTENV_LOOP):/dev/kvmd-msd \
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
 			--publish 8080:80/tcp \
@@ -98,6 +100,7 @@ run-ipmi: testenv
 			--volume `pwd`/kvmd:/kvmd:ro \
 			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
+			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
 			--publish 6230:623/udp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
 			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
@@ -105,6 +108,24 @@ run-ipmi: testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& $(if $(CMD),$(CMD),python -m kvmd.apps.ipmi) \
+		"
+
+
+run-vnc: testenv
+	- docker run --rm --name kvmd-vnc \
+			--volume `pwd`/testenv/run:/run/kvmd:rw \
+			--volume `pwd`/testenv:/testenv:ro \
+			--volume `pwd`/kvmd:/kvmd:ro \
+			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
+			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
+			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
+			--publish 5900:5900/tcp \
+		-it $(TESTENV_IMAGE) /bin/bash -c " \
+			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
+			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
+			&& $(if $(CMD),$(CMD),python -m kvmd.apps.vnc) \
 		"
 
 

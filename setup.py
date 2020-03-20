@@ -95,11 +95,16 @@ def main() -> None:
             "kvmd.apps.htpasswd",
             "kvmd.apps.cleanup",
             "kvmd.apps.ipmi",
+            "kvmd.apps.vnc",
             "kvmd.helpers",
             "kvmd.helpers.otgmsd",
             "kvmd.helpers.otgmsd.unlock",
             "kvmd.helpers.otgmsd.remount",
         ],
+
+        package_data={
+            "kvmd.apps.vnc": ["fonts/*.ttf"],
+        },
 
         scripts=[
             os.path.join("scripts", name)
@@ -115,6 +120,7 @@ def main() -> None:
                 "kvmd-htpasswd = kvmd.apps.htpasswd:main",
                 "kvmd-cleanup = kvmd.apps.cleanup:main",
                 "kvmd-ipmi = kvmd.apps.ipmi:main",
+                "kvmd-vnc = kvmd.apps.vnc:main",
                 "kvmd-helper-otgmsd-unlock = kvmd.helpers.otgmsd.unlock:main",
                 "kvmd-helper-otgmsd-remount = kvmd.helpers.otgmsd.remount:main",
             ],

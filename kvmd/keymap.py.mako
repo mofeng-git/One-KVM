@@ -46,9 +46,26 @@ class Key:
 # =====
 KEYMAP: Dict[str, Key] = {
 % for km in sorted(keymap, key=operator.attrgetter("serial_code")):
-    "${km.web_key}": Key(
+    "${km.web_name}": Key(
         serial=SerialKey(code=${km.serial_code}),
         otg=OtgKey(code=${km.otg_code}, is_modifier=${km.otg_is_modifier}),
     ),
+% endfor
+}
+
+
+# =====
+X11_TO_AT1 = {
+% for km in sorted(keymap, key=operator.attrgetter("at1_code")):
+    % for code in sorted(km.x11_codes):
+    ${code}: ${km.at1_code},
+    % endfor
+% endfor
+}
+
+
+AT1_TO_WEB = {
+% for km in sorted(keymap, key=operator.attrgetter("at1_code")):
+    ${km.at1_code}: "${km.web_name}",
 % endfor
 }

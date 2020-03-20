@@ -39,6 +39,8 @@ depends=(
 	python-pygments
 	python-pyghmi
 	python-pam
+	python-pillow
+	python-xlib
 	v4l-utils
 	nginx-mainline
 	openssl
@@ -79,7 +81,7 @@ package_kvmd() {
 	install -DTm644 configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
 	mkdir -p "$pkgdir/usr/share/kvmd"
-	cp -r {hid,web,extras} "$pkgdir/usr/share/kvmd"
+	cp -r {hid,web,extras,contrib/keymaps} "$pkgdir/usr/share/kvmd"
 
 	local _cfg_default="$pkgdir/usr/share/kvmd/configs.default"
 	mkdir -p "$_cfg_default"

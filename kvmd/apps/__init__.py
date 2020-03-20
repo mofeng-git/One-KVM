@@ -320,4 +320,29 @@ def _get_config_scheme() -> Dict:
                 "file": Option("/etc/kvmd/ipmipasswd", type=valid_abs_file, unpack_as="path"),
             },
         },
+
+        "vnc": {
+            "keymap": Option("", type=valid_abs_path),
+
+            "server": {
+                "host":        Option("::", type=valid_ip_or_host),
+                "port":        Option(5900, type=valid_port),
+                # TODO: timeout
+                "max_clients": Option(10, type=(lambda arg: valid_number(arg, min=1))),
+            },
+
+            "kvmd": {
+                "host":    Option("localhost", type=valid_ip_or_host),
+                "port":    Option(0,   type=valid_port),
+                "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
+                "timeout": Option(5.0, type=valid_float_f01),
+            },
+
+            "streamer": {
+                "host":    Option("localhost", type=valid_ip_or_host),
+                "port":    Option(0,   type=valid_port),
+                "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
+                "timeout": Option(5.0, type=valid_float_f01),
+            },
+        },
     }

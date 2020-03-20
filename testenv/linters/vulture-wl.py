@@ -20,10 +20,15 @@ IpmiServer.handle_raw_request
 
 fake_rpi.RPi.GPIO
 
-_KeyMapping.web_key
+_KeyMapping.web_name
 _KeyMapping.serial_code
-_KeyMapping.arduino_key
+_KeyMapping.arduino_name
 _KeyMapping.otg_code
 _KeyMapping.otg_is_modifier
+_KeyMapping.at1_code
+_KeyMapping.x11_codes
+
+_SharedParams.width
+_SharedParams.height
 
 _ScriptWriter.get_args

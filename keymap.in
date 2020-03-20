@@ -23,98 +23,99 @@
 # https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code/code_values
 # https://github.com/NicoHood/HID/blob/master/src/KeyboardLayouts/ImprovedKeylayouts.h
 # https://gist.github.com/MightyPork/6da26e382a7ad91b5496ee55fdc73db2
+# https://github.com/qemu/keycodemapdb/blob/master/data/keymaps.csv
 
-# -----------------------------------------------------------------------------------
-#  Web            | Serial code   | Arduino key           | OTG code + modifier flag
-# -----------------------------------------------------------------------------------
-KeyA				1				KEY_A					0x04	-
-KeyB				2				KEY_B					0x05	-
-KeyC				3				KEY_C					0x06	-
-KeyD				4				KEY_D					0x07	-
-KeyE				5				KEY_E					0x08	-
-KeyF				6				KEY_F					0x09	-
-KeyG				7				KEY_G					0x0a	-
-KeyH				8				KEY_H					0x0b	-
-KeyI				9				KEY_I					0x0c	-
-KeyJ				10				KEY_J					0x0d	-
-KeyK				11				KEY_K					0x0e	-
-KeyL				12				KEY_L					0x0f	-
-KeyM				13				KEY_M					0x10	-
-KeyN				14				KEY_N					0x11	-
-KeyO				15				KEY_O					0x12	-
-KeyP				16				KEY_P					0x13	-
-KeyQ				17				KEY_Q					0x14	-
-KeyR				18				KEY_R					0x15	-
-KeyS				19				KEY_S					0x16	-
-KeyT				20				KEY_T					0x17	-
-KeyU				21				KEY_U					0x18	-
-KeyV				22				KEY_V					0x19	-
-KeyW				23				KEY_W					0x1a	-
-KeyX				24				KEY_X					0x1b	-
-KeyY				25				KEY_Y					0x1c	-
-KeyZ				26				KEY_Z					0x1d	-
-Digit1				27				KEY_1					0x1e	-
-Digit2				28				KEY_2					0x1f	-
-Digit3				29				KEY_3					0x20	-
-Digit4				30				KEY_4					0x21	-
-Digit5				31				KEY_5					0x22	-
-Digit6				32				KEY_6					0x23	-
-Digit7				33				KEY_7					0x24	-
-Digit8				34				KEY_8					0x25	-
-Digit9				35				KEY_9					0x26	-
-Digit0				36				KEY_0					0x27	-
-Enter				37				KEY_ENTER				0x28	-
-Escape				38				KEY_ESC					0x29	-
-Backspace			39				KEY_BACKSPACE			0x2a	-
-Tab					40				KEY_TAB					0x2b	-
-Space				41				KEY_SPACE				0x2c	-
-Minus				42				KEY_MINUS				0x2d	-
-Equal				43				KEY_EQUAL				0x2e	-
-BracketLeft			44				KEY_LEFT_BRACE			0x2f	-
-BracketRight		45				KEY_RIGHT_BRACE			0x30	-
-Backslash			46				KEY_BACKSLASH			0x31	-
-Semicolon			47				KEY_SEMICOLON			0x33	-
-Quote				48				KEY_QUOTE				0x34	-
-Backquote			49				KEY_TILDE				0x35	-
-Comma				50				KEY_COMMA				0x36	-
-Period				51				KEY_PERIOD				0x37	-
-Slash				52				KEY_SLASH				0x38	-
-CapsLock			53				KEY_CAPS_LOCK			0x39	-
-F1					54				KEY_F1					0x3a	-
-F2					55				KEY_F2					0x3b	-
-F3					56				KEY_F3					0x3c	-
-F4					57				KEY_F4					0x3d	-
-F5					58				KEY_F5					0x3e	-
-F6					59				KEY_F6					0x3f	-
-F7					60				KEY_F7					0x40	-
-F8					61				KEY_F8					0x41	-
-F9					62				KEY_F9					0x42	-
-F10					63				KEY_F10					0x43	-
-F11					64				KEY_F11					0x44	-
-F12					65				KEY_F12					0x45	-
-PrintScreen			66				KEY_PRINT				0x46	-
-Insert				67				KEY_INSERT				0x49	-
-Home				68				KEY_HOME				0x4a	-
-PageUp				69				KEY_PAGE_UP				0x4b	-
-Delete				70				KEY_DELETE				0x4c	-
-End					71				KEY_END					0x4d	-
-PageDown			72				KEY_PAGE_DOWN			0x4e	-
-ArrowRight			73				KEY_RIGHT_ARROW			0x4f	-
-ArrowLeft			74				KEY_LEFT_ARROW			0x50	-
-ArrowDown			75				KEY_DOWN_ARROW			0x51	-
-ArrowUp				76				KEY_UP_ARROW			0x52	-
-ControlLeft			77				KEY_LEFT_CTRL			0x01	m
-ShiftLeft			78				KEY_LEFT_SHIFT			0x02	m
-AltLeft				79				KEY_LEFT_ALT			0x04	m
-MetaLeft			80				KEY_LEFT_GUI			0x08	m
-ControlRight		81				KEY_RIGHT_CTRL			0x10	m
-ShiftRight			82				KEY_RIGHT_SHIFT			0x20	m
-AltRight			83				KEY_RIGHT_ALT			0x40	m
-MetaRight			84				KEY_RIGHT_GUI			0x80	m
-Pause				85				KEY_PAUSE				0x48	-
-ScrollLock			86				KEY_SCROLL_LOCK			0x47	-
-NumLock				87				KEY_NUM_LOCK			0x53	-
-ContextMenu			88				KEY_MENU				0x65	-
+# ----------------------------------------------------------------------------------------------------------------
+#  Web            | Serial code   | Arduino key           | OTG code + modifier flag  | AT set1  | X11 keysyms
+# ----------------------------------------------------------------------------------------------------------------
+KeyA				1				KEY_A					0x04	-					0x1e			XK_A,XK_a
+KeyB				2				KEY_B					0x05	-					0x30			XK_B,XK_b
+KeyC				3				KEY_C					0x06	-					0x2e			XK_C,XK_c
+KeyD				4				KEY_D					0x07	-					0x20			XK_D,XK_d
+KeyE				5				KEY_E					0x08	-					0x12			XK_E,XK_e
+KeyF				6				KEY_F					0x09	-					0x21			XK_F,XK_f
+KeyG				7				KEY_G					0x0a	-					0x22			XK_G,XK_g
+KeyH				8				KEY_H					0x0b	-					0x23			XK_H,XK_h
+KeyI				9				KEY_I					0x0c	-					0x17			XK_I,XK_i
+KeyJ				10				KEY_J					0x0d	-					0x24			XK_J,XK_j
+KeyK				11				KEY_K					0x0e	-					0x25			XK_K,XK_k
+KeyL				12				KEY_L					0x0f	-					0x26			XK_L,XK_l
+KeyM				13				KEY_M					0x10	-					0x32			XK_M,XK_m
+KeyN				14				KEY_N					0x11	-					0x31			XK_N,XK_n
+KeyO				15				KEY_O					0x12	-					0x18			XK_O,XK_o
+KeyP				16				KEY_P					0x13	-					0x19			XK_P,XK_p
+KeyQ				17				KEY_Q					0x14	-					0x10			XK_Q,XK_q
+KeyR				18				KEY_R					0x15	-					0x13			XK_R,XK_r
+KeyS				19				KEY_S					0x16	-					0x1f			XK_S,XK_s
+KeyT				20				KEY_T					0x17	-					0x14			XK_T,XK_t
+KeyU				21				KEY_U					0x18	-					0x16			XK_U,XK_u
+KeyV				22				KEY_V					0x19	-					0x2f			XK_V,XK_v
+KeyW				23				KEY_W					0x1a	-					0x11			XK_W,XK_w
+KeyX				24				KEY_X					0x1b	-					0x2d			XK_X,XK_x
+KeyY				25				KEY_Y					0x1c	-					0x15			XK_Y,XK_y
+KeyZ				26				KEY_Z					0x1d	-					0x2c			XK_Z,XK_z
+Digit1				27				KEY_1					0x1e	-					0x02			XK_1,XK_exclam
+Digit2				28				KEY_2					0x1f	-					0x03			XK_2,XK_at
+Digit3				29				KEY_3					0x20	-					0x04			XK_3,XK_numbersign
+Digit4				30				KEY_4					0x21	-					0x05			XK_4,XK_dollar
+Digit5				31				KEY_5					0x22	-					0x06			XK_5,XK_percent
+Digit6				32				KEY_6					0x23	-					0x07			XK_6,XK_asciicircum
+Digit7				33				KEY_7					0x24	-					0x08			XK_7,XK_ampersand
+Digit8				34				KEY_8					0x25	-					0x09			XK_8,XK_asterisk
+Digit9				35				KEY_9					0x26	-					0x0a			XK_9,XK_parenleft
+Digit0				36				KEY_0					0x27	-					0x0b			XK_0,XK_parenright
+Enter				37				KEY_ENTER				0x28	-					0x1c			XK_Return
+Escape				38				KEY_ESC					0x29	-					0x01			XK_Escape
+Backspace			39				KEY_BACKSPACE			0x2a	-					0x0e			XK_BackSpace
+Tab					40				KEY_TAB					0x2b	-					0x0f			XK_Tab
+Space				41				KEY_SPACE				0x2c	-					0x39			XK_space
+Minus				42				KEY_MINUS				0x2d	-					0x0c			XK_minus,XK_underscore
+Equal				43				KEY_EQUAL				0x2e	-					0x0d			XK_equal,XK_plus
+BracketLeft			44				KEY_LEFT_BRACE			0x2f	-					0x1a			XK_bracketleft,XK_braceleft
+BracketRight		45				KEY_RIGHT_BRACE			0x30	-					0x1b			XK_bracketright,XK_braceright
+Backslash			46				KEY_BACKSLASH			0x31	-					0x2b			XK_backslash,XK_bar
+Semicolon			47				KEY_SEMICOLON			0x33	-					0x27			XK_semicolon,XK_colon
+Quote				48				KEY_QUOTE				0x34	-					0x28			XK_apostrophe,XK_quotedbl
+Backquote			49				KEY_TILDE				0x35	-					0x29			XK_grave,XK_asciitilde
+Comma				50				KEY_COMMA				0x36	-					0x33			XK_comma,XK_less
+Period				51				KEY_PERIOD				0x37	-					0x34			XK_period,XK_greater
+Slash				52				KEY_SLASH				0x38	-					0x35			XK_slash,XK_question
+CapsLock			53				KEY_CAPS_LOCK			0x39	-					0x3a			XK_Caps_Lock
+F1					54				KEY_F1					0x3a	-					0x3b			XK_F1
+F2					55				KEY_F2					0x3b	-					0x3c			XK_F2
+F3					56				KEY_F3					0x3c	-					0x3d			XK_F3
+F4					57				KEY_F4					0x3d	-					0x3e			XK_F4
+F5					58				KEY_F5					0x3e	-					0x3f			XK_F5
+F6					59				KEY_F6					0x3f	-					0x40			XK_F6
+F7					60				KEY_F7					0x40	-					0x41			XK_F7
+F8					61				KEY_F8					0x41	-					0x42			XK_F8
+F9					62				KEY_F9					0x42	-					0x43			XK_F9
+F10					63				KEY_F10					0x43	-					0x44			XK_F10
+F11					64				KEY_F11					0x44	-					0x57			XK_F11
+F12					65				KEY_F12					0x45	-					0x58			XK_F12
+PrintScreen			66				KEY_PRINT				0x46	-					0x54			XK_Sys_Req
+Insert				67				KEY_INSERT				0x49	-					0xe052			XK_Insert
+Home				68				KEY_HOME				0x4a	-					0xe047			XK_Home
+PageUp				69				KEY_PAGE_UP				0x4b	-					0xe049			XK_Page_Up
+Delete				70				KEY_DELETE				0x4c	-					0xe053			XK_Delete
+End					71				KEY_END					0x4d	-					0xe04f			XK_End
+PageDown			72				KEY_PAGE_DOWN			0x4e	-					0xe051			XK_Page_Down
+ArrowRight			73				KEY_RIGHT_ARROW			0x4f	-					0xe04d			XK_Right
+ArrowLeft			74				KEY_LEFT_ARROW			0x50	-					0xe04b			XK_Left
+ArrowDown			75				KEY_DOWN_ARROW			0x51	-					0xe050			XK_Down
+ArrowUp				76				KEY_UP_ARROW			0x52	-					0xe048			XK_Up
+ControlLeft			77				KEY_LEFT_CTRL			0x01	m					0x1d			XK_Control_L
+ShiftLeft			78				KEY_LEFT_SHIFT			0x02	m					0x2a			XK_Shift_L
+AltLeft				79				KEY_LEFT_ALT			0x04	m					0x38			XK_Alt_L
+MetaLeft			80				KEY_LEFT_GUI			0x08	m					0xe05b			XK_Meta_L
+ControlRight		81				KEY_RIGHT_CTRL			0x10	m					0xe01d			XK_Control_R
+ShiftRight			82				KEY_RIGHT_SHIFT			0x20	m					0x36			XK_Shift_R
+AltRight			83				KEY_RIGHT_ALT			0x40	m					0xe038			XK_Alt_R
+MetaRight			84				KEY_RIGHT_GUI			0x80	m					0xe05c			XK_Meta_R
+Pause				85				KEY_PAUSE				0x48	-					0xe046			XK_Pause
+ScrollLock			86				KEY_SCROLL_LOCK			0x47	-					0x46			XK_Scroll_Lock
+NumLock				87				KEY_NUM_LOCK			0x53	-					0x45			XK_Num_Lock
+ContextMenu			88				KEY_MENU				0x65	-					0xe05d			XK_Menu
 #			KEY_NON_US_NUM
 #			KEYPAD_DIVIDE
 #			KEYPAD_MULTIPLY

@@ -25,7 +25,11 @@ import sys
 import textwrap
 import dataclasses
 
+from typing import Set
 from typing import List
+
+import Xlib.keysymdef.latin1
+import Xlib.keysymdef.miscellany
 
 import mako.template
 
@@ -33,11 +37,21 @@ import mako.template
 # =====
 @dataclasses.dataclass(frozen=True)
 class _KeyMapping:
-    web_key: str
+    web_name: str
     serial_code: int
-    arduino_key: str
+    arduino_name: str
     otg_code: int
     otg_is_modifier: bool
+    at1_code: int
+    x11_codes: Set[int]
+
+
+def _resolve_keysym(name: str) -> int:
+    code = getattr(Xlib.keysymdef.latin1, name, None)
+    if code is None:
+        code = getattr(Xlib.keysymdef.miscellany, name, None)
+    assert code is not None, name
+    return code
 
 
 def _read_keymap_in(path: str) -> List[_KeyMapping]:
@@ -47,13 +61,15 @@ def _read_keymap_in(path: str) -> List[_KeyMapping]:
             line = line.strip()
             if len(line) > 0 and not line.startswith("#"):
                 parts = list(map(str.strip, line.split()))
-                if len(parts) >= 5:
+                if len(parts) >= 7:
                     keymap.append(_KeyMapping(
-                        web_key=parts[0],
+                        web_name=parts[0],
                         serial_code=int(parts[1]),
-                        arduino_key=parts[2],
+                        arduino_name=parts[2],
                         otg_code=int(parts[3], 16),
                         otg_is_modifier=(parts[4].lower() == "m"),
+                        at1_code=int(parts[5], 16),
+                        x11_codes=set(map(_resolve_keysym, parts[6].split(","))),
                     ))
     return keymap
 
