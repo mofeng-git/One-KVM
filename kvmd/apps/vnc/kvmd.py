@@ -26,8 +26,6 @@ from typing import Dict
 
 import aiohttp
 
-from ...logging import get_logger
-
 from ... import __version__
 
 
@@ -63,10 +61,7 @@ class KvmdClient:
         except aiohttp.ClientResponseError as err:
             if err.status in [401, 403]:
                 return False
-            get_logger(0).exception("Can't check user access")
-        except Exception:
-            get_logger(0).exception("Can't check user access")
-        return False
+            raise
 
     @contextlib.asynccontextmanager
     async def ws(self, user: str, passwd: str) -> aiohttp.ClientWebSocketResponse:  # pylint: disable=invalid-name
@@ -77,23 +72,17 @@ class KvmdClient:
             ) as ws:
                 yield ws
 
-    async def set_streamer_params(self, user: str, passwd: str, quality: int=-1, desired_fps: int=-1) -> None:
-        params = {
-            key: value
-            for (key, value) in [
-                ("quality", quality),
-                ("desired_fps", desired_fps),
-            ]
-            if value >= 0
-        }
-        if params:
-            async with self.__make_session(user, passwd) as session:
-                async with session.post(
-                    url=f"http://{self.__host}:{self.__port}/streamer/set_params",
-                    timeout=self.__timeout,
-                    params=params,
-                ) as response:
-                    response.raise_for_status()
+    async def set_streamer_params(self, user: str, passwd: str, quality: int, desired_fps: int) -> None:
+        async with self.__make_session(user, passwd) as session:
+            async with session.post(
+                url=f"http://{self.__host}:{self.__port}/streamer/set_params",
+                timeout=self.__timeout,
+                params={
+                    "quality": quality,
+                    "desired_fps": desired_fps,
+                },
+            ) as response:
+                response.raise_for_status()
 
     # =====
 
