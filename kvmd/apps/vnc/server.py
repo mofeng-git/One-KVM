@@ -209,7 +209,11 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         return False
 
     async def _on_key_event(self, code: int, state: bool) -> None:
-        print("KeyEvent", code, state, self.__symmap.get(code))  # TODO
+        if (web_name := self.__symmap.get(code)) is not None:  # noqa: E203,E231
+            await self.__ws_writer_queue.put({
+                "event_type": "key",
+                "event": {"key": web_name, "state": state},
+            })
 
     async def _on_pointer_event(self, buttons: Dict[str, bool], wheel: Dict[str, int], move: Dict[str, int]) -> None:
         for (button, state) in buttons.items():
@@ -234,7 +238,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             self.__mouse_move = move
 
     async def _on_cut_event(self, text: str) -> None:
-        print("CutEvent", text)  # TODO
+        pass  # print("CutEvent", text)  # TODO
 
     async def _on_set_encodings(self) -> None:
         assert self.__authorized.done()
