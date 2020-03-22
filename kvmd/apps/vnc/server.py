@@ -36,8 +36,8 @@ from ...logging import get_logger
 
 from ... import aiotools
 
-from .rfb import RfbError
 from .rfb import RfbClient
+from .rfb.errors import RfbError
 
 from .kvmd import KvmdClient
 

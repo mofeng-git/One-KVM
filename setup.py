@@ -96,6 +96,7 @@ def main() -> None:
             "kvmd.apps.cleanup",
             "kvmd.apps.ipmi",
             "kvmd.apps.vnc",
+            "kvmd.apps.vnc.rfb",
             "kvmd.helpers",
             "kvmd.helpers.otgmsd",
             "kvmd.helpers.otgmsd.unlock",
