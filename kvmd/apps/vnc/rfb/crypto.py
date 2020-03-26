@@ -20,32 +20,34 @@
 # ========================================================================== #
 
 
+import os
+
 from typing import List
-from typing import Optional
 
-from .. import init
-
-from .kvmd import KvmdClient
-from .streamer import StreamerClient
-from .vncauth import VncAuthManager
-from .server import VncServer
-from .keysym import build_symmap
+import passlib.crypto.des
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
-    config = init(
-        prog="kvmd-vnc",
-        description="VNC to KVMD proxy",
-        argv=argv,
-    )[2].vnc
+def rfb_make_challenge() -> bytes:
+    return os.urandom(16)
 
-    # pylint: disable=protected-access
-    VncServer(
-        kvmd=KvmdClient(**config.kvmd._unpack()),
-        streamer=StreamerClient(**config.streamer._unpack()),
-        vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),
-        desired_fps=config.desired_fps,
-        symmap=build_symmap(config.keymap),
-        **config.server._unpack(),
-    ).run()
+
+def rfb_encrypt_challenge(challenge: bytes, passwd: bytes) -> bytes:
+    assert len(challenge) == 16
+    key = _make_key(passwd)
+    return (
+        passlib.crypto.des.des_encrypt_block(key, challenge[:8])
+        + passlib.crypto.des.des_encrypt_block(key, challenge[8:])
+    )
+
+
+def _make_key(passwd: bytes) -> bytes:
+    passwd = (passwd + b"\0" * 8)[:8]
+    key: List[int] = []
+    for ch in passwd:
+        btgt = 0
+        for index in range(8):
+            if ch & (1 << index):
+                btgt = btgt | (1 << 7 - index)
+        key.append(btgt)
+    return bytes(key)

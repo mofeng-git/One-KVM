@@ -57,7 +57,7 @@ source=("$url/archive/v$pkgver.tar.gz")
 md5sums=(SKIP)
 backup=(
 	etc/kvmd/{override,logging,auth,meta}.yaml
-	etc/kvmd/{ht,ipmi}passwd
+	etc/kvmd/{ht,ipmi,vnc}passwd
 	etc/kvmd/nginx/{kvmd.ctx-{http,server},loc-{login,nocache,proxy,websocket},mime-types,ssl,nginx}.conf
 )
 

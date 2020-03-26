@@ -34,3 +34,7 @@ kvmd:
 
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
+
+    auth:
+        vncauth:
+            enabled: true

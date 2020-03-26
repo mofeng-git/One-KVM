@@ -345,5 +345,12 @@ def _get_config_scheme() -> Dict:
                 "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
                 "timeout": Option(5.0, type=valid_float_f01),
             },
+
+            "auth": {
+                "vncauth": {
+                    "enabled": Option(False, type=valid_bool),
+                    "file":    Option("/etc/kvmd/vncpasswd", type=valid_abs_file, unpack_as="path"),
+                },
+            },
         },
     }

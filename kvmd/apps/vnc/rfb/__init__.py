@@ -22,7 +22,10 @@
 
 import asyncio
 
+from typing import Tuple
+from typing import List
 from typing import Dict
+from typing import Callable
 from typing import Coroutine
 
 from ....logging import get_logger
@@ -34,6 +37,9 @@ from .errors import RfbConnectionError
 
 from .encodings import RfbEncodings
 from .encodings import RfbClientEncodings
+
+from .crypto import rfb_make_challenge
+from .crypto import rfb_encrypt_challenge
 
 from .stream import RfbClientStream
 
@@ -52,14 +58,17 @@ class RfbClient(RfbClientStream):
         width: int,
         height: int,
         name: str,
+        vnc_passwds: List[str],
     ) -> None:
 
         super().__init__(reader, writer)
 
         self._width = width
         self._height = height
-        self._name = name
+        self.__name = name
+        self.__vnc_passwds = vnc_passwds
 
+        self.__rfb_version = 0
         self._encodings = RfbClientEncodings(frozenset())
 
         self._lock = asyncio.Lock()
@@ -90,14 +99,14 @@ class RfbClient(RfbClientStream):
         except RfbConnectionError as err:
             logger.info("[%s] Client %s: Gone (%s): Disconnected", name, self._remote, str(err))
         except RfbError as err:
-            logger.info("[%s] Client %s: %s: Disconnected", name, self._remote, str(err))
+            logger.error("[%s] Client %s: %s: Disconnected", name, self._remote, str(err))
         except Exception:
             logger.exception("[%s] Unhandled exception with client %s: Disconnected", name, self._remote)
 
     async def __main_task_loop(self) -> None:
         try:
-            rfb_version = await self.__handshake_version()
-            await self.__handshake_security(rfb_version)
+            await self.__handshake_version()
+            await self.__handshake_security()
             await self.__handshake_init()
             await self.__main_loop()
         finally:
@@ -105,7 +114,10 @@ class RfbClient(RfbClientStream):
 
     # =====
 
-    async def _authorize(self, user: str, passwd: str) -> bool:
+    async def _authorize_userpass(self, user: str, passwd: str) -> bool:
+        raise NotImplementedError
+
+    async def _on_authorized_vnc_passwd(self, passwd: str) -> str:
         raise NotImplementedError
 
     async def _on_key_event(self, code: int, state: bool) -> None:
@@ -148,7 +160,7 @@ class RfbClient(RfbClientStream):
         assert self._encodings.has_rename
         await self._write_fb_update(0, 0, RfbEncodings.RENAME, drain=False)
         await self._write_reason(name)
-        self._name = name
+        self.__name = name
 
     async def _send_leds_state(self, caps: bool, scroll: bool, num: bool) -> None:
         assert self._encodings.has_leds_state
@@ -157,7 +169,7 @@ class RfbClient(RfbClientStream):
 
     # =====
 
-    async def __handshake_version(self) -> int:
+    async def __handshake_version(self) -> None:
         # The only published protocol versions at this time are 3.3, 3.7, 3.8.
         # Version 3.5 was wrongly reported by some clients, but it should be
         # interpreted by all servers as 3.3
@@ -176,36 +188,34 @@ class RfbClient(RfbClientStream):
             version = int(response[-2])
         except ValueError:
             raise RfbError(f"Invalid version response: {response!r}")
-        return (3 if version == 5 else version)
+        self.__rfb_version = (3 if version == 5 else version)
+        get_logger(0).info("[main] Client %s: Using RFB version 3.%d", self._remote, self.__rfb_version)
 
     # =====
 
-    async def __handshake_security(self, rfb_version: int) -> None:
-        if rfb_version == 3:
-            await self.__handshake_security_v3(rfb_version)
-        else:
-            await self.__handshake_security_v7_plus(rfb_version)
+    async def __handshake_security(self) -> None:
+        sec_types: Dict[int, Tuple[str, Callable]] = {}
+        if self.__rfb_version > 3:
+            sec_types[19] = ("VeNCrypt", self.__handshake_security_vencrypt)
+        if self.__vnc_passwds:
+            sec_types[2] = ("VNCAuth", self.__handshake_security_vnc_auth)
+        if not sec_types:
+            msg = "The client uses a very old protocol 3.3 and VNCAuth is disabled"
+            await self._write_struct("L", 0, drain=False)  # Refuse old clients using the invalid security type
+            await self._write_reason(msg)
+            raise RfbError(msg)
 
-    async def __handshake_security_v3(self, rfb_version: int) -> None:
-        assert rfb_version == 3
+        await self._write_struct("B" + "B" * len(sec_types), len(sec_types), *sec_types)  # Keep dict priority
 
-        await self._write_struct("L", 0, drain=False)  # Refuse old clients using the invalid security type
-        msg = "The client uses a very old protocol 3.3; required 3.7 at least"
-        await self._write_reason(msg)
-        raise RfbError(msg)
+        sec_type = await self._read_number("B")
+        if sec_type not in sec_types:
+            raise RfbError(f"Invalid security type: {sec_type}")
 
-    async def __handshake_security_v7_plus(self, rfb_version: int) -> None:
-        assert rfb_version >= 7
+        (sec_name, handler) = sec_types[sec_type]
+        get_logger(0).info("[main] Client %s: Using %s security type", self._remote, sec_name)
+        await handler()
 
-        vencrypt = 19
-        await self._write_struct("B B", 1, vencrypt)  # One security type, VeNCrypt
-
-        security_type = await self._read_number("B")
-        if security_type != vencrypt:
-            raise RfbError(f"Invalid security type: {security_type}; expected VeNCrypt({vencrypt})")
-
-        # -----
-
+    async def __handshake_security_vencrypt(self) -> None:
         await self._write_struct("BB", 0, 2)  # VeNCrypt 0.2
 
         vencrypt_version = "%d.%d" % (await self._read_struct("BB"))
@@ -215,29 +225,59 @@ class RfbClient(RfbClientStream):
 
         await self._write_struct("B", 0)
 
-        # -----
+        auth_types = {256: ("VeNCrypt/Plain", self.__handshake_security_vencrypt_userpass)}
+        if self.__vnc_passwds:
+            # Vinagre не умеет работать с VNC Auth через VeNCrypt, но это его проблемы,
+            # так как он своеобразно трактует рекомендации VeNCrypt.
+            # Подробнее: https://bugzilla.redhat.com/show_bug.cgi?id=692048
+            # Hint: используйте любой другой нормальный VNC-клиент.
+            auth_types[2] = ("VeNCrypt/VNCAuth", self.__handshake_security_vnc_auth)
 
-        plain = 256
-        await self._write_struct("B L", 1, plain)  # One auth subtype, plain
+        await self._write_struct("B" + "L" * len(auth_types), len(auth_types), *auth_types)
 
         auth_type = await self._read_number("L")
-        if auth_type != plain:
-            raise RfbError(f"Invalid auth type: {auth_type}; expected Plain({plain})")
+        if auth_type not in auth_types:
+            raise RfbError(f"Invalid VeNCrypt auth type: {auth_type}")
 
-        # -----
+        (auth_name, handler) = auth_types[auth_type]
+        get_logger(0).info("[main] Client %s: Using %s auth type", self._remote, auth_name)
+        await handler()
 
+    async def __handshake_security_vencrypt_userpass(self) -> None:
         (user_length, passwd_length) = await self._read_struct("LL")
         user = await self._read_text(user_length)
         passwd = await self._read_text(passwd_length)
 
-        if (await self._authorize(user, passwd)):
+        ok = await self._authorize_userpass(user, passwd)
+
+        await self.__handshake_security_send_result(ok, user)
+
+    async def __handshake_security_vnc_auth(self) -> None:
+        challenge = rfb_make_challenge()
+        await self._write_struct("", challenge)
+
+        (ok, user) = (False, "")
+        response = (await self._read_struct("16s"))[0]
+        for passwd in self.__vnc_passwds:
+            passwd_bytes = passwd.encode("utf-8", errors="ignore")
+            if rfb_encrypt_challenge(challenge, passwd_bytes) == response:
+                user = await self._on_authorized_vnc_passwd(passwd)
+                if user:
+                    ok = True
+                break
+
+        await self.__handshake_security_send_result(ok, user)
+
+    async def __handshake_security_send_result(self, ok: bool, user: str) -> None:
+        if ok:
+            assert user
             get_logger(0).info("[main] Client %s: Access granted for user %r", self._remote, user)
             await self._write_struct("L", 0)
         else:
-            await self._write_struct("L", 1, drain=(rfb_version < 8))
-            if rfb_version >= 8:
-                await self._write_reason("Invalid username or password")
-            raise RfbError(f"Access denied for user {user!r}")
+            await self._write_struct("L", 1, drain=(self.__rfb_version < 8))
+            if self.__rfb_version >= 8:
+                await self._write_reason("Invalid username or password" if user else "Invalid password")
+            raise RfbError(f"Access denied for user {user!r}" if user else "Access denied")
 
     # =====
 
@@ -259,7 +299,7 @@ class RfbClient(RfbClientStream):
             0,      # Blue shift
             drain=False,
         )
-        await self._write_reason(self._name)
+        await self._write_reason(self.__name)
 
     # =====
 

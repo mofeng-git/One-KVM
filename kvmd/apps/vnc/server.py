@@ -39,6 +39,9 @@ from ... import aiotools
 from .rfb import RfbClient
 from .rfb.errors import RfbError
 
+from .vncauth import VncAuthKvmdCredentials
+from .vncauth import VncAuthManager
+
 from .kvmd import KvmdClient
 
 from .streamer import StreamerError
@@ -66,11 +69,14 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         desired_fps: int,
         symmap: Dict[int, str],
+        vnc_credentials: Dict[str, VncAuthKvmdCredentials],
 
         shared_params: _SharedParams,
     ) -> None:
 
-        super().__init__(reader, writer, **dataclasses.asdict(shared_params))
+        self.__vnc_credentials = vnc_credentials
+
+        super().__init__(reader, writer, vnc_passwds=list(vnc_credentials), **dataclasses.asdict(shared_params))
 
         self.__kvmd = kvmd
         self.__streamer = streamer
@@ -208,11 +214,17 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    async def _authorize(self, user: str, passwd: str) -> bool:
+    async def _authorize_userpass(self, user: str, passwd: str) -> bool:
         if (await self.__kvmd.authorize(user, passwd)):
             self.__authorized.set_result((user, passwd))
             return True
         return False
+
+    async def _on_authorized_vnc_passwd(self, passwd: str) -> str:
+        kc = self.__vnc_credentials[passwd]
+        if (await self._authorize_userpass(kc.user, kc.passwd)):
+            return kc.user
+        return ""
 
     async def _on_key_event(self, code: int, state: bool) -> None:
         if (web_name := self.__symmap.get(code)) is not None:  # noqa: E203,E231
@@ -258,7 +270,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
 
 # =====
-class VncServer:
+class VncServer:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         host: str,
@@ -267,6 +279,7 @@ class VncServer:
 
         kvmd: KvmdClient,
         streamer: StreamerClient,
+        vnc_auth_manager: VncAuthManager,
 
         desired_fps: int,
         symmap: Dict[int, str],
@@ -276,43 +289,58 @@ class VncServer:
         self.__port = port
         self.__max_clients = max_clients
 
-        self.__client_kwargs = {
-            "kvmd": kvmd,
-            "streamer": streamer,
-            "desired_fps": desired_fps,
-            "symmap": symmap,
-            "shared_params": _SharedParams(),
-        }
+        self.__kvmd = kvmd
+        self.__streamer = streamer
+        self.__vnc_auth_manager = vnc_auth_manager
+
+        self.__desired_fps = desired_fps
+        self.__symmap = symmap
+
+        self.__shared_params = _SharedParams()
 
     def run(self) -> None:
         logger = get_logger(0)
-        logger.info("Listening VNC on TCP [%s]:%d ...", self.__host, self.__port)
+        loop = asyncio.get_event_loop()
+        try:
+            if not loop.run_until_complete(self.__vnc_auth_manager.read_credentials())[1]:
+                raise SystemExit(1)
 
-        with contextlib.closing(socket.socket(socket.AF_INET6, socket.SOCK_STREAM)) as sock:
-            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-            sock.bind((self.__host, self.__port))
+            logger.info("Listening VNC on TCP [%s]:%d ...", self.__host, self.__port)
 
-            loop = asyncio.get_event_loop()
-            server = loop.run_until_complete(asyncio.start_server(
-                client_connected_cb=self.__handle_client,
-                sock=sock,
-                backlog=self.__max_clients,
-                loop=loop,
-            ))
+            with contextlib.closing(socket.socket(socket.AF_INET6, socket.SOCK_STREAM)) as sock:
+                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+                sock.bind((self.__host, self.__port))
 
-            try:
-                loop.run_forever()
-            except (SystemExit, KeyboardInterrupt):
-                pass
-            finally:
-                server.close()
-                loop.run_until_complete(server.wait_closed())
-                tasks = asyncio.Task.all_tasks()
-                for task in tasks:
-                    task.cancel()
-                loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
-                loop.close()
-                logger.info("Bye-bye")
+                server = loop.run_until_complete(asyncio.start_server(
+                    client_connected_cb=self.__handle_client,
+                    sock=sock,
+                    backlog=self.__max_clients,
+                    loop=loop,
+                ))
+
+                try:
+                    loop.run_forever()
+                except (SystemExit, KeyboardInterrupt):
+                    pass
+                finally:
+                    server.close()
+                    loop.run_until_complete(server.wait_closed())
+        finally:
+            tasks = asyncio.Task.all_tasks()
+            for task in tasks:
+                task.cancel()
+            loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+            loop.close()
+            logger.info("Bye-bye")
 
     async def __handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        await _Client(reader, writer, **self.__client_kwargs).run()  # type: ignore
+        await _Client(
+            reader=reader,
+            writer=writer,
+            kvmd=self.__kvmd,
+            streamer=self.__streamer,
+            desired_fps=self.__desired_fps,
+            symmap=self.__symmap,
+            vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
+            shared_params=self.__shared_params,
+        ).run()  # type: ignore
