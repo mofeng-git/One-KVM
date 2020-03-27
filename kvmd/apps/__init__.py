@@ -198,7 +198,7 @@ def _get_config_scheme() -> Dict:
             },
 
             "auth": {
-                "disabled": Option(False, type=valid_bool),
+                "enabled": Option(True, type=valid_bool),
 
                 "internal": {
                     "type":  Option("htpasswd"),
