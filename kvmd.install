@@ -14,6 +14,7 @@ post_upgrade() {
 
 	chown kvmd:kvmd /etc/kvmd/htpasswd
 	chown kvmd-ipmi:kvmd-ipmi /etc/kvmd/ipmipasswd
+	chown kvmd-vnc:kvmd-vnc /etc/kvmd/vncpasswd
 	chmod 600 /etc/kvmd/*passwd
 
 	chown kvmd /var/lib/kvmd/msd || true
