@@ -37,6 +37,11 @@
 	<link rel="stylesheet" href="../share/css/vars.css">
 	<link rel="stylesheet" href="../share/css/main.css">
 	<link rel="stylesheet" href="../share/css/start.css">
+
+	<script type="module">
+		import {main} from "/share/js/vnc/main.js";
+		main();
+	</script>
 </head>
 
 <body>
@@ -47,8 +52,7 @@
 			</a>
 			<hr>
 			<p class="text">
-				This Pi-KVM device has running kvmd-vnc daemon and provides VNC port (default 5900)
-				for alternative access to the server other than the web interface.
+				This Pi-KVM device has running <b>kvmd-vnc</b> daemon and provides VNC access to the server.
 			</p>
 			<p class="text">
 				<b>WARNING!</b> We strongly don't recommend you to use VNC in untrusted networks.
@@ -58,7 +62,10 @@
 			<p class="text">
 				Your VNC client must support Tight JPEG compression, password authentication and allow
 				connection without encryption. <a href="https://tigervnc.org">TigerVNC</a> is a good choice.
+				On Linux, this client will most likely be available for installation from the repository.
+				It can also be called vncviewer.
 			</p>
+			<div id="vnc-text" class="code" style="max-height:200px;"></div>
 		</div>
 	</div>
 </body>

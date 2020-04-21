@@ -34,34 +34,11 @@ function __loadKvmdInfo() {
 	let http = tools.makeRequest("GET", "/api/info", function() {
 		if (http.readyState === 4) {
 			if (http.status === 200) {
-				let port = JSON.parse(http.responseText).result.extras.ipmi.port;
+				let port = JSON.parse(http.responseText).result.extras.vnc.port;
 				let host = window.location.hostname;
-				let site = `${window.location.protocol}//${window.location.host}`;
-				$("ipmi-text").innerHTML = `
-					<span class="code-comment"># Power on the server if it's off:<br>
-					$</span> ipmitool -I lanplus -U admin -P admin -H ${host} -p ${port} power on<br>
-					<span class="code-comment">$</span> curl -XPOST -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
-					&nbsp;&nbsp;&nbsp;&nbsp;${site}/api/atx/power?action=on<br>
-					<br>
-					<span class="code-comment"># Soft power off the server if it's on:<br>
-					$</span> ipmitool -I lanplus -U admin -P admin -H ${host} -p ${port} power soft<br>
-					<span class="code-comment">$</span> curl -XPOST -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
-					&nbsp;&nbsp;&nbsp;&nbsp;${site}/api/atx/power?action=off<br>
-					<br>
-					<span class="code-comment"># Hard power off the server if it's on:<br>
-					$</span> ipmitool -I lanplus -U admin -P admin -H ${host} -p ${port} power off<br>
-					<span class="code-comment">$</span> curl -XPOST -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
-					&nbsp;&nbsp;&nbsp;&nbsp;${site}/api/atx/power?action=off_hard<br>
-					<br>
-					<span class="code-comment"># Hard reset the server if it's on:<br>
-					$</span> ipmitool -I lanplus -U admin -P admin -H ${host} -p ${port} power reset<br>
-					<span class="code-comment">$</span> curl -XPOST -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
-					&nbsp;&nbsp;&nbsp;&nbsp;${site}/api/atx/power?action=reset_hard<br>
-					<br>
-					<span class="code-comment"># Check the power status:<br>
-					$</span> ipmitool -I lanplus -U admin -P admin -H ${host} -p ${port} power status<br>
-					<span class="code-comment">$</span> curl -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
-					&nbsp;&nbsp;&nbsp;&nbsp;${site}/api/atx
+				$("vnc-text").innerHTML = `
+					<span class="code-comment"># How to connect using the Linux terminal:<br>
+					$</span> vncviewer ${host}::${port}
 				`;
 			} else if (http.status === 401 || http.status === 403) {
 				document.location.href = "/login";

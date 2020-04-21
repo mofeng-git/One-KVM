@@ -30,6 +30,7 @@ import dbus.exceptions
 
 from ...logging import get_logger
 
+from ...yamlconf import Section
 from ...yamlconf.loader import load_yaml_file
 
 from ... import aiotools
@@ -39,10 +40,12 @@ from ... import aiotools
 class InfoManager:
     def __init__(
         self,
+        global_config: Section,
         meta_path: str,
         extras_path: str,
     ) -> None:
 
+        self.__global_config = global_config
         self.__meta_path = meta_path
         self.__extras_path = extras_path
 
@@ -57,10 +60,24 @@ class InfoManager:
         for app in os.listdir(self.__extras_path):
             if app[0] != "." and os.path.isdir(os.path.join(self.__extras_path, app)):
                 extras[app] = load_yaml_file(os.path.join(self.__extras_path, app, "manifest.yaml"))
-                daemon = extras[app].get("daemon", "")
-                if isinstance(daemon, str) and daemon.strip():
-                    extras[app]["enabled"] = self.__is_daemon_enabled(daemon)
+                self.__rewrite_app_daemon(extras[app])
+                self.__rewrite_app_port(extras[app])
         return extras
+
+    def __rewrite_app_daemon(self, extras: Dict) -> None:
+        daemon = extras.get("daemon", "")
+        if isinstance(daemon, str) and daemon.strip():
+            extras["enabled"] = self.__is_daemon_enabled(daemon)
+
+    def __rewrite_app_port(self, extras: Dict) -> None:
+        port_path = extras.get("port", "")
+        if isinstance(port_path, str) and port_path.strip():
+            extras["port"] = 0
+            config = self.__global_config
+            for item in filter(None, map(str.strip, port_path.split("/"))):
+                config = getattr(config, item, None)
+            if isinstance(config, int):
+                extras["port"] = config
 
     def __is_daemon_enabled(self, name: str) -> bool:
         if not name.startswith(".service"):

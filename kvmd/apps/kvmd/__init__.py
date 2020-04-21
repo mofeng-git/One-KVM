@@ -60,6 +60,7 @@ def main(argv: Optional[List[str]]=None) -> None:
         if config.kvmd.msd.type == "otg":
             msd_kwargs["gadget"] = config.otg.gadget  # XXX: Small crutch to pass gadget name to plugin
 
+        global_config = config
         config = config.kvmd
 
         KvmdServer(
@@ -71,7 +72,7 @@ def main(argv: Optional[List[str]]=None) -> None:
                 force_internal_users=config.auth.internal.force_users,
                 enabled=config.auth.enabled,
             ),
-            info_manager=InfoManager(**config.info._unpack()),
+            info_manager=InfoManager(global_config, **config.info._unpack()),
             log_reader=LogReader(),
             wol=WakeOnLan(**config.wol._unpack()),
 
