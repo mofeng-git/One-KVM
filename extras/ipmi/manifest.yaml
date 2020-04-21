@@ -4,4 +4,4 @@ icon: share/svg/ipmi.svg
 path: ipmi
 keyboard_cap: false
 daemon: kvmd-ipmi
-place: 20
+place: 21

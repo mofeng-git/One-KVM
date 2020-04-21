@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<!-- =========================================================================
+#                                                                            #
+#    KVMD - The main Pi-KVM daemon.                                          #
+#                                                                            #
+#    Copyright (C) 2018  Maxim Devaev <mdevaev@gmail.com>                    #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+========================================================================== -->
+
+
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<title>Pi-KVM VNC Info</title>
+
+	<link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
+	<link rel="manifest" href="/share/site.webmanifest">
+	<link rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5">
+	<meta name="msapplication-TileColor" content="#2b5797">
+	<meta name="theme-color" content="#ffffff">
+
+	<link rel="stylesheet" href="../share/css/vars.css">
+	<link rel="stylesheet" href="../share/css/main.css">
+	<link rel="stylesheet" href="../share/css/start.css">
+</head>
+
+<body>
+	<div class="start-box">
+		<div class="start">
+			<a style="display: inline-block; margin-top: 4px; color:#5c90bc; text-decoration: none;" href="/">
+				&nbsp;&nbsp;&larr;&nbsp;&nbsp; [ Pi-KVM Index ]
+			</a>
+			<hr>
+			<p class="text">
+				This Pi-KVM device has running kvmd-vnc daemon and provides VNC port (default 5900)
+				for alternative access to the server other than the web interface.
+			</p>
+			<p class="text">
+				<b>WARNING!</b> We strongly don't recommend you to use VNC in untrusted networks.
+				The current implementation does not use encryption, and your passwords are transmitted
+				over the network in a plain text.
+			</p>
+			<p class="text">
+				Your VNC client must support Tight JPEG compression, password authentication and allow
+				connection without encryption. <a href="https://tigervnc.org">TigerVNC</a> is a good choice.
+			</p>
+		</div>
+	</div>
+</body>
+</html>
