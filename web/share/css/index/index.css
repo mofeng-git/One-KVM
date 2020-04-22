@@ -52,6 +52,13 @@ div#apps-box ul#apps li div:hover.app {
 	box-shadow: none;
 }
 
+div#apps-box ul#apps li div:active.app {
+	color: var(--cs-control-pressed-fg) !important;
+	background-color: var(--cs-control-pressed-bg) !important;
+	border: var(--border-key-thin);
+	box-shadow: none;
+}
+
 div#apps-box ul#apps li div.app img {
 	display: block;
 	margin: auto;
