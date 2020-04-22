@@ -20,7 +20,7 @@
 # ========================================================================== #
 
 
-import socket
+import ipaddress
 
 from typing import List
 from typing import Callable
@@ -50,9 +50,9 @@ def valid_ip(arg: Any, v4: bool=True, v6: bool=True) -> str:
     assert v4 or v6
     validators: List[Callable] = []
     if v4:
-        validators.append(lambda arg: (arg, socket.inet_pton(socket.AF_INET, arg))[0])
+        validators.append(lambda arg: str(ipaddress.IPv4Address(arg)))
     if v6:
-        validators.append(lambda arg: (arg, socket.inet_pton(socket.AF_INET6, arg))[0])
+        validators.append(lambda arg: str(ipaddress.IPv6Address(arg)))
     name = "IP address"
     return check_any(
         arg=valid_stripped_string_not_empty(arg, name),
