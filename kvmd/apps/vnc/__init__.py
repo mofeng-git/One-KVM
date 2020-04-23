@@ -42,10 +42,17 @@ def main(argv: Optional[List[str]]=None) -> None:
 
     # pylint: disable=protected-access
     VncServer(
+        host=config.server.host,
+        port=config.server.port,
+        max_clients=config.server.max_clients,
+
+        tls_ciphers=config.server.tls.ciphers,
+        tls_timeout=config.server.tls.timeout,
+
+        desired_fps=config.desired_fps,
+        symmap=build_symmap(config.keymap),
+
         kvmd=KvmdClient(**config.kvmd._unpack()),
         streamer=StreamerClient(**config.streamer._unpack()),
         vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),
-        desired_fps=config.desired_fps,
-        symmap=build_symmap(config.keymap),
-        **config.server._unpack(),
     ).run()

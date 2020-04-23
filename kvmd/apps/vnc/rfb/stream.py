@@ -21,6 +21,7 @@
 
 
 import asyncio
+import ssl
 import struct
 
 from typing import Tuple
@@ -101,6 +102,31 @@ class RfbClientStream:
         )
 
     # =====
+
+    async def _start_tls(self, ssl_context: ssl.SSLContext, ssl_timeout: float) -> None:
+        loop = asyncio.get_event_loop()
+
+        ssl_reader = asyncio.StreamReader()
+        protocol = asyncio.StreamReaderProtocol(ssl_reader)
+
+        transport = await loop.start_tls(
+            self.__writer.transport,
+            protocol,
+            ssl_context,
+            server_side=True,
+            ssl_handshake_timeout=ssl_timeout,
+        )
+
+        ssl_reader.set_transport(transport)
+        ssl_writer = asyncio.StreamWriter(
+            transport=transport,
+            protocol=protocol,
+            reader=ssl_reader,
+            loop=loop,
+        )
+
+        self.__reader = ssl_reader
+        self.__writer = ssl_writer
 
     def _close(self) -> None:
         try:

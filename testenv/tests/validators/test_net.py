@@ -30,6 +30,7 @@ from kvmd.validators.net import valid_ip
 from kvmd.validators.net import valid_rfc_host
 from kvmd.validators.net import valid_port
 from kvmd.validators.net import valid_mac
+from kvmd.validators.net import valid_ssl_ciphers
 
 
 # =====
@@ -142,3 +143,15 @@ def test_ok__valid_mac(arg: Any) -> None:
 def test_fail__valid_mac(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_mac(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", ["ALL", " ALL:@SECLEVEL=0 "])
+def test_ok__valid_ssl_ciphers(arg: Any) -> None:
+    assert valid_ssl_ciphers(arg) == str(arg).strip()
+
+
+@pytest.mark.parametrize("arg", ["test", "all", "", None])
+def test_fail__valid_ssl_ciphers(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_ssl_ciphers(arg))

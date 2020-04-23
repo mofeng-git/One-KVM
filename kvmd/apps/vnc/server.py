@@ -59,29 +59,40 @@ class _SharedParams:
 
 
 class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
+        tls_ciphers: str,
+        tls_timeout: float,
+
+        desired_fps: int,
+        symmap: Dict[int, str],
 
         kvmd: KvmdClient,
         streamer: StreamerClient,
 
-        desired_fps: int,
-        symmap: Dict[int, str],
         vnc_credentials: Dict[str, VncAuthKvmdCredentials],
-
         shared_params: _SharedParams,
     ) -> None:
 
         self.__vnc_credentials = vnc_credentials
 
-        super().__init__(reader, writer, vnc_passwds=list(vnc_credentials), **dataclasses.asdict(shared_params))
+        super().__init__(
+            reader=reader,
+            writer=writer,
+            tls_ciphers=tls_ciphers,
+            tls_timeout=tls_timeout,
+            vnc_passwds=list(vnc_credentials),
+            **dataclasses.asdict(shared_params),
+        )
+
+        self.__desired_fps = desired_fps
+        self.__symmap = symmap
 
         self.__kvmd = kvmd
         self.__streamer = streamer
-        self.__desired_fps = desired_fps
-        self.__symmap = symmap
+
         self.__shared_params = shared_params
 
         self.__authorized = asyncio.Future()  # type: ignore
@@ -271,32 +282,46 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
 # =====
 class VncServer:  # pylint: disable=too-many-instance-attributes
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         host: str,
         port: int,
         max_clients: int,
 
-        kvmd: KvmdClient,
-        streamer: StreamerClient,
-        vnc_auth_manager: VncAuthManager,
+        tls_ciphers: str,
+        tls_timeout: float,
 
         desired_fps: int,
         symmap: Dict[int, str],
+
+        kvmd: KvmdClient,
+        streamer: StreamerClient,
+        vnc_auth_manager: VncAuthManager,
     ) -> None:
 
         self.__host = host
         self.__port = port
         self.__max_clients = max_clients
 
-        self.__kvmd = kvmd
-        self.__streamer = streamer
         self.__vnc_auth_manager = vnc_auth_manager
 
-        self.__desired_fps = desired_fps
-        self.__symmap = symmap
+        shared_params = _SharedParams()
 
-        self.__shared_params = _SharedParams()
+        async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            await _Client(
+                reader=reader,
+                writer=writer,
+                tls_ciphers=tls_ciphers,
+                tls_timeout=tls_timeout,
+                desired_fps=desired_fps,
+                symmap=symmap,
+                kvmd=kvmd,
+                streamer=streamer,
+                vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
+                shared_params=shared_params,
+            ).run()
+
+        self.__handle_client = handle_client
 
     def run(self) -> None:
         logger = get_logger(0)
@@ -332,15 +357,3 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
             loop.close()
             logger.info("Bye-bye")
-
-    async def __handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        await _Client(
-            reader=reader,
-            writer=writer,
-            kvmd=self.__kvmd,
-            streamer=self.__streamer,
-            desired_fps=self.__desired_fps,
-            symmap=self.__symmap,
-            vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
-            shared_params=self.__shared_params,
-        ).run()  # type: ignore

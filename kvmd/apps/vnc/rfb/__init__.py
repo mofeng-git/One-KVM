@@ -21,6 +21,7 @@
 
 
 import asyncio
+import ssl
 
 from typing import Tuple
 from typing import List
@@ -45,7 +46,7 @@ from .stream import RfbClientStream
 
 
 # =====
-class RfbClient(RfbClientStream):
+class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attributes
     # https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
     # https://www.toptal.com/java/implementing-remote-framebuffer-server-java
     # https://github.com/TigerVNC/tigervnc
@@ -54,6 +55,8 @@ class RfbClient(RfbClientStream):
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
+        tls_ciphers: str,
+        tls_timeout: float,
 
         width: int,
         height: int,
@@ -62,6 +65,9 @@ class RfbClient(RfbClientStream):
     ) -> None:
 
         super().__init__(reader, writer)
+
+        self.__tls_ciphers = tls_ciphers
+        self.__tls_timeout = tls_timeout
 
         self._width = width
         self._height = height
@@ -98,7 +104,7 @@ class RfbClient(RfbClientStream):
             raise
         except RfbConnectionError as err:
             logger.info("[%s] Client %s: Gone (%s): Disconnected", name, self._remote, str(err))
-        except RfbError as err:
+        except (RfbError, ssl.SSLError) as err:
             logger.error("[%s] Client %s: %s: Disconnected", name, self._remote, str(err))
         except Exception:
             logger.exception("[%s] Unhandled exception with client %s: Disconnected", name, self._remote)
@@ -225,13 +231,19 @@ class RfbClient(RfbClientStream):
 
         await self._write_struct("B", 0)
 
-        auth_types = {256: ("VeNCrypt/Plain", self.__handshake_security_vencrypt_userpass)}
+        auth_types = {
+            256: ("VeNCrypt/Plain", False, self.__handshake_security_vencrypt_userpass),
+            259: ("VeNCrypt/TLSPlain", True, self.__handshake_security_vencrypt_userpass),
+        }
         if self.__vnc_passwds:
             # Vinagre не умеет работать с VNC Auth через VeNCrypt, но это его проблемы,
             # так как он своеобразно трактует рекомендации VeNCrypt.
             # Подробнее: https://bugzilla.redhat.com/show_bug.cgi?id=692048
             # Hint: используйте любой другой нормальный VNC-клиент.
-            auth_types[2] = ("VeNCrypt/VNCAuth", self.__handshake_security_vnc_auth)
+            auth_types.update({
+                2: ("VeNCrypt/VNCAuth", False, self.__handshake_security_vnc_auth),
+                258: ("VeNCrypt/TLSVNCAuth", True, self.__handshake_security_vnc_auth),
+            })
 
         await self._write_struct("B" + "L" * len(auth_types), len(auth_types), *auth_types)
 
@@ -239,8 +251,15 @@ class RfbClient(RfbClientStream):
         if auth_type not in auth_types:
             raise RfbError(f"Invalid VeNCrypt auth type: {auth_type}")
 
-        (auth_name, handler) = auth_types[auth_type]
+        (auth_name, tls, handler) = auth_types[auth_type]
         get_logger(0).info("[main] Client %s: Using %s auth type", self._remote, auth_name)
+
+        if tls:
+            await self._write_struct("B", 1)  # Ack
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_context.set_ciphers(self.__tls_ciphers)
+            await self._start_tls(ssl_context, self.__tls_timeout)
+
         await handler()
 
     async def __handshake_security_vencrypt_userpass(self) -> None:

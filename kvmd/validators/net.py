@@ -21,11 +21,13 @@
 
 
 import ipaddress
+import ssl
 
 from typing import List
 from typing import Callable
 from typing import Any
 
+from . import ValidatorError
 from . import check_re_match
 from . import check_any
 
@@ -75,3 +77,13 @@ def valid_port(arg: Any) -> int:
 def valid_mac(arg: Any) -> str:
     pattern = ":".join([r"[0-9a-fA-F]{2}"] * 6)
     return check_re_match(arg, "MAC address", pattern).lower()
+
+
+def valid_ssl_ciphers(arg: Any) -> str:
+    name = "SSL ciphers"
+    arg = valid_stripped_string_not_empty(arg, name)
+    try:
+        ssl.SSLContext().set_ciphers(arg)
+    except Exception as err:
+        raise ValidatorError(f"The argument {arg!r} is not a valid {name}: {str(err)}")
+    return arg

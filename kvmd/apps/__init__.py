@@ -69,6 +69,7 @@ from ..validators.net import valid_ip_or_host
 from ..validators.net import valid_ip
 from ..validators.net import valid_port
 from ..validators.net import valid_mac
+from ..validators.net import valid_ssl_ciphers
 
 from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
@@ -328,8 +329,11 @@ def _get_config_scheme() -> Dict:
             "server": {
                 "host":        Option("::", type=valid_ip_or_host),
                 "port":        Option(5900, type=valid_port),
-                # TODO: timeout
                 "max_clients": Option(10, type=(lambda arg: valid_number(arg, min=1))),
+                "tls": {
+                    "ciphers": Option("ALL:@SECLEVEL=0", type=valid_ssl_ciphers),
+                    "timeout": Option(5.0, type=valid_float_f01),
+                },
             },
 
             "kvmd": {
