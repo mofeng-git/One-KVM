@@ -108,7 +108,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         self.__mouse_buttons: Dict[str, Optional[bool]] = {"left": None, "right": None, "middle": None}
         self.__mouse_move = {"x": -1, "y": -1}
 
-        self._lock = asyncio.Lock()
+        self.__lock = asyncio.Lock()
 
     # =====
 
@@ -165,13 +165,13 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             host = event["event"]["meta"].get("server", {}).get("host")
             if isinstance(host, str):
                 name = f"Pi-KVM: {host}"
-                async with self._lock:
+                async with self.__lock:
                     if self._encodings.has_rename:
                         await self._send_rename(name)
                 self.__shared_params.name = name
 
         elif event["event_type"] == "hid_state":
-            async with self._lock:
+            async with self.__lock:
                 if self._encodings.has_leds_state:
                     await self._send_leds_state(**event["event"]["keyboard"]["leds"])
 
@@ -197,7 +197,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 await asyncio.sleep(1)
 
     async def __send_fb_real(self, width: int, height: int, jpeg: bytes) -> None:
-        async with self._lock:
+        async with self.__lock:
             if self.__fb_requested:
                 if (self._width, self._height) != (width, height):
                     self.__shared_params.width = width
@@ -214,7 +214,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def __send_fb_stub(self, text: str, no_lock: bool=False) -> None:
         if not no_lock:
-            await self._lock.acquire()
+            await self.__lock.acquire()
         try:
             if self.__fb_requested and (self.__fb_stub_text != text or self.__fb_stub_quality != self._encodings.tight_jpeg_quality):
                 await self._send_fb(await make_text_jpeg(self._width, self._height, self._encodings.tight_jpeg_quality, text))
@@ -223,7 +223,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 self.__fb_requested = False
         finally:
             if not no_lock:
-                self._lock.release()
+                self.__lock.release()
 
     # =====
 
@@ -279,7 +279,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         await self.__kvmd.set_streamer_params(user, passwd, self._encodings.tight_jpeg_quality, self.__desired_fps)
 
     async def _on_fb_update_request(self) -> None:
-        async with self._lock:
+        async with self.__lock:
             self.__fb_requested = True
 
 
