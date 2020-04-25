@@ -337,6 +337,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
 
             with contextlib.closing(socket.socket(socket.AF_INET6, socket.SOCK_STREAM)) as sock:
                 sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
                 sock.bind((self.__host, self.__port))
 
                 server = loop.run_until_complete(asyncio.start_server(
