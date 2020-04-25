@@ -77,8 +77,6 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self.__rfb_version = 0
         self._encodings = RfbClientEncodings(frozenset())
 
-        self._lock = asyncio.Lock()
-
         get_logger(0).info("Connected client: %s", self._remote)
 
     # =====

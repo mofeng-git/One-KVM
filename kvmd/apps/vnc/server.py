@@ -108,6 +108,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         self.__mouse_buttons: Dict[str, Optional[bool]] = {"left": None, "right": None, "middle": None}
         self.__mouse_move = {"x": -1, "y": -1}
 
+        self._lock = asyncio.Lock()
+
     # =====
 
     async def run(self) -> None:
@@ -277,7 +279,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         await self.__kvmd.set_streamer_params(user, passwd, self._encodings.tight_jpeg_quality, self.__desired_fps)
 
     async def _on_fb_update_request(self) -> None:
-        self.__fb_requested = True
+        async with self._lock:
+            self.__fb_requested = True
 
 
 # =====
