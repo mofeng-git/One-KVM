@@ -139,9 +139,9 @@ select:disabled {
 }
 
 select {
-	-webkit-appearance: button;
-	-moz-appearance: button;
-	appearance: button;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
 	-webkit-user-select: none;
 	-moz-user-select: none;
 	user-select: none;
