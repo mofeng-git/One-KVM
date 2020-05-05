@@ -119,9 +119,9 @@ for _variant in "${_variants[@]}"; do
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
 			depends=(\"\${depends[@]}\")
 			if [ $_board == rpi4 ]; then
-				depends=(\"\${depends[@]}\" \"linux-raspberrypi4>=4.19.71-1\")
+				depends=(\"\${depends[@]}\" \"linux-raspberrypi4=4.19.118-1\")
 			else
-				depends=(\"\${depends[@]}\" \"linux-raspberrypi>=4.19.71-1\")
+				depends=(\"\${depends[@]}\" \"linux-raspberrypi>=4.19.118-1\")
 			fi
 		fi
 
