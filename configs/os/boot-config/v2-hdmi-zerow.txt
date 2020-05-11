@@ -6,5 +6,5 @@ gpu_mem=64
 start_x=1
 enable_uart=1
 dtoverlay=tc358743,i2c_pins_28_29=1
-dtoverlay=pi3-disable-bt
+dtoverlay=disable-bt
 dtoverlay=dwc2

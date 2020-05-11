@@ -7,4 +7,4 @@ start_x=1
 enable_uart=1
 dtoverlay=tc358743
 dtparam=act_led_gpio=26
-dtoverlay=pi3-disable-bt
+dtoverlay=disable-bt

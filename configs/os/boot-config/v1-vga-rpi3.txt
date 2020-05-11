@@ -5,4 +5,4 @@ hdmi_force_hotplug=1
 gpu_mem=16
 dtparam=act_led_gpio=26
 enable_uart=1
-dtoverlay=pi3-disable-bt
+dtoverlay=disable-bt
