@@ -129,7 +129,7 @@ class RfbClientStream:
         self.__writer = ssl_writer
 
     async def _close(self) -> None:
-        self.__writer.transport.abort()
+        self.__writer.transport.abort()  # type: ignore
         try:
             self.__writer.close()
         except Exception:
