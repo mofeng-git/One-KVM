@@ -54,7 +54,7 @@ tox: testenv
 			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
 			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
-		-it $(TESTENV_IMAGE) bash -c " \
+		-t $(TESTENV_IMAGE) bash -c " \
 			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \

@@ -1,20 +1,20 @@
-name: Docker Image CI
+name: CI
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+    push:
+        branches: [master]
+    pull_request:
+        branches: [master]
 
 jobs:
+    build:
+        runs-on: ubuntu-latest
 
-  build:
+        steps:
+          - uses: actions/checkout@v2
 
-    runs-on: ubuntu-latest
+          - name: Building testenv ...
+            run: make testenv
 
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build testenv
-      run: make testenv
-    - name: Toxing
-      run: make tox
+          - name: Running tests ...
+            run: make tox
