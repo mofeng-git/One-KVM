@@ -21,12 +21,16 @@
 
 
 import sys
+import types
 import logging
+
+from typing import Optional
 
 
 # =====
 def get_logger(depth: int=1) -> logging.Logger:
-    frame = sys._getframe(1)  # pylint: disable=protected-access
+    frame: Optional[types.FrameType] = sys._getframe(1)  # pylint: disable=protected-access
+    assert frame
     frames = []
     while frame:
         frames.append(frame)

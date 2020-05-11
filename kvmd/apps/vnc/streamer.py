@@ -61,7 +61,9 @@ class StreamerClient:
                     response.raise_for_status()
                     reader = aiohttp.MultipartReader.from_response(response)
                     while True:
-                        frame = await reader.next()
+                        frame = await reader.next()  # pylint: disable=not-callable
+                        if not isinstance(frame, aiohttp.BodyPartReader):
+                            raise RuntimeError("Expected body part")
                         yield (
                             (frame.headers["X-UStreamer-Online"] == "true"),
                             int(frame.headers["X-UStreamer-Width"]),

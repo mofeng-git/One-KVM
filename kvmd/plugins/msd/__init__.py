@@ -94,8 +94,7 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        if True:  # pylint: disable=using-constant-test
-            # XXX: Vulture hack
+        if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield
 
@@ -117,9 +116,8 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str) -> AsyncGenerator[None, None]:
-        if True:  # pylint: disable=using-constant-test
-            # XXX: Vulture hack
+    async def write_image(self, name: str) -> AsyncGenerator[None, None]:  # pylint: disable=unused-argument
+        if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield
 

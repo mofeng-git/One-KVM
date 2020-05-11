@@ -23,6 +23,7 @@
 import contextlib
 
 from typing import Dict
+from typing import AsyncGenerator
 
 import aiohttp
 
@@ -64,7 +65,7 @@ class KvmdClient:
             raise
 
     @contextlib.asynccontextmanager
-    async def ws(self, user: str, passwd: str) -> aiohttp.ClientWebSocketResponse:  # pylint: disable=invalid-name
+    async def ws(self, user: str, passwd: str) -> AsyncGenerator[aiohttp.ClientWebSocketResponse, None]:
         async with self.__make_session(user, passwd) as session:
             async with session.ws_connect(
                 url=f"http://{self.__host}:{self.__port}/ws",

@@ -127,7 +127,7 @@ def _parse_image_info_bytes(data: bytes) -> Optional[_ImageInfo]:
 
 def _ioctl_uint32(device_file: IO, request: int) -> int:
     buf = b"\0" * 4
-    buf = fcntl.ioctl(device_file.fileno(), request, buf)
+    buf = fcntl.ioctl(device_file.fileno(), request, buf)  # type: ignore
     result = struct.unpack("I", buf)[0]
     assert result > 0, (device_file, request, buf)
     return result

@@ -138,6 +138,8 @@ def make_json_exception(err: Exception, status: int) -> aiohttp.web.Response:
 # =====
 async def get_multipart_field(reader: aiohttp.MultipartReader, name: str) -> aiohttp.BodyPartReader:
     field = await reader.next()
+    if not isinstance(field, aiohttp.BodyPartReader):
+        raise ValidatorError(f"Expected body part as {name!r} field")
     if not field or field.name != name:
         raise ValidatorError(f"Missing {name!r} field")
     return field
