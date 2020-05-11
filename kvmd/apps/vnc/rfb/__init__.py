@@ -91,6 +91,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         finally:
             for task in tasks:
                 task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await self._close()
+            get_logger(0).info("Connection closed: %s", self._remote)
 
     async def __wrapper(self, name: str, coro: Coroutine) -> None:
         logger = get_logger(0)
@@ -98,23 +101,20 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             await coro
             raise RuntimeError("Subtask just finished without any exception")
         except asyncio.CancelledError:
-            logger.info("[%s] Client %s: Cancelling ...", name, self._remote)
+            logger.info("[%s] Client %s: Cancelling subtask ...", name, self._remote)
             raise
         except RfbConnectionError as err:
-            logger.info("[%s] Client %s: Gone (%s): Disconnected", name, self._remote, str(err))
+            logger.info("[%s] Client %s: Gone: %s", name, self._remote, str(err))
         except (RfbError, ssl.SSLError) as err:
-            logger.error("[%s] Client %s: %s: Disconnected", name, self._remote, str(err))
+            logger.error("[%s] Client %s: Error: %s", name, self._remote, str(err))
         except Exception:
-            logger.exception("[%s] Unhandled exception with client %s: Disconnected", name, self._remote)
+            logger.exception("[%s] Unhandled exception with client %s", name, self._remote)
 
     async def __main_task_loop(self) -> None:
-        try:
-            await self.__handshake_version()
-            await self.__handshake_security()
-            await self.__handshake_init()
-            await self.__main_loop()
-        finally:
-            self._close()
+        await self.__handshake_version()
+        await self.__handshake_security()
+        await self.__handshake_init()
+        await self.__main_loop()
 
     # =====
 

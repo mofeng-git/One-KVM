@@ -128,8 +128,10 @@ class RfbClientStream:
         self.__reader = ssl_reader
         self.__writer = ssl_writer
 
-    def _close(self) -> None:
+    async def _close(self) -> None:
+        self.__writer.transport.abort()
         try:
             self.__writer.close()
         except Exception:
             pass
+        await self.__writer.wait_closed()
