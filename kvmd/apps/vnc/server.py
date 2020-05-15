@@ -73,6 +73,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         streamer: StreamerClient,
 
         vnc_credentials: Dict[str, VncAuthKvmdCredentials],
+        none_auth_only: bool,
         shared_params: _SharedParams,
     ) -> None:
 
@@ -84,6 +85,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             tls_ciphers=tls_ciphers,
             tls_timeout=tls_timeout,
             vnc_passwds=list(vnc_credentials),
+            none_auth_only=none_auth_only,
             **dataclasses.asdict(shared_params),
         )
 
@@ -239,6 +241,11 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             return kc.user
         return ""
 
+    async def _on_authorized_none(self) -> bool:
+        return (await self._authorize_userpass("", ""))
+
+    # =====
+
     async def _on_key_event(self, code: int, state: bool) -> None:
         if (web_name := self.__symmap.get(code)) is not None:  # noqa: E203,E231
             await self.__ws_writer_queue.put({
@@ -321,6 +328,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                 kvmd=kvmd,
                 streamer=streamer,
                 vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
+                none_auth_only=(await kvmd.authorize("", "")),
                 shared_params=shared_params,
             ).run()
 

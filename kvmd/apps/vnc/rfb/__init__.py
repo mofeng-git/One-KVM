@@ -62,6 +62,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         height: int,
         name: str,
         vnc_passwds: List[str],
+        none_auth_only: bool,
     ) -> None:
 
         super().__init__(reader, writer)
@@ -73,6 +74,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self._height = height
         self.__name = name
         self.__vnc_passwds = vnc_passwds
+        self.__none_auth_only = none_auth_only
 
         self.__rfb_version = 0
         self._encodings = RfbClientEncodings(frozenset())
@@ -123,6 +125,11 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def _on_authorized_vnc_passwd(self, passwd: str) -> str:
         raise NotImplementedError
+
+    async def _on_authorized_none(self) -> bool:
+        raise NotImplementedError
+
+    # =====
 
     async def _on_key_event(self, code: int, state: bool) -> None:
         raise NotImplementedError
@@ -201,10 +208,12 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         sec_types: Dict[int, Tuple[str, Callable]] = {}
         if self.__rfb_version > 3:
             sec_types[19] = ("VeNCrypt", self.__handshake_security_vencrypt)
-        if self.__vnc_passwds:
+        if self.__none_auth_only:
+            sec_types[1] = ("None", self.__handshake_security_none)
+        elif self.__vnc_passwds:
             sec_types[2] = ("VNCAuth", self.__handshake_security_vnc_auth)
         if not sec_types:
-            msg = "The client uses a very old protocol 3.3 and VNCAuth is disabled"
+            msg = "The client uses a very old protocol 3.3 and VNCAuth or NoneAuth is disabled"
             await self._write_struct("L", 0, drain=False)  # Refuse old clients using the invalid security type
             await self._write_reason(msg)
             raise RfbError(msg)
@@ -229,19 +238,25 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
         await self._write_struct("B", 0)
 
-        auth_types = {
-            256: ("VeNCrypt/Plain", False, self.__handshake_security_vencrypt_userpass),
-            259: ("VeNCrypt/TLSPlain", True, self.__handshake_security_vencrypt_userpass),
-        }
-        if self.__vnc_passwds:
-            # Vinagre не умеет работать с VNC Auth через VeNCrypt, но это его проблемы,
-            # так как он своеобразно трактует рекомендации VeNCrypt.
-            # Подробнее: https://bugzilla.redhat.com/show_bug.cgi?id=692048
-            # Hint: используйте любой другой нормальный VNC-клиент.
-            auth_types.update({
-                2: ("VeNCrypt/VNCAuth", False, self.__handshake_security_vnc_auth),
-                258: ("VeNCrypt/TLSVNCAuth", True, self.__handshake_security_vnc_auth),
-            })
+        if self.__none_auth_only:
+            auth_types = {
+                1: ("VeNCrypt/None", False, self.__handshake_security_none),
+                257: ("VeNCrypt/TLSNone", True, self.__handshake_security_none),
+            }
+        else:
+            auth_types = {
+                256: ("VeNCrypt/Plain", False, self.__handshake_security_vencrypt_userpass),
+                259: ("VeNCrypt/TLSPlain", True, self.__handshake_security_vencrypt_userpass),
+            }
+            if self.__vnc_passwds:
+                # Vinagre не умеет работать с VNC Auth через VeNCrypt, но это его проблемы,
+                # так как он своеобразно трактует рекомендации VeNCrypt.
+                # Подробнее: https://bugzilla.redhat.com/show_bug.cgi?id=692048
+                # Hint: используйте любой другой нормальный VNC-клиент.
+                auth_types.update({
+                    2: ("VeNCrypt/VNCAuth", False, self.__handshake_security_vnc_auth),
+                    258: ("VeNCrypt/TLSVNCAuth", True, self.__handshake_security_vnc_auth),
+                })
 
         await self._write_struct("B" + "L" * len(auth_types), len(auth_types), *auth_types)
 
@@ -266,8 +281,11 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         passwd = await self._read_text(passwd_length)
 
         ok = await self._authorize_userpass(user, passwd)
-
         await self.__handshake_security_send_result(ok, user)
+
+    async def __handshake_security_none(self) -> None:
+        ok = await self._on_authorized_none()
+        await self.__handshake_security_send_result(ok, "")
 
     async def __handshake_security_vnc_auth(self) -> None:
         challenge = rfb_make_challenge()
@@ -287,14 +305,26 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def __handshake_security_send_result(self, ok: bool, user: str) -> None:
         if ok:
-            assert user
-            get_logger(0).info("[main] Client %s: Access granted for user %r", self._remote, user)
+            if self.__none_auth_only:
+                assert len(user) == 0
+                get_logger(0).info("[main] Client %s: Anonymous access granted", self._remote)
+            else:
+                assert user
+                get_logger(0).info("[main] Client %s: Access granted for user %r", self._remote, user)
             await self._write_struct("L", 0)
         else:
             await self._write_struct("L", 1, drain=(self.__rfb_version < 8))
+            if self.__none_auth_only:
+                reason = msg = "Anonymous access denied"
+            elif user:
+                reason = "Invalid username or password"
+                msg = f"Access denied for user {user!r}"
+            else:
+                reason = "Invalid password"
+                msg = "Access denied"
             if self.__rfb_version >= 8:
-                await self._write_reason("Invalid username or password" if user else "Invalid password")
-            raise RfbError(f"Access denied for user {user!r}" if user else "Access denied")
+                await self._write_reason(reason)
+            raise RfbError(msg)
 
     # =====
 
