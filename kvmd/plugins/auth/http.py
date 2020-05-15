@@ -71,6 +71,8 @@ class Plugin(BaseAuthService):
         }
 
     async def authorize(self, user: str, passwd: str) -> bool:
+        assert user == user.strip()
+        assert user
         session = self.__ensure_session()
         try:
             async with session.request(

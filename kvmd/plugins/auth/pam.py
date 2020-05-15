@@ -67,6 +67,8 @@ class Plugin(BaseAuthService):
         }
 
     async def authorize(self, user: str, passwd: str) -> bool:
+        assert user == user.strip()
+        assert user
         async with self.__lock:
             return (await aiotools.run_async(self.__inner_authorize, user, passwd))
 

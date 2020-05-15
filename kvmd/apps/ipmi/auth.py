@@ -70,9 +70,13 @@ class IpmiAuthManager:
 
             (ipmi_user, ipmi_passwd) = left.split(":")
             ipmi_user = ipmi_user.strip()
+            if len(ipmi_user) == 0:
+                raise IpmiPasswdError(f"Empty IPMI user (left) at line #{number}")
 
             (kvmd_user, kvmd_passwd) = right.split(":")
             kvmd_user = kvmd_user.strip()
+            if len(kvmd_user) == 0:
+                raise IpmiPasswdError(f"Empty KVMD user (left) at line #{number}")
 
             if ipmi_user in credentials:
                 raise IpmiPasswdError(f"Found duplicating user {ipmi_user!r} (left) at line #{number}")

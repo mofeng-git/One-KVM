@@ -71,6 +71,8 @@ class AuthManager:
         return self.__enabled
 
     async def authorize(self, user: str, passwd: str) -> bool:
+        assert user == user.strip()
+        assert user
         assert self.__enabled
         assert self.__internal_service
 
@@ -87,6 +89,8 @@ class AuthManager:
         return ok
 
     async def login(self, user: str, passwd: str) -> Optional[str]:
+        assert user == user.strip()
+        assert user
         assert self.__enabled
         if (await self.authorize(user, passwd)):
             for (token, token_user) in self.__tokens.items():

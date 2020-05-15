@@ -277,54 +277,58 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def __handshake_security_vencrypt_userpass(self) -> None:
         (user_length, passwd_length) = await self._read_struct("LL")
-        user = await self._read_text(user_length)
+        user = (await self._read_text(user_length)).strip()
         passwd = await self._read_text(passwd_length)
 
-        ok = await self._authorize_userpass(user, passwd)
-        await self.__handshake_security_send_result(ok, user)
+        allow = await self._authorize_userpass(user, passwd)
+        if allow:
+            assert user
+        await self.__handshake_security_send_result(
+            allow=allow,
+            allow_msg=f"Access granted for user {user!r}",
+            deny_msg=f"Access denied for user {user!r}",
+            deny_reason="Invalid username or password",
+        )
 
     async def __handshake_security_none(self) -> None:
-        ok = await self._on_authorized_none()
-        await self.__handshake_security_send_result(ok, "")
+        allow = await self._on_authorized_none()
+        await self.__handshake_security_send_result(
+            allow=allow,
+            allow_msg="NoneAuth access granted",
+            deny_msg="NoneAuth access denied",
+            deny_reason="Access denied",
+        )
 
     async def __handshake_security_vnc_auth(self) -> None:
         challenge = rfb_make_challenge()
         await self._write_struct("", challenge)
 
-        (ok, user) = (False, "")
+        user = ""
         response = (await self._read_struct("16s"))[0]
         for passwd in self.__vnc_passwds:
             passwd_bytes = passwd.encode("utf-8", errors="ignore")
             if rfb_encrypt_challenge(challenge, passwd_bytes) == response:
                 user = await self._on_authorized_vnc_passwd(passwd)
                 if user:
-                    ok = True
+                    assert user == user.strip()
                 break
 
-        await self.__handshake_security_send_result(ok, user)
+        await self.__handshake_security_send_result(
+            allow=bool(user),
+            allow_msg="VNCAuth access granted for user {user!r}",
+            deny_msg="VNCAuth access denied (user not found)",
+            deny_reason="Invalid password",
+        )
 
-    async def __handshake_security_send_result(self, ok: bool, user: str) -> None:
-        if ok:
-            if self.__none_auth_only:
-                assert len(user) == 0
-                get_logger(0).info("[main] Client %s: Anonymous access granted", self._remote)
-            else:
-                assert user
-                get_logger(0).info("[main] Client %s: Access granted for user %r", self._remote, user)
+    async def __handshake_security_send_result(self, allow: bool, allow_msg: str, deny_msg: str, deny_reason: str) -> None:
+        if allow:
+            get_logger(0).info("[main] Client %s: %s", self._remote, allow_msg)
             await self._write_struct("L", 0)
         else:
             await self._write_struct("L", 1, drain=(self.__rfb_version < 8))
-            if self.__none_auth_only:
-                reason = msg = "Anonymous access denied"
-            elif user:
-                reason = "Invalid username or password"
-                msg = f"Access denied for user {user!r}"
-            else:
-                reason = "Invalid password"
-                msg = "Access denied"
             if self.__rfb_version >= 8:
-                await self._write_reason(reason)
-            raise RfbError(msg)
+                await self._write_reason(deny_reason)
+            raise RfbError(deny_msg)
 
     # =====
 

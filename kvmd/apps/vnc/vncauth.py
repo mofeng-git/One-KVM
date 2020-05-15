@@ -81,6 +81,8 @@ class VncAuthManager:
 
             (kvmd_user, kvmd_passwd) = kvmd_userpass.split(":")
             kvmd_user = kvmd_user.strip()
+            if len(kvmd_user) == 0:
+                raise VncAuthError(f"Empty KVMD user (right part) at line #{number}")
 
             if vnc_passwd in credentials:
                 raise VncAuthError(f"Found duplicating VNC password (left part) at line #{number}")
