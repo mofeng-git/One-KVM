@@ -36,7 +36,7 @@ from pyghmi.ipmi.private.serversession import ServerSession as IpmiServerSession
 
 from ...logging import get_logger
 
-from ... import __version__
+from ... import make_user_agent
 
 from .auth import IpmiAuthManager
 
@@ -169,7 +169,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
                     headers={
                         "X-KVMD-User": credentials.kvmd_user,
                         "X-KVMD-Passwd": credentials.kvmd_passwd,
-                        "User-Agent": f"KVMD-IPMI/{__version__}",
+                        "User-Agent": make_user_agent("KVMD-IPMI"),
                     },
                     timeout=self.__kvmd_timeout,
                 ) as response:

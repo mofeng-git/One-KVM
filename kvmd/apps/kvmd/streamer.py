@@ -38,7 +38,7 @@ from ...logging import get_logger
 from ... import aiotools
 from ... import gpio
 
-from ... import __version__
+from ... import make_user_agent
 
 
 # =====
@@ -180,7 +180,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             try:
                 async with session.get(
                     url=f"http://{self.__host}:{self.__port}/state",
-                    headers={"User-Agent": f"KVMD/{__version__}"},
+                    headers={"User-Agent": make_user_agent("KVMD")},
                     timeout=self.__timeout,
                 ) as response:
                     response.raise_for_status()

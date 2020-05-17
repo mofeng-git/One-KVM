@@ -33,7 +33,7 @@ from ...validators.basic import valid_float_f01
 
 from ...logging import get_logger
 
-from ... import __version__
+from ... import make_user_agent
 
 from . import BaseAuthService
 
@@ -85,7 +85,7 @@ class Plugin(BaseAuthService):
                     "secret": self.__secret,
                 },
                 headers={
-                    "User-Agent": f"KVMD/{__version__}",
+                    "User-Agent": make_user_agent("KVMD"),
                     "X-KVMD-User": user,
                 },
             ) as response:

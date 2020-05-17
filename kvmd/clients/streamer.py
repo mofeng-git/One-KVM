@@ -20,30 +20,28 @@
 # ========================================================================== #
 
 
-import contextlib
-
+from typing import Tuple
 from typing import Dict
 from typing import AsyncGenerator
 
 import aiohttp
 
-from ... import __version__
-
 
 # =====
-class KvmdError(Exception):
+class StreamerError(Exception):
     def __init__(self, err: Exception):
         super().__init__(f"{type(err).__name__} {err}")
 
 
 # =====
-class KvmdClient:
+class StreamerClient:
     def __init__(
         self,
         host: str,
         port: int,
         unix_path: str,
         timeout: float,
+        user_agent: str,
     ) -> None:
 
         assert port or unix_path
@@ -51,63 +49,37 @@ class KvmdClient:
         self.__port = port
         self.__unix_path = unix_path
         self.__timeout = timeout
+        self.__user_agent = user_agent
 
-    # =====
-
-    async def authorize(self, user: str, passwd: str) -> bool:
+    async def read(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
         try:
-            async with self.__make_session(user, passwd) as session:
+            async with self.__make_session() as session:
                 async with session.get(
-                    url=f"http://{self.__host}:{self.__port}/auth/check",
-                    timeout=self.__timeout,
+                    url=f"http://{self.__host}:{self.__port}/stream",
+                    params={"extra_headers": "1"},
+                    headers={"User-Agent": self.__user_agent},
                 ) as response:
                     response.raise_for_status()
-                    if response.status == 200:
-                        return True
-                    raise RuntimeError(f"Invalid OK response: {response.status} {await response.text()}")
-        except aiohttp.ClientResponseError as err:
-            if err.status in [401, 403]:
-                return False
-            raise KvmdError(err)
-        except aiohttp.ClientError as err:
-            raise KvmdError(err)
+                    reader = aiohttp.MultipartReader.from_response(response)
+                    while True:
+                        frame = await reader.next()  # pylint: disable=not-callable
+                        if not isinstance(frame, aiohttp.BodyPartReader):
+                            raise RuntimeError("Expected body part")
+                        yield (
+                            (frame.headers["X-UStreamer-Online"] == "true"),
+                            int(frame.headers["X-UStreamer-Width"]),
+                            int(frame.headers["X-UStreamer-Height"]),
+                            bytes(await frame.read()),
+                        )
+        except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня из-за корявых исключений в MultipartReader
+            raise StreamerError(err)
 
-    @contextlib.asynccontextmanager
-    async def ws(self, user: str, passwd: str) -> AsyncGenerator[aiohttp.ClientWebSocketResponse, None]:
-        try:
-            async with self.__make_session(user, passwd) as session:
-                async with session.ws_connect(
-                    url=f"http://{self.__host}:{self.__port}/ws",
-                    timeout=self.__timeout,
-                ) as ws:
-                    yield ws
-        except aiohttp.ClientError as err:
-            raise KvmdError(err)
-
-    async def set_streamer_params(self, user: str, passwd: str, quality: int, desired_fps: int) -> None:
-        try:
-            async with self.__make_session(user, passwd) as session:
-                async with session.post(
-                    url=f"http://{self.__host}:{self.__port}/streamer/set_params",
-                    timeout=self.__timeout,
-                    params={
-                        "quality": quality,
-                        "desired_fps": desired_fps,
-                    },
-                ) as response:
-                    response.raise_for_status()
-        except aiohttp.ClientError as err:
-            raise KvmdError(err)
-
-    # =====
-
-    def __make_session(self, user: str, passwd: str) -> aiohttp.ClientSession:
+    def __make_session(self) -> aiohttp.ClientSession:
         kwargs: Dict = {
-            "headers": {
-                "X-KVMD-User": user,
-                "X-KVMD-Passwd": passwd,
-                "User-Agent": f"KVMD-VNC/{__version__}",
-            },
+            "timeout": aiohttp.ClientTimeout(
+                connect=self.__timeout,
+                sock_read=self.__timeout,
+            ),
         }
         if self.__unix_path:
             kwargs["connector"] = aiohttp.UnixConnector(path=self.__unix_path)

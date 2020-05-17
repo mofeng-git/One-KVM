@@ -34,6 +34,12 @@ import aiohttp
 
 from ...logging import get_logger
 
+from ...clients.kvmd import KvmdError
+from ...clients.kvmd import KvmdClient
+
+from ...clients.streamer import StreamerError
+from ...clients.streamer import StreamerClient
+
 from ... import aiotools
 
 from .rfb import RfbClient
@@ -43,12 +49,6 @@ from .rfb.errors import RfbError
 
 from .vncauth import VncAuthKvmdCredentials
 from .vncauth import VncAuthManager
-
-from .kvmd import KvmdError
-from .kvmd import KvmdClient
-
-from .streamer import StreamerError
-from .streamer import StreamerClient
 
 from .render import make_text_jpeg
 
