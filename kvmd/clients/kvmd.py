@@ -24,6 +24,7 @@ import contextlib
 
 from typing import Dict
 from typing import AsyncGenerator
+from typing import Union
 
 import aiohttp
 
@@ -32,12 +33,15 @@ from .. import make_user_agent
 
 # =====
 class KvmdError(Exception):
-    def __init__(self, err: Exception):
-        super().__init__(f"{type(err).__name__}: {err}")
+    def __init__(self, err: Union[Exception, str]) -> None:
+        if isinstance(err, Exception):
+            super().__init__(f"{type(err).__name__}: {err}")
+        else:
+            super().__init__(err)
 
 
 # =====
-class KvmdClient:
+class _BaseClientPart:
     def __init__(
         self,
         host: str,
@@ -52,46 +56,11 @@ class KvmdClient:
         self.__unix_path = unix_path
         self.__timeout = timeout
 
-    # =====
+    def _make_url(self, handle: str) -> str:
+        assert not handle.startswith("/"), handle
+        return f"http://{self.__host}:{self.__port}/{handle}"
 
-    async def authorize(self, user: str, passwd: str) -> bool:
-        try:
-            async with self.__make_session(user, passwd) as session:
-                async with session.get(f"http://{self.__host}:{self.__port}/auth/check") as response:
-                    response.raise_for_status()
-                    if response.status == 200:
-                        return True
-                    raise RuntimeError(f"Invalid OK response: {response.status} {await response.text()}")
-        except aiohttp.ClientResponseError as err:
-            if err.status in [401, 403]:
-                return False
-            raise KvmdError(err)
-        except aiohttp.ClientError as err:
-            raise KvmdError(err)
-
-    @contextlib.asynccontextmanager
-    async def ws(self, user: str, passwd: str) -> AsyncGenerator[aiohttp.ClientWebSocketResponse, None]:
-        try:
-            async with self.__make_session(user, passwd) as session:
-                async with session.ws_connect(f"http://{self.__host}:{self.__port}/ws") as ws:
-                    yield ws
-        except aiohttp.ClientError as err:
-            raise KvmdError(err)
-
-    async def set_streamer_params(self, user: str, passwd: str, quality: int, desired_fps: int) -> None:
-        try:
-            async with self.__make_session(user, passwd) as session:
-                async with session.post(
-                    url=f"http://{self.__host}:{self.__port}/streamer/set_params",
-                    params={"quality": quality, "desired_fps": desired_fps},
-                ) as response:
-                    response.raise_for_status()
-        except aiohttp.ClientError as err:
-            raise KvmdError(err)
-
-    # =====
-
-    def __make_session(self, user: str, passwd: str) -> aiohttp.ClientSession:
+    def _make_session(self, user: str, passwd: str) -> aiohttp.ClientSession:
         kwargs: Dict = {
             "headers": {
                 "X-KVMD-User": user,
@@ -103,3 +72,65 @@ class KvmdClient:
         if self.__unix_path:
             kwargs["connector"] = aiohttp.UnixConnector(path=self.__unix_path)
         return aiohttp.ClientSession(**kwargs)
+
+
+class _AuthClientPart(_BaseClientPart):
+    async def check(self, user: str, passwd: str) -> bool:
+        try:
+            async with self._make_session(user, passwd) as session:
+                async with session.get(self._make_url("auth/check")) as response:
+                    response.raise_for_status()
+                    if response.status == 200:
+                        return True
+                    raise KvmdError(f"Invalid OK response: {response.status} {await response.text()}")
+        except aiohttp.ClientResponseError as err:
+            if err.status in [401, 403]:
+                return False
+            raise KvmdError(err)
+        except aiohttp.ClientError as err:
+            raise KvmdError(err)
+
+
+class _StreamerClientPart(_BaseClientPart):
+    async def set_params(self, user: str, passwd: str, quality: int, desired_fps: int) -> None:
+        try:
+            async with self._make_session(user, passwd) as session:
+                async with session.post(
+                    url=self._make_url("streamer/set_params"),
+                    params={"quality": quality, "desired_fps": desired_fps},
+                ) as response:
+                    response.raise_for_status()
+        except aiohttp.ClientError as err:
+            raise KvmdError(err)
+
+
+# =====
+class KvmdClient(_BaseClientPart):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        unix_path: str,
+        timeout: float,
+    ) -> None:
+
+        kwargs: Dict = {
+            "host": host,
+            "port": port,
+            "unix_path": unix_path,
+            "timeout": timeout,
+        }
+
+        super().__init__(**kwargs)
+
+        self.auth = _AuthClientPart(**kwargs)
+        self.streamer = _StreamerClientPart(**kwargs)
+
+    @contextlib.asynccontextmanager
+    async def ws(self, user: str, passwd: str) -> AsyncGenerator[aiohttp.ClientWebSocketResponse, None]:
+        try:
+            async with self._make_session(user, passwd) as session:
+                async with session.ws_connect(self._make_url("ws")) as ws:
+                    yield ws
+        except aiohttp.ClientError as err:
+            raise KvmdError(err)

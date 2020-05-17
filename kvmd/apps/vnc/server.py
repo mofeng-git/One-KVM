@@ -233,7 +233,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def _authorize_userpass(self, user: str, passwd: str) -> bool:
-        if (await self.__kvmd.authorize(user, passwd)):
+        if (await self.__kvmd.auth.check(user, passwd)):
             self.__authorized.set_result((user, passwd))
             return True
         return False
@@ -286,7 +286,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         (user, passwd) = self.__authorized.result()
         get_logger(0).info("[main] Client %s: Applying streamer params: quality=%d%%; desired_fps=%d ...",
                            self._remote, self._encodings.tight_jpeg_quality, self.__desired_fps)
-        await self.__kvmd.set_streamer_params(user, passwd, self._encodings.tight_jpeg_quality, self.__desired_fps)
+        await self.__kvmd.streamer.set_params(user, passwd, self._encodings.tight_jpeg_quality, self.__desired_fps)
 
     async def _on_fb_update_request(self) -> None:
         async with self.__lock:
@@ -326,7 +326,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             logger.info("Preparing client %s ...", remote)
             try:
                 try:
-                    none_auth_only = await kvmd.authorize("", "")
+                    none_auth_only = await kvmd.auth.check("", "")
                 except KvmdError as err:
                     logger.error("Client %s: Can't check KVMD auth mode: %s", remote, err)
                     return
