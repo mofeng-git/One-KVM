@@ -31,7 +31,8 @@ from ... import __version__
 
 # =====
 class StreamerError(Exception):
-    pass
+    def __init__(self, err: Exception):
+        super().__init__(f"{type(err).__name__} {err}")
 
 
 # =====
@@ -71,7 +72,7 @@ class StreamerClient:
                             bytes(await frame.read()),
                         )
         except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня из-за корявых исключений в MultipartReader
-            raise StreamerError(f"{type(err).__name__}: {str(err)}")
+            raise StreamerError(err)
 
     def __make_session(self) -> aiohttp.ClientSession:
         kwargs: Dict = {

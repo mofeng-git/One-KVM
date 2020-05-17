@@ -37,11 +37,14 @@ from ...logging import get_logger
 from ... import aiotools
 
 from .rfb import RfbClient
+from .rfb.stream import rfb_format_remote
+from .rfb.stream import rfb_close_writer
 from .rfb.errors import RfbError
 
 from .vncauth import VncAuthKvmdCredentials
 from .vncauth import VncAuthManager
 
+from .kvmd import KvmdError
 from .kvmd import KvmdClient
 
 from .streamer import StreamerError
@@ -318,19 +321,34 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         shared_params = _SharedParams()
 
         async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-            await _Client(
-                reader=reader,
-                writer=writer,
-                tls_ciphers=tls_ciphers,
-                tls_timeout=tls_timeout,
-                desired_fps=desired_fps,
-                symmap=symmap,
-                kvmd=kvmd,
-                streamer=streamer,
-                vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
-                none_auth_only=(await kvmd.authorize("", "")),
-                shared_params=shared_params,
-            ).run()
+            logger = get_logger(0)
+            remote = rfb_format_remote(writer)
+            logger.info("Preparing client %s ...", remote)
+            try:
+                try:
+                    none_auth_only = await kvmd.authorize("", "")
+                except KvmdError as err:
+                    logger.error("Client %s: Can't check KVMD auth mode: %s", remote, err)
+                    return
+
+                await _Client(
+                    reader=reader,
+                    writer=writer,
+                    tls_ciphers=tls_ciphers,
+                    tls_timeout=tls_timeout,
+                    desired_fps=desired_fps,
+                    symmap=symmap,
+                    kvmd=kvmd,
+                    streamer=streamer,
+                    vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
+                    none_auth_only=none_auth_only,
+                    shared_params=shared_params,
+                ).run()
+            except Exception:
+                logger.exception("Client %s: Unhandled exception in client task", remote)
+            finally:
+                if (await rfb_close_writer(writer)):
+                    logger.info("Connection is closed in an emergency: %s", remote)
 
         self.__handle_client = handle_client
 

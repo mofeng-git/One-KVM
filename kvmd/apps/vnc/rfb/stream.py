@@ -31,12 +31,25 @@ from .errors import RfbConnectionError
 
 
 # =====
+def rfb_format_remote(writer: asyncio.StreamWriter) -> str:
+    return "[%s]:%d" % (writer.transport.get_extra_info("peername")[:2])
+
+
+async def rfb_close_writer(writer: asyncio.StreamWriter) -> bool:
+    closing = writer.is_closing()
+    if not closing:
+        writer.transport.abort()  # type: ignore
+        writer.close()
+    await writer.wait_closed()
+    return (not closing)
+
+
 class RfbClientStream:
     def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.__reader = reader
         self.__writer = writer
 
-        self._remote = "[%s]:%d" % (self.__writer.transport.get_extra_info("peername")[:2])
+        self._remote = rfb_format_remote(writer)
 
     # =====
 
@@ -129,9 +142,4 @@ class RfbClientStream:
         self.__writer = ssl_writer
 
     async def _close(self) -> None:
-        self.__writer.transport.abort()  # type: ignore
-        try:
-            self.__writer.close()
-        except Exception:
-            pass
-        await self.__writer.wait_closed()
+        await rfb_close_writer(self.__writer)

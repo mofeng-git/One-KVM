@@ -31,6 +31,12 @@ from ... import __version__
 
 
 # =====
+class KvmdError(Exception):
+    def __init__(self, err: Exception):
+        super().__init__(f"{type(err).__name__} {err}")
+
+
+# =====
 class KvmdClient:
     def __init__(
         self,
@@ -62,28 +68,36 @@ class KvmdClient:
         except aiohttp.ClientResponseError as err:
             if err.status in [401, 403]:
                 return False
-            raise
+            raise KvmdError(err)
+        except aiohttp.ClientError as err:
+            raise KvmdError(err)
 
     @contextlib.asynccontextmanager
     async def ws(self, user: str, passwd: str) -> AsyncGenerator[aiohttp.ClientWebSocketResponse, None]:
-        async with self.__make_session(user, passwd) as session:
-            async with session.ws_connect(
-                url=f"http://{self.__host}:{self.__port}/ws",
-                timeout=self.__timeout,
-            ) as ws:
-                yield ws
+        try:
+            async with self.__make_session(user, passwd) as session:
+                async with session.ws_connect(
+                    url=f"http://{self.__host}:{self.__port}/ws",
+                    timeout=self.__timeout,
+                ) as ws:
+                    yield ws
+        except aiohttp.ClientError as err:
+            raise KvmdError(err)
 
     async def set_streamer_params(self, user: str, passwd: str, quality: int, desired_fps: int) -> None:
-        async with self.__make_session(user, passwd) as session:
-            async with session.post(
-                url=f"http://{self.__host}:{self.__port}/streamer/set_params",
-                timeout=self.__timeout,
-                params={
-                    "quality": quality,
-                    "desired_fps": desired_fps,
-                },
-            ) as response:
-                response.raise_for_status()
+        try:
+            async with self.__make_session(user, passwd) as session:
+                async with session.post(
+                    url=f"http://{self.__host}:{self.__port}/streamer/set_params",
+                    timeout=self.__timeout,
+                    params={
+                        "quality": quality,
+                        "desired_fps": desired_fps,
+                    },
+                ) as response:
+                    response.raise_for_status()
+        except aiohttp.ClientError as err:
+            raise KvmdError(err)
 
     # =====
 
