@@ -33,7 +33,7 @@ from .. import make_user_agent
 # =====
 class KvmdError(Exception):
     def __init__(self, err: Exception):
-        super().__init__(f"{type(err).__name__} {err}")
+        super().__init__(f"{type(err).__name__}: {err}")
 
 
 # =====
@@ -57,10 +57,7 @@ class KvmdClient:
     async def authorize(self, user: str, passwd: str) -> bool:
         try:
             async with self.__make_session(user, passwd) as session:
-                async with session.get(
-                    url=f"http://{self.__host}:{self.__port}/auth/check",
-                    timeout=self.__timeout,
-                ) as response:
+                async with session.get(f"http://{self.__host}:{self.__port}/auth/check") as response:
                     response.raise_for_status()
                     if response.status == 200:
                         return True
@@ -76,10 +73,7 @@ class KvmdClient:
     async def ws(self, user: str, passwd: str) -> AsyncGenerator[aiohttp.ClientWebSocketResponse, None]:
         try:
             async with self.__make_session(user, passwd) as session:
-                async with session.ws_connect(
-                    url=f"http://{self.__host}:{self.__port}/ws",
-                    timeout=self.__timeout,
-                ) as ws:
+                async with session.ws_connect(f"http://{self.__host}:{self.__port}/ws") as ws:
                     yield ws
         except aiohttp.ClientError as err:
             raise KvmdError(err)
@@ -89,11 +83,7 @@ class KvmdClient:
             async with self.__make_session(user, passwd) as session:
                 async with session.post(
                     url=f"http://{self.__host}:{self.__port}/streamer/set_params",
-                    timeout=self.__timeout,
-                    params={
-                        "quality": quality,
-                        "desired_fps": desired_fps,
-                    },
+                    params={"quality": quality, "desired_fps": desired_fps},
                 ) as response:
                     response.raise_for_status()
         except aiohttp.ClientError as err:
@@ -108,6 +98,7 @@ class KvmdClient:
                 "X-KVMD-Passwd": passwd,
                 "User-Agent": make_user_agent("KVMD-VNC"),
             },
+            "timeout": aiohttp.ClientTimeout(total=self.__timeout),
         }
         if self.__unix_path:
             kwargs["connector"] = aiohttp.UnixConnector(path=self.__unix_path)

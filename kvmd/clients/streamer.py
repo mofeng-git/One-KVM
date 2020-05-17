@@ -30,7 +30,7 @@ import aiohttp
 # =====
 class StreamerError(Exception):
     def __init__(self, err: Exception):
-        super().__init__(f"{type(err).__name__} {err}")
+        super().__init__(f"{type(err).__name__}: {err}")
 
 
 # =====
