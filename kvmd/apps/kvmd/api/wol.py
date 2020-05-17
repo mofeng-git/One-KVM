@@ -20,7 +20,8 @@
 # ========================================================================== #
 
 
-import aiohttp.web
+from aiohttp.web import Request
+from aiohttp.web import Response
 
 from ..wol import WakeOnLan
 
@@ -36,10 +37,10 @@ class WolApi:
     # =====
 
     @exposed_http("GET", "/wol")
-    async def __wol_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __wol_state_handler(self, _: Request) -> Response:
         return make_json_response(self.__wol.get_state())
 
     @exposed_http("POST", "/wol/wakeup")
-    async def __wol_wakeup_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __wol_wakeup_handler(self, _: Request) -> Response:
         await self.__wol.wakeup()
         return make_json_response()

@@ -20,8 +20,8 @@
 # ========================================================================== #
 
 
-import aiohttp
-import aiohttp.web
+from aiohttp.web import Request
+from aiohttp.web import Response
 
 from ....logging import get_logger
 
@@ -45,11 +45,11 @@ class MsdApi:
     # =====
 
     @exposed_http("GET", "/msd")
-    async def __state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __state_handler(self, _: Request) -> Response:
         return make_json_response(await self.__msd.get_state())
 
     @exposed_http("POST", "/msd/set_params")
-    async def __set_params_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __set_params_handler(self, request: Request) -> Response:
         params = {
             key: validator(request.query.get(param))
             for (param, key, validator) in [
@@ -62,17 +62,17 @@ class MsdApi:
         return make_json_response()
 
     @exposed_http("POST", "/msd/connect")
-    async def __connect_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __connect_handler(self, _: Request) -> Response:
         await self.__msd.connect()
         return make_json_response()
 
     @exposed_http("POST", "/msd/disconnect")
-    async def __disconnect_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __disconnect_handler(self, _: Request) -> Response:
         await self.__msd.disconnect()
         return make_json_response()
 
     @exposed_http("POST", "/msd/write")
-    async def __write_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __write_handler(self, request: Request) -> Response:
         logger = get_logger(0)
         reader = await request.multipart()
         name = ""
@@ -96,11 +96,11 @@ class MsdApi:
         return make_json_response({"image": {"name": name, "size": written}})
 
     @exposed_http("POST", "/msd/remove")
-    async def __remove_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __remove_handler(self, request: Request) -> Response:
         await self.__msd.remove(valid_msd_image_name(request.query.get("image")))
         return make_json_response()
 
     @exposed_http("POST", "/msd/reset")
-    async def __reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __reset_handler(self, _: Request) -> Response:
         await self.__msd.reset()
         return make_json_response()

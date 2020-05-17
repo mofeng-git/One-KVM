@@ -22,7 +22,9 @@
 
 from typing import Dict
 
-import aiohttp.web
+from aiohttp.web import Request
+from aiohttp.web import Response
+from aiohttp.web import WebSocketResponse
 
 from ....plugins.hid import BaseHid
 
@@ -46,18 +48,18 @@ class HidApi:
     # =====
 
     @exposed_http("GET", "/hid")
-    async def __state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __state_handler(self, _: Request) -> Response:
         return make_json_response(await self.__hid.get_state())
 
     @exposed_http("POST", "/hid/reset")
-    async def __reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __reset_handler(self, _: Request) -> Response:
         await self.__hid.reset()
         return make_json_response()
 
     # =====
 
     @exposed_ws("key")
-    async def __ws_key_handler(self, _: aiohttp.web.WebSocketResponse, event: Dict) -> None:
+    async def __ws_key_handler(self, _: WebSocketResponse, event: Dict) -> None:
         try:
             key = valid_hid_key(event["key"])
             state = valid_bool(event["state"])
@@ -66,7 +68,7 @@ class HidApi:
         await self.__hid.send_key_event(key, state)
 
     @exposed_ws("mouse_button")
-    async def __ws_mouse_button_handler(self, _: aiohttp.web.WebSocketResponse, event: Dict) -> None:
+    async def __ws_mouse_button_handler(self, _: WebSocketResponse, event: Dict) -> None:
         try:
             button = valid_hid_mouse_button(event["button"])
             state = valid_bool(event["state"])
@@ -75,7 +77,7 @@ class HidApi:
         await self.__hid.send_mouse_button_event(button, state)
 
     @exposed_ws("mouse_move")
-    async def __ws_mouse_move_handler(self, _: aiohttp.web.WebSocketResponse, event: Dict) -> None:
+    async def __ws_mouse_move_handler(self, _: WebSocketResponse, event: Dict) -> None:
         try:
             to_x = valid_hid_mouse_move(event["to"]["x"])
             to_y = valid_hid_mouse_move(event["to"]["y"])
@@ -84,7 +86,7 @@ class HidApi:
         await self.__hid.send_mouse_move_event(to_x, to_y)
 
     @exposed_ws("mouse_wheel")
-    async def __ws_mouse_wheel_handler(self, _: aiohttp.web.WebSocketResponse, event: Dict) -> None:
+    async def __ws_mouse_wheel_handler(self, _: WebSocketResponse, event: Dict) -> None:
         try:
             delta_x = valid_hid_mouse_wheel(event["delta"]["x"])
             delta_y = valid_hid_mouse_wheel(event["delta"]["y"])

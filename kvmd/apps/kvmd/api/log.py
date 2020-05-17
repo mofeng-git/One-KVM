@@ -20,7 +20,8 @@
 # ========================================================================== #
 
 
-import aiohttp.web
+from aiohttp.web import Request
+from aiohttp.web import StreamResponse
 
 from ....validators.basic import valid_bool
 
@@ -39,11 +40,11 @@ class LogApi:
     # =====
 
     @exposed_http("GET", "/log")
-    async def __log_handler(self, request: aiohttp.web.Request) -> aiohttp.web.StreamResponse:
+    async def __log_handler(self, request: Request) -> StreamResponse:
         seek = valid_log_seek(request.query.get("seek", "0"))
         follow = valid_bool(request.query.get("follow", "false"))
 
-        response = aiohttp.web.StreamResponse(status=200, reason="OK", headers={"Content-Type": "text/plain"})
+        response = StreamResponse(status=200, reason="OK", headers={"Content-Type": "text/plain"})
         await response.prepare(request)
 
         async for record in self.__log_reader.poll_log(seek, follow):

@@ -20,7 +20,8 @@
 # ========================================================================== #
 
 
-import aiohttp.web
+from aiohttp.web import Request
+from aiohttp.web import Response
 
 from ....plugins.atx import BaseAtx
 
@@ -39,11 +40,11 @@ class AtxApi:
     # =====
 
     @exposed_http("GET", "/atx")
-    async def __state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __state_handler(self, _: Request) -> Response:
         return make_json_response(self.__atx.get_state())
 
     @exposed_http("POST", "/atx/power")
-    async def __power_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __power_handler(self, request: Request) -> Response:
         action = valid_atx_power_action(request.query.get("action"))
         processing = await ({
             "on": self.__atx.power_on,
@@ -54,7 +55,7 @@ class AtxApi:
         return make_json_response({"processing": processing})
 
     @exposed_http("POST", "/atx/click")
-    async def __click_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __click_handler(self, request: Request) -> Response:
         button = valid_atx_button(request.query.get("button"))
         await ({
             "power": self.__atx.click_power,
