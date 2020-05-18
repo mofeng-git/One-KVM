@@ -34,7 +34,6 @@ import aiohttp
 
 from ...logging import get_logger
 
-from ...clients.kvmd import KvmdError
 from ...clients.kvmd import KvmdClient
 
 from ...clients.streamer import StreamerError
@@ -327,8 +326,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             try:
                 try:
                     none_auth_only = await kvmd.auth.check("", "")
-                except KvmdError as err:
-                    logger.error("Client %s: Can't check KVMD auth mode: %s", remote, err)
+                except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+                    logger.error("Client %s: Can't check KVMD auth mode: %s: %s", remote, type(err).__name__, err)
                     return
 
                 await _Client(

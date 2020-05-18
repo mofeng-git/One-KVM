@@ -43,6 +43,8 @@ def main(argv: Optional[List[str]]=None) -> None:
         argv=argv,
     )[2].vnc
 
+    user_agent = make_user_agent("KVMD-VNC")
+
     # pylint: disable=protected-access
     VncServer(
         host=config.server.host,
@@ -55,9 +57,12 @@ def main(argv: Optional[List[str]]=None) -> None:
         desired_fps=config.desired_fps,
         symmap=build_symmap(config.keymap),
 
-        kvmd=KvmdClient(**config.kvmd._unpack()),
+        kvmd=KvmdClient(
+            user_agent=user_agent,
+            **config.kvmd._unpack(),
+        ),
         streamer=StreamerClient(
-            user_agent=make_user_agent("KVMD-VNC"),
+            user_agent=user_agent,
             **config.streamer._unpack(),
         ),
         vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),

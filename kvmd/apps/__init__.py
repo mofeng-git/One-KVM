@@ -311,10 +311,10 @@ def _get_config_scheme() -> Dict:
             },
 
             "kvmd": {
-                "host":    Option("localhost", type=valid_ip_or_host, unpack_as="kvmd_host"),
-                "port":    Option(0,   type=valid_port, unpack_as="kvmd_port"),
-                "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="kvmd_unix_path"),
-                "timeout": Option(5.0, type=valid_float_f01, unpack_as="kvmd_timeout"),
+                "host":    Option("localhost", type=valid_ip_or_host),
+                "port":    Option(0,   type=valid_port),
+                "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
+                "timeout": Option(5.0, type=valid_float_f01),
             },
 
             "auth": {

@@ -39,6 +39,8 @@ from typing import TypeVar
 from typing import Optional
 from typing import Any
 
+import aiohttp
+
 import aiofiles
 import aiofiles.base
 
@@ -91,6 +93,20 @@ async def wait_infinite() -> None:
 
 async def wait_first(*aws: Awaitable) -> Tuple[Set[asyncio.Future], Set[asyncio.Future]]:
     return (await asyncio.wait(list(aws), return_when=asyncio.FIRST_COMPLETED))
+
+
+# =====
+def raise_not_200(response: aiohttp.ClientResponse) -> None:
+    if response.status != 200:
+        assert response.reason is not None
+        response.release()
+        raise aiohttp.ClientResponseError(
+            response.request_info,
+            response.history,
+            status=response.status,
+            message=response.reason,
+            headers=response.headers,
+        )
 
 
 # =====

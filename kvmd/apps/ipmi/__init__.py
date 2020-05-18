@@ -23,6 +23,10 @@
 from typing import List
 from typing import Optional
 
+from ...clients.kvmd import KvmdClient
+
+from ... import make_user_agent
+
 from .. import init
 
 from .auth import IpmiAuthManager
@@ -40,8 +44,9 @@ def main(argv: Optional[List[str]]=None) -> None:
     # pylint: disable=protected-access
     IpmiServer(
         auth_manager=IpmiAuthManager(**config.auth._unpack()),
-        **{  # Dirty mypy hack
-            **config.server._unpack(),
+        kvmd=KvmdClient(
+            user_agent=make_user_agent("KVMD-IPMI"),
             **config.kvmd._unpack(),
-        },
-    ).run()  # type: ignore
+        ),
+        **config.server._unpack(),
+    ).run()

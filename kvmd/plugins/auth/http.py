@@ -34,6 +34,7 @@ from ...validators.basic import valid_float_f01
 from ...logging import get_logger
 
 from ... import make_user_agent
+from ... import aiotools
 
 from . import BaseAuthService
 
@@ -89,10 +90,8 @@ class Plugin(BaseAuthService):
                     "X-KVMD-User": user,
                 },
             ) as response:
-                response.raise_for_status()
-                if response.status == 200:
-                    return True
-                raise RuntimeError(f"Invalid OK response: {response.status} {await response.text()}; expected 200")
+                aiotools.raise_not_200(response)
+                return True
         except Exception:
             get_logger().exception("Failed HTTP auth request for user %r", user)
             return False

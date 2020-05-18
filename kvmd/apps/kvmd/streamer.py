@@ -183,7 +183,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                     headers={"User-Agent": make_user_agent("KVMD")},
                     timeout=self.__timeout,
                 ) as response:
-                    response.raise_for_status()
+                    aiotools.raise_not_200(response)
                     state = (await response.json())["result"]
             except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
                 pass

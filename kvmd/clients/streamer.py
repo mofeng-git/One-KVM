@@ -26,6 +26,8 @@ from typing import AsyncGenerator
 
 import aiohttp
 
+from .. import aiotools
+
 
 # =====
 class StreamerError(Exception):
@@ -59,7 +61,7 @@ class StreamerClient:
                     params={"extra_headers": "1"},
                     headers={"User-Agent": self.__user_agent},
                 ) as response:
-                    response.raise_for_status()
+                    aiotools.raise_not_200(response)
                     reader = aiohttp.MultipartReader.from_response(response)
                     while True:
                         frame = await reader.next()  # pylint: disable=not-callable

@@ -20,13 +20,10 @@
 # ========================================================================== #
 
 
-import sys
 import asyncio
-import threading
 
-from typing import Tuple
 from typing import Dict
-from typing import Optional
+from typing import Callable
 
 import aiohttp
 
@@ -36,7 +33,9 @@ from pyghmi.ipmi.private.serversession import ServerSession as IpmiServerSession
 
 from ...logging import get_logger
 
-from ... import make_user_agent
+from ...clients.kvmd import KvmdClient
+
+from ... import aiotools
 
 from .auth import IpmiAuthManager
 
@@ -49,29 +48,21 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
     def __init__(
         self,
         auth_manager: IpmiAuthManager,
+        kvmd: KvmdClient,
 
         host: str,
         port: str,
         timeout: float,
-
-        kvmd_host: str,
-        kvmd_port: int,
-        kvmd_unix_path: str,
-        kvmd_timeout: float,
     ) -> None:
 
         super().__init__(authdata=auth_manager, address=host, port=port)
 
         self.__auth_manager = auth_manager
+        self.__kvmd = kvmd
 
         self.__host = host
         self.__port = port
         self.__timeout = timeout
-
-        self.__kvmd_host = kvmd_host
-        self.__kvmd_port = kvmd_port
-        self.__kvmd_unix_path = kvmd_unix_path
-        self.__kvmd_timeout = kvmd_timeout
 
     def run(self) -> None:
         logger = get_logger(0)
@@ -104,19 +95,19 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
             session.send_ipmi_response(code=0xC1)
 
     def __get_chassis_status_handler(self, _: Dict, session: IpmiServerSession) -> None:
-        result = self.__make_request("GET", "/atx", session)[1]
+        result = self.__make_request(session, "atx.get_state()", self.__kvmd.atx.get_state)
         data = [int(result["leds"]["power"]), 0, 0]
         session.send_ipmi_response(data=data)
 
     def __chassis_control_handler(self, request: Dict, session: IpmiServerSession) -> None:
-        handle = {
-            0: "/atx/power?action=off_hard",
-            1: "/atx/power?action=on",
-            3: "/atx/power?action=reset_hard",
-            5: "/atx/power?action=off",
+        action = {
+            0: "off_hard",
+            1: "on",
+            3: "reset_hard",
+            5: "off",
         }.get(request["data"][0], "")
-        if handle:
-            if self.__make_request("POST", handle, session)[0] == 409:
+        if action:
+            if not self.__make_request(session, f"atx.switch_power({action})", self.__kvmd.atx.switch_power, action=action):
                 code = 0xC0  # Try again later
             else:
                 code = 0
@@ -126,65 +117,19 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
 
     # =====
 
-    def __make_request(self, method: str, handle: str, ipmi_session: IpmiServerSession) -> Tuple[int, Dict]:
-        result: Optional[Tuple[int, Dict]] = None
-        exc_info = None
-
-        def make_request() -> None:
-            nonlocal result
-            nonlocal exc_info
-
-            loop = asyncio.new_event_loop()
+    def __make_request(self, session: IpmiServerSession, name: str, method: Callable, **kwargs):  # type: ignore
+        async def runner():  # type: ignore
+            logger = get_logger(0)
+            credentials = self.__auth_manager.get_credentials(session.username.decode())
+            logger.info("Performing request %s from user %r (IPMI) as %r (KVMD)",
+                        name, credentials.ipmi_user, credentials.kvmd_user)
             try:
-                result = loop.run_until_complete(self.__make_request_async(method, handle, ipmi_session))
-            except:  # noqa: E722  # pylint: disable=bare-except
-                exc_info = sys.exc_info()
-            finally:
-                loop.close()
-
-        thread = threading.Thread(target=make_request, daemon=True)
-        thread.start()
-        thread.join()
-        if exc_info is not None:
-            raise exc_info[1].with_traceback(exc_info[2])  # type: ignore  # pylint: disable=unsubscriptable-object
-        assert result is not None
-        # Dirty pylint hack
-        return (result[0], result[1])  # pylint: disable=unsubscriptable-object
-
-    async def __make_request_async(self, method: str, handle: str, ipmi_session: IpmiServerSession) -> Tuple[int, Dict]:
-        logger = get_logger(0)
-
-        assert handle.startswith("/")
-        url = f"http://{self.__kvmd_host}:{self.__kvmd_port}{handle}"
-
-        credentials = self.__auth_manager.get_credentials(ipmi_session.username.decode())
-        logger.info("Performing %r request to %r from user %r (IPMI) as %r (KVMD)",
-                    method, url, credentials.ipmi_user, credentials.kvmd_user)
-
-        async with self.__make_http_session_async() as http_session:
-            try:
-                async with http_session.request(
-                    method=method,
-                    url=url,
-                    headers={
-                        "X-KVMD-User": credentials.kvmd_user,
-                        "X-KVMD-Passwd": credentials.kvmd_passwd,
-                        "User-Agent": make_user_agent("KVMD-IPMI"),
-                    },
-                    timeout=self.__kvmd_timeout,
-                ) as response:
-                    if response.status != 409:
-                        response.raise_for_status()
-                    return (response.status, (await response.json())["result"])
+                return (await method(credentials.kvmd_user, credentials.kvmd_passwd, **kwargs))
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                logger.error("Can't perform %r request to %r: %s: %s", method, url, type(err).__name__, str(err))
+                logger.error("Can't perform request %s: %s", name, str(err))
                 raise
             except Exception:
-                logger.exception("Unexpected exception while performing %r request to %r", method, url)
+                logger.exception("Unexpected exception while performing request %s", name)
                 raise
 
-    def __make_http_session_async(self) -> aiohttp.ClientSession:
-        if self.__kvmd_unix_path:
-            return aiohttp.ClientSession(connector=aiohttp.UnixConnector(path=self.__kvmd_unix_path))
-        else:
-            return aiohttp.ClientSession()
+        return aiotools.run_sync(runner())
