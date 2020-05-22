@@ -204,5 +204,5 @@ async def run_region_task(
 
     if entered.done():
         return
-    if (exc := task.exception()) is not None:  # noqa: E203,E231
+    if (exc := task.exception()) is not None:
         raise exc

@@ -365,7 +365,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         }
         while True:
             msg_type = await self._read_number("B")
-            if (handler := handlers.get(msg_type)) is not None:  # noqa: E203,E231
+            if (handler := handlers.get(msg_type)) is not None:
                 await handler()  # type: ignore  # mypy bug
             else:
                 raise RfbError(f"Unknown message type: {msg_type}")

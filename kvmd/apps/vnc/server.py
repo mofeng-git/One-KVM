@@ -249,7 +249,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def _on_key_event(self, code: int, state: bool) -> None:
-        if (web_name := self.__symmap.get(code)) is not None:  # noqa: E203,E231
+        if (web_name := self.__symmap.get(code)) is not None:
             await self.__ws_writer_queue.put({
                 "event_type": "key",
                 "event": {"key": web_name, "state": state},

@@ -69,7 +69,7 @@ def get_exposed_http(obj: object) -> List[HttpExposed]:
             handler=handler,
         )
         for name in dir(obj)
-        if inspect.ismethod(handler := getattr(obj, name)) and getattr(handler, _HTTP_EXPOSED, False)  # noqa: E203
+        if inspect.ismethod(handler := getattr(obj, name)) and getattr(handler, _HTTP_EXPOSED, False)
     ]
 
 
@@ -99,7 +99,7 @@ def get_exposed_ws(obj: object) -> List[WsExposed]:
             handler=handler,
         )
         for name in dir(obj)
-        if inspect.ismethod(handler := getattr(obj, name)) and getattr(handler, _WS_EXPOSED, False)  # noqa: E203
+        if inspect.ismethod(handler := getattr(obj, name)) and getattr(handler, _WS_EXPOSED, False)
     ]
 
 

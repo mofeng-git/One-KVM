@@ -41,7 +41,7 @@ def build_symmap(path: str) -> Dict[int, str]:
         symmap[x11_code] = keymap.AT1_TO_WEB[at1_code]
 
     for (x11_code, at1_code) in _read_keyboard_layout(path).items():
-        if (web_name := keymap.AT1_TO_WEB.get(at1_code)) is not None:  # noqa: E203,E231
+        if (web_name := keymap.AT1_TO_WEB.get(at1_code)) is not None:
             # mypy bug
             symmap[x11_code] = web_name  # type: ignore
     return symmap
@@ -89,7 +89,7 @@ def _read_keyboard_layout(path: str) -> Dict[int, int]:  # Keysym to evdev (at1)
 
         parts = line.split()
         if len(parts) >= 2:
-            if (code := _resolve_keysym(parts[0])) != 0:  # noqa: E203,E231
+            if (code := _resolve_keysym(parts[0])) != 0:
                 try:
                     layout[code] = int(parts[1], 16)
                 except ValueError as err:
