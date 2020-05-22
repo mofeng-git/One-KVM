@@ -391,7 +391,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     async def __remove_socket(self, ws: aiohttp.web.WebSocketResponse) -> None:
         async with self.__sockets_lock:
-            await self.__hid.clear_events()
+            self.__hid.clear_events()
             try:
                 self.__sockets.remove(ws)
                 remote: Optional[str] = (ws._req.remote if ws._req is not None else None)  # pylint: disable=protected-access

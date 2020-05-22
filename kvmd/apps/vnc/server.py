@@ -278,7 +278,14 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             self.__mouse_move = move
 
     async def _on_cut_event(self, text: str) -> None:
-        pass  # print("CutEvent", text)  # TODO
+        assert self.__authorized.done()
+        (user, passwd) = self.__authorized.result()
+        logger = get_logger(0)
+        logger.info("[main] Client %s: Printing %d characters ...", self._remote, len(text))
+        try:
+            await self.__kvmd.hid.print(user, passwd, text, 0)
+        except Exception:
+            logger.exception("[main] Client %s: Can't print characters", self._remote)
 
     async def _on_set_encodings(self) -> None:
         assert self.__authorized.done()

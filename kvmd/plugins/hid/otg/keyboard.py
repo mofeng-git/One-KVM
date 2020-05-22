@@ -81,9 +81,11 @@ class KeyboardProcess(BaseDeviceProcess):
         self._ensure_write(b"\x00" * 8, close=True)  # Release all keys and modifiers
 
     def send_clear_event(self) -> None:
+        self._clear_queue()
         self._queue_event(_ClearEvent())
 
     def send_reset_event(self) -> None:
+        self._clear_queue()
         self._queue_event(_ResetEvent())
 
     def send_key_event(self, key: str, state: bool) -> None:

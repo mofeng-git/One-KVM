@@ -126,6 +126,10 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
     def _queue_event(self, event: BaseEvent) -> None:
         self.__events_queue.put_nowait(event)
 
+    def _clear_queue(self) -> None:
+        while not self.__events_queue.empty():
+            self.__events_queue.get_nowait()
+
     def _ensure_write(self, report: bytes, reopen: bool=False, close: bool=False) -> bool:
         if reopen:
             self.__close_device()

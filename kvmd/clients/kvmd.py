@@ -89,6 +89,17 @@ class _StreamerClientPart(_BaseClientPart):
                 aiotools.raise_not_200(response)
 
 
+class _HidClientPart(_BaseClientPart):
+    async def print(self, user: str, passwd: str, text: str, limit: int) -> None:
+        async with self._make_session(user, passwd) as session:
+            async with session.post(
+                url=self._make_url("hid/print"),
+                params={"limit": limit},
+                data=text,
+            ) as response:
+                aiotools.raise_not_200(response)
+
+
 class _AtxClientPart(_BaseClientPart):
     async def get_state(self, user: str, passwd: str) -> Dict:
         async with self._make_session(user, passwd) as session:
@@ -134,6 +145,7 @@ class KvmdClient(_BaseClientPart):
 
         self.auth = _AuthClientPart(**kwargs)
         self.streamer = _StreamerClientPart(**kwargs)
+        self.hid = _HidClientPart(**kwargs)
         self.atx = _AtxClientPart(**kwargs)
 
     @contextlib.asynccontextmanager

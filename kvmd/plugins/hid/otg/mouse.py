@@ -79,9 +79,11 @@ class MouseProcess(BaseDeviceProcess):
         self._ensure_write(report, close=True)  # Release all buttons
 
     def send_clear_event(self) -> None:
+        self._clear_queue()
         self._queue_event(_ClearEvent())
 
     def send_reset_event(self) -> None:
+        self._clear_queue()
         self._queue_event(_ResetEvent())
 
     def send_button_event(self, button: str, state: bool) -> None:

@@ -252,22 +252,24 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
     # =====
 
-    async def send_key_event(self, key: str, state: bool) -> None:
-        await self.__queue_event(_KeyEvent(key, state))
+    def send_key_event(self, key: str, state: bool) -> None:
+        self.__queue_event(_KeyEvent(key, state))
 
-    async def send_mouse_button_event(self, button: str, state: bool) -> None:
-        await self.__queue_event(_MouseButtonEvent(button, state))
+    def send_mouse_button_event(self, button: str, state: bool) -> None:
+        self.__queue_event(_MouseButtonEvent(button, state))
 
-    async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        await self.__queue_event(_MouseMoveEvent(to_x, to_y))
+    def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        self.__queue_event(_MouseMoveEvent(to_x, to_y))
 
-    async def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
-        await self.__queue_event(_MouseWheelEvent(delta_x, delta_y))
+    def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        self.__queue_event(_MouseWheelEvent(delta_x, delta_y))
 
-    async def clear_events(self) -> None:
-        await self.__queue_event(_ClearEvent())
+    def clear_events(self) -> None:
+        while not self.__events_queue.empty():
+            self.__events_queue.get_nowait()
+        self.__queue_event(_ClearEvent())
 
-    async def __queue_event(self, event: _BaseEvent) -> None:
+    def __queue_event(self, event: _BaseEvent) -> None:
         if not self.__stop_event.is_set():
             self.__events_queue.put_nowait(event)
 

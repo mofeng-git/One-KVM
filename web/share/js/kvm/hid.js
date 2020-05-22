@@ -35,11 +35,6 @@ export function Hid() {
 
 	/************************************************************************/
 
-	var __ws = null;
-
-	var __chars_to_codes = {};
-	var __codes_delay = 50;
-
 	var __keyboard = new Keyboard();
 	var __mouse = new Mouse();
 
@@ -73,8 +68,6 @@ export function Hid() {
 		window.addEventListener("pagehide", __releaseAll);
 		window.addEventListener("blur", __releaseAll);
 
-		__chars_to_codes = __buildCharsToCodes();
-
 		tools.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
 		tools.setOnClick($("hid-reset-button"), __clickResetButton);
 
@@ -89,7 +82,6 @@ export function Hid() {
 		wm.switchEnabled($("hid-pak-text"), ws);
 		wm.switchEnabled($("hid-pak-button"), ws);
 		wm.switchEnabled($("hid-reset-button"), ws);
-		__ws = ws;
 		__keyboard.setSocket(ws);
 		__mouse.setSocket(ws);
 	};
@@ -125,68 +117,16 @@ export function Hid() {
 				} else {
 					resolve(null);
 				}
-			}, __codes_delay);
+			}, 50);
 			iterate();
 		});
-	};
-
-	var __buildCharsToCodes = function() {
-		let chars_to_codes = {
-			"\n": ["Enter"],
-			"\t": ["Tab"],
-			" ": ["Space"],
-			"`": ["Backquote"],		"~": ["ShiftLeft", "Backquote"],
-			"\\": ["Backslash"],	"|": ["ShiftLeft", "Backslash"],
-			"[": ["BracketLeft"],	"{": ["ShiftLeft", "BracketLeft"],
-			"]": ["BracketLeft"],	"}": ["ShiftLeft", "BracketRight"],
-			",": ["Comma"],			"<": ["ShiftLeft", "Comma"],
-			".": ["Period"],		">": ["ShiftLeft", "Period"],
-			"1": ["Digit1"],		"!": ["ShiftLeft", "Digit1"],
-			"2": ["Digit2"],		"@": ["ShiftLeft", "Digit2"],
-			"3": ["Digit3"],		"#": ["ShiftLeft", "Digit3"],
-			"4": ["Digit4"],		"$": ["ShiftLeft", "Digit4"],
-			"5": ["Digit5"],		"%": ["ShiftLeft", "Digit5"],
-			"6": ["Digit6"],		"^": ["ShiftLeft", "Digit6"],
-			"7": ["Digit7"],		"&": ["ShiftLeft", "Digit7"],
-			"8": ["Digit8"],		"*": ["ShiftLeft", "Digit8"],
-			"9": ["Digit9"],		"(": ["ShiftLeft", "Digit9"],
-			"0": ["Digit0"],		")": ["ShiftLeft", "Digit0"],
-			"-": ["Minus"],			"_": ["ShiftLeft", "Minus"],
-			"'": ["Quote"],			"\"": ["ShiftLeft", "Quote"],
-			";": ["Semicolon"],		":": ["ShiftLeft", "Semicolon"],
-			"/": ["Slash"],			"?": ["ShiftLeft", "Slash"],
-			"=": ["Equal"],			"+": ["ShiftLeft", "Equal"],
-		};
-
-		for (let ch = "a".charCodeAt(0); ch <= "z".charCodeAt(0); ++ch) {
-			let low = String.fromCharCode(ch);
-			let up = low.toUpperCase();
-			let code = "Key" + up;
-			chars_to_codes[low] = [code];
-			chars_to_codes[up] = ["ShiftLeft", code];
-		}
-
-		return chars_to_codes;
 	};
 
 	var __clickPasteAsKeysButton = function() {
 		let text = $("hid-pak-text").value.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
 		if (text) {
-			let clipboard_codes = [];
-			let codes_count = 0;
-			for (let ch of text) {
-				let codes = __chars_to_codes[ch];
-				if (codes) {
-					codes_count += codes.length;
-					clipboard_codes.push(codes);
-				}
-			}
-			let time = __codes_delay * codes_count * 2 / 1000;
-
 			let confirm_msg = `
-				You are going to automatically type ${codes_count} characters from the system clipboard.
-				It will take ${time} seconds.<br>
-				<br>
+				You're goint to paste ${text.length} characters.<br>
 				Are you sure you want to continue?
 			`;
 
@@ -194,27 +134,21 @@ export function Hid() {
 				if (ok) {
 					wm.switchEnabled($("hid-pak-text"), false);
 					wm.switchEnabled($("hid-pak-button"), false);
-					$("hid-pak-led").className = "led-yellow-rotating-fast";
-					$("hid-pak-led").title = "Autotyping...";
 
 					tools.debug("HID: paste-as-keys:", text);
 
-					let index = 0;
-					let iterate = function() {
-						__emitShortcut(clipboard_codes[index]).then(function() {
-							++index;
-							if (index < clipboard_codes.length && __ws) {
-								iterate();
-							} else {
-								$("hid-pak-text").value = "";
-								wm.switchEnabled($("hid-pak-text"), true);
-								wm.switchEnabled($("hid-pak-button"), true);
-								$("hid-pak-led").className = "led-gray";
-								$("hid-pak-led").title = "";
+					let http = tools.makeRequest("POST", "/api/hid/print?limit=0", function() {
+						if (http.readyState === 4) {
+							wm.switchEnabled($("hid-pak-text"), true);
+							wm.switchEnabled($("hid-pak-button"), true);
+							$("hid-pak-text").value = "";
+							if (http.status === 413) {
+								wm.error("Too many text for paste!");
+							} else if (http.status !== 200) {
+								wm.error("HID paste error:<br>", http.responseText);
 							}
-						});
-					};
-					iterate();
+						}
+					}, text, "text/plain");
 				} else {
 					$("hid-pak-text").value = "";
 				}

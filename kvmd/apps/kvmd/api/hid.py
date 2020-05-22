@@ -20,6 +20,8 @@
 # ========================================================================== #
 
 
+import asyncio
+
 from typing import Dict
 
 from aiohttp.web import Request
@@ -29,11 +31,14 @@ from aiohttp.web import WebSocketResponse
 from ....plugins.hid import BaseHid
 
 from ....validators.basic import valid_bool
+from ....validators.basic import valid_number
 
 from ....validators.kvm import valid_hid_key
 from ....validators.kvm import valid_hid_mouse_move
 from ....validators.kvm import valid_hid_mouse_button
 from ....validators.kvm import valid_hid_mouse_wheel
+
+from .... import keyprint
 
 from ..http import exposed_http
 from ..http import exposed_ws
@@ -44,6 +49,8 @@ from ..http import make_json_response
 class HidApi:
     def __init__(self, hid: BaseHid) -> None:
         self.__hid = hid
+
+        self.__key_lock = asyncio.Lock()
 
     # =====
 
@@ -56,16 +63,28 @@ class HidApi:
         await self.__hid.reset()
         return make_json_response()
 
+    @exposed_http("POST", "/hid/print")
+    async def __print_handler(self, request: Request) -> Response:
+        text = await request.text()
+        limit = int(valid_number(request.query.get("limit", "1024"), min=0, type=int))
+        if limit > 0:
+            text = text[:limit]
+        async with self.__key_lock:
+            for (key, state) in keyprint.text_to_keys(text):
+                self.__hid.send_key_event(key, state)
+        return make_json_response()
+
     # =====
 
     @exposed_ws("key")
     async def __ws_key_handler(self, _: WebSocketResponse, event: Dict) -> None:
-        try:
-            key = valid_hid_key(event["key"])
-            state = valid_bool(event["state"])
-        except Exception:
-            return
-        await self.__hid.send_key_event(key, state)
+        async with self.__key_lock:
+            try:
+                key = valid_hid_key(event["key"])
+                state = valid_bool(event["state"])
+            except Exception:
+                return
+            self.__hid.send_key_event(key, state)
 
     @exposed_ws("mouse_button")
     async def __ws_mouse_button_handler(self, _: WebSocketResponse, event: Dict) -> None:
@@ -74,7 +93,7 @@ class HidApi:
             state = valid_bool(event["state"])
         except Exception:
             return
-        await self.__hid.send_mouse_button_event(button, state)
+        self.__hid.send_mouse_button_event(button, state)
 
     @exposed_ws("mouse_move")
     async def __ws_mouse_move_handler(self, _: WebSocketResponse, event: Dict) -> None:
@@ -83,7 +102,7 @@ class HidApi:
             to_y = valid_hid_mouse_move(event["to"]["y"])
         except Exception:
             return
-        await self.__hid.send_mouse_move_event(to_x, to_y)
+        self.__hid.send_mouse_move_event(to_x, to_y)
 
     @exposed_ws("mouse_wheel")
     async def __ws_mouse_wheel_handler(self, _: WebSocketResponse, event: Dict) -> None:
@@ -92,4 +111,4 @@ class HidApi:
             delta_y = valid_hid_mouse_wheel(event["delta"]["y"])
         except Exception:
             return
-        await self.__hid.send_mouse_wheel_event(delta_x, delta_y)
+        self.__hid.send_mouse_wheel_event(delta_x, delta_y)
