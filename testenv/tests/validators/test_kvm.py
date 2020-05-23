@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from kvmd.keymap import KEYMAP
+from kvmd.keyboard.mappings import KEYMAP
 
 from kvmd.validators import ValidatorError
 from kvmd.validators.kvm import valid_atx_power_action

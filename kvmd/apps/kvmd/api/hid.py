@@ -38,7 +38,7 @@ from ....validators.kvm import valid_hid_mouse_move
 from ....validators.kvm import valid_hid_mouse_button
 from ....validators.kvm import valid_hid_mouse_wheel
 
-from .... import keyprint
+from ....keyboard.printer import text_to_web_keys
 
 from ..http import exposed_http
 from ..http import exposed_ws
@@ -70,7 +70,7 @@ class HidApi:
         if limit > 0:
             text = text[:limit]
         async with self.__key_lock:
-            for (key, state) in keyprint.text_to_keys(text):
+            for (key, state) in text_to_web_keys(text):
                 self.__hid.send_key_event(key, state)
         return make_json_response()
 

@@ -18,18 +18,3 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
 #                                                                            #
 # ========================================================================== #
-
-
-import pytest
-
-from kvmd.keymap import KEYMAP
-
-
-# =====
-def test_ok__keymap() -> None:
-    assert KEYMAP["KeyA"].serial.code == 1
-
-
-def test_fail__keymap() -> None:
-    with pytest.raises(KeyError):
-        print(KEYMAP["keya"])

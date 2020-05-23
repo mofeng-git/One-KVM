@@ -29,7 +29,8 @@ from typing import Any
 
 from ....logging import get_logger
 
-from .... import keymap
+from ....keyboard.mappings import OtgKey
+from ....keyboard.mappings import KEYMAP
 
 from .device import BaseEvent
 from .device import BaseDeviceProcess
@@ -46,7 +47,7 @@ class _ResetEvent(BaseEvent):
 
 @dataclasses.dataclass(frozen=True)
 class _ModifierEvent(BaseEvent):
-    modifier: keymap.OtgKey
+    modifier: OtgKey
     state: bool
 
     def __post_init__(self) -> None:
@@ -55,7 +56,7 @@ class _ModifierEvent(BaseEvent):
 
 @dataclasses.dataclass(frozen=True)
 class _KeyEvent(BaseEvent):
-    key: keymap.OtgKey
+    key: OtgKey
     state: bool
 
     def __post_init__(self) -> None:
@@ -72,8 +73,8 @@ class KeyboardProcess(BaseDeviceProcess):
             **kwargs,
         )
 
-        self.__pressed_modifiers: Set[keymap.OtgKey] = set()
-        self.__pressed_keys: List[Optional[keymap.OtgKey]] = [None] * 6
+        self.__pressed_modifiers: Set[OtgKey] = set()
+        self.__pressed_keys: List[Optional[OtgKey]] = [None] * 6
 
     def cleanup(self) -> None:
         self._stop()
@@ -89,7 +90,7 @@ class KeyboardProcess(BaseDeviceProcess):
         self._queue_event(_ResetEvent())
 
     def send_key_event(self, key: str, state: bool) -> None:
-        otg_key = keymap.KEYMAP[key].otg
+        otg_key = KEYMAP[key].otg
         if otg_key.is_modifier:
             self._queue_event(_ModifierEvent(otg_key, state))
         else:

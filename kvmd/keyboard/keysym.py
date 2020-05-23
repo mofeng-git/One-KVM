@@ -27,9 +27,10 @@ from typing import Dict
 
 import Xlib.keysymdef
 
-from ...logging import get_logger
+from ..logging import get_logger
 
-from ... import keymap
+from .mappings import X11_TO_AT1
+from .mappings import AT1_TO_WEB
 
 
 # =====
@@ -37,11 +38,11 @@ def build_symmap(path: str) -> Dict[int, str]:
     # https://github.com/qemu/qemu/blob/95a9457fd44ad97c518858a4e1586a5498f9773c/ui/keymaps.c
 
     symmap: Dict[int, str] = {}
-    for (x11_code, at1_code) in keymap.X11_TO_AT1.items():
-        symmap[x11_code] = keymap.AT1_TO_WEB[at1_code]
+    for (x11_code, at1_key) in X11_TO_AT1.items():
+        symmap[x11_code] = AT1_TO_WEB[at1_key.code]
 
     for (x11_code, at1_code) in _read_keyboard_layout(path).items():
-        if (web_name := keymap.AT1_TO_WEB.get(at1_code)) is not None:
+        if (web_name := AT1_TO_WEB.get(at1_code)) is not None:
             # mypy bug
             symmap[x11_code] = web_name  # type: ignore
     return symmap

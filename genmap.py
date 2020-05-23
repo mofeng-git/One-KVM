@@ -36,14 +36,26 @@ import mako.template
 
 # =====
 @dataclasses.dataclass(frozen=True)
+class _OtgKey:
+    code: int
+    is_modifier: bool
+
+
+@dataclasses.dataclass(frozen=True)
+class _X11Key:
+    name: str
+    code: int
+    shift: bool
+
+
+@dataclasses.dataclass(frozen=True)
 class _KeyMapping:
     web_name: str
     serial_code: int
     arduino_name: str
-    otg_code: int
-    otg_is_modifier: bool
+    otg_key: _OtgKey
     at1_code: int
-    x11_codes: Set[int]
+    x11_keys: Set[_X11Key]
 
 
 def _resolve_keysym(name: str) -> int:
@@ -61,15 +73,24 @@ def _read_keymap_in(path: str) -> List[_KeyMapping]:
             line = line.strip()
             if len(line) > 0 and not line.startswith("#"):
                 parts = list(map(str.strip, line.split()))
-                if len(parts) >= 7:
+                if len(parts) >= 6:
+                    otg_is_modifier = parts[3].startswith("^")
+                    otg_code = int((parts[3][1:] if otg_is_modifier else parts[3]), 16)
+
+                    x11_keys: Set[_X11Key] = set()
+                    for x11_name in parts[5].split(","):
+                        x11_shift = x11_name.startswith("^")
+                        x11_name = (x11_name[1:] if x11_shift else x11_name)
+                        x11_code = _resolve_keysym(x11_name)
+                        x11_keys.add(_X11Key(x11_name, x11_code, x11_shift))
+
                     keymap.append(_KeyMapping(
                         web_name=parts[0],
                         serial_code=int(parts[1]),
                         arduino_name=parts[2],
-                        otg_code=int(parts[3], 16),
-                        otg_is_modifier=(parts[4].lower() == "m"),
-                        at1_code=int(parts[5], 16),
-                        x11_codes=set(map(_resolve_keysym, parts[6].split(","))),
+                        otg_key=_OtgKey(otg_code, otg_is_modifier),
+                        at1_code=int(parts[4], 16),
+                        x11_keys=x11_keys,
                     ))
     return keymap
 

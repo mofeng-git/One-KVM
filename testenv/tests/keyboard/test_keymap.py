@@ -2,7 +2,7 @@
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
 #                                                                            #
-#    Copyright (C) 2020  Maxim Devaev <mdevaev@gmail.com>                    #
+#    Copyright (C) 2018  Maxim Devaev <mdevaev@gmail.com>                    #
 #                                                                            #
 #    This program is free software: you can redistribute it and/or modify    #
 #    it under the terms of the GNU General Public License as published by    #
@@ -20,51 +20,16 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Optional
+import pytest
 
-from ...keyboard.keysym import build_symmap
-
-from ...clients.kvmd import KvmdClient
-from ...clients.streamer import StreamerClient
-
-from ... import make_user_agent
-
-from .. import init
-
-from .vncauth import VncAuthManager
-from .server import VncServer
+from kvmd.keyboard.mappings import KEYMAP
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
-    config = init(
-        prog="kvmd-vnc",
-        description="VNC to KVMD proxy",
-        argv=argv,
-    )[2].vnc
+def test_ok__keymap() -> None:
+    assert KEYMAP["KeyA"].serial.code == 1
 
-    user_agent = make_user_agent("KVMD-VNC")
 
-    # pylint: disable=protected-access
-    VncServer(
-        host=config.server.host,
-        port=config.server.port,
-        max_clients=config.server.max_clients,
-
-        tls_ciphers=config.server.tls.ciphers,
-        tls_timeout=config.server.tls.timeout,
-
-        desired_fps=config.desired_fps,
-        symmap=build_symmap(config.keymap),
-
-        kvmd=KvmdClient(
-            user_agent=user_agent,
-            **config.kvmd._unpack(),
-        ),
-        streamer=StreamerClient(
-            user_agent=user_agent,
-            **config.streamer._unpack(),
-        ),
-        vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),
-    ).run()
+def test_fail__keymap() -> None:
+    with pytest.raises(KeyError):
+        print(KEYMAP["keya"])

@@ -22,7 +22,7 @@
 
 from typing import Any
 
-from .. import keymap
+from ..keyboard.mappings import KEYMAP
 
 from . import check_string_in_list
 
@@ -58,7 +58,7 @@ def valid_stream_fps(arg: Any) -> int:
 
 # =====
 def valid_hid_key(arg: Any) -> str:
-    return check_string_in_list(arg, "HID key", keymap.KEYMAP, lower=False)
+    return check_string_in_list(arg, "HID key", KEYMAP, lower=False)
 
 
 def valid_hid_mouse_move(arg: Any) -> int:

@@ -2,7 +2,7 @@
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
 #                                                                            #
-#    Copyright (C) 2020  Maxim Devaev <mdevaev@gmail.com>                    #
+#    Copyright (C) 2018  Maxim Devaev <mdevaev@gmail.com>                    #
 #                                                                            #
 #    This program is free software: you can redistribute it and/or modify    #
 #    it under the terms of the GNU General Public License as published by    #
@@ -20,51 +20,54 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Optional
+import dataclasses
 
-from ...keyboard.keysym import build_symmap
-
-from ...clients.kvmd import KvmdClient
-from ...clients.streamer import StreamerClient
-
-from ... import make_user_agent
-
-from .. import init
-
-from .vncauth import VncAuthManager
-from .server import VncServer
+from typing import Dict
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
-    config = init(
-        prog="kvmd-vnc",
-        description="VNC to KVMD proxy",
-        argv=argv,
-    )[2].vnc
+@dataclasses.dataclass(frozen=True)
+class SerialKey:
+    code: int
 
-    user_agent = make_user_agent("KVMD-VNC")
 
-    # pylint: disable=protected-access
-    VncServer(
-        host=config.server.host,
-        port=config.server.port,
-        max_clients=config.server.max_clients,
+@dataclasses.dataclass(frozen=True)
+class OtgKey:
+    code: int
+    is_modifier: bool
 
-        tls_ciphers=config.server.tls.ciphers,
-        tls_timeout=config.server.tls.timeout,
 
-        desired_fps=config.desired_fps,
-        symmap=build_symmap(config.keymap),
+@dataclasses.dataclass(frozen=True)
+class Key:
+    serial: SerialKey
+    otg: OtgKey
 
-        kvmd=KvmdClient(
-            user_agent=user_agent,
-            **config.kvmd._unpack(),
-        ),
-        streamer=StreamerClient(
-            user_agent=user_agent,
-            **config.streamer._unpack(),
-        ),
-        vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),
-    ).run()
+<%! import operator %>
+KEYMAP: Dict[str, Key] = {
+% for km in sorted(keymap, key=operator.attrgetter("serial_code")):
+    "${km.web_name}": Key(serial=SerialKey(code=${km.serial_code}), otg=OtgKey(code=${km.otg_key.code}, is_modifier=${km.otg_key.is_modifier})),
+% endfor
+}
+
+
+# =====
+@dataclasses.dataclass(frozen=True)
+class At1Key:
+    code: int
+    shift: bool
+
+
+X11_TO_AT1 = {
+% for km in sorted(keymap, key=operator.attrgetter("at1_code")):
+    % for x11_key in sorted(km.x11_keys, key=(lambda key: (key.code, key.shift))):
+    ${x11_key.code}: At1Key(code=${km.at1_code}, shift=${x11_key.shift}),  # ${x11_key.name}
+    % endfor
+% endfor
+}
+
+
+AT1_TO_WEB = {
+% for km in sorted(keymap, key=operator.attrgetter("at1_code")):
+    ${km.at1_code}: "${km.web_name}",
+% endfor
+}

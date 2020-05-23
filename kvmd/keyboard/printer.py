@@ -25,7 +25,7 @@ import string
 from typing import Tuple
 from typing import Generator
 
-from . import keymap
+from .mappings import KEYMAP
 
 
 # =====
@@ -47,7 +47,7 @@ _LOWER_CHARS = {
     **{str(number): f"Digit{number}" for number in range(0, 10)},
     **{ch: f"Key{ch.upper()}" for ch in string.ascii_lowercase},
 }
-assert not set(_LOWER_CHARS.values()).difference(keymap.KEYMAP)
+assert not set(_LOWER_CHARS.values()).difference(KEYMAP)
 
 _UPPER_CHARS = {
     "~": "Backquote",
@@ -73,11 +73,11 @@ _UPPER_CHARS = {
     "+": "Equal",
     **{ch: f"Key{ch}" for ch in string.ascii_uppercase},
 }
-assert not set(_UPPER_CHARS.values()).difference(keymap.KEYMAP)
+assert not set(_UPPER_CHARS.values()).difference(KEYMAP)
 
 
 # =====
-def text_to_keys(text: str, shift_key: str="ShiftLeft") -> Generator[Tuple[str, bool], None, None]:
+def text_to_web_keys(text: str, shift_key: str="ShiftLeft") -> Generator[Tuple[str, bool], None, None]:
     assert shift_key in ["ShiftLeft", "ShiftRight"]
 
     shifted = False

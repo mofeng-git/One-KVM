@@ -39,10 +39,11 @@ import setproctitle
 
 from ...logging import get_logger
 
+from ...keyboard.mappings import KEYMAP
+
 from ... import aiotools
 from ... import aiomulti
 from ... import gpio
-from ... import keymap
 
 from ...yamlconf import Option
 
@@ -75,10 +76,10 @@ class _KeyEvent(_BaseEvent):
     state: bool
 
     def __post_init__(self) -> None:
-        assert self.name in keymap.KEYMAP
+        assert self.name in KEYMAP
 
     def make_command(self) -> bytes:
-        code = keymap.KEYMAP[self.name].serial.code
+        code = KEYMAP[self.name].serial.code
         return struct.pack(">BBBxx", 0x11, code, int(self.state))
 
 
