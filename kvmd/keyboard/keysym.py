@@ -49,7 +49,7 @@ def build_symmap(path: str) -> Dict[int, SymmapWebKey]:
     for (x11_code, at1_key) in X11_TO_AT1.items():
         symmap[x11_code] = SymmapWebKey(
             name=AT1_TO_WEB[at1_key.code],
-            shift=False,
+            shift=at1_key.shift,
         )
 
     for (x11_code, at1_key) in _read_keyboard_layout(path).items():
