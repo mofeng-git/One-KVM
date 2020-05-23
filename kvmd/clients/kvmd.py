@@ -22,7 +22,9 @@
 
 import contextlib
 
+from typing import Tuple
 from typing import Dict
+from typing import Set
 from typing import AsyncGenerator
 
 import aiohttp
@@ -90,11 +92,18 @@ class _StreamerClientPart(_BaseClientPart):
 
 
 class _HidClientPart(_BaseClientPart):
-    async def print(self, user: str, passwd: str, text: str, limit: int) -> None:
+    async def get_keymaps(self, user: str, passwd: str) -> Tuple[str, Set[str]]:
+        async with self._make_session(user, passwd) as session:
+            async with session.get(self._make_url("hid/keymaps")) as response:
+                aiotools.raise_not_200(response)
+                result = (await response.json())["result"]
+                return (result["keymaps"]["default"], set(result["keymaps"]["available"]))
+
+    async def print(self, user: str, passwd: str, text: str, limit: int, keymap_name: str) -> None:
         async with self._make_session(user, passwd) as session:
             async with session.post(
                 url=self._make_url("hid/print"),
-                params={"limit": limit},
+                params={"limit": limit, "keymap": keymap_name},
                 data=text,
             ) as response:
                 aiotools.raise_not_200(response)

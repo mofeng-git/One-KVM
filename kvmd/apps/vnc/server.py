@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+import os
 import asyncio
 import asyncio.queues
 import socket
@@ -33,6 +34,9 @@ from typing import Optional
 import aiohttp
 
 from ...logging import get_logger
+
+from ...keyboard.keysym import SymmapWebKey
+from ...keyboard.keysym import build_symmap
 
 from ...clients.kvmd import KvmdClient
 
@@ -69,7 +73,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         tls_timeout: float,
 
         desired_fps: int,
-        symmap: Dict[int, str],
+        keymap_name: str,
+        symmap: Dict[int, SymmapWebKey],
 
         kvmd: KvmdClient,
         streamer: StreamerClient,
@@ -92,6 +97,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         )
 
         self.__desired_fps = desired_fps
+        self.__keymap_name = keymap_name
         self.__symmap = symmap
 
         self.__kvmd = kvmd
@@ -249,10 +255,10 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def _on_key_event(self, code: int, state: bool) -> None:
-        if (web_name := self.__symmap.get(code)) is not None:
+        if (web_key := self.__symmap.get(code)) is not None:
             await self.__ws_writer_queue.put({
                 "event_type": "key",
-                "event": {"key": web_name, "state": state},
+                "event": {"key": web_key.name, "state": state},
             })
 
     async def _on_pointer_event(self, buttons: Dict[str, bool], wheel: Dict[str, int], move: Dict[str, int]) -> None:
@@ -283,7 +289,14 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         logger = get_logger(0)
         logger.info("[main] Client %s: Printing %d characters ...", self._remote, len(text))
         try:
-            await self.__kvmd.hid.print(user, passwd, text, 0)
+            (default, available) = await self.__kvmd.hid.get_keymaps(user, passwd)
+            await self.__kvmd.hid.print(
+                user=user,
+                passwd=passwd,
+                text=text,
+                limit=0,
+                keymap_name=(self.__keymap_name if self.__keymap_name in available else default),
+            )
         except Exception:
             logger.exception("[main] Client %s: Can't print characters", self._remote)
 
@@ -311,7 +324,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         tls_timeout: float,
 
         desired_fps: int,
-        symmap: Dict[int, str],
+        keymap_path: str,
 
         kvmd: KvmdClient,
         streamer: StreamerClient,
@@ -321,6 +334,9 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         self.__host = host
         self.__port = port
         self.__max_clients = max_clients
+
+        keymap_name = os.path.basename(keymap_path)
+        symmap = build_symmap(keymap_path)
 
         self.__vnc_auth_manager = vnc_auth_manager
 
@@ -343,6 +359,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     tls_ciphers=tls_ciphers,
                     tls_timeout=tls_timeout,
                     desired_fps=desired_fps,
+                    keymap_name=keymap_name,
                     symmap=symmap,
                     kvmd=kvmd,
                     streamer=streamer,

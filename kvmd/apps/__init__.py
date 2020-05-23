@@ -226,6 +226,7 @@ def _get_config_scheme() -> Dict:
 
             "hid": {
                 "type": Option("", type=valid_stripped_string_not_empty),
+                "keymap": Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_path),
                 # Dynamic content
             },
 
@@ -324,7 +325,7 @@ def _get_config_scheme() -> Dict:
 
         "vnc": {
             "desired_fps": Option(30, type=valid_stream_fps),
-            "keymap":      Option("", type=valid_abs_path),
+            "keymap":      Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_path),
 
             "server": {
                 "host":        Option("::", type=valid_ip_or_host),

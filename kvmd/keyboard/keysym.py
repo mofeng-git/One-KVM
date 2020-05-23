@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+import dataclasses
 import pkgutil
 import functools
 
@@ -29,22 +30,34 @@ import Xlib.keysymdef
 
 from ..logging import get_logger
 
+from .mappings import At1Key
 from .mappings import X11_TO_AT1
 from .mappings import AT1_TO_WEB
 
 
 # =====
-def build_symmap(path: str) -> Dict[int, str]:
+@dataclasses.dataclass(frozen=True)
+class SymmapWebKey:
+    name: str
+    shift: bool
+
+
+def build_symmap(path: str) -> Dict[int, SymmapWebKey]:
     # https://github.com/qemu/qemu/blob/95a9457fd44ad97c518858a4e1586a5498f9773c/ui/keymaps.c
 
-    symmap: Dict[int, str] = {}
+    symmap: Dict[int, SymmapWebKey] = {}
     for (x11_code, at1_key) in X11_TO_AT1.items():
-        symmap[x11_code] = AT1_TO_WEB[at1_key.code]
+        symmap[x11_code] = SymmapWebKey(
+            name=AT1_TO_WEB[at1_key.code],
+            shift=False,
+        )
 
-    for (x11_code, at1_code) in _read_keyboard_layout(path).items():
-        if (web_name := AT1_TO_WEB.get(at1_code)) is not None:
-            # mypy bug
-            symmap[x11_code] = web_name  # type: ignore
+    for (x11_code, at1_key) in _read_keyboard_layout(path).items():
+        if (web_name := AT1_TO_WEB.get(at1_key.code)) is not None:
+            symmap[x11_code] = SymmapWebKey(
+                name=web_name,
+                shift=at1_key.shift,
+            )
     return symmap
 
 
@@ -76,14 +89,14 @@ def _resolve_keysym(name: str) -> int:
     return 0
 
 
-def _read_keyboard_layout(path: str) -> Dict[int, int]:  # Keysym to evdev (at1)
+def _read_keyboard_layout(path: str) -> Dict[int, At1Key]:  # Keysym to evdev (at1)
     logger = get_logger(0)
     logger.info("Reading keyboard layout %s ...", path)
 
     with open(path) as layout_file:
         lines = list(map(str.strip, layout_file.read().split("\n")))
 
-    layout: Dict[int, int] = {}
+    layout: Dict[int, At1Key] = {}
     for (number, line) in enumerate(lines):
         if len(line) == 0 or line.startswith(("#", "map ", "include ")):
             continue
@@ -92,7 +105,10 @@ def _read_keyboard_layout(path: str) -> Dict[int, int]:  # Keysym to evdev (at1)
         if len(parts) >= 2:
             if (code := _resolve_keysym(parts[0])) != 0:
                 try:
-                    layout[code] = int(parts[1], 16)
+                    layout[code] = At1Key(
+                        code=int(parts[1], 16),
+                        shift=bool(len(parts) == 3 and parts[2] == "shift"),
+                    )
                 except ValueError as err:
                     logger.error("Can't parse layout line #%d: %s", number, str(err))
     return layout

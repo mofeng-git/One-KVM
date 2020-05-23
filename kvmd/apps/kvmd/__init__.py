@@ -76,13 +76,15 @@ def main(argv: Optional[List[str]]=None) -> None:
             log_reader=LogReader(),
             wol=WakeOnLan(**config.wol._unpack()),
 
-            hid=get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type"])),
+            hid=get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type", "keymap"])),
             atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),
             msd=get_msd_class(config.msd.type)(**msd_kwargs),
             streamer=Streamer(**config.streamer._unpack()),
 
             heartbeat=config.server.heartbeat,
             sync_chunk_size=config.server.sync_chunk_size,
+
+            keymap_path=config.hid.keymap,
         ).run(**config.server._unpack(ignore=["heartbeat", "sync_chunk_size"]))
 
     get_logger(0).info("Bye-bye")

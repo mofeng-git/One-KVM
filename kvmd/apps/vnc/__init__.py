@@ -23,8 +23,6 @@
 from typing import List
 from typing import Optional
 
-from ...keyboard.keysym import build_symmap
-
 from ...clients.kvmd import KvmdClient
 from ...clients.streamer import StreamerClient
 
@@ -56,7 +54,7 @@ def main(argv: Optional[List[str]]=None) -> None:
         tls_timeout=config.server.tls.timeout,
 
         desired_fps=config.desired_fps,
-        symmap=build_symmap(config.keymap),
+        keymap_path=config.keymap,
 
         kvmd=KvmdClient(
             user_agent=user_agent,

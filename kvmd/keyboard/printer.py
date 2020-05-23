@@ -20,84 +20,43 @@
 # ========================================================================== #
 
 
-import string
-
 from typing import Tuple
+from typing import Dict
 from typing import Generator
 
-from .mappings import KEYMAP
+from .keysym import SymmapWebKey
 
 
 # =====
-_LOWER_CHARS = {
-    "\n": "Enter",
-    "\t": "Tab",
-    " ": "Space",
-    "`": "Backquote",
-    "\\": "Backslash",
-    "[": "BracketLeft",
-    "]": "BracketLeft",
-    ",": "Comma",
-    ".": "Period",
-    "-": "Minus",
-    "'": "Quote",
-    ";": "Semicolon",
-    "/": "Slash",
-    "=": "Equal",
-    **{str(number): f"Digit{number}" for number in range(0, 10)},
-    **{ch: f"Key{ch.upper()}" for ch in string.ascii_lowercase},
-}
-assert not set(_LOWER_CHARS.values()).difference(KEYMAP)
+def text_to_web_keys(
+    text: str,
+    symmap: Dict[int, SymmapWebKey],
+    shift_key: str="ShiftLeft",
+) -> Generator[Tuple[str, bool], None, None]:
 
-_UPPER_CHARS = {
-    "~": "Backquote",
-    "|": "Backslash",
-    "{": "BracketLeft",
-    "}": "BracketRight",
-    "<": "Comma",
-    ">": "Period",
-    "!": "Digit1",
-    "@": "Digit2",
-    "#": "Digit3",
-    "$": "Digit4",
-    "%": "Digit5",
-    "^": "Digit6",
-    "&": "Digit7",
-    "*": "Digit8",
-    "(": "Digit9",
-    ")": "Digit0",
-    "_": "Minus",
-    "\"": "Quote",
-    ":": "Semicolon",
-    "?": "Slash",
-    "+": "Equal",
-    **{ch: f"Key{ch}" for ch in string.ascii_uppercase},
-}
-assert not set(_UPPER_CHARS.values()).difference(KEYMAP)
-
-
-# =====
-def text_to_web_keys(text: str, shift_key: str="ShiftLeft") -> Generator[Tuple[str, bool], None, None]:
     assert shift_key in ["ShiftLeft", "ShiftRight"]
 
     shifted = False
     for ch in text:
-        upper = False
-        key = _LOWER_CHARS.get(ch)
-        if key is None:
-            if (key := _UPPER_CHARS.get(ch)) is None:
+        try:
+            code = ord(ch)
+            if not (0x20 <= code <= 0x7E):
+                # https://stackoverflow.com/questions/12343987/convert-ascii-character-to-x11-keycode
+                # https://www.ascii-code.com
                 continue
-            upper = True
+            key = symmap[code]
+        except Exception:
+            continue
 
-        if upper and not shifted:
+        if key.shift and not shifted:
             yield (shift_key, True)
             shifted = True
-        elif not upper and shifted:
+        elif not key.shift and shifted:
             yield (shift_key, False)
             shifted = False
 
-        yield (key, True)
-        yield (key, False)
+        yield (key.name, True)
+        yield (key.name, False)
 
     if shifted:
         yield (shift_key, False)

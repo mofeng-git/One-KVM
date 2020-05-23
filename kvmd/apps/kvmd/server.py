@@ -119,6 +119,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         heartbeat: float,
         sync_chunk_size: int,
+
+        keymap_path: str,
     ) -> None:
 
         self.__auth_manager = auth_manager
@@ -136,7 +138,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             self,
             LogApi(log_reader),
             WolApi(wol),
-            HidApi(hid),
+            HidApi(hid, keymap_path),
             AtxApi(atx),
             MsdApi(msd, sync_chunk_size),
         ]

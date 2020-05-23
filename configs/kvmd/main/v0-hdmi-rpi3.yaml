@@ -55,8 +55,6 @@ ipmi:
         unix: /run/kvmd/kvmd.sock
 
 vnc:
-    keymap: /usr/share/kvmd/keymaps/en-us
-
     kvmd:
         unix: /run/kvmd/kvmd.sock
 
