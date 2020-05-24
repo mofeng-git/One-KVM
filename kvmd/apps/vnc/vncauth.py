@@ -32,8 +32,8 @@ from ...logging import get_logger
 
 # =====
 class VncAuthError(Exception):
-    def __init__(self, path: str, number: int, msg: str) -> None:
-        super().__init__(f"Syntax error at {path}:{number}: {msg}")
+    def __init__(self, path: str, lineno: int, msg: str) -> None:
+        super().__init__(f"Syntax error at {path}:{lineno}: {msg}")
 
 
 # =====
@@ -68,24 +68,24 @@ class VncAuthManager:
             lines = (await vc_file.read()).split("\n")
 
         credentials: Dict[str, VncAuthKvmdCredentials] = {}
-        for (number, line) in enumerate(lines):
+        for (lineno, line) in enumerate(lines):
             if len(line.strip()) == 0 or line.lstrip().startswith("#"):
                 continue
 
             if " -> " not in line:
-                raise VncAuthError(self.__path, number, "Missing ' -> ' operator")
+                raise VncAuthError(self.__path, lineno, "Missing ' -> ' operator")
 
             (vnc_passwd, kvmd_userpass) = map(str.lstrip, line.split(" -> ", 1))
             if ":" not in kvmd_userpass:
-                raise VncAuthError(self.__path, number, "Missing ':' operator in KVMD credentials (right part)")
+                raise VncAuthError(self.__path, lineno, "Missing ':' operator in KVMD credentials (right part)")
 
             (kvmd_user, kvmd_passwd) = kvmd_userpass.split(":")
             kvmd_user = kvmd_user.strip()
             if len(kvmd_user) == 0:
-                raise VncAuthError(self.__path, number, "Empty KVMD user (right part)")
+                raise VncAuthError(self.__path, lineno, "Empty KVMD user (right part)")
 
             if vnc_passwd in credentials:
-                raise VncAuthError(self.__path, number, "Duplicating VNC password (left part)")
+                raise VncAuthError(self.__path, lineno, "Duplicating VNC password (left part)")
 
             credentials[vnc_passwd] = VncAuthKvmdCredentials(kvmd_user, kvmd_passwd)
         return credentials

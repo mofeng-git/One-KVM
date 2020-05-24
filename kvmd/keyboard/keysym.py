@@ -107,7 +107,7 @@ def _read_keyboard_layout(path: str) -> Dict[int, At1Key]:  # Keysym to evdev (a
         lines = list(map(str.strip, layout_file.read().split("\n")))
 
     layout: Dict[int, At1Key] = {}
-    for (number, line) in enumerate(lines):
+    for (lineno, line) in enumerate(lines):
         if len(line) == 0 or line.startswith(("#", "map ", "include ")):
             continue
 
@@ -122,5 +122,5 @@ def _read_keyboard_layout(path: str) -> Dict[int, At1Key]:  # Keysym to evdev (a
                         ctrl=("ctrl" in parts[2:]),
                     )
                 except ValueError as err:
-                    logger.error("Syntax error at %s:%d: %s", path, number, err)
+                    logger.error("Syntax error at %s:%d: %s", path, lineno, err)
     return layout
