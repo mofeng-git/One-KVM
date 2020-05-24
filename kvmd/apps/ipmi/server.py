@@ -21,9 +21,9 @@
 
 
 import asyncio
+import functools
 
 from typing import Dict
-from typing import Callable
 
 import aiohttp
 
@@ -95,7 +95,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
             session.send_ipmi_response(code=0xC1)
 
     def __get_chassis_status_handler(self, _: Dict, session: IpmiServerSession) -> None:
-        result = self.__make_request(session, "atx.get_state()", self.__kvmd.atx.get_state)
+        result = self.__make_request(session, "atx.get_state()", "atx.get_state")
         data = [int(result["leds"]["power"]), 0, 0]
         session.send_ipmi_response(data=data)
 
@@ -107,7 +107,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
             5: "off",
         }.get(request["data"][0], "")
         if action:
-            if not self.__make_request(session, f"atx.switch_power({action})", self.__kvmd.atx.switch_power, action=action):
+            if not self.__make_request(session, f"atx.switch_power({action})", "atx.switch_power", action=action):
                 code = 0xC0  # Try again later
             else:
                 code = 0
@@ -117,19 +117,18 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
 
     # =====
 
-    def __make_request(self, session: IpmiServerSession, name: str, method: Callable, **kwargs):  # type: ignore
+    def __make_request(self, session: IpmiServerSession, name: str, method_path: str, **kwargs):  # type: ignore
         async def runner():  # type: ignore
             logger = get_logger(0)
             credentials = self.__auth_manager.get_credentials(session.username.decode())
             logger.info("Performing request %s from user %r (IPMI) as %r (KVMD)",
                         name, credentials.ipmi_user, credentials.kvmd_user)
             try:
-                return (await method(credentials.kvmd_user, credentials.kvmd_passwd, **kwargs))
+                async with self.__kvmd.make_session(credentials.kvmd_user, credentials.kvmd_passwd) as kvmd_session:
+                    method = functools.reduce(getattr, method_path.split("."), kvmd_session)
+                    return (await method(**kwargs))
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
                 logger.error("Can't perform request %s: %s", name, str(err))
-                raise
-            except Exception:
-                logger.exception("Unexpected exception while performing request %s", name)
                 raise
 
         return aiotools.run_sync(runner())

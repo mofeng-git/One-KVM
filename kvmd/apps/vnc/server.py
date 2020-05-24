@@ -38,6 +38,7 @@ from ...logging import get_logger
 from ...keyboard.keysym import SymmapWebKey
 from ...keyboard.keysym import build_symmap
 
+from ...clients.kvmd import KvmdClientSession
 from ...clients.kvmd import KvmdClient
 
 from ...clients.streamer import StreamerError
@@ -105,6 +106,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         self.__shared_params = shared_params
 
+        self.__kvmd_session: Optional[KvmdClientSession] = None
         self.__authorized = asyncio.Future()  # type: ignore
         self.__ws_connected = asyncio.Future()  # type: ignore
         self.__ws_writer_queue: asyncio.queues.Queue = asyncio.Queue()
@@ -123,10 +125,14 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def run(self) -> None:
-        await self._run(
-            kvmd=self.__kvmd_task_loop(),
-            streamer=self.__streamer_task_loop(),
-        )
+        try:
+            await self._run(
+                kvmd=self.__kvmd_task_loop(),
+                streamer=self.__streamer_task_loop(),
+            )
+        finally:
+            if self.__kvmd_session:
+                await self.__kvmd_session.close()
 
     # =====
 
@@ -134,9 +140,9 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         logger = get_logger(0)
 
         await self.__authorized
-        (user, passwd) = self.__authorized.result()
+        assert self.__kvmd_session
 
-        async with self.__kvmd.ws(user, passwd) as ws:
+        async with self.__kvmd_session.ws() as ws:
             logger.info("[kvmd] Client %s: Connected to KVMD websocket", self._remote)
             self.__ws_connected.set_result(None)
 
@@ -238,8 +244,9 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def _authorize_userpass(self, user: str, passwd: str) -> bool:
-        if (await self.__kvmd.auth.check(user, passwd)):
-            self.__authorized.set_result((user, passwd))
+        self.__kvmd_session = self.__kvmd.make_session(user, passwd)
+        if (await self.__kvmd_session.auth.check()):
+            self.__authorized.set_result(None)
             return True
         return False
 
@@ -285,14 +292,12 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def _on_cut_event(self, text: str) -> None:
         assert self.__authorized.done()
-        (user, passwd) = self.__authorized.result()
+        assert self.__kvmd_session
         logger = get_logger(0)
         logger.info("[main] Client %s: Printing %d characters ...", self._remote, len(text))
         try:
-            (default, available) = await self.__kvmd.hid.get_keymaps(user, passwd)
-            await self.__kvmd.hid.print(
-                user=user,
-                passwd=passwd,
+            (default, available) = await self.__kvmd_session.hid.get_keymaps()
+            await self.__kvmd_session.hid.print(
                 text=text,
                 limit=0,
                 keymap_name=(self.__keymap_name if self.__keymap_name in available else default),
@@ -302,10 +307,10 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def _on_set_encodings(self) -> None:
         assert self.__authorized.done()
-        (user, passwd) = self.__authorized.result()
+        assert self.__kvmd_session
         get_logger(0).info("[main] Client %s: Applying streamer params: quality=%d%%; desired_fps=%d ...",
                            self._remote, self._encodings.tight_jpeg_quality, self.__desired_fps)
-        await self.__kvmd.streamer.set_params(user, passwd, self._encodings.tight_jpeg_quality, self.__desired_fps)
+        await self.__kvmd_session.streamer.set_params(self._encodings.tight_jpeg_quality, self.__desired_fps)
 
     async def _on_fb_update_request(self) -> None:
         async with self.__lock:
@@ -348,7 +353,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             logger.info("Preparing client %s ...", remote)
             try:
                 try:
-                    none_auth_only = await kvmd.auth.check("", "")
+                    async with kvmd.make_session("", "") as kvmd_session:
+                        none_auth_only = await kvmd_session.auth.check()
                 except (aiohttp.ClientError, asyncio.TimeoutError) as err:
                     logger.error("Client %s: Can't check KVMD auth mode: %s: %s", remote, type(err).__name__, err)
                     return

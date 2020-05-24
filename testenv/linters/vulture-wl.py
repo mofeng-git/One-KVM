@@ -18,6 +18,8 @@ InotifyMask.UNMOUNT
 
 IpmiServer.handle_raw_request
 
+_AtxApiPart.switch_power
+
 fake_rpi.RPi.GPIO
 
 _KeyMapping.web_name
