@@ -128,7 +128,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
                     method = functools.reduce(getattr, method_path.split("."), kvmd_session)
                     return (await method(**kwargs))
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                logger.error("Can't perform request %s: %s", name, str(err))
+                logger.error("Can't perform request %s: %s", name, err)
                 raise
 
         return aiotools.run_sync(runner())

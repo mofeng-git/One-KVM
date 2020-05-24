@@ -180,7 +180,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                     else:
                         await self.__send_fb_stub("No signal")
             except StreamerError as err:
-                logger.info("[streamer] Client %s: Waiting for stream: %s", self._remote, str(err))
+                logger.info("[streamer] Client %s: Waiting for stream: %s", self._remote, err)
                 await self.__send_fb_stub("Waiting for stream ...")
                 await asyncio.sleep(1)
 

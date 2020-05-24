@@ -99,5 +99,5 @@ class InfoManager:
 
                 return (enabled or (manager.GetUnitFileState(name) in ["enabled", "enabled-runtime", "static", "indirect", "generated"]))
         except Exception as err:
-            get_logger(0).error("Can't get info about the service %r: %s: %s", name, type(err).__name__, str(err))
+            get_logger(0).error("Can't get info about the service %r: %s: %s", name, type(err).__name__, err)
             return True

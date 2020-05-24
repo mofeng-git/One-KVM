@@ -85,5 +85,5 @@ def valid_ssl_ciphers(arg: Any) -> str:
     try:
         ssl.SSLContext().set_ciphers(arg)
     except Exception as err:
-        raise ValidatorError(f"The argument {arg!r} is not a valid {name}: {str(err)}")
+        raise ValidatorError(f"The argument {arg!r} is not a valid {name}: {err}")
     return arg

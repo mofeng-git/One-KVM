@@ -106,9 +106,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             logger.info("[%s] Client %s: Cancelling subtask ...", name, self._remote)
             raise
         except RfbConnectionError as err:
-            logger.info("[%s] Client %s: Gone: %s", name, self._remote, str(err))
+            logger.info("[%s] Client %s: Gone: %s", name, self._remote, err)
         except (RfbError, ssl.SSLError) as err:
-            logger.error("[%s] Client %s: Error: %s", name, self._remote, str(err))
+            logger.error("[%s] Client %s: Error: %s", name, self._remote, err)
         except Exception:
             logger.exception("[%s] Unhandled exception with client %s", name, self._remote)
 
