@@ -20,7 +20,10 @@
 # ========================================================================== #
 
 
+import asyncio
+import asyncio.queues
 import contextlib
+import json
 import types
 
 from typing import Tuple
@@ -111,6 +114,73 @@ class _AtxApiPart(_BaseApiPart):
             raise
 
 
+# =====
+class KvmdClientWs:
+    def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
+        self.__ws = ws
+
+        self.__writer_queue: asyncio.queues.Queue = asyncio.Queue()
+        self.__communicated = False
+
+    async def communicate(self) -> AsyncGenerator[Dict, None]:
+        assert not self.__communicated
+        self.__communicated = True
+        receive_task: Optional[asyncio.Task] = None
+        writer_task: Optional[asyncio.Task] = None
+        try:
+            while True:
+                if receive_task is None:
+                    receive_task = asyncio.create_task(self.__ws.receive())
+                if writer_task is None:
+                    writer_task = asyncio.create_task(self.__writer_queue.get())
+
+                done = (await aiotools.wait_first(receive_task, writer_task))[0]
+
+                if receive_task in done:
+                    msg = receive_task.result()
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        yield json.loads(msg.data)
+                    elif msg.type == aiohttp.WSMsgType.CLOSE:
+                        break
+                    else:
+                        raise RuntimeError(f"Unhandled WS message type: {msg!r}")
+                    receive_task = None
+
+                if writer_task in done:
+                    await self.__ws.send_str(json.dumps(writer_task.result()))
+                    writer_task = None
+        finally:
+            if receive_task:
+                receive_task.cancel()
+            if writer_task:
+                writer_task.cancel()
+            self.__communicated = False
+
+    async def send_key_event(self, key: str, state: bool) -> None:
+        await self.__writer_queue.put({
+            "event_type": "key",
+            "event": {"key": key, "state": state},
+        })
+
+    async def send_mouse_button_event(self, button: str, state: bool) -> None:
+        await self.__writer_queue.put({
+            "event_type": "mouse_button",
+            "event": {"button": button, "state": state},
+        })
+
+    async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        await self.__writer_queue.put({
+            "event_type": "mouse_move",
+            "event": {"to": {"x": to_x, "y": to_y}},
+        })
+
+    async def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        await self.__writer_queue.put({
+            "event_type": "mouse_wheel",
+            "event": {"delta": {"x": delta_x, "y": delta_y}},
+        })
+
+
 class KvmdClientSession:
     def __init__(
         self,
@@ -124,16 +194,17 @@ class KvmdClientSession:
         self.__http_session: Optional[aiohttp.ClientSession] = None
 
         args = (self.__ensure_http_session, make_url)
+
         self.auth = _AuthApiPart(*args)
         self.streamer = _StreamerApiPart(*args)
         self.hid = _HidApiPart(*args)
         self.atx = _AtxApiPart(*args)
 
     @contextlib.asynccontextmanager
-    async def ws(self) -> AsyncGenerator[aiohttp.ClientWebSocketResponse, None]:
+    async def ws(self) -> AsyncGenerator[KvmdClientWs, None]:
         session = self.__ensure_http_session()
         async with session.ws_connect(self.__make_url("ws")) as ws:
-            yield ws
+            yield KvmdClientWs(ws)
 
     def __ensure_http_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:
