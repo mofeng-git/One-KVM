@@ -25,6 +25,7 @@ import pkgutil
 import functools
 
 from typing import Dict
+from typing import Optional
 
 import Xlib.keysymdef
 
@@ -40,28 +41,41 @@ from .mappings import AT1_TO_WEB
 class SymmapWebKey:
     name: str
     shift: bool
+    altgr: bool
+    ctrl: bool
 
 
 def build_symmap(path: str) -> Dict[int, SymmapWebKey]:
     # https://github.com/qemu/qemu/blob/95a9457fd44ad97c518858a4e1586a5498f9773c/ui/keymaps.c
-
-    symmap: Dict[int, SymmapWebKey] = {}
-    for (x11_code, at1_key) in X11_TO_AT1.items():
-        symmap[x11_code] = SymmapWebKey(
-            name=AT1_TO_WEB[at1_key.code],
-            shift=at1_key.shift,
-        )
-
-    for (x11_code, at1_key) in _read_keyboard_layout(path).items():
-        if (web_name := AT1_TO_WEB.get(at1_key.code)) is not None:
-            symmap[x11_code] = SymmapWebKey(
-                name=web_name,
-                shift=at1_key.shift,
-            )
-    return symmap
+    return {
+        x11_code: web_key
+        for (x11_code, at1_key) in [
+            *list(X11_TO_AT1.items()),
+            *list(_read_keyboard_layout(path).items()),
+        ]
+        if (web_key := _make_safe_web_key(at1_key)) is not None
+    }
 
 
 # =====
+def _make_safe_web_key(key: At1Key) -> Optional[SymmapWebKey]:
+    if (web_name := AT1_TO_WEB.get(key.code)) is not None:
+        if (
+            (web_name in ["ShiftLeft", "ShiftRight"] and key.shift)  # pylint: disable=too-many-boolean-expressions
+            or (web_name in ["AltLeft", "AltRight"] and key.altgr)
+            or (web_name in ["ControlLeft", "ControlRight"] and key.ctrl)
+        ):
+            get_logger().error("Invalid modifier key: %s / %s", web_name, key)
+            return None  # Ехал модификатор через модификатор
+        return SymmapWebKey(
+            name=web_name,
+            shift=key.shift,
+            altgr=key.altgr,
+            ctrl=key.ctrl,
+        )
+    return None
+
+
 @functools.lru_cache()
 def _get_keysyms() -> Dict[str, int]:
     keysyms: Dict[str, int] = {}
@@ -103,11 +117,13 @@ def _read_keyboard_layout(path: str) -> Dict[int, At1Key]:  # Keysym to evdev (a
 
         parts = line.split()
         if len(parts) >= 2:
-            if (code := _resolve_keysym(parts[0])) != 0:
+            if (x11_code := _resolve_keysym(parts[0])) != 0:
                 try:
-                    layout[code] = At1Key(
+                    layout[x11_code] = At1Key(
                         code=int(parts[1], 16),
-                        shift=bool(len(parts) == 3 and parts[2] == "shift"),
+                        shift=("shift" in parts[2:]),
+                        altgr=("altgr" in parts[2:]),
+                        ctrl=("ctrl" in parts[2:]),
                     )
                 except ValueError as err:
                     logger.error("Can't parse layout line #%d: %s", number, str(err))

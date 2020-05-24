@@ -47,6 +47,8 @@ def text_to_web_keys(
             key = symmap[code]
         except Exception:
             continue
+        if key.altgr or key.ctrl:
+            continue  # Not supported yet
 
         if key.shift and not shifted:
             yield (shift_key, True)

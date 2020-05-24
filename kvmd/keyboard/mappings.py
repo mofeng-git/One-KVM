@@ -140,6 +140,8 @@ KEYMAP: Dict[str, Key] = {
 class At1Key:
     code: int
     shift: bool
+    altgr: bool = False
+    ctrl: bool = False
 
 
 X11_TO_AT1 = {
