@@ -28,8 +28,8 @@ from typing import Dict
 
 # =====
 class IpmiPasswdError(Exception):
-    def __init__(self, msg: str) -> None:
-        super().__init__("Incorrect IPMI passwd file: " + msg)
+    def __init__(self, path: str, number: int, msg: str) -> None:
+        super().__init__(f"Syntax error at {path}:{number}: {msg}")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -42,6 +42,7 @@ class IpmiUserCredentials:
 
 class IpmiAuthManager:
     def __init__(self, path: str) -> None:
+        self.__path = path
         with open(path) as passwd_file:
             self.__credentials = self.__parse_passwd_file(passwd_file.read().split("\n"))
 
@@ -61,25 +62,25 @@ class IpmiAuthManager:
                 continue
 
             if " -> " not in line:
-                raise IpmiPasswdError(f"Missing ' -> ' operator at line #{number}")
+                raise IpmiPasswdError(self.__path, number, "Missing ' -> ' operator")
 
             (left, right) = map(str.lstrip, line.split(" -> ", 1))
             for (name, pair) in [("left", left), ("right", right)]:
                 if ":" not in pair:
-                    raise IpmiPasswdError(f"Missing ':' operator in {name} credentials at line #{number}")
+                    raise IpmiPasswdError(self.__path, number, f"Missing ':' operator in {name} credentials")
 
             (ipmi_user, ipmi_passwd) = left.split(":")
             ipmi_user = ipmi_user.strip()
             if len(ipmi_user) == 0:
-                raise IpmiPasswdError(f"Empty IPMI user (left) at line #{number}")
+                raise IpmiPasswdError(self.__path, number, "Empty IPMI user (left)")
 
             (kvmd_user, kvmd_passwd) = right.split(":")
             kvmd_user = kvmd_user.strip()
             if len(kvmd_user) == 0:
-                raise IpmiPasswdError(f"Empty KVMD user (left) at line #{number}")
+                raise IpmiPasswdError(self.__path, number, "Empty KVMD user (left)")
 
             if ipmi_user in credentials:
-                raise IpmiPasswdError(f"Found duplicating user {ipmi_user!r} (left) at line #{number}")
+                raise IpmiPasswdError(self.__path, number, f"Found duplicating user {ipmi_user!r} (left)")
 
             credentials[ipmi_user] = IpmiUserCredentials(
                 ipmi_user=ipmi_user,

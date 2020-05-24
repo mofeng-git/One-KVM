@@ -32,8 +32,8 @@ from ...logging import get_logger
 
 # =====
 class VncAuthError(Exception):
-    def __init__(self, msg: str) -> None:
-        super().__init__(f"Incorrect VNCAuth passwd file: {msg}")
+    def __init__(self, path: str, number: int, msg: str) -> None:
+        super().__init__(f"Syntax error at {path}:{number}: {msg}")
 
 
 # =====
@@ -73,19 +73,19 @@ class VncAuthManager:
                 continue
 
             if " -> " not in line:
-                raise VncAuthError(f"Missing ' -> ' operator at line #{number}")
+                raise VncAuthError(self.__path, number, "Missing ' -> ' operator")
 
             (vnc_passwd, kvmd_userpass) = map(str.lstrip, line.split(" -> ", 1))
             if ":" not in kvmd_userpass:
-                raise VncAuthError(f"Missing ':' operator in KVMD credentials (right part) at line #{number}")
+                raise VncAuthError(self.__path, number, "Missing ':' operator in KVMD credentials (right part)")
 
             (kvmd_user, kvmd_passwd) = kvmd_userpass.split(":")
             kvmd_user = kvmd_user.strip()
             if len(kvmd_user) == 0:
-                raise VncAuthError(f"Empty KVMD user (right part) at line #{number}")
+                raise VncAuthError(self.__path, number, "Empty KVMD user (right part)")
 
             if vnc_passwd in credentials:
-                raise VncAuthError(f"Found duplicating VNC password (left part) at line #{number}")
+                raise VncAuthError(self.__path, number, "Duplicating VNC password (left part)")
 
             credentials[vnc_passwd] = VncAuthKvmdCredentials(kvmd_user, kvmd_passwd)
         return credentials
