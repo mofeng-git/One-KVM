@@ -146,7 +146,7 @@ async def get_multipart_field(reader: aiohttp.MultipartReader, name: str) -> aio
 
 
 # =====
-_REQUEST_AUTH_INFO = "_kvd_auth_info"
+_REQUEST_AUTH_INFO = "_kvmd_auth_info"
 
 
 def _format_P(request: aiohttp.web.BaseRequest, *_, **__) -> str:  # type: ignore  # pylint: disable=invalid-name
