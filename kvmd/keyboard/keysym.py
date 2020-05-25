@@ -113,14 +113,24 @@ def _read_keyboard_layout(path: str) -> Dict[int, At1Key]:  # Keysym to evdev (a
 
         parts = line.split()
         if len(parts) >= 2:
-            if (code := _resolve_keysym(parts[0])) != 0:
+            if (x11_code := _resolve_keysym(parts[0])) != 0:
                 try:
-                    layout[code] = At1Key(
-                        code=int(parts[1], 16),
-                        shift=("shift" in parts[2:]),
-                        altgr=("altgr" in parts[2:]),
-                        ctrl=("ctrl" in parts[2:]),
-                    )
+                    at1_code = int(parts[1], 16)
                 except ValueError as err:
                     logger.error("Syntax error at %s:%d: %s", path, lineno, err)
+                    continue
+                rest = parts[2:]
+
+                layout[x11_code] = At1Key(
+                    code=at1_code,
+                    shift=("shift" in rest),
+                    altgr=("altgr" in rest),
+                    ctrl=("ctrl" in rest),
+                )
+
+                if "addupper" in rest and (x11_code := _resolve_keysym(parts[0].upper())) != 0:
+                    layout[x11_code] = At1Key(
+                        code=at1_code,
+                        shift=True,
+                    )
     return layout
