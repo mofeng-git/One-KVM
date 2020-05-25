@@ -31,8 +31,7 @@ from .. import aiotools
 
 # =====
 class StreamerError(Exception):
-    def __init__(self, err: Exception):
-        super().__init__(f"{type(err).__name__}: {err}")
+    pass
 
 
 # =====
@@ -66,6 +65,11 @@ class StreamerClient:
                         frame = await reader.next()  # pylint: disable=not-callable
                         if not isinstance(frame, aiohttp.BodyPartReader):
                             raise RuntimeError("Expected body part")
+                        if hasattr(frame, "_content"):
+                            # FIXME: An ugly workaround for:
+                            #   Multiple access to StreamReader in eof state, might be infinite loop
+                            if frame._content.is_eof():  # pylint: disable=protected-access
+                                break
                         yield (
                             (frame.headers["X-UStreamer-Online"] == "true"),
                             int(frame.headers["X-UStreamer-Width"]),
@@ -73,7 +77,8 @@ class StreamerClient:
                             bytes(await frame.read()),
                         )
         except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня из-за корявых исключений в MultipartReader
-            raise StreamerError(err)
+            raise StreamerError(f"{type(err).__name__}: {err}")
+        raise StreamerError("Reached EOF")
 
 #    async def get_snapshot(self) -> Tuple[bool, bytes]:
 #        async with self.__make_session(infinite=False) as session:
