@@ -171,7 +171,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         while True:
             try:
                 streaming = False
-                async for (online, width, height, jpeg) in self.__streamer.read():
+                async for (online, width, height, jpeg) in self.__streamer.read_stream():
                     if not streaming:
                         logger.info("[streamer] Client %s: Streaming ...", self._remote)
                         streaming = True

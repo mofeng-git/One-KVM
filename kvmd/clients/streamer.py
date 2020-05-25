@@ -53,13 +53,12 @@ class StreamerClient:
         self.__timeout = timeout
         self.__user_agent = user_agent
 
-    async def read(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
+    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
         try:
-            async with self.__make_session() as session:
+            async with self.__make_session(infinite=True) as session:
                 async with session.get(
-                    url=f"http://{self.__host}:{self.__port}/stream",
+                    url=self.__make_url("stream"),
                     params={"extra_headers": "1"},
-                    headers={"User-Agent": self.__user_agent},
                 ) as response:
                     aiotools.raise_not_200(response)
                     reader = aiohttp.MultipartReader.from_response(response)
@@ -76,13 +75,28 @@ class StreamerClient:
         except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня из-за корявых исключений в MultipartReader
             raise StreamerError(err)
 
-    def __make_session(self) -> aiohttp.ClientSession:
-        kwargs: Dict = {
-            "timeout": aiohttp.ClientTimeout(
+#    async def get_snapshot(self) -> Tuple[bool, bytes]:
+#        async with self.__make_session(infinite=False) as session:
+#            async with session.get(self.__make_url("snapshot")) as response:
+#                aiotools.raise_not_200(response)
+#                return (
+#                    (response.headers["X-UStreamer-Online"] == "true"),
+#                    bytes(await response.read()),
+#                )
+
+    def __make_session(self, infinite: bool) -> aiohttp.ClientSession:
+        kwargs: Dict = {"headers": {"User-Agent": self.__user_agent}}
+        if infinite:
+            kwargs["timeout"] = aiohttp.ClientTimeout(
                 connect=self.__timeout,
                 sock_read=self.__timeout,
-            ),
-        }
+            )
+        else:
+            kwargs["timeout"] = aiohttp.ClientTimeout(total=self.__timeout)
         if self.__unix_path:
             kwargs["connector"] = aiohttp.UnixConnector(path=self.__unix_path)
         return aiohttp.ClientSession(**kwargs)
+
+    def __make_url(self, handle: str) -> str:
+        assert not handle.startswith("/"), handle
+        return f"http://{self.__host}:{self.__port}/{handle}"
