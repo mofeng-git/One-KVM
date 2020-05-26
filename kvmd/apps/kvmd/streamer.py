@@ -179,13 +179,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     async def get_state(self) -> Dict:
         state = None
         if self.__streamer_task:
-            session = self.__ensure_session()
+            session = self.__ensure_http_session()
             try:
-                async with session.get(
-                    url=f"http://{self.__host}:{self.__port}/state",
-                    headers={"User-Agent": make_user_agent("KVMD")},
-                    timeout=self.__timeout,
-                ) as response:
+                async with session.get(self.__make_url("state")) as response:
                     aiotools.raise_not_200(response)
                     state = (await response.json())["result"]
             except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
@@ -246,13 +242,20 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    def __ensure_session(self) -> aiohttp.ClientSession:
+    def __ensure_http_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:
+            kwargs: Dict = {
+                "headers": {"User-Agent": make_user_agent("KVMD")},
+                "timeout": aiohttp.ClientTimeout(total=self.__timeout),
+            }
             if self.__unix_path:
-                self.__http_session = aiohttp.ClientSession(connector=aiohttp.UnixConnector(path=self.__unix_path))
-            else:
-                self.__http_session = aiohttp.ClientSession()
+                kwargs["connector"] = aiohttp.UnixConnector(path=self.__unix_path)
+            self.__http_session = aiohttp.ClientSession(**kwargs)
         return self.__http_session
+
+    def __make_url(self, handle: str) -> str:
+        assert not handle.startswith("/"), handle
+        return f"http://{self.__host}:{self.__port}/{handle}"
 
     # =====
 

@@ -408,12 +408,12 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     # ===== SYSTEM TASKS
 
     async def __stream_controller(self) -> None:
-        prev = 0
+        prev = False
         while True:
-            cur = len(self.__sockets)
-            if prev == 0 and cur > 0:
+            cur = bool(self.__sockets)
+            if not prev and cur:
                 await self.__streamer.ensure_start(init_restart=True)
-            elif prev > 0 and cur == 0:
+            elif prev and not cur:
                 await self.__streamer.ensure_stop(immediately=False)
 
             if self.__reset_streamer or self.__new_streamer_params:
