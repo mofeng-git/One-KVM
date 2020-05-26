@@ -206,13 +206,15 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     @exposed_http("POST", "/streamer/set_params")
     async def __streamer_set_params_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        current_params = self.__streamer.get_params()
         for (name, validator) in [
             ("quality", valid_stream_quality),
             ("desired_fps", valid_stream_fps),
         ]:
-            value = request.query.get(name)
-            if value:
-                self.__new_streamer_params[name] = validator(value)
+            if (value := request.query.get(name)):
+                value = validator(value)
+                if current_params[name] != value:
+                    self.__new_streamer_params[name] = value
         await self.__streamer_notifier.notify()
         return make_json_response()
 

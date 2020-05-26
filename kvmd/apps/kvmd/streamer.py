@@ -173,6 +173,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             ]
         }
 
+    def get_params(self) -> Dict:
+        return dict(self.__params)
+
     async def get_state(self) -> Dict:
         state = None
         if self.__streamer_task:
