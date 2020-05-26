@@ -61,20 +61,24 @@ class StreamerClient:
                 ) as response:
                     aiotools.raise_not_200(response)
                     reader = aiohttp.MultipartReader.from_response(response)
+
                     while True:
                         frame = await reader.next()  # pylint: disable=not-callable
                         if not isinstance(frame, aiohttp.BodyPartReader):
                             raise RuntimeError("Expected body part")
+
                         if hasattr(frame, "_content"):
-                            # FIXME: An ugly workaround for:
-                            #   Multiple access to StreamReader in eof state, might be infinite loop
                             if frame._content.is_eof():  # pylint: disable=protected-access
                                 break
+                        data = bytes(await frame.read())
+                        if not data:
+                            break
+
                         yield (
                             (frame.headers["X-UStreamer-Online"] == "true"),
                             int(frame.headers["X-UStreamer-Width"]),
                             int(frame.headers["X-UStreamer-Height"]),
-                            bytes(await frame.read()),
+                            data,
                         )
         except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня из-за корявых исключений в MultipartReader
             raise StreamerError(f"{type(err).__name__}: {err}")
