@@ -74,7 +74,7 @@ class Plugin(BaseAuthService):
     async def authorize(self, user: str, passwd: str) -> bool:
         assert user == user.strip()
         assert user
-        session = self.__ensure_session()
+        session = self.__ensure_http_session()
         try:
             async with session.request(
                 method="POST",
@@ -101,7 +101,7 @@ class Plugin(BaseAuthService):
             await self.__http_session.close()
             self.__http_session = None
 
-    def __ensure_session(self) -> aiohttp.ClientSession:
+    def __ensure_http_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:
             kwargs: Dict = {}
             if self.__user:
