@@ -54,7 +54,7 @@ class StreamerClient:
 
     async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
         try:
-            async with self.__make_session(infinite=True) as session:
+            async with self.__make_http_session(infinite=True) as session:
                 async with session.get(
                     url=self.__make_url("stream"),
                     params={"extra_headers": "1"},
@@ -85,7 +85,7 @@ class StreamerClient:
         raise StreamerError("Reached EOF")
 
 #    async def get_snapshot(self) -> Tuple[bool, bytes]:
-#        async with self.__make_session(infinite=False) as session:
+#        async with self.__make_http_session(infinite=False) as session:
 #            async with session.get(self.__make_url("snapshot")) as response:
 #                aiotools.raise_not_200(response)
 #                return (
@@ -93,7 +93,7 @@ class StreamerClient:
 #                    bytes(await response.read()),
 #                )
 
-    def __make_session(self, infinite: bool) -> aiohttp.ClientSession:
+    def __make_http_session(self, infinite: bool) -> aiohttp.ClientSession:
         kwargs: Dict = {"headers": {"User-Agent": self.__user_agent}}
         if infinite:
             kwargs["timeout"] = aiohttp.ClientTimeout(
