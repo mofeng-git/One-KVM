@@ -53,6 +53,7 @@ from ..validators.basic import valid_stripped_string
 from ..validators.basic import valid_stripped_string_not_empty
 from ..validators.basic import valid_bool
 from ..validators.basic import valid_number
+from ..validators.basic import valid_int_f1
 from ..validators.basic import valid_float_f0
 from ..validators.basic import valid_float_f01
 
@@ -293,7 +294,7 @@ def _get_config_scheme() -> Dict:
 
             "drives": {
                 "enabled": Option(False, type=valid_bool),
-                "count":   Option(1,     type=(lambda arg: valid_number(arg, min=1))),
+                "count":   Option(1,     type=valid_int_f1),
                 "default": {
                     "stall":     Option(False, type=valid_bool),
                     "cdrom":     Option(False, type=valid_bool),
@@ -330,7 +331,7 @@ def _get_config_scheme() -> Dict:
             "server": {
                 "host":        Option("::", type=valid_ip_or_host),
                 "port":        Option(5900, type=valid_port),
-                "max_clients": Option(10, type=(lambda arg: valid_number(arg, min=1))),
+                "max_clients": Option(10,   type=valid_int_f1),
                 "tls": {
                     "ciphers": Option("ALL:@SECLEVEL=0", type=valid_ssl_ciphers),
                     "timeout": Option(5.0, type=valid_float_f01),
