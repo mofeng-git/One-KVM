@@ -177,20 +177,20 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 passwd=valid_passwd(credentials.get("passwd", "")),
             )
             if token:
-                return make_json_response({}, set_cookies={_COOKIE_AUTH_TOKEN: token})
-            raise ForbiddenError("Forbidden")
-        return make_json_response({})
+                return make_json_response(set_cookies={_COOKIE_AUTH_TOKEN: token})
+            raise ForbiddenError()
+        return make_json_response()
 
     @exposed_http("POST", "/auth/logout")
     async def __auth_logout_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         if self.__auth_manager.is_auth_enabled():
             token = valid_auth_token(request.cookies.get(_COOKIE_AUTH_TOKEN, ""))
             self.__auth_manager.logout(token)
-        return make_json_response({})
+        return make_json_response()
 
     @exposed_http("GET", "/auth/check")
     async def __auth_check_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return make_json_response({})
+        return make_json_response()
 
     # ===== SYSTEM
 
@@ -316,17 +316,17 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                         user = valid_user(user)
                         set_request_auth_info(request, f"{user} (xhdr)")
                         if not (await self.__auth_manager.authorize(user, valid_passwd(passwd))):
-                            raise ForbiddenError("Forbidden")
+                            raise ForbiddenError()
 
                     elif token:
                         user = self.__auth_manager.check(valid_auth_token(token))
                         if not user:
                             set_request_auth_info(request, "- (token)")
-                            raise ForbiddenError("Forbidden")
+                            raise ForbiddenError()
                         set_request_auth_info(request, f"{user} (token)")
 
                     else:
-                        raise UnauthorizedError("Unauthorized")
+                        raise UnauthorizedError()
 
                 return (await exposed.handler(request))
 

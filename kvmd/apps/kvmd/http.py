@@ -28,11 +28,13 @@ class HttpError(Exception):
 
 
 class UnauthorizedError(HttpError):
-    pass
+    def __init__(self) -> None:
+        super().__init__("Unauthorized")
 
 
 class ForbiddenError(HttpError):
-    pass
+    def __init__(self) -> None:
+        super().__init__("Forbidden")
 
 
 # =====
