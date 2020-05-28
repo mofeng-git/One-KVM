@@ -36,9 +36,8 @@ import aiohttp
 from ...logging import get_logger
 
 from ... import aiotools
+from ... import htclient
 from ... import gpio
-
-from ... import make_user_agent
 
 
 # =====
@@ -182,7 +181,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             session = self.__ensure_http_session()
             try:
                 async with session.get(self.__make_url("state")) as response:
-                    aiotools.raise_not_200(response)
+                    htclient.raise_not_200(response)
                     state = (await response.json())["result"]
             except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
                 pass
@@ -245,7 +244,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     def __ensure_http_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:
             kwargs: Dict = {
-                "headers": {"User-Agent": make_user_agent("KVMD")},
+                "headers": {"User-Agent": htclient.make_user_agent("KVMD")},
                 "timeout": aiohttp.ClientTimeout(total=self.__timeout),
             }
             if self.__unix_path:

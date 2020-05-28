@@ -33,8 +33,7 @@ from ...validators.basic import valid_float_f01
 
 from ...logging import get_logger
 
-from ... import make_user_agent
-from ... import aiotools
+from ... import htclient
 
 from . import BaseAuthService
 
@@ -86,11 +85,11 @@ class Plugin(BaseAuthService):
                     "secret": self.__secret,
                 },
                 headers={
-                    "User-Agent": make_user_agent("KVMD"),
+                    "User-Agent": htclient.make_user_agent("KVMD"),
                     "X-KVMD-User": user,
                 },
             ) as response:
-                aiotools.raise_not_200(response)
+                htclient.raise_not_200(response)
                 return True
         except Exception:
             get_logger().exception("Failed HTTP auth request for user %r", user)

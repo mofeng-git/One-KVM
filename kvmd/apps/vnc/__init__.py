@@ -26,7 +26,7 @@ from typing import Optional
 from ...clients.kvmd import KvmdClient
 from ...clients.streamer import StreamerClient
 
-from ... import make_user_agent
+from ... import htclient
 
 from .. import init
 
@@ -42,7 +42,7 @@ def main(argv: Optional[List[str]]=None) -> None:
         argv=argv,
     )[2].vnc
 
-    user_agent = make_user_agent("KVMD-VNC")
+    user_agent = htclient.make_user_agent("KVMD-VNC")
 
     # pylint: disable=protected-access
     VncServer(

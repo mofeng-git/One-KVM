@@ -21,8 +21,3 @@
 
 
 __version__ = "1.63"
-
-
-# =====
-def make_user_agent(app: str) -> str:
-    return f"{app}/{__version__}"

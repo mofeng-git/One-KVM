@@ -26,7 +26,7 @@ from typing import AsyncGenerator
 
 import aiohttp
 
-from .. import aiotools
+from .. import htclient
 
 
 # =====
@@ -59,7 +59,7 @@ class StreamerClient:
                     url=self.__make_url("stream"),
                     params={"extra_headers": "1"},
                 ) as response:
-                    aiotools.raise_not_200(response)
+                    htclient.raise_not_200(response)
                     reader = aiohttp.MultipartReader.from_response(response)
 
                     while True:
@@ -87,7 +87,7 @@ class StreamerClient:
 #    async def get_snapshot(self) -> Tuple[bool, bytes]:
 #        async with self.__make_http_session(infinite=False) as session:
 #            async with session.get(self.__make_url("snapshot")) as response:
-#                aiotools.raise_not_200(response)
+#                htclient.raise_not_200(response)
 #                return (
 #                    (response.headers["X-UStreamer-Online"] == "true"),
 #                    bytes(await response.read()),

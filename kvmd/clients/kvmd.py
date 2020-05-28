@@ -37,6 +37,7 @@ from typing import Optional
 import aiohttp
 
 from .. import aiotools
+from .. import htclient
 
 
 # =====
@@ -56,7 +57,7 @@ class _AuthApiPart(_BaseApiPart):
         session = self._ensure_http_session()
         try:
             async with session.get(self._make_url("auth/check")) as response:
-                aiotools.raise_not_200(response)
+                htclient.raise_not_200(response)
                 return True
         except aiohttp.ClientResponseError as err:
             if err.status in [401, 403]:
@@ -71,14 +72,14 @@ class _StreamerApiPart(_BaseApiPart):
             url=self._make_url("streamer/set_params"),
             params={"quality": quality, "desired_fps": desired_fps},
         ) as response:
-            aiotools.raise_not_200(response)
+            htclient.raise_not_200(response)
 
 
 class _HidApiPart(_BaseApiPart):
     async def get_keymaps(self) -> Tuple[str, Set[str]]:
         session = self._ensure_http_session()
         async with session.get(self._make_url("hid/keymaps")) as response:
-            aiotools.raise_not_200(response)
+            htclient.raise_not_200(response)
             result = (await response.json())["result"]
             return (result["keymaps"]["default"], set(result["keymaps"]["available"]))
 
@@ -89,14 +90,14 @@ class _HidApiPart(_BaseApiPart):
             params={"limit": limit, "keymap": keymap_name},
             data=text,
         ) as response:
-            aiotools.raise_not_200(response)
+            htclient.raise_not_200(response)
 
 
 class _AtxApiPart(_BaseApiPart):
     async def get_state(self) -> Dict:
         session = self._ensure_http_session()
         async with session.get(self._make_url("atx")) as response:
-            aiotools.raise_not_200(response)
+            htclient.raise_not_200(response)
             return (await response.json())["result"]
 
     async def switch_power(self, action: str) -> bool:
@@ -106,7 +107,7 @@ class _AtxApiPart(_BaseApiPart):
                 url=self._make_url("atx/power"),
                 params={"action": action},
             ) as response:
-                aiotools.raise_not_200(response)
+                htclient.raise_not_200(response)
                 return True
         except aiohttp.ClientResponseError as err:
             if err.status == 409:

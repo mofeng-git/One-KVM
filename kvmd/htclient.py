@@ -20,33 +20,24 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Optional
+import aiohttp
 
-from ...clients.kvmd import KvmdClient
-
-from ... import htclient
-
-from .. import init
-
-from .auth import IpmiAuthManager
-from .server import IpmiServer
+from . import __version__
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
-    config = init(
-        prog="kvmd-ipmi",
-        description="IPMI to KVMD proxy",
-        argv=argv,
-    )[2].ipmi
+def make_user_agent(app: str) -> str:
+    return f"{app}/{__version__}"
 
-    # pylint: disable=protected-access
-    IpmiServer(
-        auth_manager=IpmiAuthManager(**config.auth._unpack()),
-        kvmd=KvmdClient(
-            user_agent=htclient.make_user_agent("KVMD-IPMI"),
-            **config.kvmd._unpack(),
-        ),
-        **config.server._unpack(),
-    ).run()
+
+def raise_not_200(response: aiohttp.ClientResponse) -> None:
+    if response.status != 200:
+        assert response.reason is not None
+        response.release()
+        raise aiohttp.ClientResponseError(
+            response.request_info,
+            response.history,
+            status=response.status,
+            message=response.reason,
+            headers=response.headers,
+        )
