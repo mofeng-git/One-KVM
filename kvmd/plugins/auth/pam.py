@@ -30,7 +30,7 @@ import pam
 
 from ...yamlconf import Option
 
-from ...validators.basic import valid_number
+from ...validators.basic import valid_int_f0
 from ...validators.auth import valid_users_list
 
 from ...logging import get_logger
@@ -63,7 +63,7 @@ class Plugin(BaseAuthService):
             "service":       Option("login"),
             "allow_users":   Option([], type=valid_users_list),
             "deny_users":    Option([], type=valid_users_list),
-            "allow_uids_at": Option(0, type=(lambda arg: valid_number(arg, min=0))),
+            "allow_uids_at": Option(0, type=valid_int_f0),
         }
 
     async def authorize(self, user: str, passwd: str) -> bool:

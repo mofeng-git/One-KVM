@@ -28,6 +28,7 @@ import pytest
 from kvmd.validators import ValidatorError
 from kvmd.validators.basic import valid_bool
 from kvmd.validators.basic import valid_number
+from kvmd.validators.basic import valid_int_f0
 from kvmd.validators.basic import valid_int_f1
 from kvmd.validators.basic import valid_float_f0
 from kvmd.validators.basic import valid_float_f01
@@ -80,6 +81,20 @@ def test_ok__valid_number__min_max(arg: Any) -> None:
 def test_fail__valid_number__min_max(arg: Any) -> None:  # pylint: disable=invalid-name
     with pytest.raises(ValidatorError):
         print(valid_number(arg, -5, 5))
+
+
+# =====
+@pytest.mark.parametrize("arg", [0, 1, 5, "5 "])
+def test_ok__valid_int_f0(arg: Any) -> None:
+    value = valid_int_f0(arg)
+    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert value == int(str(arg).strip())
+
+
+@pytest.mark.parametrize("arg", ["test", "", None, -6, "-6 ", "5.0"])
+def test_fail__valid_int_f0(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_int_f0(arg))
 
 
 # =====

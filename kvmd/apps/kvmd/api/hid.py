@@ -37,7 +37,7 @@ from ....plugins.hid import BaseHid
 from ....validators import raise_error
 
 from ....validators.basic import valid_bool
-from ....validators.basic import valid_number
+from ....validators.basic import valid_int_f0
 
 from ....validators.os import valid_printable_filename
 
@@ -98,7 +98,7 @@ class HidApi:
     @exposed_http("POST", "/hid/print")
     async def __print_handler(self, request: Request) -> Response:
         text = await request.text()
-        limit = int(valid_number(request.query.get("limit", "1024"), min=0, type=int))
+        limit = int(valid_int_f0(request.query.get("limit", "1024")))
         if limit > 0:
             text = text[:limit]
         symmap = self.__ensure_symmap(request.query.get("keymap", self.__default_keymap_name))

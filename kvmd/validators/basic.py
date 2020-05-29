@@ -84,6 +84,10 @@ def valid_number(
     return arg
 
 
+def valid_int_f0(arg: Any) -> int:
+    return int(valid_number(arg, min=0))
+
+
 def valid_int_f1(arg: Any) -> int:
     return int(valid_number(arg, min=1))
 

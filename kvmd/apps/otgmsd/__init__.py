@@ -31,7 +31,7 @@ from typing import Optional
 import psutil
 
 from ...validators.basic import valid_bool
-from ...validators.basic import valid_number
+from ...validators.basic import valid_int_f0
 
 from ...validators.os import valid_abs_file
 
@@ -90,7 +90,7 @@ def main(argv: Optional[List[str]]=None) -> None:
         description="KVMD OTG-MSD low-level hand tool",
         parents=[parent_parser],
     )
-    parser.add_argument("-i", "--instance", default=0, type=(lambda arg: valid_number(arg, min=0)),
+    parser.add_argument("-i", "--instance", default=0, type=valid_int_f0,
                         metavar="<N>", help="Drive instance (0 for KVMD drive)")
     parser.add_argument("--unlock", action="store_true",
                         help="Send SIGUSR1 to MSD kernel thread")
