@@ -52,10 +52,6 @@ from ...plugins.msd import BaseMsd
 
 from ...validators import ValidatorError
 
-from ...validators.auth import valid_user
-from ...validators.auth import valid_passwd
-from ...validators.auth import valid_auth_token
-
 from ...validators.kvm import valid_stream_quality
 from ...validators.kvm import valid_stream_fps
 
@@ -78,8 +74,10 @@ from .http import get_exposed_http
 from .http import get_exposed_ws
 from .http import make_json_response
 from .http import make_json_exception
-from .http import set_request_auth_info
 from .http import HttpServer
+
+from .api.auth import AuthApi
+from .api.auth import check_request_auth
 
 from .api.log import LogApi
 from .api.wol import WolApi
@@ -89,12 +87,6 @@ from .api.msd import MsdApi
 
 
 # =====
-_HEADER_AUTH_USER = "X-KVMD-User"
-_HEADER_AUTH_PASSWD = "X-KVMD-Passwd"
-
-_COOKIE_AUTH_TOKEN = "auth_token"
-
-
 class _Events(Enum):
     INFO_STATE = "info_state"
     WOL_STATE = "wol_state"
@@ -136,6 +128,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         self.__apis: List[object] = [
             self,
+            AuthApi(auth_manager),
             LogApi(log_reader),
             WolApi(wol),
             HidApi(hid, keymap_path),
@@ -165,32 +158,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             "meta": await self.__info_manager.get_meta(),
             "extras": await self.__info_manager.get_extras(),
         }
-
-    # ===== AUTH
-
-    @exposed_http("POST", "/auth/login", auth_required=False)
-    async def __auth_login_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        if self.__auth_manager.is_auth_enabled():
-            credentials = await request.post()
-            token = await self.__auth_manager.login(
-                user=valid_user(credentials.get("user", "")),
-                passwd=valid_passwd(credentials.get("passwd", "")),
-            )
-            if token:
-                return make_json_response(set_cookies={_COOKIE_AUTH_TOKEN: token})
-            raise ForbiddenError()
-        return make_json_response()
-
-    @exposed_http("POST", "/auth/logout")
-    async def __auth_logout_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        if self.__auth_manager.is_auth_enabled():
-            token = valid_auth_token(request.cookies.get(_COOKIE_AUTH_TOKEN, ""))
-            self.__auth_manager.logout(token)
-        return make_json_response()
-
-    @exposed_http("GET", "/auth/check")
-    async def __auth_check_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return make_json_response()
 
     # ===== SYSTEM
 
@@ -307,29 +274,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     def __add_app_route(self, app: aiohttp.web.Application, exposed: HttpExposed) -> None:
         async def wrapper(request: aiohttp.web.Request) -> aiohttp.web.Response:
             try:
-                if exposed.auth_required and self.__auth_manager.is_auth_enabled():
-                    user = request.headers.get(_HEADER_AUTH_USER, "")
-                    passwd = request.headers.get(_HEADER_AUTH_PASSWD, "")
-                    token = request.cookies.get(_COOKIE_AUTH_TOKEN, "")
-
-                    if user:
-                        user = valid_user(user)
-                        set_request_auth_info(request, f"{user} (xhdr)")
-                        if not (await self.__auth_manager.authorize(user, valid_passwd(passwd))):
-                            raise ForbiddenError()
-
-                    elif token:
-                        user = self.__auth_manager.check(valid_auth_token(token))
-                        if not user:
-                            set_request_auth_info(request, "- (token)")
-                            raise ForbiddenError()
-                        set_request_auth_info(request, f"{user} (token)")
-
-                    else:
-                        raise UnauthorizedError()
-
+                await check_request_auth(self.__auth_manager, exposed, request)
                 return (await exposed.handler(request))
-
             except IsBusyError as err:
                 return make_json_exception(err, 409)
             except (ValidatorError, OperationError) as err:
@@ -338,7 +284,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 return make_json_exception(err, 401)
             except ForbiddenError as err:
                 return make_json_exception(err, 403)
-
         app.router.add_route(exposed.method, exposed.path, wrapper)
 
     async def __on_shutdown(self, _: aiohttp.web.Application) -> None:
