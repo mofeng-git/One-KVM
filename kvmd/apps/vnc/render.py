@@ -42,9 +42,9 @@ def _inner_make_text_jpeg(width: int, height: int, quality: int, text: str) -> b
     image = Image.new("RGB", (width, height), color=(0, 0, 0))
     draw = ImageDraw.Draw(image)
     draw.multiline_text((20, 20), text, font=_get_font(), fill=(255, 255, 255))
-    bio = io.BytesIO()
-    image.save(bio, format="jpeg", quality=quality)
-    return bio.getvalue()
+    with io.BytesIO() as bio:
+        image.save(bio, format="jpeg", quality=quality)
+        return bio.getvalue()
 
 
 @functools.lru_cache()
