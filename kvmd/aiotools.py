@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import os
 import asyncio
 import asyncio.queues
 import functools
@@ -38,9 +37,6 @@ from typing import Type
 from typing import TypeVar
 from typing import Optional
 from typing import Any
-
-import aiofiles
-import aiofiles.base
 
 from .logging import get_logger
 
@@ -91,13 +87,6 @@ async def wait_infinite() -> None:
 
 async def wait_first(*aws: Awaitable) -> Tuple[Set[asyncio.Future], Set[asyncio.Future]]:
     return (await asyncio.wait(list(aws), return_when=asyncio.FIRST_COMPLETED))
-
-
-# =====
-async def afile_write_now(afile: aiofiles.base.AiofilesContextManager, data: bytes) -> None:
-    await afile.write(data)
-    await afile.flush()
-    await run_async(os.fsync, afile.fileno())
 
 
 # =====

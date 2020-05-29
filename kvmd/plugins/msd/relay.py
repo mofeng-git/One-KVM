@@ -39,6 +39,7 @@ import aiofiles.base
 from ...logging import get_logger
 
 from ... import aiotools
+from ... import aiofs
 from ... import gpio
 
 from ...yamlconf import Option
@@ -325,7 +326,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__device_file
-        await aiotools.afile_write_now(self.__device_file, chunk)
+        await aiofs.afile_write_now(self.__device_file, chunk)
         self.__written += len(chunk)
         return self.__written
 
@@ -349,7 +350,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         assert self.__device_info
         if self.__device_info.size - self.__written > _IMAGE_INFO_SIZE:
             await self.__device_file.seek(self.__device_info.size - _IMAGE_INFO_SIZE)
-            await aiotools.afile_write_now(self.__device_file, _make_image_info_bytes(name, self.__written, complete))
+            await aiofs.afile_write_now(self.__device_file, _make_image_info_bytes(name, self.__written, complete))
             await self.__device_file.seek(0)
         else:
             get_logger().error("Can't write image info because device is full")

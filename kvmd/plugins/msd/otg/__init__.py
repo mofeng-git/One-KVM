@@ -45,6 +45,7 @@ from ....validators.os import valid_abs_dir
 from ....validators.os import valid_command
 
 from .... import aiotools
+from .... import aiofs
 
 from .. import MsdError
 from .. import MsdIsBusyError
@@ -340,7 +341,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__new_file
-        await aiotools.afile_write_now(self.__new_file, chunk)
+        await aiofs.afile_write_now(self.__new_file, chunk)
         self.__new_file_written += len(chunk)
         now = time.time()
         if self.__new_file_tick + 1 < now:
