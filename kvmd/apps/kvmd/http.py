@@ -39,6 +39,11 @@ class ForbiddenError(HttpError):
         super().__init__("Forbidden", 403)
 
 
+class UnavailableError(HttpError):
+    def __init__(self) -> None:
+        super().__init__("Service Unavailable", 503)
+
+
 # =====
 @dataclasses.dataclass(frozen=True)
 class HttpExposed:

@@ -54,7 +54,7 @@ class StreamerClient:
 
     async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
         try:
-            async with self.__make_http_session(infinite=True) as session:
+            async with self.__make_http_session() as session:
                 async with session.get(
                     url=self.__make_url("stream"),
                     params={"extra_headers": "1"},
@@ -84,24 +84,14 @@ class StreamerClient:
             raise StreamerError(f"{type(err).__name__}: {err}")
         raise StreamerError("Reached EOF")
 
-#    async def get_snapshot(self) -> Tuple[bool, bytes]:
-#        async with self.__make_http_session(infinite=False) as session:
-#            async with session.get(self.__make_url("snapshot")) as response:
-#                htclient.raise_not_200(response)
-#                return (
-#                    (response.headers["X-UStreamer-Online"] == "true"),
-#                    bytes(await response.read()),
-#                )
-
-    def __make_http_session(self, infinite: bool) -> aiohttp.ClientSession:
-        kwargs: Dict = {"headers": {"User-Agent": self.__user_agent}}
-        if infinite:
-            kwargs["timeout"] = aiohttp.ClientTimeout(
+    def __make_http_session(self) -> aiohttp.ClientSession:
+        kwargs: Dict = {
+            "headers": {"User-Agent": self.__user_agent},
+            "timeout": aiohttp.ClientTimeout(
                 connect=self.__timeout,
                 sock_read=self.__timeout,
-            )
-        else:
-            kwargs["timeout"] = aiohttp.ClientTimeout(total=self.__timeout)
+            ),
+        }
         if self.__unix_path:
             kwargs["connector"] = aiohttp.UnixConnector(path=self.__unix_path)
         return aiohttp.ClientSession(**kwargs)

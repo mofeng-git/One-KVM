@@ -24,7 +24,10 @@ import os
 import signal
 import asyncio
 import asyncio.subprocess
+import dataclasses
+import operator
 
+from typing import Tuple
 from typing import List
 from typing import Dict
 from typing import AsyncGenerator
@@ -42,6 +45,16 @@ from ... import gpio
 
 
 # =====
+@dataclasses.dataclass(frozen=True)
+class StreamerSnapshot:
+    online: bool
+    width: int
+    height: int
+    mtime: float
+    headers: Tuple[Tuple[str, str], ...]
+    data: bytes
+
+
 class Streamer:  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
@@ -100,6 +113,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__streamer_proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
 
         self.__http_session: Optional[aiohttp.ClientSession] = None
+
+        self.__snapshot: Optional[StreamerSnapshot] = None
+
+        self.__state_notifier = aiotools.AioNotifier()
 
     # =====
 
@@ -163,6 +180,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         # Запущено и не планирует останавливаться
         return bool(self.__streamer_task and not self.__stop_task)
 
+    # =====
+
     def set_params(self, params: Dict) -> None:
         assert not self.__streamer_task
         self.__params = {
@@ -176,6 +195,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     def get_params(self) -> Dict:
         return dict(self.__params)
 
+    # =====
+
     async def get_state(self) -> Dict:
         state = None
         if self.__streamer_task:
@@ -188,18 +209,24 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 pass
             except Exception:
                 get_logger().exception("Invalid streamer response from /state")
+
+        snapshot: Optional[Dict] = None
+        if self.__snapshot:
+            snapshot = dataclasses.asdict(self.__snapshot)
+            del snapshot["headers"]
+            del snapshot["data"]
+
         return {
             "limits": {"max_fps": self.__max_fps},
             "params": self.__params,
+            "snapshot": {"saved": snapshot},
             "state": state,
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        notifier = aiotools.AioNotifier()
-
         def signal_handler(*_: Any) -> None:
             get_logger(0).info("Got SIGUSR2, checking the stream state ...")
-            asyncio.ensure_future(notifier.notify())
+            asyncio.ensure_future(self.__state_notifier.notify())
 
         get_logger(0).info("Installing SIGUSR2 streamer handler ...")
         asyncio.get_event_loop().add_signal_handler(signal.SIGUSR2, signal_handler)
@@ -213,9 +240,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 prev_state = state
 
             if waiter_task is None:
-                waiter_task = asyncio.create_task(notifier.wait())
+                waiter_task = asyncio.create_task(self.__state_notifier.wait())
             if waiter_task in (await aiotools.wait_first(asyncio.sleep(self.__state_poll), waiter_task))[0]:
                 waiter_task = None
+
+    # =====
 
     async def get_info(self) -> Dict:
         version = (await aioproc.read_process([self.__cmd[0], "--version"], err_to_null=True))[1]
@@ -223,6 +252,49 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             "app": os.path.basename(self.__cmd[0]),
             "version": version,
         }
+
+    async def make_snapshot(self, save: bool, load: bool, allow_offline: bool) -> Optional[StreamerSnapshot]:
+        if load:
+            return self.__snapshot
+        else:
+            session = self.__ensure_http_session()
+            try:
+                async with session.get(self.__make_url("snapshot")) as response:
+                    htclient.raise_not_200(response)
+                    online = (response.headers["X-UStreamer-Online"] == "true")
+                    if online or allow_offline:
+                        snapshot = StreamerSnapshot(
+                            online=online,
+                            width=int(response.headers["X-UStreamer-Width"]),
+                            height=int(response.headers["X-UStreamer-Height"]),
+                            mtime=float(response.headers["X-Timestamp"]),
+                            headers=tuple(
+                                (key, value)
+                                for (key, value) in sorted(response.headers.items(), key=operator.itemgetter(0))
+                                if key.lower().startswith("x-ustreamer-") or key.lower() in [
+                                    "x-timestamp",
+                                    "access-control-allow-origin",
+                                    "cache-control",
+                                    "pragma",
+                                    "expires",
+                                ]
+                            ),
+                            data=bytes(await response.read()),
+                        )
+                        if save:
+                            self.__snapshot = snapshot
+                            await self.__state_notifier.notify()
+                        return snapshot
+            except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
+                pass
+            except Exception:
+                get_logger().exception("Invalid streamer response from /snapshot")
+            return None
+
+    def remove_snapshot(self) -> None:
+        self.__snapshot = None
+
+    # =====
 
     @aiotools.atomic
     async def cleanup(self) -> None:

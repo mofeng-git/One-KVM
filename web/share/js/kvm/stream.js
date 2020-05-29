@@ -193,7 +193,7 @@ export function Streamer() {
 
 	var __clickScreenshotButton = function() {
 		let el_a = document.createElement("a");
-		el_a.href = "/streamer/snapshot";
+		el_a.href = "/api/streamer/snapshot?allow_offline=1";
 		el_a.target = "_blank";
 		document.body.appendChild(el_a);
 		el_a.click();

@@ -83,6 +83,7 @@ from .api.wol import WolApi
 from .api.hid import HidApi
 from .api.atx import AtxApi
 from .api.msd import MsdApi
+from .api.streamer import StreamerApi
 
 
 # =====
@@ -133,6 +134,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             HidApi(hid, keymap_path),
             AtxApi(atx),
             MsdApi(msd, sync_chunk_size),
+            StreamerApi(streamer),
         ]
 
         self.__ws_handlers: Dict[str, Callable] = {}
@@ -164,11 +166,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     async def __info_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
         return make_json_response(await self.__make_info())
 
-    # ===== STREAMER
-
-    @exposed_http("GET", "/streamer")
-    async def __streamer_state_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return make_json_response(await self.__streamer.get_state())
+    # ===== STREAMER CONTROLLER
 
     @exposed_http("POST", "/streamer/set_params")
     async def __streamer_set_params_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
