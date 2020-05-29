@@ -24,17 +24,19 @@ from ...validators import ValidatorError
 
 # =====
 class HttpError(Exception):
-    pass
+    def __init__(self, msg: str, status: int) -> None:
+        super().__init__(msg)
+        self.status = status
 
 
 class UnauthorizedError(HttpError):
     def __init__(self) -> None:
-        super().__init__("Unauthorized")
+        super().__init__("Unauthorized", 401)
 
 
 class ForbiddenError(HttpError):
     def __init__(self) -> None:
-        super().__init__("Forbidden")
+        super().__init__("Forbidden", 403)
 
 
 # =====
@@ -126,11 +128,14 @@ def make_json_response(
     return response
 
 
-def make_json_exception(err: Exception, status: int) -> aiohttp.web.Response:
+def make_json_exception(err: Exception, status: Optional[int]=None) -> aiohttp.web.Response:
     name = type(err).__name__
     msg = str(err)
-    if not isinstance(err, (UnauthorizedError, ForbiddenError)):
+    if isinstance(err, HttpError):
+        status = err.status
+    else:
         get_logger().error("API error: %s: %s", name, msg)
+    assert status is not None, err
     return make_json_response({
         "error": name,
         "error_msg": msg,

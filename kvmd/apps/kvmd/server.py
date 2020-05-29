@@ -65,8 +65,7 @@ from .logreader import LogReader
 from .streamer import Streamer
 from .wol import WakeOnLan
 
-from .http import UnauthorizedError
-from .http import ForbiddenError
+from .http import HttpError
 from .http import HttpExposed
 from .http import exposed_http
 from .http import exposed_ws
@@ -280,10 +279,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 return make_json_exception(err, 409)
             except (ValidatorError, OperationError) as err:
                 return make_json_exception(err, 400)
-            except UnauthorizedError as err:
-                return make_json_exception(err, 401)
-            except ForbiddenError as err:
-                return make_json_exception(err, 403)
+            except HttpError as err:
+                return make_json_exception(err)
         app.router.add_route(exposed.method, exposed.path, wrapper)
 
     async def __on_shutdown(self, _: aiohttp.web.Application) -> None:
