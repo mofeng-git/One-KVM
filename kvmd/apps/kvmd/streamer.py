@@ -36,6 +36,7 @@ import aiohttp
 from ...logging import get_logger
 
 from ... import aiotools
+from ... import aioproc
 from ... import htclient
 from ... import gpio
 
@@ -217,16 +218,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 waiter_task = None
 
     async def get_info(self) -> Dict:
-        proc = await asyncio.create_subprocess_exec(
-            *[self.__cmd[0], "--version"],
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-            preexec_fn=(lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)),
-        )
-        (stdout, _) = await proc.communicate()
+        version = (await aioproc.read_process([self.__cmd[0], "--version"], err_to_null=True))[1]
         return {
             "app": os.path.basename(self.__cmd[0]),
-            "version": stdout.decode(errors="ignore").strip(),
+            "version": version,
         }
 
     @aiotools.atomic
@@ -329,12 +324,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             )
             for part in self.__cmd
         ]
-        self.__streamer_proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            preexec_fn=(lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)),
-        )
+        self.__streamer_proc = await aioproc.run_process(cmd)
         get_logger(0).info("Started streamer pid=%d: %s", self.__streamer_proc.pid, cmd)
 
     async def __kill_streamer_proc(self) -> None:
