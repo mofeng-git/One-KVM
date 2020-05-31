@@ -44,6 +44,7 @@
 	<link rel="stylesheet" href="../share/css/switch.css">
 	<link rel="stylesheet" href="../share/css/progress.css">
 	<link rel="stylesheet" href="../share/css/keypad.css">
+	<link rel="stylesheet" href="../share/css/tabs.css">
 	<link rel="stylesheet" href="../share/css/kvm/stream.css">
 	<link rel="stylesheet" href="../share/css/kvm/hid.css">
 	<link rel="stylesheet" href="../share/css/kvm/msd.css">
@@ -664,11 +665,49 @@
 					</td>
 				</tr>
 			</table>
-			<hr>
-			<div id="about-meta" class="code">
-				<span class="code-comment">No data</span>
+			<div class="tabs">
+				<input type="radio" name="about-tab-button" id="about-tab-info-button" value="" checked>
+				<label for="about-tab-info-button">Info</label>
+
+				<input type="radio" name="about-tab-button" id="about-tab-thanks-button" value="">
+				<label for="about-tab-thanks-button">Thanks</label>
+
+				<div id="about-tab-info-content">
+					<div id="about-meta" class="code">
+						<span class="code-comment">No data</span>
+					</div>
+				</div>
+				<div id="about-tab-thanks-content">
+					<div class="code" style="max-height: 300px">
+						<span class="code-comment">
+							// These kind people donated money to the Pi-KVM project<br>
+							// and supported the work on it. We are very grateful<br>
+							// for their help, and memorializing their names<br>
+							// is the least we can do in gratitude.<br>
+							// If you also want to support this project,<br>
+							// you can use one of these services:
+							<a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
+							or <a target="_blank" href="https://www.paypal.me/mdevaev">PayPal</a>.
+						</span>
+						<ul>
+							<li>Arthur Woimbée</li>
+							<li>Branden Shaulis</li>
+							<li>Christof Maluck</li>
+							<li>David Howell</li>
+							<li>Denis Yatsenko</li>
+							<li>Ge Men</li>
+							<li>Grey Cynic</li>
+							<li>Jason Toland</li>
+							<li>John McGovern</li>
+							<li>Mauricio Allende</li>
+							<li>Samed Ozoglu</li>
+							<li>Truman Kilen</li>
+							<li>Walter_Ego</li>
+						</ul>
+					</div>
+				</div>
 			</div>
-			<hr>
+			<br>
 			<p class="text">
 				Full documentation, source code, hardware schematics and legal information
 				can be found in our <a target="_blank" href="https://pikvm.org">official website</a>.
