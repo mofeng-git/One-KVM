@@ -176,7 +176,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _send_leds_state(self, caps: bool, scroll: bool, num: bool) -> None:
         assert self._encodings.has_leds_state
         await self._write_fb_update(0, 0, RfbEncodings.LEDS_STATE, drain=False)
-        await self._write_struct("B", 0x1 & scroll | 0x2 & num | 0x4 & caps)
+        await self._write_struct("B", int(scroll) | int(num) << 1 | int(caps) << 2)
 
     # =====
 
