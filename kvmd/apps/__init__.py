@@ -214,9 +214,9 @@ def _get_config_scheme() -> Dict:
                 },
             },
 
-            "info": {
-                "meta":   Option("/etc/kvmd/meta.yaml",    type=valid_abs_file, unpack_as="meta_path"),
-                "extras": Option("/usr/share/kvmd/extras", type=valid_abs_dir, unpack_as="extras_path"),
+            "info": {  # Accessed via global config, see kvmd/info.py for details
+                "meta":   Option("/etc/kvmd/meta.yaml",    type=valid_abs_file),
+                "extras": Option("/usr/share/kvmd/extras", type=valid_abs_dir),
             },
 
             "wol": {

@@ -57,8 +57,6 @@ from ...validators.kvm import valid_stream_fps
 
 from ... import aiotools
 
-from ... import __version__
-
 from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
@@ -78,6 +76,7 @@ from .http import HttpServer
 from .api.auth import AuthApi
 from .api.auth import check_request_auth
 
+from .api.info import InfoApi
 from .api.log import LogApi
 from .api.wol import WolApi
 from .api.hid import HidApi
@@ -129,6 +128,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self.__apis: List[object] = [
             self,
             AuthApi(auth_manager),
+            InfoApi(info_manager),
             LogApi(log_reader),
             WolApi(wol),
             HidApi(hid, keymap_path),
@@ -147,24 +147,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self.__streamer_notifier = aiotools.AioNotifier()
         self.__reset_streamer = False
         self.__new_streamer_params: Dict = {}
-
-    async def __make_info(self) -> Dict:
-        streamer_info = await self.__streamer.get_info()
-        return {
-            "version": {
-                "kvmd": __version__,
-                "streamer": streamer_info["version"],
-            },
-            "streamer": streamer_info["app"],
-            "meta": await self.__info_manager.get_meta(),
-            "extras": await self.__info_manager.get_extras(),
-        }
-
-    # ===== SYSTEM
-
-    @exposed_http("GET", "/info")
-    async def __info_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
-        return make_json_response(await self.__make_info())
 
     # ===== STREAMER CONTROLLER
 
@@ -198,7 +180,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         await self.__register_socket(ws)
         try:
             await asyncio.gather(*[
-                self.__broadcast_event(_Events.INFO_STATE, (await self.__make_info())),
+                self.__broadcast_event(_Events.INFO_STATE, (await self.__info_manager.get_state())),
                 self.__broadcast_event(_Events.WOL_STATE, self.__wol.get_state()),
                 self.__broadcast_event(_Events.HID_STATE, (await self.__hid.get_state())),
                 self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state()),

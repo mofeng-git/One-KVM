@@ -56,15 +56,20 @@ function __loadKvmdInfo() {
 			if (http.status === 200) {
 				let info = JSON.parse(http.responseText).result;
 
-				let apps = Object.values(info.extras).sort(function(a, b) {
-					if (a.place < b.place) {
-						return -1;
-					} else if (a.place > b.place) {
-						return 1;
-					} else {
-						return 0;
-					}
-				});
+				let apps = [];
+				if (info.extras === null) {
+					wm.error("Not all applications in the menu can be displayed<br>due an error. See KVMD logs for details.");
+				} else {
+					apps = Object.values(info.extras).sort(function(a, b) {
+						if (a.place < b.place) {
+							return -1;
+						} else if (a.place > b.place) {
+							return 1;
+						} else {
+							return 0;
+						}
+					});
+				}
 
 				$("apps-box").innerHTML = "<ul id=\"apps\"></ul>";
 
@@ -79,7 +84,7 @@ function __loadKvmdInfo() {
 				$("apps").innerHTML += __makeApp("logout-button", "#", "share/svg/logout.svg", "Logout");
 				tools.setOnClick($("logout-button"), __logout);
 
-				if (info.meta && info.meta.server && info.meta.server.host) {
+				if (info.meta !== null && info.meta.server && info.meta.server.host) {
 					$("kvmd-meta-server-host").innerHTML = info.meta.server.host;
 					document.title = `Pi-KVM Index: ${info.meta.server.host}`;
 				} else {

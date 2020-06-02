@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import os
 import signal
 import asyncio
 import asyncio.subprocess
@@ -245,13 +244,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 waiter_task = None
 
     # =====
-
-    async def get_info(self) -> Dict:
-        version = (await aioproc.read_process([self.__cmd[0], "--version"], err_to_null=True))[1]
-        return {
-            "app": os.path.basename(self.__cmd[0]),
-            "version": version,
-        }
 
     async def make_snapshot(self, save: bool, load: bool, allow_offline: bool) -> Optional[StreamerSnapshot]:
         if load:

@@ -55,8 +55,8 @@ export function Session() {
 
 	/************************************************************************/
 
-	var __setKvmdInfo = function(state) {
-		if (state.meta) {
+	var __setAboutInfo = function(state) {
+		if (state.meta != null) {
 			let text = JSON.stringify(state.meta, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
 			$("about-meta").innerHTML = `
 				<span class="code-comment">// The Pi-KVM metadata.<br>
@@ -75,8 +75,48 @@ export function Session() {
 			}
 		}
 
-		$("about-version-kvmd").innerHTML = state.version.kvmd;
-		$("about-version-streamer").innerHTML = `${state.version.streamer} (${state.streamer})`;
+		let sys = state.system;
+		$("about-version").innerHTML = `
+			KVMD: <span class="code-comment">${sys.kvmd.version}</span><br>
+			<hr>
+			Streamer: <span class="code-comment">${sys.streamer.version} (${sys.streamer.app})</span>
+			${__formatStreamerFeatures(sys.streamer.features)}
+			<hr>
+			${sys.kernel.system} kernel:
+			${__formatUname(sys.kernel)}
+		`;
+	};
+
+	var __formatStreamerFeatures = function(features) {
+		let pairs = [];
+		for (let field of Object.keys(features).sort()) {
+			pairs.push([
+				field,
+				(features[field] ? "Yes" : "No"),
+			]);
+		}
+		return __formatUl(pairs);
+	};
+
+	var __formatUname = function(kernel) {
+		let pairs = [];
+		for (let field of Object.keys(kernel).sort()) {
+			if (field != "system") {
+				pairs.push([
+					field[0].toUpperCase() + field.slice(1),
+					kernel[field],
+				]);
+			}
+		}
+		return __formatUl(pairs);
+	};
+
+	var __formatUl = function(pairs) {
+		let text = "<ul>";
+		for (let pair of pairs) {
+			text += `<li>${pair[0]}: <span class="code-comment">${pair[1]}</span></li>`;
+		}
+		return text + "</ul>";
 	};
 
 	var __startSession = function() {
@@ -117,7 +157,7 @@ export function Session() {
 		let data = JSON.parse(event.data);
 		switch (data.event_type) {
 			case "pong": __missed_heartbeats = 0; break;
-			case "info_state": __setKvmdInfo(data.event); break;
+			case "info_state": __setAboutInfo(data.event); break;
 			case "wol_state": __wol.setState(data.event); break;
 			case "hid_state": __hid.setState(data.event); break;
 			case "atx_state": __atx.setState(data.event); break;

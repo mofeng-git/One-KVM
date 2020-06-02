@@ -1,4 +1,4 @@
-/*****************************************************************************
+# ========================================================================== #
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
 #                                                                            #
@@ -17,36 +17,25 @@
 #    You should have received a copy of the GNU General Public License       #
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
 #                                                                            #
-*****************************************************************************/
+# ========================================================================== #
 
 
-div#about {
-	-webkit-user-select: text;
-	-moz-user-select: text;
-	user-select: text;
-	max-width: 600px;
-	white-space: normal;
-	padding: 5px 5px 5px 5px;
-}
+from aiohttp.web import Request
+from aiohttp.web import Response
 
-div#about td.logo {
-	padding-right: 25px;
-}
+from ..info import InfoManager
 
-div#about td.title {
-	font-size: 1.2em;
-}
+from ..http import exposed_http
+from ..http import make_json_response
 
-div#about td.copyright {
-	font-size: 0.8em;
-}
 
-div#about div#about-meta, div#about-version, div#about-thanks {
-	height: 250px;
-}
+# =====
+class InfoApi:
+    def __init__(self, info_manager: InfoManager) -> None:
+        self.__info_manager = info_manager
 
-#about-tab-info-button:checked~#about-tab-info-content,
-#about-tab-version-button:checked~#about-tab-version-content,
-#about-tab-thanks-button:checked~#about-tab-thanks-content {
-	display: block;
-}
+    # =====
+
+    @exposed_http("GET", "/info")
+    async def __state_handler(self, _: Request) -> Response:
+        return make_json_response(await self.__info_manager.get_state())

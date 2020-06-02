@@ -150,13 +150,17 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def __process_ws_event(self, event: Dict) -> None:
         if event["event_type"] == "info_state":
-            host = event["event"]["meta"].get("server", {}).get("host")
-            if isinstance(host, str):
-                name = f"Pi-KVM: {host}"
-                async with self.__lock:
-                    if self._encodings.has_rename:
-                        await self._send_rename(name)
-                self.__shared_params.name = name
+            try:
+                host = event["event"]["meta"]["server"]["host"]
+            except Exception:
+                host = None
+            else:
+                if isinstance(host, str):
+                    name = f"Pi-KVM: {host}"
+                    async with self.__lock:
+                        if self._encodings.has_rename:
+                            await self._send_rename(name)
+                    self.__shared_params.name = name
 
         elif event["event_type"] == "hid_state":
             async with self.__lock:
