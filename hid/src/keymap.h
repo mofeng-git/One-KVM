@@ -29,6 +29,22 @@
 
 INLINE KeyboardKeycode keymap(uint8_t code) {
 	switch(code) {
+		case 103: return KEYPAD_0;
+		case 94: return KEYPAD_1;
+		case 95: return KEYPAD_2;
+		case 96: return KEYPAD_3;
+		case 97: return KEYPAD_4;
+		case 98: return KEYPAD_5;
+		case 99: return KEYPAD_6;
+		case 100: return KEYPAD_7;
+		case 101: return KEYPAD_8;
+		case 102: return KEYPAD_9;
+		case 92: return KEYPAD_ADD;
+		case 104: return KEYPAD_DECIMAL;
+		case 89: return KEYPAD_DIVIDE;
+		case 93: return KEYPAD_ENTER;
+		case 90: return KEYPAD_MULTIPLY;
+		case 91: return KEYPAD_SUBTRACT;
 		case 36: return KEY_0;
 		case 27: return KEY_1;
 		case 28: return KEY_2;

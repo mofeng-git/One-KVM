@@ -116,21 +116,21 @@ Pause				85				KEY_PAUSE				0x48					0xe046			XK_Pause
 ScrollLock			86				KEY_SCROLL_LOCK			0x47					0x46			XK_Scroll_Lock
 NumLock				87				KEY_NUM_LOCK			0x53					0x45			XK_Num_Lock
 ContextMenu			88				KEY_MENU				0x65					0xe05d			XK_Menu
-#			KEY_NON_US_NUM
-#			KEYPAD_DIVIDE
-#			KEYPAD_MULTIPLY
-#			KEYPAD_SUBTRACT
-#			KEYPAD_ADD
-#			KEYPAD_ENTER
-#			KEYPAD_1
-#			KEYPAD_2
-#			KEYPAD_3
-#			KEYPAD_4
-#			KEYPAD_5
-#			KEYPAD_6
-#			KEYPAD_7
-#			KEYPAD_8
-#			KEYPAD_9
-#			KEYPAD_0
-#			KEYPAD_DOT
+NumpadDivide		89				KEYPAD_DIVIDE			0x54					0xe035			XK_KP_Divide
+NumpadMultiply		90				KEYPAD_MULTIPLY			0x55					0x37			XK_multiply
+NumpadSubtract		91				KEYPAD_SUBTRACT			0x56					0x4a			XK_KP_Subtract
+NumpadAdd			92				KEYPAD_ADD				0x57					0x4e			XK_KP_Add
+NumpadEnter			93				KEYPAD_ENTER			0x58					0xe01c			XK_KP_Enter
+Numpad1				94				KEYPAD_1				0x59					0x4f			XK_KP_1
+Numpad2				95				KEYPAD_2				0x5a					0x50			XK_KP_2
+Numpad3				96				KEYPAD_3				0x5b					0x51			XK_KP_3
+Numpad4				97				KEYPAD_4				0x5c					0x4b			XK_KP_4
+Numpad5				98				KEYPAD_5				0x5d					0x4c			XK_KP_5
+Numpad6				99				KEYPAD_6				0x5e					0x4d			XK_KP_6
+Numpad7				100				KEYPAD_7				0x5f					0x47			XK_KP_7
+Numpad8				101				KEYPAD_8				0x60					0x48			XK_KP_8
+Numpad9				102				KEYPAD_9				0x61					0x49			XK_KP_9
+Numpad0				103				KEYPAD_0				0x62					0x52			XK_KP_0
+NumpadDecimal		104				KEYPAD_DECIMAL			0x63					0x53			XK_KP_Decimal
 #			KEY_NON_US
+#			KEY_NON_US_NUM

@@ -132,6 +132,22 @@ KEYMAP: Dict[str, Key] = {
     "ScrollLock": Key(serial=SerialKey(code=86), otg=OtgKey(code=71, is_modifier=False)),
     "NumLock": Key(serial=SerialKey(code=87), otg=OtgKey(code=83, is_modifier=False)),
     "ContextMenu": Key(serial=SerialKey(code=88), otg=OtgKey(code=101, is_modifier=False)),
+    "NumpadDivide": Key(serial=SerialKey(code=89), otg=OtgKey(code=84, is_modifier=False)),
+    "NumpadMultiply": Key(serial=SerialKey(code=90), otg=OtgKey(code=85, is_modifier=False)),
+    "NumpadSubtract": Key(serial=SerialKey(code=91), otg=OtgKey(code=86, is_modifier=False)),
+    "NumpadAdd": Key(serial=SerialKey(code=92), otg=OtgKey(code=87, is_modifier=False)),
+    "NumpadEnter": Key(serial=SerialKey(code=93), otg=OtgKey(code=88, is_modifier=False)),
+    "Numpad1": Key(serial=SerialKey(code=94), otg=OtgKey(code=89, is_modifier=False)),
+    "Numpad2": Key(serial=SerialKey(code=95), otg=OtgKey(code=90, is_modifier=False)),
+    "Numpad3": Key(serial=SerialKey(code=96), otg=OtgKey(code=91, is_modifier=False)),
+    "Numpad4": Key(serial=SerialKey(code=97), otg=OtgKey(code=92, is_modifier=False)),
+    "Numpad5": Key(serial=SerialKey(code=98), otg=OtgKey(code=93, is_modifier=False)),
+    "Numpad6": Key(serial=SerialKey(code=99), otg=OtgKey(code=94, is_modifier=False)),
+    "Numpad7": Key(serial=SerialKey(code=100), otg=OtgKey(code=95, is_modifier=False)),
+    "Numpad8": Key(serial=SerialKey(code=101), otg=OtgKey(code=96, is_modifier=False)),
+    "Numpad9": Key(serial=SerialKey(code=102), otg=OtgKey(code=97, is_modifier=False)),
+    "Numpad0": Key(serial=SerialKey(code=103), otg=OtgKey(code=98, is_modifier=False)),
+    "NumpadDecimal": Key(serial=SerialKey(code=104), otg=OtgKey(code=99, is_modifier=False)),
 }
 
 
@@ -246,6 +262,7 @@ X11_TO_AT1 = {
     47: At1Key(code=53, shift=False),  # XK_slash
     63: At1Key(code=53, shift=True),  # XK_question
     65506: At1Key(code=54, shift=False),  # XK_Shift_R
+    215: At1Key(code=55, shift=False),  # XK_multiply
     65513: At1Key(code=56, shift=False),  # XK_Alt_L
     32: At1Key(code=57, shift=False),  # XK_space
     65509: At1Key(code=58, shift=False),  # XK_Caps_Lock
@@ -261,10 +278,25 @@ X11_TO_AT1 = {
     65479: At1Key(code=68, shift=False),  # XK_F10
     65407: At1Key(code=69, shift=False),  # XK_Num_Lock
     65300: At1Key(code=70, shift=False),  # XK_Scroll_Lock
+    65463: At1Key(code=71, shift=False),  # XK_KP_7
+    65464: At1Key(code=72, shift=False),  # XK_KP_8
+    65465: At1Key(code=73, shift=False),  # XK_KP_9
+    65453: At1Key(code=74, shift=False),  # XK_KP_Subtract
+    65460: At1Key(code=75, shift=False),  # XK_KP_4
+    65461: At1Key(code=76, shift=False),  # XK_KP_5
+    65462: At1Key(code=77, shift=False),  # XK_KP_6
+    65451: At1Key(code=78, shift=False),  # XK_KP_Add
+    65457: At1Key(code=79, shift=False),  # XK_KP_1
+    65458: At1Key(code=80, shift=False),  # XK_KP_2
+    65459: At1Key(code=81, shift=False),  # XK_KP_3
+    65456: At1Key(code=82, shift=False),  # XK_KP_0
+    65454: At1Key(code=83, shift=False),  # XK_KP_Decimal
     65301: At1Key(code=84, shift=False),  # XK_Sys_Req
     65480: At1Key(code=87, shift=False),  # XK_F11
     65481: At1Key(code=88, shift=False),  # XK_F12
+    65421: At1Key(code=57372, shift=False),  # XK_KP_Enter
     65508: At1Key(code=57373, shift=False),  # XK_Control_R
+    65455: At1Key(code=57397, shift=False),  # XK_KP_Divide
     65514: At1Key(code=57400, shift=False),  # XK_Alt_R
     65299: At1Key(code=57414, shift=False),  # XK_Pause
     65360: At1Key(code=57415, shift=False),  # XK_Home
@@ -338,6 +370,7 @@ AT1_TO_WEB = {
     52: "Period",
     53: "Slash",
     54: "ShiftRight",
+    55: "NumpadMultiply",
     56: "AltLeft",
     57: "Space",
     58: "CapsLock",
@@ -353,10 +386,25 @@ AT1_TO_WEB = {
     68: "F10",
     69: "NumLock",
     70: "ScrollLock",
+    71: "Numpad7",
+    72: "Numpad8",
+    73: "Numpad9",
+    74: "NumpadSubtract",
+    75: "Numpad4",
+    76: "Numpad5",
+    77: "Numpad6",
+    78: "NumpadAdd",
+    79: "Numpad1",
+    80: "Numpad2",
+    81: "Numpad3",
+    82: "Numpad0",
+    83: "NumpadDecimal",
     84: "PrintScreen",
     87: "F11",
     88: "F12",
+    57372: "NumpadEnter",
     57373: "ControlRight",
+    57397: "NumpadDivide",
     57400: "AltRight",
     57414: "Pause",
     57415: "Home",
