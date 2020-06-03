@@ -40,8 +40,8 @@ INLINE KeyboardKeycode keymap(uint8_t code) {
 		case 101: return KEYPAD_8;
 		case 102: return KEYPAD_9;
 		case 92: return KEYPAD_ADD;
-		case 104: return KEYPAD_DECIMAL;
 		case 89: return KEYPAD_DIVIDE;
+		case 104: return KEYPAD_DOT;
 		case 93: return KEYPAD_ENTER;
 		case 90: return KEYPAD_MULTIPLY;
 		case 91: return KEYPAD_SUBTRACT;

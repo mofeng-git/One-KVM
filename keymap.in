@@ -131,6 +131,6 @@ Numpad7				100				KEYPAD_7				0x5f					0x47			XK_KP_7
 Numpad8				101				KEYPAD_8				0x60					0x48			XK_KP_8
 Numpad9				102				KEYPAD_9				0x61					0x49			XK_KP_9
 Numpad0				103				KEYPAD_0				0x62					0x52			XK_KP_0
-NumpadDecimal		104				KEYPAD_DECIMAL			0x63					0x53			XK_KP_Decimal
+NumpadDecimal		104				KEYPAD_DOT				0x63					0x53			XK_KP_Decimal
 #			KEY_NON_US
 #			KEY_NON_US_NUM
