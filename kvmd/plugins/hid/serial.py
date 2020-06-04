@@ -313,9 +313,9 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
     def __process_request(self, tty: serial.Serial, request: bytes) -> None:  # pylint: disable=too-many-branches
         logger = get_logger()
 
+        common_error_occured = False
         common_retries = self.__common_retries
         read_retries = self.__read_retries
-        error_occured = False
 
         while common_retries and read_retries:
             if not self.__noop:
@@ -351,7 +351,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                         self.__state_flags.update(online=True)
                         return
                     elif code == 0x20:  # Done
-                        if error_occured:
+                        if common_error_occured:
                             logger.info("Success!")
                         self.__state_flags.update(online=True)
                         return
@@ -366,9 +366,8 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                     else:
                         logger.error("Invalid response from HID: request=%r; code=0x%x", request, code)
 
-                common_retries -= 1
-
-            error_occured = True
+            common_error_occured = True
+            common_retries -= 1
             self.__state_flags.update(online=False)
 
             if common_retries and read_retries:
