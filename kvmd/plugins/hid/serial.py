@@ -21,7 +21,6 @@
 
 
 import os
-import signal
 import asyncio
 import multiprocessing
 import multiprocessing.queues
@@ -35,7 +34,6 @@ from typing import Dict
 from typing import AsyncGenerator
 
 import serial
-import setproctitle
 
 from ...logging import get_logger
 
@@ -43,6 +41,7 @@ from ...keyboard.mappings import KEYMAP
 
 from ... import aiotools
 from ... import aiomulti
+from ... import aioproc
 from ... import gpio
 
 from ...yamlconf import Option
@@ -278,8 +277,8 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         logger = get_logger(0)
 
         logger.info("Started HID pid=%d", os.getpid())
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        setproctitle.setproctitle(f"kvmd/hid: {setproctitle.getproctitle()}")
+        aioproc.ignore_sigint()
+        aioproc.rename_process("hid")
 
         while not self.__stop_event.is_set():
             try:

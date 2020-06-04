@@ -27,6 +27,8 @@ import signal
 from typing import Tuple
 from typing import List
 
+import setproctitle
+
 
 # =====
 async def run_process(cmd: List[str], err_to_null: bool=False) -> asyncio.subprocess.Process:  # pylint: disable=no-member
@@ -34,7 +36,7 @@ async def run_process(cmd: List[str], err_to_null: bool=False) -> asyncio.subpro
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=(asyncio.subprocess.DEVNULL if err_to_null else asyncio.subprocess.STDOUT),
-        preexec_fn=preexec_ignore_sigint,
+        preexec_fn=ignore_sigint,
     ))
 
 
@@ -44,5 +46,9 @@ async def read_process(cmd: List[str], err_to_null: bool=False) -> Tuple[asyncio
     return (proc, stdout.decode(errors="ignore").strip())
 
 
-def preexec_ignore_sigint() -> None:
+def ignore_sigint() -> None:
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+def rename_process(suffix: str, prefix: str="kvmd") -> None:
+    setproctitle.setproctitle(f"{prefix}/{suffix}: {setproctitle.getproctitle()}")

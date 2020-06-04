@@ -22,7 +22,6 @@
 
 import os
 import select
-import signal
 import multiprocessing
 import multiprocessing.queues
 import queue
@@ -31,11 +30,10 @@ import time
 
 from typing import Dict
 
-import setproctitle
-
 from ....logging import get_logger
 
 from .... import aiomulti
+from .... import aioproc
 
 
 # =====
@@ -78,8 +76,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         logger = get_logger(0)
 
         logger.info("Started HID-%s pid=%d", self.__name, os.getpid())
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        setproctitle.setproctitle(f"kvmd/hid-{self.__name}: {setproctitle.getproctitle()}")
+        aioproc.ignore_sigint()
+        aioproc.rename_process(f"hid-{self.__name}")
 
         while not self.__stop_event.is_set():
             try:

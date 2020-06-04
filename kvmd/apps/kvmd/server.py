@@ -37,7 +37,6 @@ from typing import Any
 
 import aiohttp
 import aiohttp.web
-import setproctitle
 
 from ...logging import get_logger
 
@@ -56,6 +55,7 @@ from ...validators.kvm import valid_stream_quality
 from ...validators.kvm import valid_stream_fps
 
 from ... import aiotools
+from ... import aioproc
 
 from .auth import AuthManager
 from .info import InfoManager
@@ -215,7 +215,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     def run(self, **kwargs: Any) -> None:  # type: ignore  # pylint: disable=arguments-differ
         self.__hid.start()
-        setproctitle.setproctitle(f"kvmd/main: {setproctitle.getproctitle()}")
+        aioproc.rename_process("main")
         super().run(**kwargs)
 
     async def _make_app(self) -> aiohttp.web.Application:

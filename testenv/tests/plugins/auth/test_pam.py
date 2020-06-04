@@ -45,7 +45,7 @@ async def _run_process(cmd: str, input: Optional[str]=None) -> None:  # pylint: 
     proc = await asyncio.create_subprocess_exec(
         *cmd.split(" "),
         stdin=(asyncio.subprocess.PIPE if input is not None else None),
-        preexec_fn=aioproc.preexec_ignore_sigint,
+        preexec_fn=aioproc.ignore_sigint,
     )
     await proc.communicate(input.encode() if input is not None else None)
     assert proc.returncode == 0
