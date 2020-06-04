@@ -320,7 +320,6 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             if not self.__noop:
                 if tty.in_waiting:
                     tty.read(tty.in_waiting)
-
                 assert tty.write(request) == len(request)
                 response = tty.read(4)
             else:
@@ -333,7 +332,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             else:
                 assert len(response) == 4, response
                 if self.__make_crc16(response[-4:-2]) != struct.unpack(">H", response[-2:])[0]:
-                    get_logger().error("Invalid response CRC; requesting response again ...")
+                    logger.error("Invalid response CRC; requesting response again ...")
                     request = self.__make_request(b"\x02\x00\x00\x00\x00")  # Repeat an answer
                 else:
                     code = response[1]
