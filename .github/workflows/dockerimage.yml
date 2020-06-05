@@ -13,8 +13,5 @@ jobs:
         steps:
           - uses: actions/checkout@v2
 
-          - name: Building testenv ...
-            run: make testenv
-
           - name: Running tests ...
-            run: make tox
+            run: make tox NC=1
