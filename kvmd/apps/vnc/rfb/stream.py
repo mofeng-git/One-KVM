@@ -32,7 +32,7 @@ from .errors import RfbConnectionError
 
 # =====
 def rfb_format_remote(writer: asyncio.StreamWriter) -> str:
-    return "[%s]:%d" % (writer.transport.get_extra_info("peername")[:2])
+    return str(writer.transport.get_extra_info("peername")[0])
 
 
 async def rfb_close_writer(writer: asyncio.StreamWriter) -> bool:

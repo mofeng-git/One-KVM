@@ -79,11 +79,11 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self.__rfb_version = 0
         self._encodings = RfbClientEncodings(frozenset())
 
-        get_logger(0).info("Connected client: %s", self._remote)
-
     # =====
 
     async def _run(self, **coros: Coroutine) -> None:
+        logger = get_logger(0)
+        logger.info("[entry] [%s]: Starting client tasks ...", self._remote)
         tasks = list(map(asyncio.create_task, [
             self.__wrapper(name, coro)
             for (name, coro) in {"main": self.__main_task_loop(), **coros}.items()
@@ -95,7 +95,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             await self._close()
-            get_logger(0).info("Connection closed: %s", self._remote)
+            logger.info("[entry] [%s]: Connection closed", self._remote)
 
     async def __wrapper(self, name: str, coro: Coroutine) -> None:
         logger = get_logger(0)
@@ -103,14 +103,14 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             await coro
             raise RuntimeError("Subtask just finished without any exception")
         except asyncio.CancelledError:
-            logger.info("[%s] Client %s: Cancelling subtask ...", name, self._remote)
+            logger.info("[%s] [%s]: Cancelling subtask ...", name, self._remote)
             raise
         except RfbConnectionError as err:
-            logger.info("[%s] Client %s: Gone: %s", name, self._remote, err)
+            logger.info("[%s] [%s]: Gone: %s", name, self._remote, err)
         except (RfbError, ssl.SSLError) as err:
-            logger.error("[%s] Client %s: Error: %s", name, self._remote, err)
+            logger.error("[%s] [%s]: Error: %s", name, self._remote, err)
         except Exception:
-            logger.exception("[%s] Unhandled exception with client %s", name, self._remote)
+            logger.exception("[%s] [%s]: Unhandled exception", name, self._remote)
 
     async def __main_task_loop(self) -> None:
         await self.__handshake_version()
@@ -200,7 +200,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         except ValueError:
             raise RfbError(f"Invalid version response: {response!r}")
         self.__rfb_version = (3 if version == 5 else version)
-        get_logger(0).info("[main] Client %s: Using RFB version 3.%d", self._remote, self.__rfb_version)
+        get_logger(0).info("[main] [%s]: Using RFB version 3.%d", self._remote, self.__rfb_version)
 
     # =====
 
@@ -225,7 +225,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             raise RfbError(f"Invalid security type: {sec_type}")
 
         (sec_name, handler) = sec_types[sec_type]
-        get_logger(0).info("[main] Client %s: Using %s security type", self._remote, sec_name)
+        get_logger(0).info("[main] [%s]: Using %s security type", self._remote, sec_name)
         await handler()
 
     async def __handshake_security_vencrypt(self) -> None:
@@ -265,7 +265,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             raise RfbError(f"Invalid VeNCrypt auth type: {auth_type}")
 
         (auth_name, tls, handler) = auth_types[auth_type]
-        get_logger(0).info("[main] Client %s: Using %s auth type", self._remote, auth_name)
+        get_logger(0).info("[main] [%s]: Using %s auth type", self._remote, auth_name)
 
         if tls:
             await self._write_struct("B", 1)  # Ack
@@ -322,7 +322,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def __handshake_security_send_result(self, allow: bool, allow_msg: str, deny_msg: str, deny_reason: str) -> None:
         if allow:
-            get_logger(0).info("[main] Client %s: %s", self._remote, allow_msg)
+            get_logger(0).info("[main] [%s]: %s", self._remote, allow_msg)
             await self._write_struct("L", 0)
         else:
             await self._write_struct("L", 1, drain=(self.__rfb_version < 8))
@@ -381,7 +381,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         if encodings_count > 1024:
             raise RfbError(f"Too many encodings: {encodings_count}")
         self._encodings = RfbClientEncodings(frozenset(await self._read_struct("l" * encodings_count)))
-        get_logger(0).info("[main] Client %s: Features: resize=%d; rename=%d; leds=%d",
+        get_logger(0).info("[main] [%s]: Features: resize=%d; rename=%d; leds=%d",
                            self._remote, self._encodings.has_resize, self._encodings.has_rename, self._encodings.has_leds_state)
         self.__check_tight_jpeg()
         await self._on_set_encodings()

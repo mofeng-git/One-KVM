@@ -88,8 +88,8 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
             except (aiohttp.ClientError, asyncio.TimeoutError):
                 session.send_ipmi_response(code=0xFF)
             except Exception:
-                get_logger(0).exception("Unexpected exception while handling IPMI request: netfn=%d; command=%d",
-                                        request["netfn"], request["command"])
+                get_logger(0).exception("[%s]: Unexpected exception while handling IPMI request: netfn=%d; command=%d",
+                                        session.sockaddr[0], request["netfn"], request["command"])
                 session.send_ipmi_response(code=0xFF)
         else:
             session.send_ipmi_response(code=0xC1)
@@ -121,14 +121,14 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
         async def runner():  # type: ignore
             logger = get_logger(0)
             credentials = self.__auth_manager.get_credentials(session.username.decode())
-            logger.info("Client %s: Performing request %s from user %r (IPMI) as %r (KVMD)",
+            logger.info("[%s]: Performing request %s from user %r (IPMI) as %r (KVMD)",
                         session.sockaddr[0], name, credentials.ipmi_user, credentials.kvmd_user)
             try:
                 async with self.__kvmd.make_session(credentials.kvmd_user, credentials.kvmd_passwd) as kvmd_session:
                     method = functools.reduce(getattr, method_path.split("."), kvmd_session)
                     return (await method(**kwargs))
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                logger.error("Can't perform request %s: %s", name, err)
+                logger.error("[%s]: Can't perform request %s: %s", session.sockaddr[0], name, err)
                 raise
 
         return aiotools.run_sync(runner())
