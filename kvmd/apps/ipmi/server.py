@@ -78,7 +78,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
 
     def handle_raw_request(self, request: Dict, session: IpmiServerSession) -> None:
         handler = {
-            (6, 1): lambda _, session: self.send_device_id(session),  # Get device ID
+            (6, 1): (lambda _, session: self.send_device_id(session)),  # Get device ID
             (0, 1): self.__get_chassis_status_handler,  # Get chassis status
             (0, 2): self.__chassis_control_handler,  # Chassis control
         }.get((request["netfn"], request["command"]))
@@ -121,8 +121,8 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
         async def runner():  # type: ignore
             logger = get_logger(0)
             credentials = self.__auth_manager.get_credentials(session.username.decode())
-            logger.info("Performing request %s from user %r (IPMI) as %r (KVMD)",
-                        name, credentials.ipmi_user, credentials.kvmd_user)
+            logger.info("Client %s: Performing request %s from user %r (IPMI) as %r (KVMD)",
+                        session.sockaddr[0], name, credentials.ipmi_user, credentials.kvmd_user)
             try:
                 async with self.__kvmd.make_session(credentials.kvmd_user, credentials.kvmd_passwd) as kvmd_session:
                     method = functools.reduce(getattr, method_path.split("."), kvmd_session)
