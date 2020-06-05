@@ -30,6 +30,7 @@ import struct
 import errno
 import time
 
+from typing import List
 from typing import Dict
 from typing import AsyncGenerator
 
@@ -47,6 +48,7 @@ from ... import gpio
 from ...yamlconf import Option
 
 from ...validators.basic import valid_bool
+from ...validators.basic import valid_int_f0
 from ...validators.basic import valid_int_f1
 from ...validators.basic import valid_float_f01
 
@@ -56,6 +58,22 @@ from ...validators.hw import valid_tty_speed
 from ...validators.hw import valid_gpio_pin
 
 from . import BaseHid
+
+
+# =====
+class _RequestError(Exception):
+    def __init__(self, msg: str, online: bool=False) -> None:
+        super().__init__(msg)
+        self.msg = msg
+        self.online = online
+
+
+class _FatalRequestError(_RequestError):
+    pass
+
+
+class _TempRequestError(_RequestError):
+    pass
 
 
 # =====
@@ -141,6 +159,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         read_retries: int,
         common_retries: int,
         retries_delay: float,
+        errors_threshold: int,
         noop: bool,
     ) -> None:
 
@@ -155,6 +174,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__read_retries = read_retries
         self.__common_retries = common_retries
         self.__retries_delay = retries_delay
+        self.__errors_threshold = errors_threshold
         self.__noop = noop
 
         self.__reset_wip = False
@@ -177,13 +197,14 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             "reset_pin":   Option(-1,  type=valid_gpio_pin),
             "reset_delay": Option(0.1, type=valid_float_f01),
 
-            "device":         Option("",     type=valid_abs_path, unpack_as="device_path"),
-            "speed":          Option(115200, type=valid_tty_speed),
-            "read_timeout":   Option(2.0,    type=valid_float_f01),
-            "read_retries":   Option(10,     type=valid_int_f1),
-            "common_retries": Option(100,    type=valid_int_f1),
-            "retries_delay":  Option(0.1,    type=valid_float_f01),
-            "noop":           Option(False,  type=valid_bool),
+            "device":           Option("",     type=valid_abs_path, unpack_as="device_path"),
+            "speed":            Option(115200, type=valid_tty_speed),
+            "read_timeout":     Option(2.0,    type=valid_float_f01),
+            "read_retries":     Option(10,     type=valid_int_f1),
+            "common_retries":   Option(100,    type=valid_int_f1),
+            "retries_delay":    Option(0.1,    type=valid_float_f01),
+            "errors_threshold": Option(5,      type=valid_int_f0),
+            "noop":             Option(False,  type=valid_bool),
         }
 
     def start(self) -> None:
@@ -311,68 +332,81 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
     def __process_request(self, tty: serial.Serial, request: bytes) -> None:  # pylint: disable=too-many-branches
         logger = get_logger()
+        errors: List[str] = []
+        runtime_errors = False
 
-        common_error_occured = False
         common_retries = self.__common_retries
         read_retries = self.__read_retries
 
         while common_retries and read_retries:
-            if not self.__noop:
-                if tty.in_waiting:
-                    tty.read(tty.in_waiting)
-                assert tty.write(request) == len(request)
-                response = tty.read(4)
-            else:
-                response = b"\x33\x20"  # Magic + OK
-                response += struct.pack(">H", self.__make_crc16(response))
+            response = self.__send_request(tty, request)
+            try:
+                if len(response) < 4:
+                    read_retries -= 1
+                    raise _TempRequestError(f"No response from HID: request={request!r}")
 
-            if len(response) < 4:
-                logger.error("No response from HID: request=%r", request)
-                read_retries -= 1
-            else:
                 assert len(response) == 4, response
                 if self.__make_crc16(response[-4:-2]) != struct.unpack(">H", response[-2:])[0]:
-                    logger.error("Invalid response CRC; requesting response again ...")
                     request = self.__make_request(b"\x02\x00\x00\x00\x00")  # Repeat an answer
+                    raise _TempRequestError("Invalid response CRC; requesting response again ...")
+
+                code = response[1]
+                if code == 0x48:  # Request timeout  # pylint: disable=no-else-raise
+                    raise _TempRequestError(f"Got request timeout from HID: request={request!r}")
+                elif code == 0x40:  # CRC Error
+                    raise _TempRequestError(f"Got CRC error of request from HID: request={request!r}")
+                elif code == 0x45:  # Unknown command
+                    raise _FatalRequestError(f"HID did not recognize the request={request!r}", online=True)
+                elif code == 0x24:  # Rebooted?
+                    raise _FatalRequestError("No previous command state inside HID, seems it was rebooted", online=True)
+                elif code == 0x20:  # Done
+                    self.__state_flags.update(online=True)
+                    return
+                elif code & 0x80:  # Pong with leds
+                    self.__state_flags.update(
+                        online=True,
+                        caps=bool(code & 0b00000001),
+                        scroll=bool(code & 0x00000010),
+                        num=bool(code & 0x00000100),
+                    )
+                    return
                 else:
-                    code = response[1]
-                    if code == 0x48:  # Request timeout
-                        logger.error("Got request timeout from HID: request=%r", request)
-                    elif code == 0x40:  # CRC Error
-                        logger.error("Got CRC error of request from HID: request=%r", request)
-                    elif code == 0x45:  # Unknown command
-                        logger.error("HID did not recognize the request=%r", request)
-                        self.__state_flags.update(online=True)
-                        return
-                    elif code == 0x24:  # Rebooted?
-                        logger.error("No previous command state inside HID, seems it was rebooted")
-                        self.__state_flags.update(online=True)
-                        return
-                    elif code == 0x20:  # Done
-                        if common_error_occured:
-                            logger.info("Success!")
-                        self.__state_flags.update(online=True)
-                        return
-                    elif code & 0x80:  # Pong with leds
-                        self.__state_flags.update(
-                            online=True,
-                            caps=bool(code & 0b00000001),
-                            scroll=bool(code & 0x00000010),
-                            num=bool(code & 0x00000100),
-                        )
-                        return
-                    else:
-                        logger.error("Invalid response from HID: request=%r; code=0x%x", request, code)
+                    raise _TempRequestError(f"Invalid response from HID: request={request!r}; code=0x{code:02X}")
 
-            common_error_occured = True
-            common_retries -= 1
-            self.__state_flags.update(online=False)
+            except _RequestError as err:
+                common_retries -= 1
+                self.__state_flags.update(online=err.online)
 
-            if common_retries and read_retries:
-                logger.error("Retries left: common_retries=%d; read_retries=%d", common_retries, read_retries)
-                time.sleep(self.__retries_delay)
+                if runtime_errors:
+                    logger.error(err.msg)
+                else:
+                    errors.append(err.msg)
+                    if len(errors) > self.__errors_threshold:
+                        for msg in errors:
+                            logger.error(msg)
+                        errors = []
+                        runtime_errors = True
 
-        logger.error("Can't process HID request due many errors: %r", request)
+                if isinstance(err, _FatalRequestError):
+                    break
+                if common_retries and read_retries:
+                    time.sleep(self.__retries_delay)
+
+        for msg in errors:
+            logger.error(msg)
+        if not (common_retries and read_retries):
+            logger.error("Can't process HID request due many errors: %r", request)
+
+    def __send_request(self, tty: serial.Serial, request: bytes) -> bytes:
+        if not self.__noop:
+            if tty.in_waiting:
+                tty.read(tty.in_waiting)
+            assert tty.write(request) == len(request)
+            response = tty.read(4)
+        else:
+            response = b"\x33\x20"  # Magic + OK
+            response += struct.pack(">H", self.__make_crc16(response))
+        return response
 
     def __make_request(self, command: bytes) -> bytes:
         request = b"\x33" + command
