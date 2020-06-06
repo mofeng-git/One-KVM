@@ -47,7 +47,7 @@ class AtxIsBusyError(IsBusyError, AtxError):
 
 # =====
 class BaseAtx(BasePlugin):
-    def get_state(self) -> Dict:
+    async def get_state(self) -> Dict:
         raise NotImplementedError
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:

@@ -50,7 +50,7 @@ class WakeOnLan:
             assert len(mac) == 17, mac
             self.__magic = bytes.fromhex("FF" * 6 + mac.replace(":", "") * 16)
 
-    def get_state(self) -> Dict:
+    async def get_state(self) -> Dict:
         return {
             "enabled": bool(self.__magic),
             "target": {

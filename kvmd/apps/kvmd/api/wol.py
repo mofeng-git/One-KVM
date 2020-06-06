@@ -38,7 +38,7 @@ class WolApi:
 
     @exposed_http("GET", "/wol")
     async def __state_handler(self, _: Request) -> Response:
-        return make_json_response(self.__wol.get_state())
+        return make_json_response(await self.__wol.get_state())
 
     @exposed_http("POST", "/wol/wakeup")
     async def __wakeup_handler(self, _: Request) -> Response:

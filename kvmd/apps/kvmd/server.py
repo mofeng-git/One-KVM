@@ -23,14 +23,14 @@
 import os
 import signal
 import asyncio
+import dataclasses
 import json
-
-from enum import Enum
 
 from typing import List
 from typing import Dict
 from typing import Set
 from typing import Callable
+from typing import Coroutine
 from typing import AsyncGenerator
 from typing import Optional
 from typing import Any
@@ -86,13 +86,23 @@ from .api.streamer import StreamerApi
 
 
 # =====
-class _Events(Enum):
-    INFO_STATE = "info_state"
-    WOL_STATE = "wol_state"
-    HID_STATE = "hid_state"
-    ATX_STATE = "atx_state"
-    MSD_STATE = "msd_state"
-    STREAMER_STATE = "streamer_state"
+@dataclasses.dataclass(frozen=True)
+class _Component:
+    name: str
+    event_type: str
+    obj: object
+    get_state: Optional[Callable[[], Coroutine[Any, Any, Dict]]] = None
+    poll_state: Optional[Callable[[], AsyncGenerator[Dict, None]]] = None
+    cleanup: Optional[Callable[[], Coroutine[Any, Any, Dict]]] = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.obj, BasePlugin):
+            object.__setattr__(self, "name", f"{self.name} ({self.obj.get_plugin_name()})")
+
+        for field in ["get_state", "poll_state", "cleanup"]:
+            object.__setattr__(self, field, getattr(self.obj, field, None))
+        if self.get_state or self.poll_state:
+            assert self.event_type, self
 
 
 class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
@@ -115,15 +125,20 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     ) -> None:
 
         self.__auth_manager = auth_manager
-        self.__info_manager = info_manager
-        self.__wol = wol
-
         self.__hid = hid
-        self.__atx = atx
-        self.__msd = msd
         self.__streamer = streamer
 
         self.__heartbeat = heartbeat
+
+        self.__components = [
+            _Component("Auth manager", "",               auth_manager),
+            _Component("Info manager", "info_state",     info_manager),
+            _Component("Wake-on-LAN",  "wol_state",      wol),
+            _Component("HID",          "hid_state",      hid),
+            _Component("ATX",          "atx_state",      atx),
+            _Component("MSD",          "msd_state",      msd),
+            _Component("Streamer",     "streamer_state", streamer),
+        ]
 
         self.__apis: List[object] = [
             self,
@@ -180,12 +195,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         await self.__register_socket(ws)
         try:
             await asyncio.gather(*[
-                self.__broadcast_event(_Events.INFO_STATE, (await self.__info_manager.get_state())),
-                self.__broadcast_event(_Events.WOL_STATE, self.__wol.get_state()),
-                self.__broadcast_event(_Events.HID_STATE, (await self.__hid.get_state())),
-                self.__broadcast_event(_Events.ATX_STATE, self.__atx.get_state()),
-                self.__broadcast_event(_Events.MSD_STATE, (await self.__msd.get_state())),
-                self.__broadcast_event(_Events.STREAMER_STATE, (await self.__streamer.get_state())),
+                self.__broadcast_event(component.event_type, await component.get_state())
+                for component in self.__components
+                if component.get_state
             ])
             async for msg in ws:
                 if msg.type == aiohttp.web.WSMsgType.TEXT:
@@ -224,10 +236,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         app.on_cleanup.append(self.__on_cleanup)
 
         self.__run_system_task(self.__stream_controller)
-        self.__run_system_task(self.__poll_state, _Events.HID_STATE, self.__hid.poll_state())
-        self.__run_system_task(self.__poll_state, _Events.ATX_STATE, self.__atx.poll_state())
-        self.__run_system_task(self.__poll_state, _Events.MSD_STATE, self.__msd.poll_state())
-        self.__run_system_task(self.__poll_state, _Events.STREAMER_STATE, self.__streamer.poll_state())
+        for component in self.__components:
+            if component.poll_state:
+                self.__run_system_task(self.__poll_state, component.event_type, component.poll_state())
 
         for api in self.__apis:
             for http_exposed in get_exposed_http(api):
@@ -282,26 +293,19 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
         logger = get_logger(0)
-        for (name, obj) in [
-            ("Auth manager", self.__auth_manager),
-            ("Streamer", self.__streamer),
-            ("MSD", self.__msd),
-            ("ATX", self.__atx),
-            ("HID", self.__hid),
-        ]:
-            if isinstance(obj, BasePlugin):
-                name = f"{name} ({obj.get_plugin_name()})"
-            logger.info("Cleaning up %s ...", name)
-            try:
-                await obj.cleanup()  # type: ignore
-            except Exception:
-                logger.exception("Cleanup error on %s", name)
+        for component in self.__components:
+            if component.cleanup:
+                logger.info("Cleaning up %s ...", component.name)
+                try:
+                    await component.cleanup()  # type: ignore
+                except Exception:
+                    logger.exception("Cleanup error on %s", component.name)
 
-    async def __broadcast_event(self, event_type: _Events, event: Dict) -> None:
+    async def __broadcast_event(self, event_type: str, event: Dict) -> None:
         if self.__sockets:
             await asyncio.gather(*[
                 ws.send_str(json.dumps({
-                    "event_type": event_type.value,
+                    "event_type": event_type,
                     "event": event,
                 }))
                 for ws in list(self.__sockets)
@@ -351,6 +355,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             prev = cur
             await self.__streamer_notifier.wait()
 
-    async def __poll_state(self, event_type: _Events, poller: AsyncGenerator[Dict, None]) -> None:
+    async def __poll_state(self, event_type: str, poller: AsyncGenerator[Dict, None]) -> None:
         async for state in poller:
             await self.__broadcast_event(event_type, state)

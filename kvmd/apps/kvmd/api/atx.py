@@ -41,7 +41,7 @@ class AtxApi:
 
     @exposed_http("GET", "/atx")
     async def __state_handler(self, _: Request) -> Response:
-        return make_json_response(self.__atx.get_state())
+        return make_json_response(await self.__atx.get_state())
 
     @exposed_http("POST", "/atx/power")
     async def __power_handler(self, request: Request) -> Response:

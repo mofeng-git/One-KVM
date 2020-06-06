@@ -37,7 +37,7 @@ class AtxDisabledError(AtxOperationError):
 
 # =====
 class Plugin(BaseAtx):
-    def get_state(self) -> Dict:
+    async def get_state(self) -> Dict:
         return {
             "enabled": False,
             "busy": False,
@@ -49,7 +49,7 @@ class Plugin(BaseAtx):
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         while True:
-            yield self.get_state()
+            yield (await self.get_state())
             await aiotools.wait_infinite()
 
     # =====

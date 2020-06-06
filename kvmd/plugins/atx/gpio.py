@@ -92,7 +92,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
             "state_poll": Option(0.1, type=valid_float_f01),
         }
 
-    def get_state(self) -> Dict:
+    async def get_state(self) -> Dict:
         return {
             "enabled": True,
             "busy": self.__region.is_busy(),
@@ -105,7 +105,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         prev_state: Dict = {}
         while True:
-            state = self.get_state()
+            state = await self.get_state()
             if state != prev_state:
                 yield state
                 prev_state = state
@@ -124,25 +124,25 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def power_on(self) -> bool:
-        if not self.get_state()["leds"]["power"]:
+        if not (await self.__get_power()):
             await self.click_power()
             return True
         return False
 
     async def power_off(self) -> bool:
-        if self.get_state()["leds"]["power"]:
+        if (await self.__get_power()):
             await self.click_power()
             return True
         return False
 
     async def power_off_hard(self) -> bool:
-        if self.get_state()["leds"]["power"]:
+        if (await self.__get_power()):
             await self.click_power_long()
             return True
         return False
 
     async def power_reset_hard(self) -> bool:
-        if self.get_state()["leds"]["power"]:
+        if (await self.__get_power()):
             await self.click_reset()
             return True
         return False
@@ -159,6 +159,9 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         await self.__click("reset", self.__reset_switch_pin, self.__click_delay)
 
     # =====
+
+    async def __get_power(self) -> bool:
+        return (await self.get_state())["leds"]["power"]
 
     @aiotools.atomic
     async def __click(self, name: str, pin: int, delay: float) -> None:
