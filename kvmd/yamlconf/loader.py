@@ -44,7 +44,7 @@ class _YamlLoader(yaml.SafeLoader):
         super().__init__(yaml_file)
         self.__root = os.path.dirname(yaml_file.name)
 
-    def include(self, node: yaml.nodes.Node) -> str:
+    def include(self, node: yaml.nodes.Node) -> Any:
         path = os.path.join(self.__root, self.construct_scalar(node))
         return load_yaml_file(path)
 
