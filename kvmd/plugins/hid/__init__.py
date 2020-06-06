@@ -20,7 +20,9 @@
 # ========================================================================== #
 
 
+from typing import Tuple
 from typing import Dict
+from typing import Iterable
 from typing import AsyncGenerator
 from typing import Type
 
@@ -48,7 +50,7 @@ class BaseHid(BasePlugin):
 
     # =====
 
-    def send_key_event(self, key: str, state: bool) -> None:
+    def send_key_events(self, keys: Iterable[Tuple[str, bool]]) -> None:
         raise NotImplementedError
 
     def send_mouse_button_event(self, button: str, state: bool) -> None:

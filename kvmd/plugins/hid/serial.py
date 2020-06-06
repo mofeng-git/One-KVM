@@ -30,8 +30,10 @@ import struct
 import errno
 import time
 
+from typing import Tuple
 from typing import List
 from typing import Dict
+from typing import Iterable
 from typing import AsyncGenerator
 
 import serial
@@ -273,8 +275,9 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
     # =====
 
-    def send_key_event(self, key: str, state: bool) -> None:
-        self.__queue_event(_KeyEvent(key, state))
+    def send_key_events(self, keys: Iterable[Tuple[str, bool]]) -> None:
+        for (key, state) in keys:
+            self.__queue_event(_KeyEvent(key, state))
 
     def send_mouse_button_event(self, button: str, state: bool) -> None:
         self.__queue_event(_MouseButtonEvent(button, state))

@@ -22,7 +22,6 @@
 
 import os
 import stat
-import asyncio
 import functools
 
 from typing import Dict
@@ -66,8 +65,6 @@ class HidApi:
 
         self.__ensure_symmap(self.__default_keymap_name)
 
-        self.__key_lock = asyncio.Lock()
-
     # =====
 
     @exposed_http("GET", "/hid")
@@ -102,9 +99,7 @@ class HidApi:
         if limit > 0:
             text = text[:limit]
         symmap = self.__ensure_symmap(request.query.get("keymap", self.__default_keymap_name))
-        async with self.__key_lock:
-            for (key, state) in text_to_web_keys(text, symmap):
-                self.__hid.send_key_event(key, state)
+        self.__hid.send_key_events(text_to_web_keys(text, symmap))
         return make_json_response()
 
     def __ensure_symmap(self, keymap_name: str) -> Dict[int, SymmapWebKey]:
@@ -127,13 +122,12 @@ class HidApi:
 
     @exposed_ws("key")
     async def __ws_key_handler(self, _: WebSocketResponse, event: Dict) -> None:
-        async with self.__key_lock:
-            try:
-                key = valid_hid_key(event["key"])
-                state = valid_bool(event["state"])
-            except Exception:
-                return
-            self.__hid.send_key_event(key, state)
+        try:
+            key = valid_hid_key(event["key"])
+            state = valid_bool(event["state"])
+        except Exception:
+            return
+        self.__hid.send_key_events([(key, state)])
 
     @exposed_ws("mouse_button")
     async def __ws_mouse_button_handler(self, _: WebSocketResponse, event: Dict) -> None:

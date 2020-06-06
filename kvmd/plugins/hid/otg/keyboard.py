@@ -22,8 +22,10 @@
 
 import dataclasses
 
+from typing import Tuple
 from typing import List
 from typing import Set
+from typing import Iterable
 from typing import Optional
 from typing import Any
 
@@ -89,12 +91,13 @@ class KeyboardProcess(BaseDeviceProcess):
         self._clear_queue()
         self._queue_event(_ResetEvent())
 
-    def send_key_event(self, key: str, state: bool) -> None:
-        otg_key = KEYMAP[key].otg
-        if otg_key.is_modifier:
-            self._queue_event(_ModifierEvent(otg_key, state))
-        else:
-            self._queue_event(_KeyEvent(otg_key, state))
+    def send_key_events(self, keys: Iterable[Tuple[str, bool]]) -> None:
+        for (key, state) in keys:
+            otg_key = KEYMAP[key].otg
+            if otg_key.is_modifier:
+                self._queue_event(_ModifierEvent(otg_key, state))
+            else:
+                self._queue_event(_KeyEvent(otg_key, state))
 
     # =====
 

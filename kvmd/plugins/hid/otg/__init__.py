@@ -20,7 +20,9 @@
 # ========================================================================== #
 
 
+from typing import Tuple
 from typing import Dict
+from typing import Iterable
 from typing import AsyncGenerator
 from typing import Any
 
@@ -113,8 +115,8 @@ class Plugin(BaseHid):
 
     # =====
 
-    def send_key_event(self, key: str, state: bool) -> None:
-        self.__keyboard_proc.send_key_event(key, state)
+    def send_key_events(self, keys: Iterable[Tuple[str, bool]]) -> None:
+        self.__keyboard_proc.send_key_events(keys)
 
     def send_mouse_button_event(self, button: str, state: bool) -> None:
         self.__mouse_proc.send_button_event(button, state)
