@@ -74,6 +74,8 @@ from ..validators.net import valid_ssl_ciphers
 
 from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
+from ..validators.kvm import valid_hid_key
+from ..validators.kvm import valid_hid_mouse_move
 
 from ..validators.hw import valid_gpio_pin_optional
 from ..validators.hw import valid_otg_gadget
@@ -263,6 +265,18 @@ def _get_config_scheme() -> Dict:
                 "process_name_prefix": Option("kvmd/streamer"),
 
                 "cmd": Option(["/bin/true"], type=valid_command),
+            },
+
+            "snapshot": {
+                "idle_interval": Option(0.0, type=valid_float_f0),
+                "live_interval": Option(0.0, type=valid_float_f0),
+
+                "wakeup_key":  Option("", type=(lambda arg: (valid_hid_key(arg) if arg else ""))),
+                "wakeup_move": Option(0,  type=valid_hid_mouse_move),
+
+                "online_delay":  Option(5.0, type=valid_float_f0),
+                "retries":       Option(10,  type=valid_int_f1),
+                "retries_delay": Option(3.0, type=valid_float_f01),
             },
         },
 

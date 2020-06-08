@@ -60,8 +60,9 @@ from ... import aioproc
 from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
-from .streamer import Streamer
 from .wol import WakeOnLan
+from .streamer import Streamer
+from .snapshoter import Snapshoter
 
 from .http import HttpError
 from .http import HttpExposed
@@ -117,6 +118,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         atx: BaseAtx,
         msd: BaseMsd,
         streamer: Streamer,
+        snapshoter: Snapshoter,
 
         heartbeat: float,
         sync_chunk_size: int,
@@ -127,6 +129,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self.__auth_manager = auth_manager
         self.__hid = hid
         self.__streamer = streamer
+        self.__snapshoter = snapshoter  # Not a component: No state or cleanup
 
         self.__heartbeat = heartbeat
 
@@ -239,6 +242,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         for component in self.__components:
             if component.poll_state:
                 self.__run_system_task(self.__poll_state, component.event_type, component.poll_state())
+        self.__run_system_task(self.__stream_snapshoter)
 
         for api in self.__apis:
             for http_exposed in get_exposed_http(api):
@@ -336,7 +340,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     async def __stream_controller(self) -> None:
         prev = False
         while True:
-            cur = bool(self.__sockets)
+            cur = (bool(self.__sockets) or self.__snapshoter.snapshoting())
             if not prev and cur:
                 await self.__streamer.ensure_start(init_restart=True)
             elif prev and not cur:
@@ -358,3 +362,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     async def __poll_state(self, event_type: str, poller: AsyncGenerator[Dict, None]) -> None:
         async for state in poller:
             await self.__broadcast_event(event_type, state)
+
+    async def __stream_snapshoter(self) -> None:
+        await self.__snapshoter.run(
+            is_live=(lambda: bool(self.__sockets)),
+            notifier=self.__streamer_notifier,
+        )

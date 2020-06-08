@@ -38,6 +38,7 @@ from .info import InfoManager
 from .logreader import LogReader
 from .wol import WakeOnLan
 from .streamer import Streamer
+from .snapshoter import Snapshoter
 from .server import KvmdServer
 
 
@@ -63,6 +64,9 @@ def main(argv: Optional[List[str]]=None) -> None:
         global_config = config
         config = config.kvmd
 
+        hid = get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type", "keymap"]))
+        streamer = Streamer(**config.streamer._unpack())
+
         KvmdServer(
             auth_manager=AuthManager(
                 internal_type=config.auth.internal.type,
@@ -76,10 +80,16 @@ def main(argv: Optional[List[str]]=None) -> None:
             log_reader=LogReader(),
             wol=WakeOnLan(**config.wol._unpack()),
 
-            hid=get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type", "keymap"])),
+            hid=hid,
             atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),
             msd=get_msd_class(config.msd.type)(**msd_kwargs),
-            streamer=Streamer(**config.streamer._unpack()),
+            streamer=streamer,
+
+            snapshoter=Snapshoter(
+                hid=hid,
+                streamer=streamer,
+                **config.snapshot._unpack(),
+            ),
 
             heartbeat=config.server.heartbeat,
             sync_chunk_size=config.server.sync_chunk_size,

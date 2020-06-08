@@ -249,6 +249,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         if load:
             return self.__snapshot
         else:
+            logger = get_logger()
             session = self.__ensure_http_session()
             try:
                 async with session.get(self.__make_url("snapshot")) as response:
@@ -277,10 +278,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                             self.__snapshot = snapshot
                             await self.__state_notifier.notify()
                         return snapshot
-            except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
-                pass
+                    logger.error("Stream is offline, no signal or so")
+            except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as err:
+                logger.error("Can't make snapshot: %s: %s", type(err).__name__, err)
             except Exception:
-                get_logger().exception("Invalid streamer response from /snapshot")
+                logger.exception("Invalid streamer response from /snapshot")
             return None
 
     def remove_snapshot(self) -> None:
