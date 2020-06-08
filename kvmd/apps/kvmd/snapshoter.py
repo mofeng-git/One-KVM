@@ -99,20 +99,7 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
             await notifier.notify()
 
             if not live:
-                if self.__wakeup_key:
-                    logger.info("Waking up using key %r ...", self.__wakeup_key)
-                    self.__hid.send_key_events([
-                        (self.__wakeup_key, True),
-                        (self.__wakeup_key, False),
-                    ])
-                if self.__wakeup_move:
-                    logger.info("Waking up using mouse move for %d units ...", self.__wakeup_move)
-                    self.__hid.send_mouse_move_event(0, 0)
-                    self.__hid.send_mouse_move_event(self.__wakeup_move, self.__wakeup_move)
-
-                if self.__online_delay:
-                    logger.info("Waiting %.2f seconds for online ...", self.__online_delay)
-                    await asyncio.sleep(self.__online_delay)
+                await self.__wakeup()
 
             retries = self.__retries
             while retries:
@@ -130,3 +117,22 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
         finally:
             self.__snapshoting = False
             await notifier.notify()
+
+    async def __wakeup(self) -> None:
+        logger = get_logger(0)
+
+        if self.__wakeup_key:
+            logger.info("Waking up using key %r ...", self.__wakeup_key)
+            self.__hid.send_key_events([
+                (self.__wakeup_key, True),
+                (self.__wakeup_key, False),
+            ])
+
+        if self.__wakeup_move:
+            logger.info("Waking up using mouse move for %d units ...", self.__wakeup_move)
+            for (to_x, to_y) in [(0, 0), (self.__wakeup_move, self.__wakeup_move), (0, 0)]:
+                self.__hid.send_mouse_move_event(to_x, to_y)
+
+        if self.__online_delay:
+            logger.info("Waiting %.2f seconds for online ...", self.__online_delay)
+            await asyncio.sleep(self.__online_delay)
