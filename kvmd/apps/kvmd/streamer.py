@@ -245,7 +245,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    async def make_snapshot(self, save: bool, load: bool, allow_offline: bool) -> Optional[StreamerSnapshot]:
+    async def take_snapshot(self, save: bool, load: bool, allow_offline: bool) -> Optional[StreamerSnapshot]:
         if load:
             return self.__snapshot
         else:
@@ -280,7 +280,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                         return snapshot
                     logger.error("Stream is offline, no signal or so")
             except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as err:
-                logger.error("Can't make snapshot: %s: %s", type(err).__name__, err)
+                logger.error("Can't connect to streamer: %s: %s", type(err).__name__, err)
             except Exception:
                 logger.exception("Invalid streamer response from /snapshot")
             return None

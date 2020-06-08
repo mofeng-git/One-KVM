@@ -55,8 +55,8 @@ class StreamerApi:
         return make_json_response(await self.__streamer.get_state())
 
     @exposed_http("GET", "/streamer/snapshot")
-    async def __make_snapshot_handler(self, request: Request) -> Response:
-        if (snapshot := await self.__streamer.make_snapshot(
+    async def __take_snapshot_handler(self, request: Request) -> Response:
+        if (snapshot := await self.__streamer.take_snapshot(
             save=valid_bool(request.query.get("save", "false")),
             load=valid_bool(request.query.get("load", "false")),
             allow_offline=valid_bool(request.query.get("allow_offline", "false")),

@@ -81,7 +81,7 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
             while True:
                 live = is_live()
                 if last_snapshot_ts + (self.__live_interval if live else self.__idle_interval) < time.time():
-                    await self.__make_snapshot(live, notifier)
+                    await self.__take_snapshot(live, notifier)
                     last_snapshot_ts = time.time()
                 await asyncio.sleep(min(self.__idle_interval, self.__live_interval))
         else:
@@ -90,9 +90,9 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
     def snapshoting(self) -> bool:
         return self.__snapshoting
 
-    async def __make_snapshot(self, live: bool, notifier: aiotools.AioNotifier) -> None:
+    async def __take_snapshot(self, live: bool, notifier: aiotools.AioNotifier) -> None:
         logger = get_logger(0)
-        logger.info("Time to make the new snapshot (%s)", ("live" if live else "idle"))
+        logger.info("Time to take the new snapshot (%s)", ("live" if live else "idle"))
         try:
             self.__snapshoting = True
             await notifier.notify()
@@ -115,16 +115,16 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
 
             retries = self.__retries
             while retries:
-                snapshot = await self.__streamer.make_snapshot(save=True, load=False, allow_offline=False)
+                snapshot = await self.__streamer.take_snapshot(save=True, load=False, allow_offline=False)
                 if snapshot:
                     logger.info("New snapshot saved: %dx%d", snapshot.width, snapshot.height)
                     break
                 retries -= 1
                 await asyncio.sleep(self.__retries_delay)
             else:
-                logger.error("Can't make snapshot after %d retries", self.__retries)
+                logger.error("Can't take snapshot after %d retries", self.__retries)
         except Exception:  # Этого вообще-то не должно случаться, апи внутри заэксцепчены, но мало ли
-            logger.exception("Unhandled exception while making snapshot")
+            logger.exception("Unhandled exception while taking snapshot")
         finally:
             self.__snapshoting = False
             await notifier.notify()
