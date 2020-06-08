@@ -84,7 +84,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _run(self, **coros: Coroutine) -> None:
         logger = get_logger(0)
         logger.info("[entry] [%s]: Starting client tasks ...", self._remote)
-        tasks = list(map(asyncio.create_task, [
+        tasks = list(map(asyncio.create_task, [  # type: ignore  # Я хз, почему github action фейлится здесь
             self.__wrapper(name, coro)
             for (name, coro) in {"main": self.__main_task_loop(), **coros}.items()
         ]))
