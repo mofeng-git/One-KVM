@@ -92,7 +92,8 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
 
     async def __take_snapshot(self, live: bool, notifier: aiotools.AioNotifier) -> None:
         logger = get_logger(0)
-        logger.info("Time to take the new snapshot (%s)", ("live" if live else "idle"))
+        if not live:
+            logger.info("Time to take the new idle snapshot")
         try:
             self.__snapshoting = True
             await notifier.notify()
@@ -117,7 +118,8 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
             while retries:
                 snapshot = await self.__streamer.take_snapshot(save=True, load=False, allow_offline=False)
                 if snapshot:
-                    logger.info("New snapshot saved: %dx%d", snapshot.width, snapshot.height)
+                    if not live:
+                        logger.info("New idle snapshot saved: %dx%d", snapshot.width, snapshot.height)
                     break
                 retries -= 1
                 await asyncio.sleep(self.__retries_delay)
