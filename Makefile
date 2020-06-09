@@ -27,6 +27,8 @@ all:
 	@ echo "    make run CMD=...      # Run specified command inside kvmd environment"
 	@ echo "    make run-ipmi         # Run kvmd-ipmi"
 	@ echo "    make run-ipmi CMD=... # Run specified command inside kvmd-ipmi environment"
+	@ echo "    make run-vnc          # Run kvmd-vnc"
+	@ echo "    make run-vnc  CMD=... # Run specified command inside kvmd-vnc environment"
 	@ echo "    make regen            # Regen some sources like keymap"
 	@ echo "    make bump             # Bump minor version"
 	@ echo "    make bump V=major     # Bump major version"
