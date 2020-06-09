@@ -145,12 +145,7 @@ export function Mouse() {
 	var __sendButton = function(button, state) {
 		tools.debug("Mouse: button", (state ? "pressed:" : "released:"), button);
 		__sendMove();
-		if (__ws) {
-			__ws.send(JSON.stringify({
-				"event_type": "mouse_button",
-				"event": {"button": button, "state": state},
-			}));
-		}
+		__sendEvent("mouse_button", {"button": button, "state": state});
 	};
 
 	var __sendMove = function() {
@@ -163,12 +158,7 @@ export function Mouse() {
 			};
 
 			tools.debug("Mouse: moved:", to);
-			if (__ws) {
-				__ws.send(JSON.stringify({
-					"event_type": "mouse_move",
-					"event": {"to": to},
-				}));
-			}
+			__sendEvent("mouse_move", {"to": to});
 			__sent_pos = pos;
 		}
 	};
@@ -199,12 +189,13 @@ export function Mouse() {
 
 		if (delta.x || delta.y) {
 			tools.debug("Mouse: scrolled:", delta);
-			if (__ws) {
-				__ws.send(JSON.stringify({
-					"event_type": "mouse_wheel",
-					"event": {"delta": delta},
-				}));
-			}
+			__sendEvent("mouse_wheel", {"delta": delta});
+		}
+	};
+
+	var __sendEvent = function(event_type, event) {
+		if (__ws) {
+			__ws.send(JSON.stringify({"event_type": event_type, "event": event}));
 		}
 	};
 
