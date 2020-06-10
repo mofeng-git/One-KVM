@@ -28,18 +28,3 @@ div#msd-menu div.msd-message,
 div#msd-menu input.msd-message {
 	display: none;
 }
-
-div#msd-menu table.msd-info {
-	-webkit-user-select: text;
-	-moz-user-select: text;
-	user-select: text;
-	border-spacing: 5px;
-	margin: 0 10px 0 10px;
-	font-size: 12px;
-}
-
-div#msd-menu table.msd-info td.msd-info-value {
-	font-weight: bold;
-	max-width: 310px;
-	overflow: hidden;
-}

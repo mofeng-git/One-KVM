@@ -133,6 +133,20 @@ ul#menu li div.menu-item-content-text table.one-line-switch {
 	}
 }
 
+ul#menu li div.menu-item-content table.menu-item-content-kv {
+	-webkit-user-select: text;
+	-moz-user-select: text;
+	user-select: text;
+	border-spacing: 5px;
+	margin: 0 10px 0 10px;
+	font-size: 12px;
+}
+ul#menu li div.menu-item-content table.menu-item-content-kv td.value {
+	font-weight: bold;
+	max-width: 310px;
+	overflow: hidden;
+}
+
 ul#menu li div.menu-item-content-buttons button,
 ul#menu li div.menu-item-content-buttons select {
 	box-shadow: none;
