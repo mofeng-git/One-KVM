@@ -79,6 +79,9 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
     def handle_raw_request(self, request: Dict, session: IpmiServerSession) -> None:
         handler = {
             (6, 1): (lambda _, session: self.send_device_id(session)),  # Get device ID
+            (6, 7): self.__get_power_state_handler,  # Power state
+            (6, 4): self.__get_selftest_status_handler,  # Self-test
+            (6, 0x38): (lambda _, session: session.send_ipmi_response()),  # Get channel auth types
             (0, 1): self.__get_chassis_status_handler,  # Get chassis status
             (0, 2): self.__chassis_control_handler,  # Chassis control
         }.get((request["netfn"], request["command"]))
@@ -94,8 +97,23 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
         else:
             session.send_ipmi_response(code=0xC1)
 
+    def __get_power_state_handler(self, _: Dict, session: IpmiServerSession) -> None:
+        # https://github.com/arcress0/ipmiutil/blob/e2f6e95127d22e555f959f136d9bb9543c763896/util/ireset.c#L654
+        result = self.__make_request(session, "atx.get_state() [power]", "atx.get_state")
+        data = [(0 if result["leds"]["power"] else 5)]
+        session.send_ipmi_response(data=data)
+
+    def __get_selftest_status_handler(self, _: Dict, session: IpmiServerSession) -> None:
+        # https://github.com/arcress0/ipmiutil/blob/e2f6e95127d22e555f959f136d9bb9543c763896/util/ihealth.c#L858
+        data = [0x0055]
+        try:
+            self.__make_request(session, "atx.get_state() [health]", "atx.get_state")
+        except Exception:
+            data = [0]
+        session.send_ipmi_response(data=data)
+
     def __get_chassis_status_handler(self, _: Dict, session: IpmiServerSession) -> None:
-        result = self.__make_request(session, "atx.get_state()", "atx.get_state")
+        result = self.__make_request(session, "atx.get_state() [chassis]", "atx.get_state")
         data = [int(result["leds"]["power"]), 0, 0]
         session.send_ipmi_response(data=data)
 
