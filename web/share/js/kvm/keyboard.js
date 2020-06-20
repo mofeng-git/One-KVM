@@ -24,10 +24,12 @@ import {tools, $, $$$} from "../tools.js";
 import {Keypad} from "../keypad.js";
 
 
-export function Keyboard() {
+export function Keyboard(record_callback) {
 	var self = this;
 
 	/************************************************************************/
+
+	var __record_callback = record_callback;
 
 	var __ws = null;
 	var __online = true;
@@ -136,12 +138,14 @@ export function Keyboard() {
 
 	var __sendKey = function(code, state) {
 		tools.debug("Keyboard: key", (state ? "pressed:" : "released:"), code);
+		let event = {
+			"event_type": "key",
+			"event": {"key": code, "state": state},
+		};
 		if (__ws) {
-			__ws.send(JSON.stringify({
-				"event_type": "key",
-				"event": {"key": code, "state": state},
-			}));
+			__ws.send(JSON.stringify(event));
 		}
+		__record_callback(event);
 	};
 
 	__init__();

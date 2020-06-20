@@ -26,6 +26,7 @@
 import {tools, $, $$$} from "../tools.js";
 import {wm} from "../wm.js";
 
+import {Recorder} from "./recorder.js";
 import {Keyboard} from "./keyboard.js";
 import {Mouse} from "./mouse.js";
 
@@ -35,10 +36,15 @@ export function Hid() {
 
 	/************************************************************************/
 
-	var __keyboard = new Keyboard();
-	var __mouse = new Mouse();
+	var __recorder = null;
+	var __keyboard = null;
+	var __mouse = null;
 
 	var __init__ = function() {
+		__recorder = new Recorder();
+		__keyboard = new Keyboard(__recorder.recordWsEvent);
+		__mouse = new Mouse(__recorder.recordWsEvent);
+
 		let hidden_attr = null;
 		let visibility_change_attr = null;
 
@@ -82,6 +88,7 @@ export function Hid() {
 		wm.switchEnabled($("hid-pak-text"), ws);
 		wm.switchEnabled($("hid-pak-button"), ws);
 		wm.switchEnabled($("hid-reset-button"), ws);
+		__recorder.setSocket(ws);
 		__keyboard.setSocket(ws);
 		__mouse.setSocket(ws);
 	};
@@ -146,6 +153,8 @@ export function Hid() {
 								wm.error("Too many text for paste!");
 							} else if (http.status !== 200) {
 								wm.error("HID paste error:<br>", http.responseText);
+							} else if (http.status === 200) {
+								__recorder.recordPrintEvent(text);
 							}
 						}
 					}, text, "text/plain");

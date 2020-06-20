@@ -63,18 +63,11 @@ img.led-yellow {
 	filter: var(--led-filter-yellow);
 }
 
-img.led-green-rotating-medium {
-	-webkit-filter: var(--led-filter-green);
-	filter: var(--led-filter-green);
-	-webkit-animation: var(--led-spin-medium);
-	animation: var(--led-spin-medium);
-}
-
-img.led-yellow-rotating-slow {
-	-webkit-filter: var(--led-filter-yellow);
-	filter: var(--led-filter-yellow);
-	-webkit-animation: var(--led-spin-slow);
-	animation: var(--led-spin-slow);
+img.led-red-rotating-fast {
+	-webkit-filter: var(--led-filter-red);
+	filter: var(--led-filter-red);
+	-webkit-animation: var(--led-spin-fast);
+	animation: var(--led-spin-fast);
 }
 
 img.led-yellow-rotating-fast {

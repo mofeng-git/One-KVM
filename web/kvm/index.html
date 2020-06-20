@@ -302,6 +302,43 @@
 
 		<li class="menu-right-items">
 			<a class="menu-item" href="#">
+				<img data-dont-hide-menu id="hid-recorder-led" class="led-gray" src="../share/svg/led-gear.svg" />
+				Macro &#8628;
+			</a>
+			<div data-dont-hide-menu class="menu-item-content">
+				<div class="menu-item-content-text">
+					<b>Record and play keyboard &amp; mouse actions</b><br>
+					<sub>For security reasons, the record will not saved on Pi-KVM</sub>
+				</div>
+				<div class="menu-item-content-buttons buttons-row">
+					<button disabled data-force-hide-menu id="hid-recorder-record" class="row25">&bull; Rec</button>
+					<button disabled id="hid-recorder-stop" class="row25">Stop</button>
+					<button disabled id="hid-recorder-play" class="row25">Play</button>
+					<button disabled id="hid-recorder-clear" class="row25">Clear</button>
+				</div>
+				<hr>
+				<table class="menu-item-content-kv">
+					<tr>
+						<td>Script time:</td>
+						<td colspan="2" id="hid-recorder-time" class="value">00:00:00.0</td>
+					</tr>
+					<tr>
+						<td>Scripted events:</td>
+						<td id="hid-recorder-events-count" class="value">0</td>
+						<td><sup><i>include delays</i></sup></td>
+					</tr>
+				</table>
+				<hr>
+				<input type="file" id="hid-recorder-new-script-file" />
+				<div class="menu-item-content-buttons buttons-row">
+					<button disabled id="hid-recorder-upload" class="row50">Upload script</button>
+					<button disabled id="hid-recorder-download" class="row50">Download script</button>
+				</div>
+			</div>
+		</li>
+
+		<li class="menu-right-items">
+			<a class="menu-item" href="#">
 				Shortcuts &#8628;
 			</a>
 			<div data-dont-hide-menu class="menu-item-content">

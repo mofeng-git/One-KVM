@@ -41,3 +41,7 @@ textarea#hid-pak-text::-webkit-input-placeholder {
 	line-height: 40px;
 	text-align: center;
 }
+
+input#hid-recorder-new-script-file {
+	display: none;
+}

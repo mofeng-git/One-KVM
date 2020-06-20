@@ -64,6 +64,17 @@ export var tools = new function() {
 		}
 	};
 
+	this.formatDuration = function(duration) {
+		let millis = parseInt((duration % 1000) / 100);
+		let secs = Math.floor((duration / 1000) % 60);
+		let mins = Math.floor((duration / (1000 * 60)) % 60);
+		let hours = Math.floor((duration / (1000 * 60 * 60)) % 24);
+		hours = (hours < 10 ? "0" + hours : hours);
+		mins = (mins < 10 ? "0" + mins : mins);
+		secs = (secs < 10 ? "0" + secs : secs);
+		return `${hours}:${mins}:${secs}.${millis}`;
+	};
+
 	/************************************************************************/
 
 	this.getCookie = function(name) {

@@ -27,10 +27,12 @@ import {tools, $} from "../tools.js";
 import {Keypad} from "../keypad.js";
 
 
-export function Mouse() {
+export function Mouse(record_callback) {
 	var self = this;
 
 	/************************************************************************/
+
+	var __record_callback = record_callback;
 
 	var __ws = null;
 	var __online = true;
@@ -194,9 +196,11 @@ export function Mouse() {
 	};
 
 	var __sendEvent = function(event_type, event) {
+		event = {"event_type": event_type, "event": event};
 		if (__ws) {
-			__ws.send(JSON.stringify({"event_type": event_type, "event": event}));
+			__ws.send(JSON.stringify(event));
 		}
+		__record_callback(event);
 	};
 
 	__init__();
