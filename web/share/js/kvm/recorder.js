@@ -219,7 +219,7 @@ export function Recorder() {
 					}
 				}, event.event.text, "text/plain");
 				return;
-			} else if (event.event_type in ["key", "mouse_button", "mouse_move", "mouse_wheel"]) {
+			} else if (["key", "mouse_button", "mouse_move", "mouse_wheel"].includes(event.event_type)) {
 				__ws.send(JSON.stringify(event));
 			}
 			index += 1;
