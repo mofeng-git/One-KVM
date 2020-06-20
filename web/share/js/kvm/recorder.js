@@ -36,8 +36,8 @@ export function Recorder() {
 
 	var __play_timer = null;
 	var __recording = false;
-	var __record = [];
-	var __record_time = 0;
+	var __events = [];
+	var __events_time = 0;
 	var __last_event_ts = 0;
 
 	var __init__ = function() {
@@ -76,12 +76,12 @@ export function Recorder() {
 			let now = new Date().getTime();
 			if (__last_event_ts) {
 				let delay = now - __last_event_ts;
-				__record.push({"event_type": "delay", "event": {"millis": delay}});
-				__record_time += delay;
+				__events.push({"event_type": "delay", "event": {"millis": delay}});
+				__events_time += delay;
 			}
 			__last_event_ts = now;
-			__record.push(event);
-			__setCounters(__record.length, __record_time);
+			__events.push(event);
+			__setCounters(__events.length, __events_time);
 		}
 	};
 
@@ -108,14 +108,14 @@ export function Recorder() {
 	};
 
 	var __clearRecord = function() {
-		__record = [];
-		__record_time = 0;
+		__events = [];
+		__events_time = 0;
 		__last_event_ts = 0;
 		__refresh();
 	};
 
 	var __downloadScript = function() {
-		let blob = new Blob([JSON.stringify(__record, undefined, 4)], {"type": "application/json"});
+		let blob = new Blob([JSON.stringify(__events, undefined, 4)], {"type": "application/json"});
 		let url = window.URL.createObjectURL(blob);
 		let el_anchor = document.createElement("a");
 		el_anchor.href = url;
@@ -130,16 +130,14 @@ export function Recorder() {
 		if (script_file) {
 			let reader = new FileReader();
 			reader.onload = function () {
-				let record = [];
-				let record_time = 0;
+				let events = [];
+				let events_time = 0;
 
 				try {
-					let raw_record = JSON.parse(reader.result);
-					console.log(typeof raw_record);
-					console.log(raw_record);
-					__checkType(raw_record, "object", "Base of script is not an objects list");
+					let raw_events = JSON.parse(reader.result);
+					__checkType(raw_events, "object", "Base of script is not an objects list");
 
-					for (let event of raw_record) {
+					for (let event of raw_events) {
 						__checkType(event, "object", "Non-dict event");
 						__checkType(event.event, "object", "Non-dict event");
 
@@ -148,7 +146,7 @@ export function Recorder() {
 							if (event.event.millis < 0) {
 								throw "Negative delay";
 							}
-							record_time += event.event.millis;
+							events_time += event.event.millis;
 						} else if (event.event_type === "print") {
 							__checkType(event.event.text, "string", "Non-string print text");
 						} else if (event.event_type === "key") {
@@ -169,11 +167,11 @@ export function Recorder() {
 							throw "Unknown event type";
 						}
 
-						record.push(event);
+						events.push(event);
 					}
 
-					__record = record;
-					__record_time = record_time;
+					__events = events;
+					__events_time = events_time;
 				} catch (err) {
 					wm.error(`Invalid script: ${err}`);
 				}
@@ -198,9 +196,9 @@ export function Recorder() {
 	};
 
 	var __runEvents = function(index, time=0) {
-		while (index < __record.length) {
-			__setCounters(__record.length - index + 1, __record_time - time);
-			let event = __record[index];
+		while (index < __events.length) {
+			__setCounters(__events.length - index + 1, __events_time - time);
+			let event = __events[index];
 			if (event.event_type === "delay") {
 				__play_timer = setTimeout(() => __runEvents(index + 1, time + event.event.millis), event.event.millis);
 				return;
@@ -241,16 +239,16 @@ export function Recorder() {
 
 		wm.switchEnabled($("hid-recorder-record"), (__ws && !__play_timer && !__recording));
 		wm.switchEnabled($("hid-recorder-stop"), (__ws && (__play_timer || __recording)));
-		wm.switchEnabled($("hid-recorder-play"), (__ws && !__recording && __record.length));
-		wm.switchEnabled($("hid-recorder-clear"), (!__play_timer && !__recording && __record.length));
+		wm.switchEnabled($("hid-recorder-play"), (__ws && !__recording && __events.length));
+		wm.switchEnabled($("hid-recorder-clear"), (!__play_timer && !__recording && __events.length));
 		wm.switchEnabled($("hid-recorder-upload"), (!__play_timer && !__recording));
-		wm.switchEnabled($("hid-recorder-download"), (!__play_timer && !__recording && __record.length));
+		wm.switchEnabled($("hid-recorder-download"), (!__play_timer && !__recording && __events.length));
 
-		__setCounters(__record.length, __record_time);
+		__setCounters(__events.length, __events_time);
 	};
 
-	var __setCounters = function(events_count, time) {
-		$("hid-recorder-time").innerHTML = tools.formatDuration(time);
+	var __setCounters = function(events_count, events_time) {
+		$("hid-recorder-time").innerHTML = tools.formatDuration(events_time);
 		$("hid-recorder-events-count").innerHTML = events_count;
 	};
 
