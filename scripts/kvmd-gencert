@@ -21,10 +21,7 @@
 # ========================================================================== #
 
 
-set -x
 set -e
-
-export LC_ALL=C
 
 if [ `whoami` != root ]; then
 	echo "Only root can do that"
@@ -37,6 +34,10 @@ if [ "$1" != --do-the-thing ]; then
 	echo "append the option '--do-the-thing' to execute."
 	exit 1
 fi
+
+set -x
+
+export LC_ALL=C
 
 mkdir -p /etc/kvmd/nginx/ssl
 cd /etc/kvmd/nginx/ssl
