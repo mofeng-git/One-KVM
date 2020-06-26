@@ -17,7 +17,7 @@ for _variant in "${_variants[@]}"; do
 	pkgname+=(kvmd-platform-$_platform-$_board)
 done
 pkgbase=kvmd
-pkgver=1.71
+pkgver=1.72
 pkgrel=1
 pkgdesc="The main Pi-KVM daemon"
 url="https://github.com/pikvm/kvmd"
