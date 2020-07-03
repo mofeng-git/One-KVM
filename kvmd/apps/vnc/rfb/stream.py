@@ -40,7 +40,10 @@ async def rfb_close_writer(writer: asyncio.StreamWriter) -> bool:
     if not closing:
         writer.transport.abort()  # type: ignore
         writer.close()
-    await writer.wait_closed()
+    try:
+        await writer.wait_closed()
+    except Exception:
+        pass
     return (not closing)
 
 
