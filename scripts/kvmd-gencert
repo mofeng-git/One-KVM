@@ -35,6 +35,11 @@ if [ "$1" != --do-the-thing ]; then
 	exit 1
 fi
 
+# XXX: Why ECC?
+# https://www.leaderssl.com/articles/345-what-is-ecc-and-why-you-should-use-it
+# https://www.digitalocean.com/community/tutorials/how-to-create-an-ecc-certificate-on-nginx-for-debian-8
+# https://msol.io/blog/tech/create-a-self-signed-ecc-certificate
+
 set -x
 
 export LC_ALL=C
@@ -42,7 +47,8 @@ export LC_ALL=C
 mkdir -p /etc/kvmd/nginx/ssl
 cd /etc/kvmd/nginx/ssl
 
-openssl req -new -x509 -nodes -newkey rsa:4096 -keyout server.key -out server.crt -days 3650 \
+openssl ecparam -out server.key -name prime256v1 -genkey
+openssl req -new -x509 -sha256 -nodes -key server.key -out server.crt -days 3650 \
 	-subj "/C=RU/ST=Moscow/L=Moscow/O=Pi-KVM/OU=Pi-KVM/CN=localhost"
 
 chown -R root:kvmd-nginx /etc/kvmd/nginx/ssl
