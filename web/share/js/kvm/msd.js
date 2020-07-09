@@ -321,7 +321,7 @@ export function Msd() {
 	var __refreshImageSelector = function() {
 		let el = $("msd-image-selector");
 
-		if (el.options.length == 0) {
+		if (el.options.length === 0) {
 			el.options[0] = new Option("< Not selected >", "", false, false);
 		} else {
 			el.options.length = 1; // Cleanup
@@ -343,7 +343,7 @@ export function Msd() {
 
 				let option = new Option(name, name, false, false);
 				el.options[index] = option;
-				if (__state.drive.image && __state.drive.image.name == name && __state.drive.image.in_storage) {
+				if (__state.drive.image && __state.drive.image.name === name && __state.drive.image.in_storage) {
 					select_index = index;
 				}
 				++index;

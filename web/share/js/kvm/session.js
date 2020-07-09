@@ -56,7 +56,7 @@ export function Session() {
 	/************************************************************************/
 
 	var __setAboutInfoMeta = function(state) {
-		if (state != null) {
+		if (state !== null) {
 			let text = JSON.stringify(state, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
 			$("about-meta").innerHTML = `
 				<span class="code-comment">// The Pi-KVM metadata.<br>
@@ -142,7 +142,7 @@ export function Session() {
 	var __formatUname = function(kernel) {
 		let pairs = [];
 		for (let field of Object.keys(kernel).sort()) {
-			if (field != "system") {
+			if (field !== "system") {
 				pairs.push([tools.upperFirst(field), kernel[field]]);
 			}
 		}
