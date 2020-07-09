@@ -55,36 +55,37 @@ export function Session() {
 
 	/************************************************************************/
 
-	var __setAboutInfo = function(state) {
-		if (state.meta != null) {
-			let text = JSON.stringify(state.meta, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
+	var __setAboutInfoSystem = function(state) {
+		$("about-version").innerHTML = `
+			KVMD: <span class="code-comment">${state.kvmd.version}</span><br>
+			<hr>
+			Streamer: <span class="code-comment">${state.streamer.version} (${state.streamer.app})</span>
+			${__formatStreamerFeatures(state.streamer.features)}
+			<hr>
+			${state.kernel.system} kernel:
+			${__formatUname(state.kernel)}
+		`;
+	};
+
+	var __setAboutInfoMeta = function(state) {
+		if (state != null) {
+			let text = JSON.stringify(state, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
 			$("about-meta").innerHTML = `
 				<span class="code-comment">// The Pi-KVM metadata.<br>
-				// You can get this json using handle <a target="_blank" href="/api/info">/api/info</a>.<br>
+				// You can get this JSON using handle <a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a>.<br>
 				// In the standard configuration this data<br>
 				// is specified in the file /etc/kvmd/meta.yaml.</span><br>
 				<br>
 				${text}
 			`;
-			if (state.meta.server && state.meta.server.host) {
-				$("kvmd-meta-server-host").innerHTML = `Server: ${state.meta.server.host}`;
-				document.title = `Pi-KVM Session: ${state.meta.server.host}`;
+			if (state.server && state.server.host) {
+				$("kvmd-meta-server-host").innerHTML = `Server: ${state.server.host}`;
+				document.title = `Pi-KVM Session: ${state.server.host}`;
 			} else {
 				$("kvmd-meta-server-host").innerHTML = "";
 				document.title = "Pi-KVM Session";
 			}
 		}
-
-		let sys = state.system;
-		$("about-version").innerHTML = `
-			KVMD: <span class="code-comment">${sys.kvmd.version}</span><br>
-			<hr>
-			Streamer: <span class="code-comment">${sys.streamer.version} (${sys.streamer.app})</span>
-			${__formatStreamerFeatures(sys.streamer.features)}
-			<hr>
-			${sys.kernel.system} kernel:
-			${__formatUname(sys.kernel)}
-		`;
 	};
 
 	var __formatStreamerFeatures = function(features) {
@@ -157,7 +158,8 @@ export function Session() {
 		let data = JSON.parse(event.data);
 		switch (data.event_type) {
 			case "pong": __missed_heartbeats = 0; break;
-			case "info_state": __setAboutInfo(data.event); break;
+			case "info_system_state": __setAboutInfoSystem(data.event); break;
+			case "info_meta_state": __setAboutInfoMeta(data.event); break;
 			case "wol_state": __wol.setState(data.event); break;
 			case "hid_state": __hid.setState(data.event); break;
 			case "atx_state": __atx.setState(data.event); break;

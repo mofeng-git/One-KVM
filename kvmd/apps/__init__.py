@@ -216,16 +216,15 @@ def _get_config_scheme() -> Dict:
                 },
             },
 
-            "info": {  # Accessed via global config, see kvmd/info.py for details
+            "info": {  # Accessed via global config, see kvmd/info for details
                 "meta":   Option("/etc/kvmd/meta.yaml",    type=valid_abs_file),
                 "extras": Option("/usr/share/kvmd/extras", type=valid_abs_dir),
-            },
-
-            "hw": {
-                "vcgencmd_cmd":   Option(["/opt/vc/bin/vcgencmd"], type=valid_command),
-                "procfs_prefix":  Option("", type=(lambda arg: str(arg).strip())),
-                "sysfs_prefix":   Option("", type=(lambda arg: str(arg).strip())),
-                "state_poll":     Option(10.0,  type=valid_float_f01),
+                "hw": {
+                    "vcgencmd_cmd":  Option(["/opt/vc/bin/vcgencmd"], type=valid_command),
+                    "procfs_prefix": Option("", type=(lambda arg: str(arg).strip())),
+                    "sysfs_prefix":  Option("", type=(lambda arg: str(arg).strip())),
+                    "state_poll":    Option(10.0,  type=valid_float_f01),
+                },
             },
 
             "wol": {

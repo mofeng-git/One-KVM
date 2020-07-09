@@ -31,9 +31,11 @@ from typing import Optional
 
 import aiofiles
 
-from ...logging import get_logger
+from ....logging import get_logger
 
-from ... import aioproc
+from .... import aioproc
+
+from .base import BaseInfoSubmanager
 
 
 # =====
@@ -41,7 +43,7 @@ _RetvalT = TypeVar("_RetvalT")
 
 
 # =====
-class HwManager:
+class HwInfoSubmanager(BaseInfoSubmanager):
     def __init__(
         self,
         vcgencmd_cmd: List[str],

@@ -20,42 +20,11 @@
 # ========================================================================== #
 
 
-import asyncio
-
-from typing import List
-
-from aiohttp.web import Request
-from aiohttp.web import Response
-
-from ....validators import check_string_in_list
-from ....validators.basic import valid_string_list
-
-from ..info import InfoManager
-
-from ..http import exposed_http
-from ..http import make_json_response
+from typing import Dict
+from typing import Optional
 
 
 # =====
-class InfoApi:
-    def __init__(self, info_manager: InfoManager) -> None:
-        self.__info_manager = info_manager
-
-    # =====
-
-    @exposed_http("GET", "/info")
-    async def __common_state_handler(self, request: Request) -> Response:
-        fields = self.__valid_info_fields(request)
-        results = dict(zip(fields, await asyncio.gather(*[
-            self.__info_manager.get_submanager(field).get_state()
-            for field in fields
-        ])))
-        return make_json_response(results)
-
-    def __valid_info_fields(self, request: Request) -> List[str]:
-        subs = self.__info_manager.get_subs()
-        return (sorted(set(valid_string_list(
-            arg=request.query.get("fields", ",".join(subs)),
-            subval=(lambda field: check_string_in_list(field, "info field", subs)),
-            name="info fields list",
-        ))) or subs)
+class BaseInfoSubmanager:
+    async def get_state(self) -> Optional[Dict]:
+        raise NotImplementedError

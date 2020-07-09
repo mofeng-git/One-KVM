@@ -20,22 +20,26 @@
 # ========================================================================== #
 
 
-from aiohttp.web import Request
-from aiohttp.web import Response
+from typing import Dict
+from typing import Optional
 
-from ..hw import HwManager
+from ....logging import get_logger
 
-from ..http import exposed_http
-from ..http import make_json_response
+from ....yamlconf.loader import load_yaml_file
+
+from .... import aiotools
+
+from .base import BaseInfoSubmanager
 
 
 # =====
-class HwApi:
-    def __init__(self, hw_manager: HwManager) -> None:
-        self.__hw_manager = hw_manager
+class MetaInfoSubmanager(BaseInfoSubmanager):
+    def __init__(self, meta_path: str) -> None:
+        self.__meta_path = meta_path
 
-    # =====
-
-    @exposed_http("GET", "/hw")
-    async def __state_handler(self, _: Request) -> Response:
-        return make_json_response(await self.__hw_manager.get_state())
+    async def get_state(self) -> Optional[Dict]:
+        try:
+            return ((await aiotools.run_async(load_yaml_file, self.__meta_path)) or {})
+        except Exception:
+            get_logger(0).exception("Can't parse meta")
+        return None

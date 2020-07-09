@@ -51,7 +51,7 @@ function __setAppText() {
 }
 
 function __loadKvmdInfo() {
-	let http = tools.makeRequest("GET", "/api/info", function() {
+	let http = tools.makeRequest("GET", "/api/info?fields=meta,extras", function() {
 		if (http.readyState === 4) {
 			if (http.status === 200) {
 				let info = JSON.parse(http.responseText).result;

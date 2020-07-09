@@ -149,9 +149,9 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             self.__kvmd_ws = None
 
     async def __process_ws_event(self, event: Dict) -> None:
-        if event["event_type"] == "info_state":
+        if event["event_type"] == "info_meta_state":
             try:
-                host = event["event"]["meta"]["server"]["host"]
+                host = event["event"]["server"]["host"]
             except Exception:
                 host = None
             else:

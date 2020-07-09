@@ -35,7 +35,6 @@ from .. import init
 
 from .auth import AuthManager
 from .info import InfoManager
-from .hw import HwManager
 from .logreader import LogReader
 from .wol import WakeOnLan
 from .streamer import Streamer
@@ -78,7 +77,6 @@ def main(argv: Optional[List[str]]=None) -> None:
                 enabled=config.auth.enabled,
             ),
             info_manager=InfoManager(global_config),
-            hw_manager=HwManager(**config.hw._unpack()),
             log_reader=LogReader(),
             wol=WakeOnLan(**config.wol._unpack()),
 

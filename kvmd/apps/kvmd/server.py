@@ -62,7 +62,6 @@ from ... import aioproc
 
 from .auth import AuthManager
 from .info import InfoManager
-from .hw import HwManager
 from .logreader import LogReader
 from .wol import WakeOnLan
 from .streamer import Streamer
@@ -82,7 +81,6 @@ from .api.auth import AuthApi
 from .api.auth import check_request_auth
 
 from .api.info import InfoApi
-from .api.hw import HwApi
 from .api.log import LogApi
 from .api.wol import WolApi
 from .api.hid import HidApi
@@ -125,7 +123,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self,
         auth_manager: AuthManager,
         info_manager: InfoManager,
-        hw_manager: HwManager,
         log_reader: LogReader,
         wol: WakeOnLan,
 
@@ -149,21 +146,26 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self.__heartbeat = heartbeat
 
         self.__components = [
-            _Component("Auth manager", "",               auth_manager),
-            _Component("Info manager", "info_state",     info_manager),
-            _Component("HW manager",   "hw_state",       hw_manager),
-            _Component("Wake-on-LAN",  "wol_state",      wol),
-            _Component("HID",          "hid_state",      hid),
-            _Component("ATX",          "atx_state",      atx),
-            _Component("MSD",          "msd_state",      msd),
-            _Component("Streamer",     "streamer_state", streamer),
+            *[
+                _Component("Auth manager", "", auth_manager),
+            ],
+            *[
+                _Component(f"Info manager ({sub})", f"info_{sub}_state", info_manager.get_submanager(sub))
+                for sub in info_manager.get_subs()
+            ],
+            *[
+                _Component("Wake-on-LAN",  "wol_state",      wol),
+                _Component("HID",          "hid_state",      hid),
+                _Component("ATX",          "atx_state",      atx),
+                _Component("MSD",          "msd_state",      msd),
+                _Component("Streamer",     "streamer_state", streamer),
+            ],
         ]
 
         self.__apis: List[object] = [
             self,
             AuthApi(auth_manager),
             InfoApi(info_manager),
-            HwApi(hw_manager),
             LogApi(log_reader),
             WolApi(wol),
             HidApi(hid, keymap_path),
@@ -325,7 +327,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 except Exception:
                     logger.exception("Cleanup error on %s", component.name)
 
-    async def __broadcast_event(self, event_type: str, event: Dict) -> None:
+    async def __broadcast_event(self, event_type: str, event: Optional[Dict]) -> None:
         if self.__ws_clients:
             await asyncio.gather(*[
                 client.ws.send_str(json.dumps({

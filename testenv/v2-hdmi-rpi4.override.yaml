@@ -2,9 +2,10 @@ kvmd:
     server:
         unix_mode: 0666
 
-    hw:
-        procfs_prefix: /fake_procfs
-        sysfs_prefix: /fake_sysfs
+    info:
+        hw:
+            procfs_prefix: /fake_procfs
+            sysfs_prefix: /fake_sysfs
 
     hid:
         keyboard:
