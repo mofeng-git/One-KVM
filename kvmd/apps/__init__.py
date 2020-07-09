@@ -221,6 +221,13 @@ def _get_config_scheme() -> Dict:
                 "extras": Option("/usr/share/kvmd/extras", type=valid_abs_dir),
             },
 
+            "hw": {
+                "vcgencmd_cmd":   Option(["/opt/vc/bin/vcgencmd"], type=valid_command),
+                "procfs_prefix":  Option("", type=(lambda arg: str(arg).strip())),
+                "sysfs_prefix":   Option("", type=(lambda arg: str(arg).strip())),
+                "state_poll":     Option(10.0,  type=valid_float_f01),
+            },
+
             "wol": {
                 "ip":   Option("255.255.255.255", type=(lambda arg: valid_ip(arg, v6=False))),
                 "port": Option(9, type=valid_port),

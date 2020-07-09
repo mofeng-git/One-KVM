@@ -44,10 +44,14 @@ RUN pip install -r requirements.txt
 RUN mkdir -p \
 		/etc/kvmd/nginx \
 		/var/lib/kvmd/msd/{images,meta} \
+		/opt/vc/bin \
 		/fake_sysfs/sys/kernel/config/usb_gadget/kvmd/functions/mass_storage.usb0/lun.0 \
-	&& cd /fake_sysfs/sys/kernel/config/usb_gadget/kvmd/functions/mass_storage.usb0/lun.0 \
-	&& touch file  \
-	&& echo 1 > cdrom \
-	&& echo 1 > ro
+		/fake_sysfs/sys/class/thermal/thermal_zone0 \
+		/fake_procfs/proc/device-tree
+
+COPY testenv/fakes/vcgencmd /opt/vc/bin/
+COPY testenv/fakes/msd/* /fake_sysfs/sys/kernel/config/usb_gadget/kvmd/functions/mass_storage.usb0/lun.0/
+COPY testenv/fakes/cpu_temp /fake_sysfs/sys/class/thermal/thermal_zone0/temp
+COPY testenv/fakes/dt_model /fake_procfs/proc/device-tree/model
 
 CMD /bin/bash

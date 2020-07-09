@@ -1,0 +1,5 @@
+#!/bin/sh
+case $1 in
+	get_throttled) echo "throttled=0x0";;
+	measure_temp) echo "temp=35.0'C";;
+esac
