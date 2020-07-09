@@ -41,11 +41,12 @@ div#about td.copyright {
 	font-size: 0.8em;
 }
 
-div#about div#about-meta, div#about-version, div#about-thanks {
+div#about div#about-meta, div#about-hw, div#about-version, div#about-thanks {
 	height: 250px;
 }
 
-#about-tab-info-button:checked~#about-tab-info-content,
+#about-tab-meta-button:checked~#about-tab-meta-content,
+#about-tab-hw-button:checked~#about-tab-hw-content,
 #about-tab-version-button:checked~#about-tab-version-content,
 #about-tab-thanks-button:checked~#about-tab-thanks-content {
 	display: block;

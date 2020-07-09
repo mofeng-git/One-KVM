@@ -69,7 +69,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 "type": "rpi",
                 "base": model,
             },
-            "state": {
+            "health": {
                 "temp": {
                     "cpu": cpu_temp,
                     "gpu": gpu_temp,

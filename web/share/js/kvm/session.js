@@ -55,18 +55,6 @@ export function Session() {
 
 	/************************************************************************/
 
-	var __setAboutInfoSystem = function(state) {
-		$("about-version").innerHTML = `
-			KVMD: <span class="code-comment">${state.kvmd.version}</span><br>
-			<hr>
-			Streamer: <span class="code-comment">${state.streamer.version} (${state.streamer.app})</span>
-			${__formatStreamerFeatures(state.streamer.features)}
-			<hr>
-			${state.kernel.system} kernel:
-			${__formatUname(state.kernel)}
-		`;
-	};
-
 	var __setAboutInfoMeta = function(state) {
 		if (state != null) {
 			let text = JSON.stringify(state, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
@@ -88,13 +76,65 @@ export function Session() {
 		}
 	};
 
+	var __setAboutInfoHw = function(state) {
+		$("about-hw").innerHTML = `
+			Platform base: <span class="code-comment">${state.platform.base}</span><br>
+			<hr>
+			Temperature:
+			${__formatTemp(state.health.temp)}
+			<hr>
+			Throttling:
+			${__formatThrottling(state.health.throttling)}
+		`;
+	};
+
+	var __formatTemp = function(temp) {
+		let pairs = [];
+		for (let field of Object.keys(temp).sort()) {
+			pairs.push([field.toUpperCase(), `${temp[field]}&deg;C`]);
+		}
+		return __formatUl(pairs);
+	};
+
+	var __formatThrottling = function(throttling) {
+		if (throttling !== null) {
+			let pairs = [];
+			for (let field of Object.keys(throttling.parsed_flags).sort()) {
+				pairs.push([
+					tools.upperFirst(field).replace("_", " "),
+					__formatThrottleError(throttling.parsed_flags[field]),
+				]);
+			}
+			return __formatUl(pairs);
+		} else {
+			return "NO DATA";
+		}
+	};
+
+	var __formatThrottleError = function(flags) {
+		let colored = ((color, text) => `<font color="${color}">${text}</font>`);
+		return `
+			${flags["now"] ? colored("red", "RIGHT NOW") : colored("green", "No")};
+			${flags["past"] ? colored("red", "In the past") : colored("green", "Never")}
+		`;
+	};
+
+	var __setAboutInfoSystem = function(state) {
+		$("about-version").innerHTML = `
+			KVMD: <span class="code-comment">${state.kvmd.version}</span><br>
+			<hr>
+			Streamer: <span class="code-comment">${state.streamer.version} (${state.streamer.app})</span>
+			${__formatStreamerFeatures(state.streamer.features)}
+			<hr>
+			${state.kernel.system} kernel:
+			${__formatUname(state.kernel)}
+		`;
+	};
+
 	var __formatStreamerFeatures = function(features) {
 		let pairs = [];
 		for (let field of Object.keys(features).sort()) {
-			pairs.push([
-				field,
-				(features[field] ? "Yes" : "No"),
-			]);
+			pairs.push([field, (features[field] ? "Yes" : "No")]);
 		}
 		return __formatUl(pairs);
 	};
@@ -103,10 +143,7 @@ export function Session() {
 		let pairs = [];
 		for (let field of Object.keys(kernel).sort()) {
 			if (field != "system") {
-				pairs.push([
-					field[0].toUpperCase() + field.slice(1),
-					kernel[field],
-				]);
+				pairs.push([tools.upperFirst(field), kernel[field]]);
 			}
 		}
 		return __formatUl(pairs);
@@ -158,8 +195,9 @@ export function Session() {
 		let data = JSON.parse(event.data);
 		switch (data.event_type) {
 			case "pong": __missed_heartbeats = 0; break;
-			case "info_system_state": __setAboutInfoSystem(data.event); break;
 			case "info_meta_state": __setAboutInfoMeta(data.event); break;
+			case "info_hw_state": __setAboutInfoHw(data.event); break;
+			case "info_system_state": __setAboutInfoSystem(data.event); break;
 			case "wol_state": __wol.setState(data.event); break;
 			case "hid_state": __hid.setState(data.event); break;
 			case "atx_state": __atx.setState(data.event); break;

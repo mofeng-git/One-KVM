@@ -46,6 +46,10 @@ export var tools = new function() {
 
 	/************************************************************************/
 
+	this.upperFirst = function(text) {
+		return text[0].toUpperCase() + text.slice(1);
+	};
+
 	this.makeId = function() {
 		let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 		let id = "";
