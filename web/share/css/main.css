@@ -243,3 +243,7 @@ ul.footer li a {
 .feature-disabled {
 	display: none;
 }
+
+.hidden {
+	display: none;
+}

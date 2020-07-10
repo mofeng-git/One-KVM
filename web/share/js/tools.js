@@ -139,6 +139,14 @@ export var tools = new function() {
 		$(`${el.id}-value`).style.width = `${percent}%`;
 	};
 
+	this.setHiddenVisible = function(el, visible) {
+		el.classList.toggle("hidden", !visible);
+	};
+
+	this.setFeatureEnabled = function(el, enabled) {
+		el.classList.toggle("feature-disabled", !enabled);
+	};
+
 	/************************************************************************/
 
 	let __debug = (new URL(window.location.href)).searchParams.get("debug");

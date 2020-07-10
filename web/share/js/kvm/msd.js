@@ -183,8 +183,8 @@ export function Msd() {
 	var __applyState = function() {
 		if (__state) {
 			__toggleMsdFeatures();
-			$("msd-dropdown").classList.toggle("feature-disabled", !__state.enabled);
-			$("msd-reset-button").classList.toggle("feature-disabled", !__state.enabled);
+			tools.setFeatureEnabled($("msd-dropdown"), __state.enabled);
+			tools.setFeatureEnabled($("msd-reset-button"), __state.enabled);
 
 			__showMessageOffline(!__state.online);
 			__showMessageImageBroken(__state.online && __state.drive.image && !__state.drive.image.complete && !__state.storage.uploading);
@@ -236,7 +236,7 @@ export function Msd() {
 
 			wm.switchEnabled($("msd-reset-button"), (__state.enabled && !__state.busy));
 
-			$("msd-submenu-new-image").style.display = (__image_file ? "block" : "none");
+			tools.setHiddenVisible($("msd-submenu-new-image"), __image_file);
 			$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
 			$("msd-new-image-size").innerHTML = (__image_file ? tools.formatSize(__image_file.size) : "");
 			if (!__upload_http) {
@@ -274,7 +274,7 @@ export function Msd() {
 			wm.switchEnabled($("msd-reset-button"), false);
 
 			$("msd-select-new-image-file").value = "";
-			$("msd-submenu-new-image").style.display = "none";
+			tools.setHiddenVisible($("msd-submenu-new-image"), false);
 			$("msd-new-image-name").innerHTML = "";
 			$("msd-new-image-size").innerHTML = "";
 			tools.setProgressPercent($("msd-uploading-progress"), "", 0);
@@ -283,34 +283,34 @@ export function Msd() {
 
 	var __toggleMsdFeatures = function() {
 		for (let el of $$$(".msd-single-storage")) {
-			el.classList.toggle("feature-disabled", __state.features.multi);
+			tools.setFeatureEnabled(el, !__state.features.multi);
 		}
 		for (let el of $$$(".msd-multi-storage")) {
-			el.classList.toggle("feature-disabled", !__state.features.multi);
+			tools.setFeatureEnabled(el, __state.features.multi);
 		}
 		for (let el of $$$(".msd-cdrom-emulation")) {
-			el.classList.toggle("feature-disabled", !__state.features.cdrom);
+			tools.setFeatureEnabled(el, __state.features.cdrom);
 		}
 	};
 
 	var __showMessageOffline = function(visible) {
-		$("msd-message-offline").style.display = (visible ? "block" : "none");
+		tools.setHiddenVisible($("msd-message-offline"), visible);
 	};
 
 	var __showMessageImageBroken = function(visible) {
-		$("msd-message-image-broken").style.display = (visible ? "block" : "none");
+		tools.setHiddenVisible($("msd-message-image-broken"), visible);
 	};
 
 	var __showMessageTooBigForCdrom = function(visible) {
-		$("msd-message-too-big-for-cdrom").style.display = (visible ? "block" : "none");
+		tools.setHiddenVisible($("msd-message-too-big-for-cdrom"), visible);
 	};
 
 	var __showMessageOutOfStorage = function(visible) {
-		$("msd-message-out-of-storage").style.display = (visible ? "block" : "none");
+		tools.setHiddenVisible($("msd-message-out-of-storage"), visible);
 	};
 
 	var __showMessageAnotherUserUploads = function(visible) {
-		$("msd-message-another-user-uploads").style.display = (visible ? "block" : "none");
+		tools.setHiddenVisible($("msd-message-another-user-uploads"), visible);
 	};
 
 	var __setStatus = function(led_cls, msg) {

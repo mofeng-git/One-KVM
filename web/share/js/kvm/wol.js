@@ -42,7 +42,7 @@ export function WakeOnLan() {
 
 	self.setState = function(state) {
 		if (state) {
-			$("wol").classList.toggle("feature-disabled", !state.enabled);
+			tools.setFeatureEnabled($("wol"), state.enabled);
 			__target = state.target;
 		}
 		wm.switchEnabled($("wol-wakeup-button"), (state && state.enabled));
