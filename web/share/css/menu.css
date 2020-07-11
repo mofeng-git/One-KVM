@@ -34,10 +34,12 @@ ul#menu {
 }
 
 ul#menu li.menu-right-items {
+	border-left: var(--border-menu-thin);
 	float: right;
 }
 
 ul#menu li.menu-left-items {
+	border-right: var(--border-menu-thin);
 	float: left;
 }
 
@@ -45,7 +47,6 @@ ul#menu li a#menu-logo {
 	line-height: 50px;
 	outline: none;
 	cursor: pointer;
-	border-right: var(--border-menu-thin);
 	display: inline-block;
 	color: var(--cs-menu-default-fg);
 	padding-left: 16px;
@@ -68,7 +69,6 @@ ul#menu li a.menu-item {
 	line-height: 50px;
 	outline: none;
 	cursor: pointer;
-	border-left: var(--border-menu-thin);
 	display: inline-block;
 	color: var(--cs-menu-default-fg);
 	padding-left: 16px;

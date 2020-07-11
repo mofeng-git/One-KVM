@@ -86,6 +86,18 @@ export function Session() {
 			Throttling:
 			${__formatThrottling(state.health.throttling)}
 		`;
+
+		if (state.health.throttling !== null) {
+			let flags = state.health.throttling.parsed_flags;
+			let undervoltage = (flags.undervoltage.now || flags.undervoltage.past);
+			let freq_capped = (flags.freq_capped.now || flags.freq_capped.past);
+
+			tools.setHiddenVisible($("hw-health-dropdown"), (undervoltage || freq_capped));
+			$("hw-health-undervoltage-led").className = (undervoltage ? (flags.undervoltage.now ? "led-red" : "led-yellow") : "hidden");
+			$("hw-health-overheating-led").className = (freq_capped ? (flags.freq_capped.now ? "led-red" : "led-yellow") : "hidden");
+			tools.setHiddenVisible($("hw-health-message-undervoltage"), undervoltage);
+			tools.setHiddenVisible($("hw-health-message-overheating"), freq_capped);
+		}
 	};
 
 	var __formatTemp = function(temp) {

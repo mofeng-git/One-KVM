@@ -66,6 +66,66 @@
 			</a>
 		</li>
 
+		<div id="hw-health-dropdown" class="hidden">
+			<li class="menu-left-items">
+				<a class="menu-item" href="#">
+					<img data-dont-hide-menu id="hw-health-undervoltage-led" class="hidden" src="../share/svg/led-undervoltage.svg" />
+					<img data-dont-hide-menu id="hw-health-overheating-led" class="hidden" src="../share/svg/led-overheating.svg" />
+					&#8628;
+				</a>
+				<div data-dont-hide-menu class="menu-item-content">
+					<div class="menu-item-content-text">
+						<table>
+							<tr>
+								<td><img class="sign" src="../share/svg/warning.svg" /></td>
+								<td>
+									<b>Raspberry Pi's health is at risk</b><br><br>
+									<sup>
+										This is not a drill! A red icon indicates a current issue,<br>
+										a yellow one that was observed since the device booted up.
+									</sup>
+								</td>
+							</tr>
+						</table>
+					</div>
+					<div id="hw-health-message-undervoltage" class="hidden">
+						<hr>
+						<div class="menu-item-content-text">
+							<table>
+								<tr>
+									<td><img class="sign led-gray" src="../share/svg/led-undervoltage.svg" /></td>
+									<td>
+										<b>Undervoltage detected</b><br><br>
+										<sup>
+											Make sure your power supply and cabling are providing<br>
+											enough power to the Raspberry Pi (3A minimum).
+										</sup>
+									</td>
+								</tr>
+							</table>
+						</div>
+					</div>
+					<div id="hw-health-message-overheating" class="hidden">
+						<hr>
+						<div class="menu-item-content-text">
+							<table>
+								<tr>
+									<td><img class="sign led-gray" src="../share/svg/led-overheating.svg" /></td>
+									<td>
+										<b>Overheating detected</b><br><br>
+										<sup>
+											Frequency capping due to overheating.<br>
+											Improve cooling of the Raspberry Pi.
+										</sup>
+									</td>
+								</tr>
+							</table>
+						</div>
+					</div>
+				</div>
+			</li>
+		</div>
+
 		<li class="menu-right-items">
 			<a class="menu-item" href="#">
 				<img data-dont-hide-menu id="link-led" class="led-gray" src="../share/svg/led-link.svg" />
