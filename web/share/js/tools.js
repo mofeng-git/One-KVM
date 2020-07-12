@@ -126,10 +126,11 @@ export var tools = new function() {
 		};
 
 		el.onmouseup = el.ontouchend = function(event) {
+			let value = el.value;
 			event.preventDefault();
 			clear_timer();
 			el.execution_timer = setTimeout(function() {
-				execute_callback(el.value);
+				execute_callback(value);
 			}, delay);
 		};
 	};
