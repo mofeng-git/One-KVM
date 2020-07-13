@@ -67,6 +67,10 @@ export function Streamer() {
 	/************************************************************************/
 
 	self.setState = function(state) {
+		if (state) {
+			tools.setFeatureEnabled($("stream-quality"), state.features.quality && (state.state === null || state.state.encoder.quality > 0));
+		}
+
 		if (state && state.state) {
 			let max_fps = state.limits.max_fps;
 			state = state.state;

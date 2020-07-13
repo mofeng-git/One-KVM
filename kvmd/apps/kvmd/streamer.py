@@ -54,6 +54,69 @@ class StreamerSnapshot:
     data: bytes
 
 
+class _StreamerParams:
+    __DESIRED_FPS = "desired_fps"
+    __MAX_FPS = "max_fps"
+
+    __QUALITY = "quality"
+
+    __RESOLUTION = "resolution"
+    __AVAILABLE_RESOLUTIONS = "available_resolutions"
+
+    def __init__(
+        self,
+        desired_fps: int,
+        max_fps: int,
+        quality: int,
+        resolution: str,
+        available_resolutions: List[str],
+    ) -> None:
+
+        self.__has_quality = bool(quality)
+        self.__has_resolution = bool(resolution)
+
+        self.__params: Dict = {
+            self.__DESIRED_FPS: desired_fps,
+            **({self.__QUALITY: quality} if self.__has_quality else {}),
+            **({self.__RESOLUTION: resolution} if self.__has_resolution else {}),
+        }
+
+        self.__limits: Dict = {
+            self.__MAX_FPS: max_fps,
+            **({self.__AVAILABLE_RESOLUTIONS: available_resolutions} if self.__has_resolution else {}),
+        }
+
+    def get_features(self) -> Dict:
+        return {
+            self.__QUALITY: self.__has_quality,
+            self.__RESOLUTION: self.__has_resolution,
+        }
+
+    def get_limits(self) -> Dict:
+        limits = dict(self.__limits)
+        if self.__has_resolution:
+            limits[self.__AVAILABLE_RESOLUTIONS] = list(limits[self.__AVAILABLE_RESOLUTIONS])
+        return limits
+
+    def get_params(self) -> Dict:
+        return dict(self.__params)
+
+    def set_params(self, params: Dict) -> None:
+        new_params = dict(self.__params)
+
+        if self.__DESIRED_FPS in params:
+            new_params[self.__DESIRED_FPS] = min(max(params[self.__DESIRED_FPS], 0), self.__limits[self.__MAX_FPS])
+
+        if self.__QUALITY in params and self.__has_quality:
+            new_params[self.__QUALITY] = min(max(params[self.__QUALITY], 1), 100)
+
+        if self.__RESOLUTION in params and self.__has_resolution:
+            if params[self.__RESOLUTION] in self.__limits[self.__AVAILABLE_RESOLUTIONS]:
+                new_params[self.__RESOLUTION] = params[self.__RESOLUTION]
+
+        self.__params = new_params
+
+
 class Streamer:  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
@@ -66,10 +129,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         shutdown_delay: float,
         state_poll: float,
 
-        quality: int,
-        desired_fps: int,
-        max_fps: int,
-
         host: str,
         port: int,
         unix_path: str,
@@ -78,6 +137,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         process_name_prefix: str,
 
         cmd: List[str],
+
+        **params_kwargs: Any,
     ) -> None:
 
         self.__cap_pin = (gpio.set_output(cap_pin) if cap_pin >= 0 else -1)
@@ -89,12 +150,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__shutdown_delay = shutdown_delay
         self.__state_poll = state_poll
 
-        self.__params = {
-            "quality": quality,
-            "desired_fps": desired_fps,
-        }
-        self.__max_fps = max_fps
-
         assert port or unix_path
         self.__host = host
         self.__port = port
@@ -104,6 +159,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__process_name_prefix = process_name_prefix
 
         self.__cmd = cmd
+
+        self.__params = _StreamerParams(**params_kwargs)
 
         self.__stop_task: Optional[asyncio.Task] = None
         self.__stop_wip = False
@@ -183,16 +240,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     def set_params(self, params: Dict) -> None:
         assert not self.__streamer_task
-        self.__params = {
-            key: min(max(params.get(key, self.__params[key]), a), b)
-            for (key, a, b) in [
-                ("quality", 0, 100),
-                ("desired_fps", 0, self.__max_fps),
-            ]
-        }
+        return self.__params.set_params(params)
 
     def get_params(self) -> Dict:
-        return dict(self.__params)
+        return self.__params.get_params()
 
     # =====
 
@@ -216,10 +267,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             del snapshot["data"]
 
         return {
-            "limits": {"max_fps": self.__max_fps},
-            "params": self.__params,
+            "limits": self.__params.get_limits(),
+            "params": self.__params.get_params(),
             "snapshot": {"saved": snapshot},
             "state": state,
+            "features": self.__params.get_features(),
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
@@ -370,11 +422,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             except asyncio.CancelledError:
                 break
 
-            except Exception as err:
+            except Exception:
                 if self.__streamer_proc:
                     logger.exception("Unexpected streamer error: pid=%d", self.__streamer_proc.pid)
                 else:
-                    logger.exception("Can't start streamer: %s", err)
+                    logger.exception("Can't start streamer")
                 await self.__kill_streamer_proc()
                 await asyncio.sleep(1)
 
@@ -386,7 +438,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 port=self.__port,
                 unix=self.__unix_path,
                 process_name_prefix=self.__process_name_prefix,
-                **self.__params,
+                **self.__params.get_params(),
             )
             for part in self.__cmd
         ]

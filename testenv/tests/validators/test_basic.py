@@ -142,6 +142,7 @@ def test_fail__valid_float_f01(arg: Any) -> None:
 # =====
 @pytest.mark.parametrize("arg, retval", [
     ("a, b, c",       ["a", "b", "c"]),
+    ("a, b,, c",      ["a", "b", "c"]),
     ("a b c",         ["a", "b", "c"]),
     (["a", "b", "c"], ["a", "b", "c"]),
     ("",              []),

@@ -32,6 +32,7 @@ from kvmd.validators.kvm import valid_atx_button
 from kvmd.validators.kvm import valid_log_seek
 from kvmd.validators.kvm import valid_stream_quality
 from kvmd.validators.kvm import valid_stream_fps
+from kvmd.validators.kvm import valid_stream_resolution
 from kvmd.validators.kvm import valid_hid_key
 from kvmd.validators.kvm import valid_hid_mouse_move
 from kvmd.validators.kvm import valid_hid_mouse_button
@@ -102,6 +103,20 @@ def test_ok__valid_stream_fps(arg: Any) -> None:
 def test_fail__valid_stream_fps(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_stream_fps(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", ["1280x720 ", "1x1"])
+def test_ok__valid_stream_resolution(arg: Any) -> None:
+    value = valid_stream_resolution(arg)
+    assert type(value) == str  # pylint: disable=unidiomatic-typecheck
+    assert value == str(arg).strip()
+
+
+@pytest.mark.parametrize("arg", ["x", None, "0x0", "0x1", "1x0", "1280", "1280x", "1280x720x"])
+def test_fail__valid_stream_resolution(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_stream_resolution(arg))
 
 
 # =====

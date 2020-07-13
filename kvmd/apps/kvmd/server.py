@@ -56,6 +56,7 @@ from ...validators.basic import valid_bool
 
 from ...validators.kvm import valid_stream_quality
 from ...validators.kvm import valid_stream_fps
+from ...validators.kvm import valid_stream_resolution
 
 from ... import aiotools
 from ... import aioproc
@@ -193,6 +194,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         for (name, validator) in [
             ("quality", valid_stream_quality),
             ("desired_fps", valid_stream_fps),
+            ("resolution", valid_stream_resolution),
         ]:
             if (value := request.query.get(name)):
                 value = validator(value)

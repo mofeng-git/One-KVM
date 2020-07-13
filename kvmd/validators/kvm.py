@@ -24,8 +24,10 @@ from typing import Any
 
 from ..keyboard.mappings import KEYMAP
 
+from . import raise_error
 from . import check_string_in_list
 
+from .basic import valid_stripped_string_not_empty
 from .basic import valid_number
 
 from .os import valid_printable_filename
@@ -54,6 +56,17 @@ def valid_stream_quality(arg: Any) -> int:
 
 def valid_stream_fps(arg: Any) -> int:
     return int(valid_number(arg, min=0, max=120, name="stream FPS"))
+
+
+def valid_stream_resolution(arg: Any) -> str:
+    name = "stream resolution"
+    arg = valid_stripped_string_not_empty(arg, name)
+    parts = arg.split("x")
+    if len(parts) != 2:
+        raise_error(arg, name)
+    width = int(valid_number(parts[0], min=1, name=f"{name} (width)"))
+    height = int(valid_number(parts[1], min=1, name=f"{name} (height)"))
+    return f"{width}x{height}"
 
 
 # =====

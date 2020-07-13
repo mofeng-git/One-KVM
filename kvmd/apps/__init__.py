@@ -56,6 +56,7 @@ from ..validators.basic import valid_number
 from ..validators.basic import valid_int_f1
 from ..validators.basic import valid_float_f0
 from ..validators.basic import valid_float_f01
+from ..validators.basic import valid_string_list
 
 from ..validators.auth import valid_user
 from ..validators.auth import valid_users_list
@@ -74,6 +75,7 @@ from ..validators.net import valid_ssl_ciphers
 
 from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
+from ..validators.kvm import valid_stream_resolution
 from ..validators.kvm import valid_hid_key
 from ..validators.kvm import valid_hid_mouse_move
 
@@ -259,9 +261,11 @@ def _get_config_scheme() -> Dict:
                 "shutdown_delay":     Option(10.0, type=valid_float_f01),
                 "state_poll":         Option(1.0,  type=valid_float_f01),
 
-                "quality":     Option(80, type=valid_stream_quality),
+                "quality":     Option(80, type=(lambda arg: (valid_stream_quality(arg) if arg else 0))),  # 0 for disabled feature
                 "desired_fps": Option(30, type=valid_stream_fps),
                 "max_fps":     Option(60, type=valid_stream_fps),
+                "resolution":  Option("", type=(lambda arg: (valid_stream_resolution(arg) if arg else ""))),
+                "available_resolutions": Option([], type=(lambda arg: valid_string_list(arg, subval=valid_stream_resolution))),
 
                 "host":    Option("localhost", type=valid_ip_or_host),
                 "port":    Option(0,   type=valid_port),
