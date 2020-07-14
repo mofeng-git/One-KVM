@@ -27,7 +27,9 @@ RUN pacman -Syu --noconfirm \
 		npm \
 	&& (pacman -Sc --noconfirm || true)
 
-RUN npm install htmlhint -g
+RUN npm install htmlhint -g \
+	&& npm install pug \
+	&& npm install pug-cli -g
 
 ARG USTREAMER_MIN_VERSION
 ENV USTREAMER_MIN_VERSION $USTREAMER_MIN_VERSION

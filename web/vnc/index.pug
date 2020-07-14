@@ -1,0 +1,20 @@
+extends ../start.pug
+
+append vars
+	- title = "Pi-KVM VNC Info"
+	- main_js = "vnc/main"
+	- index_link = true
+
+block start
+	p(class="text")
+		| This Pi-KVM device has running #[b kvmd-vnc] daemon and provides VNC access to the server.
+	p(class="text")
+		| #[b WARNING!] We strongly don't recommend you to use VNC in untrusted networks.
+		| The current implementation does not use encryption, and your passwords are transmitted
+		| over the network in a plain text.
+	p(class="text")
+		| Your VNC client must support Tight JPEG compression, password authentication and allow
+		| connection without encryption. #[a(href="https://tigervnc.org") TigerVNC] is a good choice.
+		| On Linux, this client will most likely be available for installation from the repository.
+		| It can also be called vncviewer.
+	div(id="vnc-text" class="code" style="max-height:200px")

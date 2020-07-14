@@ -132,11 +132,23 @@ run-vnc: testenv
 
 
 regen: testenv
-	for file in kvmd/keyboard/mappings.py hid/src/keymap.h; do \
-		docker run --user `id -u`:`id -g` --rm \
-			--volume `pwd`:/src \
-		-it $(TESTENV_IMAGE) bash -c "cd src && ./genmap.py keymap.in $$file.mako $$file"; \
-	done
+	docker run --user `id -u`:`id -g` --rm \
+		--volume `pwd`:/src \
+	-it $(TESTENV_IMAGE) bash -c "cd src \
+		&& ./genmap.py keymap.in kvmd/keyboard/mappings.py.mako kvmd/keyboard/mappings.py \
+		&& ./genmap.py keymap.in hid/src/keymap.h.mako hid/src/keymap.h \
+	"
+
+
+pug: testenv
+	docker run --user `id -u`:`id -g` --rm \
+		--volume `pwd`:/src \
+	-it $(TESTENV_IMAGE) bash -c "cd src \
+		&& pug --pretty web/index.pug -o web \
+		&& pug --pretty web/login/index.pug -o web/login \
+		&& pug --pretty web/ipmi/index.pug -o web/ipmi \
+		&& pug --pretty web/vnc/index.pug -o web/vnc \
+	"
 
 
 release:

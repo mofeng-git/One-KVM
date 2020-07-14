@@ -1,0 +1,58 @@
+doctype html
+
+//
+	==============================================================================
+	#                                                                            #
+	#    KVMD - The main Pi-KVM daemon.                                          #
+	#                                                                            #
+	#    Copyright (C) 2018  Maxim Devaev <mdevaev@gmail.com>                    #
+	#                                                                            #
+	#    This program is free software: you can redistribute it and/or modify    #
+	#    it under the terms of the GNU General Public License as published by    #
+	#    the Free Software Foundation, either version 3 of the License, or       #
+	#    (at your option) any later version.                                     #
+	#                                                                            #
+	#    This program is distributed in the hope that it will be useful,         #
+	#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+	#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+	#    GNU General Public License for more details.                            #
+	#                                                                            #
+	#    You should have received a copy of the GNU General Public License       #
+	#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+	#                                                                            #
+	==============================================================================
+
+- var css_dir = "/share/css"
+- var js_dir = "/share/js"
+- var svg_dir = "/share/svg"
+
+- var title = ""
+- var main_js = ""
+- var body_class = ""
+- var css_list = ["vars", "main"]
+
+block vars
+
+html(lang="en")
+	head
+		meta(charset="utf-8")
+		title #{title}
+
+		link(rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png")
+		link(rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png")
+		link(rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png")
+		link(rel="manifest" href="/share/site.webmanifest")
+		link(rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5")
+		meta(name="msapplication-TileColor" content="#2b5797")
+		meta(name="theme-color" content="#ffffff")
+
+		each name in css_list
+			link(rel="stylesheet" href=`${css_dir}/${name}.css`)
+
+		if main_js
+			script(type="module")
+				| import {main} from "#{js_dir}/#{main_js}.js";
+				| main();
+
+	body(class=body_class)
+		block body

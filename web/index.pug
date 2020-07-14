@@ -1,0 +1,43 @@
+extends start.pug
+
+append vars
+	- title = "Pi-KVM Index"
+	- main_js = "index/main"
+	- css_list = css_list.concat(["window", "modal", "index/index"])
+
+block start
+	table
+		tr
+			td(valign="top" class="logo")
+				img(class="svg-gray" src=`${svg_dir}/logo.svg` alt="Open Source Hardware" height="40")
+			td(valign="top")
+				table
+					tr
+						td(colspan="2" class="title") Open Source &amp; Open Hardware IP-KVM
+					tr
+						td(colspan="2" class="copyright") Copyright &copy; 2018 Pi-KVM Developers Team
+
+	hr
+	table
+		td(class="server")
+			td Server:
+			td
+				a(id="kvmd-meta-server-host" target="_blank" href="/api/info")
+
+	hr
+	div(id="apps-box")
+		h4 Loading ...
+
+	hr
+	p(class="text")
+		| Please note that when you are working with a KVM session or another application that captures the keyboard,
+		| you can't use some keyboard shortcuts such as Ctrl+Alt+Del (which will be caught by your OS) or Ctrl+W (caught by your browser).
+	p(class="text")
+		| To override this limitation you can use #[a(target="_blank" href="https://google.com/chrome") Google Chrome]
+		| or #[a(target="_blank" href="https://chromium.org/Home") Chromium] in application mode.
+	div(id="app-text" class="code")
+
+	hr
+	p(class="text")
+		| Full documentation, source code, hardware schematics and legal information
+		| can be found in our #[a(target="_blank" href="https://pikvm.org") official website].

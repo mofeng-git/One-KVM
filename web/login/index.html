@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- =========================================================================
+<!--
+==============================================================================
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
 #                                                                            #
@@ -18,60 +19,59 @@
 #    You should have received a copy of the GNU General Public License       #
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
 #                                                                            #
-========================================================================== -->
+==============================================================================
 
-
+-->
 <html lang="en">
-<head>
-	<meta charset="utf-8" />
-	<title>Pi-KVM Login</title>
-
-	<link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
-	<link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
-	<link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
-	<link rel="manifest" href="/share/site.webmanifest">
-	<link rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5">
-	<meta name="msapplication-TileColor" content="#2b5797">
-	<meta name="theme-color" content="#ffffff">
-
-	<link rel="stylesheet" href="../share/css/vars.css">
-	<link rel="stylesheet" href="../share/css/main.css">
-	<link rel="stylesheet" href="../share/css/window.css">
-	<link rel="stylesheet" href="../share/css/modal.css">
-	<link rel="stylesheet" href="../share/css/login/login.css">
-
-	<script type="module">
-		import {main} from "/share/js/login/main.js";
-		main();
-	</script>
-</head>
-
-<body>
-	<div id="login-box">
-		<div id="login">
-			<table>
-				<tr>
-					<td>Username:</td>
-					<td><input type="text" id="user-input"></td>
-				</tr>
-				<tr>
-					<td>Password:</td>
-					<td><input type="password" id="passwd-input"></td>
-				</tr>
-				<tr>
-					<td></td>
-					<td><button id="login-button">Login</button></td>
-				</tr>
-			</table>
-		</div>
-	</div>
-
-	<ul class="footer">
-		<li class="footer-left">
-			This site is actively using JavaScript.<br>
-			It doesn't contain ads, but is blocked by some ad filters.<br>
-			Please turn it off to continue and reload the page.
-		</li>
-	</ul>
-</body>
+  <head>
+    <meta charset="utf-8">
+    <title>Pi-KVM Login</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
+    <link rel="manifest" href="/share/site.webmanifest">
+    <link rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="msapplication-TileColor" content="#2b5797">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="stylesheet" href="/share/css/vars.css">
+    <link rel="stylesheet" href="/share/css/main.css">
+    <link rel="stylesheet" href="/share/css/window.css">
+    <link rel="stylesheet" href="/share/css/modal.css">
+    <link rel="stylesheet" href="/share/css/login/login.css">
+    <script type="module">import {main} from "/share/js/login/main.js";
+      main();
+    </script>
+  </head>
+  <body>
+    <div id="login-box">
+      <div id="login">
+        <table>
+          <tr>
+            <td>Username:</td>
+            <td>
+              <input type="text" id="user-input">
+            </td>
+          </tr>
+          <tr>
+            <td>Password:</td>
+            <td>
+              <input type="password" id="passwd-input">
+            </td>
+          </tr>
+          <tr>
+            <td></td>
+            <td>
+              <button id="login-button">Login</button>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <ul class="footer">
+      <li class="footer-left">This site is actively using JavaScript.<br>
+        It doesn't contain ads, but is blocked by some ad filters.<br>
+        Please turn it off to continue and reload the page.
+      </li>
+    </ul>
+  </body>
 </html>

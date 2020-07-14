@@ -1,0 +1,14 @@
+extends base.pug
+
+append vars
+	- css_list.push("start")
+	- var index_link = false
+
+block body
+	div(class="start-box")
+		div(class="start")
+			if index_link
+				a(style="display:inline-block; margin-top:4px; color:#5c90bc; text-decoration:none" href="/")
+					| &nbsp;&nbsp;&larr;&nbsp;&nbsp; [ Pi-KVM Index ]
+				hr
+			block start

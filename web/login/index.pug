@@ -1,0 +1,26 @@
+extends ../base.pug
+
+append vars
+	- title = "Pi-KVM Login"
+	- main_js = "login/main"
+	- css_list = css_list.concat(["window", "modal", "login/login"])
+
+block body
+	div(id="login-box")
+		div(id="login")
+			table
+				tr
+					td Username:
+					td #[input(type="text" id="user-input")]
+				tr
+					td Password:
+					td #[input(type="password" id="passwd-input")]
+				tr
+					td
+					td #[button(id="login-button") Login]
+
+	ul(class="footer")
+		li(class="footer-left")
+			| This site is actively using JavaScript.#[br]
+			| It doesn't contain ads, but is blocked by some ad filters.#[br]
+			| Please turn it off to continue and reload the page.
