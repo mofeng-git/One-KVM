@@ -83,6 +83,7 @@ package_kvmd() {
 
 	mkdir -p "$pkgdir/usr/share/kvmd"
 	cp -r {hid,web,extras,contrib/keymaps} "$pkgdir/usr/share/kvmd"
+	find "$pkgdir/usr/share/kvmd/web" -name '*.pug' -exec rm -f '{}' \;
 
 	local _cfg_default="$pkgdir/usr/share/kvmd/configs.default"
 	mkdir -p "$_cfg_default"
