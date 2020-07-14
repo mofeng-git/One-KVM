@@ -33,6 +33,8 @@ export function Streamer() {
 	/************************************************************************/
 
 	var __resolution = {width: 640, height: 480};
+	var __resolution_str = "640x480";
+	var __available_resolutions = [];
 	var __size_factor = 1;
 	var __client_key = tools.makeId();
 	var __client_id = "";
@@ -53,6 +55,11 @@ export function Streamer() {
 		$("stream-desired-fps-slider").value = 0;
 		tools.setOnUpSlider($("stream-desired-fps-slider"), 1000, __updateDesiredFpsValue, (value) => __sendParam("desired_fps", value));
 
+		$("stream-resolution-selector").onchange = (() => {
+			wm.switchEnabled($("stream-resolution-selector"), false);
+			__sendParam("resolution", $("stream-resolution-selector").value);
+		});
+
 		$("stream-size-slider").min = 20;
 		$("stream-size-slider").max = 200;
 		$("stream-size-slider").step = 5;
@@ -68,35 +75,34 @@ export function Streamer() {
 
 	self.setState = function(state) {
 		if (state) {
-			tools.setFeatureEnabled($("stream-quality"), state.features.quality && (state.state === null || state.state.encoder.quality > 0));
+			tools.setFeatureEnabled($("stream-quality"), state.features.quality && (state.streamer === null || state.streamer.encoder.quality > 0));
+			tools.setFeatureEnabled($("stream-resolution"), state.features.resolution);
 		}
 
-		if (state && state.state) {
-			let max_fps = state.limits.max_fps;
-			state = state.state;
-
+		if (state && state.streamer) {
 			if (!$("stream-quality-slider").activated) {
 				wm.switchEnabled($("stream-quality-slider"), true);
-				if ($("stream-quality-slider").value !== state.encoder.quality) {
-					$("stream-quality-slider").value = state.encoder.quality;
-					__updateQualityValue(state.encoder.quality);
+				if ($("stream-quality-slider").value !== state.streamer.encoder.quality) {
+					$("stream-quality-slider").value = state.streamer.encoder.quality;
+					__updateQualityValue(state.streamer.encoder.quality);
 				}
 			}
 
 			if (!$("stream-desired-fps-slider").activated) {
-				$("stream-desired-fps-slider").max = max_fps;
+				$("stream-desired-fps-slider").max = state.limits.max_fps;
 				wm.switchEnabled($("stream-desired-fps-slider"), true);
-				if ($("stream-desired-fps-slider").value !== state.source.desired_fps) {
-					$("stream-desired-fps-slider").value = state.source.desired_fps;
-					__updateDesiredFpsValue(state.source.desired_fps);
+				if ($("stream-desired-fps-slider").value !== state.streamer.source.desired_fps) {
+					$("stream-desired-fps-slider").value = state.streamer.source.desired_fps;
+					__updateDesiredFpsValue(state.streamer.source.desired_fps);
 				}
 			}
 
 			if (
-				__resolution.width !== state.source.resolution.width
-				|| __resolution.height !== state.source.resolution.height
+				__resolution.width !== state.streamer.source.resolution.width
+				|| __resolution.height !== state.streamer.source.resolution.height
 			) {
-				__resolution = state.source.resolution;
+				__resolution = state.streamer.source.resolution;
+				__resolution_str = `${__resolution.width}x${__resolution.height}`;
 				if ($("stream-auto-resize-checkbox").checked) {
 					__adjustSizeFactor();
 				} else {
@@ -104,7 +110,23 @@ export function Streamer() {
 				}
 			}
 
-			if (__ensureStream(state.stream.clients_stat)) {
+			if (state.features.resolution) {
+				if (__available_resolutions != state.limits.available_resolutions) {
+					__available_resolutions = state.limits.available_resolutions;
+					let resolutions_html = "";
+					for (let variant of __available_resolutions) {
+						resolutions_html += `<option value="${variant}">${variant}</option>`;
+					}
+					if (!__available_resolutions.includes(__resolution_str)) {
+						resolutions_html += `<option value="${__resolution_str}">${__resolution_str}</option>`;
+					}
+					$("stream-resolution-selector").innerHTML = resolutions_html;
+				}
+				document.querySelector(`#stream-resolution-selector [value="${__resolution_str}"]`).selected = true;
+				wm.switchEnabled($("stream-resolution-selector"), true);
+			}
+
+			if (__ensureStream(state.streamer.stream.clients_stat)) {
 				$("stream-led").className = "led-green";
 				$("stream-led").title = "Stream is active";
 				wm.switchEnabled($("stream-screenshot-button"), true);
@@ -114,7 +136,7 @@ export function Streamer() {
 				tools.info("Stream: active");
 			}
 
-			__updateStreamWindow(true, state.source.online);
+			__updateStreamWindow(true, state.streamer.source.online);
 
 		} else {
 			$("stream-led").className = "led-gray";
@@ -123,6 +145,7 @@ export function Streamer() {
 			wm.switchEnabled($("stream-reset-button"), false);
 			wm.switchEnabled($("stream-quality-slider"), false);
 			wm.switchEnabled($("stream-desired-fps-slider"), false);
+			wm.switchEnabled($("stream-resolution-selector"), false);
 			tools.info("Stream: inactive");
 
 			__updateStreamWindow(false, false);
@@ -177,7 +200,7 @@ export function Streamer() {
 			if (!online) {
 				title += "no signal / ";
 			}
-			title += `${__resolution.width}x${__resolution.height}`;
+			title += __resolution_str;
 			if (__client_fps >= 0) {
 				title += ` / ${__client_fps} fps`;
 			}

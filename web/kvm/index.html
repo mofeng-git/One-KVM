@@ -142,11 +142,20 @@
 					<button data-force-hide-menu id="show-keyboard-button">&bull; Show keyboard</button>
 					<button data-force-hide-menu id="show-about-button">&bull; Show about</button>
 				</div>
+				<div id="stream-resolution" class="feature-disabled">
+					<hr>
+					<div class="menu-item-content-text">
+						Stream resolution:
+						<div class="stream-param-box">
+							<select disabled data-dont-hide-menu id="stream-resolution-selector"></select>
+						</div>
+					</div>
+				</div>
 				<div id="stream-quality" class="feature-disabled">
 					<hr>
 					<div class="menu-item-content-text">
 						Stream quality: <span id="stream-quality-value">80%</span>
-						<div class="stream-slider-box">
+						<div class="stream-param-box">
 							<input disabled type="range" id="stream-quality-slider" class="slider" />
 						</div>
 					</div>
@@ -154,14 +163,14 @@
 				<hr>
 				<div class="menu-item-content-text">
 					Stream FPS: <span id="stream-desired-fps-value">0</span>
-					<div class="stream-slider-box">
+					<div class="stream-param-box">
 						<input disabled type="range" id="stream-desired-fps-slider" class="slider" />
 					</div>
 				</div>
 				<hr>
 				<div class="menu-item-content-text">
 					Stream size: <span id="stream-size-value">100%</span>
-					<div class="stream-slider-box">
+					<div class="stream-param-box">
 						<input type="range" id="stream-size-slider" class="slider" />
 					</div>
 				</div>

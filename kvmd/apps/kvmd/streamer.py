@@ -248,13 +248,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def get_state(self) -> Dict:
-        state = None
+        streamer_state = None
         if self.__streamer_task:
             session = self.__ensure_http_session()
             try:
                 async with session.get(self.__make_url("state")) as response:
                     htclient.raise_not_200(response)
-                    state = (await response.json())["result"]
+                    streamer_state = (await response.json())["result"]
             except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
                 pass
             except Exception:
@@ -270,7 +270,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             "limits": self.__params.get_limits(),
             "params": self.__params.get_params(),
             "snapshot": {"saved": snapshot},
-            "state": state,
+            "streamer": streamer_state,
             "features": self.__params.get_features(),
         }
 
