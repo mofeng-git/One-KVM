@@ -146,6 +146,7 @@ pug: testenv
 	-it $(TESTENV_IMAGE) bash -c "cd src \
 		&& pug --pretty web/index.pug -o web \
 		&& pug --pretty web/login/index.pug -o web/login \
+		&& pug --pretty web/kvm/index.pug -o web/kvm \
 		&& pug --pretty web/ipmi/index.pug -o web/ipmi \
 		&& pug --pretty web/vnc/index.pug -o web/vnc \
 	"

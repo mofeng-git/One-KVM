@@ -20,12 +20,12 @@
 *****************************************************************************/
 
 
-ul#menu {
+ul#navbar {
 	box-shadow: var(--shadow-small);
 	list-style-type: none;
 	margin: 0;
 	padding: 0;
-	background-color: var(--cs-menu-default-bg);
+	background-color: var(--cs-navbar-default-bg);
 	position: fixed;
 	top: 0;
 	width: 100%;
@@ -33,107 +33,107 @@ ul#menu {
 	z-index: 2147483646;
 }
 
-ul#menu li.menu-right-items {
-	border-left: var(--border-menu-thin);
+ul#navbar li.right {
+	border-left: var(--border-navbar-item-thin);
 	float: right;
 }
 
-ul#menu li.menu-left-items {
-	border-right: var(--border-menu-thin);
+ul#navbar li.left {
+	border-right: var(--border-navbar-item-thin);
 	float: left;
 }
 
-ul#menu li a#menu-logo {
+ul#navbar li a#logo {
 	line-height: 50px;
 	outline: none;
 	cursor: pointer;
 	display: inline-block;
-	color: var(--cs-menu-default-fg);
+	color: var(--cs-navbar-default-fg);
 	padding-left: 16px;
 	padding-right: 16px;
 	text-decoration: none;
 }
 
-ul#menu li a.menu-item img {
+ul#navbar li a.menu-button {
+	line-height: 50px;
+	outline: none;
+	cursor: pointer;
+	display: inline-block;
+	color: var(--cs-navbar-default-fg);
+	padding-left: 16px;
+	padding-right: 16px;
+	text-decoration: none;
+}
+
+ul#navbar li a#logo:hover:not(.active),
+ul#navbar li a.menu-button:hover:not(.active) {
+	background-color: var(--cs-navbar-item-hovered-bg);
+}
+@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
+	/* iPad 8 */
+	ul#navbar li a#menu-button:hover:not(.active),
+	ul#navbar li a.menu-button:hover:not(.active) {
+		background-color: var(--cs-navbar-default-bg) !important;
+	}
+}
+
+ul#navbar li a#logo img {
+	margin-top: -2px;
+	height: 24px;
+}
+
+ul#navbar li a.menu-button img {
 	vertical-align: middle;
 	margin-right: 10px;
 	height: 20px;
 }
 
-ul#menu li a#menu-logo img {
-	margin-top: -2px;
-	height: 24px;
+ul#navbar li a.menu-button-pressed {
+	box-shadow: var(--shadow-navbar-item-pressed);
+	background-color: var(--cs-navbar-item-pressed-bg) !important;
 }
 
-ul#menu li a.menu-item {
-	line-height: 50px;
-	outline: none;
-	cursor: pointer;
-	display: inline-block;
-	color: var(--cs-menu-default-fg);
-	padding-left: 16px;
-	padding-right: 16px;
-	text-decoration: none;
-}
-
-ul#menu li a#menu-logo:hover:not(.active),
-ul#menu li a.menu-item:hover:not(.active) {
-	background-color: var(--cs-menu-hovered-bg);
-}
-@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
-	/* iPad 8 */
-	ul#menu li a#menu-item:hover:not(.active),
-	ul#menu li a.menu-item:hover:not(.active) {
-		background-color: var(--cs-menu-default-bg) !important;
-	}
-}
-
-ul#menu li a.menu-item-selected {
-	box-shadow: var(--shadow-menu-pressed);
-	background-color: var(--cs-menu-pressed-bg) !important;
-}
-
-ul#menu li div.menu-item-content {
+ul#navbar li div.menu {
 	visibility: hidden;
 	outline: none;
 	overflow: hidden;
 	white-space: nowrap;
-	border: var(--border-menu-item-content-default-2px);
-	border-top: var(--border-menu-item-content-top-thin);
+	border: var(--border-navbar-menu-default-2px);
+	border-top: var(--border-navbar-menu-top-thin);
 	border-radius: 0 0 8px 8px;
 	position: absolute;
-	background-color: var(--cs-menu-default-bg);
+	background-color: var(--cs-navbar-default-bg);
 	min-width: 180px;
 	box-shadow: var(--shadow-big);
 	z-index: 2147483645;
 }
-ul#menu li div.menu-item-content-active {
-	border: var(--border-menu-item-content-active-2px) !important;
-	border-top: var(--border-menu-item-content-top-thin) !important;
+ul#navbar li div.menu-active {
+	border: var(--border-navbar-menu-active-2px) !important;
+	border-top: var(--border-navbar-menu-top-thin) !important;
 }
 
-ul#menu li div.menu-item-content-buttons {
+ul#navbar li div.menu div.buttons {
 	background-color: var(--cs-control-default-bg);
 }
 
-ul#menu li div.menu-item-content-text {
+ul#navbar li div.menu div.text {
 	margin: 10px 15px 10px 15px;
 	font-size: 14px;
 }
 
-ul#menu li div.menu-item-content-text table.one-line-switch {
+ul#navbar li div.menu div.text table.one-line-switch {
 	width: 100%;
 	border-collapse: collapse;
 }
 @media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
 	@supports (-webkit-appearance: none) {
-		ul#menu li div.menu-item-content-text table.one-line-switch {
+		ul#navbar li div.menu div.text table.one-line-switch {
 			margin: 20px 0 20px 0 !important;
 		}
 	}
 }
 
-ul#menu li div.menu-item-content table.menu-item-content-kv {
+ul#navbar li div.menu table.kv {
 	-webkit-user-select: text;
 	-moz-user-select: text;
 	user-select: text;
@@ -141,14 +141,14 @@ ul#menu li div.menu-item-content table.menu-item-content-kv {
 	margin: 0 10px 0 10px;
 	font-size: 12px;
 }
-ul#menu li div.menu-item-content table.menu-item-content-kv td.value {
+ul#navbar li div.menu table.kv td.value {
 	font-weight: bold;
 	max-width: 310px;
 	overflow: hidden;
 }
 
-ul#menu li div.menu-item-content-buttons button,
-ul#menu li div.menu-item-content-buttons select {
+ul#navbar li div.menu div.buttons button,
+ul#navbar li div.menu div.buttons select {
 	box-shadow: none;
 	border: none;
 	border-radius: 0;
@@ -156,7 +156,7 @@ ul#menu li div.menu-item-content-buttons select {
 	padding: 0 16px;
 }
 
-ul#menu li div.menu-item-content hr {
+ul#navbar li div.menu hr {
 	margin: 0;
 	display: block;
 	height: 0px;
@@ -165,7 +165,7 @@ ul#menu li div.menu-item-content hr {
 	border-top: var(--border-control-thin);
 }
 
-ul#menu li div.menu-item-content img.sign {
+ul#navbar li div.menu img.sign {
 	vertical-align: middle;
 	margin-right: 10px;
 	height: 20px;

@@ -34,10 +34,10 @@
 	--cs-control-pressed-fg: #6c7481;
 	--cs-control-disabled-fg: #6c7481;
 
-	--cs-menu-default-bg: #202225;
-	--cs-menu-default-fg: #c3c3c3;
-	--cs-menu-hovered-bg: #1a1c1f;
-	--cs-menu-pressed-bg: #171717;
+	--cs-navbar-default-bg: #202225;
+	--cs-navbar-default-fg: #c3c3c3;
+	--cs-navbar-item-hovered-bg: #1a1c1f;
+	--cs-navbar-item-pressed-bg: #171717;
 
 	--cs-window-default-bg: #484b51;
 	--cs-window-default-fg: #c3c3c3;
@@ -69,18 +69,18 @@
 	--shadow-micro: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
 	--shadow-small: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
 	--shadow-big: 0 8px 16px 0 rgba(0, 0, 0, 0.4);
-	--shadow-menu-pressed: 0 5px 0 #5b90bb inset;
+	--shadow-navbar-item-pressed: 0 5px 0 #5b90bb inset;
 
 	--border-default-thin: thin solid #36393f;
 	--border-default-2px: 2px solid #36393f;
-	--border-menu-thin: thin solid black;
+	--border-navbar-item-thin: thin solid black;
 	--border-control-thin: thin solid #17191d;
 	--border-window-thin: thin solid #17191d;
 	--border-key-thin: thin solid #202225;
 	--border-intensive-2px: 2px solid #5b90bb;
 	--border-intensive-thin: thin solid #5b90bb;
 
-	--border-menu-item-content-default-2px: 2px solid black;
-	--border-menu-item-content-active-2px: 2px solid #5b90bb;
+	--border-navbar-menu-default-2px: 2px solid black;
+	--border-navbar-menu-active-2px: 2px solid #5b90bb;
 	--border-menu-item-content-top-thin: thin solid #17191d;
 }

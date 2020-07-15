@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- =========================================================================
+<!--
+==============================================================================
 #                                                                            #
 #    KVMD - The main Pi-KVM daemon.                                          #
 #                                                                            #
@@ -18,830 +19,1222 @@
 #    You should have received a copy of the GNU General Public License       #
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
 #                                                                            #
-========================================================================== -->
+==============================================================================
 
-
+-->
 <html lang="en">
-<head>
-	<meta charset="utf-8" />
-	<title>Pi-KVM Session</title>
-
-	<link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
-	<link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
-	<link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
-	<link rel="manifest" href="/share/site.webmanifest">
-	<link rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5">
-	<meta name="msapplication-TileColor" content="#2b5797">
-	<meta name="theme-color" content="#ffffff">
-
-	<link rel="stylesheet" href="../share/css/vars.css">
-	<link rel="stylesheet" href="../share/css/main.css">
-	<link rel="stylesheet" href="../share/css/menu.css">
-	<link rel="stylesheet" href="../share/css/window.css">
-	<link rel="stylesheet" href="../share/css/modal.css">
-	<link rel="stylesheet" href="../share/css/led.css">
-	<link rel="stylesheet" href="../share/css/slider.css">
-	<link rel="stylesheet" href="../share/css/switch.css">
-	<link rel="stylesheet" href="../share/css/progress.css">
-	<link rel="stylesheet" href="../share/css/keypad.css">
-	<link rel="stylesheet" href="../share/css/tabs.css">
-	<link rel="stylesheet" href="../share/css/kvm/stream.css">
-	<link rel="stylesheet" href="../share/css/kvm/hid.css">
-	<link rel="stylesheet" href="../share/css/kvm/msd.css">
-	<link rel="stylesheet" href="../share/css/kvm/keyboard.css">
-	<link rel="stylesheet" href="../share/css/kvm/about.css">
-
-	<script type="module">
-		import {main} from "/share/js/kvm/main.js";
-		main();
-	</script>
-</head>
-
-<body class="body-no-select">
-	<ul id="menu">
-		<li class="menu-left-items">
-			<a id="menu-logo" href="/">
-				&larr;&nbsp;&nbsp;
-				<img class="svg-gray" src="../share/svg/logo.svg" alt="&pi;-kvm" />
-			</a>
-		</li>
-
-		<div id="hw-health-dropdown" class="hidden">
-			<li class="menu-left-items">
-				<a class="menu-item" href="#">
-					<img data-dont-hide-menu id="hw-health-undervoltage-led" class="hidden" src="../share/svg/led-undervoltage.svg" />
-					<img data-dont-hide-menu id="hw-health-overheating-led" class="hidden" src="../share/svg/led-overheating.svg" />
-					&#8628;
-				</a>
-				<div data-dont-hide-menu class="menu-item-content">
-					<div class="menu-item-content-text">
-						<table>
-							<tr>
-								<td><img class="sign" src="../share/svg/warning.svg" /></td>
-								<td>
-									<b>Raspberry Pi's health is at risk</b><br><br>
-									<sup>
-										This is not a drill! A red icon indicates a current issue,<br>
-										a yellow one that was observed since the device booted up.
-									</sup>
-								</td>
-							</tr>
-						</table>
-					</div>
-					<div id="hw-health-message-undervoltage" class="hidden">
-						<hr>
-						<div class="menu-item-content-text">
-							<table>
-								<tr>
-									<td><img class="sign led-gray" src="../share/svg/led-undervoltage.svg" /></td>
-									<td>
-										<b>Undervoltage detected</b><br><br>
-										<sup>
-											Make sure your power supply and cabling are providing<br>
-											enough power to the Raspberry Pi (3A minimum).
-										</sup>
-									</td>
-								</tr>
-							</table>
-						</div>
-					</div>
-					<div id="hw-health-message-overheating" class="hidden">
-						<hr>
-						<div class="menu-item-content-text">
-							<table>
-								<tr>
-									<td><img class="sign led-gray" src="../share/svg/led-overheating.svg" /></td>
-									<td>
-										<b>Overheating detected</b><br><br>
-										<sup>
-											Frequency capping due to overheating.<br>
-											Improve cooling of the Raspberry Pi.
-										</sup>
-									</td>
-								</tr>
-							</table>
-						</div>
-					</div>
-				</div>
-			</li>
-		</div>
-
-		<li class="menu-right-items">
-			<a class="menu-item" href="#">
-				<img data-dont-hide-menu id="link-led" class="led-gray" src="../share/svg/led-link.svg" />
-				<img data-dont-hide-menu id="stream-led" class="led-gray" src="../share/svg/led-stream.svg" />
-				<img data-dont-hide-menu id="hid-keyboard-led" class="led-gray" src="../share/svg/led-hid-keyboard.svg" />
-				<img data-dont-hide-menu id="hid-mouse-led" class="led-gray" src="../share/svg/led-hid-mouse.svg" />
-				System &#8628;
-			</a>
-			<div data-dont-hide-menu class="menu-item-content">
-				<div class="menu-item-content-buttons">
-					<button disabled data-force-hide-menu id="stream-screenshot-button">&bull; Take a screenshot</button>
-					<hr>
-					<button data-force-hide-menu id="show-stream-button">&bull; Show stream</button>
-					<button data-force-hide-menu id="show-keyboard-button">&bull; Show keyboard</button>
-					<button data-force-hide-menu id="show-about-button">&bull; Show about</button>
-				</div>
-				<div id="stream-resolution" class="feature-disabled">
-					<hr>
-					<div class="menu-item-content-text">
-						Stream resolution:
-						<div class="stream-param-box">
-							<select disabled data-dont-hide-menu id="stream-resolution-selector"></select>
-						</div>
-					</div>
-				</div>
-				<div id="stream-quality" class="feature-disabled">
-					<hr>
-					<div class="menu-item-content-text">
-						Stream quality: <span id="stream-quality-value">80%</span>
-						<div class="stream-param-box">
-							<input disabled type="range" id="stream-quality-slider" class="slider" />
-						</div>
-					</div>
-				</div>
-				<hr>
-				<div class="menu-item-content-text">
-					Stream FPS: <span id="stream-desired-fps-value">0</span>
-					<div class="stream-param-box">
-						<input disabled type="range" id="stream-desired-fps-slider" class="slider" />
-					</div>
-				</div>
-				<hr>
-				<div class="menu-item-content-text">
-					Stream size: <span id="stream-size-value">100%</span>
-					<div class="stream-param-box">
-						<input type="range" id="stream-size-slider" class="slider" />
-					</div>
-				</div>
-				<hr>
-				<div class="menu-item-content-text">
-					<table class="one-line-switch"><tr>
-						<td>Auto-resize stream:</td>
-						<td align="right">
-							<div class="switch-box">
-								<input type="checkbox" id="stream-auto-resize-checkbox" class="switch-checkbox" checked />
-								<label class="switch-label" for="stream-auto-resize-checkbox">
-									<span class="switch-inner"></span>
-									<span class="switch"></span>
-								</label>
-							</div>
-						</td>
-					</tr></table>
-				</div>
-				<div class="menu-item-content-buttons">
-					<hr>
-					<button disabled data-force-hide-menu id="stream-reset-button">&bull; Reset stream</button>
-					<button disabled data-force-hide-menu id="hid-reset-button">&bull; Reset keyboard &amp; mouse</button>
-					<button disabled data-force-hide-menu id="msd-reset-button" class="feature-disabled">&bull; Reset mass storage</button>
-				</div>
-				<hr>
-				<div class="menu-item-content-buttons">
-					<button data-force-hide-menu id="open-log-button">&bull; Open log</button>
-				</div>
-				<div id="wol" class="menu-item-content-buttons feature-disabled">
-					<hr>
-					<button disabled id="wol-wakeup-button">&bull; Wake on LAN server</button>
-				</div>
-			</div>
-		</li>
-
-		<li id="atx-dropdown" class="menu-right-items feature-disabled">
-			<a class="menu-item" href="#">
-				<img data-dont-hide-menu id="atx-power-led" class="led-gray" src="../share/svg/led-atx-power.svg" />
-				<img data-dont-hide-menu id="atx-hdd-led" class="led-gray" src="../share/svg/led-atx-hdd.svg" />
-				ATX &#8628;
-			</a>
-			<div class="menu-item-content menu-item-content-buttons">
-				<button disabled id="atx-power-button">&bull; Click Power <sup><i>short</i></sup></button>
-				<button disabled id="atx-power-button-long">&bull; Click Power <sup><i>long</i></sup></button>
-				<hr>
-				<button disabled id="atx-reset-button">&bull; Click Reset</button>
-			</div>
-		</li>
-
-		<li id="msd-dropdown" class="menu-right-items feature-disabled">
-			<a class="menu-item" href="#">
-				<img data-dont-hide-menu id="msd-led" class="led-gray" src="../share/svg/led-msd.svg" />
-				Mass Storage &#8628;
-			</a>
-			<div data-dont-hide-menu id="msd-menu" class="menu-item-content">
-				<div id="msd-message-offline" class="hidden">
-					<div class="menu-item-content-text">
-						<table>
-							<tr>
-								<td><img class="sign" src="../share/svg/warning.svg" /></td>
-								<td><b>Mass Storage Device is offline</b></td>
-							</tr>
-						</table>
-					</div>
-					<hr>
-				</div>
-				<div id="msd-message-image-broken" class="hidden">
-					<div class="menu-item-content-text">
-						<table>
-							<tr>
-								<td><img class="sign" src="../share/svg/warning.svg" /></td>
-								<td><b>Current image is broken!</b><br><sub>Perhaps uploading was interrupted</sub></td>
-							</tr>
-						</table>
-					</div>
-					<hr>
-				</div>
-				<div id="msd-message-too-big-for-cdrom" class="hidden">
-					<div class="menu-item-content-text">
-						<table>
-							<tr>
-								<td><img class="sign" src="../share/svg/warning.svg" /></td>
-								<td><b>Current image is too big for CD-ROM!</b><br><sub>The device filesystem will be truncated to 2.2GiB</sub></td>
-							</tr>
-						</table>
-					</div>
-					<hr>
-				</div>
-				<div id="msd-message-out-of-storage" class="hidden">
-					<div class="menu-item-content-text">
-						<table>
-							<tr>
-								<td><img class="sign" src="../share/svg/info.svg" /></td>
-								<td><b>Current image is out of storage</b><br><sub>This image was connected manually using <b>kvmd-otgmsd</b></sub></td>
-							</tr>
-						</table>
-					</div>
-					<hr>
-				</div>
-				<div id="msd-message-another-user-uploads" class="hidden">
-					<div class="menu-item-content-text">
-						<table>
-							<tr>
-								<td><img class="sign" src="../share/svg/info.svg" /></td>
-								<td><b>Another user uploads an image</b></td>
-							</tr>
-						</table>
-					</div>
-					<hr>
-				</div>
-
-				<table class="menu-item-content-kv">
-					<tr>
-						<td>Status: </td>
-						<td id="msd-status" class="value"></td>
-					</tr>
-				</table>
-				<hr>
-
-				<table class="menu-item-content-kv msd-single-storage feature-disabled">
-					<tr>
-						<td>Current image:</td>
-						<td id="msd-image-name" class="value"></td>
-					</tr>
-					<tr>
-						<td>Image size:</td>
-						<td id="msd-image-size" class="value"></td>
-					</tr>
-					<tr>
-						<td>Storage size:</td>
-						<td id="msd-storage-size" class="value"></td>
-					</tr>
-				</table>
-				<table class="menu-item-content-kv msd-multi-storage feature-disabled">
-					<tr>
-						<td>Image:</td>
-						<td width="100%"><select disabled id="msd-image-selector"></select></td>
-						<td><button disabled id="msd-remove-image">Remove</button></td>
-					</tr>
-				</table>
-				<table class="menu-item-content-kv msd-multi-storage feature-disabled">
-					<tr class="msd-cdrom-emulation feature-disabled">
-						<td>Emulate CD-ROM drive:</td>
-						<td>
-							<div class="switch-box msd-cdrom-switch-box">
-								<input type="checkbox" id="msd-emulate-cdrom-checkbox" class="switch-checkbox" checked />
-								<label class="switch-label" for="msd-emulate-cdrom-checkbox">
-									<span class="switch-inner"></span>
-									<span class="switch"></span>
-								</label>
-							</div>
-						</td>
-					</tr>
-				</table>
-				<hr>
-
-				<div class="msd-multi-storage feature-disabled">
-					<div class="menu-item-content-text">
-						<div id="msd-storage-progress" class="progress">
-							<span id="msd-storage-progress-value" class="progress-value"></span>
-						</div>
-					</div>
-					<hr>
-				</div>
-
-				<input type="file" id="msd-select-new-image-file" class="hidden" />
-				<div class="menu-item-content-buttons buttons-row">
-					<button disabled id="msd-select-new-image-button" class="row50">Upload new image</button>
-					<button disabled id="msd-upload-new-image-button" class="row25">Start</button>
-					<button disabled id="msd-abort-uploading-button" class="row25">Abort</button>
-				</div>
-				<hr>
-
-				<div id="msd-submenu-new-image" class="hidden">
-					<table class="menu-item-content-kv">
-						<tr>
-							<td>New image:</td>
-							<td id="msd-new-image-name" class="value"></td>
-						</tr>
-						<tr>
-							<td>Upload size:</td>
-							<td id="msd-new-image-size" class="value"></td>
-						</tr>
-					</table>
-					<hr>
-					<div class="menu-item-content-text">
-						<div id="msd-uploading-progress" class="progress">
-							<span id="msd-uploading-progress-value" class="progress-value"></span>
-						</div>
-					</div>
-					<hr>
-				</div>
-
-				<div class="menu-item-content-buttons buttons-row">
-					<button disabled data-force-hide-menu id="msd-connect-button" class="row50">&bull; Connect drive to Server</button>
-					<button disabled data-force-hide-menu id="msd-disconnect-button" class="row50">&bull; Disconnect drive</button>
-				</div>
-			</div>
-		</li>
-
-		<li class="menu-right-items">
-			<a class="menu-item" href="#">
-				<img data-dont-hide-menu id="hid-recorder-led" class="led-gray" src="../share/svg/led-gear.svg" />
-				Macro &#8628;
-			</a>
-			<div data-dont-hide-menu class="menu-item-content">
-				<div class="menu-item-content-text">
-					<b>Record and play keyboard &amp; mouse actions</b><br>
-					<sub>For security reasons, the record will not saved on Pi-KVM</sub>
-				</div>
-				<div class="menu-item-content-buttons buttons-row">
-					<button disabled data-force-hide-menu id="hid-recorder-record" class="row25">&bull; Rec</button>
-					<button disabled id="hid-recorder-stop" class="row25">Stop</button>
-					<button disabled id="hid-recorder-play" class="row25">Play</button>
-					<button disabled id="hid-recorder-clear" class="row25">Clear</button>
-				</div>
-				<hr>
-				<table class="menu-item-content-kv">
-					<tr>
-						<td>Script time:</td>
-						<td colspan="2" id="hid-recorder-time" class="value">00:00:00.0</td>
-					</tr>
-					<tr>
-						<td>Scripted events:</td>
-						<td id="hid-recorder-events-count" class="value">0</td>
-						<td><sup><i>include delays</i></sup></td>
-					</tr>
-				</table>
-				<hr>
-				<input type="file" id="hid-recorder-new-script-file" />
-				<div class="menu-item-content-buttons buttons-row">
-					<button disabled id="hid-recorder-upload" class="row50">Upload script</button>
-					<button disabled id="hid-recorder-download" class="row50">Download script</button>
-				</div>
-			</div>
-		</li>
-
-		<li class="menu-right-items">
-			<a class="menu-item" href="#">
-				Shortcuts &#8628;
-			</a>
-			<div data-dont-hide-menu class="menu-item-content">
-				<div class="menu-item-content-buttons">
-					<textarea id="hid-pak-text" placeholder="Paste your text here"></textarea>
-					<hr>
-					<button disabled data-force-hide-menu id="hid-pak-button">&bull; &#x21b3; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
-					<hr>
-					<div class="buttons-row">
-						<button data-force-hide-menu data-shortcut="CapsLock" class="row50">
-							&bull;
-							Caps Lock
-							<img class="inline-lamp hid-keyboard-caps-led led-gray" src="../share/svg/led-square.svg" />
-						</button>
-						<button data-force-hide-menu data-shortcut="MetaLeft" class="row50">&bull; Left Win</button>
-					</div>
-					<hr>
-					<button data-force-hide-menu data-shortcut="AltLeft ShiftLeft">&bull; Alt+Shift</button>
-					<button data-force-hide-menu data-shortcut="ControlLeft ShiftLeft">&bull; Ctrl+Shift</button>
-					<button data-force-hide-menu data-shortcut="ShiftLeft ShiftRight">&bull; Shift+Shift</button>
-					<button data-force-hide-menu data-shortcut="MetaLeft Space">&bull; Win+Space</button>
-					<hr>
-					<button data-force-hide-menu data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
-					<button data-force-hide-menu data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
-					<button data-force-hide-menu data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
-					<button data-force-hide-menu data-shortcut="AltLeft F4">&bull; Alt+F4</button>
-					<hr>
-					<button data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
-				</div>
-				<hr>
-				<div class="menu-item-content-text">
-					&darr; Alt+SysRq+... <sup><i>linux magic (<a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">help</a>)</i></sup>
-				</div>
-				<hr>
-				<div class="menu-item-content-buttons buttons-row">
-					<button data-shortcut="AltLeft PrintScreen KeyR" class="row16">R</button>
-					<button data-shortcut="AltLeft PrintScreen KeyE" class="row16">E</button>
-					<button data-shortcut="AltLeft PrintScreen KeyI" class="row16">I</button>
-					<button data-shortcut="AltLeft PrintScreen KeyS" class="row16">S</button>
-					<button data-shortcut="AltLeft PrintScreen KeyU" class="row16">U</button>
-					<button data-shortcut="AltLeft PrintScreen KeyB" class="row16">B</button>
-				</div>
-			</div>
-		</li>
-	</ul>
-
-	<div id="stream-window" class="window" style="z-index: 1">
-		<div id="stream-window-header" class="window-header">
-			<div class="window-grab">Stream</div>
-		</div>
-		<div id="stream-info"></div>
-		<div id="stream-box" class="stream-box-inactive">
-			<img id="stream-image" class="stream-image-inactive" src="../share/png/blank-stream.png" />
-		</div>
-		<div id="stream-mouse-buttons" class="keypad" align="center">
-			<div class="keypad-block">
-				<div class="keypad-row">
-					<div data-code="left" class="key wide-4 left small"><span>Mouse<br>Left</span></div>
-					<div data-code="left" class="modifier wide-2 left small"><span><b>&bull;</b><br>&larr; Hold</span></div>
-					<div class="empty-key" style="width:10px"></div>
-					<div data-code="middle" class="key wide-2 left small"><span>Mouse<br>Middle</span></div>
-					<div data-code="middle" class="modifier wide-2 left small"><span><b>&bull;</b><br>&larr; Hold</span></div>
-					<div class="empty-key" style="width:10px"></div>
-					<div data-code="right" class="modifier wide-2 right small"><span><b>&bull;</b><br>Hold &rarr;</span></div>
-					<div data-code="right" class="key wide-4 right small"><span>Mouse<br>Right</span></div>
-				</div>
-			</div>
-		</div>
-	</div>
-
-	<div id="keyboard-window" class="window">
-		<div id="keyboard-window-header" class="window-header">
-			<div class="window-grab">Virtual Keyboard</div>
-			<button class="window-button-close">&times;</button>
-		</div>
-		<div id="keyboard-desktop" class="keypad" align="center">
-			<div class="keypad-block">
-				<div class="keypad-row">
-					<div data-code="Escape" class="key small"><div class="label">Esc</div></div>
-					<div class="empty-key" style="width:24px"></div>
-					<div data-code="F1" class="key small"><div class="label">F1</div></div>
-					<div data-code="F2" class="key small"><div class="label">F2</div></div>
-					<div data-code="F3" class="key small"><div class="label">F3</div></div>
-					<div data-code="F4" class="key small"><div class="label">F4</div></div>
-					<div class="empty-key" style="width:10px"></div>
-					<div data-code="F5" class="key small"><div class="label">F5</div></div>
-					<div data-code="F6" class="key small"><div class="label">F6</div></div>
-					<div data-code="F7" class="key small"><div class="label">F7</div></div>
-					<div data-code="F8" class="key small"><div class="label">F8</div></div>
-					<div class="empty-key" style="width:10px"></div>
-					<div data-code="F9" class="key small"><div class="label">F9</div></div>
-					<div data-code="F10" class="key small"><div class="label">F10</div></div>
-					<div data-code="F11" class="key small"><div class="label">F11</div></div>
-					<div data-code="F12" class="key small"><div class="label">F12</div></div>
-				</div>
-				<hr>
-				<div class="keypad-row">
-					<div data-code="Backquote" class="key"><div class="label">~<br>`</div></div>
-					<div data-code="Digit1" class="key"><div class="label">!<br>1</div></div>
-					<div data-code="Digit2" class="key"><div class="label">@<br>2</div></div>
-					<div data-code="Digit3" class="key"><div class="label">#<br>3</div></div>
-					<div data-code="Digit4" class="key"><div class="label">$<br>4</div></div>
-					<div data-code="Digit5" class="key"><div class="label">%<br>5</div></div>
-					<div data-code="Digit6" class="key"><div class="label">^<br>6</div></div>
-					<div data-code="Digit7" class="key"><div class="label">&amp;<br>7</div></div>
-					<div data-code="Digit8" class="key"><div class="label">*<br>8</div></div>
-					<div data-code="Digit9" class="key"><div class="label">(<br>9</div></div>
-					<div data-code="Digit0" class="key"><div class="label">)<br>0</div></div>
-					<div data-code="Minus" class="key"><div class="label">_<br>-</div></div>
-					<div data-code="Equal" class="key"><div class="label">+<br>=</div></div>
-					<div data-code="Backspace" class="key wide-2 right"><div class="label">&#8612;</div></div>
-				</div>
-				<div class="keypad-row">
-					<div data-code="Tab" class="key wide-2 left"><div class="label">&#8676;<br>&#8677;</div></div>
-					<div data-code="KeyQ" class="key single"><div class="label">Q</div></div>
-					<div data-code="KeyW" class="key single"><div class="label">W</div></div>
-					<div data-code="KeyE" class="key single"><div class="label">E</div></div>
-					<div data-code="KeyR" class="key single"><div class="label">R</div></div>
-					<div data-code="KeyT" class="key single"><div class="label">T</div></div>
-					<div data-code="KeyY" class="key single"><div class="label">Y</div></div>
-					<div data-code="KeyU" class="key single"><div class="label">U</div></div>
-					<div data-code="KeyI" class="key single"><div class="label">I</div></div>
-					<div data-code="KeyO" class="key single"><div class="label">O</div></div>
-					<div data-code="KeyP" class="key single"><div class="label">P</div></div>
-					<div data-code="BracketLeft" class="key"><div class="label">{<br>[</div></div>
-					<div data-code="BracketRight" class="key"><div class="label">}<br>]</div></div>
-					<div data-code="Backslash" class="key"><div class="label">|<br>\</div></div>
-				</div>
-				<div class="keypad-row">
-					<div data-code="CapsLock" class="key wide-3 left small">
-						<div class="label">
-							<img class="inline-lamp hid-keyboard-caps-led led-gray" src="../share/svg/led-square.svg" />
-							<br>
-							Caps Lock
-						</div>
-					</div>
-					<div data-code="KeyA" class="key single"><div class="label">A</div></div>
-					<div data-code="KeyS" class="key single"><div class="label">S</div></div>
-					<div data-code="KeyD" class="key single"><div class="label">D</div></div>
-					<div data-code="KeyF" class="key single"><div class="label">F</div></div>
-					<div data-code="KeyG" class="key single"><div class="label">G</div></div>
-					<div data-code="KeyH" class="key single"><div class="label">H</div></div>
-					<div data-code="KeyJ" class="key single"><div class="label">J</div></div>
-					<div data-code="KeyK" class="key single"><div class="label">K</div></div>
-					<div data-code="KeyL" class="key single"><div class="label">L</div></div>
-					<div data-code="Semicolon" class="key"><div class="label">:<br>;</div></div>
-					<div data-code="Quote" class="key"><div class="label">"<br>'</div></div>
-					<div data-code="Enter" class="key wide-3 right small"><div class="label">Enter<br>&crarr;</div></div>
-				</div>
-				<div class="keypad-row">
-					<div data-code="ShiftLeft" class="modifier wide-4 left small"><div class="label"><b>&bull;</b><br>Shift</div></div>
-					<div data-code="KeyZ" class="key single"><div class="label">Z</div></div>
-					<div data-code="KeyX" class="key single"><div class="label">X</div></div>
-					<div data-code="KeyC" class="key single"><div class="label">C</div></div>
-					<div data-code="KeyV" class="key single"><div class="label">V</div></div>
-					<div data-code="KeyB" class="key single"><div class="label">B</div></div>
-					<div data-code="KeyN" class="key single"><div class="label">N</div></div>
-					<div data-code="KeyM" class="key single"><div class="label">M</div></div>
-					<div data-code="Comma" class="key"><div class="label">&lt;<br>,</div></div>
-					<div data-code="Period" class="key"><div class="label">&gt;<br>.</div></div>
-					<div data-code="Slash" class="key"><div class="label">?<br>/</div></div>
-					<div data-code="ShiftRight" class="modifier wide-4 right small"><div class="label"><b>&bull;</b><br>Shift</div></div>
-				</div>
-				<div class="keypad-row">
-					<div data-code="ControlLeft" class="modifier wide-1 left small"><div class="label"><b>&bull;</b><br>Ctrl</div></div>
-					<div data-code="MetaLeft" class="modifier wide-1 left small"><div class="label"><b>&bull;</b><br>Win</div></div>
-					<div data-code="AltLeft" class="modifier wide-1 left small"><div class="label"><b>&bull;</b><br>Alt</div></div>
-					<div data-code="Space" class="key wide-5"></div>
-					<div data-code="AltRight" class="modifier wide-1 right small"><div class="label"><b>&bull;</b><br>Alt</div></div>
-					<div data-code="MetaRight" class="modifier wide-1 right small"><div class="label"><b>&bull;</b><br>Win</div></div>
-					<div data-code="ControlRight" class="modifier wide-1 right small"><div class="label"><b>&bull;</b><br>Ctrl</div></div>
-				</div>
-			</div>
-			<div class="keypad-block">
-				<div class="keypad-row">
-					<div data-code="PrintScreen" class="modifier small"><div class="label"><b>&bull;</b><br>Pt/Sq</div></div>
-					<div data-code="ScrollLock" class="key small">
-						<div class="label">
-							<img class="inline-lamp hid-keyboard-scroll-led led-gray" src="../share/svg/led-square.svg" />
-							<br>
-							ScrLk
-						</div>
-					</div>
-					<div data-code="Pause" class="key small"><div class="label">P/Brk</div></div>
-				</div>
-				<hr>
-				<div class="keypad-row">
-					<div data-code="Insert" class="key small"><div class="label">Ins</div></div>
-					<div data-code="Home" class="key small"><div class="label">Home</div></div>
-					<div data-code="PageUp" class="key small"><div class="label">PgUp</div></div>
-				</div>
-				<div class="keypad-row">
-					<div data-code="Delete" class="key small"><div class="label">Del</div></div>
-					<div data-code="End" class="key small"><div class="label">End</div></div>
-					<div data-code="PageDown" class="key small"><div class="label">PgDn</div></div>
-				</div>
-				<div class="keypad-row"></div>
-				<div class="keypad-row">
-					<div class="empty-key"></div>
-					<div data-code="ArrowUp" class="key"><div class="label">&uarr;</div></div>
-					<div class="empty-key"></div>
-				</div>
-				<div class="keypad-row">
-					<div data-code="ArrowLeft" class="key"><div class="label">&larr;</div></div>
-					<div data-code="ArrowDown" class="key"><div class="label">&darr;</div></div>
-					<div data-code="ArrowRight" class="key"><div class="label">&rarr;</div></div>
-				</div>
-			</div>
-		</div>
-
-		<div id="keyboard-mobile" class="keypad" align="center">
-			<div class="keypad-block">
-				<div class="keypad-row">
-					<div data-code="Escape" class="key margin-0 small"><div class="label">Esc</div></div>
-					<div class="empty-key" style="width:4px"></div>
-					<div data-code="F1" class="key wide-0 margin-0 small"><div class="label">F1</div></div>
-					<div data-code="F2" class="key wide-0 margin-0 small"><div class="label">F2</div></div>
-					<div data-code="F3" class="key wide-0 margin-0 small"><div class="label">F3</div></div>
-					<div data-code="F4" class="key wide-0 margin-0 small"><div class="label">F4</div></div>
-					<div data-code="F5" class="key wide-0 margin-0 small"><div class="label">F5</div></div>
-					<div data-code="F6" class="key wide-0 margin-0 small"><div class="label">F6</div></div>
-					<div data-code="F7" class="key wide-0 margin-0 small"><div class="label">F7</div></div>
-					<div data-code="F8" class="key wide-0 margin-0 small"><div class="label">F8</div></div>
-					<div data-code="F9" class="key wide-0 margin-0 small"><div class="label">F9</div></div>
-					<div data-code="F10" class="key wide-0 margin-0 small"><div class="label">F10</div></div>
-					<div data-code="F11" class="key wide-0 margin-0 small"><div class="label">F11</div></div>
-					<div data-code="F12" class="key wide-0 margin-0 small"><div class="label">F12</div></div>
-					<div class="empty-key" style="width:5px"></div>
-					<div data-code="PrintScreen" class="modifier margin-0 small"><div class="label"><b>&bull;</b><br>Pt/Sq</div></div>
-					<div data-code="ScrollLock" class="key margin-0 small">
-						<div class="label">
-							<img class="inline-lamp hid-keyboard-scroll-led led-gray" src="../share/svg/led-square.svg" />
-							<br>
-							ScrLk
-						</div>
-					</div>
-					<div data-code="Pause" class="key margin-0 small"><div class="label">P/Brk</div></div>
-					<div data-code="Insert" class="key margin-0 small"><div class="label">Ins</div></div>
-					<div data-code="Home" class="key margin-0 small"><div class="label">Home</div></div>
-					<div data-code="End" class="key margin-0 small"><div class="label">End</div></div>
-					<div data-code="Delete" class="key margin-0 small"><div class="label">Del</div></div>
-				</div>
-				<hr>
-				<div class="keypad-row">
-					<div data-code="Backquote" class="key"><div class="label">~<br>`</div></div>
-					<div data-code="Digit1" class="key"><div class="label">!<br>1</div></div>
-					<div data-code="Digit2" class="key"><div class="label">@<br>2</div></div>
-					<div data-code="Digit3" class="key"><div class="label">#<br>3</div></div>
-					<div data-code="Digit4" class="key"><div class="label">$<br>4</div></div>
-					<div data-code="Digit5" class="key"><div class="label">%<br>5</div></div>
-					<div data-code="Digit6" class="key"><div class="label">^<br>6</div></div>
-					<div data-code="Digit7" class="key"><div class="label">&amp;<br>7</div></div>
-					<div data-code="Digit8" class="key"><div class="label">*<br>8</div></div>
-					<div data-code="Digit9" class="key"><div class="label">(<br>9</div></div>
-					<div data-code="Digit0" class="key"><div class="label">)<br>0</div></div>
-					<div data-code="Minus" class="key"><div class="label">_<br>-</div></div>
-					<div data-code="Equal" class="key"><div class="label">+<br>=</div></div>
-					<div data-code="Backspace" class="key wide-3 right" style="width:101px"><div class="label">&#8612;</div></div>
-				</div>
-				<div class="keypad-row">
-					<div data-code="Tab" class="key wide-2 left"><div class="label">&#8676;<br>&#8677;</div></div>
-					<div data-code="KeyQ" class="key single"><div class="label">Q</div></div>
-					<div data-code="KeyW" class="key single"><div class="label">W</div></div>
-					<div data-code="KeyE" class="key single"><div class="label">E</div></div>
-					<div data-code="KeyR" class="key single"><div class="label">R</div></div>
-					<div data-code="KeyT" class="key single"><div class="label">T</div></div>
-					<div data-code="KeyY" class="key single"><div class="label">Y</div></div>
-					<div data-code="KeyU" class="key single"><div class="label">U</div></div>
-					<div data-code="KeyI" class="key single"><div class="label">I</div></div>
-					<div data-code="KeyO" class="key single"><div class="label">O</div></div>
-					<div data-code="KeyP" class="key single"><div class="label">P</div></div>
-					<div data-code="BracketLeft" class="key"><div class="label">{<br>[</div></div>
-					<div data-code="BracketRight" class="key"><div class="label">}<br>]</div></div>
-					<div data-code="Backslash" class="key wide-2 left" style="width:78px"><div class="label">|<br>\</div></div>
-				</div>
-				<div class="keypad-row">
-					<div data-code="CapsLock" class="key wide-3 left small">
-						<div class="label">
-							<img class="inline-lamp hid-keyboard-caps-led led-gray" src="../share/svg/led-square.svg" />
-							<br>
-							Caps Lock
-						</div>
-					</div>
-					<div data-code="KeyA" class="key single"><div class="label">A</div></div>
-					<div data-code="KeyS" class="key single"><div class="label">S</div></div>
-					<div data-code="KeyD" class="key single"><div class="label">D</div></div>
-					<div data-code="KeyF" class="key single"><div class="label">F</div></div>
-					<div data-code="KeyG" class="key single"><div class="label">G</div></div>
-					<div data-code="KeyH" class="key single"><div class="label">H</div></div>
-					<div data-code="KeyJ" class="key single"><div class="label">J</div></div>
-					<div data-code="KeyK" class="key single"><div class="label">K</div></div>
-					<div data-code="KeyL" class="key single"><div class="label">L</div></div>
-					<div data-code="Semicolon" class="key"><div class="label">:<br>;</div></div>
-					<div data-code="Quote" class="key"><div class="label">"<br>'</div></div>
-					<div data-code="Enter" class="key wide-4 right small" style="width:116px"><div class="label">Enter<br>&crarr;</div></div>
-				</div>
-				<div class="keypad-row">
-					<div data-code="ShiftLeft" class="modifier wide-4 left small"><div class="label"><b>&bull;</b><br>Shift</div></div>
-					<div data-code="KeyZ" class="key single"><div class="label">Z</div></div>
-					<div data-code="KeyX" class="key single"><div class="label">X</div></div>
-					<div data-code="KeyC" class="key single"><div class="label">C</div></div>
-					<div data-code="KeyV" class="key single"><div class="label">V</div></div>
-					<div data-code="KeyB" class="key single"><div class="label">B</div></div>
-					<div data-code="KeyN" class="key single"><div class="label">N</div></div>
-					<div data-code="KeyM" class="key single"><div class="label">M</div></div>
-					<div data-code="Comma" class="key"><div class="label">&lt;<br>,</div></div>
-					<div data-code="Period" class="key"><div class="label">&gt;<br>.</div></div>
-					<div data-code="Slash" class="key"><div class="label">?<br>/</div></div>
-					<div data-code="PageUp" class="key small"><div class="label">PgUp</div></div>
-					<div data-code="ArrowUp" class="key"><div class="label">&uarr;</div></div>
-					<div data-code="PageDown" class="key small"><div class="label">PgDn</div></div>
-				</div>
-				<div class="keypad-row">
-					<div data-code="ControlLeft" class="modifier wide-1 left small"><div class="label"><b>&bull;</b><br>Ctrl</div></div>
-					<div data-code="MetaLeft" class="modifier wide-1 left small"><div class="label"><b>&bull;</b><br>Win</div></div>
-					<div data-code="AltLeft" class="modifier wide-1 left small"><div class="label"><b>&bull;</b><br>Alt</div></div>
-					<div data-code="Space" class="key" style="width:190px"></div>
-					<div data-code="AltRight" class="modifier right small"><div class="label"><b>&bull;</b><br>Alt</div></div>
-					<div data-code="MetaRight" class="modifier right small"><div class="label"><b>&bull;</b><br>Win</div></div>
-					<div data-code="ShiftRight" class="modifier right small"><div class="label"><b>&bull;</b><br>Shift</div></div>
-					<div data-code="ControlRight" class="modifier right small"><div class="label"><b>&bull;</b><br>Ctrl</div></div>
-					<div data-code="ArrowLeft" class="key"><div class="label">&larr;</div></div>
-					<div data-code="ArrowDown" class="key"><div class="label">&darr;</div></div>
-					<div data-code="ArrowRight" class="key"><div class="label">&rarr;</div></div>
-				</div>
-			</div>
-		</div>
-	</div>
-
-	<div id="about-window" class="window">
-		<div class="window-header">
-			<div class="window-grab">About</div>
-			<button class="window-button-close">&times;</button>
-		</div>
-		<div id="about">
-			<table>
-				<tr>
-					<td valign="top" class="logo">
-						<img class="svg-gray" src="../share/svg/logo.svg" alt="Open Source Hardware" height="40" />
-					</td>
-					<td valign="top">
-						<table>
-							<tr>
-								<td colspan="2" class="title">Open Source &amp; Open Hardware IP-KVM</td>
-							</tr>
-							<tr>
-								<td colspan="2" class="copyright">Copyright &copy; 2018 Pi-KVM Developers Team</td>
-							</tr>
-						</table>
-					</td>
-				</tr>
-			</table>
-			<br>
-			<div class="tabs">
-				<input type="radio" name="about-tab-button" id="about-tab-meta-button" value="" checked>
-				<label for="about-tab-meta-button">Meta</label>
-
-				<input type="radio" name="about-tab-button" id="about-tab-hw-button" value="">
-				<label for="about-tab-hw-button">Hardware</label>
-
-				<input type="radio" name="about-tab-button" id="about-tab-version-button" value="">
-				<label for="about-tab-version-button">Version</label>
-
-				<input type="radio" name="about-tab-button" id="about-tab-thanks-button" value="">
-				<label for="about-tab-thanks-button">Thanks</label>
-
-				<div id="about-tab-meta-content">
-					<div id="about-meta" class="code">
-						<span class="code-comment">No data</span>
-					</div>
-				</div>
-
-				<div id="about-tab-hw-content">
-					<div id="about-hw" class="code">
-						<span class="code-comment">No data</span>
-					</div>
-				</div>
-
-				<div id="about-tab-version-content">
-					<div id="about-version" class="code">
-						<span class="code-comment">No data</span>
-					</div>
-				</div>
-
-				<div id="about-tab-thanks-content">
-					<div id="about-thanks" class="code">
-						<span class="code-comment">
-							// These kind people donated money to the Pi-KVM project<br>
-							// and supported the work on it. We are very grateful<br>
-							// for their help, and memorializing their names<br>
-							// is the least we can do in gratitude.<br>
-							// If you also want to support this project,<br>
-							// you can use one of these services:
-							<a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
-							or <a target="_blank" href="https://www.paypal.me/mdevaev">PayPal</a>.
-						</span>
-						<ul>
-							<li>Aleksei Brusianskii</li>
-							<li>Arthur Woimbée</li>
-							<li>Ben Gordon</li>
-							<li>Branden Shaulis</li>
-							<li>Christof Maluck</li>
-							<li>Corey Lista</li>
-							<li>David Howell</li>
-							<li>Denis Yatsenko</li>
-							<li>Ge Men</li>
-							<li>Grey Cynic</li>
-							<li>Jason Toland</li>
-							<li>Jeff Bowman</li>
-							<li>John McGovern</li>
-							<li>Mark Gilbert</li>
-							<li>Mark Robinson</li>
-							<li>Mauricio Allende</li>
-							<li>Michael Lynch</li>
-							<li>Samed Ozoglu</li>
-							<li>Truman Kilen</li>
-							<li>Walter_Ego</li>
-						</ul>
-					</div>
-				</div>
-			</div>
-			<br>
-			<p class="text">
-				Full documentation, source code, hardware schematics and legal information
-				can be found in our <a target="_blank" href="https://pikvm.org">official website</a>.
-			</p>
-		</div>
-	</div>
-
-	<ul class="footer">
-		<li id="kvmd-meta-server-host" class="footer-left"></li>
-		<li class="footer-right"><a target="_blank" href="https://pikvm.org">Pi-KVM Project</a></li>
-	</ul>
-</body>
+  <head>
+    <meta charset="utf-8">
+    <title>Pi-KVM Session</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
+    <link rel="manifest" href="/share/site.webmanifest">
+    <link rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="msapplication-TileColor" content="#2b5797">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="stylesheet" href="/share/css/vars.css">
+    <link rel="stylesheet" href="/share/css/main.css">
+    <link rel="stylesheet" href="/share/css/navbar.css">
+    <link rel="stylesheet" href="/share/css/window.css">
+    <link rel="stylesheet" href="/share/css/modal.css">
+    <link rel="stylesheet" href="/share/css/led.css">
+    <link rel="stylesheet" href="/share/css/slider.css">
+    <link rel="stylesheet" href="/share/css/switch.css">
+    <link rel="stylesheet" href="/share/css/progress.css">
+    <link rel="stylesheet" href="/share/css/keypad.css">
+    <link rel="stylesheet" href="/share/css/tabs.css">
+    <link rel="stylesheet" href="/share/css/kvm/stream.css">
+    <link rel="stylesheet" href="/share/css/kvm/hid.css">
+    <link rel="stylesheet" href="/share/css/kvm/msd.css">
+    <link rel="stylesheet" href="/share/css/kvm/keyboard.css">
+    <link rel="stylesheet" href="/share/css/kvm/about.css">
+    <script type="module">import {main} from "/share/js/kvm/main.js";
+      main();
+    </script>
+  </head>
+  <body class="body-no-select">
+    <ul id="navbar">
+      <li class="left"><a id="logo" href="/">&larr;&nbsp;&nbsp;<img class="svg-gray" src="/share/svg/logo.svg" alt="&amp;pi;-kvm"></a></li>
+      <div class="hidden" id="hw-health-dropdown">
+        <li class="left"><a class="menu-button" href="#"><img class="hidden" data-dont-hide-menu id="hw-health-undervoltage-led" src="/share/svg/led-undervoltage.svg"><img class="hidden" data-dont-hide-menu id="hw-health-overheating-led" src="/share/svg/led-overheating.svg">&#8628;</a>
+          <div class="menu" data-dont-hide-menu>
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td><b>Raspberry Pi's health is at risk</b> <br> <br><sup>This is not a drill! A red icon indicates a current issue,<br>
+                          a yellow one that was observed since the device booted up.</sup></td>
+                    </tr>
+                  </table>
+                </div>
+            <div class="hidden" id="hw-health-message-undervoltage">
+              <hr>
+                  <div class="text">
+                    <table>
+                      <tr>
+                        <td><img class="sign  led-gray" src="/share/svg/led-undervoltage.svg"></td>
+                        <td><b>Undervoltage detected</b> <br> <br><sup>Make sure your power supply and cabling are providing<br>
+                            enough power to the Raspberry Pi (3A minimum).</sup></td>
+                      </tr>
+                    </table>
+                  </div>
+            </div>
+            <div class="hidden" id="hw-health-message-overheating">
+              <hr>
+                  <div class="text">
+                    <table>
+                      <tr>
+                        <td><img class="sign  led-gray" src="/share/svg/led-overheating.svg"></td>
+                        <td><b>Overheating detected</b> <br> <br><sup>Frequency capping due to overheating.<br>
+                            Improve cooling of the Raspberry Pi.</sup></td>
+                      </tr>
+                    </table>
+                  </div>
+            </div>
+          </div>
+        </li>
+      </div>
+      <li class="right"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" data-dont-hide-menu id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" data-dont-hide-menu id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" data-dont-hide-menu id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg">System &#8628;</a>
+        <div class="menu" data-dont-hide-menu>
+          <div class="buttons">
+            <button disabled data-force-hide-menu id="stream-screenshot-button">&bull; Take a screenshot</button>
+            <hr>
+            <button data-force-hide-menu id="show-stream-button">&bull; Show stream</button>
+            <button data-force-hide-menu id="show-keyboard-button">&bull; Show keyboard</button>
+            <button data-force-hide-menu id="show-about-button">&bull; Show about</button>
+          </div>
+          <div class="feature-disabled" id="stream-resolution">
+            <hr>
+            <div class="text">Stream resolution:
+              <div class="stream-param-box">
+                <select disabled data-dont-hide-menu id="stream-resolution-selector"></select>
+              </div>
+            </div>
+          </div>
+          <div class="feature-disabled" id="stream-quality">
+            <hr>
+            <div class="text">Stream quality: <span id="stream-quality-value">80%</span>
+              <div class="stream-param-box">
+                <input class="slider" disabled type="range" id="stream-quality-slider">
+              </div>
+            </div>
+          </div>
+          <hr>
+          <div class="text">Stream FPS: <span id="stream-desired-fps-value">0</span>
+            <div class="stream-param-box">
+              <input class="slider" disabled type="range" id="stream-desired-fps-slider">
+            </div>
+          </div>
+          <hr>
+          <div class="text">Stream size: <span id="stream-size-value">100%</span>
+            <div class="stream-param-box">
+              <input class="slider" type="range" id="stream-size-slider">
+            </div>
+          </div>
+          <hr>
+          <div class="text">
+            <table class="one-line-switch">
+              <td>Auto-resize stream:</td>
+              <td align="right">
+                    <div class="switch-box">
+                      <input class="switch-checkbox" checked type="checkbox" id="stream-auto-resize-checkbox">
+                      <label class="switch-label" for="stream-auto-resize-checkbox"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+              </td>
+            </table>
+          </div>
+          <hr>
+          <div class="buttons">
+            <button disabled data-force-hide-menu id="stream-reset-button">&bull; Reset stream</button>
+            <button disabled data-force-hide-menu id="hid-reset-button">&bull; Reset keyboard &amp; mouse</button>
+            <button class="feature-disabled" disabled data-force-hide-menu id="msd-reset-button">&bull; Reset mass storage</button>
+          </div>
+          <hr>
+          <div class="buttons">
+            <button data-force-hide-menu id="open-log-button">&bull; Open log</button>
+          </div>
+          <div class="buttons feature-disabled" id="wol">
+            <hr>
+            <button disabled id="wol-wakeup-button">&bull; Wake on LAN server</button>
+          </div>
+        </div>
+      </li>
+      <li class="right feature-disabled" id="atx-dropdown"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" data-dont-hide-menu id="atx-hdd-led" src="/share/svg/led-atx-hdd.svg">ATX &#8628;</a>
+        <div class="menu">
+          <div class="buttons">
+            <button disabled id="atx-power-button">&bull; Click Power <sup><i>short</i></sup></button>
+            <button disabled id="atx-power-button-long">&bull; Click Power <sup><i>long</i></sup></button>
+            <hr>
+            <button disabled id="atx-reset-button">&bull; Click Reset</button>
+          </div>
+        </div>
+      </li>
+      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="msd-led" src="/share/svg/led-msd.svg">Mass Storage &#8628;</a>
+        <div class="menu" data-dont-hide-menu id="msd-menu">
+          <div class="hidden" id="msd-message-offline">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td><img class="sign" src="/share/svg/warning.svg"></td>
+                      <td><b>Mass Storage Device is offline</b>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <div class="hidden" id="msd-message-image-broken">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td><img class="sign" src="/share/svg/warning.svg"></td>
+                      <td><b>Current image is broken!</b><br><sup>Perhaps uploading was interrupted</sup>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <div class="hidden" id="msd-message-too-big-for-cdrom">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td><img class="sign" src="/share/svg/warning.svg"></td>
+                      <td><b>Current image is too big for CD-ROM!</b><br><sup>The device filesystem will be truncated to 2.2GiB</sup>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <div class="hidden" id="msd-message-out-of-storage">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td><img class="sign" src="/share/svg/warning.svg"></td>
+                      <td><b>Current image is out of storag</b><br><sup>This image was connected manually using <b>kvmd-otgmsd</b></sup>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <div class="hidden" id="msd-message-another-user-uploads">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td><img class="sign" src="/share/svg/info.svg"></td>
+                      <td><b>Another user uploads an image</b>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <table class="kv">
+            <tr>
+              <td>Status:</td>
+              <td class="value" id="msd-status"></td>
+            </tr>
+          </table>
+          <hr>
+          <table class="kv msd-single-storage feature-disabled">
+            <tr>
+              <td>Current image:</td>
+              <td class="value" id="msd-image-name"></td>
+            </tr>
+            <tr>
+              <td>Image size:</td>
+              <td class="value" id="msd-image-size"></td>
+            </tr>
+            <tr>
+              <td>Storage size:</td>
+              <td class="value" id="msd-storage-size"></td>
+            </tr>
+          </table>
+          <table class="kv msd-multi-storage feature-disabled">
+            <tr>
+              <td>Image:</td>
+              <td width="100%">
+                <select disabled id="msd-image-selector"></select>
+              </td>
+              <td>
+                <button disabled id="msd-remove-image">Remove</button>
+              </td>
+            </tr>
+          </table>
+          <table class="kv msd-multi-storage feature-disabled">
+            <tr class="msd-cdrom-emulation feature-disabled">
+              <td>Emulate CD-ROM drive:</td>
+              <td>
+                    <div class="switch-box">
+                      <input class="switch-checkbox" checked type="checkbox" id="msd-emulate-cdrom-checkbox">
+                      <label class="switch-label" for="msd-emulate-cdrom-checkbox"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+              </td>
+            </tr>
+          </table>
+          <div class="msd-multi-storage feature-disabled">
+            <hr>
+            <div class="text">
+              <div class="progress" id="msd-storage-progress"><span class="progress-value" id="msd-storage-progress-value"></span></div>
+            </div>
+          </div>
+          <hr>
+          <input class="hidden" type="file" id="msd-select-new-image-file">
+          <div class="buttons buttons-row">
+            <button class="row50" disabled id="msd-select-new-image-button">Upload new image</button>
+            <button class="row25" disabled id="msd-upload-new-image-button">Start</button>
+            <button class="row25" disabled id="msd-abort-uploading-button">Abort</button>
+          </div>
+          <hr>
+          <div class="hidden" id="msd-submenu-new-image">
+            <table class="kv">
+              <tr>
+                <td>New image:</td>
+                <td class="value" id="msd-new-image-name"></td>
+              </tr>
+              <tr>
+                <td>Upload size:</td>
+                <td class="value" id="msd-new-image-size"></td>
+              </tr>
+            </table>
+            <hr>
+            <div class="text">
+              <div class="progress" id="msd-uploading-progress"><span class="progress-value" id="msd-uploading-progress-value"></span></div>
+            </div>
+            <hr>
+          </div>
+          <div class="buttons buttons-row">
+            <button class="row50" disabled data-force-hide-menu id="msd-connect-button">&bull; Connect drive to Server</button>
+            <button class="row50" disabled data-force-hide-menu id="msd-disconnect-button">&bull; Disconnect drive</button>
+          </div>
+        </div>
+      </li>
+      <li class="right"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="hid-recorder-led" src="/share/svg/led-gear.svg">Macro &#8628;</a>
+        <div class="menu" data-dont-hide-menu>
+          <div class="text"><b>Record and play keyboard &amp; mouse actions<br></b><sub>For security reasons, the record will not saved on Pi-KVM</sub></div>
+          <div class="buttons buttons-row">
+            <button class="row25" disabled data-force-hide-menu id="hid-recorder-record">&bull; Rec</button>
+            <button class="row25" disabled id="hid-recorder-stop">Stop</button>
+            <button class="row25" disabled id="hid-recorder-play">Play</button>
+            <button class="row25" disabled id="hid-recorder-clear">Clear</button>
+          </div>
+          <hr>
+          <table class="kv">
+            <tr>
+              <td>Script time:</td>
+              <td class="value" colspan="2" id="hid-recorder-time">00:00:00.0</td>
+            </tr>
+            <tr>
+              <td>Scripted events:</td>
+              <td class="value" id="hid-recorder-events-count">0</td>
+              <td><sup><i>include delays</i></sup></td>
+            </tr>
+          </table>
+          <hr>
+          <input type="file" id="hid-recorder-new-script-file">
+          <div class="buttons buttons-row">
+            <button class="row50" disabled id="hid-recorder-upload">Upload script</button>
+            <button class="row50" disabled id="hid-recorder-download">Download script</button>
+          </div>
+        </div>
+      </li>
+      <li class="right"><a class="menu-button" href="#">Shortcuts &#8628;</a>
+        <div class="menu" data-dont-hide-menu>
+          <div class="buttons">
+            <textarea id="hid-pak-text" placeholder="Paste your text here"></textarea>
+            <hr>
+            <button disabled data-force-hide-menu id="hid-pak-button">&bull; &#x21b3; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
+            <hr>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
+              <button class="row50" data-force-hide-menu data-shortcut="MetaLeft">&bull; Left Win</button>
+            </div>
+            <hr>
+            <button data-force-hide-menu data-shortcut="AltLeft ShiftLeft">&bull; Alt+Shift</button>
+            <button data-force-hide-menu data-shortcut="ControlLeft ShiftLeft">&bull; Ctrl+Shift</button>
+            <button data-force-hide-menu data-shortcut="ShiftLeft ShiftRight">&bull; Shift+Shift</button>
+            <button data-force-hide-menu data-shortcut="MetaLeft Space">&bull; Win+Space</button>
+            <hr>
+            <button data-force-hide-menu data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
+            <button data-force-hide-menu data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
+            <button data-force-hide-menu data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
+            <button data-force-hide-menu data-shortcut="AltLeft F4">&bull; Alt+F4</button>
+            <hr>
+            <button data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
+          </div>
+          <hr>
+          <div class="text">
+            &darr; Alt+SysRq+... <sup><i>linux magic
+            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">help</a></i></sup>
+          </div>
+          <hr>
+          <div class="buttons">
+            <div class="buttons-row">
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyR">R</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyE">E</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyI">I</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyS">S</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyU">U</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyB">B</button>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ul>
+        <div class="window" id="stream-window">
+          <div class="window-header" id="stream-window-header" style="z-index:1">
+            <div class="window-grab">Stream</div>
+          </div>
+          <div id="stream-info"></div>
+          <div class="stream-box-inactive" id="stream-box"><img class="stream-image-inactive" id="stream-image" src="/share/png/blank-stream.png"></div>
+          <div class="keypad" id="stream-mouse-buttons" align="center">
+            <div class="keypad-block">
+              <div class="keypad-row">
+                <div class="key wide-4 left small" data-code="left"><span>Mouse<br>Left</span></div>
+                <div class="modifier wide-2 left small" data-code="left"><span><b>&bull;</b><br>&larr; Hold</span></div>
+                <div class="empty-key" style="width:10px"></div>
+                <div class="key wide-2 left small" data-code="middle"><span>Mouse<br>Middle</span></div>
+                <div class="modifier wide-2 left small" data-code="middle"><span><b>&bull;</b><br>&larr; Hold</span></div>
+                <div class="empty-key" style="width:10px"></div>
+                <div class="modifier wide-2 right small" data-code="right"><span><b>&bull;</b><br>Hold &rarr;</span></div>
+                <div class="key wide-4 right small" data-code="right"><span>Mouse<br>Right</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="window" id="keyboard-window">
+          <div class="window-header" id="keyboard-window-header">
+            <div class="window-grab">Virtual Keyboard</div>
+            <button class="window-button-close">&times;</button>
+          </div>
+          <div class="keypad" id="keyboard-desktop" align="center">
+            <div class="keypad-block">
+              <div class="keypad-row">
+                    <div class="key small" data-code="Escape">
+                      <div class="label">Esc
+                      </div>
+                    </div>
+                    <div class="empty-key" style="width:24px"></div>
+                    <div class="key small" data-code="F1">
+                      <div class="label">F1
+                      </div>
+                    </div>
+                    <div class="key small" data-code="F2">
+                      <div class="label">F2
+                      </div>
+                    </div>
+                    <div class="key small" data-code="F3">
+                      <div class="label">F3
+                      </div>
+                    </div>
+                    <div class="key small" data-code="F4">
+                      <div class="label">F4
+                      </div>
+                    </div>
+                    <div class="empty-key" style="width:10px"></div>
+                    <div class="key small" data-code="F5">
+                      <div class="label">F5
+                      </div>
+                    </div>
+                    <div class="key small" data-code="F6">
+                      <div class="label">F6
+                      </div>
+                    </div>
+                    <div class="key small" data-code="F7">
+                      <div class="label">F7
+                      </div>
+                    </div>
+                    <div class="key small" data-code="F8">
+                      <div class="label">F8
+                      </div>
+                    </div>
+                    <div class="empty-key" style="width:10px"></div>
+                    <div class="key small" data-code="F9">
+                      <div class="label">F9
+                      </div>
+                    </div>
+                    <div class="key small" data-code="F10">
+                      <div class="label">F10
+                      </div>
+                    </div>
+                    <div class="key small" data-code="F11">
+                      <div class="label">F11
+                      </div>
+                    </div>
+                    <div class="key small" data-code="F12">
+                      <div class="label">F12
+                      </div>
+                    </div>
+              </div>
+              <hr>
+              <div class="keypad-row">
+                    <div class="key " data-code="Backquote">
+                      <div class="label">~<br>`
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit1">
+                      <div class="label">!<br>1
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit2">
+                      <div class="label">@<br>2
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit3">
+                      <div class="label">#<br>3
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit4">
+                      <div class="label">$<br>4
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit5">
+                      <div class="label">%<br>5
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit6">
+                      <div class="label">^<br>6
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit7">
+                      <div class="label">&amp;<br>7
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit8">
+                      <div class="label">*<br>8
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit9">
+                      <div class="label">(<br>9
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit0">
+                      <div class="label">)<br>0
+                      </div>
+                    </div>
+                    <div class="key " data-code="Minus">
+                      <div class="label">_<br>-
+                      </div>
+                    </div>
+                    <div class="key " data-code="Equal">
+                      <div class="label">+<br>=
+                      </div>
+                    </div>
+                    <div class="key wide-2 right" data-code="Backspace">
+                      <div class="label">&#8612;
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row">
+                    <div class="key wide-2 left" data-code="Tab">
+                      <div class="label">&#8676;<br>&#8677;
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyQ">
+                      <div class="label">Q
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyW">
+                      <div class="label">W
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyE">
+                      <div class="label">E
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyR">
+                      <div class="label">R
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyT">
+                      <div class="label">T
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyY">
+                      <div class="label">Y
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyU">
+                      <div class="label">U
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyI">
+                      <div class="label">I
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyO">
+                      <div class="label">O
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyP">
+                      <div class="label">P
+                      </div>
+                    </div>
+                    <div class="key " data-code="BracketLeft">
+                      <div class="label">{<br>[
+                      </div>
+                    </div>
+                    <div class="key " data-code="BracketRight">
+                      <div class="label">}<br>]
+                      </div>
+                    </div>
+                    <div class="key " data-code="Backslash">
+                      <div class="label">|<br>&bsol;
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row">
+                    <div class="key wide-3 left small" data-code="CapsLock">
+                      <div class="label"><img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyA">
+                      <div class="label">A
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyS">
+                      <div class="label">S
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyD">
+                      <div class="label">D
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyF">
+                      <div class="label">F
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyG">
+                      <div class="label">G
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyH">
+                      <div class="label">H
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyJ">
+                      <div class="label">J
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyK">
+                      <div class="label">K
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyL">
+                      <div class="label">L
+                      </div>
+                    </div>
+                    <div class="key " data-code="Semicolon">
+                      <div class="label">:<br>;
+                      </div>
+                    </div>
+                    <div class="key " data-code="Quote">
+                      <div class="label">"<br>'
+                      </div>
+                    </div>
+                    <div class="key wide-3 right small" data-code="Enter">
+                      <div class="label">Enter<br>&crarr;
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row">
+                    <div class="modifier wide-4 left small" data-code="ShiftLeft">
+                      <div class="label"><b>&bull;</b><br>Shift
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyZ">
+                      <div class="label">Z
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyX">
+                      <div class="label">X
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyC">
+                      <div class="label">C
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyV">
+                      <div class="label">V
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyB">
+                      <div class="label">B
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyN">
+                      <div class="label">N
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyM">
+                      <div class="label">M
+                      </div>
+                    </div>
+                    <div class="key " data-code="Comma">
+                      <div class="label">&lt;<br>,
+                      </div>
+                    </div>
+                    <div class="key " data-code="Period">
+                      <div class="label">&gt;<br>.
+                      </div>
+                    </div>
+                    <div class="key " data-code="Slash">
+                      <div class="label">?<br>/
+                      </div>
+                    </div>
+                    <div class="modifier wide-4 right small" data-code="ShiftRight">
+                      <div class="label"><b>&bull;</b><br>Shift
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row">
+                    <div class="modifier wide-1 left small" data-code="ControlLeft">
+                      <div class="label"><b>&bull;</b><br>Ctrl
+                      </div>
+                    </div>
+                    <div class="modifier wide-1 left small" data-code="MetaLeft">
+                      <div class="label"><b>&bull;</b><br>Win
+                      </div>
+                    </div>
+                    <div class="modifier wide-1 left small" data-code="AltLeft">
+                      <div class="label"><b>&bull;</b><br>Alt
+                      </div>
+                    </div>
+                    <div class="key wide-5" data-code="Space">
+                      <div class="label">
+                      </div>
+                    </div>
+                    <div class="modifier wide-1 right small" data-code="AltRight">
+                      <div class="label"><b>&bull;</b><br>Alt
+                      </div>
+                    </div>
+                    <div class="modifier wide-1 right small" data-code="MetaRight">
+                      <div class="label"><b>&bull;</b><br>Win
+                      </div>
+                    </div>
+                    <div class="modifier wide-1 right small" data-code="ControlRight">
+                      <div class="label"><b>&bull;</b><br>Ctrl
+                      </div>
+                    </div>
+              </div>
+            </div>
+            <div class="keypad-block">
+              <div class="keypad-row">
+                    <div class="modifier small" data-code="PrintScreen">
+                      <div class="label"><b>&bull;</b><br>Pt/Sq
+                      </div>
+                    </div>
+                    <div class="key small" data-code="ScrollLock">
+                      <div class="label"><img class="inline-lamp hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                      </div>
+                    </div>
+                    <div class="key small" data-code="Pause">
+                      <div class="label">P/Brk
+                      </div>
+                    </div>
+              </div>
+              <hr>
+              <div class="keypad-row">
+                    <div class="key small" data-code="Insert">
+                      <div class="label">Ins
+                      </div>
+                    </div>
+                    <div class="key small" data-code="Home">
+                      <div class="label">Home
+                      </div>
+                    </div>
+                    <div class="key small" data-code="PageUp">
+                      <div class="label">PgUp
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row">
+                    <div class="key small" data-code="Delete">
+                      <div class="label">Del
+                      </div>
+                    </div>
+                    <div class="key small" data-code="End">
+                      <div class="label">End
+                      </div>
+                    </div>
+                    <div class="key small" data-code="PageDown">
+                      <div class="label">PgDn
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row"></div>
+              <div class="keypad-row">
+                    <div class="empty-key"></div>
+                    <div class="key " data-code="ArrowUp">
+                      <div class="label">&uarr;
+                      </div>
+                    </div>
+                    <div class="empty-key"></div>
+              </div>
+              <div class="keypad-row">
+                    <div class="key " data-code="ArrowLeft">
+                      <div class="label">&larr;
+                      </div>
+                    </div>
+                    <div class="key " data-code="ArrowDown">
+                      <div class="label">&darr;
+                      </div>
+                    </div>
+                    <div class="key " data-code="ArrowRight">
+                      <div class="label">&rarr;
+                      </div>
+                    </div>
+              </div>
+            </div>
+          </div>
+          <div class="keypad" id="keyboard-mobile" align="center">
+            <div class="keypad-block">
+              <div class="keypad-row">
+                    <div class="key margin-0 small" data-code="Escape">
+                      <div class="label">Esc
+                      </div>
+                    </div>
+                    <div class="empty-key" style="width:1px"></div>
+                    <div class="key wide-0 margin-0 small" data-code="F1">
+                      <div class="label">F1
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F2">
+                      <div class="label">F2
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F3">
+                      <div class="label">F3
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F4">
+                      <div class="label">F4
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F5">
+                      <div class="label">F5
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F6">
+                      <div class="label">F6
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F7">
+                      <div class="label">F7
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F8">
+                      <div class="label">F8
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F9">
+                      <div class="label">F9
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F10">
+                      <div class="label">F10
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F11">
+                      <div class="label">F11
+                      </div>
+                    </div>
+                    <div class="key wide-0 margin-0 small" data-code="F12">
+                      <div class="label">F12
+                      </div>
+                    </div>
+                    <div class="empty-key" style="width:2px"></div>
+                    <div class="modifier margin-0 small" data-code="PrintScreen">
+                      <div class="label"><b>&bull;</b><br>Pt/Sq
+                      </div>
+                    </div>
+                    <div class="key margin-0 small" data-code="ScrollLock">
+                      <div class="label"><img class="inline-lamp hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                      </div>
+                    </div>
+                    <div class="key margin-0 small" data-code="Pause">
+                      <div class="label">P/Brk
+                      </div>
+                    </div>
+                    <div class="key margin-0 small" data-code="Insert">
+                      <div class="label">Ins
+                      </div>
+                    </div>
+                    <div class="key margin-0 small" data-code="Home">
+                      <div class="label">Home
+                      </div>
+                    </div>
+                    <div class="key margin-0 small" data-code="End">
+                      <div class="label">End
+                      </div>
+                    </div>
+                    <div class="key margin-0 small" data-code="Delete">
+                      <div class="label">Del
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row">
+                    <div class="key " data-code="Backquote">
+                      <div class="label">~<br>`
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit1">
+                      <div class="label">!<br>1
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit2">
+                      <div class="label">@<br>2
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit3">
+                      <div class="label">#<br>3
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit4">
+                      <div class="label">$<br>4
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit5">
+                      <div class="label">%<br>5
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit6">
+                      <div class="label">^<br>6
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit7">
+                      <div class="label">&amp;<br>7
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit8">
+                      <div class="label">*<br>8
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit9">
+                      <div class="label">(<br>9
+                      </div>
+                    </div>
+                    <div class="key " data-code="Digit0">
+                      <div class="label">)<br>0
+                      </div>
+                    </div>
+                    <div class="key " data-code="Minus">
+                      <div class="label">_<br>-
+                      </div>
+                    </div>
+                    <div class="key " data-code="Equal">
+                      <div class="label">+<br>=
+                      </div>
+                    </div>
+                    <div class="key wide-3 right" data-code="Backspace" style="width:101px">
+                      <div class="label">&#8612;
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row">
+                    <div class="key wide-2 left" data-code="Tab">
+                      <div class="label">&#8676;<br>&#8677;
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyQ">
+                      <div class="label">Q
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyW">
+                      <div class="label">W
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyE">
+                      <div class="label">E
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyR">
+                      <div class="label">R
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyT">
+                      <div class="label">T
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyY">
+                      <div class="label">Y
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyU">
+                      <div class="label">U
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyI">
+                      <div class="label">I
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyO">
+                      <div class="label">O
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyP">
+                      <div class="label">P
+                      </div>
+                    </div>
+                    <div class="key " data-code="BracketLeft">
+                      <div class="label">{<br>[
+                      </div>
+                    </div>
+                    <div class="key " data-code="BracketRight">
+                      <div class="label">}<br>]
+                      </div>
+                    </div>
+                    <div class="key wide-2 left" data-code="Backslash" style="width:78px">
+                      <div class="label">|<br>&bsol;
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row">
+                    <div class="key wide-3 left small" data-code="CapsLock">
+                      <div class="label"><img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyA">
+                      <div class="label">A
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyS">
+                      <div class="label">S
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyD">
+                      <div class="label">D
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyF">
+                      <div class="label">F
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyG">
+                      <div class="label">G
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyH">
+                      <div class="label">H
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyJ">
+                      <div class="label">J
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyK">
+                      <div class="label">K
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyL">
+                      <div class="label">L
+                      </div>
+                    </div>
+                    <div class="key " data-code="Semicolon">
+                      <div class="label">:<br>;
+                      </div>
+                    </div>
+                    <div class="key " data-code="Quote">
+                      <div class="label">`<br>'
+                      </div>
+                    </div>
+                    <div class="key wide-4 right small" data-code="Enter" style="width:116px">
+                      <div class="label">Enter<br>&crarr;
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row">
+                    <div class="modifier wide-4 left small" data-code="ShiftLeft">
+                      <div class="label"><b>&bull;</b><br>Shift
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyZ">
+                      <div class="label">Z
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyX">
+                      <div class="label">X
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyC">
+                      <div class="label">C
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyV">
+                      <div class="label">V
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyB">
+                      <div class="label">B
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyN">
+                      <div class="label">N
+                      </div>
+                    </div>
+                    <div class="key single" data-code="KeyM">
+                      <div class="label">M
+                      </div>
+                    </div>
+                    <div class="key " data-code="Comma">
+                      <div class="label">lt;<br>,
+                      </div>
+                    </div>
+                    <div class="key " data-code="Period">
+                      <div class="label">&gt;<br>.
+                      </div>
+                    </div>
+                    <div class="key " data-code="Slash">
+                      <div class="label">?<br>/
+                      </div>
+                    </div>
+                    <div class="key small" data-code="PageUp">
+                      <div class="label">PgUp
+                      </div>
+                    </div>
+                    <div class="key " data-code="ArrowUp">
+                      <div class="label">&uarr;
+                      </div>
+                    </div>
+                    <div class="key small" data-code="PageDown">
+                      <div class="label">PgDn
+                      </div>
+                    </div>
+              </div>
+              <div class="keypad-row">
+                    <div class="modifier wide-1 left small" data-code="ControlLeft">
+                      <div class="label"><b>&bull;</b><br>Ctrl
+                      </div>
+                    </div>
+                    <div class="modifier wide-1 left small" data-code="MetaLeft">
+                      <div class="label"><b>&bull;</b><br>Win
+                      </div>
+                    </div>
+                    <div class="modifier wide-1 left small" data-code="AltLeft">
+                      <div class="label"><b>&bull;</b><br>Alt
+                      </div>
+                    </div>
+                    <div class="key " data-code="Space" style="width:190px">
+                      <div class="label">
+                      </div>
+                    </div>
+                    <div class="modifier right small" data-code="AltRight">
+                      <div class="label"><b>&bull;</b><br>Alt
+                      </div>
+                    </div>
+                    <div class="modifier right small" data-code="MetaRight">
+                      <div class="label"><b>&bull;</b><br>Win
+                      </div>
+                    </div>
+                    <div class="modifier right small" data-code="ShiftRight">
+                      <div class="label"><b>&bull;</b><br>Shift
+                      </div>
+                    </div>
+                    <div class="modifier right small" data-code="ControlRight">
+                      <div class="label"><b>&bull;</b><br>Ctrl
+                      </div>
+                    </div>
+                    <div class="key " data-code="ArrowLeft">
+                      <div class="label">&larr;
+                      </div>
+                    </div>
+                    <div class="key " data-code="ArrowDown">
+                      <div class="label">&darr;
+                      </div>
+                    </div>
+                    <div class="key " data-code="ArrowRight">
+                      <div class="label">&rarr;
+                      </div>
+                    </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="window" id="about-window">
+          <div class="window-header" id="">
+            <div class="window-grab">About</div>
+            <button class="window-button-close">&times;</button>
+          </div>
+          <div id="about">
+            <table>
+              <tr>
+                <td class="logo" valign="top"><img class="svg-gray" src="../share/svg/logo.svg" alt="Open Source Hardware" height="40"></td>
+                <td valign="top">
+                  <table>
+                    <tr>
+                      <td class="title" colspan="2">Open Source &amp; Open Hardware IP-KVM</td>
+                    </tr>
+                    <tr>
+                      <td class="copyright" colspan="2">Copyright &copy; 2018 Pi-KVM Developers Team</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table><br>
+            <div class="tabs">
+              <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
+              <label for="about-tab-meta-button">Meta</label>
+              <input type="radio" name="about-tab-button" id="about-tab-hw-button">
+              <label for="about-tab-hw-button">Hardware</label>
+              <input type="radio" name="about-tab-button" id="about-tab-version-button">
+              <label for="about-tab-version-button">Version</label>
+              <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
+              <label for="about-tab-thanks-button">Thanks</label>
+              <div id="about-tab-meta-content">
+                <div class="code" id="about-meta"><span class="code-comment">No data</span></div>
+              </div>
+              <div id="about-tab-hw-content">
+                <div class="code" id="about-hw"><span class="code-comment">No data</span></div>
+              </div>
+              <div id="about-tab-version-content">
+                <div class="code" id="about-version"><span class="code-comment">No data</span></div>
+              </div>
+              <div id="about-tab-thanks-content">
+                <div class="code" id="about-thanks"><span class="code-comment">// These kind people donated money to the Pi-KVM project<br>
+                    // and supported the work on it. We are very grateful<br>
+                    // for their help, and memorializing their names<br>
+                    // is the least we can do in gratitude.<br>
+                    // If you also want to support this project,<br>
+                    // you can use one of these services:
+                    <a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
+                    or <a target="_blank" href="https://www.paypal.me/mdevaev">PayPal</a>.</span>
+                  <ul>
+                    <li>Aleksei Brusianskii</li>
+                    <li>Arthur Woimbée</li>
+                    <li>Ben Gordon</li>
+                    <li>Branden Shaulis</li>
+                    <li>Christof Maluck</li>
+                    <li>Corey Lista</li>
+                    <li>David Howell</li>
+                    <li>Denis Yatsenko</li>
+                    <li>Ge Men</li>
+                    <li>Grey Cynic</li>
+                    <li>Jason Toland</li>
+                    <li>Jeff Bowman</li>
+                    <li>John McGovern</li>
+                    <li>Mark Gilbert</li>
+                    <li>Mark Robinson</li>
+                    <li>Mauricio Allende</li>
+                    <li>Michael Lynch</li>
+                    <li>Samed Ozoglu</li>
+                    <li>Truman Kilen</li>
+                    <li>Walter_Ego</li>
+                  </ul>
+                </div>
+              </div>
+            </div><br>
+            <p class="text">
+              Full documentation, source code, hardware schematics and legal information
+              can be found in our <a target="_blank" href="https://pikvm.org">official website</a>.
+            </p>
+          </div>
+        </div>
+    <ul class="footer">
+      <li class="footer-left" id="kvmd-meta-server-host"></li>
+      <li class="footer-right"><a target="_blank" href="https://pikvm.org">Pi-KVM Project</a></li>
+    </ul>
+  </body>
 </html>

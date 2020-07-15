@@ -39,7 +39,7 @@ function __WindowManager() {
 
 	var __top_z_index = 0;
 	var __windows = [];
-	var __menu_items = [];
+	var __menu_buttons = [];
 
 	var __init__ = function() {
 		for (let el_button of $$$("button")) {
@@ -48,10 +48,10 @@ function __WindowManager() {
 			el_button.ontouchstart = function() {};
 		}
 
-		for (let el_item of $$("menu-item")) {
-			el_item.parentElement.querySelector(".menu-item-content").setAttribute("tabindex", "-1");
-			tools.setOnDown(el_item, () => __toggleMenu(el_item));
-			__menu_items.push(el_item);
+		for (let el_button of $$("menu-button")) {
+			el_button.parentElement.querySelector(".menu").setAttribute("tabindex", "-1");
+			tools.setOnDown(el_button, () => __toggleMenu(el_button));
+			__menu_buttons.push(el_button);
 		}
 
 		for (let el_window of $$("window")) {
@@ -161,7 +161,7 @@ function __WindowManager() {
 			let el_to_focus = (
 				el.closest(".modal-window")
 				|| el.closest(".window")
-				|| el.closest(".menu-item-content")
+				|| el.closest(".menu")
 			);
 			if (el_to_focus) {
 				el_to_focus.focus();
@@ -182,9 +182,9 @@ function __WindowManager() {
 	};
 
 	self.getViewGeometry = function() {
-		let el_menu = $("menu");
+		let el_navbar = $("navbar");
 		return {
-			top: (el_menu ? el_menu.clientHeight : 0), // Menu height
+			top: (el_navbar ? el_navbar.clientHeight : 0), // Navbar height
 			bottom: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
 			left: 0,
 			right: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
@@ -194,15 +194,15 @@ function __WindowManager() {
 	var __toggleMenu = function(el_a) {
 		let all_hidden = true;
 
-		for (let el_item of __menu_items) {
-			let el_menu = el_item.parentElement.querySelector(".menu-item-content");
-			if (el_item === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
-				el_item.classList.add("menu-item-selected");
+		for (let el_button of __menu_buttons) {
+			let el_menu = el_button.parentElement.querySelector(".menu");
+			if (el_button === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
+				el_button.classList.add("menu-button-pressed");
 				el_menu.style.visibility = "visible";
 				el_menu.focus();
 				all_hidden &= false;
 			} else {
-				el_item.classList.remove("menu-item-selected");
+				el_button.classList.remove("menu-button-pressed");
 				el_menu.style.visibility = "hidden";
 			}
 		}
@@ -223,9 +223,9 @@ function __WindowManager() {
 
 	var __closeAllMenues = function() {
 		document.onkeyup = null;
-		for (let el_item of __menu_items) {
-			let el_menu = el_item.parentElement.querySelector(".menu-item-content");
-			el_item.classList.remove("menu-item-selected");
+		for (let el_button of __menu_buttons) {
+			let el_menu = el_button.parentElement.querySelector(".menu");
+			el_button.classList.remove("menu-button-pressed");
 			el_menu.style.visibility = "hidden";
 		}
 	};
@@ -236,8 +236,8 @@ function __WindowManager() {
 			el_parent.classList.add("window-active");
 		} else if ((el_parent = event.target.closest(".window")) !== null) {
 			el_parent.classList.add("window-active");
-		} else if ((el_parent = event.target.closest(".menu-item-content")) !== null) {
-			el_parent.classList.add("menu-item-content-active");
+		} else if ((el_parent = event.target.closest(".menu")) !== null) {
+			el_parent.classList.add("menu-active");
 		}
 		tools.debug("Focus in:", el_parent);
 	};
@@ -248,14 +248,14 @@ function __WindowManager() {
 			el_parent.classList.remove("window-active");
 		} else if ((el_parent = event.target.closest(".window")) !== null) {
 			el_parent.classList.remove("window-active");
-		} else if ((el_parent = event.target.closest(".menu-item-content")) !== null) {
-			el_parent.classList.remove("menu-item-content-active");
+		} else if ((el_parent = event.target.closest(".menu")) !== null) {
+			el_parent.classList.remove("menu-active");
 		}
 		tools.debug("Focus out:", el_parent);
 	};
 
 	var __globalMouseButtonHandler = function(event) {
-		if (!event.target.matches(".menu-item")) {
+		if (!event.target.matches(".menu-button")) {
 			for (let el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
 				if (el_item.hasAttribute("data-force-hide-menu")) {
 					break;

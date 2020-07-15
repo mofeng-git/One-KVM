@@ -1,0 +1,263 @@
+mixin navbar_led(id, icon)
+	img(data-dont-hide-menu id=id, class="led-gray" src=`${svg_dir}/${icon}.svg`)
+
+mixin navbar_message(icon, short)
+	div(class="text")
+		table
+			tr
+				td #[img(class="sign" src=`${svg_dir}/${icon}.svg`)]
+				td
+					| #[b #{short}]
+					if block
+						br
+						sup
+							block
+
+mixin navbar_health_message(icon, short, gray)
+	div(class="text")
+		table
+			tr
+				td #[img(class=`sign ${gray ? " led-gray" : ""}` src=`${svg_dir}/${icon}.svg`)]
+				td
+					| #[b #{short}] #[br] #[br]
+					sup
+						block
+
+mixin switch(id)
+	div(class="switch-box")
+		input(checked type="checkbox" id=id class="switch-checkbox")
+		label(class="switch-label" for=id)
+			span(class="switch-inner")
+			span(class="switch")
+
+ul(id="navbar")
+	li(class="left")
+		a(id="logo" href="/") &larr;&nbsp;&nbsp;
+			img(class="svg-gray" src=`${svg_dir}/logo.svg` alt="&pi;-kvm")
+
+	div(id="hw-health-dropdown" class="hidden")
+		li(class="left")
+			a(class="menu-button" href="#")
+				img(data-dont-hide-menu id="hw-health-undervoltage-led" class="hidden" src=`${svg_dir}/led-undervoltage.svg`)
+				img(data-dont-hide-menu id="hw-health-overheating-led" class="hidden" src=`${svg_dir}/led-overheating.svg`)
+				| &#8628;
+			div(data-dont-hide-menu class="menu")
+				+navbar_health_message("warning", "Raspberry Pi's health is at risk", false)
+					| This is not a drill! A red icon indicates a current issue,#[br]
+					| a yellow one that was observed since the device booted up.
+				div(id="hw-health-message-undervoltage" class="hidden")
+					hr
+					+navbar_health_message("led-undervoltage", "Undervoltage detected", true)
+						| Make sure your power supply and cabling are providing#[br]
+						| enough power to the Raspberry Pi (3A minimum).
+				div(id="hw-health-message-overheating" class="hidden")
+					hr
+					+navbar_health_message("led-overheating", "Overheating detected", true)
+						| Frequency capping due to overheating.#[br]
+						| Improve cooling of the Raspberry Pi.
+
+	li(class="right")
+		a(class="menu-button" href="#")
+			+navbar_led("link-led", "led-link")
+			+navbar_led("stream-led", "led-stream")
+			+navbar_led("hid-keyboard-led", "led-hid-keyboard")
+			+navbar_led("hid-mouse-led", "led-hid-mouse")
+			| System &#8628;
+		div(data-dont-hide-menu class="menu")
+			div(class="buttons")
+				button(disabled data-force-hide-menu id="stream-screenshot-button") &bull; Take a screenshot
+				hr
+				button(data-force-hide-menu id="show-stream-button") &bull; Show stream
+				button(data-force-hide-menu id="show-keyboard-button") &bull; Show keyboard
+				button(data-force-hide-menu id="show-about-button") &bull; Show about
+			div(id="stream-resolution" class="feature-disabled")
+				hr
+				div(class="text")
+					| Stream resolution:
+					div(class="stream-param-box")
+						select(disabled data-dont-hide-menu id="stream-resolution-selector")
+			div(id="stream-quality" class="feature-disabled")
+				hr
+				div(class="text")
+					| Stream quality: #[span(id="stream-quality-value") 80%]
+					div(class="stream-param-box")
+						input(disabled type="range" id="stream-quality-slider" class="slider")
+			hr
+			div(class="text")
+				| Stream FPS: #[span(id="stream-desired-fps-value") 0]
+				div(class="stream-param-box")
+					input(disabled type="range" id="stream-desired-fps-slider" class="slider")
+			hr
+			div(class="text")
+				| Stream size: #[span(id="stream-size-value") 100%]
+				div(class="stream-param-box")
+					input(type="range" id="stream-size-slider" class="slider")
+			hr
+			div(class="text")
+				table(class="one-line-switch")
+					td Auto-resize stream:
+					td(align="right")
+						+switch("stream-auto-resize-checkbox")
+			hr
+			div(class="buttons")
+				button(disabled data-force-hide-menu id="stream-reset-button") &bull; Reset stream
+				button(disabled data-force-hide-menu id="hid-reset-button") &bull; Reset keyboard &amp; mouse
+				button(disabled data-force-hide-menu id="msd-reset-button" class="feature-disabled") &bull; Reset mass storage
+			hr
+			div(class="buttons")
+				button(data-force-hide-menu id="open-log-button") &bull; Open log
+			div(id="wol" class="buttons feature-disabled")
+				hr
+				button(disabled id="wol-wakeup-button") &bull; Wake on LAN server
+
+	li(id="atx-dropdown" class="right feature-disabled")
+		a(class="menu-button" href="#")
+			+navbar_led("atx-power-led", "led-atx-power")
+			+navbar_led("atx-hdd-led", "led-atx-hdd")
+			| ATX &#8628;
+		div(class="menu")
+			div(class="buttons")
+				button(disabled id="atx-power-button") &bull; Click Power #[sup #[i short]]
+				button(disabled id="atx-power-button-long") &bull; Click Power #[sup #[i long]]
+				hr
+				button(disabled id="atx-reset-button") &bull; Click Reset
+
+	li(id="msd-dropdown" class="right feature-disabled")
+		a(class="menu-button" href="#")
+			+navbar_led("msd-led", "led-msd")
+			| Mass Storage &#8628;
+		div(data-dont-hide-menu id="msd-menu" class="menu")
+			div(id="msd-message-offline" class="hidden")
+				+navbar_message("warning", "Mass Storage Device is offline")
+				hr
+			div(id="msd-message-image-broken" class="hidden")
+				+navbar_message("warning", "Current image is broken!")
+					| Perhaps uploading was interrupted
+				hr
+			div(id="msd-message-too-big-for-cdrom" class="hidden")
+				+navbar_message("warning", "Current image is too big for CD-ROM!")
+					| The device filesystem will be truncated to 2.2GiB
+				hr
+			div(id="msd-message-out-of-storage" class="hidden")
+				+navbar_message("warning", "Current image is out of storag")
+					| This image was connected manually using #[b kvmd-otgmsd]
+				hr
+			div(id="msd-message-another-user-uploads" class="hidden")
+				+navbar_message("info", "Another user uploads an image")
+				hr
+			table(class="kv")
+				tr
+					td Status:
+					td(id="msd-status" class="value")
+			hr
+			table(class="kv msd-single-storage feature-disabled")
+				tr
+					td Current image:
+					td(id="msd-image-name" class="value")
+				tr
+					td Image size:
+					td(id="msd-image-size" class="value")
+				tr
+					td Storage size:
+					td(id="msd-storage-size" class="value")
+			table(class="kv msd-multi-storage feature-disabled")
+				tr
+					td Image:
+					td(width="100%") #[select(disabled id="msd-image-selector")]
+					td #[button(disabled id="msd-remove-image") Remove]
+			table(class="kv msd-multi-storage feature-disabled")
+				tr(class="msd-cdrom-emulation feature-disabled")
+					td Emulate CD-ROM drive:
+					td
+						+switch("msd-emulate-cdrom-checkbox")
+			div(class="msd-multi-storage feature-disabled")
+				hr
+				div(class="text")
+					div(id="msd-storage-progress" class="progress")
+						span(id="msd-storage-progress-value" class="progress-value")
+			hr
+			input(type="file" id="msd-select-new-image-file" class="hidden")
+			div(class="buttons buttons-row")
+				button(disabled id="msd-select-new-image-button" class="row50") Upload new image
+				button(disabled id="msd-upload-new-image-button" class="row25") Start
+				button(disabled id="msd-abort-uploading-button" class="row25") Abort
+			hr
+			div(id="msd-submenu-new-image" class="hidden")
+				table(class="kv")
+					tr
+						td New image:
+						td(id="msd-new-image-name" class="value")
+					tr
+						td Upload size:
+						td(id="msd-new-image-size" class="value")
+				hr
+				div(class="text")
+					div(id="msd-uploading-progress" class="progress")
+						span(id="msd-uploading-progress-value" class="progress-value")
+				hr
+			div(class="buttons buttons-row")
+				button(disabled data-force-hide-menu id="msd-connect-button" class="row50") &bull; Connect drive to Server
+				button(disabled data-force-hide-menu id="msd-disconnect-button" class="row50") &bull; Disconnect drive
+
+	li(class="right")
+		a(class="menu-button" href="#")
+			+navbar_led("hid-recorder-led", "led-gear")
+			| Macro &#8628;
+		div(data-dont-hide-menu class="menu")
+			div(class="text")
+				b Record and play keyboard &amp; mouse actions#[br]
+				sub For security reasons, the record will not saved on Pi-KVM
+			div(class="buttons buttons-row")
+				button(disabled data-force-hide-menu id="hid-recorder-record" class="row25") &bull; Rec
+				button(disabled id="hid-recorder-stop" class="row25") Stop
+				button(disabled id="hid-recorder-play" class="row25") Play
+				button(disabled id="hid-recorder-clear" class="row25") Clear
+			hr
+			table(class="kv")
+				tr
+					td Script time:
+					td(colspan="2" id="hid-recorder-time" class="value") 00:00:00.0
+				tr
+					td Scripted events:
+					td(id="hid-recorder-events-count" class="value") 0
+					td #[sup #[i include delays]]
+			hr
+			input(type="file" id="hid-recorder-new-script-file")
+			div(class="buttons buttons-row")
+				button(disabled id="hid-recorder-upload" class="row50") Upload script
+				button(disabled id="hid-recorder-download" class="row50") Download script
+
+	li(class="right")
+		a(class="menu-button" href="#") Shortcuts &#8628;
+		div(data-dont-hide-menu class="menu")
+			div(class="buttons")
+				textarea(id="hid-pak-text" placeholder="Paste your text here")
+				hr
+				button(disabled data-force-hide-menu id="hid-pak-button") &bull; &#x21b3; Paste-as-Keys #[sup #[i ascii-only]]
+				hr
+				div(class="buttons-row")
+					button(data-force-hide-menu data-shortcut="CapsLock" class="row50")
+						| &bull; Caps Lock &nbsp;
+						img(class="inline-lamp hid-keyboard-caps-led led-gray" src=`${svg_dir}/led-square.svg`)
+					button(data-force-hide-menu data-shortcut="MetaLeft" class="row50") &bull; Left Win
+				hr
+				button(data-force-hide-menu data-shortcut="AltLeft ShiftLeft") &bull; Alt+Shift
+				button(data-force-hide-menu data-shortcut="ControlLeft ShiftLeft") &bull; Ctrl+Shift
+				button(data-force-hide-menu data-shortcut="ShiftLeft ShiftRight") &bull; Shift+Shift
+				button(data-force-hide-menu data-shortcut="MetaLeft Space") &bull; Win+Space
+				hr
+				button(data-force-hide-menu data-shortcut="ControlLeft KeyW") &bull; Ctrl+W
+				button(data-force-hide-menu data-shortcut="AltLeft Tab") &bull; Alt+Tab
+				button(data-force-hide-menu data-shortcut="AltLeft Enter") &bull; Alt+Enter
+				button(data-force-hide-menu data-shortcut="AltLeft F4") &bull; Alt+F4
+				hr
+				button(data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete") &bull; Ctrl+Alt+Del
+			hr
+			div(class="text")
+				| &darr; Alt+SysRq+... <sup><i>linux magic
+				| #[a(target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html") help]</i></sup>
+			hr
+			div(class="buttons")
+				div(class="buttons-row")
+					each key in ["R", "E", "I", "S", "U", "B"]
+						button(data-shortcut=`AltLeft PrintScreen Key${key}` class="row16") #{key}

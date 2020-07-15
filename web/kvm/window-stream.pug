@@ -1,0 +1,15 @@
++window("stream-window", "Stream", false, true)
+	div(id="stream-info")
+	div(id="stream-box" class="stream-box-inactive")
+		img(id="stream-image" class="stream-image-inactive" src=`${png_dir}/blank-stream.png`)
+	div(id="stream-mouse-buttons" class="keypad" align="center")
+		div(class="keypad-block")
+			div(class="keypad-row")
+				div(data-code="left" class="key wide-4 left small") #[span Mouse#[br]Left]
+				div(data-code="left" class="modifier wide-2 left small") #[span #[b &bull;]#[br]&larr; Hold]
+				div(class="empty-key" style="width:10px")
+				div(data-code="middle" class="key wide-2 left small") #[span Mouse#[br]Middle]
+				div(data-code="middle" class="modifier wide-2 left small") #[span #[b &bull;]#[br]&larr; Hold]
+				div(class="empty-key" style="width:10px")
+				div(data-code="right" class="modifier wide-2 right small") #[span #[b &bull;]#[br]Hold &rarr;]
+				div(data-code="right" class="key wide-4 right small") #[span Mouse#[br]Right]

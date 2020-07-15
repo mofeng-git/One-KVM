@@ -1,0 +1,58 @@
++window("about-window", "About", true, false)
+	div(id="about")
+		table
+			tr
+				td(valign="top" class="logo")
+					img(class="svg-gray" src="../share/svg/logo.svg" alt="Open Source Hardware" height="40")
+				td(valign="top")
+					table
+						tr #[td(colspan="2" class="title") Open Source &amp; Open Hardware IP-KVM]
+						tr #[td(colspan="2" class="copyright") Copyright &copy; 2018 Pi-KVM Developers Team]
+		br
+		div(class="tabs")
+			each tab, index in ["Meta", "Hardware", "Version", "Thanks"]
+				- tab_id = `about-tab-${tab != "Hardware" ? tab.toLowerCase() : "hw"}-button`
+				if index == 0
+					input(checked type="radio" name="about-tab-button" id=tab_id)
+				else
+					input(type="radio" name="about-tab-button" id=tab_id)
+				label(for=tab_id) #{tab}
+			each tab in ["meta", "hw", "version"]
+				div(id=`about-tab-${tab}-content`)
+					div(id=`about-${tab}` class="code") #[span(class="code-comment") No data]
+			div(id="about-tab-thanks-content")
+				div(id="about-thanks" class="code")
+					span(class="code-comment")
+						| // These kind people donated money to the Pi-KVM project#[br]
+						| // and supported the work on it. We are very grateful#[br]
+						| // for their help, and memorializing their names#[br]
+						| // is the least we can do in gratitude.#[br]
+						| // If you also want to support this project,#[br]
+						| // you can use one of these services:
+						| #[a(target="_blank" href="https://www.patreon.com/pikvm") Patreon]
+						| or #[a(target="_blank" href="https://www.paypal.me/mdevaev") PayPal].
+					ul
+						li Aleksei Brusianskii
+						li Arthur Woimbée
+						li Ben Gordon
+						li Branden Shaulis
+						li Christof Maluck
+						li Corey Lista
+						li David Howell
+						li Denis Yatsenko
+						li Ge Men
+						li Grey Cynic
+						li Jason Toland
+						li Jeff Bowman
+						li John McGovern
+						li Mark Gilbert
+						li Mark Robinson
+						li Mauricio Allende
+						li Michael Lynch
+						li Samed Ozoglu
+						li Truman Kilen
+						li Walter_Ego
+		br
+		p(class="text")
+			| Full documentation, source code, hardware schematics and legal information
+			| can be found in our #[a(target="_blank" href="https://pikvm.org") official website].
