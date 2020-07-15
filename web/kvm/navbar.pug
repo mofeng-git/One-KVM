@@ -1,27 +1,18 @@
 mixin navbar_led(id, icon)
 	img(data-dont-hide-menu id=id, class="led-gray" src=`${svg_dir}/${icon}.svg`)
 
-mixin navbar_message(icon, short)
+mixin menu_message(icon, short, classes="")
 	div(class="text")
 		table
 			tr
-				td #[img(class="sign" src=`${svg_dir}/${icon}.svg`)]
-				td
+				td(rowspan="2") #[img(class=`sign ${classes}` src=`${svg_dir}/${icon}.svg`)]
+				td(style="line-height:1.5")
 					| #[b #{short}]
-					if block
-						br
-						sup
+			if block
+				tr
+					td
+						sup(style="line-height:1")
 							block
-
-mixin navbar_health_message(icon, short, gray)
-	div(class="text")
-		table
-			tr
-				td #[img(class=`sign ${gray ? " led-gray" : ""}` src=`${svg_dir}/${icon}.svg`)]
-				td
-					| #[b #{short}] #[br] #[br]
-					sup
-						block
 
 mixin switch(id)
 	div(class="switch-box")
@@ -42,19 +33,19 @@ ul(id="navbar")
 				img(data-dont-hide-menu id="hw-health-overheating-led" class="hidden" src=`${svg_dir}/led-overheating.svg`)
 				| &#8628;
 			div(data-dont-hide-menu class="menu")
-				+navbar_health_message("warning", "Raspberry Pi's health is at risk", false)
+				+menu_message("warning", "Raspberry Pi's health is at risk")
 					| This is not a drill! A red icon indicates a current issue,#[br]
-					| a yellow one that was observed since the device booted up.
+					| a yellow one that was observed since the device booted up
 				div(id="hw-health-message-undervoltage" class="hidden")
 					hr
-					+navbar_health_message("led-undervoltage", "Undervoltage detected", true)
+					+menu_message("led-undervoltage", "Undervoltage detected", "led-gray")
 						| Make sure your power supply and cabling are providing#[br]
-						| enough power to the Raspberry Pi (3A minimum).
+						| enough power to the Raspberry Pi (3A minimum)
 				div(id="hw-health-message-overheating" class="hidden")
 					hr
-					+navbar_health_message("led-overheating", "Overheating detected", true)
-						| Frequency capping due to overheating.#[br]
-						| Improve cooling of the Raspberry Pi.
+					+menu_message("led-overheating", "Overheating detected", "led-gray")
+						| Frequency capping due to overheating,#[br]
+						| improve cooling of the Raspberry Pi
 
 	li(class="right")
 		a(class="menu-button" href="#")
@@ -128,22 +119,22 @@ ul(id="navbar")
 			| Mass Storage &#8628;
 		div(data-dont-hide-menu id="msd-menu" class="menu")
 			div(id="msd-message-offline" class="hidden")
-				+navbar_message("warning", "Mass Storage Device is offline")
+				+menu_message("warning", "Mass Storage Device is offline")
 				hr
 			div(id="msd-message-image-broken" class="hidden")
-				+navbar_message("warning", "Current image is broken!")
-					| Perhaps uploading was interrupted
+				+menu_message("warning", "Current image is broken!")
+					| Perhaps uploading was interrupted#[br]
 				hr
 			div(id="msd-message-too-big-for-cdrom" class="hidden")
-				+navbar_message("warning", "Current image is too big for CD-ROM!")
+				+menu_message("warning", "Current image is too big for CD-ROM!")
 					| The device filesystem will be truncated to 2.2GiB
 				hr
 			div(id="msd-message-out-of-storage" class="hidden")
-				+navbar_message("warning", "Current image is out of storag")
+				+menu_message("warning", "Current image is out of storag")
 					| This image was connected manually using #[b kvmd-otgmsd]
 				hr
 			div(id="msd-message-another-user-uploads" class="hidden")
-				+navbar_message("info", "Another user uploads an image")
+				+menu_message("info", "Another user uploads an image")
 				hr
 			table(class="kv")
 				tr
