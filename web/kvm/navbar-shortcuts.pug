@@ -1,0 +1,34 @@
+li(class="right")
+	a(class="menu-button" href="#") Shortcuts &#8628;
+	div(data-dont-hide-menu class="menu")
+		div(class="buttons")
+			textarea(id="hid-pak-text" placeholder="Paste your text here")
+			hr
+			button(disabled data-force-hide-menu id="hid-pak-button") &bull; &#x21b3; Paste-as-Keys #[sup #[i ascii-only]]
+			hr
+			div(class="buttons-row")
+				button(data-force-hide-menu data-shortcut="CapsLock" class="row50")
+					| &bull; Caps Lock &nbsp;
+					img(class="inline-lamp hid-keyboard-caps-led led-gray" src=`${svg_dir}/led-square.svg`)
+				button(data-force-hide-menu data-shortcut="MetaLeft" class="row50") &bull; Left Win
+			hr
+			button(data-force-hide-menu data-shortcut="AltLeft ShiftLeft") &bull; Alt+Shift
+			button(data-force-hide-menu data-shortcut="ControlLeft ShiftLeft") &bull; Ctrl+Shift
+			button(data-force-hide-menu data-shortcut="ShiftLeft ShiftRight") &bull; Shift+Shift
+			button(data-force-hide-menu data-shortcut="MetaLeft Space") &bull; Win+Space
+			hr
+			button(data-force-hide-menu data-shortcut="ControlLeft KeyW") &bull; Ctrl+W
+			button(data-force-hide-menu data-shortcut="AltLeft Tab") &bull; Alt+Tab
+			button(data-force-hide-menu data-shortcut="AltLeft Enter") &bull; Alt+Enter
+			button(data-force-hide-menu data-shortcut="AltLeft F4") &bull; Alt+F4
+			hr
+			button(data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete") &bull; Ctrl+Alt+Del
+		hr
+		div(class="text")
+			| &darr; Alt+SysRq+... <sup><i>linux magic
+			| #[a(target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html") help]</i></sup>
+		hr
+		div(class="buttons")
+			div(class="buttons-row")
+				each key in ["R", "E", "I", "S", "U", "B"]
+					button(data-shortcut=`AltLeft PrintScreen Key${key}` class="row16") #{key}

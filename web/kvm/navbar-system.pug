@@ -1,0 +1,53 @@
+li(class="right")
+	a(class="menu-button" href="#")
+		+navbar_led("link-led", "led-link")
+		+navbar_led("stream-led", "led-stream")
+		+navbar_led("hid-keyboard-led", "led-hid-keyboard")
+		+navbar_led("hid-mouse-led", "led-hid-mouse")
+		| System &#8628;
+	div(data-dont-hide-menu class="menu")
+		div(class="buttons")
+			button(disabled data-force-hide-menu id="stream-screenshot-button") &bull; Take a screenshot
+			hr
+			button(data-force-hide-menu id="show-stream-button") &bull; Show stream
+			button(data-force-hide-menu id="show-keyboard-button") &bull; Show keyboard
+			button(data-force-hide-menu id="show-about-button") &bull; Show about
+		div(id="stream-resolution" class="feature-disabled")
+			hr
+			div(class="text")
+				| Stream resolution:
+				div(class="stream-param-box")
+					select(disabled data-dont-hide-menu id="stream-resolution-selector")
+		div(id="stream-quality" class="feature-disabled")
+			hr
+			div(class="text")
+				| Stream quality: #[span(id="stream-quality-value") 80%]
+				div(class="stream-param-box")
+					input(disabled type="range" id="stream-quality-slider" class="slider")
+		hr
+		div(class="text")
+			| Stream FPS: #[span(id="stream-desired-fps-value") 0]
+			div(class="stream-param-box")
+				input(disabled type="range" id="stream-desired-fps-slider" class="slider")
+		hr
+		div(class="text")
+			| Stream size: #[span(id="stream-size-value") 100%]
+			div(class="stream-param-box")
+				input(type="range" id="stream-size-slider" class="slider")
+		hr
+		div(class="text")
+			table(class="one-line-switch")
+				td Auto-resize stream:
+				td(align="right")
+					+switch("stream-auto-resize-checkbox")
+		hr
+		div(class="buttons")
+			button(disabled data-force-hide-menu id="stream-reset-button") &bull; Reset stream
+			button(disabled data-force-hide-menu id="hid-reset-button") &bull; Reset keyboard &amp; mouse
+			button(disabled data-force-hide-menu id="msd-reset-button" class="feature-disabled") &bull; Reset mass storage
+		hr
+		div(class="buttons")
+			button(data-force-hide-menu id="open-log-button") &bull; Open log
+		div(id="wol" class="buttons feature-disabled")
+			hr
+			button(disabled id="wol-wakeup-button") &bull; Wake on LAN server
