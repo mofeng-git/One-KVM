@@ -22,6 +22,7 @@
 
 
 import sys
+import csv
 import textwrap
 import dataclasses
 
@@ -66,32 +67,29 @@ def _resolve_keysym(name: str) -> int:
     return code
 
 
-def _read_keymap_in(path: str) -> List[_KeyMapping]:
+def _read_keymap_csv(path: str) -> List[_KeyMapping]:
     keymap: List[_KeyMapping] = []
     with open(path) as keymap_file:
-        for line in keymap_file:
-            line = line.strip()
-            if len(line) > 0 and not line.startswith("#"):
-                parts = list(map(str.strip, line.split()))
-                if len(parts) >= 6:
-                    otg_is_modifier = parts[3].startswith("^")
-                    otg_code = int((parts[3][1:] if otg_is_modifier else parts[3]), 16)
+        for row in csv.DictReader(keymap_file):
+            if len(row) >= 6:
+                otg_is_modifier = row["otg_key"].startswith("^")
+                otg_code = int((row["otg_key"][1:] if otg_is_modifier else row["otg_key"]), 16)
 
-                    x11_keys: Set[_X11Key] = set()
-                    for x11_name in parts[5].split(","):
-                        x11_shift = x11_name.startswith("^")
-                        x11_name = (x11_name[1:] if x11_shift else x11_name)
-                        x11_code = _resolve_keysym(x11_name)
-                        x11_keys.add(_X11Key(x11_name, x11_code, x11_shift))
+                x11_keys: Set[_X11Key] = set()
+                for x11_name in row["x11_names"].split(","):
+                    x11_shift = x11_name.startswith("^")
+                    x11_name = (x11_name[1:] if x11_shift else x11_name)
+                    x11_code = _resolve_keysym(x11_name)
+                    x11_keys.add(_X11Key(x11_name, x11_code, x11_shift))
 
-                    keymap.append(_KeyMapping(
-                        web_name=parts[0],
-                        serial_code=int(parts[1]),
-                        arduino_name=parts[2],
-                        otg_key=_OtgKey(otg_code, otg_is_modifier),
-                        at1_code=int(parts[4], 16),
-                        x11_keys=x11_keys,
-                    ))
+                keymap.append(_KeyMapping(
+                    web_name=row["web_name"],
+                    serial_code=int(row["serial_code"]),
+                    arduino_name=row["arduino_name"],
+                    otg_key=_OtgKey(otg_code, otg_is_modifier),
+                    at1_code=int(row["at1_code"], 16),
+                    x11_keys=x11_keys,
+                ))
     return keymap
 
 
@@ -105,9 +103,22 @@ def _render_keymap(keymap: List[_KeyMapping], template_path: str, out_path: str)
 
 # =====
 def main() -> None:
-    assert len(sys.argv) == 4, f"{sys.argv[0]} <keymap.in> <template> <out>"
+    # https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code/code_values
+    # https://github.com/NicoHood/HID/blob/master/src/KeyboardLayouts/ImprovedKeylayouts.h
+    # https://gist.github.com/MightyPork/6da26e382a7ad91b5496ee55fdc73db2
+    # https://github.com/qemu/keycodemapdb/blob/master/data/keymaps.csv
 
-    keymap = _read_keymap_in(sys.argv[1])
+    # Fields list:
+    #   - Web
+    #   - Serial code
+    #   - Arduino key
+    #   - OTG code (^ for mod)
+    #   - AT set1
+    #   -X11 keysyms (^ for shift)
+
+    assert len(sys.argv) == 4, f"{sys.argv[0]} <keymap.csv> <template> <out>"
+
+    keymap = _read_keymap_csv(sys.argv[1])
     _render_keymap(keymap, sys.argv[2], sys.argv[3])
 
 

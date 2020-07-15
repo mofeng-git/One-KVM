@@ -138,8 +138,8 @@ keymap: testenv
 	docker run --user `id -u`:`id -g` --rm \
 		--volume `pwd`:/src \
 	-it $(TESTENV_IMAGE) bash -c "cd src \
-		&& ./genmap.py keymap.in kvmd/keyboard/mappings.py.mako kvmd/keyboard/mappings.py \
-		&& ./genmap.py keymap.in hid/src/keymap.h.mako hid/src/keymap.h \
+		&& ./genmap.py keymap.csv kvmd/keyboard/mappings.py.mako kvmd/keyboard/mappings.py \
+		&& ./genmap.py keymap.csv hid/src/keymap.h.mako hid/src/keymap.h \
 	"
 
 
