@@ -131,7 +131,10 @@ run-vnc: testenv
 		"
 
 
-regen: testenv
+regen: keymap pug
+
+
+keymap: testenv
 	docker run --user `id -u`:`id -g` --rm \
 		--volume `pwd`:/src \
 	-it $(TESTENV_IMAGE) bash -c "cd src \
