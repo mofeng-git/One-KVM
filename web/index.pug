@@ -12,17 +12,14 @@ block start
 				img(class="svg-gray" src=`${svg_dir}/logo.svg` alt="Open Source Hardware" height="40")
 			td(valign="top")
 				table
-					tr
-						td(colspan="2" class="title") Open Source &amp; Open Hardware IP-KVM
-					tr
-						td(colspan="2" class="copyright") Copyright &copy; 2018 Pi-KVM Developers Team
+					tr #[td(colspan="2" class="title") Open Source &amp; Open Hardware IP-KVM]
+					tr #[td(colspan="2" class="copyright") Copyright &copy; 2018 Pi-KVM Developers Team]
 
 	hr
 	table
 		td(class="server")
 			td Server:
-			td
-				a(id="kvmd-meta-server-host" target="_blank" href="/api/info")
+			td #[a(id="kvmd-meta-server-host" target="_blank" href="/api/info")]
 
 	hr
 	div(id="apps-box")

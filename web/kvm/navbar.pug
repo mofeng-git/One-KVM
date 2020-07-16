@@ -1,13 +1,12 @@
-mixin navbar_led(id, icon)
-	img(data-dont-hide-menu id=id, class="led-gray" src=`${svg_dir}/${icon}.svg`)
+mixin navbar_led(id, icon, cls="led-gray")
+	img(data-dont-hide-menu id=id, class=cls src=`${svg_dir}/${icon}.svg`)
 
 mixin menu_message(icon, short, classes="")
 	div(class="text")
 		table
 			tr
 				td(rowspan="2") #[img(class=`sign ${classes}` src=`${svg_dir}/${icon}.svg`)]
-				td(style="line-height:1.5")
-					| #[b #{short}]
+				td(style="line-height:1.5") #[b #{short}]
 			if block
 				tr
 					td

@@ -1,8 +1,8 @@
 div(id="hw-health-dropdown" class="hidden")
 	li(class="left")
 		a(class="menu-button" href="#")
-			img(data-dont-hide-menu id="hw-health-undervoltage-led" class="hidden" src=`${svg_dir}/led-undervoltage.svg`)
-			img(data-dont-hide-menu id="hw-health-overheating-led" class="hidden" src=`${svg_dir}/led-overheating.svg`)
+			+navbar_led("hw-health-undervoltage-led", "led-undervoltage", "hidden")
+			+navbar_led("hw-health-overheating-led", "led-overheating", "hidden")
 			| &#8628;
 		div(data-dont-hide-menu class="menu")
 			+menu_message("warning", "Raspberry Pi's health is at risk")
