@@ -108,6 +108,7 @@ INLINE KeyboardKeycode keymap(uint8_t code) {
 		case 69: return KEY_PAGE_UP;
 		case 85: return KEY_PAUSE;
 		case 51: return KEY_PERIOD;
+		case 105: return KEY_POWER;
 		case 66: return KEY_PRINT;
 		case 17: return KEY_Q;
 		case 48: return KEY_QUOTE;

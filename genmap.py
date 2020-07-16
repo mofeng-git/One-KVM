@@ -28,9 +28,11 @@ import dataclasses
 
 from typing import Set
 from typing import List
+from typing import Optional
 
 import Xlib.keysymdef.latin1
 import Xlib.keysymdef.miscellany
+import Xlib.keysymdef.xf86
 
 import mako.template
 
@@ -60,9 +62,15 @@ class _KeyMapping:
 
 
 def _resolve_keysym(name: str) -> int:
-    code = getattr(Xlib.keysymdef.latin1, name, None)
-    if code is None:
-        code = getattr(Xlib.keysymdef.miscellany, name, None)
+    code: Optional[int] = None
+    for module in [
+        Xlib.keysymdef.latin1,
+        Xlib.keysymdef.miscellany,
+        Xlib.keysymdef.xf86,
+    ]:
+        code = getattr(module, name, None)
+        if code is not None:
+            break
     assert code is not None, name
     return code
 

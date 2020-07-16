@@ -148,6 +148,7 @@ KEYMAP: Dict[str, Key] = {
     "Numpad9": Key(serial=SerialKey(code=102), otg=OtgKey(code=97, is_modifier=False)),
     "Numpad0": Key(serial=SerialKey(code=103), otg=OtgKey(code=98, is_modifier=False)),
     "NumpadDecimal": Key(serial=SerialKey(code=104), otg=OtgKey(code=99, is_modifier=False)),
+    "Power": Key(serial=SerialKey(code=105), otg=OtgKey(code=102, is_modifier=False)),
 }
 
 
@@ -312,6 +313,7 @@ X11_TO_AT1 = {
     65511: At1Key(code=57435, shift=False),  # XK_Meta_L
     65512: At1Key(code=57436, shift=False),  # XK_Meta_R
     65383: At1Key(code=57437, shift=False),  # XK_Menu
+    269025071: At1Key(code=57438, shift=False),  # XK_XF86_Sleep
 }
 
 
@@ -420,4 +422,5 @@ AT1_TO_WEB = {
     57435: "MetaLeft",
     57436: "MetaRight",
     57437: "ContextMenu",
+    57438: "Power",
 }
