@@ -50,7 +50,7 @@ depends=(
 	patch
 	sudo
 	raspberrypi-io-access
-	"ustreamer>=1.17"
+	"ustreamer>=1.19"
 )
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
