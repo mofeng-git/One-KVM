@@ -20,28 +20,45 @@
 *****************************************************************************/
 
 
-div.tabs>input[type="radio"] {
+div.tabs {
+	display: flex;
+	flex-wrap: wrap;
+}
+
+div.tabs input[type="radio"] {
 	display: none;
 }
 
-div.tabs>div {
+div.tabs div.tab {
+	order: 99;
 	display: none;
 	border: var(--border-default-thin);
 	padding: 10px 10px;
+	width: 100%;
 }
 
-div.tabs>label {
-	display: inline-block;
+div.tabs label {
+	order: 1;
+	display: block;
 	text-align: center;
 	vertical-align: middle;
 	user-select: none;
-	border: var(--border-default-thin);
+	border-top: var(--border-default-thin);
+	border-left: var(--border-default-thin);
 	padding: 4px 8px;
 	cursor: pointer;
 	position: relative;
 	top: 1px;
 }
 
-div.tabs>input[type="radio"]:checked+label {
+div.tabs label:last-of-type {
+	border-right: var(--border-default-thin);
+}
+
+div.tabs input[type="radio"]:checked+label {
 	background-color: var(--cs-control-default-bg);
+}
+
+div.tabs input[type="radio"]:checked+label+.tab {
+	display: block;
 }

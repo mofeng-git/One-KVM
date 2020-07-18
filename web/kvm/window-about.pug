@@ -1,3 +1,14 @@
+mixin about_tab(name, title, checked=false)
+	- let button_id = `about-tab-${name}-button`
+	input(checked=checked type="radio" name="about-tab-button", id=button_id)
+	label(for=button_id) #{title}
+	div(class="tab")
+		div(id=`about-${name}` class="code")
+			if block
+				block
+			else
+				span(class="code-comment") No data
+
 +window("about-window", "About", true, false)
 	div(id="about")
 		table
@@ -10,48 +21,41 @@
 						tr #[td(colspan="2" class="copyright") Copyright &copy; 2018 Pi-KVM Developers Team]
 		br
 		div(class="tabs")
-			each tab, index in ["Meta", "Hardware", "Version", "Thanks"]
-				- tab_id = `about-tab-${tab != "Hardware" ? tab.toLowerCase() : "hw"}-button`
-				if index == 0
-					input(checked type="radio" name="about-tab-button" id=tab_id)
-				else
-					input(type="radio" name="about-tab-button" id=tab_id)
-				label(for=tab_id) #{tab}
-			each tab in ["meta", "hw", "version"]
-				div(id=`about-tab-${tab}-content`)
-					div(id=`about-${tab}` class="code") #[span(class="code-comment") No data]
-			div(id="about-tab-thanks-content")
-				div(id="about-thanks" class="code")
-					span(class="code-comment")
-						| // These kind people donated money to the Pi-KVM project#[br]
-						| // and supported the work on it. We are very grateful#[br]
-						| // for their help, and memorializing their names#[br]
-						| // is the least we can do in gratitude.#[br]
-						| // If you also want to support this project,#[br]
-						| // you can use one of these services:
-						| #[a(target="_blank" href="https://www.patreon.com/pikvm") Patreon]
-						| or #[a(target="_blank" href="https://www.paypal.me/mdevaev") PayPal].
-					ul
-						li Aleksei Brusianskii
-						li Arthur Woimbée
-						li Ben Gordon
-						li Branden Shaulis
-						li Christof Maluck
-						li Corey Lista
-						li David Howell
-						li Denis Yatsenko
-						li Ge Men
-						li Grey Cynic
-						li Jason Toland
-						li Jeff Bowman
-						li John McGovern
-						li Mark Gilbert
-						li Mark Robinson
-						li Mauricio Allende
-						li Michael Lynch
-						li Samed Ozoglu
-						li Truman Kilen
-						li Walter_Ego
+			+about_tab("meta", "Meta", true)
+			+about_tab("hw", "Hardware")
+			+about_tab("version", "Version")
+
+			+about_tab("thanks", "Thanks")
+				span(class="code-comment")
+					| // These kind people donated money to the Pi-KVM project#[br]
+					| // and supported the work on it. We are very grateful#[br]
+					| // for their help, and memorializing their names#[br]
+					| // is the least we can do in gratitude.#[br]
+					| // If you also want to support this project,#[br]
+					| // you can use one of these services:
+					| #[a(target="_blank" href="https://www.patreon.com/pikvm") Patreon]
+					| or #[a(target="_blank" href="https://www.paypal.me/mdevaev") PayPal].
+				ul
+					li Aleksei Brusianskii
+					li Arthur Woimbée
+					li Ben Gordon
+					li Branden Shaulis
+					li Christof Maluck
+					li Corey Lista
+					li David Howell
+					li Denis Yatsenko
+					li Ge Men
+					li Grey Cynic
+					li Jason Toland
+					li Jeff Bowman
+					li John McGovern
+					li Mark Gilbert
+					li Mark Robinson
+					li Mauricio Allende
+					li Michael Lynch
+					li Samed Ozoglu
+					li Truman Kilen
+					li Walter_Ego
 		br
 		p(class="text")
 			| Full documentation, source code, hardware schematics and legal information

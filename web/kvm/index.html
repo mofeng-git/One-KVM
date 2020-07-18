@@ -328,6 +328,7 @@
       <li class="right"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="hid-recorder-led" src="/share/svg/led-gear.svg">Macro &#8628;</a>
         <div class="menu" data-dont-hide-menu>
           <div class="text"><b>Record and play keyboard &amp; mouse actions<br></b><sub>For security reasons, the record will not saved on Pi-KVM</sub></div>
+          <hr>
           <div class="buttons buttons-row">
             <button class="row25" disabled data-force-hide-menu id="hid-recorder-record">&bull; Rec</button>
             <button class="row25" disabled id="hid-recorder-stop">Stop</button>
@@ -1188,56 +1189,59 @@
               </tr>
             </table><br>
             <div class="tabs">
-              <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
-              <label for="about-tab-meta-button">Meta</label>
-              <input type="radio" name="about-tab-button" id="about-tab-hw-button">
-              <label for="about-tab-hw-button">Hardware</label>
-              <input type="radio" name="about-tab-button" id="about-tab-version-button">
-              <label for="about-tab-version-button">Version</label>
-              <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
-              <label for="about-tab-thanks-button">Thanks</label>
-              <div id="about-tab-meta-content">
-                <div class="code" id="about-meta"><span class="code-comment">No data</span></div>
-              </div>
-              <div id="about-tab-hw-content">
-                <div class="code" id="about-hw"><span class="code-comment">No data</span></div>
-              </div>
-              <div id="about-tab-version-content">
-                <div class="code" id="about-version"><span class="code-comment">No data</span></div>
-              </div>
-              <div id="about-tab-thanks-content">
-                <div class="code" id="about-thanks"><span class="code-comment">// These kind people donated money to the Pi-KVM project<br>
-                    // and supported the work on it. We are very grateful<br>
-                    // for their help, and memorializing their names<br>
-                    // is the least we can do in gratitude.<br>
-                    // If you also want to support this project,<br>
-                    // you can use one of these services:
-                    <a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
-                    or <a target="_blank" href="https://www.paypal.me/mdevaev">PayPal</a>.</span>
-                  <ul>
-                    <li>Aleksei Brusianskii</li>
-                    <li>Arthur Woimbée</li>
-                    <li>Ben Gordon</li>
-                    <li>Branden Shaulis</li>
-                    <li>Christof Maluck</li>
-                    <li>Corey Lista</li>
-                    <li>David Howell</li>
-                    <li>Denis Yatsenko</li>
-                    <li>Ge Men</li>
-                    <li>Grey Cynic</li>
-                    <li>Jason Toland</li>
-                    <li>Jeff Bowman</li>
-                    <li>John McGovern</li>
-                    <li>Mark Gilbert</li>
-                    <li>Mark Robinson</li>
-                    <li>Mauricio Allende</li>
-                    <li>Michael Lynch</li>
-                    <li>Samed Ozoglu</li>
-                    <li>Truman Kilen</li>
-                    <li>Walter_Ego</li>
-                  </ul>
-                </div>
-              </div>
+                  <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
+                  <label for="about-tab-meta-button">Meta</label>
+                  <div class="tab">
+                    <div class="code" id="about-meta"><span class="code-comment">No data</span>
+                    </div>
+                  </div>
+                  <input type="radio" name="about-tab-button" id="about-tab-hw-button">
+                  <label for="about-tab-hw-button">Hardware</label>
+                  <div class="tab">
+                    <div class="code" id="about-hw"><span class="code-comment">No data</span>
+                    </div>
+                  </div>
+                  <input type="radio" name="about-tab-button" id="about-tab-version-button">
+                  <label for="about-tab-version-button">Version</label>
+                  <div class="tab">
+                    <div class="code" id="about-version"><span class="code-comment">No data</span>
+                    </div>
+                  </div>
+                  <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
+                  <label for="about-tab-thanks-button">Thanks</label>
+                  <div class="tab">
+                    <div class="code" id="about-thanks"><span class="code-comment">// These kind people donated money to the Pi-KVM project<br>
+                        // and supported the work on it. We are very grateful<br>
+                        // for their help, and memorializing their names<br>
+                        // is the least we can do in gratitude.<br>
+                        // If you also want to support this project,<br>
+                        // you can use one of these services:
+                        <a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
+                        or <a target="_blank" href="https://www.paypal.me/mdevaev">PayPal</a>.</span>
+                      <ul>
+                        <li>Aleksei Brusianskii</li>
+                        <li>Arthur Woimbée</li>
+                        <li>Ben Gordon</li>
+                        <li>Branden Shaulis</li>
+                        <li>Christof Maluck</li>
+                        <li>Corey Lista</li>
+                        <li>David Howell</li>
+                        <li>Denis Yatsenko</li>
+                        <li>Ge Men</li>
+                        <li>Grey Cynic</li>
+                        <li>Jason Toland</li>
+                        <li>Jeff Bowman</li>
+                        <li>John McGovern</li>
+                        <li>Mark Gilbert</li>
+                        <li>Mark Robinson</li>
+                        <li>Mauricio Allende</li>
+                        <li>Michael Lynch</li>
+                        <li>Samed Ozoglu</li>
+                        <li>Truman Kilen</li>
+                        <li>Walter_Ego</li>
+                      </ul>
+                    </div>
+                  </div>
             </div><br>
             <p class="text">
               Full documentation, source code, hardware schematics and legal information
