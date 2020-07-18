@@ -85,7 +85,6 @@ div.switch-box label.switch-label span.switch {
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	right: 31px;
 	border: var(--border-intensive-2px);
 	border-radius: 15px;
 }
