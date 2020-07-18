@@ -197,6 +197,14 @@ function __WindowManager() {
 		for (let el_button of __menu_buttons) {
 			let el_menu = el_button.parentElement.querySelector(".menu");
 			if (el_button === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
+				let rect = el_menu.getBoundingClientRect();
+				let offset = self.getViewGeometry().right - (rect.x + el_menu.clientWidth);
+				if (offset < 0) {
+					el_menu.style.right = "0px";
+				} else {
+					el_menu.style.removeProperty("right");
+				}
+
 				el_button.classList.add("menu-button-pressed");
 				el_menu.style.visibility = "visible";
 				el_menu.focus();
@@ -204,6 +212,8 @@ function __WindowManager() {
 			} else {
 				el_button.classList.remove("menu-button-pressed");
 				el_menu.style.visibility = "hidden";
+
+				el_menu.style.removeProperty("right");
 			}
 		}
 
