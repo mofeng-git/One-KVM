@@ -41,6 +41,6 @@ div#about td.copyright {
 	font-size: 0.8em;
 }
 
-div#about div.tabs div.tab div.code {
+div#about div.tabs-box div.tab div.code {
 	height: 250px;
 }
