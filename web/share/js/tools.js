@@ -137,7 +137,7 @@ export var tools = new function() {
 
 	this.setOnClickRadio = function(name, callback) {
 		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
-			this.setOnClick(el, callback)
+			this.setOnClick(el, callback);
 		}
 	};
 
