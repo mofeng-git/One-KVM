@@ -91,6 +91,17 @@ from .api.streamer import StreamerApi
 
 
 # =====
+class StreamerQualityNotSupported(OperationError):
+    def __init__(self) -> None:
+        super().__init__("This streamer does not support quality settings")
+
+
+class StreamerResolutionNotSupported(OperationError):
+    def __init__(self) -> None:
+        super().__init__("This streamer does not support resolution settings")
+
+
+# =====
 @dataclasses.dataclass(frozen=True)
 class _Component:
     name: str
@@ -191,12 +202,15 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     @exposed_http("POST", "/streamer/set_params")
     async def __streamer_set_params_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         current_params = self.__streamer.get_params()
-        for (name, validator) in [
-            ("quality", valid_stream_quality),
-            ("desired_fps", valid_stream_fps),
-            ("resolution", valid_stream_resolution),
+        for (name, validator, exc_cls) in [
+            ("quality", valid_stream_quality, StreamerQualityNotSupported),
+            ("desired_fps", valid_stream_fps, None),
+            ("resolution", valid_stream_resolution, StreamerResolutionNotSupported),
         ]:
             if (value := request.query.get(name)):
+                if name not in current_params:
+                    assert exc_cls is not None, name
+                    raise exc_cls()
                 value = validator(value)
                 if current_params[name] != value:
                     self.__new_streamer_params[name] = value
