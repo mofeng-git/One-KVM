@@ -28,7 +28,7 @@
 	--cs-control-default-bg: #36393f;
 	--cs-control-default-fg: #c3c3c3;
 	--cs-control-intensive-fg: white;
-	--cs-control-hovered-bg: #202225;
+	--cs-control-hovered-bg: #2a2d31;
 	--cs-control-hovered-fg: white;
 	--cs-control-pressed-bg: #17191d;
 	--cs-control-pressed-fg: #6c7481;
@@ -60,7 +60,7 @@
 
 	--cs-key-default-bg: #3b3e43;
 	--cs-key-default-fg: #c3c3c3;
-	--cs-key-hovered-bg: #202225;
+	--cs-key-hovered-bg: #2a2d31;
 	--cs-key-hovered-fg: white;
 	--cs-key-pressed-bg: #17191d;
 	--cs-key-pressed-fg: #6c7481;
@@ -73,6 +73,7 @@
 
 	--border-default-thin: thin solid #36393f;
 	--border-default-2px: 2px solid #36393f;
+	--border-hovered-2px: 2px solid #2a2d31;
 	--border-navbar-item-thin: thin solid black;
 	--border-control-thin: thin solid #17191d;
 	--border-window-thin: thin solid #17191d;

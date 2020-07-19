@@ -29,11 +29,11 @@ div.switch-box {
 	-moz-user-select: none;
 }
 
-div.switch-box input[type=checkbox].switch-checkbox {
+div.switch-box input[type=checkbox] {
 	display: none;
 }
 
-div.switch-box label.switch-label {
+div.switch-box label {
 	display: block;
 	overflow: hidden;
 	cursor: pointer;
@@ -41,14 +41,14 @@ div.switch-box label.switch-label {
 	border-radius: 15px;
 }
 
-div.switch-box label.switch-label span.switch-inner {
+div.switch-box label span.switch-inner {
 	display: block;
 	width: 200%;
 	margin-left: -100%;
 }
 
-div.switch-box label.switch-label span.switch-inner:before,
-div.switch-box label.switch-label span.switch-inner:after {
+div.switch-box label span.switch-inner:before,
+div.switch-box label span.switch-inner:after {
 	display: block;
 	float: left;
 	width: 50%;
@@ -61,15 +61,14 @@ div.switch-box label.switch-label span.switch-inner:after {
 	box-sizing: border-box;
 }
 
-div.switch-box label.switch-label span.switch-inner:before {
+div.switch-box label span.switch-inner:before {
 	content: "ON";
 	padding-left: 5px;
 	background-color: var(--cs-control-default-bg);
 	color: var(--cs-control-default-fg);
 	text-align: left;
 }
-
-div.switch-box label.switch-label span.switch-inner:after {
+div.switch-box label span.switch-inner:after {
 	content: "OFF";
 	padding-right: 5px;
 	background-color: var(--cs-control-default-bg);
@@ -77,7 +76,17 @@ div.switch-box label.switch-label span.switch-inner:after {
 	text-align: right;
 }
 
-div.switch-box label.switch-label span.switch {
+@media (hover: hover), (min--moz-device-pixel-ratio: 0) {
+	/* If we have a mouse cursor */
+	div.switch-box label span.switch-inner:not(:disabled):hover::before {
+		background-color: var(--cs-control-hovered-bg);
+	}
+	div.switch-box label span.switch-inner:not(:disabled):hover::after {
+		background-color: var(--cs-control-hovered-bg);
+	}
+}
+
+div.switch-box label span.switch {
 	display: block;
 	width: 15px;
 	margin: 0px;
@@ -89,15 +98,15 @@ div.switch-box label.switch-label span.switch {
 	border-radius: 15px;
 }
 
-div.switch-box input[type=checkbox].switch-checkbox:checked + label.switch-label span.switch-inner {
+div.switch-box input[type=checkbox]:checked + label span.switch-inner {
 	margin-left: 0;
 }
 
-div.switch-box input[type=checkbox].switch-checkbox:checked + label.switch-label span.switch {
+div.switch-box input[type=checkbox]:checked + label span.switch {
 	right: 0px;
 }
 
-div.switch-box input[type=checkbox].switch-checkbox:disabled + label.switch-label span.switch {
+div.switch-box input[type=checkbox]:disabled + label span.switch {
 	background: var(--cs-thumb-disabled-bg);
 	border: var(--border-default-2px);
 }

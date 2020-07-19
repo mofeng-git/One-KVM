@@ -149,8 +149,6 @@ ul#navbar li div.menu table.kv td.value {
 
 ul#navbar li div.menu div.buttons button,
 ul#navbar li div.menu div.buttons select {
-	box-shadow: none;
-	border: none;
 	border-radius: 0;
 	text-align: left;
 	padding: 0 16px;

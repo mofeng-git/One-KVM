@@ -39,7 +39,11 @@ li(class="right")
 			table(class="one-line-switch")
 				td Auto-resize stream:
 				td(align="right")
-					+switch("stream-auto-resize-checkbox")
+					div(class="switch-box")
+						input(checked type="checkbox" id="stream-auto-resize-checkbox")
+						label(for="stream-auto-resize-checkbox")
+							span(class="switch-inner")
+							span(class="switch")
 		hr
 		div(class="buttons")
 			button(disabled data-force-hide-menu id="stream-reset-button") &bull; Reset stream
