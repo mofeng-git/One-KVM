@@ -204,7 +204,7 @@ function __WindowManager() {
 			let el_menu = el_button.parentElement.querySelector(".menu");
 			if (el_button === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
 				let rect = el_menu.getBoundingClientRect();
-				let offset = self.getViewGeometry().right - (rect.x + el_menu.clientWidth);
+				let offset = self.getViewGeometry().right - (rect.x + el_menu.clientWidth + 2); // + 2 is ugly hack
 				if (offset < 0) {
 					el_menu.style.right = "0px";
 				} else {
