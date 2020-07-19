@@ -135,6 +135,22 @@ export var tools = new function() {
 		};
 	};
 
+	this.setOnClickRadio = function(name, callback) {
+		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+			this.setOnClick(el, callback)
+		}
+	};
+
+	this.getRadioValue = function(name, value) {
+		return document.querySelector(`input[type="radio"][name="${name}"]:checked`).value;
+	};
+
+	this.setRadioValue = function(name, value) {
+		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+			el.checked = (el.value === value);
+		}
+	};
+
 	this.setProgressPercent = function(el, title, percent) {
 		el.setAttribute("data-label", title);
 		$(`${el.id}-value`).style.width = `${percent}%`;

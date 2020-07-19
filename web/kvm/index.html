@@ -41,6 +41,7 @@
     <link rel="stylesheet" href="/share/css/led.css">
     <link rel="stylesheet" href="/share/css/slider.css">
     <link rel="stylesheet" href="/share/css/switch.css">
+    <link rel="stylesheet" href="/share/css/radio.css">
     <link rel="stylesheet" href="/share/css/progress.css">
     <link rel="stylesheet" href="/share/css/keypad.css">
     <link rel="stylesheet" href="/share/css/tabs.css">
@@ -279,12 +280,14 @@
           </table>
           <table class="kv msd-multi-storage feature-disabled">
             <tr class="msd-cdrom-emulation feature-disabled">
-              <td>Emulate CD-ROM drive:</td>
+              <td>Drive mode:</td>
               <td>
-                    <div class="switch-box">
-                      <input class="switch-checkbox" checked type="checkbox" id="msd-emulate-cdrom-checkbox">
-                      <label class="switch-label" for="msd-emulate-cdrom-checkbox"><span class="switch-inner"></span><span class="switch"></span></label>
-                    </div>
+                <div class="radio-box">
+                  <input checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1">
+                  <label for="msd-mode-radio-cdrom">CD-ROM</label>
+                  <input type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0">
+                  <label for="msd-mode-radio-flash">Flash</label>
+                </div>
               </td>
             </tr>
           </table>

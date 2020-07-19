@@ -43,9 +43,13 @@ li(id="msd-dropdown" class="right feature-disabled")
 				td #[button(disabled id="msd-remove-image") Remove]
 		table(class="kv msd-multi-storage feature-disabled")
 			tr(class="msd-cdrom-emulation feature-disabled")
-				td Emulate CD-ROM drive:
+				td Drive mode:
 				td
-					+switch("msd-emulate-cdrom-checkbox")
+					div(class="radio-box")
+						input(checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1")
+						label(for="msd-mode-radio-cdrom") CD-ROM
+						input(type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0")
+						label(for="msd-mode-radio-flash") Flash
 		div(class="msd-multi-storage feature-disabled")
 			hr
 			div(class="text")

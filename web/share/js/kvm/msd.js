@@ -42,7 +42,7 @@ export function Msd() {
 		$("msd-image-selector").onchange = __selectImage;
 		tools.setOnClick($("msd-remove-image"), __clickRemoveImageButton);
 
-		tools.setOnClick($("msd-emulate-cdrom-checkbox"), __clickCdromSwitch);
+		tools.setOnClickRadio("msd-mode-radio", __clickModeRadio);
 
 		$("msd-select-new-image-file").onchange = __selectNewImageFile;
 		tools.setOnClick($("msd-select-new-image-button"), () => $("msd-select-new-image-file").click());
@@ -84,8 +84,8 @@ export function Msd() {
 		});
 	};
 
-	var __clickCdromSwitch = function() {
-		__sendParam("cdrom", ($("msd-emulate-cdrom-checkbox").checked ? "1" : "0"));
+	var __clickModeRadio = function() {
+		__sendParam("cdrom", tools.getRadioValue("msd-mode-radio"));
 	};
 
 	var __sendParam = function(name, value) {
@@ -224,8 +224,8 @@ export function Msd() {
 			}
 			wm.switchEnabled($("msd-remove-image"), (__state.online && __state.features.multi && __state.drive.image && !__state.drive.connected && !__state.busy));
 
-			wm.switchEnabled($("msd-emulate-cdrom-checkbox"), (__state.online && __state.features.cdrom && !__state.drive.connected && !__state.busy));
-			$("msd-emulate-cdrom-checkbox").checked = (__state.online && __state.features.cdrom && __state.drive.cdrom);
+			wm.switchRadioEnabled("msd-mode-radio", (__state.online && __state.features.cdrom && !__state.drive.connected && !__state.busy));
+			tools.setRadioValue("msd-mode-radio", `${Number(__state.online && __state.features.cdrom && __state.drive.cdrom)}`);
 
 			wm.switchEnabled($("msd-connect-button"), (__state.online && (!__state.features.multi || __state.drive.image) && !__state.drive.connected && !__state.busy));
 			wm.switchEnabled($("msd-disconnect-button"), (__state.online && __state.drive.connected && !__state.busy));
@@ -261,8 +261,8 @@ export function Msd() {
 			$("msd-image-selector").options.length = 1;
 			wm.switchEnabled($("msd-remove-image"), false);
 
-			wm.switchEnabled($("msd-emulate-cdrom-checkbox"), false);
-			$("msd-emulate-cdrom-checkbox").checked = false;
+			wm.switchRadioEnabled("msd-mode-radio", false);
+			tools.setRadioValue("msd-mode-radio", "0");
 
 			wm.switchEnabled($("msd-connect-button"), false);
 			wm.switchEnabled($("msd-disconnect-button"), false);

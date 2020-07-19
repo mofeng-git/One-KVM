@@ -170,6 +170,12 @@ function __WindowManager() {
 		el.disabled = !enabled;
 	};
 
+	self.switchRadioEnabled = function(name, enabled) {
+		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+			self.switchEnabled(el, enabled);
+		}
+	};
+
 	self.showWindow = function(el_window, activate=true, center=false) {
 		if (el_window.style.visibility === "hidden") {
 			center = true;
