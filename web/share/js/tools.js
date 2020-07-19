@@ -141,7 +141,7 @@ export var tools = new function() {
 		}
 	};
 
-	this.getRadioValue = function(name, value) {
+	this.getRadioValue = function(name) {
 		return document.querySelector(`input[type="radio"][name="${name}"]:checked`).value;
 	};
 
