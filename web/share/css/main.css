@@ -70,6 +70,12 @@ div.code::-webkit-scrollbar-thumb {
 	border-radius: 4px;
 	background: var(--cs-scroll-default-bg);
 }
+@-moz-document url-prefix() {
+	div.code {
+		scrollbar-width: thin;
+		scrollbar-color: var(--cs-scroll-default-bg) var(--cs-code-default-bg);
+	}
+}
 
 div.code span.code-comment {
 	color: var(--cs-code-comment-fg);
