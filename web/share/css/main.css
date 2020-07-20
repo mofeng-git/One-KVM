@@ -63,7 +63,7 @@ div.code {
 	padding: 10px;
 }
 div.code::-webkit-scrollbar {
-    width: 8px;
+	width: 8px;
 	height: 8px;
 }
 div.code::-webkit-scrollbar-thumb {
@@ -186,6 +186,7 @@ input[type=text], input[type=password] {
 	color: var(--cs-code-default-fg);
 	background-color: var(--cs-code-default-bg);
 	padding: 2px;
+	height: 30px;
 }
 
 @media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
