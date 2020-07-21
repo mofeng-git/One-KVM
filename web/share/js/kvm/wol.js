@@ -42,14 +42,17 @@ export function WakeOnLan() {
 
 	self.setState = function(state) {
 		if (state) {
-			tools.setFeatureEnabled($("wol"), state.enabled);
+			tools.featureSetEnabled($("wol"), state.enabled);
 			__target = state.target;
 		}
 		wm.switchEnabled($("wol-wakeup-button"), (state && state.enabled));
 	};
 
 	var __clickWakeupButton = function() {
-		let msg = `Are you sure to send Wake-on-LAN packet to the server?<br>Target: <b>${__target.mac}</b> (${__target.ip}:${__target.port})?`;
+		let msg = `
+			Are you sure to send Wake-on-LAN packet to the server?<br>
+			Target: <b>${__target.mac}</b> (${__target.ip}:${__target.port})?
+		`;
 		wm.confirm(msg).then(function(ok) {
 			if (ok) {
 				let http = tools.makeRequest("POST", "/api/wol/wakeup", function() {

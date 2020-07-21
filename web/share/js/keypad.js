@@ -36,7 +36,7 @@ export function Keypad(keys_parent, key_callback) {
 	var __modifiers = {};
 
 	var __init__ = function() {
-		for (let el_key of $$$(keys_parent + " div.key")) {
+		for (let el_key of $$$(`${keys_parent} div.key`)) {
 			let code = el_key.getAttribute("data-code");
 
 			tools.setDefault(__keys, code, []);
@@ -54,7 +54,7 @@ export function Keypad(keys_parent, key_callback) {
 			};
 		}
 
-		for (let el_key of $$$(keys_parent + " div.modifier")) {
+		for (let el_key of $$$(`${keys_parent} div.modifier`)) {
 			let code = el_key.getAttribute("data-code");
 
 			tools.setDefault(__modifiers, code, []);

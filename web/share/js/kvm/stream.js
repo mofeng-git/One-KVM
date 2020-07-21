@@ -43,27 +43,18 @@ export function Streamer() {
 	var __init__ = function() {
 		$("stream-led").title = "Stream inactive";
 
-		$("stream-quality-slider").min = 5;
-		$("stream-quality-slider").max = 100;
-		$("stream-quality-slider").step = 5;
-		$("stream-quality-slider").value = 80;
-		tools.setOnUpSlider($("stream-quality-slider"), 1000, __updateQualityValue, (value) => __sendParam("quality", value));
+		tools.sliderSetParams($("stream-quality-slider"), 5, 100, 5, 80);
+		tools.sliderSetOnUp($("stream-quality-slider"), 1000, __updateQualityValue, (value) => __sendParam("quality", value));
 
-		$("stream-desired-fps-slider").min = 0;
-		$("stream-desired-fps-slider").max = 120;
-		$("stream-desired-fps-slider").step = 1;
-		$("stream-desired-fps-slider").value = 0;
-		tools.setOnUpSlider($("stream-desired-fps-slider"), 1000, __updateDesiredFpsValue, (value) => __sendParam("desired_fps", value));
+		tools.sliderSetParams($("stream-desired-fps-slider"), 0, 120, 1, 0);
+		tools.sliderSetOnUp($("stream-desired-fps-slider"), 1000, __updateDesiredFpsValue, (value) => __sendParam("desired_fps", value));
 
 		$("stream-resolution-selector").onchange = (() => {
 			wm.switchEnabled($("stream-resolution-selector"), false);
 			__sendParam("resolution", $("stream-resolution-selector").value);
 		});
 
-		$("stream-size-slider").min = 20;
-		$("stream-size-slider").max = 200;
-		$("stream-size-slider").step = 5;
-		$("stream-size-slider").value = 100;
+		tools.sliderSetParams($("stream-size-slider"), 20, 200, 5, 100);
 		$("stream-size-slider").oninput = () => __resize();
 		$("stream-size-slider").onchange = () => __resize();
 
@@ -75,8 +66,8 @@ export function Streamer() {
 
 	self.setState = function(state) {
 		if (state) {
-			tools.setFeatureEnabled($("stream-quality"), state.features.quality && (state.streamer === null || state.streamer.encoder.quality > 0));
-			tools.setFeatureEnabled($("stream-resolution"), state.features.resolution);
+			tools.featureSetEnabled($("stream-quality"), state.features.quality && (state.streamer === null || state.streamer.encoder.quality > 0));
+			tools.featureSetEnabled($("stream-resolution"), state.features.resolution);
 		}
 
 		if (state && state.streamer) {
@@ -211,7 +202,7 @@ export function Streamer() {
 	};
 
 	var __updateQualityValue = function(value) {
-		$("stream-quality-value").innerHTML = value + "%";
+		$("stream-quality-value").innerHTML = `${value}%`;
 	};
 
 	var __updateDesiredFpsValue = function(value) {
@@ -253,7 +244,7 @@ export function Streamer() {
 
 	var __resize = function() {
 		let size = $("stream-size-slider").value;
-		$("stream-size-value").innerHTML = size + "%";
+		$("stream-size-value").innerHTML = `${size}%`;
 		__size_factor = size / 100;
 		__applySizeFactor();
 	};
@@ -281,9 +272,9 @@ export function Streamer() {
 	};
 
 	var __applySizeFactor = function() {
-		let el_stream_image = $("stream-image");
-		el_stream_image.style.width = __resolution.width * __size_factor + "px";
-		el_stream_image.style.height = __resolution.height * __size_factor + "px";
+		let el = $("stream-image");
+		el.style.width = __resolution.width * __size_factor + "px";
+		el.style.height = __resolution.height * __size_factor + "px";
 		wm.showWindow($("stream-window"), false);
 	};
 

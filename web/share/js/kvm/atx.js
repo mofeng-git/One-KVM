@@ -36,30 +36,37 @@ export function Atx() {
 		$("atx-power-led").title = "Power Led";
 		$("atx-hdd-led").title = "Disk Activity Led";
 
-		tools.setOnClick($("atx-power-button"), () => __clickButton("power", "Are you sure to click the power button?"));
-		tools.setOnClick($("atx-power-button-long"), () => __clickButton("power_long", "Are you sure to perform the long press of the power button?"));
-		tools.setOnClick($("atx-reset-button"), () => __clickButton("reset", "Are you sure to reboot the server?"));
+		for (let args of [
+			["atx-power-button", "power", "Are you sure to click the power button?"],
+			["atx-power-button-long", "power_long", "Are you sure to perform the long press of the power button?"],
+			["atx-reset-button", "reset", "Are you sure to reboot the server?"],
+		]) {
+			tools.setOnClick($(args[0]), () => __clickButton(args[1], args[2]));
+		}
 	};
 
 	/************************************************************************/
 
 	self.setState = function(state) {
+		let buttons_enabled = false;
 		if (state) {
-			tools.setFeatureEnabled($("atx-dropdown"), state.enabled);
+			tools.featureSetEnabled($("atx-dropdown"), state.enabled);
+			$("atx-power-led").className = (state.busy ? "led-yellow" : (state.leds.power ? "led-green" : "led-gray"));
+			$("atx-hdd-led").className = (state.leds.hdd ? "led-red" : "led-gray");
+			buttons_enabled = !state.busy;
+		} else {
+			$("atx-power-led").className = "led-gray";
+			$("atx-hdd-led").className = "led-gray";
 		}
-
-		$("atx-power-led").className = ((state && state.leds.power) ? "led-green" : "led-gray");
-		$("atx-hdd-led").className = ((state && state.leds.hdd) ? "led-red" : "led-gray");
-
-		wm.switchEnabled($("atx-power-button"), (state && !state.busy));
-		wm.switchEnabled($("atx-power-button-long"), (state && !state.busy));
-		wm.switchEnabled($("atx-reset-button"), (state && !state.busy));
+		for (let id of ["atx-power-button", "atx-power-button-long", "atx-reset-button"]) {
+			wm.switchEnabled($(id), buttons_enabled);
+		}
 	};
 
 	var __clickButton = function(button, confirm_msg) {
 		wm.confirm(confirm_msg).then(function(ok) {
 			if (ok) {
-				let http = tools.makeRequest("POST", "/api/atx/click?button=" + button, function() {
+				let http = tools.makeRequest("POST", `/api/atx/click?button=${button}`, function() {
 					if (http.readyState === 4) {
 						if (http.status === 409) {
 							wm.error("Performing another ATX operation for other client.<br>Please try again later");

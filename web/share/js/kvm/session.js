@@ -92,11 +92,11 @@ export function Session() {
 			let undervoltage = (flags.undervoltage.now || flags.undervoltage.past);
 			let freq_capped = (flags.freq_capped.now || flags.freq_capped.past);
 
-			tools.setHiddenVisible($("hw-health-dropdown"), (undervoltage || freq_capped));
+			tools.hiddenSetVisible($("hw-health-dropdown"), (undervoltage || freq_capped));
 			$("hw-health-undervoltage-led").className = (undervoltage ? (flags.undervoltage.now ? "led-red" : "led-yellow") : "hidden");
 			$("hw-health-overheating-led").className = (freq_capped ? (flags.freq_capped.now ? "led-red" : "led-yellow") : "hidden");
-			tools.setHiddenVisible($("hw-health-message-undervoltage"), undervoltage);
-			tools.setHiddenVisible($("hw-health-message-overheating"), freq_capped);
+			tools.hiddenSetVisible($("hw-health-message-undervoltage"), undervoltage);
+			tools.hiddenSetVisible($("hw-health-message-overheating"), freq_capped);
 		}
 	};
 

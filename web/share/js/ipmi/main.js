@@ -34,34 +34,23 @@ function __loadKvmdInfo() {
 	let http = tools.makeRequest("GET", "/api/info", function() {
 		if (http.readyState === 4) {
 			if (http.status === 200) {
-				let port = JSON.parse(http.responseText).result.extras.ipmi.port;
-				let host = window.location.hostname;
-				let site = `${window.location.protocol}//${window.location.host}`;
+				let ipmi_port = JSON.parse(http.responseText).result.extras.ipmi.port;
+				let make_item = (comment, ipmi, api) => `
+					<span class="code-comment"># ${comment}:<br>$</span>
+					ipmitool -I lanplus -U admin -P admin -H ${window.location.hostname} -p ${ipmi_port} ${ipmi}<br>
+					<span class="code-comment">$</span> curl -XPOST -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
+					&nbsp;&nbsp;&nbsp;&nbsp;${window.location.protocol}//${window.location.host}/api/atx${api}<br>
+				`;
 				$("ipmi-text").innerHTML = `
-					<span class="code-comment"># Power on the server if it's off:<br>
-					$</span> ipmitool -I lanplus -U admin -P admin -H ${host} -p ${port} power on<br>
-					<span class="code-comment">$</span> curl -XPOST -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
-					&nbsp;&nbsp;&nbsp;&nbsp;${site}/api/atx/power?action=on<br>
+					${make_item("Power on the server if it's off", "power on", "/power?action=on")}
 					<br>
-					<span class="code-comment"># Soft power off the server if it's on:<br>
-					$</span> ipmitool -I lanplus -U admin -P admin -H ${host} -p ${port} power soft<br>
-					<span class="code-comment">$</span> curl -XPOST -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
-					&nbsp;&nbsp;&nbsp;&nbsp;${site}/api/atx/power?action=off<br>
+					${make_item("Soft power off the server if it's on", "power soft", "/power?action=off")}
 					<br>
-					<span class="code-comment"># Hard power off the server if it's on:<br>
-					$</span> ipmitool -I lanplus -U admin -P admin -H ${host} -p ${port} power off<br>
-					<span class="code-comment">$</span> curl -XPOST -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
-					&nbsp;&nbsp;&nbsp;&nbsp;${site}/api/atx/power?action=off_hard<br>
+					${make_item("Hard power off the server if it's on", "power off", "/power?action=off_hard")}
 					<br>
-					<span class="code-comment"># Hard reset the server if it's on:<br>
-					$</span> ipmitool -I lanplus -U admin -P admin -H ${host} -p ${port} power reset<br>
-					<span class="code-comment">$</span> curl -XPOST -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
-					&nbsp;&nbsp;&nbsp;&nbsp;${site}/api/atx/power?action=reset_hard<br>
+					${make_item("Hard reset the server if it's on", "power reset", "/power?action=reset_hard")}
 					<br>
-					<span class="code-comment"># Check the power status:<br>
-					$</span> ipmitool -I lanplus -U admin -P admin -H ${host} -p ${port} power status<br>
-					<span class="code-comment">$</span> curl -HX-KVMD-User:admin -HX-KVMD-Passwd:admin -k \\<br>
-					&nbsp;&nbsp;&nbsp;&nbsp;${site}/api/atx
+					${make_item("Check the power status", "power status", "")}
 				`;
 			} else if (http.status === 401 || http.status === 403) {
 				document.location.href = "/login";

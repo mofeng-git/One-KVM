@@ -107,7 +107,7 @@ export var tools = new function() {
 		};
 	};
 
-	this.setOnUpSlider = function(el, delay, display_callback, execute_callback) {
+	this.sliderSetOnUp = function(el, delay, display_callback, execute_callback) {
 		el.execution_timer = null;
 		el.activated = false;
 
@@ -134,33 +134,37 @@ export var tools = new function() {
 			}, delay);
 		};
 	};
+	this.sliderSetParams = function(el, min, max, step, value) {
+		el.min = min;
+		el.max = max;
+		el.step = step;
+		el.value = value;
+	};
 
-	this.setOnClickRadio = function(name, callback) {
+	this.radioSetOnClick = function(name, callback) {
 		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
 			this.setOnClick(el, callback);
 		}
 	};
-
-	this.getRadioValue = function(name) {
+	this.radioGetValue = function(name) {
 		return document.querySelector(`input[type="radio"][name="${name}"]:checked`).value;
 	};
-
-	this.setRadioValue = function(name, value) {
+	this.radioSetValue = function(name, value) {
 		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
 			el.checked = (el.value === value);
 		}
 	};
 
-	this.setProgressPercent = function(el, title, percent) {
+	this.progressSetValue = function(el, title, percent) {
 		el.setAttribute("data-label", title);
 		$(`${el.id}-value`).style.width = `${percent}%`;
 	};
 
-	this.setHiddenVisible = function(el, visible) {
+	this.hiddenSetVisible = function(el, visible) {
 		el.classList.toggle("hidden", !visible);
 	};
 
-	this.setFeatureEnabled = function(el, enabled) {
+	this.featureSetEnabled = function(el, enabled) {
 		el.classList.toggle("feature-disabled", !enabled);
 	};
 
