@@ -315,7 +315,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
         await self.__handshake_security_send_result(
             allow=bool(user),
-            allow_msg="VNCAuth access granted for user {user!r}",
+            allow_msg=f"VNCAuth access granted for user {user!r}",
             deny_msg="VNCAuth access denied (user not found)",
             deny_reason="Invalid password",
         )
