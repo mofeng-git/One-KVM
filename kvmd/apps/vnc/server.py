@@ -140,7 +140,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         assert self.__kvmd_session
         try:
             async with self.__kvmd_session.ws() as self.__kvmd_ws:
-                logger.info("[kvmd] [%s]: Connected to KVMD websocket", self._remote)
+                logger.info("[kvmd] %s: Connected to KVMD websocket", self._remote)
                 self.__ws_connected.set_result(None)
                 async for event in self.__kvmd_ws.communicate():
                     await self.__process_ws_event(event)
@@ -177,14 +177,14 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 streaming = False
                 async for (online, width, height, jpeg) in self.__streamer.read_stream():
                     if not streaming:
-                        logger.info("[streamer] [%s]: Streaming ...", self._remote)
+                        logger.info("[streamer] %s: Streaming ...", self._remote)
                         streaming = True
                     if online:
                         await self.__send_fb_real(width, height, jpeg)
                     else:
                         await self.__send_fb_stub("No signal")
             except StreamerError as err:
-                logger.info("[streamer] [%s]: Waiting for stream: %s", self._remote, err)
+                logger.info("[streamer] %s: Waiting for stream: %s", self._remote, err)
                 await self.__send_fb_stub("Waiting for stream ...")
                 await asyncio.sleep(1)
 
@@ -260,7 +260,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         assert self.__authorized.done()
         assert self.__kvmd_session
         logger = get_logger(0)
-        logger.info("[main] [%s]: Printing %d characters ...", self._remote, len(text))
+        logger.info("[main] %s: Printing %d characters ...", self._remote, len(text))
         try:
             (default, available) = await self.__kvmd_session.hid.get_keymaps()
             await self.__kvmd_session.hid.print(
@@ -269,12 +269,12 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 keymap_name=(self.__keymap_name if self.__keymap_name in available else default),
             )
         except Exception:
-            logger.exception("[main] [%s]: Can't print characters", self._remote)
+            logger.exception("[main] %s: Can't print characters", self._remote)
 
     async def _on_set_encodings(self) -> None:
         assert self.__authorized.done()
         assert self.__kvmd_session
-        get_logger(0).info("[main] [%s]: Applying streamer params: quality=%d%%; desired_fps=%d ...",
+        get_logger(0).info("[main] %s: Applying streamer params: quality=%d%%; desired_fps=%d ...",
                            self._remote, self._encodings.tight_jpeg_quality, self.__desired_fps)
         await self.__kvmd_session.streamer.set_params(self._encodings.tight_jpeg_quality, self.__desired_fps)
 
@@ -322,7 +322,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             logger = get_logger(0)
             remote = rfb_format_remote(writer)
-            logger.info("[entry] [%s]: Connected client", remote)
+            logger.info("[entry] %s: Connected client", remote)
             try:
                 sock = writer.get_extra_info("socket")
                 if no_delay:
@@ -341,7 +341,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     async with kvmd.make_session("", "") as kvmd_session:
                         none_auth_only = await kvmd_session.auth.check()
                 except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                    logger.error("[entry] [%s]: Can't check KVMD auth mode: %s: %s", remote, type(err).__name__, err)
+                    logger.error("[entry] %s: Can't check KVMD auth mode: %s: %s", remote, type(err).__name__, err)
                     return
 
                 await _Client(
@@ -359,10 +359,10 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     shared_params=shared_params,
                 ).run()
             except Exception:
-                logger.exception("[entry] [%s]: Unhandled exception in client task", remote)
+                logger.exception("[entry] %s: Unhandled exception in client task", remote)
             finally:
                 if (await rfb_close_writer(writer)):
-                    logger.info("[entry] [%s]: Connection is closed in an emergency", remote)
+                    logger.info("[entry] %s: Connection is closed in an emergency", remote)
 
         self.__handle_client = handle_client
 
