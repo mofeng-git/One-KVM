@@ -285,11 +285,17 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
 # =====
 class VncServer:  # pylint: disable=too-many-instance-attributes
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
         host: str,
         port: int,
         max_clients: int,
+
+        no_delay: bool,
+        keepalive_enabled: bool,
+        keepalive_idle: int,
+        keepalive_interval: int,
+        keepalive_count: int,
 
         tls_ciphers: str,
         tls_timeout: float,
@@ -318,6 +324,19 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             remote = rfb_format_remote(writer)
             logger.info("[entry] [%s]: Connected client", remote)
             try:
+                sock = writer.get_extra_info("socket")
+                if no_delay:
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                if keepalive_enabled:
+                    # https://www.tldp.org/HOWTO/html_single/TCP-Keepalive-HOWTO/#setsockopt
+                    # https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, keepalive_idle)
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, keepalive_interval)
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, keepalive_count)
+                    timeout = (keepalive_idle + keepalive_interval * keepalive_count) * 1000  # Milliseconds
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, timeout)
+
                 try:
                     async with kvmd.make_session("", "") as kvmd_session:
                         none_auth_only = await kvmd_session.auth.check()
@@ -357,8 +376,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             logger.info("Listening VNC on TCP [%s]:%d ...", self.__host, self.__port)
 
             with contextlib.closing(socket.socket(socket.AF_INET6, socket.SOCK_STREAM)) as sock:
-                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, False)
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.bind((self.__host, self.__port))
 
                 server = loop.run_until_complete(asyncio.start_server(

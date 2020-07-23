@@ -356,6 +356,15 @@ def _get_config_scheme() -> Dict:
                 "host":        Option("::", type=valid_ip_or_host),
                 "port":        Option(5900, type=valid_port),
                 "max_clients": Option(10,   type=valid_int_f1),
+
+                "no_delay": Option(True, type=valid_bool),
+                "keepalive": {
+                    "enabled":  Option(True, type=valid_bool, unpack_as="keepalive_enabled"),
+                    "idle":     Option(10, type=(lambda arg: valid_number(arg, min=1, max=3600)), unpack_as="keepalive_idle"),
+                    "interval": Option(3, type=(lambda arg: valid_number(arg, min=1, max=60)), unpack_as="keepalive_interval"),
+                    "count":    Option(3, type=(lambda arg: valid_number(arg, min=1, max=10)), unpack_as="keepalive_count"),
+                },
+
                 "tls": {
                     "ciphers": Option("ALL:@SECLEVEL=0", type=valid_ssl_ciphers),
                     "timeout": Option(5.0, type=valid_float_f01),

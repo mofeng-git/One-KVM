@@ -50,6 +50,8 @@ def main(argv: Optional[List[str]]=None) -> None:
         port=config.server.port,
         max_clients=config.server.max_clients,
 
+        no_delay=config.server.no_delay,
+
         tls_ciphers=config.server.tls.ciphers,
         tls_timeout=config.server.tls.timeout,
 
@@ -65,4 +67,6 @@ def main(argv: Optional[List[str]]=None) -> None:
             **config.streamer._unpack(),
         ),
         vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),
+
+        **config.server.keepalive._unpack(),
     ).run()
