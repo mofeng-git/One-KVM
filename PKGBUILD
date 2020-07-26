@@ -12,8 +12,8 @@ _variants=(
 
 	v1-vga:rpi2
 	v1-vga:rpi3
-	v1-hdmi-rpi2
-	v1-hdmi-rpi3
+	v1-hdmi:rpi2
+	v1-hdmi:rpi3
 
 	v2-hdmi:zerow
 	v2-hdmi:rpi4
