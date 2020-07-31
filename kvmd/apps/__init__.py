@@ -313,7 +313,7 @@ def _get_config_scheme() -> Dict:
             },
 
             "acm": {
-                "enabled": Option(True, type=valid_bool),
+                "enabled": Option(False, type=valid_bool),
             },
 
             "drives": {
