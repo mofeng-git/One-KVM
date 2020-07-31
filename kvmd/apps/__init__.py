@@ -366,7 +366,7 @@ def _get_config_scheme() -> Dict:
                 },
 
                 "tls": {
-                    "ciphers": Option("ALL:@SECLEVEL=0", type=valid_ssl_ciphers),
+                    "ciphers": Option("ALL:@SECLEVEL=0", type=(lambda arg: valid_ssl_ciphers(arg) if arg else "")),
                     "timeout": Option(5.0, type=valid_float_f01),
                 },
             },

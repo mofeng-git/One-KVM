@@ -239,24 +239,21 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         await self._write_struct("B", 0)
 
         if self.__none_auth_only:
-            auth_types = {
-                1: ("VeNCrypt/None", False, self.__handshake_security_none),
-                257: ("VeNCrypt/TLSNone", True, self.__handshake_security_none),
-            }
+            auth_types = {1: ("VeNCrypt/None", False, self.__handshake_security_none)}
+            if self.__tls_ciphers:
+                auth_types[257] = ("VeNCrypt/TLSNone", True, self.__handshake_security_none)
         else:
-            auth_types = {
-                256: ("VeNCrypt/Plain", False, self.__handshake_security_vencrypt_userpass),
-                259: ("VeNCrypt/TLSPlain", True, self.__handshake_security_vencrypt_userpass),
-            }
+            auth_types = {256: ("VeNCrypt/Plain", False, self.__handshake_security_vencrypt_userpass)}
+            if self.__tls_ciphers:
+                auth_types[259] = ("VeNCrypt/TLSPlain", True, self.__handshake_security_vencrypt_userpass)
             if self.__vnc_passwds:
                 # Vinagre не умеет работать с VNC Auth через VeNCrypt, но это его проблемы,
                 # так как он своеобразно трактует рекомендации VeNCrypt.
                 # Подробнее: https://bugzilla.redhat.com/show_bug.cgi?id=692048
                 # Hint: используйте любой другой нормальный VNC-клиент.
-                auth_types.update({
-                    2: ("VeNCrypt/VNCAuth", False, self.__handshake_security_vnc_auth),
-                    258: ("VeNCrypt/TLSVNCAuth", True, self.__handshake_security_vnc_auth),
-                })
+                auth_types[2] = ("VeNCrypt/VNCAuth", False, self.__handshake_security_vnc_auth)
+                if self.__tls_ciphers:
+                    auth_types[258] = ("VeNCrypt/TLSVNCAuth", True, self.__handshake_security_vnc_auth)
 
         await self._write_struct("B" + "L" * len(auth_types), len(auth_types), *auth_types)
 
@@ -268,6 +265,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         get_logger(0).info("[main] %s: Using %s auth type", self._remote, auth_name)
 
         if tls:
+            assert self.__tls_ciphers, (self.__tls_ciphers, auth_name, tls, handler)
             await self._write_struct("B", 1)  # Ack
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             ssl_context.set_ciphers(self.__tls_ciphers)
