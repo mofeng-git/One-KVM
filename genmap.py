@@ -45,6 +45,12 @@ class _OtgKey:
 
 
 @dataclasses.dataclass(frozen=True)
+class _Ps2Key:
+    code: int
+    type: int
+
+
+@dataclasses.dataclass(frozen=True)
 class _X11Key:
     name: str
     code: int
@@ -57,6 +63,7 @@ class _KeyMapping:
     serial_code: int
     arduino_name: str
     otg_key: _OtgKey
+    ps2_key: _Ps2Key
     at1_code: int
     x11_keys: Set[_X11Key]
 
@@ -75,28 +82,48 @@ def _resolve_keysym(name: str) -> int:
     return code
 
 
+def _parse_x11_names(names: str) -> Set[_X11Key]:
+    keys: Set[_X11Key] = set()
+    for name in names.split(","):
+        shift = name.startswith("^")
+        name = (name[1:] if shift else name)
+        code = _resolve_keysym(name)
+        keys.add(_X11Key(name, code, shift))
+    return keys
+
+
+def _parse_otg_key(key: str) -> _OtgKey:
+    is_modifier = key.startswith("^")
+    code = int((key[1:] if is_modifier else key), 16)
+    return _OtgKey(code, is_modifier)
+
+
+def _parse_ps2_key(key: str) -> _Ps2Key:
+    (raw_type, raw_code) = key.split(":")
+    return _Ps2Key(
+        code=int(raw_code, 16),
+        type={
+            "reg": 0,
+            "spec": 1,
+            "pause": 2,
+            "print": 3,
+        }[raw_type],
+    )
+
+
 def _read_keymap_csv(path: str) -> List[_KeyMapping]:
     keymap: List[_KeyMapping] = []
     with open(path) as keymap_file:
         for row in csv.DictReader(keymap_file):
             if len(row) >= 6:
-                otg_is_modifier = row["otg_key"].startswith("^")
-                otg_code = int((row["otg_key"][1:] if otg_is_modifier else row["otg_key"]), 16)
-
-                x11_keys: Set[_X11Key] = set()
-                for x11_name in row["x11_names"].split(","):
-                    x11_shift = x11_name.startswith("^")
-                    x11_name = (x11_name[1:] if x11_shift else x11_name)
-                    x11_code = _resolve_keysym(x11_name)
-                    x11_keys.add(_X11Key(x11_name, x11_code, x11_shift))
-
                 keymap.append(_KeyMapping(
                     web_name=row["web_name"],
                     serial_code=int(row["serial_code"]),
                     arduino_name=row["arduino_name"],
-                    otg_key=_OtgKey(otg_code, otg_is_modifier),
+                    otg_key=_parse_otg_key(row["otg_key"]),
+                    ps2_key=_parse_ps2_key(row["ps2_key"]),
                     at1_code=int(row["at1_code"], 16),
-                    x11_keys=x11_keys,
+                    x11_keys=_parse_x11_names(row["x11_names"]),
                 ))
     return keymap
 
