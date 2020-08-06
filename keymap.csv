@@ -1,4 +1,4 @@
-web_name,serial_code,usb_name,otg_key,ps2_key,at1_code,x11_names
+web_name,serial_code,arduino_name,otg_key,ps2_key,at1_code,x11_names
 KeyA,1,KEY_A,0x04,reg:0x1c,0x1e,"^XK_A,XK_a"
 KeyB,2,KEY_B,0x05,reg:0x32,0x30,"^XK_B,XK_b"
 KeyC,3,KEY_C,0x06,reg:0x21,0x2e,"^XK_C,XK_c"

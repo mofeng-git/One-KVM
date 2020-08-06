@@ -61,7 +61,7 @@ class _X11Key:
 class _KeyMapping:
     web_name: str
     serial_code: int
-    usb_name: str
+    arduino_name: str
     otg_key: _OtgKey
     ps2_key: _Ps2Key
     at1_code: int
@@ -114,7 +114,7 @@ def _read_keymap_csv(path: str) -> List[_KeyMapping]:
                 keymap.append(_KeyMapping(
                     web_name=row["web_name"],
                     serial_code=int(row["serial_code"]),
-                    usb_name=row["usb_name"],
+                    arduino_name=row["arduino_name"],
                     otg_key=_parse_otg_key(row["otg_key"]),
                     ps2_key=_parse_ps2_key(row["ps2_key"]),
                     at1_code=int(row["at1_code"], 16),
@@ -135,16 +135,19 @@ def _render_keymap(keymap: List[_KeyMapping], template_path: str, out_path: str)
 def main() -> None:
     # https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code/code_values
     # https://github.com/NicoHood/HID/blob/master/src/KeyboardLayouts/ImprovedKeylayouts.h
+    # https://github.com/Harvie/ps2dev/blob/master/src/ps2dev.h
     # https://gist.github.com/MightyPork/6da26e382a7ad91b5496ee55fdc73db2
     # https://github.com/qemu/keycodemapdb/blob/master/data/keymaps.csv
+    # Hut1_12v2.pdf
 
     # Fields list:
     #   - Web
     #   - Serial code
-    #   - Arduino key
+    #   - Arduino name
     #   - OTG code (^ for mod)
+    #   - PS/2 key
     #   - AT set1
-    #   -X11 keysyms (^ for shift)
+    #   - X11 keysyms (^ for shift)
 
     assert len(sys.argv) == 4, f"{sys.argv[0]} <keymap.csv> <template> <out>"
 

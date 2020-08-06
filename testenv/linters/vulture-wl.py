@@ -24,7 +24,7 @@ fake_rpi.RPi.GPIO
 
 _KeyMapping.web_name
 _KeyMapping.serial_code
-_KeyMapping.usb_name
+_KeyMapping.arduino_name
 _KeyMapping.otg_key
 _KeyMapping.ps2_key
 _KeyMapping.at1_code
