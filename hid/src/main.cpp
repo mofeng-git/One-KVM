@@ -21,11 +21,16 @@
 
 
 #include <Arduino.h>
-#include <HID-Project.h>
 #include <TimerOne.h>
 
 #include "inline.h"
-#include "keymap.h"
+#if defined(HID_USB)
+#	include "usb/hid.h"
+#elif defined(HID_PS2)
+#	include "ps2/hid.h"
+#else
+#	error HID type is not selected
+#endif
 
 
 // #define CMD_SERIAL		Serial1
@@ -43,8 +48,8 @@
 
 #define PROTO_RESP_PONG_PREFIX	0x80
 #define PROTO_RESP_PONG_CAPS	0b00000001
-#define PROTO_RESP_PONG_SCROLL	0x00000010
-#define PROTO_RESP_PONG_NUM		0x00000100
+#define PROTO_RESP_PONG_SCROLL	0b00000010
+#define PROTO_RESP_PONG_NUM		0b00000100
 
 #define PROTO_CMD_PING					0x01
 #define PROTO_CMD_REPEAT				0x02
@@ -63,47 +68,43 @@
 
 
 // -----------------------------------------------------------------------------
+#if defined(HID_USB)
+	UsbHid hid;
+#elif defined(HID_PS2)
+	Ps2Hid hid;
+#else
+#	error HID type is not selected
+#endif
+
+
+// -----------------------------------------------------------------------------
 INLINE uint8_t cmdResetHid(const uint8_t *buffer) { // 0 bytes
-	BootKeyboard.releaseAll();
-	SingleAbsoluteMouse.releaseAll();
+#	ifdef HID_USB
+	hid.reset();
+#	endif
 	return PROTO_RESP_OK;
 }
 
 INLINE uint8_t cmdKeyEvent(const uint8_t *buffer) { // 2 bytes
-	KeyboardKeycode code = keymap(buffer[0]);
-
-	if (code != KEY_ERROR_UNDEFINED) {
-		if (buffer[1]) {
-			BootKeyboard.press(code);
-		} else {
-			BootKeyboard.release(code);
-		}
-	}
+	hid.sendKey(buffer[0], buffer[1]);
 	return PROTO_RESP_OK;
 }
 
 INLINE uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
+#	ifdef HID_USB
 	uint8_t state = buffer[0];
 
-#	define PROCESS_BUTTON(name) { \
-			if (state & PROTO_CMD_MOUSE_BUTTON_##name##_SELECT) { \
-				if (state & PROTO_CMD_MOUSE_BUTTON_##name##_STATE) { \
-					SingleAbsoluteMouse.press(MOUSE_##name); \
-				} else { \
-					SingleAbsoluteMouse.release(MOUSE_##name); \
-				} \
-			} \
-		}
-
-	PROCESS_BUTTON(LEFT);
-	PROCESS_BUTTON(RIGHT);
-	PROCESS_BUTTON(MIDDLE);
-
-#	undef PROCESS_BUTTON
+	hid.sendMouseButtons(
+		state & PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT, state & PROTO_CMD_MOUSE_BUTTON_LEFT_STATE,
+		state & PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT, state & PROTO_CMD_MOUSE_BUTTON_RIGHT_STATE,
+		state & PROTO_CMD_MOUSE_BUTTON_MIDDLE_SELECT, state & PROTO_CMD_MOUSE_BUTTON_MIDDLE_STATE
+	);
+#	endif
 	return PROTO_RESP_OK;
 }
 
 INLINE uint8_t cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
+#	ifdef HID_USB
 	int x = (int)buffer[0] << 8;
 	x |= (int)buffer[1];
 	x = (x + 32768) / 2; // See /kvmd/apps/otg/hid/keyboard.py for details
@@ -112,34 +113,24 @@ INLINE uint8_t cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
 	y |= (int)buffer[3];
 	y = (y + 32768) / 2; // See /kvmd/apps/otg/hid/keyboard.py for details
 
-	SingleAbsoluteMouse.moveTo(x, y);
+	hid.sendMouseMove(x, y);
+#	endif
 	return PROTO_RESP_OK;
 }
 
 INLINE uint8_t cmdMouseWheelEvent(const uint8_t *buffer) { // 2 bytes
-	// delta_x is not supported by hid-project now
-	signed char delta_y = buffer[1];
-
-	SingleAbsoluteMouse.move(0, 0, delta_y);
+#	ifdef HID_USB
+	hid.sendMouseWheel(buffer[1]); // Y only, X is not supported
+#	endif
 	return PROTO_RESP_OK;
 }
 
 INLINE uint8_t cmdPongLeds(const uint8_t *buffer) { // 0 bytes
-	uint8_t leds = BootKeyboard.getLeds();
-	uint8_t response = PROTO_RESP_PONG_PREFIX;
-
-#	define PROCESS_LED(name) { \
-			if (leds & LED_##name##_LOCK) { \
-				response |= PROTO_RESP_PONG_##name; \
-			} \
-		}
-
-	PROCESS_LED(CAPS);
-	PROCESS_LED(SCROLL);
-	PROCESS_LED(NUM);
-
-#	undef PROCESS_LED
-	return response;
+	return ((uint8_t) PROTO_RESP_PONG_PREFIX) | hid.getLedsAs(
+		PROTO_RESP_PONG_CAPS,
+		PROTO_RESP_PONG_SCROLL,
+		PROTO_RESP_PONG_NUM
+	);
 }
 
 
@@ -199,8 +190,7 @@ void intRecvTimedOut() {
 }
 
 void setup() {
-	BootKeyboard.begin();
-	SingleAbsoluteMouse.begin();
+	hid.begin();
 
 	Timer1.attachInterrupt(intRecvTimedOut);
 	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
@@ -211,6 +201,10 @@ void loop() {
 	unsigned index = 0;
 
 	while (true) {
+#		ifdef HID_PS2
+		hid.periodic();
+#		endif
+
 		if (CMD_SERIAL.available() > 0) {
 			buffer[index] = (uint8_t)CMD_SERIAL.read();
 			if (index == 7) {

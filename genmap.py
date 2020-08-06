@@ -61,7 +61,7 @@ class _X11Key:
 class _KeyMapping:
     web_name: str
     serial_code: int
-    arduino_name: str
+    usb_name: str
     otg_key: _OtgKey
     ps2_key: _Ps2Key
     at1_code: int
@@ -99,15 +99,10 @@ def _parse_otg_key(key: str) -> _OtgKey:
 
 
 def _parse_ps2_key(key: str) -> _Ps2Key:
-    (raw_type, raw_code) = key.split(":")
+    (code_type, raw_code) = key.split(":")
     return _Ps2Key(
         code=int(raw_code, 16),
-        type={
-            "reg": 0,
-            "spec": 1,
-            "pause": 2,
-            "print": 3,
-        }[raw_type],
+        type=code_type,
     )
 
 
@@ -119,7 +114,7 @@ def _read_keymap_csv(path: str) -> List[_KeyMapping]:
                 keymap.append(_KeyMapping(
                     web_name=row["web_name"],
                     serial_code=int(row["serial_code"]),
-                    arduino_name=row["arduino_name"],
+                    usb_name=row["usb_name"],
                     otg_key=_parse_otg_key(row["otg_key"]),
                     ps2_key=_parse_ps2_key(row["ps2_key"]),
                     at1_code=int(row["at1_code"], 16),

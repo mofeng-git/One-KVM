@@ -139,7 +139,8 @@ keymap: testenv
 		--volume `pwd`:/src \
 	-it $(TESTENV_IMAGE) bash -c "cd src \
 		&& ./genmap.py keymap.csv kvmd/keyboard/mappings.py.mako kvmd/keyboard/mappings.py \
-		&& ./genmap.py keymap.csv hid/src/keymap.h.mako hid/src/keymap.h \
+		&& ./genmap.py keymap.csv hid/src/usb/keymap.h.mako hid/src/usb/keymap.h \
+		&& ./genmap.py keymap.csv hid/src/ps2/keymap.h.mako hid/src/ps2/keymap.h \
 	"
 
 

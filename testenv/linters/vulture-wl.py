@@ -24,11 +24,11 @@ fake_rpi.RPi.GPIO
 
 _KeyMapping.web_name
 _KeyMapping.serial_code
-_KeyMapping.arduino_name
-_KeyMapping.otg_code
-_KeyMapping.otg_is_modifier
+_KeyMapping.usb_name
+_KeyMapping.otg_key
+_KeyMapping.ps2_key
 _KeyMapping.at1_code
-_KeyMapping.x11_codes
+_KeyMapping.x11_keys
 
 _SharedParams.width
 _SharedParams.height

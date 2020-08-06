@@ -24,11 +24,11 @@
 
 #include <HID-Project.h>
 
-#include "inline.h"
+#include "../inline.h"
 
 
-INLINE KeyboardKeycode keymap(uint8_t code) {
-	switch(code) {
+INLINE KeyboardKeycode keymapUsb(uint8_t code) {
+	switch (code) {
 		case 1: return KEY_A;
 		case 2: return KEY_B;
 		case 3: return KEY_C;

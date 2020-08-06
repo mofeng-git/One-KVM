@@ -1,16 +1,26 @@
-all:
-	platformio run --environment $(if $(E),$(E),serial_prod)
+usb:
+	make _build E=usb
+ps2:
+	make _build E=ps2
+_build:
+	rm -f .current
+	platformio run --environment $(E)
+	echo -n $(E) > .current
+
+
+install: upload
+upload:
+	platformio run --environment $(shell cat .current) --target upload
+
 
 update:
 	platformio platform update
 
-install: upload
-upload:
-	platformio run --environment $(if $(E),$(E),serial_prod) --target upload
 
 clean-all: clean
 clean:
-	rm -rf .pio
+	rm -rf .pio .current
+
 
 help:
 	@ cat Makefile
