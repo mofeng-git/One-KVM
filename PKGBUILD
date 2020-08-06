@@ -3,17 +3,10 @@
 
 
 _variants=(
-	v0-vga:rpi2
-	v0-vga:rpi3
 	v0-hdmi:rpi2
 	v0-hdmi:rpi3
 	v0-hdmiusb:rpi2
 	v0-hdmiusb:rpi3
-
-	v1-vga:rpi2
-	v1-vga:rpi3
-	v1-hdmi:rpi2
-	v1-hdmi:rpi3
 
 	v2-hdmi:zerow
 	v2-hdmi:rpi4

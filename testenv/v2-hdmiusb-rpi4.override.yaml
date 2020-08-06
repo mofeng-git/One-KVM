@@ -8,18 +8,26 @@ kvmd:
             sysfs_prefix: /fake_sysfs
 
     hid:
-        device: /dev/ttyS10
+        keyboard:
+            device: /dev/null
+        mouse:
+            device: /dev/null
         noop: true
 
+    msd:
+        remount_cmd: /bin/true
+        unlock_cmd: /bin/true
+        sysfs_prefix: /fake_sysfs
+
     streamer:
-        desired_fps: 30
-        max_fps: 40
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
-            - "--quality={quality}"
+            - "--persistent"
+            - "--format=jpeg"
+            - "--resolution={resolution}"
             - "--desired-fps={desired_fps}"
-            - "--resolution=800x600"
+            - "--drop-same-frames=30"
             - "--last-as-blank=0"
             - "--unix={unix}"
             - "--unix-rm"
@@ -28,6 +36,7 @@ kvmd:
             - "--process-name-prefix={process_name_prefix}"
             - "--notify-parent"
             - "--no-log-colors"
+
 
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
