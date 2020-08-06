@@ -47,7 +47,7 @@ class _OtgKey:
 @dataclasses.dataclass(frozen=True)
 class _Ps2Key:
     code: int
-    type: int
+    type: str
 
 
 @dataclasses.dataclass(frozen=True)
