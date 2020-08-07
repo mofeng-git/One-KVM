@@ -91,6 +91,40 @@ mixin lamp(cls)
 				+key("ArrowLeft") &larr;
 				+key("ArrowDown") &darr;
 				+key("ArrowRight") &rarr;
+		div(class="keypad-block")
+			div(class="keypad-row")
+				+empty_key()
+				+empty_key()
+				+empty_key()
+				+key("Power", "small") PWR
+			hr
+			div(class="keypad-row")
+				+key("NumLock", "small")
+					+lamp("hid-keyboard-num-led")
+					| #[br] NmLk
+				+key("NumpadDivide") /
+				+key("NumpadMultiply") *
+				+key("NumpadSubtract") -
+			div(class="keypad-row")
+				+key("Numpad7", "small") 7#[br]Home
+				+key("Numpad8", "small") 8#[br]&uarr;
+				+key("Numpad9", "small") 9#[br]PgUp
+				+empty_key()
+			div(class="keypad-row")
+				+key("Numpad4", "small") 4#[br]&larr;
+				+key("Numpad5", "small") 5#[br]#[br]
+				+key("Numpad6", "small") 6#[br]&rarr;
+				+key("NumpadAdd") +
+			div(class="keypad-row")
+				+key("Numpad1", "small") 1#[br]End
+				+key("Numpad2", "small") 2#[br]&darr;
+				+key("Numpad3", "small") 3#[br]PgDn
+				+empty_key()
+			div(class="keypad-row")
+				+key("Numpad0", "small") 0#[br]Ins
+				+empty_key()
+				+key("NumpadDecimal", "small") .#[br]Del
+				+key("NumpadEnter", "small") Ent
 
 	div(id="keyboard-mobile" class="keypad" align="center")
 		div(class="keypad-block")
