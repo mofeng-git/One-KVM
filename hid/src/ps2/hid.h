@@ -29,8 +29,8 @@
 
 #include "keymap.h"
 
-// #define PS2_KBD_CLOCK_PIN	3
-// #define PS2_KBD_DATA_PIN		2
+// #define PS2_KBD_CLOCK_PIN	7
+// #define PS2_KBD_DATA_PIN		5
 
 
 class Ps2Hid {
