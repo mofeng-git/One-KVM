@@ -14,11 +14,13 @@ mixin about_tab(name, title, checked=false)
 		table
 			tr
 				td(valign="top" class="logo")
-					img(class="svg-gray" src="../share/svg/logo.svg" alt="Open Source Hardware" height="40")
+					img(class="svg-gray" src="../share/svg/logo.svg" alt="Pi-KVM" height="40")
 				td(valign="top")
 					table
-						tr #[td(colspan="2" class="title") Open Source &amp; Open Hardware IP-KVM]
-						tr #[td(colspan="2" class="copyright") Copyright &copy; 2018 Pi-KVM Developers Team]
+						tr #[td(colspan="2" class="title") The Open Source IP-KVM]
+						tr
+							td(colspan="2" class="copyright")
+								| Copyright &copy; 2018 #[a(target="_blank" href="mailto:mdevaev@gmail.com") Maxim Devaev]
 		br
 		div(class="tabs-box")
 			+about_tab("meta", "Meta", true)
