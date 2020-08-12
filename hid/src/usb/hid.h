@@ -30,18 +30,16 @@
 
 
 // -----------------------------------------------------------------------------
-class UsbHid {
+class UsbHidKeyboard {
 	public:
-		UsbHid() {}
+		UsbHidKeyboard() {}
 
 		void begin() {
 			BootKeyboard.begin();
-			SingleAbsoluteMouse.begin();
 		}
 
-		void reset() {
+		INLINE void reset() {
 			BootKeyboard.releaseAll();
-			SingleAbsoluteMouse.releaseAll();
 		}
 
 		INLINE void sendKey(uint8_t code, bool state) {
@@ -50,25 +48,6 @@ class UsbHid {
 				if (state) BootKeyboard.press(usb_code);
 				else BootKeyboard.release(usb_code);
 			}
-		}
-
-		INLINE void sendMouseButtons(
-			bool left_select, bool left_state,
-			bool right_select, bool right_state,
-			bool middle_select, bool middle_state
-		) {
-			if (left_select) sendMouseButton(MOUSE_LEFT, left_state);
-			if (right_select) sendMouseButton(MOUSE_RIGHT, right_state);
-			if (middle_select) sendMouseButton(MOUSE_MIDDLE, middle_state);
-		}
-
-		INLINE void sendMouseMove(int x, int y) {
-			SingleAbsoluteMouse.moveTo(x, y);
-		}
-
-		INLINE void sendMouseWheel(int delta_y) {
-			// delta_x is not supported by hid-project now
-			SingleAbsoluteMouse.move(0, 0, delta_y);
 		}
 
 		INLINE uint8_t getLedsAs(uint8_t caps, uint8_t scroll, uint8_t num) {
@@ -80,9 +59,41 @@ class UsbHid {
 			if (leds & LED_NUM_LOCK) result |= num;
 			return result;
 		}
+};
+
+class UsbHidMouse {
+	public:
+		UsbHidMouse() {}
+
+		void begin() {
+			SingleAbsoluteMouse.begin();
+		}
+
+		INLINE void reset() {
+			SingleAbsoluteMouse.releaseAll();
+		}
+
+		INLINE void sendMouseButtons(
+			bool left_select, bool left_state,
+			bool right_select, bool right_state,
+			bool middle_select, bool middle_state
+		) {
+			if (left_select) _sendMouseButton(MOUSE_LEFT, left_state);
+			if (right_select) _sendMouseButton(MOUSE_RIGHT, right_state);
+			if (middle_select) _sendMouseButton(MOUSE_MIDDLE, middle_state);
+		}
+
+		INLINE void sendMouseMove(int x, int y) {
+			SingleAbsoluteMouse.moveTo(x, y);
+		}
+
+		INLINE void sendMouseWheel(int delta_y) {
+			// delta_x is not supported by hid-project now
+			SingleAbsoluteMouse.move(0, 0, delta_y);
+		}
 
 	private:
-		INLINE void sendMouseButton(uint8_t button, bool state) {
+		INLINE void _sendMouseButton(uint8_t button, bool state) {
 			if (state) SingleAbsoluteMouse.press(button);
 			else SingleAbsoluteMouse.release(button);
 		}

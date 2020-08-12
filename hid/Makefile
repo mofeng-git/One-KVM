@@ -2,6 +2,8 @@ usb:
 	make _build E=usb
 ps2:
 	make _build E=ps2
+mixed:
+	make _build E=mixed
 _build:
 	rm -f .current
 	platformio run --environment $(E)

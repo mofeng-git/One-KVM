@@ -33,11 +33,11 @@
 // #define PS2_KBD_DATA_PIN		5
 
 
-class Ps2Hid {
+class Ps2HidKeyboard {
 	// https://wiki.osdev.org/PS/2_Keyboard
 
 	public:
-		Ps2Hid() : _dev(PS2_KBD_CLOCK_PIN, PS2_KBD_DATA_PIN) {}
+		Ps2HidKeyboard() : _dev(PS2_KBD_CLOCK_PIN, PS2_KBD_DATA_PIN) {}
 
 		void begin() {
 			_dev.keyboard_init();

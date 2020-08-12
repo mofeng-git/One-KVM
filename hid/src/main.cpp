@@ -24,12 +24,12 @@
 #include <TimerOne.h>
 
 #include "inline.h"
-#if defined(HID_USB)
+
+#if defined(HID_USB_KBD) || defined(HID_USB_MOUSE)
 #	include "usb/hid.h"
-#elif defined(HID_PS2)
+#endif
+#ifdef HID_PS2_KBD
 #	include "ps2/hid.h"
-#else
-#	error HID type is not selected
 #endif
 
 
@@ -68,33 +68,37 @@
 
 
 // -----------------------------------------------------------------------------
-#if defined(HID_USB)
-	UsbHid hid;
-#elif defined(HID_PS2)
-	Ps2Hid hid;
-#else
-#	error HID type is not selected
+#ifdef HID_USB_KBD
+	UsbHidKeyboard hid_kbd;
+#elif defined(HID_PS2_KBD)
+	Ps2HidKeyboard hid_kbd;
+#endif
+#ifdef HID_USB_MOUSE
+	UsbHidMouse hid_mouse;
 #endif
 
 
 // -----------------------------------------------------------------------------
 INLINE uint8_t cmdResetHid(const uint8_t *buffer) { // 0 bytes
-#	ifdef HID_USB
-	hid.reset();
+#	ifdef HID_USB_KBD
+	hid_kbd.reset();
+#	endif
+#	ifdef HID_USB_MOUSE
+	hid_mouse.reset();
 #	endif
 	return PROTO_RESP_OK;
 }
 
 INLINE uint8_t cmdKeyEvent(const uint8_t *buffer) { // 2 bytes
-	hid.sendKey(buffer[0], buffer[1]);
+	hid_kbd.sendKey(buffer[0], buffer[1]);
 	return PROTO_RESP_OK;
 }
 
 INLINE uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
-#	ifdef HID_USB
+#	ifdef HID_USB_MOUSE
 	uint8_t state = buffer[0];
 
-	hid.sendMouseButtons(
+	hid_mouse.sendMouseButtons(
 		state & PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT, state & PROTO_CMD_MOUSE_BUTTON_LEFT_STATE,
 		state & PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT, state & PROTO_CMD_MOUSE_BUTTON_RIGHT_STATE,
 		state & PROTO_CMD_MOUSE_BUTTON_MIDDLE_SELECT, state & PROTO_CMD_MOUSE_BUTTON_MIDDLE_STATE
@@ -104,7 +108,7 @@ INLINE uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
 }
 
 INLINE uint8_t cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
-#	ifdef HID_USB
+#	ifdef HID_USB_MOUSE
 	int x = (int)buffer[0] << 8;
 	x |= (int)buffer[1];
 	x = (x + 32768) / 2; // See /kvmd/apps/otg/hid/keyboard.py for details
@@ -113,20 +117,20 @@ INLINE uint8_t cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
 	y |= (int)buffer[3];
 	y = (y + 32768) / 2; // See /kvmd/apps/otg/hid/keyboard.py for details
 
-	hid.sendMouseMove(x, y);
+	hid_mouse.sendMouseMove(x, y);
 #	endif
 	return PROTO_RESP_OK;
 }
 
 INLINE uint8_t cmdMouseWheelEvent(const uint8_t *buffer) { // 2 bytes
-#	ifdef HID_USB
-	hid.sendMouseWheel(buffer[1]); // Y only, X is not supported
+#	ifdef HID_USB_MOUSE
+	hid_mouse.sendMouseWheel(buffer[1]); // Y only, X is not supported
 #	endif
 	return PROTO_RESP_OK;
 }
 
 INLINE uint8_t cmdPongLeds(const uint8_t *buffer) { // 0 bytes
-	return ((uint8_t) PROTO_RESP_PONG_PREFIX) | hid.getLedsAs(
+	return ((uint8_t) PROTO_RESP_PONG_PREFIX) | hid_kbd.getLedsAs(
 		PROTO_RESP_PONG_CAPS,
 		PROTO_RESP_PONG_SCROLL,
 		PROTO_RESP_PONG_NUM
@@ -190,7 +194,10 @@ void intRecvTimedOut() {
 }
 
 void setup() {
-	hid.begin();
+	hid_kbd.begin();
+#	ifdef HID_USB_MOUSE
+	hid_mouse.begin();
+#	endif
 
 	Timer1.attachInterrupt(intRecvTimedOut);
 	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
@@ -201,8 +208,8 @@ void loop() {
 	unsigned index = 0;
 
 	while (true) {
-#		ifdef HID_PS2
-		hid.periodic();
+#		ifdef HID_PS2_KBD
+		hid_kbd.periodic();
 #		endif
 
 		if (CMD_SERIAL.available() > 0) {
@@ -212,7 +219,7 @@ void loop() {
 				crc |= (uint16_t)buffer[7];
 
 				if (makeCrc16(buffer, 6) == crc) {
-#	define HANDLE(_handler) { sendCmdResponse(_handler(buffer + 2)); break; }
+#					define HANDLE(_handler) { sendCmdResponse(_handler(buffer + 2)); break; }
 					switch (buffer[1]) {
 						case PROTO_CMD_RESET_HID:			HANDLE(cmdResetHid);
 						case PROTO_CMD_KEY_EVENT:			HANDLE(cmdKeyEvent);
@@ -223,7 +230,7 @@ void loop() {
 						case PROTO_CMD_REPEAT:	sendCmdResponse(); break;
 						default:				sendCmdResponse(PROTO_RESP_INVALID_ERROR); break;
 					}
-#	undef HANDLE
+#					undef HANDLE
 				} else {
 					sendCmdResponse(PROTO_RESP_CRC_ERROR);
 				}
