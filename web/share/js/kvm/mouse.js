@@ -171,22 +171,34 @@ export function Mouse(record_callback) {
 
 	var __streamWheelHandler = function(event) {
 		// https://learn.javascript.ru/mousewheel
+		// https://stackoverflow.com/a/24595588
 		if (event.preventDefault) {
 			event.preventDefault();
 		}
 
 		let delta = {x: 0, y: 0};
 
-		__wheel_delta.x += event.deltaX; // Horizontal scrolling
-		if (Math.abs(__wheel_delta.x) >= 100) {
-			delta.x = __wheel_delta.x / Math.abs(__wheel_delta.x) * (-5);
-			__wheel_delta.x = 0;
-		}
+		if (tools.browser.is_firefox && !tools.browser.is_mac) {
+			if (event.deltaX !== 0) {
+				delta.x = event.deltaX / Math.abs(event.deltaX) * (-5);
+			}
+			if (event.deltaY !== 0) {
+				delta.y = event.deltaY / Math.abs(event.deltaY) * (-5);
+			}
+		} else {
+			let factor = (tools.browser.is_mac ? 5 : 1);
 
-		__wheel_delta.y += event.deltaY; // Vertical scrolling
-		if (Math.abs(__wheel_delta.y) >= 100) {
-			delta.y = __wheel_delta.y / Math.abs(__wheel_delta.y) * (-5);
-			__wheel_delta.y = 0;
+			__wheel_delta.x += event.deltaX * factor; // Horizontal scrolling
+			if (Math.abs(__wheel_delta.x) >= 100) {
+				delta.x = __wheel_delta.x / Math.abs(__wheel_delta.x) * (-5);
+				__wheel_delta.x = 0;
+			}
+
+			__wheel_delta.y += event.deltaY * factor; // Vertical scrolling
+			if (Math.abs(__wheel_delta.y) >= 100) {
+				delta.y = __wheel_delta.y / Math.abs(__wheel_delta.y) * (-5);
+				__wheel_delta.y = 0;
+			}
 		}
 
 		if (delta.x || delta.y) {
