@@ -124,7 +124,7 @@ export function Streamer() {
 			}
 
 			if (state.features.resolution) {
-				if (__available_resolutions != state.limits.available_resolutions) {
+				if (__available_resolutions !== state.limits.available_resolutions) {
 					__available_resolutions = state.limits.available_resolutions;
 					let resolutions_html = "";
 					for (let variant of __available_resolutions) {
