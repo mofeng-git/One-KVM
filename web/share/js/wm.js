@@ -177,14 +177,25 @@ function __WindowManager() {
 	};
 
 	self.showWindow = function(el_window, activate=true, center=false) {
+		let showed = false;
 		if (el_window.style.visibility === "hidden") {
 			center = true;
+			showed = true;
 		}
 		__organizeWindow(el_window, center);
 		el_window.style.visibility = "visible";
 		if (activate) {
 			__activateWindow(el_window);
 		}
+		if (Object.prototype.hasOwnProperty.call(el_window, "show_hook")) {
+			if (showed) {
+				el_window.show_hook();
+			}
+		}
+	};
+
+	self.isWindowVisible = function(el_window) {
+		return (window.getComputedStyle(el_window, null).visibility !== "hidden");
 	};
 
 	self.getViewGeometry = function() {
@@ -255,7 +266,7 @@ function __WindowManager() {
 		} else if ((el_parent = event.target.closest(".menu")) !== null) {
 			el_parent.classList.add("menu-active");
 		}
-		tools.debug("Focus in:", el_parent);
+		tools.debug("UI: Focus in:", el_parent);
 	};
 
 	var __focusOut = function(event) {
@@ -267,7 +278,7 @@ function __WindowManager() {
 		} else if ((el_parent = event.target.closest(".menu")) !== null) {
 			el_parent.classList.remove("menu-active");
 		}
-		tools.debug("Focus out:", el_parent);
+		tools.debug("UI: Focus out:", el_parent);
 	};
 
 	var __globalMouseButtonHandler = function(event) {
@@ -320,6 +331,9 @@ function __WindowManager() {
 
 		if (document.activeElement) {
 			el_last_window = (document.activeElement.closest(".modal-window") || document.activeElement.closest(".window"));
+			if (el_last_window && window.getComputedStyle(el_last_window, null).visibility === "hidden") {
+				el_last_window = null;
+			}
 		}
 
 		if (!el_last_window || el_last_window === el_except_window) {
@@ -337,8 +351,11 @@ function __WindowManager() {
 		}
 
 		if (el_last_window) {
-			tools.debug("Activating last window:", el_last_window);
+			tools.debug("UI: Activating last window:", el_last_window);
 			__activateWindow(el_last_window);
+		} else {
+			tools.debug("UI: Unsetting focuse because no windows left");
+			document.activeElement.blur();
 		}
 	};
 
@@ -358,12 +375,12 @@ function __WindowManager() {
 			if (el_window.className !== "modal" && parseInt(el_window.style.zIndex) !== __top_z_index) {
 				__top_z_index += 1;
 				el_window.style.zIndex = __top_z_index;
-				tools.debug("UI: activated window:", el_window);
+				tools.debug("UI: Activated window:", el_window);
 			}
 
 			if (el_window !== el_window_contains_focus) {
 				el_to_focus.focus();
-				tools.debug("UI: focused window:", el_window);
+				tools.debug("UI: Focused window:", el_window);
 			}
 		}
 	};

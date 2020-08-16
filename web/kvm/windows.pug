@@ -1,9 +1,8 @@
-mixin window(id, title, closeable=true, with_header_id=false)
+mixin window(id, title, with_header_id=false)
 	div(id=id class="window")
-		div(id=(with_header_id ? `${id}-header` : "") class="window-header" style=(closeable ? "" : "z-index:1"))
+		div(id=(with_header_id ? `${id}-header` : "") class="window-header")
 			div(class="window-grab") #{title}
-			if closeable
-				button(class="window-button-close") &times;
+			button(class="window-button-close") &times;
 		block
 
 include window-stream.pug

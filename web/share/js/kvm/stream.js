@@ -35,10 +35,14 @@ export function Streamer() {
 	var __resolution = {width: 640, height: 480};
 	var __resolution_str = "640x480";
 	var __available_resolutions = [];
+
 	var __size_factor = 1;
+
 	var __client_key = tools.makeId();
 	var __client_id = "";
 	var __client_fps = -1;
+
+	var __state_for_invisible = null;
 
 	var __init__ = function() {
 		$("stream-led").title = "Stream inactive";
@@ -60,11 +64,29 @@ export function Streamer() {
 
 		tools.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
 		tools.setOnClick($("stream-reset-button"), __clickResetButton);
+
+		$("stream-window").show_hook = function() {
+			if (__state_for_invisible !== null) {
+				self.setState(__state_for_invisible);
+			}
+		};
 	};
 
 	/************************************************************************/
 
 	self.setState = function(state) {
+		if (!wm.isWindowVisible($("stream-window"))) {
+			if (__state_for_invisible === null) {
+				$("stream-image").src = "/share/png/blank-stream.png";
+				$("stream-image").className = "stream-image-inactive";
+				$("stream-box").classList.add("stream-box-inactive");
+			}
+			__state_for_invisible = state;
+			state = null;
+		} else {
+			__state_for_invisible = null;
+		}
+
 		if (state) {
 			tools.featureSetEnabled($("stream-quality"), state.features.quality && (state.streamer === null || state.streamer.encoder.quality > 0));
 			tools.featureSetEnabled($("stream-resolution"), state.features.resolution);
@@ -124,12 +146,17 @@ export function Streamer() {
 				wm.switchEnabled($("stream-reset-button"), true);
 				$("stream-quality-slider").activated = false;
 				$("stream-desired-fps-slider").activated = false;
+
 				tools.info("Stream: active");
 			}
 
 			__updateStreamWindow(true, state.streamer.source.online);
 
 		} else {
+			if ($("stream-led").className !== "led-gray") { // Чтобы не дублировать логи, когда окно стрима закрыто
+				tools.info("Stream: inactive");
+			}
+
 			$("stream-led").className = "led-gray";
 			$("stream-led").title = "Stream inactive";
 			wm.switchEnabled($("stream-screenshot-button"), false);
@@ -137,7 +164,6 @@ export function Streamer() {
 			wm.switchEnabled($("stream-quality-slider"), false);
 			wm.switchEnabled($("stream-desired-fps-slider"), false);
 			wm.switchEnabled($("stream-resolution-selector"), false);
-			tools.info("Stream: inactive");
 
 			__updateStreamWindow(false, false);
 		}
