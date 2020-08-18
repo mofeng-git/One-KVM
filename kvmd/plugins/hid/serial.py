@@ -298,7 +298,10 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
     def clear_events(self) -> None:
         while not self.__events_queue.empty():
-            self.__events_queue.get_nowait()
+            try:
+                self.__events_queue.get_nowait()
+            except queue.Empty:
+                break
         self.__queue_event(_ClearEvent())
 
     def __queue_event(self, event: _BaseEvent) -> None:
