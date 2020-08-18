@@ -373,7 +373,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         # JpegCompression may only be used when bits-per-pixel is either 16 or 32
         bits_per_pixel = (await self._read_struct("xxx BB?? HHH BBB xxx"))[0]
         if bits_per_pixel not in [16, 32]:
-            raise RfbError(f"Requested unsupported {bits_per_pixel=} for Tight JPEG; required 16 or 32")
+            raise RfbError(f"Requested unsupported bits_per_pixel={bits_per_pixel} for Tight JPEG; required 16 or 32")
 
     async def __handle_set_encodings(self) -> None:
         encodings_count = (await self._read_struct("x H"))[0]
