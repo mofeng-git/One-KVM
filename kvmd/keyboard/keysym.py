@@ -54,7 +54,8 @@ def build_symmap(path: str) -> Dict[int, SymmapWebKey]:
         (path, list(_read_keyboard_layout(path).items())),
     ]:
         for (code, key) in items:
-            if (web_name := AT1_TO_WEB.get(key.code)) is not None:
+            web_name = AT1_TO_WEB.get(key.code)
+            if web_name is not None:
                 if (
                     (web_name in ["ShiftLeft", "ShiftRight"] and key.shift)  # pylint: disable=too-many-boolean-expressions
                     or (web_name in ["AltLeft", "AltRight"] and key.altgr)
@@ -113,7 +114,8 @@ def _read_keyboard_layout(path: str) -> Dict[int, At1Key]:  # Keysym to evdev (a
 
         parts = line.split()
         if len(parts) >= 2:
-            if (x11_code := _resolve_keysym(parts[0])) != 0:
+            x11_code = _resolve_keysym(parts[0])
+            if x11_code != 0:
                 try:
                     at1_code = int(parts[1], 16)
                 except ValueError as err:
@@ -128,7 +130,8 @@ def _read_keyboard_layout(path: str) -> Dict[int, At1Key]:  # Keysym to evdev (a
                     ctrl=("ctrl" in rest),
                 )
 
-                if "addupper" in rest and (x11_code := _resolve_keysym(parts[0].upper())) != 0:
+                x11_code = _resolve_keysym(parts[0].upper())
+                if "addupper" in rest and x11_code != 0:
                     layout[x11_code] = At1Key(
                         code=at1_code,
                         shift=True,

@@ -215,7 +215,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             ("desired_fps", valid_stream_fps, None),
             ("resolution", valid_stream_resolution, StreamerResolutionNotSupported),
         ]:
-            if (value := request.query.get(name)):
+            value = request.query.get(name)
+            if (value):
                 if name not in current_params:
                     assert exc_cls is not None, name
                     raise exc_cls()

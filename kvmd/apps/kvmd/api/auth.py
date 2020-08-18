@@ -45,7 +45,8 @@ _COOKIE_AUTH_TOKEN = "auth_token"
 
 async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, request: Request) -> None:
     if exposed.auth_required and auth_manager.is_auth_enabled():
-        if (user := request.headers.get("X-KVMD-User", "")):
+        user = request.headers.get("X-KVMD-User", "")
+        if user:
             user = valid_user(user)
             passwd = request.headers.get("X-KVMD-Passwd", "")
             set_request_auth_info(request, f"{user} (xhdr)")
@@ -53,7 +54,8 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
                 raise ForbiddenError()
             return
 
-        elif (token := request.cookies.get(_COOKIE_AUTH_TOKEN, "")):
+        token = request.cookies.get(_COOKIE_AUTH_TOKEN, "")
+        if token:
             user = auth_manager.check(valid_auth_token(token))
             if not user:
                 set_request_auth_info(request, "- (token)")
@@ -61,7 +63,8 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
             set_request_auth_info(request, f"{user} (token)")
             return
 
-        elif (basic_auth := request.headers.get("Authorization", "")):
+        basic_auth = request.headers.get("Authorization", "")
+        if basic_auth:
             if basic_auth[:6].lower() == "basic ":
                 try:
                     (user, passwd) = base64.b64decode(basic_auth[6:]).decode("utf-8").split(":")

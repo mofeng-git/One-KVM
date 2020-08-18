@@ -239,7 +239,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def _on_key_event(self, code: int, state: bool) -> None:
         if self.__kvmd_ws:
-            if (web_key := self.__symmap.get(code)) is not None:
+            web_key = self.__symmap.get(code)
+            if web_key is not None:
                 await self.__kvmd_ws.send_key_event(web_key.name, state)
 
     async def _on_pointer_event(self, buttons: Dict[str, bool], wheel: Dict[str, int], move: Dict[str, int]) -> None:
