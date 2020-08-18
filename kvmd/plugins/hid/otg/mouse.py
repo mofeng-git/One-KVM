@@ -91,6 +91,8 @@ class MouseProcess(BaseDeviceProcess):
             "left":   0x1,
             "right":  0x2,
             "middle": 0x4,
+            "up":     0x8,  # Back
+            "down":   0x10,  # Forward
         }[button]
         self._queue_event(_ButtonEvent(code, state))
 

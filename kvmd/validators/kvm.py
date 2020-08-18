@@ -80,7 +80,7 @@ def valid_hid_mouse_move(arg: Any) -> int:
 
 
 def valid_hid_mouse_button(arg: Any) -> str:
-    return check_string_in_list(arg, "HID mouse button", ["left", "right", "middle"])
+    return check_string_in_list(arg, "HID mouse button", ["left", "right", "middle", "up", "down"])
 
 
 def valid_hid_mouse_wheel(arg: Any) -> int:

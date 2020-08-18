@@ -153,7 +153,7 @@ def test_fail__valid_hid_mouse_move(arg: Any) -> None:
 
 
 # =====
-@pytest.mark.parametrize("arg", ["LEFT ", "RIGHT "])
+@pytest.mark.parametrize("arg", ["LEFT ", "RIGHT ", "Up ", " Down", " MiDdLe "])
 def test_ok__valid_hid_mouse_button(arg: Any) -> None:
     assert valid_hid_mouse_button(arg) == arg.strip().lower()
 

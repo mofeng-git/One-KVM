@@ -400,6 +400,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
                 "left": bool(buttons & 0x1),
                 "right": bool(buttons & 0x4),
                 "middle": bool(buttons & 0x2),
+                "up": bool(buttons & 0x8),  # Back
+                "down": bool(buttons & 0x10),  # Forward
             },
             wheel={
                 "x": (-4 if buttons & 0x40 else (4 if buttons & 0x20 else 0)),

@@ -66,6 +66,11 @@
 #define PROTO_CMD_MOUSE_BUTTON_MIDDLE_SELECT	0b00100000
 #define PROTO_CMD_MOUSE_BUTTON_MIDDLE_STATE		0b00000010
 
+#define PROTO_CMD_MOUSE_BUTTON_EXTRA_UP_SELECT		0b10000000
+#define PROTO_CMD_MOUSE_BUTTON_EXTRA_UP_STATE		0b00001000
+#define PROTO_CMD_MOUSE_BUTTON_EXTRA_DOWN_SELECT	0b01000000
+#define PROTO_CMD_MOUSE_BUTTON_EXTRA_DOWN_STATE		0b00000100
+
 
 // -----------------------------------------------------------------------------
 #ifdef HID_USB_KBD
@@ -94,14 +99,17 @@ INLINE uint8_t cmdKeyEvent(const uint8_t *buffer) { // 2 bytes
 	return PROTO_RESP_OK;
 }
 
-INLINE uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 1 byte
+INLINE uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 2 bytes
 #	ifdef HID_USB_MOUSE
-	uint8_t state = buffer[0];
+	uint8_t main_state = buffer[0];
+	uint8_t extra_state = buffer[1];
 
 	hid_mouse.sendMouseButtons(
-		state & PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT, state & PROTO_CMD_MOUSE_BUTTON_LEFT_STATE,
-		state & PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT, state & PROTO_CMD_MOUSE_BUTTON_RIGHT_STATE,
-		state & PROTO_CMD_MOUSE_BUTTON_MIDDLE_SELECT, state & PROTO_CMD_MOUSE_BUTTON_MIDDLE_STATE
+		main_state & PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT, main_state & PROTO_CMD_MOUSE_BUTTON_LEFT_STATE,
+		main_state & PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT, main_state & PROTO_CMD_MOUSE_BUTTON_RIGHT_STATE,
+		main_state & PROTO_CMD_MOUSE_BUTTON_MIDDLE_SELECT, main_state & PROTO_CMD_MOUSE_BUTTON_MIDDLE_STATE,
+		extra_state & PROTO_CMD_MOUSE_BUTTON_EXTRA_UP_SELECT, extra_state & PROTO_CMD_MOUSE_BUTTON_EXTRA_UP_STATE,
+		extra_state & PROTO_CMD_MOUSE_BUTTON_EXTRA_DOWN_SELECT, extra_state & PROTO_CMD_MOUSE_BUTTON_EXTRA_DOWN_STATE
 	);
 #	endif
 	return PROTO_RESP_OK;

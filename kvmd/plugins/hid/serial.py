@@ -108,17 +108,25 @@ class _MouseButtonEvent(_BaseEvent):
     state: bool
 
     def __post_init__(self) -> None:
-        assert self.name in ["left", "right", "middle"]
+        assert self.name in ["left", "right", "middle", "up", "down"]
 
     def make_command(self) -> bytes:
-        (code, state_pressed) = {
-            "left":   (0b10000000, 0b00001000),
-            "right":  (0b01000000, 0b00000100),
-            "middle": (0b00100000, 0b00000010),
+        (code, state_pressed, is_main) = {
+            "left":   (0b10000000, 0b00001000, True),
+            "right":  (0b01000000, 0b00000100, True),
+            "middle": (0b00100000, 0b00000010, True),
+            "up":     (0b10000000, 0b00001000, False),  # Back
+            "down":   (0b01000000, 0b00000100, False),  # Forward
         }[self.name]
         if self.state:
             code |= state_pressed
-        return struct.pack(">BBxxx", 0x13, code)
+        if is_main:
+            main_code = code
+            extra_code = 0
+        else:
+            main_code = 0
+            extra_code = code
+        return struct.pack(">BBBxx", 0x13, main_code, extra_code)
 
 
 @dataclasses.dataclass(frozen=True)

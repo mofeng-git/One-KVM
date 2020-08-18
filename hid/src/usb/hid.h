@@ -76,11 +76,15 @@ class UsbHidMouse {
 		INLINE void sendMouseButtons(
 			bool left_select, bool left_state,
 			bool right_select, bool right_state,
-			bool middle_select, bool middle_state
+			bool middle_select, bool middle_state,
+			bool up_select, bool up_state,
+			bool down_select, bool down_state
 		) {
 			if (left_select) _sendMouseButton(MOUSE_LEFT, left_state);
 			if (right_select) _sendMouseButton(MOUSE_RIGHT, right_state);
 			if (middle_select) _sendMouseButton(MOUSE_MIDDLE, middle_state);
+			if (up_select) _sendMouseButton(MOUSE_PREV, up_state);
+			if (down_select) _sendMouseButton(MOUSE_NEXT, down_state);
 		}
 
 		INLINE void sendMouseMove(int x, int y) {

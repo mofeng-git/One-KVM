@@ -120,6 +120,8 @@ export function Mouse(record_callback) {
 			case 0: __keypad.emit("left", state); break;
 			case 2: __keypad.emit("right", state); break;
 			case 1: __keypad.emit("middle", state); break;
+			case 3: __keypad.emit("up", state); break;
+			case 4: __keypad.emit("down", state); break;
 		}
 	};
 
