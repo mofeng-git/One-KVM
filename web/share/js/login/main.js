@@ -58,7 +58,15 @@ function __login() {
 				} else if (http.status === 403) {
 					wm.error("Invalid username or password").then(__tryAgain);
 				} else {
-					wm.error("Login error:<br>", http.responseText).then(__tryAgain);
+					let error = "";
+					if (http.status === 400) {
+						try { error = JSON.parse(http.responseText)["result"]["error"]; } catch (_) { /* Nah */ }
+					}
+					if (error === "ValidatorError") {
+						wm.error("Incorrect username characters").then(__tryAgain);
+					} else {
+						wm.error("Login error:<br>", http.responseText).then(__tryAgain);
+					}
 				}
 			}
 		}, body, "application/x-www-form-urlencoded");
