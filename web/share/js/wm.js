@@ -62,7 +62,7 @@ function __WindowManager() {
 			let el_button = el_window.querySelector(".window-header .window-button-close");
 			if (el_button) {
 				tools.setOnClick(el_button, function() {
-					el_window.style.visibility = "hidden";
+					__closeWindow(el_window);
 					__activateLastWindow(el_window);
 				});
 			}
@@ -111,7 +111,7 @@ function __WindowManager() {
 				el_window.appendChild(el_buttons);
 
 				function close(retval) {
-					el_window.style.visibility = "hidden";
+					__closeWindow(el_window);
 					el_modal.outerHTML = "";
 					let index = __windows.indexOf(el_modal);
 					if (index !== -1) {
@@ -206,6 +206,12 @@ function __WindowManager() {
 			left: 0,
 			right: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
 		};
+	};
+
+	var __closeWindow = function(el_window) {
+		el_window.focus();
+		el_window.blur();
+		el_window.style.visibility = "hidden";
 	};
 
 	var __toggleMenu = function(el_a) {
@@ -354,8 +360,7 @@ function __WindowManager() {
 			tools.debug("UI: Activating last window:", el_last_window);
 			__activateWindow(el_last_window);
 		} else {
-			tools.debug("UI: Unsetting focuse because no windows left");
-			document.activeElement.blur();
+			tools.debug("UI: No last window to activation");
 		}
 	};
 
