@@ -3,7 +3,6 @@
 TESTENV_IMAGE ?= kvmd-testenv
 TESTENV_HID ?= /dev/ttyS10
 TESTENV_VIDEO ?= /dev/video0
-TESTENV_LOOP ?= $(shell losetup -f)
 
 USTREAMER_MIN_VERSION ?= $(shell grep -o 'ustreamer>=[^"]\+' PKGBUILD | sed 's/ustreamer>=//g')
 
@@ -67,7 +66,6 @@ tox: testenv
 
 
 run: testenv
-	sudo modprobe loop
 	- docker run --rm --name kvmd \
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
@@ -76,7 +74,6 @@ run: testenv
 			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
 			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
-			--device $(TESTENV_LOOP):/dev/kvmd-msd \
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
 			--publish 8080:80/tcp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
@@ -88,11 +85,8 @@ run: testenv
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
-			&& (losetup -d /dev/kvmd-msd || true) \
-			&& losetup /dev/kvmd-msd /root/loop.img \
 			&& $(if $(CMD),$(CMD),python -m kvmd.apps.kvmd) \
 		"
-	- docker run --rm --device=$(TESTENV_LOOP):/dev/kvmd-msd -it $(TESTENV_IMAGE) losetup -d /dev/kvmd-msd
 
 
 run-ipmi: testenv

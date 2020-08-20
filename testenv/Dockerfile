@@ -1,7 +1,5 @@
 FROM archlinux/base
 
-RUN dd if=/dev/zero of=/root/loop.img bs=1024 count=1048576
-
 RUN echo "Server = http://mirror.yandex.ru/archlinux/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
 
 RUN pacman -Syu --noconfirm \
