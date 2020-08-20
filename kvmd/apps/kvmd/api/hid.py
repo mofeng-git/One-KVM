@@ -155,3 +155,40 @@ class HidApi:
         except Exception:
             return
         self.__hid.send_mouse_wheel_event(delta_x, delta_y)
+
+    # =====
+
+    @exposed_http("POST", "/hid/events/send_key")
+    async def __events_send_key_handler(self, request: Request) -> Response:
+        key = valid_hid_key(request.query.get("key"))
+        if "state" in request.query:
+            state = valid_bool(request.query["state"])
+            self.__hid.send_key_events([(key, state)])
+        else:
+            self.__hid.send_key_events([(key, True), (key, False)])
+        return make_json_response()
+
+    @exposed_http("POST", "/hid/events/send_mouse_button")
+    async def __events_send_mouse_button_handler(self, request: Request) -> Response:
+        button = valid_hid_mouse_button(request.query.get("button"))
+        if "state" in request.query:
+            state = valid_bool(request.query["state"])
+            self.__hid.send_mouse_button_event(button, state)
+        else:
+            self.__hid.send_mouse_button_event(button, True)
+            self.__hid.send_mouse_button_event(button, False)
+        return make_json_response()
+
+    @exposed_http("POST", "/hid/events/send_mouse_move")
+    async def __events_send_mouse_move_handler(self, request: Request) -> Response:
+        to_x = valid_hid_mouse_move(request.query.get("to_x"))
+        to_y = valid_hid_mouse_move(request.query.get("to_y"))
+        self.__hid.send_mouse_move_event(to_x, to_y)
+        return make_json_response()
+
+    @exposed_http("POST", "/hid/events/send_mouse_wheel")
+    async def __events_send_mouse_wheel(self, request: Request) -> Response:
+        delta_x = valid_hid_mouse_wheel(request.query.get("delta_x"))
+        delta_y = valid_hid_mouse_wheel(request.query.get("delta_y"))
+        self.__hid.send_mouse_wheel_event(delta_x, delta_y)
+        return make_json_response()
