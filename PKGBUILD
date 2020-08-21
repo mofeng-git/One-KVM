@@ -5,6 +5,7 @@
 _variants=(
 	v0-hdmi:rpi2
 	v0-hdmi:rpi3
+	v0-hdmiusb:zerow
 	v0-hdmiusb:rpi2
 	v0-hdmiusb:rpi3
 
