@@ -66,11 +66,24 @@ class _AuthApiPart(_BaseApiPart):
 
 
 class _StreamerApiPart(_BaseApiPart):
-    async def set_params(self, quality: int, desired_fps: int) -> None:
+    async def get_state(self) -> Dict:
+        session = self._ensure_http_session()
+        async with session.get(self._make_url("streamer")) as response:
+            htclient.raise_not_200(response)
+            return (await response.json())["result"]
+
+    async def set_params(self, quality: Optional[int]=None, desired_fps: Optional[int]=None) -> None:
         session = self._ensure_http_session()
         async with session.post(
             url=self._make_url("streamer/set_params"),
-            params={"quality": quality, "desired_fps": desired_fps},
+            params={
+                key: value
+                for (key, value) in [
+                    ("quality", quality),
+                    ("desired_fps", desired_fps),
+                ]
+                if value is not None
+            },
         ) as response:
             htclient.raise_not_200(response)
 

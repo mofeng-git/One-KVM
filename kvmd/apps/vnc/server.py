@@ -274,9 +274,11 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     async def _on_set_encodings(self) -> None:
         assert self.__authorized.done()
         assert self.__kvmd_session
-        get_logger(0).info("[main] %s: Applying streamer params: quality=%d%%; desired_fps=%d ...",
-                           self._remote, self._encodings.tight_jpeg_quality, self.__desired_fps)
-        await self.__kvmd_session.streamer.set_params(self._encodings.tight_jpeg_quality, self.__desired_fps)
+        has_quality = (await self.__kvmd_session.streamer.get_state())["features"]["quality"]
+        quality = (self._encodings.tight_jpeg_quality if has_quality else None)
+        get_logger(0).info("[main] %s: Applying streamer params: quality=%s; desired_fps=%d ...",
+                           self._remote, quality, self.__desired_fps)
+        await self.__kvmd_session.streamer.set_params(quality, self.__desired_fps)
 
     async def _on_fb_update_request(self) -> None:
         async with self.__lock:
