@@ -63,7 +63,7 @@ function __login() {
 						try { error = JSON.parse(http.responseText)["result"]["error"]; } catch (_) { /* Nah */ }
 					}
 					if (error === "ValidatorError") {
-						wm.error("Incorrect username characters").then(__tryAgain);
+						wm.error("Invalid username or password characters").then(__tryAgain);
 					} else {
 						wm.error("Login error:<br>", http.responseText).then(__tryAgain);
 					}
