@@ -79,7 +79,7 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
                 extras["port"] = config
 
     def __is_daemon_enabled(self, name: str) -> bool:
-        if not name.startswith(".service"):
+        if not name.endswith(".service"):
             name += ".service"
 
         try:
