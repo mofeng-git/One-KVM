@@ -79,7 +79,9 @@ from ..validators.kvm import valid_stream_resolution
 from ..validators.kvm import valid_hid_key
 from ..validators.kvm import valid_hid_mouse_move
 
+from ..validators.hw import valid_gpio_pin
 from ..validators.hw import valid_gpio_pin_optional
+from ..validators.hw import valid_gpio_mode
 from ..validators.hw import valid_otg_gadget
 from ..validators.hw import valid_otg_id
 
@@ -113,6 +115,7 @@ def init(
             load_hid=True,
             load_atx=True,
             load_msd=True,
+            load_gpio=True,
         ))
         raise SystemExit()
     config = _init_config(options.config_path, options.set_options, **load)
@@ -123,15 +126,7 @@ def init(
 
 
 # =====
-def _init_config(
-    config_path: str,
-    override_options: List[str],
-    load_auth: bool=False,
-    load_hid: bool=False,
-    load_atx: bool=False,
-    load_msd: bool=False,
-) -> Section:
-
+def _init_config(config_path: str, override_options: List[str], **load_flags: bool) -> Section:
     config_path = os.path.expanduser(config_path)
     raw_config: Dict = load_yaml_file(config_path)
 
@@ -141,29 +136,67 @@ def _init_config(
         _merge_dicts(raw_config, build_raw_from_options(override_options))
         config = make_config(raw_config, scheme)
 
-        rebuild = False
-
-        if load_auth:
-            scheme["kvmd"]["auth"]["internal"].update(get_auth_service_class(config.kvmd.auth.internal.type).get_plugin_options())
-            if config.kvmd.auth.external.type:
-                scheme["kvmd"]["auth"]["external"].update(get_auth_service_class(config.kvmd.auth.external.type).get_plugin_options())
-            rebuild = True
-
-        for (load, section, get_class) in [
-            (load_hid, "hid", get_hid_class),
-            (load_atx, "atx", get_atx_class),
-            (load_msd, "msd", get_msd_class),
-        ]:
-            if load:
-                scheme["kvmd"][section].update(get_class(getattr(config.kvmd, section).type).get_plugin_options())
-                rebuild = True
-
-        if rebuild:
+        if _patch_dynamic(raw_config, config, scheme, **load_flags):
             config = make_config(raw_config, scheme)
 
         return config
     except (ConfigError, UnknownPluginError) as err:
         raise SystemExit(f"Config error: {err}")
+
+
+def _patch_dynamic(  # pylint: disable=too-many-locals
+    raw_config: Dict,
+    config: Section,
+    scheme: Dict,
+    load_auth: bool=False,
+    load_hid: bool=False,
+    load_atx: bool=False,
+    load_msd: bool=False,
+    load_gpio: bool=False,
+) -> bool:
+
+    rebuild = False
+
+    if load_auth:
+        scheme["kvmd"]["auth"]["internal"].update(get_auth_service_class(config.kvmd.auth.internal.type).get_plugin_options())
+        if config.kvmd.auth.external.type:
+            scheme["kvmd"]["auth"]["external"].update(get_auth_service_class(config.kvmd.auth.external.type).get_plugin_options())
+        rebuild = True
+
+    for (load, section, get_class) in [
+        (load_hid, "hid", get_hid_class),
+        (load_atx, "atx", get_atx_class),
+        (load_msd, "msd", get_msd_class),
+    ]:
+        if load:
+            scheme["kvmd"][section].update(get_class(getattr(config.kvmd, section).type).get_plugin_options())
+            rebuild = True
+
+    if load_gpio:
+        for (channel, params) in raw_config.get("kvmd", {}).get("gpio", {}).get("scheme", {}).items():
+            try:
+                mode = valid_gpio_mode(params.get("mode", ""))
+            except Exception:
+                mode = ""
+            channel_scheme: Dict = {
+                "pin":   Option(-1, type=valid_gpio_pin),
+                "mode":  Option("", type=valid_gpio_mode),
+                "title": Option(""),
+            }
+            if mode == "input":
+                channel_scheme["inverted"] = Option(False, type=valid_bool)
+            else:  # output
+                channel_scheme.update({
+                    "switch": Option(True, type=valid_bool),
+                    "pulse": {
+                        "delay":     Option(0.1, type=valid_float_f0),
+                        "min_delay": Option(0.1, type=valid_float_f01),
+                        "max_delay": Option(0.1, type=valid_float_f01),
+                    },
+                })
+            scheme["kvmd"]["gpio"]["scheme"][channel] = channel_scheme
+
+    return rebuild
 
 
 def _dump_config(config: Section) -> None:
@@ -287,6 +320,11 @@ def _get_config_scheme() -> Dict:
                 "online_delay":  Option(5.0, type=valid_float_f0),
                 "retries":       Option(10,  type=valid_int_f1),
                 "retries_delay": Option(3.0, type=valid_float_f01),
+            },
+
+            "gpio": {
+                "state_poll": Option(0.1, type=valid_float_f01),
+                "scheme": {},  # Dymanic content
             },
         },
 

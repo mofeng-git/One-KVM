@@ -37,6 +37,7 @@ from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
 from .wol import WakeOnLan
+from .ugpio import UserGpio
 from .streamer import Streamer
 from .snapshoter import Snapshoter
 from .server import KvmdServer
@@ -52,6 +53,7 @@ def main(argv: Optional[List[str]]=None) -> None:
         load_hid=True,
         load_atx=True,
         load_msd=True,
+        load_gpio=True,
     )[2]
 
     with gpio.bcm():
@@ -79,6 +81,7 @@ def main(argv: Optional[List[str]]=None) -> None:
             info_manager=InfoManager(global_config),
             log_reader=LogReader(),
             wol=WakeOnLan(**config.wol._unpack()),
+            user_gpio=UserGpio(config.gpio),
 
             hid=hid,
             atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),

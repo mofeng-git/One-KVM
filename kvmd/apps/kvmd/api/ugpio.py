@@ -20,41 +20,44 @@
 # ========================================================================== #
 
 
-from typing import Any
+from aiohttp.web import Request
+from aiohttp.web import Response
 
-from . import check_in_list
-from . import check_string_in_list
-from . import check_re_match
+from ....validators.basic import valid_bool
+from ....validators.basic import valid_float_f0
 
-from .basic import valid_number
+from ....validators.hw import valid_gpio_channel
+
+from ..ugpio import UserGpio
+
+from ..http import exposed_http
+from ..http import make_json_response
 
 
 # =====
-def valid_tty_speed(arg: Any) -> int:
-    name = "TTY speed"
-    arg = int(valid_number(arg, name=name))
-    return check_in_list(arg, name, [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200])
+class UserGpioApi:
+    def __init__(self, user_gpio: UserGpio) -> None:
+        self.__user_gpio = user_gpio
 
+    # =====
 
-def valid_gpio_pin(arg: Any) -> int:
-    return int(valid_number(arg, min=0, name="GPIO pin"))
+    @exposed_http("GET", "/gpio")
+    async def __state_handler(self, _: Request) -> Response:
+        return make_json_response({
+            "scheme": (await self.__user_gpio.get_scheme()),
+            "state": (await self.__user_gpio.get_state()),
+        })
 
+    @exposed_http("POST", "/gpio/switch")
+    async def __switch_handler(self, request: Request) -> Response:
+        channel = valid_gpio_channel(request.query.get("channel"))
+        state = valid_bool(request.query.get("state"))
+        done = await self.__user_gpio.switch(channel, state)
+        return make_json_response({"done": done})
 
-def valid_gpio_pin_optional(arg: Any) -> int:
-    return int(valid_number(arg, min=-1, name="optional GPIO pin"))
-
-
-def valid_gpio_mode(arg: Any) -> str:
-    return check_string_in_list(arg, "GPIO mode", ["input", "output"])
-
-
-def valid_gpio_channel(arg: Any) -> str:
-    return check_re_match(arg, "GPIO channel", r"^[a-zA-Z_][a-zA-Z0-9_-]*$")[:255]
-
-
-def valid_otg_gadget(arg: Any) -> str:
-    return check_re_match(arg, "OTG gadget name", r"^[a-z_][a-z0-9_-]*$")[:255]
-
-
-def valid_otg_id(arg: Any) -> int:
-    return int(valid_number(arg, min=0, max=65535, name="OTG ID"))
+    @exposed_http("POST", "/gpio/pulse")
+    async def __pulse_handler(self, request: Request) -> Response:
+        channel = valid_gpio_channel(request.query.get("channel"))
+        delay = valid_float_f0(request.query.get("delay", "0"))
+        await self.__user_gpio.pulse(channel, delay)
+        return make_json_response()

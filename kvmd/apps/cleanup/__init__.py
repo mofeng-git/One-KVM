@@ -45,24 +45,30 @@ def _clear_gpio(config: Section) -> None:
     with gpio.bcm():
         for (name, pin) in [
             *([
-                ("tty_hid_reset_pin", config.hid.reset_pin),
-            ] if config.hid.type == "tty" else []),
+                ("hid_serial/reset", config.hid.reset_pin),
+            ] if config.hid.type == "serial" else []),
 
             *([
-                ("gpio_atx_power_switch_pin", config.atx.power_switch_pin),
-                ("gpio_atx_reset_switch_pin", config.atx.reset_switch_pin),
+                ("atx_gpio/power_switch", config.atx.power_switch_pin),
+                ("atx_gpio/reset_switch", config.atx.reset_switch_pin),
             ] if config.atx.type == "gpio" else []),
 
             *([
-                ("relay_msd_target_pin", config.msd.target_pin),
-                ("relay_msd_reset_pin", config.msd.reset_pin),
+                ("msd_relay/target", config.msd.target_pin),
+                ("msd_relay/reset", config.msd.reset_pin),
             ] if config.msd.type == "relay" else []),
 
-            ("streamer_cap_pin", config.streamer.cap_pin),
-            ("streamer_conv_pin", config.streamer.conv_pin),
+            ("streamer/cap", config.streamer.cap_pin),
+            ("streamer/conv", config.streamer.conv_pin),
+
+            *([
+                (f"gpio/{channel}", params.pin)
+                for (channel, params) in config.gpio.scheme.items()
+                if params.mode == "output"
+            ]),
         ]:
             if pin >= 0:
-                logger.info("Writing value=0 to GPIO pin=%d (%s)", pin, name)
+                logger.info("Writing 0 to GPIO pin=%d (%s)", pin, name)
                 try:
                     gpio.set_output(pin, initial=False)
                 except Exception:
@@ -114,6 +120,7 @@ def main(argv: Optional[List[str]]=None) -> None:
         load_hid=True,
         load_atx=True,
         load_msd=True,
+        load_gpio=True,
     )[2].kvmd
 
     logger = get_logger(0)

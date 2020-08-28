@@ -65,6 +65,7 @@ from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
 from .wol import WakeOnLan
+from .ugpio import UserGpio
 from .streamer import Streamer
 from .snapshoter import Snapshoter
 
@@ -84,6 +85,7 @@ from .api.auth import check_request_auth
 from .api.info import InfoApi
 from .api.log import LogApi
 from .api.wol import WolApi
+from .api.ugpio import UserGpioApi
 from .api.hid import HidApi
 from .api.atx import AtxApi
 from .api.msd import MsdApi
@@ -137,6 +139,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         info_manager: InfoManager,
         log_reader: LogReader,
         wol: WakeOnLan,
+        user_gpio: UserGpio,
 
         hid: BaseHid,
         atx: BaseAtx,
@@ -154,6 +157,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self.__hid = hid
         self.__streamer = streamer
         self.__snapshoter = snapshoter  # Not a component: No state or cleanup
+        self.__user_gpio = user_gpio  # Has extra state "gpio_scheme_state"
 
         self.__heartbeat = heartbeat
 
@@ -167,6 +171,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             ],
             *[
                 _Component("Wake-on-LAN",  "wol_state",      wol),
+                _Component("GPIO",         "gpio_state",     user_gpio),
                 _Component("HID",          "hid_state",      hid),
                 _Component("ATX",          "atx_state",      atx),
                 _Component("MSD",          "msd_state",      msd),
@@ -180,6 +185,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             InfoApi(info_manager),
             LogApi(log_reader),
             WolApi(wol),
+            UserGpioApi(user_gpio),
             HidApi(hid, keymap_path),
             AtxApi(atx),
             MsdApi(msd, sync_chunk_size),
@@ -235,6 +241,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         await client.ws.prepare(request)
         await self.__register_ws_client(client)
         try:
+            await self.__broadcast_event("gpio_scheme_state", await self.__user_gpio.get_scheme())
             await asyncio.gather(*[
                 self.__broadcast_event(component.event_type, await component.get_state())
                 for component in self.__components
