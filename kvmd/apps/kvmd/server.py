@@ -171,7 +171,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             ],
             *[
                 _Component("Wake-on-LAN",  "wol_state",      wol),
-                _Component("GPIO",         "gpio_state",     user_gpio),
+                _Component("User-GPIO",    "gpio_state",     user_gpio),
                 _Component("HID",          "hid_state",      hid),
                 _Component("ATX",          "atx_state",      atx),
                 _Component("MSD",          "msd_state",      msd),
