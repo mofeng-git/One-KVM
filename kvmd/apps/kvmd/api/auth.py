@@ -52,6 +52,7 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
             set_request_auth_info(request, f"{user} (xhdr)")
             if not (await auth_manager.authorize(user, valid_passwd(passwd))):
                 raise ForbiddenError()
+            return
 
         elif token:
             user = auth_manager.check(valid_auth_token(token))
@@ -59,9 +60,9 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
                 set_request_auth_info(request, "- (token)")
                 raise ForbiddenError()
             set_request_auth_info(request, f"{user} (token)")
+            return
 
-        else:
-            raise UnauthorizedError()
+        raise UnauthorizedError()
 
 
 class AuthApi:
