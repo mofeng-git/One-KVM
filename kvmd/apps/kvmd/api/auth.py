@@ -20,6 +20,8 @@
 # ========================================================================== #
 
 
+import base64
+
 from aiohttp.web import Request
 from aiohttp.web import Response
 
@@ -58,6 +60,18 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
                 raise ForbiddenError()
             set_request_auth_info(request, f"{user} (token)")
             return
+
+        elif (basic_auth := request.headers.get("Authorization", "")):
+            if basic_auth[:6].lower() == "basic ":
+                try:
+                    (user, passwd) = base64.b64decode(basic_auth[6:]).decode("utf-8").split(":")
+                except Exception:
+                    raise UnauthorizedError()
+                user = valid_user(user)
+                set_request_auth_info(request, f"{user} (basic)")
+                if not (await auth_manager.authorize(user, valid_passwd(passwd))):
+                    raise ForbiddenError()
+                return
 
         raise UnauthorizedError()
 
