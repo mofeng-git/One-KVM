@@ -22,6 +22,8 @@
 
 import asyncio
 
+from typing import Any
+from typing import Dict
 from typing import List
 
 from aiohttp.web import Request
@@ -34,6 +36,22 @@ from ..info import InfoManager
 
 from ..http import exposed_http
 from ..http import make_json_response
+from ..http import make_text_response
+
+
+# ====
+def _build_metrics(metrics: List[str], name: str, value: Any) -> None:
+    if isinstance(value, bool):
+        value = 1 if value else 0
+    if isinstance(value, (int, float)):
+        metrics.append(f"# TYPE {name} gauge")
+        metrics.append(f"{name} {value}")
+    elif isinstance(value, dict):
+        for key, val in value.items():
+            if key == "parsed_flags":
+                _build_metrics(metrics, name, val)
+            else:
+                _build_metrics(metrics, f"{name}_{key}", val)
 
 
 # =====
@@ -59,3 +77,17 @@ class InfoApi:
             subval=(lambda field: check_string_in_list(field, "info field", subs)),
             name="info fields list",
         ))) or subs)
+
+    @exposed_http("GET", "/export/prometheus/metrics", False)
+    async def __metrics_handler(self, _: Request) -> Response:
+        data = await asyncio.gather(self.__info_manager.get_submanager("hw").get_state())
+        if data is None:
+            return make_text_response("error", 500)
+        else:
+            data_exists: Dict[Any, Any] = data
+            health = data_exists[0]["health"]
+
+            metrics: List[str] = []
+            _build_metrics(metrics, "pikvm", health)
+
+            return make_text_response("\n".join(metrics))
