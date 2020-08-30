@@ -43,18 +43,15 @@ _COOKIE_AUTH_TOKEN = "auth_token"
 
 async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, request: Request) -> None:
     if exposed.auth_required and auth_manager.is_auth_enabled():
-        user = request.headers.get("X-KVMD-User", "")
-        passwd = request.headers.get("X-KVMD-Passwd", "")
-        token = request.cookies.get(_COOKIE_AUTH_TOKEN, "")
-
-        if user:
+        if (user := request.headers.get("X-KVMD-User", "")):
             user = valid_user(user)
+            passwd = request.headers.get("X-KVMD-Passwd", "")
             set_request_auth_info(request, f"{user} (xhdr)")
             if not (await auth_manager.authorize(user, valid_passwd(passwd))):
                 raise ForbiddenError()
             return
 
-        elif token:
+        elif (token := request.cookies.get(_COOKIE_AUTH_TOKEN, "")):
             user = auth_manager.check(valid_auth_token(token))
             if not user:
                 set_request_auth_info(request, "- (token)")
