@@ -147,23 +147,6 @@ def make_json_exception(err: Exception, status: Optional[int]=None) -> aiohttp.w
     }, status=status)
 
 
-def make_text_response(
-    result: str,
-    status: int=200,
-    set_cookies: Optional[Dict[str, str]]=None,
-) -> aiohttp.web.Response:
-
-    response = aiohttp.web.Response(
-        text=result,
-        status=status,
-        content_type="text/plain",
-    )
-    if set_cookies:
-        for (key, value) in set_cookies.items():
-            response.set_cookie(key, value)
-    return response
-
-
 # =====
 async def get_multipart_field(reader: aiohttp.MultipartReader, name: str) -> aiohttp.BodyPartReader:
     field = await reader.next()

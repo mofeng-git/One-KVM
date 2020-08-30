@@ -90,6 +90,7 @@ from .api.hid import HidApi
 from .api.atx import AtxApi
 from .api.msd import MsdApi
 from .api.streamer import StreamerApi
+from .api.export import ExportApi
 
 
 # =====
@@ -190,6 +191,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             AtxApi(atx),
             MsdApi(msd, sync_chunk_size),
             StreamerApi(streamer),
+            ExportApi(info_manager, atx),
         ]
 
         self.__ws_handlers: Dict[str, Callable] = {}
