@@ -182,7 +182,6 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
                 ch_scheme: Dict = {
                     "pin":      Option(-1, type=valid_gpio_pin),
                     "mode":     Option("", type=valid_gpio_mode),
-                    "title":    Option(""),
                     "inverted": Option(False, type=valid_bool),
                 }
                 if mode == "output":

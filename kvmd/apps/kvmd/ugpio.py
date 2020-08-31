@@ -63,13 +63,12 @@ class GpioChannelIsBusyError(IsBusyError):
 class _GpioInput:
     def __init__(self, channel: str, config: Section, reader: gpio.BatchReader) -> None:
         self.__channel = channel
-        self.__title: str = config.title
         self.__pin: int = config.pin  # gpio.set_input(config.pin)  # Configured in UserGpio/BatchReader
         self.__inverted: bool = config.inverted
         self.__reader = reader
 
     def get_scheme(self) -> Dict:
-        return {"title": self.__title}
+        return {}
 
     def get_state(self) -> Dict:
         return {"state": (self.__reader.get(self.__pin) ^ self.__inverted)}
@@ -83,7 +82,6 @@ class _GpioInput:
 class _GpioOutput:  # pylint: disable=too-many-instance-attributes
     def __init__(self, channel: str, config: Section, notifier: aiotools.AioNotifier) -> None:
         self.__channel = channel
-        self.__title: str = config.title
         self.__pin: int = gpio.set_output(config.pin, (config.initial ^ config.inverted))
         self.__inverted: bool = config.inverted
         self.__switch: bool = config.switch
@@ -96,7 +94,6 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
 
     def get_scheme(self) -> Dict:
         return {
-            "title": self.__title,
             "switch": self.__switch,
             "pulse": {
                 "delay": self.__pulse_delay,
