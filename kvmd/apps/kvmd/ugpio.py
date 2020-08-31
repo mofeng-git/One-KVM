@@ -84,13 +84,14 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
     def __init__(self, channel: str, config: Section, notifier: aiotools.AioNotifier) -> None:
         self.__channel = channel
         self.__title: str = config.title
-        self.__pin: int = gpio.set_output(config.pin)
+        self.__pin: int = gpio.set_output(config.pin, (config.initial ^ config.inverted))
+        self.__inverted: bool = config.inverted
         self.__switch: bool = config.switch
         self.__pulse_delay: float = config.pulse.delay
         self.__min_pulse_delay: float = config.pulse.min_delay
         self.__max_pulse_delay: float = config.pulse.max_delay
 
-        self.__state = False
+        self.__state = config.initial
         self.__region = aiotools.AioExclusiveRegion(GpioChannelIsBusyError, notifier)
 
     def get_scheme(self) -> Dict:
@@ -122,9 +123,9 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
             raise GpioSwitchNotSupported()
         async with self.__region:
             # Состояние проверяется только при изменении
-            real_state = gpio.read(self.__pin)
+            real_state = self.__read()
             if state != real_state:
-                gpio.write(self.__pin, state)
+                self.__write(state)
                 self.__state = state
                 get_logger(0).info("Switched GPIO %s to %d", self, state)
                 return True
@@ -144,15 +145,24 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
     @aiotools.atomic
     async def __inner_pulse(self, delay: float) -> None:
         try:
-            gpio.write(self.__pin, True)
+            self.__write(True)
             await asyncio.sleep(delay)
         finally:
-            gpio.write(self.__pin, False)
+            self.__write(False)
             await asyncio.sleep(1)
         get_logger(0).info("Pulsed GPIO %s", self)
 
+    def __read(self) -> bool:
+        return (gpio.read(self.__pin) ^ self.__inverted)
+
+    def __write(self, state: bool) -> None:
+        gpio.write(self.__pin, (state ^ self.__inverted))
+
     def __str__(self) -> str:
-        return f"Output({self.__channel}, pin={self.__pin}, switch={self.__switch}, pulse={bool(self.__max_pulse_delay)})"
+        return (
+            f"Output({self.__channel}, pin={self.__pin}, inverted={self.__inverted},"
+            f" switch={self.__switch}, pulse={bool(self.__max_pulse_delay)})"
+        )
 
     __repr__ = __str__
 

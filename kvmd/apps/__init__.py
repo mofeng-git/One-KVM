@@ -177,24 +177,25 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
             try:
                 mode = valid_gpio_mode(params.get("mode", ""))
             except Exception:
-                mode = ""
-            channel_scheme: Dict = {
-                "pin":   Option(-1, type=valid_gpio_pin),
-                "mode":  Option("", type=valid_gpio_mode),
-                "title": Option(""),
-            }
-            if mode == "input":
-                channel_scheme["inverted"] = Option(False, type=valid_bool)
-            else:  # output
-                channel_scheme.update({
-                    "switch": Option(True, type=valid_bool),
-                    "pulse": {
-                        "delay":     Option(0.1, type=valid_float_f0),
-                        "min_delay": Option(0.1, type=valid_float_f01),
-                        "max_delay": Option(0.1, type=valid_float_f01),
-                    },
-                })
-            scheme["kvmd"]["gpio"]["scheme"][channel] = channel_scheme
+                pass
+            finally:
+                ch_scheme: Dict = {
+                    "pin":      Option(-1, type=valid_gpio_pin),
+                    "mode":     Option("", type=valid_gpio_mode),
+                    "title":    Option(""),
+                    "inverted": Option(False, type=valid_bool),
+                }
+                if mode == "output":
+                    ch_scheme.update({
+                        "initial": Option(False, type=valid_bool),
+                        "switch":  Option(True, type=valid_bool),
+                        "pulse": {
+                            "delay":     Option(0.1, type=valid_float_f0),
+                            "min_delay": Option(0.1, type=valid_float_f01),
+                            "max_delay": Option(0.1, type=valid_float_f01),
+                        },
+                    })
+                scheme["kvmd"]["gpio"]["scheme"][channel] = ch_scheme
 
     return rebuild
 
