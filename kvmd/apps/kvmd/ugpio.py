@@ -167,6 +167,8 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
 # =====
 class UserGpio:
     def __init__(self, config: Section) -> None:
+        self.__view = config.view
+
         self.__state_notifier = aiotools.AioNotifier()
         self.__reader = gpio.BatchReader(
             pins=[gpio.set_input(ch_config.pin) for ch_config in config.scheme.values()],
@@ -188,6 +190,9 @@ class UserGpio:
             "inputs": {channel: gin.get_scheme() for (channel, gin) in self.__inputs.items()},
             "outputs": {channel: gout.get_scheme() for (channel, gout) in self.__outputs.items()},
         }
+
+    async def get_view(self) -> Dict:
+        return self.__view
 
     async def get_state(self) -> Dict:
         return {

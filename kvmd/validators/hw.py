@@ -23,7 +23,6 @@
 from typing import Any
 
 from . import check_in_list
-from . import check_string_in_list
 from . import check_re_match
 
 from .basic import valid_number
@@ -42,14 +41,6 @@ def valid_gpio_pin(arg: Any) -> int:
 
 def valid_gpio_pin_optional(arg: Any) -> int:
     return int(valid_number(arg, min=-1, name="optional GPIO pin"))
-
-
-def valid_gpio_mode(arg: Any) -> str:
-    return check_string_in_list(arg, "GPIO mode", ["input", "output"])
-
-
-def valid_gpio_channel(arg: Any) -> str:
-    return check_re_match(arg, "GPIO channel", r"^[a-zA-Z_][a-zA-Z0-9_-]*$")[:255]
 
 
 def valid_otg_gadget(arg: Any) -> str:

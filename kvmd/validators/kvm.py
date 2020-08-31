@@ -20,12 +20,14 @@
 # ========================================================================== #
 
 
+from typing import List
 from typing import Any
 
 from ..keyboard.mappings import KEYMAP
 
 from . import raise_error
 from . import check_string_in_list
+from . import check_re_match
 
 from .basic import valid_stripped_string_not_empty
 from .basic import valid_number
@@ -86,3 +88,19 @@ def valid_hid_mouse_button(arg: Any) -> str:
 def valid_hid_mouse_wheel(arg: Any) -> int:
     arg = valid_number(arg, name="HID mouse wheel")
     return min(max(-127, arg), 127)
+
+
+# =====
+def valid_ugpio_mode(arg: Any) -> str:
+    return check_string_in_list(arg, "GPIO mode", ["input", "output"])
+
+
+def valid_ugpio_channel(arg: Any) -> str:
+    return check_re_match(arg, "GPIO channel", r"^[a-zA-Z_][a-zA-Z0-9_-]*$")[:255]
+
+
+def valid_ugpio_view_table(arg: Any) -> List[List[str]]:
+    try:
+        return list(map(str, list(arg)))  # type: ignore
+    except Exception:
+        raise_error("<skipped>", "GPIO view table")

@@ -26,7 +26,7 @@ from aiohttp.web import Response
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_float_f0
 
-from ....validators.hw import valid_gpio_channel
+from ....validators.kvm import valid_ugpio_channel
 
 from ..ugpio import UserGpio
 
@@ -45,19 +45,20 @@ class UserGpioApi:
     async def __state_handler(self, _: Request) -> Response:
         return make_json_response({
             "scheme": (await self.__user_gpio.get_scheme()),
+            "view": (await self.__user_gpio.get_view()),
             "state": (await self.__user_gpio.get_state()),
         })
 
     @exposed_http("POST", "/gpio/switch")
     async def __switch_handler(self, request: Request) -> Response:
-        channel = valid_gpio_channel(request.query.get("channel"))
+        channel = valid_ugpio_channel(request.query.get("channel"))
         state = valid_bool(request.query.get("state"))
         done = await self.__user_gpio.switch(channel, state)
         return make_json_response({"done": done})
 
     @exposed_http("POST", "/gpio/pulse")
     async def __pulse_handler(self, request: Request) -> Response:
-        channel = valid_gpio_channel(request.query.get("channel"))
+        channel = valid_ugpio_channel(request.query.get("channel"))
         delay = valid_float_f0(request.query.get("delay", "0"))
         await self.__user_gpio.pulse(channel, delay)
         return make_json_response()

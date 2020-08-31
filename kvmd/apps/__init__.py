@@ -78,10 +78,11 @@ from ..validators.kvm import valid_stream_fps
 from ..validators.kvm import valid_stream_resolution
 from ..validators.kvm import valid_hid_key
 from ..validators.kvm import valid_hid_mouse_move
+from ..validators.kvm import valid_ugpio_mode
+from ..validators.kvm import valid_ugpio_view_table
 
 from ..validators.hw import valid_gpio_pin
 from ..validators.hw import valid_gpio_pin_optional
-from ..validators.hw import valid_gpio_mode
 from ..validators.hw import valid_otg_gadget
 from ..validators.hw import valid_otg_id
 
@@ -175,13 +176,13 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
     if load_gpio:
         for (channel, params) in raw_config.get("kvmd", {}).get("gpio", {}).get("scheme", {}).items():
             try:
-                mode = valid_gpio_mode(params.get("mode", ""))
+                mode = valid_ugpio_mode(params.get("mode", ""))
             except Exception:
                 pass
             finally:
                 ch_scheme: Dict = {
                     "pin":      Option(-1, type=valid_gpio_pin),
-                    "mode":     Option("", type=valid_gpio_mode),
+                    "mode":     Option("", type=valid_ugpio_mode),
                     "inverted": Option(False, type=valid_bool),
                 }
                 if mode == "output":
@@ -325,6 +326,13 @@ def _get_config_scheme() -> Dict:
             "gpio": {
                 "state_poll": Option(0.1, type=valid_float_f01),
                 "scheme": {},  # Dymanic content
+                "view": {
+                    "header": {
+                        "title": Option("Switches"),
+                        "leds":  Option([], type=valid_string_list),
+                    },
+                    "table": Option([], type=valid_ugpio_view_table),
+                },
             },
         },
 

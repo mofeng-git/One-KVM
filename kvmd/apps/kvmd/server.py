@@ -244,6 +244,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         await self.__register_ws_client(client)
         try:
             await self.__broadcast_event("gpio_scheme_state", await self.__user_gpio.get_scheme())
+            await self.__broadcast_event("gpio_view_state", await self.__user_gpio.get_view())
             await asyncio.gather(*[
                 self.__broadcast_event(component.event_type, await component.get_state())
                 for component in self.__components
