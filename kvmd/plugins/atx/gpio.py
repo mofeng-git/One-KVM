@@ -21,7 +21,6 @@
 
 
 import asyncio
-import operator
 
 from typing import Dict
 from typing import AsyncGenerator
@@ -97,8 +96,8 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
             "enabled": True,
             "busy": self.__region.is_busy(),
             "leds": {
-                "power": operator.xor(self.__power_led_inverted, gpio.read(self.__power_led_pin)),
-                "hdd": operator.xor(self.__hdd_led_inverted, gpio.read(self.__hdd_led_pin)),
+                "power": (gpio.read(self.__power_led_pin) ^ self.__power_led_inverted),
+                "hdd": (gpio.read(self.__hdd_led_pin) ^ self.__hdd_led_inverted),
             },
         }
 
