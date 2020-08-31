@@ -74,7 +74,7 @@ class BatchReader:
     def __init__(self, pins: List[int], interval: float, notifier: aiotools.AioNotifier) -> None:
         self.__pins = pins
         self.__flags: Tuple[Optional[bool], ...] = (None,) * len(pins)
-        self.__state = dict.fromkeys(pins, False)
+        self.__state = {pin: read(pin) for pin in pins}
 
         self.__interval = interval
         self.__notifier = notifier

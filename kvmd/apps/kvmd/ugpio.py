@@ -64,7 +64,7 @@ class _GpioInput:
     def __init__(self, channel: str, config: Section, reader: gpio.BatchReader) -> None:
         self.__channel = channel
         self.__title: str = config.title
-        self.__pin: int = gpio.set_input(config.pin)
+        self.__pin: int = config.pin  # gpio.set_input(config.pin)  # Configured in UserGpio/BatchReader
         self.__inverted: bool = config.inverted
         self.__reader = reader
 
@@ -172,7 +172,7 @@ class UserGpio:
     def __init__(self, config: Section) -> None:
         self.__state_notifier = aiotools.AioNotifier()
         self.__reader = gpio.BatchReader(
-            pins=[ch_config.pin for ch_config in config.scheme.values()],
+            pins=[gpio.set_input(ch_config.pin) for ch_config in config.scheme.values()],
             interval=config.state_poll,
             notifier=self.__state_notifier,
         )
