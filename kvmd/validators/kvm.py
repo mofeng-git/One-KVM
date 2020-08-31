@@ -101,6 +101,6 @@ def valid_ugpio_channel(arg: Any) -> str:
 
 def valid_ugpio_view_table(arg: Any) -> List[List[str]]:
     try:
-        return list(map(str, list(arg)))  # type: ignore
+        return [list(map(str, row)) for row in list(arg)]
     except Exception:
         raise_error("<skipped>", "GPIO view table")
