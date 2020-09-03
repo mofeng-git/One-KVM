@@ -75,7 +75,7 @@ class _GpioInput:
         return {"state": (self.__reader.get(self.__pin) ^ self.__inverted)}
 
     def __str__(self) -> str:
-        return f"Input({self.__channel}, pin={self.__pin}, inverted={self.__inverted})"
+        return f"Input({self.__channel}, pin={self.__pin})"
 
     __repr__ = __str__
 
@@ -126,7 +126,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
             if state != real_state:
                 self.__write(state)
                 self.__state = state
-                get_logger(0).info("Switched GPIO %s to %d", self, state)
+                get_logger(0).info("Switched %s to %d", self, state)
                 await asyncio.sleep(self.__busy_delay)
                 return True
             self.__state = real_state
@@ -139,7 +139,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
             raise GpioPulseNotSupported()
         delay = min(max((delay or self.__pulse_delay), self.__min_pulse_delay), self.__max_pulse_delay)
         await aiotools.run_region_task(
-            f"Can't perform GPIO pulse of {self} or operation was not completed",
+            f"Can't perform pulse of {self} or operation was not completed",
             self.__region, self.__inner_pulse, delay,
         )
 
@@ -151,7 +151,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         finally:
             self.__write(False)
             await asyncio.sleep(self.__busy_delay)
-        get_logger(0).info("Pulsed GPIO %s", self)
+        get_logger(0).info("Pulsed %s with delay=%.2f", self, delay)
 
     def __read(self) -> bool:
         return (gpio.read(self.__pin) ^ self.__inverted)
@@ -160,10 +160,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         gpio.write(self.__pin, (state ^ self.__inverted))
 
     def __str__(self) -> str:
-        return (
-            f"Output({self.__channel}, pin={self.__pin}, inverted={self.__inverted},"
-            f" switch={self.__switch}, pulse={bool(self.__max_pulse_delay)})"
-        )
+        return f"Output({self.__channel}, pin={self.__pin})"
 
     __repr__ = __str__
 
