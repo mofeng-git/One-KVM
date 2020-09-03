@@ -191,7 +191,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             AtxApi(atx),
             MsdApi(msd, sync_chunk_size),
             StreamerApi(streamer),
-            ExportApi(info_manager, atx),
+            ExportApi(info_manager, atx, user_gpio),
         ]
 
         self.__ws_handlers: Dict[str, Callable] = {}

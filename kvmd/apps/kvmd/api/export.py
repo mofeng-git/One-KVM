@@ -32,27 +32,33 @@ from aiohttp.web import Response
 from ....plugins.atx import BaseAtx
 
 from ..info import InfoManager
+from ..ugpio import UserGpio
 
 from ..http import exposed_http
 
 
 # =====
 class ExportApi:
-    def __init__(self, info_manager: InfoManager, atx: BaseAtx) -> None:
+    def __init__(self, info_manager: InfoManager, atx: BaseAtx, user_gpio: UserGpio) -> None:
         self.__info_manager = info_manager
         self.__atx = atx
+        self.__user_gpio = user_gpio
 
     # =====
 
     @exposed_http("GET", "/export/prometheus/metrics")
     async def __prometheus_metrics_handler(self, _: Request) -> Response:
-        (atx_state, hw_state) = await asyncio.gather(*[
+        (atx_state, hw_state, gpio_state) = await asyncio.gather(*[
             self.__atx.get_state(),
             self.__info_manager.get_submanager("hw").get_state(),
+            self.__user_gpio.get_state(),
         ])
         rows: List[str] = []
         self.__append_prometheus_rows(rows, atx_state["enabled"], "pikvm_atx_enabled")
         self.__append_prometheus_rows(rows, atx_state["leds"]["power"], "pikvm_atx_power")
+        for mode in ["input", "output"]:
+            for (channel, gch) in gpio_state[f"{mode}s"].items():
+                self.__append_prometheus_rows(rows, gch["state"], f"pikvm_gpio_input_{channel}")
         if hw_state is not None:
             self.__append_prometheus_rows(rows, hw_state["health"], "pikvm_hw")
         return Response(text="\n".join(rows))
