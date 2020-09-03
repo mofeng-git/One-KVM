@@ -83,7 +83,7 @@ export function Gpio() {
 					if (item.type === "output") {
 						item.scheme = model.scheme.outputs[item.channel];
 					}
-					content += `<td>${__createItem(item, switches, buttons)}</td>`;
+					content += `<td align="center">${__createItem(item, switches, buttons)}</td>`;
 				}
 				content += "</tr>";
 			}
@@ -105,7 +105,7 @@ export function Gpio() {
 		if (item.type === "label") {
 			return item.text;
 		} else if (item.type === "input") {
-			return `<img id="gpio-led-${item.channel}" class="gpio-led inline-lamp-big led-gray" src="/share/svg/led-square.svg" />`;
+			return `<img id="gpio-led-${item.channel}" class="gpio-led inline-lamp-big led-gray" src="/share/svg/led-circle.svg" />`;
 		} else if (item.type === "output") {
 			let controls = [];
 			if (item.scheme["switch"]) {
