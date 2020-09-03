@@ -31,6 +31,7 @@ import {Atx} from "./atx.js";
 import {Msd} from "./msd.js";
 import {Streamer} from "./stream.js";
 import {WakeOnLan} from "./wol.js";
+import {Gpio} from "./gpio.js";
 
 
 export function Session() {
@@ -48,6 +49,7 @@ export function Session() {
 	var __msd = new Msd();
 	var __streamer = new Streamer();
 	var __wol = new WakeOnLan();
+	var __gpio = new Gpio();
 
 	var __init__ = function() {
 		__startSession();
@@ -211,6 +213,8 @@ export function Session() {
 			case "info_hw_state": __setAboutInfoHw(data.event); break;
 			case "info_system_state": __setAboutInfoSystem(data.event); break;
 			case "wol_state": __wol.setState(data.event); break;
+			case "gpio_model_state": __gpio.setModel(data.event); break;
+			case "gpio_state": __gpio.setState(data.event); break;
 			case "hid_state": __hid.setState(data.event); break;
 			case "atx_state": __atx.setState(data.event); break;
 			case "msd_state": __msd.setState(data.event); break;
@@ -237,6 +241,7 @@ export function Session() {
 			__ping_timer = null;
 		}
 
+		__gpio.setState(null);
 		__hid.setSocket(null);
 		__atx.setState(null);
 		__msd.setState(null);

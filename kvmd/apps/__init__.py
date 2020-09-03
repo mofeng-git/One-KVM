@@ -187,6 +187,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
                 }
                 if mode == "output":
                     ch_scheme.update({
+                        "busy_delay": Option(0.2, type=valid_float_f01),
                         "initial": Option(False, type=valid_bool),
                         "switch":  Option(True, type=valid_bool),
                         "pulse": {
@@ -328,8 +329,7 @@ def _get_config_scheme() -> Dict:
                 "scheme": {},  # Dymanic content
                 "view": {
                     "header": {
-                        "title": Option("Switches"),
-                        "leds":  Option([], type=valid_string_list),
+                        "title": Option("GPIO"),
                     },
                     "table": Option([], type=valid_ugpio_view_table),
                 },

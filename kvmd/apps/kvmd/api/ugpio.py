@@ -44,8 +44,7 @@ class UserGpioApi:
     @exposed_http("GET", "/gpio")
     async def __state_handler(self, _: Request) -> Response:
         return make_json_response({
-            "scheme": (await self.__user_gpio.get_scheme()),
-            "view": (await self.__user_gpio.get_view()),
+            "model": (await self.__user_gpio.get_model()),
             "state": (await self.__user_gpio.get_state()),
         })
 

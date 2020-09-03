@@ -37,6 +37,77 @@ kvmd:
             - "--notify-parent"
             - "--no-log-colors"
 
+    gpio:
+        scheme:
+            host1:  # any name like foo_bar_baz
+                pin: 1
+                mode: input
+            host2:
+                pin: 2
+                mode: input
+            host3:
+                pin: 3
+                mode: input
+            host4:
+                pin: 4
+                mode: input
+            change_host:
+                pin: 5
+                mode: output
+                switch: false
+
+            host1_pwr:
+                pin: 11
+                mode: input
+            host2_pwr:
+                pin: 12
+                mode: input
+            host3_pwr:
+                pin: 13
+                mode: input
+            host4_pwr:
+                pin: 14
+                mode: input
+
+            host1_pwr_btn:
+                pin: 21
+                mode: output
+                switch: false
+            host2_pwr_btn:
+                pin: 22
+                mode: output
+                switch: false
+            host3_pwr_btn:
+                pin: 23
+                mode: output
+                switch: false
+            host4_pwr_btn:
+                pin: 24
+                mode: output
+                switch: false
+
+            lamp:
+                pin: 50
+                mode: output
+                pulse:
+                    delay: 0
+
+        view:
+            header:
+                title: Switch
+            table:
+                - ["#Multihost controller"]
+                - []
+                - ["", "#Current", "#Power"]
+                - ["#host1.localdomain:", host1, host1_pwr, "host1_pwr_btn,Pwr"]
+                - ["#host2.localdomain:", host2, host2_pwr, "host2_pwr_btn,Pwr"]
+                - ["#host3.localdomain:", host3, host3_pwr, "host3_pwr_btn,Pwr"]
+                - ["#host4.localdomain:", host4, host4_pwr, "host4_pwr_btn,Pwr"]
+                - []
+                - ["change_host,Change host"]
+                - []
+                - ["#Lamp in the rack", lamp]
+
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
 
