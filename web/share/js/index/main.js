@@ -40,7 +40,7 @@ export function main() {
 function __setAppText() {
 	$("app-text").innerHTML = `
 		<span class="code-comment"># On Linux using Chromium/Chrome via any terminal:<br>
-		$</span> \`which chromium 2>/dev/null || which chrome 2>/dev/null\` --app="${window.location.href}"<br>
+		$</span> \`which chromium 2>/dev/null || which google-chrome 2>/dev/null\` --app="${window.location.href}"<br>
 		<br>
 		<span class="code-comment"># On MacOS using Terminal application:<br>
 		$</span> /Applications/Google&bsol; Chrome.app/Contents/MacOS/Google&bsol; Chrome --app="${window.location.href}"<br>
