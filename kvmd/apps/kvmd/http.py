@@ -77,8 +77,8 @@ def get_exposed_http(obj: object) -> List[HttpExposed]:
             auth_required=getattr(handler, _HTTP_AUTH_REQUIRED),
             handler=handler,
         )
-        for name in dir(obj)
-        if inspect.ismethod(handler := getattr(obj, name)) and getattr(handler, _HTTP_EXPOSED, False)
+        for handler in [getattr(obj, name) for name in dir(obj)]
+        if inspect.ismethod(handler) and getattr(handler, _HTTP_EXPOSED, False)
     ]
 
 
@@ -107,8 +107,8 @@ def get_exposed_ws(obj: object) -> List[WsExposed]:
             event_type=getattr(handler, _WS_EVENT_TYPE),
             handler=handler,
         )
-        for name in dir(obj)
-        if inspect.ismethod(handler := getattr(obj, name)) and getattr(handler, _WS_EXPOSED, False)
+        for handler in [getattr(obj, name) for name in dir(obj)]
+        if inspect.ismethod(handler) and getattr(handler, _WS_EXPOSED, False)
     ]
 
 

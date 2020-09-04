@@ -56,11 +56,12 @@ class StreamerApi:
 
     @exposed_http("GET", "/streamer/snapshot")
     async def __take_snapshot_handler(self, request: Request) -> Response:
-        if (snapshot := await self.__streamer.take_snapshot(
+        snapshot = await self.__streamer.take_snapshot(
             save=valid_bool(request.query.get("save", "false")),
             load=valid_bool(request.query.get("load", "false")),
             allow_offline=valid_bool(request.query.get("allow_offline", "false")),
-        )):
+        )
+        if snapshot:
             if valid_bool(request.query.get("preview", "false")):
                 data = await self.__make_preview(
                     snapshot=snapshot,

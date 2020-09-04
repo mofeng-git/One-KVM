@@ -177,5 +177,6 @@ async def run_region_task(
 
     if entered.done():
         return
-    if (exc := task.exception()) is not None:
+    exc = task.exception()
+    if exc is not None:
         raise exc
