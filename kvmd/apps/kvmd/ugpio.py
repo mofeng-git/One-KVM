@@ -66,6 +66,7 @@ class _GpioInput:
         self.__channel = channel
         self.__pin: int = config.pin  # gpio.set_input(config.pin)  # Configured in UserGpio/BatchReader
         self.__inverted: bool = config.inverted
+
         self.__reader = reader
 
     def get_scheme(self) -> Dict:
@@ -85,13 +86,15 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         self.__channel = channel
         self.__pin: int = gpio.set_output(config.pin, (config.initial ^ config.inverted))
         self.__inverted: bool = config.inverted
+
         self.__switch: bool = config.switch
+
         self.__pulse_delay: float = config.pulse.delay
         self.__min_pulse_delay: float = config.pulse.min_delay
         self.__max_pulse_delay: float = config.pulse.max_delay
+
         self.__busy_delay: float = config.busy_delay
 
-        self.__state = config.initial
         self.__region = aiotools.AioExclusiveRegion(GpioChannelIsBusyError, notifier)
 
     def get_scheme(self) -> Dict:
@@ -107,7 +110,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
     def get_state(self) -> Dict:
         busy = self.__region.is_busy()
         return {
-            "state": (self.__state if not busy else False),
+            "state": (self.__read() if not busy else False),
             "busy": busy,
         }
 
@@ -121,15 +124,11 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         if not self.__switch:
             raise GpioSwitchNotSupported()
         async with self.__region:
-            # Состояние проверяется только при изменении
-            real_state = self.__read()
-            if state != real_state:
+            if state != self.__read():
                 self.__write(state)
-                self.__state = state
                 get_logger(0).info("Switched %s to %d", self, state)
                 await asyncio.sleep(self.__busy_delay)
                 return True
-            self.__state = real_state
             await asyncio.sleep(self.__busy_delay)
             return False
 
