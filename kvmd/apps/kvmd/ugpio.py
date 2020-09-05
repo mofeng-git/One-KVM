@@ -64,7 +64,7 @@ class GpioChannelIsBusyError(IsBusyError):
 class _GpioInput:
     def __init__(self, channel: str, config: Section, reader: gpio.BatchReader) -> None:
         self.__channel = channel
-        self.__pin: int = config.pin  # gpio.set_input(config.pin)  # Configured in UserGpio/BatchReader
+        self.__pin: int = config.pin
         self.__inverted: bool = config.inverted
 
         self.__reader = reader
@@ -84,7 +84,7 @@ class _GpioInput:
 class _GpioOutput:  # pylint: disable=too-many-instance-attributes
     def __init__(self, channel: str, config: Section, notifier: aiotools.AioNotifier) -> None:
         self.__channel = channel
-        self.__pin: int = gpio.set_output(config.pin, (config.initial ^ config.inverted))
+        self.__pin: int = config.pin
         self.__inverted: bool = config.inverted
 
         self.__switch: bool = config.switch
@@ -171,7 +171,14 @@ class UserGpio:
 
         self.__state_notifier = aiotools.AioNotifier()
         self.__reader = gpio.BatchReader(
-            pins=[gpio.set_input(ch_config.pin) for ch_config in config.scheme.values()],
+            pins=[
+                (
+                    gpio.set_input(ch_config.pin)
+                    if ch_config.mode == "input" else
+                    gpio.set_output(ch_config.pin, (ch_config.initial ^ ch_config.inverted))
+                )
+                for ch_config in config.scheme.values()
+            ],
             interval=config.state_poll,
             notifier=self.__state_notifier,
         )
