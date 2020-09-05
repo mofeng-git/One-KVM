@@ -235,7 +235,7 @@ class Inotify:
     def watch(self, path: str, mask: int) -> None:
         path = os.path.normpath(path)
         assert path not in self.__wd_by_path, path
-        get_logger().info("Watching for %s: %s", path, InotifyMask.to_string(mask))
+        get_logger().info("Watching for %s", path)
         wd = _inotify_check(_inotify_add_watch(self.__fd, _fs_encode(path), mask))
         self.__wd_by_path[path] = wd
         self.__path_by_wd[wd] = path
