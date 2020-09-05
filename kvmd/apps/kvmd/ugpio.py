@@ -217,6 +217,7 @@ class UserGpio:
             await self.__state_notifier.wait()
 
     async def systask(self) -> None:
+        get_logger(0).info("Polling User-GPIO inputs ...")
         await self.__reader.poll()
 
     async def cleanup(self) -> None:
