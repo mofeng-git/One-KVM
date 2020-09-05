@@ -112,13 +112,14 @@ class _Component:
     obj: object
     get_state: Optional[Callable[[], Coroutine[Any, Any, Dict]]] = None
     poll_state: Optional[Callable[[], AsyncGenerator[Dict, None]]] = None
+    systask: Optional[Callable[[], Coroutine[Any, Any, None]]] = None
     cleanup: Optional[Callable[[], Coroutine[Any, Any, Dict]]] = None
 
     def __post_init__(self) -> None:
         if isinstance(self.obj, BasePlugin):
             object.__setattr__(self, "name", f"{self.name} ({self.obj.get_plugin_name()})")
 
-        for field in ["get_state", "poll_state", "cleanup"]:
+        for field in ["get_state", "poll_state", "systask", "cleanup"]:
             object.__setattr__(self, field, getattr(self.obj, field, None))
         if self.get_state or self.poll_state:
             assert self.event_type, self
@@ -288,6 +289,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         self.__run_system_task(self.__stream_controller)
         for component in self.__components:
+            if component.systask:
+                self.__run_system_task(component.systask)
             if component.poll_state:
                 self.__run_system_task(self.__poll_state, component.event_type, component.poll_state())
         self.__run_system_task(self.__stream_snapshoter)

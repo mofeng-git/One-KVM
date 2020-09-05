@@ -206,29 +206,16 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        inotify_task = asyncio.create_task(self.__watch_inotify())
-        waiter_task: Optional[asyncio.Task] = None
         prev_state: Dict = {}
-        try:
-            while True:
-                if inotify_task.cancelled():
-                    break
-                if inotify_task.done():
-                    RuntimeError("Inotify task is dead")
+        while True:
+            state = await self.get_state()
+            if state != prev_state:
+                yield state
+                prev_state = state
+            await self.__state_notifier.wait()
 
-                state = await self.get_state()
-                if state != prev_state:
-                    yield state
-                    prev_state = state
-
-                if waiter_task is None:
-                    waiter_task = asyncio.create_task(self.__state_notifier.wait())
-                if waiter_task in (await aiotools.wait_first(inotify_task, waiter_task))[0]:
-                    waiter_task = None
-        finally:
-            if not inotify_task.done():
-                inotify_task.cancel()
-                await inotify_task
+    async def systask(self) -> None:
+        await self.__watch_inotify()
 
     @aiotools.atomic
     async def reset(self) -> None:

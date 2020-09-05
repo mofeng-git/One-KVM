@@ -201,29 +201,16 @@ class UserGpio:
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        reader_task = asyncio.create_task(self.__reader.poll())
-        waiter_task: Optional[asyncio.Task] = None
         prev_state: Dict = {}
-        try:
-            while True:
-                if reader_task.cancelled():
-                    break
-                if reader_task.done():
-                    RuntimeError("BatchReader task is dead")
+        while True:
+            state = await self.get_state()
+            if state != prev_state:
+                yield state
+                prev_state = state
+            await self.__state_notifier.wait()
 
-                state = await self.get_state()
-                if state != prev_state:
-                    yield state
-                    prev_state = state
-
-                if waiter_task is None:
-                    waiter_task = asyncio.create_task(self.__state_notifier.wait())
-                if waiter_task in (await aiotools.wait_first(reader_task, waiter_task))[0]:
-                    waiter_task = None
-        finally:
-            if not reader_task.done():
-                reader_task.cancel()
-                await reader_task
+    async def systask(self) -> None:
+        await self.__reader.poll()
 
     async def cleanup(self) -> None:
         for gout in self.__outputs.values():
