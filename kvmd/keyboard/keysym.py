@@ -130,10 +130,11 @@ def _read_keyboard_layout(path: str) -> Dict[int, At1Key]:  # Keysym to evdev (a
                     ctrl=("ctrl" in rest),
                 )
 
-                x11_code = _resolve_keysym(parts[0].upper())
-                if "addupper" in rest and x11_code != 0:
-                    layout[x11_code] = At1Key(
-                        code=at1_code,
-                        shift=True,
-                    )
+                if "addupper" in rest:
+                    x11_code = _resolve_keysym(parts[0].upper())
+                    if x11_code != 0:
+                        layout[x11_code] = At1Key(
+                            code=at1_code,
+                            shift=True,
+                        )
     return layout

@@ -258,18 +258,20 @@ class UserGpio:
                         "type": "label",
                         "text": item[1:].strip(),
                     })
-                elif (parts := list(map(str.strip, item.split(",", 1)))):
-                    if parts[0] in self.__inputs:
-                        items.append({
-                            "type": "input",
-                            "channel": parts[0],
-                        })
-                    elif parts[0] in self.__outputs:
-                        items.append({
-                            "type": "output",
-                            "channel": parts[0],
-                            "text": (parts[1] if len(parts) > 1 else "Click"),
-                        })
+                else:
+                    parts = list(map(str.strip, item.split(",", 1)))
+                    if parts:
+                        if parts[0] in self.__inputs:
+                            items.append({
+                                "type": "input",
+                                "channel": parts[0],
+                            })
+                        elif parts[0] in self.__outputs:
+                            items.append({
+                                "type": "output",
+                                "channel": parts[0],
+                                "text": (parts[1] if len(parts) > 1 else "Click"),
+                            })
             table.append(items)
         return {
             "header": self.__view["header"],
