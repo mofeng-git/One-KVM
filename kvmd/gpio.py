@@ -24,7 +24,7 @@ import asyncio
 import contextlib
 
 from typing import Tuple
-from typing import List
+from typing import Set
 from typing import Generator
 from typing import Optional
 
@@ -48,7 +48,7 @@ def bcm() -> Generator[None, None, None]:
         logger.info("GPIO cleaned")
 
 
-def set_output(pin: int, initial: bool=False) -> int:
+def set_output(pin: int, initial: Optional[bool]) -> int:
     assert pin >= 0, pin
     GPIO.setup(pin, GPIO.OUT, initial=initial)
     return pin
@@ -71,10 +71,10 @@ def write(pin: int, state: bool) -> None:
 
 
 class BatchReader:
-    def __init__(self, pins: List[int], interval: float, notifier: aiotools.AioNotifier) -> None:
-        self.__pins = pins
-        self.__flags: Tuple[Optional[bool], ...] = (None,) * len(pins)
-        self.__state = {pin: read(pin) for pin in pins}
+    def __init__(self, pins: Set[int], interval: float, notifier: aiotools.AioNotifier) -> None:
+        self.__pins = sorted(pins)
+        self.__flags: Tuple[Optional[bool], ...] = (None,) * len(self.__pins)
+        self.__state = {pin: read(pin) for pin in self.__pins}
 
         self.__interval = interval
         self.__notifier = notifier

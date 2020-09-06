@@ -32,8 +32,8 @@ from .. import get_plugin_class
 
 # =====
 class BaseHid(BasePlugin):
-    def start(self) -> None:
-        pass
+    def sysprep(self) -> None:
+        raise NotImplementedError
 
     async def get_state(self) -> Dict:
         raise NotImplementedError

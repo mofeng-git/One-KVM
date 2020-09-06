@@ -141,8 +141,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         **params_kwargs: Any,
     ) -> None:
 
-        self.__cap_pin = (gpio.set_output(cap_pin) if cap_pin >= 0 else -1)
-        self.__conv_pin = (gpio.set_output(conv_pin) if conv_pin >= 0 else -1)
+        self.__cap_pin = (gpio.set_output(cap_pin, False) if cap_pin >= 0 else -1)
+        self.__conv_pin = (gpio.set_output(conv_pin, False) if conv_pin >= 0 else -1)
 
         self.__sync_delay = sync_delay
         self.__init_delay = init_delay

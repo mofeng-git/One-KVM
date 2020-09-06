@@ -54,13 +54,18 @@ class ExportApi:
             self.__user_gpio.get_state(),
         ])
         rows: List[str] = []
+
         self.__append_prometheus_rows(rows, atx_state["enabled"], "pikvm_atx_enabled")
         self.__append_prometheus_rows(rows, atx_state["leds"]["power"], "pikvm_atx_power")
+
         for mode in ["input", "output"]:
-            for (channel, gch) in gpio_state[f"{mode}s"].items():
-                self.__append_prometheus_rows(rows, gch["state"], f"pikvm_gpio_input_{channel}")
+            for (channel, ch_state) in gpio_state[f"{mode}s"].items():
+                for key in ["online", "state"]:
+                    self.__append_prometheus_rows(rows, ch_state["state"], f"pikvm_gpio_{mode}_{key}_{channel}")
+
         if hw_state is not None:
             self.__append_prometheus_rows(rows, hw_state["health"], "pikvm_hw")
+
         return Response(text="\n".join(rows))
 
     def __append_prometheus_rows(self, rows: List[str], value: Any, path: str) -> None:

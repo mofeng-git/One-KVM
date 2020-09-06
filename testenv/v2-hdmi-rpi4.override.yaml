@@ -38,6 +38,11 @@ kvmd:
             - "--no-log-colors"
 
     gpio:
+        drivers:
+            gpio2:
+                type: gpio
+                state_poll: 0.3
+
         scheme:
             host1:  # any name like foo_bar_baz
                 pin: 1

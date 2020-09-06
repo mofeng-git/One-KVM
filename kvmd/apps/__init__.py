@@ -40,6 +40,7 @@ from ..plugins.auth import get_auth_service_class
 from ..plugins.hid import get_hid_class
 from ..plugins.atx import get_atx_class
 from ..plugins.msd import get_msd_class
+from ..plugins.ugpio import get_ugpio_driver_class
 
 from ..yamlconf import ConfigError
 from ..yamlconf import make_config
@@ -174,6 +175,16 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
             rebuild = True
 
     if load_gpio:
+        for (driver, params) in {  # type: ignore
+            "gpio": {},
+            **(raw_config.get("kvmd", {}).get("gpio", {}).get("drivers", {})),
+        }.items():
+            driver_type = valid_stripped_string_not_empty(params.get("type", "gpio"))
+            scheme["kvmd"]["gpio"]["drivers"][driver] = {
+                "type": Option(driver_type, type=valid_stripped_string_not_empty),
+                **get_ugpio_driver_class(driver_type).get_plugin_options()
+            }
+
         for (channel, params) in raw_config.get("kvmd", {}).get("gpio", {}).get("scheme", {}).items():
             try:
                 mode = valid_ugpio_mode(params.get("mode", ""))
@@ -181,6 +192,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
                 pass
             finally:
                 ch_scheme: Dict = {
+                    "driver":   Option("gpio"),
                     "pin":      Option(-1, type=valid_gpio_pin),
                     "mode":     Option("", type=valid_ugpio_mode),
                     "inverted": Option(False, type=valid_bool),
@@ -196,7 +208,8 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
                             "max_delay": Option(0.1, type=valid_float_f01),
                         },
                     })
-                scheme["kvmd"]["gpio"]["scheme"][channel] = ch_scheme
+            scheme["kvmd"]["gpio"]["scheme"][channel] = ch_scheme
+        rebuild = True
 
     return rebuild
 
@@ -326,6 +339,7 @@ def _get_config_scheme() -> Dict:
 
             "gpio": {
                 "state_poll": Option(0.1, type=valid_float_f01),
+                "drivers": {},  # Dynamic content
                 "scheme": {},  # Dymanic content
                 "view": {
                     "header": {

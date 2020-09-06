@@ -74,7 +74,7 @@ class Plugin(BaseHid):
             "noop": Option(False, type=valid_bool),
         }
 
-    def start(self) -> None:
+    def sysprep(self) -> None:
         self.__keyboard_proc.start()
         self.__mouse_proc.start()
 

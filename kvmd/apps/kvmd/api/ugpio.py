@@ -59,5 +59,6 @@ class UserGpioApi:
     async def __pulse_handler(self, request: Request) -> Response:
         channel = valid_ugpio_channel(request.query.get("channel"))
         delay = valid_float_f0(request.query.get("delay", "0"))
-        await self.__user_gpio.pulse(channel, delay)
+        wait = valid_bool(request.query.get("wait", "0"))
+        await self.__user_gpio.pulse(channel, delay, wait)
         return make_json_response()

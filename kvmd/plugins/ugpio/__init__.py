@@ -20,39 +20,58 @@
 # ========================================================================== #
 
 
-import pytest
+from typing import Type
+from typing import Optional
 
-from kvmd import gpio
+from ...errors import OperationError
+
+from ... import aiotools
+
+from .. import BasePlugin
+from .. import get_plugin_class
 
 
 # =====
-@pytest.mark.parametrize("pin", [0, 1, 13])
-def test_ok__loopback_initial_false(pin: int) -> None:
-    with gpio.bcm():
-        assert gpio.set_output(pin, False) == pin
-        assert gpio.read(pin) is False
-        gpio.write(pin, True)
-        assert gpio.read(pin) is True
+class GpioError(Exception):
+    pass
 
 
-@pytest.mark.parametrize("pin", [0, 1, 13])
-def test_ok__loopback_initial_true(pin: int) -> None:
-    with gpio.bcm():
-        assert gpio.set_output(pin, True) == pin
-        assert gpio.read(pin) is True
-        gpio.write(pin, False)
-        assert gpio.read(pin) is False
+class GpioOperationError(OperationError, GpioError):
+    pass
 
 
-@pytest.mark.parametrize("pin", [0, 1, 13])
-def test_ok__input(pin: int) -> None:
-    with gpio.bcm():
-        assert gpio.set_input(pin) == pin
-        assert gpio.read(pin) is False
+class GpioDriverOfflineError(GpioOperationError):
+    def __init__(self, driver: "BaseUserGpioDriver") -> None:
+        super().__init__(f"GPIO driver {driver.get_instance_name()!r} is offline")
 
 
-def test_fail__invalid_pin() -> None:
-    with pytest.raises(AssertionError):
-        gpio.set_output(-1, False)
-    with pytest.raises(AssertionError):
-        gpio.set_input(-1)
+# =====
+class BaseUserGpioDriver(BasePlugin):
+    def get_instance_name(self) -> str:
+        raise NotImplementedError
+
+    def register_input(self, pin: int) -> None:
+        raise NotImplementedError
+
+    def register_output(self, pin: int, initial: Optional[bool]) -> None:
+        raise NotImplementedError
+
+    def prepare(self, notifier: aiotools.AioNotifier) -> None:
+        raise NotImplementedError
+
+    async def run(self) -> None:
+        raise NotImplementedError
+
+    def cleanup(self) -> None:
+        pass
+
+    def read(self, pin: int) -> bool:
+        raise NotImplementedError
+
+    def write(self, pin: int, state: bool) -> None:
+        raise NotImplementedError
+
+
+# =====
+def get_ugpio_driver_class(name: str) -> Type[BaseUserGpioDriver]:
+    return get_plugin_class("ugpio", name)  # type: ignore

@@ -62,8 +62,8 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
 
         self.__power_led_pin = gpio.set_input(power_led_pin)
         self.__hdd_led_pin = gpio.set_input(hdd_led_pin)
-        self.__power_switch_pin = gpio.set_output(power_switch_pin)
-        self.__reset_switch_pin = gpio.set_output(reset_switch_pin)
+        self.__power_switch_pin = gpio.set_output(power_switch_pin, False)
+        self.__reset_switch_pin = gpio.set_output(reset_switch_pin, False)
 
         self.__power_led_inverted = power_led_inverted
         self.__hdd_led_inverted = hdd_led_inverted
@@ -75,7 +75,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__region = aiotools.AioExclusiveRegion(AtxIsBusyError, self.__state_notifier)
 
         self.__reader = gpio.BatchReader(
-            pins=[self.__power_led_pin, self.__hdd_led_pin],
+            pins=set([self.__power_led_pin, self.__hdd_led_pin]),
             interval=state_poll,
             notifier=self.__state_notifier,
         )

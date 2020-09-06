@@ -175,7 +175,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
         multiprocessing.Process.__init__(self, daemon=True)
 
-        self.__reset_pin = gpio.set_output(reset_pin)
+        self.__reset_pin = gpio.set_output(reset_pin, False)
         self.__reset_delay = reset_delay
 
         self.__device_path = device_path
@@ -217,9 +217,9 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             "noop":             Option(False,  type=valid_bool),
         }
 
-    def start(self) -> None:
+    def sysprep(self) -> None:
         get_logger(0).info("Starting HID daemon ...")
-        multiprocessing.Process.start(self)
+        self.start()
 
     async def get_state(self) -> Dict:
         state = await self.__state_flags.get()

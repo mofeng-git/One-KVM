@@ -106,20 +106,21 @@ class StreamerResolutionNotSupported(OperationError):
 
 # =====
 @dataclasses.dataclass(frozen=True)
-class _Component:
+class _Component:  # pylint: disable=too-many-instance-attributes
     name: str
     event_type: str
     obj: object
+    sysprep: Optional[Callable[[], None]] = None
+    systask: Optional[Callable[[], Coroutine[Any, Any, None]]] = None
     get_state: Optional[Callable[[], Coroutine[Any, Any, Dict]]] = None
     poll_state: Optional[Callable[[], AsyncGenerator[Dict, None]]] = None
-    systask: Optional[Callable[[], Coroutine[Any, Any, None]]] = None
     cleanup: Optional[Callable[[], Coroutine[Any, Any, Dict]]] = None
 
     def __post_init__(self) -> None:
         if isinstance(self.obj, BasePlugin):
             object.__setattr__(self, "name", f"{self.name} ({self.obj.get_plugin_name()})")
 
-        for field in ["get_state", "poll_state", "systask", "cleanup"]:
+        for field in ["sysprep", "systask", "get_state", "poll_state", "cleanup"]:
             object.__setattr__(self, field, getattr(self.obj, field, None))
         if self.get_state or self.poll_state:
             assert self.event_type, self
@@ -278,7 +279,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     # ===== SYSTEM STUFF
 
     def run(self, **kwargs: Any) -> None:  # type: ignore  # pylint: disable=arguments-differ
-        self.__hid.start()
+        for component in self.__components:
+            if component.sysprep:
+                component.sysprep()
         aioproc.rename_process("main")
         super().run(**kwargs)
 
@@ -307,7 +310,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         async def wrapper() -> None:
             try:
                 await method(*args)
-                raise RuntimeError(f"Dead system task: {method.__name__}"
+                raise RuntimeError(f"Dead system task: {method}"
                                    f"({', '.join(getattr(arg, '__name__', str(arg)) for arg in args)})")
             except asyncio.CancelledError:
                 pass

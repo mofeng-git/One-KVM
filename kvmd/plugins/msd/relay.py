@@ -165,8 +165,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         reset_delay: float,
     ) -> None:
 
-        self.__target_pin = gpio.set_output(target_pin)
-        self.__reset_pin = gpio.set_output(reset_pin)
+        self.__target_pin = gpio.set_output(target_pin, False)
+        self.__reset_pin = gpio.set_output(reset_pin, False)
 
         self.__device_path = device_path
         self.__init_delay = init_delay
