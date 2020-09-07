@@ -78,9 +78,7 @@ class Plugin(BaseUserGpioDriver):
         await self.__reader.poll()
 
     def read(self, pin: int) -> bool:
-        assert self.__reader
-        return self.__reader.get(pin)
+        return gpio.read(pin)
 
     def write(self, pin: int, state: bool) -> None:
-        assert self.__reader
         gpio.write(pin, state)

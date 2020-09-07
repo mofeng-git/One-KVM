@@ -116,7 +116,6 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
             await self.__state_notifier.wait()
 
     async def systask(self) -> None:
-        get_logger(0).info("Polling GPIO ATX inputs ...")
         await self.__reader.poll()
 
     async def cleanup(self) -> None:
