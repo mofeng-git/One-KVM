@@ -48,8 +48,12 @@ export function Gpio() {
 				for (let type of ["switch", "button"]) {
 					let el = $(`gpio-${type}-${channel}`);
 					if (el) {
-						wm.switchEnabled(el, !state.outputs[channel].busy);
+						wm.switchEnabled(el, state.outputs[channel].online && !state.outputs[channel].busy);
 					}
+				}
+				let el = $(`gpio-switch-${channel}`);
+				if (el) {
+					el.checked = state.outputs[channel].state;
 				}
 			}
 		} else {
