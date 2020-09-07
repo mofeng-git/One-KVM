@@ -284,11 +284,11 @@ class UserGpio:
             raise GpioChannelNotFoundError()
         return (await gout.switch(state))
 
-    async def pulse(self, channel: str, delay: float) -> None:
+    async def pulse(self, channel: str, delay: float, wait: bool) -> None:
         gout = self.__outputs.get(channel)
         if gout is None:
             raise GpioChannelNotFoundError()
-        await gout.pulse(delay)
+        await gout.pulse(delay, wait)
 
     # =====
 
