@@ -200,8 +200,8 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
                 if mode == "output":
                     ch_scheme.update({
                         "busy_delay": Option(0.2, type=valid_float_f01),
-                        "initial": Option(False, type=valid_bool),
-                        "switch":  Option(True, type=valid_bool),
+                        "initial":    Option(False, type=(lambda arg: (None if arg is None else valid_bool(arg)))),
+                        "switch":     Option(True, type=valid_bool),
                         "pulse": {
                             "delay":     Option(0.1, type=valid_float_f0),
                             "min_delay": Option(0.1, type=valid_float_f01),

@@ -112,7 +112,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         self.__channel = channel
         self.__pin: int = config.pin
         self.__inverted: bool = config.inverted
-        self.__initial: bool = config.initial
+        self.__initial: Optional[bool] = config.initial
 
         self.__switch: bool = config.switch
 
@@ -123,7 +123,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         self.__busy_delay: float = config.busy_delay
 
         self.__driver = driver
-        self.__driver.register_output(self.__pin, (config.initial ^ config.inverted))
+        self.__driver.register_output(self.__pin, (None if config.initial is None else (config.initial ^ config.inverted)))
 
         self.__region = aiotools.AioExclusiveRegion(GpioChannelIsBusyError, notifier)
 
@@ -156,10 +156,11 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         }
 
     def cleanup(self) -> None:
-        try:
-            self.__driver.write(self.__pin, (self.__initial ^ self.__inverted))
-        except Exception:
-            get_logger().exception("Can't cleanup %s", self)
+        if self.__initial is not None:
+            try:
+                self.__driver.write(self.__pin, (self.__initial ^ self.__inverted))
+            except Exception:
+                get_logger().exception("Can't cleanup %s", self)
 
     async def switch(self, state: bool) -> bool:
         if not self.__switch:
