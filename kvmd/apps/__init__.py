@@ -35,6 +35,8 @@ import pygments
 import pygments.lexers.data
 import pygments.formatters
 
+from .. import tools
+
 from ..plugins import UnknownPluginError
 from ..plugins.auth import get_auth_service_class
 from ..plugins.hid import get_hid_class
@@ -134,8 +136,8 @@ def _init_config(config_path: str, override_options: List[str], **load_flags: bo
 
     scheme = _get_config_scheme()
     try:
-        _merge_dicts(raw_config, (raw_config.pop("override", {}) or {}))
-        _merge_dicts(raw_config, build_raw_from_options(override_options))
+        tools.merge(raw_config, (raw_config.pop("override", {}) or {}))
+        tools.merge(raw_config, build_raw_from_options(override_options))
         config = make_config(raw_config, scheme)
 
         if _patch_dynamic(raw_config, config, scheme, **load_flags):
@@ -177,7 +179,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
     if load_gpio:
         for (driver, params) in {  # type: ignore
             "gpio": {},
-            **(raw_config.get("kvmd", {}).get("gpio", {}).get("drivers", {})),
+            **tools.rget(raw_config, "kvmd", "gpio", "drivers"),
         }.items():
             driver_type = valid_stripped_string_not_empty(params.get("type", "gpio"))
             scheme["kvmd"]["gpio"]["drivers"][driver] = {
@@ -185,7 +187,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
                 **get_ugpio_driver_class(driver_type).get_plugin_options()
             }
 
-        for (channel, params) in raw_config.get("kvmd", {}).get("gpio", {}).get("scheme", {}).items():
+        for (channel, params) in tools.rget(raw_config, "kvmd", "gpio", "scheme").items():
             try:
                 mode = valid_ugpio_mode(params.get("mode", ""))
             except Exception:
@@ -223,15 +225,6 @@ def _dump_config(config: Section) -> None:
             pygments.formatters.TerminalFormatter(bg="dark"),  # pylint: disable=no-member
         )
     print(dump)
-
-
-def _merge_dicts(dest: Dict, src: Dict) -> None:
-    for key in src:
-        if key in dest:
-            if isinstance(dest[key], dict) and isinstance(src[key], dict):
-                _merge_dicts(dest[key], src[key])
-                continue
-        dest[key] = src[key]
 
 
 def _get_config_scheme() -> Dict:
