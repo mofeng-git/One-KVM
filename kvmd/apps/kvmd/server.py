@@ -170,7 +170,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             ],
             *[
                 _Component(f"Info manager ({sub})", f"info_{sub}_state", info_manager.get_submanager(sub))
-                for sub in info_manager.get_subs()
+                for sub in sorted(info_manager.get_subs())
             ],
             *[
                 _Component("Wake-on-LAN",  "wol_state",      wol),

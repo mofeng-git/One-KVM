@@ -27,8 +27,7 @@ from typing import List
 from aiohttp.web import Request
 from aiohttp.web import Response
 
-from ....validators import check_string_in_list
-from ....validators.basic import valid_string_list
+from ....validators.kvm import valid_info_fields
 
 from ..info import InfoManager
 
@@ -54,8 +53,7 @@ class InfoApi:
 
     def __valid_info_fields(self, request: Request) -> List[str]:
         subs = self.__info_manager.get_subs()
-        return (sorted(set(valid_string_list(
+        return sorted(valid_info_fields(
             arg=request.query.get("fields", ",".join(subs)),
-            subval=(lambda field: check_string_in_list(field, "info field", subs)),
-            name="info fields list",
-        ))) or subs)
+            variants=subs,
+        ) or subs)

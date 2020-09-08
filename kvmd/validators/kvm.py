@@ -34,6 +34,7 @@ from . import check_len
 
 from .basic import valid_stripped_string_not_empty
 from .basic import valid_number
+from .basic import valid_string_list
 
 from .os import valid_printable_filename
 
@@ -49,6 +50,14 @@ def valid_atx_button(arg: Any) -> str:
 
 def valid_msd_image_name(arg: Any) -> str:
     return valid_printable_filename(arg, name="MSD image name")  # pragma: nocover
+
+
+def valid_info_fields(arg: Any, variants: Set[str]) -> Set[str]:
+    return set(valid_string_list(
+        arg=str(arg).strip(),
+        subval=(lambda field: check_string_in_list(field, "info field", variants)),
+        name="info fields list",
+    ))
 
 
 def valid_log_seek(arg: Any) -> int:

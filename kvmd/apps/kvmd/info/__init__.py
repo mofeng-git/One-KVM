@@ -20,7 +20,7 @@
 # ========================================================================== #
 
 
-from typing import List
+from typing import Set
 
 from ....yamlconf import Section
 
@@ -41,8 +41,8 @@ class InfoManager:
             "hw": HwInfoSubmanager(**config.kvmd.info.hw._unpack()),
         }
 
-    def get_subs(self) -> List[str]:
-        return list(self.__subs)
+    def get_subs(self) -> Set[str]:
+        return set(self.__subs)
 
     def get_submanager(self, name: str) -> BaseInfoSubmanager:
         return self.__subs[name]
