@@ -26,6 +26,7 @@ from typing import List
 from typing import Mapping
 from typing import Sequence
 from typing import Callable
+from typing import TypeVar
 from typing import NoReturn
 from typing import Union
 from typing import Any
@@ -34,6 +35,10 @@ from typing import Any
 # =====
 class ValidatorError(ValueError):
     pass
+
+
+# =====
+_RetvalSeqT = TypeVar("_RetvalSeqT", bound=Sequence)
 
 
 # =====
@@ -74,6 +79,12 @@ def check_re_match(arg: Any, name: str, pattern: str, strip: bool=True, hide: bo
     arg = check_not_none_string(arg, name, strip=strip)
     if re.match(pattern, arg, flags=re.MULTILINE) is None:
         raise_error(arg, name, hide=hide)
+    return arg
+
+
+def check_len(arg: _RetvalSeqT, name: str, limit: int) -> _RetvalSeqT:
+    if len(arg) > limit:
+        raise_error(arg, name)
     return arg
 
 
