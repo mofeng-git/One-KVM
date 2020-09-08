@@ -22,6 +22,7 @@
 
 from typing import Type
 from typing import Optional
+from typing import Any
 
 from ...errors import OperationError
 
@@ -42,13 +43,20 @@ class GpioOperationError(OperationError, GpioError):
 
 class GpioDriverOfflineError(GpioOperationError):
     def __init__(self, driver: "BaseUserGpioDriver") -> None:
-        super().__init__(f"GPIO driver {driver.get_instance_name()!r} is offline")
+        super().__init__(f"GPIO driver {driver} is offline")
 
 
 # =====
 class BaseUserGpioDriver(BasePlugin):
-    def get_instance_name(self) -> str:
-        raise NotImplementedError
+    def __init__(  # pylint: disable=super-init-not-called
+        self,
+        instance_name: str,
+        notifier: aiotools.AioNotifier,
+        **_: Any,
+    ) -> None:
+
+        self._instance_name = instance_name
+        self._notifier = notifier
 
     def register_input(self, pin: int) -> None:
         raise NotImplementedError
@@ -56,7 +64,7 @@ class BaseUserGpioDriver(BasePlugin):
     def register_output(self, pin: int, initial: Optional[bool]) -> None:
         raise NotImplementedError
 
-    def prepare(self, notifier: aiotools.AioNotifier) -> None:
+    def prepare(self) -> None:
         raise NotImplementedError
 
     async def run(self) -> None:

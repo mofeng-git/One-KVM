@@ -36,7 +36,16 @@ from . import BaseUserGpioDriver
 
 # =====
 class Plugin(BaseUserGpioDriver):
-    def __init__(self, state_poll: float) -> None:  # pylint: disable=super-init-not-called
+    def __init__(
+        self,
+        instance_name: str,
+        notifier: aiotools.AioNotifier,
+
+        state_poll: float,
+    ) -> None:
+
+        super().__init__(instance_name, notifier)
+
         self.__state_poll = state_poll
 
         self.__input_pins: Set[int] = set()
@@ -50,16 +59,13 @@ class Plugin(BaseUserGpioDriver):
             "state_poll": Option(0.1, type=valid_float_f01),
         }
 
-    def get_instance_name(self) -> str:
-        return "gpio"
-
     def register_input(self, pin: int) -> None:
         self.__input_pins.add(pin)
 
     def register_output(self, pin: int, initial: Optional[bool]) -> None:
         self.__output_pins[pin] = initial
 
-    def prepare(self, notifier: aiotools.AioNotifier) -> None:
+    def prepare(self) -> None:
         assert self.__reader is None
         self.__reader = gpio.BatchReader(
             pins=set([
@@ -70,7 +76,7 @@ class Plugin(BaseUserGpioDriver):
                 ],
             ]),
             interval=self.__state_poll,
-            notifier=notifier,
+            notifier=self._notifier,
         )
 
     async def run(self) -> None:
@@ -82,3 +88,8 @@ class Plugin(BaseUserGpioDriver):
 
     def write(self, pin: int, state: bool) -> None:
         gpio.write(pin, state)
+
+    def __str__(self) -> str:
+        return f"GPIO({self._instance_name})"
+
+    __repr__ = __str__

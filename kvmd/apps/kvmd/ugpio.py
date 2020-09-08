@@ -95,7 +95,7 @@ class _GpioInput:
         }
 
     def __str__(self) -> str:
-        return f"Input({self.__channel}, driver={self.__driver.get_instance_name()}, pin={self.__pin})"
+        return f"Input({self.__channel}, driver={self.__driver}, pin={self.__pin})"
 
     __repr__ = __str__
 
@@ -136,7 +136,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
                 "max_delay": (self.__max_pulse_delay if self.__pulse_delay else 0),
             },
             "hw": {
-                "driver": self.__driver.get_instance_name(),
+                "driver": str(self.__driver),
                 "pin": self.__pin,
             },
         }
@@ -205,7 +205,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         self.__driver.write(self.__pin, (state ^ self.__inverted))
 
     def __str__(self) -> str:
-        return f"Output({self.__channel}, driver={self.__driver.get_instance_name()}, pin={self.__pin})"
+        return f"Output({self.__channel}, driver={self.__driver}, pin={self.__pin})"
 
     __repr__ = __str__
 
@@ -218,7 +218,11 @@ class UserGpio:
         self.__state_notifier = aiotools.AioNotifier()
 
         self.__drivers = {
-            driver: get_ugpio_driver_class(drv_config.type)(**drv_config._unpack(ignore=["type"]))
+            driver: get_ugpio_driver_class(drv_config.type)(
+                instance_name=driver,
+                notifier=self.__state_notifier,
+                **drv_config._unpack(ignore=["instance_name", "notifier", "type"]),
+            )
             for (driver, drv_config) in config.drivers.items()
         }
 
@@ -261,7 +265,7 @@ class UserGpio:
     def sysprep(self) -> None:
         get_logger().info("Preparing User-GPIO drivers ...")
         for (_, driver) in sorted(self.__drivers.items(), key=operator.itemgetter(0)):
-            driver.prepare(self.__state_notifier)
+            driver.prepare()
 
     async def systask(self) -> None:
         get_logger(0).info("Running User-GPIO drivers ...")
@@ -277,7 +281,7 @@ class UserGpio:
             try:
                 driver.cleanup()
             except Exception:
-                get_logger().exception("Can't cleanup driver %r", driver.get_instance_name())
+                get_logger().exception("Can't cleanup driver %s", driver)
 
     async def switch(self, channel: str, state: bool) -> bool:
         gout = self.__outputs.get(channel)
