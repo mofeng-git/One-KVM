@@ -81,7 +81,12 @@ class _GpioInput:
         self.__driver.register_input(self.__pin)
 
     def get_scheme(self) -> Dict:
-        return {}
+        return {
+            "hw": {
+                "driver": self.__driver.get_instance_id(),
+                "pin": self.__pin,
+            },
+        }
 
     def get_state(self) -> Dict:
         (online, state) = (True, False)
@@ -136,7 +141,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
                 "max_delay": (self.__max_pulse_delay if self.__pulse_delay else 0),
             },
             "hw": {
-                "driver": str(self.__driver),
+                "driver": self.__driver.get_instance_id(),
                 "pin": self.__pin,
             },
         }

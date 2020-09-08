@@ -58,6 +58,9 @@ class BaseUserGpioDriver(BasePlugin):
         self._instance_name = instance_name
         self._notifier = notifier
 
+    def get_instance_id(self) -> str:
+        return self._instance_name
+
     def register_input(self, pin: int) -> None:
         raise NotImplementedError
 
