@@ -21,6 +21,8 @@
 
 
 from typing import List
+from typing import Set
+from typing import Optional
 from typing import Any
 
 from ..keyboard.mappings import KEYMAP
@@ -92,9 +94,12 @@ def valid_hid_mouse_wheel(arg: Any) -> int:
 
 
 # =====
-def valid_ugpio_driver(arg: Any) -> str:
+def valid_ugpio_driver(arg: Any, variants: Optional[Set[str]]=None) -> str:
     name = "GPIO driver"
-    return check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_-]*$"), name, 255)
+    arg = check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_-]*$"), name, 255)
+    if variants is not None:
+        arg = check_string_in_list(arg, f"configured {name}", variants)
+    return arg
 
 
 def valid_ugpio_mode(arg: Any) -> str:

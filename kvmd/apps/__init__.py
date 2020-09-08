@@ -29,6 +29,7 @@ import logging.config
 from typing import Tuple
 from typing import List
 from typing import Dict
+from typing import Set
 from typing import Optional
 
 import pygments
@@ -51,8 +52,6 @@ from ..yamlconf import Option
 from ..yamlconf import build_raw_from_options
 from ..yamlconf.dumper import make_config_dump
 from ..yamlconf.loader import load_yaml_file
-
-from ..validators import check_string_in_list
 
 from ..validators.basic import valid_stripped_string
 from ..validators.basic import valid_stripped_string_not_empty
@@ -181,7 +180,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
             rebuild = True
 
     if load_gpio:
-        drivers: List[str] = []
+        drivers: Set[str] = set()
         for (driver, params) in {  # type: ignore
             "__gpio__": {},
             **tools.rget(raw_config, "kvmd", "gpio", "drivers"),
@@ -192,17 +191,13 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
                 "type": Option(driver_type, type=valid_stripped_string_not_empty),
                 **get_ugpio_driver_class(driver_type).get_plugin_options()
             }
-            drivers.append(driver)
+            drivers.add(driver)
 
         for (channel, params) in tools.rget(raw_config, "kvmd", "gpio", "scheme").items():
             channel = valid_ugpio_channel(channel)
             mode = valid_ugpio_mode(params.get("mode", ""))
             scheme["kvmd"]["gpio"]["scheme"][channel] = {
-                "driver": Option("__gpio__", type=(lambda arg: check_string_in_list(
-                    arg=valid_stripped_string_not_empty(arg),
-                    name="configured GPIO driver",
-                    variants=drivers,
-                ))),
+                "driver":   Option("__gpio__", type=(lambda arg: valid_ugpio_driver(arg, drivers))),
                 "pin":      Option(-1, type=valid_gpio_pin),
                 "mode":     Option("", type=valid_ugpio_mode),
                 "inverted": Option(False, type=valid_bool),

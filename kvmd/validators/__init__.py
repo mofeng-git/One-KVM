@@ -23,6 +23,7 @@
 import re
 
 from typing import List
+from typing import Set
 from typing import Mapping
 from typing import Sequence
 from typing import Callable
@@ -62,13 +63,19 @@ def check_not_none_string(arg: Any, name: str, strip: bool=True) -> str:
     return arg
 
 
-def check_in_list(arg: Any, name: str, variants: Union[Sequence, Mapping]) -> Any:
+def check_in_list(arg: Any, name: str, variants: Union[Sequence, Mapping, Set]) -> Any:
     if arg not in variants:
         raise_error(arg, name)
     return arg
 
 
-def check_string_in_list(arg: Any, name: str, variants: Union[Sequence[str], Mapping[str, Any]], lower: bool=True) -> str:
+def check_string_in_list(
+    arg: Any,
+    name: str,
+    variants: Union[Sequence[str], Mapping[str, Any], Set[str]],
+    lower: bool=True,
+) -> str:
+
     arg = check_not_none_string(arg, name)
     if lower:
         arg = arg.lower()
