@@ -180,7 +180,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
 
     if load_gpio:
         for (driver, params) in {  # type: ignore
-            "gpio": {},
+            "__gpio__": {},
             **tools.rget(raw_config, "kvmd", "gpio", "drivers"),
         }.items():
             driver = valid_ugpio_driver(driver)
@@ -194,7 +194,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
             channel = valid_ugpio_channel(channel)
             mode = valid_ugpio_mode(params.get("mode", ""))
             scheme["kvmd"]["gpio"]["scheme"][channel] = {
-                "driver":   Option("gpio"),
+                "driver":   Option("__gpio__"),
                 "pin":      Option(-1, type=valid_gpio_pin),
                 "mode":     Option("", type=valid_ugpio_mode),
                 "inverted": Option(False, type=valid_bool),
