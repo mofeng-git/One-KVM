@@ -63,7 +63,7 @@ def check_in_list(arg: Any, name: str, variants: Union[Sequence, Mapping]) -> An
     return arg
 
 
-def check_string_in_list(arg: Any, name: str, variants: Union[Sequence[str], Mapping[str, Any]], lower: bool=True) -> Any:
+def check_string_in_list(arg: Any, name: str, variants: Union[Sequence[str], Mapping[str, Any]], lower: bool=True) -> str:
     arg = check_not_none_string(arg, name)
     if lower:
         arg = arg.lower()
