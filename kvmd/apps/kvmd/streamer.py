@@ -172,7 +172,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__snapshot: Optional[StreamerSnapshot] = None
 
-        self.__state_notifier = aiotools.AioNotifier()
+        self.__notifier = aiotools.AioNotifier()
 
     # =====
 
@@ -277,7 +277,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         def signal_handler(*_: Any) -> None:
             get_logger(0).info("Got SIGUSR2, checking the stream state ...")
-            asyncio.ensure_future(self.__state_notifier.notify())
+            asyncio.ensure_future(self.__notifier.notify())
 
         get_logger(0).info("Installing SIGUSR2 streamer handler ...")
         asyncio.get_event_loop().add_signal_handler(signal.SIGUSR2, signal_handler)
@@ -291,7 +291,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 prev_state = state
 
             if waiter_task is None:
-                waiter_task = asyncio.create_task(self.__state_notifier.wait())
+                waiter_task = asyncio.create_task(self.__notifier.wait())
             if waiter_task in (await aiotools.wait_first(asyncio.sleep(self.__state_poll), waiter_task))[0]:
                 waiter_task = None
 
@@ -328,7 +328,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                         )
                         if save:
                             self.__snapshot = snapshot
-                            await self.__state_notifier.notify()
+                            await self.__notifier.notify()
                         return snapshot
                     logger.error("Stream is offline, no signal or so")
             except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as err:

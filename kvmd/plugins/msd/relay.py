@@ -179,8 +179,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__device_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__written = 0
 
-        self.__state_notifier = aiotools.AioNotifier()
-        self.__region = aiotools.AioExclusiveRegion(MsdIsBusyError, self.__state_notifier)
+        self.__notifier = aiotools.AioNotifier()
+        self.__region = aiotools.AioExclusiveRegion(MsdIsBusyError, self.__notifier)
 
         logger = get_logger(0)
         logger.info("Using %r as MSD", self.__device_path)
@@ -234,7 +234,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if state != prev_state:
                 yield state
                 prev_state = state
-            await self.__state_notifier.wait()
+            await self.__notifier.wait()
 
     @aiotools.atomic
     async def reset(self) -> None:
@@ -317,7 +317,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     self.__written = 0
 
                     await self.__write_image_info(name, complete=False)
-                    await self.__state_notifier.notify()
+                    await self.__notifier.notify()
                     yield
                     await self.__write_image_info(name, complete=True)
                 finally:

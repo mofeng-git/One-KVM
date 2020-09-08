@@ -71,13 +71,13 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__click_delay = click_delay
         self.__long_click_delay = long_click_delay
 
-        self.__state_notifier = aiotools.AioNotifier()
-        self.__region = aiotools.AioExclusiveRegion(AtxIsBusyError, self.__state_notifier)
+        self.__notifier = aiotools.AioNotifier()
+        self.__region = aiotools.AioExclusiveRegion(AtxIsBusyError, self.__notifier)
 
         self.__reader = gpio.BatchReader(
             pins=set([self.__power_led_pin, self.__hdd_led_pin]),
             interval=state_poll,
-            notifier=self.__state_notifier,
+            notifier=self.__notifier,
         )
 
     @classmethod
@@ -113,7 +113,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
             if state != prev_state:
                 yield state
                 prev_state = state
-            await self.__state_notifier.wait()
+            await self.__notifier.wait()
 
     async def systask(self) -> None:
         await self.__reader.poll()

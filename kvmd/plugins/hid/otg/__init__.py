@@ -51,10 +51,10 @@ class Plugin(BaseHid):
         noop: bool,
     ) -> None:
 
-        self.__state_notifier = aiomulti.AioProcessNotifier()
+        self.__notifier = aiomulti.AioProcessNotifier()
 
-        self.__keyboard_proc = KeyboardProcess(noop=noop, state_notifier=self.__state_notifier, **keyboard)
-        self.__mouse_proc = MouseProcess(noop=noop, state_notifier=self.__state_notifier, **mouse)
+        self.__keyboard_proc = KeyboardProcess(noop=noop, notifier=self.__notifier, **keyboard)
+        self.__mouse_proc = MouseProcess(noop=noop, notifier=self.__notifier, **mouse)
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
@@ -101,7 +101,7 @@ class Plugin(BaseHid):
             if state != prev_state:
                 yield state
                 prev_state = state
-            await self.__state_notifier.wait()
+            await self.__notifier.wait()
 
     async def reset(self) -> None:
         self.__keyboard_proc.send_reset_event()

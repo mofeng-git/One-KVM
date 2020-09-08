@@ -191,13 +191,13 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
         self.__events_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
 
-        self.__state_notifier = aiomulti.AioProcessNotifier()
+        self.__notifier = aiomulti.AioProcessNotifier()
         self.__state_flags = aiomulti.AioSharedFlags({
             "online": True,
             "caps": False,
             "scroll": False,
             "num": False,
-        }, self.__state_notifier)
+        }, self.__notifier)
 
         self.__stop_event = multiprocessing.Event()
 
@@ -243,7 +243,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             if state != prev_state:
                 yield state
                 prev_state = state
-            await self.__state_notifier.wait()
+            await self.__notifier.wait()
 
     @aiotools.atomic
     async def reset(self) -> None:

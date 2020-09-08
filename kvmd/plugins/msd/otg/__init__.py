@@ -155,8 +155,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__new_file_written = 0
         self.__new_file_tick = 0.0
 
-        self.__state_notifier = aiotools.AioNotifier()
-        self.__state = _State(self.__state_notifier)
+        self.__notifier = aiotools.AioNotifier()
+        self.__state = _State(self.__notifier)
 
         logger = get_logger(0)
         logger.info("Using OTG gadget %r as MSD", gadget)
@@ -212,7 +212,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if state != prev_state:
                 yield state
                 prev_state = state
-            await self.__state_notifier.wait()
+            await self.__notifier.wait()
 
     async def systask(self) -> None:
         await self.__watch_inotify()
@@ -294,7 +294,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             async with self.__state._region:  # pylint: disable=protected-access
                 try:
                     async with self.__state._lock:  # pylint: disable=protected-access
-                        await self.__state_notifier.notify()
+                        await self.__notifier.notify()
                         assert self.__state.storage
                         assert self.__state.vd
 
@@ -310,7 +310,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         self.__new_file_written = 0
                         self.__new_file = await aiofiles.open(path, mode="w+b", buffering=0)
 
-                    await self.__state_notifier.notify()
+                    await self.__notifier.notify()
                     yield
                     self.__set_image_complete(name, True)
 
@@ -324,7 +324,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             # Между закрытием файла и эвентом айнотифи состояние может быть не обновлено,
             # так что форсим обновление вручную, чтобы получить актуальное состояние.
             await self.__reload_state()
-            await self.__state_notifier.notify()
+            await self.__notifier.notify()
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__new_file
@@ -334,7 +334,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         if self.__new_file_tick + 1 < now:
             # Это нужно для ручного оповещения о свободном пространстве на диске, см. get_state()
             self.__new_file_tick = now
-            await self.__state_notifier.notify()
+            await self.__notifier.notify()
         return self.__new_file_written
 
     @aiotools.atomic
@@ -382,7 +382,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 while True:
                     # Активно ждем, пока не будут на месте все каталоги.
                     await self.__reload_state()
-                    await self.__state_notifier.notify()
+                    await self.__notifier.notify()
                     if self.__state.vd:
                         break
                     await asyncio.sleep(5)
@@ -394,7 +394,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                     # После установки вотчеров еще раз проверяем стейт, чтобы ничего не потерять
                     await self.__reload_state()
-                    await self.__state_notifier.notify()
+                    await self.__notifier.notify()
 
                     while self.__state.vd:  # Если живы после предыдущей проверки
                         need_restart = False
@@ -410,7 +410,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                             break
                         if need_reload_state:
                             await self.__reload_state()
-                            await self.__state_notifier.notify()
+                            await self.__notifier.notify()
             except Exception:
                 logger.exception("Unexpected MSD watcher error")
 

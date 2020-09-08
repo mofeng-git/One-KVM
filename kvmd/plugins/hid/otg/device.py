@@ -47,7 +47,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         name: str,
         read_size: int,
         initial_state: Dict,
-        state_notifier: aiomulti.AioProcessNotifier,
+        notifier: aiomulti.AioProcessNotifier,
 
         device_path: str,
         select_timeout: float,
@@ -69,7 +69,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         self.__fd = -1
         self.__events_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
-        self.__state_flags = aiomulti.AioSharedFlags({"online": True, **initial_state}, state_notifier)
+        self.__state_flags = aiomulti.AioSharedFlags({"online": True, **initial_state}, notifier)
         self.__stop_event = multiprocessing.Event()
 
     def run(self) -> None:

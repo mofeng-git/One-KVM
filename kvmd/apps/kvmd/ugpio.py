@@ -215,12 +215,12 @@ class UserGpio:
     def __init__(self, config: Section) -> None:
         self.__view = config.view
 
-        self.__state_notifier = aiotools.AioNotifier()
+        self.__notifier = aiotools.AioNotifier()
 
         self.__drivers = {
             driver: get_ugpio_driver_class(drv_config.type)(
                 instance_name=driver,
-                notifier=self.__state_notifier,
+                notifier=self.__notifier,
                 **drv_config._unpack(ignore=["instance_name", "notifier", "type"]),
             )
             for (driver, drv_config) in config.drivers.items()
@@ -236,7 +236,7 @@ class UserGpio:
             if ch_config.mode == "input":
                 self.__inputs[channel] = _GpioInput(channel, ch_config, driver)
             else:  # output:
-                self.__outputs[channel] = _GpioOutput(channel, ch_config, driver, self.__state_notifier)
+                self.__outputs[channel] = _GpioOutput(channel, ch_config, driver, self.__notifier)
 
     async def get_model(self) -> Dict:
         return {
@@ -260,7 +260,7 @@ class UserGpio:
             if state != prev_state:
                 yield state
                 prev_state = state
-            await self.__state_notifier.wait()
+            await self.__notifier.wait()
 
     def sysprep(self) -> None:
         get_logger().info("Preparing User-GPIO drivers ...")
