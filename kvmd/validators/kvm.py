@@ -91,6 +91,10 @@ def valid_hid_mouse_wheel(arg: Any) -> int:
 
 
 # =====
+def valid_ugpio_driver(arg: Any) -> str:
+    return check_re_match(arg, "GPIO driver", r"^[a-zA-Z_][a-zA-Z0-9_-]*$")[:255]
+
+
 def valid_ugpio_mode(arg: Any) -> str:
     return check_string_in_list(arg, "GPIO mode", ["input", "output"])
 

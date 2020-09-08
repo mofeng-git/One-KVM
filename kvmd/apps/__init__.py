@@ -81,7 +81,9 @@ from ..validators.kvm import valid_stream_fps
 from ..validators.kvm import valid_stream_resolution
 from ..validators.kvm import valid_hid_key
 from ..validators.kvm import valid_hid_mouse_move
+from ..validators.kvm import valid_ugpio_driver
 from ..validators.kvm import valid_ugpio_mode
+from ..validators.kvm import valid_ugpio_channel
 from ..validators.kvm import valid_ugpio_view_table
 
 from ..validators.hw import valid_gpio_pin
@@ -181,6 +183,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
             "gpio": {},
             **tools.rget(raw_config, "kvmd", "gpio", "drivers"),
         }.items():
+            driver = valid_ugpio_driver(driver)
             driver_type = valid_stripped_string_not_empty(params.get("type", "gpio"))
             scheme["kvmd"]["gpio"]["drivers"][driver] = {
                 "type": Option(driver_type, type=valid_stripped_string_not_empty),
@@ -188,29 +191,25 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
             }
 
         for (channel, params) in tools.rget(raw_config, "kvmd", "gpio", "scheme").items():
-            try:
-                mode = valid_ugpio_mode(params.get("mode", ""))
-            except Exception:
-                pass
-            finally:
-                ch_scheme: Dict = {
-                    "driver":   Option("gpio"),
-                    "pin":      Option(-1, type=valid_gpio_pin),
-                    "mode":     Option("", type=valid_ugpio_mode),
-                    "inverted": Option(False, type=valid_bool),
-                }
-                if mode == "output":
-                    ch_scheme.update({
-                        "busy_delay": Option(0.2, type=valid_float_f01),
-                        "initial":    Option(False, type=(lambda arg: (None if arg is None else valid_bool(arg)))),
-                        "switch":     Option(True, type=valid_bool),
-                        "pulse": {
-                            "delay":     Option(0.1, type=valid_float_f0),
-                            "min_delay": Option(0.1, type=valid_float_f01),
-                            "max_delay": Option(0.1, type=valid_float_f01),
-                        },
-                    })
-            scheme["kvmd"]["gpio"]["scheme"][channel] = ch_scheme
+            channel = valid_ugpio_channel(channel)
+            mode = valid_ugpio_mode(params.get("mode", ""))
+            scheme["kvmd"]["gpio"]["scheme"][channel] = {
+                "driver":   Option("gpio"),
+                "pin":      Option(-1, type=valid_gpio_pin),
+                "mode":     Option("", type=valid_ugpio_mode),
+                "inverted": Option(False, type=valid_bool),
+                **({
+                    "busy_delay": Option(0.2, type=valid_float_f01),
+                    "initial":    Option(False, type=(lambda arg: (None if arg is None else valid_bool(arg)))),
+                    "switch":     Option(True, type=valid_bool),
+                    "pulse": {  # type: ignore
+                        "delay":     Option(0.1, type=valid_float_f0),
+                        "min_delay": Option(0.1, type=valid_float_f01),
+                        "max_delay": Option(0.1, type=valid_float_f01),
+                    },
+                } if mode == "output" else {})
+            }
+
         rebuild = True
 
     return rebuild
