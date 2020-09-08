@@ -85,7 +85,7 @@ class IpmiAuthManager:
             credentials[ipmi_user] = IpmiUserCredentials(
                 ipmi_user=ipmi_user,
                 ipmi_passwd=ipmi_passwd,
-                kvmd_user=kvmd_passwd,
+                kvmd_user=kvmd_user,
                 kvmd_passwd=kvmd_passwd,
             )
         return credentials
