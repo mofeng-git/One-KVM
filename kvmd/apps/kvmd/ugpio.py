@@ -235,9 +235,7 @@ class UserGpio:
         self.__outputs: Dict[str, _GpioOutput] = {}
 
         for (channel, ch_config) in sorted(config.scheme.items(), key=operator.itemgetter(0)):
-            driver = self.__drivers.get(ch_config.driver)
-            if driver is None:
-                raise RuntimeError(f"Missing User-GPIO driver configuration: {ch_config.driver}")
+            driver = self.__drivers[ch_config.driver]
             if ch_config.mode == "input":
                 self.__inputs[channel] = _GpioInput(channel, ch_config, driver)
             else:  # output:
