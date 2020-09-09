@@ -114,7 +114,7 @@ export function Msd() {
 	var __uploadStateChange = function() {
 		if (__upload_http.readyState === 4) {
 			if (__upload_http.status !== 200) {
-				wm.error("Can't upload image to the Mass Storage Device:<br>", __upload_http.responseText);
+				wm.error("Can't upload image to the Mass Storage Drive:<br>", __upload_http.responseText);
 			}
 			$("msd-select-new-image-file").value = "";
 			__image_file = null;
@@ -156,7 +156,7 @@ export function Msd() {
 		let el_input = $("msd-select-new-image-file");
 		let image_file = (el_input.files.length ? el_input.files[0] : null);
 		if (image_file && image_file.size > __state.storage.size) {
-			wm.error("New image is too big for your Mass Storage Device.<br>Maximum:", tools.formatSize(__state.storage.size));
+			wm.error("New image is too big for your Mass Storage Drive.<br>Maximum:", tools.formatSize(__state.storage.size));
 			el_input.value = "";
 			image_file = null;
 		}
@@ -165,7 +165,7 @@ export function Msd() {
 	};
 
 	var __clickResetButton = function() {
-		wm.confirm("Are you sure you want to reset Mass Storage Device?").then(function(ok) {
+		wm.confirm("Are you sure you want to reset Mass Storage Drive?").then(function(ok) {
 			if (ok) {
 				let http = tools.makeRequest("POST", "/api/msd/reset", function() {
 					if (http.readyState === 4) {
