@@ -81,12 +81,13 @@ class Plugin(BaseUserGpioDriver):
 
     def prepare(self) -> None:
         logger = get_logger(0)
-        logger.info("Probing driver %s ...", self)
+        logger.info("Probing driver %s on %s ...", self, self.__device_path)
         try:
             with self.__ensure_device("probing"):
                 pass
         except Exception as err:
-            logger.error("Can't probe %s: %s: %s", self, type(err).__name__, err)
+            logger.error("Can't probe %s on %s: %s: %s",
+                         self, self.__device_path, type(err).__name__, err)
         self.__reset_pins()
 
     async def run(self) -> None:
@@ -124,11 +125,13 @@ class Plugin(BaseUserGpioDriver):
         logger = get_logger(0)
         for (pin, state) in self.__initials.items():
             if state is not None:
-                logger.info("Resetting pin=%d to state=%d of %s: ...", pin, state, self)
+                logger.info("Resetting pin=%d to state=%d of %s on %s: ...",
+                            pin, state, self, self.__device_path)
                 try:
                     self.__inner_write(pin, state)
                 except Exception as err:
-                    logger.error("Can't reset pin=%d of %s: %s: %s", pin, self, type(err).__name__, err)
+                    logger.error("Can't reset pin=%d of %s on %s: %s: %s",
+                                 pin, self, self.__device_path, type(err).__name__, err)
 
     def __inner_read(self, pin: int) -> bool:
         if self.__check_pin(pin):
@@ -150,7 +153,7 @@ class Plugin(BaseUserGpioDriver):
     def __check_pin(self, pin: int) -> bool:
         ok = (0 <= pin <= 7)
         if not ok:
-            get_logger(0).warning("Unsupported pin for %s: %d", self, pin)
+            get_logger(0).warning("Unsupported pin for %s on %s: %d", self, self.__device_path, pin)
         return ok
 
     @contextlib.contextmanager
@@ -161,12 +164,12 @@ class Plugin(BaseUserGpioDriver):
             device.open_path(self.__device_path.encode("utf-8"))
             device.set_nonblocking(True)
             self.__device = device
-            get_logger(0).info("Opened %s while %s", self, context)
+            get_logger(0).info("Opened %s on %s while %s", self, self.__device_path, context)
         try:
             yield self.__device
         except Exception as err:
-            get_logger(0).error("Error occured on %s while %s: %s: %s",
-                                self, context, type(err).__name__, err)
+            get_logger(0).error("Error occured on %s on %s while %s: %s: %s",
+                                self, self.__device_path, context, type(err).__name__, err)
             self.__close_device()
             raise
 
@@ -177,9 +180,9 @@ class Plugin(BaseUserGpioDriver):
             except Exception:
                 pass
             self.__device = None
-            get_logger(0).info("Closed %s", self)
+            get_logger(0).info("Closed %s on %s", self, self.__device_path)
 
     def __str__(self) -> str:
-        return f"HidRelay({self._instance_name}, {self.__device_path})"
+        return f"HidRelay({self._instance_name})"
 
     __repr__ = __str__
