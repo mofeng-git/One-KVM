@@ -225,6 +225,7 @@ def test_ok__valid_ugpio_item(validator: Callable[[Any], str], arg: Any) -> None
     "te~st",
     "-",
     "-foo_bar",
+    "foo bar",
     "a" * 256,
     "  ",
     "",

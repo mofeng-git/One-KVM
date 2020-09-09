@@ -51,6 +51,7 @@ def test_ok__valid_user(arg: Any) -> None:
     "te~st",
     "-",
     "-foo_bar",
+    "foo bar",
     "  ",
     "",
     None,

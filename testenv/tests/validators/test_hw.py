@@ -94,6 +94,7 @@ def test_ok__valid_otg_gadget(arg: Any) -> None:
     "te~st",
     "-",
     "-foo_bar",
+    "foo bar",
     "a" * 256,
     "  ",
     "",
