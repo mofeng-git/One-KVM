@@ -135,7 +135,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         return {
             "switch": self.__switch,
             "pulse": {
-                "delay": self.__pulse_delay,
+                "delay": min(max(self.__pulse_delay, self.__min_pulse_delay), self.__max_pulse_delay),
                 "min_delay": (self.__min_pulse_delay if self.__pulse_delay else 0),
                 "max_delay": (self.__max_pulse_delay if self.__pulse_delay else 0),
             },

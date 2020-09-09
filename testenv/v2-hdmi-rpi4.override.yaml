@@ -73,6 +73,9 @@ kvmd:
                 mode: output
                 initial: null
                 driver: relay
+                pulse:
+                    delay: 2
+                    max_delay: 5
 
         view:
             table:
