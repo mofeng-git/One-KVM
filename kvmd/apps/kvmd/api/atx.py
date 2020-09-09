@@ -25,6 +25,8 @@ from aiohttp.web import Response
 
 from ....plugins.atx import BaseAtx
 
+from ....validators.basic import valid_bool
+
 from ....validators.kvm import valid_atx_power_action
 from ....validators.kvm import valid_atx_button
 
@@ -46,20 +48,22 @@ class AtxApi:
     @exposed_http("POST", "/atx/power")
     async def __power_handler(self, request: Request) -> Response:
         action = valid_atx_power_action(request.query.get("action"))
+        wait = valid_bool(request.query.get("wait", "0"))
         processing = await ({
             "on": self.__atx.power_on,
             "off": self.__atx.power_off,
             "off_hard": self.__atx.power_off_hard,
             "reset_hard": self.__atx.power_reset_hard,
-        }[action])()
+        }[action])(wait)
         return make_json_response({"processing": processing})
 
     @exposed_http("POST", "/atx/click")
     async def __click_handler(self, request: Request) -> Response:
         button = valid_atx_button(request.query.get("button"))
+        wait = valid_bool(request.query.get("wait", "0"))
         await ({
             "power": self.__atx.click_power,
             "power_long": self.__atx.click_power_long,
             "reset": self.__atx.click_reset,
-        }[button])()
+        }[button])(wait)
         return make_json_response()

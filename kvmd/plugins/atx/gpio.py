@@ -130,40 +130,40 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    async def power_on(self) -> bool:
+    async def power_on(self, wait: bool) -> bool:
         if not (await self.__get_power()):
-            await self.click_power()
+            await self.click_power(wait)
             return True
         return False
 
-    async def power_off(self) -> bool:
+    async def power_off(self, wait: bool) -> bool:
         if (await self.__get_power()):
-            await self.click_power()
+            await self.click_power(wait)
             return True
         return False
 
-    async def power_off_hard(self) -> bool:
+    async def power_off_hard(self, wait: bool) -> bool:
         if (await self.__get_power()):
-            await self.click_power_long()
+            await self.click_power_long(wait)
             return True
         return False
 
-    async def power_reset_hard(self) -> bool:
+    async def power_reset_hard(self, wait: bool) -> bool:
         if (await self.__get_power()):
-            await self.click_reset()
+            await self.click_reset(wait)
             return True
         return False
 
     # =====
 
-    async def click_power(self) -> None:
-        await self.__click("power", self.__power_switch_pin, self.__click_delay)
+    async def click_power(self, wait: bool) -> None:
+        await self.__click("power", self.__power_switch_pin, self.__click_delay, wait)
 
-    async def click_power_long(self) -> None:
-        await self.__click("power_long", self.__power_switch_pin, self.__long_click_delay)
+    async def click_power_long(self, wait: bool) -> None:
+        await self.__click("power_long", self.__power_switch_pin, self.__long_click_delay, wait)
 
-    async def click_reset(self) -> None:
-        await self.__click("reset", self.__reset_switch_pin, self.__click_delay)
+    async def click_reset(self, wait: bool) -> None:
+        await self.__click("reset", self.__reset_switch_pin, self.__click_delay, wait)
 
     # =====
 
@@ -171,11 +171,15 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         return (await self.get_state())["leds"]["power"]
 
     @aiotools.atomic
-    async def __click(self, name: str, pin: int, delay: float) -> None:
-        await aiotools.run_region_task(
-            "Can't perform ATX click or operation was not completed",
-            self.__region, self.__inner_click, name, pin, delay,
-        )
+    async def __click(self, name: str, pin: int, delay: float, wait: bool) -> None:
+        if wait:
+            async with self.__region:
+                await self.__inner_click(name, pin, delay)
+        else:
+            await aiotools.run_region_task(
+                "Can't perform ATX click or operation was not completed",
+                self.__region, self.__inner_click, name, pin, delay,
+            )
 
     @aiotools.atomic
     async def __inner_click(self, name: str, pin: int, delay: float) -> None:
