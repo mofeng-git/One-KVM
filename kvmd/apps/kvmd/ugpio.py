@@ -182,8 +182,16 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         else:
             await aiotools.run_region_task(
                 f"Can't perform pulse of {self} or operation was not completed",
-                self.__region, self.__inner_pulse, delay,
+                self.__region, self.__inner_pulse_tasked, delay,
             )
+
+    @aiotools.atomic
+    async def __inner_pulse_tasked(self, delay: float) -> None:
+        try:
+            await self.__inner_pulse(delay)
+        except GpioDriverOfflineError:
+            get_logger(0).error("Can't perform pulse of %s or operation was not completed"
+                                " because the driver is offline", self)
 
     @aiotools.atomic
     async def __inner_pulse(self, delay: float) -> None:
