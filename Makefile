@@ -3,6 +3,7 @@
 TESTENV_IMAGE ?= kvmd-testenv
 TESTENV_HID ?= /dev/ttyS10
 TESTENV_VIDEO ?= /dev/video0
+TESTENV_RELAY ?= $(if $(shell ls /dev/hidraw0 2>/dev/null || true),/dev/hidraw0,)
 
 USTREAMER_MIN_VERSION ?= $(shell grep -o 'ustreamer>=[^"]\+' PKGBUILD | sed 's/ustreamer>=//g')
 
@@ -75,6 +76,7 @@ run: testenv
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
 			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
+			$(if $(TESTENV_RELAY),--device $(TESTENV_RELAY):$(TESTENV_RELAY),) \
 			--publish 8080:80/tcp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
 			(socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \

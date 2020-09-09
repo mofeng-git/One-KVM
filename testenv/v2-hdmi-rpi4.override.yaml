@@ -39,79 +39,52 @@ kvmd:
 
     gpio:
         drivers:
-            gpio2:
-                type: gpio
-                state_poll: 0.3
+            relay:
+                type: hidrelay
+                device: /dev/hidraw0
 
         scheme:
-            host1:  # any name like foo_bar_baz
+            led1:
+                pin: 0
+                mode: input
+
+            led2:
                 pin: 1
                 mode: input
-            host2:
-                pin: 2
-                mode: input
-            host3:
-                pin: 3
-                mode: input
-            host4:
-                pin: 4
-                mode: input
-            change_host:
-                pin: 5
+
+            button1:
+                pin: 10
                 mode: output
                 switch: false
 
-            host1_pwr:
+            button2:
                 pin: 11
-                mode: input
-            host2_pwr:
-                pin: 12
-                mode: input
-            host3_pwr:
-                pin: 13
-                mode: input
-            host4_pwr:
-                pin: 14
-                mode: input
-
-            host1_pwr_btn:
-                pin: 21
-                mode: output
-                switch: false
-            host2_pwr_btn:
-                pin: 22
-                mode: output
-                switch: false
-            host3_pwr_btn:
-                pin: 23
-                mode: output
-                switch: false
-            host4_pwr_btn:
-                pin: 24
                 mode: output
                 switch: false
 
-            lamp:
-                pin: 50
+            relay1:
+                pin: 0
                 mode: output
-                pulse:
-                    delay: 0
+                initial: null
+                driver: relay
+
+            relay2:
+                pin: 1
+                mode: output
+                initial: null
+                driver: relay
 
         view:
-            header:
-                title: Switch
             table:
-                - ["#Multihost controller"]
+                - ["#Generic GPIO leds"]
                 - []
-                - ["", "#Current", "#Power"]
-                - ["#host1.localdomain:", host1, host1_pwr, "host1_pwr_btn,Pwr"]
-                - ["#host2.localdomain:", host2, host2_pwr, "host2_pwr_btn,Pwr"]
-                - ["#host3.localdomain:", host3, host3_pwr, "host3_pwr_btn,Pwr"]
-                - ["#host4.localdomain:", host4, host4_pwr, "host4_pwr_btn,Pwr"]
+                - ["#Test 1:", led1, button1]
+                - ["#Test 2:", led2, button2]
                 - []
-                - ["change_host,Change host"]
+                - ["#HID Relays /dev/hidraw0"]
                 - []
-                - ["#Lamp in the rack", lamp]
+                - ["#Relay #1:", relay1]
+                - ["#Relay #2:", relay2]
 
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
