@@ -107,7 +107,7 @@ def valid_ugpio_driver(arg: Any, variants: Optional[Set[str]]=None) -> str:
     name = "GPIO driver"
     arg = check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_-]*$"), name, 255)
     if variants is not None:
-        arg = check_string_in_list(arg, f"configured {name}", variants)
+        arg = check_string_in_list(arg, f"configured {name}", variants, False)
     return arg
 
 

@@ -238,6 +238,20 @@ def test_fail__valid_ugpio_item(validator: Callable[[Any], str], arg: Any) -> No
 
 
 # =====
+@pytest.mark.parametrize("arg", ["foo", " bar", " baz "])
+def test_ok__valid_ugpio_driver_variants(arg: Any) -> None:
+    value = valid_ugpio_driver(arg, set(["foo", "bar", "baz"]))
+    assert type(value) == str  # pylint: disable=unidiomatic-typecheck
+    assert value == str(arg).strip()
+
+
+@pytest.mark.parametrize("arg", ["BAR", " ", "", None])
+def test_fail__valid_ugpio_driver_variants(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_ugpio_driver(arg, set(["foo", "bar", "baz"])))
+
+
+# =====
 @pytest.mark.parametrize("arg", ["Input ", " OUTPUT "])
 def test_ok__valid_ugpio_mode(arg: Any) -> None:
     assert valid_ugpio_mode(arg) == arg.strip().lower()
