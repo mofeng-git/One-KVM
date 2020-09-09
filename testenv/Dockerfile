@@ -19,6 +19,7 @@ RUN pacman -Syu --noconfirm \
 		python-dbus \
 		python-psutil \
 		python-mako \
+		python-hidapi \
 		nginx-mainline \
 		socat \
 		eslint \

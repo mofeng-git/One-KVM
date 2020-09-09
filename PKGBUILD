@@ -50,6 +50,7 @@ depends=(
 	python-pam
 	python-pillow
 	python-xlib
+	python-hidapi
 	freetype2
 	v4l-utils
 	nginx-mainline
