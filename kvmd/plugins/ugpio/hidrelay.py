@@ -81,19 +81,19 @@ class Plugin(BaseUserGpioDriver):
 
     def prepare(self) -> None:
         logger = get_logger(0)
-        logger.info("Initializing %s ...", self)
+        logger.info("Probing driver %s ...", self)
         try:
-            for (pid, state) in self.__initials.items():
-                if state is not None:
-                    self.write(pid, state)
-        except Exception:
-            logger.exception("Can't perform first initialization of %s", self)
+            with self.__ensure_device("probing"):
+                pass
+        except Exception as err:
+            logger.error("Can't probe %s: %s: %s", self, type(err).__name__, err)
+        self.__reset_pins()
 
     async def run(self) -> None:
         prev_raw = -1
         while True:
             try:
-                raw = self.__read_raw()
+                raw = self.__inner_read_raw()
             except Exception:
                 raw = -1
             if raw != prev_raw:
@@ -102,39 +102,56 @@ class Plugin(BaseUserGpioDriver):
             await asyncio.sleep(self.__state_poll)
 
     def cleanup(self) -> None:
+        self.__reset_pins()
         self.__close_device()
         self.__stop = True
 
     def read(self, pin: int) -> bool:
-        if self.__check_pin(pin):
-            try:
-                return bool(self.__read_raw() & (1 << pin))
-            except Exception:
-                raise GpioDriverOfflineError(self) from None
-        return False
+        try:
+            return self.__inner_read(pin)
+        except Exception:
+            raise GpioDriverOfflineError(self)
 
     def write(self, pin: int, state: bool) -> None:
-        if self.__check_pin(pin):
-            try:
-                with self.__ensure_device("writing") as device:
-                    report = [(0xFF if state else 0xFD), pin + 1]  # Pin numeration starts from 0
-                    result = device.send_feature_report(report)
-                    if result < 0:
-                        raise RuntimeError(f"Retval of send_feature_report() < 0: {result}")
-            except Exception:
-                raise GpioDriverOfflineError(self) from None
+        try:
+            return self.__inner_write(pin, state)
+        except Exception:
+            raise GpioDriverOfflineError(self)
 
     # =====
+
+    def __reset_pins(self) -> None:
+        logger = get_logger(0)
+        for (pin, state) in self.__initials.items():
+            if state is not None:
+                logger.info("Resetting pin=%d to state=%d of %s: ...", pin, state, self)
+                try:
+                    self.__inner_write(pin, state)
+                except Exception as err:
+                    logger.error("Can't reset pin=%d of %s: %s: %s", pin, self, type(err).__name__, err)
+
+    def __inner_read(self, pin: int) -> bool:
+        if self.__check_pin(pin):
+            return bool(self.__inner_read_raw() & (1 << pin))
+        return False
+
+    def __inner_read_raw(self) -> int:
+        with self.__ensure_device("reading") as device:
+            return device.get_feature_report(1, 8)[7]
+
+    def __inner_write(self, pin: int, state: bool) -> None:
+        if self.__check_pin(pin):
+            with self.__ensure_device("writing") as device:
+                report = [(0xFF if state else 0xFD), pin + 1]  # Pin numeration starts from 0
+                result = device.send_feature_report(report)
+                if result < 0:
+                    raise RuntimeError(f"Retval of send_feature_report() < 0: {result}")
 
     def __check_pin(self, pin: int) -> bool:
         ok = (0 <= pin <= 7)
         if not ok:
             get_logger(0).warning("Unsupported pin for %s: %d", self, pin)
         return ok
-
-    def __read_raw(self) -> int:
-        with self.__ensure_device("reading") as device:
-            return device.get_feature_report(1, 8)[7]
 
     @contextlib.contextmanager
     def __ensure_device(self, context: str) -> hid.device:

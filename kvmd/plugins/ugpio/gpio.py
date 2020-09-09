@@ -83,6 +83,11 @@ class Plugin(BaseUserGpioDriver):
         assert self.__reader
         await self.__reader.poll()
 
+    def cleanup(self) -> None:
+        for (pin, initial) in self.__output_pins.items():
+            if initial is not None:
+                gpio.write(pin, initial)
+
     def read(self, pin: int) -> bool:
         return gpio.read(pin)
 

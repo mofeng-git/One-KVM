@@ -117,7 +117,6 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         self.__channel = channel
         self.__pin: int = config.pin
         self.__inverted: bool = config.inverted
-        self.__initial: Optional[bool] = config.initial
 
         self.__switch: bool = config.switch
 
@@ -159,13 +158,6 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
             "state": state,
             "busy": busy,
         }
-
-    def cleanup(self) -> None:
-        if self.__initial is not None:
-            try:
-                self.__driver.write(self.__pin, (self.__initial ^ self.__inverted))
-            except Exception:
-                get_logger().exception("Can't cleanup %s", self)
 
     async def switch(self, state: bool) -> bool:
         if not self.__switch:
@@ -278,8 +270,6 @@ class UserGpio:
         ])
 
     async def cleanup(self) -> None:
-        for gout in self.__outputs.values():
-            gout.cleanup()
         for driver in self.__drivers.values():
             try:
                 driver.cleanup()
