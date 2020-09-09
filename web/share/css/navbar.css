@@ -134,9 +134,6 @@ ul#navbar li div.menu div.text table.one-line-switch {
 }
 
 ul#navbar li div.menu table.kv {
-	-webkit-user-select: text;
-	-moz-user-select: text;
-	user-select: text;
 	border-spacing: 5px;
 	margin: 0 10px 0 10px;
 	font-size: 12px;

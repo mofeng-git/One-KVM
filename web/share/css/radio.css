@@ -30,11 +30,13 @@ div.radio-box input[type=radio] {
 }
 
 div.radio-box label {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
 	display: flex;
 	align-items: center;
 	text-align: center;
 	vertical-align: middle;
-	user-select: none;
 	padding: 4px 8px;
 	cursor: pointer;
 	position: relative;

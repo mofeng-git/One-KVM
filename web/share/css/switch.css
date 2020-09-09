@@ -21,12 +21,13 @@
 
 
 div.switch-box {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
 	display: inline-block;
 	vertical-align: middle;
 	position: relative;
 	width: 50px;
-	-webkit-user-select: none;
-	-moz-user-select: none;
 }
 
 div.switch-box input[type=checkbox] {

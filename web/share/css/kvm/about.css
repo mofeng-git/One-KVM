@@ -21,9 +21,6 @@
 
 
 div#about {
-	-webkit-user-select: text;
-	-moz-user-select: text;
-	user-select: text;
 	max-width: 600px;
 	white-space: normal;
 	padding: 5px 5px 5px 5px;
@@ -42,5 +39,8 @@ div#about td.copyright {
 }
 
 div#about div.tabs-box div.tab div.code {
+	-webkit-user-select: text;
+	-moz-user-select: text;
+	user-select: text;
 	height: 250px;
 }
