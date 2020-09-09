@@ -42,6 +42,7 @@ from kvmd.validators.kvm import valid_hid_mouse_wheel
 from kvmd.validators.kvm import valid_ugpio_driver
 from kvmd.validators.kvm import valid_ugpio_channel
 from kvmd.validators.kvm import valid_ugpio_mode
+from kvmd.validators.kvm import valid_ugpio_view_table
 
 
 # =====
@@ -246,3 +247,24 @@ def test_ok__valid_ugpio_mode(arg: Any) -> None:
 def test_fail__valid_ugpio_mode(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_ugpio_mode(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg,retval", [
+    ([],                     []),
+    ({},                     []),
+    ([[]],                   [[]]),
+    ([{}],                   [[]]),
+    ([[[]]],                 [["[]"]]),
+    ("",                     []),
+    ("ab",                   [["a"], ["b"]]),
+    ([[1, 2], [None], "ab", {}, [3, 4]],   [["1", "2"], ["None"], ["a", "b"], [], ["3", "4"]]),
+])
+def test_ok__valid_ugpio_view_table(arg: Any, retval: Any) -> None:
+    assert valid_ugpio_view_table(arg) == retval
+
+
+@pytest.mark.parametrize("arg", [None, [None], 1])
+def test_fail__valid_ugpio_view_table(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_ugpio_view_table(arg))
