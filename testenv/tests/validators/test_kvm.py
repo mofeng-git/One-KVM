@@ -29,6 +29,7 @@ from kvmd.keyboard.mappings import KEYMAP
 from kvmd.validators import ValidatorError
 from kvmd.validators.kvm import valid_atx_power_action
 from kvmd.validators.kvm import valid_atx_button
+from kvmd.validators.kvm import valid_info_fields
 from kvmd.validators.kvm import valid_log_seek
 from kvmd.validators.kvm import valid_stream_quality
 from kvmd.validators.kvm import valid_stream_fps
@@ -61,6 +62,20 @@ def test_ok__valid_atx_button(arg: Any) -> None:
 def test_fail__valid_atx_button(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_atx_button(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", [" foo ", "bar", "foo, ,bar,", " ", " , ", ""])
+def test_ok__valid_info_fields(arg: Any) -> None:
+    value = valid_info_fields(arg, set(["foo", "bar"]))
+    assert type(value) == set  # pylint: disable=unidiomatic-typecheck
+    assert value == set(filter(None, map(str.strip, str(arg).split(","))))
+
+
+@pytest.mark.parametrize("arg", ["xxx", "yyy", "foo,xxx", None])
+def test_fail__valid_info_fields(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_info_fields(arg, set(["foo", "bar"])))
 
 
 # =====

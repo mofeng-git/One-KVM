@@ -82,6 +82,7 @@ def test_fail__valid_gpio_pin_optional(arg: Any) -> None:
     "_",
     "_foo_bar_",
     " aix",
+    "a" * 255,
 ])
 def test_ok__valid_otg_gadget(arg: Any) -> None:
     assert valid_otg_gadget(arg) == arg.strip()
@@ -93,6 +94,7 @@ def test_ok__valid_otg_gadget(arg: Any) -> None:
     "te~st",
     "-",
     "-foo_bar",
+    "a" * 256,
     "  ",
     "",
     None,
