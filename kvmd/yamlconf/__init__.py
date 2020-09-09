@@ -20,11 +20,13 @@
 # ========================================================================== #
 
 
+import contextlib
 import json
 
 from typing import Tuple
 from typing import List
 from typing import Dict
+from typing import Generator
 from typing import Callable
 from typing import Optional
 from typing import Any
@@ -129,6 +131,14 @@ class Option:
 
 
 # =====
+@contextlib.contextmanager
+def manual_validated(value: Any, *path: str) -> Generator[None, None, None]:
+    try:
+        yield
+    except (TypeError, ValueError) as err:
+        raise ConfigError(f"Invalid value {value!r} for key {'/'.join(path)!r}: {err}")
+
+
 def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, ...]=()) -> Section:
     if not isinstance(raw, dict):
         raise ConfigError(f"The node {('/'.join(_keys) or '/')!r} must be a dictionary")

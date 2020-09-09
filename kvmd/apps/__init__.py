@@ -46,6 +46,7 @@ from ..plugins.msd import get_msd_class
 from ..plugins.ugpio import get_ugpio_driver_class
 
 from ..yamlconf import ConfigError
+from ..yamlconf import manual_validated
 from ..yamlconf import make_config
 from ..yamlconf import Section
 from ..yamlconf import Option
@@ -185,7 +186,8 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
             "__gpio__": {},
             **tools.rget(raw_config, "kvmd", "gpio", "drivers"),
         }.items():
-            driver = valid_ugpio_driver(driver)
+            with manual_validated(driver, "kvmd", "gpio", "drivers", "<key>"):
+                driver = valid_ugpio_driver(driver)
             driver_type = valid_stripped_string_not_empty(params.get("type", "gpio"))
             scheme["kvmd"]["gpio"]["drivers"][driver] = {
                 "type": Option(driver_type, type=valid_stripped_string_not_empty),
@@ -194,8 +196,10 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
             drivers.add(driver)
 
         for (channel, params) in tools.rget(raw_config, "kvmd", "gpio", "scheme").items():
-            channel = valid_ugpio_channel(channel)
-            mode = valid_ugpio_mode(params.get("mode", ""))
+            with manual_validated(channel, "kvmd", "gpio", "scheme", "<key>"):
+                channel = valid_ugpio_channel(channel)
+            with manual_validated(params.get("mode", ""), "kvmd", "gpio", "scheme", channel, "mode"):
+                mode = valid_ugpio_mode(params.get("mode", ""))
             scheme["kvmd"]["gpio"]["scheme"][channel] = {
                 "driver":   Option("__gpio__", type=(lambda arg: valid_ugpio_driver(arg, drivers))),
                 "pin":      Option(-1, type=valid_gpio_pin),
