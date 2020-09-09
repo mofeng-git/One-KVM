@@ -84,8 +84,8 @@ from ..validators.kvm import valid_stream_resolution
 from ..validators.kvm import valid_hid_key
 from ..validators.kvm import valid_hid_mouse_move
 from ..validators.kvm import valid_ugpio_driver
-from ..validators.kvm import valid_ugpio_mode
 from ..validators.kvm import valid_ugpio_channel
+from ..validators.kvm import valid_ugpio_mode
 from ..validators.kvm import valid_ugpio_view_table
 
 from ..validators.hw import valid_gpio_pin

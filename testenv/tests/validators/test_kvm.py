@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+from typing import Callable
 from typing import Any
 
 import pytest
@@ -38,6 +39,9 @@ from kvmd.validators.kvm import valid_hid_key
 from kvmd.validators.kvm import valid_hid_mouse_move
 from kvmd.validators.kvm import valid_hid_mouse_button
 from kvmd.validators.kvm import valid_hid_mouse_wheel
+from kvmd.validators.kvm import valid_ugpio_driver
+from kvmd.validators.kvm import valid_ugpio_channel
+from kvmd.validators.kvm import valid_ugpio_mode
 
 
 # =====
@@ -197,3 +201,47 @@ def test_ok__valid_hid_mouse_wheel__p200() -> None:
 def test_fail__valid_hid_mouse_wheel(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_hid_mouse_wheel(arg))
+
+
+# =====
+@pytest.mark.parametrize("validator", [valid_ugpio_driver, valid_ugpio_channel])
+@pytest.mark.parametrize("arg", [
+    "test-",
+    "glados",
+    "test",
+    "_",
+    "_foo_bar_",
+    " aix",
+    "a" * 255,
+])
+def test_ok__valid_ugpio_item(validator: Callable[[Any], str], arg: Any) -> None:
+    assert validator(arg) == arg.strip()
+
+
+@pytest.mark.parametrize("validator", [valid_ugpio_driver, valid_ugpio_channel])
+@pytest.mark.parametrize("arg", [
+    "тест",
+    "-molestia",
+    "te~st",
+    "-",
+    "-foo_bar",
+    "a" * 256,
+    "  ",
+    "",
+    None,
+])
+def test_fail__valid_ugpio_item(validator: Callable[[Any], str], arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(validator(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", ["Input ", " OUTPUT "])
+def test_ok__valid_ugpio_mode(arg: Any) -> None:
+    assert valid_ugpio_mode(arg) == arg.strip().lower()
+
+
+@pytest.mark.parametrize("arg", ["test", "", None])
+def test_fail__valid_ugpio_mode(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_ugpio_mode(arg))
