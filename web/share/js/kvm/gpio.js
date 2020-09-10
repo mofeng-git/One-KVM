@@ -75,8 +75,6 @@ export function Gpio() {
 			$("gpio-menu-button").innerHTML = `${model.view.header.title} &#8628;`;
 		}
 
-		let switches = [];
-		let buttons = [];
 		let content = "<table class=\"kv\">";
 		for (let row of model.view.table) {
 			if (row === null) {
@@ -87,7 +85,7 @@ export function Gpio() {
 					if (item.type === "output") {
 						item.scheme = model.scheme.outputs[item.channel];
 					}
-					content += `<td align="center">${__createItem(item, switches, buttons)}</td>`;
+					content += `<td align="center">${__createItem(item)}</td>`;
 				}
 				content += "</tr>";
 			}
@@ -95,17 +93,21 @@ export function Gpio() {
 		content += "</table>";
 		$("gpio-menu").innerHTML = content;
 
-		for (let channel of switches) {
-			tools.setOnClick($(`gpio-switch-${channel}`), () => __switchChannel(channel));
-		}
-		for (let channel of buttons) {
-			tools.setOnClick($(`gpio-button-${channel}`), () => __pulseChannel(channel));
+		for (let channel in model.scheme.outputs) {
+			let el = $(`gpio-switch-${channel}`);
+			if (el) {
+				tools.setOnClick(el, () => __switchChannel(channel));
+			}
+			el = $(`gpio-button-${channel}`);
+			if (el) {
+				tools.setOnClick(el, () => __pulseChannel(channel));
+			}
 		}
 
 		self.setState(__state);
 	};
 
-	var __createItem = function(item, switches, buttons) {
+	var __createItem = function(item) {
 		if (item.type === "label") {
 			return item.text;
 		} else if (item.type === "input") {
@@ -116,7 +118,6 @@ export function Gpio() {
 		} else if (item.type === "output") {
 			let controls = [];
 			if (item.scheme["switch"]) {
-				switches.push(item.channel);
 				controls.push(`
 					<td><div class="switch-box">
 						<input disabled type="checkbox" id="gpio-switch-${item.channel}" class="gpio-switch" />
@@ -128,7 +129,6 @@ export function Gpio() {
 				`);
 			}
 			if (item.scheme.pulse.delay) {
-				buttons.push(item.channel);
 				controls.push(`<td><button disabled id="gpio-button-${item.channel}" class="gpio-button">${item.text}</button></td>`);
 			}
 			return `<table><tr>${controls.join("<td>&nbsp;&nbsp;&nbsp;</td>")}</tr></table>`;
