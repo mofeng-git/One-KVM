@@ -23,7 +23,7 @@
 
 set -x
 
-# udevadm info -a -p  $(udevadm info -q path -n /dev/video0)
+# udevadm info -a -p $(udevadm info -q path -n /dev/video0)
 
 board="$1"
 port="$2"
