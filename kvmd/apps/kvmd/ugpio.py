@@ -21,7 +21,6 @@
 
 
 import asyncio
-import operator
 
 from typing import List
 from typing import Dict
@@ -38,6 +37,7 @@ from ...plugins.ugpio import GpioDriverOfflineError
 from ...plugins.ugpio import BaseUserGpioDriver
 from ...plugins.ugpio import get_ugpio_driver_class
 
+from ... import tools
 from ... import aiotools
 
 from ...yamlconf import Section
@@ -242,13 +242,13 @@ class UserGpio:
                 notifier=self.__notifier,
                 **drv_config._unpack(ignore=["instance_name", "notifier", "type"]),
             )
-            for (driver, drv_config) in sorted(config.drivers.items(), key=operator.itemgetter(0))
+            for (driver, drv_config) in tools.sorted_kvs(config.drivers)
         }
 
         self.__inputs: Dict[str, _GpioInput] = {}
         self.__outputs: Dict[str, _GpioOutput] = {}
 
-        for (channel, ch_config) in sorted(config.scheme.items(), key=operator.itemgetter(0)):
+        for (channel, ch_config) in tools.sorted_kvs(config.scheme):
             driver = self.__drivers[ch_config.driver]
             if ch_config.mode == "input":
                 self.__inputs[channel] = _GpioInput(channel, ch_config, driver)
@@ -281,14 +281,14 @@ class UserGpio:
 
     def sysprep(self) -> None:
         get_logger().info("Preparing User-GPIO drivers ...")
-        for (_, driver) in sorted(self.__drivers.items(), key=operator.itemgetter(0)):
+        for (_, driver) in tools.sorted_kvs(self.__drivers):
             driver.prepare()
 
     async def systask(self) -> None:
         get_logger(0).info("Running User-GPIO drivers ...")
         await asyncio.gather(*[
             driver.run()
-            for (_, driver) in sorted(self.__drivers.items(), key=operator.itemgetter(0))
+            for (_, driver) in tools.sorted_kvs(self.__drivers)
         ])
 
     async def cleanup(self) -> None:

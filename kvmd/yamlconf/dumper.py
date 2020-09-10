@@ -21,12 +21,13 @@
 
 
 import textwrap
-import operator
 
 from typing import Generator
 from typing import Any
 
 import yaml
+
+from .. import tools
 
 from . import Section
 
@@ -37,7 +38,7 @@ def make_config_dump(config: Section, indent: int=4) -> str:
 
 
 def _inner_make_dump(config: Section, indent: int, _level: int=0) -> Generator[str, None, None]:
-    for (key, value) in sorted(config.items(), key=operator.itemgetter(0)):
+    for (key, value) in tools.sorted_kvs(config):
         if isinstance(value, Section):
             prefix = " " * indent * _level
             yield f"{prefix}{key}:"

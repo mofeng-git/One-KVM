@@ -20,10 +20,14 @@
 # ========================================================================== #
 
 
+import operator
 import functools
 
+from typing import Tuple
+from typing import List
 from typing import Dict
 from typing import Hashable
+from typing import TypeVar
 
 
 # =====
@@ -41,3 +45,11 @@ def rget(dct: Dict, *keys: Hashable) -> Dict:
     if not isinstance(result, dict):
         raise TypeError(f"Not a dict as result: {result!r} from {dct!r} at {list(keys)}")
     return result
+
+
+_DictKeyT = TypeVar("_DictKeyT")
+_DictValueT = TypeVar("_DictValueT")
+
+
+def sorted_kvs(dct: Dict[_DictKeyT, _DictValueT]) -> List[Tuple[_DictKeyT, _DictValueT]]:
+    return sorted(dct.items(), key=operator.itemgetter(0))

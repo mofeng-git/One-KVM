@@ -24,7 +24,6 @@ import signal
 import asyncio
 import asyncio.subprocess
 import dataclasses
-import operator
 
 from typing import Tuple
 from typing import List
@@ -37,6 +36,7 @@ import aiohttp
 
 from ...logging import get_logger
 
+from ... import tools
 from ... import aiotools
 from ... import aioproc
 from ... import htclient
@@ -315,7 +315,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                             mtime=float(response.headers["X-Timestamp"]),
                             headers=tuple(
                                 (key, value)
-                                for (key, value) in sorted(response.headers.items(), key=operator.itemgetter(0))
+                                for (key, value) in tools.sorted_kvs(response.headers)
                                 if key.lower().startswith("x-ustreamer-") or key.lower() in [
                                     "x-timestamp",
                                     "access-control-allow-origin",

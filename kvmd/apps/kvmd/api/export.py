@@ -21,13 +21,14 @@
 
 
 import asyncio
-import operator
 
 from typing import Any
 from typing import List
 
 from aiohttp.web import Request
 from aiohttp.web import Response
+
+from .... import tools
 
 from ....plugins.atx import BaseAtx
 
@@ -78,6 +79,6 @@ class ExportApi:
                 "",
             ])
         elif isinstance(value, dict):
-            for (sub_key, sub_value) in sorted(value.items(), key=operator.itemgetter(0)):
+            for (sub_key, sub_value) in tools.sorted_kvs(value):
                 sub_path = (f"{path}_{sub_key}" if sub_key != "parsed_flags" else path)
                 self.__append_prometheus_rows(rows, sub_value, sub_path)
