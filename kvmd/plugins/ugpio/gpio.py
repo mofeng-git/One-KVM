@@ -29,7 +29,6 @@ from ... import gpio
 
 from ...yamlconf import Option
 
-from ...validators.basic import valid_bool
 from ...validators.basic import valid_float_f01
 
 from . import BaseUserGpioDriver
@@ -42,13 +41,11 @@ class Plugin(BaseUserGpioDriver):
         instance_name: str,
         notifier: aiotools.AioNotifier,
 
-        edge_detection: bool,
         state_poll: float,
     ) -> None:
 
         super().__init__(instance_name, notifier)
 
-        self.__edge_detection = edge_detection
         self.__state_poll = state_poll
 
         self.__input_pins: Set[int] = set()
@@ -59,8 +56,7 @@ class Plugin(BaseUserGpioDriver):
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "edge_detection": Option(False, type=valid_bool),
-            "state_poll":     Option(0.1, type=valid_float_f01),
+            "state_poll": Option(0.1, type=valid_float_f01),
         }
 
     def register_input(self, pin: int) -> None:
@@ -79,7 +75,7 @@ class Plugin(BaseUserGpioDriver):
                     for (pin, initial) in self.__output_pins.items()
                 ],
             ]),
-            edge_detection=self.__edge_detection,
+            edge_detection=False,
             interval=self.__state_poll,
             notifier=self._notifier,
         )
