@@ -86,8 +86,8 @@ kvmd:
                 - []
                 - ["#HID Relays /dev/hidraw0"]
                 - []
-                - ["#Relay #1:", relay1]
-                - ["#Relay #2:", relay2]
+                - ["#Relay #1:", "relay1,Boop 0.1"]
+                - ["#Relay #2:", "relay2,Boop 2.0"]
 
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
