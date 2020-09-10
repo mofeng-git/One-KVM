@@ -45,20 +45,20 @@ kvmd:
 
         scheme:
             led1:
-                pin: 0
+                pin: 19
                 mode: input
 
             led2:
-                pin: 1
+                pin: 16
                 mode: input
 
             button1:
-                pin: 10
+                pin: 26
                 mode: output
                 switch: false
 
             button2:
-                pin: 11
+                pin: 20
                 mode: output
                 switch: false
 
@@ -78,6 +78,8 @@ kvmd:
                     max_delay: 5
 
         view:
+            header:
+                title: Switches
             table:
                 - ["#Generic GPIO leds"]
                 - []
