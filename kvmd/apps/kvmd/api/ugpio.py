@@ -52,8 +52,9 @@ class UserGpioApi:
     async def __switch_handler(self, request: Request) -> Response:
         channel = valid_ugpio_channel(request.query.get("channel"))
         state = valid_bool(request.query.get("state"))
-        done = await self.__user_gpio.switch(channel, state)
-        return make_json_response({"done": done})
+        wait = valid_bool(request.query.get("wait", "0"))
+        await self.__user_gpio.switch(channel, state, wait)
+        return make_json_response()
 
     @exposed_http("POST", "/gpio/pulse")
     async def __pulse_handler(self, request: Request) -> Response:
