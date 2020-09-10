@@ -57,7 +57,6 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         click_delay: float,
         long_click_delay: float,
 
-        edge_detection: bool,
         state_poll: float,
     ) -> None:
 
@@ -77,7 +76,6 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
 
         self.__reader = gpio.BatchReader(
             pins=set([self.__power_led_pin, self.__hdd_led_pin]),
-            edge_detection=edge_detection,
             interval=state_poll,
             notifier=self.__notifier,
         )
@@ -95,7 +93,6 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
             "click_delay":      Option(0.1, type=valid_float_f01),
             "long_click_delay": Option(5.5, type=valid_float_f01),
 
-            "edge_detection": Option(False, type=valid_bool),
             "state_poll":     Option(0.1,   type=valid_float_f01),
         }
 

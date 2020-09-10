@@ -97,9 +97,6 @@ class AioNotifier:
     async def notify(self) -> None:
         await self.__queue.put(None)
 
-    def notify_sync(self) -> None:
-        self.__queue.put_nowait(None)
-
     async def wait(self) -> None:
         await self.__queue.get()
         while not self.__queue.empty():

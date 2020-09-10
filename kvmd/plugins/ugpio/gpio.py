@@ -75,7 +75,6 @@ class Plugin(BaseUserGpioDriver):
                     for (pin, initial) in self.__output_pins.items()
                 ],
             ]),
-            edge_detection=False,
             interval=self.__state_poll,
             notifier=self._notifier,
         )
