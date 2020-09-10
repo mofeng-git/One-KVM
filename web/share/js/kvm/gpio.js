@@ -109,7 +109,10 @@ export function Gpio() {
 		if (item.type === "label") {
 			return item.text;
 		} else if (item.type === "input") {
-			return `<img id="gpio-led-${item.channel}" class="gpio-led inline-lamp-big led-gray" src="/share/svg/led-circle.svg" />`;
+			return `
+				<img id="gpio-led-${item.channel}" class="gpio-led inline-lamp-big led-gray"
+				src="/share/svg/led-circle.svg" data-color="${item.color}" />
+			`;
 		} else if (item.type === "output") {
 			let controls = [];
 			if (item.scheme["switch"]) {
@@ -135,12 +138,13 @@ export function Gpio() {
 	};
 
 	var __setLedState = function(el, state) {
+		let color = el.getAttribute("data-color");
 		if (state) {
-			el.classList.add("led-green");
+			el.classList.add(`led-${color}`);
 			el.classList.remove("led-gray");
 		} else {
 			el.classList.add("led-gray");
-			el.classList.remove("led-green");
+			el.classList.remove(`led-${color}`);
 		}
 	};
 
