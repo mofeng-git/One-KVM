@@ -328,7 +328,7 @@ class UserGpio:
                         "text": item[1:].strip(),
                     })
                 else:
-                    parts = list(map(str.strip, item.split(",", 1)))
+                    parts = list(map(str.strip, item.split("|", 1)))
                     if parts:
                         if parts[0] in self.__inputs:
                             items.append({
