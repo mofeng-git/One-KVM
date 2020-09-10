@@ -54,12 +54,8 @@ class Plugin(BaseAtx):
 
     # =====
 
-    async def __stub_power(self, wait: bool) -> bool:
+    async def __stub(self, wait: bool) -> None:
         raise AtxDisabledError()
 
-    power_on = power_off = power_off_hard = power_reset_hard = __stub_power
-
-    async def __stub_click(self, wait: bool) -> None:
-        raise AtxDisabledError()
-
-    click_power = click_power_long = click_reset = __stub_click
+    power_on = power_off = power_off_hard = power_reset_hard = __stub
+    click_power = click_power_long = click_reset = __stub

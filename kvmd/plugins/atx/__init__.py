@@ -59,16 +59,16 @@ class BaseAtx(BasePlugin):
 
     # =====
 
-    async def power_on(self, wait: bool) -> bool:
+    async def power_on(self, wait: bool) -> None:
         raise NotImplementedError
 
-    async def power_off(self, wait: bool) -> bool:
+    async def power_off(self, wait: bool) -> None:
         raise NotImplementedError
 
-    async def power_off_hard(self, wait: bool) -> bool:
+    async def power_off_hard(self, wait: bool) -> None:
         raise NotImplementedError
 
-    async def power_reset_hard(self, wait: bool) -> bool:
+    async def power_reset_hard(self, wait: bool) -> None:
         raise NotImplementedError
 
     # =====

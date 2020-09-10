@@ -49,13 +49,13 @@ class AtxApi:
     async def __power_handler(self, request: Request) -> Response:
         action = valid_atx_power_action(request.query.get("action"))
         wait = valid_bool(request.query.get("wait", "0"))
-        processing = await ({
+        await ({
             "on": self.__atx.power_on,
             "off": self.__atx.power_off,
             "off_hard": self.__atx.power_off_hard,
             "reset_hard": self.__atx.power_reset_hard,
         }[action])(wait)
-        return make_json_response({"processing": processing})
+        return make_json_response()
 
     @exposed_http("POST", "/atx/click")
     async def __click_handler(self, request: Request) -> Response:

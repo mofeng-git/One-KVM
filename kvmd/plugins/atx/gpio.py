@@ -130,29 +130,21 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    async def power_on(self, wait: bool) -> bool:
+    async def power_on(self, wait: bool) -> None:
         if not (await self.__get_power()):
             await self.click_power(wait)
-            return True
-        return False
 
-    async def power_off(self, wait: bool) -> bool:
+    async def power_off(self, wait: bool) -> None:
         if (await self.__get_power()):
             await self.click_power(wait)
-            return True
-        return False
 
-    async def power_off_hard(self, wait: bool) -> bool:
+    async def power_off_hard(self, wait: bool) -> None:
         if (await self.__get_power()):
             await self.click_power_long(wait)
-            return True
-        return False
 
-    async def power_reset_hard(self, wait: bool) -> bool:
+    async def power_reset_hard(self, wait: bool) -> None:
         if (await self.__get_power()):
             await self.click_reset(wait)
-            return True
-        return False
 
     # =====
 
