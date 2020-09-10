@@ -259,7 +259,7 @@ def _get_config_scheme() -> Dict:
                 "unix_rm":           Option(True,  type=valid_bool),
                 "unix_mode":         Option(0o660, type=valid_unix_mode),
                 "heartbeat":         Option(3.0,   type=valid_float_f01),
-                "sync_chunk_size":   Option(65536, type=(lambda arg: valid_number(arg, min=1024))),
+                "sync_chunk_size":   Option(65536, type=functools.partial(valid_number, min=1024)),
                 "access_log_format": Option("[%P / %{X-Real-IP}i] '%r' => %s; size=%b ---"
                                             " referer='%{Referer}i'; user_agent='%{User-Agent}i'"),
             },
@@ -284,14 +284,14 @@ def _get_config_scheme() -> Dict:
                 "extras": Option("/usr/share/kvmd/extras", type=valid_abs_dir),
                 "hw": {
                     "vcgencmd_cmd":  Option(["/opt/vc/bin/vcgencmd"], type=valid_command),
-                    "procfs_prefix": Option("", type=(lambda arg: str(arg).strip())),
-                    "sysfs_prefix":  Option("", type=(lambda arg: str(arg).strip())),
+                    "procfs_prefix": Option("", type=tools.str_strip),
+                    "sysfs_prefix":  Option("", type=tools.str_strip),
                     "state_poll":    Option(10.0,  type=valid_float_f01),
                 },
             },
 
             "wol": {
-                "ip":   Option("255.255.255.255", type=(lambda arg: valid_ip(arg, v6=False))),
+                "ip":   Option("255.255.255.255", type=functools.partial(valid_ip, v6=False)),
                 "port": Option(9, type=valid_port),
                 "mac":  Option("", type=(lambda arg: (valid_mac(arg) if arg else ""))),
             },
@@ -326,7 +326,7 @@ def _get_config_scheme() -> Dict:
                 "desired_fps": Option(30, type=valid_stream_fps),
                 "max_fps":     Option(60, type=valid_stream_fps),
                 "resolution":  Option("", type=(lambda arg: (valid_stream_resolution(arg) if arg else ""))),
-                "available_resolutions": Option([], type=(lambda arg: valid_string_list(arg, subval=valid_stream_resolution))),
+                "available_resolutions": Option([], type=functools.partial(valid_string_list, subval=valid_stream_resolution)),
 
                 "host":    Option("localhost", type=valid_ip_or_host),
                 "port":    Option(0,   type=valid_port),
@@ -433,9 +433,9 @@ def _get_config_scheme() -> Dict:
                 "no_delay": Option(True, type=valid_bool),
                 "keepalive": {
                     "enabled":  Option(True, type=valid_bool, unpack_as="keepalive_enabled"),
-                    "idle":     Option(10, type=(lambda arg: valid_number(arg, min=1, max=3600)), unpack_as="keepalive_idle"),
-                    "interval": Option(3, type=(lambda arg: valid_number(arg, min=1, max=60)), unpack_as="keepalive_interval"),
-                    "count":    Option(3, type=(lambda arg: valid_number(arg, min=1, max=10)), unpack_as="keepalive_count"),
+                    "idle":     Option(10, type=functools.partial(valid_number, min=1, max=3600), unpack_as="keepalive_idle"),
+                    "interval": Option(3, type=functools.partial(valid_number, min=1, max=60), unpack_as="keepalive_interval"),
+                    "count":    Option(3, type=functools.partial(valid_number, min=1, max=10), unpack_as="keepalive_count"),
                 },
 
                 "tls": {

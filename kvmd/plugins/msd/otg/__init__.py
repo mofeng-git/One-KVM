@@ -44,6 +44,7 @@ from ....yamlconf import Option
 from ....validators.os import valid_abs_dir
 from ....validators.os import valid_command
 
+from .... import tools
 from .... import aiotools
 from .... import aiofs
 
@@ -169,7 +170,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "storage":      Option("/var/lib/kvmd/msd", type=valid_abs_dir, unpack_as="storage_path"),
             "remount_cmd":  Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-remount", "{mode}"], type=valid_command),
             "unlock_cmd":   Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-unlock", "unlock"],  type=valid_command),
-            "sysfs_prefix": Option("", type=(lambda arg: str(arg).strip())),
+            "sysfs_prefix": Option("", type=tools.str_strip),
         }
 
     async def get_state(self) -> Dict:

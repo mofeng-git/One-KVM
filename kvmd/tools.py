@@ -28,6 +28,12 @@ from typing import List
 from typing import Dict
 from typing import Hashable
 from typing import TypeVar
+from typing import Any
+
+
+# =====
+def str_strip(arg: Any) -> str:
+    return str(arg).strip()
 
 
 # =====
