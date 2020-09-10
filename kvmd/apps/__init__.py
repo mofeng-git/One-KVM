@@ -221,7 +221,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
                 "inverted": Option(False, type=valid_bool),
                 **({
                     "busy_delay": Option(0.2, type=valid_float_f01),
-                    "initial":    Option(False, type=(lambda arg: (None if arg is None else valid_bool(arg)))),
+                    "initial":    Option(False, type=(lambda arg: (valid_bool(arg) if arg is not None else None))),
                     "switch":     Option(True, type=valid_bool),
                     "pulse": {  # type: ignore
                         "delay":     Option(0.1, type=valid_float_f0),
