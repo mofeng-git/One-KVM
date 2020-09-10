@@ -34,6 +34,7 @@ from ...logging import get_logger
 from ...plugins.ugpio import GpioError
 from ...plugins.ugpio import GpioOperationError
 from ...plugins.ugpio import GpioDriverOfflineError
+from ...plugins.ugpio import UserGpioModes
 from ...plugins.ugpio import BaseUserGpioDriver
 from ...plugins.ugpio import get_ugpio_driver_class
 
@@ -250,7 +251,7 @@ class UserGpio:
 
         for (channel, ch_config) in tools.sorted_kvs(config.scheme):
             driver = self.__drivers[ch_config.driver]
-            if ch_config.mode == "input":
+            if ch_config.mode == UserGpioModes.INPUT:
                 self.__inputs[channel] = _GpioInput(channel, ch_config, driver)
             else:  # output:
                 self.__outputs[channel] = _GpioOutput(channel, ch_config, driver, self.__notifier)
@@ -331,12 +332,12 @@ class UserGpio:
                     if parts:
                         if parts[0] in self.__inputs:
                             items.append({
-                                "type": "input",
+                                "type": UserGpioModes.INPUT,
                                 "channel": parts[0],
                             })
                         elif parts[0] in self.__outputs:
                             items.append({
-                                "type": "output",
+                                "type": UserGpioModes.OUTPUT,
                                 "channel": parts[0],
                                 "text": (parts[1] if len(parts) > 1 else "Click"),
                             })

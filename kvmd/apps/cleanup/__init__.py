@@ -60,12 +60,6 @@ def _clear_gpio(config: Section) -> None:
 
             ("streamer/cap", config.streamer.cap_pin),
             ("streamer/conv", config.streamer.conv_pin),
-
-            # *([
-            #     (f"gpio/{channel}", params.pin)
-            #     for (channel, params) in config.gpio.scheme.items()
-            #     if params.mode == "output"
-            # ]),
         ]:
             if pin >= 0:
                 logger.info("Writing 0 to GPIO pin=%d (%s)", pin, name)

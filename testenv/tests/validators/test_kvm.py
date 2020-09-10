@@ -44,6 +44,8 @@ from kvmd.validators.kvm import valid_ugpio_channel
 from kvmd.validators.kvm import valid_ugpio_mode
 from kvmd.validators.kvm import valid_ugpio_view_table
 
+from kvmd.plugins.ugpio import UserGpioModes
+
 
 # =====
 @pytest.mark.parametrize("arg", ["ON ", "OFF ", "OFF_HARD ", "RESET_HARD "])
@@ -254,13 +256,13 @@ def test_fail__valid_ugpio_driver_variants(arg: Any) -> None:
 # =====
 @pytest.mark.parametrize("arg", ["Input ", " OUTPUT "])
 def test_ok__valid_ugpio_mode(arg: Any) -> None:
-    assert valid_ugpio_mode(arg) == arg.strip().lower()
+    assert valid_ugpio_mode(arg, UserGpioModes.ALL) == arg.strip().lower()
 
 
 @pytest.mark.parametrize("arg", ["test", "", None])
 def test_fail__valid_ugpio_mode(arg: Any) -> None:
     with pytest.raises(ValidatorError):
-        print(valid_ugpio_mode(arg))
+        print(valid_ugpio_mode(arg, UserGpioModes.ALL))
 
 
 # =====

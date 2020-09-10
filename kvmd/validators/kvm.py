@@ -116,8 +116,8 @@ def valid_ugpio_channel(arg: Any) -> str:
     return check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_-]*$"), name, 255)
 
 
-def valid_ugpio_mode(arg: Any) -> str:
-    return check_string_in_list(arg, "GPIO mode", ["input", "output"])
+def valid_ugpio_mode(arg: Any, variants: Set[str]) -> str:
+    return check_string_in_list(arg, "GPIO driver's pin mode", variants)
 
 
 def valid_ugpio_view_table(arg: Any) -> List[List[str]]:

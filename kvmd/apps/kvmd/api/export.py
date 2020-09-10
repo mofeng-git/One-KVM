@@ -32,6 +32,8 @@ from .... import tools
 
 from ....plugins.atx import BaseAtx
 
+from ....plugins.ugpio import UserGpioModes
+
 from ..info import InfoManager
 from ..ugpio import UserGpio
 
@@ -59,7 +61,7 @@ class ExportApi:
         self.__append_prometheus_rows(rows, atx_state["enabled"], "pikvm_atx_enabled")
         self.__append_prometheus_rows(rows, atx_state["leds"]["power"], "pikvm_atx_power")
 
-        for mode in ["input", "output"]:
+        for mode in sorted(UserGpioModes.ALL):
             for (channel, ch_state) in gpio_state[f"{mode}s"].items():
                 for key in ["online", "state"]:
                     self.__append_prometheus_rows(rows, ch_state["state"], f"pikvm_gpio_{mode}_{key}_{channel}")

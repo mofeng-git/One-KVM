@@ -24,6 +24,7 @@ import asyncio
 import contextlib
 
 from typing import Dict
+from typing import Set
 from typing import Optional
 
 import hid
@@ -39,6 +40,7 @@ from ...validators.basic import valid_float_f01
 from ...validators.os import valid_abs_path
 
 from . import GpioDriverOfflineError
+from . import UserGpioModes
 from . import BaseUserGpioDriver
 
 
@@ -73,8 +75,12 @@ class Plugin(BaseUserGpioDriver):
             "state_poll": Option(5.0, type=valid_float_f01),
         }
 
+    @classmethod
+    def get_modes(cls) -> Set[str]:
+        return set([UserGpioModes.OUTPUT])
+
     def register_input(self, pin: int) -> None:
-        _ = pin
+        raise RuntimeError(f"Unsupported mode 'input' for pin={pin} on {self}")
 
     def register_output(self, pin: int, initial: Optional[bool]) -> None:
         self.__initials[pin] = initial
@@ -153,7 +159,7 @@ class Plugin(BaseUserGpioDriver):
     def __check_pin(self, pin: int) -> bool:
         ok = (0 <= pin <= 7)
         if not ok:
-            get_logger(0).warning("Unsupported pin for %s on %s: %d", self, self.__device_path, pin)
+            get_logger(0).warning("Unsupported pin=%d for %s on %s", pin, self, self.__device_path)
         return ok
 
     @contextlib.contextmanager

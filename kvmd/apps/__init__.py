@@ -22,6 +22,7 @@
 
 import sys
 import os
+import functools
 import argparse
 import logging
 import logging.config
@@ -43,6 +44,8 @@ from ..plugins.auth import get_auth_service_class
 from ..plugins.hid import get_hid_class
 from ..plugins.atx import get_atx_class
 from ..plugins.msd import get_msd_class
+
+from ..plugins.ugpio import UserGpioModes
 from ..plugins.ugpio import get_ugpio_driver_class
 
 from ..yamlconf import ConfigError
@@ -181,29 +184,40 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
             rebuild = True
 
     if load_gpio:
-        drivers: Set[str] = set()
+        driver: str
+        drivers: Dict[str, Set[str]] = {}  # Name to modes
         for (driver, params) in {  # type: ignore
             "__gpio__": {},
             **tools.rget(raw_config, "kvmd", "gpio", "drivers"),
         }.items():
             with manual_validated(driver, "kvmd", "gpio", "drivers", "<key>"):
                 driver = valid_ugpio_driver(driver)
+
             driver_type = valid_stripped_string_not_empty(params.get("type", "gpio"))
+            driver_class = get_ugpio_driver_class(driver_type)
+            drivers[driver] = driver_class.get_modes()
             scheme["kvmd"]["gpio"]["drivers"][driver] = {
                 "type": Option(driver_type, type=valid_stripped_string_not_empty),
-                **get_ugpio_driver_class(driver_type).get_plugin_options()
+                **driver_class.get_plugin_options()
             }
-            drivers.add(driver)
 
-        for (channel, params) in tools.rget(raw_config, "kvmd", "gpio", "scheme").items():
-            with manual_validated(channel, "kvmd", "gpio", "scheme", "<key>"):
+        path = ("kvmd", "gpio", "scheme")
+        for (channel, params) in tools.rget(raw_config, *path).items():
+            with manual_validated(channel, *path, "<key>"):
                 channel = valid_ugpio_channel(channel)
-            with manual_validated(params.get("mode", ""), "kvmd", "gpio", "scheme", channel, "mode"):
-                mode = valid_ugpio_mode(params.get("mode", ""))
+
+            driver = params.get("driver", "__gpio__")
+            with manual_validated(driver, *path, channel, "driver"):
+                driver = valid_ugpio_driver(driver, set(drivers))
+
+            mode: str = params.get("mode", "")
+            with manual_validated(mode, *path, channel, "mode"):
+                mode = valid_ugpio_mode(mode, drivers[driver])
+
             scheme["kvmd"]["gpio"]["scheme"][channel] = {
-                "driver":   Option("__gpio__", type=(lambda arg: valid_ugpio_driver(arg, drivers))),
+                "driver":   Option("__gpio__", type=functools.partial(valid_ugpio_driver, variants=set(drivers))),
                 "pin":      Option(-1, type=valid_gpio_pin),
-                "mode":     Option("", type=valid_ugpio_mode),
+                "mode":     Option("", type=functools.partial(valid_ugpio_mode, variants=drivers[driver])),
                 "inverted": Option(False, type=valid_bool),
                 **({
                     "busy_delay": Option(0.2, type=valid_float_f01),
@@ -214,7 +228,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
                         "min_delay": Option(0.1, type=valid_float_f01),
                         "max_delay": Option(0.1, type=valid_float_f01),
                     },
-                } if mode == "output" else {})
+                } if mode == UserGpioModes.OUTPUT else {})
             }
 
         rebuild = True

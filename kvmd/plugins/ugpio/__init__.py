@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+from typing import Set
 from typing import Type
 from typing import Optional
 from typing import Any
@@ -47,6 +48,14 @@ class GpioDriverOfflineError(GpioOperationError):
 
 
 # =====
+class UserGpioModes:
+    INPUT = "input"
+    OUTPUT = "output"
+
+    ALL = set([INPUT, OUTPUT])
+
+
+# =====
 class BaseUserGpioDriver(BasePlugin):
     def __init__(  # pylint: disable=super-init-not-called
         self,
@@ -60,6 +69,10 @@ class BaseUserGpioDriver(BasePlugin):
 
     def get_instance_id(self) -> str:
         return self._instance_name
+
+    @classmethod
+    def get_modes(cls) -> Set[str]:
+        return set(UserGpioModes.ALL)
 
     def register_input(self, pin: int) -> None:
         raise NotImplementedError
