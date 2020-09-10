@@ -99,8 +99,7 @@ export function Gpio() {
 			tools.setOnClick($(`gpio-switch-${channel}`), () => __switchChannel(channel));
 		}
 		for (let channel of buttons) {
-			let wait = (model.scheme.outputs[channel].pulse.delay <= 1);
-			tools.setOnClick($(`gpio-button-${channel}`), () => __pulseChannel(channel, wait));
+			tools.setOnClick($(`gpio-button-${channel}`), () => __pulseChannel(channel));
 		}
 
 		self.setState(__state);
@@ -150,8 +149,8 @@ export function Gpio() {
 		__sendPost(`/api/gpio/switch?channel=${channel}&state=${to}`);
 	};
 
-	var __pulseChannel = function(channel, wait) {
-		__sendPost(`/api/gpio/pulse?channel=${channel}&wait=${wait ? "1" : "0"}`);
+	var __pulseChannel = function(channel) {
+		__sendPost(`/api/gpio/pulse?channel=${channel}`);
 	};
 
 	var __sendPost = function(url) {
