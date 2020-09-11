@@ -222,7 +222,11 @@ export function Recorder() {
 			}
 			index += 1;
 		}
-		__stopProcess();
+		if ($("hid-recorder-loop-checkbox").checked) {
+			setTimeout(() => __runEvents(0));
+		} else {
+			__stopProcess();
+		}
 	};
 
 	var __refresh = function() {
@@ -241,6 +245,8 @@ export function Recorder() {
 		wm.switchEnabled($("hid-recorder-stop"), (__ws && (__play_timer || __recording)));
 		wm.switchEnabled($("hid-recorder-play"), (__ws && !__recording && __events.length));
 		wm.switchEnabled($("hid-recorder-clear"), (!__play_timer && !__recording && __events.length));
+		wm.switchEnabled($("hid-recorder-loop-checkbox"), (__ws && !__recording));
+
 		wm.switchEnabled($("hid-recorder-upload"), (!__play_timer && !__recording));
 		wm.switchEnabled($("hid-recorder-download"), (!__play_timer && !__recording && __events.length));
 
