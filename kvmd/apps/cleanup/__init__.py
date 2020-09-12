@@ -45,10 +45,6 @@ def _clear_gpio(config: Section) -> None:
     with gpio.bcm():
         for (name, pin) in [
             *([
-                ("hid_serial/reset", config.hid.reset_pin),
-            ] if config.hid.type == "serial" else []),
-
-            *([
                 ("atx_gpio/power_switch", config.atx.power_switch_pin),
                 ("atx_gpio/reset_switch", config.atx.reset_switch_pin),
             ] if config.atx.type == "gpio" else []),
