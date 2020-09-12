@@ -51,6 +51,7 @@ depends=(
 	python-pillow
 	python-xlib
 	python-hidapi
+	libgpiod
 	freetype2
 	v4l-utils
 	nginx-mainline
