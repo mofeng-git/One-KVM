@@ -48,11 +48,6 @@ def _clear_gpio(config: Section) -> None:
                 ("atx_gpio/power_switch", config.atx.power_switch_pin),
                 ("atx_gpio/reset_switch", config.atx.reset_switch_pin),
             ] if config.atx.type == "gpio" else []),
-
-            *([
-                ("msd_relay/target", config.msd.target_pin),
-                ("msd_relay/reset", config.msd.reset_pin),
-            ] if config.msd.type == "relay" else []),
         ]:
             if pin >= 0:
                 logger.info("Writing 0 to GPIO pin=%d (%s)", pin, name)
