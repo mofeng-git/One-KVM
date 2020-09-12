@@ -92,7 +92,6 @@ from ..validators.kvm import valid_ugpio_mode
 from ..validators.kvm import valid_ugpio_view_table
 
 from ..validators.hw import valid_gpio_pin
-from ..validators.hw import valid_gpio_pin_optional
 from ..validators.hw import valid_otg_gadget
 from ..validators.hw import valid_otg_id
 
@@ -313,14 +312,9 @@ def _get_config_scheme() -> Dict:
             },
 
             "streamer": {
-                "cap_pin":  Option(-1, type=valid_gpio_pin_optional),
-                "conv_pin": Option(-1, type=valid_gpio_pin_optional),
-
-                "sync_delay":         Option(0.0,  type=valid_float_f0),
-                "init_delay":         Option(1.0,  type=valid_float_f0),
-                "init_restart_after": Option(0.0,  type=valid_float_f0),
-                "shutdown_delay":     Option(10.0, type=valid_float_f01),
-                "state_poll":         Option(1.0,  type=valid_float_f01),
+                "reset_delay":    Option(1.0,  type=valid_float_f0),
+                "shutdown_delay": Option(10.0, type=valid_float_f01),
+                "state_poll":     Option(1.0,  type=valid_float_f01),
 
                 "quality":     Option(80, type=(lambda arg: (valid_stream_quality(arg) if arg else 0))),  # 0 for disabled feature
                 "desired_fps": Option(30, type=valid_stream_fps),

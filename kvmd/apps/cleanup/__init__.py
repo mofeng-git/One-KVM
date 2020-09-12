@@ -57,9 +57,6 @@ def _clear_gpio(config: Section) -> None:
                 ("msd_relay/target", config.msd.target_pin),
                 ("msd_relay/reset", config.msd.reset_pin),
             ] if config.msd.type == "relay" else []),
-
-            ("streamer/cap", config.streamer.cap_pin),
-            ("streamer/conv", config.streamer.conv_pin),
         ]:
             if pin >= 0:
                 logger.info("Writing 0 to GPIO pin=%d (%s)", pin, name)

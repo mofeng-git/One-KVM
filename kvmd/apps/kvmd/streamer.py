@@ -40,7 +40,6 @@ from ... import tools
 from ... import aiotools
 from ... import aioproc
 from ... import htclient
-from ... import gpio
 
 
 # =====
@@ -120,12 +119,8 @@ class _StreamerParams:
 class Streamer:  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
-        cap_pin: int,
-        conv_pin: int,
 
-        sync_delay: float,
-        init_delay: float,
-        init_restart_after: float,
+        reset_delay: float,
         shutdown_delay: float,
         state_poll: float,
 
@@ -141,12 +136,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         **params_kwargs: Any,
     ) -> None:
 
-        self.__cap_pin = (gpio.set_output(cap_pin, False) if cap_pin >= 0 else -1)
-        self.__conv_pin = (gpio.set_output(conv_pin, False) if conv_pin >= 0 else -1)
-
-        self.__sync_delay = sync_delay
-        self.__init_delay = init_delay
-        self.__init_restart_after = init_restart_after
+        self.__reset_delay = reset_delay
         self.__shutdown_delay = shutdown_delay
         self.__state_poll = state_poll
 
@@ -177,7 +167,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     # =====
 
     @aiotools.atomic
-    async def ensure_start(self, init_restart: bool) -> None:
+    async def ensure_start(self, reset: bool) -> None:
         if not self.__streamer_task or self.__stop_task:
             logger = get_logger(0)
 
@@ -190,14 +180,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 else:
                     await asyncio.gather(self.__stop_task, return_exceptions=True)
 
+            if reset and self.__reset_delay > 0:
+                logger.info("Waiting %.2f seconds for reset delay ...", self.__reset_delay)
+                await asyncio.sleep(self.__reset_delay)
             logger.info("Starting streamer ...")
             await self.__inner_start()
-            if self.__init_restart_after > 0.0 and init_restart:
-                await asyncio.sleep(self.__init_restart_after)
-                logger.info("Stopping streamer to restart ...")
-                await self.__inner_stop()
-                logger.info("Starting again ...")
-                await self.__inner_start()
 
     @aiotools.atomic
     async def ensure_stop(self, immediately: bool) -> None:
@@ -344,13 +331,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def cleanup(self) -> None:
-        try:
-            await self.ensure_stop(immediately=True)
-            if self.__http_session:
-                await self.__http_session.close()
-                self.__http_session = None
-        finally:
-            await self.__set_hw_enabled(False)
+        await self.ensure_stop(immediately=True)
+        if self.__http_session:
+            await self.__http_session.close()
+            self.__http_session = None
 
     # =====
 
@@ -374,7 +358,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     @aiotools.atomic
     async def __inner_start(self) -> None:
         assert not self.__streamer_task
-        await self.__set_hw_enabled(True)
         self.__streamer_task = asyncio.create_task(self.__streamer_task_loop())
 
     @aiotools.atomic
@@ -383,20 +366,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__streamer_task.cancel()
         await asyncio.gather(self.__streamer_task, return_exceptions=True)
         await self.__kill_streamer_proc()
-        await self.__set_hw_enabled(False)
         self.__streamer_task = None
-
-    @aiotools.atomic
-    async def __set_hw_enabled(self, enabled: bool) -> None:
-        # XXX: This sequence is very important to enable converter and cap board
-        if self.__cap_pin >= 0:
-            gpio.write(self.__cap_pin, enabled)
-        if self.__conv_pin >= 0:
-            if enabled:
-                await asyncio.sleep(self.__sync_delay)
-            gpio.write(self.__conv_pin, enabled)
-        if enabled:
-            await asyncio.sleep(self.__init_delay)
 
     # =====
 
