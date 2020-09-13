@@ -23,7 +23,7 @@
 import asyncio
 import threading
 
-from typing import List
+from typing import Dict
 from typing import Optional
 
 import gpiod
@@ -32,23 +32,29 @@ from . import aiotools
 
 
 # =====
+async def pulse(line: gpiod.Line, delay: float, final: float) -> None:
+    try:
+        line.set_value(1)
+        await asyncio.sleep(delay)
+    finally:
+        line.set_value(0)
+        await asyncio.sleep(final)
+
+
 class AioPinsReader(threading.Thread):
     def __init__(
         self,
         path: str,
         consumer: str,
-        pins: List[int],
-        inverted: List[bool],
+        pins: Dict[int, bool],
         notifier: aiotools.AioNotifier,
     ) -> None:
 
-        assert len(pins) == len(inverted)
         super().__init__(daemon=True)
 
         self.__path = path
         self.__consumer = consumer
         self.__pins = pins
-        self.__inverted = dict(zip(pins, inverted))
         self.__notifier = notifier
 
         self.__state = dict.fromkeys(pins, False)
@@ -57,7 +63,7 @@ class AioPinsReader(threading.Thread):
         self.__loop: Optional[asyncio.AbstractEventLoop] = None
 
     def get(self, pin: int) -> bool:
-        return (self.__state[pin] ^ self.__inverted[pin])
+        return (self.__state[pin] ^ self.__pins[pin])
 
     async def poll(self) -> None:
         if not self.__pins:
@@ -75,13 +81,14 @@ class AioPinsReader(threading.Thread):
     def run(self) -> None:
         assert self.__loop
         with gpiod.Chip(self.__path) as chip:
-            lines = chip.get_lines(self.__pins)
+            pins = sorted(self.__pins)
+            lines = chip.get_lines(pins)
             lines.request(self.__consumer, gpiod.LINE_REQ_EV_BOTH_EDGES)
 
             lines.event_wait(nsec=1)
             self.__state = {
                 pin: bool(value)
-                for (pin, value) in zip(self.__pins, lines.get_values())
+                for (pin, value) in zip(pins, lines.get_values())
             }
             self.__loop.call_soon_threadsafe(self.__notifier.notify_sync)
 

@@ -21,7 +21,6 @@
 
 
 import os
-import asyncio
 import multiprocessing
 import multiprocessing.queues
 import dataclasses
@@ -47,6 +46,7 @@ from ...keyboard.mappings import KEYMAP
 from ... import aiotools
 from ... import aiomulti
 from ... import aioproc
+from ... import aiogp
 
 from ...yamlconf import Option
 
@@ -186,16 +186,11 @@ class _Gpio:
         if self.__reset_pin >= 0:
             assert self.__reset_line
             if not self.__reset_wip:
+                self.__reset_wip = True
                 try:
-                    self.__reset_wip = True
-                    self.__reset_line.set_value(1)
-                    await asyncio.sleep(self.__reset_delay)
+                    await aiogp.pulse(self.__reset_line, self.__reset_delay, 1)
                 finally:
-                    try:
-                        self.__reset_line.set_value(0)
-                        await asyncio.sleep(1)
-                    finally:
-                        self.__reset_wip = False
+                    self.__reset_wip = False
                 get_logger(0).info("Reset HID performed")
             else:
                 get_logger(0).info("Another reset HID in progress")

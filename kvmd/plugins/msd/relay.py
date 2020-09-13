@@ -41,6 +41,7 @@ from ...logging import get_logger
 
 from ... import aiotools
 from ... import aiofs
+from ... import aiogp
 
 from ...yamlconf import Option
 
@@ -196,16 +197,9 @@ class _Gpio:
         assert self.__target_line
         self.__target_line.set_value(1)
 
-    @contextlib.asynccontextmanager
-    async def reset(self) -> AsyncGenerator[None, None]:
+    async def reset(self) -> None:
         assert self.__reset_line
-        try:
-            self.__reset_line.set_value(1)
-            await asyncio.sleep(self.__reset_delay)
-            self.__reset_line.set_value(0)
-            yield
-        finally:
-            self.__reset_line.set_value(0)
+        await aiogp.pulse(self.__reset_line, self.__reset_delay, 0)
 
 
 # =====
@@ -302,11 +296,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def __inner_reset(self) -> None:
-        async with self.__gpio.reset():
-            self.__gpio.switch_to_local()
-            self.__connected = False
-            await self.__load_device_info()
-            get_logger(0).info("MSD reset has been successful")
+        await self.__gpio.reset()
+        self.__gpio.switch_to_local()
+        self.__connected = False
+        await self.__load_device_info()
+        get_logger(0).info("MSD reset has been successful")
 
     @aiotools.atomic
     async def cleanup(self) -> None:

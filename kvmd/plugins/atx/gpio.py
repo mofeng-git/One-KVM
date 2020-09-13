@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-import asyncio
-
 from typing import Dict
 from typing import AsyncGenerator
 from typing import Optional
@@ -77,8 +75,10 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__reader = aiogp.AioPinsReader(
             path="/dev/gpiochip0",
             consumer="kvmd/atx-gpio/leds",
-            pins=[power_led_pin, hdd_led_pin],
-            inverted=[power_led_inverted, hdd_led_inverted],
+            pins={
+                power_led_pin: power_led_inverted,
+                hdd_led_pin: hdd_led_inverted,
+            },
             notifier=self.__notifier,
         )
 
@@ -185,10 +185,5 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def __inner_click(self, name: str, line: gpiod.Line, delay: float) -> None:
-        try:
-            line.set_value(1)
-            await asyncio.sleep(delay)
-        finally:
-            line.set_value(0)
-            await asyncio.sleep(1)
+        await aiogp.pulse(line, delay, 1)
         get_logger(0).info("Clicked ATX button %r", name)
