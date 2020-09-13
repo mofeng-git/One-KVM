@@ -33,30 +33,10 @@ from ...logging import get_logger
 
 from ...yamlconf import Section
 
-from ... import gpio
-
 from .. import init
 
 
 # =====
-def _clear_gpio(config: Section) -> None:
-    logger = get_logger(0)
-
-    with gpio.bcm():
-        for (name, pin) in [
-            *([
-                ("atx_gpio/power_switch", config.atx.power_switch_pin),
-                ("atx_gpio/reset_switch", config.atx.reset_switch_pin),
-            ] if config.atx.type == "gpio" else []),
-        ]:
-            if pin >= 0:
-                logger.info("Writing 0 to GPIO pin=%d (%s)", pin, name)
-                try:
-                    gpio.set_output(pin, False)
-                except Exception:
-                    logger.exception("Can't clear GPIO pin=%d (%s)", pin, name)
-
-
 def _kill_streamer(config: Section) -> None:
     logger = get_logger(0)
 
@@ -99,17 +79,12 @@ def main(argv: Optional[List[str]]=None) -> None:
         prog="kvmd-cleanup",
         description="Kill KVMD and clear resources",
         argv=argv,
-        load_hid=True,
-        load_atx=True,
-        load_msd=True,
-        load_gpio=True,
     )[2].kvmd
 
     logger = get_logger(0)
     logger.info("Cleaning up ...")
 
     for method in [
-        _clear_gpio,
         _kill_streamer,
         _remove_sockets,
     ]:
