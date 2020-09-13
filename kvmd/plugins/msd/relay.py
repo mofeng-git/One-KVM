@@ -183,7 +183,10 @@ class _Gpio:
 
     def close(self) -> None:
         if self.__chip:
-            self.__chip.close()
+            try:
+                self.__chip.close()
+            except Exception:
+                pass
 
     def switch_to_local(self) -> None:
         assert self.__target_line

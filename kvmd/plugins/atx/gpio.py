@@ -133,7 +133,10 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
 
     async def cleanup(self) -> None:
         if self.__chip:
-            self.__chip.close()
+            try:
+                self.__chip.close()
+            except Exception:
+                pass
 
     # =====
 
