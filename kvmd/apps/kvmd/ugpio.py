@@ -201,10 +201,9 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def __inner_switch(self, state: bool) -> None:
-        if state != self.__read():
-            self.__write(state)
-            get_logger(0).info("Switched %s to state=%d", self, state)
-            await asyncio.sleep(self.__busy_delay)
+        self.__write(state)
+        get_logger(0).info("Ensured switch %s to state=%d", self, state)
+        await asyncio.sleep(self.__busy_delay)
 
     @aiotools.atomic
     async def __inner_pulse(self, delay: float) -> None:
