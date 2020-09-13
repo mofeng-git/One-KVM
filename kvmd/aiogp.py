@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+import os
 import asyncio
 import threading
 
@@ -29,6 +30,12 @@ from typing import Optional
 import gpiod
 
 from . import aiotools
+
+
+# =====
+# XXX: Do not use this variable for any purpose other than testing.
+# It can be removed at any time.
+DEVICE_PATH = os.getenv("KVMD_GPIO_DEVICE_PATH", "/dev/gpiochip0")
 
 
 # =====

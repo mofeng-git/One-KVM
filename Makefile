@@ -89,6 +89,7 @@ run: testenv $(TESTENV_GPIO)
 			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
 			--device $(TESTENV_GPIO):$(TESTENV_GPIO) \
+			--env KVMD_GPIO_DEVICE_PATH=$(TESTENV_GPIO) \
 			$(if $(TESTENV_RELAY),--device $(TESTENV_RELAY):$(TESTENV_RELAY),) \
 			--publish 8080:80/tcp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \

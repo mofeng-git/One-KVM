@@ -174,7 +174,7 @@ class _Gpio:
         assert self.__target_line is None
         assert self.__reset_line is None
 
-        self.__chip = gpiod.Chip("/dev/gpiochip0")
+        self.__chip = gpiod.Chip(aiogp.DEVICE_PATH)
 
         self.__target_line = self.__chip.get_line(self.__target_pin)
         self.__target_line.request("kvmd/msd-relay/target", gpiod.LINE_REQ_DIR_OUT, default_val=0)

@@ -59,13 +59,13 @@ class Plugin(BaseUserGpioDriver):
     def prepare(self) -> None:
         assert self.__reader is None
         self.__reader = aiogp.AioPinsReader(
-            path="/dev/gpiochip0",
+            path=aiogp.DEVICE_PATH,
             consumer="kvmd/ugpio-gpio/inputs",
             pins=dict.fromkeys(self.__input_pins, False),
             notifier=self._notifier,
         )
 
-        self.__chip = gpiod.Chip("/dev/gpiochip0")
+        self.__chip = gpiod.Chip(aiogp.DEVICE_PATH)
         for (pin, initial) in self.__output_pins.items():
             line = self.__chip.get_line(pin)
             line.request("kvmd/ugpio-gpio/outputs", gpiod.LINE_REQ_DIR_OUT, default_val=int(initial or False))
