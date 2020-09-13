@@ -59,7 +59,7 @@ depends=(
 	make
 	patch
 	sudo
-	raspberrypi-io-access
+	"raspberrypi-io-access>=0.5"
 	"ustreamer>=1.19"
 )
 makedepends=(python-setuptools)
