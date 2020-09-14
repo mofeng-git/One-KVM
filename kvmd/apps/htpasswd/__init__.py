@@ -25,6 +25,7 @@ import os
 import getpass
 import tempfile
 import contextlib
+import textwrap
 import argparse
 
 from typing import List
@@ -75,6 +76,26 @@ def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.Htpassw
             os.remove(tmp_path)
 
 
+def _print_invalidate_tip(prepend_nl: bool) -> None:
+    if sys.stdout.isatty() and sys.stderr.isatty():
+        gray = "\033[30;1m"
+        blue = "\033[34m"
+        reset = "\033[39m"
+    else:
+        gray = blue = reset = ""
+    if prepend_nl:
+        print(file=sys.stderr)
+    print(textwrap.dedent(f"""
+        {gray}# Note: Users logged in with this username will stay logged in.
+        # To invalidate their cookies you need to restart kvmd & kvmd-nginx:
+        #    {reset}{blue}systemctl restart kvmd kvmd-nginx{gray}
+        # Be careful, this will break your connection to the Pi-KVM
+        # and may affect the GPIO relays state. Also don't forget to edit
+        # the files {reset}{blue}/etc/kvmd/{{vncpasswd,ipmipasswd}}{gray} and restart
+        # the corresponding services {reset}{blue}kvmd-vnc{gray} & {reset}{blue}kvmd-ipmi{gray} if necessary.{reset}
+    """).strip(), file=sys.stderr)
+
+
 # ====
 def _cmd_list(config: Section, _: argparse.Namespace) -> None:
     for user in sorted(passlib.apache.HtpasswdFile(_get_htpasswd_path(config)).users()):
@@ -83,6 +104,7 @@ def _cmd_list(config: Section, _: argparse.Namespace) -> None:
 
 def _cmd_set(config: Section, options: argparse.Namespace) -> None:
     with _get_htpasswd_for_write(config) as htpasswd:
+        has_user = (options.user in htpasswd.users())
         if options.read_stdin:
             passwd = valid_passwd(input())
         else:
@@ -90,11 +112,16 @@ def _cmd_set(config: Section, options: argparse.Namespace) -> None:
             if valid_passwd(getpass.getpass("Repeat: ", stream=sys.stderr)) != passwd:
                 raise SystemExit("Sorry, passwords do not match")
         htpasswd.set_password(options.user, passwd)
+    if has_user and not options.quiet:
+        _print_invalidate_tip(True)
 
 
 def _cmd_delete(config: Section, options: argparse.Namespace) -> None:
     with _get_htpasswd_for_write(config) as htpasswd:
+        has_user = (options.user in htpasswd.users())
         htpasswd.delete(options.user)
+    if has_user and not options.quiet:
+        _print_invalidate_tip(False)
 
 
 # =====
@@ -118,10 +145,12 @@ def main(argv: Optional[List[str]]=None) -> None:
     cmd_set_parser = subparsers.add_parser("set", help="Create user or change password")
     cmd_set_parser.add_argument("user", type=valid_user)
     cmd_set_parser.add_argument("-i", "--read-stdin", action="store_true", help="Read password from stdin")
+    cmd_set_parser.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
     cmd_set_parser.set_defaults(cmd=_cmd_set)
 
     cmd_delete_parser = subparsers.add_parser("del", help="Delete user")
     cmd_delete_parser.add_argument("user", type=valid_user)
+    cmd_delete_parser.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
     cmd_delete_parser.set_defaults(cmd=_cmd_delete)
 
     options = parser.parse_args(argv[1:])
