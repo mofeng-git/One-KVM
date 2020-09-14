@@ -104,7 +104,7 @@ class AioPinsReader:  # pylint: disable=too-many-instance-attributes
                 ev_lines = lines.event_wait(1)
                 if ev_lines:
                     for ev_line in ev_lines:
-                        events = ev_line.event_read_multiply()
+                        events = ev_line.event_read_multiple()
                         if events:
                             (pin, value) = self.__parse_event(events[-1])
                             if self.__state[pin] != value:
