@@ -24,6 +24,7 @@ import os
 import asyncio
 import threading
 
+from typing import Tuple
 from typing import Dict
 from typing import Optional
 
@@ -48,7 +49,7 @@ async def pulse(line: gpiod.Line, delay: float, final: float) -> None:
         await asyncio.sleep(final)
 
 
-class AioPinsReader(threading.Thread):
+class AioPinsReader:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         path: str,
@@ -56,8 +57,6 @@ class AioPinsReader(threading.Thread):
         pins: Dict[int, bool],
         notifier: aiotools.AioNotifier,
     ) -> None:
-
-        super().__init__(daemon=True)
 
         self.__path = path
         self.__consumer = consumer
@@ -69,6 +68,8 @@ class AioPinsReader(threading.Thread):
         self.__stop_event = threading.Event()
         self.__loop: Optional[asyncio.AbstractEventLoop] = None
 
+        self.__thread = threading.Thread(target=self.__run, daemon=True)
+
     def get(self, pin: int) -> bool:
         return (self.__state[pin] ^ self.__pins[pin])
 
@@ -78,15 +79,14 @@ class AioPinsReader(threading.Thread):
         else:
             assert self.__loop is None
             self.__loop = asyncio.get_running_loop()
-            self.start()
+            self.__thread.start()
             try:
-                await aiotools.run_async(self.join)
+                await aiotools.run_async(self.__thread.join)
             finally:
                 self.__stop_event.set()
-                await aiotools.run_async(self.join)
+                await aiotools.run_async(self.__thread.join)
 
-    def run(self) -> None:
-        assert self.__loop
+    def __run(self) -> None:
         with gpiod.Chip(self.__path) as chip:
             pins = sorted(self.__pins)
             lines = chip.get_lines(pins)
@@ -97,7 +97,7 @@ class AioPinsReader(threading.Thread):
                 pin: bool(value)
                 for (pin, value) in zip(pins, lines.get_values())
             }
-            self.__loop.call_soon_threadsafe(self.__notifier.notify_sync)
+            self.__notify()
 
             while not self.__stop_event.is_set():
                 ev_lines = lines.event_wait(1)
@@ -105,12 +105,18 @@ class AioPinsReader(threading.Thread):
                     for ev_line in ev_lines:
                         events = ev_line.event_read_multiply()
                         if events:
-                            event = events[-1]
-                            if event.type == gpiod.LineEvent.RISING_EDGE:
-                                value = True
-                            elif event.type == gpiod.LineEvent.FALLING_EDGE:
-                                value = False
-                            else:
-                                raise RuntimeError(f"Invalid event {event} type: {event.type}")
-                            self.__state[event.source.offset()] = value
-                    self.__loop.call_soon_threadsafe(self.__notifier.notify_sync)
+                            (pin, value) = self.__parse_event(events[-1])
+                            self.__state[pin] = value
+                    self.__notify()
+
+    def __parse_event(self, event: gpiod.LineEvent) -> Tuple[int, bool]:
+        pin = event.source.offset()
+        if event.type == gpiod.LineEvent.RISING_EDGE:
+            return (pin, True)
+        elif event.type == gpiod.LineEvent.FALLING_EDGE:
+            return (pin, False)
+        raise RuntimeError(f"Invalid event {event} type: {event.type}")
+
+    def __notify(self) -> None:
+        assert self.__loop
+        self.__loop.call_soon_threadsafe(self.__notifier.notify_sync)
