@@ -102,12 +102,16 @@ class AioPinsReader:  # pylint: disable=too-many-instance-attributes
             while not self.__stop_event.is_set():
                 ev_lines = lines.event_wait(1)
                 if ev_lines:
+                    changed = False
                     for ev_line in ev_lines:
                         events = ev_line.event_read_multiply()
                         if events:
                             (pin, value) = self.__parse_event(events[-1])
-                            self.__state[pin] = value
-                    self.__notify()
+                            if self.__state[pin] != value:
+                                self.__state[pin] = value
+                                changed = True
+                    if changed:
+                        self.__notify()
 
     def __parse_event(self, event: gpiod.LineEvent) -> Tuple[int, bool]:
         pin = event.source.offset()
