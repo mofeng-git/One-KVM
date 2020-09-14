@@ -103,12 +103,14 @@ class AioPinsReader(threading.Thread):
                 ev_lines = lines.event_wait(1)
                 if ev_lines:
                     for ev_line in ev_lines:
-                        event = ev_line.event_read()
-                        if event.type == gpiod.LineEvent.RISING_EDGE:
-                            value = True
-                        elif event.type == gpiod.LineEvent.FALLING_EDGE:
-                            value = False
-                        else:
-                            raise RuntimeError(f"Invalid event {event} type: {event.type}")
-                        self.__state[event.source.offset()] = value
+                        events = ev_line.event_read_multiply()
+                        if events:
+                            event = events[-1]
+                            if event.type == gpiod.LineEvent.RISING_EDGE:
+                                value = True
+                            elif event.type == gpiod.LineEvent.FALLING_EDGE:
+                                value = False
+                            else:
+                                raise RuntimeError(f"Invalid event {event} type: {event.type}")
+                            self.__state[event.source.offset()] = value
                     self.__loop.call_soon_threadsafe(self.__notifier.notify_sync)
