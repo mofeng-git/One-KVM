@@ -54,7 +54,7 @@ class AioPinsReader:  # pylint: disable=too-many-instance-attributes
         self,
         path: str,
         consumer: str,
-        pins: Dict[int, bool],
+        pins: Dict[int, bool],  # (pin, inverted)
         notifier: aiotools.AioNotifier,
     ) -> None:
 
@@ -63,15 +63,15 @@ class AioPinsReader:  # pylint: disable=too-many-instance-attributes
         self.__pins = pins
         self.__notifier = notifier
 
-        self.__state = dict.fromkeys(pins, False)
+        self.__state = dict.fromkeys(pins, 0)
 
-        self.__stop_event = threading.Event()
         self.__loop: Optional[asyncio.AbstractEventLoop] = None
 
         self.__thread = threading.Thread(target=self.__run, daemon=True)
+        self.__stop_event = threading.Event()
 
     def get(self, pin: int) -> bool:
-        return (self.__state[pin] ^ self.__pins[pin])
+        return (bool(self.__state[pin]) ^ self.__pins[pin])
 
     async def poll(self) -> None:
         if not self.__pins:
@@ -92,17 +92,17 @@ class AioPinsReader:  # pylint: disable=too-many-instance-attributes
             lines = chip.get_lines(pins)
             lines.request(self.__consumer, gpiod.LINE_REQ_EV_BOTH_EDGES)
 
+            def read_state() -> Dict[int, int]:
+                return dict(zip(pins, lines.get_values()))
+
             lines.event_wait(nsec=1)
-            self.__state = {
-                pin: bool(value)
-                for (pin, value) in zip(pins, lines.get_values())
-            }
+            self.__state = read_state()
             self.__notify()
 
             while not self.__stop_event.is_set():
+                changed = False
                 ev_lines = lines.event_wait(1)
                 if ev_lines:
-                    changed = False
                     for ev_line in ev_lines:
                         events = ev_line.event_read_multiply()
                         if events:
@@ -110,15 +110,21 @@ class AioPinsReader:  # pylint: disable=too-many-instance-attributes
                             if self.__state[pin] != value:
                                 self.__state[pin] = value
                                 changed = True
-                    if changed:
-                        self.__notify()
+                else:  # Timeout
+                    # Ensure state to avoid driver bugs
+                    state = read_state()
+                    if self.__state != state:
+                        self.__state = state
+                        changed = True
+                if changed:
+                    self.__notify()
 
-    def __parse_event(self, event: gpiod.LineEvent) -> Tuple[int, bool]:
+    def __parse_event(self, event: gpiod.LineEvent) -> Tuple[int, int]:
         pin = event.source.offset()
         if event.type == gpiod.LineEvent.RISING_EDGE:
-            return (pin, True)
+            return (pin, 1)
         elif event.type == gpiod.LineEvent.FALLING_EDGE:
-            return (pin, False)
+            return (pin, 0)
         raise RuntimeError(f"Invalid event {event} type: {event.type}")
 
     def __notify(self) -> None:
