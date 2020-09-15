@@ -22,7 +22,9 @@
 
 import os
 import asyncio
+import asyncio.queues
 import threading
+import dataclasses
 
 from typing import Tuple
 from typing import Dict
@@ -49,12 +51,19 @@ async def pulse(line: gpiod.Line, delay: float, final: float) -> None:
         await asyncio.sleep(final)
 
 
-class AioPinsReader:  # pylint: disable=too-many-instance-attributes
+# =====
+@dataclasses.dataclass(frozen=True)
+class AioReaderPinParams:
+    inverted: bool
+    debounce: float
+
+
+class AioReader:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         path: str,
         consumer: str,
-        pins: Dict[int, bool],  # (pin, inverted)
+        pins: Dict[int, AioReaderPinParams],
         notifier: aiotools.AioNotifier,
     ) -> None:
 
@@ -63,15 +72,16 @@ class AioPinsReader:  # pylint: disable=too-many-instance-attributes
         self.__pins = pins
         self.__notifier = notifier
 
-        self.__state = dict.fromkeys(pins, 0)
-
-        self.__loop: Optional[asyncio.AbstractEventLoop] = None
+        self.__values: Optional[Dict[int, _DebouncedValue]] = None
 
         self.__thread = threading.Thread(target=self.__run, daemon=True)
         self.__stop_event = threading.Event()
 
+        self.__loop: Optional[asyncio.AbstractEventLoop] = None
+
     def get(self, pin: int) -> bool:
-        return (bool(self.__state[pin]) ^ self.__pins[pin])
+        value = (self.__values[pin].get() if self.__values is not None else False)
+        return (value ^ self.__pins[pin].inverted)
 
     async def poll(self) -> None:
         if not self.__pins:
@@ -87,37 +97,39 @@ class AioPinsReader:  # pylint: disable=too-many-instance-attributes
                 await aiotools.run_async(self.__thread.join)
 
     def __run(self) -> None:
+        assert self.__values is None
+        assert self.__loop
         with gpiod.Chip(self.__path) as chip:
             pins = sorted(self.__pins)
             lines = chip.get_lines(pins)
             lines.request(self.__consumer, gpiod.LINE_REQ_EV_BOTH_EDGES)
 
-            def read_state() -> Dict[int, int]:
-                return dict(zip(pins, lines.get_values()))
-
             lines.event_wait(nsec=1)
-            self.__state = read_state()
-            self.__notify()
+            self.__values = {
+                pin: _DebouncedValue(
+                    initial=bool(value),
+                    debounce=self.__pins[pin].debounce,
+                    notifier=self.__notifier,
+                    loop=self.__loop,
+                )
+                for (pin, value) in zip(pins, lines.get_values())
+            }
+            self.__loop.call_soon_threadsafe(self.__notifier.notify_sync)
 
             while not self.__stop_event.is_set():
-                changed = False
                 ev_lines = lines.event_wait(1)
                 if ev_lines:
                     for ev_line in ev_lines:
                         events = ev_line.event_read_multiple()
                         if events:
                             (pin, value) = self.__parse_event(events[-1])
-                            if self.__state[pin] != value:
-                                self.__state[pin] = value
-                                changed = True
+                            self.__values[pin].set(bool(value))
                 else:  # Timeout
-                    # Ensure state to avoid driver bugs
-                    state = read_state()
-                    if self.__state != state:
-                        self.__state = state
-                        changed = True
-                if changed:
-                    self.__notify()
+                    # Размер буфера ядра - 16 эвентов на линии. При превышении этого числа,
+                    # новые эвенты потеряются. Это не баг, это фича, как мне объяснили в LKML.
+                    # Штош. Будем с этим жить и синхронизировать состояния при таймауте.
+                    for (pin, value) in zip(pins, lines.get_values()):
+                        self.__values[pin].set(bool(value))
 
     def __parse_event(self, event: gpiod.LineEvent) -> Tuple[int, int]:
         pin = event.source.offset()
@@ -127,6 +139,42 @@ class AioPinsReader:  # pylint: disable=too-many-instance-attributes
             return (pin, 0)
         raise RuntimeError(f"Invalid event {event} type: {event.type}")
 
-    def __notify(self) -> None:
-        assert self.__loop
-        self.__loop.call_soon_threadsafe(self.__notifier.notify_sync)
+
+class _DebouncedValue:
+    def __init__(
+        self,
+        initial: bool,
+        debounce: float,
+        notifier: aiotools.AioNotifier,
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
+
+        self.__value = initial
+        self.__debounce = debounce
+        self.__notifier = notifier
+        self.__loop = loop
+
+        self.__queue: asyncio.queues.Queue = asyncio.Queue(loop=loop)
+        self.__task = loop.create_task(self.__consumer())
+
+    def set(self, value: bool) -> None:
+        if self.__loop.is_running():
+            self.__check_alive()
+            self.__loop.call_soon_threadsafe(self.__queue.put_nowait, value)
+
+    def get(self) -> bool:
+        return self.__value
+
+    def __check_alive(self) -> None:
+        if self.__task.done() and not self.__task.cancelled():
+            raise RuntimeError("Dead debounce consumer")
+
+    async def __consumer(self) -> None:
+        while True:
+            value = await self.__queue.get()
+            while not self.__queue.empty():
+                value = await self.__queue.get()
+            if self.__value != value:
+                self.__value = value
+                await self.__notifier.notify()
+            await asyncio.sleep(self.__debounce)

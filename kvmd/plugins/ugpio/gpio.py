@@ -21,7 +21,6 @@
 
 
 from typing import Dict
-from typing import Set
 from typing import Optional
 
 import gpiod
@@ -42,26 +41,26 @@ class Plugin(BaseUserGpioDriver):
 
         super().__init__(instance_name, notifier)
 
-        self.__input_pins: Set[int] = set()
+        self.__input_pins: Dict[int, aiogp.AioReaderPinParams] = {}
         self.__output_pins: Dict[int, Optional[bool]] = {}
 
-        self.__reader: Optional[aiogp.AioPinsReader] = None
+        self.__reader: Optional[aiogp.AioReader] = None
 
         self.__chip: Optional[gpiod.Chip] = None
         self.__output_lines: Dict[int, gpiod.Line] = {}
 
-    def register_input(self, pin: int) -> None:
-        self.__input_pins.add(pin)
+    def register_input(self, pin: int, debounce: float) -> None:
+        self.__input_pins[pin] = aiogp.AioReaderPinParams(False, debounce)
 
     def register_output(self, pin: int, initial: Optional[bool]) -> None:
         self.__output_pins[pin] = initial
 
     def prepare(self) -> None:
         assert self.__reader is None
-        self.__reader = aiogp.AioPinsReader(
+        self.__reader = aiogp.AioReader(
             path=aiogp.DEVICE_PATH,
             consumer="kvmd/ugpio-gpio/inputs",
-            pins=dict.fromkeys(self.__input_pins, False),
+            pins=self.__input_pins,
             notifier=self._notifier,
         )
 

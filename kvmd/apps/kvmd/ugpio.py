@@ -81,7 +81,7 @@ class _GpioInput:
         self.__inverted: bool = config.inverted
 
         self.__driver = driver
-        self.__driver.register_input(self.__pin)
+        self.__driver.register_input(self.__pin, config.debounce)
 
     def get_scheme(self) -> Dict:
         return {

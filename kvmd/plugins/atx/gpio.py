@@ -34,6 +34,7 @@ from ... import aiogp
 from ...yamlconf import Option
 
 from ...validators.basic import valid_bool
+from ...validators.basic import valid_float_f0
 from ...validators.basic import valid_float_f01
 
 from ...validators.hw import valid_gpio_pin
@@ -47,9 +48,12 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments,super-init-not-called
         self,
         power_led_pin: int,
-        hdd_led_pin: int,
         power_led_inverted: bool,
+        power_led_debounce: float,
+
+        hdd_led_pin: int,
         hdd_led_inverted: bool,
+        hdd_led_debounce: float,
 
         power_switch_pin: int,
         reset_switch_pin: int,
@@ -72,12 +76,12 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__power_switch_line: Optional[gpiod.Line] = None
         self.__reset_switch_line: Optional[gpiod.Line] = None
 
-        self.__reader = aiogp.AioPinsReader(
+        self.__reader = aiogp.AioReader(
             path=aiogp.DEVICE_PATH,
             consumer="kvmd/atx-gpio/leds",
             pins={
-                power_led_pin: power_led_inverted,
-                hdd_led_pin: hdd_led_inverted,
+                power_led_pin: aiogp.AioReaderPinParams(power_led_inverted, power_led_debounce),
+                hdd_led_pin: aiogp.AioReaderPinParams(hdd_led_inverted, hdd_led_debounce),
             },
             notifier=self.__notifier,
         )
@@ -86,9 +90,12 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
     def get_plugin_options(cls) -> Dict:
         return {
             "power_led_pin":      Option(-1,    type=valid_gpio_pin),
-            "hdd_led_pin":        Option(-1,    type=valid_gpio_pin),
             "power_led_inverted": Option(False, type=valid_bool),
-            "hdd_led_inverted":   Option(False, type=valid_bool),
+            "power_led_debounce": Option(0.1,   type=valid_float_f0),
+
+            "hdd_led_pin":      Option(-1,    type=valid_gpio_pin),
+            "hdd_led_inverted": Option(False, type=valid_bool),
+            "hdd_led_debounce": Option(0.1,   type=valid_float_f0),
 
             "power_switch_pin": Option(-1,  type=valid_gpio_pin),
             "reset_switch_pin": Option(-1,  type=valid_gpio_pin),
