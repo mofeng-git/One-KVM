@@ -155,7 +155,7 @@ class _DebouncedValue:
         self.__loop = loop
 
         self.__queue: asyncio.queues.Queue = asyncio.Queue(loop=loop)
-        self.__task = loop.create_task(self.__consumer())
+        self.__task = loop.create_task(self.__consumer_task_loop())
 
     def set(self, value: bool) -> None:
         if self.__loop.is_running():
@@ -169,7 +169,7 @@ class _DebouncedValue:
         if self.__task.done() and not self.__task.cancelled():
             raise RuntimeError("Dead debounce consumer")
 
-    async def __consumer(self) -> None:
+    async def __consumer_task_loop(self) -> None:
         while True:
             value = await self.__queue.get()
             while not self.__queue.empty():
