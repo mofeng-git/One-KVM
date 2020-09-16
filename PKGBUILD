@@ -39,7 +39,6 @@ depends=(
 	python-aiohttp
 	python-aiofiles
 	python-passlib
-	python-raspberry-gpio
 	python-pyserial
 	python-setproctitle
 	python-psutil
@@ -51,6 +50,7 @@ depends=(
 	python-pillow
 	python-xlib
 	python-hidapi
+	libgpiod
 	freetype2
 	v4l-utils
 	nginx-mainline
@@ -59,7 +59,7 @@ depends=(
 	make
 	patch
 	sudo
-	raspberrypi-io-access
+	"raspberrypi-io-access>=0.5"
 	"ustreamer>=1.19"
 )
 makedepends=(python-setuptools)

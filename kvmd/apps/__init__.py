@@ -227,7 +227,9 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
                         "min_delay": Option(0.1, type=valid_float_f01),
                         "max_delay": Option(0.1, type=valid_float_f01),
                     },
-                } if mode == UserGpioModes.OUTPUT else {})
+                } if mode == UserGpioModes.OUTPUT else {  # input
+                    "debounce": Option(0.1, type=valid_float_f0),
+                })
             }
 
         rebuild = True

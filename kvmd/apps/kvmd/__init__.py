@@ -25,8 +25,6 @@ from typing import Optional
 
 from ...logging import get_logger
 
-from ... import gpio
-
 from ...plugins.hid import get_hid_class
 from ...plugins.atx import get_atx_class
 from ...plugins.msd import get_msd_class
@@ -45,6 +43,8 @@ from .server import KvmdServer
 
 # =====
 def main(argv: Optional[List[str]]=None) -> None:
+    # pylint: disable=protected-access
+
     config = init(
         prog="kvmd",
         description="The main Pi-KVM daemon",
@@ -56,48 +56,45 @@ def main(argv: Optional[List[str]]=None) -> None:
         load_gpio=True,
     )[2]
 
-    with gpio.bcm():
-        # pylint: disable=protected-access
+    msd_kwargs = config.kvmd.msd._unpack(ignore=["type"])
+    if config.kvmd.msd.type == "otg":
+        msd_kwargs["gadget"] = config.otg.gadget  # XXX: Small crutch to pass gadget name to plugin
 
-        msd_kwargs = config.kvmd.msd._unpack(ignore=["type"])
-        if config.kvmd.msd.type == "otg":
-            msd_kwargs["gadget"] = config.otg.gadget  # XXX: Small crutch to pass gadget name to plugin
+    global_config = config
+    config = config.kvmd
 
-        global_config = config
-        config = config.kvmd
+    hid = get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type", "keymap"]))
+    streamer = Streamer(**config.streamer._unpack())
 
-        hid = get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type", "keymap"]))
-        streamer = Streamer(**config.streamer._unpack())
+    KvmdServer(
+        auth_manager=AuthManager(
+            internal_type=config.auth.internal.type,
+            internal_kwargs=config.auth.internal._unpack(ignore=["type", "force_users"]),
+            external_type=config.auth.external.type,
+            external_kwargs=(config.auth.external._unpack(ignore=["type"]) if config.auth.external.type else {}),
+            force_internal_users=config.auth.internal.force_users,
+            enabled=config.auth.enabled,
+        ),
+        info_manager=InfoManager(global_config),
+        log_reader=LogReader(),
+        wol=WakeOnLan(**config.wol._unpack()),
+        user_gpio=UserGpio(config.gpio),
 
-        KvmdServer(
-            auth_manager=AuthManager(
-                internal_type=config.auth.internal.type,
-                internal_kwargs=config.auth.internal._unpack(ignore=["type", "force_users"]),
-                external_type=config.auth.external.type,
-                external_kwargs=(config.auth.external._unpack(ignore=["type"]) if config.auth.external.type else {}),
-                force_internal_users=config.auth.internal.force_users,
-                enabled=config.auth.enabled,
-            ),
-            info_manager=InfoManager(global_config),
-            log_reader=LogReader(),
-            wol=WakeOnLan(**config.wol._unpack()),
-            user_gpio=UserGpio(config.gpio),
+        hid=hid,
+        atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),
+        msd=get_msd_class(config.msd.type)(**msd_kwargs),
+        streamer=streamer,
 
+        snapshoter=Snapshoter(
             hid=hid,
-            atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),
-            msd=get_msd_class(config.msd.type)(**msd_kwargs),
             streamer=streamer,
+            **config.snapshot._unpack(),
+        ),
 
-            snapshoter=Snapshoter(
-                hid=hid,
-                streamer=streamer,
-                **config.snapshot._unpack(),
-            ),
+        heartbeat=config.server.heartbeat,
+        sync_chunk_size=config.server.sync_chunk_size,
 
-            heartbeat=config.server.heartbeat,
-            sync_chunk_size=config.server.sync_chunk_size,
-
-            keymap_path=config.hid.keymap,
-        ).run(**config.server._unpack(ignore=["heartbeat", "sync_chunk_size"]))
+        keymap_path=config.hid.keymap,
+    ).run(**config.server._unpack(ignore=["heartbeat", "sync_chunk_size"]))
 
     get_logger(0).info("Bye-bye")

@@ -74,7 +74,7 @@ class BaseUserGpioDriver(BasePlugin):
     def get_modes(cls) -> Set[str]:
         return set(UserGpioModes.ALL)
 
-    def register_input(self, pin: int) -> None:
+    def register_input(self, pin: int, debounce: float) -> None:
         raise NotImplementedError
 
     def register_output(self, pin: int, initial: Optional[bool]) -> None:

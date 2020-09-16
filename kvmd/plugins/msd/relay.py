@@ -35,12 +35,13 @@ from typing import Optional
 
 import aiofiles
 import aiofiles.base
+import gpiod
 
 from ...logging import get_logger
 
 from ... import aiotools
 from ... import aiofs
-from ... import gpio
+from ... import aiogp
 
 from ...yamlconf import Option
 
@@ -152,6 +153,55 @@ def _explore_device(device_path: str) -> _DeviceInfo:
     )
 
 
+class _Gpio:
+    def __init__(
+        self,
+        target_pin: int,
+        reset_pin: int,
+        reset_delay: float,
+    ) -> None:
+
+        self.__target_pin = target_pin
+        self.__reset_pin = reset_pin
+        self.__reset_delay = reset_delay
+
+        self.__chip: Optional[gpiod.Chip] = None
+        self.__target_line: Optional[gpiod.Line] = None
+        self.__reset_line: Optional[gpiod.Line] = None
+
+    def open(self) -> None:
+        assert self.__chip is None
+        assert self.__target_line is None
+        assert self.__reset_line is None
+
+        self.__chip = gpiod.Chip(aiogp.DEVICE_PATH)
+
+        self.__target_line = self.__chip.get_line(self.__target_pin)
+        self.__target_line.request("kvmd/msd-relay/target", gpiod.LINE_REQ_DIR_OUT, default_val=0)
+
+        self.__reset_line = self.__chip.get_line(self.__reset_pin)
+        self.__reset_line.request("kvmd/msd-relay/reset", gpiod.LINE_REQ_DIR_OUT, default_val=0)
+
+    def close(self) -> None:
+        if self.__chip:
+            try:
+                self.__chip.close()
+            except Exception:
+                pass
+
+    def switch_to_local(self) -> None:
+        assert self.__target_line
+        self.__target_line.set_value(0)
+
+    def switch_to_server(self) -> None:
+        assert self.__target_line
+        self.__target_line.set_value(1)
+
+    async def reset(self) -> None:
+        assert self.__reset_line
+        await aiogp.pulse(self.__reset_line, self.__reset_delay, 0)
+
+
 # =====
 class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=super-init-not-called
@@ -165,13 +215,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         reset_delay: float,
     ) -> None:
 
-        self.__target_pin = gpio.set_output(target_pin, False)
-        self.__reset_pin = gpio.set_output(reset_pin, False)
-
         self.__device_path = device_path
         self.__init_delay = init_delay
         self.__init_retries = init_retries
-        self.__reset_delay = reset_delay
+
+        self.__gpio = _Gpio(target_pin, reset_pin, reset_delay)
 
         self.__device_info: Optional[_DeviceInfo] = None
         self.__connected = False
@@ -201,6 +249,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "init_retries": Option(5,   type=valid_int_f1),
             "reset_delay":  Option(1.0, type=valid_float_f01),
         }
+
+    def sysprep(self) -> None:
+        self.__gpio.open()
 
     async def get_state(self) -> Dict:
         storage: Optional[Dict] = None
@@ -245,26 +296,18 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def __inner_reset(self) -> None:
-        try:
-            gpio.write(self.__reset_pin, True)
-            await asyncio.sleep(self.__reset_delay)
-            gpio.write(self.__reset_pin, False)
-
-            gpio.write(self.__target_pin, False)
-            self.__connected = False
-
-            await self.__load_device_info()
-            get_logger(0).info("MSD reset has been successful")
-        finally:
-            gpio.write(self.__reset_pin, False)
+        await self.__gpio.reset()
+        self.__gpio.switch_to_local()
+        self.__connected = False
+        await self.__load_device_info()
+        get_logger(0).info("MSD reset has been successful")
 
     @aiotools.atomic
     async def cleanup(self) -> None:
         try:
             await self.__close_device_file()
         finally:
-            gpio.write(self.__target_pin, False)
-            gpio.write(self.__reset_pin, False)
+            self.__gpio.close()
 
     # =====
 
@@ -283,7 +326,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 if self.__connected:
                     raise MsdConnectedError()
 
-                gpio.write(self.__target_pin, True)
+                self.__gpio.switch_to_server()
                 self.__connected = True
                 get_logger(0).info("MSD switched to Server")
 
@@ -294,12 +337,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 if not self.__connected:
                     raise MsdDisconnectedError()
 
-                gpio.write(self.__target_pin, False)
+                self.__gpio.switch_to_local()
                 try:
                     await self.__load_device_info()
                 except Exception:
                     if self.__connected:
-                        gpio.write(self.__target_pin, True)
+                        self.__gpio.switch_to_server()
                     raise
                 self.__connected = False
                 get_logger(0).info("MSD switched to KVM: %s", self.__device_info)

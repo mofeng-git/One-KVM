@@ -79,7 +79,7 @@ class Plugin(BaseUserGpioDriver):
     def get_modes(cls) -> Set[str]:
         return set([UserGpioModes.OUTPUT])
 
-    def register_input(self, pin: int) -> None:
+    def register_input(self, pin: int, debounce: float) -> None:
         raise RuntimeError(f"Unsupported mode 'input' for pin={pin} on {self}")
 
     def register_output(self, pin: int, initial: Optional[bool]) -> None:

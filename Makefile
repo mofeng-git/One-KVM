@@ -3,7 +3,10 @@
 TESTENV_IMAGE ?= kvmd-testenv
 TESTENV_HID ?= /dev/ttyS10
 TESTENV_VIDEO ?= /dev/video0
+TESTENV_GPIO ?= /dev/gpiochip0
 TESTENV_RELAY ?= $(if $(shell ls /dev/hidraw0 2>/dev/null || true),/dev/hidraw0,)
+
+LIBGPIOD_VERSION ?= 1.5.2
 
 USTREAMER_MIN_VERSION ?= $(shell grep -o 'ustreamer>=[^"]\+' PKGBUILD | sed 's/ustreamer>=//g')
 
@@ -23,6 +26,7 @@ all:
 	@ echo "    make textenv          # Build test environment"
 	@ echo "    make tox              # Run tests and linters"
 	@ echo "    make tox E=pytest     # Run selected test environment"
+	@ echo "    make gpio             # Create gpio mockup"
 	@ echo "    make run              # Run kvmd"
 	@ echo "    make run CMD=...      # Run specified command inside kvmd environment"
 	@ echo "    make run-ipmi         # Run kvmd-ipmi"
@@ -44,6 +48,7 @@ testenv:
 			$(if $(call optbool,$(NC)),--no-cache,) \
 			--rm \
 			--tag $(TESTENV_IMAGE) \
+			--build-arg LIBGPIOD_VERSION=$(LIBGPIOD_VERSION) \
 			--build-arg USTREAMER_MIN_VERSION=$(USTREAMER_MIN_VERSION) \
 		-f testenv/Dockerfile .
 
@@ -66,8 +71,15 @@ tox: testenv
 		"
 
 
-run: testenv
+$(TESTENV_GPIO):
+	test ! -e $(TESTENV_GPIO)
+	sudo modprobe gpio-mockup gpio_mockup_ranges=0,40
+	test -c $(TESTENV_GPIO)
+
+
+run: testenv $(TESTENV_GPIO)
 	- docker run --rm --name kvmd \
+			--cap-add SYS_ADMIN \
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
@@ -76,10 +88,14 @@ run: testenv
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
 			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
+			--device $(TESTENV_GPIO):$(TESTENV_GPIO) \
+			--env KVMD_GPIO_DEVICE_PATH=$(TESTENV_GPIO) \
 			$(if $(TESTENV_RELAY),--device $(TESTENV_RELAY):$(TESTENV_RELAY),) \
 			--publish 8080:80/tcp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
-			(socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
+			mount -t debugfs none /sys/kernel/debug \
+			&& test -d /sys/kernel/debug/gpio-mockup/`basename $(TESTENV_GPIO)`/ \
+			&& (socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
 			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/kvmd/nginx \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
