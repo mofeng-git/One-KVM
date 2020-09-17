@@ -59,7 +59,7 @@ class Plugin(BaseUserGpioDriver):
         assert self.__reader is None
         self.__reader = aiogp.AioReader(
             path=aiogp.DEVICE_PATH,
-            consumer="kvmd/ugpio-gpio/inputs",
+            consumer="kvmd::ugpio-gpio::inputs",
             pins=self.__input_pins,
             notifier=self._notifier,
         )
@@ -67,7 +67,7 @@ class Plugin(BaseUserGpioDriver):
         self.__chip = gpiod.Chip(aiogp.DEVICE_PATH)
         for (pin, initial) in self.__output_pins.items():
             line = self.__chip.get_line(pin)
-            line.request("kvmd/ugpio-gpio/outputs", gpiod.LINE_REQ_DIR_OUT, default_val=int(initial or False))
+            line.request("kvmd::ugpio-gpio::outputs", gpiod.LINE_REQ_DIR_OUT, default_val=int(initial or False))
             self.__output_lines[pin] = line
 
     async def run(self) -> None:
