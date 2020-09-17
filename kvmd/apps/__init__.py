@@ -314,6 +314,8 @@ def _get_config_scheme() -> Dict:
             },
 
             "streamer": {
+                "forever": Option(False, type=valid_bool),
+
                 "reset_delay":    Option(1.0,  type=valid_float_f0),
                 "shutdown_delay": Option(10.0, type=valid_float_f01),
                 "state_poll":     Option(1.0,  type=valid_float_f01),

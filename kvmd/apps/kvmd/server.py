@@ -154,6 +154,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         sync_chunk_size: int,
 
         keymap_path: str,
+
+        stream_forever: bool,
     ) -> None:
 
         self.__auth_manager = auth_manager
@@ -163,6 +165,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self.__user_gpio = user_gpio  # Has extra state "gpio_scheme_state"
 
         self.__heartbeat = heartbeat
+
+        self.__stream_forever = stream_forever
 
         self.__components = [
             *[
@@ -399,7 +403,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     async def __stream_controller(self) -> None:
         prev = False
         while True:
-            cur = (self.__has_stream_clients() or self.__snapshoter.snapshoting())
+            cur = (self.__has_stream_clients() or self.__snapshoter.snapshoting() or self.__stream_forever)
             if not prev and cur:
                 await self.__streamer.ensure_start(reset=False)
             elif prev and not cur:

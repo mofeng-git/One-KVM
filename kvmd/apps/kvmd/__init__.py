@@ -64,7 +64,7 @@ def main(argv: Optional[List[str]]=None) -> None:
     config = config.kvmd
 
     hid = get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type", "keymap"]))
-    streamer = Streamer(**config.streamer._unpack())
+    streamer = Streamer(**config.streamer._unpack(ignore=["forever"]))
 
     KvmdServer(
         auth_manager=AuthManager(
@@ -95,6 +95,8 @@ def main(argv: Optional[List[str]]=None) -> None:
         sync_chunk_size=config.server.sync_chunk_size,
 
         keymap_path=config.hid.keymap,
+
+        stream_forever=config.streamer.forever,
     ).run(**config.server._unpack(ignore=["heartbeat", "sync_chunk_size"]))
 
     get_logger(0).info("Bye-bye")
