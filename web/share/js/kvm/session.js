@@ -75,6 +75,11 @@ export function Session() {
 				$("kvmd-meta-server-host").innerHTML = "";
 				document.title = "Pi-KVM Session";
 			}
+
+			// Don't use this option, it may be removed in any time
+			if (state.web && state.web.confirm_session_exit === false) {
+				window.onbeforeunload = null; // See main.js
+			}
 		}
 	};
 
