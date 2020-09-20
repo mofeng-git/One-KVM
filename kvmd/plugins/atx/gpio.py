@@ -111,10 +111,10 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__chip = gpiod.Chip(aiogp.DEVICE_PATH)
 
         self.__power_switch_line = self.__chip.get_line(self.__power_switch_pin)
-        self.__power_switch_line.request("kvmd::atx-gpio::power_switch", gpiod.LINE_REQ_DIR_OUT, default_val=0)
+        self.__power_switch_line.request("kvmd::atx-gpio::power_switch", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
 
         self.__reset_switch_line = self.__chip.get_line(self.__reset_switch_pin)
-        self.__reset_switch_line.request("kvmd::atx-gpio::reset_switch", gpiod.LINE_REQ_DIR_OUT, default_val=0)
+        self.__reset_switch_line.request("kvmd::atx-gpio::reset_switch", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
 
     async def get_state(self) -> Dict:
         return {
