@@ -144,5 +144,6 @@ INLINE void keymapPs2(uint8_t code, Ps2KeyType *ps2_type, uint8_t *ps2_code) {
 		case 103: *ps2_type = PS2_KEY_TYPE_REG; *ps2_code = 112; return; // KEYPAD_0
 		case 104: *ps2_type = PS2_KEY_TYPE_REG; *ps2_code = 113; return; // KEYPAD_DOT
 		case 105: *ps2_type = PS2_KEY_TYPE_SPEC; *ps2_code = 94; return; // KEY_POWER
+		case 106: *ps2_type = PS2_KEY_TYPE_REG; *ps2_code = 97; return; // KEY_NON_US
 	}
 }

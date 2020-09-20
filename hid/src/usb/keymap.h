@@ -134,6 +134,7 @@ INLINE KeyboardKeycode keymapUsb(uint8_t code) {
 		case 103: return KEYPAD_0;
 		case 104: return KEYPAD_DOT;
 		case 105: return KEY_POWER;
+		case 106: return KEY_NON_US;
 		default: return KEY_ERROR_UNDEFINED;
 	}
 }
