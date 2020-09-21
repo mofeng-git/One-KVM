@@ -250,9 +250,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         await client.ws.prepare(request)
         await self.__register_ws_client(client)
         try:
-            await self.__broadcast_event("gpio_model_state", await self.__user_gpio.get_model())
+            await self.__send_event(client.ws, "gpio_model_state", await self.__user_gpio.get_model())
             await asyncio.gather(*[
-                self.__broadcast_event(component.event_type, await component.get_state())
+                self.__send_event(client.ws, component.event_type, await component.get_state())
                 for component in self.__components
                 if component.get_state
             ])
@@ -278,7 +278,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     @exposed_ws("ping")
     async def __ws_ping_handler(self, ws: aiohttp.web.WebSocketResponse, _: Dict) -> None:
-        await ws.send_str(json.dumps({"event_type": "pong", "event": {}}))
+        await self.__send_event(ws, "pong", {})
 
     # ===== SYSTEM STUFF
 
@@ -363,13 +363,16 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 except Exception:
                     logger.exception("Cleanup error on %s", component.name)
 
+    async def __send_event(self, ws: aiohttp.web.WebSocketResponse, event_type: str, event: Optional[Dict]) -> None:
+        await ws.send_str(json.dumps({
+            "event_type": event_type,
+            "event": event,
+        }))
+
     async def __broadcast_event(self, event_type: str, event: Optional[Dict]) -> None:
         if self.__ws_clients:
             await asyncio.gather(*[
-                client.ws.send_str(json.dumps({
-                    "event_type": event_type,
-                    "event": event,
-                }))
+                self.__send_event(client.ws, event_type, event)
                 for client in list(self.__ws_clients)
                 if (
                     not client.ws.closed
