@@ -256,6 +256,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 for component in self.__components
                 if component.get_state
             ])
+            await self.__send_event(client.ws, "loop", {})
             async for msg in client.ws:
                 if msg.type == aiohttp.web.WSMsgType.TEXT:
                     try:
