@@ -322,29 +322,51 @@ class UserGpio:
             items: List[Dict] = []
             for item in map(str.strip, row):
                 if item.startswith("#") or len(item) == 0:
-                    items.append({
-                        "type": "label",
-                        "text": item[1:].strip(),
-                    })
+                    items.append(self.__make_view_label(item))
                 else:
-                    parts = list(map(str.strip, item.split("|", 1)))
+                    parts = list(map(str.strip, item.split("|", 2)))
                     if parts:
-                        channel: str = parts[0]
-                        param: Optional[str] = (parts[1] if len(parts) > 1 else None)
-                        if channel in self.__inputs:
-                            items.append({
-                                "type": UserGpioModes.INPUT,
-                                "channel": channel,
-                                "color": (param if param in ["green", "yellow", "red"] else "green"),
-                            })
-                        elif channel in self.__outputs:
-                            items.append({
-                                "type": UserGpioModes.OUTPUT,
-                                "channel": parts[0],
-                                "text": (param if param is not None else "Click"),
-                            })
+                        if parts[0] in self.__inputs:
+                            items.append(self.__make_view_input(parts))
+                        elif parts[0] in self.__outputs:
+                            items.append(self.__make_view_output(parts))
             table.append(items)
+
         return {
             "header": self.__view["header"],
             "table": table,
+        }
+
+    def __make_view_label(self, item: str) -> Dict:
+        assert item.startswith("#")
+        return {
+            "type": "label",
+            "text": item[1:].strip(),
+        }
+
+    def __make_view_input(self, parts: List[str]) -> Dict:
+        assert len(parts) >= 1
+        color = (parts[1] if len(parts) > 1 else None)
+        if color not in ["green", "yellow", "red"]:
+            color = "green"
+        return {
+            "type": UserGpioModes.INPUT,
+            "channel": parts[0],
+            "color": color,
+        }
+
+    def __make_view_output(self, parts: List[str]) -> Dict:
+        assert len(parts) >= 1
+        confirm = False
+        text = "Click"
+        if len(parts) == 2:
+            text = parts[1]
+        elif len(parts) == 3:
+            confirm = (parts[1] == "confirm")
+            text = parts[2]
+        return {
+            "type": UserGpioModes.OUTPUT,
+            "channel": parts[0],
+            "confirm": confirm,
+            "text": text,
         }

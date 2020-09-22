@@ -96,11 +96,11 @@ export function Gpio() {
 		for (let channel in model.scheme.outputs) {
 			let el = $(`gpio-switch-${channel}`);
 			if (el) {
-				tools.setOnClick(el, () => __switchChannel(channel));
+				tools.setOnClick(el, () => __switchChannel(el));
 			}
 			el = $(`gpio-button-${channel}`);
 			if (el) {
-				tools.setOnClick(el, () => __pulseChannel(channel));
+				tools.setOnClick(el, () => __pulseChannel(el));
 			}
 		}
 
@@ -120,7 +120,8 @@ export function Gpio() {
 			if (item.scheme["switch"]) {
 				controls.push(`
 					<td><div class="switch-box">
-						<input disabled type="checkbox" id="gpio-switch-${item.channel}" class="gpio-switch" />
+						<input disabled type="checkbox" id="gpio-switch-${item.channel}" class="gpio-switch"
+						data-channel="${item.channel}" data-confirm="${Number(item.confirm)}" />
 						<label for="gpio-switch-${item.channel}">
 							<span class="switch-inner"></span>
 							<span class="switch"></span>
@@ -129,7 +130,10 @@ export function Gpio() {
 				`);
 			}
 			if (item.scheme.pulse.delay) {
-				controls.push(`<td><button disabled id="gpio-button-${item.channel}" class="gpio-button">${item.text}</button></td>`);
+				controls.push(`
+					<td><button disabled id="gpio-button-${item.channel}" class="gpio-button"
+					data-channel="${item.channel}" data-confirm="${Number(item.confirm)}">${item.text}</button></td>
+				`);
 			}
 			return `<table><tr>${controls.join("<td>&nbsp;&nbsp;&nbsp;</td>")}</tr></table>`;
 		} else {
@@ -148,13 +152,33 @@ export function Gpio() {
 		}
 	};
 
-	var __switchChannel = function(channel) {
+	var __switchChannel = function(el) {
+		let channel = el.getAttribute("data-channel");
+		let confirm = parseInt(el.getAttribute("data-confirm"));
 		let to = ($(`gpio-switch-${channel}`).checked ? "1" : "0");
-		__sendPost(`/api/gpio/switch?channel=${channel}&state=${to}`);
+		let act = () => __sendPost(`/api/gpio/switch?channel=${channel}&state=${to}`);
+		if (confirm) {
+			wm.confirm("Are you sure to act this switch?").then(function(ok) {
+				if (ok) {
+					act();
+				} else {
+					self.setState(__state); // Switch back
+				}
+			});
+		} else {
+			act();
+		}
 	};
 
-	var __pulseChannel = function(channel) {
-		__sendPost(`/api/gpio/pulse?channel=${channel}`);
+	var __pulseChannel = function(el) {
+		let channel = el.getAttribute("data-channel");
+		let confirm = parseInt(el.getAttribute("data-confirm"));
+		let act = () => __sendPost(`/api/gpio/pulse?channel=${channel}`);
+		if (confirm) {
+			wm.confirm("Are you sure to click this button?").then(function(ok) { if (ok) act(); });
+		} else {
+			act();
+		}
 	};
 
 	var __sendPost = function(url) {

@@ -84,11 +84,11 @@ kvmd:
                 - ["#Generic GPIO leds"]
                 - []
                 - ["#Test 1:", led1, button1]
-                - ["#Test 2:", led2, button2]
+                - ["#Test 2:", led2, button2|confirm|Click]
                 - []
                 - ["#HID Relays /dev/hidraw0"]
                 - []
-                - ["#Relay #1:", "relay1|Boop 0.1"]
+                - ["#Relay #1:", "relay1|confirm|Boop 0.1"]
                 - ["#Relay #2:", "relay2|Boop 2.0"]
 
 vnc:
