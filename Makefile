@@ -173,7 +173,7 @@ release:
 	make tox
 	make clean
 	make push
-	make bump
+	make bump V=$(V)
 	make push
 	make clean
 
