@@ -51,14 +51,13 @@ mixin lamp(cls)
 				+key("Quote") "#[br]'
 				+key("Enter", "wide-3 right small") Enter#[br]&crarr;
 			div(class="keypad-row")
-				+modifier("ShiftLeft", "wide-3 left small") Shift
-				+key("IntlBackslash", "small") 
+				+modifier("ShiftLeft", "wide-4 left small") Shift
 				each key in ["Z", "X", "C", "V", "B", "N", "M"]
 					+key(`Key${key}`, "single") #{key}
 				+key("Comma") &lt;#[br],
 				+key("Period") &gt;#[br].
 				+key("Slash") ?#[br]/
-				+modifier("ShiftRight", "wide-3 right small") Shift
+				+modifier("ShiftRight", "wide-4 right small") Shift
 			div(class="keypad-row")
 				+modifier("ControlLeft", "wide-1 left small") Ctrl
 				+modifier("MetaLeft", "wide-1 left small") Win
@@ -96,7 +95,7 @@ mixin lamp(cls)
 			div(class="keypad-row")
 				+empty_key()
 				+empty_key()
-				+empty_key()
+				+key("IntlBackslash", "small") N/US
 				+key("Power", "small") PWR
 			hr
 			div(class="keypad-row")

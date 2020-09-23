@@ -294,8 +294,6 @@ X11_TO_AT1 = {
     65456: At1Key(code=82, shift=False),  # XK_KP_0
     65454: At1Key(code=83, shift=False),  # XK_KP_Decimal
     65301: At1Key(code=84, shift=False),  # XK_Sys_Req
-    60: At1Key(code=86, shift=False),  # XK_less
-    62: At1Key(code=86, shift=True),  # XK_greater
     65480: At1Key(code=87, shift=False),  # XK_F11
     65481: At1Key(code=88, shift=False),  # XK_F12
     65421: At1Key(code=57372, shift=False),  # XK_KP_Enter
