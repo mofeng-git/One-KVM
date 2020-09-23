@@ -84,6 +84,8 @@ function __WindowManager() {
 	self.confirm = (...args) => __modalDialog("Question", args.join(" "), true, true);
 
 	var __modalDialog = function(header, text, ok, cancel) {
+		let el_active_menu = (document.activeElement && document.activeElement.closest(".menu"));
+
 		let el_modal = document.createElement("div");
 		el_modal.className = "modal";
 		el_modal.style.visibility = "visible";
@@ -117,7 +119,11 @@ function __WindowManager() {
 					if (index !== -1) {
 						__windows.splice(index, 1);
 					}
-					__activateLastWindow(el_modal);
+					if (el_active_menu && el_active_menu.style.visibility === "visible") {
+						el_active_menu.focus();
+					} else {
+						__activateLastWindow(el_modal);
+					}
 					resolve(retval);
 				}
 
@@ -288,7 +294,7 @@ function __WindowManager() {
 	};
 
 	var __globalMouseButtonHandler = function(event) {
-		if (!event.target.matches(".menu-button")) {
+		if (!event.target.matches(".menu-button") && !event.target.closest(".modal")) {
 			for (let el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
 				if (el_item.hasAttribute("data-force-hide-menu")) {
 					break;
