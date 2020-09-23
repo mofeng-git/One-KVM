@@ -84,12 +84,11 @@ def _resolve_keysym(name: str) -> int:
 
 def _parse_x11_names(names: str) -> Set[_X11Key]:
     keys: Set[_X11Key] = set()
-    if names:
-        for name in names.split(","):
-            shift = name.startswith("^")
-            name = (name[1:] if shift else name)
-            code = _resolve_keysym(name)
-            keys.add(_X11Key(name, code, shift))
+    for name in filter(None, names.split(",")):
+        shift = name.startswith("^")
+        name = (name[1:] if shift else name)
+        code = _resolve_keysym(name)
+        keys.add(_X11Key(name, code, shift))
     return keys
 
 
