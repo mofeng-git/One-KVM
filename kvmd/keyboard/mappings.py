@@ -299,6 +299,7 @@ X11_TO_AT1 = {
     65421: At1Key(code=57372, shift=False),  # XK_KP_Enter
     65508: At1Key(code=57373, shift=False),  # XK_Control_R
     65455: At1Key(code=57397, shift=False),  # XK_KP_Divide
+    65027: At1Key(code=57400, shift=False),  # XK_ISO_Level3_Shift
     65514: At1Key(code=57400, shift=False),  # XK_Alt_R
     65299: At1Key(code=57414, shift=False),  # XK_Pause
     65360: At1Key(code=57415, shift=False),  # XK_Home
