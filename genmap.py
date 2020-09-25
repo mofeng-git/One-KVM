@@ -33,6 +33,7 @@ from typing import Optional
 import Xlib.keysymdef.latin1
 import Xlib.keysymdef.miscellany
 import Xlib.keysymdef.xf86
+import Xlib.keysymdef.xkb
 
 import mako.template
 
@@ -74,6 +75,7 @@ def _resolve_keysym(name: str) -> int:
         Xlib.keysymdef.latin1,
         Xlib.keysymdef.miscellany,
         Xlib.keysymdef.xf86,
+        Xlib.keysymdef.xkb,
     ]:
         code = getattr(module, name, None)
         if code is not None:

@@ -81,7 +81,7 @@ AltLeft,79,KEY_LEFT_ALT,^0x04,reg:0x11,0x38,XK_Alt_L
 MetaLeft,80,KEY_LEFT_GUI,^0x08,spec:0x1f,0xe05b,XK_Meta_L
 ControlRight,81,KEY_RIGHT_CTRL,^0x10,spec:0x14,0xe01d,XK_Control_R
 ShiftRight,82,KEY_RIGHT_SHIFT,^0x20,reg:0x59,0x36,XK_Shift_R
-AltRight,83,KEY_RIGHT_ALT,^0x40,spec:0x11,0xe038,XK_Alt_R
+AltRight,83,KEY_RIGHT_ALT,^0x40,spec:0x11,0xe038,"XK_Alt_R,XK_ISO_Level3_Shift"
 MetaRight,84,KEY_RIGHT_GUI,^0x80,spec:0x27,0xe05c,XK_Meta_R
 Pause,85,KEY_PAUSE,0x48,pause:0xff,0xe046,XK_Pause
 ScrollLock,86,KEY_SCROLL_LOCK,0x47,reg:0x7e,0x46,XK_Scroll_Lock
