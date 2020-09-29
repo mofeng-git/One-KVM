@@ -91,6 +91,7 @@ from .api.atx import AtxApi
 from .api.msd import MsdApi
 from .api.streamer import StreamerApi
 from .api.export import ExportApi
+from .api.redfish import RedfishApi
 
 
 # =====
@@ -198,6 +199,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             MsdApi(msd, sync_chunk_size),
             StreamerApi(streamer),
             ExportApi(info_manager, atx, user_gpio),
+            RedfishApi(info_manager, atx),
         ]
 
         self.__ws_handlers: Dict[str, Callable] = {}
@@ -291,7 +293,11 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         super().run(**kwargs)
 
     async def _make_app(self) -> aiohttp.web.Application:
-        app = aiohttp.web.Application()
+        app = aiohttp.web.Application(middlewares=[aiohttp.web.normalize_path_middleware(
+            append_slash=False,
+            remove_slash=True,
+            merge_slashes=True,
+        )])
         app.on_shutdown.append(self.__on_shutdown)
         app.on_cleanup.append(self.__on_cleanup)
 

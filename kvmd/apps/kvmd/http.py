@@ -117,13 +117,14 @@ def make_json_response(
     result: Optional[Dict]=None,
     status: int=200,
     set_cookies: Optional[Dict[str, str]]=None,
+    wrap_result: bool=True,
 ) -> aiohttp.web.Response:
 
     response = aiohttp.web.Response(
-        text=json.dumps({
+        text=json.dumps(({
             "ok": (status == 200),
             "result": (result or {}),
-        }, sort_keys=True, indent=4),
+        } if wrap_result else result), sort_keys=True, indent=4),
         status=status,
         content_type="application/json",
     )
