@@ -44,7 +44,6 @@ def main(argv: Optional[List[str]]=None) -> None:
 
     user_agent = htclient.make_user_agent("KVMD-VNC")
 
-    # pylint: disable=protected-access
     VncServer(
         host=config.server.host,
         port=config.server.port,

@@ -43,8 +43,6 @@ from .server import KvmdServer
 
 # =====
 def main(argv: Optional[List[str]]=None) -> None:
-    # pylint: disable=protected-access
-
     config = init(
         prog="kvmd",
         description="The main Pi-KVM daemon",

@@ -80,7 +80,7 @@ class Section(dict):
         for (key, value) in self.items():
             if key not in ignore:
                 if isinstance(value, Section):
-                    unpacked[key] = value._unpack()  # pylint: disable=protected-access
+                    unpacked[key] = value._unpack()
                 else:  # Option
                     unpacked[self._get_unpack_as(key)] = value  # pylint: disable=protected-access
         return unpacked

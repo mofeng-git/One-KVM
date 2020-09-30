@@ -41,7 +41,6 @@ def main(argv: Optional[List[str]]=None) -> None:
         argv=argv,
     )[2].ipmi
 
-    # pylint: disable=protected-access
     IpmiServer(
         auth_manager=IpmiAuthManager(**config.auth._unpack()),
         kvmd=KvmdClient(
