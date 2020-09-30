@@ -94,6 +94,7 @@ from ..validators.kvm import valid_ugpio_view_table
 from ..validators.hw import valid_gpio_pin
 from ..validators.hw import valid_otg_gadget
 from ..validators.hw import valid_otg_id
+from ..validators.hw import valid_otg_ethernet
 
 
 # =====
@@ -404,6 +405,7 @@ def _get_config_scheme() -> Dict:
 
                 "ethernet": {
                     "enabled":  Option(False, type=valid_bool),
+                    "driver":   Option("ecm", type=valid_otg_ethernet),
                     "host_mac": Option("", type=(lambda arg: (valid_mac(arg) if arg else ""))),
                     "kvm_mac":  Option("", type=(lambda arg: (valid_mac(arg) if arg else ""))),
                 },

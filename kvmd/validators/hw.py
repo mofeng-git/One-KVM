@@ -23,6 +23,7 @@
 from typing import Any
 
 from . import check_in_list
+from . import check_string_in_list
 from . import check_re_match
 from . import check_len
 
@@ -51,3 +52,7 @@ def valid_otg_gadget(arg: Any) -> str:
 
 def valid_otg_id(arg: Any) -> int:
     return int(valid_number(arg, min=0, max=65535, name="OTG ID"))
+
+
+def valid_otg_ethernet(arg: Any) -> str:
+    return check_string_in_list(arg, "OTG Ethernet driver", ["ecm", "eem", "ncm", "rndis"])
