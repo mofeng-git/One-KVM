@@ -191,25 +191,27 @@ def _cmd_start(config: Section) -> None:
     _write(join(config_path, "MaxPower"), "250")
 
     if config.otg.devices.serial.enabled:
-        logger.info("Required Serial")
+        logger.info("===== Required Serial =====")
         _create_serial(gadget_path, config_path)
 
     if config.otg.devices.ethernet.enabled:
-        logger.info("Required Ethernet")
+        logger.info("===== Required Ethernet =====")
         _create_ethernet(gadget_path, config_path, **config.otg.devices.ethernet._unpack(ignore=["enabled"]))
 
     if config.kvmd.hid.type == "otg":
-        logger.info("Required HID")
+        logger.info("===== Required HID =====")
         _create_hid(gadget_path, config_path, 0, KEYBOARD_HID)
         _create_hid(gadget_path, config_path, 1, MOUSE_HID)
 
     if config.kvmd.msd.type == "otg":
-        logger.info("Required MSD")
+        logger.info("===== Required MSD =====")
         _create_msd(gadget_path, config_path, 0, config.otg.devices.msd.user, **config.otg.devices.msd.default._unpack())
         if config.otg.devices.drives.enabled:
-            logger.info("Required MSD extra drives: %d", config.otg.devices.drives.count)
+            logger.info("===== Required MSD extra drives: %d =====", config.otg.devices.drives.count)
             for instance in range(config.otg.devices.drives.count):
                 _create_msd(gadget_path, config_path, instance + 1, "root", **config.otg.devices.drives.default._unpack())
+
+    logger.info("===== Preparing complete =====")
 
     logger.info("Enabling the gadget ...")
     _write(join(gadget_path, "UDC"), udc)
