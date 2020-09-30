@@ -140,6 +140,8 @@ def init(
 def _init_config(config_path: str, override_options: List[str], **load_flags: bool) -> Section:
     config_path = os.path.expanduser(config_path)
     raw_config: Dict = load_yaml_file(config_path)
+    if not isinstance(raw_config, dict):
+        raise SystemExit(f"Config error: Top-level of the file {config_path!r} must be a dictionary")
 
     scheme = _get_config_scheme()
     try:
