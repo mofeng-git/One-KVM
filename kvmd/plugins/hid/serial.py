@@ -54,9 +54,7 @@ from ...validators.basic import valid_bool
 from ...validators.basic import valid_int_f0
 from ...validators.basic import valid_int_f1
 from ...validators.basic import valid_float_f01
-
 from ...validators.os import valid_abs_path
-
 from ...validators.hw import valid_tty_speed
 from ...validators.hw import valid_gpio_pin_optional
 

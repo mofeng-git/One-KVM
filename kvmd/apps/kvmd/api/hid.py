@@ -34,12 +34,9 @@ from aiohttp.web import WebSocketResponse
 from ....plugins.hid import BaseHid
 
 from ....validators import raise_error
-
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_int_f0
-
 from ....validators.os import valid_printable_filename
-
 from ....validators.kvm import valid_hid_key
 from ....validators.kvm import valid_hid_mouse_move
 from ....validators.kvm import valid_hid_mouse_button
@@ -47,7 +44,6 @@ from ....validators.kvm import valid_hid_mouse_wheel
 
 from ....keyboard.keysym import SymmapWebKey
 from ....keyboard.keysym import build_symmap
-
 from ....keyboard.printer import text_to_web_keys
 
 from ..http import exposed_http

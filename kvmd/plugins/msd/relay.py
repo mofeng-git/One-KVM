@@ -47,9 +47,7 @@ from ...yamlconf import Option
 
 from ...validators.basic import valid_int_f1
 from ...validators.basic import valid_float_f01
-
 from ...validators.os import valid_abs_path
-
 from ...validators.hw import valid_gpio_pin
 
 from . import MsdError

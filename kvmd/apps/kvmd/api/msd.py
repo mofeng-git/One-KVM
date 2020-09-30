@@ -28,7 +28,6 @@ from ....logging import get_logger
 from ....plugins.msd import BaseMsd
 
 from ....validators.basic import valid_bool
-
 from ....validators.kvm import valid_msd_image_name
 
 from ..http import exposed_http

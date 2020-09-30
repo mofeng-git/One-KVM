@@ -24,7 +24,6 @@ from aiohttp.web import Request
 from aiohttp.web import StreamResponse
 
 from ....validators.basic import valid_bool
-
 from ....validators.kvm import valid_log_seek
 
 from ..logreader import LogReader

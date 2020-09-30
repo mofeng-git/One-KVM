@@ -30,7 +30,6 @@ from PIL import Image
 
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_int_f0
-
 from ....validators.kvm import valid_stream_quality
 
 from .... import aiotools

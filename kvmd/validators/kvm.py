@@ -35,7 +35,6 @@ from . import check_len
 from .basic import valid_stripped_string_not_empty
 from .basic import valid_number
 from .basic import valid_string_list
-
 from .os import valid_printable_filename
 
 

@@ -51,9 +51,7 @@ from ...plugins.atx import BaseAtx
 from ...plugins.msd import BaseMsd
 
 from ...validators import ValidatorError
-
 from ...validators.basic import valid_bool
-
 from ...validators.kvm import valid_stream_quality
 from ...validators.kvm import valid_stream_fps
 from ...validators.kvm import valid_stream_resolution

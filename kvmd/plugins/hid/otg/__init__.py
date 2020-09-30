@@ -33,7 +33,6 @@ from ....yamlconf import Option
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_int_f1
 from ....validators.basic import valid_float_f01
-
 from ....validators.os import valid_abs_path
 
 from .. import BaseHid

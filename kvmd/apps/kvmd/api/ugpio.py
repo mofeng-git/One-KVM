@@ -25,7 +25,6 @@ from aiohttp.web import Response
 
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_float_f0
-
 from ....validators.kvm import valid_ugpio_channel
 
 from ..ugpio import UserGpio

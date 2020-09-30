@@ -31,7 +31,6 @@ from aiohttp.web import Response
 from .... import tools
 
 from ....plugins.atx import BaseAtx
-
 from ....plugins.ugpio import UserGpioModes
 
 from ..info import InfoManager

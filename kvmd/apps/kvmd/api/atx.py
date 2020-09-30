@@ -26,7 +26,6 @@ from aiohttp.web import Response
 from ....plugins.atx import BaseAtx
 
 from ....validators.basic import valid_bool
-
 from ....validators.kvm import valid_atx_power_action
 from ....validators.kvm import valid_atx_button
 

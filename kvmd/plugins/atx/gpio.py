@@ -36,7 +36,6 @@ from ...yamlconf import Option
 from ...validators.basic import valid_bool
 from ...validators.basic import valid_float_f0
 from ...validators.basic import valid_float_f01
-
 from ...validators.hw import valid_gpio_pin
 
 from . import AtxIsBusyError

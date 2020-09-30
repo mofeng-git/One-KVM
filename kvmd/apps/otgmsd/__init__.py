@@ -32,7 +32,6 @@ import psutil
 
 from ...validators.basic import valid_bool
 from ...validators.basic import valid_int_f0
-
 from ...validators.os import valid_abs_file
 
 from .. import init
