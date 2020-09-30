@@ -187,7 +187,7 @@ def _cmd_start(config: Section) -> None:
     config_path = join(gadget_path, "configs/c.1")
     _mkdir(config_path)
     _mkdir(join(config_path, "strings/0x409"))
-    _write(join(config_path, "strings/0x409/configuration"), "Config 1: ECM network")
+    _write(join(config_path, "strings/0x409/configuration"), "Config 1: Pi-KVM device")
     _write(join(config_path, "MaxPower"), "250")
 
     if config.otg.devices.serial.enabled:
