@@ -112,12 +112,14 @@ def _create_serial(gadget_path: str, config_path: str) -> None:
 
 
 def _create_ethernet(gadget_path: str, config_path: str, host_mac: str, kvm_mac: str) -> None:
-    if host_mac == kvm_mac:
+    if host_mac and kvm_mac and host_mac == kvm_mac:
         raise RuntimeError("Ethernet host_mac should not be equal to kvm_mac")
     func_path = join(gadget_path, "functions/ecm.usb0")
     _mkdir(func_path)
-    _write(join(func_path, "host_addr"), host_mac)
-    _write(join(func_path, "dev_addr"), kvm_mac)
+    if host_mac:
+        _write(join(func_path, "host_addr"), host_mac)
+    if kvm_mac:
+        _write(join(func_path, "dev_addr"), kvm_mac)
     _symlink(func_path, join(config_path, "ecm.usb0"))
 
 

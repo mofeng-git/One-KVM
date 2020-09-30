@@ -404,8 +404,8 @@ def _get_config_scheme() -> Dict:
 
                 "ethernet": {
                     "enabled":  Option(False, type=valid_bool),
-                    "host_mac": Option("", type=valid_mac, only_if="enabled"),
-                    "kvm_mac":  Option("", type=valid_mac, only_if="enabled"),
+                    "host_mac": Option("", type=(lambda arg: (valid_mac(arg) if arg else ""))),
+                    "kvm_mac":  Option("", type=(lambda arg: (valid_mac(arg) if arg else ""))),
                 },
 
                 "drives": {
