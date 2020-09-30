@@ -387,6 +387,12 @@ def _get_config_scheme() -> Dict:
                 "enabled": Option(False, type=valid_bool),
             },
 
+            "ethernet": {
+                "enabled":  Option(False, type=valid_bool),
+                "host_mac": Option("", type=valid_mac, only_if="enabled"),
+                "kvm_mac":  Option("", type=valid_mac, only_if="enabled"),
+            },
+
             "drives": {
                 "enabled": Option(False, type=valid_bool),
                 "count":   Option(1,     type=valid_int_f1),

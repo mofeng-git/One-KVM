@@ -97,6 +97,7 @@ def _find_udc(udc: str) -> str:
 def _check_config(config: Section) -> None:
     if (
         not config.otg.acm.enabled
+        and not config.otg.ethernet.enabled
         and config.kvmd.hid.type != "otg"
         and config.kvmd.msd.type != "otg"
     ):
@@ -108,6 +109,16 @@ def _create_acm(gadget_path: str, config_path: str) -> None:
     func_path = join(gadget_path, "functions/acm.usb0")
     _mkdir(func_path)
     _symlink(func_path, join(config_path, "acm.usb0"))
+
+
+def _create_ethernet(gadget_path: str, config_path: str, host_mac: str, kvm_mac: str) -> None:
+    if host_mac == kvm_mac:
+        raise RuntimeError("Ethernet host_mac should not be equal to kvm_mac")
+    func_path = join(gadget_path, "functions/ecm.usb0")
+    _mkdir(func_path)
+    _write(join(func_path, "host_addr"), host_mac)
+    _write(join(func_path, "dev_addr"), kvm_mac)
+    _symlink(func_path, join(config_path, "ecm.usb0"))
 
 
 def _create_hid(gadget_path: str, config_path: str, instance: int, hid: Hid) -> None:
@@ -180,6 +191,10 @@ def _cmd_start(config: Section) -> None:
     if config.otg.acm.enabled:
         logger.info("Required ACM")
         _create_acm(gadget_path, config_path)
+
+    if config.otg.ethernet.enabled:
+        logger.info("Required Ethernet")
+        _create_ethernet(gadget_path, config_path, config.otg.ethernet.host_mac, config.otg.ethernet.kvm_mac)
 
     if config.kvmd.hid.type == "otg":
         logger.info("Required HID")
