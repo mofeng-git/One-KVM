@@ -144,6 +144,7 @@ def _init_config(config_path: str, override_options: List[str], **load_flags: bo
     try:
         tools.merge(raw_config, (raw_config.pop("override", {}) or {}))
         tools.merge(raw_config, build_raw_from_options(override_options))
+        _patch_raw(raw_config)
         config = make_config(raw_config, scheme)
 
         if _patch_dynamic(raw_config, config, scheme, **load_flags):
@@ -152,6 +153,19 @@ def _init_config(config_path: str, override_options: List[str], **load_flags: bo
         return config
     except (ConfigError, UnknownPluginError) as err:
         raise SystemExit(f"Config error: {err}")
+
+
+def _patch_raw(raw_config: Dict) -> None:
+    if isinstance(raw_config.get("otg"), dict):
+        for (old, new) in [
+            ("msd", "msd"),
+            ("acm", "serial"),
+            ("drives", "drives"),
+        ]:
+            if old in raw_config["otg"]:
+                if not isinstance(raw_config["otg"].get("devices"), dict):
+                    raw_config["otg"]["devices"] = {}
+                raw_config["otg"]["devices"][new] = raw_config["otg"].pop(old)
 
 
 def _patch_dynamic(  # pylint: disable=too-many-locals
@@ -372,36 +386,38 @@ def _get_config_scheme() -> Dict:
             "udc":        Option("",     type=valid_stripped_string),
             "init_delay": Option(3.0,    type=valid_float_f01),
 
-            "msd": {
-                "user": Option("kvmd", type=valid_user),
-                "default": {
-                    "stall":     Option(False, type=valid_bool),
-                    "cdrom":     Option(True,  type=valid_bool),
-                    "rw":        Option(False, type=valid_bool),
-                    "removable": Option(True,  type=valid_bool),
-                    "fua":       Option(True,  type=valid_bool),
+            "devices": {
+                "msd": {
+                    "user": Option("kvmd", type=valid_user),
+                    "default": {
+                        "stall":     Option(False, type=valid_bool),
+                        "cdrom":     Option(True,  type=valid_bool),
+                        "rw":        Option(False, type=valid_bool),
+                        "removable": Option(True,  type=valid_bool),
+                        "fua":       Option(True,  type=valid_bool),
+                    },
                 },
-            },
 
-            "acm": {
-                "enabled": Option(False, type=valid_bool),
-            },
+                "serial": {
+                    "enabled": Option(False, type=valid_bool),
+                },
 
-            "ethernet": {
-                "enabled":  Option(False, type=valid_bool),
-                "host_mac": Option("", type=valid_mac, only_if="enabled"),
-                "kvm_mac":  Option("", type=valid_mac, only_if="enabled"),
-            },
+                "ethernet": {
+                    "enabled":  Option(False, type=valid_bool),
+                    "host_mac": Option("", type=valid_mac, only_if="enabled"),
+                    "kvm_mac":  Option("", type=valid_mac, only_if="enabled"),
+                },
 
-            "drives": {
-                "enabled": Option(False, type=valid_bool),
-                "count":   Option(1,     type=valid_int_f1),
-                "default": {
-                    "stall":     Option(False, type=valid_bool),
-                    "cdrom":     Option(False, type=valid_bool),
-                    "rw":        Option(True,  type=valid_bool),
-                    "removable": Option(True,  type=valid_bool),
-                    "fua":       Option(True,  type=valid_bool),
+                "drives": {
+                    "enabled": Option(False, type=valid_bool),
+                    "count":   Option(1,     type=valid_int_f1),
+                    "default": {
+                        "stall":     Option(False, type=valid_bool),
+                        "cdrom":     Option(False, type=valid_bool),
+                        "rw":        Option(True,  type=valid_bool),
+                        "removable": Option(True,  type=valid_bool),
+                        "fua":       Option(True,  type=valid_bool),
+                    },
                 },
             },
         },

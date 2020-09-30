@@ -96,8 +96,8 @@ def _find_udc(udc: str) -> str:
 
 def _check_config(config: Section) -> None:
     if (
-        not config.otg.acm.enabled
-        and not config.otg.ethernet.enabled
+        not config.otg.devices.serial.enabled
+        and not config.otg.devices.ethernet.enabled
         and config.kvmd.hid.type != "otg"
         and config.kvmd.msd.type != "otg"
     ):
@@ -105,7 +105,7 @@ def _check_config(config: Section) -> None:
 
 
 # =====
-def _create_acm(gadget_path: str, config_path: str) -> None:
+def _create_serial(gadget_path: str, config_path: str) -> None:
     func_path = join(gadget_path, "functions/acm.usb0")
     _mkdir(func_path)
     _symlink(func_path, join(config_path, "acm.usb0"))
@@ -188,13 +188,13 @@ def _cmd_start(config: Section) -> None:
     _write(join(config_path, "strings/0x409/configuration"), "Config 1: ECM network")
     _write(join(config_path, "MaxPower"), "250")
 
-    if config.otg.acm.enabled:
-        logger.info("Required ACM")
-        _create_acm(gadget_path, config_path)
+    if config.otg.devices.serial.enabled:
+        logger.info("Required Serial")
+        _create_serial(gadget_path, config_path)
 
-    if config.otg.ethernet.enabled:
+    if config.otg.devices.ethernet.enabled:
         logger.info("Required Ethernet")
-        _create_ethernet(gadget_path, config_path, config.otg.ethernet.host_mac, config.otg.ethernet.kvm_mac)
+        _create_ethernet(gadget_path, config_path, **config.otg.devices.ethernet._unpack(ignore=["enabled"]))
 
     if config.kvmd.hid.type == "otg":
         logger.info("Required HID")
@@ -203,11 +203,11 @@ def _cmd_start(config: Section) -> None:
 
     if config.kvmd.msd.type == "otg":
         logger.info("Required MSD")
-        _create_msd(gadget_path, config_path, 0, config.otg.msd.user, **config.otg.msd.default._unpack())  # pylint: disable=protected-access
-        if config.otg.drives.enabled:
-            logger.info("Required MSD extra drives: %d", config.otg.drives.count)
-            for instance in range(config.otg.drives.count):
-                _create_msd(gadget_path, config_path, instance + 1, "root", **config.otg.drives.default._unpack())  # pylint: disable=protected-access
+        _create_msd(gadget_path, config_path, 0, config.otg.devices.msd.user, **config.otg.devices.msd.default._unpack())
+        if config.otg.devices.drives.enabled:
+            logger.info("Required MSD extra drives: %d", config.otg.devices.drives.count)
+            for instance in range(config.otg.devices.drives.count):
+                _create_msd(gadget_path, config_path, instance + 1, "root", **config.otg.devices.drives.default._unpack())
 
     logger.info("Enabling the gadget ...")
     _write(join(gadget_path, "UDC"), udc)
