@@ -77,7 +77,9 @@ from ..validators.os import valid_command
 
 from ..validators.net import valid_ip_or_host
 from ..validators.net import valid_ip
+from ..validators.net import valid_net
 from ..validators.net import valid_port
+from ..validators.net import valid_ports_list
 from ..validators.net import valid_mac
 from ..validators.net import valid_ssl_ciphers
 
@@ -423,6 +425,26 @@ def _get_config_scheme() -> Dict:
                         "fua":       Option(True,  type=valid_bool),
                     },
                 },
+            },
+        },
+
+        "otgnet": {
+            "iface": {
+                "net": Option("169.254.0.100/31", type=functools.partial(valid_net, v6=False)),
+            },
+
+            "firewall": {
+                "allow_tcp": Option([], type=valid_ports_list),
+                "allow_udp": Option([], type=valid_ports_list),
+            },
+
+            "dhcp": {
+                "enabled": Option(True, type=valid_bool),
+            },
+
+            "commands": {
+                "ip_cmd": Option(["/usr/bin/ip"], type=valid_command),
+                "iptables_cmd": Option(["/usr/bin/iptables"], type=valid_command),
             },
         },
 

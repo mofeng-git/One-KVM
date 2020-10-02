@@ -59,6 +59,8 @@ depends=(
 	make
 	patch
 	sudo
+	iptables
+	iproute2
 	"raspberrypi-io-access>=0.5"
 	"ustreamer>=1.19"
 )

@@ -28,11 +28,13 @@ from typing import Callable
 from typing import Any
 
 from . import ValidatorError
+from . import raise_error
 from . import check_re_match
 from . import check_any
 
 from .basic import valid_number
 from .basic import valid_stripped_string_not_empty
+from .basic import valid_string_list
 
 
 # =====
@@ -66,6 +68,26 @@ def valid_ip(arg: Any, v4: bool=True, v6: bool=True) -> str:
     )
 
 
+def valid_net(arg: Any, v4: bool=True, v6: bool=True) -> str:
+    assert v4 or v6
+    validators: List[Callable] = []
+    versions: List[str] = []
+    if v4:
+        validators.append(lambda arg: str(ipaddress.IPv4Network(arg)))
+        versions.append("4")
+    if v6:
+        validators.append(lambda arg: str(ipaddress.IPv6Network(arg)))
+        versions.append("6")
+    name = f"IPv{'/'.join(versions)} network"
+    if "/" not in str(arg):
+        raise_error(arg, name)
+    return check_any(
+        arg=valid_stripped_string_not_empty(arg, name),
+        name=name,
+        validators=validators,
+    )
+
+
 def valid_rfc_host(arg: Any) -> str:
     # http://stackoverflow.com/questions/106179/regular-expression-to-match-hostname-or-ip-address
     pattern = r"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*" \
@@ -75,6 +97,10 @@ def valid_rfc_host(arg: Any) -> str:
 
 def valid_port(arg: Any) -> int:
     return int(valid_number(arg, min=0, max=65535, name="network port"))
+
+
+def valid_ports_list(arg: Any) -> List[int]:
+    return list(map(int, valid_string_list(arg, subval=valid_port, name="ports list")))
 
 
 def valid_mac(arg: Any) -> str:
