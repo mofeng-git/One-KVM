@@ -37,7 +37,7 @@ from .basic import valid_stripped_string_not_empty
 
 # =====
 def valid_ip_or_host(arg: Any) -> str:
-    name = "IP address or RFC-1123 hostname"
+    name = "IPv4/6 address or RFC-1123 hostname"
     return check_any(
         arg=valid_stripped_string_not_empty(arg, name),
         name=name,
@@ -51,11 +51,14 @@ def valid_ip_or_host(arg: Any) -> str:
 def valid_ip(arg: Any, v4: bool=True, v6: bool=True) -> str:
     assert v4 or v6
     validators: List[Callable] = []
+    versions: List[str] = []
     if v4:
         validators.append(lambda arg: str(ipaddress.IPv4Address(arg)))
+        versions.append("4")
     if v6:
         validators.append(lambda arg: str(ipaddress.IPv6Address(arg)))
-    name = "IP address"
+        versions.append("6")
+    name = f"IPv{'/'.join(versions)} address"
     return check_any(
         arg=valid_stripped_string_not_empty(arg, name),
         name=name,
@@ -71,7 +74,7 @@ def valid_rfc_host(arg: Any) -> str:
 
 
 def valid_port(arg: Any) -> int:
-    return int(valid_number(arg, min=0, max=65535, name="TCP/UDP port"))
+    return int(valid_number(arg, min=0, max=65535, name="network port"))
 
 
 def valid_mac(arg: Any) -> str:
