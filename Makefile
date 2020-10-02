@@ -29,6 +29,7 @@ all:
 	@ echo "    make gpio             # Create gpio mockup"
 	@ echo "    make run              # Run kvmd"
 	@ echo "    make run CMD=...      # Run specified command inside kvmd environment"
+	@ echo "    make run-cfg          # Run kvmd -m"
 	@ echo "    make run-ipmi         # Run kvmd-ipmi"
 	@ echo "    make run-ipmi CMD=... # Run specified command inside kvmd-ipmi environment"
 	@ echo "    make run-vnc          # Run kvmd-vnc"
@@ -104,6 +105,23 @@ run: testenv $(TESTENV_GPIO)
 			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 			&& $(if $(CMD),$(CMD),python -m kvmd.apps.kvmd) \
+		"
+
+
+run-cfg: testenv
+	- docker run --rm --name kvmd-cfg \
+			--volume `pwd`/testenv/run:/run/kvmd:rw \
+			--volume `pwd`/testenv:/testenv:ro \
+			--volume `pwd`/kvmd:/kvmd:ro \
+			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
+			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
+			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
+		-it $(TESTENV_IMAGE) /bin/bash -c " \
+			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
+			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
+			&& $(if $(CMD),$(CMD),python -m kvmd.apps.kvmd -m) \
 		"
 
 
