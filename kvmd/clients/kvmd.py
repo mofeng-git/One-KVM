@@ -60,7 +60,7 @@ class _AuthApiPart(_BaseApiPart):
                 htclient.raise_not_200(response)
                 return True
         except aiohttp.ClientResponseError as err:
-            if err.status in [401, 403]:
+            if err.status in [400, 401, 403]:
                 return False
             raise
 
