@@ -35,6 +35,8 @@ from ....logging import get_logger
 from .... import aiomulti
 from .... import aioproc
 
+from .usb import UsbDeviceController
+
 
 # =====
 class BaseEvent:
@@ -42,12 +44,14 @@ class BaseEvent:
 
 
 class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         name: str,
         read_size: int,
         initial_state: Dict,
         notifier: aiomulti.AioProcessNotifier,
+
+        udc: UsbDeviceController,
 
         device_path: str,
         select_timeout: float,
@@ -60,6 +64,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         self.__name = name
         self.__read_size = read_size
+
+        self.__udc = udc
 
         self.__device_path = device_path
         self.__select_timeout = select_timeout
@@ -87,7 +93,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                     try:
                         event: BaseEvent = self.__events_queue.get(timeout=0.1)
                     except queue.Empty:
-                        pass
+                        if not self.__udc.can_operate():
+                            self.__close_device()
                     else:
                         self._process_event(event)
             except Exception:
@@ -216,16 +223,19 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         logger = get_logger()
 
         if self.__fd < 0:
-            try:
-                flags = os.O_NONBLOCK
-                flags |= (os.O_RDWR if self.__read_size else os.O_WRONLY)
-                self.__fd = os.open(self.__device_path, flags)
-            except FileNotFoundError:
-                logger.error("Missing HID-%s device: %s", self.__name, self.__device_path)
-                time.sleep(self.__select_timeout)
-            except Exception as err:
-                logger.error("Can't open HID-%s device: %s: %s: %s",
-                             self.__name, self.__device_path, type(err).__name__, err)
+            if self.__udc.can_operate():
+                try:
+                    flags = os.O_NONBLOCK
+                    flags |= (os.O_RDWR if self.__read_size else os.O_WRONLY)
+                    self.__fd = os.open(self.__device_path, flags)
+                except FileNotFoundError:
+                    logger.error("Missing HID-%s device: %s", self.__name, self.__device_path)
+                    time.sleep(self.__select_timeout)
+                except Exception as err:
+                    logger.error("Can't open HID-%s device: %s: %s: %s",
+                                 self.__name, self.__device_path, type(err).__name__, err)
+                    time.sleep(self.__select_timeout)
+            else:
                 time.sleep(self.__select_timeout)
 
         if self.__fd >= 0:

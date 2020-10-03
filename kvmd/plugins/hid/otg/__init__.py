@@ -37,6 +37,7 @@ from ....validators.os import valid_abs_path
 
 from .. import BaseHid
 
+from .usb import UsbDeviceController
 from .keyboard import KeyboardProcess
 from .mouse import MouseProcess
 
@@ -48,12 +49,15 @@ class Plugin(BaseHid):
         keyboard: Dict[str, Any],
         mouse: Dict[str, Any],
         noop: bool,
+        udc: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
 
         self.__notifier = aiomulti.AioProcessNotifier()
 
-        self.__keyboard_proc = KeyboardProcess(noop=noop, notifier=self.__notifier, **keyboard)
-        self.__mouse_proc = MouseProcess(noop=noop, notifier=self.__notifier, **mouse)
+        self.__udc = UsbDeviceController(udc)
+
+        self.__keyboard_proc = KeyboardProcess(udc=self.__udc, noop=noop, notifier=self.__notifier, **keyboard)
+        self.__mouse_proc = MouseProcess(udc=self.__udc, noop=noop, notifier=self.__notifier, **mouse)
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
@@ -74,6 +78,7 @@ class Plugin(BaseHid):
         }
 
     def sysprep(self) -> None:
+        self.__udc.find()
         self.__keyboard_proc.start()
         self.__mouse_proc.start()
 

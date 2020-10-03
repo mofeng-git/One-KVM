@@ -56,12 +56,16 @@ def main(argv: Optional[List[str]]=None) -> None:
 
     msd_kwargs = config.kvmd.msd._unpack(ignore=["type"])
     if config.kvmd.msd.type == "otg":
-        msd_kwargs["gadget"] = config.otg.gadget  # XXX: Small crutch to pass gadget name to plugin
+        msd_kwargs["gadget"] = config.otg.gadget  # XXX: Small crutch to pass gadget name to the plugin
+
+    hid_kwargs = config.kvmd.hid._unpack(ignore=["type", "keymap"])
+    if config.kvmd.hid.type == "otg":
+        hid_kwargs["udc"] = config.otg.udc  # XXX: Small crutch to pass UDC to the plugin
 
     global_config = config
     config = config.kvmd
 
-    hid = get_hid_class(config.hid.type)(**config.hid._unpack(ignore=["type", "keymap"]))
+    hid = get_hid_class(config.hid.type)(**hid_kwargs)
     streamer = Streamer(**config.streamer._unpack(ignore=["forever"]))
 
     KvmdServer(
