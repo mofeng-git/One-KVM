@@ -110,6 +110,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         pass
 
     def _update_state(self, **kwargs: bool) -> None:
+        assert "online" not in kwargs
         self.__state_flags.update(**kwargs)
 
     # =====
