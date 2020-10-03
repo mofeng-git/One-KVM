@@ -37,6 +37,8 @@ from ...yamlconf import Section
 
 from ...validators import ValidatorError
 
+from ... import env
+
 from .. import init
 
 from .hid import Hid
@@ -83,7 +85,7 @@ def _write_bytes(path: str, data: bytes) -> None:
 
 
 def _find_udc(udc: str) -> str:
-    udcs = sorted(os.listdir("/sys/class/udc"))
+    udcs = sorted(os.listdir(f"{env.SYSFS_PREFIX}/sys/class/udc"))
     if not udc:
         if len(udcs) == 0:
             raise RuntimeError("Can't find any UDC")
@@ -170,7 +172,7 @@ def _cmd_start(config: Section) -> None:
     udc = _find_udc(config.otg.udc)
 
     logger.info("Creating gadget %r ...", config.otg.gadget)
-    gadget_path = join("/sys/kernel/config/usb_gadget", config.otg.gadget)
+    gadget_path = join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", config.otg.gadget)
     _mkdir(gadget_path)
 
     _write(join(gadget_path, "idVendor"), f"0x{config.otg.vendor_id:X}")
@@ -228,7 +230,7 @@ def _cmd_stop(config: Section) -> None:
 
     _check_config(config)
 
-    gadget_path = join("/sys/kernel/config/usb_gadget", config.otg.gadget)
+    gadget_path = join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", config.otg.gadget)
 
     logger.info("Disabling gadget %r ...", config.otg.gadget)
     _write(join(gadget_path, "UDC"), "")

@@ -34,13 +34,15 @@ from ...validators.basic import valid_bool
 from ...validators.basic import valid_int_f0
 from ...validators.os import valid_abs_file
 
+from ... import env
+
 from .. import init
 
 
 # =====
 def _make_param_path(gadget: str, instance: int, param: str) -> str:
     return os.path.join(
-        "/sys/kernel/config/usb_gadget",
+        f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget",
         gadget,
         f"functions/mass_storage.usb{instance}/lun.0",
         param,
