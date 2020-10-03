@@ -313,7 +313,9 @@ X11_TO_AT1 = {
     65379: At1Key(code=57426, shift=False),  # XK_Insert
     65535: At1Key(code=57427, shift=False),  # XK_Delete
     65511: At1Key(code=57435, shift=False),  # XK_Meta_L
+    65515: At1Key(code=57435, shift=False),  # XK_Super_L
     65512: At1Key(code=57436, shift=False),  # XK_Meta_R
+    65516: At1Key(code=57436, shift=False),  # XK_Super_R
     65383: At1Key(code=57437, shift=False),  # XK_Menu
     269025071: At1Key(code=57438, shift=False),  # XK_XF86_Sleep
 }
