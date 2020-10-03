@@ -47,17 +47,17 @@ class UsbDeviceController:
         try:
             candidates = sorted(os.listdir(path))
         except Exception as err:
-            logger.error("Can't list %s: %s: %s", path, type(err).__name__, err)
+            logger.error("Can't list %s: %s: %s: ignored", path, type(err).__name__, err)
             return
 
         udc = ""
         if not self.__udc:
             if len(candidates) == 0:
-                logger.warning("Can't find any UDC: ignored")
+                logger.error("Can't find any UDC: ignored")
             else:
                 udc = candidates[0]
         elif self.__udc not in candidates:
-            logger.warning("Can't find selected UDC: %s: ignored", self.__udc)
+            logger.error("Can't find selected UDC: %s: ignored", self.__udc)
         else:
             udc = self.__udc
 
