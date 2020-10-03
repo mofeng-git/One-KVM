@@ -57,6 +57,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         select_timeout: float,
         write_retries: int,
         write_retries_delay: float,
+        reopen_delay: float,
         noop: bool,
     ) -> None:
 
@@ -71,6 +72,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         self.__select_timeout = select_timeout
         self.__write_retries = write_retries
         self.__write_retries_delay = write_retries_delay
+        self.__reopen_delay = reopen_delay
         self.__noop = noop
 
         self.__fd = -1
@@ -230,13 +232,13 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                     self.__fd = os.open(self.__device_path, flags)
                 except FileNotFoundError:
                     logger.error("Missing HID-%s device: %s", self.__name, self.__device_path)
-                    time.sleep(self.__select_timeout)
+                    time.sleep(self.__reopen_delay)
                 except Exception as err:
                     logger.error("Can't open HID-%s device: %s: %s: %s",
                                  self.__name, self.__device_path, type(err).__name__, err)
-                    time.sleep(self.__select_timeout)
+                    time.sleep(self.__reopen_delay)
             else:
-                time.sleep(self.__select_timeout)
+                time.sleep(self.__reopen_delay)
 
         if self.__fd >= 0:
             try:

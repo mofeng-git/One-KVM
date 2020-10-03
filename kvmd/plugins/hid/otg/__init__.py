@@ -67,12 +67,14 @@ class Plugin(BaseHid):
                 "select_timeout":      Option(1.0, type=valid_float_f01),
                 "write_retries":       Option(5,   type=valid_int_f1),
                 "write_retries_delay": Option(0.1, type=valid_float_f01),
+                "reopen_delay":        Option(0.5, type=valid_float_f01),
             },
             "mouse": {
                 "device":              Option("",  type=valid_abs_path, unpack_as="device_path"),
                 "select_timeout":      Option(1.0, type=valid_float_f01),
                 "write_retries":       Option(5,   type=valid_int_f1),
                 "write_retries_delay": Option(0.1, type=valid_float_f01),
+                "reopen_delay":        Option(0.5, type=valid_float_f01),
             },
             "noop": Option(False, type=valid_bool),
         }
