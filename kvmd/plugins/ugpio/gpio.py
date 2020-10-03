@@ -25,6 +25,7 @@ from typing import Optional
 
 import gpiod
 
+from ... import env
 from ... import aiotools
 from ... import aiogp
 
@@ -58,13 +59,13 @@ class Plugin(BaseUserGpioDriver):
     def prepare(self) -> None:
         assert self.__reader is None
         self.__reader = aiogp.AioReader(
-            path=aiogp.DEVICE_PATH,
+            path=env.GPIO_DEVICE_PATH,
             consumer="kvmd::ugpio-gpio::inputs",
             pins=self.__input_pins,
             notifier=self._notifier,
         )
 
-        self.__chip = gpiod.Chip(aiogp.DEVICE_PATH)
+        self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
         for (pin, initial) in self.__output_pins.items():
             line = self.__chip.get_line(pin)
             line.request("kvmd::ugpio-gpio::outputs", gpiod.LINE_REQ_DIR_OUT, default_vals=[int(initial or False)])

@@ -302,8 +302,6 @@ def _get_config_scheme() -> Dict:
                 "extras": Option("/usr/share/kvmd/extras", type=valid_abs_dir),
                 "hw": {
                     "vcgencmd_cmd":  Option(["/opt/vc/bin/vcgencmd"], type=valid_command),
-                    "procfs_prefix": Option("", type=tools.str_strip),
-                    "sysfs_prefix":  Option("", type=tools.str_strip),
                     "state_poll":    Option(10.0,  type=valid_float_f01),
                 },
             },

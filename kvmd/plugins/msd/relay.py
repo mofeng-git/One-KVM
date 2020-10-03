@@ -39,6 +39,7 @@ import gpiod
 
 from ...logging import get_logger
 
+from ... import env
 from ... import aiotools
 from ... import aiofs
 from ... import aiogp
@@ -172,7 +173,7 @@ class _Gpio:
         assert self.__target_line is None
         assert self.__reset_line is None
 
-        self.__chip = gpiod.Chip(aiogp.DEVICE_PATH)
+        self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
 
         self.__target_line = self.__chip.get_line(self.__target_pin)
         self.__target_line.request("kvmd::msd-relay::target", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])

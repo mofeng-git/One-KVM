@@ -28,6 +28,7 @@ import gpiod
 
 from ...logging import get_logger
 
+from ... import env
 from ... import aiotools
 from ... import aiogp
 
@@ -76,7 +77,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__reset_switch_line: Optional[gpiod.Line] = None
 
         self.__reader = aiogp.AioReader(
-            path=aiogp.DEVICE_PATH,
+            path=env.GPIO_DEVICE_PATH,
             consumer="kvmd::atx-gpio::leds",
             pins={
                 power_led_pin: aiogp.AioReaderPinParams(power_led_inverted, power_led_debounce),
@@ -107,7 +108,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         assert self.__power_switch_line is None
         assert self.__reset_switch_line is None
 
-        self.__chip = gpiod.Chip(aiogp.DEVICE_PATH)
+        self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
 
         self.__power_switch_line = self.__chip.get_line(self.__power_switch_pin)
         self.__power_switch_line.request("kvmd::atx-gpio::power_switch", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])

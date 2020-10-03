@@ -91,6 +91,8 @@ run: testenv $(TESTENV_GPIO)
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
 			--device $(TESTENV_GPIO):$(TESTENV_GPIO) \
 			--env KVMD_GPIO_DEVICE_PATH=$(TESTENV_GPIO) \
+			--env KVMD_SYSFS_PREFIX=/fake_sysfs \
+			--env KVMD_PROCFS_PREFIX=/fake_procfs \
 			$(if $(TESTENV_RELAY),--device $(TESTENV_RELAY):$(TESTENV_RELAY),) \
 			--publish 8080:80/tcp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \

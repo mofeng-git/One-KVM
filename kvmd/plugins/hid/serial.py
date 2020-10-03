@@ -43,6 +43,7 @@ from ...logging import get_logger
 
 from ...keyboard.mappings import KEYMAP
 
+from ... import env
 from ... import aiotools
 from ... import aiomulti
 from ... import aioproc
@@ -168,7 +169,7 @@ class _Gpio:
         if self.__reset_pin >= 0:
             assert self.__chip is None
             assert self.__reset_line is None
-            self.__chip = gpiod.Chip(aiogp.DEVICE_PATH)
+            self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
             self.__reset_line = self.__chip.get_line(self.__reset_pin)
             self.__reset_line.request("kvmd::hid-serial::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
 

@@ -44,7 +44,6 @@ from ....yamlconf import Option
 from ....validators.os import valid_abs_dir
 from ....validators.os import valid_command
 
-from .... import tools
 from .... import aiotools
 from .... import aiofs
 
@@ -139,7 +138,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         remount_cmd: List[str],
         unlock_cmd: List[str],
 
-        sysfs_prefix: str,
         gadget: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
 
@@ -150,7 +148,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__remount_cmd = remount_cmd
         self.__unlock_cmd = unlock_cmd
 
-        self.__drive = Drive(sysfs_prefix, gadget, instance=0, lun=0)
+        self.__drive = Drive(gadget, instance=0, lun=0)
 
         self.__new_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__new_file_written = 0
@@ -170,7 +168,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "storage":      Option("/var/lib/kvmd/msd", type=valid_abs_dir, unpack_as="storage_path"),
             "remount_cmd":  Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-remount", "{mode}"], type=valid_command),
             "unlock_cmd":   Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-unlock", "unlock"],  type=valid_command),
-            "sysfs_prefix": Option("", type=tools.str_strip),
         }
 
     async def get_state(self) -> Dict:

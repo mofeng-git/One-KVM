@@ -33,6 +33,7 @@ import aiofiles
 
 from ....logging import get_logger
 
+from .... import env
 from .... import aioproc
 
 from .base import BaseInfoSubmanager
@@ -47,14 +48,10 @@ class HwInfoSubmanager(BaseInfoSubmanager):
     def __init__(
         self,
         vcgencmd_cmd: List[str],
-        procfs_prefix: str,
-        sysfs_prefix: str,
         state_poll: float,
     ) -> None:
 
         self.__vcgencmd_cmd = vcgencmd_cmd
-        self.__sysfs_prefix = sysfs_prefix
-        self.__procfs_prefix = procfs_prefix
         self.__state_poll = state_poll
 
     async def get_state(self) -> Dict:
@@ -90,7 +87,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
     # =====
 
     async def __get_dt_model(self) -> Optional[str]:
-        model_path = f"{self.__procfs_prefix}/proc/device-tree/model"
+        model_path = f"{env.PROCFS_PREFIX}/proc/device-tree/model"
         try:
             async with aiofiles.open(model_path) as model_file:
                 return (await model_file.read()).strip(" \t\r\n\0")
@@ -99,7 +96,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             return None
 
     async def __get_cpu_temp(self) -> Optional[float]:
-        temp_path = f"{self.__sysfs_prefix}/sys/class/thermal/thermal_zone0/temp"
+        temp_path = f"{env.SYSFS_PREFIX}/sys/class/thermal/thermal_zone0/temp"
         try:
             async with aiofiles.open(temp_path) as temp_file:
                 return int((await temp_file.read()).strip()) / 1000

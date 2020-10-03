@@ -2,11 +2,6 @@ kvmd:
     server:
         unix_mode: 0666
 
-    info:
-        hw:
-            procfs_prefix: /fake_procfs
-            sysfs_prefix: /fake_sysfs
-
     hid:
         keyboard:
             device: /dev/null
@@ -17,7 +12,6 @@ kvmd:
     msd:
         remount_cmd: /bin/true
         unlock_cmd: /bin/true
-        sysfs_prefix: /fake_sysfs
 
     streamer:
         cmd:

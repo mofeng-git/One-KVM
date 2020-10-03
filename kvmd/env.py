@@ -20,36 +20,14 @@
 # ========================================================================== #
 
 
-import operator
-import functools
-
-from typing import Tuple
-from typing import List
-from typing import Dict
-from typing import Hashable
-from typing import TypeVar
+import os
 
 
 # =====
-def merge(dest: Dict, src: Dict) -> None:
-    for key in src:
-        if key in dest:
-            if isinstance(dest[key], dict) and isinstance(src[key], dict):
-                merge(dest[key], src[key])
-                continue
-        dest[key] = src[key]
+# XXX: Don't use these variables for any purpose other than testing.
+# It can be removed at any time.
 
+GPIO_DEVICE_PATH = str(os.getenv("KVMD_GPIO_DEVICE_PATH", "/dev/gpiochip0")).strip()
 
-def rget(dct: Dict, *keys: Hashable) -> Dict:
-    result = functools.reduce((lambda nxt, key: nxt.get(key, {})), keys, dct)
-    if not isinstance(result, dict):
-        raise TypeError(f"Not a dict as result: {result!r} from {dct!r} at {list(keys)}")
-    return result
-
-
-_DictKeyT = TypeVar("_DictKeyT")
-_DictValueT = TypeVar("_DictValueT")
-
-
-def sorted_kvs(dct: Dict[_DictKeyT, _DictValueT]) -> List[Tuple[_DictKeyT, _DictValueT]]:
-    return sorted(dct.items(), key=operator.itemgetter(0))
+SYSFS_PREFIX = str(os.getenv("KVMD_SYSFS_PREFIX", "")).strip()
+PROCFS_PREFIX = str(os.getenv("KVMD_PROCFS_PREFIX", "")).strip()
