@@ -85,12 +85,12 @@ def _write_bytes(path: str, data: bytes) -> None:
 
 
 def _find_udc(udc: str) -> str:
-    udcs = sorted(os.listdir(f"{env.SYSFS_PREFIX}/sys/class/udc"))
+    candidates = sorted(os.listdir(f"{env.SYSFS_PREFIX}/sys/class/udc"))
     if not udc:
-        if len(udcs) == 0:
+        if len(candidates) == 0:
             raise RuntimeError("Can't find any UDC")
-        udc = udcs[0]
-    elif udc not in udcs:
+        udc = candidates[0]
+    elif udc not in candidates:
         raise RuntimeError(f"Can't find selected UDC: {udc}")
     get_logger().info("Using UDC %s", udc)
     return udc
