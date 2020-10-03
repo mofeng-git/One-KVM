@@ -164,8 +164,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             except Exception as err:
                 if isinstance(err, OSError) and (
                     # https://github.com/raspberrypi/linux/commit/61b7f805dc2fd364e0df682de89227e94ce88e25
-                    err.errno == errno.EAGAIN
-                    or err.errno == errno.ESHUTDOWN
+                    err.errno == errno.EAGAIN  # pylint: disable=no-member
+                    or err.errno == errno.ESHUTDOWN  # pylint: disable=no-member
                 ):
                     logger.debug("HID-%s busy/unplugged (write): %s: %s",
                                  self.__name, type(err).__name__, err)
