@@ -1,9 +1,39 @@
-# Use this file to override system settings and other configs like this:
+####################################################################
+#                                                                  #
+# Override Pi-KVM system settings. This file uses the YAML syntax. #
+#                                                                  #
+#    https://github.com/pikvm/pikvm/blob/master/pages/config.md    #
+#                                                                  #
+# All overridden parameters will be applied AFTER other configs    #
+# and "!include" directives and BEFORE validation.                 #
+# Not: Sections should be combined under shared keys.              #
+#                                                                  #
+####################################################################
 #
-# kvmd:
-#     server:
-#         heartbeat: 5.0
+#########
+# Wrong #
+#########
+#kvmd:
+#    gpio:
+#        drivers: ...
+#kvmd:
+#    gpio:
+#        scheme: ...
 #
-# It will be applied AFTER other configs and "!include" directives and BEFORE validation.
-
-{}
+###########
+# Correct #
+###########
+#kvmd:
+#    gpio:
+#        drivers: ...
+#        scheme: ...
+#
+###########
+# Example #
+###########
+#vnc:
+#    # See https://github.com/pikvm/pikvm/blob/master/pages/vnc.md
+#    keymap: /usr/share/kvmd/keymaps/ru # Set russian keymap
+#    auth:
+#        vncauth:
+#            enabled: true # Enable auth via /etc/kvmd/vncpasswd
