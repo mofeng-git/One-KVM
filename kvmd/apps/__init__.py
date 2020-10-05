@@ -382,6 +382,7 @@ def _get_config_scheme() -> Dict:
             "manufacturer": Option("Pi-KVM"),
             "product":      Option("Composite KVM Device"),
             "serial":       Option("CAFEBABE"),
+            "max_power":    Option(250, type=functools.partial(valid_number, min=0, max=500)),
 
             "gadget":     Option("kvmd", type=valid_otg_gadget),
             "udc":        Option("",     type=valid_stripped_string),
