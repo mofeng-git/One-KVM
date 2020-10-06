@@ -96,15 +96,19 @@ export function Gpio() {
 		for (let channel in model.scheme.outputs) {
 			let el = $(`gpio-switch-${channel}`);
 			if (el) {
-				tools.setOnClick(el, () => __switchChannel(el));
+				tools.setOnClick(el, __createAction(el, __switchChannel));
 			}
 			el = $(`gpio-button-${channel}`);
 			if (el) {
-				tools.setOnClick(el, () => __pulseChannel(el));
+				tools.setOnClick(el, __createAction(el, __pulseChannel));
 			}
 		}
 
 		self.setState(__state);
+	};
+
+	var __createAction = function(el, action) {
+		return () => action(el);
 	};
 
 	var __createItem = function(item) {
