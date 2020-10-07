@@ -20,5 +20,6 @@ post_upgrade() {
 	chown kvmd /var/lib/kvmd/msd || true
 
 	echo "==> Patching configs ..."
-	sed -i -e "s/^dtoverlay=pi3-disable-bt$/dtoverlay=disable-bt/g" /boot/config.txt
+	sed -i -e 's/^dtoverlay=pi3-disable-bt$/dtoverlay=disable-bt/g' /boot/config.txt
+	sed -i -e 's/^dtoverlay=dwc2$/dtoverlay=dwc2,dr_mode=peripheral/g' /boot/config.txt
 }
