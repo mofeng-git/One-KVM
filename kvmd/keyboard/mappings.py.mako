@@ -62,7 +62,7 @@ class At1Key:
 X11_TO_AT1 = {
 % for km in sorted(keymap, key=operator.attrgetter("at1_code")):
     % for x11_key in sorted(km.x11_keys, key=(lambda key: (key.code, key.shift))):
-    ${x11_key.code}: At1Key(code=${km.at1_code}, shift=${x11_key.shift}),  # ${x11_key.name}
+    ${x11_key.code}: [At1Key(code=${km.at1_code}, shift=${x11_key.shift})],  # ${x11_key.name}
     % endfor
 % endfor
 }

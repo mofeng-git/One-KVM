@@ -42,7 +42,6 @@ from ....validators.kvm import valid_hid_mouse_move
 from ....validators.kvm import valid_hid_mouse_button
 from ....validators.kvm import valid_hid_mouse_wheel
 
-from ....keyboard.keysym import SymmapWebKey
 from ....keyboard.keysym import build_symmap
 from ....keyboard.printer import text_to_web_keys
 
@@ -98,7 +97,7 @@ class HidApi:
         self.__hid.send_key_events(text_to_web_keys(text, symmap))
         return make_json_response()
 
-    def __ensure_symmap(self, keymap_name: str) -> Dict[int, SymmapWebKey]:
+    def __ensure_symmap(self, keymap_name: str) -> Dict[int, Dict[int, str]]:
         keymap_name = valid_printable_filename(keymap_name, "keymap")
         path = os.path.join(self.__keymaps_dir_path, keymap_name)
         try:
@@ -110,7 +109,7 @@ class HidApi:
         return self.__inner_ensure_symmap(path, st.st_mtime)
 
     @functools.lru_cache(maxsize=10)
-    def __inner_ensure_symmap(self, path: str, mtime: int) -> Dict[int, SymmapWebKey]:
+    def __inner_ensure_symmap(self, path: str, mtime: int) -> Dict[int, Dict[int, str]]:
         _ = mtime  # For LRU
         return build_symmap(path)
 

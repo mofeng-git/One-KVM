@@ -20,10 +20,11 @@
 # ========================================================================== #
 
 
-import dataclasses
 import pkgutil
 import functools
 
+from typing import Tuple
+from typing import List
 from typing import Dict
 
 import Xlib.keysymdef
@@ -36,39 +37,58 @@ from .mappings import AT1_TO_WEB
 
 
 # =====
-@dataclasses.dataclass(frozen=True)
-class SymmapWebKey:
-    name: str
-    shift: bool
-    altgr: bool
-    ctrl: bool
+class SymmapModifiers:
+    SHIFT: int = 0x1
+    ALTGR: int = 0x2
+    CTRL: int = 0x4
 
 
-def build_symmap(path: str) -> Dict[int, SymmapWebKey]:
+def switch_symmap_modifiers(modifiers: int, code: int, state: bool) -> Tuple[bool, int]:
+    mod = 0
+    if code == 65505 or code == 65506:  # XK_Shift_L, XK_Shift_R
+        mod = SymmapModifiers.SHIFT
+    elif code == 65027:  # AltGR aka XK_ISO_Level3_Shift
+        mod = SymmapModifiers.ALTGR
+    elif code == 65507 or code == 65508:  # XK_Control_L, XK_Control_R
+        mod = SymmapModifiers.CTRL
+    if mod == 0:
+        return (False, modifiers)
+    if state:
+        modifiers |= mod
+    else:
+        modifiers &= ~mod
+    return (True, modifiers)
+
+
+def build_symmap(path: str) -> Dict[int, Dict[int, str]]:
     # https://github.com/qemu/qemu/blob/95a9457fd44ad97c518858a4e1586a5498f9773c/ui/keymaps.c
     logger = get_logger()
 
-    symmap: Dict[int, SymmapWebKey] = {}
+    symmap: Dict[int, Dict[int, str]] = {}
     for (src, items) in [
         ("<builtin>", list(X11_TO_AT1.items())),
         (path, list(_read_keyboard_layout(path).items())),
     ]:
-        for (code, key) in items:
-            web_name = AT1_TO_WEB.get(key.code)
-            if web_name is not None:
-                if (
-                    (web_name in ["ShiftLeft", "ShiftRight"] and key.shift)  # pylint: disable=too-many-boolean-expressions
-                    or (web_name in ["AltLeft", "AltRight"] and key.altgr)
-                    or (web_name in ["ControlLeft", "ControlRight"] and key.ctrl)
-                ):
-                    logger.error("Invalid modifier key at mapping %s: %s / %s", src, web_name, key)
-                    continue
-                symmap[code] = SymmapWebKey(
-                    name=web_name,
-                    shift=key.shift,
-                    altgr=key.altgr,
-                    ctrl=key.ctrl,
-                )
+        for (code, keys) in items:
+            for key in keys:
+                web_name = AT1_TO_WEB.get(key.code)
+                if web_name is not None:
+                    if (
+                        (web_name in ["ShiftLeft", "ShiftRight"] and key.shift)  # pylint: disable=too-many-boolean-expressions
+                        or (web_name in ["AltLeft", "AltRight"] and key.altgr)
+                        or (web_name in ["ControlLeft", "ControlRight"] and key.ctrl)
+                    ):
+                        logger.error("Invalid modifier key at mapping %s: %s / %s", src, web_name, key)
+                        continue
+
+                    if code not in symmap:
+                        symmap[code] = {}
+                    symmap[code][
+                        0
+                        | (SymmapModifiers.SHIFT if key.shift else 0)
+                        | (SymmapModifiers.ALTGR if key.altgr else 0)
+                        | (SymmapModifiers.CTRL if key.ctrl else 0)
+                    ] = web_name
     return symmap
 
 
@@ -100,14 +120,14 @@ def _resolve_keysym(name: str) -> int:
     return 0
 
 
-def _read_keyboard_layout(path: str) -> Dict[int, At1Key]:  # Keysym to evdev (at1)
+def _read_keyboard_layout(path: str) -> Dict[int, List[At1Key]]:  # Keysym to evdev (at1)
     logger = get_logger(0)
     logger.info("Reading keyboard layout %s ...", path)
 
     with open(path) as layout_file:
         lines = list(map(str.strip, layout_file.read().split("\n")))
 
-    layout: Dict[int, At1Key] = {}
+    layout: Dict[int, List[At1Key]] = {}
     for (lineno, line) in enumerate(lines):
         if len(line) == 0 or line.startswith(("#", "map ", "include ")):
             continue
@@ -115,26 +135,32 @@ def _read_keyboard_layout(path: str) -> Dict[int, At1Key]:  # Keysym to evdev (a
         parts = line.split()
         if len(parts) >= 2:
             x11_code = _resolve_keysym(parts[0])
-            if x11_code != 0:
-                try:
-                    at1_code = int(parts[1], 16)
-                except ValueError as err:
-                    logger.error("Syntax error at %s:%d: %s", path, lineno, err)
-                    continue
-                rest = parts[2:]
+            if x11_code == 0:
+                continue
 
-                layout[x11_code] = At1Key(
-                    code=at1_code,
-                    shift=("shift" in rest),
-                    altgr=("altgr" in rest),
-                    ctrl=("ctrl" in rest),
-                )
+            try:
+                at1_code = int(parts[1], 16)
+            except ValueError as err:
+                logger.error("Syntax error at %s:%d: %s", path, lineno, err)
+                continue
+            rest = parts[2:]
 
-                if "addupper" in rest:
-                    x11_code = _resolve_keysym(parts[0].upper())
-                    if x11_code != 0:
-                        layout[x11_code] = At1Key(
-                            code=at1_code,
-                            shift=True,
-                        )
+            if x11_code not in layout:
+                layout[x11_code] = []
+            layout[x11_code].append(At1Key(
+                code=at1_code,
+                shift=("shift" in rest),
+                altgr=("altgr" in rest),
+                ctrl=("ctrl" in rest),
+            ))
+
+            if "addupper" in rest:
+                x11_code = _resolve_keysym(parts[0].upper())
+                if x11_code != 0:
+                    if x11_code not in layout:
+                        layout[x11_code] = []
+                    layout[x11_code].append(At1Key(
+                        code=at1_code,
+                        shift=True,
+                    ))
     return layout

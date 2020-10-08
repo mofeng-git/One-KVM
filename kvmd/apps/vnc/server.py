@@ -33,7 +33,7 @@ import aiohttp
 
 from ...logging import get_logger
 
-from ...keyboard.keysym import SymmapWebKey
+from ...keyboard.keysym import switch_symmap_modifiers
 from ...keyboard.keysym import build_symmap
 
 from ...clients.kvmd import KvmdClientWs
@@ -72,7 +72,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         desired_fps: int,
         keymap_name: str,
-        symmap: Dict[int, SymmapWebKey],
+        symmap: Dict[int, Dict[int, str]],
 
         kvmd: KvmdClient,
         streamer: StreamerClient,
@@ -118,6 +118,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         self.__mouse_move = {"x": -1, "y": -1}
 
         self.__lock = asyncio.Lock()
+
+        self.__modifiers = 0
 
     # =====
 
@@ -238,10 +240,18 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def _on_key_event(self, code: int, state: bool) -> None:
+        (is_modifier, self.__modifiers) = switch_symmap_modifiers(self.__modifiers, code, state)
         if self.__kvmd_ws:
-            web_key = self.__symmap.get(code)
-            if web_key is not None:
-                await self.__kvmd_ws.send_key_event(web_key.name, state)
+            web_keys = self.__symmap.get(code)
+            if web_keys:
+                if is_modifier:
+                    web_key = web_keys.get(0)
+                else:
+                    web_key = web_keys.get(self.__modifiers)
+                    if web_key is None:
+                        web_key = web_keys.get(0)
+                if web_key is not None:
+                    await self.__kvmd_ws.send_key_event(web_key, state)
 
     async def _on_pointer_event(self, buttons: Dict[str, bool], wheel: Dict[str, int], move: Dict[str, int]) -> None:
         if self.__kvmd_ws:

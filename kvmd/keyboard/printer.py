@@ -24,13 +24,13 @@ from typing import Tuple
 from typing import Dict
 from typing import Generator
 
-from .keysym import SymmapWebKey
+from .keysym import SymmapModifiers
 
 
 # =====
 def text_to_web_keys(
     text: str,
-    symmap: Dict[int, SymmapWebKey],
+    symmap: Dict[int, Dict[int, str]],
     shift_key: str="ShiftLeft",
 ) -> Generator[Tuple[str, bool], None, None]:
 
@@ -40,25 +40,32 @@ def text_to_web_keys(
     for ch in text:
         try:
             code = ord(ch)
-            if not (0x20 <= code <= 0x7E):
+            if 0x20 <= code <= 0x7E:
                 # https://stackoverflow.com/questions/12343987/convert-ascii-character-to-x11-keycode
                 # https://www.ascii-code.com
+                keys = symmap[code]
+            elif code == 0x0A:  # Enter:
+                keys = {0: "Enter"}
+            else:
                 continue
-            key = symmap[code]
         except Exception:
             continue
-        if key.altgr or key.ctrl:
-            continue  # Not supported yet
 
-        if key.shift and not shifted:
-            yield (shift_key, True)
-            shifted = True
-        elif not key.shift and shifted:
-            yield (shift_key, False)
-            shifted = False
+        for (modifiers, key) in reversed(keys.items()):
+            if (modifiers & SymmapModifiers.ALTGR) or (modifiers & SymmapModifiers.CTRL):
+                # Not supported yet
+                continue
 
-        yield (key.name, True)
-        yield (key.name, False)
+            if modifiers & SymmapModifiers.SHIFT and not shifted:
+                yield (shift_key, True)
+                shifted = True
+            elif not (modifiers & SymmapModifiers.SHIFT) and shifted:
+                yield (shift_key, False)
+                shifted = False
+
+            yield (key, True)
+            yield (key, False)
+            break
 
     if shifted:
         yield (shift_key, False)
