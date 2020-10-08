@@ -27,14 +27,18 @@ import dataclasses
 import contextlib
 
 from typing import Dict
+from typing import Union
 from typing import Optional
 
 import aiohttp
 
 from ...logging import get_logger
 
-from ...keyboard.keysym import switch_symmap_modifiers
+from ...keyboard.keysym import SymmapModifiers
 from ...keyboard.keysym import build_symmap
+from ...keyboard.mappings import WebModifiers
+from ...keyboard.mappings import X11Modifiers
+from ...keyboard.mappings import AT1_TO_WEB
 
 from ...clients.kvmd import KvmdClientWs
 from ...clients.kvmd import KvmdClientSession
@@ -240,7 +244,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def _on_key_event(self, code: int, state: bool) -> None:
-        (is_modifier, self.__modifiers) = switch_symmap_modifiers(self.__modifiers, code, state)
+        is_modifier = self.__switch_modifiers(code, state)
         if self.__kvmd_ws:
             web_keys = self.__symmap.get(code)
             if web_keys:
@@ -252,6 +256,29 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         web_key = web_keys.get(0)
                 if web_key is not None:
                     await self.__kvmd_ws.send_key_event(web_key, state)
+
+    async def _on_ext_key_event(self, code: int, state: bool) -> None:
+        web_key = AT1_TO_WEB.get(code)
+        if web_key is not None:
+            self.__switch_modifiers(web_key, state)  # Предполагаем, что модификаторы всегда известны
+            if self.__kvmd_ws:
+                await self.__kvmd_ws.send_key_event(web_key, state)
+
+    def __switch_modifiers(self, key: Union[int, str], state: bool) -> bool:
+        mod = 0
+        if key in X11Modifiers.SHIFTS or key in WebModifiers.SHIFTS:
+            mod = SymmapModifiers.SHIFT
+        elif key == X11Modifiers.ALTGR or key == WebModifiers.ALT_RIGHT:
+            mod = SymmapModifiers.ALTGR
+        elif key in X11Modifiers.CTRLS or key in WebModifiers.CTRLS:
+            mod = SymmapModifiers.CTRL
+        if mod == 0:
+            return False
+        if state:
+            self.__modifiers |= mod
+        else:
+            self.__modifiers &= ~mod
+        return True
 
     async def _on_pointer_event(self, buttons: Dict[str, bool], wheel: Dict[str, int], move: Dict[str, int]) -> None:
         if self.__kvmd_ws:

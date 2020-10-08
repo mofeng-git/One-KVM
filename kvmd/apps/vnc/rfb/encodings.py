@@ -30,7 +30,8 @@ from typing import Any
 class RfbEncodings:
     RESIZE = -223  # DesktopSize Pseudo-encoding
     RENAME = -307  # DesktopName Pseudo-encoding
-    LEDS_STATE = -261  # LED State Pseudo-encoding
+    LEDS_STATE = -261  # QEMU LED State Pseudo-encoding
+    EXT_KEYS = -258  # QEMU Extended Key Events Pseudo-encoding
 
     TIGHT = 7
     TIGHT_JPEG_QUALITIES = dict(zip(  # JPEG Quality Level Pseudo-encoding
@@ -46,6 +47,7 @@ class RfbClientEncodings:
     has_resize: bool = dataclasses.field(default=False)
     has_rename: bool = dataclasses.field(default=False)
     has_leds_state: bool = dataclasses.field(default=False)
+    has_ext_keys: bool = dataclasses.field(default=False)
 
     has_tight: bool = dataclasses.field(default=False)
     tight_jpeg_quality: int = dataclasses.field(default=0)
@@ -54,6 +56,7 @@ class RfbClientEncodings:
         self.__set("has_resize", (RfbEncodings.RESIZE in self.encodings))
         self.__set("has_rename", (RfbEncodings.RENAME in self.encodings))
         self.__set("has_leds_state", (RfbEncodings.LEDS_STATE in self.encodings))
+        self.__set("has_ext_keys", (RfbEncodings.EXT_KEYS in self.encodings))
 
         self.__set("has_tight", (RfbEncodings.TIGHT in self.encodings))
         self.__set("tight_jpeg_quality", self.__get_tight_jpeg_quality())

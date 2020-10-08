@@ -134,6 +134,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _on_key_event(self, code: int, state: bool) -> None:
         raise NotImplementedError
 
+    async def _on_ext_key_event(self, code: int, state: bool) -> None:
+        raise NotImplementedError
+
     async def _on_pointer_event(self, buttons: Dict[str, bool], wheel: Dict[str, int], move: Dict[str, int]) -> None:
         raise NotImplementedError
 
@@ -360,6 +363,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             4: self.__handle_key_event,
             5: self.__handle_pointer_event,
             6: self.__handle_client_cut_text,
+            255: self.__handle_qemu_event,
         }
         while True:
             msg_type = await self._read_number("B")
@@ -380,9 +384,12 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         if encodings_count > 1024:
             raise RfbError(f"Too many encodings: {encodings_count}")
         self._encodings = RfbClientEncodings(frozenset(await self._read_struct("l" * encodings_count)))
-        get_logger(0).info("[main] %s: Features: resize=%d; rename=%d; leds=%d",
-                           self._remote, self._encodings.has_resize, self._encodings.has_rename, self._encodings.has_leds_state)
+        get_logger(0).info("[main] %s: Features: resize=%d, rename=%d, leds=%d, extkeys=%d",
+                           self._remote, self._encodings.has_resize, self._encodings.has_rename,
+                           self._encodings.has_leds_state, self._encodings.has_ext_keys)
         self.__check_tight_jpeg()
+        if self._encodings.has_ext_keys:  # Preferred method
+            await self._write_fb_update(0, 0, RfbEncodings.EXT_KEYS, drain=True)
         await self._on_set_encodings()
 
     async def __handle_fb_update_request(self) -> None:
@@ -416,6 +423,17 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         length = (await self._read_struct("xxx L"))[0]
         text = await self._read_text(length)
         await self._on_cut_event(text)
+
+    async def __handle_qemu_event(self) -> None:
+        (sub_type, state, code) = await self._read_struct("B H xxxx L")
+        if sub_type != 0:
+            raise RfbError(f"Invalid QEMU sub-message type: {sub_type}")
+        if code == 0xB7:
+            # For backwards compatibility servers SHOULD accept 0xB7 as a synonym for 0x54 (PrintScreen)
+            code = 0x54
+        if code & 0x80:
+            code = (0xE0 << 8) | (code & ~0x80)
+        await self._on_ext_key_event(code, bool(state))
 
     def __check_tight_jpeg(self) -> None:
         # JpegCompression may only be used when the client has advertized

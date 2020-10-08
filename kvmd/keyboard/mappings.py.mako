@@ -51,6 +51,33 @@ KEYMAP: Dict[str, Key] = {
 
 
 # =====
+class WebModifiers:
+    SHIFT_LEFT = "ShiftLeft"
+    SHIFT_RIGHT = "ShiftRight"
+    SHIFTS = set([SHIFT_LEFT, SHIFT_RIGHT])
+
+    ALT_LEFT = "AltLeft"
+    ALT_RIGHT = "AltRight"
+    ALTS = set([ALT_LEFT, ALT_RIGHT])
+
+    CTRL_LEFT = "ControlLeft"
+    CTRL_RIGHT = "ControlRight"
+    CTRLS = set([CTRL_RIGHT, CTRL_RIGHT])
+
+
+class X11Modifiers:
+    SHIFT_LEFT = 65505
+    SHIFT_RIGHT = 65506
+    SHIFTS = set([SHIFT_LEFT, SHIFT_RIGHT])
+
+    ALTGR = 65027  # XK_ISO_Level3_Shift
+
+    CTRL_LEFT = 65507
+    CTRL_RIGHT = 65508
+    CTRLS = set([CTRL_LEFT, CTRL_RIGHT])
+
+
+# =====
 @dataclasses.dataclass(frozen=True)
 class At1Key:
     code: int

@@ -23,7 +23,6 @@
 import pkgutil
 import functools
 
-from typing import Tuple
 from typing import List
 from typing import Dict
 
@@ -32,6 +31,7 @@ import Xlib.keysymdef
 from ..logging import get_logger
 
 from .mappings import At1Key
+from .mappings import WebModifiers
 from .mappings import X11_TO_AT1
 from .mappings import AT1_TO_WEB
 
@@ -41,23 +41,6 @@ class SymmapModifiers:
     SHIFT: int = 0x1
     ALTGR: int = 0x2
     CTRL: int = 0x4
-
-
-def switch_symmap_modifiers(modifiers: int, code: int, state: bool) -> Tuple[bool, int]:
-    mod = 0
-    if code == 65505 or code == 65506:  # XK_Shift_L, XK_Shift_R
-        mod = SymmapModifiers.SHIFT
-    elif code == 65027:  # AltGR aka XK_ISO_Level3_Shift
-        mod = SymmapModifiers.ALTGR
-    elif code == 65507 or code == 65508:  # XK_Control_L, XK_Control_R
-        mod = SymmapModifiers.CTRL
-    if mod == 0:
-        return (False, modifiers)
-    if state:
-        modifiers |= mod
-    else:
-        modifiers &= ~mod
-    return (True, modifiers)
 
 
 def build_symmap(path: str) -> Dict[int, Dict[int, str]]:
@@ -74,9 +57,9 @@ def build_symmap(path: str) -> Dict[int, Dict[int, str]]:
                 web_name = AT1_TO_WEB.get(key.code)
                 if web_name is not None:
                     if (
-                        (web_name in ["ShiftLeft", "ShiftRight"] and key.shift)  # pylint: disable=too-many-boolean-expressions
-                        or (web_name in ["AltLeft", "AltRight"] and key.altgr)
-                        or (web_name in ["ControlLeft", "ControlRight"] and key.ctrl)
+                        (web_name in WebModifiers.SHIFTS and key.shift)  # pylint: disable=too-many-boolean-expressions
+                        or (web_name in WebModifiers.ALTS and key.altgr)
+                        or (web_name in WebModifiers.CTRLS and key.ctrl)
                     ):
                         logger.error("Invalid modifier key at mapping %s: %s / %s", src, web_name, key)
                         continue

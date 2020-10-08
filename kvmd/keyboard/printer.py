@@ -25,16 +25,17 @@ from typing import Dict
 from typing import Generator
 
 from .keysym import SymmapModifiers
+from .mappings import WebModifiers
 
 
 # =====
 def text_to_web_keys(
     text: str,
     symmap: Dict[int, Dict[int, str]],
-    shift_key: str="ShiftLeft",
+    shift_key: str=WebModifiers.SHIFT_LEFT,
 ) -> Generator[Tuple[str, bool], None, None]:
 
-    assert shift_key in ["ShiftLeft", "ShiftRight"]
+    assert shift_key in WebModifiers.SHIFTS
 
     shifted = False
     for ch in text:
