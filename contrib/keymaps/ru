@@ -345,7 +345,8 @@ KP_Separator 0x53 numlock
 # evdev 85 (0x55): no evdev -> QKeyCode mapping (xkb keysym NoSymbol)
 
 # evdev 86 (0x56), QKeyCode "less", number 0x56
-slash 0x56
+# XXX: KVMD
+#slash 0x56
 bar 0x56 shift
 bar 0x56 altgr
 brokenbar 0x56 shift altgr
