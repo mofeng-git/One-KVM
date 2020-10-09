@@ -59,13 +59,6 @@ async def unlock_drive(base_cmd: List[str]) -> None:
 async def _run_helper(cmd: List[str]) -> None:
     logger = get_logger(0)
     logger.info("Executing helper %s ...", cmd)
-
-    (proc, stdout) = await aioproc.read_process(cmd)
-
-    if stdout:
-        log = (logger.info if proc.returncode == 0 else logger.error)
-        for line in stdout.split("\n"):
-            log("Console: %s", line)
-
+    proc = await aioproc.log_process(cmd, logger)
     if proc.returncode != 0:
         raise MsdError(f"Error while helper execution: pid={proc.pid}; retcode={proc.returncode}")

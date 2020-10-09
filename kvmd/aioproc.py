@@ -23,6 +23,7 @@
 import asyncio
 import asyncio.subprocess
 import signal
+import logging
 
 from typing import Tuple
 from typing import List
@@ -44,6 +45,15 @@ async def read_process(cmd: List[str], err_to_null: bool=False) -> Tuple[asyncio
     proc = await run_process(cmd, err_to_null)
     (stdout, _) = await proc.communicate()
     return (proc, stdout.decode(errors="ignore").strip())
+
+
+async def log_process(cmd: List[str], logger: logging.Logger) -> asyncio.subprocess.Process:  # pylint: disable=no-member
+    (proc, stdout) = await read_process(cmd)
+    if stdout:
+        log = (logger.info if proc.returncode == 0 else logger.error)
+        for line in stdout.split("\n"):
+            log("Console: %s", line)
+    return proc
 
 
 def ignore_sigint() -> None:
