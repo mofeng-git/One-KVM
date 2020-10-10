@@ -375,23 +375,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         while True:  # pylint: disable=too-many-nested-blocks
             try:
                 await self.__start_streamer_proc()
-
-                empty = 0
-                async for line_bytes in self.__streamer_proc.stdout:  # type: ignore
-                    line = line_bytes.decode(errors="ignore").strip()
-                    if line:
-                        logger.info("Console: %s", line)
-                        empty = 0
-                    else:
-                        empty += 1
-                        if empty == 100:  # asyncio bug
-                            raise RuntimeError("Streamer/asyncio: too many empty lines")
-
+                assert self.__streamer_proc is not None
+                await aioproc.log_stdout_infinite(self.__streamer_proc, logger)
                 raise RuntimeError("Streamer unexpectedly died")
-
             except asyncio.CancelledError:
                 break
-
             except Exception:
                 if self.__streamer_proc:
                     logger.exception("Unexpected streamer error: pid=%d", self.__streamer_proc.pid)

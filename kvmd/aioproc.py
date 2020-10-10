@@ -56,6 +56,19 @@ async def log_process(cmd: List[str], logger: logging.Logger) -> asyncio.subproc
     return proc
 
 
+async def log_stdout_infinite(proc: asyncio.subprocess.Process, logger: logging.Logger) -> None:  # pylint: disable=no-member
+    empty = 0
+    async for line_bytes in proc.stdout:  # type: ignore
+        line = line_bytes.decode(errors="ignore").strip()
+        if line:
+            logger.info("Console: %s", line)
+            empty = 0
+        else:
+            empty += 1
+            if empty == 100:  # asyncio bug
+                raise RuntimeError("asyncio process: too many empty lines")
+
+
 def ignore_sigint() -> None:
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
