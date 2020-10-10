@@ -61,6 +61,7 @@ depends=(
 	sudo
 	iptables
 	iproute2
+	dnsmasq
 	"raspberrypi-io-access>=0.5"
 	"ustreamer>=1.19"
 )

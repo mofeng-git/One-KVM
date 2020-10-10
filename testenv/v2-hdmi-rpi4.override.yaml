@@ -91,3 +91,10 @@ vnc:
     auth:
         vncauth:
             enabled: true
+
+otgnet:
+    commands:
+        post_start_cmd:
+            - "/bin/true"
+        pre_stop_cmd:
+            - "/bin/true"

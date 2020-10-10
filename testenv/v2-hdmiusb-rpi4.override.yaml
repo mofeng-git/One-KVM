@@ -31,10 +31,16 @@ kvmd:
             - "--notify-parent"
             - "--no-log-colors"
 
-
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
 
     auth:
         vncauth:
             enabled: true
+
+otgnet:
+    commands:
+        post_start_cmd:
+            - "/bin/true"
+        pre_stop_cmd:
+            - "/bin/true"

@@ -31,4 +31,7 @@ _KeyMapping.x11_keys
 _SharedParams.width
 _SharedParams.height
 
+_Netcfg.net_ip
+_Netcfg.net_mask
+
 _ScriptWriter.get_args

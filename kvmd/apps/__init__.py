@@ -430,21 +430,34 @@ def _get_config_scheme() -> Dict:
 
         "otgnet": {
             "iface": {
-                "net": Option("169.254.0.100/31", type=functools.partial(valid_net, v6=False)),
+                "net":    Option("169.254.0.0/24", type=functools.partial(valid_net, v6=False)),
+                "ip_cmd": Option(["/usr/bin/ip"], type=valid_command),
             },
 
             "firewall": {
-                "allow_tcp": Option([], type=valid_ports_list),
-                "allow_udp": Option([], type=valid_ports_list),
-            },
-
-            "dhcp": {
-                "enabled": Option(True, type=valid_bool),
+                "allow_tcp":    Option([], type=valid_ports_list),
+                "allow_udp":    Option([], type=valid_ports_list),
+                "iptables_cmd": Option(["/usr/bin/iptables"], type=valid_command),
             },
 
             "commands": {
-                "ip_cmd": Option(["/usr/bin/ip"], type=valid_command),
-                "iptables_cmd": Option(["/usr/bin/iptables"], type=valid_command),
+                "pre_start_cmd":  Option(["/bin/true", "pre-start"], type=valid_command),
+                "post_start_cmd": Option([
+                    "/usr/bin/systemd-run",
+                    "--unit=kvmd-otgnet-dnsmasq",
+                    "dnsmasq",
+                    "--interface={iface}",
+                    "--port=0",
+                    "--dhcp-range={dhcp_ip_begin},{dhcp_ip_end},24h",
+                    "--dhcp-leasefile=/run/kvmd/dnsmasq.lease",
+                    "--no-daemon",
+                ], type=valid_command),
+                "pre_stop_cmd":   Option([
+                    "/usr/bin/systemctl",
+                    "stop",
+                    "kvmd-otgnet-dnsmasq",
+                ], type=valid_command),
+                "post_stop_cmd":  Option(["/bin/true", "post-stop"], type=valid_command),
             },
         },
 
