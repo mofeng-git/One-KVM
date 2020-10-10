@@ -430,7 +430,7 @@ def _get_config_scheme() -> Dict:
 
         "otgnet": {
             "iface": {
-                "net":    Option("169.254.0.0/24", type=functools.partial(valid_net, v6=False)),
+                "net":    Option("169.254.0.0/28", type=functools.partial(valid_net, v6=False)),
                 "ip_cmd": Option(["/usr/bin/ip"], type=valid_command),
             },
 
@@ -445,7 +445,7 @@ def _get_config_scheme() -> Dict:
                 "post_start_cmd": Option([
                     "/usr/bin/systemd-run",
                     "--unit=kvmd-otgnet-dnsmasq",
-                    "dnsmasq",
+                    "/usr/bin/dnsmasq",
                     "--interface={iface}",
                     "--port=0",
                     "--dhcp-range={dhcp_ip_begin},{dhcp_ip_end},24h",
