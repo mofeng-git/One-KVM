@@ -91,7 +91,6 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         ctls: List[BaseCtl] = [
             CustomCtl(self.__pre_start_cmd, self.__post_stop_cmd, placeholders),
             IfaceUpCtl(self.__ip_cmd, netcfg.iface),
-            IptablesDropAllCtl(self.__iptables_cmd, netcfg.iface),
             *[
                 IptablesAllowPortCtl(self.__iptables_cmd, netcfg.iface, port, tcp)
                 for (port, tcp) in [
@@ -99,6 +98,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
                     *zip(self.__allow_udp, itertools.repeat(False)),
                 ]
             ],
+            IptablesDropAllCtl(self.__iptables_cmd, netcfg.iface),
             IfaceAddIpCtl(self.__ip_cmd, netcfg.iface, f"{netcfg.iface_ip}/{netcfg.net_prefix}"),
             CustomCtl(self.__post_start_cmd, self.__pre_stop_cmd, placeholders),
         ]
