@@ -39,6 +39,7 @@ def main(argv: Optional[List[str]]=None) -> None:
     config = init(
         prog="kvmd-vnc",
         description="VNC to KVMD proxy",
+        check_run=True,
         argv=argv,
     )[2].vnc
 

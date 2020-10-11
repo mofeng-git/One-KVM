@@ -106,7 +106,7 @@ run: testenv $(TESTENV_GPIO)
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
-			&& $(if $(CMD),$(CMD),python -m kvmd.apps.kvmd) \
+			&& $(if $(CMD),$(CMD),python -m kvmd.apps.kvmd --run) \
 		"
 
 
@@ -141,7 +141,7 @@ run-ipmi: testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
-			&& $(if $(CMD),$(CMD),python -m kvmd.apps.ipmi) \
+			&& $(if $(CMD),$(CMD),python -m kvmd.apps.ipmi --run) \
 		"
 
 
@@ -159,7 +159,7 @@ run-vnc: testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
-			&& $(if $(CMD),$(CMD),python -m kvmd.apps.vnc) \
+			&& $(if $(CMD),$(CMD),python -m kvmd.apps.vnc --run) \
 		"
 
 

@@ -55,6 +55,7 @@ def test_ok(tmpdir) -> None:  # type: ignore
         "--set-options",
         f"kvmd/server/unix={kvmd_sock_path}",
         f"kvmd/streamer/unix={ustreamer_sock_path}",
+        "--run",
     ])
 
     assert not os.path.exists(ustreamer_sock_path)
