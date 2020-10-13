@@ -306,7 +306,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         await self.__remount_storage(rw=True)
                         self.__set_image_complete(name, False)
                         self.__new_file_written = 0
-                        self.__new_file = await aiofiles.open(path, mode="w+b", buffering=0)
+                        self.__new_file = await aiofiles.open(path, mode="w+b", buffering=0)  # type: ignore
 
                     await self.__notifier.notify()
                     yield
@@ -364,7 +364,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         try:
             if self.__new_file:
                 get_logger().info("Closing new image file ...")
-                await self.__new_file.close()
+                await self.__new_file.close()  # type: ignore
         except Exception:
             get_logger().exception("Can't close device file")
         finally:

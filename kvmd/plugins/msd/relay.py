@@ -355,7 +355,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     if self.__connected:
                         raise MsdConnectedError()
 
-                    self.__device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)
+                    self.__device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)  # type: ignore
                     self.__written = 0
 
                     await self.__write_image_info(name, complete=False)
@@ -391,9 +391,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         assert self.__device_file
         assert self.__device_info
         if self.__device_info.size - self.__written > _IMAGE_INFO_SIZE:
-            await self.__device_file.seek(self.__device_info.size - _IMAGE_INFO_SIZE)
+            await self.__device_file.seek(self.__device_info.size - _IMAGE_INFO_SIZE)  # type: ignore
             await aiofs.afile_write_now(self.__device_file, _make_image_info_bytes(name, self.__written, complete))
-            await self.__device_file.seek(0)
+            await self.__device_file.seek(0)  # type: ignore
         else:
             get_logger().error("Can't write image info because device is full")
 
@@ -401,7 +401,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         try:
             if self.__device_file:
                 get_logger().info("Closing device file ...")
-                await self.__device_file.close()
+                await self.__device_file.close()  # type: ignore
         except Exception:
             get_logger().exception("Can't close device file")
         finally:

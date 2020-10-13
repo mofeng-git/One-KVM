@@ -25,9 +25,9 @@ import dataclasses
 from typing import Tuple
 from typing import Dict
 
-import aiofiles
-
 from ...logging import get_logger
+
+from ... import aiofs
 
 
 # =====
@@ -64,8 +64,7 @@ class VncAuthManager:
         return ({}, (not self.__enabled))
 
     async def __inner_read_credentials(self) -> Dict[str, VncAuthKvmdCredentials]:
-        async with aiofiles.open(self.__path) as vc_file:
-            lines = (await vc_file.read()).split("\n")
+        lines = (await aiofs.read(self.__path)).split("\n")
 
         credentials: Dict[str, VncAuthKvmdCredentials] = {}
         for (lineno, line) in enumerate(lines):

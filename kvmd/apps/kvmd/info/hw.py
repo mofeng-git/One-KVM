@@ -29,11 +29,10 @@ from typing import AsyncGenerator
 from typing import TypeVar
 from typing import Optional
 
-import aiofiles
-
 from ....logging import get_logger
 
 from .... import env
+from .... import aiofs
 from .... import aioproc
 
 from .base import BaseInfoSubmanager
@@ -89,8 +88,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
     async def __get_dt_model(self) -> Optional[str]:
         model_path = f"{env.PROCFS_PREFIX}/proc/device-tree/model"
         try:
-            async with aiofiles.open(model_path) as model_file:
-                return (await model_file.read()).strip(" \t\r\n\0")
+            return (await aiofs.read(model_path)).strip(" \t\r\n\0")
         except Exception as err:
             get_logger(0).error("Can't read DT model from %s: %s", model_path, err)
             return None
@@ -98,8 +96,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
     async def __get_cpu_temp(self) -> Optional[float]:
         temp_path = f"{env.SYSFS_PREFIX}/sys/class/thermal/thermal_zone0/temp"
         try:
-            async with aiofiles.open(temp_path) as temp_file:
-                return int((await temp_file.read()).strip()) / 1000
+            return int((await aiofs.read(temp_path)).strip()) / 1000
         except Exception as err:
             get_logger(0).error("Can't read CPU temp from %s: %s", temp_path, err)
             return None

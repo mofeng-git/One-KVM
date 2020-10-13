@@ -29,7 +29,12 @@ from . import aiotools
 
 
 # =====
+async def read(path: str) -> str:
+    async with aiofiles.open(path) as afile:  # type: ignore
+        return (await afile.read())
+
+
 async def afile_write_now(afile: aiofiles.base.AiofilesContextManager, data: bytes) -> None:
-    await afile.write(data)
-    await afile.flush()
-    await aiotools.run_async(os.fsync, afile.fileno())
+    await afile.write(data)  # type: ignore
+    await afile.flush()  # type: ignore
+    await aiotools.run_async(os.fsync, afile.fileno())  # type: ignore
