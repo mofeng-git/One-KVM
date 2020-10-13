@@ -241,7 +241,6 @@ function __WindowManager() {
 			} else {
 				el_button.classList.remove("menu-button-pressed");
 				el_menu.style.visibility = "hidden";
-
 				el_menu.style.removeProperty("right");
 			}
 		}
@@ -266,6 +265,7 @@ function __WindowManager() {
 			let el_menu = el_button.parentElement.querySelector(".menu");
 			el_button.classList.remove("menu-button-pressed");
 			el_menu.style.visibility = "hidden";
+			el_menu.style.removeProperty("right");
 		}
 	};
 
