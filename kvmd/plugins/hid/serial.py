@@ -344,7 +344,8 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                         except queue.Empty:
                             self.__process_command(tty, b"\x01\x00\x00\x00\x00")  # Ping
                         else:
-                            self.__process_command(tty, event.make_command())
+                            if not self.__process_command(tty, event.make_command()):
+                                self.clear_events()
 
             except serial.SerialException as err:
                 if err.errno == errno.ENOENT:
@@ -361,10 +362,10 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
     def __get_serial(self) -> serial.Serial:
         return serial.Serial(self.__device_path, self.__speed, timeout=self.__read_timeout)
 
-    def __process_command(self, tty: serial.Serial, command: bytes) -> None:
-        self.__process_request(tty, self.__make_request(command))
+    def __process_command(self, tty: serial.Serial, command: bytes) -> bool:
+        return self.__process_request(tty, self.__make_request(command))
 
-    def __process_request(self, tty: serial.Serial, request: bytes) -> None:  # pylint: disable=too-many-branches
+    def __process_request(self, tty: serial.Serial, request: bytes) -> bool:  # pylint: disable=too-many-branches
         logger = get_logger()
         errors: List[str] = []
         runtime_errors = False
@@ -395,7 +396,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                     raise _FatalRequestError("No previous command state inside HID, seems it was rebooted", online=True)
                 elif code == 0x20:  # Done
                     self.__state_flags.update(online=True)
-                    return
+                    return True
                 elif code & 0x80:  # Pong with leds
                     self.__state_flags.update(
                         online=True,
@@ -403,7 +404,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                         scroll=bool(code & 0x00000010),
                         num=bool(code & 0x00000100),
                     )
-                    return
+                    return True
                 else:
                     raise _TempRequestError(f"Invalid response from HID: request={request!r}; code=0x{code:02X}")
 
@@ -430,6 +431,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             logger.error(msg)
         if not (common_retries and read_retries):
             logger.error("Can't process HID request due many errors: %r", request)
+        return False
 
     def __send_request(self, tty: serial.Serial, request: bytes) -> bytes:
         if not self.__noop:
