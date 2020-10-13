@@ -63,7 +63,18 @@ ul#navbar li a.menu-button {
 	padding-left: 16px;
 	padding-right: 16px;
 	text-decoration: none;
+	position: relative;
 }
+
+/*ul#navbar li a.menu-button:before {
+	content: "";
+	position: absolute;
+	top: calc(100% - 10px);
+	right: 0;
+	width: 0;
+	border-bottom: 10px solid var(--cs-navbar-item-pressed-bg);
+	border-left: 10px solid transparent;
+}*/
 
 ul#navbar li a#logo:hover:not(.active),
 ul#navbar li a.menu-button:hover:not(.active) {

@@ -72,7 +72,7 @@ export function Gpio() {
 	self.setModel = function(model) {
 		tools.featureSetEnabled($("gpio-dropdown"), model.view.table.length);
 		if (model.view.table.length) {
-			$("gpio-menu-button").innerHTML = `${model.view.header.title} &#8628;`;
+			$("gpio-menu-button").innerHTML = `${model.view.header.title}`;
 		}
 
 		let content = "<table class=\"kv\">";
