@@ -21,7 +21,6 @@
 
 
 import asyncio
-import asyncio.queues
 import threading
 import dataclasses
 
@@ -147,7 +146,7 @@ class _DebouncedValue:
         self.__notifier = notifier
         self.__loop = loop
 
-        self.__queue: asyncio.queues.Queue = asyncio.Queue(loop=loop)
+        self.__queue: "asyncio.Queue[bool]" = asyncio.Queue(loop=loop)
         self.__task = loop.create_task(self.__consumer_task_loop())
 
     def set(self, value: bool) -> None:

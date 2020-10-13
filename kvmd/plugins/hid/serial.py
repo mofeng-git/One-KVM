@@ -22,7 +22,6 @@
 
 import os
 import multiprocessing
-import multiprocessing.queues
 import dataclasses
 import queue
 import struct
@@ -225,7 +224,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
         self.__gpio = _Gpio(reset_pin, reset_delay)
 
-        self.__events_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
+        self.__events_queue: "multiprocessing.Queue[_BaseEvent]" = multiprocessing.Queue()
 
         self.__notifier = aiomulti.AioProcessNotifier()
         self.__state_flags = aiomulti.AioSharedFlags({
@@ -344,7 +343,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                 with self.__get_serial() as tty:
                     while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
                         try:
-                            event: _BaseEvent = self.__events_queue.get(timeout=0.1)
+                            event = self.__events_queue.get(timeout=0.1)
                         except queue.Empty:
                             self.__process_command(tty, b"\x01\x00\x00\x00\x00")  # Ping
                         else:

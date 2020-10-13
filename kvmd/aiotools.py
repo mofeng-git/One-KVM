@@ -21,7 +21,6 @@
 
 
 import asyncio
-import asyncio.queues
 import functools
 import types
 
@@ -92,7 +91,7 @@ async def wait_first(*aws: Awaitable) -> Tuple[Set[asyncio.Future], Set[asyncio.
 # =====
 class AioNotifier:
     def __init__(self) -> None:
-        self.__queue: asyncio.queues.Queue = asyncio.Queue()
+        self.__queue: "asyncio.Queue[None]" = asyncio.Queue()
 
     async def notify(self) -> None:
         await self.__queue.put(None)

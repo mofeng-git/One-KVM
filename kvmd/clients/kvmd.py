@@ -21,7 +21,6 @@
 
 
 import asyncio
-import asyncio.queues
 import contextlib
 import json
 import types
@@ -133,7 +132,7 @@ class KvmdClientWs:
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         self.__ws = ws
 
-        self.__writer_queue: asyncio.queues.Queue = asyncio.Queue()
+        self.__writer_queue: "asyncio.Queue[Dict]" = asyncio.Queue()
         self.__communicated = False
 
     async def communicate(self) -> AsyncGenerator[Dict, None]:

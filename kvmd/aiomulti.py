@@ -21,8 +21,6 @@
 
 
 import multiprocessing
-import multiprocessing.queues
-import multiprocessing.sharedctypes
 import queue
 
 from typing import Dict
@@ -33,7 +31,7 @@ from . import aiotools
 # =====
 class AioProcessNotifier:
     def __init__(self) -> None:
-        self.__queue: multiprocessing.queues.Queue = multiprocessing.Queue()
+        self.__queue: "multiprocessing.Queue[None]" = multiprocessing.Queue()
 
     def notify(self) -> None:
         self.__queue.put_nowait(None)
@@ -62,7 +60,7 @@ class AioSharedFlags:
 
         self.__notifier = notifier
 
-        self.__flags: Dict[str, multiprocessing.sharedctypes.RawValue] = {
+        self.__flags = {
             key: multiprocessing.RawValue("i", int(value))  # type: ignore
             for (key, value) in initial.items()
         }

@@ -22,8 +22,9 @@
 
 import os
 import multiprocessing
-import multiprocessing.queues
 import time
+
+from typing import Literal
 
 import setproctitle
 
@@ -32,7 +33,8 @@ from kvmd.apps.cleanup import main
 
 # =====
 def test_ok(tmpdir) -> None:  # type: ignore
-    queue: multiprocessing.queues.Queue = multiprocessing.Queue()
+    _ = Literal  # Makes liters happy
+    queue: "multiprocessing.Queue[Literal[True]]" = multiprocessing.Queue()
 
     ustreamer_sock_path = os.path.abspath(str(tmpdir.join("ustreamer-fake.sock")))
     open(ustreamer_sock_path, "w").close()

@@ -25,7 +25,6 @@
 import sys
 import os
 import asyncio
-import asyncio.queues
 import ctypes
 import ctypes.util
 import struct
@@ -230,7 +229,7 @@ class Inotify:
 
         self.__moved: Dict[int, str] = {}
 
-        self.__events_queue: asyncio.queues.Queue = asyncio.Queue()
+        self.__events_queue: "asyncio.Queue[InotifyEvent]" = asyncio.Queue()
 
     def watch(self, path: str, mask: int) -> None:
         path = os.path.normpath(path)

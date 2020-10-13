@@ -23,7 +23,6 @@
 import os
 import select
 import multiprocessing
-import multiprocessing.queues
 import queue
 import errno
 import time
@@ -76,7 +75,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         self.__noop = noop
 
         self.__fd = -1
-        self.__events_queue: multiprocessing.queues.Queue = multiprocessing.Queue()
+        self.__events_queue: "multiprocessing.Queue[BaseEvent]" = multiprocessing.Queue()
         self.__state_flags = aiomulti.AioSharedFlags({"online": True, **initial_state}, notifier)
         self.__stop_event = multiprocessing.Event()
 
@@ -93,7 +92,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                     if self.__ensure_device():  # Check device and process reports if needed
                         self.__read_all_reports()
                     try:
-                        event: BaseEvent = self.__events_queue.get(timeout=0.1)
+                        event = self.__events_queue.get(timeout=0.1)
                     except queue.Empty:
                         if not self.__udc.can_operate():
                             self.__close_device()
