@@ -31,6 +31,7 @@ from typing import Dict
 
 from ....logging import get_logger
 
+from .... import tools
 from .... import aiomulti
 from .... import aioproc
 
@@ -134,11 +135,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         self.__events_queue.put_nowait(event)
 
     def _clear_queue(self) -> None:
-        while not self.__events_queue.empty():
-            try:
-                self.__events_queue.get_nowait()
-            except queue.Empty:
-                break
+        tools.clear_queue(self.__events_queue)
 
     def _ensure_write(self, report: bytes, reopen: bool=False, close: bool=False) -> bool:
         if reopen:

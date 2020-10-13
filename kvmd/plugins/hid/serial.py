@@ -43,6 +43,7 @@ from ...logging import get_logger
 from ...keyboard.mappings import KEYMAP
 
 from ... import env
+from ... import tools
 from ... import aiotools
 from ... import aiomulti
 from ... import aioproc
@@ -320,11 +321,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__queue_event(_MouseWheelEvent(delta_x, delta_y))
 
     def clear_events(self) -> None:
-        while not self.__events_queue.empty():
-            try:
-                self.__events_queue.get_nowait()
-            except queue.Empty:
-                break
+        tools.clear_queue(self.__events_queue)
         self.__queue_event(_ClearEvent())
 
     def __queue_event(self, event: _BaseEvent) -> None:

@@ -22,6 +22,8 @@
 
 import operator
 import functools
+import multiprocessing.queues
+import queue
 
 from typing import Tuple
 from typing import List
@@ -53,3 +55,12 @@ _DictValueT = TypeVar("_DictValueT")
 
 def sorted_kvs(dct: Dict[_DictKeyT, _DictValueT]) -> List[Tuple[_DictKeyT, _DictValueT]]:
     return sorted(dct.items(), key=operator.itemgetter(0))
+
+
+# =====
+def clear_queue(q: multiprocessing.queues.Queue) -> None:  # pylint: disable=invalid-name
+    for _ in range(q.qsize()):
+        try:
+            q.get_nowait()
+        except queue.Empty:
+            break
