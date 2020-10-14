@@ -70,7 +70,7 @@ class _RequestError(Exception):
         self.online = online
 
 
-class _FatalRequestError(_RequestError):
+class _PermRequestError(_RequestError):
     pass
 
 
@@ -367,8 +367,8 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
     def __process_request(self, tty: serial.Serial, request: bytes) -> bool:  # pylint: disable=too-many-branches
         logger = get_logger()
-        errors: List[str] = []
-        runtime_errors = False
+        error_messages: List[str] = []
+        live_log_errors = False
 
         common_retries = self.__common_retries
         read_retries = self.__read_retries
@@ -391,9 +391,9 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                 elif code == 0x40:  # CRC Error
                     raise _TempRequestError(f"Got CRC error of request from HID: request={request!r}")
                 elif code == 0x45:  # Unknown command
-                    raise _FatalRequestError(f"HID did not recognize the request={request!r}", online=True)
+                    raise _PermRequestError(f"HID did not recognize the request={request!r}", online=True)
                 elif code == 0x24:  # Rebooted?
-                    raise _FatalRequestError("No previous command state inside HID, seems it was rebooted", online=True)
+                    raise _PermRequestError("No previous command state inside HID, seems it was rebooted", online=True)
                 elif code == 0x20:  # Done
                     self.__state_flags.update(online=True)
                     return True
@@ -405,29 +405,28 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                         num=bool(code & 0x00000100),
                     )
                     return True
-                else:
-                    raise _TempRequestError(f"Invalid response from HID: request={request!r}; code=0x{code:02X}")
+                raise _TempRequestError(f"Invalid response from HID: request={request!r}; code=0x{code:02X}")
 
             except _RequestError as err:
                 common_retries -= 1
                 self.__state_flags.update(online=err.online)
 
-                if runtime_errors:
+                if live_log_errors:
                     logger.error(err.msg)
                 else:
-                    errors.append(err.msg)
-                    if len(errors) > self.__errors_threshold:
-                        for msg in errors:
+                    error_messages.append(err.msg)
+                    if len(error_messages) > self.__errors_threshold:
+                        for msg in error_messages:
                             logger.error(msg)
-                        errors = []
-                        runtime_errors = True
+                        error_messages = []
+                        live_log_errors = True
 
-                if isinstance(err, _FatalRequestError):
+                if isinstance(err, _PermRequestError):
                     break
                 if common_retries and read_retries:
                     time.sleep(self.__retries_delay)
 
-        for msg in errors:
+        for msg in error_messages:
             logger.error(msg)
         if not (common_retries and read_retries):
             logger.error("Can't process HID request due many errors: %r", request)
