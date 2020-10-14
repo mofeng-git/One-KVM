@@ -372,6 +372,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
         common_retries = self.__common_retries
         read_retries = self.__read_retries
+        error_retval = False
 
         while common_retries and read_retries:
             response = self.__send_request(tty, request)
@@ -410,6 +411,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             except _RequestError as err:
                 common_retries -= 1
                 self.__state_flags.update(online=err.online)
+                error_retval = err.online
 
                 if live_log_errors:
                     logger.error(err.msg)
@@ -430,7 +432,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             logger.error(msg)
         if not (common_retries and read_retries):
             logger.error("Can't process HID request due many errors: %r", request)
-        return False
+        return error_retval
 
     def __send_request(self, tty: serial.Serial, request: bytes) -> bytes:
         if not self.__noop:
