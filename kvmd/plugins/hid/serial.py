@@ -353,12 +353,11 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                     logger.error("Missing HID serial device: %s", self.__device_path)
                 else:
                     logger.exception("Unexpected HID error")
+                time.sleep(1)
 
             except Exception:
                 self.clear_events()
                 logger.exception("Unexpected HID error")
-
-            finally:
                 time.sleep(1)
 
     def __get_serial(self) -> serial.Serial:
