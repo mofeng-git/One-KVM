@@ -321,6 +321,9 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__queue_event(_MouseWheelEvent(delta_x, delta_y))
 
     def clear_events(self) -> None:
+        # FIXME: Если очистка производится со стороны процесса хида, то возможна гонка между
+        # очисткой и добавлением события _ClearEvent. Неприятно, но не смертельно.
+        # Починить блокировкой после перехода на асинхронные очереди.
         tools.clear_queue(self.__events_queue)
         self.__queue_event(_ClearEvent())
 
@@ -347,17 +350,12 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                             if not self.__process_command(tty, event.make_command()):
                                 self.clear_events()
 
-            except serial.SerialException as err:
+            except Exception as err:
                 self.clear_events()
-                if err.errno == errno.ENOENT:
+                if isinstance(err, serial.SerialException) and err.errno == errno.ENOENT:  # pylint: disable=no-member
                     logger.error("Missing HID serial device: %s", self.__device_path)
                 else:
                     logger.exception("Unexpected HID error")
-                time.sleep(1)
-
-            except Exception:
-                self.clear_events()
-                logger.exception("Unexpected HID error")
                 time.sleep(1)
 
     def __get_serial(self) -> serial.Serial:
