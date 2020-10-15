@@ -47,6 +47,7 @@ def main(argv: Optional[List[str]]=None) -> None:
         prog="kvmd",
         description="The main Pi-KVM daemon",
         argv=argv,
+        check_run=True,
         load_auth=True,
         load_hid=True,
         load_atx=True,

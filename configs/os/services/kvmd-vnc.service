@@ -9,7 +9,7 @@ Type=simple
 Restart=always
 RestartSec=3
 
-ExecStart=/usr/bin/kvmd-vnc
+ExecStart=/usr/bin/kvmd-vnc --run
 TimeoutStopSec=3
 
 [Install]

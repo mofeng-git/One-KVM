@@ -104,6 +104,7 @@ def init(
     prog: Optional[str]=None,
     description: Optional[str]=None,
     add_help: bool=True,
+    check_run: bool=False,
     argv: Optional[List[str]]=None,
     **load: bool,
 ) -> Tuple[argparse.ArgumentParser, List[str], Section]:
@@ -118,6 +119,9 @@ def init(
                              help="Override config options list (like sec/sub/opt=value)")
     args_parser.add_argument("-m", "--dump-config", dest="dump_config", action="store_true",
                              help="View current configuration (include all overrides)")
+    if check_run:
+        args_parser.add_argument("--run", dest="run", action="store_true",
+                                 help="Run the service")
     (options, remaining) = args_parser.parse_known_args(argv)
 
     if options.dump_config:
@@ -135,6 +139,14 @@ def init(
 
     logging.captureWarnings(True)
     logging.config.dictConfig(config.logging)
+
+    if check_run and not options.run:
+        raise SystemExit(
+            "To prevent accidental startup, you must specify the --run option to start.\n"
+            "Try the --help option to find out what this service does.\n"
+            "Make sure you understand exactly what you are doing!"
+        )
+
     return (args_parser, remaining, config)
 
 
