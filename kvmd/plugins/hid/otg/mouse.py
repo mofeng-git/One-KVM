@@ -110,44 +110,46 @@ class MouseProcess(BaseDeviceProcess):
 
     # =====
 
-    def _process_event(self, event: BaseEvent) -> None:
+    def _process_event(self, event: BaseEvent) -> bool:
         if isinstance(event, _ClearEvent):
-            self.__process_clear_event()
+            return self.__process_clear_event()
         elif isinstance(event, _ResetEvent):
-            self.__process_clear_event(reopen=True)
+            return self.__process_clear_event(reopen=True)
         elif isinstance(event, _ButtonEvent):
-            self.__process_button_event(event)
+            return self.__process_button_event(event)
         elif isinstance(event, _MoveEvent):
-            self.__process_move_event(event)
+            return self.__process_move_event(event)
         elif isinstance(event, _WheelEvent):
-            self.__process_wheel_event(event)
+            return self.__process_wheel_event(event)
+        raise RuntimeError(f"Not implemented event: {event}")
 
-    def __process_clear_event(self, reopen: bool=False) -> None:
+    def __process_clear_event(self, reopen: bool=False) -> bool:
         self.__clear_state()
-        self.__send_current_state(0, 0, reopen=reopen)
+        return self.__send_current_state(reopen=reopen)
 
-    def __process_button_event(self, event: _ButtonEvent) -> None:
+    def __process_button_event(self, event: _ButtonEvent) -> bool:
         if event.code & self.__pressed_buttons:
             # Ранее нажатую кнопку отжимаем
             self.__pressed_buttons &= ~event.code
-            if not self.__send_current_state(0, 0):
-                return
+            if not self.__send_current_state():
+                return False
         if event.state:
             # Нажимаем если нужно
             self.__pressed_buttons |= event.code
-            self.__send_current_state(0, 0)
+            return self.__send_current_state()
+        return True
 
-    def __process_move_event(self, event: _MoveEvent) -> None:
+    def __process_move_event(self, event: _MoveEvent) -> bool:
         self.__x = event.to_x
         self.__y = event.to_y
-        self.__send_current_state(0, 0)
+        return self.__send_current_state()
 
-    def __process_wheel_event(self, event: _WheelEvent) -> None:
-        self.__send_current_state(event.delta_x, event.delta_y)
+    def __process_wheel_event(self, event: _WheelEvent) -> bool:
+        return self.__send_current_state(event.delta_x, event.delta_y)
 
     # =====
 
-    def __send_current_state(self, delta_x: int, delta_y: int, reopen: bool=False) -> bool:
+    def __send_current_state(self, delta_x: int=0, delta_y: int=0, reopen: bool=False) -> bool:
         report = self.__make_report(
             buttons=self.__pressed_buttons,
             to_x=self.__x,

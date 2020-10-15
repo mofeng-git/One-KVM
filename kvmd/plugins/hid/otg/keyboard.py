@@ -112,47 +112,50 @@ class KeyboardProcess(BaseDeviceProcess):
 
     # =====
 
-    def _process_event(self, event: BaseEvent) -> None:
+    def _process_event(self, event: BaseEvent) -> bool:
         if isinstance(event, _ClearEvent):
-            self.__process_clear_event()
+            return self.__process_clear_event()
         elif isinstance(event, _ResetEvent):
-            self.__process_clear_event(reopen=True)
+            return self.__process_clear_event(reopen=True)
         elif isinstance(event, _ModifierEvent):
-            self.__process_modifier_event(event)
+            return self.__process_modifier_event(event)
         elif isinstance(event, _KeyEvent):
-            self.__process_key_event(event)
+            return self.__process_key_event(event)
+        raise RuntimeError(f"Not implemented event: {event}")
 
-    def __process_clear_event(self, reopen: bool=False) -> None:
+    def __process_clear_event(self, reopen: bool=False) -> bool:
         self.__clear_modifiers()
         self.__clear_keys()
-        self.__send_current_state(reopen=reopen)
+        return self.__send_current_state(reopen=reopen)
 
-    def __process_modifier_event(self, event: _ModifierEvent) -> None:
+    def __process_modifier_event(self, event: _ModifierEvent) -> bool:
         if event.modifier in self.__pressed_modifiers:
             # Ранее нажатый модификатор отжимаем
             self.__pressed_modifiers.remove(event.modifier)
             if not self.__send_current_state():
-                return
+                return False
         if event.state:
             # Нажимаем если нужно
             self.__pressed_modifiers.add(event.modifier)
-            self.__send_current_state()
+            return self.__send_current_state()
+        return True
 
-    def __process_key_event(self, event: _KeyEvent) -> None:
+    def __process_key_event(self, event: _KeyEvent) -> bool:
         if event.key in self.__pressed_keys:
             # Ранее нажатую клавишу отжимаем
             self.__pressed_keys[self.__pressed_keys.index(event.key)] = None
             if not self.__send_current_state():
-                return
+                return False
         elif event.state and None not in self.__pressed_keys:
             # Если нужно нажать что-то новое, но свободных слотов нет - отжимаем всё
             self.__clear_keys()
             if not self.__send_current_state():
-                return
+                return False
         if event.state:
             # Нажимаем если нужно
             self.__pressed_keys[self.__pressed_keys.index(None)] = event.key
-            self.__send_current_state()
+            return self.__send_current_state()
+        return True
 
     # =====
 

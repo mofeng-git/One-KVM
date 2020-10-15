@@ -96,13 +96,15 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                         event = self.__events_queue.get(timeout=0.1)
                     except queue.Empty:
                         if not self.__udc.can_operate():
+                            self._clear_queue()
                             self.__close_device()
                     else:
-                        self._process_event(event)
+                        if not self._process_event(event):
+                            self._clear_queue()
             except Exception:
                 logger.exception("Unexpected HID-%s error", self.__name)
+                self._clear_queue()
                 self.__close_device()
-            finally:
                 time.sleep(1)
 
         self.__close_device()
@@ -112,7 +114,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
     # =====
 
-    def _process_event(self, event: BaseEvent) -> None:
+    def _process_event(self, event: BaseEvent) -> bool:
         raise NotImplementedError
 
     def _process_read_report(self, report: bytes) -> None:
