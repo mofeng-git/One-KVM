@@ -18,16 +18,29 @@ RUN pacman -Syu --noconfirm \
 		python \
 		python-pip \
 		python-tox \
+		python-mako \
+		python-yaml \
+		python-aiohttp \
+		python-aiofiles \
+		python-passlib \
+		python-pyserial \
+		python-setproctitle \
+		python-psutil \
 		python-systemd \
 		python-dbus \
-		python-psutil \
-		python-mako \
+		python-pygments \
+		python-pam \
+		python-pillow \
+		python-xlib \
 		python-hidapi \
 		nginx-mainline \
 		socat \
 		eslint \
 		npm \
 	&& (pacman -Sc --noconfirm || true)
+
+COPY testenv/requirements.txt requirements.txt
+RUN pip install -r requirements.txt
 
 RUN npm install htmlhint -g \
 	&& npm install pug \
@@ -53,9 +66,6 @@ RUN git clone https://github.com/pikvm/ustreamer \
 	&& make PREFIX=/usr install \
 	&& cd - \
 	&& rm -rf ustreamer
-
-COPY testenv/requirements.txt requirements.txt
-RUN pip install -r requirements.txt
 
 RUN mkdir -p \
 		/etc/kvmd/nginx \

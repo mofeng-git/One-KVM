@@ -1,12 +1,1 @@
-six
-aiohttp
-aiofiles
-passlib
-pyyaml
-pyserial
-setproctitle
-pygments
 pyghmi
-python-pam
-Pillow
-python-xlib
