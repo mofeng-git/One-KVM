@@ -43,6 +43,7 @@ from .netctl import BaseCtl
 from .netctl import IfaceUpCtl
 from .netctl import IfaceAddIpCtl
 from .netctl import IptablesDropAllCtl
+from .netctl import IptablesAllowIcmpCtl
 from .netctl import IptablesAllowPortCtl
 from .netctl import CustomCtl
 
@@ -64,6 +65,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         self.__iface_net: str = config.otgnet.iface.net
         self.__ip_cmd: List[str] = config.otgnet.iface.ip_cmd
 
+        self.__allow_icmp: bool = config.otgnet.firewall.allow_icmp
         self.__allow_tcp: List[int] = sorted(set(config.otgnet.firewall.allow_tcp))
         self.__allow_udp: List[int] = sorted(set(config.otgnet.firewall.allow_udp))
         self.__iptables_cmd: List[str] = config.otgnet.firewall.iptables_cmd
@@ -91,6 +93,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         ctls: List[BaseCtl] = [
             CustomCtl(self.__pre_start_cmd, self.__post_stop_cmd, placeholders),
             IfaceUpCtl(self.__ip_cmd, netcfg.iface),
+            *([IptablesAllowIcmpCtl(self.__iptables_cmd, netcfg.iface)] if self.__allow_icmp else []),
             *[
                 IptablesAllowPortCtl(self.__iptables_cmd, netcfg.iface, port, tcp)
                 for (port, tcp) in [

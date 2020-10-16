@@ -58,6 +58,18 @@ class IptablesDropAllCtl(BaseCtl):
         return [*self.__base_cmd, ("-A" if direct else "-D"), "INPUT", "-i", self.__iface, "-j", "DROP"]
 
 
+class IptablesAllowIcmpCtl(BaseCtl):
+    def __init__(self, base_cmd: List[str], iface: str) -> None:
+        self.__base_cmd = base_cmd
+        self.__iface = iface
+
+    def get_command(self, direct: bool) -> List[str]:
+        return [
+            *self.__base_cmd,
+            ("-A" if direct else "-D"), "INPUT", "-i", self.__iface, "-p", "icmp", "-j", "ACCEPT",
+        ]
+
+
 class IptablesAllowPortCtl(BaseCtl):
     def __init__(self, base_cmd: List[str], iface: str, port: int, tcp: bool) -> None:
         self.__base_cmd = base_cmd

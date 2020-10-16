@@ -447,7 +447,8 @@ def _get_config_scheme() -> Dict:
             },
 
             "firewall": {
-                "allow_tcp":    Option([], type=valid_ports_list),
+                "allow_icmp":   Option(True, type=valid_bool),
+                "allow_tcp":    Option([],   type=valid_ports_list),
                 "allow_udp":    Option([67], type=valid_ports_list),
                 "iptables_cmd": Option(["/usr/bin/iptables"], type=valid_command),
             },
