@@ -78,7 +78,7 @@ $(TESTENV_GPIO):
 	test -c $(TESTENV_GPIO)
 
 
-run: testenv testenv-ssl $(TESTENV_GPIO)
+run: testenv $(TESTENV_GPIO)
 	test -d testenv/.ssl || docker run --rm \
 			--volume `pwd`:/src:ro \
 			--volume `pwd`/testenv:/src/testenv:rw \
