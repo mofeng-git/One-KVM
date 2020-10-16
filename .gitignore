@@ -10,6 +10,7 @@
 /testenv/.coverage
 /testenv/run/*.sock
 /testenv/run/*.pid
+/testenv/.ssl/
 /v*.tar.gz
 /*.pkg.tar.xz
 /*.pkg.tar.zst

@@ -7,6 +7,7 @@
 /testenv/run/
 /testenv/.tox/
 /testenv/.mypy_cache/
+/testenv/.ssl/
 /.git/
 /v*.tar.gz
 /*.pkg.tar.xz
