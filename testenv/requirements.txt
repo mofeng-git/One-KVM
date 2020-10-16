@@ -1,3 +1,4 @@
+six
 aiohttp
 aiofiles
 passlib
