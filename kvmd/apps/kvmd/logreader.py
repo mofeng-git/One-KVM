@@ -41,7 +41,7 @@ class LogReader:
         services = set(
             service
             for service in systemd.journal.Reader().query_unique("_SYSTEMD_UNIT")
-            if re.match(r"kvmd(-\w+)?\.service", service)
+            if re.match(r"kvmd(-\w+)*\.service", service)
         ).union(["kvmd.service"])
 
         for service in services:
