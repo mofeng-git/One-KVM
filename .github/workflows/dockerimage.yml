@@ -17,4 +17,4 @@ jobs:
             run: make testenv
 
           - name: Running tests ...
-            run: make tox
+            run: make tox CMD="tox -c testenv/tox.ini"
