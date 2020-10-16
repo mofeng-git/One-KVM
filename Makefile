@@ -23,7 +23,7 @@ endef
 all:
 	@ echo "Useful commands:"
 	@ echo "    make                  # Print this help"
-	@ echo "    make textenv          # Build test environment"
+	@ echo "    make testenv          # Build test environment"
 	@ echo "    make tox              # Run tests and linters"
 	@ echo "    make tox E=pytest     # Run selected test environment"
 	@ echo "    make gpio             # Create gpio mockup"
