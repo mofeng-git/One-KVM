@@ -17,6 +17,8 @@ RUN pacman -Syu --noconfirm \
 		libbsd \
 		python \
 		python-pip \
+		python-setuptools \
+		python-six \
 		python-tox \
 		python-systemd \
 		python-dbus \
