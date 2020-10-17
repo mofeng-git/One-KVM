@@ -33,6 +33,7 @@ RUN pacman -Syu --noconfirm \
 		python-pillow \
 		python-xlib \
 		python-hidapi \
+		freetype2 \
 		nginx-mainline \
 		socat \
 		eslint \
