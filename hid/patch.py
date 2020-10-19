@@ -1,20 +1,32 @@
-from os.path import join
+# https://docs.platformio.org/en/latest/projectconf/advanced_scripting.html
+
 from os.path import exists
+from os.path import join
+from os.path import basename
+
+from typing import Dict
 
 Import("env")
 
 
 # =====
-deps_path = env.get("PROJECT_LIBDEPS_DIR", env.get("PROJECTLIBDEPS_DIR"))
-assert deps_path, deps_path
-env_path = join(deps_path, env["PIOENV"])
-flag_path = join(env_path, ".patched")
+def _get_libs() -> Dict[str, str]:
+    return {
+        builder.name: builder.path
+        for builder in env.GetLibBuilders()
+    }
 
-if not exists(flag_path):
-    env.Execute(f"patch -p1 -d {join(env_path, 'HID-Project')} < {join('patches', 'absmouse.patch')}")
 
-    def touch_flag(*_, **__) -> None:
-        with open(flag_path, "w") as flag_file:
-            pass
+def _patch_lib(lib_path: str, patch_path: str) -> None:
+    assert exists(lib_path)
+    flag_path: str = join(lib_path, f".{basename(patch_path)}.done")
+    if not exists(flag_path):
+        env.Execute(f"patch -p1 -d {lib_path} < {patch_path}")
+        env.Execute(lambda *_, **__: open(flag_path, "w").close())
 
-    env.Execute(touch_flag)
+
+# =====
+_libs = _get_libs()
+assert "TimerOne" in _libs  # Just checking
+if "HID-Project" in _libs:
+    _patch_lib(_libs["HID-Project"], "patches/absmouse.patch")
