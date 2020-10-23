@@ -23,9 +23,38 @@
 import multiprocessing
 import queue
 
+from typing import Tuple
 from typing import Dict
+from typing import TypeVar
+from typing import Optional
 
 from . import aiotools
+
+
+# =====
+_QueueItemT = TypeVar("_QueueItemT")
+
+
+async def queue_get_last(  # pylint: disable=invalid-name
+    q: "multiprocessing.Queue[_QueueItemT]",
+    timeout: float,
+) -> Tuple[bool, Optional[_QueueItemT]]:
+
+    return (await aiotools.run_async(queue_get_last_sync, q, timeout))
+
+
+def queue_get_last_sync(  # pylint: disable=invalid-name
+    q: "multiprocessing.Queue[_QueueItemT]",
+    timeout: float,
+) -> Tuple[bool, Optional[_QueueItemT]]:
+
+    try:
+        item = q.get(timeout=timeout)
+        while not q.empty():
+            item = q.get()
+        return (True, item)
+    except queue.Empty:
+        return (False, None)
 
 
 # =====
@@ -37,17 +66,8 @@ class AioProcessNotifier:
         self.__queue.put_nowait(None)
 
     async def wait(self) -> None:
-        while not (await aiotools.run_async(self.__inner_wait)):
+        while not (await queue_get_last(self.__queue, 0.1))[0]:
             pass
-
-    def __inner_wait(self) -> bool:
-        try:
-            self.__queue.get(timeout=0.1)
-            while not self.__queue.empty():
-                self.__queue.get()
-            return True
-        except queue.Empty:
-            return False
 
 
 # =====
