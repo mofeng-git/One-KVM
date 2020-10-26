@@ -52,17 +52,11 @@ class _ModifierEvent(BaseEvent):
     modifier: OtgKey
     state: bool
 
-    def __post_init__(self) -> None:
-        assert self.modifier.is_modifier
-
 
 @dataclasses.dataclass(frozen=True)
 class _KeyEvent(BaseEvent):
     key: OtgKey
     state: bool
-
-    def __post_init__(self) -> None:
-        assert not self.key.is_modifier
 
 
 # =====
@@ -94,10 +88,8 @@ class KeyboardProcess(BaseDeviceProcess):
     def send_key_events(self, keys: Iterable[Tuple[str, bool]]) -> None:
         for (key, state) in keys:
             otg_key = KEYMAP[key].otg
-            if otg_key.is_modifier:
-                self._queue_event(_ModifierEvent(otg_key, state))
-            else:
-                self._queue_event(_KeyEvent(otg_key, state))
+            cls = (_ModifierEvent if otg_key.is_modifier else _KeyEvent)
+            self._queue_event(cls(otg_key, state))
 
     # =====
 
