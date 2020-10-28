@@ -93,7 +93,7 @@ class _KeyEvent(_BaseEvent):
         assert self.name in KEYMAP
 
     def make_command(self) -> bytes:
-        code = KEYMAP[self.name].serial.code
+        code = KEYMAP[self.name].mcu.code
         return struct.pack(">BBBxx", 0x11, code, int(self.state))
 
 

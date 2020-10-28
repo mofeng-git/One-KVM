@@ -27,7 +27,7 @@ from kvmd.keyboard.mappings import KEYMAP
 
 # =====
 def test_ok__keymap() -> None:
-    assert KEYMAP["KeyA"].serial.code == 1
+    assert KEYMAP["KeyA"].mcu.code == 1
 
 
 def test_fail__keymap() -> None:

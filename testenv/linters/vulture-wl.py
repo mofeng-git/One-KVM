@@ -21,7 +21,7 @@ IpmiServer.handle_raw_request
 _AtxApiPart.switch_power
 
 _KeyMapping.web_name
-_KeyMapping.serial_code
+_KeyMapping.mcu_code
 _KeyMapping.arduino_name
 _KeyMapping.otg_key
 _KeyMapping.ps2_key

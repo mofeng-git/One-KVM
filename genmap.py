@@ -61,7 +61,7 @@ class _X11Key:
 @dataclasses.dataclass(frozen=True)
 class _KeyMapping:
     web_name: str
-    serial_code: int
+    mcu_code: int
     arduino_name: str
     otg_key: _OtgKey
     ps2_key: _Ps2Key
@@ -115,7 +115,7 @@ def _read_keymap_csv(path: str) -> List[_KeyMapping]:
             if len(row) >= 6:
                 keymap.append(_KeyMapping(
                     web_name=row["web_name"],
-                    serial_code=int(row["serial_code"]),
+                    mcu_code=int(row["mcu_code"]),
                     arduino_name=row["arduino_name"],
                     otg_key=_parse_otg_key(row["otg_key"]),
                     ps2_key=_parse_ps2_key(row["ps2_key"]),
@@ -144,7 +144,7 @@ def main() -> None:
 
     # Fields list:
     #   - Web
-    #   - Serial code
+    #   - MCU code
     #   - Arduino name
     #   - OTG code (^ for mod)
     #   - PS/2 key

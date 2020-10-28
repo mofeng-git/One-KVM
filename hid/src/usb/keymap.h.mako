@@ -29,8 +29,8 @@
 <%! import operator %>
 INLINE KeyboardKeycode keymapUsb(uint8_t code) {
 	switch (code) {
-% for km in sorted(keymap, key=operator.attrgetter("serial_code")):
-		case ${km.serial_code}: return ${km.arduino_name};
+% for km in sorted(keymap, key=operator.attrgetter("mcu_code")):
+		case ${km.mcu_code}: return ${km.arduino_name};
 % endfor
 		default: return KEY_ERROR_UNDEFINED;
 	}

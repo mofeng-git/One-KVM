@@ -27,7 +27,7 @@ from typing import Dict
 
 # =====
 @dataclasses.dataclass(frozen=True)
-class SerialKey:
+class McuKey:
     code: int
 
 
@@ -39,13 +39,13 @@ class OtgKey:
 
 @dataclasses.dataclass(frozen=True)
 class Key:
-    serial: SerialKey
+    mcu: McuKey
     otg: OtgKey
 
 <%! import operator %>
 KEYMAP: Dict[str, Key] = {
-% for km in sorted(keymap, key=operator.attrgetter("serial_code")):
-    "${km.web_name}": Key(serial=SerialKey(code=${km.serial_code}), otg=OtgKey(code=${km.otg_key.code}, is_modifier=${km.otg_key.is_modifier})),
+% for km in sorted(keymap, key=operator.attrgetter("mcu_code")):
+    "${km.web_name}": Key(mcu=McuKey(code=${km.mcu_code}), otg=OtgKey(code=${km.otg_key.code}, is_modifier=${km.otg_key.is_modifier})),
 % endfor
 }
 
