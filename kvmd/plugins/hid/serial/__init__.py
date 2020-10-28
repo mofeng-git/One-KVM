@@ -33,33 +33,31 @@ from typing import List
 from typing import Dict
 from typing import Iterable
 from typing import AsyncGenerator
-from typing import Optional
 
-import gpiod
 import serial
 
-from ...logging import get_logger
+from ....logging import get_logger
 
-from ...keyboard.mappings import KEYMAP
+from ....keyboard.mappings import KEYMAP
 
-from ... import env
-from ... import tools
-from ... import aiotools
-from ... import aiomulti
-from ... import aioproc
-from ... import aiogp
+from .... import tools
+from .... import aiotools
+from .... import aiomulti
+from .... import aioproc
 
-from ...yamlconf import Option
+from ....yamlconf import Option
 
-from ...validators.basic import valid_bool
-from ...validators.basic import valid_int_f0
-from ...validators.basic import valid_int_f1
-from ...validators.basic import valid_float_f01
-from ...validators.os import valid_abs_path
-from ...validators.hw import valid_tty_speed
-from ...validators.hw import valid_gpio_pin_optional
+from ....validators.basic import valid_bool
+from ....validators.basic import valid_int_f0
+from ....validators.basic import valid_int_f1
+from ....validators.basic import valid_float_f01
+from ....validators.os import valid_abs_path
+from ....validators.hw import valid_tty_speed
+from ....validators.hw import valid_gpio_pin_optional
 
-from . import BaseHid
+from .. import BaseHid
+
+from .gpio import Gpio
 
 
 # =====
@@ -156,45 +154,6 @@ class _MouseWheelEvent(_BaseEvent):
         return struct.pack(">Bxbxx", 0x14, self.delta_y)
 
 
-class _Gpio:
-    def __init__(self, reset_pin: int, reset_delay: float) -> None:
-        self.__reset_pin = reset_pin
-        self.__reset_delay = reset_delay
-
-        self.__chip: Optional[gpiod.Chip] = None
-        self.__reset_line: Optional[gpiod.Line] = None
-        self.__reset_wip = False
-
-    def open(self) -> None:
-        if self.__reset_pin >= 0:
-            assert self.__chip is None
-            assert self.__reset_line is None
-            self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
-            self.__reset_line = self.__chip.get_line(self.__reset_pin)
-            self.__reset_line.request("kvmd::hid-serial::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
-
-    def close(self) -> None:
-        if self.__chip:
-            try:
-                self.__chip.close()
-            except Exception:
-                pass
-
-    @aiotools.atomic
-    async def reset(self) -> None:
-        if self.__reset_pin >= 0:
-            assert self.__reset_line
-            if not self.__reset_wip:
-                self.__reset_wip = True
-                try:
-                    await aiogp.pulse(self.__reset_line, self.__reset_delay, 1)
-                finally:
-                    self.__reset_wip = False
-                get_logger(0).info("Reset HID performed")
-            else:
-                get_logger(0).info("Another reset HID in progress")
-
-
 # =====
 class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments,super-init-not-called
@@ -223,7 +182,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__errors_threshold = errors_threshold
         self.__noop = noop
 
-        self.__gpio = _Gpio(reset_pin, reset_delay)
+        self.__gpio = Gpio(reset_pin, reset_delay)
 
         self.__events_queue: "multiprocessing.Queue[_BaseEvent]" = multiprocessing.Queue()
 
