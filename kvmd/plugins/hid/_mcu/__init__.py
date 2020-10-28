@@ -23,18 +23,17 @@
 import os
 import multiprocessing
 import dataclasses
+import contextlib
 import queue
 import struct
-import errno
 import time
 
 from typing import Tuple
 from typing import List
 from typing import Dict
 from typing import Iterable
+from typing import Generator
 from typing import AsyncGenerator
-
-import serial
 
 from ....logging import get_logger
 
@@ -51,8 +50,6 @@ from ....validators.basic import valid_bool
 from ....validators.basic import valid_int_f0
 from ....validators.basic import valid_int_f1
 from ....validators.basic import valid_float_f01
-from ....validators.os import valid_abs_path
-from ....validators.hw import valid_tty_speed
 from ....validators.hw import valid_gpio_pin_optional
 
 from .. import BaseHid
@@ -155,15 +152,28 @@ class _MouseWheelEvent(_BaseEvent):
 
 
 # =====
-class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
+class BasePhyConnection:
+    def send(self, request: bytes, receive: int) -> bytes:
+        raise NotImplementedError
+
+
+class BasePhy:
+    def has_device(self) -> bool:
+        raise NotImplementedError
+
+    @contextlib.contextmanager
+    def connected(self) -> Generator[BasePhyConnection, None, None]:
+        raise NotImplementedError
+
+
+class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments,super-init-not-called
         self,
+        phy: BasePhy,
+
         reset_pin: int,
         reset_delay: float,
 
-        device_path: str,
-        speed: int,
-        read_timeout: float,
         read_retries: int,
         common_retries: int,
         retries_delay: float,
@@ -173,15 +183,13 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
         multiprocessing.Process.__init__(self, daemon=True)
 
-        self.__device_path = device_path
-        self.__speed = speed
-        self.__read_timeout = read_timeout
         self.__read_retries = read_retries
         self.__common_retries = common_retries
         self.__retries_delay = retries_delay
         self.__errors_threshold = errors_threshold
         self.__noop = noop
 
+        self.__phy = phy
         self.__gpio = Gpio(reset_pin, reset_delay)
 
         self.__events_queue: "multiprocessing.Queue[_BaseEvent]" = multiprocessing.Queue()
@@ -202,9 +210,6 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             "reset_pin":   Option(-1,  type=valid_gpio_pin_optional),
             "reset_delay": Option(0.1, type=valid_float_f01),
 
-            "device":           Option("",     type=valid_abs_path, unpack_as="device_path"),
-            "speed":            Option(115200, type=valid_tty_speed),
-            "read_timeout":     Option(2.0,    type=valid_float_f01),
             "read_retries":     Option(10,     type=valid_int_f1),
             "common_retries":   Option(100,    type=valid_int_f1),
             "retries_delay":    Option(0.1,    type=valid_float_f01),
@@ -254,11 +259,11 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                 self.__stop_event.set()
             if self.exitcode is not None:
                 self.join()
-            if os.path.exists(self.__device_path):
+            if self.__phy.has_device():
                 get_logger().info("Clearing HID events ...")
                 try:
-                    with self.__get_serial() as tty:
-                        self.__process_command(tty, b"\x10\x00\x00\x00\x00")
+                    with self.__phy.connected() as conn:
+                        self.__process_command(conn, b"\x10\x00\x00\x00\x00")
                 except Exception:
                     logger.exception("Can't clear HID events")
         finally:
@@ -299,31 +304,28 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
         while not self.__stop_event.is_set():
             try:
-                with self.__get_serial() as tty:
-                    while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
-                        try:
-                            event = self.__events_queue.get(timeout=0.1)
-                        except queue.Empty:
-                            self.__process_command(tty, b"\x01\x00\x00\x00\x00")  # Ping
-                        else:
-                            if not self.__process_command(tty, event.make_command()):
-                                self.clear_events()
-
-            except Exception as err:
-                self.clear_events()
-                if isinstance(err, serial.SerialException) and err.errno == errno.ENOENT:  # pylint: disable=no-member
-                    logger.error("Missing HID serial device: %s", self.__device_path)
+                if self.__phy.has_device():
+                    with self.__phy.connected() as conn:
+                        while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
+                            try:
+                                event = self.__events_queue.get(timeout=0.1)
+                            except queue.Empty:
+                                self.__process_command(conn, b"\x01\x00\x00\x00\x00")  # Ping
+                            else:
+                                if not self.__process_command(conn, event.make_command()):
+                                    self.clear_events()
                 else:
-                    logger.exception("Unexpected HID error")
+                    logger.error("Missing HID device")
+                    time.sleep(1)
+            except Exception:
+                self.clear_events()
+                logger.exception("Unexpected HID error")
                 time.sleep(1)
 
-    def __get_serial(self) -> serial.Serial:
-        return serial.Serial(self.__device_path, self.__speed, timeout=self.__read_timeout)
+    def __process_command(self, conn: BasePhyConnection, command: bytes) -> bool:
+        return self.__process_request(conn, self.__make_request(command))
 
-    def __process_command(self, tty: serial.Serial, command: bytes) -> bool:
-        return self.__process_request(tty, self.__make_request(command))
-
-    def __process_request(self, tty: serial.Serial, request: bytes) -> bool:  # pylint: disable=too-many-branches
+    def __process_request(self, conn: BasePhyConnection, request: bytes) -> bool:  # pylint: disable=too-many-branches
         logger = get_logger()
         error_messages: List[str] = []
         live_log_errors = False
@@ -333,7 +335,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         error_retval = False
 
         while common_retries and read_retries:
-            response = self.__send_request(tty, request)
+            response = self.__send_request(conn, request)
             try:
                 if len(response) < 4:
                     read_retries -= 1
@@ -392,12 +394,9 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             logger.error("Can't process HID request due many errors: %r", request)
         return error_retval
 
-    def __send_request(self, tty: serial.Serial, request: bytes) -> bytes:
+    def __send_request(self, conn: BasePhyConnection, request: bytes) -> bytes:
         if not self.__noop:
-            if tty.in_waiting:
-                tty.read(tty.in_waiting)
-            assert tty.write(request) == len(request)
-            response = tty.read(4)
+            response = conn.send(request, 4)
         else:
             response = b"\x33\x20"  # Magic + OK
             response += struct.pack(">H", self.__make_crc16(response))

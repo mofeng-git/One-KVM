@@ -47,7 +47,7 @@ class Gpio:
             assert self.__reset_line is None
             self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
             self.__reset_line = self.__chip.get_line(self.__reset_pin)
-            self.__reset_line.request("kvmd::hid-serial::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
+            self.__reset_line.request("kvmd::hid-mcu::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
 
     def close(self) -> None:
         if self.__chip:
