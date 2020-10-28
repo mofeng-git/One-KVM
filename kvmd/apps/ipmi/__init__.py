@@ -48,5 +48,8 @@ def main(argv: Optional[List[str]]=None) -> None:
             user_agent=htclient.make_user_agent("KVMD-IPMI"),
             **config.kvmd._unpack(),
         ),
-        **config.server._unpack(),
+        **{  # Makes mypy happy (too many arguments for IpmiServer)
+            **config.server._unpack(),
+            **config.sol._unpack(),
+        },
     ).run()

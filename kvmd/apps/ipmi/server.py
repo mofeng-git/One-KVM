@@ -20,13 +20,21 @@
 # ========================================================================== #
 
 
+import os
+import select
 import asyncio
+import threading
+import multiprocessing
 import functools
+import queue
 
 from typing import Dict
+from typing import Optional
 
 import aiohttp
+import serial
 
+from pyghmi.ipmi.console import ServerConsole as IpmiConsole
 from pyghmi.ipmi.private.session import Session as IpmiSession
 from pyghmi.ipmi.private.serversession import IpmiServer as BaseIpmiServer
 from pyghmi.ipmi.private.serversession import ServerSession as IpmiServerSession
@@ -51,8 +59,13 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
         kvmd: KvmdClient,
 
         host: str,
-        port: str,
+        port: int,
         timeout: float,
+
+        sol_device_path: str,
+        sol_speed: int,
+        sol_select_timeout: float,
+        sol_proxy_port: int,
     ) -> None:
 
         super().__init__(authdata=auth_manager, address=host, port=port)
@@ -64,6 +77,16 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
         self.__port = port
         self.__timeout = timeout
 
+        self.__sol_device_path = sol_device_path
+        self.__sol_speed = sol_speed
+        self.__sol_select_timeout = sol_select_timeout
+        self.__sol_proxy_port = (sol_proxy_port or port)
+
+        self.__sol_lock = threading.Lock()
+        self.__sol_console: Optional[IpmiConsole] = None
+        self.__sol_thread: Optional[threading.Thread] = None
+        self.__sol_stop = False
+
     def run(self) -> None:
         logger = get_logger(0)
         logger.info("Listening IPMI on UPD [%s]:%d ...", self.__host, self.__port)
@@ -72,6 +95,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
                 IpmiSession.wait_for_rsp(self.__timeout)
         except (SystemExit, KeyboardInterrupt):
             pass
+        self.__stop_sol_worker()
         logger.info("Bye-bye")
 
     # =====
@@ -84,6 +108,8 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
             (6, 0x38): (lambda _, session: session.send_ipmi_response()),  # Get channel auth types
             (0, 1): self.__get_chassis_status_handler,  # Get chassis status
             (0, 2): self.__chassis_control_handler,  # Chassis control
+            (6, 0x48): self.__activate_sol_handler,  # Enable SOL
+            (6, 0x49): self.__deactivate_sol_handler,  # Disable SOL
         }.get((request["netfn"], request["command"]))
         if handler is not None:
             try:
@@ -96,6 +122,8 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
                 session.send_ipmi_response(code=0xFF)
         else:
             session.send_ipmi_response(code=0xC1)
+
+    # =====
 
     def __get_power_state_handler(self, _: Dict, session: IpmiServerSession) -> None:
         # https://github.com/arcress0/ipmiutil/blob/e2f6e95127d22e555f959f136d9bb9543c763896/util/ireset.c#L654
@@ -133,8 +161,6 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
             code = 0xCC  # Invalid request
         session.send_ipmi_response(code=code)
 
-    # =====
-
     def __make_request(self, session: IpmiServerSession, name: str, method_path: str, **kwargs):  # type: ignore
         async def runner():  # type: ignore
             logger = get_logger(0)
@@ -150,3 +176,90 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
                 raise
 
         return aiotools.run_sync(runner())
+
+    # =====
+
+    def __activate_sol_handler(self, _: Dict, session: IpmiServerSession) -> None:
+        with self.__sol_lock:
+            if not self.__sol_device_path:
+                session.send_ipmi_response(code=0x81)  # SOL disabled
+            elif not os.access(self.__sol_device_path, os.R_OK | os.W_OK):
+                get_logger(0).info("Can't activate SOL because %s is unavailable", self.__sol_device_path)
+                session.send_ipmi_response(code=0x81)  # SOL disabled
+            elif self.__is_sol_activated():
+                session.send_ipmi_response(code=0x80)  # Already activated
+            else:
+                get_logger(0).info("Activating SOL ...")
+                self.__stop_sol_worker()  # Join if dead
+                session.send_ipmi_response(data=[
+                    0, 0, 0, 0, 1, 0, 1, 0,
+                    (self.__sol_proxy_port >> 8 & 0xFF), (self.__sol_proxy_port & 0xFF),
+                    0xFF, 0xFF,
+                ])
+                self.__start_sol_worker(session)
+
+    def __deactivate_sol_handler(self, _: Dict, session: IpmiServerSession) -> None:
+        with self.__sol_lock:
+            if not self.__sol_device_path:
+                session.send_ipmi_response(code=0x81)
+            elif not self.__is_sol_activated():
+                session.send_ipmi_response(code=0x80)
+            else:
+                get_logger(0).info("Deactivating SOL ...")
+                self.__stop_sol_worker()
+
+    def __is_sol_activated(self) -> bool:
+        return (self.__sol_thread is not None and self.__sol_thread.is_alive())
+
+    def __start_sol_worker(self, session: IpmiServerSession) -> None:
+        assert self.__sol_console is None
+        assert self.__sol_thread is None
+        user_queue: "multiprocessing.Queue[bytes]" = multiprocessing.Queue()  # Only for select()
+        self.__sol_console = IpmiConsole(session, user_queue.put_nowait)
+        self.__sol_thread = threading.Thread(target=self.__sol_worker, args=(user_queue,), daemon=True)
+        self.__sol_thread.start()
+
+    def __stop_sol_worker(self) -> None:
+        if self.__sol_thread is not None:
+            if self.__sol_thread.is_alive():
+                self.__sol_stop = True
+            self.__sol_thread.join()
+            self.__sol_stop = False
+            self.__sol_thread = None
+        self.__close_sol_console()
+
+    def __close_sol_console(self) -> None:
+        if self.__sol_console is not None:
+            self.__sol_console.close()
+            self.__sol_console = None
+            get_logger(0).info("SOL closed")
+
+    def __sol_worker(self, user_queue: "multiprocessing.Queue[bytes]") -> None:
+        logger = get_logger(0)
+        logger.info("Starting SOL worker ...")
+        try:
+            assert self.__sol_console is not None
+            with serial.Serial(self.__sol_device_path, self.__sol_speed) as tty:
+                logger.info("Opened SOL port %s at speed=%d", self.__sol_device_path, self.__sol_speed)
+                qr = user_queue._reader  # type: ignore  # pylint: disable=protected-access
+                try:
+                    while not self.__sol_stop:
+                        ready = select.select([qr, tty], [], [], self.__sol_select_timeout)[0]
+                        if qr in ready:
+                            data = b""
+                            for _ in range(user_queue.qsize()):  # Don't hold on this with [not empty()]
+                                try:
+                                    data += user_queue.get_nowait()
+                                except queue.Empty:
+                                    break
+                            if data:
+                                tty.write(data)
+                        if tty in ready:
+                            self.__sol_console.send_data(tty.read_all())
+                finally:
+                    logger.info("Closed SOL port %s", self.__sol_device_path)
+        except Exception:
+            logger.exception("SOL worker error")
+            self.__close_sol_console()
+        finally:
+            logger.info("SOL worker finished")

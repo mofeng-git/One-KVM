@@ -93,6 +93,7 @@ from ..validators.kvm import valid_ugpio_channel
 from ..validators.kvm import valid_ugpio_mode
 from ..validators.kvm import valid_ugpio_view_table
 
+from ..validators.hw import valid_tty_speed
 from ..validators.hw import valid_gpio_pin
 from ..validators.hw import valid_otg_gadget
 from ..validators.hw import valid_otg_id
@@ -495,6 +496,13 @@ def _get_config_scheme() -> Dict:
 
             "auth": {
                 "file": Option("/etc/kvmd/ipmipasswd", type=valid_abs_file, unpack_as="path"),
+            },
+
+            "sol": {
+                "device":         Option("",     type=(lambda arg: (valid_abs_path(arg) if arg else "")), unpack_as="sol_device_path"),
+                "speed":          Option(115200, type=valid_tty_speed, unpack_as="sol_speed"),
+                "select_timeout": Option(0.1,    type=valid_float_f01, unpack_as="sol_select_timeout"),
+                "proxy_port":     Option(0,      type=valid_port, unpack_as="sol_proxy_port"),
             },
         },
 
