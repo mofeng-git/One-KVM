@@ -153,7 +153,7 @@ class _MouseWheelEvent(_BaseEvent):
 
 # =====
 class BasePhyConnection:
-    def send(self, request: bytes, receive: int) -> bytes:
+    def send(self, request: bytes) -> bytes:
         raise NotImplementedError
 
 
@@ -396,7 +396,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
     def __send_request(self, conn: BasePhyConnection, request: bytes) -> bytes:
         if not self.__noop:
-            response = conn.send(request, 4)
+            response = conn.send(request)
         else:
             response = b"\x33\x20"  # Magic + OK
             response += struct.pack(">H", self.__make_crc16(response))

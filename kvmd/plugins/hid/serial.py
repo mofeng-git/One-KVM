@@ -45,11 +45,12 @@ class _SerialPhyConnection(BasePhyConnection):
     def __init__(self, tty: serial.Serial) -> None:
         self.__tty = tty
 
-    def send(self, request: bytes, receive: int) -> bytes:
+    def send(self, request: bytes) -> bytes:
+        assert len(request) == 8
         if self.__tty.in_waiting:
             self.__tty.read_all()
-        assert self.__tty.write(request) == len(request)
-        return self.__tty.read(receive)
+        assert self.__tty.write(request) == 8
+        return self.__tty.read(4)
 
 
 class _SerialPhy(BasePhy):

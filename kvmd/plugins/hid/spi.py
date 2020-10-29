@@ -31,6 +31,8 @@ from typing import Any
 
 import spidev
 
+from ...logging import get_logger
+
 from ...yamlconf import Option
 
 from ...validators.basic import valid_int_f0
@@ -44,10 +46,6 @@ from ._mcu import BaseMcuHid
 
 
 # =====
-class SpiPhyError(Exception):
-    pass
-
-
 class _SpiPhyConnection(BasePhyConnection):
     def __init__(
         self,
@@ -60,41 +58,44 @@ class _SpiPhyConnection(BasePhyConnection):
         self.__read_timeout = read_timeout
         self.__read_delay = read_delay
 
-    def send(self, request: bytes, receive: int) -> bytes:
-        assert 0 < receive <= len(request)
+        self.__empty8 = b"\x00" * 8
+        self.__empty4 = b"\x00" * 4
 
-        dummy = b"\x00" * len(request)
+    def send(self, request: bytes) -> bytes:
+        assert len(request) == 8
+
         deadline_ts = time.time() + self.__read_timeout
         while time.time() < deadline_ts:
-            garbage = bytes(self.__spi.xfer(dummy))
-            if garbage == dummy:
+            garbage = bytes(self.__spi.xfer(self.__empty8))
+            if garbage == self.__empty8:
                 break
         else:
-            raise SpiPhyError("Timeout reached while reading a garbage")
+            get_logger(0).error("SPI timeout reached while reading the a garbage")
+            return b""
 
         self.__spi.xfer(request)
 
         response: List[int] = []
-        dummy = b"\x00" * receive
         deadline_ts = time.time() + self.__read_timeout
         found = False
         while time.time() < deadline_ts:
             if not found:
                 time.sleep(self.__read_delay)
-            for byte in self.__spi.xfer(dummy):
+            for byte in self.__spi.xfer(self.__empty4):
                 if not found:
                     if byte == 0:
                         continue
                     found = True
                 response.append(byte)
-                if len(response) >= receive:
+                if len(response) >= 4:
                     break
-            if len(response) >= receive:
+            if len(response) >= 4:
                 break
         else:
-            raise SpiPhyError("Timeout reached while responce waiting")
+            get_logger(0).error("SPI timeout reached while responce waiting")
+            return b""
 
-        assert len(response) == receive
+        assert len(response) == 4
         return bytes(response)
 
 
