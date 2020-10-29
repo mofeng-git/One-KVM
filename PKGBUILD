@@ -40,6 +40,7 @@ depends=(
 	python-aiofiles
 	python-passlib
 	python-pyserial
+	python-spidev
 	python-setproctitle
 	python-psutil
 	python-systemd
