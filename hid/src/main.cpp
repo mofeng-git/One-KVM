@@ -104,13 +104,17 @@ INLINE uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 2 bytes
 	uint8_t main_state = buffer[0];
 	uint8_t extra_state = buffer[1];
 
+#	define MOUSE_PAIR(_state, _button) \
+		_state & PROTO_CMD_MOUSE_BUTTON_##_button##_SELECT, \
+		_state & PROTO_CMD_MOUSE_BUTTON_##_button##_STATE
 	hid_mouse.sendMouseButtons(
-		main_state & PROTO_CMD_MOUSE_BUTTON_LEFT_SELECT, main_state & PROTO_CMD_MOUSE_BUTTON_LEFT_STATE,
-		main_state & PROTO_CMD_MOUSE_BUTTON_RIGHT_SELECT, main_state & PROTO_CMD_MOUSE_BUTTON_RIGHT_STATE,
-		main_state & PROTO_CMD_MOUSE_BUTTON_MIDDLE_SELECT, main_state & PROTO_CMD_MOUSE_BUTTON_MIDDLE_STATE,
-		extra_state & PROTO_CMD_MOUSE_BUTTON_EXTRA_UP_SELECT, extra_state & PROTO_CMD_MOUSE_BUTTON_EXTRA_UP_STATE,
-		extra_state & PROTO_CMD_MOUSE_BUTTON_EXTRA_DOWN_SELECT, extra_state & PROTO_CMD_MOUSE_BUTTON_EXTRA_DOWN_STATE
+		MOUSE_PAIR(main_state, LEFT),
+		MOUSE_PAIR(main_state, RIGHT),
+		MOUSE_PAIR(main_state, MIDDLE),
+		MOUSE_PAIR(extra_state, EXTRA_UP),
+		MOUSE_PAIR(extra_state, EXTRA_DOWN)
 	);
+#	undef MOUSE_PAIR
 #	endif
 	return PROTO_RESP_OK;
 }
