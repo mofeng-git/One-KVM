@@ -94,8 +94,14 @@ def valid_unix_mode(arg: Any) -> int:
     return int(valid_number(arg, min=0, name="UNIX mode"))
 
 
+def valid_options(arg: Any, name: str="") -> List[str]:
+    if not name:
+        name = "options"
+    return valid_string_list(arg, delim=r"[,\t]+", name=name)
+
+
 def valid_command(arg: Any) -> List[str]:
-    cmd = valid_string_list(arg, delim=r"[,\t]+", name="command")
+    cmd = valid_options(arg, name="command")
     if len(cmd) == 0:
         raise_error(arg, "command")
     cmd[0] = valid_abs_file(cmd[0], name="command entry point")

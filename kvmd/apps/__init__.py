@@ -73,6 +73,7 @@ from ..validators.os import valid_abs_path
 from ..validators.os import valid_abs_file
 from ..validators.os import valid_abs_dir
 from ..validators.os import valid_unix_mode
+from ..validators.os import valid_options
 from ..validators.os import valid_command
 
 from ..validators.net import valid_ip_or_host
@@ -363,7 +364,9 @@ def _get_config_scheme() -> Dict:
 
                 "process_name_prefix": Option("kvmd/streamer"),
 
-                "cmd": Option(["/bin/true"], type=valid_command),
+                "cmd":        Option(["/bin/true"], type=valid_command),
+                "cmd_remove": Option([], type=valid_options),
+                "cmd_append": Option([], type=valid_options),
             },
 
             "snapshot": {

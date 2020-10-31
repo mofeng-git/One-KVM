@@ -132,6 +132,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         process_name_prefix: str,
 
         cmd: List[str],
+        cmd_remove: List[str],
+        cmd_append: List[str],
 
         **params_kwargs: Any,
     ) -> None:
@@ -148,7 +150,11 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__process_name_prefix = process_name_prefix
 
-        self.__cmd = cmd
+        self.__cmd = [
+            cmd[0],  # Executable
+            *filter((lambda item: item not in cmd_remove), cmd[1:]),
+            *cmd_append,
+        ]
 
         self.__params = _StreamerParams(**params_kwargs)
 
