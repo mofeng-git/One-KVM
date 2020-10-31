@@ -64,6 +64,10 @@ depends=(
 	dnsmasq
 	"raspberrypi-io-access>=0.5"
 	"ustreamer>=1.19"
+
+	# Avoid dhcpcd stack trace
+	dhclient
+	netctl
 )
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
@@ -118,6 +122,9 @@ package_kvmd() {
 	install -Dm600 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*passwd
 
 	mkdir -p "$pkgdir/var/lib/kvmd/msd"
+
+	# Avoid dhcp problems
+	install -DTm755 configs/os/netctl-dhcp "$pkgdir/etc/netctl/hooks/pikvm-dhcp"
 }
 
 
