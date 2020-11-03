@@ -96,8 +96,8 @@ def valid_hid_mouse_button(arg: Any) -> str:
     return check_string_in_list(arg, "HID mouse button", ["left", "right", "middle", "up", "down"])
 
 
-def valid_hid_mouse_wheel(arg: Any) -> int:
-    arg = valid_number(arg, name="HID mouse wheel")
+def valid_hid_mouse_delta(arg: Any) -> int:
+    arg = valid_number(arg, name="HID mouse delta")
     return min(max(-127, arg), 127)
 
 

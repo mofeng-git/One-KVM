@@ -75,6 +75,7 @@ class Plugin(BaseHid):
                 "write_retries":       Option(5,   type=valid_int_f1),
                 "write_retries_delay": Option(0.1, type=valid_float_f01),
                 "reopen_delay":        Option(0.5, type=valid_float_f01),
+                "absolute":            Option(True, type=valid_bool),
             },
             "noop": Option(False, type=valid_bool),
         }
@@ -129,6 +130,9 @@ class Plugin(BaseHid):
 
     def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
         self.__mouse_proc.send_move_event(to_x, to_y)
+
+    def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
+        self.__mouse_proc.send_relative_event(delta_x, delta_y)
 
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         self.__mouse_proc.send_wheel_event(delta_x, delta_y)

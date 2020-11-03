@@ -40,7 +40,7 @@ from ....validators.os import valid_printable_filename
 from ....validators.kvm import valid_hid_key
 from ....validators.kvm import valid_hid_mouse_move
 from ....validators.kvm import valid_hid_mouse_button
-from ....validators.kvm import valid_hid_mouse_wheel
+from ....validators.kvm import valid_hid_mouse_delta
 
 from ....keyboard.keysym import build_symmap
 from ....keyboard.printer import text_to_web_keys
@@ -142,11 +142,20 @@ class HidApi:
             return
         self.__hid.send_mouse_move_event(to_x, to_y)
 
+    @exposed_ws("mouse_relative")
+    async def __ws_mouse_relative_handler(self, _: WebSocketResponse, event: Dict) -> None:
+        try:
+            delta_x = valid_hid_mouse_delta(event["delta"]["x"])
+            delta_y = valid_hid_mouse_delta(event["delta"]["y"])
+        except Exception:
+            return
+        self.__hid.send_mouse_relative_event(delta_x, delta_y)
+
     @exposed_ws("mouse_wheel")
     async def __ws_mouse_wheel_handler(self, _: WebSocketResponse, event: Dict) -> None:
         try:
-            delta_x = valid_hid_mouse_wheel(event["delta"]["x"])
-            delta_y = valid_hid_mouse_wheel(event["delta"]["y"])
+            delta_x = valid_hid_mouse_delta(event["delta"]["x"])
+            delta_y = valid_hid_mouse_delta(event["delta"]["y"])
         except Exception:
             return
         self.__hid.send_mouse_wheel_event(delta_x, delta_y)
@@ -181,9 +190,16 @@ class HidApi:
         self.__hid.send_mouse_move_event(to_x, to_y)
         return make_json_response()
 
+    @exposed_http("POST", "/hid/events/send_mouse_relative")
+    async def __events_send_mouse_relative_handler(self, request: Request) -> Response:
+        delta_x = valid_hid_mouse_delta(request.query.get("delta_x"))
+        delta_y = valid_hid_mouse_delta(request.query.get("delta_y"))
+        self.__hid.send_mouse_relative_event(delta_x, delta_y)
+        return make_json_response()
+
     @exposed_http("POST", "/hid/events/send_mouse_wheel")
-    async def __events_send_mouse_wheel(self, request: Request) -> Response:
-        delta_x = valid_hid_mouse_wheel(request.query.get("delta_x"))
-        delta_y = valid_hid_mouse_wheel(request.query.get("delta_y"))
+    async def __events_send_mouse_wheel_handler(self, request: Request) -> Response:
+        delta_x = valid_hid_mouse_delta(request.query.get("delta_x"))
+        delta_y = valid_hid_mouse_delta(request.query.get("delta_y"))
         self.__hid.send_mouse_wheel_event(delta_x, delta_y)
         return make_json_response()

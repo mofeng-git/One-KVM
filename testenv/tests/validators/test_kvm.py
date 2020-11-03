@@ -38,7 +38,7 @@ from kvmd.validators.kvm import valid_stream_resolution
 from kvmd.validators.kvm import valid_hid_key
 from kvmd.validators.kvm import valid_hid_mouse_move
 from kvmd.validators.kvm import valid_hid_mouse_button
-from kvmd.validators.kvm import valid_hid_mouse_wheel
+from kvmd.validators.kvm import valid_hid_mouse_delta
 from kvmd.validators.kvm import valid_ugpio_driver
 from kvmd.validators.kvm import valid_ugpio_channel
 from kvmd.validators.kvm import valid_ugpio_mode
@@ -188,22 +188,22 @@ def test_fail__valid_hid_mouse_button(arg: Any) -> None:
 
 # =====
 @pytest.mark.parametrize("arg", [-100, "1 ", "-1", 1, -1, 0, "100 "])
-def test_ok__valid_hid_mouse_wheel(arg: Any) -> None:
-    assert valid_hid_mouse_wheel(arg) == int(str(arg).strip())
+def test_ok__valid_hid_mouse_delta(arg: Any) -> None:
+    assert valid_hid_mouse_delta(arg) == int(str(arg).strip())
 
 
-def test_ok__valid_hid_mouse_wheel__m200() -> None:
-    assert valid_hid_mouse_wheel(-200) == -127
+def test_ok__valid_hid_mouse_delta__m200() -> None:
+    assert valid_hid_mouse_delta(-200) == -127
 
 
-def test_ok__valid_hid_mouse_wheel__p200() -> None:
-    assert valid_hid_mouse_wheel(200) == 127
+def test_ok__valid_hid_mouse_delta__p200() -> None:
+    assert valid_hid_mouse_delta(200) == 127
 
 
 @pytest.mark.parametrize("arg", ["test", "", None, 1.1])
-def test_fail__valid_hid_mouse_wheel(arg: Any) -> None:
+def test_fail__valid_hid_mouse_delta(arg: Any) -> None:
     with pytest.raises(ValidatorError):
-        print(valid_hid_mouse_wheel(arg))
+        print(valid_hid_mouse_delta(arg))
 
 
 # =====

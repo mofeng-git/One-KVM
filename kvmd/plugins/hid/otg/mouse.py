@@ -23,6 +23,7 @@
 import struct
 import dataclasses
 
+from typing import Optional
 from typing import Any
 
 from ....logging import get_logger
@@ -53,6 +54,12 @@ class _MoveEvent(BaseEvent):
 
 
 @dataclasses.dataclass(frozen=True)
+class _RelativeEvent(BaseEvent):
+    delta_x: int
+    delta_y: int
+
+
+@dataclasses.dataclass(frozen=True)
 class _WheelEvent(BaseEvent):
     delta_x: int
     delta_y: int
@@ -61,21 +68,26 @@ class _WheelEvent(BaseEvent):
 # =====
 class MouseProcess(BaseDeviceProcess):
     def __init__(self, **kwargs: Any) -> None:
+        self.__absolute: bool = kwargs.pop("absolute")
+
         super().__init__(
             name="mouse",
             read_size=0,
-            initial_state={},
+            initial_state={"absolute": self.__absolute},  # Just for the state
             **kwargs,
         )
 
         self.__pressed_buttons: int = 0
-        self.__x = 0
+        self.__x = 0  # For absolute
         self.__y = 0
 
     def cleanup(self) -> None:
         self._stop()
         get_logger().info("Clearing HID-mouse events ...")
-        report = self.__make_report(0, self.__x, self.__y, 0, 0)
+        if self.__absolute:
+            report = self.__make_report(0, self.__x, self.__y, 0, 0)
+        else:
+            report = self.__make_report(0, 0, 0, 0, 0)
         self._ensure_write(report, close=True)  # Release all buttons
 
     def send_clear_event(self) -> None:
@@ -97,11 +109,18 @@ class MouseProcess(BaseDeviceProcess):
         self._queue_event(_ButtonEvent(code, state))
 
     def send_move_event(self, to_x: int, to_y: int) -> None:
-        assert -32768 <= to_x <= 32767
-        assert -32768 <= to_y <= 32767
-        to_x = (to_x + 32768) // 2
-        to_y = (to_y + 32768) // 2
-        self._queue_event(_MoveEvent(to_x, to_y))
+        if self.__absolute:
+            assert -32768 <= to_x <= 32767
+            assert -32768 <= to_y <= 32767
+            to_x = (to_x + 32768) // 2
+            to_y = (to_y + 32768) // 2
+            self._queue_event(_MoveEvent(to_x, to_y))
+
+    def send_relative_event(self, delta_x: int, delta_y: int) -> None:
+        if not self.__absolute:
+            assert -127 <= delta_x <= 127
+            assert -127 <= delta_y <= 127
+            self._queue_event(_RelativeEvent(delta_x, delta_y))
 
     def send_wheel_event(self, delta_x: int, delta_y: int) -> None:
         assert -127 <= delta_x <= 127
@@ -119,6 +138,8 @@ class MouseProcess(BaseDeviceProcess):
             return self.__process_button_event(event)
         elif isinstance(event, _MoveEvent):
             return self.__process_move_event(event)
+        elif isinstance(event, _RelativeEvent):
+            return self.__process_relative_event(event)
         elif isinstance(event, _WheelEvent):
             return self.__process_wheel_event(event)
         raise RuntimeError(f"Not implemented event: {event}")
@@ -144,19 +165,40 @@ class MouseProcess(BaseDeviceProcess):
         self.__y = event.to_y
         return self.__send_current_state()
 
+    def __process_relative_event(self, event: _RelativeEvent) -> bool:
+        return self.__send_current_state(relative_event=event)
+
     def __process_wheel_event(self, event: _WheelEvent) -> bool:
-        return self.__send_current_state(event.delta_x, event.delta_y)
+        return self.__send_current_state(wheel_event=event)
 
     # =====
 
-    def __send_current_state(self, delta_x: int=0, delta_y: int=0, reopen: bool=False) -> bool:
-        report = self.__make_report(
-            buttons=self.__pressed_buttons,
-            to_x=self.__x,
-            to_y=self.__y,
-            delta_x=delta_x,
-            delta_y=delta_y,
-        )
+    def __send_current_state(
+        self,
+        relative_event: Optional[_RelativeEvent]=None,
+        wheel_event: Optional[_WheelEvent]=None,
+        reopen: bool=False,
+    ) -> bool:
+
+        if self.__absolute:
+            assert relative_event is None
+            move_x = self.__x
+            move_y = self.__y
+        else:
+            assert self.__x == self.__y == 0
+            if relative_event is not None:
+                move_x = relative_event.delta_x
+                move_y = relative_event.delta_y
+            else:
+                move_x = move_y = 0
+
+        if wheel_event is not None:
+            wheel_x = wheel_event.delta_x
+            wheel_y = wheel_event.delta_y
+        else:
+            wheel_x = wheel_y = 0
+
+        report = self.__make_report(self.__pressed_buttons, move_x, move_y, wheel_x, wheel_y)
         if not self._ensure_write(report, reopen=reopen):
             self.__clear_state()
             return False
@@ -167,7 +209,7 @@ class MouseProcess(BaseDeviceProcess):
         self.__x = 0
         self.__y = 0
 
-    def __make_report(self, buttons: int, to_x: int, to_y: int, delta_x: int, delta_y: int) -> bytes:
-        # XXX: Delta Y before X: it's ok.
-        # See /kvmd/apps/otg/hid/keyboard.py for details
-        return struct.pack("<BHHbb", buttons, to_x, to_y, delta_y, delta_x)
+    def __make_report(self, buttons: int, move_x: int, move_y: int, wheel_x: int, wheel_y: int) -> bytes:
+        # XXX: Wheel Y before X: it's ok.
+        # See /kvmd/apps/otg/hid/mouse.py for details
+        return struct.pack(("<BHHbb" if self.__absolute else "<Bbbbb"), buttons, move_x, move_y, wheel_y, wheel_x)

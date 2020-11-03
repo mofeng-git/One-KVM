@@ -36,6 +36,7 @@ export function Mouse(record_callback) {
 
 	var __ws = null;
 	var __online = true;
+	var __absolute = true;
 
 	var __keypad = null;
 
@@ -50,8 +51,10 @@ export function Mouse(record_callback) {
 
 		$("hid-mouse-led").title = "Mouse free";
 
-		$("stream-box").onmouseenter = __hoverStream;
-		$("stream-box").onmouseleave = __leaveStream;
+		document.onpointerlockchange = __relativeCapturedHandler; // Only for relative
+		document.onpointerlockerror = __relativeCapturedHandler;
+		$("stream-box").onmouseenter = () => __streamHoveredHandler(true);
+		$("stream-box").onmouseleave = () => __streamHoveredHandler(false);
 		$("stream-box").onmousedown = (event) => __streamButtonHandler(event, true);
 		$("stream-box").onmouseup = (event) => __streamButtonHandler(event, false);
 		$("stream-box").oncontextmenu = (event) => event.preventDefault();
@@ -59,7 +62,7 @@ export function Mouse(record_callback) {
 		$("stream-box").onwheel = __streamWheelHandler;
 		$("stream-box").ontouchstart = (event) => __streamTouchMoveHandler(event);
 
-		setInterval(__sendMove, 100);
+		setInterval(__sendMove, 100); // Only for absolute
 	};
 
 	/************************************************************************/
@@ -72,6 +75,13 @@ export function Mouse(record_callback) {
 
 	self.setState = function(state) {
 		__online = state.online;
+		if (!("absolute" in state)) { // FIXME: SPI
+			state.absolute = true;
+		}
+		if (state.absolute && !__absolute && __isRelativeCaptured()) {
+			$("stream-box").exitPointerLock();
+		}
+		__absolute = state.absolute;
 		__updateOnlineLeds();
 	};
 
@@ -79,33 +89,35 @@ export function Mouse(record_callback) {
 		__keypad.releaseAll();
 	};
 
-	var __hoverStream = function() {
-		__stream_hovered = true;
-		__updateOnlineLeds();
-	};
-
-	var __leaveStream = function() {
-		__stream_hovered = false;
-		__updateOnlineLeds();
+	var __streamHoveredHandler = function(hovered) {
+		if (__absolute) {
+			__stream_hovered = hovered;
+			__updateOnlineLeds();
+		}
 	};
 
 	var __updateOnlineLeds = function() {
-		let is_captured = (__stream_hovered || tools.browser.is_ios);
+		let captured;
+		if (__absolute) {
+			captured = (__stream_hovered || tools.browser.is_ios);
+		} else {
+			captured = __isRelativeCaptured();
+		}
 		let led = "led-gray";
 		let title = "Mouse free";
 
 		if (__ws) {
 			if (__online) {
-				if (is_captured) {
+				if (captured) {
 					led = "led-green";
 					title = "Mouse captured";
 				}
 			} else {
 				led = "led-yellow";
-				title = (is_captured ? "Mouse captured, HID offline" : "Mouse free, HID offline");
+				title = (captured ? "Mouse captured, HID offline" : "Mouse free, HID offline");
 			}
 		} else {
-			if (is_captured) {
+			if (captured) {
 				title = "Mouse captured, Pi-KVM offline";
 			}
 		}
@@ -113,38 +125,61 @@ export function Mouse(record_callback) {
 		$("hid-mouse-led").title = title;
 	};
 
+	var __isRelativeCaptured = function() {
+		return (document.pointerLockElement === $("stream-box"));
+	};
+
+	var __relativeCapturedHandler = function() {
+		tools.info("Relative mouse", (__isRelativeCaptured() ? "captured" : "released"), "by pointer lock");
+		__updateOnlineLeds();
+	};
+
 	var __streamButtonHandler = function(event, state) {
 		// https://www.w3schools.com/jsref/event_button.asp
 		event.preventDefault();
-		switch (event.button) {
-			case 0: __keypad.emit("left", state); break;
-			case 2: __keypad.emit("right", state); break;
-			case 1: __keypad.emit("middle", state); break;
-			case 3: __keypad.emit("up", state); break;
-			case 4: __keypad.emit("down", state); break;
+		if (__absolute || __isRelativeCaptured()) {
+			switch (event.button) {
+				case 0: __keypad.emit("left", state); break;
+				case 2: __keypad.emit("right", state); break;
+				case 1: __keypad.emit("middle", state); break;
+				case 3: __keypad.emit("up", state); break;
+				case 4: __keypad.emit("down", state); break;
+			}
+		} else if (!__absolute && !__isRelativeCaptured() && !state) {
+			$("stream-box").requestPointerLock();
 		}
 	};
 
 	var __streamTouchMoveHandler = function(event) {
 		event.preventDefault();
-		if (event.touches[0].target && event.touches[0].target.getBoundingClientRect) {
-			let rect = event.touches[0].target.getBoundingClientRect();
-			__current_pos = {
-				x: Math.round(event.touches[0].clientX - rect.left),
-				y: Math.round(event.touches[0].clientY - rect.top),
-			};
-			__sendMove();
+		if (__absolute) {
+			if (event.touches[0].target && event.touches[0].target.getBoundingClientRect) {
+				let rect = event.touches[0].target.getBoundingClientRect();
+				__current_pos = {
+					x: Math.round(event.touches[0].clientX - rect.left),
+					y: Math.round(event.touches[0].clientY - rect.top),
+				};
+				__sendMove();
+			}
 		}
 	};
 
 	var __streamMoveHandler = function(event) {
-		let rect = event.target.getBoundingClientRect();
-		__current_pos = {
-			x: Math.max(Math.round(event.clientX - rect.left), 0),
-			y: Math.max(Math.round(event.clientY - rect.top), 0),
-		};
+		if (__absolute) {
+			let rect = event.target.getBoundingClientRect();
+			__current_pos = {
+				x: Math.max(Math.round(event.clientX - rect.left), 0),
+				y: Math.max(Math.round(event.clientY - rect.top), 0),
+			};
+		} else if (__isRelativeCaptured()) {
+			let delta = {
+				x: Math.min(Math.max(-127, event.movementX), 127),
+				y: Math.min(Math.max(-127, event.movementY), 127),
+			};
+			tools.debug("Mouse: relative:", delta);
+			__sendEvent("mouse_relative", {"delta": delta});
+		}
 	};
-
 
 	var __sendButton = function(button, state) {
 		tools.debug("Mouse: button", (state ? "pressed:" : "released:"), button);
@@ -153,17 +188,19 @@ export function Mouse(record_callback) {
 	};
 
 	var __sendMove = function() {
-		let pos = __current_pos;
-		if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
-			let el_stream_image = $("stream-image");
-			let to = {
-				x: __translate(pos.x, 0, el_stream_image.clientWidth, -32768, 32767),
-				y: __translate(pos.y, 0, el_stream_image.clientHeight, -32768, 32767),
-			};
+		if (__absolute) {
+			let pos = __current_pos;
+			if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
+				let el_stream_image = $("stream-image");
+				let to = {
+					x: __translate(pos.x, 0, el_stream_image.clientWidth, -32768, 32767),
+					y: __translate(pos.y, 0, el_stream_image.clientHeight, -32768, 32767),
+				};
 
-			tools.debug("Mouse: moved:", to);
-			__sendEvent("mouse_move", {"to": to});
-			__sent_pos = pos;
+				tools.debug("Mouse: moved:", to);
+				__sendEvent("mouse_move", {"to": to});
+				__sent_pos = pos;
+			}
 		}
 	};
 
@@ -176,6 +213,10 @@ export function Mouse(record_callback) {
 		// https://stackoverflow.com/a/24595588
 		if (event.preventDefault) {
 			event.preventDefault();
+		}
+
+		if (!__absolute && !__isRelativeCaptured()) {
+			return;
 		}
 
 		let delta = {x: 0, y: 0};
