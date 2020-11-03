@@ -20,13 +20,15 @@
 # ========================================================================== #
 
 
+from typing import Optional
+
 from . import Hid
 
 
 # =====
-def make_mouse_hid(absolute: bool, horizontal_wheel: bool) -> Hid:
+def make_mouse_hid(absolute: bool, horizontal_wheel: bool, report_id: Optional[int]=None) -> Hid:
     maker = (_make_absolute_hid if absolute else _make_relative_hid)
-    return maker(horizontal_wheel)
+    return maker(horizontal_wheel, report_id)
 
 
 _HORIZONTAL_WHEEL = [
@@ -40,7 +42,7 @@ _HORIZONTAL_WHEEL = [
 ]
 
 
-def _make_absolute_hid(horizontal_wheel: bool) -> Hid:
+def _make_absolute_hid(horizontal_wheel: bool, report_id: Optional[int]) -> Hid:
     return Hid(
         protocol=0,  # None protocol
         subclass=0,  # No subclass
@@ -59,6 +61,9 @@ def _make_absolute_hid(horizontal_wheel: bool) -> Hid:
             0x05, 0x01,  # USAGE_PAGE (Generic Desktop)
             0x09, 0x02,  # USAGE (Mouse)
             0xA1, 0x01,  # COLLECTION (Application)
+
+            # Report ID
+            *([0x85, report_id] if report_id is not None else []),
 
             # 8 Buttons
             0x05, 0x09,  # USAGE_PAGE (Button)
@@ -96,7 +101,7 @@ def _make_absolute_hid(horizontal_wheel: bool) -> Hid:
     )
 
 
-def _make_relative_hid(horizontal_wheel: bool) -> Hid:
+def _make_relative_hid(horizontal_wheel: bool, report_id: Optional[int]) -> Hid:
     return Hid(
         protocol=2,  # Mouse protocol
         subclass=1,  # Boot interface subclass
@@ -110,6 +115,9 @@ def _make_relative_hid(horizontal_wheel: bool) -> Hid:
             0x05, 0x01,  # USAGE_PAGE (Generic Desktop)
             0x09, 0x02,  # USAGE (Mouse)
             0xA1, 0x01,  # COLLECTION (Application)
+
+            # Report ID
+            *([0x85, report_id] if report_id is not None else []),
 
             # 8 Buttons
             0x05, 0x09,  # USAGE_PAGE (Button)
