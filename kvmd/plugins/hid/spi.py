@@ -27,6 +27,7 @@ import time
 from typing import List
 from typing import Dict
 from typing import Generator
+from typing import Callable
 from typing import Any
 
 import spidev
@@ -49,31 +50,18 @@ from ._mcu import BaseMcuHid
 class _SpiPhyConnection(BasePhyConnection):
     def __init__(
         self,
-        spi: spidev.SpiDev,
+        xfer: Callable[[bytes], bytes],
         read_timeout: float,
         read_delay: float,
     ) -> None:
 
-        self.__spi = spi
+        self.__xfer = xfer
         self.__read_timeout = read_timeout
         self.__read_delay = read_delay
 
-        self.__empty8 = b"\x00" * 8
-        self.__empty4 = b"\x00" * 4
-
     def send(self, request: bytes) -> bytes:
         assert len(request) == 8
-
-        deadline_ts = time.time() + self.__read_timeout
-        while time.time() < deadline_ts:
-            garbage = bytes(self.__spi.xfer(self.__empty8))
-            if garbage == self.__empty8:
-                break
-        else:
-            get_logger(0).error("SPI timeout reached while reading the a garbage")
-            return b""
-
-        self.__spi.xfer(request)
+        self.__xfer(request)
 
         response: List[int] = []
         deadline_ts = time.time() + self.__read_timeout
@@ -81,21 +69,19 @@ class _SpiPhyConnection(BasePhyConnection):
         while time.time() < deadline_ts:
             if not found:
                 time.sleep(self.__read_delay)
-            for byte in self.__spi.xfer(self.__empty4):
+            for byte in self.__xfer(b"\x00" * (4 - len(response))):
                 if not found:
                     if byte == 0:
                         continue
                     found = True
                 response.append(byte)
-                if len(response) >= 4:
+                if len(response) == 4:
                     break
-            if len(response) >= 4:
+            if len(response) == 4:
                 break
         else:
             get_logger(0).error("SPI timeout reached while responce waiting")
             return b""
-
-        assert len(response) == 4
         return bytes(response)
 
 
@@ -105,6 +91,7 @@ class _SpiPhy(BasePhy):
         bus: int,
         chip: int,
         max_freq: int,
+        block_usec: int,
         read_timeout: float,
         read_delay: float,
     ) -> None:
@@ -112,6 +99,7 @@ class _SpiPhy(BasePhy):
         self.__bus = bus
         self.__chip = chip
         self.__max_freq = max_freq
+        self.__block_usec = block_usec
         self.__read_timeout = read_timeout
         self.__read_delay = read_delay
 
@@ -123,7 +111,15 @@ class _SpiPhy(BasePhy):
         with contextlib.closing(spidev.SpiDev(self.__bus, self.__chip)) as spi:
             spi.mode = 0
             spi.max_speed_hz = self.__max_freq
-            yield _SpiPhyConnection(spi, self.__read_timeout, self.__read_delay)
+
+            def xfer(data: bytes) -> bytes:
+                return spi.xfer(data, self.__max_freq, self.__block_usec)
+
+            yield _SpiPhyConnection(
+                xfer=xfer,
+                read_timeout=self.__read_timeout,
+                read_delay=self.__read_delay,
+            )
 
 
 # =====
@@ -133,23 +129,25 @@ class Plugin(BaseMcuHid):
         bus: int,
         chip: int,
         max_freq: int,
+        block_usec: int,
         read_timeout: float,
         read_delay: float,
         **kwargs: Any,
     ) -> None:
 
         super().__init__(
-            phy=_SpiPhy(bus, chip, max_freq, read_timeout, read_delay),
+            phy=_SpiPhy(bus, chip, max_freq, block_usec, read_timeout, read_delay),
             **kwargs,
         )
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "bus":          Option(0,       type=valid_int_f0),
-            "chip":         Option(0,       type=valid_int_f0),
-            "max_freq":     Option(1000000, type=valid_int_f1),
-            "read_timeout": Option(2.0,     type=valid_float_f01),
-            "read_delay":   Option(0.001,   type=valid_float_f0),
+            "bus":          Option(0,      type=valid_int_f0),
+            "chip":         Option(0,      type=valid_int_f0),
+            "max_freq":     Option(400000, type=valid_int_f1),
+            "block_usec":   Option(1,      type=valid_int_f0),
+            "read_timeout": Option(2.0,    type=valid_float_f01),
+            "read_delay":   Option(0.001,  type=valid_float_f0),
             **BaseMcuHid.get_plugin_options(),
         }

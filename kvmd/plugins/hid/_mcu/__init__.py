@@ -172,6 +172,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         phy: BasePhy,
 
         reset_pin: int,
+        reset_inverted: bool,
         reset_delay: float,
 
         read_retries: int,
@@ -190,7 +191,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         self.__noop = noop
 
         self.__phy = phy
-        self.__gpio = Gpio(reset_pin, reset_delay)
+        self.__gpio = Gpio(reset_pin, reset_inverted, reset_delay)
 
         self.__events_queue: "multiprocessing.Queue[_BaseEvent]" = multiprocessing.Queue()
 
@@ -207,8 +208,9 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "reset_pin":   Option(-1,  type=valid_gpio_pin_optional),
-            "reset_delay": Option(0.1, type=valid_float_f01),
+            "reset_pin":      Option(-1,    type=valid_gpio_pin_optional),
+            "reset_inverted": Option(False, type=valid_bool),
+            "reset_delay":    Option(0.1,   type=valid_float_f01),
 
             "read_retries":     Option(10,     type=valid_int_f1),
             "common_retries":   Option(100,    type=valid_int_f1),

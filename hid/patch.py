@@ -27,6 +27,5 @@ def _patch_lib(lib_path: str, patch_path: str) -> None:
 
 # =====
 _libs = _get_libs()
-assert "TimerOne" in _libs  # Just checking
 if "HID-Project" in _libs:
     _patch_lib(_libs["HID-Project"], "patches/absmouse.patch")

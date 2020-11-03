@@ -24,8 +24,6 @@
 
 #include <HID-Project.h>
 
-#include "../inline.h"
-
 #include "keymap.h"
 
 
@@ -38,11 +36,11 @@ class UsbHidKeyboard {
 			BootKeyboard.begin();
 		}
 
-		INLINE void reset() {
+		void reset() {
 			BootKeyboard.releaseAll();
 		}
 
-		INLINE void sendKey(uint8_t code, bool state) {
+		void sendKey(uint8_t code, bool state) {
 			KeyboardKeycode usb_code = keymapUsb(code);
 			if (usb_code != KEY_ERROR_UNDEFINED) {
 				if (state) BootKeyboard.press(usb_code);
@@ -50,7 +48,7 @@ class UsbHidKeyboard {
 			}
 		}
 
-		INLINE uint8_t getLedsAs(uint8_t caps, uint8_t scroll, uint8_t num) {
+		uint8_t getLedsAs(uint8_t caps, uint8_t scroll, uint8_t num) {
 			uint8_t leds = BootKeyboard.getLeds();
 			uint8_t result = 0;
 
@@ -69,11 +67,11 @@ class UsbHidMouse {
 			SingleAbsoluteMouse.begin();
 		}
 
-		INLINE void reset() {
+		void reset() {
 			SingleAbsoluteMouse.releaseAll();
 		}
 
-		INLINE void sendMouseButtons(
+		void sendMouseButtons(
 			bool left_select, bool left_state,
 			bool right_select, bool right_state,
 			bool middle_select, bool middle_state,
@@ -87,17 +85,17 @@ class UsbHidMouse {
 			if (down_select) _sendMouseButton(MOUSE_NEXT, down_state);
 		}
 
-		INLINE void sendMouseMove(int x, int y) {
+		void sendMouseMove(int x, int y) {
 			SingleAbsoluteMouse.moveTo(x, y);
 		}
 
-		INLINE void sendMouseWheel(int delta_y) {
+		void sendMouseWheel(int delta_y) {
 			// delta_x is not supported by hid-project now
 			SingleAbsoluteMouse.move(0, 0, delta_y);
 		}
 
 	private:
-		INLINE void _sendMouseButton(uint8_t button, bool state) {
+		void _sendMouseButton(uint8_t button, bool state) {
 			if (state) SingleAbsoluteMouse.press(button);
 			else SingleAbsoluteMouse.release(button);
 		}

@@ -33,8 +33,15 @@ from .... import aiogp
 
 # =====
 class Gpio:
-    def __init__(self, reset_pin: int, reset_delay: float) -> None:
+    def __init__(
+        self,
+        reset_pin: int,
+        reset_inverted: bool,
+        reset_delay: float,
+    ) -> None:
+
         self.__reset_pin = reset_pin
+        self.__reset_inverted = reset_inverted
         self.__reset_delay = reset_delay
 
         self.__chip: Optional[gpiod.Chip] = None
@@ -47,7 +54,7 @@ class Gpio:
             assert self.__reset_line is None
             self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
             self.__reset_line = self.__chip.get_line(self.__reset_pin)
-            self.__reset_line.request("kvmd::hid-mcu::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
+            self.__reset_line.request("kvmd::hid-mcu::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[int(self.__reset_inverted)])
 
     def close(self) -> None:
         if self.__chip:
@@ -63,7 +70,7 @@ class Gpio:
             if not self.__reset_wip:
                 self.__reset_wip = True
                 try:
-                    await aiogp.pulse(self.__reset_line, self.__reset_delay, 1)
+                    await aiogp.pulse(self.__reset_line, self.__reset_delay, 1, self.__reset_inverted)
                 finally:
                     self.__reset_wip = False
                 get_logger(0).info("Reset HID performed")
