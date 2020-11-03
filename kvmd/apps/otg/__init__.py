@@ -42,9 +42,8 @@ from ... import env
 from .. import init
 
 from .hid import Hid
-from .hid.keyboard import KEYBOARD_HID
-from .hid.mouse import MOUSE_ABSOLUTE_HID
-from .hid.mouse import MOUSE_RELATIVE_HID
+from .hid.keyboard import make_keyboard_hid
+from .hid.mouse import make_mouse_hid
 
 
 # =====
@@ -203,11 +202,11 @@ def _cmd_start(config: Section) -> None:
 
     if config.kvmd.hid.type == "otg":
         logger.info("===== Required HID =====")
-        _create_hid(gadget_path, config_path, 0, KEYBOARD_HID)
-        if config.kvmd.hid.mouse.absolute:
-            _create_hid(gadget_path, config_path, 1, MOUSE_ABSOLUTE_HID)
-        else:
-            _create_hid(gadget_path, config_path, 1, MOUSE_RELATIVE_HID)
+        _create_hid(gadget_path, config_path, 0, make_keyboard_hid())
+        _create_hid(gadget_path, config_path, 1, make_mouse_hid(
+            absolute=config.kvmd.hid.mouse.absolute,
+            horizontal_wheel=config.kvmd.hid.mouse.horizontal_wheel,
+        ))
 
     if config.kvmd.msd.type == "otg":
         logger.info("===== Required MSD =====")

@@ -76,6 +76,7 @@ class Plugin(BaseHid):
                 "write_retries_delay": Option(0.1, type=valid_float_f01),
                 "reopen_delay":        Option(0.5, type=valid_float_f01),
                 "absolute":            Option(True, type=valid_bool),
+                "horizontal_wheel":    Option(True, type=valid_bool),
             },
             "noop": Option(False, type=valid_bool),
         }

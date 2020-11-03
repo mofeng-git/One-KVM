@@ -69,6 +69,7 @@ class _WheelEvent(BaseEvent):
 class MouseProcess(BaseDeviceProcess):
     def __init__(self, **kwargs: Any) -> None:
         self.__absolute: bool = kwargs.pop("absolute")
+        self.__horizontal_wheel: bool = kwargs.pop("horizontal_wheel")
 
         super().__init__(
             name="mouse",
@@ -212,4 +213,7 @@ class MouseProcess(BaseDeviceProcess):
     def __make_report(self, buttons: int, move_x: int, move_y: int, wheel_x: int, wheel_y: int) -> bytes:
         # XXX: Wheel Y before X: it's ok.
         # See /kvmd/apps/otg/hid/mouse.py for details
-        return struct.pack(("<BHHbb" if self.__absolute else "<Bbbbb"), buttons, move_x, move_y, wheel_y, wheel_x)
+        if self.__horizontal_wheel:
+            return struct.pack(("<BHHbb" if self.__absolute else "<Bbbbb"), buttons, move_x, move_y, wheel_y, wheel_x)
+        else:
+            return struct.pack(("<BHHb" if self.__absolute else "<Bbbb"), buttons, move_x, move_y, wheel_y)
