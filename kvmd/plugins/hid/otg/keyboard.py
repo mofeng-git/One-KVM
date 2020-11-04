@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-import dataclasses
-
 from typing import Tuple
 from typing import List
 from typing import Set
@@ -32,31 +30,15 @@ from typing import Any
 from ....logging import get_logger
 
 from ....keyboard.mappings import OtgKey
-from ....keyboard.mappings import KEYMAP
 
-from .device import BaseEvent
 from .device import BaseDeviceProcess
 
-
-# =====
-class _ClearEvent(BaseEvent):
-    pass
-
-
-class _ResetEvent(BaseEvent):
-    pass
-
-
-@dataclasses.dataclass(frozen=True)
-class _ModifierEvent(BaseEvent):
-    modifier: OtgKey
-    state: bool
-
-
-@dataclasses.dataclass(frozen=True)
-class _KeyEvent(BaseEvent):
-    key: OtgKey
-    state: bool
+from .events import BaseEvent
+from .events import ClearEvent
+from .events import ResetEvent
+from .events import KeyEvent
+from .events import ModifierEvent
+from .events import make_keyboard_event
 
 
 # =====
@@ -79,17 +61,15 @@ class KeyboardProcess(BaseDeviceProcess):
 
     def send_clear_event(self) -> None:
         self._clear_queue()
-        self._queue_event(_ClearEvent())
+        self._queue_event(ClearEvent())
 
     def send_reset_event(self) -> None:
         self._clear_queue()
-        self._queue_event(_ResetEvent())
+        self._queue_event(ResetEvent())
 
     def send_key_events(self, keys: Iterable[Tuple[str, bool]]) -> None:
         for (key, state) in keys:
-            otg_key = KEYMAP[key].otg
-            cls = (_ModifierEvent if otg_key.is_modifier else _KeyEvent)
-            self._queue_event(cls(otg_key, state))
+            self._queue_event(make_keyboard_event(key, state))
 
     # =====
 
@@ -105,13 +85,13 @@ class KeyboardProcess(BaseDeviceProcess):
     # =====
 
     def _process_event(self, event: BaseEvent) -> bool:
-        if isinstance(event, _ClearEvent):
+        if isinstance(event, ClearEvent):
             return self.__process_clear_event()
-        elif isinstance(event, _ResetEvent):
+        elif isinstance(event, ResetEvent):
             return self.__process_clear_event(reopen=True)
-        elif isinstance(event, _ModifierEvent):
+        elif isinstance(event, ModifierEvent):
             return self.__process_modifier_event(event)
-        elif isinstance(event, _KeyEvent):
+        elif isinstance(event, KeyEvent):
             return self.__process_key_event(event)
         raise RuntimeError(f"Not implemented event: {event}")
 
@@ -120,7 +100,7 @@ class KeyboardProcess(BaseDeviceProcess):
         self.__clear_keys()
         return self.__send_current_state(reopen=reopen)
 
-    def __process_modifier_event(self, event: _ModifierEvent) -> bool:
+    def __process_modifier_event(self, event: ModifierEvent) -> bool:
         if event.modifier in self.__pressed_modifiers:
             # Ранее нажатый модификатор отжимаем
             self.__pressed_modifiers.remove(event.modifier)
@@ -132,7 +112,7 @@ class KeyboardProcess(BaseDeviceProcess):
             return self.__send_current_state()
         return True
 
-    def __process_key_event(self, event: _KeyEvent) -> bool:
+    def __process_key_event(self, event: KeyEvent) -> bool:
         if event.key in self.__pressed_keys:
             # Ранее нажатую клавишу отжимаем
             self.__pressed_keys[self.__pressed_keys.index(event.key)] = None

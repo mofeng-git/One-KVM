@@ -36,13 +36,10 @@ from .... import aiomulti
 from .... import aioproc
 
 from .usb import UsbDeviceController
+from .events import BaseEvent
 
 
 # =====
-class BaseEvent:
-    pass
-
-
 class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments
         self,
