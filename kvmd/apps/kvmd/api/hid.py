@@ -24,7 +24,6 @@ import os
 import stat
 import functools
 
-from typing import Tuple
 from typing import Dict
 from typing import Set
 from typing import Callable
@@ -159,10 +158,22 @@ class HidApi:
                 (valid_hid_mouse_delta(delta["x"]), valid_hid_mouse_delta(delta["y"]))
                 for delta in (raw_delta if isinstance(raw_delta, list) else [raw_delta])
             ]
+            squash = valid_bool(event.get("squash", False))
         except Exception:
             return
-        for delta_xy in deltas:
-            handler(*delta_xy)
+        if squash:
+            prev = (0, 0)
+            for cur in deltas:
+                if abs(prev[0] + cur[0]) > 127 or abs(prev[1] + cur[1]) > 127:
+                    handler(*prev)
+                    prev = cur
+                else:
+                    prev = (prev[0] + cur[0], prev[1] + cur[1])
+            if prev[0] or prev[1]:
+                handler(*prev)
+        else:
+            for xy in deltas:
+                handler(*xy)
 
     # =====
 

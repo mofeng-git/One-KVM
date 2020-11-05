@@ -201,9 +201,9 @@ export function Mouse(record_callback) {
 				__sendEvent("mouse_move", {"to": to});
 				__sent_pos = pos;
 			}
-		} else if (__relative_deltas) {
+		} else if (__relative_deltas.length) {
 			tools.debug("Mouse: relative:", __relative_deltas);
-			__sendEvent("mouse_relative", {"delta": __relative_deltas});
+			__sendEvent("mouse_relative", {"delta": __relative_deltas, "squash": true});
 			__relative_deltas = [];
 		}
 	};
