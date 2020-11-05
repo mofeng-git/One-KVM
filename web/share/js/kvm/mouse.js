@@ -43,6 +43,7 @@ export function Mouse(record_callback) {
 	var __current_pos = {x: 0, y:0};
 	var __sent_pos = {x: 0, y:0};
 	var __wheel_delta = {x: 0, y: 0};
+	var __relative_deltas = [];
 
 	var __stream_hovered = false;
 
@@ -62,7 +63,7 @@ export function Mouse(record_callback) {
 		$("stream-box").onwheel = __streamWheelHandler;
 		$("stream-box").ontouchstart = (event) => __streamTouchMoveHandler(event);
 
-		setInterval(__sendMove, 100); // Only for absolute
+		setInterval(__sendMove, 100);
 	};
 
 	/************************************************************************/
@@ -176,8 +177,7 @@ export function Mouse(record_callback) {
 				x: Math.min(Math.max(-127, event.movementX), 127),
 				y: Math.min(Math.max(-127, event.movementY), 127),
 			};
-			tools.debug("Mouse: relative:", delta);
-			__sendEvent("mouse_relative", {"delta": delta});
+			__relative_deltas.push(delta);
 		}
 	};
 
@@ -201,6 +201,10 @@ export function Mouse(record_callback) {
 				__sendEvent("mouse_move", {"to": to});
 				__sent_pos = pos;
 			}
+		} else if (__relative_deltas) {
+			tools.debug("Mouse: relative:", __relative_deltas);
+			__sendEvent("mouse_relative", {"delta": __relative_deltas});
+			__relative_deltas = [];
 		}
 	};
 
