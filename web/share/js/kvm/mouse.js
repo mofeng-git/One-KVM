@@ -71,6 +71,9 @@ export function Mouse(record_callback) {
 	self.setSocket = function(ws) {
 		__ws = ws;
 		$("stream-box").classList.toggle("stream-box-mouse-enabled", ws);
+		if (!__absolute && __isRelativeCaptured()) {
+			$("stream-box").exitPointerLock();
+		}
 		__updateOnlineLeds();
 	};
 
@@ -79,8 +82,11 @@ export function Mouse(record_callback) {
 		if (!("absolute" in state)) { // FIXME: SPI
 			state.absolute = true;
 		}
-		if (state.absolute && !__absolute && __isRelativeCaptured()) {
+		if (!__absolute && state.absolute && __isRelativeCaptured()) {
 			$("stream-box").exitPointerLock();
+		}
+		if (__absolute && !state.absolute) {
+			__relative_deltas = [];
 		}
 		__absolute = state.absolute;
 		__updateOnlineLeds();
