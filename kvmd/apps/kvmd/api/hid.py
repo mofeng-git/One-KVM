@@ -24,8 +24,10 @@ import os
 import stat
 import functools
 
+from typing import Tuple
 from typing import Dict
 from typing import Set
+from typing import Callable
 
 from aiohttp.web import Request
 from aiohttp.web import Response
@@ -144,21 +146,23 @@ class HidApi:
 
     @exposed_ws("mouse_relative")
     async def __ws_mouse_relative_handler(self, _: WebSocketResponse, event: Dict) -> None:
-        try:
-            delta_x = valid_hid_mouse_delta(event["delta"]["x"])
-            delta_y = valid_hid_mouse_delta(event["delta"]["y"])
-        except Exception:
-            return
-        self.__hid.send_mouse_relative_event(delta_x, delta_y)
+        self.__process_delta_ws_request(event, self.__hid.send_mouse_relative_event)
 
     @exposed_ws("mouse_wheel")
     async def __ws_mouse_wheel_handler(self, _: WebSocketResponse, event: Dict) -> None:
+        self.__process_delta_ws_request(event, self.__hid.send_mouse_wheel_event)
+
+    def __process_delta_ws_request(self, event: Dict, handler: Callable[[int, int], None]) -> None:
         try:
-            delta_x = valid_hid_mouse_delta(event["delta"]["x"])
-            delta_y = valid_hid_mouse_delta(event["delta"]["y"])
+            raw_delta = event["delta"]
+            deltas = [
+                (valid_hid_mouse_delta(delta["x"]), valid_hid_mouse_delta(delta["y"]))
+                for delta in (raw_delta if isinstance(raw_delta, list) else [raw_delta])
+            ]
         except Exception:
             return
-        self.__hid.send_mouse_wheel_event(delta_x, delta_y)
+        for delta_xy in deltas:
+            handler(*delta_xy)
 
     # =====
 
@@ -192,14 +196,14 @@ class HidApi:
 
     @exposed_http("POST", "/hid/events/send_mouse_relative")
     async def __events_send_mouse_relative_handler(self, request: Request) -> Response:
-        delta_x = valid_hid_mouse_delta(request.query.get("delta_x"))
-        delta_y = valid_hid_mouse_delta(request.query.get("delta_y"))
-        self.__hid.send_mouse_relative_event(delta_x, delta_y)
-        return make_json_response()
+        return self.__process_delta_request(request, self.__hid.send_mouse_relative_event)
 
     @exposed_http("POST", "/hid/events/send_mouse_wheel")
     async def __events_send_mouse_wheel_handler(self, request: Request) -> Response:
+        return self.__process_delta_request(request, self.__hid.send_mouse_wheel_event)
+
+    def __process_delta_request(self, request: Request, handler: Callable[[int, int], None]) -> Response:
         delta_x = valid_hid_mouse_delta(request.query.get("delta_x"))
         delta_y = valid_hid_mouse_delta(request.query.get("delta_y"))
-        self.__hid.send_mouse_wheel_event(delta_x, delta_y)
+        handler(delta_x, delta_y)
         return make_json_response()
