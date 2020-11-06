@@ -51,7 +51,7 @@ class MouseProcess(BaseDeviceProcess):
             **kwargs,
         )
 
-        self.__pressed_buttons: int = 0
+        self.__pressed_buttons = 0
         self.__x = 0  # For absolute
         self.__y = 0
 
