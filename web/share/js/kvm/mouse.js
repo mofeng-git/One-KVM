@@ -72,7 +72,7 @@ export function Mouse(record_callback) {
 		__ws = ws;
 		$("stream-box").classList.toggle("stream-box-mouse-enabled", ws);
 		if (!__absolute && __isRelativeCaptured()) {
-			$("stream-box").exitPointerLock();
+			document.exitPointerLock();
 		}
 		__updateOnlineLeds();
 	};
@@ -83,7 +83,7 @@ export function Mouse(record_callback) {
 			state.absolute = true;
 		}
 		if (!__absolute && state.absolute && __isRelativeCaptured()) {
-			$("stream-box").exitPointerLock();
+			document.exitPointerLock();
 		}
 		if (__absolute && !state.absolute) {
 			__relative_deltas = [];
