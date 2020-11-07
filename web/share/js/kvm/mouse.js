@@ -88,6 +88,7 @@ export function Mouse(record_callback) {
 		if (__absolute && !state.absolute) {
 			__relative_deltas = [];
 		}
+		tools.featureSetEnabled($("mouse-squash"), !state.absolute);
 		__absolute = state.absolute;
 		__updateOnlineLeds();
 	};
@@ -134,6 +135,10 @@ export function Mouse(record_callback) {
 
 	var __isRelativeCaptured = function() {
 		return (document.pointerLockElement === $("stream-box"));
+	};
+
+	var __isRelativeSquashed = function() {
+		return $("mouse-squash-checkbox").checked;
 	};
 
 	var __relativeCapturedHandler = function() {
@@ -183,7 +188,12 @@ export function Mouse(record_callback) {
 				x: Math.min(Math.max(-127, event.movementX), 127),
 				y: Math.min(Math.max(-127, event.movementY), 127),
 			};
-			__relative_deltas.push(delta);
+			if (__isRelativeSquashed()) {
+				__relative_deltas.push(delta);
+			} else {
+				tools.debug("Mouse: relative:", delta);
+				__sendEvent("mouse_relative", {"delta": delta});
+			}
 		}
 	};
 

@@ -35,15 +35,10 @@ li(class="right")
 			div(class="stream-param-box")
 				input(type="range" id="stream-size-slider" class="slider")
 		hr
-		div(class="text")
-			table(class="one-line-switch")
-				td Auto-resize stream:
-				td(align="right")
-					div(class="switch-box")
-						input(checked type="checkbox" id="stream-auto-resize-checkbox")
-						label(for="stream-auto-resize-checkbox")
-							span(class="switch-inner")
-							span(class="switch")
+		+menu_switch("stream-auto-resize-checkbox", "Auto-resize stream")
+		div(id="mouse-squash" class="feature-disabled")
+			hr
+			+menu_switch("mouse-squash-checkbox", "Squash mouse moves")
 		hr
 		div(class="buttons")
 			button(disabled data-force-hide-menu id="stream-reset-button") &bull; Reset stream
