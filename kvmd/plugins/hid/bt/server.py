@@ -218,7 +218,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
             num=get_led_num(leds),
         )
 
-    def __process_events(self) -> None:
+    def __process_events(self) -> None:  # pylint: disable=too-many-branches
         for _ in range(self.__events_queue.qsize()):
             try:
                 event = self.__events_queue.get_nowait()
