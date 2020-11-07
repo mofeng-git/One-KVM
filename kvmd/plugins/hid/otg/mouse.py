@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-import struct
-
 from typing import Optional
 from typing import Any
 
@@ -36,6 +34,7 @@ from .events import MouseButtonEvent
 from .events import MouseMoveEvent
 from .events import MouseRelativeEvent
 from .events import MouseWheelEvent
+from .events import make_mouse_report
 
 
 # =====
@@ -58,10 +57,14 @@ class MouseProcess(BaseDeviceProcess):
     def cleanup(self) -> None:
         self._stop()
         get_logger().info("Clearing HID-mouse events ...")
-        if self.__absolute:
-            report = self.__make_report(0, self.__x, self.__y, 0, 0)
-        else:
-            report = self.__make_report(0, 0, 0, 0, 0)
+        report = make_mouse_report(
+            absolute=self.__absolute,
+            buttons=0,
+            move_x=(self.__x if self.__absolute else 0),
+            move_y=(self.__y if self.__absolute else 0),
+            wheel_x=(0 if self.__horizontal_wheel else None),
+            wheel_y=0,
+        )
         self._ensure_write(report, close=True)  # Release all buttons
 
     def send_clear_event(self) -> None:
@@ -157,7 +160,14 @@ class MouseProcess(BaseDeviceProcess):
         else:
             wheel_x = wheel_y = 0
 
-        report = self.__make_report(self.__pressed_buttons, move_x, move_y, wheel_x, wheel_y)
+        report = make_mouse_report(
+            absolute=self.__absolute,
+            buttons=self.__pressed_buttons,
+            move_x=move_x,
+            move_y=move_y,
+            wheel_x=(wheel_x if self.__horizontal_wheel else None),
+            wheel_y=wheel_y,
+        )
         if not self._ensure_write(report, reopen=reopen):
             self.__clear_state()
             return False
@@ -167,11 +177,3 @@ class MouseProcess(BaseDeviceProcess):
         self.__pressed_buttons = 0
         self.__x = 0
         self.__y = 0
-
-    def __make_report(self, buttons: int, move_x: int, move_y: int, wheel_x: int, wheel_y: int) -> bytes:
-        # XXX: Wheel Y before X: it's ok.
-        # See /kvmd/apps/otg/hid/mouse.py for details
-        if self.__horizontal_wheel:
-            return struct.pack(("<BHHbb" if self.__absolute else "<Bbbbb"), buttons, move_x, move_y, wheel_y, wheel_x)
-        else:
-            return struct.pack(("<BHHb" if self.__absolute else "<Bbbb"), buttons, move_x, move_y, wheel_y)

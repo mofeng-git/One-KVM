@@ -39,6 +39,10 @@ from .events import ResetEvent
 from .events import KeyEvent
 from .events import ModifierEvent
 from .events import make_keyboard_event
+from .events import get_led_caps
+from .events import get_led_scroll
+from .events import get_led_num
+from .events import make_keyboard_report
 
 
 # =====
@@ -74,12 +78,11 @@ class KeyboardProcess(BaseDeviceProcess):
     # =====
 
     def _process_read_report(self, report: bytes) -> None:
-        # https://wiki.osdev.org/USB_Human_Interface_Devices#LED_lamps
         assert len(report) == 1, report
         self._update_state(
-            caps=bool(report[0] & 2),
-            scroll=bool(report[0] & 4),
-            num=bool(report[0] & 1),
+            caps=get_led_caps(report[0]),
+            scroll=get_led_scroll(report[0]),
+            num=get_led_num(report[0]),
         )
 
     # =====
@@ -132,7 +135,8 @@ class KeyboardProcess(BaseDeviceProcess):
     # =====
 
     def __send_current_state(self, reopen: bool=False) -> bool:
-        if not self._ensure_write(self.__make_report(), reopen=reopen):
+        report = make_keyboard_report(self.__pressed_modifiers, self.__pressed_keys)
+        if not self._ensure_write(report, reopen=reopen):
             self.__clear_modifiers()
             self.__clear_keys()
             return False
@@ -143,16 +147,3 @@ class KeyboardProcess(BaseDeviceProcess):
 
     def __clear_keys(self) -> None:
         self.__pressed_keys = [None] * 6
-
-    def __make_report(self) -> bytes:
-        modifiers = 0
-        for modifier in self.__pressed_modifiers:
-            modifiers |= modifier.code
-
-        assert len(self.__pressed_keys) == 6
-        keys = [
-            (0 if key is None else key.code)
-            for key in self.__pressed_keys
-        ]
-
-        return bytes([modifiers, 0] + keys)

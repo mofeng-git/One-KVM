@@ -20,8 +20,12 @@
 # ========================================================================== #
 
 
+import struct
 import dataclasses
 
+from typing import List
+from typing import Set
+from typing import Optional
 from typing import Union
 
 from ....keyboard.mappings import OtgKey
@@ -65,6 +69,36 @@ def make_keyboard_event(key: str, state: bool) -> Union[KeyEvent, ModifierEvent]
     if otg_key.is_modifier:
         return ModifierEvent(otg_key, state)
     return KeyEvent(otg_key, state)
+
+
+def get_led_caps(flags: int) -> bool:
+    # https://wiki.osdev.org/USB_Human_Interface_Devices#LED_lamps
+    return bool(flags & 2)
+
+
+def get_led_scroll(flags: int) -> bool:
+    return bool(flags & 4)
+
+
+def get_led_num(flags: int) -> bool:
+    return bool(flags & 1)
+
+
+def make_keyboard_report(
+    pressed_modifiers: Set[OtgKey],
+    pressed_keys: List[Optional[OtgKey]],
+) -> bytes:
+
+    modifiers = 0
+    for modifier in pressed_modifiers:
+        modifiers |= modifier.code
+
+    assert len(pressed_keys) == 6
+    keys = [
+        (0 if key is None else key.code)
+        for key in pressed_keys
+    ]
+    return bytes([modifiers, 0] + keys)
 
 
 # =====
@@ -116,3 +150,21 @@ class MouseWheelEvent(BaseEvent):
     def __post_init__(self) -> None:
         assert -127 <= self.delta_x <= 127
         assert -127 <= self.delta_y <= 127
+
+
+def make_mouse_report(
+    absolute: bool,
+    buttons: int,
+    move_x: int,
+    move_y: int,
+    wheel_x: Optional[int],
+    wheel_y: int,
+) -> bytes:
+
+    # XXX: Wheel Y before X: it's ok.
+    # See /kvmd/apps/otg/hid/mouse.py for details
+
+    if wheel_x is not None:
+        return struct.pack(("<BHHbb" if absolute else "<Bbbbb"), buttons, move_x, move_y, wheel_y, wheel_x)
+    else:
+        return struct.pack(("<BHHb" if absolute else "<Bbbb"), buttons, move_x, move_y, wheel_y)
