@@ -40,11 +40,11 @@
 #endif
 
 
-// #define CMD_SERIAL		Serial1
-// #define CMD_SERIAL_SPEED	115200
+// #define CMD_SERIAL			Serial1
+// #define CMD_SERIAL_SPEED		115200
+// #define CMD_SERIAL_TIMEOUT	100000
 // -- OR --
 // #define CMD_SPI
-#define CMD_TIMEOUT 100000
 
 
 // -----------------------------------------------------------------------------
@@ -150,52 +150,49 @@ uint8_t handleCmdBuffer(const uint8_t *buffer) { // 8 bytes
 #ifdef CMD_SPI
 volatile uint8_t spi_in[8] = {0};
 volatile uint8_t spi_in_index = 0;
-volatile uint8_t spi_in_read = 0; // Вычитанное spiRead()
 
 volatile uint8_t spi_out[4] = {0};
 volatile uint8_t spi_out_index = 0;
 
-uint8_t spiAvailable() {
-	return spi_in_index - spi_in_read;
-}
-
-uint8_t spiRead() {
-	uint8_t value = 0;
-	if (spi_in_read < 8) {
-		value = spi_in[spi_in_read];
-		++spi_in_read;
-	}
-	return value;
+bool spiReady() {
+	return (!spi_out[0] && spi_in_index == 8);
 }
 
 void spiWrite(const uint8_t *buffer) {
-	if (spi_out[0] == 0) {
-		spi_out[3] = buffer[3];
-		spi_out[2] = buffer[2];
-		spi_out[1] = buffer[1];
-		spi_out[0] = buffer[0]; // Меджик разрешает начать ответ
-	}
-}
-
-void spiReadReset() {
-	spi_in_index = 0;
-	spi_in_read = 0;
+	spi_out[3] = buffer[3];
+	spi_out[2] = buffer[2];
+	spi_out[1] = buffer[1];
+	spi_out[0] = buffer[0]; // Меджик разрешает начать ответ
+//	digitalWrite(5, 1);
 }
 
 ISR(SPI_STC_vect) {
-	if (spi_in_index < 8) {
-		spi_in[spi_in_index] = SPDR;
-		++spi_in_index;
-		SPDR = 0;
-	} else if (spi_out[0] && spi_out_index < 4) {
+	uint8_t in = SPDR;
+	if (spi_out[0] && spi_out_index < 4) {
+//		digitalWrite(4, !digitalRead(4));
 		SPDR = spi_out[spi_out_index];
-		++spi_out_index;
-		if (spi_out_index == 4) {
-			spiReadReset();
-			spi_out[0] = 0;
-			spi_out_index = 0;
+		bool err = (SPSR & (1 << WCOL));
+		if (!err) {
+			++spi_out_index;
+			if (spi_out_index == 4) {
+				spi_out_index = 0;
+				spi_in_index = 0;
+				spi_out[0] = 0;
+//				digitalWrite(5, 0);
+			}
 		}
 	} else {
+		static bool receiving = false;
+		if (!receiving && in == PROTO_MAGIC) {
+			receiving = true;
+		}
+		if (receiving && spi_in_index < 8) {
+			spi_in[spi_in_index] = in;
+			++spi_in_index;
+		}
+		if (spi_in_index == 8) {
+			receiving = false;
+		}
 		SPDR = 0;
 	}
 }
@@ -225,19 +222,16 @@ void sendCmdResponse(uint8_t code) {
 #	endif
 }
 
-bool isCmdTimedOut(unsigned long last) {
-	unsigned long now = micros();
-	return (
-		(now >= last && now - last > CMD_TIMEOUT)
-		|| (now < last && ((unsigned long)-1) - last + now > CMD_TIMEOUT)
-	);
-}
-
 void setup() {
 	hid_kbd.begin();
 #	ifdef HID_USB_MOUSE
 	hid_mouse.begin();
 #	endif
+
+	pinMode(3, OUTPUT);
+	pinMode(4, OUTPUT);
+	pinMode(5, OUTPUT);
+	pinMode(6, OUTPUT);
 
 #	ifdef CMD_SERIAL
 	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
@@ -248,9 +242,11 @@ void setup() {
 }
 
 void loop() {
+#	ifdef CMD_SERIAL
 	unsigned long last = micros();
 	uint8_t buffer[8];
 	uint8_t index = 0;
+#	endif
 
 	while (true) {
 #		ifdef HID_PS2_KBD
@@ -260,10 +256,6 @@ void loop() {
 #		ifdef CMD_SERIAL
 		if (CMD_SERIAL.available() > 0) {
 			buffer[index] = (uint8_t)CMD_SERIAL.read();
-#		elif defined(CMD_SPI)
-		if (spiAvailable() > 0) {
-			buffer[index] = spiRead();
-#		endif
 			if (index == 7) {
 				sendCmdResponse(handleCmdBuffer(buffer));
 				index = 0;
@@ -271,13 +263,26 @@ void loop() {
 				last = micros();
 				++index;
 			}
-		} else if (index > 0 && isCmdTimedOut(last)) {
-#			ifdef CMD_SERIAL
-			sendCmdResponse(PROTO_RESP_TIMEOUT_ERROR);
-#			elif defined(CMD_SPI)
-			spiReadReset();
-#			endif
-			index = 0;
+		} else if (index > 0) {
+			unsigned long now = micros();
+			if (
+				(now >= last && now - last > CMD_SERIAL_TIMEOUT)
+				|| (now < last && ((unsigned long)-1) - last + now > CMD_SERIAL_TIMEOUT)
+			) {
+				sendCmdResponse(PROTO_RESP_TIMEOUT_ERROR);
+				index = 0;
+			}
 		}
+#		elif defined(CMD_SPI)
+		if (SPSR & (1 << WCOL)) {
+			digitalWrite(3, HIGH);
+			uint8_t _ = SPDR;
+			delay(1);
+			digitalWrite(3, LOW);
+		}
+		if (spiReady()) {
+			sendCmdResponse(handleCmdBuffer(spi_in));
+		}
+#		endif
 	}
 }

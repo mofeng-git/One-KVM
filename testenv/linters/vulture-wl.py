@@ -18,6 +18,7 @@ InotifyMask.UNMOUNT
 
 IpmiServer.handle_raw_request
 
+SpiDev.no_cs
 SpiDev.max_speed_hz
 
 _AtxApiPart.switch_power
