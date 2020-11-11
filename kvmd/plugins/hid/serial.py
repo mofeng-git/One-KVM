@@ -47,6 +47,7 @@ class _SerialPhyConnection(BasePhyConnection):
 
     def send(self, request: bytes) -> bytes:
         assert len(request) == 8
+        assert request[0] == 0x33
         if self.__tty.in_waiting:
             self.__tty.read_all()
         assert self.__tty.write(request) == 8
@@ -76,24 +77,21 @@ class _SerialPhy(BasePhy):
 
 # =====
 class Plugin(BaseMcuHid):
-    def __init__(
-        self,
-        device_path: str,
-        speed: int,
-        read_timeout: float,
-        **kwargs: Any,
-    ) -> None:
-
-        super().__init__(
-            phy=_SerialPhy(device_path, speed, read_timeout),
-            **kwargs,
-        )
+    def __init__(self, **kwargs: Any) -> None:
+        phy_kwargs: Dict = {key: kwargs.pop(key) for key in self.__get_phy_options()}
+        super().__init__(phy=_SerialPhy(**phy_kwargs), **kwargs)
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
+            **cls.__get_phy_options(),
+            **BaseMcuHid.get_plugin_options(),
+        }
+
+    @classmethod
+    def __get_phy_options(cls) -> Dict:
+        return {
             "device":       Option("",     type=valid_abs_path, unpack_as="device_path"),
             "speed":        Option(115200, type=valid_tty_speed),
             "read_timeout": Option(2.0,    type=valid_float_f01),
-            **BaseMcuHid.get_plugin_options(),
         }
