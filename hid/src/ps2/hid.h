@@ -25,8 +25,6 @@
 #include <Arduino.h>
 #include <ps2dev.h>
 
-#include "../inline.h"
-
 #include "keymap.h"
 
 // #define PS2_KBD_CLOCK_PIN	7
@@ -43,11 +41,11 @@ class Ps2HidKeyboard {
 			_dev.keyboard_init();
 		}
 
-		INLINE void periodic() {
+		void periodic() {
 			_dev.keyboard_handle(&_leds);
 		}
 
-		INLINE void sendKey(uint8_t code, bool state) {
+		void sendKey(uint8_t code, bool state) {
 			Ps2KeyType ps2_type;
 			uint8_t ps2_code;
 
@@ -76,7 +74,7 @@ class Ps2HidKeyboard {
 			}
 		}
 
-		INLINE uint8_t getLedsAs(uint8_t caps, uint8_t scroll, uint8_t num) {
+		uint8_t getLedsAs(uint8_t caps, uint8_t scroll, uint8_t num) {
 			uint8_t result = 0;
 
 			periodic();

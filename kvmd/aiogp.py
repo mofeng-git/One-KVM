@@ -34,12 +34,12 @@ from . import aiotools
 
 
 # =====
-async def pulse(line: gpiod.Line, delay: float, final: float) -> None:
+async def pulse(line: gpiod.Line, delay: float, final: float, inverted: bool=False) -> None:
     try:
-        line.set_value(1)
+        line.set_value(int(not inverted))
         await asyncio.sleep(delay)
     finally:
-        line.set_value(0)
+        line.set_value(int(inverted))
         await asyncio.sleep(final)
 
 

@@ -52,6 +52,8 @@ class BasePlugin:
 def get_plugin_class(sub: str, name: str) -> Type[BasePlugin]:
     assert sub
     assert name
+    if name.startswith("_"):
+        raise UnknownPluginError(f"Unknown plugin '{sub}/{name}'")
     try:
         module = importlib.import_module(f"kvmd.plugins.{sub}.{name}")
     except ModuleNotFoundError:

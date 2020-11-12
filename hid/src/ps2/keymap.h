@@ -22,8 +22,6 @@
 
 #pragma once
 
-#include "../inline.h"
-
 
 enum Ps2KeyType : uint8_t {
 	PS2_KEY_TYPE_UNKNOWN = 0,
@@ -34,7 +32,7 @@ enum Ps2KeyType : uint8_t {
 };
 
 
-INLINE void keymapPs2(uint8_t code, Ps2KeyType *ps2_type, uint8_t *ps2_code) {
+void keymapPs2(uint8_t code, Ps2KeyType *ps2_type, uint8_t *ps2_code) {
 	*ps2_type = PS2_KEY_TYPE_UNKNOWN;
 	*ps2_code = 0;
 

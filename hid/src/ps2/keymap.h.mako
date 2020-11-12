@@ -22,8 +22,6 @@
 
 #pragma once
 
-#include "../inline.h"
-
 
 enum Ps2KeyType : uint8_t {
 	PS2_KEY_TYPE_UNKNOWN = 0,
@@ -34,13 +32,13 @@ enum Ps2KeyType : uint8_t {
 };
 
 <%! import operator %>
-INLINE void keymapPs2(uint8_t code, Ps2KeyType *ps2_type, uint8_t *ps2_code) {
+void keymapPs2(uint8_t code, Ps2KeyType *ps2_type, uint8_t *ps2_code) {
 	*ps2_type = PS2_KEY_TYPE_UNKNOWN;
 	*ps2_code = 0;
 
 	switch (code) {
-% for km in sorted(keymap, key=operator.attrgetter("serial_code")):
-		case ${km.serial_code}: *ps2_type = PS2_KEY_TYPE_${km.ps2_key.type.upper()}; *ps2_code = ${km.ps2_key.code}; return; // ${km.arduino_name}
+% for km in sorted(keymap, key=operator.attrgetter("mcu_code")):
+		case ${km.mcu_code}: *ps2_type = PS2_KEY_TYPE_${km.ps2_key.type.upper()}; *ps2_code = ${km.ps2_key.code}; return; // ${km.arduino_name}
 % endfor
 	}
 }
