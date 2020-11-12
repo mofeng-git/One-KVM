@@ -79,9 +79,6 @@ export function Mouse(record_callback) {
 
 	self.setState = function(state) {
 		__online = state.online;
-		if (!("absolute" in state)) { // FIXME: SPI
-			state.absolute = true;
-		}
 		if (!__absolute && state.absolute && __isRelativeCaptured()) {
 			document.exitPointerLock();
 		}

@@ -236,7 +236,10 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                     "num": state["num"],
                 },
             },
-            "mouse": {"online": state["online"]},
+            "mouse": {
+                "online": state["online"],
+                "absolute": True,
+            },
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
@@ -282,6 +285,10 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
     def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
         self.__queue_event(_MouseMoveEvent(to_x, to_y))
+
+    def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
+        _ = delta_x  # No relative events yet
+        _ = delta_y
 
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         self.__queue_event(_MouseWheelEvent(delta_x, delta_y))

@@ -60,7 +60,7 @@ class BaseHid(BasePlugin):
         raise NotImplementedError
 
     def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
-        pass  # FIXME: SPI
+        raise NotImplementedError
 
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         raise NotImplementedError
