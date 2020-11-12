@@ -81,7 +81,7 @@ class _SpiPhyConnection(BasePhyConnection):
         deadline_ts = time.time() + self.__read_timeout
         found = False
         while time.time() < deadline_ts:
-            for byte in self.__xfer(b"\x00" * (4 - len(response))):
+            for byte in self.__xfer(b"\x00" * (5 - len(response))):
                 if not found:
                     if byte != 0x33:
                         continue
