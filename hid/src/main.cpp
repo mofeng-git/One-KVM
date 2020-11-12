@@ -163,13 +163,11 @@ void spiWrite(const uint8_t *buffer) {
 	spi_out[2] = buffer[2];
 	spi_out[1] = buffer[1];
 	spi_out[0] = buffer[0]; // Меджик разрешает начать ответ
-//	digitalWrite(5, 1);
 }
 
 ISR(SPI_STC_vect) {
 	uint8_t in = SPDR;
 	if (spi_out[0] && spi_out_index < 4) {
-//		digitalWrite(4, !digitalRead(4));
 		SPDR = spi_out[spi_out_index];
 		if (!(SPSR & (1 << WCOL))) {
 			++spi_out_index;
@@ -177,7 +175,6 @@ ISR(SPI_STC_vect) {
 				spi_out_index = 0;
 				spi_in_index = 0;
 				spi_out[0] = 0;
-//				digitalWrite(5, 0);
 			}
 		}
 	} else {
@@ -227,11 +224,6 @@ void setup() {
 	hid_mouse.begin();
 #	endif
 
-	pinMode(3, OUTPUT);
-	pinMode(4, OUTPUT);
-	pinMode(5, OUTPUT);
-	pinMode(6, OUTPUT);
-
 #	ifdef CMD_SERIAL
 	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
 #	elif defined(CMD_SPI)
@@ -273,12 +265,6 @@ void loop() {
 			}
 		}
 #		elif defined(CMD_SPI)
-		/*if (SPSR & (1 << WCOL)) {
-			digitalWrite(3, HIGH);
-			uint8_t _ = SPDR;
-			delay(1);
-			digitalWrite(3, LOW);
-		}*/
 		if (spiReady()) {
 			sendCmdResponse(handleCmdBuffer(spi_in));
 		}
