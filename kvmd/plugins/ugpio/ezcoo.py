@@ -134,7 +134,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
         logger.info("Started %s pid=%d", self, os.getpid())
         aioproc.ignore_sigint()
-        aioproc.rename_process(f"ugpio-ezcoo-{self._instance_name}")
+        aioproc.rename_process(f"gpio-ezcoo-{self._instance_name}")
 
         while not self.__stop_event.is_set():
             try:

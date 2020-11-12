@@ -147,7 +147,7 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
         if self.__sw_cs_pin > 0:
             with contextlib.closing(gpiod.Chip(env.GPIO_DEVICE_PATH)) as chip:
                 line = chip.get_line(self.__sw_cs_pin)
-                line.request("kvmd::hid-mcu::sw_cs", gpiod.LINE_REQ_DIR_OUT, default_vals=[1])
+                line.request("kvmd::hid::sw_cs", gpiod.LINE_REQ_DIR_OUT, default_vals=[1])
                 yield line
         else:
             yield None

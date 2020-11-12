@@ -176,10 +176,10 @@ class _Gpio:
         self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
 
         self.__target_line = self.__chip.get_line(self.__target_pin)
-        self.__target_line.request("kvmd::msd-relay::target", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
+        self.__target_line.request("kvmd::msd::target", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
 
         self.__reset_line = self.__chip.get_line(self.__reset_pin)
-        self.__reset_line.request("kvmd::msd-relay::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
+        self.__reset_line.request("kvmd::msd::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
 
     def close(self) -> None:
         if self.__chip:
