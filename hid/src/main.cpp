@@ -171,8 +171,7 @@ ISR(SPI_STC_vect) {
 	if (spi_out[0] && spi_out_index < 4) {
 //		digitalWrite(4, !digitalRead(4));
 		SPDR = spi_out[spi_out_index];
-		bool err = (SPSR & (1 << WCOL));
-		if (!err) {
+		if (!(SPSR & (1 << WCOL))) {
 			++spi_out_index;
 			if (spi_out_index == 4) {
 				spi_out_index = 0;
@@ -274,12 +273,12 @@ void loop() {
 			}
 		}
 #		elif defined(CMD_SPI)
-		if (SPSR & (1 << WCOL)) {
+		/*if (SPSR & (1 << WCOL)) {
 			digitalWrite(3, HIGH);
 			uint8_t _ = SPDR;
 			delay(1);
 			digitalWrite(3, LOW);
-		}
+		}*/
 		if (spiReady()) {
 			sendCmdResponse(handleCmdBuffer(spi_in));
 		}

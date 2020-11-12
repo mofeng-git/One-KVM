@@ -28,9 +28,11 @@ from typing import List
 from typing import Dict
 from typing import Generator
 from typing import Callable
+from typing import Optional
 from typing import Any
 
 import spidev
+import gpiod
 
 from ...logging import get_logger
 
@@ -40,6 +42,9 @@ from ...validators.basic import valid_bool
 from ...validators.basic import valid_int_f0
 from ...validators.basic import valid_int_f1
 from ...validators.basic import valid_float_f01
+from ...validators.hw import valid_gpio_pin_optional
+
+from ... import env
 
 from ._mcu import BasePhyConnection
 from ._mcu import BasePhy
@@ -92,12 +97,14 @@ class _SpiPhyConnection(BasePhyConnection):
         return bytes(response)
 
 
-class _SpiPhy(BasePhy):
+class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         bus: int,
         chip: int,
-        cs: bool,
+        hw_cs: bool,
+        sw_cs_pin: int,
+        cs_high: bool,
         max_freq: int,
         block_usec: int,
         read_timeout: float,
@@ -105,7 +112,9 @@ class _SpiPhy(BasePhy):
 
         self.__bus = bus
         self.__chip = chip
-        self.__cs = cs
+        self.__hw_cs = hw_cs
+        self.__sw_cs_pin = sw_cs_pin
+        self.__cs_high = cs_high
         self.__max_freq = max_freq
         self.__block_usec = block_usec
         self.__read_timeout = read_timeout
@@ -115,18 +124,37 @@ class _SpiPhy(BasePhy):
 
     @contextlib.contextmanager
     def connected(self) -> Generator[_SpiPhyConnection, None, None]:  # type: ignore
-        with contextlib.closing(spidev.SpiDev(self.__bus, self.__chip)) as spi:
-            spi.mode = 0
-            spi.no_cs = (not self.__cs)
-            spi.max_speed_hz = self.__max_freq
+        with self.__sw_cs_connected() as sw_cs_line:
+            with contextlib.closing(spidev.SpiDev(self.__bus, self.__chip)) as spi:
+                spi.mode = 0
+                spi.no_cs = (not self.__hw_cs)
+                if self.__hw_cs:
+                    spi.cshigh = self.__cs_high
+                spi.max_speed_hz = self.__max_freq
 
-            def xfer(data: bytes) -> bytes:
-                return spi.xfer(data, self.__max_freq, self.__block_usec)
+                def xfer(data: bytes) -> bytes:
+                    try:
+                        if sw_cs_line is not None:
+                            sw_cs_line.set_value(int(self.__cs_high))
+                        return spi.xfer(data, self.__max_freq, self.__block_usec)
+                    finally:
+                        if sw_cs_line is not None:
+                            sw_cs_line.set_value(int(not self.__cs_high))
 
-            yield _SpiPhyConnection(
-                xfer=xfer,
-                read_timeout=self.__read_timeout,
-            )
+                yield _SpiPhyConnection(
+                    xfer=xfer,
+                    read_timeout=self.__read_timeout,
+                )
+
+    @contextlib.contextmanager
+    def __sw_cs_connected(self) -> Generator[Optional[gpiod.Line], None, None]:
+        if self.__sw_cs_pin > 0:
+            with contextlib.closing(gpiod.Chip(env.GPIO_DEVICE_PATH)) as chip:
+                line = chip.get_line(self.__sw_cs_pin)
+                line.request("kvmd::hid-mcu::sw_cs", gpiod.LINE_REQ_DIR_OUT, default_vals=[int(not self.__cs_high)])
+                yield line
+        else:
+            yield None
 
 
 # =====
@@ -145,9 +173,11 @@ class Plugin(BaseMcuHid):
     @classmethod
     def __get_phy_options(cls) -> Dict:
         return {
-            "bus":          Option(0,      type=valid_int_f0),
-            "chip":         Option(0,      type=valid_int_f0),
-            "cs":           Option(False,  type=valid_bool),
+            "bus":          Option(-1,     type=valid_int_f0),
+            "chip":         Option(-1,     type=valid_int_f0),
+            "hw_cs":        Option(False,  type=valid_bool),
+            "sw_cs_pin":    Option(-1,     type=valid_gpio_pin_optional),
+            "cs_high":      Option(False,  type=valid_bool),
             "max_freq":     Option(200000, type=valid_int_f1),
             "block_usec":   Option(1,      type=valid_int_f0),
             "read_timeout": Option(0.5,    type=valid_float_f01),
