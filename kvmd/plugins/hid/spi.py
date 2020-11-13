@@ -66,9 +66,9 @@ class _SpiPhyConnection(BasePhyConnection):
         assert len(request) == 8
         assert request[0] == 0x33
 
-        deadline_ts = time.time() + self.__read_timeout
+        deadline_ts = time.monotonic() + self.__read_timeout
         dummy = b"\x00" * 8
-        while time.time() < deadline_ts:
+        while time.monotonic() < deadline_ts:
             if bytes(self.__xfer(dummy)) == dummy:
                 break
         else:
@@ -78,9 +78,9 @@ class _SpiPhyConnection(BasePhyConnection):
         self.__xfer(request)
 
         response: List[int] = []
-        deadline_ts = time.time() + self.__read_timeout
+        deadline_ts = time.monotonic() + self.__read_timeout
         found = False
-        while time.time() < deadline_ts:
+        while time.monotonic() < deadline_ts:
             for byte in self.__xfer(b"\x00" * (5 - len(response))):
                 if not found:
                     if byte != 0x33:

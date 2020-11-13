@@ -328,7 +328,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         assert self.__new_file
         await aiofs.afile_write_now(self.__new_file, chunk)
         self.__new_file_written += len(chunk)
-        now = time.time()
+        now = time.monotonic()
         if self.__new_file_tick + 1 < now:
             # Это нужно для ручного оповещения о свободном пространстве на диске, см. get_state()
             self.__new_file_tick = now

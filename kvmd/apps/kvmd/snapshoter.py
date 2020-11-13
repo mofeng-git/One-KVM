@@ -80,9 +80,9 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
             last_snapshot_ts = 0.0
             while True:
                 live = is_live()
-                if last_snapshot_ts + (self.__live_interval if live else self.__idle_interval) < time.time():
+                if last_snapshot_ts + (self.__live_interval if live else self.__idle_interval) < time.monotonic():
                     await self.__take_snapshot(live, notifier)
-                    last_snapshot_ts = time.time()
+                    last_snapshot_ts = time.monotonic()
                 await asyncio.sleep(min(self.__idle_interval, self.__live_interval))
         else:
             await aiotools.wait_infinite()
