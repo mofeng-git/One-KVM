@@ -82,7 +82,7 @@ uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 2 bytes
 #	define MOUSE_PAIR(_state, _button) \
 		_state & PROTO_CMD_MOUSE_BUTTON_##_button##_SELECT, \
 		_state & PROTO_CMD_MOUSE_BUTTON_##_button##_STATE
-	hid_mouse.sendMouseButtons(
+	hid_mouse.sendButtons(
 		MOUSE_PAIR(main_state, LEFT),
 		MOUSE_PAIR(main_state, RIGHT),
 		MOUSE_PAIR(main_state, MIDDLE),
@@ -104,14 +104,14 @@ uint8_t cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
 	y |= (int)buffer[3];
 	y = (y + 32768) / 2; // See /kvmd/apps/otg/hid/keyboard.py for details
 
-	hid_mouse.sendMouseMove(x, y);
+	hid_mouse.sendMove(x, y);
 #	endif
 	return PROTO_RESP_OK;
 }
 
 uint8_t cmdMouseWheelEvent(const uint8_t *buffer) { // 2 bytes
 #	ifdef HID_USB_MOUSE
-	hid_mouse.sendMouseWheel(buffer[1]); // Y only, X is not supported
+	hid_mouse.sendWheel(buffer[1]); // Y only, X is not supported
 #	endif
 	return PROTO_RESP_OK;
 }

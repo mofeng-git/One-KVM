@@ -71,31 +71,31 @@ class UsbHidMouse {
 			SingleAbsoluteMouse.releaseAll();
 		}
 
-		void sendMouseButtons(
+		void sendButtons(
 			bool left_select, bool left_state,
 			bool right_select, bool right_state,
 			bool middle_select, bool middle_state,
 			bool up_select, bool up_state,
 			bool down_select, bool down_state
 		) {
-			if (left_select) _sendMouseButton(MOUSE_LEFT, left_state);
-			if (right_select) _sendMouseButton(MOUSE_RIGHT, right_state);
-			if (middle_select) _sendMouseButton(MOUSE_MIDDLE, middle_state);
-			if (up_select) _sendMouseButton(MOUSE_PREV, up_state);
-			if (down_select) _sendMouseButton(MOUSE_NEXT, down_state);
+			if (left_select) _sendButton(MOUSE_LEFT, left_state);
+			if (right_select) _sendButton(MOUSE_RIGHT, right_state);
+			if (middle_select) _sendButton(MOUSE_MIDDLE, middle_state);
+			if (up_select) _sendButton(MOUSE_PREV, up_state);
+			if (down_select) _sendButton(MOUSE_NEXT, down_state);
 		}
 
-		void sendMouseMove(int x, int y) {
+		void sendMove(int x, int y) {
 			SingleAbsoluteMouse.moveTo(x, y);
 		}
 
-		void sendMouseWheel(int delta_y) {
+		void sendWheel(int delta_y) {
 			// delta_x is not supported by hid-project now
 			SingleAbsoluteMouse.move(0, 0, delta_y);
 		}
 
 	private:
-		void _sendMouseButton(uint8_t button, bool state) {
+		void _sendButton(uint8_t button, bool state) {
 			if (state) SingleAbsoluteMouse.press(button);
 			else SingleAbsoluteMouse.release(button);
 		}
