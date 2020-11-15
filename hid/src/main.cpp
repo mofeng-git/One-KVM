@@ -61,11 +61,11 @@
 // -----------------------------------------------------------------------------
 uint8_t cmdPong(const uint8_t *_=NULL) { // 0 bytes
 	return (
-		((uint8_t)PROTO_RESP_PONG_PREFIX)
-		| hid_kbd.getLedsAs(PROTO_RESP_PONG_CAPS, PROTO_RESP_PONG_SCROLL, PROTO_RESP_PONG_NUM)
-		| (hid_kbd.isOnline() ? 0 : PROTO_RESP_PONG_KEYBOARD_OFFLINE)
+		PROTO::PONG::PREFIX
+		| hid_kbd.getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM)
+		| (hid_kbd.isOnline() ? 0 : PROTO::PONG::KEYBOARD_OFFLINE)
 #		ifdef HID_USB_MOUSE
-		| (hid_mouse.isOnline() ? 0 : PROTO_RESP_PONG_MOUSE_OFFLINE)
+		| (hid_mouse.isOnline() ? 0 : PROTO::PONG::MOUSE_OFFLINE)
 #		endif
 	);
 }
@@ -91,8 +91,8 @@ uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 2 bytes
 	uint8_t extra_state = buffer[1];
 
 #	define MOUSE_PAIR(_state, _button) \
-		_state & PROTO_CMD_MOUSE_BUTTON_##_button##_SELECT, \
-		_state & PROTO_CMD_MOUSE_BUTTON_##_button##_STATE
+		_state & PROTO::CMD::MOUSE::_button::SELECT, \
+		_state & PROTO::CMD::MOUSE::_button::STATE
 	hid_mouse.sendButtons(
 		MOUSE_PAIR(main_state, LEFT),
 		MOUSE_PAIR(main_state, RIGHT),
@@ -134,18 +134,18 @@ uint8_t handleCmdBuffer(const uint8_t *buffer) { // 8 bytes
 	if (protoCrc16(buffer, 6) == crc) {
 #		define HANDLE(_handler) { return _handler(buffer + 2); }
 		switch (buffer[1]) {
-			case PROTO_CMD_RESET_HID:			HANDLE(cmdResetHid);
-			case PROTO_CMD_KEY_EVENT:			HANDLE(cmdKeyEvent);
-			case PROTO_CMD_MOUSE_BUTTON_EVENT:	HANDLE(cmdMouseButtonEvent);
-			case PROTO_CMD_MOUSE_MOVE_EVENT:	HANDLE(cmdMouseMoveEvent);
-			case PROTO_CMD_MOUSE_WHEEL_EVENT:	HANDLE(cmdMouseWheelEvent);
-			case PROTO_CMD_PING:				HANDLE(cmdPong);
-			case PROTO_CMD_REPEAT:	return 0;
-			default:				return PROTO_RESP_INVALID_ERROR;
+			case PROTO::CMD::RESET_HID:			HANDLE(cmdResetHid);
+			case PROTO::CMD::KEYBOARD::KEY:		HANDLE(cmdKeyEvent);
+			case PROTO::CMD::MOUSE::BUTTON:		HANDLE(cmdMouseButtonEvent);
+			case PROTO::CMD::MOUSE::MOVE:		HANDLE(cmdMouseMoveEvent);
+			case PROTO::CMD::MOUSE::WHEEL:		HANDLE(cmdMouseWheelEvent);
+			case PROTO::CMD::PING:				HANDLE(cmdPong);
+			case PROTO::CMD::REPEAT:	return 0;
+			default:					return PROTO::RESP::INVALID_ERROR;
 		}
 #		undef HANDLE
 	}
-	return PROTO_RESP_CRC_ERROR;
+	return PROTO::RESP::CRC_ERROR;
 }
 
 
@@ -182,7 +182,7 @@ ISR(SPI_STC_vect) {
 		}
 	} else {
 		static bool receiving = false;
-		if (!receiving && in == PROTO_MAGIC) {
+		if (!receiving && in == PROTO::MAGIC) {
 			receiving = true;
 		}
 		if (receiving && spi_in_index < 8) {
@@ -200,7 +200,7 @@ ISR(SPI_STC_vect) {
 
 // -----------------------------------------------------------------------------
 void sendCmdResponse(uint8_t code) {
-	static uint8_t prev_code = PROTO_RESP_NONE;
+	static uint8_t prev_code = PROTO::RESP::NONE;
 	if (code == 0) {
 		code = prev_code; // Repeat the last code
 	} else {
@@ -208,7 +208,7 @@ void sendCmdResponse(uint8_t code) {
 	}
 
 	uint8_t buffer[4];
-	buffer[0] = PROTO_MAGIC;
+	buffer[0] = PROTO::MAGIC;
 	buffer[1] = code;
 	uint16_t crc = protoCrc16(buffer, 2);
 	buffer[2] = (uint8_t)(crc >> 8);
@@ -263,7 +263,7 @@ void loop() {
 				(now >= last && now - last > CMD_SERIAL_TIMEOUT)
 				|| (now < last && ((unsigned long)-1) - last + now > CMD_SERIAL_TIMEOUT)
 			) {
-				sendCmdResponse(PROTO_RESP_TIMEOUT_ERROR);
+				sendCmdResponse(PROTO::RESP::TIMEOUT_ERROR);
 				index = 0;
 			}
 		}
