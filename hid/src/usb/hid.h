@@ -40,9 +40,9 @@ static bool _checkEndpoint(uint8_t ep) {
 	SREG = intr_state;
 	return rw_allowed;
 }
-#	define CHECK_HID_EP(_hid) { if (!_checkEndpoint(_hid.getPluggedEndpoint())) return; }
+#	define CHECK_HID_EP { if (!isOnline()) return; }
 #else
-#	define CHECK_HID_EP(_hid)
+#	define CHECK_HID_EP
 #endif
 
 class UsbHidKeyboard {
@@ -53,12 +53,20 @@ class UsbHidKeyboard {
 			BootKeyboard.begin();
 		}
 
+		bool isOnline() {
+#			ifdef CHECK_ENDPOINT
+			return _checkEndpoint(BootKeyboard.getPluggedEndpoint());
+#			else
+			return true;
+#			endif
+		}
+
 		void reset() {
 			BootKeyboard.releaseAll();
 		}
 
 		void sendKey(uint8_t code, bool state) {
-			CHECK_HID_EP(BootKeyboard);
+			CHECK_HID_EP;
 			KeyboardKeycode usb_code = keymapUsb(code);
 			if (usb_code != KEY_ERROR_UNDEFINED) {
 				if (state) BootKeyboard.press(usb_code);
@@ -85,6 +93,14 @@ class UsbHidMouse {
 			SingleAbsoluteMouse.begin();
 		}
 
+		bool isOnline() {
+#			ifdef CHECK_ENDPOINT
+			return _checkEndpoint(SingleAbsoluteMouse.getPluggedEndpoint());
+#			else
+			return true;
+#			endif
+		}
+
 		void reset() {
 			SingleAbsoluteMouse.releaseAll();
 		}
@@ -104,19 +120,19 @@ class UsbHidMouse {
 		}
 
 		void sendMove(int x, int y) {
-			CHECK_HID_EP(SingleAbsoluteMouse);
+			CHECK_HID_EP;
 			SingleAbsoluteMouse.moveTo(x, y);
 		}
 
 		void sendWheel(int delta_y) {
-			CHECK_HID_EP(SingleAbsoluteMouse);
+			CHECK_HID_EP;
 			// delta_x is not supported by hid-project now
 			SingleAbsoluteMouse.move(0, 0, delta_y);
 		}
 
 	private:
 		void _sendButton(uint8_t button, bool state) {
-			CHECK_HID_EP(SingleAbsoluteMouse);
+			CHECK_HID_EP;
 			if (state) SingleAbsoluteMouse.press(button);
 			else SingleAbsoluteMouse.release(button);
 		}

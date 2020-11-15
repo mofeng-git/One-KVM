@@ -59,10 +59,9 @@ from .gpio import Gpio
 
 # =====
 class _RequestError(Exception):
-    def __init__(self, msg: str, online: bool=False) -> None:
+    def __init__(self, msg: str) -> None:
         super().__init__(msg)
         self.msg = msg
-        self.online = online
 
 
 class _PermRequestError(_RequestError):
@@ -197,7 +196,8 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
         self.__notifier = aiomulti.AioProcessNotifier()
         self.__state_flags = aiomulti.AioSharedFlags({
-            "online": True,
+            "keyboard_online": True,
+            "mouse_online": True,
             "caps": False,
             "scroll": False,
             "num": False,
@@ -227,9 +227,9 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     async def get_state(self) -> Dict:
         state = await self.__state_flags.get()
         return {
-            "online": state["online"],
+            "online": (state["keyboard_online"] and state["mouse_online"]),
             "keyboard": {
-                "online": state["online"],
+                "online": state["keyboard_online"],
                 "leds": {
                     "caps": state["caps"],
                     "scroll": state["scroll"],
@@ -237,7 +237,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 },
             },
             "mouse": {
-                "online": state["online"],
+                "online": state["mouse_online"],
                 "absolute": True,
             },
         }
@@ -361,26 +361,19 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 elif code == 0x40:  # CRC Error
                     raise _TempRequestError(f"Got CRC error of request from HID: request={request!r}")
                 elif code == 0x45:  # Unknown command
-                    raise _PermRequestError(f"HID did not recognize the request={request!r}", online=True)
+                    raise _PermRequestError(f"HID did not recognize the request={request!r}")
                 elif code == 0x24:  # Rebooted?
-                    raise _PermRequestError("No previous command state inside HID, seems it was rebooted", online=True)
-                elif code == 0x20:  # Done
-                    self.__state_flags.update(online=True)
+                    raise _PermRequestError("No previous command state inside HID, seems it was rebooted")
+                elif code == 0x20:  # Legacy done
+                    self.__set_state_online(True)
                     return True
-                elif code & 0x80:  # Pong with leds
-                    self.__state_flags.update(
-                        online=True,
-                        caps=bool(code & 0b00000001),
-                        scroll=bool(code & 0x00000010),
-                        num=bool(code & 0x00000100),
-                    )
+                elif code & 0x80:  # Pong/Done with state
+                    self.__set_state_code(code)
                     return True
                 raise _TempRequestError(f"Invalid response from HID: request={request!r}; code=0x{code:02X}")
 
             except _RequestError as err:
                 common_retries -= 1
-                self.__state_flags.update(online=err.online)
-                error_retval = err.online
 
                 if live_log_errors:
                     logger.error(err.msg)
@@ -393,7 +386,11 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                         live_log_errors = True
 
                 if isinstance(err, _PermRequestError):
+                    error_retval = True
                     break
+
+                self.__set_state_online(False)
+
                 if common_retries and read_retries:
                     time.sleep(self.__retries_delay)
 
@@ -402,6 +399,21 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         if not (common_retries and read_retries):
             logger.error("Can't process HID request due many errors: %r", request)
         return error_retval
+
+    def __set_state_online(self, online: bool) -> None:
+        self.__state_flags.update(
+            keyboard_online=online,
+            mouse_online=online,
+        )
+
+    def __set_state_code(self, code: int) -> None:
+        self.__state_flags.update(
+            keyboard_online=(not (code & 0b00001000)),
+            mouse_online=(not (code & 0b00010000)),
+            caps=bool(code & 0b00000001),
+            scroll=bool(code & 0b00000010),
+            num=bool(code & 0b00000100),
+        )
 
     def __send_request(self, conn: BasePhyConnection, request: bytes) -> bytes:
         if not self.__noop:

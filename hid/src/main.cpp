@@ -59,19 +59,30 @@
 
 
 // -----------------------------------------------------------------------------
-uint8_t cmdResetHid(const uint8_t *buffer) { // 0 bytes
+uint8_t cmdPong(const uint8_t *_=NULL) { // 0 bytes
+	return (
+		((uint8_t)PROTO_RESP_PONG_PREFIX)
+		| hid_kbd.getLedsAs(PROTO_RESP_PONG_CAPS, PROTO_RESP_PONG_SCROLL, PROTO_RESP_PONG_NUM)
+		| (hid_kbd.isOnline() ? 0 : PROTO_RESP_PONG_KEYBOARD_OFFLINE)
+#		ifdef HID_USB_MOUSE
+		| (hid_mouse.isOnline() ? 0 : PROTO_RESP_PONG_MOUSE_OFFLINE)
+#		endif
+	);
+}
+
+uint8_t cmdResetHid(const uint8_t *_) { // 0 bytes
 #	ifdef HID_USB_KBD
 	hid_kbd.reset();
 #	endif
 #	ifdef HID_USB_MOUSE
 	hid_mouse.reset();
 #	endif
-	return PROTO_RESP_OK;
+	return cmdPong();
 }
 
 uint8_t cmdKeyEvent(const uint8_t *buffer) { // 2 bytes
 	hid_kbd.sendKey(buffer[0], buffer[1]);
-	return PROTO_RESP_OK;
+	return cmdPong();
 }
 
 uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 2 bytes
@@ -91,7 +102,7 @@ uint8_t cmdMouseButtonEvent(const uint8_t *buffer) { // 2 bytes
 	);
 #	undef MOUSE_PAIR
 #	endif
-	return PROTO_RESP_OK;
+	return cmdPong();
 }
 
 uint8_t cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
@@ -106,22 +117,14 @@ uint8_t cmdMouseMoveEvent(const uint8_t *buffer) { // 4 bytes
 
 	hid_mouse.sendMove(x, y);
 #	endif
-	return PROTO_RESP_OK;
+	return cmdPong();
 }
 
 uint8_t cmdMouseWheelEvent(const uint8_t *buffer) { // 2 bytes
 #	ifdef HID_USB_MOUSE
 	hid_mouse.sendWheel(buffer[1]); // Y only, X is not supported
 #	endif
-	return PROTO_RESP_OK;
-}
-
-uint8_t cmdPongLeds(const uint8_t *buffer) { // 0 bytes
-	return ((uint8_t) PROTO_RESP_PONG_PREFIX) | hid_kbd.getLedsAs(
-		PROTO_RESP_PONG_CAPS,
-		PROTO_RESP_PONG_SCROLL,
-		PROTO_RESP_PONG_NUM
-	);
+	return cmdPong();
 }
 
 uint8_t handleCmdBuffer(const uint8_t *buffer) { // 8 bytes
@@ -136,7 +139,7 @@ uint8_t handleCmdBuffer(const uint8_t *buffer) { // 8 bytes
 			case PROTO_CMD_MOUSE_BUTTON_EVENT:	HANDLE(cmdMouseButtonEvent);
 			case PROTO_CMD_MOUSE_MOVE_EVENT:	HANDLE(cmdMouseMoveEvent);
 			case PROTO_CMD_MOUSE_WHEEL_EVENT:	HANDLE(cmdMouseWheelEvent);
-			case PROTO_CMD_PING:				HANDLE(cmdPongLeds);
+			case PROTO_CMD_PING:				HANDLE(cmdPong);
 			case PROTO_CMD_REPEAT:	return 0;
 			default:				return PROTO_RESP_INVALID_ERROR;
 		}

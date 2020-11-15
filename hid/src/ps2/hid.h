@@ -41,6 +41,10 @@ class Ps2HidKeyboard {
 			_dev.keyboard_init();
 		}
 
+		bool isOnline() {
+			return true;
+		}
+
 		void periodic() {
 			_dev.keyboard_handle(&_leds);
 		}
