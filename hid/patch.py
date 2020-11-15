@@ -33,7 +33,7 @@ def _patch(path: str, patch_path: str) -> None:
 
 
 # =====
-_patch(_get_pkg_path("framework-arduino-avr"), "patches/serial.patch")
+_patch(_get_pkg_path("framework-arduino-avr"), "patches/optional-serial.patch")
 _patch(_get_pkg_path("framework-arduino-avr"), "patches/get-plugged-endpoint.patch")
 
 _libs = _get_libs()
