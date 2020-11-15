@@ -39,3 +39,4 @@ _patch(_get_pkg_path("framework-arduino-avr"), "patches/get-plugged-endpoint.pat
 _libs = _get_libs()
 if "HID-Project" in _libs:
     _patch(_libs["HID-Project"], "patches/absmouse.patch")
+    _patch(_libs["HID-Project"], "patches/shut-up.patch")
