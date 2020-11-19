@@ -25,7 +25,9 @@ import queue
 
 from typing import Tuple
 from typing import Dict
+from typing import Type
 from typing import TypeVar
+from typing import Generic
 from typing import Optional
 
 from . import aiotools
@@ -71,14 +73,19 @@ class AioProcessNotifier:
 
 
 # =====
-class AioSharedFlags:
+_SharedFlagT = TypeVar("_SharedFlagT", int, bool)
+
+
+class AioSharedFlags(Generic[_SharedFlagT]):
     def __init__(
         self,
-        initial: Dict[str, bool],
+        initial: Dict[str, _SharedFlagT],
         notifier: AioProcessNotifier,
+        type: Type[_SharedFlagT]=bool,  # pylint: disable=redefined-builtin
     ) -> None:
 
         self.__notifier = notifier
+        self.__type: Type[_SharedFlagT] = type
 
         self.__flags = {
             key: multiprocessing.RawValue("i", int(value))  # type: ignore
@@ -87,7 +94,7 @@ class AioSharedFlags:
 
         self.__lock = multiprocessing.Lock()
 
-    def update(self, **kwargs: bool) -> None:
+    def update(self, **kwargs: _SharedFlagT) -> None:
         changed = False
         with self.__lock:
             for (key, value) in kwargs.items():
@@ -98,12 +105,12 @@ class AioSharedFlags:
         if changed:
             self.__notifier.notify()
 
-    async def get(self) -> Dict[str, bool]:
+    async def get(self) -> Dict[str, _SharedFlagT]:
         return (await aiotools.run_async(self.__inner_get))
 
-    def __inner_get(self) -> Dict[str, bool]:
+    def __inner_get(self) -> Dict[str, _SharedFlagT]:
         with self.__lock:
             return {
-                key: bool(shared.value)
+                key: self.__type(shared.value)
                 for (key, shared) in self.__flags.items()
             }

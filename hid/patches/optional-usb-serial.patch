@@ -5,7 +5,7 @@ https://github.com/arduino-libraries/MIDIUSB/issues/50#issuecomment-451427496
  	return obj;
  }
  
-+#ifndef NO_SERIAL
++#ifndef NO_USB_SERIAL
  PluggableUSB_::PluggableUSB_() : lastIf(CDC_ACM_INTERFACE + CDC_INTERFACE_COUNT),
                                   lastEp(CDC_FIRST_ENDPOINT + CDC_ENPOINT_COUNT),
 +#else
@@ -22,7 +22,7 @@ diff -u -r a/cores/arduino/USBCore.cpp b/cores/arduino/USBCore.cpp
  {
  	0,                      // Control Endpoint
  	
-+#ifndef NO_SERIAL
++#ifndef NO_USB_SERIAL
  	EP_TYPE_INTERRUPT_IN,   // CDC_ENDPOINT_ACM
  	EP_TYPE_BULK_OUT,       // CDC_ENDPOINT_OUT
  	EP_TYPE_BULK_IN,        // CDC_ENDPOINT_IN
@@ -34,7 +34,7 @@ diff -u -r a/cores/arduino/USBCore.cpp b/cores/arduino/USBCore.cpp
  {
  	u8 i = setup.wIndex;
  
-+#ifndef NO_SERIAL
++#ifndef NO_USB_SERIAL
  	if (CDC_ACM_INTERFACE == i)
  		return CDC_Setup(setup);
 +#endif
@@ -45,7 +45,7 @@ diff -u -r a/cores/arduino/USBCore.cpp b/cores/arduino/USBCore.cpp
  {
  	u8 interfaces = 0;
  
-+#ifndef NO_SERIAL
++#ifndef NO_USB_SERIAL
  	CDC_GetInterface(&interfaces);
 +#endif
  

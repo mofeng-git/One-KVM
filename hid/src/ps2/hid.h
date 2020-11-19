@@ -27,22 +27,18 @@
 
 #include "keymap.h"
 
-// #define PS2_KBD_CLOCK_PIN	7
-// #define PS2_KBD_DATA_PIN		5
+// #define HID_PS2_KBD_CLOCK_PIN	7
+// #define HID_PS2_KBD_DATA_PIN		5
 
 
-class Ps2HidKeyboard {
+class Ps2Keyboard {
 	// https://wiki.osdev.org/PS/2_Keyboard
 
 	public:
-		Ps2HidKeyboard() : _dev(PS2_KBD_CLOCK_PIN, PS2_KBD_DATA_PIN) {}
+		Ps2Keyboard() : _dev(HID_PS2_KBD_CLOCK_PIN, HID_PS2_KBD_DATA_PIN) {}
 
 		void begin() {
 			_dev.keyboard_init();
-		}
-
-		bool isOnline() {
-			return true;
 		}
 
 		void periodic() {
@@ -57,7 +53,7 @@ class Ps2HidKeyboard {
 			if (ps2_type != PS2_KEY_TYPE_UNKNOWN) {
 				// Не отправлялась часть нажатий. Когда clock на нуле, комп не принимает ничего от клавы.
 				// Этот костыль понижает процент пропущенных нажатий.
-				while (digitalRead(PS2_KBD_CLOCK_PIN) == 0) {};
+				while (digitalRead(HID_PS2_KBD_CLOCK_PIN) == 0) {};
 				if (state) {
 					switch (ps2_type) {
 						case PS2_KEY_TYPE_REG: _dev.keyboard_press(ps2_code); break;
@@ -76,6 +72,10 @@ class Ps2HidKeyboard {
 					}
 				}
 			}
+		}
+
+		uint8_t getOfflineAs(uint8_t offline) {
+			return 0;
 		}
 
 		uint8_t getLedsAs(uint8_t caps, uint8_t scroll, uint8_t num) {

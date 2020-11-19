@@ -89,8 +89,9 @@ class Plugin(BaseHid):
     async def get_state(self) -> Dict:
         keyboard_state = await self.__keyboard_proc.get_state()
         mouse_state = await self.__mouse_proc.get_state()
+        outputs: Dict = {"available": {}, "active": ""}
         return {
-            "online": (keyboard_state["online"] and mouse_state["online"]),
+            "online": True,
             "keyboard": {
                 "online": keyboard_state["online"],
                 "leds": {
@@ -98,8 +99,9 @@ class Plugin(BaseHid):
                     "scroll": keyboard_state["scroll"],
                     "num": keyboard_state["num"],
                 },
+                "outputs": outputs,
             },
-            "mouse": mouse_state,
+            "mouse": {**mouse_state, "outputs": outputs},
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
