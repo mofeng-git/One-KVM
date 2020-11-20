@@ -254,47 +254,47 @@ static void _sendResponse(uint8_t code) {
 		prev_code = code;
 	}
 
-	uint8_t data[8] = {0};
-	data[0] = PROTO::MAGIC;
+	uint8_t response[8] = {0};
+	response[0] = PROTO::MAGIC;
 	if (code & PROTO::PONG::OK) {
-		data[1] = PROTO::PONG::OK;
+		response[1] = PROTO::PONG::OK;
 #		ifdef HID_DYNAMIC
 		if (_reset_required) {
-			data[1] |= PROTO::PONG::RESET_REQUIRED;
+			response[1] |= PROTO::PONG::RESET_REQUIRED;
 		}
-		data[2] = PROTO::OUTPUTS::DYNAMIC;
+		response[2] = PROTO::OUTPUTS::DYNAMIC;
 #		endif
 		if (_usb_kbd) {
-			data[1] |= _usb_kbd->getOfflineAs(PROTO::PONG::KEYBOARD_OFFLINE);
-			data[1] |= _usb_kbd->getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM);
-			data[2] |= PROTO::OUTPUTS::KEYBOARD::USB;
+			response[1] |= _usb_kbd->getOfflineAs(PROTO::PONG::KEYBOARD_OFFLINE);
+			response[1] |= _usb_kbd->getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM);
+			response[2] |= PROTO::OUTPUTS::KEYBOARD::USB;
 		} else if (_ps2_kbd) {
-			data[1] |= _ps2_kbd->getOfflineAs(PROTO::PONG::KEYBOARD_OFFLINE);
-			data[1] |= _ps2_kbd->getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM);
-			data[2] |= PROTO::OUTPUTS::KEYBOARD::PS2;
+			response[1] |= _ps2_kbd->getOfflineAs(PROTO::PONG::KEYBOARD_OFFLINE);
+			response[1] |= _ps2_kbd->getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM);
+			response[2] |= PROTO::OUTPUTS::KEYBOARD::PS2;
 		}
 		if (_usb_mouse_abs) {
-			data[1] |= _usb_mouse_abs->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
-			data[2] |= PROTO::OUTPUTS::MOUSE::USB_ABS;
+			response[1] |= _usb_mouse_abs->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
+			response[2] |= PROTO::OUTPUTS::MOUSE::USB_ABS;
 		} else if (_usb_mouse_rel) {
-			data[1] |= _usb_mouse_rel->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
-			data[2] |= PROTO::OUTPUTS::MOUSE::USB_REL;
+			response[1] |= _usb_mouse_rel->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
+			response[2] |= PROTO::OUTPUTS::MOUSE::USB_REL;
 		} // TODO: ps2
 #		ifdef HID_WITH_USB
-		data[3] |= PROTO::FEATURES::HAS_USB;
+		response[3] |= PROTO::FEATURES::HAS_USB;
 #		endif
 #		ifdef HID_WITH_PS2
-		data[3] |= PROTO::FEATURES::HAS_PS2;
+		response[3] |= PROTO::FEATURES::HAS_PS2;
 #		endif
 	} else {
-		data[1] = code;
+		response[1] = code;
 	}
-	PROTO::split16(PROTO::crc16(data, 6), &data[6], &data[7]);
+	PROTO::split16(PROTO::crc16(response, 6), &response[6], &response[7]);
 
 #	ifdef CMD_SERIAL
-	CMD_SERIAL.write(data, 8);
+	CMD_SERIAL.write(response, 8);
 #	elif defined(CMD_SPI)
-	spiWrite(data);
+	spiWrite(response);
 #	endif
 }
 
