@@ -20,29 +20,28 @@
 *****************************************************************************/
 
 
+// #define CMD_SERIAL			Serial1
+// #define CMD_SERIAL_SPEED		115200
+// #define CMD_SERIAL_TIMEOUT	100000
+// -- OR --
+// #define CMD_SPI
+
 #if !(defined(CMD_SERIAL) || defined(CMD_SPI))
 #	error CMD phy is not defined
 #endif
 
 
 #include <Arduino.h>
-#ifdef CMD_SPI
-#	include <SPI.h>
-#endif
 #ifdef HID_DYNAMIC
 #	include <avr/eeprom.h>
 #endif
 
 #include "proto.h"
+#ifdef CMD_SPI
+#	include "spi.h"
+#endif
 #include "usb/hid.h"
 #include "ps2/hid.h"
-
-
-// #define CMD_SERIAL			Serial1
-// #define CMD_SERIAL_SPEED		115200
-// #define CMD_SERIAL_TIMEOUT	100000
-// -- OR --
-// #define CMD_SPI
 
 
 // -----------------------------------------------------------------------------
@@ -247,55 +246,6 @@ static uint8_t _handleRequest(const uint8_t *data) { // 8 bytes
 
 
 // -----------------------------------------------------------------------------
-#ifdef CMD_SPI
-static volatile uint8_t _spi_in[8] = {0};
-static volatile uint8_t _spi_in_index = 0;
-
-static volatile uint8_t _spi_out[8] = {0};
-static volatile uint8_t _spi_out_index = 0;
-
-static bool _spiReady() {
-	return (!_spi_out[0] && _spi_in_index == 8);
-}
-
-static void _spiWrite(const uint8_t *data) {
-	// Меджик в нулевом байте разрешает начать ответ
-	for (int index = 7; index >= 0; --index) {
-		_spi_out[index] = data[index];
-	}
-}
-
-ISR(SPI_STC_vect) {
-	uint8_t in = SPDR;
-	if (_spi_out[0] && _spi_out_index < 8) {
-		SPDR = _spi_out[_spi_out_index];
-		if (!(SPSR & (1 << WCOL))) {
-			++_spi_out_index;
-			if (_spi_out_index == 8) {
-				_spi_out_index = 0;
-				_spi_in_index = 0;
-				_spi_out[0] = 0;
-			}
-		}
-	} else {
-		static bool receiving = false;
-		if (!receiving && in == PROTO::MAGIC) {
-			receiving = true;
-		}
-		if (receiving && _spi_in_index < 8) {
-			_spi_in[_spi_in_index] = in;
-			++_spi_in_index;
-		}
-		if (_spi_in_index == 8) {
-			receiving = false;
-		}
-		SPDR = 0;
-	}
-}
-#endif
-
-
-// -----------------------------------------------------------------------------
 static void _sendResponse(uint8_t code) {
 	static uint8_t prev_code = PROTO::RESP::NONE;
 	if (code == 0) {
@@ -344,7 +294,7 @@ static void _sendResponse(uint8_t code) {
 #	ifdef CMD_SERIAL
 	CMD_SERIAL.write(data, 8);
 #	elif defined(CMD_SPI)
-	_spiWrite(data);
+	spiWrite(data);
 #	endif
 }
 
@@ -358,6 +308,9 @@ int main() {
 	unsigned long last = micros();
 	uint8_t buffer[8];
 	uint8_t index = 0;
+#	elif defined(CMD_SPI)
+	spiBegin();
+#	endif
 
 	while (true) {
 #		ifdef HID_WITH_PS2
@@ -365,6 +318,7 @@ int main() {
 			_ps2_kbd->periodic();
 		}
 #		endif
+#		ifdef CMD_SERIAL
 		if (CMD_SERIAL.available() > 0) {
 			buffer[index] = (uint8_t)CMD_SERIAL.read();
 			if (index == 7) {
@@ -384,23 +338,11 @@ int main() {
 				index = 0;
 			}
 		}
-	}
-
-#	elif defined(CMD_SPI)
-	pinMode(MISO, OUTPUT);
-	SPCR = (1 << SPE) | (1 << SPIE); // Slave, SPI En, IRQ En
-
-	while (true) {
-#		ifdef HID_WITH_PS2
-		if (_ps2_kbd) {
-			_ps2_kbd->periodic();
+#		elif defined(CMD_SPI)
+		if (spiReady()) {
+			_sendResponse(_handleRequest(spiGet()));
 		}
 #		endif
-		if (_spiReady()) {
-			_sendResponse(_handleRequest((const uint8_t *)_spi_in));
-		}
 	}
-
-#	endif
 	return 0;
 }
