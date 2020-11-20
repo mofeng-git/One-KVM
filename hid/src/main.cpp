@@ -153,7 +153,7 @@ static void _cmdSetKeyboard(const uint8_t *data) { // 1 bytes
 
 static void _cmdSetMouse(const uint8_t *data) { // 1 bytes
 #	ifdef HID_DYNAMIC
-	_writeOutputs(PROTO::OUTPUTS::KEYBOARD::MASK, data[0], false);
+	_writeOutputs(PROTO::OUTPUTS::MOUSE::MASK, data[0], false);
 	_reset_required = true;
 #	endif
 }
