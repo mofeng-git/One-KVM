@@ -65,10 +65,11 @@ namespace PROTO {
 	}
 
 	namespace CMD {
-		const uint8_t PING =		0x01;
-		const uint8_t REPEAT =		0x02;
-		const uint8_t SET_OUTPUTS =	0x03;
-		const uint8_t CLEAR_HID =	0x10;
+		const uint8_t PING =			0x01;
+		const uint8_t REPEAT =			0x02;
+		const uint8_t SET_KEYBOARD =	0x03;
+		const uint8_t SET_MOUSE =		0x04;
+		const uint8_t CLEAR_HID =		0x10;
 
 		namespace KEYBOARD {
 			const uint8_t KEY =	0x11;

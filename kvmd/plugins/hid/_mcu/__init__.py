@@ -55,7 +55,11 @@ from .gpio import Gpio
 from .proto import REQUEST_PING
 from .proto import REQUEST_REPEAT
 from .proto import RESPONSE_LEGACY_OK
+from .proto import KEYBOARD_CODES_TO_NAMES
+from .proto import MOUSE_CODES_TO_NAMES
 from .proto import BaseEvent
+from .proto import SetKeyboardOutputEvent
+from .proto import SetMouseOutputEvent
 from .proto import ClearEvent
 from .proto import KeyEvent
 from .proto import MouseButtonEvent
@@ -164,24 +168,24 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
         keyboard_outputs: Dict = {"available": {}, "active": ""}
         mouse_outputs: Dict = {"available": {}, "active": ""}
+
         if outputs & 0b10000000:  # Dynamic
             if features & 0b00000001:  # USB
                 keyboard_outputs["available"]["usb"] = {"name": "USB"}
-                mouse_outputs["available"]["usb_abs"] = {"name": "USB", "absolute": True}
+                mouse_outputs["available"]["usb"] = {"name": "USB", "absolute": True}
                 mouse_outputs["available"]["usb_rel"] = {"name": "USB Relative", "absolute": False}
+
             if features & 0b00000010:  # PS/2
                 keyboard_outputs["available"]["ps2"] = {"name": "PS/2"}
                 mouse_outputs["available"]["ps2"] = {"name": "PS/2"}
 
-            keyboard_outputs["active"] = {
-                0b00000001: "usb",
-                0b00000011: "ps2",
-            }.get(outputs & 0b00000111, "")
-            mouse_outputs["active"] = {
-                0b00001000: "usb_abs",
-                0b00010000: "usb_rel",
-                0b00011000: "ps2",
-            }.get(outputs & 0b00111000, "")
+            active = KEYBOARD_CODES_TO_NAMES.get(outputs & 0b00000111, "")
+            if active in keyboard_outputs["available"]:
+                keyboard_outputs["active"] = active
+
+            active = MOUSE_CODES_TO_NAMES.get(outputs & 0b00111000, "")
+            if active in mouse_outputs["available"]:
+                mouse_outputs["active"] = active
 
         return {
             "online": online,
@@ -251,10 +255,18 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         self.__queue_event(MouseWheelEvent(delta_x, delta_y))
 
-    def clear_events(self) -> None:
+    def set_keyboard_output(self, output: str) -> None:
         # FIXME: Если очистка производится со стороны процесса хида, то возможна гонка между
-        # очисткой и добавлением события _ClearEvent. Неприятно, но не смертельно.
+        # очисткой и добавлением нового события. Неприятно, но не смертельно.
         # Починить блокировкой после перехода на асинхронные очереди.
+        tools.clear_queue(self.__events_queue)
+        self.__queue_event(SetKeyboardOutputEvent(output))
+
+    def set_mouse_output(self, output: str) -> None:
+        tools.clear_queue(self.__events_queue)
+        self.__queue_event(SetMouseOutputEvent(output))
+
+    def clear_events(self) -> None:
         tools.clear_queue(self.__events_queue)
         self.__queue_event(ClearEvent())
 

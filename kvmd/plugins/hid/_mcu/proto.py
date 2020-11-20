@@ -32,6 +32,44 @@ class BaseEvent:
         raise NotImplementedError
 
 
+KEYBOARD_NAMES_TO_CODES = {
+    "usb": 0b00000001,
+    "ps2": 0b00000011,
+}
+KEYBOARD_CODES_TO_NAMES = {value: key for (key, value) in KEYBOARD_NAMES_TO_CODES.items()}
+
+
+@dataclasses.dataclass(frozen=True)
+class SetKeyboardOutputEvent(BaseEvent):
+    keyboard: str
+
+    def __post_init__(self) -> None:
+        assert not self.keyboard or self.keyboard in KEYBOARD_NAMES_TO_CODES
+
+    def make_request(self) -> bytes:
+        code = KEYBOARD_NAMES_TO_CODES.get(self.keyboard, 0)
+        return _make_request(struct.pack(">BBxxx", 0x03, code))
+
+
+MOUSE_NAMES_TO_CODES = {
+    "usb":     0b00001000,
+    "usb_rel": 0b00010000,
+    "ps2":     0b00011000,
+}
+MOUSE_CODES_TO_NAMES = {value: key for (key, value) in MOUSE_NAMES_TO_CODES.items()}
+
+
+@dataclasses.dataclass(frozen=True)
+class SetMouseOutputEvent(BaseEvent):
+    mouse: str
+
+    def __post_init__(self) -> None:
+        assert not self.mouse or self.mouse in MOUSE_NAMES_TO_CODES
+
+    def make_request(self) -> bytes:
+        return _make_request(struct.pack(">BBxxx", 0x04, MOUSE_NAMES_TO_CODES.get(self.mouse, 0)))
+
+
 class ClearEvent(BaseEvent):
     def make_request(self) -> bytes:
         return _make_request(b"\x10\x00\x00\x00\x00")

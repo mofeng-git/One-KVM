@@ -55,45 +55,58 @@ static Ps2Keyboard *_ps2_kbd = NULL;
 #ifdef HID_DYNAMIC
 static bool _reset_required = false;
 
-static void _setOutputs(uint8_t outputs) {
+static int _readOutputs(void) {
+	uint8_t data[8];
+	eeprom_read_block(data, 0, 8);
+	if (data[0] != PROTO::MAGIC || PROTO::crc16(data, 6) != PROTO::merge8(data[6], data[7])) {
+		return -1;
+	}
+	return data[1];
+}
+
+static void _writeOutputs(uint8_t mask, uint8_t outputs, bool force) {
+	int old = 0;
+	if (!force) {
+		old = _readOutputs();
+		if (old < 0) {
+			old = 0;
+		}
+	}
 	uint8_t data[8] = {0};
 	data[0] = PROTO::MAGIC;
-	data[1] = outputs;
+	data[1] = (old & ~mask) | outputs;
 	PROTO::split16(PROTO::crc16(data, 6), &data[6], &data[7]);
 	eeprom_update_block(data, 0, 8);
 }
 #endif
 
 static void _initOutputs() {
-	uint8_t data[8];
+	int outputs;
 #	ifdef HID_DYNAMIC
-	eeprom_read_block(data, 0, 8);
-	if (
-		PROTO::crc16(data, 6) != PROTO::merge8(data[6], data[7])
-		|| data[0] != PROTO::MAGIC
-	) {
+	outputs = _readOutputs();
+	if (outputs < 0) {
 #	endif
-		data[1] = 0;
+		outputs = 0;
 
 #	if defined(HID_WITH_USB) && defined(HID_SET_USB_KBD)
-		data[1] |= PROTO::OUTPUTS::KEYBOARD::USB;
+		outputs |= PROTO::OUTPUTS::KEYBOARD::USB;
 #	elif defined(HID_WITH_PS2) && defined(HID_SET_PS2_KBD)
-		data[1] |= PROTO::OUTPUTS::KEYBOARD::PS2;
+		outputs |= PROTO::OUTPUTS::KEYBOARD::PS2;
 #	endif
 #	if defined(HID_WITH_USB) && defined(HID_SET_USB_MOUSE_ABS)
-		data[1] |= PROTO::OUTPUTS::MOUSE::USB_ABS;
+		outputs |= PROTO::OUTPUTS::MOUSE::USB_ABS;
 #	elif defined(HID_WITH_USB) && defined(HID_SET_USB_MOUSE_REL)
-		data[1] |= PROTO::OUTPUTS::MOUSE::USB_REL;
+		outputs |= PROTO::OUTPUTS::MOUSE::USB_REL;
 #	elif defined(HID_WITH_PS2) && defined(HID_SET_PS2_MOUSE)
-		data[1] |= PROTO::OUTPUTS::MOUSE::PS2;
+		outputs |= PROTO::OUTPUTS::MOUSE::PS2;
 #	endif
 
 #	ifdef HID_DYNAMIC
-		_setOutputs(data[1]);
+		_writeOutputs(0xFF, outputs, true);
 	}
 #	endif
 
-	uint8_t kbd = data[1] & PROTO::OUTPUTS::KEYBOARD::MASK;
+	uint8_t kbd = outputs & PROTO::OUTPUTS::KEYBOARD::MASK;
 	switch (kbd) {
 #	ifdef HID_WITH_USB
 		case PROTO::OUTPUTS::KEYBOARD::USB: _usb_kbd = new UsbKeyboard(); break;
@@ -103,7 +116,7 @@ static void _initOutputs() {
 #	endif
 	}
 
-	uint8_t mouse = data[1] & PROTO::OUTPUTS::MOUSE::MASK;
+	uint8_t mouse = outputs & PROTO::OUTPUTS::MOUSE::MASK;
 	switch (mouse) {
 #	ifdef HID_WITH_USB
 		case PROTO::OUTPUTS::MOUSE::USB_ABS: _usb_mouse_abs = new UsbMouseAbsolute(); break;
@@ -132,9 +145,16 @@ static void _initOutputs() {
 
 
 // -----------------------------------------------------------------------------
-static void _cmdSetOutputs(const uint8_t *data) { // 1 bytes
+static void _cmdSetKeyboard(const uint8_t *data) { // 1 bytes
 #	ifdef HID_DYNAMIC
-	_setOutputs(data[0]);
+	_writeOutputs(PROTO::OUTPUTS::KEYBOARD::MASK, data[0], false);
+	_reset_required = true;
+#	endif
+}
+
+static void _cmdSetMouse(const uint8_t *data) { // 1 bytes
+#	ifdef HID_DYNAMIC
+	_writeOutputs(PROTO::OUTPUTS::KEYBOARD::MASK, data[0], false);
 	_reset_required = true;
 #	endif
 }
@@ -209,7 +229,8 @@ static uint8_t _handleRequest(const uint8_t *data) { // 8 bytes
 #		define HANDLE(_handler) { _handler(data + 2); return PROTO::PONG::OK; }
 		switch (data[1]) {
 			case PROTO::CMD::PING:				return PROTO::PONG::OK;
-			case PROTO::CMD::SET_OUTPUTS:		HANDLE(_cmdSetOutputs);
+			case PROTO::CMD::SET_KEYBOARD:		HANDLE(_cmdSetKeyboard);
+			case PROTO::CMD::SET_MOUSE:			HANDLE(_cmdSetMouse);
 			case PROTO::CMD::CLEAR_HID:			HANDLE(_cmdClearHid);
 			case PROTO::CMD::KEYBOARD::KEY:		HANDLE(_cmdKeyEvent);
 			case PROTO::CMD::MOUSE::BUTTON:		HANDLE(_cmdMouseButtonEvent);
