@@ -25,6 +25,8 @@ import struct
 
 from ....keyboard.mappings import KEYMAP
 
+from .... import tools
+
 
 # =====
 class BaseEvent:
@@ -32,11 +34,16 @@ class BaseEvent:
         raise NotImplementedError
 
 
-KEYBOARD_NAMES_TO_CODES = {
+# =====
+_KEYBOARD_NAMES_TO_CODES = {
     "usb": 0b00000001,
     "ps2": 0b00000011,
 }
-KEYBOARD_CODES_TO_NAMES = {value: key for (key, value) in KEYBOARD_NAMES_TO_CODES.items()}
+_KEYBOARD_CODES_TO_NAMES = tools.swapped_kvs(_KEYBOARD_NAMES_TO_CODES)
+
+
+def get_active_keyboard(outputs: int) -> str:
+    return _KEYBOARD_CODES_TO_NAMES.get(outputs & 0b00000111, "")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -44,19 +51,24 @@ class SetKeyboardOutputEvent(BaseEvent):
     keyboard: str
 
     def __post_init__(self) -> None:
-        assert not self.keyboard or self.keyboard in KEYBOARD_NAMES_TO_CODES
+        assert not self.keyboard or self.keyboard in _KEYBOARD_NAMES_TO_CODES
 
     def make_request(self) -> bytes:
-        code = KEYBOARD_NAMES_TO_CODES.get(self.keyboard, 0)
+        code = _KEYBOARD_NAMES_TO_CODES.get(self.keyboard, 0)
         return _make_request(struct.pack(">BBxxx", 0x03, code))
 
 
-MOUSE_NAMES_TO_CODES = {
+# =====
+_MOUSE_NAMES_TO_CODES = {
     "usb":     0b00001000,
     "usb_rel": 0b00010000,
     "ps2":     0b00011000,
 }
-MOUSE_CODES_TO_NAMES = {value: key for (key, value) in MOUSE_NAMES_TO_CODES.items()}
+_MOUSE_CODES_TO_NAMES = tools.swapped_kvs(_MOUSE_NAMES_TO_CODES)
+
+
+def get_active_mouse(outputs: int) -> str:
+    return _MOUSE_CODES_TO_NAMES.get(outputs & 0b00111000, "")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -64,12 +76,13 @@ class SetMouseOutputEvent(BaseEvent):
     mouse: str
 
     def __post_init__(self) -> None:
-        assert not self.mouse or self.mouse in MOUSE_NAMES_TO_CODES
+        assert not self.mouse or self.mouse in _MOUSE_NAMES_TO_CODES
 
     def make_request(self) -> bytes:
-        return _make_request(struct.pack(">BBxxx", 0x04, MOUSE_NAMES_TO_CODES.get(self.mouse, 0)))
+        return _make_request(struct.pack(">BBxxx", 0x04, _MOUSE_NAMES_TO_CODES.get(self.mouse, 0)))
 
 
+# =====
 class ClearEvent(BaseEvent):
     def make_request(self) -> bytes:
         return _make_request(b"\x10\x00\x00\x00\x00")

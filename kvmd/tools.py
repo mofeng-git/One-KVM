@@ -57,6 +57,10 @@ def sorted_kvs(dct: Dict[_DictKeyT, _DictValueT]) -> List[Tuple[_DictKeyT, _Dict
     return sorted(dct.items(), key=operator.itemgetter(0))
 
 
+def swapped_kvs(dct: Dict[_DictKeyT, _DictValueT]) -> Dict[_DictValueT, _DictKeyT]:
+    return {value: key for (key, value) in dct.items()}
+
+
 # =====
 def clear_queue(q: multiprocessing.queues.Queue) -> None:  # pylint: disable=invalid-name
     for _ in range(q.qsize()):

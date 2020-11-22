@@ -55,8 +55,6 @@ from .gpio import Gpio
 from .proto import REQUEST_PING
 from .proto import REQUEST_REPEAT
 from .proto import RESPONSE_LEGACY_OK
-from .proto import KEYBOARD_CODES_TO_NAMES
-from .proto import MOUSE_CODES_TO_NAMES
 from .proto import BaseEvent
 from .proto import SetKeyboardOutputEvent
 from .proto import SetMouseOutputEvent
@@ -66,6 +64,8 @@ from .proto import MouseButtonEvent
 from .proto import MouseMoveEvent
 from .proto import MouseRelativeEvent
 from .proto import MouseWheelEvent
+from .proto import get_active_keyboard
+from .proto import get_active_mouse
 from .proto import check_response
 
 
@@ -163,7 +163,8 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         features = state["status"] & 0xFF
 
         absolute = True
-        if online and (outputs & 0b00111000) in [0b00010000, 0b00011000]:
+        active_mouse = get_active_mouse(outputs)
+        if online and active_mouse in ["usb_rel", "ps2"]:
             absolute = False
 
         keyboard_outputs: Dict = {"available": {}, "active": ""}
@@ -179,13 +180,12 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 keyboard_outputs["available"]["ps2"] = {"name": "PS/2"}
                 mouse_outputs["available"]["ps2"] = {"name": "PS/2"}
 
-            active = KEYBOARD_CODES_TO_NAMES.get(outputs & 0b00000111, "")
-            if active in keyboard_outputs["available"]:
-                keyboard_outputs["active"] = active
+            active_keyboard = get_active_keyboard(outputs)
+            if active_keyboard in keyboard_outputs["available"]:
+                keyboard_outputs["active"] = active_keyboard
 
-            active = MOUSE_CODES_TO_NAMES.get(outputs & 0b00111000, "")
-            if active in mouse_outputs["available"]:
-                mouse_outputs["active"] = active
+            if active_mouse in mouse_outputs["available"]:
+                mouse_outputs["active"] = active_mouse
 
         return {
             "online": online,
