@@ -25,8 +25,6 @@ from typing import Set
 from typing import Optional
 from typing import Any
 
-from ..keyboard.mappings import KEYMAP
-
 from . import raise_error
 from . import check_string_in_list
 from . import check_re_match
@@ -80,33 +78,6 @@ def valid_stream_resolution(arg: Any) -> str:
     width = int(valid_number(parts[0], min=1, name=f"{name} (width)"))
     height = int(valid_number(parts[1], min=1, name=f"{name} (height)"))
     return f"{width}x{height}"
-
-
-# =====
-def valid_hid_keyboard_output(arg: Any) -> str:
-    return check_string_in_list(arg, "Keyboard output", ["usb", "ps2", ""])
-
-
-def valid_hid_mouse_output(arg: Any) -> str:
-    return check_string_in_list(arg, "Mouse output", ["usb", "usb_rel", "ps2", ""])
-
-
-def valid_hid_key(arg: Any) -> str:
-    return check_string_in_list(arg, "HID key", KEYMAP, lower=False)
-
-
-def valid_hid_mouse_move(arg: Any) -> int:
-    arg = valid_number(arg, name="HID mouse move")
-    return min(max(-32768, arg), 32767)
-
-
-def valid_hid_mouse_button(arg: Any) -> str:
-    return check_string_in_list(arg, "HID mouse button", ["left", "right", "middle", "up", "down"])
-
-
-def valid_hid_mouse_delta(arg: Any) -> int:
-    arg = valid_number(arg, name="HID mouse delta")
-    return min(max(-127, arg), 127)
 
 
 # =====

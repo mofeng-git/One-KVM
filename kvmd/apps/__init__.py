@@ -84,11 +84,12 @@ from ..validators.net import valid_ports_list
 from ..validators.net import valid_mac
 from ..validators.net import valid_ssl_ciphers
 
+from ..validators.hid import valid_hid_key
+from ..validators.hid import valid_hid_mouse_move
+
 from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
 from ..validators.kvm import valid_stream_resolution
-from ..validators.kvm import valid_hid_key
-from ..validators.kvm import valid_hid_mouse_move
 from ..validators.kvm import valid_ugpio_driver
 from ..validators.kvm import valid_ugpio_channel
 from ..validators.kvm import valid_ugpio_mode
