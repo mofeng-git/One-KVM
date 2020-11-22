@@ -256,22 +256,21 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         self.__queue_event(MouseWheelEvent(delta_x, delta_y))
 
     def set_keyboard_output(self, output: str) -> None:
-        # FIXME: Если очистка производится со стороны процесса хида, то возможна гонка между
-        # очисткой и добавлением нового события. Неприятно, но не смертельно.
-        # Починить блокировкой после перехода на асинхронные очереди.
-        tools.clear_queue(self.__events_queue)
-        self.__queue_event(SetKeyboardOutputEvent(output))
+        self.__queue_event(SetKeyboardOutputEvent(output), clear=True)
 
     def set_mouse_output(self, output: str) -> None:
-        tools.clear_queue(self.__events_queue)
-        self.__queue_event(SetMouseOutputEvent(output))
+        self.__queue_event(SetMouseOutputEvent(output), clear=True)
 
     def clear_events(self) -> None:
-        tools.clear_queue(self.__events_queue)
-        self.__queue_event(ClearEvent())
+        self.__queue_event(ClearEvent(), clear=True)
 
-    def __queue_event(self, event: BaseEvent) -> None:
+    def __queue_event(self, event: BaseEvent, clear: bool=False) -> None:
         if not self.__stop_event.is_set():
+            if clear:
+                # FIXME: Если очистка производится со стороны процесса хида, то возможна гонка между
+                # очисткой и добавлением нового события. Неприятно, но не смертельно.
+                # Починить блокировкой после перехода на асинхронные очереди.
+                tools.clear_queue(self.__events_queue)
             self.__events_queue.put_nowait(event)
 
     def run(self) -> None:  # pylint: disable=too-many-branches
