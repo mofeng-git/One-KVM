@@ -20,51 +20,37 @@
 # ========================================================================== #
 
 
-import operator
-import functools
-import multiprocessing.queues
-import queue
+from typing import Any
 
-from typing import Tuple
-from typing import List
-from typing import Dict
-from typing import Hashable
-from typing import TypeVar
+from ..keyboard.mappings import KEYMAP
+
+from . import check_string_in_list
+
+from .basic import valid_number
 
 
 # =====
-def merge(dest: Dict, src: Dict) -> None:
-    for key in src:
-        if key in dest:
-            if isinstance(dest[key], dict) and isinstance(src[key], dict):
-                merge(dest[key], src[key])
-                continue
-        dest[key] = src[key]
+def valid_hid_keyboard_output(arg: Any) -> str:
+    return check_string_in_list(arg, "Keyboard output", ["usb", "ps2", ""])
 
 
-def rget(dct: Dict, *keys: Hashable) -> Dict:
-    result = functools.reduce((lambda nxt, key: nxt.get(key, {})), keys, dct)
-    if not isinstance(result, dict):
-        raise TypeError(f"Not a dict as result: {result!r} from {dct!r} at {list(keys)}")
-    return result
+def valid_hid_mouse_output(arg: Any) -> str:
+    return check_string_in_list(arg, "Mouse output", ["usb", "usb_rel", "ps2", ""])
 
 
-_DictKeyT = TypeVar("_DictKeyT")
-_DictValueT = TypeVar("_DictValueT")
+def valid_hid_key(arg: Any) -> str:
+    return check_string_in_list(arg, "Keyboard key", KEYMAP, lower=False)
 
 
-def sorted_kvs(dct: Dict[_DictKeyT, _DictValueT]) -> List[Tuple[_DictKeyT, _DictValueT]]:
-    return sorted(dct.items(), key=operator.itemgetter(0))
+def valid_hid_mouse_move(arg: Any) -> int:
+    arg = valid_number(arg, name="Mouse move")
+    return min(max(-32768, arg), 32767)
 
 
-def swapped_kvs(dct: Dict[_DictKeyT, _DictValueT]) -> Dict[_DictValueT, _DictKeyT]:
-    return {value: key for (key, value) in dct.items()}
+def valid_hid_mouse_button(arg: Any) -> str:
+    return check_string_in_list(arg, "Mouse button", ["left", "right", "middle", "up", "down"])
 
 
-# =====
-def clear_queue(q: multiprocessing.queues.Queue) -> None:  # pylint: disable=invalid-name
-    for _ in range(q.qsize()):
-        try:
-            q.get_nowait()
-        except queue.Empty:
-            break
+def valid_hid_mouse_delta(arg: Any) -> int:
+    arg = valid_number(arg, name="Mouse delta")
+    return min(max(-127, arg), 127)

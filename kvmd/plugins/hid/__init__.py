@@ -57,13 +57,21 @@ class BaseHid(BasePlugin):
         raise NotImplementedError
 
     def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        raise NotImplementedError
+        _ = to_x
+        _ = to_y
 
     def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
-        raise NotImplementedError
+        _ = delta_x
+        _ = delta_y
 
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         raise NotImplementedError
+
+    def set_keyboard_output(self, output: str) -> None:
+        _ = output
+
+    def set_mouse_output(self, output: str) -> None:
+        _ = output
 
     def clear_events(self) -> None:
         raise NotImplementedError

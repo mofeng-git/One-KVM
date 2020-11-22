@@ -67,7 +67,7 @@ class _SpiPhyConnection(BasePhyConnection):
         assert request[0] == 0x33
 
         deadline_ts = time.monotonic() + self.__read_timeout
-        dummy = b"\x00" * 8
+        dummy = b"\x00" * 10
         while time.monotonic() < deadline_ts:
             if bytes(self.__xfer(dummy)) == dummy:
                 break
@@ -81,15 +81,15 @@ class _SpiPhyConnection(BasePhyConnection):
         deadline_ts = time.monotonic() + self.__read_timeout
         found = False
         while time.monotonic() < deadline_ts:
-            for byte in self.__xfer(b"\x00" * (5 - len(response))):
+            for byte in self.__xfer(b"\x00" * (9 - len(response))):
                 if not found:
-                    if byte != 0x33:
+                    if byte == 0:
                         continue
                     found = True
                 response.append(byte)
-                if len(response) == 4:
+                if len(response) == 8:
                     break
-            if len(response) == 4:
+            if len(response) == 8:
                 break
         else:
             get_logger(0).error("SPI timeout reached while responce waiting")

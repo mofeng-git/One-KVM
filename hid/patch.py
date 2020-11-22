@@ -33,10 +33,11 @@ def _patch(path: str, patch_path: str) -> None:
 
 
 # =====
-_patch(_get_pkg_path("framework-arduino-avr"), "patches/optional-serial.patch")
+_patch(_get_pkg_path("framework-arduino-avr"), "patches/no-main.patch")
+_patch(_get_pkg_path("framework-arduino-avr"), "patches/optional-usb-serial.patch")
 _patch(_get_pkg_path("framework-arduino-avr"), "patches/get-plugged-endpoint.patch")
 
 _libs = _get_libs()
-if "HID-Project" in _libs:
-    _patch(_libs["HID-Project"], "patches/absmouse.patch")
-    _patch(_libs["HID-Project"], "patches/shut-up.patch")
+_patch(_libs["HID-Project"], "patches/shut-up.patch")
+_patch(_libs["HID-Project"], "patches/no-hid-singletones.patch")
+_patch(_libs["HID-Project"], "patches/absmouse-win-fix.patch")

@@ -38,10 +38,12 @@ from ....validators import raise_error
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_int_f0
 from ....validators.os import valid_printable_filename
-from ....validators.kvm import valid_hid_key
-from ....validators.kvm import valid_hid_mouse_move
-from ....validators.kvm import valid_hid_mouse_button
-from ....validators.kvm import valid_hid_mouse_delta
+from ....validators.hid import valid_hid_keyboard_output
+from ....validators.hid import valid_hid_mouse_output
+from ....validators.hid import valid_hid_key
+from ....validators.hid import valid_hid_mouse_move
+from ....validators.hid import valid_hid_mouse_button
+from ....validators.hid import valid_hid_mouse_delta
 
 from ....keyboard.keysym import build_symmap
 from ....keyboard.printer import text_to_web_keys
@@ -66,6 +68,16 @@ class HidApi:
     @exposed_http("GET", "/hid")
     async def __state_handler(self, _: Request) -> Response:
         return make_json_response(await self.__hid.get_state())
+
+    @exposed_http("POST", "/hid/keyboard/set_params")
+    async def __keyboard_set_params_handler(self, request: Request) -> Response:
+        self.__hid.set_keyboard_output(valid_hid_keyboard_output(request.query.get("output")))
+        return make_json_response()
+
+    @exposed_http("POST", "/hid/mouse/set_params")
+    async def __mouse_set_params_handler(self, request: Request) -> Response:
+        self.__hid.set_mouse_output(valid_hid_mouse_output(request.query.get("output")))
+        return make_json_response()
 
     @exposed_http("POST", "/hid/reset")
     async def __reset_handler(self, _: Request) -> Response:

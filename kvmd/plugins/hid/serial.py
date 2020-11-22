@@ -51,7 +51,10 @@ class _SerialPhyConnection(BasePhyConnection):
         if self.__tty.in_waiting:
             self.__tty.read_all()
         assert self.__tty.write(request) == 8
-        return self.__tty.read(4)
+        data = self.__tty.read(4)
+        if data[0] == 0x34:  # New response protocol
+            data += self.__tty.read(4)
+        return data
 
 
 class _SerialPhy(BasePhy):

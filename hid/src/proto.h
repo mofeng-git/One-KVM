@@ -25,7 +25,6 @@
 
 namespace PROTO {
 	const uint8_t MAGIC			= 0x33;
-	const uint16_t CRC_POLINOM	= 0xA001;
 
 	namespace RESP { // Plain responses
 		// const uint8_t OK =			0x20; // Legacy
@@ -36,27 +35,51 @@ namespace PROTO {
 	};
 
 	namespace PONG { // Complex response
-		const uint8_t PREFIX =				0x80;
+		const uint8_t OK =					0x80;
 		const uint8_t CAPS =				0b00000001;
 		const uint8_t SCROLL =				0b00000010;
 		const uint8_t NUM =					0b00000100;
 		const uint8_t KEYBOARD_OFFLINE =	0b00001000;
 		const uint8_t MOUSE_OFFLINE =		0b00010000;
+		const uint8_t RESET_REQUIRED =		0b01000000;
 	};
 
+	namespace OUTPUTS { // Complex request/responce flags
+		const uint8_t DYNAMIC =		0b10000000;
+		namespace KEYBOARD {
+			const uint8_t MASK =	0b00000111;
+			const uint8_t USB =		0b00000001;
+			const uint8_t PS2 =		0b00000011;
+		};
+		namespace MOUSE {
+			const uint8_t MASK =	0b00111000;
+			const uint8_t USB_ABS =	0b00001000;
+			const uint8_t USB_REL =	0b00010000;
+			const uint8_t PS2 =		0b00011000;
+		};
+	};
+
+	namespace FEATURES {
+		const uint8_t HAS_USB =	0b00000001;
+		const uint8_t HAS_PS2 =	0b00000010;
+	}
+
 	namespace CMD {
-		const uint8_t PING =		0x01;
-		const uint8_t REPEAT =		0x02;
-		const uint8_t RESET_HID =	0x10;
+		const uint8_t PING =			0x01;
+		const uint8_t REPEAT =			0x02;
+		const uint8_t SET_KEYBOARD =	0x03;
+		const uint8_t SET_MOUSE =		0x04;
+		const uint8_t CLEAR_HID =		0x10;
 
 		namespace KEYBOARD {
 			const uint8_t KEY =	0x11;
 		};
 
 		namespace MOUSE {
-			const uint8_t MOVE =	0x12;
-			const uint8_t BUTTON =	0x13;
-			const uint8_t WHEEL =	0x14;
+			const uint8_t MOVE =		0x12;
+			const uint8_t BUTTON =		0x13;
+			const uint8_t WHEEL =		0x14;
+			const uint8_t RELATIVE =	0x15;
 			namespace LEFT {
 				const uint8_t SELECT =	0b10000000;
 				const uint8_t STATE =	0b00001000;
@@ -79,22 +102,35 @@ namespace PROTO {
 			};
 		};
 	};
-};
 
+	uint16_t crc16(const uint8_t *buffer, unsigned length) {
+		const uint16_t polinom = 0xA001;
+		uint16_t crc = 0xFFFF;
 
-uint16_t protoCrc16(const uint8_t *buffer, unsigned length) {
-	uint16_t crc = 0xFFFF;
-
-	for (unsigned byte_count = 0; byte_count < length; ++byte_count) {
-		crc = crc ^ buffer[byte_count];
-		for (unsigned bit_count = 0; bit_count < 8; ++bit_count) {
-			if ((crc & 0x0001) == 0) {
-				crc = crc >> 1;
-			} else {
-				crc = crc >> 1;
-				crc = crc ^ PROTO::CRC_POLINOM;
+		for (unsigned byte_count = 0; byte_count < length; ++byte_count) {
+			crc = crc ^ buffer[byte_count];
+			for (unsigned bit_count = 0; bit_count < 8; ++bit_count) {
+				if ((crc & 0x0001) == 0) {
+					crc = crc >> 1;
+				} else {
+					crc = crc >> 1;
+					crc = crc ^ polinom;
+				}
 			}
 		}
+		return crc;
 	}
-	return crc;
-}
+
+	inline int merge8_int(uint8_t from_a, uint8_t from_b) {
+		return (((int)from_a << 8) | (int)from_b);
+	}
+
+	inline uint16_t merge8(uint8_t from_a, uint8_t from_b) {
+		return (((uint16_t)from_a << 8) | (uint16_t)from_b);
+	}
+
+	inline void split16(uint16_t from, uint8_t *to_a, uint8_t *to_b) {
+		*to_a = (uint8_t)(from >> 8);
+		*to_b = (uint8_t)(from & 0xFF);
+	}
+};

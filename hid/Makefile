@@ -1,15 +1,7 @@
-usb:
-	make _build E=usb
-ps2:
-	make _build E=ps2
-mixed:
-	make _build E=mixed
-usb-spi:
-	make _build E=usb_spi
-ps2-spi:
-	make _build E=ps2_spi
-mixed-spi:
-	make _build E=mixed_spi
+serial:
+	make _build E=serial
+spi:
+	make _build E=spi
 _build:
 	rm -f .current
 	platformio run --environment $(E)
