@@ -20,6 +20,10 @@
 # ========================================================================== #
 
 
+import types
+import time
+
+from typing import Type
 from typing import Optional
 
 import gpiod
@@ -27,8 +31,6 @@ import gpiod
 from ....logging import get_logger
 
 from .... import env
-from .... import aiotools
-from .... import aiogp
 
 
 # =====
@@ -46,9 +48,8 @@ class Gpio:
 
         self.__chip: Optional[gpiod.Chip] = None
         self.__reset_line: Optional[gpiod.Line] = None
-        self.__reset_wip = False
 
-    def open(self) -> None:
+    def __enter__(self) -> None:
         if self.__reset_pin >= 0:
             assert self.__chip is None
             assert self.__reset_line is None
@@ -56,23 +57,28 @@ class Gpio:
             self.__reset_line = self.__chip.get_line(self.__reset_pin)
             self.__reset_line.request("kvmd::hid::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[int(self.__reset_inverted)])
 
-    def close(self) -> None:
+    def __exit__(
+        self,
+        _exc_type: Type[BaseException],
+        _exc: BaseException,
+        _tb: types.TracebackType,
+    ) -> None:
+
         if self.__chip:
             try:
                 self.__chip.close()
             except Exception:
                 pass
+            self.__reset_line = None
+            self.__chip = None
 
-    @aiotools.atomic
-    async def reset(self) -> None:
+    def reset(self) -> None:
         if self.__reset_pin >= 0:
             assert self.__reset_line
-            if not self.__reset_wip:
-                self.__reset_wip = True
-                try:
-                    await aiogp.pulse(self.__reset_line, self.__reset_delay, 1, self.__reset_inverted)
-                finally:
-                    self.__reset_wip = False
-                get_logger(0).info("Reset HID performed")
-            else:
-                get_logger(0).info("Another reset HID in progress")
+            try:
+                self.__reset_line.set_value(int(not self.__reset_inverted))
+                time.sleep(self.__reset_delay)
+            finally:
+                self.__reset_line.set_value(int(self.__reset_inverted))
+                time.sleep(1)
+            get_logger(0).info("Reset HID performed")

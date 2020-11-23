@@ -55,6 +55,7 @@ from .gpio import Gpio
 from .proto import REQUEST_PING
 from .proto import REQUEST_REPEAT
 from .proto import RESPONSE_LEGACY_OK
+
 from .proto import BaseEvent
 from .proto import SetKeyboardOutputEvent
 from .proto import SetMouseOutputEvent
@@ -64,6 +65,7 @@ from .proto import MouseButtonEvent
 from .proto import MouseMoveEvent
 from .proto import MouseRelativeEvent
 from .proto import MouseWheelEvent
+
 from .proto import get_active_keyboard
 from .proto import get_active_mouse
 from .proto import check_response
@@ -82,6 +84,12 @@ class _PermRequestError(_RequestError):
 
 class _TempRequestError(_RequestError):
     pass
+
+
+# =====
+class _HardResetEvent(BaseEvent):
+    def make_request(self) -> bytes:
+        raise RuntimeError("Don't call me")
 
 
 # =====
@@ -151,7 +159,6 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         }
 
     def sysprep(self) -> None:
-        self.__gpio.open()
         get_logger(0).info("Starting HID daemon ...")
         self.start()
 
@@ -214,28 +221,16 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 prev_state = state
             await self.__notifier.wait()
 
-    @aiotools.atomic
     async def reset(self) -> None:
-        await self.__gpio.reset()
+        self.__queue_event(_HardResetEvent(), clear=True)
 
     @aiotools.atomic
     async def cleanup(self) -> None:
-        logger = get_logger(0)
-        try:
-            if self.is_alive():
-                logger.info("Stopping HID daemon ...")
-                self.__stop_event.set()
-            if self.exitcode is not None:
-                self.join()
-            if self.__phy.has_device():
-                get_logger().info("Clearing HID events ...")
-                try:
-                    with self.__phy.connected() as conn:
-                        self.__process_request(conn, ClearEvent().make_request())
-                except Exception:
-                    logger.exception("Can't clear HID events")
-        finally:
-            self.__gpio.close()
+        if self.is_alive():
+            get_logger(0).info("Stopping HID daemon ...")
+            self.__stop_event.set()
+        if self.exitcode is not None:
+            self.join()
 
     # =====
 
@@ -282,22 +277,42 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
         while not self.__stop_event.is_set():
             try:
-                if self.__phy.has_device():
-                    with self.__phy.connected() as conn:
-                        while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
-                            try:
-                                event = self.__events_queue.get(timeout=0.1)
-                            except queue.Empty:
-                                self.__process_request(conn, REQUEST_PING)
-                            else:
-                                if not self.__process_request(conn, event.make_request()):
-                                    self.clear_events()
-                else:
+                with self.__gpio:
+                    self.__hid_loop()
+                    if self.__phy.has_device():
+                        logger.info("Clearing HID events ...")
+                        try:
+                            with self.__phy.connected() as conn:
+                                self.__process_request(conn, ClearEvent().make_request())
+                        except Exception:
+                            logger.exception("Can't clear HID events")
+            except Exception:
+                logger.exception("Unexpected error in the GPIO loop")
+                time.sleep(1)
+
+    def __hid_loop(self) -> None:
+        logger = get_logger(0)
+        while not self.__stop_event.is_set():
+            try:
+                if not self.__phy.has_device():
                     logger.error("Missing HID device")
                     time.sleep(1)
+                    continue
+
+                with self.__phy.connected() as conn:
+                    while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
+                        try:
+                            event = self.__events_queue.get(timeout=0.1)
+                        except queue.Empty:
+                            self.__process_request(conn, REQUEST_PING)
+                        else:
+                            if isinstance(event, _HardResetEvent):
+                                self.__gpio.reset()
+                            elif not self.__process_request(conn, event.make_request()):
+                                self.clear_events()
             except Exception:
                 self.clear_events()
-                logger.exception("Unexpected HID error")
+                logger.exception("Unexpected error in the HID loop")
                 time.sleep(1)
 
     def __process_request(self, conn: BasePhyConnection, request: bytes) -> bool:  # pylint: disable=too-many-branches
@@ -373,3 +388,5 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         if len(response) > 4:
             status |= (response[2] << 8) | response[3]
         self.__state_flags.update(online=1, status=status)
+        if response[1] & 0b01000000:  # Reset required
+            self.__gpio.reset()
