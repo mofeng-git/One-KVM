@@ -20,45 +20,37 @@
 # ========================================================================== #
 
 
-from aiohttp.web import Request
-from aiohttp.web import Response
+from typing import List
+from typing import Set
+from typing import Optional
+from typing import Any
 
-from ....validators.basic import valid_bool
-from ....validators.basic import valid_float_f0
-from ....validators.ugpio import valid_ugpio_channel
-
-from ..ugpio import UserGpio
-
-from ..http import exposed_http
-from ..http import make_json_response
+from . import raise_error
+from . import check_string_in_list
+from . import check_re_match
+from . import check_len
 
 
 # =====
-class UserGpioApi:
-    def __init__(self, user_gpio: UserGpio) -> None:
-        self.__user_gpio = user_gpio
+def valid_ugpio_driver(arg: Any, variants: Optional[Set[str]]=None) -> str:
+    name = "GPIO driver"
+    arg = check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_-]*$"), name, 255)
+    if variants is not None:
+        arg = check_string_in_list(arg, f"configured {name}", variants, False)
+    return arg
 
-    # =====
 
-    @exposed_http("GET", "/gpio")
-    async def __state_handler(self, _: Request) -> Response:
-        return make_json_response({
-            "model": (await self.__user_gpio.get_model()),
-            "state": (await self.__user_gpio.get_state()),
-        })
+def valid_ugpio_channel(arg: Any) -> str:
+    name = "GPIO channel"
+    return check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_-]*$"), name, 255)
 
-    @exposed_http("POST", "/gpio/switch")
-    async def __switch_handler(self, request: Request) -> Response:
-        channel = valid_ugpio_channel(request.query.get("channel"))
-        state = valid_bool(request.query.get("state"))
-        wait = valid_bool(request.query.get("wait", "0"))
-        await self.__user_gpio.switch(channel, state, wait)
-        return make_json_response()
 
-    @exposed_http("POST", "/gpio/pulse")
-    async def __pulse_handler(self, request: Request) -> Response:
-        channel = valid_ugpio_channel(request.query.get("channel"))
-        delay = valid_float_f0(request.query.get("delay", "0"))
-        wait = valid_bool(request.query.get("wait", "0"))
-        await self.__user_gpio.pulse(channel, delay, wait)
-        return make_json_response()
+def valid_ugpio_mode(arg: Any, variants: Set[str]) -> str:
+    return check_string_in_list(arg, "GPIO driver's pin mode", variants)
+
+
+def valid_ugpio_view_table(arg: Any) -> List[List[str]]:
+    try:
+        return [list(map(str, row)) for row in list(arg)]
+    except Exception:
+        raise_error("<skipped>", "GPIO view table")

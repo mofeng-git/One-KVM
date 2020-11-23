@@ -20,15 +20,11 @@
 # ========================================================================== #
 
 
-from typing import List
 from typing import Set
-from typing import Optional
 from typing import Any
 
 from . import raise_error
 from . import check_string_in_list
-from . import check_re_match
-from . import check_len
 
 from .basic import valid_stripped_string_not_empty
 from .basic import valid_number
@@ -78,28 +74,3 @@ def valid_stream_resolution(arg: Any) -> str:
     width = int(valid_number(parts[0], min=1, name=f"{name} (width)"))
     height = int(valid_number(parts[1], min=1, name=f"{name} (height)"))
     return f"{width}x{height}"
-
-
-# =====
-def valid_ugpio_driver(arg: Any, variants: Optional[Set[str]]=None) -> str:
-    name = "GPIO driver"
-    arg = check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_-]*$"), name, 255)
-    if variants is not None:
-        arg = check_string_in_list(arg, f"configured {name}", variants, False)
-    return arg
-
-
-def valid_ugpio_channel(arg: Any) -> str:
-    name = "GPIO channel"
-    return check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_-]*$"), name, 255)
-
-
-def valid_ugpio_mode(arg: Any, variants: Set[str]) -> str:
-    return check_string_in_list(arg, "GPIO driver's pin mode", variants)
-
-
-def valid_ugpio_view_table(arg: Any) -> List[List[str]]:
-    try:
-        return [list(map(str, row)) for row in list(arg)]
-    except Exception:
-        raise_error("<skipped>", "GPIO view table")

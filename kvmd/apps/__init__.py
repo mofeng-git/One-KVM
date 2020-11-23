@@ -90,10 +90,11 @@ from ..validators.hid import valid_hid_mouse_move
 from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
 from ..validators.kvm import valid_stream_resolution
-from ..validators.kvm import valid_ugpio_driver
-from ..validators.kvm import valid_ugpio_channel
-from ..validators.kvm import valid_ugpio_mode
-from ..validators.kvm import valid_ugpio_view_table
+
+from ..validators.ugpio import valid_ugpio_driver
+from ..validators.ugpio import valid_ugpio_channel
+from ..validators.ugpio import valid_ugpio_mode
+from ..validators.ugpio import valid_ugpio_view_table
 
 from ..validators.hw import valid_tty_speed
 from ..validators.hw import valid_gpio_pin

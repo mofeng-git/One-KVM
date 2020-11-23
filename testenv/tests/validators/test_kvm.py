@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Callable
 from typing import Any
 
 import pytest
@@ -33,12 +32,6 @@ from kvmd.validators.kvm import valid_log_seek
 from kvmd.validators.kvm import valid_stream_quality
 from kvmd.validators.kvm import valid_stream_fps
 from kvmd.validators.kvm import valid_stream_resolution
-from kvmd.validators.kvm import valid_ugpio_driver
-from kvmd.validators.kvm import valid_ugpio_channel
-from kvmd.validators.kvm import valid_ugpio_mode
-from kvmd.validators.kvm import valid_ugpio_view_table
-
-from kvmd.plugins.ugpio import UserGpioModes
 
 
 # =====
@@ -133,83 +126,3 @@ def test_ok__valid_stream_resolution(arg: Any) -> None:
 def test_fail__valid_stream_resolution(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_stream_resolution(arg))
-
-
-# =====
-@pytest.mark.parametrize("validator", [valid_ugpio_driver, valid_ugpio_channel])
-@pytest.mark.parametrize("arg", [
-    "test-",
-    "glados",
-    "test",
-    "_",
-    "_foo_bar_",
-    " aix",
-    "a" * 255,
-])
-def test_ok__valid_ugpio_item(validator: Callable[[Any], str], arg: Any) -> None:
-    assert validator(arg) == arg.strip()
-
-
-@pytest.mark.parametrize("validator", [valid_ugpio_driver, valid_ugpio_channel])
-@pytest.mark.parametrize("arg", [
-    "тест",
-    "-molestia",
-    "te~st",
-    "-",
-    "-foo_bar",
-    "foo bar",
-    "a" * 256,
-    "  ",
-    "",
-    None,
-])
-def test_fail__valid_ugpio_item(validator: Callable[[Any], str], arg: Any) -> None:
-    with pytest.raises(ValidatorError):
-        print(validator(arg))
-
-
-# =====
-@pytest.mark.parametrize("arg", ["foo", " bar", " baz "])
-def test_ok__valid_ugpio_driver_variants(arg: Any) -> None:
-    value = valid_ugpio_driver(arg, set(["foo", "bar", "baz"]))
-    assert type(value) == str  # pylint: disable=unidiomatic-typecheck
-    assert value == str(arg).strip()
-
-
-@pytest.mark.parametrize("arg", ["BAR", " ", "", None])
-def test_fail__valid_ugpio_driver_variants(arg: Any) -> None:
-    with pytest.raises(ValidatorError):
-        print(valid_ugpio_driver(arg, set(["foo", "bar", "baz"])))
-
-
-# =====
-@pytest.mark.parametrize("arg", ["Input ", " OUTPUT "])
-def test_ok__valid_ugpio_mode(arg: Any) -> None:
-    assert valid_ugpio_mode(arg, UserGpioModes.ALL) == arg.strip().lower()
-
-
-@pytest.mark.parametrize("arg", ["test", "", None])
-def test_fail__valid_ugpio_mode(arg: Any) -> None:
-    with pytest.raises(ValidatorError):
-        print(valid_ugpio_mode(arg, UserGpioModes.ALL))
-
-
-# =====
-@pytest.mark.parametrize("arg,retval", [
-    ([],                     []),
-    ({},                     []),
-    ([[]],                   [[]]),
-    ([{}],                   [[]]),
-    ([[[]]],                 [["[]"]]),
-    ("",                     []),
-    ("ab",                   [["a"], ["b"]]),
-    ([[1, 2], [None], "ab", {}, [3, 4]],   [["1", "2"], ["None"], ["a", "b"], [], ["3", "4"]]),
-])
-def test_ok__valid_ugpio_view_table(arg: Any, retval: Any) -> None:
-    assert valid_ugpio_view_table(arg) == retval
-
-
-@pytest.mark.parametrize("arg", [None, [None], 1])
-def test_fail__valid_ugpio_view_table(arg: Any) -> None:
-    with pytest.raises(ValidatorError):
-        print(valid_ugpio_view_table(arg))
