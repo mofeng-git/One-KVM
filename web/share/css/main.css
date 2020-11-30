@@ -215,15 +215,20 @@ div.buttons-row {
 	display: inline-block;
 	width: 50%;
 }
+.row33 {
+	display: inline-block;
+	width: 33.33%;
+}
 .row25 {
 	display: inline-block;
 	width: 25%;
 }
 .row16 {
 	display: inline-block;
-	width: 16.66%
+	width: 16.66%;
 }
 .row50:not(:first-child),
+.row33:not(:first-child),
 .row25:not(:first-child),
 .row16:not(:first-child) {
 	border-top-left-radius: 0;
@@ -231,6 +236,7 @@ div.buttons-row {
 	border-left: var(--border-control-thin) !important;
 }
 .row50:not(:last-child),
+.row33:not(:last-child),
 .row25:not(:last-child),
 .row16:not(:last-child) {
 	border-top-right-radius: 0;

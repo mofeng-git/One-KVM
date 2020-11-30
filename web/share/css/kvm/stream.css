@@ -61,11 +61,6 @@ img.stream-image-inactive {
 	filter: grayscale(100%) brightness(75%) sepia(75%);
 }
 
-div.stream-param-box {
-	margin-top: 5px;
-	display: flex;
-}
-
 div#stream-mouse-buttons {
 	display: none;
 }

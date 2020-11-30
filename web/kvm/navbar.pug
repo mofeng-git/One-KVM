@@ -13,16 +13,15 @@ mixin menu_message(icon, short, classes="")
 						sup(style="line-height:1")
 							block
 
-mixin menu_switch(id, title)
-	div(class="text")
-		table(class="one-line-switch")
-			td #{title}:
-			td(align="right")
-				div(class="switch-box")
-					input(checked type="checkbox" id=id)
-					label(for=id)
-						span(class="switch-inner")
-						span(class="switch")
+mixin menu_switch(id, title, enabled, checked)
+	table(class="kv")
+		td #{title}:
+		td(align="right")
+			div(class="switch-box")
+				input(checked=checked disabled=!enabled type="checkbox" id=id)
+				label(for=id)
+					span(class="switch-inner")
+					span(class="switch")
 
 ul(id="navbar")
 	li(class="left")

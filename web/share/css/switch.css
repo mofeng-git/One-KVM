@@ -28,6 +28,8 @@ div.switch-box {
 	vertical-align: middle;
 	position: relative;
 	width: 50px;
+	margin-top: 3px;
+	margin-bottom: 3px;
 }
 
 div.switch-box input[type=checkbox] {
