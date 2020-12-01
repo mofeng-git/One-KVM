@@ -34,7 +34,6 @@ export function Streamer() {
 
 	var __resolution = {width: 640, height: 480};
 	var __resolution_str = "640x480";
-	var __available_resolutions = [];
 
 	var __size_factor = 1;
 
@@ -53,10 +52,7 @@ export function Streamer() {
 		tools.sliderSetParams($("stream-desired-fps-slider"), 0, 120, 1, 0);
 		tools.sliderSetOnUp($("stream-desired-fps-slider"), 1000, __updateDesiredFpsValue, (value) => __sendParam("desired_fps", value));
 
-		$("stream-resolution-selector").onchange = (() => {
-			wm.switchEnabled($("stream-resolution-selector"), false);
-			__sendParam("resolution", $("stream-resolution-selector").value);
-		});
+		$("stream-resolution-selector").onchange = (() => __sendParam("resolution", $("stream-resolution-selector").value));
 
 		tools.sliderSetParams($("stream-size-slider"), 20, 200, 5, 100);
 		$("stream-size-slider").oninput = () => __resize();
@@ -124,16 +120,16 @@ export function Streamer() {
 			}
 
 			if (state.features.resolution) {
-				if (__available_resolutions !== state.limits.available_resolutions) {
-					__available_resolutions = state.limits.available_resolutions;
+				if ($("stream-resolution-selector").resolutions !== state.limits.available_resolutions) {
 					let resolutions_html = "";
-					for (let variant of __available_resolutions) {
+					for (let variant of state.limits.available_resolutions) {
 						resolutions_html += `<option value="${variant}">${variant}</option>`;
 					}
-					if (!__available_resolutions.includes(__resolution_str)) {
+					if (!state.limits.available_resolutions.includes(__resolution_str)) {
 						resolutions_html += `<option value="${__resolution_str}">${__resolution_str}</option>`;
 					}
 					$("stream-resolution-selector").innerHTML = resolutions_html;
+					$("stream-resolution-selector").resolutions = state.limits.available_resolutions;
 				}
 				document.querySelector(`#stream-resolution-selector [value="${__resolution_str}"]`).selected = true;
 				wm.switchEnabled($("stream-resolution-selector"), true);
