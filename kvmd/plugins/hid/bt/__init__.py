@@ -131,7 +131,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     async def get_state(self) -> Dict:
         state = await self.__server.get_state()
-        outputs: Dict = {"available": {}, "active": ""}
+        outputs: Dict = {"available": [], "active": ""}
         return {
             "online": True,
             "keyboard": {

@@ -89,7 +89,7 @@ class Plugin(BaseHid):
     async def get_state(self) -> Dict:
         keyboard_state = await self.__keyboard_proc.get_state()
         mouse_state = await self.__mouse_proc.get_state()
-        outputs: Dict = {"available": {}, "active": ""}
+        outputs: Dict = {"available": [], "active": ""}
         return {
             "online": True,
             "keyboard": {

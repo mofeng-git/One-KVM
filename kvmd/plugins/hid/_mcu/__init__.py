@@ -174,18 +174,17 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         if online and active_mouse in ["usb_rel", "ps2"]:
             absolute = False
 
-        keyboard_outputs: Dict = {"available": {}, "active": ""}
-        mouse_outputs: Dict = {"available": {}, "active": ""}
+        keyboard_outputs: Dict = {"available": [], "active": ""}
+        mouse_outputs: Dict = {"available": [], "active": ""}
 
         if outputs & 0b10000000:  # Dynamic
             if features & 0b00000001:  # USB
-                keyboard_outputs["available"]["usb"] = {"name": "USB"}
-                mouse_outputs["available"]["usb"] = {"name": "USB", "absolute": True}
-                mouse_outputs["available"]["usb_rel"] = {"name": "USB Relative", "absolute": False}
+                keyboard_outputs["available"].extend(["usb"])
+                mouse_outputs["available"].extend(["usb", "usb_rel"])
 
             if features & 0b00000010:  # PS/2
-                keyboard_outputs["available"]["ps2"] = {"name": "PS/2"}
-                mouse_outputs["available"]["ps2"] = {"name": "PS/2"}
+                keyboard_outputs["available"].extend(["ps2"])
+                mouse_outputs["available"].extend(["ps2"])
 
             active_keyboard = get_active_keyboard(outputs)
             if active_keyboard in keyboard_outputs["available"]:
