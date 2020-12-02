@@ -85,7 +85,6 @@ export function Mouse(record_callback) {
 		if (__absolute && !state.absolute) {
 			__relative_deltas = [];
 		}
-		tools.featureSetEnabled($("mouse-squash"), !state.absolute);
 		__absolute = state.absolute;
 		__updateOnlineLeds();
 	};
@@ -135,7 +134,7 @@ export function Mouse(record_callback) {
 	};
 
 	var __isRelativeSquashed = function() {
-		return $("mouse-squash-checkbox").checked;
+		return $("hid-mouse-squash-checkbox").checked;
 	};
 
 	var __relativeCapturedHandler = function() {

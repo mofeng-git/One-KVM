@@ -154,14 +154,31 @@
             <button class="row33" disabled data-force-hide-menu id="stream-screenshot-button">&bull; Screenshot</button>
             <button class="row33" disabled id="stream-reset-button">Reset stream</button>
           </div>
-          <div class="feature-disabled" id="mouse-squash">
+          <div class="feature-disabled" id="hid-outputs">
+            <hr>
+            <table class="kv">
+              <tr>
+                <td>Keyboard:</td>
+                <td>
+                  <div class="radio-box" id="hid-outputs-keyboard"></div>
+                </td>
+              </tr>
+              <tr>
+                <td>Mouse:</td>
+                <td>
+                  <div class="radio-box" id="hid-outputs-mouse"></div>
+                </td>
+              </tr>
+            </table>
+          </div>
+          <div class="feature-disabled" id="hid-mouse-squash">
             <hr>
                 <table class="kv">
-                  <td>Squash mouse moves:</td>
+                  <td>Squash relative mouse moves:</td>
                   <td align="right">
                     <div class="switch-box">
-                      <input checked type="checkbox" id="mouse-squash-checkbox">
-                      <label for="mouse-squash-checkbox"><span class="switch-inner"></span><span class="switch"></span></label>
+                      <input checked type="checkbox" id="hid-mouse-squash-checkbox">
+                      <label for="hid-mouse-squash-checkbox"><span class="switch-inner"></span><span class="switch"></span></label>
                     </div>
                   </td>
                 </table>

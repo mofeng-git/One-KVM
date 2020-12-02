@@ -41,6 +41,10 @@ div.radio-box label {
 	cursor: pointer;
 	position: relative;
 }
+div.radio-box label:not(:last-of-type) {
+	margin-right: 1px;
+	box-shadow: 1px 0 0 0 var(--cs-control-pressed-bg);
+}
 @media only screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
 	div.radio-box label {
 		height: 30px !important;
@@ -65,7 +69,8 @@ div.radio-box label:last-of-type {
 }
 
 div.radio-box input[type=radio]:checked + label {
-	font-weight: bold;
+	/*font-weight: bold;*/
+	text-shadow: 0.5px 0 0 currentColor;
 	border: var(--border-intensive-2px);
 	color: var(--cs-control-intensive-fg);
 	background-color: var(--cs-thumb-default-bg);

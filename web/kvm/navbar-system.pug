@@ -33,9 +33,18 @@ li(class="right")
 			button(data-force-hide-menu id="show-stream-button" class="row33") &bull; Show stream
 			button(disabled data-force-hide-menu id="stream-screenshot-button" class="row33") &bull; Screenshot
 			button(disabled id="stream-reset-button" class="row33") Reset stream
-		div(id="mouse-squash" class="feature-disabled")
+		div(id="hid-outputs" class="feature-disabled")
 			hr
-			+menu_switch("mouse-squash-checkbox", "Squash mouse moves", true, true)
+			table(class="kv")
+				tr
+					td Keyboard:
+					td #[div(id="hid-outputs-keyboard" class="radio-box")]
+				tr
+					td Mouse:
+					td #[div(id="hid-outputs-mouse" class="radio-box")]
+		div(id="hid-mouse-squash" class="feature-disabled")
+			hr
+			+menu_switch("hid-mouse-squash-checkbox", "Squash relative mouse moves", true, true)
 		hr
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu id="show-keyboard-button" class="row50") &bull; Show keyboard

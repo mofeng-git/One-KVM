@@ -141,6 +141,12 @@ export var tools = new function() {
 		el.value = value;
 	};
 
+	this.radioMakeItem = function(name, title, value) {
+		return `
+			<input type="radio" id="${name}-${value}" name="${name}" value="${value}" />
+			<label for="${name}-${value}">${title}</label>
+		`;
+	};
 	this.radioSetOnClick = function(name, callback) {
 		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
 			this.setOnClick(el, callback);

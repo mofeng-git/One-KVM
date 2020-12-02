@@ -88,14 +88,74 @@ export function Hid() {
 		wm.switchEnabled($("hid-pak-text"), ws);
 		wm.switchEnabled($("hid-pak-button"), ws);
 		wm.switchEnabled($("hid-reset-button"), ws);
+		if (!ws) {
+			self.setState(null);
+		}
 		__recorder.setSocket(ws);
 		__keyboard.setSocket(ws);
 		__mouse.setSocket(ws);
 	};
 
 	self.setState = function(state) {
-		__keyboard.setState(state.keyboard);
-		__mouse.setState(state.mouse);
+		let has_relative_squash = false;
+
+		if (state && state.online) {
+			let keyboard_outputs = state.keyboard.outputs.available;
+			let mouse_outputs = state.mouse.outputs.available;
+			let has_outputs = (keyboard_outputs.length || mouse_outputs.length);
+			let has_relative = false;
+			if (has_outputs) {
+				if ($("hid-outputs-keyboard").outputs !== keyboard_outputs) {
+					let html = "";
+					for (let args of [
+						["USB", "usb"],
+						["PS/2", "ps2"],
+						["Off", ""],
+					]) {
+						if (keyboard_outputs.includes(args[1]) || !args[1]) {
+							html += tools.radioMakeItem("hid-outputs-keyboard-radio", args[0], args[1]);
+						}
+					}
+					$("hid-outputs-keyboard").innerHTML = html;
+					$("hid-outputs-keyboard").outputs = keyboard_outputs;
+					tools.radioSetOnClick("hid-outputs-keyboard-radio", () => __clickOutputsRadio("keyboard"));
+				}
+				if ($("hid-outputs-mouse").outputs !== mouse_outputs) {
+					let html = "";
+					for (let args of [
+						["USB", "usb", false],
+						["USB Relative", "usb_rel", true],
+						["PS/2", "ps2", true],
+						["Off", ""],
+					]) {
+						if (mouse_outputs.includes(args[1]) || !args[1]) {
+							html += tools.radioMakeItem("hid-outputs-mouse-radio", args[0], args[1]);
+							has_relative = (has_relative || args[2]);
+						}
+					}
+					$("hid-outputs-mouse").innerHTML = html;
+					$("hid-outputs-mouse").outputs = mouse_outputs;
+					tools.radioSetOnClick("hid-outputs-mouse-radio", () => __clickOutputsRadio("mouse"));
+				}
+				tools.radioSetValue("hid-outputs-keyboard-radio", state.keyboard.outputs.active);
+				tools.radioSetValue("hid-outputs-mouse-radio", state.mouse.outputs.active);
+				has_relative_squash = ["usb_rel", "ps2"].includes(state.mouse.outputs.active);
+			} else {
+				has_relative = !state.mouse.absolute;
+				has_relative_squash = has_relative;
+			}
+			tools.featureSetEnabled($("hid-outputs"), has_outputs);
+			tools.featureSetEnabled($("hid-mouse-squash"), has_relative);
+		}
+
+		wm.switchRadioEnabled("hid-outputs-keyboard-radio", (state && state.online && !state.busy));
+		wm.switchRadioEnabled("hid-outputs-mouse-radio", (state && state.online && !state.busy));
+		wm.switchEnabled($("hid-mouse-squash-checkbox"), (has_relative_squash && !state.busy));
+
+		if (state) {
+			__keyboard.setState(state.keyboard);
+			__mouse.setState(state.mouse);
+		}
 	};
 
 	var __releaseAll = function() {
@@ -163,6 +223,17 @@ export function Hid() {
 				}
 			});
 		}
+	};
+
+	var __clickOutputsRadio = function(hid) {
+		let output = tools.radioGetValue(`hid-outputs-${hid}-radio`);
+		let http = tools.makeRequest("POST", `/api/hid/${hid}/set_params?output=${output}`, function() {
+			if (http.readyState === 4) {
+				if (http.status !== 200) {
+					wm.error("Can't configure HID:<br>", http.responseText);
+				}
+			}
+		});
 	};
 
 	var __clickResetButton = function() {
