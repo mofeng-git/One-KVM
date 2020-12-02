@@ -92,6 +92,7 @@ class Plugin(BaseHid):
         outputs: Dict = {"available": [], "active": ""}
         return {
             "online": True,
+            "busy": False,
             "keyboard": {
                 "online": keyboard_state["online"],
                 "leds": {

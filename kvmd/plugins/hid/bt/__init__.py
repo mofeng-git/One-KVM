@@ -134,6 +134,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         outputs: Dict = {"available": [], "active": ""}
         return {
             "online": True,
+            "busy": False,
             "keyboard": {
                 "online": state["online"],
                 "leds": {
