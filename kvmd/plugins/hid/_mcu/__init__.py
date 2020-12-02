@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import os
 import multiprocessing
 import contextlib
 import queue
@@ -270,12 +269,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
             self.__events_queue.put_nowait(event)
 
     def run(self) -> None:  # pylint: disable=too-many-branches
-        logger = get_logger(0)
-
-        logger.info("Started HID pid=%d", os.getpid())
-        os.setpgrp()
-        aioproc.rename_process("hid")
-
+        logger = aioproc.settle("HID", "hid")
         while not self.__stop_event.is_set():
             try:
                 with self.__gpio:

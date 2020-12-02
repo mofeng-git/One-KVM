@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import os
 import re
 import multiprocessing
 import errno
@@ -130,12 +129,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         )
 
     def __serial_worker(self) -> None:
-        logger = get_logger(0)
-
-        logger.info("Started %s pid=%d", self, os.getpid())
-        os.setpgrp()
-        aioproc.rename_process(f"gpio-ezcoo-{self._instance_name}")
-
+        logger = aioproc.settle(str(self), f"gpio-ezcoo-{self._instance_name}")
         while not self.__stop_event.is_set():
             try:
                 with self.__get_serial() as tty:

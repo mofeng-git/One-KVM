@@ -30,6 +30,8 @@ from typing import List
 
 import setproctitle
 
+from .logging import get_logger
+
 
 # =====
 async def run_process(cmd: List[str], err_to_null: bool=False) -> asyncio.subprocess.Process:  # pylint: disable=no-member
@@ -71,3 +73,11 @@ async def log_stdout_infinite(proc: asyncio.subprocess.Process, logger: logging.
 
 def rename_process(suffix: str, prefix: str="kvmd") -> None:
     setproctitle.setproctitle(f"{prefix}/{suffix}: {setproctitle.getproctitle()}")
+
+
+def settle(name: str, suffix: str, prefix: str="kvmd") -> logging.Logger:
+    logger = get_logger(1)
+    logger.info("Started %s pid=%d", name, os.getpid())
+    os.setpgrp()
+    rename_process(suffix, prefix)
+    return logger

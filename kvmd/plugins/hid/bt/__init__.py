@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import os
 import multiprocessing
 import time
 
@@ -194,12 +193,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
     # =====
 
     def __server_worker(self) -> None:  # pylint: disable=too-many-branches
-        logger = get_logger(0)
-
-        logger.info("Started HID pid=%d", os.getpid())
-        os.setpgrp()
-        aioproc.rename_process("hid")
-
+        logger = aioproc.settle("HID", "hid")
         while not self.__stop_event.is_set():
             try:
                 self.__server.run()
