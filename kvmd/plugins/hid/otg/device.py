@@ -81,7 +81,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         logger = get_logger(0)
 
         logger.info("Started HID-%s pid=%d", self.__name, os.getpid())
-        aioproc.ignore_sigint()
+        os.setpgrp()
         aioproc.rename_process(f"hid-{self.__name}")
 
         while not self.__stop_event.is_set():

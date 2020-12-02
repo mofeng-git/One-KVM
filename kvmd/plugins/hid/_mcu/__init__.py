@@ -273,7 +273,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         logger = get_logger(0)
 
         logger.info("Started HID pid=%d", os.getpid())
-        aioproc.ignore_sigint()
+        os.setpgrp()
         aioproc.rename_process("hid")
 
         while not self.__stop_event.is_set():

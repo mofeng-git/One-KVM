@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+import os
 import asyncio
 import pwd
 
@@ -28,8 +29,6 @@ from typing import AsyncGenerator
 from typing import Optional
 
 import pytest
-
-from kvmd import aioproc
 
 from . import get_configured_auth_service
 
@@ -45,7 +44,7 @@ async def _run_process(cmd: str, input: Optional[str]=None) -> None:  # pylint: 
     proc = await asyncio.create_subprocess_exec(
         *cmd.split(" "),
         stdin=(asyncio.subprocess.PIPE if input is not None else None),
-        preexec_fn=aioproc.ignore_sigint,
+        preexec_fn=os.setpgrp,
     )
     await proc.communicate(input.encode() if input is not None else None)
     assert proc.returncode == 0

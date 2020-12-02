@@ -20,9 +20,9 @@
 # ========================================================================== #
 
 
+import os
 import asyncio
 import asyncio.subprocess
-import signal
 import logging
 
 from typing import Tuple
@@ -37,7 +37,7 @@ async def run_process(cmd: List[str], err_to_null: bool=False) -> asyncio.subpro
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=(asyncio.subprocess.DEVNULL if err_to_null else asyncio.subprocess.STDOUT),
-        preexec_fn=ignore_sigint,
+        preexec_fn=os.setpgrp,
     ))
 
 
@@ -67,10 +67,6 @@ async def log_stdout_infinite(proc: asyncio.subprocess.Process, logger: logging.
             empty += 1
             if empty == 100:  # asyncio bug
                 raise RuntimeError("asyncio process: too many empty lines")
-
-
-def ignore_sigint() -> None:
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 def rename_process(suffix: str, prefix: str="kvmd") -> None:
