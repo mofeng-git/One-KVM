@@ -56,7 +56,7 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
 
         token = request.cookies.get(_COOKIE_AUTH_TOKEN, "")
         if token:
-            user = auth_manager.check(valid_auth_token(token))
+            user = auth_manager.check(valid_auth_token(token))  # type: ignore
             if not user:
                 set_request_auth_info(request, "- (token)")
                 raise ForbiddenError()

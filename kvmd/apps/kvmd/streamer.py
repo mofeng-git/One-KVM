@@ -308,7 +308,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                             mtime=float(response.headers["X-Timestamp"]),
                             headers=tuple(
                                 (key, value)
-                                for (key, value) in tools.sorted_kvs(response.headers)
+                                for (key, value) in tools.sorted_kvs(dict(response.headers))
                                 if key.lower().startswith("x-ustreamer-") or key.lower() in [
                                     "x-timestamp",
                                     "access-control-allow-origin",

@@ -65,7 +65,7 @@ def create_short_task(coro: Coroutine) -> asyncio.Task:
 def get_short_tasks() -> List[asyncio.Task]:
     return [
         task
-        for task in asyncio.Task.all_tasks()
+        for task in asyncio.all_tasks()
         if getattr(task, _ATTR_SHORT_TASK, False)
     ]
 

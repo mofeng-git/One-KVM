@@ -435,7 +435,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     server.close()
                     loop.run_until_complete(server.wait_closed())
         finally:
-            tasks = asyncio.Task.all_tasks()
+            tasks = asyncio.all_tasks(loop)
             for task in tasks:
                 task.cancel()
             loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))

@@ -226,7 +226,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 if name not in current_params:
                     assert exc_cls is not None, name
                     raise exc_cls()
-                value = validator(value)
+                value = validator(value)  # type: ignore
                 if current_params[name] != value:
                     self.__new_streamer_params[name] = value
         await self.__streamer_notifier.notify()
