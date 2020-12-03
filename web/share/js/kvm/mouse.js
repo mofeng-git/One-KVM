@@ -77,8 +77,12 @@ export function Mouse(record_callback) {
 		__updateOnlineLeds();
 	};
 
-	self.setState = function(state) {
-		__online = state.online;
+	self.setState = function(state, hid_online, hid_busy) {
+		if (!hid_online) {
+			__online = null;
+		} else {
+			__online = (state.online && !hid_busy);
+		}
 		if (!__absolute && state.absolute && __isRelativeCaptured()) {
 			document.exitPointerLock();
 		}
@@ -101,27 +105,30 @@ export function Mouse(record_callback) {
 	};
 
 	var __updateOnlineLeds = function() {
-		let captured;
+		let is_captured;
 		if (__absolute) {
-			captured = (__stream_hovered || tools.browser.is_ios);
+			is_captured = (__stream_hovered || tools.browser.is_ios);
 		} else {
-			captured = __isRelativeCaptured();
+			is_captured = __isRelativeCaptured();
 		}
 		let led = "led-gray";
 		let title = "Mouse free";
 
 		if (__ws) {
-			if (__online) {
-				if (captured) {
+			if (__online === null) {
+				led = "led-red";
+				title = (is_captured ? "Mouse captured, HID offline" : "Mouse free, HID offline");
+			} else if (__online) {
+				if (is_captured) {
 					led = "led-green";
 					title = "Mouse captured";
 				}
 			} else {
 				led = "led-yellow";
-				title = (captured ? "Mouse captured, HID offline" : "Mouse free, HID offline");
+				title = (is_captured ? "Mouse captured, inactive/busy" : "Mouse free, inactive/busy");
 			}
 		} else {
-			if (captured) {
+			if (is_captured) {
 				title = "Mouse captured, Pi-KVM offline";
 			}
 		}

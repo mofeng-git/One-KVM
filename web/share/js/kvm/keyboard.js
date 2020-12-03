@@ -73,8 +73,12 @@ export function Keyboard(record_callback) {
 		__updateOnlineLeds();
 	};
 
-	self.setState = function(state) {
-		__online = state.online;
+	self.setState = function(state, hid_online, hid_busy) {
+		if (!hid_online) {
+			__online = null;
+		} else {
+			__online = (state.online && !hid_busy);
+		}
 		__updateOnlineLeds();
 
 		for (let led of ["caps", "scroll", "num"]) {
@@ -107,14 +111,17 @@ export function Keyboard(record_callback) {
 		let title = "Keyboard free";
 
 		if (__ws) {
-			if (__online) {
+			if (__online === null) {
+				led = "led-red";
+				title = (is_captured ? "Keyboard captured, HID offline" : "Keyboard free, HID offline");
+			} else if (__online) {
 				if (is_captured) {
 					led = "led-green";
 					title = "Keyboard captured";
 				}
 			} else {
 				led = "led-yellow";
-				title = (is_captured ? "Keyboard captured, HID offline" : "Keyboard free, HID offline");
+				title = (is_captured ? "Keyboard captured, inactive/busy" : "Keyboard free, inactive/busy");
 			}
 		} else {
 			if (is_captured) {

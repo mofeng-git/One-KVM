@@ -153,8 +153,8 @@ export function Hid() {
 		wm.switchEnabled($("hid-mouse-squash-checkbox"), (has_relative_squash && !state.busy));
 
 		if (state) {
-			__keyboard.setState(state.keyboard);
-			__mouse.setState(state.mouse);
+			__keyboard.setState(state.keyboard, state.online, state.busy);
+			__mouse.setState(state.mouse, state.online, state.busy);
 		}
 	};
 
