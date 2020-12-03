@@ -25,6 +25,7 @@
 
 namespace PROTO {
 	const uint8_t MAGIC			= 0x33;
+	const uint8_t MAGIC_RESP	= 0x34;
 
 	namespace RESP { // Plain responses
 		// const uint8_t OK =			0x20; // Legacy

@@ -255,7 +255,7 @@ static void _sendResponse(uint8_t code) {
 	}
 
 	uint8_t response[8] = {0};
-	response[0] = PROTO::MAGIC;
+	response[0] = PROTO::MAGIC_RESP;
 	if (code & PROTO::PONG::OK) {
 		response[1] = PROTO::PONG::OK;
 #		ifdef HID_DYNAMIC

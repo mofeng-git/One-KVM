@@ -52,9 +52,13 @@ class _SerialPhyConnection(BasePhyConnection):
             self.__tty.read_all()
         assert self.__tty.write(request) == 8
         data = self.__tty.read(4)
-        if data[0] == 0x34:  # New response protocol
-            data += self.__tty.read(4)
-        return data
+        if len(data) == 4:
+            if data[0] == 0x34:  # New response protocol
+                data += self.__tty.read(4)
+                if len(data) != 8:
+                    return b""
+            return data
+        return b""
 
 
 class _SerialPhy(BasePhy):
@@ -81,7 +85,10 @@ class _SerialPhy(BasePhy):
 # =====
 class Plugin(BaseMcuHid):
     def __init__(self, **kwargs: Any) -> None:
-        phy_kwargs: Dict = {key: kwargs.pop(key) for key in self.__get_phy_options()}
+        phy_kwargs: Dict = {
+            (option.unpack_as or key): kwargs.pop(option.unpack_as or key)
+            for (key, option) in self.__get_phy_options().items()
+        }
         super().__init__(phy=_SerialPhy(**phy_kwargs), **kwargs)
 
     @classmethod
