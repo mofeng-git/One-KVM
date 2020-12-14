@@ -20,33 +20,27 @@ kvmd:
             device: /dev/kvmd-hid-mouse
 
     atx:
-        type: disabled
+        type: gpio
+        power_led_pin: 24
+        hdd_led_pin: 22
+        power_switch_pin: 23
+        reset_switch_pin: 27
 
     msd:
         type: otg
 
     streamer:
-        quality: 0
-        resolution: 1920x1080
-        available_resolutions:
-            - 1920x1080
-            - 1600x1200
-            - 1360x768
-            - 1280x1024
-            - 1280x960
-            - 1280x720
-            - 1024x768
-            - 800x600
-            - 720x576
-            - 720x480
-            - 640x480
         unix: /run/kvmd/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
             - "--persistent"
-            - "--format=jpeg"
-            - "--resolution={resolution}"
+            - "--dv-timings"
+            - "--format=uyvy"
+            - "--encoder=omx"
+            - "--glitched-resolutions=720x480,720x576"
+            - "--workers=3"
+            - "--quality={quality}"
             - "--desired-fps={desired_fps}"
             - "--drop-same-frames=30"
             - "--last-as-blank=0"
