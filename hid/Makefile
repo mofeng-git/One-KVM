@@ -2,6 +2,8 @@ serial:
 	make _build E=serial
 spi:
 	make _build E=spi
+aum:
+	make _build E=aum
 _build:
 	rm -f .current
 	platformio run --environment $(E)

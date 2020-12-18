@@ -60,9 +60,11 @@ namespace PROTO {
 		};
 	};
 
-	namespace FEATURES {
-		const uint8_t HAS_USB =	0b00000001;
-		const uint8_t HAS_PS2 =	0b00000010;
+	namespace PARAMS {
+		const uint8_t HAS_USB =			0b00000001;
+		const uint8_t HAS_PS2 =			0b00000010;
+		const uint8_t USB_PLUGGABLE =	0b10000000;
+		const uint8_t USB_PLUGGED =		0b01000000;
 	}
 
 	namespace CMD {
@@ -70,6 +72,7 @@ namespace PROTO {
 		const uint8_t REPEAT =			0x02;
 		const uint8_t SET_KEYBOARD =	0x03;
 		const uint8_t SET_MOUSE =		0x04;
+		const uint8_t SET_USB_PLUGGED =	0x05;
 		const uint8_t CLEAR_HID =		0x10;
 
 		namespace KEYBOARD {

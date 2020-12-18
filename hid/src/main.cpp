@@ -36,6 +36,13 @@
 #	include <avr/eeprom.h>
 #endif
 
+#if defined(AUM) && defined(HID_WITH_USB)
+#	include <digitalWriteFast.h>
+#	define AUM_IS_USB_POWERED_PIN	A4
+#	define AUM_SET_USB_VBUS_PIN		11
+#	define AUM_SET_USB_PLUGGED_PIN	A5
+#endif
+
 #include "proto.h"
 #ifdef CMD_SPI
 #	include "spi.h"
@@ -158,6 +165,12 @@ static void _cmdSetMouse(const uint8_t *data) { // 1 bytes
 #	endif
 }
 
+static void _cmdSetUsbPlugged(const uint8_t *data) { // 1 byte
+#	if defined(AUM) && defined(HID_WITH_USB)
+	digitalWriteFast(AUM_SET_USB_PLUGGED_PIN, (bool)data[0]);
+#	endif
+}
+
 static void _cmdClearHid(const uint8_t *_) { // 0 bytes
 	if (_usb_kbd) {
 		_usb_kbd->clear();
@@ -230,6 +243,7 @@ static uint8_t _handleRequest(const uint8_t *data) { // 8 bytes
 			case PROTO::CMD::PING:				return PROTO::PONG::OK;
 			case PROTO::CMD::SET_KEYBOARD:		HANDLE(_cmdSetKeyboard);
 			case PROTO::CMD::SET_MOUSE:			HANDLE(_cmdSetMouse);
+			case PROTO::CMD::SET_USB_PLUGGED:	HANDLE(_cmdSetUsbPlugged);
 			case PROTO::CMD::CLEAR_HID:			HANDLE(_cmdClearHid);
 			case PROTO::CMD::KEYBOARD::KEY:		HANDLE(_cmdKeyEvent);
 			case PROTO::CMD::MOUSE::BUTTON:		HANDLE(_cmdMouseButtonEvent);
@@ -280,11 +294,17 @@ static void _sendResponse(uint8_t code) {
 			response[1] |= _usb_mouse_rel->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
 			response[2] |= PROTO::OUTPUTS::MOUSE::USB_REL;
 		} // TODO: ps2
+#		if defined(AUM) && defined(HID_WITH_USB)
+		response[3] |= PROTO::PARAMS::USB_PLUGGABLE;
+		if (digitalReadFast(AUM_SET_USB_PLUGGED_PIN)) {
+			response[3] |= PROTO::PARAMS::USB_PLUGGED;
+		}
+#		endif
 #		ifdef HID_WITH_USB
-		response[3] |= PROTO::FEATURES::HAS_USB;
+		response[3] |= PROTO::PARAMS::HAS_USB;
 #		endif
 #		ifdef HID_WITH_PS2
-		response[3] |= PROTO::FEATURES::HAS_PS2;
+		response[3] |= PROTO::PARAMS::HAS_PS2;
 #		endif
 	} else {
 		response[1] = code;
@@ -303,6 +323,13 @@ int main() {
 	initVariant(); // Arduino
 	_initOutputs();
 
+#	if defined(AUM) && defined(HID_WITH_USB)
+	pinModeFast(AUM_IS_USB_POWERED_PIN, INPUT);
+	pinModeFast(AUM_SET_USB_VBUS_PIN, OUTPUT);
+	pinModeFast(AUM_SET_USB_PLUGGED_PIN, OUTPUT);
+	digitalWriteFast(AUM_SET_USB_PLUGGED_PIN, HIGH);
+#	endif
+
 #	ifdef CMD_SERIAL
 	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
 	unsigned long last = micros();
@@ -313,11 +340,19 @@ int main() {
 #	endif
 
 	while (true) {
+#		if defined(AUM) && defined(HID_WITH_USB)
+		bool vbus = digitalReadFast(AUM_IS_USB_POWERED_PIN);
+		if (digitalReadFast(AUM_SET_USB_VBUS_PIN) != vbus) {
+			digitalWriteFast(AUM_SET_USB_VBUS_PIN, vbus);
+		}
+#		endif
+
 #		ifdef HID_WITH_PS2
 		if (_ps2_kbd) {
 			_ps2_kbd->periodic();
 		}
 #		endif
+
 #		ifdef CMD_SERIAL
 		if (CMD_SERIAL.available() > 0) {
 			buffer[index] = (uint8_t)CMD_SERIAL.read();
