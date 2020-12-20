@@ -176,32 +176,26 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 raise MsdCdromNotSupported()
 
     @aiotools.atomic
-    async def connect(self) -> None:
+    async def set_connected(self, connected: bool) -> None:
         async with self.__working():
             async with self.__region:
-                if self.__connected:
-                    raise MsdConnectedError()
-
-                self.__gpio.switch_to_server()
-                self.__connected = True
-                get_logger(0).info("MSD switched to Server")
-
-    @aiotools.atomic
-    async def disconnect(self) -> None:
-        async with self.__working():
-            async with self.__region:
-                if not self.__connected:
-                    raise MsdDisconnectedError()
-
-                self.__gpio.switch_to_local()
-                try:
-                    await self.__load_device_info()
-                except Exception:
+                if connected:
                     if self.__connected:
-                        self.__gpio.switch_to_server()
-                    raise
-                self.__connected = False
-                get_logger(0).info("MSD switched to KVM: %s", self.__device_info)
+                        raise MsdConnectedError()
+                    self.__gpio.switch_to_server()
+                    get_logger(0).info("MSD switched to Server")
+                else:
+                    if not self.__connected:
+                        raise MsdDisconnectedError()
+                    self.__gpio.switch_to_local()
+                    try:
+                        await self.__load_device_info()
+                    except Exception:
+                        if self.__connected:
+                            self.__gpio.switch_to_server()
+                        raise
+                    get_logger(0).info("MSD switched to KVM: %s", self.__device_info)
+                self.__connected = connected
 
     @contextlib.asynccontextmanager
     async def write_image(self, name: str) -> AsyncGenerator[None, None]:

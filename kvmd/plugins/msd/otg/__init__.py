@@ -255,36 +255,32 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__state.vd.cdrom = cdrom
 
     @aiotools.atomic
-    async def connect(self) -> None:
+    async def set_connected(self, connected: bool) -> None:
         async with self.__state.busy():
             assert self.__state.vd
+            if connected:
+                if self.__state.vd.connected or self.__drive.get_image_path():
+                    raise MsdConnectedError()
+                if self.__state.vd.image is None:
+                    raise MsdImageNotSelected()
 
-            if self.__state.vd.connected or self.__drive.get_image_path():
-                raise MsdConnectedError()
-            if self.__state.vd.image is None:
-                raise MsdImageNotSelected()
+                assert self.__state.vd.image.in_storage
 
-            assert self.__state.vd.image.in_storage
+                if not os.path.exists(self.__state.vd.image.path):
+                    raise MsdUnknownImageError()
 
-            if not os.path.exists(self.__state.vd.image.path):
-                raise MsdUnknownImageError()
+                await self.__unlock_drive()
+                self.__drive.set_cdrom_flag(self.__state.vd.cdrom)
+                self.__drive.set_image_path(self.__state.vd.image.path)
 
-            await self.__unlock_drive()
-            self.__drive.set_cdrom_flag(self.__state.vd.cdrom)
-            self.__drive.set_image_path(self.__state.vd.image.path)
-            self.__state.vd.connected = True
+            else:
+                if not (self.__state.vd.connected or self.__drive.get_image_path()):
+                    raise MsdDisconnectedError()
 
-    @aiotools.atomic
-    async def disconnect(self) -> None:
-        async with self.__state.busy():
-            assert self.__state.vd
+                await self.__unlock_drive()
+                self.__drive.set_image_path("")
 
-            if not (self.__state.vd.connected or self.__drive.get_image_path()):
-                raise MsdDisconnectedError()
-
-            await self.__unlock_drive()
-            self.__drive.set_image_path("")
-            self.__state.vd.connected = False
+            self.__state.vd.connected = connected
 
     @contextlib.asynccontextmanager
     async def write_image(self, name: str) -> AsyncGenerator[None, None]:

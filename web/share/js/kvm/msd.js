@@ -138,9 +138,8 @@ export function Msd() {
 		tools.progressSetValue($("msd-uploading-progress"), "Aborted", 0);
 	};
 
-	var __clickConnectButton = function(connect) {
-		let action = (connect ? "connect" : "disconnect");
-		let http = tools.makeRequest("POST", `/api/msd/${action}`, function() {
+	var __clickConnectButton = function(connected) {
+		let http = tools.makeRequest("POST", `/api/msd/set_connected?connected=${connected}`, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					wm.error("Switch error:<br>", http.responseText);
@@ -149,7 +148,7 @@ export function Msd() {
 			__applyState();
 		});
 		__applyState();
-		wm.switchEnabled($(`msd-${action}-button`), false);
+		wm.switchEnabled($(`msd-${connected ? "connect" : "disconnect"}-button`), false);
 	};
 
 	var __selectNewImageFile = function() {

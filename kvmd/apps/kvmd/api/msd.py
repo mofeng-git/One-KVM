@@ -60,14 +60,9 @@ class MsdApi:
         await self.__msd.set_params(**params)  # type: ignore
         return make_json_response()
 
-    @exposed_http("POST", "/msd/connect")
-    async def __connect_handler(self, _: Request) -> Response:
-        await self.__msd.connect()
-        return make_json_response()
-
-    @exposed_http("POST", "/msd/disconnect")
-    async def __disconnect_handler(self, _: Request) -> Response:
-        await self.__msd.disconnect()
+    @exposed_http("POST", "/msd/set_connected")
+    async def __set_connected_handler(self, request: Request) -> Response:
+        await self.__msd.set_connected(valid_bool(request.query.get("connected")))
         return make_json_response()
 
     @exposed_http("POST", "/msd/write")

@@ -109,10 +109,7 @@ class BaseMsd(BasePlugin):
     async def set_params(self, name: Optional[str]=None, cdrom: Optional[bool]=None) -> None:
         raise NotImplementedError()
 
-    async def connect(self) -> None:
-        raise NotImplementedError()
-
-    async def disconnect(self) -> None:
+    async def set_connected(self, connected: bool) -> None:
         raise NotImplementedError()
 
     @contextlib.asynccontextmanager

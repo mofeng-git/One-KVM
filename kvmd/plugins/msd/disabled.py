@@ -66,10 +66,7 @@ class Plugin(BaseMsd):
     async def set_params(self, name: Optional[str]=None, cdrom: Optional[bool]=None) -> None:
         raise MsdDisabledError()
 
-    async def connect(self) -> None:
-        raise MsdDisabledError()
-
-    async def disconnect(self) -> None:
+    async def set_connected(self, connected: bool) -> None:
         raise MsdDisabledError()
 
     @contextlib.asynccontextmanager
