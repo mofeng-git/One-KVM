@@ -38,9 +38,7 @@
 
 #if defined(AUM) && defined(HID_WITH_USB)
 #	include <digitalWriteFast.h>
-#	define AUM_IS_USB_POWERED_PIN	A4
-#	define AUM_SET_USB_VBUS_PIN		11
-#	define AUM_SET_USB_PLUGGED_PIN	A5
+// #define bla-bla-bla AUM_* pins
 #endif
 
 #include "proto.h"
@@ -165,9 +163,9 @@ static void _cmdSetMouse(const uint8_t *data) { // 1 bytes
 #	endif
 }
 
-static void _cmdSetUsbPlugged(const uint8_t *data) { // 1 byte
+static void _cmdSetUsbConnected(const uint8_t *data) { // 1 byte
 #	if defined(AUM) && defined(HID_WITH_USB)
-	digitalWriteFast(AUM_SET_USB_PLUGGED_PIN, (bool)data[0]);
+	digitalWriteFast(AUM_SET_USB_CONNECTED_PIN, (bool)data[0]);
 #	endif
 }
 
@@ -243,7 +241,7 @@ static uint8_t _handleRequest(const uint8_t *data) { // 8 bytes
 			case PROTO::CMD::PING:				return PROTO::PONG::OK;
 			case PROTO::CMD::SET_KEYBOARD:		HANDLE(_cmdSetKeyboard);
 			case PROTO::CMD::SET_MOUSE:			HANDLE(_cmdSetMouse);
-			case PROTO::CMD::SET_USB_PLUGGED:	HANDLE(_cmdSetUsbPlugged);
+			case PROTO::CMD::SET_USB_CONNECTED:	HANDLE(_cmdSetUsbConnected);
 			case PROTO::CMD::CLEAR_HID:			HANDLE(_cmdClearHid);
 			case PROTO::CMD::KEYBOARD::KEY:		HANDLE(_cmdKeyEvent);
 			case PROTO::CMD::MOUSE::BUTTON:		HANDLE(_cmdMouseButtonEvent);
@@ -295,9 +293,9 @@ static void _sendResponse(uint8_t code) {
 			response[2] |= PROTO::OUTPUTS::MOUSE::USB_REL;
 		} // TODO: ps2
 #		if defined(AUM) && defined(HID_WITH_USB)
-		response[3] |= PROTO::PARAMS::USB_PLUGGABLE;
-		if (digitalReadFast(AUM_SET_USB_PLUGGED_PIN)) {
-			response[3] |= PROTO::PARAMS::USB_PLUGGED;
+		response[3] |= PROTO::PARAMS::USB_CONNECTABLE;
+		if (digitalReadFast(AUM_SET_USB_CONNECTED_PIN)) {
+			response[3] |= PROTO::PARAMS::USB_CONNECTED;
 		}
 #		endif
 #		ifdef HID_WITH_USB
@@ -326,8 +324,8 @@ int main() {
 #	if defined(AUM) && defined(HID_WITH_USB)
 	pinModeFast(AUM_IS_USB_POWERED_PIN, INPUT);
 	pinModeFast(AUM_SET_USB_VBUS_PIN, OUTPUT);
-	pinModeFast(AUM_SET_USB_PLUGGED_PIN, OUTPUT);
-	digitalWriteFast(AUM_SET_USB_PLUGGED_PIN, HIGH);
+	pinModeFast(AUM_SET_USB_CONNECTED_PIN, OUTPUT);
+	digitalWriteFast(AUM_SET_USB_CONNECTED_PIN, HIGH);
 #	endif
 
 #	ifdef CMD_SERIAL

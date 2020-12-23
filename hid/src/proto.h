@@ -63,17 +63,17 @@ namespace PROTO {
 	namespace PARAMS {
 		const uint8_t HAS_USB =			0b00000001;
 		const uint8_t HAS_PS2 =			0b00000010;
-		const uint8_t USB_PLUGGABLE =	0b10000000;
-		const uint8_t USB_PLUGGED =		0b01000000;
+		const uint8_t USB_CONNECTABLE =	0b10000000;
+		const uint8_t USB_CONNECTED =	0b01000000;
 	}
 
 	namespace CMD {
-		const uint8_t PING =			0x01;
-		const uint8_t REPEAT =			0x02;
-		const uint8_t SET_KEYBOARD =	0x03;
-		const uint8_t SET_MOUSE =		0x04;
-		const uint8_t SET_USB_PLUGGED =	0x05;
-		const uint8_t CLEAR_HID =		0x10;
+		const uint8_t PING =				0x01;
+		const uint8_t REPEAT =				0x02;
+		const uint8_t SET_KEYBOARD =		0x03;
+		const uint8_t SET_MOUSE =			0x04;
+		const uint8_t SET_USB_CONNECTED =	0x05;
+		const uint8_t CLEAR_HID =			0x10;
 
 		namespace KEYBOARD {
 			const uint8_t KEY =	0x11;
