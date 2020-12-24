@@ -25,6 +25,9 @@
 #include <Arduino.h>
 #include <HID-Project.h>
 
+#ifdef AUM
+#	include "../aum.h"
+#endif
 #include "keymap.h"
 
 
@@ -32,8 +35,14 @@
 #ifdef HID_USB_CHECK_ENDPOINT
 // https://github.com/arduino/ArduinoCore-avr/blob/2f67c916f6ab6193c404eebe22efe901e0f9542d/cores/arduino/USBCore.cpp#L249
 // https://sourceforge.net/p/arduinomidilib/svn/41/tree/branch/3.1/Teensy/teensy_core/usb_midi/usb_api.cpp#l103
+#	ifdef AUM
+#		define CHECK_AUM_USB { if (!aumIsUsbConnected()) { return offline; } }
+#	else
+#		define CHECK_AUM_USB
+#	endif
 #	define CLS_GET_OFFLINE_AS(_hid) \
 		uint8_t getOfflineAs(uint8_t offline) { \
+			CHECK_AUM_USB; \
 			uint8_t ep = _hid.getPluggedEndpoint(); \
 			uint8_t intr_state = SREG; \
 			cli(); \

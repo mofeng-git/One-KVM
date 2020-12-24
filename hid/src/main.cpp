@@ -36,14 +36,12 @@
 #	include <avr/eeprom.h>
 #endif
 
-#if defined(AUM) && defined(HID_WITH_USB)
-#	include <digitalWriteFast.h>
-// #define bla-bla-bla AUM_* pins
-#endif
-
 #include "proto.h"
 #ifdef CMD_SPI
 #	include "spi.h"
+#endif
+#ifdef AUM
+#	include "aum.h"
 #endif
 #include "usb/hid.h"
 #include "ps2/hid.h"
@@ -164,8 +162,8 @@ static void _cmdSetMouse(const uint8_t *data) { // 1 bytes
 }
 
 static void _cmdSetConnected(const uint8_t *data) { // 1 byte
-#	if defined(AUM) && defined(HID_WITH_USB)
-	digitalWriteFast(AUM_SET_USB_CONNECTED_PIN, (bool)data[0]);
+#	ifdef AUM
+	aumSetUsbConnected(data[0]);
 #	endif
 }
 
@@ -292,9 +290,9 @@ static void _sendResponse(uint8_t code) {
 			response[1] |= _usb_mouse_rel->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
 			response[2] |= PROTO::OUTPUTS1::MOUSE::USB_REL;
 		} // TODO: ps2
-#		if defined(AUM) && defined(HID_WITH_USB)
+#		ifdef AUM
 		response[3] |= PROTO::OUTPUTS2::CONNECTABLE;
-		if (digitalReadFast(AUM_SET_USB_CONNECTED_PIN)) {
+		if (aumIsUsbConnected()) {
 			response[3] |= PROTO::OUTPUTS2::CONNECTED;
 		}
 #		endif
@@ -321,11 +319,8 @@ int main() {
 	initVariant(); // Arduino
 	_initOutputs();
 
-#	if defined(AUM) && defined(HID_WITH_USB)
-	pinModeFast(AUM_IS_USB_POWERED_PIN, INPUT);
-	pinModeFast(AUM_SET_USB_VBUS_PIN, OUTPUT);
-	pinModeFast(AUM_SET_USB_CONNECTED_PIN, OUTPUT);
-	digitalWriteFast(AUM_SET_USB_CONNECTED_PIN, HIGH);
+#	ifdef AUM
+	aumInit();
 #	endif
 
 #	ifdef CMD_SERIAL
@@ -338,11 +333,8 @@ int main() {
 #	endif
 
 	while (true) {
-#		if defined(AUM) && defined(HID_WITH_USB)
-		bool vbus = digitalReadFast(AUM_IS_USB_POWERED_PIN);
-		if (digitalReadFast(AUM_SET_USB_VBUS_PIN) != vbus) {
-			digitalWriteFast(AUM_SET_USB_VBUS_PIN, vbus);
-		}
+#		ifdef AUM
+		aumProxyUsbVbus();
 #		endif
 
 #		ifdef HID_WITH_PS2
