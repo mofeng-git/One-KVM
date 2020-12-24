@@ -58,6 +58,7 @@ from .proto import RESPONSE_LEGACY_OK
 from .proto import BaseEvent
 from .proto import SetKeyboardOutputEvent
 from .proto import SetMouseOutputEvent
+from .proto import SetConnectedEvent
 from .proto import ClearEvent
 from .proto import KeyEvent
 from .proto import MouseButtonEvent
@@ -166,27 +167,27 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         state = await self.__state_flags.get()
         online = bool(state["online"])
         pong = (state["status"] >> 16) & 0xFF
-        outputs = (state["status"] >> 8) & 0xFF
-        features = state["status"] & 0xFF
+        outputs1 = (state["status"] >> 8) & 0xFF
+        outputs2 = state["status"] & 0xFF
 
         absolute = True
-        active_mouse = get_active_mouse(outputs)
+        active_mouse = get_active_mouse(outputs1)
         if online and active_mouse in ["usb_rel", "ps2"]:
             absolute = False
 
         keyboard_outputs: Dict = {"available": [], "active": ""}
         mouse_outputs: Dict = {"available": [], "active": ""}
 
-        if outputs & 0b10000000:  # Dynamic
-            if features & 0b00000001:  # USB
+        if outputs1 & 0b10000000:  # Dynamic
+            if outputs2 & 0b00000001:  # USB
                 keyboard_outputs["available"].extend(["usb"])
                 mouse_outputs["available"].extend(["usb", "usb_rel"])
 
-            if features & 0b00000010:  # PS/2
+            if outputs2 & 0b00000010:  # PS/2
                 keyboard_outputs["available"].extend(["ps2"])
                 mouse_outputs["available"].extend(["ps2"])
 
-            active_keyboard = get_active_keyboard(outputs)
+            active_keyboard = get_active_keyboard(outputs1)
             if active_keyboard in keyboard_outputs["available"]:
                 keyboard_outputs["active"] = active_keyboard
 
@@ -196,6 +197,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         return {
             "online": online,
             "busy": bool(state["busy"]),
+            "connected": (bool(outputs2 & 0b01000000) if outputs2 & 0b10000000 else None),
             "keyboard": {
                 "online": (online and not (pong & 0b00001000)),
                 "leds": {
@@ -255,6 +257,9 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
     def set_mouse_output(self, output: str) -> None:
         self.__queue_event(SetMouseOutputEvent(output), clear=True)
+
+    def set_connected(self, connected: bool) -> None:
+        self.__queue_event(SetConnectedEvent(connected), clear=True)
 
     def clear_events(self) -> None:
         self.__queue_event(ClearEvent(), clear=True)

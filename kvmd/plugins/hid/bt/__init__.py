@@ -134,6 +134,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         return {
             "online": True,
             "busy": False,
+            "connected": None,
             "keyboard": {
                 "online": state["online"],
                 "leds": {

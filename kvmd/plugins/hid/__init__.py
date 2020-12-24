@@ -73,6 +73,9 @@ class BaseHid(BasePlugin):
     def set_mouse_output(self, output: str) -> None:
         _ = output
 
+    def set_connected(self, connected: bool) -> None:
+        _ = connected
+
     def clear_events(self) -> None:
         raise NotImplementedError
 

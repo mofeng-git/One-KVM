@@ -79,6 +79,11 @@ class HidApi:
         self.__hid.set_mouse_output(valid_hid_mouse_output(request.query.get("output")))
         return make_json_response()
 
+    @exposed_http("POST", "/hid/set_connected")
+    async def __set_connected_handler(self, request: Request) -> Response:
+        self.__hid.set_connected(valid_bool(request.query.get("connected")))
+        return make_json_response()
+
     @exposed_http("POST", "/hid/reset")
     async def __reset_handler(self, _: Request) -> Response:
         await self.__hid.reset()

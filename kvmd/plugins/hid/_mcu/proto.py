@@ -83,6 +83,15 @@ class SetMouseOutputEvent(BaseEvent):
 
 
 # =====
+@dataclasses.dataclass(frozen=True)
+class SetConnectedEvent(BaseEvent):
+    connected: bool
+
+    def make_request(self) -> bytes:
+        return _make_request(struct.pack(">BBxxx", 0x05, int(self.connected)))
+
+
+# =====
 class ClearEvent(BaseEvent):
     def make_request(self) -> bytes:
         return _make_request(b"\x10\x00\x00\x00\x00")

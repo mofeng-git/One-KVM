@@ -93,6 +93,7 @@ class Plugin(BaseHid):
         return {
             "online": True,
             "busy": False,
+            "connected": None,
             "keyboard": {
                 "online": keyboard_state["online"],
                 "leds": {
