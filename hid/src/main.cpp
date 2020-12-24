@@ -93,16 +93,16 @@ static void _initOutputs() {
 		outputs = 0;
 
 #	if defined(HID_WITH_USB) && defined(HID_SET_USB_KBD)
-		outputs |= PROTO::OUTPUTS::KEYBOARD::USB;
+		outputs |= PROTO::OUTPUTS1::KEYBOARD::USB;
 #	elif defined(HID_WITH_PS2) && defined(HID_SET_PS2_KBD)
-		outputs |= PROTO::OUTPUTS::KEYBOARD::PS2;
+		outputs |= PROTO::OUTPUTS1::KEYBOARD::PS2;
 #	endif
 #	if defined(HID_WITH_USB) && defined(HID_SET_USB_MOUSE_ABS)
-		outputs |= PROTO::OUTPUTS::MOUSE::USB_ABS;
+		outputs |= PROTO::OUTPUTS1::MOUSE::USB_ABS;
 #	elif defined(HID_WITH_USB) && defined(HID_SET_USB_MOUSE_REL)
-		outputs |= PROTO::OUTPUTS::MOUSE::USB_REL;
+		outputs |= PROTO::OUTPUTS1::MOUSE::USB_REL;
 #	elif defined(HID_WITH_PS2) && defined(HID_SET_PS2_MOUSE)
-		outputs |= PROTO::OUTPUTS::MOUSE::PS2;
+		outputs |= PROTO::OUTPUTS1::MOUSE::PS2;
 #	endif
 
 #	ifdef HID_DYNAMIC
@@ -110,21 +110,21 @@ static void _initOutputs() {
 	}
 #	endif
 
-	uint8_t kbd = outputs & PROTO::OUTPUTS::KEYBOARD::MASK;
+	uint8_t kbd = outputs & PROTO::OUTPUTS1::KEYBOARD::MASK;
 	switch (kbd) {
 #	ifdef HID_WITH_USB
-		case PROTO::OUTPUTS::KEYBOARD::USB: _usb_kbd = new UsbKeyboard(); break;
+		case PROTO::OUTPUTS1::KEYBOARD::USB: _usb_kbd = new UsbKeyboard(); break;
 #	endif
 #	ifdef HID_WITH_PS2
-		case PROTO::OUTPUTS::KEYBOARD::PS2: _ps2_kbd = new Ps2Keyboard(); break;
+		case PROTO::OUTPUTS1::KEYBOARD::PS2: _ps2_kbd = new Ps2Keyboard(); break;
 #	endif
 	}
 
-	uint8_t mouse = outputs & PROTO::OUTPUTS::MOUSE::MASK;
+	uint8_t mouse = outputs & PROTO::OUTPUTS1::MOUSE::MASK;
 	switch (mouse) {
 #	ifdef HID_WITH_USB
-		case PROTO::OUTPUTS::MOUSE::USB_ABS: _usb_mouse_abs = new UsbMouseAbsolute(); break;
-		case PROTO::OUTPUTS::MOUSE::USB_REL: _usb_mouse_rel = new UsbMouseRelative(); break;
+		case PROTO::OUTPUTS1::MOUSE::USB_ABS: _usb_mouse_abs = new UsbMouseAbsolute(); break;
+		case PROTO::OUTPUTS1::MOUSE::USB_REL: _usb_mouse_rel = new UsbMouseRelative(); break;
 #	endif
 	}
 
@@ -132,17 +132,17 @@ static void _initOutputs() {
 
 	switch (kbd) {
 #	ifdef HID_WITH_USB
-		case PROTO::OUTPUTS::KEYBOARD::USB: _usb_kbd->begin(); break;
+		case PROTO::OUTPUTS1::KEYBOARD::USB: _usb_kbd->begin(); break;
 #	endif
 #	ifdef HID_WITH_PS2
-		case PROTO::OUTPUTS::KEYBOARD::PS2: _ps2_kbd->begin(); break;
+		case PROTO::OUTPUTS1::KEYBOARD::PS2: _ps2_kbd->begin(); break;
 #	endif
 	}
 
 	switch (mouse) {
 #	ifdef HID_WITH_USB
-		case PROTO::OUTPUTS::MOUSE::USB_ABS: _usb_mouse_abs->begin(); break;
-		case PROTO::OUTPUTS::MOUSE::USB_REL: _usb_mouse_rel->begin(); break;
+		case PROTO::OUTPUTS1::MOUSE::USB_ABS: _usb_mouse_abs->begin(); break;
+		case PROTO::OUTPUTS1::MOUSE::USB_REL: _usb_mouse_rel->begin(); break;
 #	endif
 	}
 }
@@ -151,19 +151,19 @@ static void _initOutputs() {
 // -----------------------------------------------------------------------------
 static void _cmdSetKeyboard(const uint8_t *data) { // 1 bytes
 #	ifdef HID_DYNAMIC
-	_writeOutputs(PROTO::OUTPUTS::KEYBOARD::MASK, data[0], false);
+	_writeOutputs(PROTO::OUTPUTS1::KEYBOARD::MASK, data[0], false);
 	_reset_required = true;
 #	endif
 }
 
 static void _cmdSetMouse(const uint8_t *data) { // 1 bytes
 #	ifdef HID_DYNAMIC
-	_writeOutputs(PROTO::OUTPUTS::MOUSE::MASK, data[0], false);
+	_writeOutputs(PROTO::OUTPUTS1::MOUSE::MASK, data[0], false);
 	_reset_required = true;
 #	endif
 }
 
-static void _cmdSetUsbConnected(const uint8_t *data) { // 1 byte
+static void _cmdSetConnected(const uint8_t *data) { // 1 byte
 #	if defined(AUM) && defined(HID_WITH_USB)
 	digitalWriteFast(AUM_SET_USB_CONNECTED_PIN, (bool)data[0]);
 #	endif
@@ -241,7 +241,7 @@ static uint8_t _handleRequest(const uint8_t *data) { // 8 bytes
 			case PROTO::CMD::PING:				return PROTO::PONG::OK;
 			case PROTO::CMD::SET_KEYBOARD:		HANDLE(_cmdSetKeyboard);
 			case PROTO::CMD::SET_MOUSE:			HANDLE(_cmdSetMouse);
-			case PROTO::CMD::SET_USB_CONNECTED:	HANDLE(_cmdSetUsbConnected);
+			case PROTO::CMD::SET_CONNECTED:		HANDLE(_cmdSetConnected);
 			case PROTO::CMD::CLEAR_HID:			HANDLE(_cmdClearHid);
 			case PROTO::CMD::KEYBOARD::KEY:		HANDLE(_cmdKeyEvent);
 			case PROTO::CMD::MOUSE::BUTTON:		HANDLE(_cmdMouseButtonEvent);
@@ -274,35 +274,35 @@ static void _sendResponse(uint8_t code) {
 		if (_reset_required) {
 			response[1] |= PROTO::PONG::RESET_REQUIRED;
 		}
-		response[2] = PROTO::OUTPUTS::DYNAMIC;
+		response[2] = PROTO::OUTPUTS1::DYNAMIC;
 #		endif
 		if (_usb_kbd) {
 			response[1] |= _usb_kbd->getOfflineAs(PROTO::PONG::KEYBOARD_OFFLINE);
 			response[1] |= _usb_kbd->getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM);
-			response[2] |= PROTO::OUTPUTS::KEYBOARD::USB;
+			response[2] |= PROTO::OUTPUTS1::KEYBOARD::USB;
 		} else if (_ps2_kbd) {
 			response[1] |= _ps2_kbd->getOfflineAs(PROTO::PONG::KEYBOARD_OFFLINE);
 			response[1] |= _ps2_kbd->getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM);
-			response[2] |= PROTO::OUTPUTS::KEYBOARD::PS2;
+			response[2] |= PROTO::OUTPUTS1::KEYBOARD::PS2;
 		}
 		if (_usb_mouse_abs) {
 			response[1] |= _usb_mouse_abs->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
-			response[2] |= PROTO::OUTPUTS::MOUSE::USB_ABS;
+			response[2] |= PROTO::OUTPUTS1::MOUSE::USB_ABS;
 		} else if (_usb_mouse_rel) {
 			response[1] |= _usb_mouse_rel->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
-			response[2] |= PROTO::OUTPUTS::MOUSE::USB_REL;
+			response[2] |= PROTO::OUTPUTS1::MOUSE::USB_REL;
 		} // TODO: ps2
 #		if defined(AUM) && defined(HID_WITH_USB)
-		response[3] |= PROTO::PARAMS::USB_CONNECTABLE;
+		response[3] |= PROTO::OUTPUTS2::CONNECTABLE;
 		if (digitalReadFast(AUM_SET_USB_CONNECTED_PIN)) {
-			response[3] |= PROTO::PARAMS::USB_CONNECTED;
+			response[3] |= PROTO::OUTPUTS2::CONNECTED;
 		}
 #		endif
 #		ifdef HID_WITH_USB
-		response[3] |= PROTO::PARAMS::HAS_USB;
+		response[3] |= PROTO::OUTPUTS2::HAS_USB;
 #		endif
 #		ifdef HID_WITH_PS2
-		response[3] |= PROTO::PARAMS::HAS_PS2;
+		response[3] |= PROTO::OUTPUTS2::HAS_PS2;
 #		endif
 	} else {
 		response[1] = code;

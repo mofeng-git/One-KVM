@@ -45,7 +45,7 @@ namespace PROTO {
 		const uint8_t RESET_REQUIRED =		0b01000000;
 	};
 
-	namespace OUTPUTS { // Complex request/responce flags
+	namespace OUTPUTS1 { // Complex request/responce flags
 		const uint8_t DYNAMIC =		0b10000000;
 		namespace KEYBOARD {
 			const uint8_t MASK =	0b00000111;
@@ -60,20 +60,20 @@ namespace PROTO {
 		};
 	};
 
-	namespace PARAMS {
-		const uint8_t HAS_USB =			0b00000001;
-		const uint8_t HAS_PS2 =			0b00000010;
-		const uint8_t USB_CONNECTABLE =	0b10000000;
-		const uint8_t USB_CONNECTED =	0b01000000;
+	namespace OUTPUTS2 { // Complex response
+		const uint8_t CONNECTABLE =	0b10000000;
+		const uint8_t CONNECTED =	0b01000000;
+		const uint8_t HAS_USB =		0b00000001;
+		const uint8_t HAS_PS2 =		0b00000010;
 	}
 
 	namespace CMD {
-		const uint8_t PING =				0x01;
-		const uint8_t REPEAT =				0x02;
-		const uint8_t SET_KEYBOARD =		0x03;
-		const uint8_t SET_MOUSE =			0x04;
-		const uint8_t SET_USB_CONNECTED =	0x05;
-		const uint8_t CLEAR_HID =			0x10;
+		const uint8_t PING =			0x01;
+		const uint8_t REPEAT =			0x02;
+		const uint8_t SET_KEYBOARD =	0x03;
+		const uint8_t SET_MOUSE =		0x04;
+		const uint8_t SET_CONNECTED =	0x05;
+		const uint8_t CLEAR_HID =		0x10;
 
 		namespace KEYBOARD {
 			const uint8_t KEY =	0x11;
