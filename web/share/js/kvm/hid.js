@@ -75,6 +75,7 @@ export function Hid() {
 		window.addEventListener("blur", __releaseAll);
 
 		tools.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
+		tools.setOnClick($("hid-connect-checkbox"), __clickConnectCheckbox);
 		tools.setOnClick($("hid-reset-button"), __clickResetButton);
 
 		for (let el_shortcut of $$$("[data-shortcut]")) {
@@ -146,11 +147,14 @@ export function Hid() {
 			}
 			tools.featureSetEnabled($("hid-outputs"), has_outputs);
 			tools.featureSetEnabled($("hid-mouse-squash"), has_relative);
+			tools.featureSetEnabled($("hid-connect"), (state.connected !== null));
+			$("hid-connect-checkbox").checked = !!state.connected;
 		}
 
 		wm.switchRadioEnabled("hid-outputs-keyboard-radio", (state && state.online && !state.busy));
 		wm.switchRadioEnabled("hid-outputs-mouse-radio", (state && state.online && !state.busy));
 		wm.switchEnabled($("hid-mouse-squash-checkbox"), (has_relative_squash && !state.busy));
+		wm.switchEnabled($("hid-connect-checkbox"), (state && state.online && !state.busy));
 
 		if (state) {
 			__keyboard.setState(state.keyboard, state.online, state.busy);
@@ -231,6 +235,17 @@ export function Hid() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					wm.error("Can't configure HID:<br>", http.responseText);
+				}
+			}
+		});
+	};
+
+	var __clickConnectCheckbox = function() {
+		let connected = $("hid-connect-checkbox").checked;
+		let http = tools.makeRequest("POST", `/api/hid/set_connected?connected=${connected}`, function() {
+			if (http.readyState === 4) {
+				if (http.status !== 200) {
+					wm.error(`Can't ${connected ? "connect" : "disconnect"} HID:<br>`, http.responseText);
 				}
 			}
 		});
