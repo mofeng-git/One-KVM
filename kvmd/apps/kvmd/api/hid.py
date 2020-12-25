@@ -79,7 +79,7 @@ class HidApi:
             ]
             if request.query.get(key) is not None
         }
-        await self.__hid.set_params(**params)  # type: ignore
+        self.__hid.set_params(**params)  # type: ignore
         return make_json_response()
 
     @exposed_http("POST", "/hid/set_connected")
