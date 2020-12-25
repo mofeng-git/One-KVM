@@ -25,9 +25,12 @@ from typing import Optional
 
 import gpiod
 
-from ... import env
 from ... import aiotools
 from ... import aiogp
+
+from ...yamlconf import Option
+
+from ...validators.os import valid_abs_path
 
 from . import BaseUserGpioDriver
 
@@ -38,9 +41,13 @@ class Plugin(BaseUserGpioDriver):
         self,
         instance_name: str,
         notifier: aiotools.AioNotifier,
+
+        device_path: str,
     ) -> None:
 
         super().__init__(instance_name, notifier)
+
+        self.__device_path = device_path
 
         self.__input_pins: Dict[int, aiogp.AioReaderPinParams] = {}
         self.__output_pins: Dict[int, Optional[bool]] = {}
@@ -49,6 +56,12 @@ class Plugin(BaseUserGpioDriver):
 
         self.__chip: Optional[gpiod.Chip] = None
         self.__output_lines: Dict[int, gpiod.Line] = {}
+
+    @classmethod
+    def get_plugin_options(cls) -> Dict:
+        return {
+            "device": Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="device_path"),
+        }
 
     def register_input(self, pin: int, debounce: float) -> None:
         self.__input_pins[pin] = aiogp.AioReaderPinParams(False, debounce)
@@ -59,13 +72,13 @@ class Plugin(BaseUserGpioDriver):
     def prepare(self) -> None:
         assert self.__reader is None
         self.__reader = aiogp.AioReader(
-            path=env.GPIO_DEVICE_PATH,
+            path=self.__device_path,
             consumer="kvmd::gpio::inputs",
             pins=self.__input_pins,
             notifier=self._notifier,
         )
 
-        self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
+        self.__chip = gpiod.Chip(self.__device_path)
         for (pin, initial) in self.__output_pins.items():
             line = self.__chip.get_line(pin)
             line.request("kvmd::gpio::outputs", gpiod.LINE_REQ_DIR_OUT, default_vals=[int(initial or False)])

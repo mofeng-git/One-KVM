@@ -30,18 +30,18 @@ import gpiod
 
 from ....logging import get_logger
 
-from .... import env
-
 
 # =====
 class Gpio:
     def __init__(
         self,
+        device_path: str,
         reset_pin: int,
         reset_inverted: bool,
         reset_delay: float,
     ) -> None:
 
+        self.__device_path = device_path
         self.__reset_pin = reset_pin
         self.__reset_inverted = reset_inverted
         self.__reset_delay = reset_delay
@@ -53,7 +53,7 @@ class Gpio:
         if self.__reset_pin >= 0:
             assert self.__chip is None
             assert self.__reset_line is None
-            self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
+            self.__chip = gpiod.Chip(self.__device_path)
             self.__reset_line = self.__chip.get_line(self.__reset_pin)
             self.__reset_line.request("kvmd::hid::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[int(self.__reset_inverted)])
 

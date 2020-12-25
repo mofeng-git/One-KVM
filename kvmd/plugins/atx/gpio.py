@@ -28,7 +28,6 @@ import gpiod
 
 from ...logging import get_logger
 
-from ... import env
 from ... import aiotools
 from ... import aiogp
 
@@ -37,6 +36,7 @@ from ...yamlconf import Option
 from ...validators.basic import valid_bool
 from ...validators.basic import valid_float_f0
 from ...validators.basic import valid_float_f01
+from ...validators.os import valid_abs_path
 from ...validators.hw import valid_gpio_pin
 
 from . import AtxIsBusyError
@@ -47,6 +47,8 @@ from . import BaseAtx
 class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments,super-init-not-called
         self,
+        device_path: str,
+
         power_led_pin: int,
         power_led_inverted: bool,
         power_led_debounce: float,
@@ -60,6 +62,8 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         click_delay: float,
         long_click_delay: float,
     ) -> None:
+
+        self.__device_path = device_path
 
         self.__power_led_pin = power_led_pin
         self.__hdd_led_pin = hdd_led_pin
@@ -77,7 +81,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__reset_switch_line: Optional[gpiod.Line] = None
 
         self.__reader = aiogp.AioReader(
-            path=env.GPIO_DEVICE_PATH,
+            path=self.__device_path,
             consumer="kvmd::atx::leds",
             pins={
                 power_led_pin: aiogp.AioReaderPinParams(power_led_inverted, power_led_debounce),
@@ -89,6 +93,8 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
+            "device": Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="device_path"),
+
             "power_led_pin":      Option(-1,    type=valid_gpio_pin),
             "power_led_inverted": Option(False, type=valid_bool),
             "power_led_debounce": Option(0.1,   type=valid_float_f0),
@@ -108,7 +114,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         assert self.__power_switch_line is None
         assert self.__reset_switch_line is None
 
-        self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
+        self.__chip = gpiod.Chip(self.__device_path)
 
         self.__power_switch_line = self.__chip.get_line(self.__power_switch_pin)
         self.__power_switch_line.request("kvmd::atx::power_switch", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])

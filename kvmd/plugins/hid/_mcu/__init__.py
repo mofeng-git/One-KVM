@@ -46,6 +46,7 @@ from ....validators.basic import valid_bool
 from ....validators.basic import valid_int_f0
 from ....validators.basic import valid_int_f1
 from ....validators.basic import valid_float_f01
+from ....validators.os import valid_abs_path
 from ....validators.hw import valid_gpio_pin_optional
 
 from .. import BaseHid
@@ -113,6 +114,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         self,
         phy: BasePhy,
 
+        gpio_device_path: str,
         reset_pin: int,
         reset_inverted: bool,
         reset_delay: float,
@@ -133,7 +135,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         self.__noop = noop
 
         self.__phy = phy
-        self.__gpio = Gpio(reset_pin, reset_inverted, reset_delay)
+        self.__gpio = Gpio(gpio_device_path, reset_pin, reset_inverted, reset_delay)
 
         self.__events_queue: "multiprocessing.Queue[BaseEvent]" = multiprocessing.Queue()
 
@@ -149,6 +151,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
+            "gpio_device":    Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="gpio_device_path"),
             "reset_pin":      Option(-1,    type=valid_gpio_pin_optional),
             "reset_inverted": Option(False, type=valid_bool),
             "reset_delay":    Option(0.1,   type=valid_float_f01),

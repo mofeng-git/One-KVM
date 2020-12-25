@@ -24,7 +24,6 @@ from typing import Optional
 
 import gpiod
 
-from .... import env
 from .... import aiogp
 
 
@@ -32,11 +31,13 @@ from .... import aiogp
 class Gpio:
     def __init__(
         self,
+        device_path: str,
         target_pin: int,
         reset_pin: int,
         reset_delay: float,
     ) -> None:
 
+        self.__device_path = device_path
         self.__target_pin = target_pin
         self.__reset_pin = reset_pin
         self.__reset_delay = reset_delay
@@ -50,7 +51,7 @@ class Gpio:
         assert self.__target_line is None
         assert self.__reset_line is None
 
-        self.__chip = gpiod.Chip(env.GPIO_DEVICE_PATH)
+        self.__chip = gpiod.Chip(self.__device_path)
 
         self.__target_line = self.__chip.get_line(self.__target_pin)
         self.__target_line.request("kvmd::msd::target", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])

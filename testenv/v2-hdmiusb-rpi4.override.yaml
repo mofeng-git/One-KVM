@@ -2,6 +2,9 @@ kvmd:
     server:
         unix_mode: 0666
 
+    atx:
+        device: /dev/kvmd-gpio
+
     hid:
         keyboard:
             device: /dev/null

@@ -62,6 +62,7 @@ from .drive import DeviceInfo
 class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=super-init-not-called
         self,
+        gpio_device_path: str,
         target_pin: int,
         reset_pin: int,
 
@@ -75,7 +76,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__init_delay = init_delay
         self.__init_retries = init_retries
 
-        self.__gpio = Gpio(target_pin, reset_pin, reset_delay)
+        self.__gpio = Gpio(gpio_device_path, target_pin, reset_pin, reset_delay)
 
         self.__device_info: Optional[DeviceInfo] = None
         self.__connected = False
@@ -97,8 +98,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "target_pin": Option(-1, type=valid_gpio_pin),
-            "reset_pin":  Option(-1, type=valid_gpio_pin),
+            "gpio_device": Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="gpio_device_path"),
+            "target_pin":  Option(-1, type=valid_gpio_pin),
+            "reset_pin":   Option(-1, type=valid_gpio_pin),
 
             "device":       Option("",  type=valid_abs_path, unpack_as="device_path"),
             "init_delay":   Option(1.0, type=valid_float_f01),

@@ -44,8 +44,6 @@ from ...validators.basic import valid_int_f1
 from ...validators.basic import valid_float_f01
 from ...validators.hw import valid_gpio_pin_optional
 
-from ... import env
-
 from ._mcu import BasePhyConnection
 from ._mcu import BasePhy
 from ._mcu import BaseMcuHid
@@ -100,6 +98,7 @@ class _SpiPhyConnection(BasePhyConnection):
 class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
+        gpio_device_path: str,
         bus: int,
         chip: int,
         hw_cs: bool,
@@ -109,6 +108,7 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
         read_timeout: float,
     ) -> None:
 
+        self.__gpio_device_path = gpio_device_path
         self.__bus = bus
         self.__chip = chip
         self.__hw_cs = hw_cs
@@ -145,7 +145,7 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
     @contextlib.contextmanager
     def __sw_cs_connected(self) -> Generator[Optional[gpiod.Line], None, None]:
         if self.__sw_cs_pin > 0:
-            with contextlib.closing(gpiod.Chip(env.GPIO_DEVICE_PATH)) as chip:
+            with contextlib.closing(gpiod.Chip(self.__gpio_device_path)) as chip:
                 line = chip.get_line(self.__sw_cs_pin)
                 line.request("kvmd::hid::sw_cs", gpiod.LINE_REQ_DIR_OUT, default_vals=[1])
                 yield line
@@ -157,6 +157,7 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
 class Plugin(BaseMcuHid):
     def __init__(self, **kwargs: Any) -> None:
         phy_kwargs: Dict = {key: kwargs.pop(key) for key in self.__get_phy_options()}
+        phy_kwargs["gpio_device_path"] = kwargs["gpio_device_path"]
         super().__init__(phy=_SpiPhy(**phy_kwargs), **kwargs)
 
     @classmethod
