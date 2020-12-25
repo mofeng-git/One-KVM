@@ -141,7 +141,7 @@ export function Mouse(record_callback) {
 	};
 
 	var __isRelativeSquashed = function() {
-		return $("hid-mouse-squash-checkbox").checked;
+		return $("hid-mouse-squash-switch").checked;
 	};
 
 	var __relativeCapturedHandler = function() {

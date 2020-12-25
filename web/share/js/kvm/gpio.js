@@ -48,7 +48,7 @@ export function Gpio() {
 				for (let type of ["switch", "button"]) {
 					let el = $(`gpio-${type}-${channel}`);
 					if (el) {
-						wm.switchEnabled(el, state.outputs[channel].online && !state.outputs[channel].busy);
+						wm.setElementEnabled(el, state.outputs[channel].online && !state.outputs[channel].busy);
 					}
 				}
 				let el = $(`gpio-switch-${channel}`);
@@ -62,7 +62,7 @@ export function Gpio() {
 			}
 			for (let selector of [".gpio-switch", ".gpio-button"]) {
 				for (let el of $$$(selector)) {
-					wm.switchEnabled(el, false);
+					wm.setElementEnabled(el, false);
 				}
 			}
 		}

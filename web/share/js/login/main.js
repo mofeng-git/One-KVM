@@ -75,9 +75,9 @@ function __login() {
 }
 
 function __setEnabled(enabled) {
-	wm.switchEnabled($("user-input"), enabled);
-	wm.switchEnabled($("passwd-input"), enabled);
-	wm.switchEnabled($("login-button"), enabled);
+	wm.setElementEnabled($("user-input"), enabled);
+	wm.setElementEnabled($("passwd-input"), enabled);
+	wm.setElementEnabled($("login-button"), enabled);
 }
 
 function __tryAgain() {

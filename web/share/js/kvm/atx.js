@@ -59,7 +59,7 @@ export function Atx() {
 			$("atx-hdd-led").className = "led-gray";
 		}
 		for (let id of ["atx-power-button", "atx-power-button-long", "atx-reset-button"]) {
-			wm.switchEnabled($(id), buttons_enabled);
+			wm.setElementEnabled($(id), buttons_enabled);
 		}
 	};
 

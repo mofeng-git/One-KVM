@@ -27,7 +27,7 @@ li(class="right")
 				td #[input(type="range" id="stream-size-slider" class="slider")]
 				td(id="stream-size-value" class="value" style="width: 4em") 100%
 		hr
-		+menu_switch("stream-auto-resize-checkbox", "Auto-resize stream window", true, true)
+		+menu_switch("stream-auto-resize-switch", "Auto-resize stream window", true, true)
 		hr
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu id="show-stream-button" class="row33") &bull; Show stream
@@ -44,10 +44,10 @@ li(class="right")
 					td #[div(id="hid-outputs-mouse" class="radio-box")]
 		div(id="hid-mouse-squash" class="feature-disabled")
 			hr
-			+menu_switch("hid-mouse-squash-checkbox", "Squash relative mouse moves", true, true)
+			+menu_switch("hid-mouse-squash-switch", "Squash relative mouse moves", true, true)
 		div(id="hid-connect" class="feature-disabled")
 			hr
-			+menu_switch("hid-connect-checkbox", "Connect HID to Server", true, true)
+			+menu_switch("hid-connect-switch", "Connect HID to Server", true, true)
 		hr
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu id="show-keyboard-button" class="row50") &bull; Show keyboard

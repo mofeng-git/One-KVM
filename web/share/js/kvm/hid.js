@@ -75,7 +75,7 @@ export function Hid() {
 		window.addEventListener("blur", __releaseAll);
 
 		tools.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
-		tools.setOnClick($("hid-connect-checkbox"), __clickConnectCheckbox);
+		tools.setOnClick($("hid-connect-switch"), __clickConnectSwitch);
 		tools.setOnClick($("hid-reset-button"), __clickResetButton);
 
 		for (let el_shortcut of $$$("[data-shortcut]")) {
@@ -86,9 +86,9 @@ export function Hid() {
 	/************************************************************************/
 
 	self.setSocket = function(ws) {
-		wm.switchEnabled($("hid-pak-text"), ws);
-		wm.switchEnabled($("hid-pak-button"), ws);
-		wm.switchEnabled($("hid-reset-button"), ws);
+		wm.setElementEnabled($("hid-pak-text"), ws);
+		wm.setElementEnabled($("hid-pak-button"), ws);
+		wm.setElementEnabled($("hid-reset-button"), ws);
 		if (!ws) {
 			self.setState(null);
 		}
@@ -148,13 +148,13 @@ export function Hid() {
 			tools.featureSetEnabled($("hid-outputs"), has_outputs);
 			tools.featureSetEnabled($("hid-mouse-squash"), has_relative);
 			tools.featureSetEnabled($("hid-connect"), (state.connected !== null));
-			$("hid-connect-checkbox").checked = !!state.connected;
+			$("hid-connect-switch").checked = !!state.connected;
 		}
 
-		wm.switchRadioEnabled("hid-outputs-keyboard-radio", (state && state.online && !state.busy));
-		wm.switchRadioEnabled("hid-outputs-mouse-radio", (state && state.online && !state.busy));
-		wm.switchEnabled($("hid-mouse-squash-checkbox"), (has_relative_squash && !state.busy));
-		wm.switchEnabled($("hid-connect-checkbox"), (state && state.online && !state.busy));
+		wm.setRadioEnabled("hid-outputs-keyboard-radio", (state && state.online && !state.busy));
+		wm.setRadioEnabled("hid-outputs-mouse-radio", (state && state.online && !state.busy));
+		wm.setElementEnabled($("hid-mouse-squash-switch"), (has_relative_squash && !state.busy));
+		wm.setElementEnabled($("hid-connect-switch"), (state && state.online && !state.busy));
 
 		if (state) {
 			__keyboard.setState(state.keyboard, state.online, state.busy);
@@ -203,15 +203,15 @@ export function Hid() {
 
 			wm.confirm(confirm_msg).then(function(ok) {
 				if (ok) {
-					wm.switchEnabled($("hid-pak-text"), false);
-					wm.switchEnabled($("hid-pak-button"), false);
+					wm.setElementEnabled($("hid-pak-text"), false);
+					wm.setElementEnabled($("hid-pak-button"), false);
 
 					tools.debug("HID: paste-as-keys:", text);
 
 					let http = tools.makeRequest("POST", "/api/hid/print?limit=0", function() {
 						if (http.readyState === 4) {
-							wm.switchEnabled($("hid-pak-text"), true);
-							wm.switchEnabled($("hid-pak-button"), true);
+							wm.setElementEnabled($("hid-pak-text"), true);
+							wm.setElementEnabled($("hid-pak-button"), true);
 							$("hid-pak-text").value = "";
 							if (http.status === 413) {
 								wm.error("Too many text for paste!");
@@ -240,8 +240,8 @@ export function Hid() {
 		});
 	};
 
-	var __clickConnectCheckbox = function() {
-		let connected = $("hid-connect-checkbox").checked;
+	var __clickConnectSwitch = function() {
+		let connected = $("hid-connect-switch").checked;
 		let http = tools.makeRequest("POST", `/api/hid/set_connected?connected=${connected}`, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {

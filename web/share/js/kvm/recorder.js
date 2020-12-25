@@ -222,7 +222,7 @@ export function Recorder() {
 			}
 			index += 1;
 		}
-		if ($("hid-recorder-loop-checkbox").checked) {
+		if ($("hid-recorder-loop-switch").checked) {
 			setTimeout(() => __runEvents(0));
 		} else {
 			__stopProcess();
@@ -241,14 +241,14 @@ export function Recorder() {
 			$("hid-recorder-led").title = "";
 		}
 
-		wm.switchEnabled($("hid-recorder-record"), (__ws && !__play_timer && !__recording));
-		wm.switchEnabled($("hid-recorder-stop"), (__ws && (__play_timer || __recording)));
-		wm.switchEnabled($("hid-recorder-play"), (__ws && !__recording && __events.length));
-		wm.switchEnabled($("hid-recorder-clear"), (!__play_timer && !__recording && __events.length));
-		wm.switchEnabled($("hid-recorder-loop-checkbox"), (__ws && !__recording));
+		wm.setElementEnabled($("hid-recorder-record"), (__ws && !__play_timer && !__recording));
+		wm.setElementEnabled($("hid-recorder-stop"), (__ws && (__play_timer || __recording)));
+		wm.setElementEnabled($("hid-recorder-play"), (__ws && !__recording && __events.length));
+		wm.setElementEnabled($("hid-recorder-clear"), (!__play_timer && !__recording && __events.length));
+		wm.setElementEnabled($("hid-recorder-loop-switch"), (__ws && !__recording));
 
-		wm.switchEnabled($("hid-recorder-upload"), (!__play_timer && !__recording));
-		wm.switchEnabled($("hid-recorder-download"), (!__play_timer && !__recording && __events.length));
+		wm.setElementEnabled($("hid-recorder-upload"), (!__play_timer && !__recording));
+		wm.setElementEnabled($("hid-recorder-download"), (!__play_timer && !__recording && __events.length));
 
 		__setCounters(__events.length, __events_time);
 	};

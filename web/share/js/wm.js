@@ -162,7 +162,7 @@ function __WindowManager() {
 		return promise;
 	};
 
-	self.switchEnabled = function(el, enabled) {
+	self.setElementEnabled = function(el, enabled) {
 		if (!enabled && document.activeElement === el) {
 			let el_to_focus = (
 				el.closest(".modal-window")
@@ -176,9 +176,9 @@ function __WindowManager() {
 		el.disabled = !enabled;
 	};
 
-	self.switchRadioEnabled = function(name, enabled) {
+	self.setRadioEnabled = function(name, enabled) {
 		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
-			self.switchEnabled(el, enabled);
+			self.setElementEnabled(el, enabled);
 		}
 	};
 

@@ -64,8 +64,8 @@ export function Msd() {
 	};
 
 	var __selectImage = function() {
-		wm.switchEnabled($("msd-image-selector"), false);
-		wm.switchEnabled($("msd-remove-image"), false);
+		wm.setElementEnabled($("msd-image-selector"), false);
+		wm.setElementEnabled($("msd-remove-image"), false);
 		__sendParam("image", $("msd-image-selector").value);
 	};
 
@@ -148,7 +148,7 @@ export function Msd() {
 			__applyState();
 		});
 		__applyState();
-		wm.switchEnabled($(`msd-${connected ? "connect" : "disconnect"}-button`), false);
+		wm.setElementEnabled($(`msd-${connected ? "connect" : "disconnect"}-button`), false);
 	};
 
 	var __selectNewImageFile = function() {
@@ -217,23 +217,23 @@ export function Msd() {
 				tools.progressSetValue($("msd-storage-progress"), "Storage: unavailable", 0);
 			}
 
-			wm.switchEnabled($("msd-image-selector"), (__state.online && __state.features.multi && !__state.drive.connected && !__state.busy));
+			wm.setElementEnabled($("msd-image-selector"), (__state.online && __state.features.multi && !__state.drive.connected && !__state.busy));
 			if (__state.features.multi && !__state.storage.uploading) {
 				__refreshImageSelector();
 			}
-			wm.switchEnabled($("msd-remove-image"), (__state.online && __state.features.multi && __state.drive.image && !__state.drive.connected && !__state.busy));
+			wm.setElementEnabled($("msd-remove-image"), (__state.online && __state.features.multi && __state.drive.image && !__state.drive.connected && !__state.busy));
 
-			wm.switchRadioEnabled("msd-mode-radio", (__state.online && __state.features.cdrom && !__state.drive.connected && !__state.busy));
+			wm.setRadioEnabled("msd-mode-radio", (__state.online && __state.features.cdrom && !__state.drive.connected && !__state.busy));
 			tools.radioSetValue("msd-mode-radio", `${Number(__state.online && __state.features.cdrom && __state.drive.cdrom)}`);
 
-			wm.switchEnabled($("msd-connect-button"), (__state.online && (!__state.features.multi || __state.drive.image) && !__state.drive.connected && !__state.busy));
-			wm.switchEnabled($("msd-disconnect-button"), (__state.online && __state.drive.connected && !__state.busy));
+			wm.setElementEnabled($("msd-connect-button"), (__state.online && (!__state.features.multi || __state.drive.image) && !__state.drive.connected && !__state.busy));
+			wm.setElementEnabled($("msd-disconnect-button"), (__state.online && __state.drive.connected && !__state.busy));
 
-			wm.switchEnabled($("msd-select-new-image-button"), (__state.online && !__state.drive.connected && !__upload_http && !__state.busy));
-			wm.switchEnabled($("msd-upload-new-image-button"), (__state.online && !__state.drive.connected && __image_file && !__state.busy));
-			wm.switchEnabled($("msd-abort-uploading-button"), (__state.online && __upload_http));
+			wm.setElementEnabled($("msd-select-new-image-button"), (__state.online && !__state.drive.connected && !__upload_http && !__state.busy));
+			wm.setElementEnabled($("msd-upload-new-image-button"), (__state.online && !__state.drive.connected && __image_file && !__state.busy));
+			wm.setElementEnabled($("msd-abort-uploading-button"), (__state.online && __upload_http));
 
-			wm.switchEnabled($("msd-reset-button"), (__state.enabled && !__state.busy));
+			wm.setElementEnabled($("msd-reset-button"), (__state.enabled && !__state.busy));
 
 			tools.hiddenSetVisible($("msd-submenu-new-image"), __image_file);
 			$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
@@ -256,21 +256,21 @@ export function Msd() {
 			$("msd-storage-size").innerHTML = "";
 			tools.progressSetValue($("msd-storage-progress"), "", 0);
 
-			wm.switchEnabled($("msd-image-selector"), false);
+			wm.setElementEnabled($("msd-image-selector"), false);
 			$("msd-image-selector").options.length = 1;
-			wm.switchEnabled($("msd-remove-image"), false);
+			wm.setElementEnabled($("msd-remove-image"), false);
 
-			wm.switchRadioEnabled("msd-mode-radio", false);
+			wm.setRadioEnabled("msd-mode-radio", false);
 			tools.radioSetValue("msd-mode-radio", "0");
 
-			wm.switchEnabled($("msd-connect-button"), false);
-			wm.switchEnabled($("msd-disconnect-button"), false);
+			wm.setElementEnabled($("msd-connect-button"), false);
+			wm.setElementEnabled($("msd-disconnect-button"), false);
 
-			wm.switchEnabled($("msd-select-new-image-button"), false);
-			wm.switchEnabled($("msd-upload-new-image-button"), false);
-			wm.switchEnabled($("msd-abort-uploading-button"), false);
+			wm.setElementEnabled($("msd-select-new-image-button"), false);
+			wm.setElementEnabled($("msd-upload-new-image-button"), false);
+			wm.setElementEnabled($("msd-abort-uploading-button"), false);
 
-			wm.switchEnabled($("msd-reset-button"), false);
+			wm.setElementEnabled($("msd-reset-button"), false);
 
 			$("msd-select-new-image-file").value = "";
 			tools.hiddenSetVisible($("msd-submenu-new-image"), false);

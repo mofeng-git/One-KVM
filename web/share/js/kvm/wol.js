@@ -45,7 +45,7 @@ export function WakeOnLan() {
 			tools.featureSetEnabled($("wol"), state.enabled);
 			__target = state.target;
 		}
-		wm.switchEnabled($("wol-wakeup-button"), (state && state.enabled));
+		wm.setElementEnabled($("wol-wakeup-button"), (state && state.enabled));
 	};
 
 	var __clickWakeupButton = function() {
