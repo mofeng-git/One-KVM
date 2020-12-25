@@ -69,14 +69,17 @@ class HidApi:
     async def __state_handler(self, _: Request) -> Response:
         return make_json_response(await self.__hid.get_state())
 
-    @exposed_http("POST", "/hid/keyboard/set_params")
-    async def __keyboard_set_params_handler(self, request: Request) -> Response:
-        self.__hid.set_keyboard_output(valid_hid_keyboard_output(request.query.get("output")))
-        return make_json_response()
-
-    @exposed_http("POST", "/hid/mouse/set_params")
-    async def __mouse_set_params_handler(self, request: Request) -> Response:
-        self.__hid.set_mouse_output(valid_hid_mouse_output(request.query.get("output")))
+    @exposed_http("POST", "/hid/set_params")
+    async def __set_params_handler(self, request: Request) -> Response:
+        params = {
+            key: validator(request.query.get(key))
+            for (key, validator) in [
+                ("keyboard_output", valid_hid_keyboard_output),
+                ("mouse_output", valid_hid_mouse_output),
+            ]
+            if request.query.get(key) is not None
+        }
+        await self.__hid.set_params(**params)  # type: ignore
         return make_json_response()
 
     @exposed_http("POST", "/hid/set_connected")

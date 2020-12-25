@@ -231,7 +231,7 @@ export function Hid() {
 
 	var __clickOutputsRadio = function(hid) {
 		let output = tools.radioGetValue(`hid-outputs-${hid}-radio`);
-		let http = tools.makeRequest("POST", `/api/hid/${hid}/set_params?output=${output}`, function() {
+		let http = tools.makeRequest("POST", `/api/hid/set_params?${hid}_output=${output}`, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					wm.error("Can't configure HID:<br>", http.responseText);

@@ -25,6 +25,7 @@ from typing import Dict
 from typing import Iterable
 from typing import AsyncGenerator
 from typing import Type
+from typing import Optional
 
 from .. import BasePlugin
 from .. import get_plugin_class
@@ -67,11 +68,9 @@ class BaseHid(BasePlugin):
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         raise NotImplementedError
 
-    def set_keyboard_output(self, output: str) -> None:
-        _ = output
-
-    def set_mouse_output(self, output: str) -> None:
-        _ = output
+    def set_params(self, keyboard_output: Optional[str]=None, mouse_output: Optional[str]=None) -> None:
+        _ = keyboard_output
+        _ = mouse_output
 
     def set_connected(self, connected: bool) -> None:
         _ = connected

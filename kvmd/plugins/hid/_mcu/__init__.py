@@ -31,6 +31,7 @@ from typing import Dict
 from typing import Iterable
 from typing import Generator
 from typing import AsyncGenerator
+from typing import Optional
 
 from ....logging import get_logger
 
@@ -252,11 +253,14 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         self.__queue_event(MouseWheelEvent(delta_x, delta_y))
 
-    def set_keyboard_output(self, output: str) -> None:
-        self.__queue_event(SetKeyboardOutputEvent(output), clear=True)
-
-    def set_mouse_output(self, output: str) -> None:
-        self.__queue_event(SetMouseOutputEvent(output), clear=True)
+    def set_params(self, keyboard_output: Optional[str]=None, mouse_output: Optional[str]=None) -> None:
+        events: List[BaseEvent] = []
+        if keyboard_output is not None:
+            events.append(SetKeyboardOutputEvent(keyboard_output))
+        if mouse_output is not None:
+            events.append(SetMouseOutputEvent(mouse_output))
+        for (index, event) in enumerate(events, 1):
+            self.__queue_event(event, clear=(index == len(events)))
 
     def set_connected(self, connected: bool) -> None:
         self.__queue_event(SetConnectedEvent(connected), clear=True)
