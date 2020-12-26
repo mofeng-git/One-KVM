@@ -210,7 +210,7 @@ def _cmd_start(config: Section) -> None:
 
     if config.kvmd.msd.type == "otg":
         logger.info("===== Required MSD =====")
-        _create_msd(gadget_path, config_path, 0, config.otg.devices.msd.user, **config.otg.devices.msd.default._unpack())
+        _create_msd(gadget_path, config_path, 0, config.otg.user, **config.otg.devices.msd.default._unpack())
         if config.otg.devices.drives.enabled:
             logger.info("===== Required MSD extra drives: %d =====", config.otg.devices.drives.count)
             for instance in range(config.otg.devices.drives.count):
@@ -221,6 +221,11 @@ def _cmd_start(config: Section) -> None:
     logger.info("Enabling the gadget ...")
     _write(join(gadget_path, "UDC"), udc)
     time.sleep(config.otg.init_delay)
+
+    logger.info("Setting DWC2 bind permissions ...")
+    driver_path = f"{env.SYSFS_PREFIX}/sys/bus/platform/drivers/dwc2"
+    _chown(join(driver_path, "bind"), config.otg.user)
+    _chown(join(driver_path, "unbind"), config.otg.user)
 
     logger.info("Ready to work")
 

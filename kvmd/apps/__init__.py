@@ -409,9 +409,10 @@ def _get_config_scheme() -> Dict:
             "udc":        Option("",     type=valid_stripped_string),
             "init_delay": Option(3.0,    type=valid_float_f01),
 
+            "user": Option("kvmd", type=valid_user),
+
             "devices": {
                 "msd": {
-                    "user": Option("kvmd", type=valid_user),
                     "default": {
                         "stall":     Option(False, type=valid_bool),
                         "cdrom":     Option(True,  type=valid_bool),

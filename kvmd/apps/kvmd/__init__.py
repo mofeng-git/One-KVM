@@ -81,7 +81,7 @@ def main(argv: Optional[List[str]]=None) -> None:
         info_manager=InfoManager(global_config),
         log_reader=LogReader(),
         wol=WakeOnLan(**config.wol._unpack()),
-        user_gpio=UserGpio(config.gpio),
+        user_gpio=UserGpio(config.gpio, global_config.otg.udc),
 
         hid=hid,
         atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),
