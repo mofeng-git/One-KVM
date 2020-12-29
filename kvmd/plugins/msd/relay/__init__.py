@@ -38,6 +38,7 @@ from .... import aiofs
 
 from ....yamlconf import Option
 
+from ....validators.basic import valid_bool
 from ....validators.basic import valid_int_f1
 from ....validators.basic import valid_float_f01
 from ....validators.os import valid_abs_path
@@ -64,6 +65,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self,
         gpio_device_path: str,
         target_pin: int,
+        reset_inverted: bool,
         reset_pin: int,
 
         device_path: str,
@@ -76,7 +78,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__init_delay = init_delay
         self.__init_retries = init_retries
 
-        self.__gpio = Gpio(gpio_device_path, target_pin, reset_pin, reset_delay)
+        self.__gpio = Gpio(gpio_device_path, target_pin, reset_pin, reset_inverted, reset_delay)
 
         self.__device_info: Optional[DeviceInfo] = None
         self.__connected = False
@@ -87,20 +89,13 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__notifier = aiotools.AioNotifier()
         self.__region = aiotools.AioExclusiveRegion(MsdIsBusyError, self.__notifier)
 
-        logger = get_logger(0)
-        logger.info("Using %r as MSD", self.__device_path)
-        try:
-            aiotools.run_sync(self.__load_device_info())
-        except Exception as err:
-            log = (logger.error if isinstance(err, MsdError) else logger.exception)
-            log("MSD is offline: %s", err)
-
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "gpio_device": Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="gpio_device_path"),
-            "target_pin":  Option(-1, type=valid_gpio_pin),
-            "reset_pin":   Option(-1, type=valid_gpio_pin),
+            "gpio_device":    Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="gpio_device_path"),
+            "target_pin":     Option(-1, type=valid_gpio_pin),
+            "reset_pin":      Option(-1, type=valid_gpio_pin),
+            "reset_inverted": Option(False, type=valid_bool),
 
             "device":       Option("",  type=valid_abs_path, unpack_as="device_path"),
             "init_delay":   Option(1.0, type=valid_float_f01),
@@ -109,7 +104,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         }
 
     def sysprep(self) -> None:
+        logger = get_logger(0)
         self.__gpio.open()
+        logger.info("Using %r as MSD", self.__device_path)
+        try:
+            aiotools.run_sync(self.__load_device_info())
+        except Exception as err:
+            log = (logger.error if isinstance(err, MsdError) else logger.exception)
+            log("MSD is offline: %s", err)
 
     async def get_state(self) -> Dict:
         storage: Optional[Dict] = None
@@ -243,10 +245,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     async def __write_image_info(self, name: str, complete: bool) -> None:
         assert self.__device_file
         assert self.__device_info
-        if not self.__device_info.write_image_info(
+        if not (await self.__device_info.write_image_info(
             device_file=self.__device_file,
             image_info=ImageInfo(name, self.__written, complete),
-        ):
+        )):
             get_logger().error("Can't write image info because device is full")
 
     async def __close_device_file(self) -> None:

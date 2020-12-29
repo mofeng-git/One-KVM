@@ -28,18 +28,20 @@ from .... import aiogp
 
 
 # =====
-class Gpio:
+class Gpio:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         device_path: str,
         target_pin: int,
         reset_pin: int,
+        reset_inverted: bool,
         reset_delay: float,
     ) -> None:
 
         self.__device_path = device_path
         self.__target_pin = target_pin
         self.__reset_pin = reset_pin
+        self.__reset_inverted = reset_inverted
         self.__reset_delay = reset_delay
 
         self.__chip: Optional[gpiod.Chip] = None
@@ -57,7 +59,7 @@ class Gpio:
         self.__target_line.request("kvmd::msd::target", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
 
         self.__reset_line = self.__chip.get_line(self.__reset_pin)
-        self.__reset_line.request("kvmd::msd::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
+        self.__reset_line.request("kvmd::msd::reset", gpiod.LINE_REQ_DIR_OUT, default_vals=[int(self.__reset_inverted)])
 
     def close(self) -> None:
         if self.__chip:
@@ -76,4 +78,4 @@ class Gpio:
 
     async def reset(self) -> None:
         assert self.__reset_line
-        await aiogp.pulse(self.__reset_line, self.__reset_delay, 0)
+        await aiogp.pulse(self.__reset_line, self.__reset_delay, 0, self.__reset_inverted)
