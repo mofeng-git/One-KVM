@@ -89,12 +89,6 @@ class _TempRequestError(_RequestError):
 
 
 # =====
-class _HardResetEvent(BaseEvent):
-    def make_request(self) -> bytes:
-        raise RuntimeError("Don't call me")
-
-
-# =====
 class BasePhyConnection:
     def send(self, request: bytes) -> bytes:
         raise NotImplementedError
@@ -137,6 +131,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         self.__phy = phy
         self.__gpio = Gpio(gpio_device_path, reset_pin, reset_inverted, reset_delay)
 
+        self.__reset_required_event = multiprocessing.Event()
         self.__events_queue: "multiprocessing.Queue[BaseEvent]" = multiprocessing.Queue()
 
         self.__notifier = aiomulti.AioProcessNotifier()
@@ -228,7 +223,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
             await self.__notifier.wait()
 
     async def reset(self) -> None:
-        self.__queue_event(_HardResetEvent(), clear=True)
+        self.__reset_required_event.set()
 
     @aiotools.atomic
     async def cleanup(self) -> None:
@@ -308,19 +303,21 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
                 with self.__phy.connected() as conn:
                     while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
+                        if self.__reset_required_event.is_set():
+                            try:
+                                self.__set_state_busy(True)
+                                self.__gpio.reset()
+                            finally:
+                                self.__reset_required_event.clear()
                         try:
                             event = self.__events_queue.get(timeout=0.1)
                         except queue.Empty:
                             self.__process_request(conn, REQUEST_PING)
                         else:
-                            if isinstance(event, _HardResetEvent):
+                            if isinstance(event, (SetKeyboardOutputEvent, SetMouseOutputEvent)):
                                 self.__set_state_busy(True)
-                                self.__gpio.reset()
-                            else:
-                                if isinstance(event, (SetKeyboardOutputEvent, SetMouseOutputEvent)):
-                                    self.__set_state_busy(True)
-                                if not self.__process_request(conn, event.make_request()):
-                                    self.clear_events()
+                            if not self.__process_request(conn, event.make_request()):
+                                self.clear_events()
             except Exception:
                 self.clear_events()
                 logger.exception("Unexpected error in the HID loop")
@@ -404,4 +401,4 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         reset_required = (1 if response[1] & 0b01000000 else 0)
         self.__state_flags.update(online=1, busy=reset_required, status=status)
         if reset_required:
-            self.__gpio.reset()
+            self.__reset_required_event.set()
