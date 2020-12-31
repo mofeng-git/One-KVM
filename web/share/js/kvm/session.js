@@ -262,7 +262,7 @@ export function Session() {
 	var __pingServer = function() {
 		try {
 			__missed_heartbeats += 1;
-			if (__missed_heartbeats >= 5) {
+			if (__missed_heartbeats >= 15) {
 				throw new Error("Too many missed heartbeats");
 			}
 			__ws.send(JSON.stringify({"event_type": "ping", "event": {}}));
