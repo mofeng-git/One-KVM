@@ -19,3 +19,4 @@
 /*kvmd-*.tar.gz
 *.pyc
 *.swp
+/venv/
