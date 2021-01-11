@@ -6,7 +6,7 @@ TESTENV_VIDEO ?= /dev/video0
 TESTENV_GPIO ?= /dev/gpiochip0
 TESTENV_RELAY ?= $(if $(shell ls /dev/hidraw0 2>/dev/null || true),/dev/hidraw0,)
 
-LIBGPIOD_VERSION ?= 1.5.2
+LIBGPIOD_VERSION ?= 1.6.2
 
 USTREAMER_MIN_VERSION ?= $(shell grep -o 'ustreamer>=[^"]\+' PKGBUILD | sed 's/ustreamer>=//g')
 
@@ -120,7 +120,7 @@ run: testenv $(TESTENV_GPIO)
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
-			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-gpio \
+			&& ln -s $(TESTENV_GPIO) /dev/kvmd-gpio \
 			&& $(if $(CMD),$(CMD),python -m kvmd.apps.kvmd --run) \
 		"
 
