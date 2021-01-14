@@ -43,6 +43,13 @@ kvmd:
                 device: /dev/hidraw0
 
         scheme:
+            __v3_usb_breaker__:
+                pin: 5
+                mode: output
+                initial: true
+                pulse:
+                    delay: 0
+
             led1:
                 pin: 19
                 mode: input
@@ -83,7 +90,7 @@ kvmd:
                 - ["#Generic GPIO leds"]
                 - []
                 - ["#Test 1:", led1, button1]
-                - ["#Test 2:", led2, button2|confirm|Click]
+                - ["#Test 2:", led2, button2|confirm|Testing]
                 - []
                 - ["#HID Relays /dev/hidraw0"]
                 - []
