@@ -64,7 +64,7 @@ ENV USTREAMER_MIN_VERSION $USTREAMER_MIN_VERSION
 RUN echo $USTREAMER_MIN_VERSION
 RUN git clone https://github.com/pikvm/ustreamer \
 	&& cd ustreamer \
-	&& make PREFIX=/usr install \
+	&& make WITH_PYTHON=1 PREFIX=/usr DESTDIR=/ install \
 	&& cd - \
 	&& rm -rf ustreamer
 

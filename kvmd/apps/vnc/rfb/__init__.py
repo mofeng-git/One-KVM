@@ -151,7 +151,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     # =====
 
-    async def _send_fb(self, jpeg: bytes) -> None:
+    async def _send_fb_jpeg(self, jpeg: bytes) -> None:
         assert self._encodings.has_tight
         assert self._encodings.tight_jpeg_quality > 0
         assert len(jpeg) <= 4194303, len(jpeg)

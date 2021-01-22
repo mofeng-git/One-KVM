@@ -549,6 +549,15 @@ def _get_config_scheme() -> Dict:
                 "timeout": Option(5.0, type=valid_float_f01),
             },
 
+            "memsink": {
+                "jpeg": {
+                    "sink":             Option("",  unpack_as="obj"),
+                    "lock_timeout":     Option(1.0, type=valid_float_f01),
+                    "wait_timeout":     Option(1.0, type=valid_float_f01),
+                    "drop_same_frames": Option(1.0, type=valid_float_f0),
+                },
+            },
+
             "auth": {
                 "vncauth": {
                     "enabled": Option(False, type=valid_bool),

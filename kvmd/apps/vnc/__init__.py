@@ -24,7 +24,8 @@ from typing import List
 from typing import Optional
 
 from ...clients.kvmd import KvmdClient
-from ...clients.streamer import StreamerClient
+from ...clients.streamer import StreamerHttpClient
+from ...clients.streamer import StreamerMemsinkClient
 
 from ... import htclient
 
@@ -62,9 +63,13 @@ def main(argv: Optional[List[str]]=None) -> None:
             user_agent=user_agent,
             **config.kvmd._unpack(),
         ),
-        streamer=StreamerClient(
+        streamer_http=StreamerHttpClient(
             user_agent=user_agent,
             **config.streamer._unpack(),
+        ),
+        streamer_memsink_jpeg=(
+            StreamerMemsinkClient(**config.memsink.jpeg._unpack())
+            if config.memsink.jpeg.sink else None
         ),
         vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),
 

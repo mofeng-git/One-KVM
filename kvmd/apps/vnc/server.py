@@ -45,7 +45,10 @@ from ...clients.kvmd import KvmdClientSession
 from ...clients.kvmd import KvmdClient
 
 from ...clients.streamer import StreamerError
-from ...clients.streamer import StreamerClient
+from ...clients.streamer import StreamerPermError
+from ...clients.streamer import BaseStreamerClient
+from ...clients.streamer import StreamerHttpClient
+from ...clients.streamer import StreamerMemsinkClient
 
 from .rfb import RfbClient
 from .rfb.stream import rfb_format_remote
@@ -79,7 +82,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         symmap: Dict[int, Dict[int, str]],
 
         kvmd: KvmdClient,
-        streamer: StreamerClient,
+        streamer_http: StreamerHttpClient,
+        streamer_memsink_jpeg: Optional[StreamerMemsinkClient],
 
         vnc_credentials: Dict[str, VncAuthKvmdCredentials],
         none_auth_only: bool,
@@ -103,7 +107,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         self.__symmap = symmap
 
         self.__kvmd = kvmd
-        self.__streamer = streamer
+        self.__streamer_http = streamer_http
+        self.__streamer_memsink_jpeg = streamer_memsink_jpeg
 
         self.__shared_params = shared_params
 
@@ -178,19 +183,29 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     async def __streamer_task_loop(self) -> None:
         logger = get_logger(0)
         await self.__ws_connected
+
+        name = "streamer_http"
+        streamer: BaseStreamerClient = self.__streamer_http
+        if self.__streamer_memsink_jpeg:
+            (name, streamer) = ("streamer_memsink_jpeg", self.__streamer_memsink_jpeg)
+
         while True:
             try:
                 streaming = False
-                async for (online, width, height, jpeg) in self.__streamer.read_stream():
+                async for (online, width, height, jpeg) in streamer.read_stream():
                     if not streaming:
-                        logger.info("[streamer] %s: Streaming ...", self._remote)
+                        logger.info("[%s] %s: Streaming ...", name, self._remote)
                         streaming = True
                     if online:
                         await self.__send_fb_real(width, height, jpeg)
                     else:
                         await self.__send_fb_stub("No signal")
             except StreamerError as err:
-                logger.info("[streamer] %s: Waiting for stream: %s", self._remote, err)
+                if isinstance(err, StreamerPermError):
+                    logger.info("[%s] %s: Permanent error: %s; switching to HTTP ...", name, self._remote, err)
+                    (name, streamer) = ("streamer_http", self.__streamer_http)
+                else:
+                    logger.info("[%s] %s: Waiting for stream: %s", name, self._remote, err)
                 await self.__send_fb_stub("Waiting for stream ...")
                 await asyncio.sleep(1)
 
@@ -205,7 +220,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         await self.__send_fb_stub(msg, no_lock=True)
                         return
                     await self._send_resize(width, height)
-                await self._send_fb(jpeg)
+                await self._send_fb_jpeg(jpeg)
                 self.__fb_stub_text = ""
                 self.__fb_stub_quality = 0
                 self.__fb_requested = False
@@ -215,7 +230,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             await self.__lock.acquire()
         try:
             if self.__fb_requested and (self.__fb_stub_text != text or self.__fb_stub_quality != self._encodings.tight_jpeg_quality):
-                await self._send_fb(await make_text_jpeg(self._width, self._height, self._encodings.tight_jpeg_quality, text))
+                await self._send_fb_jpeg(await make_text_jpeg(self._width, self._height, self._encodings.tight_jpeg_quality, text))
                 self.__fb_stub_text = text
                 self.__fb_stub_quality = self._encodings.tight_jpeg_quality
                 self.__fb_requested = False
@@ -344,7 +359,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         keymap_path: str,
 
         kvmd: KvmdClient,
-        streamer: StreamerClient,
+        streamer_http: StreamerHttpClient,
+        streamer_memsink_jpeg: Optional[StreamerMemsinkClient],
         vnc_auth_manager: VncAuthManager,
     ) -> None:
 
@@ -393,7 +409,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     keymap_name=keymap_name,
                     symmap=symmap,
                     kvmd=kvmd,
-                    streamer=streamer,
+                    streamer_http=streamer_http,
+                    streamer_memsink_jpeg=streamer_memsink_jpeg,
                     vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
                     none_auth_only=none_auth_only,
                     shared_params=shared_params,
