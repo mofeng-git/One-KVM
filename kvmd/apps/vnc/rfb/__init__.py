@@ -151,18 +151,18 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     # =====
 
-    async def _send_fb_jpeg(self, jpeg: bytes) -> None:
+    async def _send_fb_jpeg(self, data: bytes) -> None:
         assert self._encodings.has_tight
         assert self._encodings.tight_jpeg_quality > 0
-        assert len(jpeg) <= 4194303, len(jpeg)
+        assert len(data) <= 4194303, len(data)
         await self._write_fb_update(self._width, self._height, RfbEncodings.TIGHT, drain=False)
-        length = len(jpeg)
+        length = len(data)
         if length <= 127:
-            await self._write_struct("", bytes([0b10011111, length & 0x7F]), jpeg)
+            await self._write_struct("", bytes([0b10011111, length & 0x7F]), data)
         elif length <= 16383:
-            await self._write_struct("", bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F]), jpeg)
+            await self._write_struct("", bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F]), data)
         else:
-            await self._write_struct("", bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F | 0x80, length >> 14 & 0xFF]), jpeg)
+            await self._write_struct("", bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F | 0x80, length >> 14 & 0xFF]), data)
 
     async def _send_resize(self, width: int, height: int) -> None:
         assert self._encodings.has_resize

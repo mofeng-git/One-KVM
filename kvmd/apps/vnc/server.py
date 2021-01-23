@@ -194,12 +194,12 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         while True:
             try:
                 streaming = False
-                async for (online, width, height, jpeg) in streamer.read_stream():
+                async for (online, width, height, data) in streamer.read_stream():
                     if not streaming:
                         logger.info("[%s] %s: Streaming ...", name, self._remote)
                         streaming = True
                     if online:
-                        await self.__send_fb_real(width, height, jpeg)
+                        await self.__send_fb_real(width, height, data)
                     else:
                         await self.__send_fb_stub("No signal")
             except StreamerError as err:
@@ -211,10 +211,10 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 await self.__send_fb_stub("Waiting for stream ...")
                 await asyncio.sleep(1)
 
-    async def __send_fb_real(self, width: int, height: int, jpeg: bytes) -> None:
+    async def __send_fb_real(self, width: int, height: int, data: bytes) -> None:
         async with self.__lock:
             if self.__fb_requested:
-                if (self._width, self._height) != (width, height):
+                if self._width != width or self._height != height:
                     self.__shared_params.width = width
                     self.__shared_params.height = height
                     if not self._encodings.has_resize:
@@ -222,7 +222,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         await self.__send_fb_stub(msg, no_lock=True)
                         return
                     await self._send_resize(width, height)
-                await self._send_fb_jpeg(jpeg)
+                await self._send_fb_jpeg(data)
                 self.__fb_stub_text = ""
                 self.__fb_stub_quality = 0
                 self.__fb_requested = False
