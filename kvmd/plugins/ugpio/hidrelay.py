@@ -31,6 +31,7 @@ import hid
 
 from ...logging import get_logger
 
+from ... import tools
 from ... import aiotools
 
 from ...yamlconf import Option
@@ -91,8 +92,8 @@ class Plugin(BaseUserGpioDriver):
             with self.__ensure_device("probing"):
                 pass
         except Exception as err:
-            logger.error("Can't probe %s on %s: %s: %s",
-                         self, self.__device_path, type(err).__name__, err)
+            logger.error("Can't probe %s on %s: %s",
+                         self, self.__device_path, tools.efmt(err))
         self.__reset_pins()
 
     async def run(self) -> None:
@@ -135,8 +136,8 @@ class Plugin(BaseUserGpioDriver):
                 try:
                     self.__inner_write(pin, state)
                 except Exception as err:
-                    logger.error("Can't reset pin=%d of %s on %s: %s: %s",
-                                 pin, self, self.__device_path, type(err).__name__, err)
+                    logger.error("Can't reset pin=%d of %s on %s: %s",
+                                 pin, self, self.__device_path, tools.efmt(err))
 
     def __inner_read(self, pin: int) -> bool:
         if self.__check_pin(pin):
@@ -173,8 +174,8 @@ class Plugin(BaseUserGpioDriver):
         try:
             yield self.__device
         except Exception as err:
-            get_logger(0).error("Error occured on %s on %s while %s: %s: %s",
-                                self, self.__device_path, context, type(err).__name__, err)
+            get_logger(0).error("Error occured on %s on %s while %s: %s",
+                                self, self.__device_path, context, tools.efmt(err))
             self.__close_device()
             raise
 

@@ -187,8 +187,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
                         elif data == b"\x71":
                             sock.send(b"\x00")
                     except Exception as err:
-                        get_logger(0).exception("CTL socket error on %s: %s: %s",
-                                                client.addr, type(err).__name__, err)
+                        get_logger(0).exception("CTL socket error on %s: %s", client.addr, tools.efmt(err))
                         self.__close_client("CTL", client, "ctl_sock")
                         continue
 
@@ -202,8 +201,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
                         elif data[:2] == b"\xA2\x01":
                             self.__process_leds(data[2])
                     except Exception as err:
-                        get_logger(0).exception("INT socket error on %s: %s: %s",
-                                                client.addr, type(err).__name__, err)
+                        get_logger(0).exception("INT socket error on %s: %s", client.addr, tools.efmt(err))
                         self.__close_client("INT", client, "ctl_sock")
 
             if qr in ready_read:
@@ -286,8 +284,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
         try:
             client.int_sock.send(report)
         except Exception as err:
-            get_logger(0).info("Can't send %s report to %s: %s: %s",
-                               name, client.addr, type(err).__name__, err)
+            get_logger(0).info("Can't send %s report to %s: %s", name, client.addr, tools.efmt(err))
             self.__close_client_pair(client)
 
     def __clear_modifiers(self) -> None:
@@ -379,7 +376,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
             try:
                 self.__iface.set_public(public)
             except Exception as err:
-                logger.error("Can't change public mode: %s: %s", type(err).__name__, err)
+                logger.error("Can't change public mode: %s", tools.efmt(err))
 
     def __unpair_client(self, client: _BtClient) -> None:
         logger = get_logger(0)
@@ -387,4 +384,4 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
         try:
             self.__iface.unpair(client.addr)
         except Exception as err:
-            logger.error("Can't unpair %s: %s: %s", client.addr, type(err).__name__, err)
+            logger.error("Can't unpair %s: %s", client.addr, tools.efmt(err))

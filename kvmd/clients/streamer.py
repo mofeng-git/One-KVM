@@ -33,6 +33,7 @@ try:
 except ImportError:
     ustreamer = None
 
+from .. import tools
 from .. import aiotools
 from .. import htclient
 
@@ -119,7 +120,7 @@ class StreamerHttpClient(BaseStreamerClient):
         except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня
             if isinstance(err, StreamerTempError):
                 raise
-            raise StreamerTempError(f"{type(err).__name__}: {err}")
+            raise StreamerTempError(tools.efmt(err))
         raise StreamerTempError("Reached EOF")
 
     def __make_http_session(self) -> aiohttp.ClientSession:
@@ -165,6 +166,6 @@ class StreamerMemsinkClient(BaseStreamerClient):
                     if frame is not None:
                         yield (frame["online"], frame["width"], frame["height"], frame["data"])
         except FileNotFoundError as err:
-            raise StreamerTempError(f"{type(err).__name__}: {err}")
+            raise StreamerTempError(tools.efmt(err))
         except Exception as err:
-            raise StreamerPermError(f"{type(err).__name__}: {err}")
+            raise StreamerPermError(tools.efmt(err))

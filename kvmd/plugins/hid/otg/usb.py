@@ -25,6 +25,7 @@ import os
 from ....logging import get_logger
 
 from .... import env
+from .... import tools
 
 
 # =====
@@ -47,7 +48,7 @@ class UsbDeviceController:
         try:
             candidates = sorted(os.listdir(path))
         except Exception as err:
-            logger.error("Can't list %s: %s: %s: ignored", path, type(err).__name__, err)
+            logger.error("Can't list %s: %s: ignored", path, tools.efmt(err))
             return
 
         udc = ""

@@ -325,7 +325,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                         return snapshot
                     logger.error("Stream is offline, no signal or so")
             except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as err:
-                logger.error("Can't connect to streamer: %s: %s", type(err).__name__, err)
+                logger.error("Can't connect to streamer: %s", tools.efmt(err))
             except Exception:
                 logger.exception("Invalid streamer response from /snapshot")
             return None

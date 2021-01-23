@@ -34,6 +34,7 @@ from ....logging import get_logger
 from ....yamlconf import Section
 from ....yamlconf.loader import load_yaml_file
 
+from .... import tools
 from .... import aiotools
 
 from .base import BaseInfoSubmanager
@@ -98,5 +99,5 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
 
                 return (enabled or (manager.GetUnitFileState(name) in ["enabled", "enabled-runtime", "static", "indirect", "generated"]))
         except Exception as err:
-            get_logger(0).error("Can't get info about the service %r: %s: %s", name, type(err).__name__, err)
+            get_logger(0).error("Can't get info about the service %r: %s", name, tools.efmt(err))
             return True

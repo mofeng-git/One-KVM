@@ -33,6 +33,11 @@ from typing import TypeVar
 
 
 # =====
+def efmt(err: Exception) -> str:
+    return f"{type(err).__name__}: {err}"
+
+
+# =====
 def merge(dest: Dict, src: Dict) -> None:
     for key in src:
         if key in dest:

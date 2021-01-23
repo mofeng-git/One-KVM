@@ -50,6 +50,8 @@ from ...clients.streamer import BaseStreamerClient
 from ...clients.streamer import StreamerHttpClient
 from ...clients.streamer import StreamerMemsinkClient
 
+from ... import tools
+
 from .rfb import RfbClient
 from .rfb.stream import rfb_format_remote
 from .rfb.stream import rfb_close_writer
@@ -397,7 +399,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     async with kvmd.make_session("", "") as kvmd_session:
                         none_auth_only = await kvmd_session.auth.check()
                 except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                    logger.error("[entry] %s: Can't check KVMD auth mode: %s: %s", remote, type(err).__name__, err)
+                    logger.error("[entry] %s: Can't check KVMD auth mode: %s", remote, tools.efmt(err))
                     return
 
                 await _Client(
