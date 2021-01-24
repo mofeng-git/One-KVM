@@ -1,5 +1,8 @@
 FROM archlinux/base
 
+RUN mkdir -p /etc/pacman.d/hooks \
+	&& ln -s /dev/null /etc/pacman.d/hooks/30-systemd-tmpfiles.hook
+
 RUN echo "Server = http://mirror.yandex.ru/archlinux/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
 
 RUN pacman -Syu --noconfirm \
