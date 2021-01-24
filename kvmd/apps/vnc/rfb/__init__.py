@@ -80,6 +80,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self.__rfb_version = 0
         self._encodings = RfbClientEncodings(frozenset())
 
+        self.__reset_h264 = False
+
     # =====
 
     async def _run(self, **coros: Coroutine) -> None:
@@ -164,19 +166,22 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             await self._write_struct("", bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F]), data)
         else:
             await self._write_struct("", bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F | 0x80, length >> 14 & 0xFF]), data)
+        self.__reset_h264 = True
 
     async def _send_fb_h264(self, data: bytes) -> None:
         assert self._encodings.has_h264
         assert len(data) <= 0xFFFFFFFF, len(data)
         await self._write_fb_update(self._width, self._height, RfbEncodings.H264, drain=False)
-        await self._write_struct("LL", len(data), 0, drain=False)
+        await self._write_struct("LL", len(data), int(self.__reset_h264), drain=False)
         await self._write_struct("", data)
+        self.__reset_h264 = False
 
     async def _send_resize(self, width: int, height: int) -> None:
         assert self._encodings.has_resize
         await self._write_fb_update(width, height, RfbEncodings.RESIZE)
         self._width = width
         self._height = height
+        self.__reset_h264 = True
 
     async def _send_rename(self, name: str) -> None:
         assert self._encodings.has_rename
