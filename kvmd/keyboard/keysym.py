@@ -22,6 +22,7 @@
 
 import pkgutil
 import functools
+import importlib.machinery
 
 from typing import List
 from typing import Dict
@@ -79,8 +80,13 @@ def build_symmap(path: str) -> Dict[int, Dict[int, str]]:
 @functools.lru_cache()
 def _get_keysyms() -> Dict[str, int]:
     keysyms: Dict[str, int] = {}
-    for (loader, module_name, _) in pkgutil.walk_packages(Xlib.keysymdef.__path__):
-        module = loader.find_module(module_name).load_module(module_name)
+    for (finder, module_name, _) in pkgutil.walk_packages(Xlib.keysymdef.__path__):
+        if not isinstance(finder, importlib.machinery.FileFinder):
+            continue
+        loader = finder.find_module(module_name)
+        if loader is None:
+            continue
+        module = loader.load_module(module_name)
         for keysym_name in dir(module):
             if keysym_name.startswith("XK_"):
                 short_name = keysym_name[3:]
