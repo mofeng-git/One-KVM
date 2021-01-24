@@ -46,6 +46,11 @@ def main(argv: Optional[List[str]]=None) -> None:
 
     user_agent = htclient.make_user_agent("KVMD-VNC")
 
+    def make_memsink(name: str) -> Optional[StreamerMemsinkClient]:
+        if getattr(config.memsink, name).sink:
+            return StreamerMemsinkClient(name=name, **getattr(config.memsink, name)._unpack())
+        return None
+
     VncServer(
         host=config.server.host,
         port=config.server.port,
@@ -59,18 +64,12 @@ def main(argv: Optional[List[str]]=None) -> None:
         desired_fps=config.desired_fps,
         keymap_path=config.keymap,
 
-        kvmd=KvmdClient(
-            user_agent=user_agent,
-            **config.kvmd._unpack(),
-        ),
-        streamer_http=StreamerHttpClient(
-            user_agent=user_agent,
-            **config.streamer._unpack(),
-        ),
-        streamer_memsink_jpeg=(
-            StreamerMemsinkClient(**config.memsink.jpeg._unpack())
-            if config.memsink.jpeg.sink else None
-        ),
+        kvmd=KvmdClient(user_agent=user_agent, **config.kvmd._unpack()),
+        streamers=list(filter(None, [
+            make_memsink("h264"),
+            make_memsink("jpeg"),
+            StreamerHttpClient(name="jpeg", user_agent=user_agent, **config.streamer._unpack()),
+        ])),
         vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),
 
         **config.server.keepalive._unpack(),

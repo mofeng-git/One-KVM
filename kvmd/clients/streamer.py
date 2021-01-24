@@ -53,7 +53,7 @@ class StreamerPermError(StreamerError):
 
 # =====
 class BaseStreamerClient:
-    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
+    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes, bool], None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield
@@ -77,6 +77,7 @@ def _patch_stream_reader(reader: aiohttp.StreamReader) -> None:
 class StreamerHttpClient(BaseStreamerClient):
     def __init__(
         self,
+        name: str,
         host: str,
         port: int,
         unix_path: str,
@@ -85,13 +86,14 @@ class StreamerHttpClient(BaseStreamerClient):
     ) -> None:
 
         assert port or unix_path
+        self.__name = name
         self.__host = host
         self.__port = port
         self.__unix_path = unix_path
         self.__timeout = timeout
         self.__user_agent = user_agent
 
-    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
+    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes, bool], None]:
         try:
             async with self.__make_http_session() as session:
                 async with session.get(
@@ -116,6 +118,7 @@ class StreamerHttpClient(BaseStreamerClient):
                             int(frame.headers["X-UStreamer-Width"]),
                             int(frame.headers["X-UStreamer-Height"]),
                             data,
+                            False,
                         )
         except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня
             if isinstance(err, StreamerTempError):
@@ -139,16 +142,21 @@ class StreamerHttpClient(BaseStreamerClient):
         assert not handle.startswith("/"), handle
         return f"http://{self.__host}:{self.__port}/{handle}"
 
+    def __str__(self) -> str:
+        return f"StreamerHttpClient({self.__name})"
+
 
 class StreamerMemsinkClient(BaseStreamerClient):
     def __init__(
         self,
+        name: str,
         obj: str,
         lock_timeout: float,
         wait_timeout: float,
         drop_same_frames: float,
     ) -> None:
 
+        self.__name = name
         self.__kwargs: Dict = {
             "obj": obj,
             "lock_timeout": lock_timeout,
@@ -156,7 +164,7 @@ class StreamerMemsinkClient(BaseStreamerClient):
             "drop_same_frames": drop_same_frames,
         }
 
-    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
+    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes, bool], None]:
         if ustreamer is None:
             raise StreamerPermError("Missing ustreamer library")
         try:
@@ -164,8 +172,17 @@ class StreamerMemsinkClient(BaseStreamerClient):
                 while True:
                     frame = await aiotools.run_async(sink.wait_frame)
                     if frame is not None:
-                        yield (frame["online"], frame["width"], frame["height"], frame["data"])
+                        yield (
+                            frame["online"],
+                            frame["width"],
+                            frame["height"],
+                            frame["data"],
+                            (frame["format"] == 875967048),  # V4L2_PIX_FMT_H264
+                        )
         except FileNotFoundError as err:
             raise StreamerTempError(tools.efmt(err))
         except Exception as err:
             raise StreamerPermError(tools.efmt(err))
+
+    def __str__(self) -> str:
+        return f"StreamerMemsinkClient({self.__name})"

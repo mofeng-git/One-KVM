@@ -39,9 +39,11 @@ class RfbEncodings:
         [10,   20,  30,  40,  50,  60,  70,  80,  90, 100],
     ))
 
+    H264 = 0xCAFE0101  # Pi-KVM H264 Encoding
+
 
 @dataclasses.dataclass(frozen=True)
-class RfbClientEncodings:
+class RfbClientEncodings:  # pylint: disable=too-many-instance-attributes
     encodings: FrozenSet[int]
 
     has_resize: bool = dataclasses.field(default=False)
@@ -52,6 +54,8 @@ class RfbClientEncodings:
     has_tight: bool = dataclasses.field(default=False)
     tight_jpeg_quality: int = dataclasses.field(default=0)
 
+    has_h264: bool = dataclasses.field(default=False)
+
     def __post_init__(self) -> None:
         self.__set("has_resize", (RfbEncodings.RESIZE in self.encodings))
         self.__set("has_rename", (RfbEncodings.RENAME in self.encodings))
@@ -60,6 +64,8 @@ class RfbClientEncodings:
 
         self.__set("has_tight", (RfbEncodings.TIGHT in self.encodings))
         self.__set("tight_jpeg_quality", self.__get_tight_jpeg_quality())
+
+        self.__set("has_h264", (RfbEncodings.H264 in self.encodings))
 
     def __set(self, key: str, value: Any) -> None:
         object.__setattr__(self, key, value)

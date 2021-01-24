@@ -556,6 +556,12 @@ def _get_config_scheme() -> Dict:
                     "wait_timeout":     Option(1.0, type=valid_float_f01),
                     "drop_same_frames": Option(1.0, type=valid_float_f0),
                 },
+                "h264": {
+                    "sink":             Option("",  unpack_as="obj"),
+                    "lock_timeout":     Option(1.0, type=valid_float_f01),
+                    "wait_timeout":     Option(1.0, type=valid_float_f01),
+                    "drop_same_frames": Option(0.0, type=valid_float_f0),
+                },
             },
 
             "auth": {

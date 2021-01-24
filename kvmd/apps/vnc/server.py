@@ -26,6 +26,8 @@ import socket
 import dataclasses
 import contextlib
 
+from typing import Tuple
+from typing import List
 from typing import Dict
 from typing import Union
 from typing import Optional
@@ -47,8 +49,6 @@ from ...clients.kvmd import KvmdClient
 from ...clients.streamer import StreamerError
 from ...clients.streamer import StreamerPermError
 from ...clients.streamer import BaseStreamerClient
-from ...clients.streamer import StreamerHttpClient
-from ...clients.streamer import StreamerMemsinkClient
 
 from ... import tools
 
@@ -84,8 +84,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         symmap: Dict[int, Dict[int, str]],
 
         kvmd: KvmdClient,
-        streamer_http: StreamerHttpClient,
-        streamer_memsink_jpeg: Optional[StreamerMemsinkClient],
+        streamers: List[BaseStreamerClient],
 
         vnc_credentials: Dict[str, VncAuthKvmdCredentials],
         none_auth_only: bool,
@@ -109,19 +108,19 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         self.__symmap = symmap
 
         self.__kvmd = kvmd
-        self.__streamer_http = streamer_http
-        self.__streamer_memsink_jpeg = streamer_memsink_jpeg
+        self.__streamers = streamers
 
         self.__shared_params = shared_params
 
-        self.__authorized = asyncio.Future()  # type: ignore
-        self.__ws_connected = asyncio.Future()  # type: ignore
+        self.__stage1_authorized = asyncio.Future()  # type: ignore
+        self.__stage2_encodings_accepted = asyncio.Future()  # type: ignore
+        self.__stage3_ws_connected = asyncio.Future()  # type: ignore
+
         self.__kvmd_session: Optional[KvmdClientSession] = None
         self.__kvmd_ws: Optional[KvmdClientWs] = None
 
         self.__fb_requested = False
-        self.__fb_stub_text = ""
-        self.__fb_stub_quality = 0
+        self.__fb_stub: Optional[Tuple[int, str]] = None
 
         # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
         # Все это нужно только чтобы не посылать лишние жсоны в сокет KVMD
@@ -149,12 +148,19 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def __kvmd_task_loop(self) -> None:
         logger = get_logger(0)
-        await self.__authorized
+        await self.__stage1_authorized
+
+        logger.info("[kvmd] %s: Waiting for the SetEncodings message ...", self._remote)
+        try:
+            await asyncio.wait_for(self.__stage2_encodings_accepted, timeout=5)
+        except asyncio.TimeoutError:
+            raise RfbError("No SetEncodings message recieved from the clienta in 5 secs")
+
         assert self.__kvmd_session
         try:
             async with self.__kvmd_session.ws() as self.__kvmd_ws:
                 logger.info("[kvmd] %s: Connected to KVMD websocket", self._remote)
-                self.__ws_connected.set_result(None)
+                self.__stage3_ws_connected.set_result(None)
                 async for event in self.__kvmd_ws.communicate():
                     await self.__process_ws_event(event)
                 raise RfbError("KVMD closes the websocket (the server may have been stopped)")
@@ -184,34 +190,29 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def __streamer_task_loop(self) -> None:
         logger = get_logger(0)
-        await self.__ws_connected
-
-        name = "streamer_http"
-        streamer: BaseStreamerClient = self.__streamer_http
-        if self.__streamer_memsink_jpeg:
-            (name, streamer) = ("streamer_memsink_jpeg", self.__streamer_memsink_jpeg)
-
+        await self.__stage3_ws_connected
+        streamer = self.__streamers[0]
         while True:
             try:
                 streaming = False
-                async for (online, width, height, data) in streamer.read_stream():
+                async for (online, width, height, data, h264) in streamer.read_stream():
                     if not streaming:
-                        logger.info("[%s] %s: Streaming ...", name, self._remote)
+                        logger.info("[streamer] %s: Streaming from %s ...", self._remote, streamer)
                         streaming = True
                     if online:
-                        await self.__send_fb_real(width, height, data)
+                        await self.__send_fb_real(width, height, data, h264)
                     else:
                         await self.__send_fb_stub("No signal")
             except StreamerError as err:
                 if isinstance(err, StreamerPermError):
-                    logger.info("[%s] %s: Permanent error: %s; switching to HTTP ...", name, self._remote, err)
-                    (name, streamer) = ("streamer_http", self.__streamer_http)
+                    streamer = self.__streamers[-1]
+                    logger.info("[streamer] %s: Permanent error: %s; switching to %s ...", self._remote, err, streamer)
                 else:
-                    logger.info("[%s] %s: Waiting for stream: %s", name, self._remote, err)
+                    logger.info("[streamer] %s: Waiting for stream: %s", self._remote, err)
                 await self.__send_fb_stub("Waiting for stream ...")
                 await asyncio.sleep(1)
 
-    async def __send_fb_real(self, width: int, height: int, data: bytes) -> None:
+    async def __send_fb_real(self, width: int, height: int, data: bytes, h264: bool) -> None:
         async with self.__lock:
             if self.__fb_requested:
                 if self._width != width or self._height != height:
@@ -222,19 +223,18 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         await self.__send_fb_stub(msg, no_lock=True)
                         return
                     await self._send_resize(width, height)
-                await self._send_fb_jpeg(data)
-                self.__fb_stub_text = ""
-                self.__fb_stub_quality = 0
+                await (self._send_fb_h264 if h264 else self._send_fb_jpeg)(data)
+                self.__fb_stub = None
                 self.__fb_requested = False
 
     async def __send_fb_stub(self, text: str, no_lock: bool=False) -> None:
         if not no_lock:
             await self.__lock.acquire()
         try:
-            if self.__fb_requested and (self.__fb_stub_text != text or self.__fb_stub_quality != self._encodings.tight_jpeg_quality):
-                await self._send_fb_jpeg(await make_text_jpeg(self._width, self._height, self._encodings.tight_jpeg_quality, text))
-                self.__fb_stub_text = text
-                self.__fb_stub_quality = self._encodings.tight_jpeg_quality
+            quality = self._encodings.tight_jpeg_quality
+            if self.__fb_requested and self.__fb_stub != (quality, text):
+                await self._send_fb_jpeg(await make_text_jpeg(self._width, self._height, quality, text))
+                self.__fb_stub = (quality, text)
                 self.__fb_requested = False
         finally:
             if not no_lock:
@@ -245,7 +245,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     async def _authorize_userpass(self, user: str, passwd: str) -> bool:
         self.__kvmd_session = self.__kvmd.make_session(user, passwd)
         if (await self.__kvmd_session.auth.check()):
-            self.__authorized.set_result(None)
+            self.__stage1_authorized.set_result(None)
             return True
         return False
 
@@ -312,7 +312,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 self.__mouse_move = move
 
     async def _on_cut_event(self, text: str) -> None:
-        assert self.__authorized.done()
+        assert self.__stage1_authorized.done()
         assert self.__kvmd_session
         logger = get_logger(0)
         logger.info("[main] %s: Printing %d characters ...", self._remote, len(text))
@@ -327,11 +327,13 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             logger.exception("[main] %s: Can't print characters", self._remote)
 
     async def _on_set_encodings(self) -> None:
-        assert self.__authorized.done()
+        assert self.__stage1_authorized.done()
         assert self.__kvmd_session
+        if not self.__stage2_encodings_accepted.done():
+            self.__stage2_encodings_accepted.set_result(None)
         has_quality = (await self.__kvmd_session.streamer.get_state())["features"]["quality"]
         quality = (self._encodings.tight_jpeg_quality if has_quality else None)
-        get_logger(0).info("[main] %s: Applying streamer params: quality=%s; desired_fps=%d ...",
+        get_logger(0).info("[main] %s: Applying streamer params: jpeg_quality=%s; desired_fps=%d ...",
                            self._remote, quality, self.__desired_fps)
         await self.__kvmd_session.streamer.set_params(quality, self.__desired_fps)
 
@@ -361,8 +363,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         keymap_path: str,
 
         kvmd: KvmdClient,
-        streamer_http: StreamerHttpClient,
-        streamer_memsink_jpeg: Optional[StreamerMemsinkClient],
+        streamers: List[BaseStreamerClient],
         vnc_auth_manager: VncAuthManager,
     ) -> None:
 
@@ -411,8 +412,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     keymap_name=keymap_name,
                     symmap=symmap,
                     kvmd=kvmd,
-                    streamer_http=streamer_http,
-                    streamer_memsink_jpeg=streamer_memsink_jpeg,
+                    streamers=streamers,
                     vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
                     none_auth_only=none_auth_only,
                     shared_params=shared_params,

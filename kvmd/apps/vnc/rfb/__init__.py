@@ -22,6 +22,7 @@
 
 import asyncio
 import ssl
+import dataclasses
 
 from typing import Tuple
 from typing import List
@@ -163,6 +164,13 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             await self._write_struct("", bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F]), data)
         else:
             await self._write_struct("", bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F | 0x80, length >> 14 & 0xFF]), data)
+
+    async def _send_fb_h264(self, data: bytes) -> None:
+        assert self._encodings.has_h264
+        assert len(data) <= 0xFFFFFFFF, len(data)
+        await self._write_fb_update(self._width, self._height, RfbEncodings.H264, drain=False)
+        await self._write_struct("LL", len(data), 0, drain=False)
+        await self._write_struct("", data)
 
     async def _send_resize(self, width: int, height: int) -> None:
         assert self._encodings.has_resize
@@ -380,14 +388,18 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             raise RfbError(f"Requested unsupported bits_per_pixel={bits_per_pixel} for Tight JPEG; required 16 or 32")
 
     async def __handle_set_encodings(self) -> None:
+        logger = get_logger(0)
+
         encodings_count = (await self._read_struct("x H"))[0]
         if encodings_count > 1024:
             raise RfbError(f"Too many encodings: {encodings_count}")
+
         self._encodings = RfbClientEncodings(frozenset(await self._read_struct("l" * encodings_count)))
-        get_logger(0).info("[main] %s: Features: resize=%d, rename=%d, leds=%d, extkeys=%d",
-                           self._remote, self._encodings.has_resize, self._encodings.has_rename,
-                           self._encodings.has_leds_state, self._encodings.has_ext_keys)
+        logger.info("[main] %s: Client features (SetEncodings): ...", self._remote)
+        for (key, value) in dataclasses.asdict(self._encodings).items():
+            logger.info("[main] %s: ... %s=%s", self._remote, key, value)
         self.__check_tight_jpeg()
+
         if self._encodings.has_ext_keys:  # Preferred method
             await self._write_fb_update(0, 0, RfbEncodings.EXT_KEYS, drain=True)
         await self._on_set_encodings()
