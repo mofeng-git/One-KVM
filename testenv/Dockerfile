@@ -1,4 +1,4 @@
-FROM archlinux/base
+FROM archlinux/archlinux:base-devel
 
 RUN mkdir -p /etc/pacman.d/hooks \
 	&& ln -s /dev/null /etc/pacman.d/hooks/30-systemd-tmpfiles.hook
@@ -7,8 +7,6 @@ RUN echo "Server = http://mirror.yandex.ru/archlinux/\$repo/os/\$arch" > /etc/pa
 
 RUN pacman -Syu --noconfirm \
 	&& pacman -S --needed --noconfirm \
-		base \
-		base-devel \
 		autoconf-archive \
 		help2man \
 		m4 \
@@ -41,7 +39,8 @@ RUN pacman -Syu --noconfirm \
 		socat \
 		eslint \
 		npm \
-	&& (pacman -Sc --noconfirm || true)
+	&& (pacman -Sc --noconfirm || true) \
+	&& rm -rf /var/cache/pacman/pkg/*
 
 COPY testenv/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
