@@ -59,21 +59,6 @@ class BaseStreamerClient:
         yield
 
 
-# =====
-def _patch_stream_reader(reader: aiohttp.StreamReader) -> None:
-    # https://github.com/pikvm/pikvm/issues/92
-    # Infinite looping in BodyPartReader.read() because _at_eof flag.
-
-    orig_read = reader.read
-
-    async def read(self: aiohttp.StreamReader, n: int=-1) -> bytes:  # pylint: disable=invalid-name
-        if self.is_eof():
-            raise StreamerTempError("StreamReader.read(): Reached EOF")
-        return (await orig_read(n))
-
-    reader.read = types.MethodType(read, reader)  # type: ignore
-
-
 class StreamerHttpClient(BaseStreamerClient):
     def __init__(
         self,
@@ -102,7 +87,7 @@ class StreamerHttpClient(BaseStreamerClient):
                 ) as response:
                     htclient.raise_not_200(response)
                     reader = aiohttp.MultipartReader.from_response(response)
-                    _patch_stream_reader(reader.resp.content)
+                    self.__patch_stream_reader(reader.resp.content)
 
                     while True:
                         frame = await reader.next()  # pylint: disable=not-callable
@@ -141,6 +126,19 @@ class StreamerHttpClient(BaseStreamerClient):
     def __make_url(self, handle: str) -> str:
         assert not handle.startswith("/"), handle
         return f"http://{self.__host}:{self.__port}/{handle}"
+
+    def __patch_stream_reader(self, reader: aiohttp.StreamReader) -> None:
+        # https://github.com/pikvm/pikvm/issues/92
+        # Infinite looping in BodyPartReader.read() because _at_eof flag.
+
+        orig_read = reader.read
+
+        async def read(self: aiohttp.StreamReader, n: int=-1) -> bytes:  # pylint: disable=invalid-name
+            if self.is_eof():
+                raise StreamerTempError("StreamReader.read(): Reached EOF")
+            return (await orig_read(n))
+
+        reader.read = types.MethodType(read, reader)  # type: ignore
 
     def __str__(self) -> str:
         return f"StreamerHttpClient({self.__name})"
