@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import ctypes
 import dataclasses
 
 from typing import FrozenSet
@@ -40,7 +39,7 @@ class RfbEncodings:
         [10,   20,  30,  40,  50,  60,  70,  80,  90, 100],
     ))
 
-    H264 = ctypes.c_int32(0xCAFE0101).value  # Pi-KVM H264 Encoding
+    H264 = 50  # Pi-KVM H264 Encoding
 
 
 @dataclasses.dataclass(frozen=True)
