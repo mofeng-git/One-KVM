@@ -52,14 +52,23 @@ class StreamerPermError(StreamerError):
 
 
 # =====
+class StreamFormats:
+    JPEG = 1195724874    # V4L2_PIX_FMT_JPEG
+    H264 = 875967048     # V4L2_PIX_FMT_H264
+    _MJPEG = 1196444237  # V4L2_PIX_FMT_MJPEG
+
+
 class BaseStreamerClient:
-    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes, bool], None]:
+    def get_format(self) -> int:
+        raise NotImplementedError()
+
+    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield
 
 
-class StreamerHttpClient(BaseStreamerClient):
+class HttpStreamerClient(BaseStreamerClient):
     def __init__(
         self,
         name: str,
@@ -78,7 +87,10 @@ class StreamerHttpClient(BaseStreamerClient):
         self.__timeout = timeout
         self.__user_agent = user_agent
 
-    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes, bool], None]:
+    def get_format(self) -> int:
+        return StreamFormats.JPEG
+
+    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
         try:
             async with self.__make_http_session() as session:
                 async with session.get(
@@ -103,7 +115,6 @@ class StreamerHttpClient(BaseStreamerClient):
                             int(frame.headers["X-UStreamer-Width"]),
                             int(frame.headers["X-UStreamer-Height"]),
                             data,
-                            False,
                         )
         except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня
             if isinstance(err, StreamerTempError):
@@ -141,13 +152,14 @@ class StreamerHttpClient(BaseStreamerClient):
         reader.read = types.MethodType(read, reader)  # type: ignore
 
     def __str__(self) -> str:
-        return f"StreamerHttpClient({self.__name})"
+        return f"HttpStreamerClient({self.__name})"
 
 
-class StreamerMemsinkClient(BaseStreamerClient):
+class MemsinkStreamerClient(BaseStreamerClient):
     def __init__(
         self,
         name: str,
+        fmt: int,
         obj: str,
         lock_timeout: float,
         wait_timeout: float,
@@ -155,6 +167,7 @@ class StreamerMemsinkClient(BaseStreamerClient):
     ) -> None:
 
         self.__name = name
+        self.__fmt = fmt
         self.__kwargs: Dict = {
             "obj": obj,
             "lock_timeout": lock_timeout,
@@ -162,7 +175,10 @@ class StreamerMemsinkClient(BaseStreamerClient):
             "drop_same_frames": drop_same_frames,
         }
 
-    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes, bool], None]:
+    def get_format(self) -> int:
+        return self.__fmt
+
+    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
         if ustreamer is None:
             raise StreamerPermError("Missing ustreamer library")
         try:
@@ -170,17 +186,25 @@ class StreamerMemsinkClient(BaseStreamerClient):
                 while True:
                     frame = await aiotools.run_async(sink.wait_frame)
                     if frame is not None:
+                        self.__check_format(frame["format"])
                         yield (
                             frame["online"],
                             frame["width"],
                             frame["height"],
                             frame["data"],
-                            (frame["format"] == 875967048),  # V4L2_PIX_FMT_H264
                         )
+        except StreamerPermError:
+            raise
         except FileNotFoundError as err:
             raise StreamerTempError(tools.efmt(err))
         except Exception as err:
             raise StreamerPermError(tools.efmt(err))
 
+    def __check_format(self, fmt: int) -> None:
+        if fmt == StreamFormats._MJPEG:  # pylint: disable=protected-access
+            fmt = StreamFormats.JPEG
+        if fmt != self.__fmt:
+            raise StreamerPermError("Invalid sink format")
+
     def __str__(self) -> str:
-        return f"StreamerMemsinkClient({self.__name})"
+        return f"MemsinkStreamerClient({self.__name})"

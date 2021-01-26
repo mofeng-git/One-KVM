@@ -48,6 +48,7 @@ from ...clients.kvmd import KvmdClient
 
 from ...clients.streamer import StreamerError
 from ...clients.streamer import StreamerPermError
+from ...clients.streamer import StreamFormats
 from ...clients.streamer import BaseStreamerClient
 
 from ... import tools
@@ -154,7 +155,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         try:
             await asyncio.wait_for(self.__stage2_encodings_accepted, timeout=5)
         except asyncio.TimeoutError:
-            raise RfbError("No SetEncodings message recieved from the clienta in 5 secs")
+            raise RfbError("No SetEncodings message recieved from the client in 5 secs")
 
         assert self.__kvmd_session
         try:
@@ -191,28 +192,45 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     async def __streamer_task_loop(self) -> None:
         logger = get_logger(0)
         await self.__stage3_ws_connected
-        streamer = self.__streamers[0]
+        streamer = self.__get_preferred_streamer()
         while True:
             try:
                 streaming = False
-                async for (online, width, height, data, h264) in streamer.read_stream():
+                async for (online, width, height, data) in streamer.read_stream():
                     if not streaming:
-                        logger.info("[streamer] %s: Streaming from %s ...", self._remote, streamer)
+                        logger.info("[streamer] %s: Streaming ...", self._remote)
                         streaming = True
                     if online:
-                        await self.__send_fb_real(width, height, data, h264)
+                        await self.__send_fb_real(width, height, data, streamer.get_format())
                     else:
                         await self.__send_fb_stub("No signal")
             except StreamerError as err:
                 if isinstance(err, StreamerPermError):
-                    streamer = self.__streamers[-1]
+                    streamer = self.__get_default_streamer()
                     logger.info("[streamer] %s: Permanent error: %s; switching to %s ...", self._remote, err, streamer)
                 else:
                     logger.info("[streamer] %s: Waiting for stream: %s", self._remote, err)
                 await self.__send_fb_stub("Waiting for stream ...")
                 await asyncio.sleep(1)
 
-    async def __send_fb_real(self, width: int, height: int, data: bytes, h264: bool) -> None:
+    def __get_preferred_streamer(self) -> BaseStreamerClient:
+        formats = {
+            StreamFormats.JPEG: "has_tight",
+            StreamFormats.H264: "has_h264",
+        }
+        streamer: Optional[BaseStreamerClient] = None
+        for streamer in self.__streamers:
+            if getattr(self._encodings, formats[streamer.get_format()]):
+                get_logger(0).info("[streamer] %s: Using preferred %s", self._remote, streamer)
+                return streamer
+        raise RuntimeError("No streamers found")
+
+    def __get_default_streamer(self) -> BaseStreamerClient:
+        streamer = self.__streamers[-1]
+        get_logger(0).info("[streamer] %s: Using default %s", self._remote, streamer)
+        return streamer
+
+    async def __send_fb_real(self, width: int, height: int, data: bytes, fmt: int) -> None:
         async with self.__lock:
             if self.__fb_requested:
                 if self._width != width or self._height != height:
@@ -223,7 +241,16 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         await self.__send_fb_stub(msg, no_lock=True)
                         return
                     await self._send_resize(width, height)
-                await (self._send_fb_h264 if h264 else self._send_fb_jpeg)(data)
+
+                if fmt == StreamFormats.JPEG:
+                    await self._send_fb_jpeg(data)
+                elif fmt == StreamFormats.H264:
+                    if not self._encodings.has_h264:
+                        raise StreamerPermError("The client doesn't want to accept H264 anymore")
+                    await self._send_fb_h264(data)
+                else:
+                    raise RuntimeError(f"Unknown format: {fmt}")
+
                 self.__fb_stub = None
                 self.__fb_requested = False
 
