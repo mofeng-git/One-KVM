@@ -106,6 +106,30 @@ class AioNotifier:
 
 
 # =====
+class AioStage:
+    def __init__(self) -> None:
+        self.__fut = asyncio.Future()  # type: ignore
+
+    def set_passed(self, multi: bool=False) -> None:
+        if multi and self.__fut.done():
+            return
+        self.__fut.set_result(None)
+
+    def is_passed(self) -> bool:
+        return self.__fut.done()
+
+    async def wait_passed(self, timeout: float=-1) -> bool:
+        if timeout >= 0:
+            try:
+                await asyncio.wait_for(self.__fut, timeout=timeout)
+            except asyncio.TimeoutError:
+                return False
+        else:
+            await self.__fut
+        return True
+
+
+# =====
 class AioExclusiveRegion:
     def __init__(
         self,
