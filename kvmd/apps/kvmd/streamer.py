@@ -55,7 +55,6 @@ class StreamerSnapshot:
 
 class _StreamerParams:
     __DESIRED_FPS = "desired_fps"
-    __MAX_FPS = "max_fps"
 
     __QUALITY = "quality"
 
@@ -84,7 +83,7 @@ class _StreamerParams:
         self.__has_h264 = bool(h264_bitrate)
 
         self.__params: Dict = {self.__DESIRED_FPS: min(desired_fps, max_fps)}
-        self.__limits: Dict = {self.__MAX_FPS: max_fps}
+        self.__limits: Dict = {self.__DESIRED_FPS: {"min": 0, "max": max_fps}}
 
         if self.__has_quality:
             self.__params[self.__QUALITY] = quality
@@ -117,7 +116,8 @@ class _StreamerParams:
         new_params = dict(self.__params)
 
         if self.__DESIRED_FPS in params:
-            new_params[self.__DESIRED_FPS] = min(max(params[self.__DESIRED_FPS], 0), self.__limits[self.__MAX_FPS])
+            if self.__check_limits_min_max(self.__DESIRED_FPS, params[self.__DESIRED_FPS]):
+                new_params[self.__DESIRED_FPS] = params[self.__DESIRED_FPS]
 
         if self.__QUALITY in params and self.__has_quality:
             new_params[self.__QUALITY] = min(max(params[self.__QUALITY], 1), 100)
@@ -127,12 +127,13 @@ class _StreamerParams:
                 new_params[self.__RESOLUTION] = params[self.__RESOLUTION]
 
         if self.__H264_BITRATE in params and self.__has_h264:
-            min_bitrate = self.__limits[self.__H264_BITRATE]["min"]
-            max_bitrate = self.__limits[self.__H264_BITRATE]["max"]
-            if min_bitrate <= params[self.__H264_BITRATE] <= max_bitrate:
+            if self.__check_limits_min_max(self.__H264_BITRATE, params[self.__H264_BITRATE]):
                 new_params[self.__H264_BITRATE] = params[self.__H264_BITRATE]
 
         self.__params = new_params
+
+    def __check_limits_min_max(self, key: str, value: int) -> bool:
+        return (self.__limits[key]["min"] <= value <= self.__limits[key]["max"])
 
 
 class Streamer:  # pylint: disable=too-many-instance-attributes

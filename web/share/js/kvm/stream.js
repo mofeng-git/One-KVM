@@ -98,7 +98,8 @@ export function Streamer() {
 			}
 
 			if (!$("stream-desired-fps-slider").activated) {
-				$("stream-desired-fps-slider").max = state.limits.max_fps;
+				$("stream-desired-fps-slider").min = state.limits.desired_fps.min;
+				$("stream-desired-fps-slider").max = state.limits.desired_fps.max;
 				wm.setElementEnabled($("stream-desired-fps-slider"), true);
 				if ($("stream-desired-fps-slider").value !== state.streamer.source.desired_fps) {
 					$("stream-desired-fps-slider").value = state.streamer.source.desired_fps;
