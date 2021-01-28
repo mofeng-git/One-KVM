@@ -55,6 +55,7 @@ from ...validators.basic import valid_bool
 from ...validators.kvm import valid_stream_quality
 from ...validators.kvm import valid_stream_fps
 from ...validators.kvm import valid_stream_resolution
+from ...validators.kvm import valid_stream_h264_bitrate
 
 from ... import aiotools
 from ... import aioproc
@@ -101,6 +102,11 @@ class StreamerQualityNotSupported(OperationError):
 class StreamerResolutionNotSupported(OperationError):
     def __init__(self) -> None:
         super().__init__("This streamer does not support resolution settings")
+
+
+class StreamerH264NotSupported(OperationError):
+    def __init__(self) -> None:
+        super().__init__("This streamer does not support H264")
 
 
 # =====
@@ -220,6 +226,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             ("quality", valid_stream_quality, StreamerQualityNotSupported),
             ("desired_fps", valid_stream_fps, None),
             ("resolution", valid_stream_resolution, StreamerResolutionNotSupported),
+            ("h264_bitrate", valid_stream_h264_bitrate, StreamerH264NotSupported),
         ]:
             value = request.query.get(name)
             if value:

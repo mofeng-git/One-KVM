@@ -62,33 +62,46 @@ class _StreamerParams:
     __RESOLUTION = "resolution"
     __AVAILABLE_RESOLUTIONS = "available_resolutions"
 
+    __H264_BITRATE = "h264_bitrate"
+
     def __init__(
         self,
         desired_fps: int,
         max_fps: int,
+
         quality: int,
+
         resolution: str,
         available_resolutions: List[str],
+
+        h264_bitrate: int,
+        h264_min_bitrate: int,
+        h264_max_bitrate: int,
     ) -> None:
 
         self.__has_quality = bool(quality)
         self.__has_resolution = bool(resolution)
+        self.__has_h264 = bool(h264_bitrate)
 
-        self.__params: Dict = {
-            self.__DESIRED_FPS: desired_fps,
-            **({self.__QUALITY: quality} if self.__has_quality else {}),
-            **({self.__RESOLUTION: resolution} if self.__has_resolution else {}),
-        }
+        self.__params: Dict = {self.__DESIRED_FPS: min(desired_fps, max_fps)}
+        self.__limits: Dict = {self.__MAX_FPS: max_fps}
 
-        self.__limits: Dict = {
-            self.__MAX_FPS: max_fps,
-            **({self.__AVAILABLE_RESOLUTIONS: available_resolutions} if self.__has_resolution else {}),
-        }
+        if self.__has_quality:
+            self.__params[self.__QUALITY] = quality
+
+        if self.__has_resolution:
+            self.__params[self.__RESOLUTION] = resolution
+            self.__limits[self.__AVAILABLE_RESOLUTIONS] = available_resolutions
+
+        if self.__has_h264:
+            self.__params[self.__H264_BITRATE] = min(max(h264_bitrate, h264_min_bitrate), h264_max_bitrate)
+            self.__limits[self.__H264_BITRATE] = {"min": h264_min_bitrate, "max": h264_max_bitrate}
 
     def get_features(self) -> Dict:
         return {
             self.__QUALITY: self.__has_quality,
             self.__RESOLUTION: self.__has_resolution,
+            "h264": self.__has_h264,
         }
 
     def get_limits(self) -> Dict:
@@ -112,6 +125,12 @@ class _StreamerParams:
         if self.__RESOLUTION in params and self.__has_resolution:
             if params[self.__RESOLUTION] in self.__limits[self.__AVAILABLE_RESOLUTIONS]:
                 new_params[self.__RESOLUTION] = params[self.__RESOLUTION]
+
+        if self.__H264_BITRATE in params and self.__has_h264:
+            min_bitrate = self.__limits[self.__H264_BITRATE]["min"]
+            max_bitrate = self.__limits[self.__H264_BITRATE]["max"]
+            if min_bitrate <= params[self.__H264_BITRATE] <= max_bitrate:
+                new_params[self.__H264_BITRATE] = params[self.__H264_BITRATE]
 
         self.__params = new_params
 

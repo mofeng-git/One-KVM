@@ -90,6 +90,7 @@ from ..validators.hid import valid_hid_mouse_move
 from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
 from ..validators.kvm import valid_stream_resolution
+from ..validators.kvm import valid_stream_h264_bitrate
 
 from ..validators.ugpio import valid_ugpio_driver
 from ..validators.ugpio import valid_ugpio_channel
@@ -358,6 +359,10 @@ def _get_config_scheme() -> Dict:
                 "max_fps":     Option(60, type=valid_stream_fps),
                 "resolution":  Option("", type=(lambda arg: (valid_stream_resolution(arg) if arg else ""))),
                 "available_resolutions": Option([], type=functools.partial(valid_string_list, subval=valid_stream_resolution)),
+
+                "h264_bitrate":     Option(0,     type=(lambda arg: (valid_stream_h264_bitrate(arg) if arg else 0))),
+                "h264_min_bitrate": Option(100,   type=valid_stream_h264_bitrate),
+                "h264_max_bitrate": Option(16000, type=valid_stream_h264_bitrate),
 
                 "host":    Option("localhost", type=valid_ip_or_host),
                 "port":    Option(0,   type=valid_port),

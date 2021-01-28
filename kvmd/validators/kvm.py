@@ -74,3 +74,7 @@ def valid_stream_resolution(arg: Any) -> str:
     width = int(valid_number(parts[0], min=1, name=f"{name} (width)"))
     height = int(valid_number(parts[1], min=1, name=f"{name} (height)"))
     return f"{width}x{height}"
+
+
+def valid_stream_h264_bitrate(arg: Any) -> int:
+    return int(valid_number(arg, min=100, max=16000, name="stream H264 bitrate"))
