@@ -22,7 +22,6 @@
 
 import types
 
-from typing import Tuple
 from typing import Dict
 from typing import AsyncGenerator
 
@@ -62,7 +61,7 @@ class BaseStreamerClient:
     def get_format(self) -> int:
         raise NotImplementedError()
 
-    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
+    async def read_stream(self) -> AsyncGenerator[Dict, None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield
@@ -90,7 +89,7 @@ class HttpStreamerClient(BaseStreamerClient):
     def get_format(self) -> int:
         return StreamFormats.JPEG
 
-    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
+    async def read_stream(self) -> AsyncGenerator[Dict, None]:
         try:
             async with self.__make_http_session() as session:
                 async with session.get(
@@ -110,12 +109,12 @@ class HttpStreamerClient(BaseStreamerClient):
                         if not data:
                             break
 
-                        yield (
-                            (frame.headers["X-UStreamer-Online"] == "true"),
-                            int(frame.headers["X-UStreamer-Width"]),
-                            int(frame.headers["X-UStreamer-Height"]),
-                            data,
-                        )
+                        yield {
+                            "online": (frame.headers["X-UStreamer-Online"] == "true"),
+                            "width": int(frame.headers["X-UStreamer-Width"]),
+                            "height": int(frame.headers["X-UStreamer-Height"]),
+                            "data": data,
+                        }
         except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня
             if isinstance(err, StreamerTempError):
                 raise
@@ -178,7 +177,7 @@ class MemsinkStreamerClient(BaseStreamerClient):
     def get_format(self) -> int:
         return self.__fmt
 
-    async def read_stream(self) -> AsyncGenerator[Tuple[bool, int, int, bytes], None]:
+    async def read_stream(self) -> AsyncGenerator[Dict, None]:
         if ustreamer is None:
             raise StreamerPermError("Missing ustreamer library")
         try:
@@ -187,12 +186,7 @@ class MemsinkStreamerClient(BaseStreamerClient):
                     frame = await aiotools.run_async(sink.wait_frame)
                     if frame is not None:
                         self.__check_format(frame["format"])
-                        yield (
-                            frame["online"],
-                            frame["width"],
-                            frame["height"],
-                            frame["data"],
-                        )
+                        yield frame
         except StreamerPermError:
             raise
         except FileNotFoundError as err:
