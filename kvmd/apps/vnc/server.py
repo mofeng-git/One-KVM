@@ -242,6 +242,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                     if not self._encodings.has_h264:
                         self.__fb_h264_data = b""
                         raise StreamerPermError("The client doesn't want to accept H264 anymore")
+                    self.__append_h264_data(frame)
                     await self._send_fb_h264(self.__fb_h264_data)
                 else:
                     raise RuntimeError(f"Unknown format: {frame['format']}")
@@ -251,13 +252,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 self.__fb_h264_data = b""
 
             elif self._encodings.has_h264 and frame["format"] == StreamFormats.H264:
-                if frame["key"]:
-                    self.__fb_h264_data = frame["data"]
-                elif len(self.__fb_h264_data) + len(frame["data"]) > 4194304:  # 4Mb
-                    get_logger(0).info("Accumulated H264 buffer is too big; resetting ...")
-                    self.__fb_h264_data = frame["data"]
-                else:
-                    self.__fb_h264_data += frame["data"]
+                self.__append_h264_data(frame)
 
     async def __resize_fb_unsafe(self, frame: Dict) -> bool:
         width = frame["width"]
@@ -271,6 +266,15 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 return False
             await self._send_resize(width, height)
         return True
+
+    def __append_h264_data(self, frame: Dict) -> None:
+        if frame["key"]:
+            self.__fb_h264_data = frame["data"]
+        elif len(self.__fb_h264_data) + len(frame["data"]) > 4194304:  # 4Mb
+            get_logger(0).info("Accumulated H264 buffer is too big; resetting ...")
+            self.__fb_h264_data = frame["data"]
+        else:
+            self.__fb_h264_data += frame["data"]
 
     async def __send_fb_stub(self, text: str, no_lock: bool=False) -> None:
         if not no_lock:
