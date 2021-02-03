@@ -281,6 +281,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 await self._send_fb_jpeg(await make_text_jpeg(self._width, self._height, quality, text))
                 self.__fb_stub = (quality, text)
                 self.__fb_requested = False
+                self.__fb_h264_data = b""
         finally:
             if not no_lock:
                 self.__lock.release()
