@@ -201,7 +201,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         logger.info("[streamer] %s: Streaming ...", self._remote)
                         streaming = True
                     if frame["online"]:
-                        await self.__send_fb_real(frame, streamer.get_format())
+                        await self.__send_fb_real(frame)
                     else:
                         await self.__send_fb_stub("No signal")
             except StreamerError as err:
@@ -230,27 +230,27 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         get_logger(0).info("[streamer] %s: Using default %s", self._remote, streamer)
         return streamer
 
-    async def __send_fb_real(self, frame: Dict, fmt: int) -> None:
+    async def __send_fb_real(self, frame: Dict) -> None:
         async with self.__lock:
             if self.__fb_requested:
                 if not (await self.__resize_fb_unsafe(frame)):
                     return
 
-                if fmt == StreamFormats.JPEG:
+                if frame["format"] == StreamFormats.JPEG:
                     await self._send_fb_jpeg(frame["data"])
-                elif fmt == StreamFormats.H264:
+                elif frame["format"] == StreamFormats.H264:
                     if not self._encodings.has_h264:
                         self.__fb_h264_data = b""
                         raise StreamerPermError("The client doesn't want to accept H264 anymore")
                     await self._send_fb_h264(self.__fb_h264_data)
                 else:
-                    raise RuntimeError(f"Unknown format: {fmt}")
+                    raise RuntimeError(f"Unknown format: {frame['format']}")
 
                 self.__fb_stub = None
                 self.__fb_requested = False
                 self.__fb_h264_data = b""
 
-            elif self._encodings.has_h264 and fmt == StreamFormats.H264:
+            elif self._encodings.has_h264 and frame["format"] == StreamFormats.H264:
                 if frame["key"]:
                     self.__fb_h264_data = frame["data"]
                 elif len(self.__fb_h264_data) + len(frame["data"]) > 4194304:  # 4Mb

@@ -114,6 +114,7 @@ class HttpStreamerClient(BaseStreamerClient):
                             "width": int(frame.headers["X-UStreamer-Width"]),
                             "height": int(frame.headers["X-UStreamer-Height"]),
                             "data": data,
+                            "format": StreamFormats.JPEG,
                         }
         except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня
             if isinstance(err, StreamerTempError):
