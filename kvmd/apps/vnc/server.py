@@ -139,7 +139,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             await self._run(
                 kvmd=self.__kvmd_task_loop(),
                 streamer=self.__streamer_task_loop(),
-                fb_sendeer=self.__fb_sender_task_loop(),
+                fb_sender=self.__fb_sender_task_loop(),
             )
         finally:
             if self.__kvmd_session:
@@ -200,16 +200,16 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         logger.info("[streamer] %s: Streaming ...", self._remote)
                         streaming = True
                     if frame["online"]:
-                        await self.__queue_fb_real(frame)
+                        await self.__queue_frame(frame)
                     else:
-                        await self.__queue_fb_stub("No signal")
+                        await self.__queue_frame("No signal")
             except StreamerError as err:
                 if isinstance(err, StreamerPermError):
                     streamer = self.__get_default_streamer()
                     logger.info("[streamer] %s: Permanent error: %s; switching to %s ...", self._remote, err, streamer)
                 else:
                     logger.info("[streamer] %s: Waiting for stream: %s", self._remote, err)
-                await self.__queue_fb_stub("Waiting for stream ...")
+                await self.__queue_frame("Waiting for stream ...")
                 await asyncio.sleep(1)
 
     def __get_preferred_streamer(self) -> BaseStreamerClient:
@@ -229,13 +229,12 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         get_logger(0).info("[streamer] %s: Using default %s", self._remote, streamer)
         return streamer
 
-    async def __queue_fb_real(self, frame: Dict) -> None:
-        await self.__fb_queue.put(frame)
+    async def __queue_frame(self, frame: Union[Dict, str]) -> None:
+        if isinstance(frame, str):
+            frame = await self.__make_text_frame(frame)
+        self.__fb_queue.put_nowait(frame)
 
-    async def __queue_fb_stub(self, text: str) -> None:
-        await self.__fb_queue.put(await self.__make_stub_frame(text))
-
-    async def __make_stub_frame(self, text: str) -> Dict:
+    async def __make_text_frame(self, text: str) -> Dict:
         return {
             "data": (await make_text_jpeg(self._width, self._height, self._encodings.tight_jpeg_quality, text)),
             "width": self._width,
@@ -261,7 +260,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         or len(last["data"]) + len(frame["data"]) > 4194304
                     ))
                 ):
-                    last = frame
+                    last = dict(frame)
                     if self.__fb_queue.qsize() == 0:
                         break
                     continue
@@ -279,7 +278,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                             f"Resoultion changed: {self._width}x{self._height}"
                             f" -> {last['width']}x{last['height']}\nPlease reconnect"
                         )
-                        await self._send_fb_jpeg(await self.__make_stub_frame(msg))
+                        await self._send_fb_jpeg((await self.__make_text_frame(msg))["data"])
                         return
                     await self._send_resize(last["width"], last["height"])
 
