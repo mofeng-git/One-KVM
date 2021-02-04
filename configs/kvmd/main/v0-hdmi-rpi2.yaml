@@ -36,7 +36,6 @@ kvmd:
             - "--dv-timings"
             - "--format=uyvy"
             - "--encoder=omx"
-            - "--glitched-resolutions=720x480,720x576"
             - "--workers=3"
             - "--quality={quality}"
             - "--desired-fps={desired_fps}"
