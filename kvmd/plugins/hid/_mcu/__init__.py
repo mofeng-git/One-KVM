@@ -293,14 +293,10 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 time.sleep(1)
 
     def __hid_loop(self) -> None:
-        logger = get_logger(0)
         while not self.__stop_event.is_set():
             try:
-                if not self.__phy.has_device():
-                    logger.error("Missing HID device")
-                    time.sleep(1)
+                if not self.__hid_loop_wait_device():
                     continue
-
                 with self.__phy.connected() as conn:
                     while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
                         if self.__reset_required_event.is_set():
@@ -320,8 +316,24 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                                 self.clear_events()
             except Exception:
                 self.clear_events()
-                logger.exception("Unexpected error in the HID loop")
+                get_logger(0).exception("Unexpected error in the HID loop")
                 time.sleep(1)
+
+    def __hid_loop_wait_device(self) -> bool:
+        logger = get_logger(0)
+        logger.info("Initial HID reset and wait ...")
+        self.__gpio.reset()
+        # На самом деле SPI и Serial-девайсы не пропадают, просто резет и ожидание
+        # логичнее всего делать именно здесь. Ну и на будущее, да
+        for _ in range(10):
+            if self.__phy.has_device():
+                logger.info("HID found")
+                return True
+            if self.__stop_event.is_set():
+                break
+            time.sleep(1)
+        logger.error("Missing HID")
+        return False
 
     def __process_request(self, conn: BasePhyConnection, request: bytes) -> bool:  # pylint: disable=too-many-branches
         logger = get_logger()
