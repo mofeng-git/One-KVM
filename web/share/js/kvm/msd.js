@@ -89,7 +89,7 @@ export function Msd() {
 	};
 
 	var __sendParam = function(name, value) {
-		let http = tools.makeRequest("POST", `/api/msd/set_params?${name}=${value}`, function() {
+		let http = tools.makeRequest("POST", `/api/msd/set_params?${name}=${encodeURIComponent(value)}`, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					wm.error("Can't configure MSD:<br>", http.responseText);
