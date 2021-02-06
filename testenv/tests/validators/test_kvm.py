@@ -33,6 +33,7 @@ from kvmd.validators.kvm import valid_stream_quality
 from kvmd.validators.kvm import valid_stream_fps
 from kvmd.validators.kvm import valid_stream_resolution
 from kvmd.validators.kvm import valid_stream_h264_bitrate
+from kvmd.validators.kvm import valid_stream_h264_gop
 
 
 # =====
@@ -141,3 +142,17 @@ def test_ok__valid_stream_h264_bitrate(arg: Any) -> None:
 def test_fail__valid_stream_h264_bitrate(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_stream_h264_bitrate(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", ["1 ", 0, 60])
+def test_ok__valid_stream_h264_gop(arg: Any) -> None:
+    value = valid_stream_h264_gop(arg)
+    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert value == int(str(arg).strip())
+
+
+@pytest.mark.parametrize("arg", ["test", "", None, 61, 1.1])
+def test_fail__valid_stream_h264_gop(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_stream_h264_gop(arg))

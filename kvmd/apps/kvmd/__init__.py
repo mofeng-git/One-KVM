@@ -67,7 +67,12 @@ def main(argv: Optional[List[str]]=None) -> None:
     config = config.kvmd
 
     hid = get_hid_class(config.hid.type)(**hid_kwargs)
-    streamer = Streamer(**config.streamer._unpack(ignore=["forever"]))
+    streamer = Streamer(
+        **config.streamer._unpack(ignore=["forever", "desired_fps", "h264_bitrate", "h264_gop"]),
+        **config.streamer.desired_fps._unpack(),
+        **config.streamer.h264_bitrate._unpack(),
+        **config.streamer.h264_gop._unpack(),
+    )
 
     KvmdServer(
         auth_manager=AuthManager(

@@ -78,3 +78,7 @@ def valid_stream_resolution(arg: Any) -> str:
 
 def valid_stream_h264_bitrate(arg: Any) -> int:
     return int(valid_number(arg, min=100, max=16000, name="stream H264 bitrate"))
+
+
+def valid_stream_h264_gop(arg: Any) -> int:
+    return int(valid_number(arg, min=0, max=60, name="stream H264 GOP"))

@@ -91,6 +91,7 @@ from ..validators.kvm import valid_stream_quality
 from ..validators.kvm import valid_stream_fps
 from ..validators.kvm import valid_stream_resolution
 from ..validators.kvm import valid_stream_h264_bitrate
+from ..validators.kvm import valid_stream_h264_gop
 
 from ..validators.ugpio import valid_ugpio_driver
 from ..validators.ugpio import valid_ugpio_channel
@@ -188,6 +189,19 @@ def _patch_raw(raw_config: Dict) -> None:
                 if not isinstance(raw_config["otg"].get("devices"), dict):
                     raw_config["otg"]["devices"] = {}
                 raw_config["otg"]["devices"][new] = raw_config["otg"].pop(old)
+
+    if isinstance(raw_config.get("kvmd"), dict) and isinstance(raw_config["kvmd"].get("streamer"), dict):
+        streamer_config = raw_config["kvmd"]["streamer"]
+
+        desired_fps = streamer_config.get("desired_fps")
+        if desired_fps is not None and not isinstance(desired_fps, dict):
+            streamer_config["desired_fps"] = {"default": desired_fps}
+
+        max_fps = streamer_config.get("max_fps")
+        if max_fps is not None:
+            if not isinstance(streamer_config.get("desired_fps"), dict):
+                streamer_config["desired_fps"] = {}
+            streamer_config["desired_fps"] = {"max": max_fps}
 
 
 def _patch_dynamic(  # pylint: disable=too-many-locals
@@ -355,14 +369,26 @@ def _get_config_scheme() -> Dict:
                 "state_poll":     Option(1.0,  type=valid_float_f01),
 
                 "quality":     Option(80, type=(lambda arg: (valid_stream_quality(arg) if arg else 0))),  # 0 for disabled feature
-                "desired_fps": Option(30, type=valid_stream_fps),
-                "max_fps":     Option(60, type=valid_stream_fps),
                 "resolution":  Option("", type=(lambda arg: (valid_stream_resolution(arg) if arg else ""))),
                 "available_resolutions": Option([], type=functools.partial(valid_string_list, subval=valid_stream_resolution)),
 
-                "h264_bitrate":     Option(0,     type=(lambda arg: (valid_stream_h264_bitrate(arg) if arg else 0))),
-                "h264_min_bitrate": Option(100,   type=valid_stream_h264_bitrate),
-                "h264_max_bitrate": Option(16000, type=valid_stream_h264_bitrate),
+                "desired_fps": {
+                    "default": Option(30, type=valid_stream_fps, unpack_as="desired_fps"),
+                    "min":     Option(0,  type=valid_stream_fps, unpack_as="desired_fps_min"),
+                    "max":     Option(60, type=valid_stream_fps, unpack_as="desired_fps_max"),
+                },
+
+                "h264_bitrate": {
+                    "default": Option(0,     type=(lambda arg: (valid_stream_h264_bitrate(arg) if arg else 0)), unpack_as="h264_bitrate"),
+                    "min":     Option(100,   type=valid_stream_h264_bitrate, unpack_as="h264_bitrate_min"),
+                    "max":     Option(16000, type=valid_stream_h264_bitrate, unpack_as="h264_bitrate_max"),
+                },
+
+                "h264_gop": {
+                    "default": Option(30, type=valid_stream_h264_gop, unpack_as="h264_gop"),
+                    "min":     Option(0,  type=valid_stream_h264_gop, unpack_as="h264_gop_min"),
+                    "max":     Option(60, type=valid_stream_h264_gop, unpack_as="h264_gop_max"),
+                },
 
                 "host":    Option("localhost", type=valid_ip_or_host),
                 "port":    Option(0,   type=valid_port),
