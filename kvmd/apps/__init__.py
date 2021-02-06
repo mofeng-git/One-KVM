@@ -201,7 +201,19 @@ def _patch_raw(raw_config: Dict) -> None:
         if max_fps is not None:
             if not isinstance(streamer_config.get("desired_fps"), dict):
                 streamer_config["desired_fps"] = {}
-            streamer_config["desired_fps"] = {"max": max_fps}
+            streamer_config["desired_fps"]["max"] = max_fps
+            del streamer_config["max_fps"]
+
+        resolution = streamer_config.get("resolution")
+        if resolution is not None and not isinstance(resolution, dict):
+            streamer_config["resolution"] = {"default": resolution}
+
+        available_resolutions = streamer_config.get("available_resolutions")
+        if available_resolutions is not None:
+            if not isinstance(streamer_config.get("resolution"), dict):
+                streamer_config["resolution"] = {}
+            streamer_config["resolution"]["available"] = available_resolutions
+            del streamer_config["available_resolutions"]
 
 
 def _patch_dynamic(  # pylint: disable=too-many-locals
@@ -372,9 +384,16 @@ def _get_config_scheme() -> Dict:
                 "shutdown_delay": Option(10.0, type=valid_float_f01),
                 "state_poll":     Option(1.0,  type=valid_float_f01),
 
-                "quality":     Option(80, type=_make_ifarg(valid_stream_quality, 0)),
-                "resolution":  Option("", type=_make_ifarg(valid_stream_resolution, "")),
-                "available_resolutions": Option([], type=functools.partial(valid_string_list, subval=valid_stream_resolution)),
+                "quality": Option(80, type=_make_ifarg(valid_stream_quality, 0)),
+
+                "resolution": {
+                    "default":   Option("", type=_make_ifarg(valid_stream_resolution, ""), unpack_as="resolution"),
+                    "available": Option(
+                        [],
+                        type=functools.partial(valid_string_list, subval=valid_stream_resolution),
+                        unpack_as="available_resolutions",
+                    ),
+                },
 
                 "desired_fps": {
                     "default": Option(30, type=valid_stream_fps, unpack_as="desired_fps"),

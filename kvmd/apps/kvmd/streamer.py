@@ -76,19 +76,19 @@ class _StreamerParams:
         desired_fps_max: int,
 
         h264_bitrate: int,
-        h264_min_bitrate: int,
-        h264_max_bitrate: int,
+        h264_bitrate_min: int,
+        h264_bitrate_max: int,
 
         h264_gop: int,
-        h264_min_gop: int,
-        h264_max_gop: int,
+        h264_gop_min: int,
+        h264_gop_max: int,
     ) -> None:
 
         self.__has_quality = bool(quality)
         self.__has_resolution = bool(resolution)
         self.__has_h264 = bool(h264_bitrate)
 
-        self.__params: Dict = {self.__DESIRED_FPS: min(desired_fps, desired_fps_min)}
+        self.__params: Dict = {self.__DESIRED_FPS: min(max(desired_fps, desired_fps_min), desired_fps_max)}
         self.__limits: Dict = {self.__DESIRED_FPS: {"min": desired_fps_min, "max": desired_fps_max}}
 
         if self.__has_quality:
@@ -99,10 +99,10 @@ class _StreamerParams:
             self.__limits[self.__AVAILABLE_RESOLUTIONS] = available_resolutions
 
         if self.__has_h264:
-            self.__params[self.__H264_BITRATE] = min(max(h264_bitrate, h264_min_bitrate), h264_max_bitrate)
-            self.__limits[self.__H264_BITRATE] = {"min": h264_min_bitrate, "max": h264_max_bitrate}
-            self.__params[self.__H264_GOP] = min(max(h264_gop, h264_min_gop), h264_max_gop)
-            self.__limits[self.__H264_GOP] = {"min": h264_min_gop, "max": h264_max_gop}
+            self.__params[self.__H264_BITRATE] = min(max(h264_bitrate, h264_bitrate_min), h264_bitrate_max)
+            self.__limits[self.__H264_BITRATE] = {"min": h264_bitrate_min, "max": h264_bitrate_max}
+            self.__params[self.__H264_GOP] = min(max(h264_gop, h264_gop_min), h264_gop_max)
+            self.__limits[self.__H264_GOP] = {"min": h264_gop_min, "max": h264_gop_max}
 
     def get_features(self) -> Dict:
         return {
