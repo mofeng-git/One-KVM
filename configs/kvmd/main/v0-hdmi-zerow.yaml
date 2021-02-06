@@ -28,6 +28,7 @@ kvmd:
         type: disabled
 
     streamer:
+        quality: 50
         unix: /run/kvmd/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"
