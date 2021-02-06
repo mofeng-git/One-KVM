@@ -31,6 +31,8 @@ kvmd:
 
     streamer:
         unix: /run/kvmd/ustreamer.sock
+        h264_bitrate:
+            default: 5000
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
@@ -50,6 +52,12 @@ kvmd:
             - "--process-name-prefix={process_name_prefix}"
             - "--notify-parent"
             - "--no-log-colors"
+            - "--sink=kvmd::ustreamer::jpeg"
+            - "--sink-mode=0660"
+            - "--h264-sink=kvmd::ustreamer::h264"
+            - "--h264-sink-mode=0660"
+            - "--h264-bitrate={h264_bitrate}"
+            - "--h264-gop={h264_gop}"
 
 ipmi:
     kvmd:
@@ -61,3 +69,9 @@ vnc:
 
     streamer:
         unix: /run/kvmd/ustreamer.sock
+
+    memsink:
+        jpeg:
+            sink: "kvmd::ustreamer::jpeg"
+        h264:
+            sink: "kvmd::ustreamer::h264"
