@@ -27,19 +27,20 @@ kvmd:
 
     streamer:
         quality: 0
-        resolution: 1920x1080
-        available_resolutions:
-            - 1920x1080
-            - 1600x1200
-            - 1360x768
-            - 1280x1024
-            - 1280x960
-            - 1280x720
-            - 1024x768
-            - 800x600
-            - 720x576
-            - 720x480
-            - 640x480
+        resolution:
+            default: 1920x1080
+            available:
+                - 1920x1080
+                - 1600x1200
+                - 1360x768
+                - 1280x1024
+                - 1280x960
+                - 1280x720
+                - 1024x768
+                - 800x600
+                - 720x576
+                - 720x480
+                - 640x480
         unix: /run/kvmd/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"
