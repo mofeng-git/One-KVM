@@ -123,7 +123,7 @@ export function Gpio() {
 			`;
 		} else if (item.type === "output") {
 			let controls = [];
-			let confirm = (item.confirm ? "Are you sure to act this control?" : "");
+			let confirm = (item.confirm ? "Are you sure you want to perform this action?" : "");
 			if (item.scheme["switch"]) {
 				controls.push(`
 					<td><div class="switch-box">

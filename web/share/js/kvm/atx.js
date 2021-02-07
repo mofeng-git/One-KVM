@@ -37,9 +37,15 @@ export function Atx() {
 		$("atx-hdd-led").title = "Disk Activity Led";
 
 		for (let args of [
-			["atx-power-button", "power", "Are you sure to click the power button?"],
-			["atx-power-button-long", "power_long", "Are you sure to perform the long press of the power button?"],
-			["atx-reset-button", "reset", "Are you sure to reboot the server?"],
+			["atx-power-button", "power", "Are you sure you want to press the power button?"],
+			["atx-power-button-long", "power_long", `
+				Are you sure you want to long press the power button?<br>
+				(Warning! This could cause data loss on the server.)
+			`],
+			["atx-reset-button", "reset", `
+				Are you sure you want to press the reset button?<br>
+				(Warning! This could case data loss on the server.)
+			`],
 		]) {
 			tools.setOnClick($(args[0]), () => __clickButton(args[1], args[2]));
 		}

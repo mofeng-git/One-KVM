@@ -196,10 +196,10 @@ export function Hid() {
 	var __clickPasteAsKeysButton = function() {
 		let text = $("hid-pak-text").value.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
 		if (text) {
-			let confirm_msg = `
-				You're going to paste ${text.length} characters.<br>
-				Are you sure you want to continue?
-			`;
+			let confirm_msg = text.length !== 1 ?
+				`You're going to paste ${text.length} characters.<br>` :
+				`You're going to paste ${text.length} character.<br>`;
+			confirm_msg += "Are you sure you want to continue?";
 
 			wm.confirm(confirm_msg).then(function(ok) {
 				if (ok) {
