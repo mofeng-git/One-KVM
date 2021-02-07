@@ -190,6 +190,7 @@ export function Session() {
 					__ws.onerror = __wsErrorHandler;
 					__ws.onclose = __wsCloseHandler;
 				} else if (http.status === 401 || http.status === 403) {
+					window.onbeforeunload = () => null;
 					wm.error("Unexpected logout occured, please login again").then(function() {
 						document.location.href = "/login";
 					});
