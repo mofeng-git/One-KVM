@@ -239,7 +239,7 @@ export function Msd() {
 			$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
 			$("msd-new-image-size").innerHTML = (__image_file ? tools.formatSize(__image_file.size) : "");
 			if (!__upload_http) {
-				tools.progressSetValue($("msd-uploading-progress"), "Waiting for upload ...", 0);
+				tools.progressSetValue($("msd-uploading-progress"), "Waiting for upload (press UPLOAD button) ...", 0);
 			}
 
 		} else {
