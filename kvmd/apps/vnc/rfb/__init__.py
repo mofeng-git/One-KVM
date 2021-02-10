@@ -42,6 +42,7 @@ from .encodings import RfbClientEncodings
 
 from .crypto import rfb_make_challenge
 from .crypto import rfb_encrypt_challenge
+from .crypto import create_self_signed_cert_if_nonexistent, key_file_name, cert_file_name
 
 from .stream import RfbClientStream
 
@@ -261,7 +262,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         else:
             auth_types = {256: ("VeNCrypt/Plain", False, self.__handshake_security_vencrypt_userpass)}
             if self.__tls_ciphers:
-                auth_types[259] = ("VeNCrypt/TLSPlain", True, self.__handshake_security_vencrypt_userpass)
+                auth_types[262] = ("VeNCrypt/X509Plain", True, self.__handshake_security_vencrypt_userpass)
             if self.__vnc_passwds:
                 # Vinagre не умеет работать с VNC Auth через VeNCrypt, но это его проблемы,
                 # так как он своеобразно трактует рекомендации VeNCrypt.
@@ -284,6 +285,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             assert self.__tls_ciphers, (self.__tls_ciphers, auth_name, tls, handler)
             await self._write_struct("B", 1)  # Ack
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            create_self_signed_cert_if_nonexistent(key_file_name, cert_file_name)
+            ssl_context.load_cert_chain(keyfile=key_file_name, certfile=cert_file_name)
             ssl_context.set_ciphers(self.__tls_ciphers)
             await self._start_tls(ssl_context, self.__tls_timeout)
 

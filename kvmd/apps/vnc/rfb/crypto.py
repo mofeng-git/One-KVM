@@ -26,6 +26,14 @@ from typing import List
 
 import passlib.crypto.des
 
+from OpenSSL import crypto, SSL
+from socket import gethostname
+from pprint import pprint
+from time import gmtime, mktime
+import os.path
+
+key_file_name = "private_vnc.key"
+cert_file_name = "self_signed_cert.crt"
 
 # =====
 def rfb_make_challenge() -> bytes:
@@ -51,3 +59,30 @@ def _make_key(passwd: bytes) -> bytes:
                 btgt = btgt | (1 << 7 - index)
         key.append(btgt)
     return bytes(key)
+
+
+def create_self_signed_cert_if_nonexistent(key_file, cert_file):
+    if os.path.isfile(key_file) and os.path.isfile(cert_file):
+        return
+
+    key = crypto.PKey()
+    key.generate_key(crypto.TYPE_RSA, 2048)
+
+    cert = crypto.X509()
+    cert.get_subject().C = "CA"
+    cert.get_subject().ST = "Toronto"
+    cert.get_subject().L = "Toronto"
+    cert.get_subject().O = "Company Ltd"
+    cert.get_subject().OU = "Company Ltd"
+    cert.get_subject().CN = gethostname()
+    cert.set_serial_number(1000)
+    cert.gmtime_adj_notBefore(0)
+    cert.gmtime_adj_notAfter(100*365*24*60*60)
+    cert.set_issuer(cert.get_subject())
+    cert.set_pubkey(key)
+    cert.sign(key, 'sha256')
+
+    open(key_file, "wt").write(
+        crypto.dump_privatekey(crypto.FILETYPE_PEM, key).decode('utf-8'))
+    open(cert_file, "wt").write(
+        crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode('utf-8'))
