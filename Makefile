@@ -52,6 +52,17 @@ testenv:
 			--build-arg LIBGPIOD_VERSION=$(LIBGPIOD_VERSION) \
 			--build-arg USTREAMER_MIN_VERSION=$(USTREAMER_MIN_VERSION) \
 		-f testenv/Dockerfile .
+	test -d testenv/.ssl || docker run --rm \
+			--volume `pwd`:/src:ro \
+			--volume `pwd`/testenv:/src/testenv:rw \
+		-t $(TESTENV_IMAGE) bash -c " \
+			groupadd kvmd-nginx \
+			&& /src/scripts/kvmd-gencert --do-the-thing \
+			&& chown -R root:root /etc/kvmd/nginx/ssl \
+			&& chmod 664 /etc/kvmd/nginx/ssl/* \
+			&& chmod 775 /etc/kvmd/nginx/ssl \
+			&& mv /etc/kvmd/nginx/ssl /src/testenv/.ssl \
+		"
 
 
 tox: testenv
@@ -63,7 +74,8 @@ tox: testenv
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
 			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
 		-t $(TESTENV_IMAGE) bash -c " \
-			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
+			cp -a /src/testenv/.ssl /etc/kvmd/nginx/ssl \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
 			&& cp /src/testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
@@ -79,17 +91,6 @@ $(TESTENV_GPIO):
 
 
 run: testenv $(TESTENV_GPIO)
-	test -d testenv/.ssl || docker run --rm \
-			--volume `pwd`:/src:ro \
-			--volume `pwd`/testenv:/src/testenv:rw \
-		-t $(TESTENV_IMAGE) bash -c " \
-			groupadd kvmd-nginx \
-			&& /src/scripts/kvmd-gencert --do-the-thing \
-			&& chown -R root:root /etc/kvmd/nginx/ssl \
-			&& chmod 664 /etc/kvmd/nginx/ssl/* \
-			&& chmod 775 /etc/kvmd/nginx/ssl \
-			&& mv /etc/kvmd/nginx/ssl /src/testenv/.ssl \
-		"
 	- docker run --rm --name kvmd \
 			--cap-add SYS_ADMIN \
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
@@ -170,10 +171,10 @@ run-vnc: testenv
 			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
 			--publish 5900:5900/tcp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
-			cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
+			cp -a /testenv/.ssl /etc/kvmd/nginx/ssl \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
-			&& cp -a /testenv/.ssl /etc/kvmd/nginx/ssl \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& $(if $(CMD),$(CMD),python -m kvmd.apps.vnc --run) \
 		"
