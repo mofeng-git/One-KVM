@@ -68,6 +68,8 @@ def main(argv: Optional[List[str]]=None) -> None:
 
         tls_ciphers=config.server.tls.ciphers,
         tls_timeout=config.server.tls.timeout,
+        x509_cert_path=config.server.tls.x509.cert,
+        x509_key_path=config.server.tls.x509.key,
 
         desired_fps=config.desired_fps,
         keymap_path=config.keymap,

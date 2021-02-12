@@ -79,6 +79,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         writer: asyncio.StreamWriter,
         tls_ciphers: str,
         tls_timeout: float,
+        x509_cert_path: str,
+        x509_key_path: str,
 
         desired_fps: int,
         keymap_name: str,
@@ -99,6 +101,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             writer=writer,
             tls_ciphers=tls_ciphers,
             tls_timeout=tls_timeout,
+            x509_cert_path=x509_cert_path,
+            x509_key_path=x509_key_path,
             vnc_passwds=list(vnc_credentials),
             none_auth_only=none_auth_only,
             **dataclasses.asdict(shared_params),
@@ -406,6 +410,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
 
         tls_ciphers: str,
         tls_timeout: float,
+        x509_cert_path: str,
+        x509_key_path: str,
 
         desired_fps: int,
         keymap_path: str,
@@ -456,6 +462,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     writer=writer,
                     tls_ciphers=tls_ciphers,
                     tls_timeout=tls_timeout,
+                    x509_cert_path=x509_cert_path,
+                    x509_key_path=x509_key_path,
                     desired_fps=desired_fps,
                     keymap_name=keymap_name,
                     symmap=symmap,

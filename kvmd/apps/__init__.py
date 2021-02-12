@@ -586,6 +586,10 @@ def _get_config_scheme() -> Dict:
                 "tls": {
                     "ciphers": Option("ALL:@SECLEVEL=0", type=_make_ifarg(valid_ssl_ciphers, "")),
                     "timeout": Option(5.0, type=valid_float_f01),
+                    "x509": {
+                        "cert": Option("", type=_make_ifarg(valid_abs_file, "")),
+                        "key":  Option("", type=_make_ifarg(valid_abs_file, "")),
+                    },
                 },
             },
 
