@@ -59,3 +59,9 @@ vnc:
 
     streamer:
         unix: /run/kvmd/ustreamer.sock
+
+    server:
+        tls:
+            x509:
+                cert: /etc/kvmd/nginx/ssl/server.crt
+                key: /etc/kvmd/nginx/ssl/server.key
