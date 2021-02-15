@@ -24,10 +24,12 @@ post_upgrade() {
 		kvmd-gencert --do-the-thing --vnc
 	fi
 
-	chown root:root /etc/kvmd/vnc/ssl
-	chown root:root /etc/kvmd/nginx/ssl
-	chmod 755 /etc/kvmd/vnc/ssl
-	chmod 755 /etc/kvmd/nginx/ssl
+	for target in nginx vnc; do
+		chown root:root /etc/kvmd/$target/ssl
+		chown root:kvmd-$target /etc/kvmd/$target/ssl/*
+		chmod 440 /etc/kvmd/$target/ssl/server.key
+		chmod 444 /etc/kvmd/$target/ssl/server.crt
+	done
 
 	echo "==> Patching configs ..."
 	[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=pi3-disable-bt$/dtoverlay=disable-bt/g' /boot/config.txt

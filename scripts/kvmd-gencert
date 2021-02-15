@@ -58,6 +58,6 @@ openssl req -new -x509 -sha256 -nodes -key server.key -out server.crt -days 3650
 	-subj "/C=RU/ST=Moscow/L=Moscow/O=Pi-KVM/OU=Pi-KVM/CN=localhost"
 
 chown root:kvmd-$target /etc/kvmd/$target/ssl/*
-chmod 400 server.key
+chmod 440 server.key
 chmod 444 server.crt
 chmod 755 /etc/kvmd/$target/ssl
