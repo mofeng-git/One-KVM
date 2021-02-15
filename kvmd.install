@@ -1,7 +1,7 @@
 post_install() {
 	post_upgrade
 
-	echo "==> Generating KVMD certificate ..."
+	echo "==> Generating KVMD-Nginx certificate ..."
 	kvmd-gencert --do-the-thing
 }
 
@@ -18,6 +18,16 @@ post_upgrade() {
 	chmod 600 /etc/kvmd/*passwd
 
 	chown kvmd /var/lib/kvmd/msd || true
+
+	if [ ! -d /etc/kvmd/vnc/ssl ]; then
+		echo "==> Generating KVMD-VNC certificate ..."
+		kvmd-gencert --do-the-thing --vnc
+	fi
+
+	chown root:root /etc/kvmd/vnc/ssl
+	chown root:root /etc/kvmd/nginx/ssl
+	chmod 755 /etc/kvmd/vnc/ssl
+	chmod 755 /etc/kvmd/nginx/ssl
 
 	echo "==> Patching configs ..."
 	[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=pi3-disable-bt$/dtoverlay=disable-bt/g' /boot/config.txt
