@@ -71,7 +71,7 @@ export function Msd() {
 
 	var __clickRemoveImageButton = function() {
 		let name = $("msd-image-selector").value;
-		wm.confirm(`Are you sure you want to remove<br>the image <b>${name}</b>?`).then(function(ok) {
+		wm.confirm(`Are you sure you want to remove the image<br><b>${name}</b> from Pi-KVM?`).then(function(ok) {
 			if (ok) {
 				let http = tools.makeRequest("POST", `/api/msd/remove?image=${name}`, function() {
 					if (http.readyState === 4) {
