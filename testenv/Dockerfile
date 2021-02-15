@@ -71,7 +71,7 @@ RUN git clone https://github.com/pikvm/ustreamer \
 	&& rm -rf ustreamer
 
 RUN mkdir -p \
-		/etc/kvmd/nginx \
+		/etc/kvmd/{nginx,vnc} \
 		/var/lib/kvmd/msd/{images,meta} \
 		/opt/vc/bin \
 		/fake_sysfs/sys/kernel/config/usb_gadget/kvmd/functions/mass_storage.usb0/lun.0 \
