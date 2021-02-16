@@ -179,11 +179,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__process_name_prefix = process_name_prefix
 
-        self.__cmd = [
-            cmd[0],  # Executable
-            *filter((lambda item: item not in cmd_remove), cmd[1:]),
-            *cmd_append,
-        ]
+        self.__cmd = tools.build_cmd(cmd, cmd_remove, cmd_append)
 
         self.__params = _StreamerParams(**params_kwargs)
 

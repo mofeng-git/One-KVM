@@ -516,7 +516,10 @@ def _get_config_scheme() -> Dict:
             },
 
             "commands": {
-                "pre_start_cmd":  Option(["/bin/true", "pre-start"], type=valid_command),
+                "pre_start_cmd":        Option(["/bin/true", "pre-start"], type=valid_command),
+                "pre_start_cmd_remove": Option([], type=valid_options),
+                "pre_start_cmd_append": Option([], type=valid_options),
+
                 "post_start_cmd": Option([
                     "/usr/bin/systemd-run",
                     "--unit=kvmd-otgnet-dnsmasq",
@@ -532,12 +535,20 @@ def _get_config_scheme() -> Dict:
                     "--dhcp-option=6",
                     "--keep-in-foreground",
                 ], type=valid_command),
-                "pre_stop_cmd":   Option([
+                "post_start_cmd_remove": Option([], type=valid_options),
+                "post_start_cmd_append": Option([], type=valid_options),
+
+                "pre_stop_cmd": Option([
                     "/usr/bin/systemctl",
                     "stop",
                     "kvmd-otgnet-dnsmasq",
                 ], type=valid_command),
-                "post_stop_cmd":  Option(["/bin/true", "post-stop"], type=valid_command),
+                "pre_stop_cmd_remove": Option([], type=valid_options),
+                "pre_stop_cmd_append": Option([], type=valid_options),
+
+                "post_stop_cmd":        Option(["/bin/true", "post-stop"], type=valid_command),
+                "post_stop_cmd_remove": Option([], type=valid_options),
+                "post_stop_cmd_append": Option([], type=valid_options),
             },
         },
 

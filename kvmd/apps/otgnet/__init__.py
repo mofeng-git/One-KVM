@@ -35,6 +35,7 @@ from ...logging import get_logger
 from ...yamlconf import Section
 
 from ... import env
+from ... import tools
 from ... import aioproc
 
 from .. import init
@@ -74,10 +75,17 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         self.__forward_iface: str = config.otgnet.firewall.forward_iface
         self.__iptables_cmd: List[str] = config.otgnet.firewall.iptables_cmd
 
-        self.__pre_start_cmd: List[str] = config.otgnet.commands.pre_start_cmd
-        self.__post_start_cmd: List[str] = config.otgnet.commands.post_start_cmd
-        self.__pre_stop_cmd: List[str] = config.otgnet.commands.pre_stop_cmd
-        self.__post_stop_cmd: List[str] = config.otgnet.commands.post_stop_cmd
+        def build_cmd(key: str) -> List[str]:
+            return tools.build_cmd(
+                getattr(config.otgnet.commands, key),
+                getattr(config.otgnet.commands, f"{key}_remove"),
+                getattr(config.otgnet.commands, f"{key}_append"),
+            )
+
+        self.__pre_start_cmd: List[str] = build_cmd("pre_start_cmd")
+        self.__post_start_cmd: List[str] = build_cmd("post_start_cmd")
+        self.__pre_stop_cmd: List[str] = build_cmd("pre_stop_cmd")
+        self.__post_stop_cmd: List[str] = build_cmd("post_stop_cmd")
 
         self.__gadget: str = config.otg.gadget
         self.__driver: str = config.otg.devices.ethernet.driver

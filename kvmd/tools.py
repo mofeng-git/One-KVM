@@ -73,3 +73,13 @@ def clear_queue(q: multiprocessing.queues.Queue) -> None:  # pylint: disable=inv
             q.get_nowait()
         except queue.Empty:
             break
+
+
+# =====
+def build_cmd(cmd: List[str], cmd_remove: List[str], cmd_append: List[str]) -> List[str]:
+    assert len(cmd) >= 1, cmd
+    return [
+        cmd[0],  # Executable
+        *filter((lambda item: item not in cmd_remove), cmd[1:]),
+        *cmd_append,
+    ]
