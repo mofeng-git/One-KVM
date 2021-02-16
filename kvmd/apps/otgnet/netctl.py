@@ -85,6 +85,33 @@ class IptablesAllowPortCtl(BaseCtl):
         ]
 
 
+class IptablesForwardOut(BaseCtl):
+    def __init__(self, base_cmd: List[str], iface: str) -> None:
+        self.__base_cmd = base_cmd
+        self.__iface = iface
+
+    def get_command(self, direct: bool) -> List[str]:
+        return [
+            *self.__base_cmd,
+            "--table", "nat",
+            ("-A" if direct else "-D"), "POSTROUTING",
+            "-o", self.__iface, "-j", "MASQUERADE",
+        ]
+
+
+class IptablesForwardIn(BaseCtl):
+    def __init__(self, base_cmd: List[str], iface: str) -> None:
+        self.__base_cmd = base_cmd
+        self.__iface = iface
+
+    def get_command(self, direct: bool) -> List[str]:
+        return [
+            *self.__base_cmd,
+            ("-A" if direct else "-D"), "FORWARD",
+            "-i", self.__iface, "-j", "ACCEPT",
+        ]
+
+
 class CustomCtl(BaseCtl):
     def __init__(
         self,

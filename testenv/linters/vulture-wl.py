@@ -37,5 +37,6 @@ _SharedParams.height
 
 _Netcfg.net_ip
 _Netcfg.net_mask
+_Netcfg.dhcp_option_3
 
 _ScriptWriter.get_args

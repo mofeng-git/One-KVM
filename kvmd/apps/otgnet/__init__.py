@@ -45,12 +45,14 @@ from .netctl import IfaceAddIpCtl
 from .netctl import IptablesDropAllCtl
 from .netctl import IptablesAllowIcmpCtl
 from .netctl import IptablesAllowPortCtl
+from .netctl import IptablesForwardOut
+from .netctl import IptablesForwardIn
 from .netctl import CustomCtl
 
 
 # =====
 @dataclasses.dataclass(frozen=True)
-class _Netcfg:
+class _Netcfg:  # pylint: disable=too-many-instance-attributes
     iface: str
     iface_ip: str
     net_ip: str
@@ -58,6 +60,7 @@ class _Netcfg:
     net_mask: str
     dhcp_ip_begin: str
     dhcp_ip_end: str
+    dhcp_option_3: str
 
 
 class _Service:  # pylint: disable=too-many-instance-attributes
@@ -68,6 +71,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         self.__allow_icmp: bool = config.otgnet.firewall.allow_icmp
         self.__allow_tcp: List[int] = sorted(set(config.otgnet.firewall.allow_tcp))
         self.__allow_udp: List[int] = sorted(set(config.otgnet.firewall.allow_udp))
+        self.__forward_iface: str = config.otgnet.firewall.forward_iface
         self.__iptables_cmd: List[str] = config.otgnet.firewall.iptables_cmd
 
         self.__pre_start_cmd: List[str] = config.otgnet.commands.pre_start_cmd
@@ -101,6 +105,8 @@ class _Service:  # pylint: disable=too-many-instance-attributes
                     *zip(self.__allow_udp, itertools.repeat(False)),
                 ]
             ],
+            *([IptablesForwardOut(self.__iptables_cmd, self.__forward_iface)] if self.__forward_iface else []),
+            *([IptablesForwardIn(self.__iptables_cmd, netcfg.iface)] if self.__forward_iface else []),
             IptablesDropAllCtl(self.__iptables_cmd, netcfg.iface),
             IfaceAddIpCtl(self.__ip_cmd, netcfg.iface, f"{netcfg.iface_ip}/{netcfg.net_prefix}"),
             CustomCtl(self.__post_start_cmd, self.__pre_stop_cmd, placeholders),
@@ -152,6 +158,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
             net_mask=str(net.netmask),
             dhcp_ip_begin=dhcp_ip_begin,
             dhcp_ip_end=dhcp_ip_end,
+            dhcp_option_3=(f"3,{iface_ip}" if self.__forward_iface else "3"),
         )
         logger.info("Calculated %r address is %s/%d", iface, iface_ip, netcfg.net_prefix)
         return netcfg

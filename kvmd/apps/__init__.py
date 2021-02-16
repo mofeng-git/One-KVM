@@ -511,6 +511,7 @@ def _get_config_scheme() -> Dict:
                 "allow_icmp":   Option(True, type=valid_bool),
                 "allow_tcp":    Option([],   type=valid_ports_list),
                 "allow_udp":    Option([67], type=valid_ports_list),
+                "forward_iface": Option("", type=valid_stripped_string),
                 "iptables_cmd": Option(["/usr/bin/iptables"], type=valid_command),
             },
 
@@ -527,7 +528,7 @@ def _get_config_scheme() -> Dict:
                     "--port=0",
                     "--dhcp-range={dhcp_ip_begin},{dhcp_ip_end},24h",
                     "--dhcp-leasefile=/run/kvmd/dnsmasq.lease",
-                    "--dhcp-option=3",
+                    "--dhcp-option={dhcp_option_3}",
                     "--dhcp-option=6",
                     "--keep-in-foreground",
                 ], type=valid_command),
