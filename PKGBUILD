@@ -68,7 +68,7 @@ depends=(
 	iproute2
 	dnsmasq
 	"raspberrypi-io-access>=0.5"
-	"ustreamer>=3.15"
+	"ustreamer>=3.17"
 
 	# Avoid dhcpcd stack trace
 	dhclient
