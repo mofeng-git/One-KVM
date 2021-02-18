@@ -31,8 +31,8 @@ kvmd:
 
     streamer:
         unix: /run/kvmd/ustreamer.sock
-        h264_bitrate:
-            default: 5000
+#        h264_bitrate:
+#            default: 5000
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
