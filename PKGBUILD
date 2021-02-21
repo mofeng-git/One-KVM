@@ -140,14 +140,14 @@ for _variant in "${_variants[@]}"; do
 		cd \"kvmd-\$pkgver\"
 
 		pkgdesc=\"Pi-KVM platform configs - $_platform for $_board\"
-		depends=(kvmd=$pkgver-$pkgrel \"raspberrypi-bootloader>=20210112-2\" \"raspberrypi-bootloader-x>=20210112-2\" \"raspberrypi-firmware>=20210112-2\" \"linux-firmware=20210213.646f159-1\")
+		depends=(kvmd=$pkgver-$pkgrel \"raspberrypi-bootloader>=20210216-1\" \"raspberrypi-bootloader-x>=20210216-1\" \"raspberrypi-firmware>=20210128-2\" \"linux-firmware>=20210213.646f159-2\")
 
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
 			depends=(\"\${depends[@]}\")
 			if [ $_board == rpi4 ]; then
-				depends=(\"\${depends[@]}\" \"linux-raspberrypi4>=5.4.69\" \"linux-raspberrypi4-headers>=5.4.69\")
+				depends=(\"\${depends[@]}\" \"linux-raspberrypi4>=5.10.16-3\" \"linux-raspberrypi4-headers>=5.10.16-3\")
 			else
-				depends=(\"\${depends[@]}\" \"linux-raspberrypi>=5.4.69\" \"linux-raspberrypi-headers>=5.4.69\")
+				depends=(\"\${depends[@]}\" \"linux-raspberrypi>=5.10.16-3\" \"linux-raspberrypi-headers>=5.10.16-3\")
 			fi
 		fi
 
