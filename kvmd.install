@@ -1,8 +1,5 @@
 post_install() {
 	post_upgrade
-
-	echo "==> Generating KVMD-Nginx certificate ..."
-	kvmd-gencert --do-the-thing
 }
 
 post_upgrade() {
@@ -18,6 +15,11 @@ post_upgrade() {
 	chmod 600 /etc/kvmd/*passwd
 
 	chown kvmd /var/lib/kvmd/msd || true
+
+	if [ ! -d /etc/kvmd/nginx/ssl ]; then
+		echo "==> Generating KVMD-Nginx certificate ..."
+		kvmd-gencert --do-the-thing
+	fi
 
 	if [ ! -d /etc/kvmd/vnc/ssl ]; then
 		echo "==> Generating KVMD-VNC certificate ..."
