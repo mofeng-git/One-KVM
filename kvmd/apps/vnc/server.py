@@ -246,7 +246,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             "format": StreamFormats.JPEG,
         }
 
-    async def __fb_sender_task_loop(self) -> None:
+    async def __fb_sender_task_loop(self) -> None:  # pylint: disable=too-many-branches
         has_h264_key = False
         last: Optional[Dict] = None
         while True:
