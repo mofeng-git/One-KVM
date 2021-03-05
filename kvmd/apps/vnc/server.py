@@ -247,10 +247,11 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         }
 
     async def __fb_sender_task_loop(self) -> None:
+        has_h264_key = False
+        last: Optional[Dict] = None
         while True:
             await self.__fb_notifier.wait()
 
-            last: Optional[Dict] = None
             while True:
                 frame = await self.__fb_queue.get()
                 if (
@@ -264,6 +265,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         or len(last["data"]) + len(frame["data"]) > 4194304
                     ))
                 ):
+                    has_h264_key = (frame["format"] == StreamFormats.H264 and frame["key"])
                     last = dict(frame)
                     if self.__fb_queue.qsize() == 0:
                         break
@@ -283,17 +285,26 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                             f" -> {last['width']}x{last['height']}\nPlease reconnect"
                         )
                         await self._send_fb_jpeg((await self.__make_text_frame(msg))["data"])
-                        return
+                        continue
                     await self._send_resize(last["width"], last["height"])
+
+                if len(last["data"]) == 0:
+                    # Вдруг какой-то баг
+                    await self.__fb_notifier.notify()
+                    continue
 
                 if last["format"] == StreamFormats.JPEG:
                     await self._send_fb_jpeg(last["data"])
                 elif last["format"] == StreamFormats.H264:
                     if not self._encodings.has_h264:
                         raise RfbError("The client doesn't want to accept H264 anymore")
-                    await self._send_fb_h264(last["data"])
+                    if has_h264_key:
+                        await self._send_fb_h264(last["data"])
+                    else:
+                        await self.__fb_notifier.notify()
                 else:
                     raise RuntimeError(f"Unknown format: {last['format']}")
+                last["data"] = b""
 
     # =====
 
