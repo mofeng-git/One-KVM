@@ -62,8 +62,20 @@ function __WindowManager() {
 			let el_button = el_window.querySelector(".window-header .window-button-close");
 			if (el_button) {
 				tools.setOnClick(el_button, function() {
-					__closeWindow(el_window);
-					__activateLastWindow(el_window);
+					let close_window = function() {
+						__closeWindow(el_window);
+						__activateLastWindow(el_window);
+					};
+					let confirm_msg = el_window.getAttribute("data-close-confirm");
+					if (confirm_msg) {
+						self.confirm(confirm_msg).then(function(ok) {
+							if (ok) {
+								close_window();
+							}
+						});
+					} else {
+						close_window();
+					}
 				});
 			}
 		}
@@ -456,7 +468,7 @@ function __WindowManager() {
 		}
 
 		el_window.setAttribute("data-centered", "");
-		el_window.onclick = el_window.ontouchend = () => __activateWindow(el_window);
+		el_window.onmousedown = el_window.ontouchstart = () => __activateWindow(el_window);
 
 		el_grab.onmousedown = startMoving;
 		el_grab.ontouchstart = startMoving;

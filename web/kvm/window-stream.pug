@@ -1,4 +1,7 @@
-+window("stream-window", "Stream", true)
+- let confirm_msg = "Do you want to close the stream? This action will temporarily stop<br>";
+- confirm_msg += "the video transmission until you open the broadcast again.<br>";
+- confirm_msg += "This can be useful for saving traffic.";
++window("stream-window", "Stream", true, confirm_msg)
 	div(id="stream-info")
 	div(id="stream-box" class="stream-box-inactive")
 		img(id="stream-image" class="stream-image-inactive" src=`${png_dir}/blank-stream.png`)
