@@ -95,7 +95,7 @@ def check_len(arg: _RetvalSeqT, name: str, limit: int) -> _RetvalSeqT:
     return arg
 
 
-def check_any(arg: Any, name: str, validators: List[Callable[[Any], Any]]) -> Any:
+def check_any(arg: Any, name: str, validators: List[Callable[[Any], Any]]) -> Any:  # pylint: disable=inconsistent-return-statements
     for validator in validators:
         try:
             return validator(arg)
