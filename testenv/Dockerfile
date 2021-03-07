@@ -45,9 +45,12 @@ RUN pacman -Syu --noconfirm \
 COPY testenv/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
+# https://stackoverflow.com/questions/57534295
+WORKDIR /root
 RUN npm install htmlhint -g \
 	&& npm install pug \
 	&& npm install pug-cli -g
+WORKDIR /
 
 ARG LIBGPIOD_VERSION
 ENV LIBGPIOD_PKG libgpiod-$LIBGPIOD_VERSION
