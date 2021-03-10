@@ -153,7 +153,7 @@ class KvmdClientWs:
                     msg = receive_task.result()
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         yield json.loads(msg.data)
-                    elif msg.type == aiohttp.WSMsgType.CLOSE:
+                    elif msg.type == aiohttp.WSMsgType.CLOSED:
                         break
                     else:
                         raise RuntimeError(f"Unhandled WS message type: {msg!r}")
