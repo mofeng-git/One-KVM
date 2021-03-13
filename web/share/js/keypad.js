@@ -69,28 +69,40 @@ export function Keypad(keys_parent, key_callback) {
 
 	/************************************************************************/
 
-	self.releaseAll = function(release_hook=false) {
+	self.releaseAll = function() {
 		for (let dict of [__keys, __modifiers]) {
 			for (let code in dict) {
 				if (__isActive(dict[code][0])) {
-					self.emit(code, false, release_hook);
+					self.emit(code, false);
 				}
 			}
 		}
 	};
 
-	self.emit = function(code, state, release_hook=false) {
+	self.emit = function(code, state, fix_mac_cmd=false) {
 		if (code in __merged) {
 			__commonHandler(__merged[code][0], state, false);
-			if (release_hook) {
-				for (let code in __keys) {
-					if (__isActive(__keys[code][0])) {
-						self.emit(code, false);
-					}
-				}
+			if (fix_mac_cmd) {
+				__fixMacCmd();
 			}
 			__unholdModifiers();
 		}
+	};
+
+	var __fixMacCmd = function() {
+		if (__isMacCmdActive()) {
+			for (let code in __keys) {
+				setTimeout(function() {
+					if (__isActive(__keys[code][0])) {
+						self.emit(code, false);
+					}
+				}, 100);
+			}
+		}
+	};
+
+	var __isMacCmdActive = function() {
+		return (__isActive(__modifiers["MetaLeft"][0]) || __isActive(__modifiers["MetaRight"][0]));
 	};
 
 	var __clickHandler = function(el_key, state) {

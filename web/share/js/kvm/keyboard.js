@@ -35,7 +35,7 @@ export function Keyboard(record_callback) {
 	var __online = true;
 
 	var __keypad = null;
-	var __use_release_hook = false;
+	var __fix_mac_cmd = false;
 
 	var __init__ = function() {
 		__keypad = new Keypad("div#keyboard-window", __sendKey);
@@ -58,8 +58,8 @@ export function Keyboard(record_callback) {
 		if (tools.browser.is_mac) {
 			// https://bugs.chromium.org/p/chromium/issues/detail?id=28089
 			// https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
-			tools.info("Keyboard: enabled Mac-CMD-Hook");
-			__use_release_hook = true;
+			tools.info("Keyboard: enabled Fix-Mac-CMD");
+			__fix_mac_cmd = true;
 		}
 	};
 
@@ -95,7 +95,7 @@ export function Keyboard(record_callback) {
 	};
 
 	self.releaseAll = function() {
-		__keypad.releaseAll(__use_release_hook);
+		__keypad.releaseAll();
 	};
 
 	self.emit = function(code, state) {
@@ -139,7 +139,7 @@ export function Keyboard(record_callback) {
 		if (!event.repeat) {
 			// https://bugs.chromium.org/p/chromium/issues/detail?id=28089
 			// https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
-			__keypad.emit(event.code, state, __use_release_hook);
+			__keypad.emit(event.code, state, __fix_mac_cmd);
 		}
 	};
 
