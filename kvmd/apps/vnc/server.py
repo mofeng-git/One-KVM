@@ -266,7 +266,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                     ))
                 ):
                     has_h264_key = (frame["format"] == StreamFormats.H264 and frame["key"])
-                    last = dict(frame)
+                    last = frame
                     if self.__fb_queue.qsize() == 0:
                         break
                     continue
