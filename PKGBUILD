@@ -19,6 +19,8 @@ _variants=(
 
 	v2-hdmiusb:rpi4
 	v2-hdmiusb:generic
+
+	v3-hdmi:rpi4
 )
 
 
