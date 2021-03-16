@@ -56,6 +56,7 @@ from ...validators.kvm import valid_stream_quality
 from ...validators.kvm import valid_stream_fps
 from ...validators.kvm import valid_stream_resolution
 from ...validators.kvm import valid_stream_h264_bitrate
+from ...validators.kvm import valid_stream_h264_gop
 
 from ... import aiotools
 from ... import aioproc
@@ -227,6 +228,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             ("desired_fps", valid_stream_fps, None),
             ("resolution", valid_stream_resolution, StreamerResolutionNotSupported),
             ("h264_bitrate", valid_stream_h264_bitrate, StreamerH264NotSupported),
+            ("h264_gop", valid_stream_h264_gop, StreamerH264NotSupported),
         ]:
             value = request.query.get(name)
             if value:
