@@ -17,3 +17,6 @@ dtoverlay=spi0-1cs
 
 # I2C (display)
 dtparam=i2c_arm=on
+
+# Clock
+dtoverlay=i2c-rtc,pcf8563
