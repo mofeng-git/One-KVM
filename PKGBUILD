@@ -83,6 +83,7 @@ backup=(
 	etc/kvmd/{override,logging,auth,meta}.yaml
 	etc/kvmd/{ht,ipmi,vnc}passwd
 	etc/kvmd/nginx/{kvmd.ctx-{http,server},loc-{login,nocache,proxy,websocket},mime-types,ssl,nginx}.conf
+	etc/kvmd/web.css
 )
 
 
@@ -127,6 +128,7 @@ package_kvmd() {
 
 	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*.yaml
 	install -Dm600 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*passwd
+	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/web.css
 
 	mkdir -p "$pkgdir/var/lib/kvmd/msd"
 
