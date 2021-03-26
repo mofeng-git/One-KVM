@@ -27,6 +27,7 @@ import operator
 import dataclasses
 import json
 
+from typing import Tuple
 from typing import List
 from typing import Dict
 from typing import Set
@@ -142,7 +143,7 @@ class _WsClient:
 
 
 class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
         auth_manager: AuthManager,
         info_manager: InfoManager,
@@ -160,6 +161,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         sync_chunk_size: int,
 
         keymap_path: str,
+        mouse_x_range: Tuple[int, int],
+        mouse_y_range: Tuple[int, int],
 
         stream_forever: bool,
     ) -> None:
@@ -199,7 +202,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             LogApi(log_reader),
             WolApi(wol),
             UserGpioApi(user_gpio),
-            HidApi(hid, keymap_path),
+            HidApi(hid, keymap_path, mouse_x_range, mouse_y_range),
             AtxApi(atx),
             MsdApi(msd, sync_chunk_size),
             StreamerApi(streamer),

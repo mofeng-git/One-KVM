@@ -363,7 +363,19 @@ def _get_config_scheme() -> Dict:
 
             "hid": {
                 "type": Option("", type=valid_stripped_string_not_empty),
+
                 "keymap": Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
+
+                "mouse_x_range": {
+                    "min": Option(-32768, type=valid_hid_mouse_move),
+                    "max": Option(32767,  type=valid_hid_mouse_move),
+                },
+
+                "mouse_y_range": {
+                    "min": Option(-32768, type=valid_hid_mouse_move),
+                    "max": Option(32767,  type=valid_hid_mouse_move),
+                },
+
                 # Dynamic content
             },
 

@@ -24,6 +24,7 @@ import os
 import stat
 import functools
 
+from typing import Tuple
 from typing import Dict
 from typing import Set
 from typing import Callable
@@ -55,13 +56,24 @@ from ..http import make_json_response
 
 # =====
 class HidApi:
-    def __init__(self, hid: BaseHid, keymap_path: str) -> None:
+    def __init__(
+        self,
+        hid: BaseHid,
+
+        keymap_path: str,
+
+        mouse_x_range: Tuple[int, int],
+        mouse_y_range: Tuple[int, int],
+    ) -> None:
+
         self.__hid = hid
 
         self.__keymaps_dir_path = os.path.dirname(keymap_path)
         self.__default_keymap_name = os.path.basename(keymap_path)
-
         self.__ensure_symmap(self.__default_keymap_name)
+
+        self.__mouse_x_range = mouse_x_range
+        self.__mouse_y_range = mouse_y_range
 
     # =====
 
@@ -157,8 +169,8 @@ class HidApi:
     @exposed_ws("mouse_move")
     async def __ws_mouse_move_handler(self, _: WebSocketResponse, event: Dict) -> None:
         try:
-            to_x = valid_hid_mouse_move(event["to"]["x"])
-            to_y = valid_hid_mouse_move(event["to"]["y"])
+            to_x = valid_hid_mouse_move(event["to"]["x"], *self.__mouse_x_range)
+            to_y = valid_hid_mouse_move(event["to"]["y"], *self.__mouse_y_range)
         except Exception:
             return
         self.__hid.send_mouse_move_event(to_x, to_y)
@@ -220,8 +232,8 @@ class HidApi:
 
     @exposed_http("POST", "/hid/events/send_mouse_move")
     async def __events_send_mouse_move_handler(self, request: Request) -> Response:
-        to_x = valid_hid_mouse_move(request.query.get("to_x"))
-        to_y = valid_hid_mouse_move(request.query.get("to_y"))
+        to_x = valid_hid_mouse_move(request.query.get("to_x"), *self.__mouse_x_range)
+        to_y = valid_hid_mouse_move(request.query.get("to_y"), *self.__mouse_y_range)
         self.__hid.send_mouse_move_event(to_x, to_y)
         return make_json_response()
 

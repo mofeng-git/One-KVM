@@ -42,9 +42,9 @@ def valid_hid_key(arg: Any) -> str:
     return check_string_in_list(arg, "Keyboard key", KEYMAP, lower=False)
 
 
-def valid_hid_mouse_move(arg: Any) -> int:
+def valid_hid_mouse_move(arg: Any, move_min: int=-32768, move_max: int=32767) -> int:
     arg = valid_number(arg, name="Mouse move")
-    return min(max(-32768, arg), 32767)
+    return min(max(move_min, arg), move_max)
 
 
 def valid_hid_mouse_button(arg: Any) -> str:
