@@ -1,0 +1,2 @@
+kvmd ALL=(ALL) NOPASSWD: /usr/bin/kvmd-helper-otgmsd-unlock
+kvmd ALL=(ALL) NOPASSWD: /usr/bin/kvmd-helper-otgmsd-remount
