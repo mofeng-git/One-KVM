@@ -32,7 +32,10 @@ from typing import Coroutine
 
 from ....logging import get_logger
 
+from .... import tools
 from .... import aiotools
+
+from ....mouse import MouseRange
 
 from .errors import RfbError
 from .errors import RfbConnectionError
@@ -444,8 +447,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
                 "y": (-4 if buttons & 0x10 else (4 if buttons & 0x8 else 0)),
             },
             move={
-                "x": round(to_x / self._width * 65535 + -32768),
-                "y": round(to_y / self._height * 65535 + -32768),
+                "x": tools.remap(to_x, 0, self._width, *MouseRange.RANGE),
+                "y": tools.remap(to_y, 0, self._height, *MouseRange.RANGE),
             },
         )
 

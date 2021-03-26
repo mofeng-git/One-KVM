@@ -31,6 +31,8 @@ from typing import Union
 from ....keyboard.mappings import OtgKey
 from ....keyboard.mappings import KEYMAP
 
+from ....mouse import MouseRange
+
 
 # =====
 class BaseEvent:
@@ -126,10 +128,10 @@ class MouseMoveEvent(BaseEvent):
     to_fixed_y: int = 0
 
     def __post_init__(self) -> None:
-        assert -32768 <= self.to_x <= 32767
-        assert -32768 <= self.to_y <= 32767
-        object.__setattr__(self, "to_fixed_x", (self.to_x + 32768) // 2)
-        object.__setattr__(self, "to_fixed_y", (self.to_y + 32768) // 2)
+        assert MouseRange.MIN <= self.to_x <= MouseRange.MAX
+        assert MouseRange.MIN <= self.to_y <= MouseRange.MAX
+        object.__setattr__(self, "to_fixed_x", MouseRange.remap(self.to_x, 0, MouseRange.MAX))
+        object.__setattr__(self, "to_fixed_y", MouseRange.remap(self.to_y, 0, MouseRange.MAX))
 
 
 @dataclasses.dataclass(frozen=True)

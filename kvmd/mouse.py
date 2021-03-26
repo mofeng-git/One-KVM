@@ -20,39 +20,15 @@
 # ========================================================================== #
 
 
-from typing import Any
-
-from ..keyboard.mappings import KEYMAP
-
-from ..mouse import MouseRange
-
-from . import check_string_in_list
-
-from .basic import valid_number
+from . import tools
 
 
 # =====
-def valid_hid_keyboard_output(arg: Any) -> str:
-    return check_string_in_list(arg, "Keyboard output", ["usb", "ps2", ""])
+class MouseRange:
+    MIN = -32768
+    MAX = 32767
+    RANGE = (MIN, MAX)
 
-
-def valid_hid_mouse_output(arg: Any) -> str:
-    return check_string_in_list(arg, "Mouse output", ["usb", "usb_rel", "ps2", ""])
-
-
-def valid_hid_key(arg: Any) -> str:
-    return check_string_in_list(arg, "Keyboard key", KEYMAP, lower=False)
-
-
-def valid_hid_mouse_move(arg: Any) -> int:
-    arg = valid_number(arg, name="Mouse move")
-    return min(max(MouseRange.MIN, arg), MouseRange.MAX)
-
-
-def valid_hid_mouse_button(arg: Any) -> str:
-    return check_string_in_list(arg, "Mouse button", ["left", "right", "middle", "up", "down"])
-
-
-def valid_hid_mouse_delta(arg: Any) -> int:
-    arg = valid_number(arg, name="Mouse delta")
-    return min(max(-127, arg), 127)
+    @classmethod
+    def remap(cls, value: int, out_min: int, out_max: int) -> int:
+        return tools.remap(value, cls.MIN, cls.MAX, out_min, out_max)

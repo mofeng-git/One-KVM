@@ -39,6 +39,8 @@ import pygments.formatters
 
 from .. import tools
 
+from ..mouse import MouseRange
+
 from ..plugins import UnknownPluginError
 from ..plugins.auth import get_auth_service_class
 from ..plugins.hid import get_hid_class
@@ -367,13 +369,13 @@ def _get_config_scheme() -> Dict:
                 "keymap": Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
 
                 "mouse_x_range": {
-                    "min": Option(-32768, type=valid_hid_mouse_move),
-                    "max": Option(32767,  type=valid_hid_mouse_move),
+                    "min": Option(MouseRange.MIN, type=valid_hid_mouse_move),
+                    "max": Option(MouseRange.MAX, type=valid_hid_mouse_move),
                 },
 
                 "mouse_y_range": {
-                    "min": Option(-32768, type=valid_hid_mouse_move),
-                    "max": Option(32767,  type=valid_hid_mouse_move),
+                    "min": Option(MouseRange.MIN, type=valid_hid_mouse_move),
+                    "max": Option(MouseRange.MAX, type=valid_hid_mouse_move),
                 },
 
                 # Dynamic content

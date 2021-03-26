@@ -33,6 +33,11 @@ from typing import TypeVar
 
 
 # =====
+def remap(value: int, in_min: int, in_max: int, out_min: int, out_max: int) -> int:
+    return (value - in_min) * (out_max - out_min) // (in_max - in_min) + out_min
+
+
+# =====
 def efmt(err: Exception) -> str:
     return f"{type(err).__name__}: {err}"
 

@@ -25,6 +25,8 @@ import struct
 
 from ....keyboard.mappings import KEYMAP
 
+from ....mouse import MouseRange
+
 from .... import tools
 
 
@@ -143,8 +145,8 @@ class MouseMoveEvent(BaseEvent):
     to_y: int
 
     def __post_init__(self) -> None:
-        assert -32768 <= self.to_x <= 32767
-        assert -32768 <= self.to_y <= 32767
+        assert MouseRange.MIN <= self.to_x <= MouseRange.MAX
+        assert MouseRange.MIN <= self.to_y <= MouseRange.MAX
 
     def make_request(self) -> bytes:
         return _make_request(struct.pack(">Bhh", 0x12, self.to_x, self.to_y))

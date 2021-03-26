@@ -33,6 +33,8 @@ from aiohttp.web import Request
 from aiohttp.web import Response
 from aiohttp.web import WebSocketResponse
 
+from ....mouse import MouseRange
+
 from ....plugins.hid import BaseHid
 
 from ....validators import raise_error
@@ -169,11 +171,11 @@ class HidApi:
     @exposed_ws("mouse_move")
     async def __ws_mouse_move_handler(self, _: WebSocketResponse, event: Dict) -> None:
         try:
-            to_x = valid_hid_mouse_move(event["to"]["x"], *self.__mouse_x_range)
-            to_y = valid_hid_mouse_move(event["to"]["y"], *self.__mouse_y_range)
+            to_x = valid_hid_mouse_move(event["to"]["x"])
+            to_y = valid_hid_mouse_move(event["to"]["y"])
         except Exception:
             return
-        self.__hid.send_mouse_move_event(to_x, to_y)
+        self.__send_mouse_move_event_remapped(to_x, to_y)
 
     @exposed_ws("mouse_relative")
     async def __ws_mouse_relative_handler(self, _: WebSocketResponse, event: Dict) -> None:
@@ -232,9 +234,9 @@ class HidApi:
 
     @exposed_http("POST", "/hid/events/send_mouse_move")
     async def __events_send_mouse_move_handler(self, request: Request) -> Response:
-        to_x = valid_hid_mouse_move(request.query.get("to_x"), *self.__mouse_x_range)
-        to_y = valid_hid_mouse_move(request.query.get("to_y"), *self.__mouse_y_range)
-        self.__hid.send_mouse_move_event(to_x, to_y)
+        to_x = valid_hid_mouse_move(request.query.get("to_x"))
+        to_y = valid_hid_mouse_move(request.query.get("to_y"))
+        self.__send_mouse_move_event_remapped(to_x, to_y)
         return make_json_response()
 
     @exposed_http("POST", "/hid/events/send_mouse_relative")
@@ -244,6 +246,13 @@ class HidApi:
     @exposed_http("POST", "/hid/events/send_mouse_wheel")
     async def __events_send_mouse_wheel_handler(self, request: Request) -> Response:
         return self.__process_delta_request(request, self.__hid.send_mouse_wheel_event)
+
+    def __send_mouse_move_event_remapped(self, to_x: int, to_y: int) -> None:
+        if self.__mouse_x_range != MouseRange.RANGE:
+            to_x = MouseRange.remap(to_x, *self.__mouse_x_range)
+        if self.__mouse_y_range != MouseRange.RANGE:
+            to_y = MouseRange.remap(to_y, *self.__mouse_y_range)
+        self.__hid.send_mouse_move_event(to_x, to_y)
 
     def __process_delta_request(self, request: Request, handler: Callable[[int, int], None]) -> Response:
         delta_x = valid_hid_mouse_delta(request.query.get("delta_x"))
