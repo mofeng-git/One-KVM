@@ -33,7 +33,6 @@ export function Streamer() {
 	/************************************************************************/
 
 	var __resolution = {width: 640, height: 480};
-	var __resolution_str = "640x480";
 
 	var __size_factor = 1;
 
@@ -107,12 +106,9 @@ export function Streamer() {
 				}
 			}
 
-			if (
-				__resolution.width !== state.streamer.source.resolution.width
-				|| __resolution.height !== state.streamer.source.resolution.height
-			) {
+			let resolution_str = __makeStringResolution(state.streamer.source.resolution);
+			if (__makeStringResolution(__resolution) != resolution_str) {
 				__resolution = state.streamer.source.resolution;
-				__resolution_str = `${__resolution.width}x${__resolution.height}`;
 				if ($("stream-auto-resize-switch").checked) {
 					__adjustSizeFactor();
 				} else {
@@ -126,13 +122,13 @@ export function Streamer() {
 					for (let variant of state.limits.available_resolutions) {
 						resolutions_html += `<option value="${variant}">${variant}</option>`;
 					}
-					if (!state.limits.available_resolutions.includes(__resolution_str)) {
-						resolutions_html += `<option value="${__resolution_str}">${__resolution_str}</option>`;
+					if (!state.limits.available_resolutions.includes(resolution_str)) {
+						resolutions_html += `<option value="${resolution_str}">${resolution_str}</option>`;
 					}
 					$("stream-resolution-selector").innerHTML = resolutions_html;
 					$("stream-resolution-selector").resolutions = state.limits.available_resolutions;
 				}
-				document.querySelector(`#stream-resolution-selector [value="${__resolution_str}"]`).selected = true;
+				document.querySelector(`#stream-resolution-selector [value="${resolution_str}"]`).selected = true;
 				wm.setElementEnabled($("stream-resolution-selector"), true);
 			}
 
@@ -214,7 +210,7 @@ export function Streamer() {
 			if (!online) {
 				title += "no signal / ";
 			}
-			title += __resolution_str;
+			title += __makeStringResolution(__resolution);
 			if (__client_fps >= 0) {
 				title += ` / ${__client_fps} fps`;
 			}
@@ -299,6 +295,10 @@ export function Streamer() {
 		el.style.width = __resolution.width * __size_factor + "px";
 		el.style.height = __resolution.height * __size_factor + "px";
 		wm.showWindow($("stream-window"), false);
+	};
+
+	var __makeStringResolution = function(resolution) {
+		return `${resolution.width}x${resolution.height}`;
 	};
 
 	__init__();
