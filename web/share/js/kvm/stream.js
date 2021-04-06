@@ -36,9 +36,9 @@ export function Streamer() {
 
 	var __size_factor = 1;
 
-	var __client_key = tools.makeId();
-	var __client_id = "";
-	var __client_fps = -1;
+	var __mjpeg_key = tools.makeId();
+	var __mjpeg_id = "";
+	var __mjpeg_fps = -1;
 
 	var __state_for_invisible = null;
 
@@ -132,15 +132,14 @@ export function Streamer() {
 				wm.setElementEnabled($("stream-resolution-selector"), true);
 			}
 
-			if (__ensureStream(state.streamer.stream.clients_stat)) {
+			if (__ensureMjpegStream(state.streamer.stream.clients_stat)) {
 				$("stream-led").className = "led-green";
 				$("stream-led").title = "Stream is active";
 				wm.setElementEnabled($("stream-screenshot-button"), true);
 				wm.setElementEnabled($("stream-reset-button"), true);
 				$("stream-quality-slider").activated = false;
 				$("stream-desired-fps-slider").activated = false;
-
-				tools.info("Stream: active");
+				tools.info("Stream [MJPEG]: active");
 			}
 
 			__updateStreamWindow(true, state.streamer.source.online);
@@ -162,33 +161,33 @@ export function Streamer() {
 		}
 	};
 
-	var __ensureStream = function(clients_stat) {
+	var __ensureMjpegStream = function(clients_stat) {
 		let stream_client = tools.getCookie("stream_client");
-		if (!__client_id && stream_client && stream_client.startsWith(__client_key + "/")) {
-			tools.info("Stream: found acceptable stream_client cookie:", stream_client);
-			__client_id = stream_client.slice(stream_client.indexOf("/") + 1);
+		if (!__mjpeg_id && stream_client && stream_client.startsWith(__mjpeg_key + "/")) {
+			tools.info("Stream [MJPEG]: found acceptable stream_client cookie:", stream_client);
+			__mjpeg_id = stream_client.slice(stream_client.indexOf("/") + 1);
 		}
 
-		if (__client_id && __client_id in clients_stat) {
-			__client_fps = clients_stat[__client_id].fps;
+		if (__mjpeg_id && __mjpeg_id in clients_stat) {
+			__mjpeg_fps = clients_stat[__mjpeg_id].fps;
 			return false;
 		} else {
-			__client_key = tools.makeId();
-			__client_id = "";
-			__client_fps = -1;
+			__mjpeg_key = tools.makeId();
+			__mjpeg_id = "";
+			__mjpeg_fps = -1;
 
-			let path = `/streamer/stream?key=${__client_key}`;
+			let path = `/streamer/stream?key=${__mjpeg_key}`;
 			if (tools.browser.is_safari || tools.browser.is_ios) {
 				// uStreamer fix for WebKit
-				tools.info("Stream: using dual_final_frames=1 to fix WebKit MJPG bugs");
+				tools.info("Stream [MJPEG]: using dual_final_frames=1 to fix WebKit bugs");
 				path += "&dual_final_frames=1";
 			} else if (tools.browser.is_chrome || tools.browser.is_blink) {
 				// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-				tools.info("Stream: using advance_headers=1 to fix Blink MJPG bugs");
+				tools.info("Stream [MJPEG]: using advance_headers=1 to fix Blink bugs");
 				path += "&advance_headers=1";
 			}
 
-			tools.info("Stream: refreshing ...");
+			tools.info("Stream [MJPEG]: refreshing ...");
 			$("stream-image").src = path;
 			return true;
 		}
@@ -211,8 +210,8 @@ export function Streamer() {
 				title += "no signal / ";
 			}
 			title += __makeStringResolution(__resolution);
-			if (__client_fps >= 0) {
-				title += ` / ${__client_fps} fps`;
+			if (__mjpeg_fps >= 0) {
+				title += ` / ${__mjpeg_fps} fps`;
 			}
 			el_grab.innerHTML = el_info.innerHTML = title;
 		} else {
