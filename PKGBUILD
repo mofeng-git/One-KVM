@@ -121,8 +121,8 @@ package_kvmd() {
 	chmod 750 "$_cfg_default/os/sudoers"
 	chmod 400 "$_cfg_default/os/sudoers"/*
 
-	mkdir -p "$pkgdir/etc/kvmd/{nginx,vnc}/ssl"
-	chmod 755 "$pkgdir/etc/kvmd/{nginx,vnc}/ssl"
+	mkdir -p "$pkgdir/etc/kvmd/"{nginx,vnc}"/ssl"
+	chmod 755 "$pkgdir/etc/kvmd/"{nginx,vnc}"/ssl"
 	install -Dm444 -t "$pkgdir/etc/kvmd/nginx" "$_cfg_default/nginx"/*.conf
 	chmod 644 "$pkgdir/etc/kvmd/nginx/nginx.conf"
 
