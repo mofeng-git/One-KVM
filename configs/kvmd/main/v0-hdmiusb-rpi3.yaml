@@ -60,6 +60,8 @@ kvmd:
             - "--process-name-prefix={process_name_prefix}"
             - "--notify-parent"
             - "--no-log-colors"
+            - "--sink=kvmd::ustreamer::jpeg"
+            - "--sink-mode=0660"
 
 ipmi:
     kvmd:
@@ -71,6 +73,10 @@ vnc:
 
     streamer:
         unix: /run/kvmd/ustreamer.sock
+
+    memsink:
+        jpeg:
+            sink: "kvmd::ustreamer::jpeg"
 
     server:
         tls:
