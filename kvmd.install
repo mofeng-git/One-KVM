@@ -16,12 +16,12 @@ post_upgrade() {
 
 	chown kvmd /var/lib/kvmd/msd || true
 
-	if [ ! -d /etc/kvmd/nginx/ssl ]; then
+	if [ ! -d /etc/kvmd/nginx/ssl/server.crt ]; then
 		echo "==> Generating KVMD-Nginx certificate ..."
 		kvmd-gencert --do-the-thing
 	fi
 
-	if [ ! -d /etc/kvmd/vnc/ssl ]; then
+	if [ ! -d /etc/kvmd/vnc/ssl/server.crt ]; then
 		echo "==> Generating KVMD-VNC certificate ..."
 		kvmd-gencert --do-the-thing --vnc
 	fi
