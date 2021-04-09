@@ -36,6 +36,7 @@ RUN pacman -Syu --noconfirm \
 		python-hidapi \
 		freetype2 \
 		nginx-mainline \
+		ipmitool \
 		socat \
 		eslint \
 		npm \

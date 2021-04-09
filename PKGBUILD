@@ -69,6 +69,7 @@ depends=(
 	iptables
 	iproute2
 	dnsmasq
+	ipmitool
 	"raspberrypi-io-access>=0.5"
 	"ustreamer>=3.20"
 

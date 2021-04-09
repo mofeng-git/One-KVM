@@ -21,21 +21,24 @@
 
 
 import asyncio
+import functools
 
+from typing import List
 from typing import Dict
 from typing import Optional
 
-from pyghmi.ipmi.command import Command as IpmiCommand
-
 from ...logging import get_logger
 
+from ... import tools
 from ... import aiotools
+from ... import aioproc
 
 from ...yamlconf import Option
 
 from ...validators.basic import valid_float_f01
 from ...validators.net import valid_ip_or_host
 from ...validators.net import valid_port
+from ...validators.os import valid_command
 
 from . import GpioDriverOfflineError
 from . import BaseUserGpioDriver
@@ -45,14 +48,15 @@ from . import BaseUserGpioDriver
 _OUTPUTS = {
     1: "on",
     2: "off",
-    3: "shutdown",
+    3: "cycle",
     4: "reset",
-    5: "boot",
+    5: "diag",
+    6: "soft",
 }
 
 
 # =====
-class Plugin(BaseUserGpioDriver):
+class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=super-init-not-called
         self,
         instance_name: str,
@@ -62,6 +66,10 @@ class Plugin(BaseUserGpioDriver):
         port: int,
         user: str,
         passwd: str,
+
+        passwd_env: str,
+        cmd: List[str],
+
         state_poll: float,
     ) -> None:
 
@@ -71,6 +79,10 @@ class Plugin(BaseUserGpioDriver):
         self.__port = port
         self.__user = user
         self.__passwd = passwd
+
+        self.__passwd_env = passwd_env
+        self.__cmd = cmd
+
         self.__state_poll = state_poll
 
         self.__online = False
@@ -79,10 +91,20 @@ class Plugin(BaseUserGpioDriver):
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "host":       Option("",  type=valid_ip_or_host),
-            "port":       Option(623, type=valid_port),
-            "user":       Option(""),
-            "passwd":     Option(""),
+            "host":   Option("",  type=valid_ip_or_host),
+            "port":   Option(623, type=valid_port),
+            "user":   Option(""),
+            "passwd": Option(""),
+
+            "passwd_env": Option("IPMI_PASSWORD"),
+            "cmd": Option([
+                "/usr/bin/ipmitool",
+                "-I", "lanplus",
+                "-U", "{user}", "-E",
+                "-H", "{host}", "-p", "{port}",
+                "power", "{action}",
+            ], type=valid_command),
+
             "state_poll": Option(1.0, type=valid_float_f01),
         }
 
@@ -102,7 +124,7 @@ class Plugin(BaseUserGpioDriver):
     async def run(self) -> None:
         prev = (False, False)
         while True:
-            await aiotools.run_async(self.__update_power)
+            await self.__update_power()
             new = (self.__online, self.__power)
             if new != prev:
                 await self._notifier.notify()
@@ -112,40 +134,58 @@ class Plugin(BaseUserGpioDriver):
     def cleanup(self) -> None:
         pass
 
-    def read(self, pin: int) -> bool:
+    async def read(self, pin: int) -> bool:
         if not self.__online:
             raise GpioDriverOfflineError(self)
         if pin == 0:
             return self.__power
         return False
 
-    def write(self, pin: int, state: bool) -> None:
+    async def write(self, pin: int, state: bool) -> None:
         if not self.__online:
             raise GpioDriverOfflineError(self)
-        request = _OUTPUTS[pin]
+        action = _OUTPUTS[pin]
         try:
-            self.__make_command().set_power(request)
-        except Exception:
-            get_logger(0).exception("Can't send IPMI power-%s request to %s:%d", request, self.__host, self.__port)
+            proc = await aioproc.log_process(**self.__make_ipmitool_kwargs(action), logger=get_logger(0))
+            if proc.returncode != 0:
+                raise RuntimeError(f"Error while ipmitool execution: pid={proc.pid}; retcode={proc.returncode}")
+        except Exception as err:
+            get_logger(0).error("Can't send IPMI power-%s request to %s:%d: %s", action, self.__host, self.__port, tools.efmt(err))
             raise GpioDriverOfflineError(self)
 
     # =====
 
-    def __update_power(self) -> None:
+    async def __update_power(self) -> None:
         try:
-            self.__power = (self.__make_command().get_power()["powerstate"] == "on")
-            self.__online = True
-        except Exception:
-            self.__online = self.__power = False
-            get_logger(0).exception("Can't fetch IPMI power status from %s:%d", self.__host, self.__port)
+            (proc, text) = await aioproc.read_process(**self.__make_ipmitool_kwargs("status"))
+            if proc.returncode != 0:
+                raise RuntimeError(f"Error while ipmitool execution: pid={proc.pid}; retcode={proc.returncode}")
+            stripped = text.strip()
+            if stripped.startswith("Chassis Power is "):
+                self.__power = (stripped != "Chassis Power is off")
+                self.__online = True
+                return
+            raise RuntimeError(f"Invalid ipmitool response: {text}")
+        except Exception as err:
+            get_logger(0).error("Can't fetch IPMI power status from %s:%d: %s", self.__host, self.__port, tools.efmt(err))
+            self.__power = False
+            self.__online = False
 
-    def __make_command(self) -> IpmiCommand:
-        return IpmiCommand(
-            bmc=self.__host,
-            port=self.__port,
-            userid=(self.__user or None),
-            password=(self.__passwd or None),
-        )
+    @functools.lru_cache()
+    def __make_ipmitool_kwargs(self, action: str) -> Dict:
+        return {
+            "cmd": [
+                part.format(
+                    host=self.__host,
+                    port=self.__port,
+                    user=self.__user,
+                    passwd=self.__passwd,
+                    action=action,
+                )
+                for part in self.__cmd
+            ],
+            "env": ({self.__passwd_env: self.__passwd} if self.__passwd and self.__passwd_env else None),
+        }
 
     def __str__(self) -> str:
         return f"IPMI({self._instance_name})"
