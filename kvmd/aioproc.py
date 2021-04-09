@@ -27,6 +27,8 @@ import logging
 
 from typing import Tuple
 from typing import List
+from typing import Dict
+from typing import Optional
 
 import setproctitle
 
@@ -34,23 +36,39 @@ from .logging import get_logger
 
 
 # =====
-async def run_process(cmd: List[str], err_to_null: bool=False) -> asyncio.subprocess.Process:  # pylint: disable=no-member
+async def run_process(
+    cmd: List[str],
+    err_to_null: bool=False,
+    env: Optional[Dict[str, str]]=None,
+) -> asyncio.subprocess.Process:  # pylint: disable=no-member
+
     return (await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=(asyncio.subprocess.DEVNULL if err_to_null else asyncio.subprocess.STDOUT),
         preexec_fn=os.setpgrp,
+        env=env,
     ))
 
 
-async def read_process(cmd: List[str], err_to_null: bool=False) -> Tuple[asyncio.subprocess.Process, str]:  # pylint: disable=no-member
-    proc = await run_process(cmd, err_to_null)
+async def read_process(
+    cmd: List[str],
+    err_to_null: bool=False,
+    env: Optional[Dict[str, str]]=None,
+) -> Tuple[asyncio.subprocess.Process, str]:  # pylint: disable=no-member
+
+    proc = await run_process(cmd, err_to_null, env)
     (stdout, _) = await proc.communicate()
     return (proc, stdout.decode(errors="ignore").strip())
 
 
-async def log_process(cmd: List[str], logger: logging.Logger) -> asyncio.subprocess.Process:  # pylint: disable=no-member
-    (proc, stdout) = await read_process(cmd)
+async def log_process(
+    cmd: List[str],
+    logger: logging.Logger,
+    env: Optional[Dict[str, str]]=None,
+) -> asyncio.subprocess.Process:  # pylint: disable=no-member
+
+    (proc, stdout) = await read_process(cmd, env=env)
     if stdout:
         log = (logger.info if proc.returncode == 0 else logger.error)
         for line in stdout.split("\n"):
