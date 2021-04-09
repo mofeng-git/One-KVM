@@ -148,9 +148,10 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         try:
             proc = await aioproc.log_process(**self.__make_ipmitool_kwargs(action), logger=get_logger(0))
             if proc.returncode != 0:
-                raise RuntimeError(f"Error while ipmitool execution: pid={proc.pid}; retcode={proc.returncode}")
+                raise RuntimeError(f"Ipmitool error: pid={proc.pid}; retcode={proc.returncode}")
         except Exception as err:
-            get_logger(0).error("Can't send IPMI power-%s request to %s:%d: %s", action, self.__host, self.__port, tools.efmt(err))
+            get_logger(0).error("Can't send IPMI power-%s request to %s:%d: %s",
+                                action, self.__host, self.__port, tools.efmt(err))
             raise GpioDriverOfflineError(self)
 
     # =====
@@ -159,7 +160,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         try:
             (proc, text) = await aioproc.read_process(**self.__make_ipmitool_kwargs("status"))
             if proc.returncode != 0:
-                raise RuntimeError(f"Error while ipmitool execution: pid={proc.pid}; retcode={proc.returncode}")
+                raise RuntimeError(f"Ipmitool error: pid={proc.pid}; retcode={proc.returncode}")
             stripped = text.strip()
             if stripped.startswith("Chassis Power is "):
                 self.__power = (stripped != "Chassis Power is off")
@@ -167,7 +168,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 return
             raise RuntimeError(f"Invalid ipmitool response: {text}")
         except Exception as err:
-            get_logger(0).error("Can't fetch IPMI power status from %s:%d: %s", self.__host, self.__port, tools.efmt(err))
+            get_logger(0).error("Can't fetch IPMI power status from %s:%d: %s",
+                                self.__host, self.__port, tools.efmt(err))
             self.__power = False
             self.__online = False
 
@@ -184,7 +186,11 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 )
                 for part in self.__cmd
             ],
-            "env": ({self.__passwd_env: self.__passwd} if self.__passwd and self.__passwd_env else None),
+            "env": (
+                {self.__passwd_env: self.__passwd}
+                if self.__passwd and self.__passwd_env
+                else None
+            ),
         }
 
     def __str__(self) -> str:
