@@ -89,10 +89,10 @@ class BaseUserGpioDriver(BasePlugin):
     def cleanup(self) -> None:
         raise NotImplementedError
 
-    def read(self, pin: int) -> bool:
+    async def read(self, pin: int) -> bool:
         raise NotImplementedError
 
-    def write(self, pin: int, state: bool) -> None:
+    async def write(self, pin: int, state: bool) -> None:
         raise NotImplementedError
 
 

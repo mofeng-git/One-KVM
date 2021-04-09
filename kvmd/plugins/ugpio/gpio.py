@@ -95,13 +95,13 @@ class Plugin(BaseUserGpioDriver):
             except Exception:
                 pass
 
-    def read(self, pin: int) -> bool:
+    async def read(self, pin: int) -> bool:
         assert self.__reader
         if pin in self.__input_pins:
             return self.__reader.get(pin)
         return bool(self.__output_lines[pin].get_value())
 
-    def write(self, pin: int, state: bool) -> None:
+    async def write(self, pin: int, state: bool) -> None:
         self.__output_lines[pin].set_value(int(state))
 
     def __str__(self) -> str:

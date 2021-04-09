@@ -100,11 +100,11 @@ class Plugin(BaseUserGpioDriver):
     def cleanup(self) -> None:
         pass
 
-    def read(self, pin: int) -> bool:
+    async def read(self, pin: int) -> bool:
         _ = pin
         return os.path.islink(self.__get_driver_path(self.__udc))
 
-    def write(self, pin: int, state: bool) -> None:
+    async def write(self, pin: int, state: bool) -> None:
         _ = pin
         with open(self.__get_driver_path("bind" if state else "unbind"), "w") as ctl_file:
             ctl_file.write(f"{self.__udc}\n")

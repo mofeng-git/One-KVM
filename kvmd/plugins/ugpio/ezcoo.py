@@ -108,12 +108,12 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             if self.__proc.exitcode is not None:
                 self.__proc.join()
 
-    def read(self, pin: int) -> bool:
+    async def read(self, pin: int) -> bool:
         if not self.__is_online():
             raise GpioDriverOfflineError(self)
         return (self.__channel == pin)
 
-    def write(self, pin: int, state: bool) -> None:
+    async def write(self, pin: int, state: bool) -> None:
         if not self.__is_online():
             raise GpioDriverOfflineError(self)
         if state and (0 <= pin <= 3):

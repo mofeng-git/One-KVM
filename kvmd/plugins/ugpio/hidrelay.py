@@ -113,13 +113,13 @@ class Plugin(BaseUserGpioDriver):
         self.__close_device()
         self.__stop = True
 
-    def read(self, pin: int) -> bool:
+    async def read(self, pin: int) -> bool:
         try:
             return self.__inner_read(pin)
         except Exception:
             raise GpioDriverOfflineError(self)
 
-    def write(self, pin: int, state: bool) -> None:
+    async def write(self, pin: int, state: bool) -> None:
         try:
             return self.__inner_write(pin, state)
         except Exception:

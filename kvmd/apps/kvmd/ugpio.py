@@ -91,10 +91,10 @@ class _GpioInput:
             },
         }
 
-    def get_state(self) -> Dict:
+    async def get_state(self) -> Dict:
         (online, state) = (True, False)
         try:
-            state = (self.__driver.read(self.__pin) ^ self.__inverted)
+            state = (await self.__driver.read(self.__pin) ^ self.__inverted)
         except GpioDriverOfflineError:
             online = False
         return {
@@ -153,12 +153,12 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
             },
         }
 
-    def get_state(self) -> Dict:
+    async def get_state(self) -> Dict:
         busy = self.__region.is_busy()
         (online, state) = (True, False)
         if not busy:
             try:
-                state = self.__read()
+                state = await self.__read()
             except GpioDriverOfflineError:
                 online = False
         return {
@@ -201,27 +201,27 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def __inner_switch(self, state: bool) -> None:
-        self.__write(state)
+        await self.__write(state)
         get_logger(0).info("Ensured switch %s to state=%d", self, state)
         await asyncio.sleep(self.__busy_delay)
 
     @aiotools.atomic
     async def __inner_pulse(self, delay: float) -> None:
         try:
-            self.__write(True)
+            await self.__write(True)
             await asyncio.sleep(delay)
         finally:
-            self.__write(False)
+            await self.__write(False)
             await asyncio.sleep(self.__busy_delay)
         get_logger(0).info("Pulsed %s with delay=%.2f", self, delay)
 
     # =====
 
-    def __read(self) -> bool:
-        return (self.__driver.read(self.__pin) ^ self.__inverted)
+    async def __read(self) -> bool:
+        return (await self.__driver.read(self.__pin) ^ self.__inverted)
 
-    def __write(self, state: bool) -> None:
-        self.__driver.write(self.__pin, (state ^ self.__inverted))
+    async def __write(self, state: bool) -> None:
+        await self.__driver.write(self.__pin, (state ^ self.__inverted))
 
     def __str__(self) -> str:
         return f"Output({self.__channel}, driver={self.__driver}, pin={self.__pin})"
@@ -267,8 +267,8 @@ class UserGpio:
 
     async def get_state(self) -> Dict:
         return {
-            "inputs": {channel: gin.get_state() for (channel, gin) in self.__inputs.items()},
-            "outputs": {channel: gout.get_state() for (channel, gout) in self.__outputs.items()},
+            "inputs": {channel: await gin.get_state() for (channel, gin) in self.__inputs.items()},
+            "outputs": {channel: await gout.get_state() for (channel, gout) in self.__outputs.items()},
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
