@@ -15,7 +15,11 @@ mixin empty_key(width=0)
 mixin lamp(cls)
 	img(class=`inline-lamp ${cls} led-gray` src=`${svg_dir}/led-square.svg`)
 
-+window("keyboard-window", "Virtual Keyboard", true)
+div(id="keyboard-window" class="window")
+	div(id="keyboard-window-header" class="window-header")
+		div(class="window-grab") Virtual Keyboard
+		button(class="window-button-close") &times;
+
 	div(id="keyboard-desktop" class="keypad" align="center")
 		div(class="keypad-block")
 			div(class="keypad-row")

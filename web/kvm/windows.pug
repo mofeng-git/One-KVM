@@ -1,10 +1,3 @@
-mixin window(id, title, with_header_id=false, close_confirm_msg="")
-	div(id=id class="window" data-close-confirm=close_confirm_msg)
-		div(id=(with_header_id ? `${id}-header` : "") class="window-header")
-			div(class="window-grab") #{title}
-			button(class="window-button-close") &times;
-		block
-
 include window-stream.pug
 include window-keyboard.pug
 include window-about.pug

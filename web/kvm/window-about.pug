@@ -9,7 +9,11 @@ mixin about_tab(name, title, checked=false)
 			else
 				span(class="code-comment") No data
 
-+window("about-window", "About", false)
+div(id="about-window" class="window")
+	div(class="window-header")
+		div(class="window-grab") About
+		button(class="window-button-close") &times;
+
 	div(id="about")
 		table
 			tr

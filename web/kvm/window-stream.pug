@@ -1,10 +1,25 @@
 - let confirm_msg = "Do you want to close the stream? This action will temporarily stop<br>";
 - confirm_msg += "the video transmission until you open the broadcast again.<br>";
 - confirm_msg += "This can be useful for saving traffic.";
-+window("stream-window", "Stream", true, confirm_msg)
+
+div(id="stream-window" class="window window-resizable" data-close-confirm=confirm_msg)
+	div(id="stream-window-header" class="window-header")
+		div(class="window-grab") Stream
+		button(class="window-button-close") &times;
+		button(class="window-button-maximize") &#9744;
+		button(class="window-button-full-screen") &#10530;
+
 	div(id="stream-info")
+
 	div(id="stream-box" class="stream-box-inactive")
+		div(class="window-lock-alert hidden")
+			| #[b Failed to acquire keyboard lock.#[br]Shortcuts like Alt+Tab, Ctrl+W, Ctrl+N might not be captured.]#[br]
+			| #[br]
+			| For best keyboard handling use a #[a(href="https://developer.mozilla.org/en-US/docs/Web/API/Keyboard_API#Browser_compatibility") browser with keyboard lock support API].#[br]
+			| In Chrome use HTTPS and enable #[i system-keyboard-lock] by putting at URL #[i chrome://flags/#system-keyboard-lock].#[br]
+			| More details on keyboard lock API are #[a(href="https://wicg.github.io/keyboard-lock/" target="_blank") here].
 		img(id="stream-image" class="stream-image-inactive" src=`${png_dir}/blank-stream.png`)
+
 	div(id="stream-mouse-buttons" class="keypad" align="center")
 		div(class="keypad-block")
 			div(class="keypad-row")

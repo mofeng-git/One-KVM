@@ -66,6 +66,8 @@
 	--cs-key-pressed-fg: #6c7481;
 	--cs-key-holded-bg: #436a8a;
 
+	--cs-corner-bg: #5b90bb;
+
 	--shadow-micro: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
 	--shadow-small: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
 	--shadow-big: 0 8px 16px 0 rgba(0, 0, 0, 0.4);

@@ -54,14 +54,37 @@ function __WindowManager() {
 			__menu_buttons.push(el_button);
 		}
 
+		if (!window.ResizeObserver) {
+			tools.error("ResizeObserver not supported");
+		}
+
 		for (let el_window of $$("window")) {
 			el_window.setAttribute("tabindex", "-1");
 			__makeWindowMovable(el_window);
 			__windows.push(el_window);
 
-			let el_button = el_window.querySelector(".window-header .window-button-close");
-			if (el_button) {
-				tools.setOnClick(el_button, function() {
+			if (el_window.classList.contains("window-resizable") && window.ResizeObserver) {
+				new ResizeObserver(function() {
+					// При переполнении рабочей области сократить размер окна по высоте.
+					// По ширине оно настраивается само в CSS.
+					let view = self.getViewGeometry();
+					let rect = el_window.getBoundingClientRect();
+					if ((rect.bottom - rect.top) > (view.bottom - view.top)) {
+						el_window.style.height = view.bottom - view.top + "px";
+					}
+
+					if (el_window.hasAttribute("data-centered")) {
+						__centerWindow(el_window);
+					}
+					if (el_window.resize_hook) {
+						el_window.resize_hook();
+					}
+				}).observe(el_window);
+			}
+
+			let el_close_button = el_window.querySelector(".window-header .window-button-close");
+			if (el_close_button) {
+				tools.setOnClick(el_close_button, function() {
 					let close_window = function() {
 						__closeWindow(el_window);
 						__activateLastWindow(el_window);
@@ -78,6 +101,22 @@ function __WindowManager() {
 					}
 				});
 			}
+
+			let el_maximize_button = el_window.querySelector(".window-header .window-button-maximize");
+			if (el_maximize_button) {
+				tools.setOnClick(el_maximize_button, function() {
+					__maximizeWindow(el_window);
+					__activateLastWindow(el_window);
+				});
+			}
+
+			let el_full_screen_button = el_window.querySelector(".window-header .window-button-full-screen");
+			if (el_full_screen_button) {
+				tools.setOnClick(el_full_screen_button, function() {
+					__fullScreenWindow(el_window);
+					__activateLastWindow(el_window);
+				});
+			}
 		}
 
 		window.onmouseup = __globalMouseButtonHandler;
@@ -86,8 +125,10 @@ function __WindowManager() {
 		window.addEventListener("focusin", __focusIn);
 		window.addEventListener("focusout", __focusOut);
 
-		window.addEventListener("resize", __organizeWindowsOnResize);
-		window.addEventListener("orientationchange", __organizeWindowsOnResize);
+		window.addEventListener("resize", __organizeWindowsOnBrowserResize);
+		window.addEventListener("orientationchange", __organizeWindowsOnBrowserResize);
+
+		document.onfullscreenchange = __onFullScreenChange;
 	};
 
 	/************************************************************************/
@@ -205,7 +246,7 @@ function __WindowManager() {
 		if (activate) {
 			__activateWindow(el_window);
 		}
-		if (Object.prototype.hasOwnProperty.call(el_window, "show_hook")) {
+		if (el_window.show_hook) {
 			if (showed) {
 				el_window.show_hook();
 			}
@@ -239,7 +280,7 @@ function __WindowManager() {
 			let el_menu = el_button.parentElement.querySelector(".menu");
 			if (el_button === el_a && window.getComputedStyle(el_menu, null).visibility === "hidden") {
 				let rect = el_menu.getBoundingClientRect();
-				let offset = self.getViewGeometry().right - (rect.x + el_menu.clientWidth + 2); // + 2 is ugly hack
+				let offset = self.getViewGeometry().right - (rect.left + el_menu.clientWidth + 2); // + 2 is ugly hack
 				if (offset < 0) {
 					el_menu.style.right = "0px";
 				} else {
@@ -319,7 +360,7 @@ function __WindowManager() {
 		}
 	};
 
-	var __organizeWindowsOnResize = function() {
+	var __organizeWindowsOnBrowserResize = function() {
 		for (let el_window of $$("window")) {
 			if (el_window.style.visibility === "visible") {
 				__organizeWindow(el_window);
@@ -331,10 +372,19 @@ function __WindowManager() {
 		let view = self.getViewGeometry();
 		let rect = el_window.getBoundingClientRect();
 
+		if (el_window.classList.contains("window-resizable")) {
+			// При переполнении рабочей области сократить размер окна
+			if ((rect.bottom - rect.top) > (view.bottom - view.top)) {
+				el_window.style.height = view.bottom - view.top + "px";
+			}
+			if ((rect.right - rect.left) > (view.right - view.left)) {
+				el_window.style.width = view.right - view.left + "px";
+			}
+			rect = el_window.getBoundingClientRect();
+		}
+
 		if (el_window.hasAttribute("data-centered") || center) {
-			el_window.style.top = Math.max(view.top, Math.round((view.bottom - rect.height) / 2)) + "px";
-			el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
-			el_window.setAttribute("data-centered", "");
+			__centerWindow(el_window);
 		} else {
 			if (rect.top <= view.top) {
 				el_window.style.top = view.top + "px";
@@ -348,6 +398,14 @@ function __WindowManager() {
 				el_window.style.left = view.right - rect.width + "px";
 			}
 		}
+	};
+
+	var __centerWindow = function(el_window) {
+		let view = self.getViewGeometry();
+		let rect = el_window.getBoundingClientRect();
+		el_window.style.top = Math.max(view.top, Math.round((view.bottom - rect.height) / 2)) + "px";
+		el_window.style.left = Math.round((view.right - rect.width) / 2) + "px";
+		el_window.setAttribute("data-centered", "");
 	};
 
 	var __activateLastWindow = function(el_except_window=null) {
@@ -415,6 +473,10 @@ function __WindowManager() {
 		let prev_pos = {x: 0, y: 0};
 
 		function startMoving(event) {
+			// При перетаскивании resizable-окна за правый кран экрана оно ужимается.
+			// Этот костыль фиксит это.
+			el_window.style.width = el_window.offsetWidth + "px";
+
 			__closeAllMenues();
 			__activateWindow(el_window);
 			event = (event || window.event);
@@ -472,6 +534,46 @@ function __WindowManager() {
 
 		el_grab.onmousedown = startMoving;
 		el_grab.ontouchstart = startMoving;
+	};
+
+	var __onFullScreenChange = function(event) {
+		let el_window = event.target;
+		if (!document.fullscreenElement) {
+			el_window.style.padding = "";
+			let rect = el_window.before_full_screen;
+			if (rect) {
+				el_window.style.width = rect.width + "px";
+				el_window.style.height = rect.height + "px";
+				el_window.style.top = rect.top + "px";
+				el_window.style.left = rect.left + "px";
+			}
+		} else {
+			el_window.style.padding = "0px 0px 0px 0px";
+		}
+	};
+
+	var __fullScreenWindow = function(el_window) {
+		el_window.before_full_screen = el_window.getBoundingClientRect();
+		el_window.requestFullscreen();
+		if ("keyboard" in navigator && "lock" in navigator.keyboard) {
+			navigator.keyboard.lock();
+		} else {
+			let el_lock_alert = el_window.querySelector(".window-lock-alert");
+			if (el_lock_alert) {
+				tools.hiddenSetVisible(el_lock_alert, true);
+				setTimeout(function() {
+					tools.hiddenSetVisible(el_lock_alert, false);
+				}, 7000);
+			}
+		}
+	};
+
+	var __maximizeWindow = function(el_window) {
+		let vertical_offset = $("navbar").offsetHeight;
+		el_window.style.left = "0px";
+		el_window.style.top = vertical_offset + "px";
+		el_window.style.width = window.innerWidth + "px";
+		el_window.style.height = window.innerHeight - vertical_offset + "px";
 	};
 
 	__init__();

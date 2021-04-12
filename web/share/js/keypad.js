@@ -138,7 +138,7 @@ export function Keypad(keys_parent, key_callback) {
 	var __isPressed = function(el_key) {
 		let is_pressed = false;
 		let el_keys = __resolveKeys(el_key);
-		for (let el_key of el_keys) {
+		for (el_key of el_keys) {
 			is_pressed = (is_pressed || el_key.classList.contains("pressed"));
 		}
 		return is_pressed;
@@ -147,7 +147,7 @@ export function Keypad(keys_parent, key_callback) {
 	var __isHolded = function(el_key) {
 		let is_holded = false;
 		let el_keys = __resolveKeys(el_key);
-		for (let el_key of el_keys) {
+		for (el_key of el_keys) {
 			is_holded = (is_holded || el_key.classList.contains("holded"));
 		}
 		return is_holded;
@@ -156,7 +156,7 @@ export function Keypad(keys_parent, key_callback) {
 	var __isActive = function(el_key) {
 		let is_active = false;
 		let el_keys = __resolveKeys(el_key);
-		for (let el_key of el_keys) {
+		for (el_key of el_keys) {
 			is_active = (is_active || el_key.classList.contains("pressed") || el_key.classList.contains("holded"));
 		}
 		return is_active;
@@ -164,14 +164,14 @@ export function Keypad(keys_parent, key_callback) {
 
 	var __activate = function(el_key, cls) {
 		let el_keys = __resolveKeys(el_key);
-		for (let el_key of el_keys) {
+		for (el_key of el_keys) {
 			el_key.classList.add(cls);
 		}
 	};
 
 	var __deactivate = function(el_key) {
 		let el_keys = __resolveKeys(el_key);
-		for (let el_key of el_keys) {
+		for (el_key of el_keys) {
 			el_key.classList.remove("pressed");
 			el_key.classList.remove("holded");
 		}

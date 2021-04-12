@@ -131,24 +131,7 @@
               </td>
               <td class="value" id="stream-desired-fps-value">0</td>
             </tr>
-            <tr>
-              <td>Stream size:</td>
-              <td>
-                <input class="slider" type="range" id="stream-size-slider">
-              </td>
-              <td class="value" id="stream-size-value" style="width: 4em">100%</td>
-            </tr>
           </table>
-          <hr>
-              <table class="kv">
-                <td>Auto-resize stream window:</td>
-                <td align="right">
-                  <div class="switch-box">
-                    <input checked type="checkbox" id="stream-auto-resize-switch">
-                    <label for="stream-auto-resize-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                  </div>
-                </td>
-              </table>
           <hr>
           <div class="buttons buttons-row">
             <button class="row33" data-force-hide-menu id="show-stream-button">&bull; Show stream</button>
@@ -473,1239 +456,1248 @@
         </div>
       </li>
     </ul>
-        <div class="window" id="stream-window" data-close-confirm="Do you want to close the stream? This action will temporarily stop&lt;br&gt;the video transmission until you open the broadcast again.&lt;br&gt;This can be useful for saving traffic.">
-          <div class="window-header" id="stream-window-header">
-            <div class="window-grab">Stream</div>
-            <button class="window-button-close">&times;</button>
+    <div class="window window-resizable" id="stream-window" data-close-confirm="Do you want to close the stream? This action will temporarily stop&lt;br&gt;the video transmission until you open the broadcast again.&lt;br&gt;This can be useful for saving traffic.">
+      <div class="window-header" id="stream-window-header">
+        <div class="window-grab">Stream</div>
+        <button class="window-button-close">&times;</button>
+        <button class="window-button-maximize">&#9744;</button>
+        <button class="window-button-full-screen">&#10530;</button>
+      </div>
+      <div id="stream-info"></div>
+      <div class="stream-box-inactive" id="stream-box">
+        <div class="window-lock-alert hidden"><b>Failed to acquire keyboard lock.<br>Shortcuts like Alt+Tab, Ctrl+W, Ctrl+N might not be captured.</b><br>
+          <br>
+          For best keyboard handling use a <a href="https://developer.mozilla.org/en-US/docs/Web/API/Keyboard_API#Browser_compatibility">browser with keyboard lock support API</a>.<br>
+          In Chrome use HTTPS and enable <i>system-keyboard-lock</i> by putting at URL <i>chrome://flags/#system-keyboard-lock</i>.<br>
+          More details on keyboard lock API are <a href="https://wicg.github.io/keyboard-lock/" target="_blank">here</a>.
+        </div><img class="stream-image-inactive" id="stream-image" src="/share/png/blank-stream.png">
+      </div>
+      <div class="keypad" id="stream-mouse-buttons" align="center">
+        <div class="keypad-block">
+          <div class="keypad-row">
+            <div class="key wide-4 left small" data-code="left"><span>Mouse<br>Left</span></div>
+            <div class="modifier wide-2 left small" data-code="left"><span><b>&bull;</b><br>&larr; Hold</span></div>
+            <div class="empty-key" style="width:10px"></div>
+            <div class="key wide-2 left small" data-code="middle"><span>Mouse<br>Middle</span></div>
+            <div class="modifier wide-2 left small" data-code="middle"><span><b>&bull;</b><br>&larr; Hold</span></div>
+            <div class="empty-key" style="width:10px"></div>
+            <div class="modifier wide-2 right small" data-code="right"><span><b>&bull;</b><br>Hold &rarr;</span></div>
+            <div class="key wide-4 right small" data-code="right"><span>Mouse<br>Right</span></div>
           </div>
-          <div id="stream-info"></div>
-          <div class="stream-box-inactive" id="stream-box"><img class="stream-image-inactive" id="stream-image" src="/share/png/blank-stream.png"></div>
-          <div class="keypad" id="stream-mouse-buttons" align="center">
-            <div class="keypad-block">
-              <div class="keypad-row">
-                <div class="key wide-4 left small" data-code="left"><span>Mouse<br>Left</span></div>
-                <div class="modifier wide-2 left small" data-code="left"><span><b>&bull;</b><br>&larr; Hold</span></div>
-                <div class="empty-key" style="width:10px"></div>
-                <div class="key wide-2 left small" data-code="middle"><span>Mouse<br>Middle</span></div>
-                <div class="modifier wide-2 left small" data-code="middle"><span><b>&bull;</b><br>&larr; Hold</span></div>
-                <div class="empty-key" style="width:10px"></div>
-                <div class="modifier wide-2 right small" data-code="right"><span><b>&bull;</b><br>Hold &rarr;</span></div>
-                <div class="key wide-4 right small" data-code="right"><span>Mouse<br>Right</span></div>
-              </div>
-              <div class="keypad-row" style="display:none">
-                <div class="key wide-4 left small" data-code="up"><span>Mouse<br>Up/Back</span></div>
-                <div class="modifier wide-2 left small" data-code="up"><span><b>&bull;</b><br>&larr; Hold</span></div>
-                <div class="empty-key" style="width:10px"></div>
-                <div class="modifier wide-2 right small" data-code="down"><span><b>&bull;</b><br>Hold &rarr;</span></div>
-                <div class="key wide-4 right small" data-code="down"><span>Mouse<br>Down/Fw</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="window" id="keyboard-window" data-close-confirm="">
-          <div class="window-header" id="keyboard-window-header">
-            <div class="window-grab">Virtual Keyboard</div>
-            <button class="window-button-close">&times;</button>
-          </div>
-          <div class="keypad" id="keyboard-desktop" align="center">
-            <div class="keypad-block">
-              <div class="keypad-row">
-                    <div class="key small" data-code="Escape">
-                      <div class="label">Esc
-                      </div>
-                    </div>
-                    <div class="empty-key" style="width:24px"></div>
-                    <div class="key small" data-code="F1">
-                      <div class="label">F1
-                      </div>
-                    </div>
-                    <div class="key small" data-code="F2">
-                      <div class="label">F2
-                      </div>
-                    </div>
-                    <div class="key small" data-code="F3">
-                      <div class="label">F3
-                      </div>
-                    </div>
-                    <div class="key small" data-code="F4">
-                      <div class="label">F4
-                      </div>
-                    </div>
-                    <div class="empty-key" style="width:10px"></div>
-                    <div class="key small" data-code="F5">
-                      <div class="label">F5
-                      </div>
-                    </div>
-                    <div class="key small" data-code="F6">
-                      <div class="label">F6
-                      </div>
-                    </div>
-                    <div class="key small" data-code="F7">
-                      <div class="label">F7
-                      </div>
-                    </div>
-                    <div class="key small" data-code="F8">
-                      <div class="label">F8
-                      </div>
-                    </div>
-                    <div class="empty-key" style="width:10px"></div>
-                    <div class="key small" data-code="F9">
-                      <div class="label">F9
-                      </div>
-                    </div>
-                    <div class="key small" data-code="F10">
-                      <div class="label">F10
-                      </div>
-                    </div>
-                    <div class="key small" data-code="F11">
-                      <div class="label">F11
-                      </div>
-                    </div>
-                    <div class="key small" data-code="F12">
-                      <div class="label">F12
-                      </div>
-                    </div>
-              </div>
-              <hr>
-              <div class="keypad-row">
-                    <div class="key " data-code="Backquote">
-                      <div class="label">~<br>`
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit1">
-                      <div class="label">!<br>1
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit2">
-                      <div class="label">@<br>2
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit3">
-                      <div class="label">#<br>3
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit4">
-                      <div class="label">$<br>4
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit5">
-                      <div class="label">%<br>5
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit6">
-                      <div class="label">^<br>6
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit7">
-                      <div class="label">&amp;<br>7
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit8">
-                      <div class="label">*<br>8
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit9">
-                      <div class="label">(<br>9
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit0">
-                      <div class="label">)<br>0
-                      </div>
-                    </div>
-                    <div class="key " data-code="Minus">
-                      <div class="label">_<br>-
-                      </div>
-                    </div>
-                    <div class="key " data-code="Equal">
-                      <div class="label">+<br>=
-                      </div>
-                    </div>
-                    <div class="key wide-2 right" data-code="Backspace">
-                      <div class="label">&#8612;
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key wide-2 left" data-code="Tab">
-                      <div class="label">&#8676;<br>&#8677;
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyQ">
-                      <div class="label">Q
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyW">
-                      <div class="label">W
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyE">
-                      <div class="label">E
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyR">
-                      <div class="label">R
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyT">
-                      <div class="label">T
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyY">
-                      <div class="label">Y
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyU">
-                      <div class="label">U
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyI">
-                      <div class="label">I
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyO">
-                      <div class="label">O
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyP">
-                      <div class="label">P
-                      </div>
-                    </div>
-                    <div class="key " data-code="BracketLeft">
-                      <div class="label">{<br>[
-                      </div>
-                    </div>
-                    <div class="key " data-code="BracketRight">
-                      <div class="label">}<br>]
-                      </div>
-                    </div>
-                    <div class="key " data-code="Backslash">
-                      <div class="label">|<br>&bsol;
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key wide-3 left small" data-code="CapsLock">
-                      <div class="label"><img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyA">
-                      <div class="label">A
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyS">
-                      <div class="label">S
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyD">
-                      <div class="label">D
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyF">
-                      <div class="label">F
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyG">
-                      <div class="label">G
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyH">
-                      <div class="label">H
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyJ">
-                      <div class="label">J
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyK">
-                      <div class="label">K
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyL">
-                      <div class="label">L
-                      </div>
-                    </div>
-                    <div class="key " data-code="Semicolon">
-                      <div class="label">:<br>;
-                      </div>
-                    </div>
-                    <div class="key " data-code="Quote">
-                      <div class="label">"<br>'
-                      </div>
-                    </div>
-                    <div class="key wide-3 right small" data-code="Enter">
-                      <div class="label">Enter<br>&crarr;
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="modifier wide-4 left small" data-code="ShiftLeft">
-                      <div class="label"><b>&bull;</b><br>Shift
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyZ">
-                      <div class="label">Z
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyX">
-                      <div class="label">X
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyC">
-                      <div class="label">C
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyV">
-                      <div class="label">V
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyB">
-                      <div class="label">B
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyN">
-                      <div class="label">N
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyM">
-                      <div class="label">M
-                      </div>
-                    </div>
-                    <div class="key " data-code="Comma">
-                      <div class="label">&lt;<br>,
-                      </div>
-                    </div>
-                    <div class="key " data-code="Period">
-                      <div class="label">&gt;<br>.
-                      </div>
-                    </div>
-                    <div class="key " data-code="Slash">
-                      <div class="label">?<br>/
-                      </div>
-                    </div>
-                    <div class="modifier wide-4 right small" data-code="ShiftRight">
-                      <div class="label"><b>&bull;</b><br>Shift
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="modifier wide-1 left small" data-code="ControlLeft">
-                      <div class="label"><b>&bull;</b><br>Ctrl
-                      </div>
-                    </div>
-                    <div class="modifier wide-1 left small" data-code="MetaLeft">
-                      <div class="label"><b>&bull;</b><br>Win
-                      </div>
-                    </div>
-                    <div class="modifier wide-1 left small" data-code="AltLeft">
-                      <div class="label"><b>&bull;</b><br>Alt
-                      </div>
-                    </div>
-                    <div class="key wide-5" data-code="Space">
-                      <div class="label">
-                      </div>
-                    </div>
-                    <div class="modifier wide-1 right small" data-code="AltRight">
-                      <div class="label"><b>&bull;</b><br>Alt
-                      </div>
-                    </div>
-                    <div class="modifier wide-1 right small" data-code="MetaRight">
-                      <div class="label"><b>&bull;</b><br>Win
-                      </div>
-                    </div>
-                    <div class="modifier wide-1 right small" data-code="ControlRight">
-                      <div class="label"><b>&bull;</b><br>Ctrl
-                      </div>
-                    </div>
-              </div>
-            </div>
-            <div class="keypad-block">
-              <div class="keypad-row">
-                    <div class="modifier small" data-code="PrintScreen">
-                      <div class="label"><b>&bull;</b><br>Pt/Sq
-                      </div>
-                    </div>
-                    <div class="key small" data-code="ScrollLock">
-                      <div class="label"><img class="inline-lamp hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
-                      </div>
-                    </div>
-                    <div class="key small" data-code="Pause">
-                      <div class="label">P/Brk
-                      </div>
-                    </div>
-              </div>
-              <hr>
-              <div class="keypad-row">
-                    <div class="key small" data-code="Insert">
-                      <div class="label">Ins
-                      </div>
-                    </div>
-                    <div class="key small" data-code="Home">
-                      <div class="label">Home
-                      </div>
-                    </div>
-                    <div class="key small" data-code="PageUp">
-                      <div class="label">PgUp
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key small" data-code="Delete">
-                      <div class="label">Del
-                      </div>
-                    </div>
-                    <div class="key small" data-code="End">
-                      <div class="label">End
-                      </div>
-                    </div>
-                    <div class="key small" data-code="PageDown">
-                      <div class="label">PgDn
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row"></div>
-              <div class="keypad-row">
-                    <div class="empty-key"></div>
-                    <div class="key " data-code="ArrowUp">
-                      <div class="label">&uarr;
-                      </div>
-                    </div>
-                    <div class="empty-key"></div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key " data-code="ArrowLeft">
-                      <div class="label">&larr;
-                      </div>
-                    </div>
-                    <div class="key " data-code="ArrowDown">
-                      <div class="label">&darr;
-                      </div>
-                    </div>
-                    <div class="key " data-code="ArrowRight">
-                      <div class="label">&rarr;
-                      </div>
-                    </div>
-              </div>
-            </div>
-            <div class="keypad-block">
-              <div class="keypad-row">
-                    <div class="empty-key"></div>
-                    <div class="empty-key"></div>
-                    <div class="key small" data-code="IntlBackslash">
-                      <div class="label">N/US
-                      </div>
-                    </div>
-                    <div class="key small" data-code="Power">
-                      <div class="label">PWR
-                      </div>
-                    </div>
-              </div>
-              <hr>
-              <div class="keypad-row">
-                    <div class="key small" data-code="NumLock">
-                      <div class="label"><img class="inline-lamp hid-keyboard-num-led led-gray" src="/share/svg/led-square.svg"><br> NmLk
-                      </div>
-                    </div>
-                    <div class="key " data-code="NumpadDivide">
-                      <div class="label">/
-                      </div>
-                    </div>
-                    <div class="key " data-code="NumpadMultiply">
-                      <div class="label">*
-                      </div>
-                    </div>
-                    <div class="key " data-code="NumpadSubtract">
-                      <div class="label">-
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key small" data-code="Numpad7">
-                      <div class="label">7<br>Home
-                      </div>
-                    </div>
-                    <div class="key small" data-code="Numpad8">
-                      <div class="label">8<br>&uarr;
-                      </div>
-                    </div>
-                    <div class="key small" data-code="Numpad9">
-                      <div class="label">9<br>PgUp
-                      </div>
-                    </div>
-                    <div class="empty-key"></div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key small" data-code="Numpad4">
-                      <div class="label">4<br>&larr;
-                      </div>
-                    </div>
-                    <div class="key small" data-code="Numpad5">
-                      <div class="label">5<br><br>
-                      </div>
-                    </div>
-                    <div class="key small" data-code="Numpad6">
-                      <div class="label">6<br>&rarr;
-                      </div>
-                    </div>
-                    <div class="key " data-code="NumpadAdd">
-                      <div class="label">+
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key small" data-code="Numpad1">
-                      <div class="label">1<br>End
-                      </div>
-                    </div>
-                    <div class="key small" data-code="Numpad2">
-                      <div class="label">2<br>&darr;
-                      </div>
-                    </div>
-                    <div class="key small" data-code="Numpad3">
-                      <div class="label">3<br>PgDn
-                      </div>
-                    </div>
-                    <div class="empty-key"></div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key small" data-code="Numpad0">
-                      <div class="label">0<br>Ins
-                      </div>
-                    </div>
-                    <div class="empty-key"></div>
-                    <div class="key small" data-code="NumpadDecimal">
-                      <div class="label">.<br>Del
-                      </div>
-                    </div>
-                    <div class="key small" data-code="NumpadEnter">
-                      <div class="label">Ent
-                      </div>
-                    </div>
-              </div>
-            </div>
-          </div>
-          <div class="keypad" id="keyboard-mobile" align="center">
-            <div class="keypad-block">
-              <div class="keypad-row">
-                    <div class="key margin-0 small" data-code="Escape">
-                      <div class="label">Esc
-                      </div>
-                    </div>
-                    <div class="empty-key" style="width:1px"></div>
-                    <div class="key wide-0 margin-0 small" data-code="F1">
-                      <div class="label">F1
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F2">
-                      <div class="label">F2
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F3">
-                      <div class="label">F3
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F4">
-                      <div class="label">F4
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F5">
-                      <div class="label">F5
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F6">
-                      <div class="label">F6
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F7">
-                      <div class="label">F7
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F8">
-                      <div class="label">F8
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F9">
-                      <div class="label">F9
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F10">
-                      <div class="label">F10
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F11">
-                      <div class="label">F11
-                      </div>
-                    </div>
-                    <div class="key wide-0 margin-0 small" data-code="F12">
-                      <div class="label">F12
-                      </div>
-                    </div>
-                    <div class="empty-key" style="width:2px"></div>
-                    <div class="modifier margin-0 small" data-code="PrintScreen">
-                      <div class="label"><b>&bull;</b><br>Pt/Sq
-                      </div>
-                    </div>
-                    <div class="key margin-0 small" data-code="ScrollLock">
-                      <div class="label"><img class="inline-lamp hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
-                      </div>
-                    </div>
-                    <div class="key margin-0 small" data-code="Pause">
-                      <div class="label">P/Brk
-                      </div>
-                    </div>
-                    <div class="key margin-0 small" data-code="Insert">
-                      <div class="label">Ins
-                      </div>
-                    </div>
-                    <div class="key margin-0 small" data-code="Home">
-                      <div class="label">Home
-                      </div>
-                    </div>
-                    <div class="key margin-0 small" data-code="End">
-                      <div class="label">End
-                      </div>
-                    </div>
-                    <div class="key margin-0 small" data-code="Delete">
-                      <div class="label">Del
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key " data-code="Backquote">
-                      <div class="label">~<br>`
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit1">
-                      <div class="label">!<br>1
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit2">
-                      <div class="label">@<br>2
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit3">
-                      <div class="label">#<br>3
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit4">
-                      <div class="label">$<br>4
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit5">
-                      <div class="label">%<br>5
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit6">
-                      <div class="label">^<br>6
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit7">
-                      <div class="label">&amp;<br>7
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit8">
-                      <div class="label">*<br>8
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit9">
-                      <div class="label">(<br>9
-                      </div>
-                    </div>
-                    <div class="key " data-code="Digit0">
-                      <div class="label">)<br>0
-                      </div>
-                    </div>
-                    <div class="key " data-code="Minus">
-                      <div class="label">_<br>-
-                      </div>
-                    </div>
-                    <div class="key " data-code="Equal">
-                      <div class="label">+<br>=
-                      </div>
-                    </div>
-                    <div class="key wide-3 right" data-code="Backspace" style="width:101px">
-                      <div class="label">&#8612;
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key wide-2 left" data-code="Tab">
-                      <div class="label">&#8676;<br>&#8677;
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyQ">
-                      <div class="label">Q
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyW">
-                      <div class="label">W
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyE">
-                      <div class="label">E
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyR">
-                      <div class="label">R
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyT">
-                      <div class="label">T
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyY">
-                      <div class="label">Y
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyU">
-                      <div class="label">U
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyI">
-                      <div class="label">I
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyO">
-                      <div class="label">O
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyP">
-                      <div class="label">P
-                      </div>
-                    </div>
-                    <div class="key " data-code="BracketLeft">
-                      <div class="label">{<br>[
-                      </div>
-                    </div>
-                    <div class="key " data-code="BracketRight">
-                      <div class="label">}<br>]
-                      </div>
-                    </div>
-                    <div class="key wide-2 left" data-code="Backslash" style="width:78px">
-                      <div class="label">|<br>&bsol;
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="key wide-3 left small" data-code="CapsLock">
-                      <div class="label"><img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyA">
-                      <div class="label">A
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyS">
-                      <div class="label">S
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyD">
-                      <div class="label">D
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyF">
-                      <div class="label">F
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyG">
-                      <div class="label">G
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyH">
-                      <div class="label">H
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyJ">
-                      <div class="label">J
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyK">
-                      <div class="label">K
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyL">
-                      <div class="label">L
-                      </div>
-                    </div>
-                    <div class="key " data-code="Semicolon">
-                      <div class="label">:<br>;
-                      </div>
-                    </div>
-                    <div class="key " data-code="Quote">
-                      <div class="label">`<br>'
-                      </div>
-                    </div>
-                    <div class="key wide-4 right small" data-code="Enter" style="width:116px">
-                      <div class="label">Enter<br>&crarr;
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="modifier wide-4 left small" data-code="ShiftLeft">
-                      <div class="label"><b>&bull;</b><br>Shift
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyZ">
-                      <div class="label">Z
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyX">
-                      <div class="label">X
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyC">
-                      <div class="label">C
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyV">
-                      <div class="label">V
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyB">
-                      <div class="label">B
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyN">
-                      <div class="label">N
-                      </div>
-                    </div>
-                    <div class="key single" data-code="KeyM">
-                      <div class="label">M
-                      </div>
-                    </div>
-                    <div class="key " data-code="Comma">
-                      <div class="label">lt;<br>,
-                      </div>
-                    </div>
-                    <div class="key " data-code="Period">
-                      <div class="label">&gt;<br>.
-                      </div>
-                    </div>
-                    <div class="key " data-code="Slash">
-                      <div class="label">?<br>/
-                      </div>
-                    </div>
-                    <div class="key small" data-code="PageUp">
-                      <div class="label">PgUp
-                      </div>
-                    </div>
-                    <div class="key " data-code="ArrowUp">
-                      <div class="label">&uarr;
-                      </div>
-                    </div>
-                    <div class="key small" data-code="PageDown">
-                      <div class="label">PgDn
-                      </div>
-                    </div>
-              </div>
-              <div class="keypad-row">
-                    <div class="modifier wide-1 left small" data-code="ControlLeft">
-                      <div class="label"><b>&bull;</b><br>Ctrl
-                      </div>
-                    </div>
-                    <div class="modifier wide-1 left small" data-code="MetaLeft">
-                      <div class="label"><b>&bull;</b><br>Win
-                      </div>
-                    </div>
-                    <div class="modifier wide-1 left small" data-code="AltLeft">
-                      <div class="label"><b>&bull;</b><br>Alt
-                      </div>
-                    </div>
-                    <div class="key " data-code="Space" style="width:190px">
-                      <div class="label">
-                      </div>
-                    </div>
-                    <div class="modifier right small" data-code="AltRight">
-                      <div class="label"><b>&bull;</b><br>Alt
-                      </div>
-                    </div>
-                    <div class="modifier right small" data-code="MetaRight">
-                      <div class="label"><b>&bull;</b><br>Win
-                      </div>
-                    </div>
-                    <div class="modifier right small" data-code="ShiftRight">
-                      <div class="label"><b>&bull;</b><br>Shift
-                      </div>
-                    </div>
-                    <div class="modifier right small" data-code="ControlRight">
-                      <div class="label"><b>&bull;</b><br>Ctrl
-                      </div>
-                    </div>
-                    <div class="key " data-code="ArrowLeft">
-                      <div class="label">&larr;
-                      </div>
-                    </div>
-                    <div class="key " data-code="ArrowDown">
-                      <div class="label">&darr;
-                      </div>
-                    </div>
-                    <div class="key " data-code="ArrowRight">
-                      <div class="label">&rarr;
-                      </div>
-                    </div>
-              </div>
-            </div>
+          <div class="keypad-row" style="display:none">
+            <div class="key wide-4 left small" data-code="up"><span>Mouse<br>Up/Back</span></div>
+            <div class="modifier wide-2 left small" data-code="up"><span><b>&bull;</b><br>&larr; Hold</span></div>
+            <div class="empty-key" style="width:10px"></div>
+            <div class="modifier wide-2 right small" data-code="down"><span><b>&bull;</b><br>Hold &rarr;</span></div>
+            <div class="key wide-4 right small" data-code="down"><span>Mouse<br>Down/Fw</span></div>
           </div>
         </div>
-        <div class="window" id="about-window" data-close-confirm="">
-          <div class="window-header" id="">
-            <div class="window-grab">About</div>
-            <button class="window-button-close">&times;</button>
+      </div>
+    </div>
+    <div class="window" id="keyboard-window">
+      <div class="window-header" id="keyboard-window-header">
+        <div class="window-grab">Virtual Keyboard</div>
+        <button class="window-button-close">&times;</button>
+      </div>
+      <div class="keypad" id="keyboard-desktop" align="center">
+        <div class="keypad-block">
+          <div class="keypad-row">
+                <div class="key small" data-code="Escape">
+                  <div class="label">Esc
+                  </div>
+                </div>
+                <div class="empty-key" style="width:24px"></div>
+                <div class="key small" data-code="F1">
+                  <div class="label">F1
+                  </div>
+                </div>
+                <div class="key small" data-code="F2">
+                  <div class="label">F2
+                  </div>
+                </div>
+                <div class="key small" data-code="F3">
+                  <div class="label">F3
+                  </div>
+                </div>
+                <div class="key small" data-code="F4">
+                  <div class="label">F4
+                  </div>
+                </div>
+                <div class="empty-key" style="width:10px"></div>
+                <div class="key small" data-code="F5">
+                  <div class="label">F5
+                  </div>
+                </div>
+                <div class="key small" data-code="F6">
+                  <div class="label">F6
+                  </div>
+                </div>
+                <div class="key small" data-code="F7">
+                  <div class="label">F7
+                  </div>
+                </div>
+                <div class="key small" data-code="F8">
+                  <div class="label">F8
+                  </div>
+                </div>
+                <div class="empty-key" style="width:10px"></div>
+                <div class="key small" data-code="F9">
+                  <div class="label">F9
+                  </div>
+                </div>
+                <div class="key small" data-code="F10">
+                  <div class="label">F10
+                  </div>
+                </div>
+                <div class="key small" data-code="F11">
+                  <div class="label">F11
+                  </div>
+                </div>
+                <div class="key small" data-code="F12">
+                  <div class="label">F12
+                  </div>
+                </div>
           </div>
-          <div id="about">
-            <table>
-              <tr>
-                <td class="logo" valign="top"><img class="svg-gray" src="../share/svg/logo.svg" alt="Pi-KVM" height="40"></td>
-                <td valign="top">
-                  <table>
-                    <tr>
-                      <td class="title" colspan="2">The Open Source IP-KVM</td>
-                    </tr>
-                    <tr>
-                      <td class="copyright" colspan="2">Copyright &copy; 2018-2021 <a target="_blank" href="mailto:mdevaev@gmail.com">Maxim Devaev</a></td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table><br>
-            <div class="tabs-box">
-                  <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
-                  <label for="about-tab-meta-button">Meta</label>
-                  <div class="tab">
-                    <div class="code" id="about-meta"><span class="code-comment">No data</span>
-                    </div>
+          <hr>
+          <div class="keypad-row">
+                <div class="key " data-code="Backquote">
+                  <div class="label">~<br>`
                   </div>
-                  <input type="radio" name="about-tab-button" id="about-tab-hw-button">
-                  <label for="about-tab-hw-button">Hardware</label>
-                  <div class="tab">
-                    <div class="code" id="about-hw"><span class="code-comment">No data</span>
-                    </div>
+                </div>
+                <div class="key " data-code="Digit1">
+                  <div class="label">!<br>1
                   </div>
-                  <input type="radio" name="about-tab-button" id="about-tab-version-button">
-                  <label for="about-tab-version-button">Version</label>
-                  <div class="tab">
-                    <div class="code" id="about-version"><span class="code-comment">No data</span>
-                    </div>
+                </div>
+                <div class="key " data-code="Digit2">
+                  <div class="label">@<br>2
                   </div>
-                  <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
-                  <label for="about-tab-thanks-button">Thanks</label>
-                  <div class="tab">
-                    <div class="code" id="about-thanks"><span class="code-comment">// These kind people donated money to the Pi-KVM project<br>
-                        // and supported the work on it. We are very grateful<br>
-                        // for their help, and memorializing their names<br>
-                        // is the least we can do in gratitude.<br>
-                        // If you also want to support this project,<br>
-                        // you can use one of these services:
-                        <a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
-                        or <a target="_blank" href="https://www.paypal.me/mdevaev">PayPal</a>.</span>
-                      <ul>
-                        <li>A. Isenring</li>
-                        <li>Aaron Heise</li>
-                        <li>Accalia</li>
-                        <li>adipisicing</li>
-                        <li>Adrian Basham</li>
-                        <li>Alberto Bassi</li>
-                        <li>Aleksei Brusianskii</li>
-                        <li>Alessio Curri</li>
-                        <li>Alexandre Jablonski</li>
-                        <li>Alucard</li>
-                        <li>Andreas Marufke</li>
-                        <li>Andrew Reusch</li>
-                        <li>Andrew Ruan</li>
-                        <li>Andrzej V</li>
-                        <li>Anish Patel</li>
-                        <li>Anix</li>
-                        <li>anonymous</li>
-                        <li>Anton Kovalenko</li>
-                        <li>Aron Green</li>
-                        <li>Aron Perelman</li>
-                        <li>Arthur Woimbée</li>
-                        <li>Ashlesh Chaudhari</li>
-                        <li>Augusto Becciu</li>
-                        <li>AVS Computer</li>
-                        <li>baddog</li>
-                        <li>Bao Tin Hoang</li>
-                        <li>Belf Igor</li>
-                        <li>Ben Gordon</li>
-                        <li>Ben Scott</li>
-                        <li>Benedikt Heine</li>
-                        <li>Benjamin Melancon</li>
-                        <li>Benni Stauder</li>
-                        <li>Bernhard Fitzke</li>
-                        <li>bitjoe</li>
-                        <li>Bits and Bytes Computers LLC</li>
-                        <li>Blue Frog LLC</li>
-                        <li>Bootstrapper - Programmierung erklärt</li>
-                        <li>Bosco</li>
-                        <li>Bradford King</li>
-                        <li>Brainspore Networks</li>
-                        <li>Branden Shaulis</li>
-                        <li>Brian Moses</li>
-                        <li>Brian Vecchiarelli</li>
-                        <li>Brian White</li>
-                        <li>Bruno Gomes</li>
-                        <li>Bryan Adams</li>
-                        <li>C P ELSE</li>
-                        <li>Cameron Tacklind</li>
-                        <li>Carl Mercier</li>
-                        <li>Carl-Fredrik Johansson</li>
-                        <li>cbad536</li>
-                        <li>Chris Burton</li>
-                        <li>Chris Lewis</li>
-                        <li>Chris Rizio</li>
-                        <li>Christian Schlögl</li>
-                        <li>Christian Svensson</li>
-                        <li>Christof Maluck</li>
-                        <li>Christoph Dette</li>
-                        <li>Christoffer Lund</li>
-                        <li>Christopher Mandlbaur</li>
-                        <li>Chucktastic</li>
-                        <li>Clifford Coleman</li>
-                        <li>Clinton Lee Taylor</li>
-                        <li>Cole Imhoff</li>
-                        <li>Corey Layton</li>
-                        <li>Corey Lista</li>
-                        <li>Crossfactor</li>
-                        <li>ctag</li>
-                        <li>CyB0rgg</li>
-                        <li>DeMentor</li>
-                        <li>Desmond Whitt</li>
-                        <li>Damon Meledones</li>
-                        <li>Dan Berkowitz</li>
-                        <li>Dan Brakeley</li>
-                        <li>David</li>
-                        <li>David Godibadze</li>
-                        <li>David Howell</li>
-                        <li>David Ye</li>
-                        <li>David York</li>
-                        <li>Denis</li>
-                        <li>Denis Andreev</li>
-                        <li>Denis Yatsenko</li>
-                        <li>Dennis Becker</li>
-                        <li>Derek Yap</li>
-                        <li>Didrik</li>
-                        <li>dixon wong</li>
-                        <li>dizztrukshin</li>
-                        <li>Dmitry Shilov</li>
-                        <li>Egan Ford</li>
-                        <li>Elliot Woo</li>
-                        <li>Eric Phenix</li>
-                        <li>ewook</li>
-                        <li>eye-catcher.com</li>
-                        <li>Fabiano Sidler</li>
-                        <li>Far Pin Solutions, LLC</li>
-                        <li>Felyx Gabryel</li>
-                        <li>Fergus McKay</li>
-                        <li>fo0bar</li>
-                        <li>Foamy</li>
-                        <li>Francisco Pavon</li>
-                        <li>Frank</li>
-                        <li>Frederick Czajka</li>
-                        <li>Fredrik Idréus</li>
-                        <li>Ge Men</li>
-                        <li>Genkinger Andreas</li>
-                        <li>Georgy Brodsky</li>
-                        <li>Gernot Neuschröer</li>
-                        <li>Glen Dragon</li>
-                        <li>Gregory Smith</li>
-                        <li>Gregory Treantos</li>
-                        <li>Grey Cynic</li>
-                        <li>Guido Bernacchi</li>
-                        <li>Gustin Johnson</li>
-                        <li>Heikki Tiittanen</li>
-                        <li>Helio Leonardo Pinheiro e Mota</li>
-                        <li>Henrik Ählström</li>
-                        <li>Henry Hood</li>
-                        <li>HimKo</li>
-                        <li>HouseFPV</li>
-                        <li>Icculus</li>
-                        <li>iks</li>
-                        <li>IT Lifesaver</li>
-                        <li>Ivan Shapovalov</li>
-                        <li>J L</li>
-                        <li>Jaanus</li>
-                        <li>Jackson Wyatt</li>
-                        <li>Jacob Morgan</li>
-                        <li>James Cadd</li>
-                        <li>James Cobb</li>
-                        <li>James Edwards</li>
-                        <li>James Kocher</li>
-                        <li>James Mayhugh</li>
-                        <li>Jamie Murphy</li>
-                        <li>Jan Niehusmann</li>
-                        <li>Jari Hiltunen</li>
-                        <li>Jason Downey</li>
-                        <li>Jason Toland</li>
-                        <li>Jay Davis</li>
-                        <li>Jay Isaacs</li>
-                        <li>Jean-Philippe Guilbault</li>
-                        <li>Jeff Bowman</li>
-                        <li>Jeff Urlwin</li>
-                        <li>Jennifer Rowlett</li>
-                        <li>Jerremy Holland</li>
-                        <li>Joachim Bruening</li>
-                        <li>Joe Ventura</li>
-                        <li>Joel Jacobs</li>
-                        <li>John Andersen</li>
-                        <li>John F Glenn</li>
-                        <li>John Kelley</li>
-                        <li>John McGovern</li>
-                        <li>Johnny Henson</li>
-                        <li>Jonathan Vaughn</li>
-                        <li>Jordi Pakey-Rodriguez</li>
-                        <li>Joris van Embden</li>
-                        <li>Josh Ricker</li>
-                        <li>Joshua Futterer</li>
-                        <li>Jozef Riha</li>
-                        <li>Julian Forero</li>
-                        <li>Justin Waters</li>
-                        <li>Karl Dunne</li>
-                        <li>Keith Muggleton</li>
-                        <li>Ken Lee</li>
-                        <li>Kenny Hui</li>
-                        <li>Kevin Bajohr</li>
-                        <li>Kevin Schwartz</li>
-                        <li>Krzysztof Żelaśkiewicz</li>
-                        <li>Lars</li>
-                        <li>Lee Wilkinson</li>
-                        <li>LeeNX</li>
-                        <li>Lordbob75</li>
-                        <li>Lothar Schweikle-Droll</li>
-                        <li>Louis Müller</li>
-                        <li>Lucio De Carli</li>
-                        <li>Lukas Söder</li>
-                        <li>Malcolm Cameron</li>
-                        <li>Marcos Wolf</li>
-                        <li>Mark Gilbert</li>
-                        <li>Mark Robinson</li>
-                        <li>Markrosoft</li>
-                        <li>Markus Halm</li>
-                        <li>Markus Schicker</li>
-                        <li>Markus Sobczack</li>
-                        <li>Marten Hermans</li>
-                        <li>Martin Gasser</li>
-                        <li>Mateusz Grabowski</li>
-                        <li>Matthew Cameron</li>
-                        <li>Mauricio Allende</li>
-                        <li>Mehmet Aydoğdu</li>
-                        <li>Michael Kovacs</li>
-                        <li>Michael Lynch</li>
-                        <li>Michael Pennington</li>
-                        <li>Michael Sage</li>
-                        <li>MichaelZ</li>
-                        <li>Michel Bissonnette</li>
-                        <li>Milan Múčka</li>
-                        <li>Miles Davis</li>
-                        <li>Moez Tharani</li>
-                        <li>Morgan Helton</li>
-                        <li>Nelson Lee</li>
-                        <li>Nicholas Jeppson</li>
-                        <li>Nicholas Kopas</li>
-                        <li>Nick Leffler</li>
-                        <li>Nick Roethemeier</li>
-                        <li>Nicolai Kragh-Hansen</li>
-                        <li>Nils Orbat</li>
-                        <li>Nithin Philips</li>
-                        <li>Nod Swal</li>
-                        <li>nubbn</li>
-                        <li>nybble</li>
-                        <li>Oh Be</li>
-                        <li>Oliver Schwarz</li>
-                        <li>Oliver Zimmer</li>
-                        <li>Patrick McDowell</li>
-                        <li>Patrick Wagstrom</li>
-                        <li>Paul Bishop</li>
-                        <li>Pawel Trofimiuk</li>
-                        <li>Peder Madsen</li>
-                        <li>Peter Drayton</li>
-                        <li>Peter Farrelly</li>
-                        <li>Petri Heiskanen</li>
-                        <li>Philip Merricks</li>
-                        <li>posicat</li>
-                        <li>pozitron03</li>
-                        <li>Qteal</li>
-                        <li>Quentin Peten</li>
-                        <li>Ralph Borchers</li>
-                        <li>Ranc1d</li>
-                        <li>Richard Bernarts</li>
-                        <li>Richard Fancher</li>
-                        <li>Richard Freemantle</li>
-                        <li>Richard Michael</li>
-                        <li>Rob Tongue</li>
-                        <li>Robin Gfatter</li>
-                        <li>Rodion DENISYUK</li>
-                        <li>Rohit Priyadarshi</li>
-                        <li>Rolfs 3D UG</li>
-                        <li>Ronald LeBaron</li>
-                        <li>rotx</li>
-                        <li>Russell Scott</li>
-                        <li>Samed Ozoglu</li>
-                        <li>Sameul Davies</li>
-                        <li>Samuel Vetsch</li>
-                        <li>Satish Alwani</li>
-                        <li>Scott</li>
-                        <li>Scott Spicola</li>
-                        <li>Scott Tusing</li>
-                        <li>Sean</li>
-                        <li>Seonwoo Lee</li>
-                        <li>Sergey Lukjanov</li>
-                        <li>Shichun Chen</li>
-                        <li>Simon Evans</li>
-                        <li>Simon Sundgaard</li>
-                        <li>Simplistic Realities</li>
-                        <li>srepac</li>
-                        <li>Stefan Bautz</li>
-                        <li>Stefan Müller</li>
-                        <li>Stefan Stemmer</li>
-                        <li>Stephan Schmidt</li>
-                        <li>Steve Kerr</li>
-                        <li>Steve Ovens</li>
-                        <li>Steven Richter</li>
-                        <li>sudo34</li>
-                        <li>Tarlak Desaydrone</li>
-                        <li>Ted</li>
-                        <li>Tejun Heo</li>
-                        <li>TheTechGiant</li>
-                        <li>Thomas Price</li>
-                        <li>Thomas Søfteland</li>
-                        <li>Tim Wilkinson</li>
-                        <li>Timo Brinkmann</li>
-                        <li>Timothee Besset</li>
-                        <li>Tobias Schafferhans</li>
-                        <li>Tom Lawson</li>
-                        <li>Tom York</li>
-                        <li>Tomas Kuchta</li>
-                        <li>Tomáš hrubý</li>
-                        <li>Tristan Schoening</li>
-                        <li>Truman Kilen</li>
-                        <li>turbochris</li>
-                        <li>Tyler</li>
-                        <li>Udo Schroeter</li>
-                        <li>Uli Fahrer</li>
-                        <li>Vasily Lazarev</li>
-                        <li>Vicente Salvador Cubedo</li>
-                        <li>Viktor Aschenbrenner</li>
-                        <li>Viktor Ekmark</li>
-                        <li>Walter_Ego</li>
-                        <li>William Hooper</li>
-                        <li>William Stearns</li>
-                        <li>Yethal</li>
-                        <li>Yevgeniy Kuksenko</li>
-                        <li>Yigal Dar</li>
-                        <li>Yogi</li>
-                        <li>YURI LEE</li>
-                        <li>Yurii Ostapchuk</li>
-                        <li>zgen</li>
-                        <li>Zsombor Vari</li>
-                      </ul>
-                    </div>
+                </div>
+                <div class="key " data-code="Digit3">
+                  <div class="label">#<br>3
                   </div>
-            </div><br>
-            <p class="text">
-              Full documentation, source code, hardware schematics and legal information
-              can be found in our <a target="_blank" href="https://pikvm.org">official website</a>.
-            </p>
+                </div>
+                <div class="key " data-code="Digit4">
+                  <div class="label">$<br>4
+                  </div>
+                </div>
+                <div class="key " data-code="Digit5">
+                  <div class="label">%<br>5
+                  </div>
+                </div>
+                <div class="key " data-code="Digit6">
+                  <div class="label">^<br>6
+                  </div>
+                </div>
+                <div class="key " data-code="Digit7">
+                  <div class="label">&amp;<br>7
+                  </div>
+                </div>
+                <div class="key " data-code="Digit8">
+                  <div class="label">*<br>8
+                  </div>
+                </div>
+                <div class="key " data-code="Digit9">
+                  <div class="label">(<br>9
+                  </div>
+                </div>
+                <div class="key " data-code="Digit0">
+                  <div class="label">)<br>0
+                  </div>
+                </div>
+                <div class="key " data-code="Minus">
+                  <div class="label">_<br>-
+                  </div>
+                </div>
+                <div class="key " data-code="Equal">
+                  <div class="label">+<br>=
+                  </div>
+                </div>
+                <div class="key wide-2 right" data-code="Backspace">
+                  <div class="label">&#8612;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key wide-2 left" data-code="Tab">
+                  <div class="label">&#8676;<br>&#8677;
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyQ">
+                  <div class="label">Q
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyW">
+                  <div class="label">W
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyE">
+                  <div class="label">E
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyR">
+                  <div class="label">R
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyT">
+                  <div class="label">T
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyY">
+                  <div class="label">Y
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyU">
+                  <div class="label">U
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyI">
+                  <div class="label">I
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyO">
+                  <div class="label">O
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyP">
+                  <div class="label">P
+                  </div>
+                </div>
+                <div class="key " data-code="BracketLeft">
+                  <div class="label">{<br>[
+                  </div>
+                </div>
+                <div class="key " data-code="BracketRight">
+                  <div class="label">}<br>]
+                  </div>
+                </div>
+                <div class="key " data-code="Backslash">
+                  <div class="label">|<br>&bsol;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key wide-3 left small" data-code="CapsLock">
+                  <div class="label"><img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyA">
+                  <div class="label">A
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyS">
+                  <div class="label">S
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyD">
+                  <div class="label">D
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyF">
+                  <div class="label">F
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyG">
+                  <div class="label">G
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyH">
+                  <div class="label">H
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyJ">
+                  <div class="label">J
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyK">
+                  <div class="label">K
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyL">
+                  <div class="label">L
+                  </div>
+                </div>
+                <div class="key " data-code="Semicolon">
+                  <div class="label">:<br>;
+                  </div>
+                </div>
+                <div class="key " data-code="Quote">
+                  <div class="label">"<br>'
+                  </div>
+                </div>
+                <div class="key wide-3 right small" data-code="Enter">
+                  <div class="label">Enter<br>&crarr;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier wide-4 left small" data-code="ShiftLeft">
+                  <div class="label"><b>&bull;</b><br>Shift
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyZ">
+                  <div class="label">Z
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyX">
+                  <div class="label">X
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyC">
+                  <div class="label">C
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyV">
+                  <div class="label">V
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyB">
+                  <div class="label">B
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyN">
+                  <div class="label">N
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyM">
+                  <div class="label">M
+                  </div>
+                </div>
+                <div class="key " data-code="Comma">
+                  <div class="label">&lt;<br>,
+                  </div>
+                </div>
+                <div class="key " data-code="Period">
+                  <div class="label">&gt;<br>.
+                  </div>
+                </div>
+                <div class="key " data-code="Slash">
+                  <div class="label">?<br>/
+                  </div>
+                </div>
+                <div class="modifier wide-4 right small" data-code="ShiftRight">
+                  <div class="label"><b>&bull;</b><br>Shift
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier wide-1 left small" data-code="ControlLeft">
+                  <div class="label"><b>&bull;</b><br>Ctrl
+                  </div>
+                </div>
+                <div class="modifier wide-1 left small" data-code="MetaLeft">
+                  <div class="label"><b>&bull;</b><br>Win
+                  </div>
+                </div>
+                <div class="modifier wide-1 left small" data-code="AltLeft">
+                  <div class="label"><b>&bull;</b><br>Alt
+                  </div>
+                </div>
+                <div class="key wide-5" data-code="Space">
+                  <div class="label">
+                  </div>
+                </div>
+                <div class="modifier wide-1 right small" data-code="AltRight">
+                  <div class="label"><b>&bull;</b><br>Alt
+                  </div>
+                </div>
+                <div class="modifier wide-1 right small" data-code="MetaRight">
+                  <div class="label"><b>&bull;</b><br>Win
+                  </div>
+                </div>
+                <div class="modifier wide-1 right small" data-code="ControlRight">
+                  <div class="label"><b>&bull;</b><br>Ctrl
+                  </div>
+                </div>
           </div>
         </div>
+        <div class="keypad-block">
+          <div class="keypad-row">
+                <div class="modifier small" data-code="PrintScreen">
+                  <div class="label"><b>&bull;</b><br>Pt/Sq
+                  </div>
+                </div>
+                <div class="key small" data-code="ScrollLock">
+                  <div class="label"><img class="inline-lamp hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                  </div>
+                </div>
+                <div class="key small" data-code="Pause">
+                  <div class="label">P/Brk
+                  </div>
+                </div>
+          </div>
+          <hr>
+          <div class="keypad-row">
+                <div class="key small" data-code="Insert">
+                  <div class="label">Ins
+                  </div>
+                </div>
+                <div class="key small" data-code="Home">
+                  <div class="label">Home
+                  </div>
+                </div>
+                <div class="key small" data-code="PageUp">
+                  <div class="label">PgUp
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="Delete">
+                  <div class="label">Del
+                  </div>
+                </div>
+                <div class="key small" data-code="End">
+                  <div class="label">End
+                  </div>
+                </div>
+                <div class="key small" data-code="PageDown">
+                  <div class="label">PgDn
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row"></div>
+          <div class="keypad-row">
+                <div class="empty-key"></div>
+                <div class="key " data-code="ArrowUp">
+                  <div class="label">&uarr;
+                  </div>
+                </div>
+                <div class="empty-key"></div>
+          </div>
+          <div class="keypad-row">
+                <div class="key " data-code="ArrowLeft">
+                  <div class="label">&larr;
+                  </div>
+                </div>
+                <div class="key " data-code="ArrowDown">
+                  <div class="label">&darr;
+                  </div>
+                </div>
+                <div class="key " data-code="ArrowRight">
+                  <div class="label">&rarr;
+                  </div>
+                </div>
+          </div>
+        </div>
+        <div class="keypad-block">
+          <div class="keypad-row">
+                <div class="empty-key"></div>
+                <div class="empty-key"></div>
+                <div class="key small" data-code="IntlBackslash">
+                  <div class="label">N/US
+                  </div>
+                </div>
+                <div class="key small" data-code="Power">
+                  <div class="label">PWR
+                  </div>
+                </div>
+          </div>
+          <hr>
+          <div class="keypad-row">
+                <div class="key small" data-code="NumLock">
+                  <div class="label"><img class="inline-lamp hid-keyboard-num-led led-gray" src="/share/svg/led-square.svg"><br> NmLk
+                  </div>
+                </div>
+                <div class="key " data-code="NumpadDivide">
+                  <div class="label">/
+                  </div>
+                </div>
+                <div class="key " data-code="NumpadMultiply">
+                  <div class="label">*
+                  </div>
+                </div>
+                <div class="key " data-code="NumpadSubtract">
+                  <div class="label">-
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="Numpad7">
+                  <div class="label">7<br>Home
+                  </div>
+                </div>
+                <div class="key small" data-code="Numpad8">
+                  <div class="label">8<br>&uarr;
+                  </div>
+                </div>
+                <div class="key small" data-code="Numpad9">
+                  <div class="label">9<br>PgUp
+                  </div>
+                </div>
+                <div class="empty-key"></div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="Numpad4">
+                  <div class="label">4<br>&larr;
+                  </div>
+                </div>
+                <div class="key small" data-code="Numpad5">
+                  <div class="label">5<br><br>
+                  </div>
+                </div>
+                <div class="key small" data-code="Numpad6">
+                  <div class="label">6<br>&rarr;
+                  </div>
+                </div>
+                <div class="key " data-code="NumpadAdd">
+                  <div class="label">+
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="Numpad1">
+                  <div class="label">1<br>End
+                  </div>
+                </div>
+                <div class="key small" data-code="Numpad2">
+                  <div class="label">2<br>&darr;
+                  </div>
+                </div>
+                <div class="key small" data-code="Numpad3">
+                  <div class="label">3<br>PgDn
+                  </div>
+                </div>
+                <div class="empty-key"></div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="Numpad0">
+                  <div class="label">0<br>Ins
+                  </div>
+                </div>
+                <div class="empty-key"></div>
+                <div class="key small" data-code="NumpadDecimal">
+                  <div class="label">.<br>Del
+                  </div>
+                </div>
+                <div class="key small" data-code="NumpadEnter">
+                  <div class="label">Ent
+                  </div>
+                </div>
+          </div>
+        </div>
+      </div>
+      <div class="keypad" id="keyboard-mobile" align="center">
+        <div class="keypad-block">
+          <div class="keypad-row">
+                <div class="key margin-0 small" data-code="Escape">
+                  <div class="label">Esc
+                  </div>
+                </div>
+                <div class="empty-key" style="width:1px"></div>
+                <div class="key wide-0 margin-0 small" data-code="F1">
+                  <div class="label">F1
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F2">
+                  <div class="label">F2
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F3">
+                  <div class="label">F3
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F4">
+                  <div class="label">F4
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F5">
+                  <div class="label">F5
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F6">
+                  <div class="label">F6
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F7">
+                  <div class="label">F7
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F8">
+                  <div class="label">F8
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F9">
+                  <div class="label">F9
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F10">
+                  <div class="label">F10
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F11">
+                  <div class="label">F11
+                  </div>
+                </div>
+                <div class="key wide-0 margin-0 small" data-code="F12">
+                  <div class="label">F12
+                  </div>
+                </div>
+                <div class="empty-key" style="width:2px"></div>
+                <div class="modifier margin-0 small" data-code="PrintScreen">
+                  <div class="label"><b>&bull;</b><br>Pt/Sq
+                  </div>
+                </div>
+                <div class="key margin-0 small" data-code="ScrollLock">
+                  <div class="label"><img class="inline-lamp hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                  </div>
+                </div>
+                <div class="key margin-0 small" data-code="Pause">
+                  <div class="label">P/Brk
+                  </div>
+                </div>
+                <div class="key margin-0 small" data-code="Insert">
+                  <div class="label">Ins
+                  </div>
+                </div>
+                <div class="key margin-0 small" data-code="Home">
+                  <div class="label">Home
+                  </div>
+                </div>
+                <div class="key margin-0 small" data-code="End">
+                  <div class="label">End
+                  </div>
+                </div>
+                <div class="key margin-0 small" data-code="Delete">
+                  <div class="label">Del
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key " data-code="Backquote">
+                  <div class="label">~<br>`
+                  </div>
+                </div>
+                <div class="key " data-code="Digit1">
+                  <div class="label">!<br>1
+                  </div>
+                </div>
+                <div class="key " data-code="Digit2">
+                  <div class="label">@<br>2
+                  </div>
+                </div>
+                <div class="key " data-code="Digit3">
+                  <div class="label">#<br>3
+                  </div>
+                </div>
+                <div class="key " data-code="Digit4">
+                  <div class="label">$<br>4
+                  </div>
+                </div>
+                <div class="key " data-code="Digit5">
+                  <div class="label">%<br>5
+                  </div>
+                </div>
+                <div class="key " data-code="Digit6">
+                  <div class="label">^<br>6
+                  </div>
+                </div>
+                <div class="key " data-code="Digit7">
+                  <div class="label">&amp;<br>7
+                  </div>
+                </div>
+                <div class="key " data-code="Digit8">
+                  <div class="label">*<br>8
+                  </div>
+                </div>
+                <div class="key " data-code="Digit9">
+                  <div class="label">(<br>9
+                  </div>
+                </div>
+                <div class="key " data-code="Digit0">
+                  <div class="label">)<br>0
+                  </div>
+                </div>
+                <div class="key " data-code="Minus">
+                  <div class="label">_<br>-
+                  </div>
+                </div>
+                <div class="key " data-code="Equal">
+                  <div class="label">+<br>=
+                  </div>
+                </div>
+                <div class="key wide-3 right" data-code="Backspace" style="width:101px">
+                  <div class="label">&#8612;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key wide-2 left" data-code="Tab">
+                  <div class="label">&#8676;<br>&#8677;
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyQ">
+                  <div class="label">Q
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyW">
+                  <div class="label">W
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyE">
+                  <div class="label">E
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyR">
+                  <div class="label">R
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyT">
+                  <div class="label">T
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyY">
+                  <div class="label">Y
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyU">
+                  <div class="label">U
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyI">
+                  <div class="label">I
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyO">
+                  <div class="label">O
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyP">
+                  <div class="label">P
+                  </div>
+                </div>
+                <div class="key " data-code="BracketLeft">
+                  <div class="label">{<br>[
+                  </div>
+                </div>
+                <div class="key " data-code="BracketRight">
+                  <div class="label">}<br>]
+                  </div>
+                </div>
+                <div class="key wide-2 left" data-code="Backslash" style="width:78px">
+                  <div class="label">|<br>&bsol;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key wide-3 left small" data-code="CapsLock">
+                  <div class="label"><img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyA">
+                  <div class="label">A
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyS">
+                  <div class="label">S
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyD">
+                  <div class="label">D
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyF">
+                  <div class="label">F
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyG">
+                  <div class="label">G
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyH">
+                  <div class="label">H
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyJ">
+                  <div class="label">J
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyK">
+                  <div class="label">K
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyL">
+                  <div class="label">L
+                  </div>
+                </div>
+                <div class="key " data-code="Semicolon">
+                  <div class="label">:<br>;
+                  </div>
+                </div>
+                <div class="key " data-code="Quote">
+                  <div class="label">`<br>'
+                  </div>
+                </div>
+                <div class="key wide-4 right small" data-code="Enter" style="width:116px">
+                  <div class="label">Enter<br>&crarr;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier wide-4 left small" data-code="ShiftLeft">
+                  <div class="label"><b>&bull;</b><br>Shift
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyZ">
+                  <div class="label">Z
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyX">
+                  <div class="label">X
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyC">
+                  <div class="label">C
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyV">
+                  <div class="label">V
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyB">
+                  <div class="label">B
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyN">
+                  <div class="label">N
+                  </div>
+                </div>
+                <div class="key single" data-code="KeyM">
+                  <div class="label">M
+                  </div>
+                </div>
+                <div class="key " data-code="Comma">
+                  <div class="label">lt;<br>,
+                  </div>
+                </div>
+                <div class="key " data-code="Period">
+                  <div class="label">&gt;<br>.
+                  </div>
+                </div>
+                <div class="key " data-code="Slash">
+                  <div class="label">?<br>/
+                  </div>
+                </div>
+                <div class="key small" data-code="PageUp">
+                  <div class="label">PgUp
+                  </div>
+                </div>
+                <div class="key " data-code="ArrowUp">
+                  <div class="label">&uarr;
+                  </div>
+                </div>
+                <div class="key small" data-code="PageDown">
+                  <div class="label">PgDn
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier wide-1 left small" data-code="ControlLeft">
+                  <div class="label"><b>&bull;</b><br>Ctrl
+                  </div>
+                </div>
+                <div class="modifier wide-1 left small" data-code="MetaLeft">
+                  <div class="label"><b>&bull;</b><br>Win
+                  </div>
+                </div>
+                <div class="modifier wide-1 left small" data-code="AltLeft">
+                  <div class="label"><b>&bull;</b><br>Alt
+                  </div>
+                </div>
+                <div class="key " data-code="Space" style="width:190px">
+                  <div class="label">
+                  </div>
+                </div>
+                <div class="modifier right small" data-code="AltRight">
+                  <div class="label"><b>&bull;</b><br>Alt
+                  </div>
+                </div>
+                <div class="modifier right small" data-code="MetaRight">
+                  <div class="label"><b>&bull;</b><br>Win
+                  </div>
+                </div>
+                <div class="modifier right small" data-code="ShiftRight">
+                  <div class="label"><b>&bull;</b><br>Shift
+                  </div>
+                </div>
+                <div class="modifier right small" data-code="ControlRight">
+                  <div class="label"><b>&bull;</b><br>Ctrl
+                  </div>
+                </div>
+                <div class="key " data-code="ArrowLeft">
+                  <div class="label">&larr;
+                  </div>
+                </div>
+                <div class="key " data-code="ArrowDown">
+                  <div class="label">&darr;
+                  </div>
+                </div>
+                <div class="key " data-code="ArrowRight">
+                  <div class="label">&rarr;
+                  </div>
+                </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="window" id="about-window">
+      <div class="window-header">
+        <div class="window-grab">About</div>
+        <button class="window-button-close">&times;</button>
+      </div>
+      <div id="about">
+        <table>
+          <tr>
+            <td class="logo" valign="top"><img class="svg-gray" src="../share/svg/logo.svg" alt="Pi-KVM" height="40"></td>
+            <td valign="top">
+              <table>
+                <tr>
+                  <td class="title" colspan="2">The Open Source IP-KVM</td>
+                </tr>
+                <tr>
+                  <td class="copyright" colspan="2">Copyright &copy; 2018-2021 <a target="_blank" href="mailto:mdevaev@gmail.com">Maxim Devaev</a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table><br>
+        <div class="tabs-box">
+              <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
+              <label for="about-tab-meta-button">Meta</label>
+              <div class="tab">
+                <div class="code" id="about-meta"><span class="code-comment">No data</span>
+                </div>
+              </div>
+              <input type="radio" name="about-tab-button" id="about-tab-hw-button">
+              <label for="about-tab-hw-button">Hardware</label>
+              <div class="tab">
+                <div class="code" id="about-hw"><span class="code-comment">No data</span>
+                </div>
+              </div>
+              <input type="radio" name="about-tab-button" id="about-tab-version-button">
+              <label for="about-tab-version-button">Version</label>
+              <div class="tab">
+                <div class="code" id="about-version"><span class="code-comment">No data</span>
+                </div>
+              </div>
+              <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
+              <label for="about-tab-thanks-button">Thanks</label>
+              <div class="tab">
+                <div class="code" id="about-thanks"><span class="code-comment">// These kind people donated money to the Pi-KVM project<br>
+                    // and supported the work on it. We are very grateful<br>
+                    // for their help, and memorializing their names<br>
+                    // is the least we can do in gratitude.<br>
+                    // If you also want to support this project,<br>
+                    // you can use one of these services:
+                    <a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
+                    or <a target="_blank" href="https://www.paypal.me/mdevaev">PayPal</a>.</span>
+                  <ul>
+                    <li>A. Isenring</li>
+                    <li>Aaron Heise</li>
+                    <li>Accalia</li>
+                    <li>adipisicing</li>
+                    <li>Adrian Basham</li>
+                    <li>Alberto Bassi</li>
+                    <li>Aleksei Brusianskii</li>
+                    <li>Alessio Curri</li>
+                    <li>Alexandre Jablonski</li>
+                    <li>Alucard</li>
+                    <li>Andreas Marufke</li>
+                    <li>Andrew Reusch</li>
+                    <li>Andrew Ruan</li>
+                    <li>Andrzej V</li>
+                    <li>Anish Patel</li>
+                    <li>Anix</li>
+                    <li>anonymous</li>
+                    <li>Anton Kovalenko</li>
+                    <li>Aron Green</li>
+                    <li>Aron Perelman</li>
+                    <li>Arthur Woimbée</li>
+                    <li>Ashlesh Chaudhari</li>
+                    <li>Augusto Becciu</li>
+                    <li>AVS Computer</li>
+                    <li>baddog</li>
+                    <li>Bao Tin Hoang</li>
+                    <li>Belf Igor</li>
+                    <li>Ben Gordon</li>
+                    <li>Ben Scott</li>
+                    <li>Benedikt Heine</li>
+                    <li>Benjamin Melancon</li>
+                    <li>Benni Stauder</li>
+                    <li>Bernhard Fitzke</li>
+                    <li>bitjoe</li>
+                    <li>Bits and Bytes Computers LLC</li>
+                    <li>Blue Frog LLC</li>
+                    <li>Bootstrapper - Programmierung erklärt</li>
+                    <li>Bosco</li>
+                    <li>Bradford King</li>
+                    <li>Brainspore Networks</li>
+                    <li>Branden Shaulis</li>
+                    <li>Brian Moses</li>
+                    <li>Brian Vecchiarelli</li>
+                    <li>Brian White</li>
+                    <li>Bruno Gomes</li>
+                    <li>Bryan Adams</li>
+                    <li>C P ELSE</li>
+                    <li>Cameron Tacklind</li>
+                    <li>Carl Mercier</li>
+                    <li>Carl-Fredrik Johansson</li>
+                    <li>cbad536</li>
+                    <li>Chris Burton</li>
+                    <li>Chris Lewis</li>
+                    <li>Chris Rizio</li>
+                    <li>Christian Schlögl</li>
+                    <li>Christian Svensson</li>
+                    <li>Christof Maluck</li>
+                    <li>Christoph Dette</li>
+                    <li>Christoffer Lund</li>
+                    <li>Christopher Mandlbaur</li>
+                    <li>Chucktastic</li>
+                    <li>Clifford Coleman</li>
+                    <li>Clinton Lee Taylor</li>
+                    <li>Cole Imhoff</li>
+                    <li>Corey Layton</li>
+                    <li>Corey Lista</li>
+                    <li>Crossfactor</li>
+                    <li>ctag</li>
+                    <li>CyB0rgg</li>
+                    <li>DeMentor</li>
+                    <li>Desmond Whitt</li>
+                    <li>Damon Meledones</li>
+                    <li>Dan Berkowitz</li>
+                    <li>Dan Brakeley</li>
+                    <li>David</li>
+                    <li>David Godibadze</li>
+                    <li>David Howell</li>
+                    <li>David Ye</li>
+                    <li>David York</li>
+                    <li>Denis</li>
+                    <li>Denis Andreev</li>
+                    <li>Denis Yatsenko</li>
+                    <li>Dennis Becker</li>
+                    <li>Derek Yap</li>
+                    <li>Didrik</li>
+                    <li>dixon wong</li>
+                    <li>dizztrukshin</li>
+                    <li>Dmitry Shilov</li>
+                    <li>Egan Ford</li>
+                    <li>Elliot Woo</li>
+                    <li>Eric Phenix</li>
+                    <li>ewook</li>
+                    <li>eye-catcher.com</li>
+                    <li>Fabiano Sidler</li>
+                    <li>Far Pin Solutions, LLC</li>
+                    <li>Felyx Gabryel</li>
+                    <li>Fergus McKay</li>
+                    <li>fo0bar</li>
+                    <li>Foamy</li>
+                    <li>Francisco Pavon</li>
+                    <li>Frank</li>
+                    <li>Frederick Czajka</li>
+                    <li>Fredrik Idréus</li>
+                    <li>Ge Men</li>
+                    <li>Genkinger Andreas</li>
+                    <li>Georgy Brodsky</li>
+                    <li>Gernot Neuschröer</li>
+                    <li>Glen Dragon</li>
+                    <li>Gregory Smith</li>
+                    <li>Gregory Treantos</li>
+                    <li>Grey Cynic</li>
+                    <li>Guido Bernacchi</li>
+                    <li>Gustin Johnson</li>
+                    <li>Heikki Tiittanen</li>
+                    <li>Helio Leonardo Pinheiro e Mota</li>
+                    <li>Henrik Ählström</li>
+                    <li>Henry Hood</li>
+                    <li>HimKo</li>
+                    <li>HouseFPV</li>
+                    <li>Icculus</li>
+                    <li>iks</li>
+                    <li>IT Lifesaver</li>
+                    <li>Ivan Shapovalov</li>
+                    <li>J L</li>
+                    <li>Jaanus</li>
+                    <li>Jackson Wyatt</li>
+                    <li>Jacob Morgan</li>
+                    <li>James Cadd</li>
+                    <li>James Cobb</li>
+                    <li>James Edwards</li>
+                    <li>James Kocher</li>
+                    <li>James Mayhugh</li>
+                    <li>Jamie Murphy</li>
+                    <li>Jan Niehusmann</li>
+                    <li>Jari Hiltunen</li>
+                    <li>Jason Downey</li>
+                    <li>Jason Toland</li>
+                    <li>Jay Davis</li>
+                    <li>Jay Isaacs</li>
+                    <li>Jean-Philippe Guilbault</li>
+                    <li>Jeff Bowman</li>
+                    <li>Jeff Urlwin</li>
+                    <li>Jennifer Rowlett</li>
+                    <li>Jerremy Holland</li>
+                    <li>Joachim Bruening</li>
+                    <li>Joe Ventura</li>
+                    <li>Joel Jacobs</li>
+                    <li>John Andersen</li>
+                    <li>John F Glenn</li>
+                    <li>John Kelley</li>
+                    <li>John McGovern</li>
+                    <li>Johnny Henson</li>
+                    <li>Jonathan Vaughn</li>
+                    <li>Jordi Pakey-Rodriguez</li>
+                    <li>Joris van Embden</li>
+                    <li>Josh Ricker</li>
+                    <li>Joshua Futterer</li>
+                    <li>Jozef Riha</li>
+                    <li>Julian Forero</li>
+                    <li>Justin Waters</li>
+                    <li>Karl Dunne</li>
+                    <li>Keith Muggleton</li>
+                    <li>Ken Lee</li>
+                    <li>Kenny Hui</li>
+                    <li>Kevin Bajohr</li>
+                    <li>Kevin Schwartz</li>
+                    <li>Krzysztof Żelaśkiewicz</li>
+                    <li>Lars</li>
+                    <li>Lee Wilkinson</li>
+                    <li>LeeNX</li>
+                    <li>Lordbob75</li>
+                    <li>Lothar Schweikle-Droll</li>
+                    <li>Louis Müller</li>
+                    <li>Lucio De Carli</li>
+                    <li>Lukas Söder</li>
+                    <li>Malcolm Cameron</li>
+                    <li>Marcos Wolf</li>
+                    <li>Mark Gilbert</li>
+                    <li>Mark Robinson</li>
+                    <li>Markrosoft</li>
+                    <li>Markus Halm</li>
+                    <li>Markus Schicker</li>
+                    <li>Markus Sobczack</li>
+                    <li>Marten Hermans</li>
+                    <li>Martin Gasser</li>
+                    <li>Mateusz Grabowski</li>
+                    <li>Matthew Cameron</li>
+                    <li>Mauricio Allende</li>
+                    <li>Mehmet Aydoğdu</li>
+                    <li>Michael Kovacs</li>
+                    <li>Michael Lynch</li>
+                    <li>Michael Pennington</li>
+                    <li>Michael Sage</li>
+                    <li>MichaelZ</li>
+                    <li>Michel Bissonnette</li>
+                    <li>Milan Múčka</li>
+                    <li>Miles Davis</li>
+                    <li>Moez Tharani</li>
+                    <li>Morgan Helton</li>
+                    <li>Nelson Lee</li>
+                    <li>Nicholas Jeppson</li>
+                    <li>Nicholas Kopas</li>
+                    <li>Nick Leffler</li>
+                    <li>Nick Roethemeier</li>
+                    <li>Nicolai Kragh-Hansen</li>
+                    <li>Nils Orbat</li>
+                    <li>Nithin Philips</li>
+                    <li>Nod Swal</li>
+                    <li>nubbn</li>
+                    <li>nybble</li>
+                    <li>Oh Be</li>
+                    <li>Oliver Schwarz</li>
+                    <li>Oliver Zimmer</li>
+                    <li>Patrick McDowell</li>
+                    <li>Patrick Wagstrom</li>
+                    <li>Paul Bishop</li>
+                    <li>Pawel Trofimiuk</li>
+                    <li>Peder Madsen</li>
+                    <li>Peter Drayton</li>
+                    <li>Peter Farrelly</li>
+                    <li>Petri Heiskanen</li>
+                    <li>Philip Merricks</li>
+                    <li>posicat</li>
+                    <li>pozitron03</li>
+                    <li>Qteal</li>
+                    <li>Quentin Peten</li>
+                    <li>Ralph Borchers</li>
+                    <li>Ranc1d</li>
+                    <li>Richard Bernarts</li>
+                    <li>Richard Fancher</li>
+                    <li>Richard Freemantle</li>
+                    <li>Richard Michael</li>
+                    <li>Rob Tongue</li>
+                    <li>Robin Gfatter</li>
+                    <li>Rodion DENISYUK</li>
+                    <li>Rohit Priyadarshi</li>
+                    <li>Rolfs 3D UG</li>
+                    <li>Ronald LeBaron</li>
+                    <li>rotx</li>
+                    <li>Russell Scott</li>
+                    <li>Samed Ozoglu</li>
+                    <li>Sameul Davies</li>
+                    <li>Samuel Vetsch</li>
+                    <li>Satish Alwani</li>
+                    <li>Scott</li>
+                    <li>Scott Spicola</li>
+                    <li>Scott Tusing</li>
+                    <li>Sean</li>
+                    <li>Seonwoo Lee</li>
+                    <li>Sergey Lukjanov</li>
+                    <li>Shichun Chen</li>
+                    <li>Simon Evans</li>
+                    <li>Simon Sundgaard</li>
+                    <li>Simplistic Realities</li>
+                    <li>srepac</li>
+                    <li>Stefan Bautz</li>
+                    <li>Stefan Müller</li>
+                    <li>Stefan Stemmer</li>
+                    <li>Stephan Schmidt</li>
+                    <li>Steve Kerr</li>
+                    <li>Steve Ovens</li>
+                    <li>Steven Richter</li>
+                    <li>sudo34</li>
+                    <li>Tarlak Desaydrone</li>
+                    <li>Ted</li>
+                    <li>Tejun Heo</li>
+                    <li>TheTechGiant</li>
+                    <li>Thomas Price</li>
+                    <li>Thomas Søfteland</li>
+                    <li>Tim Wilkinson</li>
+                    <li>Timo Brinkmann</li>
+                    <li>Timothee Besset</li>
+                    <li>Tobias Schafferhans</li>
+                    <li>Tom Lawson</li>
+                    <li>Tom York</li>
+                    <li>Tomas Kuchta</li>
+                    <li>Tomáš hrubý</li>
+                    <li>Tristan Schoening</li>
+                    <li>Truman Kilen</li>
+                    <li>turbochris</li>
+                    <li>Tyler</li>
+                    <li>Udo Schroeter</li>
+                    <li>Uli Fahrer</li>
+                    <li>Vasily Lazarev</li>
+                    <li>Vicente Salvador Cubedo</li>
+                    <li>Viktor Aschenbrenner</li>
+                    <li>Viktor Ekmark</li>
+                    <li>Walter_Ego</li>
+                    <li>William Hooper</li>
+                    <li>William Stearns</li>
+                    <li>Yethal</li>
+                    <li>Yevgeniy Kuksenko</li>
+                    <li>Yigal Dar</li>
+                    <li>Yogi</li>
+                    <li>YURI LEE</li>
+                    <li>Yurii Ostapchuk</li>
+                    <li>zgen</li>
+                    <li>Zsombor Vari</li>
+                  </ul>
+                </div>
+              </div>
+        </div><br>
+        <p class="text">
+          Full documentation, source code, hardware schematics and legal information
+          can be found in our <a target="_blank" href="https://pikvm.org">official website</a>.
+        </p>
+      </div>
+    </div>
     <ul class="footer">
       <li class="footer-left" id="kvmd-meta-server-host"></li>
       <li class="footer-right"><a target="_blank" href="https://pikvm.org">Pi-KVM Project</a></li>

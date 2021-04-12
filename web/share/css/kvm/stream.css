@@ -20,11 +20,19 @@
 *****************************************************************************/
 
 
+div#stream-window {
+	min-width: 400px;
+	min-height: 200px;
+}
+
 div#stream-info {
 	display: none;
 }
 
 div#stream-box {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
 	position: relative;
 	display: inline-block;
 	border: var(--border-window-thin);
@@ -45,8 +53,9 @@ div.stream-box-mouse-enabled {
 }
 
 img#stream-image {
-	width: 640px;
-	height: 480px;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
 	display: block;
 	background-color: black;
 }
@@ -69,9 +78,12 @@ div#stream-mouse-buttons {
 	div#stream-window {
 		padding-top: 3px !important;
 		border-top: 0 !important;
-		border-radius: 0 0 8px 8px !important;
+		border-left: 0 !important;
+		border-right: 0 !important;
+		border-radius: 0 !important;
 		top: 50px !important;
 		left: 50% !important;
+		width: 100% !important;
 		-webkit-transform: translateX(-50%) !important;
 		transform: translateX(-50%) !important;
 	}

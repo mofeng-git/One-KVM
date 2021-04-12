@@ -47,7 +47,7 @@ export function Session() {
 	var __hid = new Hid();
 	var __atx = new Atx();
 	var __msd = new Msd();
-	var __streamer = new Streamer();
+	var __streamer = new Streamer(__hid);
 	var __wol = new WakeOnLan();
 	var __gpio = new Gpio();
 

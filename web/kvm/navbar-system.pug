@@ -22,12 +22,6 @@ li(class="right")
 				td Max FPS:
 				td #[input(disabled type="range" id="stream-desired-fps-slider" class="slider")]
 				td(id="stream-desired-fps-value" class="value") 0
-			tr
-				td Stream size:
-				td #[input(type="range" id="stream-size-slider" class="slider")]
-				td(id="stream-size-value" class="value" style="width: 4em") 100%
-		hr
-		+menu_switch("stream-auto-resize-switch", "Auto-resize stream window", true, true)
 		hr
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu id="show-stream-button" class="row33") &bull; Show stream
