@@ -210,16 +210,14 @@ export function Mouse(record_callback) {
 		if (__absolute) {
 			let pos = __current_pos;
 			if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
-				let geometry = $("stream-box").stream_geometry;
-				if (geometry) {
-					let to = {
-						x: __translate(pos.x, geometry.x, geometry.width, -32768, 32767),
-						y: __translate(pos.y, geometry.y, geometry.height, -32768, 32767),
-					};
-					tools.debug("Mouse: moved:", to);
-					__sendEvent("mouse_move", {"to": to});
-					__sent_pos = pos;
-				}
+				let geo = __getVideoGeometry();
+				let to = {
+					"x": __translatePosition(pos.x, geo.x, geo.width, -32768, 32767),
+					"y": __translatePosition(pos.y, geo.y, geo.height, -32768, 32767),
+				};
+				tools.debug("Mouse: moved:", to);
+				__sendEvent("mouse_move", {"to": to});
+				__sent_pos = pos;
 			}
 		} else if (__relative_deltas.length) {
 			tools.debug("Mouse: relative:", __relative_deltas);
@@ -228,7 +226,31 @@ export function Mouse(record_callback) {
 		}
 	};
 
-	var __translate = function(x, a, b, c, d) {
+	var __getVideoGeometry = function() {
+		// Первоначально обновление геометрии считалось через ResizeObserver.
+		// Но оно не ловило некоторые события, например в последовательности:
+		//   - Находять в HD переходим в фулскрин
+		//   - Меняем разрешение на маленькое
+		//   - Убираем фулскрин
+		//   - Переходим в HD
+		//   - Видим нарушение пропорций
+		// Так что теперь используются быстре рассчеты через offset*
+		// вместо getBoundingClientRect().
+		let el_image = $("stream-image");
+		let real_width = el_image.naturalWidth;
+		let real_height = el_image.naturalHeight;
+		let view_width = el_image.offsetWidth;
+		let view_height = el_image.offsetHeight;
+		let ratio = Math.min(view_width / real_width, view_height / real_height);
+		return {
+			"x": Math.round((view_width - ratio * real_width) / 2),
+			"y": Math.round((view_height - ratio * real_height) / 2),
+			"width": Math.round(ratio * real_width),
+			"height": Math.round(ratio * real_height),
+		};
+	};
+
+	var __translatePosition = function(x, a, b, c, d) {
 		let translated = Math.round((x - a) / b * (d - c) + c);
 		if (translated < c) {
 			return c;

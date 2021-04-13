@@ -76,9 +76,6 @@ function __WindowManager() {
 					if (el_window.hasAttribute("data-centered")) {
 						__centerWindow(el_window);
 					}
-					if (el_window.resize_hook) {
-						el_window.resize_hook();
-					}
 				}).observe(el_window);
 			}
 

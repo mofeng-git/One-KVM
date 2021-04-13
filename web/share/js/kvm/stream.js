@@ -59,7 +59,6 @@ export function Streamer() {
 				self.setState(__state_for_invisible);
 			}
 		};
-		$("stream-window").resize_hook = __resizeHook;
 	};
 
 	/************************************************************************/
@@ -83,11 +82,6 @@ export function Streamer() {
 		}
 
 		if (state && state.streamer) {
-			if (!window.ResizeObserver) {
-				// Browsers that don't support this API(on lower versions of iOS for example)
-				__resizeHook();
-			}
-
 			if (!$("stream-quality-slider").activated) {
 				wm.setElementEnabled($("stream-quality-slider"), true);
 				if ($("stream-quality-slider").value !== state.streamer.encoder.quality) {
@@ -253,19 +247,6 @@ export function Streamer() {
 				}
 			}
 		});
-	};
-
-	var __resizeHook = function() {
-		let rect = $("stream-image").getBoundingClientRect();
-		let width = $("stream-image").naturalWidth;
-		let height = $("stream-image").naturalHeight;
-		let ratio = Math.min(rect.width / width, rect.height / height);
-		$("stream-box").stream_geometry = {
-			"x": Math.round((rect.width - ratio * width) / 2),
-			"y": Math.round((rect.height - ratio * height) / 2),
-			"width": Math.round(ratio * width),
-			"height": Math.round(ratio * height),
-		};
 	};
 
 	var __makeStringResolution = function(resolution) {
