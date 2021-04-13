@@ -75,7 +75,9 @@ function __WindowManager() {
 					let view = self.getViewGeometry();
 					let rect = el_window.getBoundingClientRect();
 					if ((rect.bottom - rect.top) > (view.bottom - view.top)) {
+						let ratio = (rect.bottom - rect.top) / (view.bottom - view.top);
 						el_window.style.height = view.bottom - view.top + "px";
+						el_window.style.width = Math.round((rect.right - rect.left) / ratio) + "px";
 					}
 
 					if (el_window.hasAttribute("data-centered")) {
@@ -377,7 +379,9 @@ function __WindowManager() {
 		if (el_window.classList.contains("window-resizable")) {
 			// При переполнении рабочей области сократить размер окна
 			if ((rect.bottom - rect.top) > (view.bottom - view.top)) {
+				let ratio = (rect.bottom - rect.top) / (view.bottom - view.top);
 				el_window.style.height = view.bottom - view.top + "px";
+				el_window.style.width = Math.round((rect.right - rect.left) / ratio) + "px";
 			}
 			if ((rect.right - rect.left) > (view.right - view.left)) {
 				el_window.style.width = view.right - view.left + "px";
