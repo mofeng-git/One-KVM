@@ -6,18 +6,19 @@ append vars
 	- css_list = css_list.concat(["window", "modal", "login/login"])
 
 block body
-	div(id="login-box")
-		div(id="login")
-			table
-				tr
-					td Username:
-					td #[input(type="text" id="user-input")]
-				tr
-					td Password:
-					td #[input(type="password" id="passwd-input")]
-				tr
-					td
-					td #[button(id="login-button" class="key") Login]
+	form(action="javascript:void(0)")
+		div(id="login-box")
+			div(id="login")
+				table
+					tr
+						td Username:
+						td #[input(type="text" id="user-input")]
+					tr
+						td Password:
+						td #[input(type="password" id="passwd-input")]
+					tr
+						td
+						td #[button(id="login-button" class="key") Login]
 
 	ul(class="footer")
 		li(class="footer-left")
