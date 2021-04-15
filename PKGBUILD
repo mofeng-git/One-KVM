@@ -41,7 +41,7 @@ depends=(
 	"python-pikvm>=3.9"
 	"python-pikvm<3.10"
 	python-yaml
-	python-aiohttp
+	python-aiohttp-pikvm
 	python-aiofiles
 	python-passlib
 	python-pyserial
