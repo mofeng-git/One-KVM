@@ -38,10 +38,10 @@ url="https://github.com/pikvm/kvmd"
 license=(GPL)
 arch=(any)
 depends=(
-	"python-pikvm>=3.9"
-	"python-pikvm<3.10"
+	"python>=3.9"
+	"python<3.10"
 	python-yaml
-	python-aiohttp-pikvm
+	python-aiohttp
 	python-aiofiles
 	python-passlib
 	python-pyserial
@@ -76,6 +76,10 @@ depends=(
 	# Avoid dhcpcd stack trace
 	dhclient
 	netctl
+)
+conflicts=(
+	python-pikvm
+	python-aiohttp-pikvm
 )
 makedepends=(python-setuptools)
 source=("$url/archive/v$pkgver.tar.gz")
