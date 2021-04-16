@@ -195,6 +195,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             ],
         ]
 
+        self.__hid_api = HidApi(hid, keymap_path, mouse_x_range, mouse_y_range)  # Ugly hack to get keymaps state
         self.__apis: List[object] = [
             self,
             AuthApi(auth_manager),
@@ -202,7 +203,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             LogApi(log_reader),
             WolApi(wol),
             UserGpioApi(user_gpio),
-            HidApi(hid, keymap_path, mouse_x_range, mouse_y_range),
+            self.__hid_api,
             AtxApi(atx),
             MsdApi(msd, sync_chunk_size),
             StreamerApi(streamer),
@@ -263,6 +264,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         await self.__register_ws_client(client)
         try:
             await self.__send_event(client.ws, "gpio_model_state", await self.__user_gpio.get_model())
+            await self.__send_event(client.ws, "hid_keymaps_state", self.__hid_api.get_keymaps())
             await asyncio.gather(*[
                 self.__send_event(client.ws, component.event_type, await component.get_state())
                 for component in self.__components

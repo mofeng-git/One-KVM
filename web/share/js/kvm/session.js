@@ -221,6 +221,7 @@ export function Session() {
 			case "wol_state": __wol.setState(data.event); break;
 			case "gpio_model_state": __gpio.setModel(data.event); break;
 			case "gpio_state": __gpio.setState(data.event); break;
+			case "hid_keymaps_state": __hid.setKeymaps(data.event); break;
 			case "hid_state": __hid.setState(data.event); break;
 			case "atx_state": __atx.setState(data.event); break;
 			case "msd_state": __msd.setState(data.event); break;

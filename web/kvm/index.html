@@ -415,25 +415,58 @@
       </li>
       <li class="right"><a class="menu-button" href="#">Shortcuts</a>
         <div class="menu" data-dont-hide-menu>
+          <div class="text"><b>Paste text as keypress sequence<br></b></div>
+          <hr>
+          <div class="text" style="margin-right: 20px">
+            <textarea id="hid-pak-text" placeholder="Enter your text here"></textarea>
+          </div>
+          <hr>
+          <table class="kv">
+            <tr>
+              <td>
+                <button disabled data-force-hide-menu id="hid-pak-button">&bull; Paste</button>
+              </td>
+              <td>using host keymap</td>
+              <td>
+                <select id="hid-pak-keymap-selector"></select>
+              </td>
+            </tr>
+          </table>
+          <hr>
+              <table class="kv">
+                <td>Ask paste confirmation:</td>
+                <td align="right">
+                  <div class="switch-box">
+                    <input checked type="checkbox" id="hid-pak-ask-switch">
+                    <label for="hid-pak-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                  </div>
+                </td>
+              </table>
+          <hr>
+          <div class="text"></div>
+          <hr>
           <div class="buttons">
-            <textarea id="hid-pak-text" placeholder="Paste your text here"></textarea>
-            <hr>
-            <button disabled data-force-hide-menu id="hid-pak-button">&bull; &#x21b3; Paste-as-Keys <sup><i>ascii-only</i></sup></button>
-            <hr>
             <div class="buttons-row">
               <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
               <button class="row50" data-force-hide-menu data-shortcut="MetaLeft">&bull; Left Win</button>
             </div>
             <hr>
-            <button data-force-hide-menu data-shortcut="AltLeft ShiftLeft">&bull; Alt+Shift</button>
-            <button data-force-hide-menu data-shortcut="ControlLeft ShiftLeft">&bull; Ctrl+Shift</button>
-            <button data-force-hide-menu data-shortcut="ShiftLeft ShiftRight">&bull; Shift+Shift</button>
-            <button data-force-hide-menu data-shortcut="MetaLeft Space">&bull; Win+Space</button>
-            <hr>
-            <button data-force-hide-menu data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
-            <button data-force-hide-menu data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
-            <button data-force-hide-menu data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
-            <button data-force-hide-menu data-shortcut="AltLeft F4">&bull; Alt+F4</button>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="AltLeft ShiftLeft">&bull; Alt+Shift</button>
+              <button class="row50" data-force-hide-menu data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
+            </div>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="ControlLeft ShiftLeft">&bull; Ctrl+Shift</button>
+              <button class="row50" data-force-hide-menu data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
+            </div>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="ShiftLeft ShiftRight">&bull; Shift+Shift</button>
+              <button class="row50" data-force-hide-menu data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
+            </div>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="MetaLeft Space">&bull; Win+Space</button>
+              <button class="row50" data-force-hide-menu data-shortcut="AltLeft F4">&bull; Alt+F4</button>
+            </div>
             <hr>
             <button data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
           </div>

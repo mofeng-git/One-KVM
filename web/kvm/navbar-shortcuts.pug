@@ -1,26 +1,43 @@
 li(class="right")
 	a(class="menu-button" href="#") Shortcuts
 	div(data-dont-hide-menu class="menu")
+		div(class="text")
+			b Paste text as keypress sequence#[br]
+		hr
+		div(class="text" style="margin-right: 20px")
+			textarea(id="hid-pak-text" placeholder="Enter your text here")
+		hr
+		table(class="kv")
+			tr
+				td
+					button(disabled data-force-hide-menu id="hid-pak-button") &bull; Paste
+				td using host keymap
+				td
+					select(id="hid-pak-keymap-selector")
+		hr
+		+menu_switch("hid-pak-ask-switch", "Ask paste confirmation", true, true)
+		hr
+		div(class="text")
+		hr
 		div(class="buttons")
-			textarea(id="hid-pak-text" placeholder="Paste your text here")
-			hr
-			button(disabled data-force-hide-menu id="hid-pak-button") &bull; &#x21b3; Paste-as-Keys #[sup #[i ascii-only]]
-			hr
 			div(class="buttons-row")
 				button(data-force-hide-menu data-shortcut="CapsLock" class="row50")
 					| &bull; Caps Lock &nbsp;
 					img(class="inline-lamp hid-keyboard-caps-led led-gray" src=`${svg_dir}/led-square.svg`)
 				button(data-force-hide-menu data-shortcut="MetaLeft" class="row50") &bull; Left Win
 			hr
-			button(data-force-hide-menu data-shortcut="AltLeft ShiftLeft") &bull; Alt+Shift
-			button(data-force-hide-menu data-shortcut="ControlLeft ShiftLeft") &bull; Ctrl+Shift
-			button(data-force-hide-menu data-shortcut="ShiftLeft ShiftRight") &bull; Shift+Shift
-			button(data-force-hide-menu data-shortcut="MetaLeft Space") &bull; Win+Space
-			hr
-			button(data-force-hide-menu data-shortcut="ControlLeft KeyW") &bull; Ctrl+W
-			button(data-force-hide-menu data-shortcut="AltLeft Tab") &bull; Alt+Tab
-			button(data-force-hide-menu data-shortcut="AltLeft Enter") &bull; Alt+Enter
-			button(data-force-hide-menu data-shortcut="AltLeft F4") &bull; Alt+F4
+			div(class="buttons-row")
+				button(data-force-hide-menu data-shortcut="AltLeft ShiftLeft" class="row50") &bull; Alt+Shift
+				button(data-force-hide-menu data-shortcut="ControlLeft KeyW" class="row50") &bull; Ctrl+W
+			div(class="buttons-row")
+				button(data-force-hide-menu data-shortcut="ControlLeft ShiftLeft" class="row50") &bull; Ctrl+Shift
+				button(data-force-hide-menu data-shortcut="AltLeft Tab" class="row50") &bull; Alt+Tab
+			div(class="buttons-row")
+				button(data-force-hide-menu data-shortcut="ShiftLeft ShiftRight" class="row50") &bull; Shift+Shift
+				button(data-force-hide-menu data-shortcut="AltLeft Enter" class="row50") &bull; Alt+Enter
+			div(class="buttons-row")
+				button(data-force-hide-menu data-shortcut="MetaLeft Space" class="row50") &bull; Win+Space
+				button(data-force-hide-menu data-shortcut="AltLeft F4" class="row50") &bull; Alt+F4
 			hr
 			button(data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete") &bull; Ctrl+Alt+Del
 		hr

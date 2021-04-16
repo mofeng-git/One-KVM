@@ -162,6 +162,14 @@ export function Hid() {
 		}
 	};
 
+	self.setKeymaps = function(state) {
+		let html = "";
+		for (let variant of state.keymaps.available) {
+			html += `<option value=${variant} ${variant === state.keymaps.default ? "selected" : ""}>${variant}</option>`;
+		}
+		$("hid-pak-keymap-selector").innerHTML = html;
+	};
+
 	var __releaseAll = function() {
 		__keyboard.releaseAll();
 		__mouse.releaseAll();
@@ -196,34 +204,45 @@ export function Hid() {
 	var __clickPasteAsKeysButton = function() {
 		let text = $("hid-pak-text").value.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
 		if (text) {
-			let confirm_msg = `You're going to paste ${text.length} character${text.length ? "s" : ""}.<br>`;
-			confirm_msg += "Are you sure you want to continue?";
+			let paste_as_keys = function() {
+				wm.setElementEnabled($("hid-pak-text"), false);
+				wm.setElementEnabled($("hid-pak-button"), false);
+				wm.setElementEnabled($("hid-pak-keymap-selector"), false);
 
-			wm.confirm(confirm_msg).then(function(ok) {
-				if (ok) {
-					wm.setElementEnabled($("hid-pak-text"), false);
-					wm.setElementEnabled($("hid-pak-button"), false);
+				let keymap = $("hid-pak-keymap-selector").value;
 
-					tools.debug("HID: paste-as-keys:", text);
+				tools.debug(`HID: paste-as-keys ${keymap}: ${text}`);
 
-					let http = tools.makeRequest("POST", "/api/hid/print?limit=0", function() {
-						if (http.readyState === 4) {
-							wm.setElementEnabled($("hid-pak-text"), true);
-							wm.setElementEnabled($("hid-pak-button"), true);
-							$("hid-pak-text").value = "";
-							if (http.status === 413) {
-								wm.error("Too many text for paste!");
-							} else if (http.status !== 200) {
-								wm.error("HID paste error:<br>", http.responseText);
-							} else if (http.status === 200) {
-								__recorder.recordPrintEvent(text);
-							}
+				let http = tools.makeRequest("POST", `/api/hid/print?limit=0&keymap=${keymap}`, function() {
+					if (http.readyState === 4) {
+						wm.setElementEnabled($("hid-pak-text"), true);
+						wm.setElementEnabled($("hid-pak-button"), true);
+						wm.setElementEnabled($("hid-pak-keymap-selector"), true);
+						$("hid-pak-text").value = "";
+						if (http.status === 413) {
+							wm.error("Too many text for paste!");
+						} else if (http.status !== 200) {
+							wm.error("HID paste error:<br>", http.responseText);
+						} else if (http.status === 200) {
+							__recorder.recordPrintEvent(text);
 						}
-					}, text, "text/plain");
-				} else {
-					$("hid-pak-text").value = "";
-				}
-			});
+					}
+				}, text, "text/plain");
+			};
+
+			if ($("hid-pak-ask-switch").checked) {
+				let confirm_msg = `You're going to paste ${text.length} character${text.length ? "s" : ""}.<br>`;
+				confirm_msg += "Are you sure you want to continue?";
+				wm.confirm(confirm_msg).then(function(ok) {
+					if (ok) {
+						paste_as_keys();
+					} else {
+						$("hid-pak-text").value = "";
+					}
+				});
+			} else {
+				paste_as_keys();
+			}
 		}
 	};
 
