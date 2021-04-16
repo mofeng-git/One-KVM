@@ -115,7 +115,7 @@ function __WindowManager() {
 			}
 
 			let el_full_screen_button = el_window.querySelector(".window-header .window-button-full-screen");
-			if (el_full_screen_button) {
+			if (el_full_screen_button && __getFullScreenFunction(el_window)) {
 				tools.setOnClick(el_full_screen_button, function() {
 					__fullScreenWindow(el_window);
 					__activateLastWindow(el_window);
@@ -544,7 +544,9 @@ function __WindowManager() {
 
 	var __onFullScreenChange = function(event) {
 		let el_window = event.target;
-		if (!document.fullscreenElement) {
+		if (document.fullscreenElement) {
+			el_window.style.padding = "0px 0px 0px 0px";
+		} else {
 			el_window.style.padding = "";
 			let rect = el_window.before_full_screen;
 			if (rect) {
@@ -553,15 +555,13 @@ function __WindowManager() {
 				el_window.style.top = rect.top + "px";
 				el_window.style.left = rect.left + "px";
 			}
-		} else {
-			el_window.style.padding = "0px 0px 0px 0px";
 		}
 	};
 
 	var __fullScreenWindow = function(el_window) {
 		el_window.before_full_screen = el_window.getBoundingClientRect();
-		el_window.requestFullscreen();
-		if ("keyboard" in navigator && "lock" in navigator.keyboard) {
+		__getFullScreenFunction(el_window).call(el_window);
+		if (navigator.keyboard && navigator.keyboard.lock) {
 			navigator.keyboard.lock();
 		} else {
 			let el_lock_alert = el_window.querySelector(".window-lock-alert");
@@ -580,6 +580,17 @@ function __WindowManager() {
 		el_window.style.top = vertical_offset + "px";
 		el_window.style.width = window.innerWidth + "px";
 		el_window.style.height = window.innerHeight - vertical_offset + "px";
+	};
+
+	var __getFullScreenFunction = function(el_window) {
+		if (el_window.requestFullscreen) {
+			return el_window.requestFullscreen;
+		} else if (el_window.webkitRequestFullscreen) {
+			return el_window.webkitRequestFullscreen;
+		} else if (el_window.mozRequestFullscreen) {
+			return el_window.mozRequestFullscreen;
+		}
+		return null;
 	};
 
 	__init__();

@@ -52,12 +52,22 @@ div.window-resizable.window-active::-webkit-resizer {
 	width: 20px !important;
 	height: 20px !important;
 }
-div.window-full-screen {
-	position: absolute;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
+div.window:fullscreen {
+	resize: none !important;
+	position: absolute !important;
+	top: 0px !important;
+	left: 0px !important;
+	width: 100% !important;
+	height: 100% !important;
+}
+div.window:-webkit-full-screen {
+	resize: none !important;
+	position: absolute !important;
+	top: 0px !important;
+	left: 0px !important;
+	width: 100% !important;
+	height: 100% !important;
+	padding: 0px !important;
 }
 
 div.window div.window-header {
