@@ -263,6 +263,9 @@ function __WindowManager() {
 		el_window.focus();
 		el_window.blur();
 		el_window.style.visibility = "hidden";
+		if (el_window.close_hook) {
+			el_window.close_hook();
+		}
 	};
 
 	var __toggleMenu = function(el_a) {

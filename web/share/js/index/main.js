@@ -80,7 +80,7 @@ function __loadKvmdInfo() {
 				}
 
 				for (let app of apps) {
-					if (app.enabled) {
+					if (app.enabled || app.started) {
 						$("apps").innerHTML += __makeApp(null, app.path, app.icon, app.name);
 					}
 				}

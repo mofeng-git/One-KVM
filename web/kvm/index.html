@@ -205,6 +205,10 @@
             <hr>
             <button disabled id="wol-wakeup-button">&bull; Wake-on-LAN server</button>
           </div>
+          <div class="buttons feature-disabled" id="webterm">
+            <hr>
+            <button data-force-hide-menu id="show-webterm-button">&bull; Show terminal</button>
+          </div>
         </div>
       </li>
       <li class="right feature-disabled" id="atx-dropdown"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" data-dont-hide-menu id="atx-hdd-led" src="/share/svg/led-atx-hdd.svg">ATX</a>
@@ -1743,6 +1747,16 @@
           can be found in our <a target="_blank" href="https://pikvm.org">official website</a>.
         </p>
       </div>
+    </div>
+    <div class="window window-resizable" id="webterm-window" data-show-by-button="show-webterm-button" style="width: 640px; height: 480px">
+      <div class="window-header">
+        <div class="window-grab">Terminal</div>
+        <button class="window-button-close">&times;</button>
+        <button class="window-button-maximize">&#9744;</button>
+        <!-- Терминал глючит из-за зажимаемой клавиши ESC для выхода-->
+        <!-- button(class="window-button-full-screen") &#10530;-->
+      </div>
+      <iframe id="webterm-iframe" src="" style="width: 100%; height: 100%"></iframe>
     </div>
     <ul class="footer">
       <li class="footer-left" id="kvmd-meta-server-host"></li>

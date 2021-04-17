@@ -107,6 +107,26 @@ export function Session() {
 		}
 	};
 
+	var __setExtras = function(state) {
+		let show_hook = null;
+		let close_hook = null;
+		let has_webterm = (state.webterm && state.webterm.started);
+		if (has_webterm) {
+			let path = "/" + state.webterm.path;
+			show_hook = function() {
+				tools.info("Terminal opened: ", path);
+				$("webterm-iframe").src = path;
+			};
+			close_hook = function() {
+				tools.info("Terminal closed");
+				$("webterm-iframe").src = "";
+			};
+		}
+		tools.featureSetEnabled($("webterm"), has_webterm);
+		$("webterm-window").show_hook = show_hook;
+		$("webterm-window").close_hook = close_hook;
+	};
+
 	var __formatTemp = function(temp) {
 		let pairs = [];
 		for (let field of Object.keys(temp).sort()) {
@@ -218,6 +238,7 @@ export function Session() {
 			case "info_meta_state": __setAboutInfoMeta(data.event); break;
 			case "info_hw_state": __setAboutInfoHw(data.event); break;
 			case "info_system_state": __setAboutInfoSystem(data.event); break;
+			case "info_extras_state": __setExtras(data.event); break;
 			case "wol_state": __wol.setState(data.event); break;
 			case "gpio_model_state": __gpio.setModel(data.event); break;
 			case "gpio_state": __gpio.setState(data.event); break;
