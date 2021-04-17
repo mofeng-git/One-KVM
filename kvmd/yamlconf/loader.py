@@ -28,15 +28,17 @@ from typing import Any
 import yaml
 import yaml.nodes
 
+from .. import tools
+
 
 # =====
 def load_yaml_file(path: str) -> Any:
     with open(path) as yaml_file:
         try:
             return yaml.load(yaml_file, _YamlLoader)
-        except Exception:
+        except Exception as err:
             # Reraise internal exception as standard ValueError and show the incorrect file
-            raise ValueError(f"Incorrect YAML syntax in file {path!r}")
+            raise ValueError(f"Invalid YAML in the file {path!r}:\n{tools.efmt(err)}") from None
 
 
 class _YamlLoader(yaml.SafeLoader):

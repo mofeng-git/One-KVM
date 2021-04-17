@@ -161,9 +161,12 @@ def init(
 # =====
 def _init_config(config_path: str, override_options: List[str], **load_flags: bool) -> Section:
     config_path = os.path.expanduser(config_path)
-    raw_config: Dict = load_yaml_file(config_path)
+    try:
+        raw_config: Dict = load_yaml_file(config_path)
+    except Exception as err:
+        raise SystemExit(f"ConfigError: Can't read config file {config_path!r}:\n{tools.efmt(err)}")
     if not isinstance(raw_config, dict):
-        raise SystemExit(f"Config error: Top-level of the file {config_path!r} must be a dictionary")
+        raise SystemExit(f"ConfigError: Top-level of the file {config_path!r} must be a dictionary")
 
     scheme = _get_config_scheme()
     try:
@@ -177,7 +180,7 @@ def _init_config(config_path: str, override_options: List[str], **load_flags: bo
 
         return config
     except (ConfigError, UnknownPluginError) as err:
-        raise SystemExit(f"Config error: {err}")
+        raise SystemExit(f"ConfigError: {err}")
 
 
 def _patch_raw(raw_config: Dict) -> None:

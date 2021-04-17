@@ -158,7 +158,7 @@ def test_fail__not_htpasswd() -> None:
 
 
 def test_fail__unknown_plugin() -> None:
-    with pytest.raises(SystemExit, match="Config error: Unknown plugin 'auth/foobar'"):
+    with pytest.raises(SystemExit, match="ConfigError: Unknown plugin 'auth/foobar'"):
         _run_htpasswd(["list"], "", internal_type="foobar")
 
 
