@@ -362,6 +362,16 @@
               <div class="progress" id="msd-uploading-progress"><span class="progress-value" id="msd-uploading-progress-value"></span></div>
             </div>
             <hr>
+            <table class="kv">
+              <tr>
+                <td class="value">Tip:</td>
+                <td>To speed up uploading, close the Stream window.</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td>This will save network bandwidth.</td>
+              </tr>
+            </table>
           </div>
           <div class="buttons buttons-row">
             <button class="row50" disabled id="msd-connect-button">Connect drive to Server</button>
@@ -489,7 +499,7 @@
         </div>
       </li>
     </ul>
-    <div class="window window-resizable" id="stream-window" data-close-confirm="Do you want to close the stream? This action will temporarily stop&lt;br&gt;the video transmission until you open the broadcast again.&lt;br&gt;This can be useful for saving traffic." data-show-by-button="show-stream-button">
+    <div class="window window-resizable" id="stream-window" data-show-by-button="show-stream-button">
       <div class="window-header" id="stream-window-header">
         <div class="window-grab">Stream</div>
         <button class="window-button-close">&times;</button>

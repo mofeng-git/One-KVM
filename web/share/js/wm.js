@@ -89,20 +89,8 @@ function __WindowManager() {
 			let el_close_button = el_window.querySelector(".window-header .window-button-close");
 			if (el_close_button) {
 				tools.setOnClick(el_close_button, function() {
-					let close_window = function() {
-						__closeWindow(el_window);
-						__activateLastWindow(el_window);
-					};
-					let confirm_msg = el_window.getAttribute("data-close-confirm");
-					if (confirm_msg) {
-						self.confirm(confirm_msg).then(function(ok) {
-							if (ok) {
-								close_window();
-							}
-						});
-					} else {
-						close_window();
-					}
+					__closeWindow(el_window);
+					__activateLastWindow(el_window);
 				});
 			}
 
