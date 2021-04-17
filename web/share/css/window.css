@@ -82,6 +82,12 @@ div.window div.window-header {
 	color: var(--cs-window-header-default-fg);
 	border-bottom: var(--border-default-thin);
 }
+div.window:fullscreen div.window-header {
+	display: none !important;
+}
+div.window:-webkit-full-screen div.window-header {
+	display: none !important;
+}
 
 div.window div.window-header div.window-grab {
 	overflow: hidden;
