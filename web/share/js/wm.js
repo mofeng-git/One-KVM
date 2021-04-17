@@ -125,10 +125,10 @@ function __WindowManager() {
 
 	/************************************************************************/
 
-	self.error = (...args) => __modalDialog("Error", args.join(" "), true, false);
-	self.confirm = (...args) => __modalDialog("Question", args.join(" "), true, true);
+	self.error = (...args) => __modalDialog("Error", args.join(" "), true, false, null);
+	self.confirm = (...args) => __modalDialog("Question", args.join(" "), true, true, null);
 
-	var __modalDialog = function(header, text, ok, cancel) {
+	var __modalDialog = function(header, text, ok, cancel, parent) {
 		let el_active_menu = (document.activeElement && document.activeElement.closest(".menu"));
 
 		let el_modal = document.createElement("div");
@@ -201,7 +201,7 @@ function __WindowManager() {
 		}
 
 		__windows.push(el_modal);
-		document.body.appendChild(el_modal);
+		(parent || document.fullscreenElement || document.body).appendChild(el_modal);
 		__activateWindow(el_modal);
 
 		return promise;
@@ -532,10 +532,7 @@ function __WindowManager() {
 
 	var __onFullScreenChange = function(event) {
 		let el_window = event.target;
-		if (document.fullscreenElement) {
-			el_window.style.padding = "0px 0px 0px 0px";
-		} else {
-			el_window.style.padding = "";
+		if (!document.fullscreenElement) {
 			let rect = el_window.before_full_screen;
 			if (rect) {
 				el_window.style.width = rect.width + "px";
@@ -552,13 +549,15 @@ function __WindowManager() {
 		if (navigator.keyboard && navigator.keyboard.lock) {
 			navigator.keyboard.lock();
 		} else {
-			let el_lock_alert = el_window.querySelector(".window-lock-alert");
-			if (el_lock_alert) {
-				tools.hiddenSetVisible(el_lock_alert, true);
-				setTimeout(function() {
-					tools.hiddenSetVisible(el_lock_alert, false);
-				}, 7000);
-			}
+			let msg = (
+				"Shortcuts like Alt+Tab, Ctrl+W, Ctrl+N might not be captured.<br>"
+				+ "For best keyboard handling use any browser with<br><a target=\"_blank\""
+				+ " href=\"https://developer.mozilla.org/en-US/docs/Web"
+				+ "/API/Keyboard_API#Browser_compatibility\">keyboard lock support from this list</a>.<br><br>"
+				+ "In Chrome use HTTPS and enable <i>system-keyboard-lock</i><br>"
+				+ "by putting at URL <i>chrome://flags/#system-keyboard-lock</i>"
+			);
+			__modalDialog("Keyboard lock is unsupported", msg, true, false, el_window);
 		}
 	};
 
