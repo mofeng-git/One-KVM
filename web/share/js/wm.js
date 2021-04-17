@@ -229,7 +229,7 @@ function __WindowManager() {
 
 	self.showWindow = function(el_window, activate=true, center=false) {
 		let showed = false;
-		if (el_window.style.visibility === "hidden") {
+		if (!self.isWindowVisible(el_window)) {
 			center = true;
 			showed = true;
 		}
