@@ -67,7 +67,6 @@ export function Streamer() {
 		if (!wm.isWindowVisible($("stream-window"))) {
 			if (__state_for_invisible === null) {
 				$("stream-image").src = "/share/png/blank-stream.png";
-				$("stream-image").className = "stream-image-inactive";
 				$("stream-box").classList.add("stream-box-inactive");
 			}
 			__state_for_invisible = state;
@@ -183,14 +182,7 @@ export function Streamer() {
 	};
 
 	var __updateStreamWindow = function(is_active, online) {
-		if (online) {
-			$("stream-image").className = "stream-image-active";
-			$("stream-box").classList.remove("stream-box-inactive");
-		} else {
-			$("stream-image").className = "stream-image-inactive";
-			$("stream-box").classList.add("stream-box-inactive");
-		}
-
+		$("stream-box").classList.toggle("stream-box-inactive", !online);
 		let el_grab = document.querySelector("#stream-window-header .window-grab");
 		let el_info = $("stream-info");
 		if (is_active) {
