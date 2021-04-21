@@ -27,20 +27,138 @@ import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
 
 
+function _MjpegStreamer(set_online_callback, set_offline_callback, set_info_callback) {
+	var self = this;
+
+	/************************************************************************/
+
+	var __key = tools.makeId();
+	var __id = "";
+	var __fps = -1;
+	var __clients_stat = null;
+
+	var __timer = null;
+	var __timer_retries = 0;
+
+	/************************************************************************/
+
+	self.getFps = function() {
+		return __fps;
+	};
+
+	self.ensureStream = function(state) {
+		if (state && state.streamer) {
+			__clients_stat = state.streamer.stream.clients_stat;
+			__findId();
+			if (__id.length > 0 && __id in __clients_stat) {
+				__setOnline();
+				__stopChecking();
+			} else {
+				__ensureChecking();
+			}
+		} else {
+			__stopChecking();
+			__setOffline();
+		}
+	};
+
+	self.stopStream = function() {
+		self.ensureStream(null);
+		$("stream-image").src = "/share/png/blank-stream.png";
+	};
+
+	var __setOnline = function() {
+		let old_fps = __fps;
+		__fps = __clients_stat[__id].fps;
+		if (old_fps < 0) {
+			tools.info("Stream [MJPEG]: Active");
+			set_online_callback();
+		}
+		set_info_callback(true, `${__fps} fps`);
+	};
+
+	var __setOffline = function() {
+		let old_fps = __fps;
+		__key = tools.makeId();
+		__id = "";
+		__fps = -1;
+		__clients_stat = null;
+		if (old_fps >= 0) {
+			tools.info("Stream [MJPEG]: Inactive");
+			set_offline_callback();
+			set_info_callback(false, "");
+		}
+	};
+
+	var __ensureChecking = function() {
+		if (!__timer) {
+			__timer_retries = 10;
+			__timer = setInterval(__checkStream, 100);
+		}
+	};
+
+	var __stopChecking = function() {
+		if (__timer) {
+			clearInterval(__timer);
+		}
+		__timer = null;
+		__timer_retries = 0;
+	};
+
+	var __findId = function() {
+		let stream_client = tools.getCookie("stream_client");
+		if (__id.length === 0 && stream_client && stream_client.startsWith(__key + "/")) {
+			tools.info("Stream [MJPEG]: Found acceptable stream_client cookie:", stream_client);
+			__id = stream_client.slice(stream_client.indexOf("/") + 1);
+		}
+	};
+
+	var __checkStream = function() {
+		__findId();
+
+		if (__id.legnth > 0 && __id in __clients_stat) {
+			__setOnline();
+			__stopChecking();
+
+		} else if (__id.length > 0 && __timer_retries >= 0) {
+			__timer_retries -= 1;
+
+		} else {
+			__setOffline();
+			__stopChecking();
+
+			let path = `/streamer/stream?key=${__key}`;
+			if (tools.browser.is_safari || tools.browser.is_ios) {
+				// uStreamer fix for WebKit
+				tools.info("Stream [MJPEG]: Using dual_final_frames=1 to fix WebKit bugs");
+				path += "&dual_final_frames=1";
+			} else if (tools.browser.is_chrome || tools.browser.is_blink) {
+				// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
+				tools.info("Stream [MJPEG]: Using advance_headers=1 to fix Blink bugs");
+				path += "&advance_headers=1";
+			}
+
+			tools.info("Stream [MJPEG]: Refreshing ...");
+			$("stream-image").src = path;
+		}
+	};
+}
+
 export function Streamer() {
 	var self = this;
 
 	/************************************************************************/
 
-	var __resolution = {width: 640, height: 480};
+	var __mjpeg = null;
 
-	var __mjpeg_key = tools.makeId();
-	var __mjpeg_id = "";
-	var __mjpeg_fps = -1;
+	var __online = false;
+	var __resolution = {width: 640, height: 480};
 
 	var __state_for_invisible = null;
 
 	var __init__ = function() {
+		__mjpeg = new _MjpegStreamer(__setOnline, __setOffline, __setInfo);
+
 		$("stream-led").title = "Stream inactive";
 
 		tools.sliderSetParams($("stream-quality-slider"), 5, 100, 5, 80);
@@ -66,7 +184,7 @@ export function Streamer() {
 	self.setState = function(state) {
 		if (!wm.isWindowVisible($("stream-window"))) {
 			if (__state_for_invisible === null) {
-				$("stream-image").src = "/share/png/blank-stream.png";
+				__mjpeg.stopStream();
 				$("stream-box").classList.add("stream-box-inactive");
 			}
 			__state_for_invisible = state;
@@ -79,6 +197,8 @@ export function Streamer() {
 			tools.featureSetEnabled($("stream-quality"), state.features.quality && (state.streamer === null || state.streamer.encoder.quality > 0));
 			tools.featureSetEnabled($("stream-resolution"), state.features.resolution);
 		}
+
+		__online = (state && state.streamer && state.streamer.source.online);
 
 		if (state && state.streamer) {
 			if (!$("stream-quality-slider").activated) {
@@ -119,80 +239,43 @@ export function Streamer() {
 				document.querySelector(`#stream-resolution-selector [value="${resolution_str}"]`).selected = true;
 				wm.setElementEnabled($("stream-resolution-selector"), true);
 			}
-
-			if (__ensureMjpegStream(state.streamer.stream.clients_stat)) {
-				$("stream-led").className = "led-green";
-				$("stream-led").title = "Stream is active";
-				wm.setElementEnabled($("stream-screenshot-button"), true);
-				wm.setElementEnabled($("stream-reset-button"), true);
-				$("stream-quality-slider").activated = false;
-				$("stream-desired-fps-slider").activated = false;
-				tools.info("Stream [MJPEG]: active");
-			}
-
-			__updateStreamWindow(true, state.streamer.source.online);
-
-		} else {
-			if ($("stream-led").className !== "led-gray") { // Чтобы не дублировать логи, когда окно стрима закрыто
-				tools.info("Stream: inactive");
-			}
-
-			$("stream-led").className = "led-gray";
-			$("stream-led").title = "Stream inactive";
-			wm.setElementEnabled($("stream-screenshot-button"), false);
-			wm.setElementEnabled($("stream-reset-button"), false);
-			wm.setElementEnabled($("stream-quality-slider"), false);
-			wm.setElementEnabled($("stream-desired-fps-slider"), false);
-			wm.setElementEnabled($("stream-resolution-selector"), false);
-
-			__updateStreamWindow(false, false);
 		}
+
+		__mjpeg.ensureStream(state);
 	};
 
-	var __ensureMjpegStream = function(clients_stat) {
-		let stream_client = tools.getCookie("stream_client");
-		if (!__mjpeg_id && stream_client && stream_client.startsWith(__mjpeg_key + "/")) {
-			tools.info("Stream [MJPEG]: found acceptable stream_client cookie:", stream_client);
-			__mjpeg_id = stream_client.slice(stream_client.indexOf("/") + 1);
-		}
-
-		if (__mjpeg_id && __mjpeg_id in clients_stat) {
-			__mjpeg_fps = clients_stat[__mjpeg_id].fps;
-			return false;
-		} else {
-			__mjpeg_key = tools.makeId();
-			__mjpeg_id = "";
-			__mjpeg_fps = -1;
-
-			let path = `/streamer/stream?key=${__mjpeg_key}`;
-			if (tools.browser.is_safari || tools.browser.is_ios) {
-				// uStreamer fix for WebKit
-				tools.info("Stream [MJPEG]: using dual_final_frames=1 to fix WebKit bugs");
-				path += "&dual_final_frames=1";
-			} else if (tools.browser.is_chrome || tools.browser.is_blink) {
-				// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-				tools.info("Stream [MJPEG]: using advance_headers=1 to fix Blink bugs");
-				path += "&advance_headers=1";
-			}
-
-			tools.info("Stream [MJPEG]: refreshing ...");
-			$("stream-image").src = path;
-			return true;
-		}
+	var __setOnline = function() {
+		$("stream-box").classList.remove("stream-box-inactive");
+		$("stream-led").className = "led-green";
+		$("stream-led").title = "Stream is active";
+		wm.setElementEnabled($("stream-screenshot-button"), true);
+		wm.setElementEnabled($("stream-reset-button"), true);
+		$("stream-quality-slider").activated = false;
+		$("stream-desired-fps-slider").activated = false;
 	};
 
-	var __updateStreamWindow = function(is_active, online) {
-		$("stream-box").classList.toggle("stream-box-inactive", !online);
+	var __setOffline = function() {
+		$("stream-box").classList.add("stream-box-inactive");
+		$("stream-led").className = "led-gray";
+		$("stream-led").title = "Stream inactive";
+		wm.setElementEnabled($("stream-screenshot-button"), false);
+		wm.setElementEnabled($("stream-reset-button"), false);
+		wm.setElementEnabled($("stream-quality-slider"), false);
+		wm.setElementEnabled($("stream-desired-fps-slider"), false);
+		wm.setElementEnabled($("stream-resolution-selector"), false);
+	};
+
+	var __setInfo = function(is_active, text) {
 		let el_grab = document.querySelector("#stream-window-header .window-grab");
 		let el_info = $("stream-info");
 		if (is_active) {
 			let title = "Stream &ndash; ";
-			if (!online) {
+			if (!__online) {
 				title += "no signal / ";
 			}
 			title += __makeStringResolution(__resolution);
-			if (__mjpeg_fps >= 0) {
-				title += ` / ${__mjpeg_fps} fps`;
+			if (text.length > 0) {
+				title += " / " + text;
 			}
 			el_grab.innerHTML = el_info.innerHTML = title;
 		} else {
