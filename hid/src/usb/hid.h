@@ -76,11 +76,15 @@ class UsbKeyboard {
 
 		void periodic() {
 #			ifdef HID_USB_CHECK_ENDPOINT
-			if (is_micros_timed_out(_last, 10000)) {
-				if (!_sent) {
+			static unsigned long prev_ts = 0;
+			if (is_micros_timed_out(prev_ts, 10000)) {
+				static bool prev_online = true;
+				bool online = !getOfflineAs(1);
+				if (!_sent || (online && !prev_online)) {
 					_sendCurrent();
 				}
-				_last = micros();
+				prev_online = online;
+				prev_ts = micros();
 			}
 #			endif
 		}
@@ -112,7 +116,6 @@ class UsbKeyboard {
 	private:
 		BootKeyboard_ _kbd;
 		bool _sent = true;
-		unsigned long _last = 0;
 
 		void _sendCurrent() {
 #			ifdef HID_USB_CHECK_ENDPOINT
