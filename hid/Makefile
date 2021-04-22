@@ -12,7 +12,15 @@ _build:
 
 install: upload
 upload:
-	platformio run --environment $(shell cat .current) --target upload
+	$(eval $@_CURRENT := $(shell cat .current))
+	bash -ex -c " \
+		current=`cat .current`; \
+		if [ '$($@_CURRENT)' == 'spi' ] || [ '$($@_CURRENT)' == 'aum' ]; then \
+			gpio -g write 25 1; \
+			gpio -g write 25 0; \
+		fi \
+	"
+	platformio run --environment '$($@_CURRENT)' --target upload
 
 
 bootloader-spi: install-bootloader-spi
