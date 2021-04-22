@@ -36,6 +36,7 @@
 #	include <avr/eeprom.h>
 #endif
 
+#include "tools.h"
 #include "proto.h"
 #ifdef CMD_SPI
 #	include "spi.h"
@@ -337,6 +338,11 @@ int main() {
 		aumProxyUsbVbus();
 #		endif
 
+#		ifdef HID_WITH_USB
+		if (_usb_kbd) {
+			_usb_kbd->periodic();
+		}
+#		endif
 #		ifdef HID_WITH_PS2
 		if (_ps2_kbd) {
 			_ps2_kbd->periodic();
@@ -354,11 +360,7 @@ int main() {
 				++index;
 			}
 		} else if (index > 0) {
-			unsigned long now = micros();
-			if (
-				(now >= last && now - last > CMD_SERIAL_TIMEOUT)
-				|| (now < last && ((unsigned long)-1) - last + now > CMD_SERIAL_TIMEOUT)
-			) {
+			if (is_micros_timed_out(last, CMD_SERIAL_TIMEOUT)) {
 				_sendResponse(PROTO::RESP::TIMEOUT_ERROR);
 				index = 0;
 			}

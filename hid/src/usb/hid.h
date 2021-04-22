@@ -25,6 +25,7 @@
 #include <Arduino.h>
 #include <HID-Project.h>
 
+#include "../tools.h"
 #ifdef AUM
 #	include "../aum.h"
 #endif
@@ -73,16 +74,27 @@ class UsbKeyboard {
 			_kbd.begin();
 		}
 
+		void periodic() {
+#			ifdef HID_USB_CHECK_ENDPOINT
+			if (is_micros_timed_out(_last, 10000)) {
+				if (!_sent) {
+					_sendCurrent();
+				}
+				_last = micros();
+			}
+#			endif
+		}
+
 		void clear() {
 			_kbd.releaseAll();
 		}
 
 		void sendKey(uint8_t code, bool state) {
-			CHECK_HID_EP;
 			KeyboardKeycode usb_code = keymapUsb(code);
 			if (usb_code != KEY_ERROR_UNDEFINED) {
-				if (state) _kbd.press(usb_code);
-				else _kbd.release(usb_code);
+				if (state ? _kbd.add(usb_code) : _kbd.remove(usb_code)) {
+					_sendCurrent();
+				}
 			}
 		}
 
@@ -99,6 +111,20 @@ class UsbKeyboard {
 
 	private:
 		BootKeyboard_ _kbd;
+		bool _sent = true;
+		unsigned long _last = 0;
+
+		void _sendCurrent() {
+#			ifdef HID_USB_CHECK_ENDPOINT
+			if (getOfflineAs(1)) {
+				_sent = false;
+			} else {
+#			endif
+				_sent = (_kbd.send() >= 0);
+#			ifdef HID_USB_CHECK_ENDPOINT
+			}
+#			endif
+		}
 };
 
 #define CLS_SEND_BUTTONS \
