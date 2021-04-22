@@ -37,11 +37,11 @@ div#stream-box {
 	display: inline-block;
 	border: var(--border-window-thin);
 }
-div.stream-box-inactive {
+div.stream-box-offline {
 	-webkit-filter: grayscale(100%) brightness(75%) sepia(75%);
 	filter: grayscale(100%) brightness(75%) sepia(75%);
 }
-div.stream-box-inactive::after {
+div.stream-box-offline::after {
 	cursor: wait;
 	content: "";
 	position: absolute;

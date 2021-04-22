@@ -27,7 +27,7 @@ import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
 
 
-function _MjpegStreamer(set_online_callback, set_offline_callback, set_info_callback) {
+function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_callback) {
 	var self = this;
 
 	/************************************************************************/
@@ -35,30 +35,26 @@ function _MjpegStreamer(set_online_callback, set_offline_callback, set_info_call
 	var __key = tools.makeId();
 	var __id = "";
 	var __fps = -1;
-	var __clients_stat = null;
+	var __state = null;
 
 	var __timer = null;
 	var __timer_retries = 0;
 
 	/************************************************************************/
 
-	self.getFps = function() {
-		return __fps;
-	};
-
 	self.ensureStream = function(state) {
 		if (state && state.streamer) {
-			__clients_stat = state.streamer.stream.clients_stat;
+			__state = state.streamer;
 			__findId();
-			if (__id.length > 0 && __id in __clients_stat) {
-				__setOnline();
+			if (__id.length > 0 && __id in __state.stream.clients_stat) {
+				__setActive();
 				__stopChecking();
 			} else {
 				__ensureChecking();
 			}
 		} else {
 			__stopChecking();
-			__setOffline();
+			__setInactive();
 		}
 	};
 
@@ -67,26 +63,26 @@ function _MjpegStreamer(set_online_callback, set_offline_callback, set_info_call
 		$("stream-image").src = "/share/png/blank-stream.png";
 	};
 
-	var __setOnline = function() {
+	var __setActive = function() {
 		let old_fps = __fps;
-		__fps = __clients_stat[__id].fps;
+		__fps = __state.stream.clients_stat[__id].fps;
 		if (old_fps < 0) {
 			tools.info("Stream [MJPEG]: Active");
-			set_online_callback();
+			set_active_callback();
 		}
-		set_info_callback(true, `${__fps} fps`);
+		set_info_callback(true, __state.source.online, `${__fps} fps`);
 	};
 
-	var __setOffline = function() {
+	var __setInactive = function() {
 		let old_fps = __fps;
 		__key = tools.makeId();
 		__id = "";
 		__fps = -1;
-		__clients_stat = null;
+		__state = null;
 		if (old_fps >= 0) {
 			tools.info("Stream [MJPEG]: Inactive");
-			set_offline_callback();
-			set_info_callback(false, "");
+			set_inactive_callback();
+			set_info_callback(false, false, "");
 		}
 	};
 
@@ -116,15 +112,15 @@ function _MjpegStreamer(set_online_callback, set_offline_callback, set_info_call
 	var __checkStream = function() {
 		__findId();
 
-		if (__id.legnth > 0 && __id in __clients_stat) {
-			__setOnline();
+		if (__id.legnth > 0 && __id in __state.stream.clients_stat) {
+			__setActive();
 			__stopChecking();
 
 		} else if (__id.length > 0 && __timer_retries >= 0) {
 			__timer_retries -= 1;
 
 		} else {
-			__setOffline();
+			__setInactive();
 			__stopChecking();
 
 			let path = `/streamer/stream?key=${__key}`;
@@ -157,7 +153,7 @@ export function Streamer() {
 	var __state_for_invisible = null;
 
 	var __init__ = function() {
-		__mjpeg = new _MjpegStreamer(__setOnline, __setOffline, __setInfo);
+		__mjpeg = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
 
 		$("stream-led").title = "Stream inactive";
 
@@ -185,7 +181,6 @@ export function Streamer() {
 		if (!wm.isWindowVisible($("stream-window"))) {
 			if (__state_for_invisible === null) {
 				__mjpeg.stopStream();
-				$("stream-box").classList.add("stream-box-inactive");
 			}
 			__state_for_invisible = state;
 			state = null;
@@ -244,8 +239,7 @@ export function Streamer() {
 		__mjpeg.ensureStream(state);
 	};
 
-	var __setOnline = function() {
-		$("stream-box").classList.remove("stream-box-inactive");
+	var __setActive = function() {
 		$("stream-led").className = "led-green";
 		$("stream-led").title = "Stream is active";
 		wm.setElementEnabled($("stream-screenshot-button"), true);
@@ -254,8 +248,7 @@ export function Streamer() {
 		$("stream-desired-fps-slider").activated = false;
 	};
 
-	var __setOffline = function() {
-		$("stream-box").classList.add("stream-box-inactive");
+	var __setInactive = function() {
 		$("stream-led").className = "led-gray";
 		$("stream-led").title = "Stream inactive";
 		wm.setElementEnabled($("stream-screenshot-button"), false);
@@ -265,7 +258,8 @@ export function Streamer() {
 		wm.setElementEnabled($("stream-resolution-selector"), false);
 	};
 
-	var __setInfo = function(is_active, text) {
+	var __setInfo = function(is_active, online, text) {
+		$("stream-box").classList.toggle("stream-box-offline", !online);
 		let el_grab = document.querySelector("#stream-window-header .window-grab");
 		let el_info = $("stream-info");
 		if (is_active) {
