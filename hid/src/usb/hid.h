@@ -77,7 +77,7 @@ class UsbKeyboard {
 		void periodic() {
 #			ifdef HID_USB_CHECK_ENDPOINT
 			static unsigned long prev_ts = 0;
-			if (is_micros_timed_out(prev_ts, 10000)) {
+			if (is_micros_timed_out(prev_ts, 50000)) {
 				static bool prev_online = true;
 				bool online = !getOfflineAs(1);
 				if (!_sent || (online && !prev_online)) {
