@@ -88,6 +88,7 @@ function __WindowManager() {
 
 			let el_close_button = el_window.querySelector(".window-header .window-button-close");
 			if (el_close_button) {
+				el_close_button.title = "Close window";
 				tools.setOnClick(el_close_button, function() {
 					__closeWindow(el_window);
 					__activateLastWindow(el_window);
@@ -96,14 +97,27 @@ function __WindowManager() {
 
 			let el_maximize_button = el_window.querySelector(".window-header .window-button-maximize");
 			if (el_maximize_button) {
+				el_maximize_button.title = "Maximize window";
 				tools.setOnClick(el_maximize_button, function() {
 					__maximizeWindow(el_window);
 					__activateLastWindow(el_window);
 				});
 			}
 
+			let el_orig_button = el_window.querySelector(".window-header .window-button-original");
+			if (el_orig_button) {
+				el_maximize_button.title = "Reduce window to its original size and center it";
+				tools.setOnClick(el_orig_button, function() {
+					el_window.style.width = "";
+					el_window.style.height = "";
+					__centerWindow(el_window);
+					__activateLastWindow(el_window);
+				});
+			}
+
 			let el_full_screen_button = el_window.querySelector(".window-header .window-button-full-screen");
 			if (el_full_screen_button && __getFullScreenFunction(el_window)) {
+				el_full_screen_button.title = "Go to full-screen mode";
 				tools.setOnClick(el_full_screen_button, function() {
 					__fullScreenWindow(el_window);
 					__activateLastWindow(el_window);

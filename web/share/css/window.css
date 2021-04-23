@@ -108,6 +108,7 @@ div.window div.window-header-grabbed {
 }
 
 div.window div.window-header button.window-button-full-screen,
+div.window div.window-header button.window-button-original,
 div.window div.window-header button.window-button-maximize,
 div.window div.window-header button.window-button-close {
 	border: none;
@@ -121,13 +122,16 @@ div.window div.window-header button.window-button-close {
 	display: inline-block;
 }
 div.window div.window-header button.window-button-full-screen {
-	right: 90px;
+	right: 135px;
 }
-div.window div.window-header button.window-button-close {
-	right: 0px;
+div.window div.window-header button.window-button-original {
+	right: 90px;
 }
 div.window div.window-header button.window-button-maximize {
 	right: 45px;
+}
+div.window div.window-header button.window-button-close {
+	right: 0px;
 }
 
 @media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
