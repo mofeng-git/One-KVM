@@ -106,7 +106,7 @@ function __WindowManager() {
 
 			let el_orig_button = el_window.querySelector(".window-header .window-button-original");
 			if (el_orig_button) {
-				el_maximize_button.title = "Reduce window to its original size and center it";
+				el_orig_button.title = "Reduce window to its original size and center it";
 				tools.setOnClick(el_orig_button, function() {
 					el_window.style.width = "";
 					el_window.style.height = "";
