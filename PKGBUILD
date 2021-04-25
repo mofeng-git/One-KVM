@@ -77,6 +77,9 @@ depends=(
 	# Avoid dhcpcd stack trace
 	dhclient
 	netctl
+
+	# Broken pillow dependency
+	libraqm
 )
 conflicts=(
 	python-pikvm
