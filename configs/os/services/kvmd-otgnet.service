@@ -1,6 +1,8 @@
 [Unit]
 Description=Pi-KVM - OTG network service
 After=kvmd-otg.service
+Wants=network-pre.target
+After=network-pre.target
 
 [Service]
 Type=oneshot

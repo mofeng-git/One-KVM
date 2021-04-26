@@ -529,7 +529,7 @@ def _get_config_scheme() -> Dict:
                 "allow_tcp":    Option([],   type=valid_ports_list),
                 "allow_udp":    Option([67], type=valid_ports_list),
                 "forward_iface": Option("", type=valid_stripped_string),
-                "iptables_cmd": Option(["/usr/bin/iptables"], type=valid_command),
+                "iptables_cmd": Option(["/usr/bin/iptables", "--wait=5"], type=valid_command),
             },
 
             "commands": {
