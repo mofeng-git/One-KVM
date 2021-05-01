@@ -1,0 +1,12 @@
+[Unit]
+Description=Pi-KVM - Janus WebRTC Gateway (stub)
+After=network.target network-online.target nss-lookup.target kvmd.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/true
+ExecStop=/bin/true
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
