@@ -65,7 +65,7 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
         daemon = extras.get("daemon", "")
         if isinstance(daemon, str) and daemon.strip():
             status = get_service_status(daemon)
-            (extras["enabled"], extras["started"]) = (status if status is not None else (True, True))
+            (extras["enabled"], extras["started"]) = (status if status is not None else (False, False))
 
     def __rewrite_app_port(self, extras: Dict) -> None:
         port_path = extras.get("port", "")
