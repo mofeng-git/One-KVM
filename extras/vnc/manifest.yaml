@@ -2,7 +2,6 @@ name: VNC
 description: Show VNC information
 icon: share/svg/vnc.svg
 path: vnc
-keyboard_cap: false
 daemon: kvmd-vnc
 port: vnc/server/port
 place: 20

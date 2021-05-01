@@ -2,7 +2,6 @@ name: IPMI
 description: Show IPMI information
 icon: share/svg/ipmi.svg
 path: ipmi
-keyboard_cap: false
 daemon: kvmd-ipmi
 port: ipmi/server/port
 place: 21
