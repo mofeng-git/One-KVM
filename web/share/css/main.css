@@ -267,9 +267,9 @@ ul.footer li a {
 }
 
 .feature-disabled {
-	display: none;
+	display: none !important;
 }
 
 .hidden {
-	display: none;
+	display: none !important;
 }
