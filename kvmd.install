@@ -7,7 +7,9 @@ post_upgrade() {
 	systemd-sysusers /usr/lib/sysusers.d/kvmd.conf
 
 	# https://github.com/systemd/systemd/issues/13522
-	usermod --expiredate= kvmd >/dev/null
+	for user in `grep '^u ' /usr/lib/sysusers.d/kvmd.conf | awk '{print $2}'`; do
+		usermod --expiredate= $user >/dev/null
+	done
 
 	chown kvmd:kvmd /etc/kvmd/htpasswd
 	chown kvmd-ipmi:kvmd-ipmi /etc/kvmd/ipmipasswd
