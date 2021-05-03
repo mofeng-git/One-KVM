@@ -56,7 +56,8 @@ div.stream-box-mouse-enabled {
 	cursor: url("../../svg/stream-mouse-cursor.svg"), pointer;
 }
 
-img#stream-image {
+img#stream-image,
+video#stream-video {
 	width: 100%;
 	height: 100%;
 	object-fit: contain;
