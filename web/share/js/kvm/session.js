@@ -110,7 +110,7 @@ export function Session() {
 	var __setExtras = function(state) {
 		let show_hook = null;
 		let close_hook = null;
-		let has_webterm = (state.webterm && state.webterm.started);
+		let has_webterm = (state.webterm && (state.webterm.enabled || state.webterm.started));
 		if (has_webterm) {
 			let path = "/" + state.webterm.path;
 			show_hook = function() {
