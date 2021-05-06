@@ -40,8 +40,6 @@ function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_cal
 	var __timer = null;
 	var __timer_retries = 0;
 
-	var __janus_enabled = null;
-
 	/************************************************************************/
 
 	self.ensureStream = function(state) {
