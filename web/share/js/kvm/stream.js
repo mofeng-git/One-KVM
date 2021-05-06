@@ -40,11 +40,13 @@ function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_cal
 	var __timer = null;
 	var __timer_retries = 0;
 
+	var __janus_enabled = null;
+
 	/************************************************************************/
 
 	self.ensureStream = function(state) {
-		if (state && state.streamer) {
-			__state = state.streamer;
+		if (state) {
+			__state = state;
 			__findId();
 			if (__id.length > 0 && __id in __state.stream.clients_stat) {
 				__setActive();
@@ -60,7 +62,10 @@ function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_cal
 
 	self.stopStream = function() {
 		self.ensureStream(null);
-		$("stream-image").src = "/share/png/blank-stream.png";
+		let blank = "/share/png/blank-stream.png";
+		if (!String.prototype.endsWith.call($("stream-image").src, blank)) {
+			$("stream-image").src = blank;
+		}
 	};
 
 	var __setActive = function() {
@@ -145,12 +150,11 @@ export function Streamer() {
 
 	/************************************************************************/
 
+	var __janus_enabled = null;
 	var __mjpeg = null;
 
-	var __online = false;
+	var __state = null;
 	var __resolution = {width: 640, height: 480};
-
-	var __state_for_invisible = null;
 
 	var __init__ = function() {
 		__mjpeg = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
@@ -168,75 +172,76 @@ export function Streamer() {
 		tools.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
 		tools.setOnClick($("stream-reset-button"), __clickResetButton);
 
-		$("stream-window").show_hook = function() {
-			if (__state_for_invisible !== null) {
-				self.setState(__state_for_invisible);
-			}
-		};
+		$("stream-window").show_hook = () => __applyState(__state);
+		$("stream-window").close_hook = () => __applyState(null);
 	};
 
 	/************************************************************************/
 
-	self.setState = function(state) {
-		if (!wm.isWindowVisible($("stream-window"))) {
-			if (__state_for_invisible === null) {
-				__mjpeg.stopStream();
-			}
-			__state_for_invisible = state;
-			state = null;
-		} else {
-			__state_for_invisible = null;
-		}
+	self.setJanusEnabled = function(enabled) {
+		__janus_enabled = (!!window.RTCPeerConnection && enabled);
+		tools.info("Stream: Janus WebRTC Gateway state:", __janus_enabled);
+		self.setState(__state);
+	};
 
+	self.setState = function(state) {
+		__state = state;
+		if (__janus_enabled !== null) {
+			__applyState(wm.isWindowVisible($("stream-window")) ? __state : null);
+		}
+	};
+
+	var __applyState = function(state) {
 		if (state) {
 			tools.featureSetEnabled($("stream-quality"), state.features.quality && (state.streamer === null || state.streamer.encoder.quality > 0));
 			tools.featureSetEnabled($("stream-resolution"), state.features.resolution);
-		}
 
-		__online = (state && state.streamer && state.streamer.source.online);
-
-		if (state && state.streamer) {
-			if (!$("stream-quality-slider").activated) {
-				wm.setElementEnabled($("stream-quality-slider"), true);
-				if ($("stream-quality-slider").value !== state.streamer.encoder.quality) {
-					$("stream-quality-slider").value = state.streamer.encoder.quality;
-					__updateQualityValue(state.streamer.encoder.quality);
-				}
-			}
-
-			if (!$("stream-desired-fps-slider").activated) {
-				$("stream-desired-fps-slider").min = state.limits.desired_fps.min;
-				$("stream-desired-fps-slider").max = state.limits.desired_fps.max;
-				wm.setElementEnabled($("stream-desired-fps-slider"), true);
-				if ($("stream-desired-fps-slider").value !== state.streamer.source.desired_fps) {
-					$("stream-desired-fps-slider").value = state.streamer.source.desired_fps;
-					__updateDesiredFpsValue(state.streamer.source.desired_fps);
-				}
-			}
-
-			let resolution_str = __makeStringResolution(state.streamer.source.resolution);
-			if (__makeStringResolution(__resolution) !== resolution_str) {
-				__resolution = state.streamer.source.resolution;
-			}
-
-			if (state.features.resolution) {
-				if ($("stream-resolution-selector").resolutions !== state.limits.available_resolutions) {
-					let resolutions_html = "";
-					for (let variant of state.limits.available_resolutions) {
-						resolutions_html += `<option value="${variant}">${variant}</option>`;
+			if (state.streamer) {
+				if (!$("stream-quality-slider").activated) {
+					wm.setElementEnabled($("stream-quality-slider"), true);
+					if ($("stream-quality-slider").value !== state.streamer.encoder.quality) {
+						$("stream-quality-slider").value = state.streamer.encoder.quality;
+						__updateQualityValue(state.streamer.encoder.quality);
 					}
-					if (!state.limits.available_resolutions.includes(resolution_str)) {
-						resolutions_html += `<option value="${resolution_str}">${resolution_str}</option>`;
-					}
-					$("stream-resolution-selector").innerHTML = resolutions_html;
-					$("stream-resolution-selector").resolutions = state.limits.available_resolutions;
 				}
-				document.querySelector(`#stream-resolution-selector [value="${resolution_str}"]`).selected = true;
-				wm.setElementEnabled($("stream-resolution-selector"), true);
-			}
-		}
 
-		__mjpeg.ensureStream(state);
+				if (!$("stream-desired-fps-slider").activated) {
+					$("stream-desired-fps-slider").min = state.limits.desired_fps.min;
+					$("stream-desired-fps-slider").max = state.limits.desired_fps.max;
+					wm.setElementEnabled($("stream-desired-fps-slider"), true);
+					if ($("stream-desired-fps-slider").value !== state.streamer.source.desired_fps) {
+						$("stream-desired-fps-slider").value = state.streamer.source.desired_fps;
+						__updateDesiredFpsValue(state.streamer.source.desired_fps);
+					}
+				}
+
+				let resolution_str = __makeStringResolution(state.streamer.source.resolution);
+				if (__makeStringResolution(__resolution) !== resolution_str) {
+					__resolution = state.streamer.source.resolution;
+				}
+
+				if (state.features.resolution) {
+					if ($("stream-resolution-selector").resolutions !== state.limits.available_resolutions) {
+						let resolutions_html = "";
+						for (let variant of state.limits.available_resolutions) {
+							resolutions_html += `<option value="${variant}">${variant}</option>`;
+						}
+						if (!state.limits.available_resolutions.includes(resolution_str)) {
+							resolutions_html += `<option value="${resolution_str}">${resolution_str}</option>`;
+						}
+						$("stream-resolution-selector").innerHTML = resolutions_html;
+						$("stream-resolution-selector").resolutions = state.limits.available_resolutions;
+					}
+					document.querySelector(`#stream-resolution-selector [value="${resolution_str}"]`).selected = true;
+					wm.setElementEnabled($("stream-resolution-selector"), true);
+				}
+			}
+
+			__mjpeg.ensureStream(state.streamer);
+
+		} else {
+			__mjpeg.stopStream();
+		}
 	};
 
 	var __setActive = function() {
@@ -264,7 +269,7 @@ export function Streamer() {
 		let el_info = $("stream-info");
 		if (is_active) {
 			let title = "Stream &ndash; ";
-			if (!__online) {
+			if (!online) {
 				title += "no signal / ";
 			}
 			title += __makeStringResolution(__resolution);

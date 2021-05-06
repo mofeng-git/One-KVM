@@ -125,6 +125,8 @@ export function Session() {
 		tools.featureSetEnabled($("webterm"), has_webterm);
 		$("webterm-window").show_hook = show_hook;
 		$("webterm-window").close_hook = close_hook;
+
+		__streamer.setJanusEnabled(state.janus && (state.janus.enabled || state.janus.started));
 	};
 
 	var __formatTemp = function(temp) {
