@@ -370,12 +370,12 @@ def _get_config_scheme() -> Dict:
                 "type": Option("", type=valid_stripped_string_not_empty),
 
                 "keymap": Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
+                "ignore_keys": Option([], type=functools.partial(valid_string_list, subval=valid_hid_key)),
 
                 "mouse_x_range": {
                     "min": Option(MouseRange.MIN, type=valid_hid_mouse_move),
                     "max": Option(MouseRange.MAX, type=valid_hid_mouse_move),
                 },
-
                 "mouse_y_range": {
                     "min": Option(MouseRange.MIN, type=valid_hid_mouse_move),
                     "max": Option(MouseRange.MAX, type=valid_hid_mouse_move),

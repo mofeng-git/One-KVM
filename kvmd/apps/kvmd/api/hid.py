@@ -25,6 +25,7 @@ import stat
 import functools
 
 from typing import Tuple
+from typing import List
 from typing import Dict
 from typing import Set
 from typing import Callable
@@ -63,6 +64,7 @@ class HidApi:
         hid: BaseHid,
 
         keymap_path: str,
+        ignore_keys: List[str],
 
         mouse_x_range: Tuple[int, int],
         mouse_y_range: Tuple[int, int],
@@ -73,6 +75,8 @@ class HidApi:
         self.__keymaps_dir_path = os.path.dirname(keymap_path)
         self.__default_keymap_name = os.path.basename(keymap_path)
         self.__ensure_symmap(self.__default_keymap_name)
+
+        self.__ignore_keys = ignore_keys
 
         self.__mouse_x_range = mouse_x_range
         self.__mouse_y_range = mouse_y_range
@@ -160,7 +164,8 @@ class HidApi:
             state = valid_bool(event["state"])
         except Exception:
             return
-        self.__hid.send_key_events([(key, state)])
+        if key not in self.__ignore_keys:
+            self.__hid.send_key_events([(key, state)])
 
     @exposed_ws("mouse_button")
     async def __ws_mouse_button_handler(self, _: WebSocketResponse, event: Dict) -> None:
@@ -217,11 +222,12 @@ class HidApi:
     @exposed_http("POST", "/hid/events/send_key")
     async def __events_send_key_handler(self, request: Request) -> Response:
         key = valid_hid_key(request.query.get("key"))
-        if "state" in request.query:
-            state = valid_bool(request.query["state"])
-            self.__hid.send_key_events([(key, state)])
-        else:
-            self.__hid.send_key_events([(key, True), (key, False)])
+        if key not in self.__ignore_keys:
+            if "state" in request.query:
+                state = valid_bool(request.query["state"])
+                self.__hid.send_key_events([(key, state)])
+            else:
+                self.__hid.send_key_events([(key, True), (key, False)])
         return make_json_response()
 
     @exposed_http("POST", "/hid/events/send_mouse_button")
