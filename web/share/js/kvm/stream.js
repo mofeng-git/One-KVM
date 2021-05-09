@@ -42,6 +42,16 @@ function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_cal
 
 	/************************************************************************/
 
+	self.getResolution = function() {
+		let el_image = $("stream-image");
+		return {
+			real_width: el_image.naturalWidth,
+			real_height: el_image.naturalHeight,
+			view_width: el_image.offsetWidth,
+			view_height: el_image.offsetHeight,
+		};
+	};
+
 	self.ensureStream = function(state) {
 		if (state) {
 			__state = state;
@@ -177,13 +187,7 @@ export function Streamer() {
 	/************************************************************************/
 
 	self.getResolution = function() {
-		let el_image = $("stream-image");
-		return {
-			real_width: el_image.naturalWidth,
-			real_height: el_image.naturalHeight,
-			view_width: el_image.offsetWidth,
-			view_height: el_image.offsetHeight,
-		};
+		return __mjpeg.getResolution();
 	};
 
 	self.setJanusEnabled = function(enabled) {
