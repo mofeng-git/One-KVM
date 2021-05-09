@@ -22,6 +22,7 @@
 
 import re
 import multiprocessing
+import functools
 import errno
 import time
 
@@ -39,6 +40,7 @@ from ... import aioproc
 
 from ...yamlconf import Option
 
+from ...validators.basic import valid_number
 from ...validators.basic import valid_float_f01
 from ...validators.os import valid_abs_path
 from ...validators.hw import valid_tty_speed
@@ -57,6 +59,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         device_path: str,
         speed: int,
         read_timeout: float,
+        protocol: int,
     ) -> None:
 
         super().__init__(instance_name, notifier)
@@ -64,6 +67,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         self.__device_path = device_path
         self.__speed = speed
         self.__read_timeout = read_timeout
+        self.__protocol = protocol
 
         self.__ctl_queue: "multiprocessing.Queue[int]" = multiprocessing.Queue()
         self.__channel_queue: "multiprocessing.Queue[Optional[int]]" = multiprocessing.Queue()
@@ -78,6 +82,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             "device":       Option("",     type=valid_abs_path, unpack_as="device_path"),
             "speed":        Option(115200, type=valid_tty_speed),
             "read_timeout": Option(2.0,    type=valid_float_f01),
+            "protocol":     Option(1,      type=functools.partial(valid_number, min=1, max=2)),
         }
 
     def register_input(self, pin: int, debounce: float) -> None:
@@ -178,7 +183,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     def __send_channel(self, tty: serial.Serial, channel: int) -> None:
         # Twice because of ezcoo bugs
-        tty.write((b"SET OUT1 VS IN%d\n" % (channel + 1)) * 2)
+        cmd = (b"SET" if self.__protocol == 1 else b"EZS")
+        tty.write((b"%s OUT1 VS IN%d\n" % (cmd, channel + 1)) * 2)
         tty.flush()
 
     def __str__(self) -> str:
