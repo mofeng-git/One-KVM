@@ -176,6 +176,16 @@ export function Streamer() {
 
 	/************************************************************************/
 
+	self.getResolution = function() {
+		let el_image = $("stream-image");
+		return {
+			real_width: el_image.naturalWidth,
+			real_height: el_image.naturalHeight,
+			view_width: el_image.offsetWidth,
+			view_height: el_image.offsetHeight,
+		};
+	};
+
 	self.setJanusEnabled = function(enabled) {
 		__janus_enabled = (!!window.RTCPeerConnection && enabled);
 		tools.info("Stream: Janus WebRTC Gateway state:", __janus_enabled);

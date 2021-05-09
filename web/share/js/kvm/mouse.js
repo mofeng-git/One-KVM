@@ -27,11 +27,12 @@ import {tools, $} from "../tools.js";
 import {Keypad} from "../keypad.js";
 
 
-export function Mouse(record_callback) {
+export function Mouse(get_resolution_callback, record_callback) {
 	var self = this;
 
 	/************************************************************************/
 
+	var __get_resolution_callback = get_resolution_callback;
 	var __record_callback = record_callback;
 
 	var __ws = null;
@@ -236,17 +237,13 @@ export function Mouse(record_callback) {
 		//   - Видим нарушение пропорций
 		// Так что теперь используются быстре рассчеты через offset*
 		// вместо getBoundingClientRect().
-		let el_image = $("stream-image");
-		let real_width = el_image.naturalWidth;
-		let real_height = el_image.naturalHeight;
-		let view_width = el_image.offsetWidth;
-		let view_height = el_image.offsetHeight;
-		let ratio = Math.min(view_width / real_width, view_height / real_height);
+		let res = __get_resolution_callback();
+		let ratio = Math.min(res.view_width / res.real_width, res.view_height / res.real_height);
 		return {
-			"x": Math.round((view_width - ratio * real_width) / 2),
-			"y": Math.round((view_height - ratio * real_height) / 2),
-			"width": Math.round(ratio * real_width),
-			"height": Math.round(ratio * real_height),
+			"x": Math.round((res.view_width - ratio * res.real_width) / 2),
+			"y": Math.round((res.view_height - ratio * res.real_height) / 2),
+			"width": Math.round(ratio * res.real_width),
+			"height": Math.round(ratio * res.real_height),
 		};
 	};
 

@@ -44,10 +44,10 @@ export function Session() {
 	var __ping_timer = null;
 	var __missed_heartbeats = 0;
 
-	var __hid = new Hid();
+	var __streamer = new Streamer();
+	var __hid = new Hid(__streamer.getResolution);
 	var __atx = new Atx();
 	var __msd = new Msd();
-	var __streamer = new Streamer(__hid);
 	var __wol = new WakeOnLan();
 	var __gpio = new Gpio();
 
