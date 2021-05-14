@@ -71,6 +71,7 @@ depends=(
 	iproute2
 	dnsmasq
 	ipmitool
+	janus-gateway-pikvm
 	"raspberrypi-io-access>=0.5"
 	"ustreamer>=3.20"
 

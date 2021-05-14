@@ -75,6 +75,7 @@ RUN git clone https://github.com/pikvm/ustreamer \
 	&& rm -rf ustreamer
 
 RUN mkdir -p \
+		/usr/share/janus/javascript \
 		/etc/kvmd/{nginx,vnc} \
 		/var/lib/kvmd/msd/{images,meta} \
 		/opt/vc/bin \

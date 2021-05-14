@@ -25,7 +25,26 @@
 
 import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
+/*import {Janus} from "./janus.js";
 
+
+function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_callback) {
+	var self = this;
+
+	var __janus = null;
+	var __handle = null;
+	var __bitrate_timer = null;
+
+	self.getResolution = function() {
+		let el_video = $("stream-video");
+		return {
+			real_width: el_video.videoWidth,
+			real_height: el_video.videoHeight,
+			view_width: el_video.offsetWidth,
+			view_height: el_video.offsetHeight,
+		};
+	};
+};*/
 
 function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_callback) {
 	var self = this;
