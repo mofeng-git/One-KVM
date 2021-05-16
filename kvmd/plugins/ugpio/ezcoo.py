@@ -105,7 +105,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 self.__channel = channel
                 await self._notifier.notify()
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         if self.__proc is not None:
             if self.__proc.is_alive():
                 get_logger(0).info("Stopping %s daemon ...", self)

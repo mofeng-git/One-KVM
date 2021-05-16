@@ -88,7 +88,7 @@ class Plugin(BaseUserGpioDriver):
         assert self.__reader
         await self.__reader.poll()
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         if self.__chip:
             try:
                 self.__chip.close()

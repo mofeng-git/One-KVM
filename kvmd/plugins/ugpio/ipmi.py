@@ -131,7 +131,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 prev = new
             await asyncio.sleep(self.__state_poll)
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         pass
 
     async def read(self, pin: int) -> bool:

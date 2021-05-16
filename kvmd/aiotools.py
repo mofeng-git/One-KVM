@@ -89,6 +89,19 @@ async def wait_first(*aws: Awaitable) -> Tuple[Set[asyncio.Future], Set[asyncio.
 
 
 # =====
+async def close_writer(writer: asyncio.StreamWriter) -> bool:
+    closing = writer.is_closing()
+    if not closing:
+        writer.transport.abort()  # type: ignore
+        writer.close()
+    try:
+        await writer.wait_closed()
+    except Exception:
+        pass
+    return (not closing)
+
+
+# =====
 class AioNotifier:
     def __init__(self) -> None:
         self.__queue: "asyncio.Queue[None]" = asyncio.Queue()

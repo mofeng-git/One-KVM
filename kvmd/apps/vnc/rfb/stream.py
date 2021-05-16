@@ -27,24 +27,14 @@ import struct
 from typing import Tuple
 from typing import Any
 
+from .... import aiotools
+
 from .errors import RfbConnectionError
 
 
 # =====
 def rfb_format_remote(writer: asyncio.StreamWriter) -> str:
     return "[%s]:%d" % (writer.transport.get_extra_info("peername")[:2])
-
-
-async def rfb_close_writer(writer: asyncio.StreamWriter) -> bool:
-    closing = writer.is_closing()
-    if not closing:
-        writer.transport.abort()  # type: ignore
-        writer.close()
-    try:
-        await writer.wait_closed()
-    except Exception:
-        pass
-    return (not closing)
 
 
 class RfbClientStream:
@@ -145,4 +135,4 @@ class RfbClientStream:
         self.__writer = ssl_writer
 
     async def _close(self) -> None:
-        await rfb_close_writer(self.__writer)
+        await aiotools.close_writer(self.__writer)

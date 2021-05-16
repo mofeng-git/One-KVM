@@ -86,7 +86,7 @@ class BaseUserGpioDriver(BasePlugin):
     async def run(self) -> None:
         raise NotImplementedError
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         raise NotImplementedError
 
     async def read(self, pin: int) -> bool:

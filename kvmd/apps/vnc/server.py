@@ -55,7 +55,6 @@ from ... import aiotools
 
 from .rfb import RfbClient
 from .rfb.stream import rfb_format_remote
-from .rfb.stream import rfb_close_writer
 from .rfb.errors import RfbError
 
 from .vncauth import VncAuthKvmdCredentials
@@ -487,7 +486,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             except Exception:
                 logger.exception("[entry] %s: Unhandled exception in client task", remote)
             finally:
-                if (await rfb_close_writer(writer)):
+                if (await aiotools.close_writer(writer)):
                     logger.info("[entry] %s: Connection is closed in an emergency", remote)
 
         self.__handle_client = handle_client

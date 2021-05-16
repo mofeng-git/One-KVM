@@ -97,7 +97,7 @@ class Plugin(BaseUserGpioDriver):
             except Exception:
                 logger.exception("Unexpected OTG-bind watcher error")
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         pass
 
     async def read(self, pin: int) -> bool:

@@ -295,7 +295,7 @@ class UserGpio:
     async def cleanup(self) -> None:
         for driver in self.__drivers.values():
             try:
-                driver.cleanup()
+                await driver.cleanup()
             except Exception:
                 get_logger().exception("Can't cleanup driver %s", driver)
 

@@ -108,7 +108,7 @@ class Plugin(BaseUserGpioDriver):
                 prev_raw = raw
             await asyncio.sleep(self.__state_poll)
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         self.__reset_pins()
         self.__close_device()
         self.__stop = True
