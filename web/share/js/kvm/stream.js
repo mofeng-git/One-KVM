@@ -25,6 +25,8 @@
 
 import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
+
+
 var _Janus = null;
 
 
@@ -213,6 +215,7 @@ export function Streamer() {
 		let supported = !!window.RTCPeerConnection;
 		let set_enabled = function() {
 			__janus_enabled = (enabled && supported && _Janus !== null);
+			tools.featureSetEnabled($("stream-mode"), __janus_enabled);
 			tools.info(`Stream: Janus WebRTC state: enabled=${enabled}, supported=${supported}, imported=${!!_Janus}`);
 			self.setState(__state);
 		};

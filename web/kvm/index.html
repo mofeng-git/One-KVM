@@ -118,7 +118,7 @@
               </td>
             </tr>
             <tr class="feature-disabled" id="stream-quality">
-              <td>Image quality:</td>
+              <td>JPEG quality:</td>
               <td>
                 <input class="slider" disabled type="range" id="stream-quality-slider">
               </td>
@@ -130,6 +130,17 @@
                 <input class="slider" disabled type="range" id="stream-desired-fps-slider">
               </td>
               <td class="value" id="stream-desired-fps-value">0</td>
+            </tr>
+            <tr class="feature-disabled" id="stream-mode">
+              <td>Video mode:</td>
+              <td>
+                <div class="radio-box">
+                  <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
+                  <label for="stream-mode-radio-mjpeg">MJPEG / HTTP</label>
+                  <input type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus">
+                  <label for="stream-mode-radio-janus">H.264 / WebRTC</label>
+                </div>
+              </td>
             </tr>
           </table>
           <hr>
@@ -1745,6 +1756,7 @@
                     <li>Stefan Bautz</li>
                     <li>Stefan Müller</li>
                     <li>Stefan Stemmer</li>
+                    <li>Stefan Vaillant</li>
                     <li>Stephan Schmidt</li>
                     <li>Steve Kerr</li>
                     <li>Steve Ovens</li>

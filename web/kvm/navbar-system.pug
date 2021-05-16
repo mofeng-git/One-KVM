@@ -15,13 +15,21 @@ li(class="right")
 				td Resolution:
 				td #[select(disabled data-dont-hide-menu id="stream-resolution-selector")]
 			tr(id="stream-quality" class="feature-disabled")
-				td Image quality:
+				td JPEG quality:
 				td #[input(disabled type="range" id="stream-quality-slider" class="slider")]
 				td(id="stream-quality-value" class="value") 80%
 			tr
 				td Max FPS:
 				td #[input(disabled type="range" id="stream-desired-fps-slider" class="slider")]
 				td(id="stream-desired-fps-value" class="value") 0
+			tr(id="stream-mode" class="feature-disabled")
+				td Video mode:
+				td
+					div(class="radio-box")
+						input(checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg")
+						label(for="stream-mode-radio-mjpeg") MJPEG / HTTP
+						input(type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus")
+						label(for="stream-mode-radio-janus") H.264 / WebRTC
 		hr
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu id="show-stream-button" class="row33") &bull; Show stream
