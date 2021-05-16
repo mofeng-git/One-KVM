@@ -25,10 +25,10 @@
 
 import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
-/*import {Janus} from "./janus.js";
+var _Janus = null;
 
 
-function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_callback) {
+/*function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_callback) {
 	var self = this;
 
 	var __janus = null;
@@ -210,9 +210,27 @@ export function Streamer() {
 	};
 
 	self.setJanusEnabled = function(enabled) {
-		__janus_enabled = (!!window.RTCPeerConnection && enabled);
-		tools.info("Stream: Janus WebRTC Gateway state:", __janus_enabled);
-		self.setState(__state);
+		let supported = !!window.RTCPeerConnection;
+		let set_enabled = function() {
+			__janus_enabled = (enabled && supported && _Janus !== null);
+			tools.info(`Stream: Janus WebRTC state: enabled=${enabled}, supported=${supported}, imported=${!!_Janus}`);
+			self.setState(__state);
+		};
+		if (enabled && supported) {
+			if (_Janus === null) {
+				import("./janus.js").then((module) => {
+					_Janus = module.Janus;
+					set_enabled();
+				}).catch((err) => {
+					tools.error("Can't import Janus module:", err);
+					set_enabled();
+				});
+			} else {
+				set_enabled();
+			}
+		} else {
+			set_enabled();
+		}
 	};
 
 	self.setState = function(state) {

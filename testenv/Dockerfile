@@ -50,7 +50,8 @@ RUN pip install -r requirements.txt
 WORKDIR /root
 RUN npm install htmlhint -g \
 	&& npm install pug \
-	&& npm install pug-cli -g
+	&& npm install pug-cli -g \
+	&& npm install @babel/eslint-parser -g
 WORKDIR /
 
 ARG LIBGPIOD_VERSION
@@ -75,7 +76,6 @@ RUN git clone https://github.com/pikvm/ustreamer \
 	&& rm -rf ustreamer
 
 RUN mkdir -p \
-		/usr/share/janus/javascript \
 		/etc/kvmd/{nginx,vnc} \
 		/var/lib/kvmd/msd/{images,meta} \
 		/opt/vc/bin \

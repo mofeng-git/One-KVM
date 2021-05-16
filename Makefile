@@ -126,7 +126,6 @@ run: testenv $(TESTENV_GPIO)
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& cp /usr/share/kvmd/configs.default/kvmd/web.css /etc/kvmd \
-			&& cp /usr/share/kvmd/web/share/js/kvm/janus.js /usr/share/janus/javascript/janus.js \
 			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 			&& ln -s $(TESTENV_GPIO) /dev/kvmd-gpio \

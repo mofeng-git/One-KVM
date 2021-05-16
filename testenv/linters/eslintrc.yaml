@@ -4,9 +4,12 @@ env:
 
 extends: "eslint:recommended"
 
+parser: "/usr/lib/node_modules/@babel/eslint-parser"
 parserOptions:
     ecmaVersion: 6
     sourceType: module
+    allowImportExportEverywhere: true
+    requireConfigFile: false
 
 rules:
     indent:
