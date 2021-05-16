@@ -52,7 +52,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         host: str,
         port: int,
         timeout: float,
-        send_delay: float,
+        switch_delay: float,
         state_poll: float,
     ) -> None:
 
@@ -61,22 +61,22 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         self.__host = host
         self.__port = port
         self.__timeout = timeout
-        self.__send_delay = send_delay
+        self.__switch_delay = switch_delay
         self.__state_poll = state_poll
 
         self.__reader: Optional[asyncio.StreamReader] = None
         self.__writer: Optional[asyncio.StreamWriter] = None
-
         self.__active: int = -1
+        self.__update_notifier = aiotools.AioNotifier()
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "host":       Option("",   type=valid_ip_or_host),
-            "port":       Option(5000, type=valid_port),
-            "timeout":    Option(5.0,  type=valid_float_f01),
-            "send_delay": Option(1.0,  type=valid_float_f0),
-            "state_poll": Option(5.0,  type=valid_float_f01),
+            "host":         Option("",   type=valid_ip_or_host),
+            "port":         Option(5000, type=valid_port),
+            "timeout":      Option(5.0,  type=valid_float_f01),
+            "switch_delay": Option(1.0,  type=valid_float_f0),
+            "state_poll":   Option(5.0,  type=valid_float_f01),
         }
 
     def register_input(self, pin: int, debounce: float) -> None:
@@ -95,6 +95,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
     async def run(self) -> None:
         prev_active = -2
         while True:
+            await self.__update_notifier.wait(self.__state_poll)
             try:
                 self.__active = await self.__send_command(b"\x10\x00")
             except Exception:
@@ -102,7 +103,6 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             if self.__active != prev_active:
                 await self._notifier.notify()
                 prev_active = self.__active
-            await asyncio.sleep(self.__state_poll)
 
     async def cleanup(self) -> None:
         await self.__close_device()
@@ -113,7 +113,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
     async def write(self, pin: int, state: bool) -> None:
         if state:
             await self.__send_command(b"\x01%.2x" % (pin - 1))
-            await asyncio.sleep(self.__send_delay)  # Slowdown
+            await self.__update_notifier.notify()
+            await asyncio.sleep(self.__switch_delay)  # Slowdown
 
     # =====
 

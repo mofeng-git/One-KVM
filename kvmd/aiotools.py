@@ -112,10 +112,17 @@ class AioNotifier:
     def notify_sync(self) -> None:
         self.__queue.put_nowait(None)
 
-    async def wait(self) -> None:
-        await self.__queue.get()
+    async def wait(self, timeout: Optional[float]=None) -> None:
+        if timeout is None:
+            await self.__queue.get()
+        else:
+            try:
+                await asyncio.wait_for(self.__queue.get(), timeout=timeout)
+            except asyncio.TimeoutError:
+                return  # False
         while not self.__queue.empty():
             await self.__queue.get()
+        # return True
 
 
 # =====
