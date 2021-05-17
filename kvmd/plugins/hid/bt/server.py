@@ -151,8 +151,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
     @contextlib.contextmanager
     def __listen(self, role: _RoleT, addr: str, port: int) -> Generator[socket.socket, None, None]:
         get_logger(0).info("Listening [%s]:%d for %s ...", addr, port, role)
-        # with socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP) as sock:
-        with socket.socket(31, socket.SOCK_SEQPACKET, 0) as sock:
+        with socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.settimeout(self.__socket_timeout)
             sock.bind((addr, port))
