@@ -240,6 +240,8 @@ export var tools = new function() {
 		};
 	};
 	this.info("Browser:", this.browser);
+
+	this.https = (location.protocol === "https:");
 };
 
 export var $ = (id) => document.getElementById(id);

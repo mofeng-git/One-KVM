@@ -205,8 +205,7 @@ export function Session() {
 		let http = tools.makeRequest("GET", "/api/auth/check", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
-					let proto = (location.protocol === "https:" ? "wss" : "ws");
-					__ws = new WebSocket(`${proto}://${location.host}/api/ws`);
+					__ws = new WebSocket(`${tools.https ? "wss" : "ws"}://${location.host}/api/ws`);
 					__ws.onopen = __wsOpenHandler;
 					__ws.onmessage = __wsMessageHandler;
 					__ws.onerror = __wsErrorHandler;
