@@ -80,12 +80,12 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         }
 
     def register_input(self, pin: int, debounce: float) -> None:
-        if not (0 < pin < 16):
+        if not (0 <= pin < 16):
             raise RuntimeError(f"Unsupported port number: {pin}")
         _ = debounce
 
     def register_output(self, pin: int, initial: Optional[bool]) -> None:
-        if not (0 < pin < 16):
+        if not (0 <= pin < 16):
             raise RuntimeError(f"Unsupported port number: {pin}")
         _ = initial
 
@@ -112,7 +112,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     async def write(self, pin: int, state: bool) -> None:
         if state:
-            await self.__send_command(b"\x01%.2x" % (pin - 1))
+            await self.__send_command("{:c}{:c}".format(1, pin + 1).encode())
             await self.__update_notifier.notify()
             await asyncio.sleep(self.__switch_delay)  # Slowdown
 
@@ -136,7 +136,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             try:
                 (reader, writer) = await asyncio.open_connection(self.__host, self.__port)
                 sock = writer.get_extra_info("socket")
-                sock.settimeout(self.__timeout)
+#                sock.settimeout(self.__timeout)
+                sock.settimeout(0)
             except Exception as err:
                 get_logger(0).error("Can't connect to Tesmart KVM [%s]:%d: %s",
                                     self.__host, self.__port, tools.efmt(err))
