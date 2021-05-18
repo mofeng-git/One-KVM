@@ -76,7 +76,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             "port":         Option(5000, type=valid_port),
             "timeout":      Option(5.0,  type=valid_float_f01),
             "switch_delay": Option(1.0,  type=valid_float_f0),
-            "state_poll":   Option(5.0,  type=valid_float_f01),
+            "state_poll":   Option(10.0, type=valid_float_f01),
         }
 
     def register_input(self, pin: int, debounce: float) -> None:
