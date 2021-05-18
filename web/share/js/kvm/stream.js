@@ -30,12 +30,19 @@ import {wm} from "../wm.js";
 var _Janus = null;
 
 
-/*function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_callback) {
+function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_callback) {
 	var self = this;
+
+	var __stop = false;
+	var __ensuring = false;
 
 	var __janus = null;
 	var __handle = null;
-	var __bitrate_timer = null;
+
+	var __retry_timeout = null;
+	var __info_interval = null;
+
+	var __state = null;
 
 	self.getResolution = function() {
 		let el_video = $("stream-video");
@@ -46,7 +53,192 @@ var _Janus = null;
 			view_height: el_video.offsetHeight,
 		};
 	};
-};*/
+
+	self.ensureStream = function(state) {
+		__state = state;
+		__stop = false;
+		__ensureJanus(false);
+	};
+
+	self.stopStream = function() {
+		__stop = true;
+		__destroyJanus();
+	};
+
+	var __ensureJanus = function(internal) {
+		if (__janus === null && !__stop && (!__ensuring || internal)) {
+			set_inactive_callback();
+			set_info_callback(false, false, "");
+			__ensuring = true;
+			__logInfo("Starting Janus ...");
+			__janus = new _Janus({
+				server: `${tools.https ? "wss" : "ws"}://${location.host}/janus/ws`,
+				destroyOnUnload: false,
+				success: __attachJanus,
+				error: function(error) { __logError(error); __finishJanus(); },
+			});
+		}
+	};
+
+	var __finishJanus = function() {
+		if (__stop) {
+			if (__retry_timeout !== null) {
+				clearTimeout(__retry_timeout);
+				__retry_timeout = null;
+			}
+			__ensuring = false;
+		} else {
+			if (__retry_timeout === null) {
+				__retry_timeout = setTimeout(function() {
+					__retry_timeout = null;
+					__ensureJanus(true);
+				}, 5000);
+			}
+		}
+		__stopInfoInterval();
+		__handle = null;
+		__janus = null;
+		set_inactive_callback();
+		set_info_callback(false, false, "");
+	};
+
+	var __destroyJanus = function() {
+		if (__janus !== null) {
+			__janus.destroy();
+		}
+		__finishJanus();
+	};
+
+	var __attachJanus = function() {
+		if (__janus === null) {
+			return;
+		}
+		__janus.attach({
+			plugin: "janus.plugin.ustreamer",
+			oid: "oid-" + _Janus.randomString(12),
+
+			success: function(handle) {
+				__handle = handle;
+				__logInfo("uStreamer attached:", handle.getPlugin(), handle.getId());
+				__sendWatch();
+			},
+
+			error: function(error) {
+				__logError("Can't attach uStreamer: ", error);
+				__destroyJanus();
+			},
+
+			iceState: function(state) {
+				__logInfo("ICE state changed to", state);
+				// Если раскомментировать, то он начнет дрючить соединение,
+				// так как каллбек вызывает сильно после завершения работы
+				/*if (state === "disconnected") {
+					__destroyJanus();
+				}*/
+			},
+
+			webrtcState: function(up) {
+				__logInfo("Janus says our WebRTC PeerConnection is", (up ? "up" : "down"), "now");
+			},
+
+			onmessage: function(msg, jsep) {
+				if (msg.result) {
+					__logInfo("Got Janus message:", msg.result.status); // starting, started, stopped
+					if (msg.result.status === "started") {
+						set_active_callback();
+					} else if (msg.result.status === "stopped") {
+						set_inactive_callback();
+						set_info_callback(false, false, "");
+					}
+				} else if (msg.error) {
+					__logError("Got janus error:", msg.error);
+					__sendStop();
+					__sendWatch();
+					return;
+				} else {
+					__logInfo("Got Janus message:", msg);
+				}
+
+				if (jsep) {
+					__logInfo("Handling SDP:", jsep);
+					__handle.createAnswer({
+						jsep: jsep,
+						media: {audioSend: false, videoSend: false, data: false},
+
+						success: function(jsep) {
+							__logInfo("Got SDP:", jsep);
+							__sendStart(jsep);
+						},
+
+						error: function(error) {
+							__logInfo("Error on SDP handling:", error);
+							//__destroyJanus();
+						},
+					});
+				}
+			},
+
+			onremotestream: function(stream) {
+				__logInfo("Got a remote stream:", stream);
+				_Janus.attachMediaStream($("stream-video"), stream);
+				__startInfoInterval();
+			},
+
+			oncleanup: function() {
+				__logInfo("Got a cleanup notification");
+				__stopInfoInterval();
+			},
+		});
+	};
+
+	var __startInfoInterval = function() {
+		__stopInfoInterval();
+		set_active_callback();
+		__updateInfo();
+		__info_interval = setInterval(__updateInfo, 1000);
+	};
+
+	var __stopInfoInterval = function() {
+		if (__info_interval !== null) {
+			clearInterval(__info_interval);
+		}
+		__info_interval = null;
+	};
+
+	var __updateInfo = function() {
+		if (__handle !== null) {
+			let online = !!(__state && __state.source && __state.source.online);
+			let bitrate = (__handle !== null ? __handle.getBitrate() : "");
+			set_info_callback(true, online, bitrate);
+		}
+	};
+
+	var __sendWatch = function() {
+		if (__handle) {
+			__logInfo("Sending WATCH ...");
+			__handle.send({message: {request: "watch"}});
+		}
+	};
+
+	var __sendStart = function(jsep) {
+		if (__handle) {
+			__logInfo("Sending START ...");
+			__handle.send({message: {request: "start"}, jsep: jsep});
+		}
+	};
+
+	var __sendStop = function() {
+		__stopInfoInterval();
+		if (__handle) {
+			__logInfo("Sending STOP ...");
+			__handle.send({message: {request: "stop"}});
+			__handle.hangup();
+		}
+	};
+
+	var __logInfo = (...args) => tools.info("Stream [Janus]:", ...args);
+	var __logError = (...args) => tools.error("Stream [Janus]:", ...args);
+}
 
 function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_callback) {
 	var self = this;
@@ -101,7 +293,7 @@ function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_cal
 		let old_fps = __fps;
 		__fps = __state.stream.clients_stat[__id].fps;
 		if (old_fps < 0) {
-			tools.info("Stream [MJPEG]: Active");
+			__logInfo("Active");
 			set_active_callback();
 		}
 		set_info_callback(true, __state.source.online, `${__fps} fps`);
@@ -114,7 +306,7 @@ function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_cal
 		__fps = -1;
 		__state = null;
 		if (old_fps >= 0) {
-			tools.info("Stream [MJPEG]: Inactive");
+			__logInfo("Inactive");
 			set_inactive_callback();
 			set_info_callback(false, false, "");
 		}
@@ -138,7 +330,7 @@ function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_cal
 	var __findId = function() {
 		let stream_client = tools.getCookie("stream_client");
 		if (__id.length === 0 && stream_client && stream_client.startsWith(__key + "/")) {
-			tools.info("Stream [MJPEG]: Found acceptable stream_client cookie:", stream_client);
+			__logInfo("Found acceptable stream_client cookie:", stream_client);
 			__id = stream_client.slice(stream_client.indexOf("/") + 1);
 		}
 	};
@@ -160,18 +352,20 @@ function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_cal
 			let path = `/streamer/stream?key=${__key}`;
 			if (tools.browser.is_safari || tools.browser.is_ios) {
 				// uStreamer fix for WebKit
-				tools.info("Stream [MJPEG]: Using dual_final_frames=1 to fix WebKit bugs");
+				__logInfo("Using dual_final_frames=1 to fix WebKit bugs");
 				path += "&dual_final_frames=1";
 			} else if (tools.browser.is_chrome || tools.browser.is_blink) {
 				// uStreamer fix for Blink https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-				tools.info("Stream [MJPEG]: Using advance_headers=1 to fix Blink bugs");
+				__logInfo("Using advance_headers=1 to fix Blink bugs");
 				path += "&advance_headers=1";
 			}
 
-			tools.info("Stream [MJPEG]: Refreshing ...");
+			__logInfo("Refreshing ...");
 			$("stream-image").src = path;
 		}
 	};
+
+	var __logInfo = (...args) => tools.info("Stream [MJPEG]:", ...args);
 }
 
 export function Streamer() {
@@ -180,13 +374,15 @@ export function Streamer() {
 	/************************************************************************/
 
 	var __janus_enabled = null;
-	var __mjpeg = null;
+	var __streamer = null;
 
 	var __state = null;
 	var __resolution = {width: 640, height: 480};
 
 	var __init__ = function() {
-		__mjpeg = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
+		__streamer = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
+//		tools.hiddenSetVisible($("stream-image"), false); // FIXME
+//		tools.hiddenSetVisible($("stream-video"), true);
 
 		$("stream-led").title = "Stream inactive";
 
@@ -198,6 +394,8 @@ export function Streamer() {
 
 		$("stream-resolution-selector").onchange = (() => __sendParam("resolution", $("stream-resolution-selector").value));
 
+		tools.radioSetOnClick("stream-mode-radio", __clickModeRadio);
+
 		tools.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
 		tools.setOnClick($("stream-reset-button"), __clickResetButton);
 
@@ -208,7 +406,7 @@ export function Streamer() {
 	/************************************************************************/
 
 	self.getResolution = function() {
-		return __mjpeg.getResolution();
+		return __streamer.getResolution();
 	};
 
 	self.setJanusEnabled = function(enabled) {
@@ -222,10 +420,15 @@ export function Streamer() {
 		if (enabled && supported) {
 			if (_Janus === null) {
 				import("./janus.js").then((module) => {
-					_Janus = module.Janus;
-					set_enabled();
+					module.Janus.init({
+						debug: "all",
+						callback: function() {
+							_Janus = module.Janus;
+							set_enabled();
+						},
+					});
 				}).catch((err) => {
-					tools.error("Can't import Janus module:", err);
+					tools.error("Stream: Can't import Janus module:", err);
 					set_enabled();
 				});
 			} else {
@@ -249,22 +452,18 @@ export function Streamer() {
 			tools.featureSetEnabled($("stream-resolution"), state.features.resolution);
 
 			if (state.streamer) {
-				if (!$("stream-quality-slider").activated) {
-					wm.setElementEnabled($("stream-quality-slider"), true);
-					if ($("stream-quality-slider").value !== state.streamer.encoder.quality) {
-						$("stream-quality-slider").value = state.streamer.encoder.quality;
-						__updateQualityValue(state.streamer.encoder.quality);
-					}
+				wm.setElementEnabled($("stream-quality-slider"), true);
+				if ($("stream-quality-slider").value !== state.streamer.encoder.quality) {
+					$("stream-quality-slider").value = state.streamer.encoder.quality;
+					__updateQualityValue(state.streamer.encoder.quality);
 				}
 
-				if (!$("stream-desired-fps-slider").activated) {
-					$("stream-desired-fps-slider").min = state.limits.desired_fps.min;
-					$("stream-desired-fps-slider").max = state.limits.desired_fps.max;
-					wm.setElementEnabled($("stream-desired-fps-slider"), true);
-					if ($("stream-desired-fps-slider").value !== state.streamer.source.desired_fps) {
-						$("stream-desired-fps-slider").value = state.streamer.source.desired_fps;
-						__updateDesiredFpsValue(state.streamer.source.desired_fps);
-					}
+				$("stream-desired-fps-slider").min = state.limits.desired_fps.min;
+				$("stream-desired-fps-slider").max = state.limits.desired_fps.max;
+				wm.setElementEnabled($("stream-desired-fps-slider"), true);
+				if ($("stream-desired-fps-slider").value !== state.streamer.source.desired_fps) {
+					$("stream-desired-fps-slider").value = state.streamer.source.desired_fps;
+					__updateDesiredFpsValue(state.streamer.source.desired_fps);
 				}
 
 				let resolution_str = __makeStringResolution(state.streamer.source.resolution);
@@ -287,12 +486,17 @@ export function Streamer() {
 					document.querySelector(`#stream-resolution-selector [value="${resolution_str}"]`).selected = true;
 					wm.setElementEnabled($("stream-resolution-selector"), true);
 				}
+
+			} else {
+				wm.setElementEnabled($("stream-quality-slider"), false);
+				wm.setElementEnabled($("stream-desired-fps-slider"), false);
+				wm.setElementEnabled($("stream-resolution-selector"), false);
 			}
 
-			__mjpeg.ensureStream(state.streamer);
+			__streamer.ensureStream(state.streamer);
 
 		} else {
-			__mjpeg.stopStream();
+			__streamer.stopStream();
 		}
 	};
 
@@ -301,8 +505,6 @@ export function Streamer() {
 		$("stream-led").title = "Stream is active";
 		wm.setElementEnabled($("stream-screenshot-button"), true);
 		wm.setElementEnabled($("stream-reset-button"), true);
-		$("stream-quality-slider").activated = false;
-		$("stream-desired-fps-slider").activated = false;
 	};
 
 	var __setInactive = function() {
@@ -310,9 +512,6 @@ export function Streamer() {
 		$("stream-led").title = "Stream inactive";
 		wm.setElementEnabled($("stream-screenshot-button"), false);
 		wm.setElementEnabled($("stream-reset-button"), false);
-		wm.setElementEnabled($("stream-quality-slider"), false);
-		wm.setElementEnabled($("stream-desired-fps-slider"), false);
-		wm.setElementEnabled($("stream-resolution-selector"), false);
 	};
 
 	var __setInfo = function(is_active, online, text) {
@@ -342,6 +541,25 @@ export function Streamer() {
 		$("stream-desired-fps-value").innerHTML = (value === 0 ? "Unlimited" : value);
 	};
 
+	var __clickModeRadio = function() {
+		if (_Janus !== null) {
+			let mode = tools.radioGetValue("stream-mode-radio");
+			setTimeout(() => tools.radioSetValue("stream-mode-radio", mode), 100);
+			tools.hiddenSetVisible($("stream-image"), (mode === "mjpeg"));
+			tools.hiddenSetVisible($("stream-video"), (mode !== "mjpeg"));
+			if (mode === "mjpeg") {
+				__streamer.stopStream();
+				__streamer = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
+			} else { // janus
+				__streamer.stopStream();
+				__streamer = new _JanusStreamer(__setActive, __setInactive, __setInfo);
+			}
+			if (wm.isWindowVisible($("stream-window"))) {
+				__streamer.ensureStream(__state);
+			}
+		}
+	};
+
 	var __clickScreenshotButton = function() {
 		let el_a = document.createElement("a");
 		el_a.href = "/api/streamer/snapshot?allow_offline=1";
@@ -354,6 +572,11 @@ export function Streamer() {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset stream?").then(function (ok) {
 			if (ok) {
+				if (wm.isWindowVisible($("stream-window"))) {
+					__streamer.stopStream();
+					__streamer.ensureStream(__state);
+				}
+
 				let http = tools.makeRequest("POST", "/api/streamer/reset", function() {
 					if (http.readyState === 4) {
 						if (http.status !== 200) {
