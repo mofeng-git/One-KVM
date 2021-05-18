@@ -123,8 +123,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         (reader, writer) = await self.__ensure_device()
         try:
             writer.write(b"\xAA\xBB\x03%s\xEE" % (cmd))
-            await writer.drain()
-            return (await reader.readexactly(6))[4]
+            await asyncio.wait_for(writer.drain(), timeout=self.__timeout)
+            return (await asyncio.wait_for(reader.readexactly(6), timeout=self.__timeout))[4]
         except Exception as err:
             get_logger(0).error("Can't send command to Tesmart KVM [%s]:%d: %s",
                                 self.__host, self.__port, tools.efmt(err))
@@ -134,10 +134,10 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
     async def __ensure_device(self) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         if self.__reader is None or self.__writer is None:
             try:
-                (reader, writer) = await asyncio.open_connection(self.__host, self.__port)
-                sock = writer.get_extra_info("socket")
-#                sock.settimeout(self.__timeout)
-                sock.settimeout(0)
+                (reader, writer) = await asyncio.wait_for(
+                    asyncio.open_connection(self.__host, self.__port),
+                    timeout=self.__timeout,
+                )
             except Exception as err:
                 get_logger(0).error("Can't connect to Tesmart KVM [%s]:%d: %s",
                                     self.__host, self.__port, tools.efmt(err))
