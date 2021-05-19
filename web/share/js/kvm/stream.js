@@ -450,18 +450,18 @@ export function Streamer() {
 	var __applyState = function(state) {
 		if (state) {
 			tools.featureSetEnabled($("stream-quality"), state.features.quality && (state.streamer === null || state.streamer.encoder.quality > 0));
+			tools.featureSetEnabled($("stream-h264-bitrate"), state.features.h264 && __janus_enabled);
 			tools.featureSetEnabled($("stream-resolution"), state.features.resolution);
 
 			if (state.streamer) {
 				wm.setElementEnabled($("stream-quality-slider"), true);
 				__setIfChanged($("stream-quality-slider"), state.streamer.encoder.quality, __updateQualityValue);
 
-				if (state.features.h264) {
+				if (state.features.h264 && __janus_enabled) {
 					__setMinMax($("stream-h264-bitrate-slider"), state.limits.h264_bitrate);
 					wm.setElementEnabled($("stream-h264-bitrate-slider"), true);
 					__setIfChanged($("stream-h264-bitrate-slider"), state.streamer.h264.bitrate, __updateH264BitrateValue);
 				}
-				tools.featureSetEnabled($("stream-h264-bitrate"), state.features.h264);
 
 				__setMinMax($("stream-desired-fps-slider"), state.limits.desired_fps);
 				wm.setElementEnabled($("stream-desired-fps-slider"), true);
