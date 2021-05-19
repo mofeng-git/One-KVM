@@ -108,7 +108,23 @@
       </div>
       <li class="right"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" data-dont-hide-menu id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" data-dont-hide-menu id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" data-dont-hide-menu id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg">System</a>
         <div class="menu" data-dont-hide-menu>
-          <div class="text"><b>Runtime settings &amp; tools<br></b><sub>Lower stream params may improve performance in a poor network</sub></div>
+          <table class="kv" style="width: calc(100% - 20px)">
+            <tr>
+              <td class="value">Runtime settings &amp; tools</td>
+              <td class="feature-disabled" id="webterm">
+                <button class="small" data-force-hide-menu id="show-webterm-button">&bull; Term</button>
+              </td>
+              <td>
+                <button class="small" data-force-hide-menu id="show-about-button">&bull; About</button>
+              </td>
+              <td>
+                <button class="small" data-force-hide-menu id="open-log-button">&bull; Log</button>
+              </td>
+              <td class="feature-disabled" id="wol">
+                <button class="small" disabled data-force-hide-menu id="wol-wakeup-button">&bull; WoL</button>
+              </td>
+            </tr>
+          </table>
           <hr>
           <table class="kv" style="width: calc(100% - 20px)">
             <tr class="feature-disabled" id="stream-resolution">
@@ -206,19 +222,6 @@
           <div class="buttons buttons-row">
             <button class="row50" data-force-hide-menu id="show-keyboard-button">&bull; Show keyboard</button>
             <button class="row50" disabled id="hid-reset-button">Reset HID</button>
-          </div>
-          <hr>
-          <div class="buttons buttons-row">
-            <button class="row50" data-force-hide-menu id="show-about-button">&bull; Show about</button>
-            <button class="row50" data-force-hide-menu id="open-log-button">&bull; Open log</button>
-          </div>
-          <div class="buttons feature-disabled" id="wol">
-            <hr>
-            <button disabled id="wol-wakeup-button">&bull; Wake-on-LAN server</button>
-          </div>
-          <div class="buttons feature-disabled" id="webterm">
-            <hr>
-            <button data-force-hide-menu id="show-webterm-button">&bull; Show terminal</button>
           </div>
         </div>
       </li>

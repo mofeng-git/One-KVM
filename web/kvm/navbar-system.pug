@@ -6,9 +6,13 @@ li(class="right")
 		+navbar_led("hid-mouse-led", "led-hid-mouse")
 		| System
 	div(data-dont-hide-menu class="menu")
-		div(class="text")
-			b Runtime settings &amp; tools#[br]
-			sub Lower stream params may improve performance in a poor network
+		table(class="kv" style="width: calc(100% - 20px)")
+			tr
+				td(class="value") Runtime settings &amp; tools
+				td(id="webterm" class="feature-disabled") #[button(data-force-hide-menu id="show-webterm-button" class="small") &bull; Term]
+				td #[button(data-force-hide-menu id="show-about-button" class="small") &bull; About]
+				td #[button(data-force-hide-menu id="open-log-button" class="small") &bull; Log]
+				td(id="wol" class="feature-disabled") #[button(disabled data-force-hide-menu id="wol-wakeup-button" class="small") &bull; WoL]
 		hr
 		table(class="kv" style="width: calc(100% - 20px)")
 			tr(id="stream-resolution" class="feature-disabled")
@@ -67,13 +71,3 @@ li(class="right")
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu id="show-keyboard-button" class="row50") &bull; Show keyboard
 			button(disabled id="hid-reset-button" class="row50") Reset HID
-		hr
-		div(class="buttons buttons-row")
-			button(data-force-hide-menu id="show-about-button" class="row50") &bull; Show about
-			button(data-force-hide-menu id="open-log-button" class="row50") &bull; Open log
-		div(id="wol" class="buttons feature-disabled")
-			hr
-			button(disabled id="wol-wakeup-button") &bull; Wake-on-LAN server
-		div(id="webterm" class="buttons feature-disabled")
-			hr
-			button(data-force-hide-menu id="show-webterm-button") &bull; Show terminal
