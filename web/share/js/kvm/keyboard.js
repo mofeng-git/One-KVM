@@ -149,7 +149,7 @@ export function Keyboard(record_callback) {
 			"event_type": "key",
 			"event": {"key": code, "state": state},
 		};
-		if (__ws) {
+		if (__ws && !$("hid-mute-switch").checked) {
 			__ws.send(JSON.stringify(event));
 		}
 		__record_callback(event);

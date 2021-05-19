@@ -301,7 +301,7 @@ export function Mouse(get_resolution_callback, record_callback) {
 
 	var __sendEvent = function(event_type, event) {
 		event = {"event_type": event_type, "event": event};
-		if (__ws) {
+		if (__ws && !$("hid-mute-switch").checked) {
 			__ws.send(JSON.stringify(event));
 		}
 		__record_callback(event);
