@@ -21,11 +21,15 @@ li(class="right")
 			tr(id="stream-quality" class="feature-disabled")
 				td JPEG quality:
 				td #[input(disabled type="range" id="stream-quality-slider" class="slider")]
-				td(id="stream-quality-value" class="value") 80%
+				td(id="stream-quality-value" class="value" style="min-width: 30px; max-width:30px")
+			tr(id="stream-h264-bitrate" class="feature-disabled")
+				td H.264 kbps:
+				td #[input(disabled type="range" id="stream-h264-bitrate-slider" class="slider")]
+				td(id="stream-h264-bitrate-value" class="value" style="min-width: 30px; max-width:30px")
 			tr
 				td Max FPS:
 				td #[input(disabled type="range" id="stream-desired-fps-slider" class="slider")]
-				td(id="stream-desired-fps-value" class="value") 0
+				td(id="stream-desired-fps-value" class="value" style="min-width: 30px; max-width:30px")
 			tr(id="stream-mode" class="feature-disabled")
 				td Video mode:
 				td
