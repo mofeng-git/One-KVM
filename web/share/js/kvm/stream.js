@@ -381,8 +381,6 @@ export function Streamer() {
 
 	var __init__ = function() {
 		__streamer = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
-//		tools.hiddenSetVisible($("stream-image"), false); // FIXME
-//		tools.hiddenSetVisible($("stream-video"), true);
 
 		$("stream-led").title = "Stream inactive";
 
