@@ -182,9 +182,8 @@
               </tr>
             </table>
           </div>
-          <div class="feature-disabled" id="hid-mouse-squash">
-            <hr>
-                <table class="kv">
+          <table class="kv">
+            <tr class="feature-disabled" id="hid-mouse-squash">
                   <td>Squash relative mouse moves:</td>
                   <td align="right">
                     <div class="switch-box">
@@ -192,11 +191,8 @@
                       <label for="hid-mouse-squash-switch"><span class="switch-inner"></span><span class="switch"></span></label>
                     </div>
                   </td>
-                </table>
-          </div>
-          <div class="feature-disabled" id="hid-connect">
-            <hr>
-                <table class="kv">
+            </tr>
+            <tr class="feature-disabled" id="hid-connect">
                   <td>Connect HID to Server:</td>
                   <td align="right">
                     <div class="switch-box">
@@ -204,21 +200,17 @@
                       <label for="hid-connect-switch"><span class="switch-inner"></span><span class="switch"></span></label>
                     </div>
                   </td>
-                </table>
-          </div>
-          <hr>
-              <table class="kv">
-                <td>Mute HID input events:</td>
-                <td align="right">
-                  <div class="switch-box">
-                    <input type="checkbox" id="hid-mute-switch">
-                    <label for="hid-mute-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                  </div>
-                </td>
-              </table>
-          <hr>
-          <div class="feature-disabled" id="v3-usb-breaker">
-            <table class="kv">
+            </tr>
+            <tr>
+                  <td>Mute HID input events:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input type="checkbox" id="hid-mute-switch">
+                      <label for="hid-mute-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+            <tr class="feature-disabled" id="v3-usb-breaker">
               <td>Connect main USB to Server:</td>
               <td align="right">
                 <div class="switch-box">
@@ -226,9 +218,9 @@
                   <label for="gpio-switch-__v3_usb_breaker__"><span class="switch-inner"></span><span class="switch"></span></label>
                 </div>
               </td>
-            </table>
-            <hr>
-          </div>
+            </tr>
+          </table>
+          <hr>
           <div class="buttons buttons-row">
             <button class="row50" data-force-hide-menu id="show-keyboard-button">&bull; Show keyboard</button>
             <button class="row50" disabled id="hid-reset-button">Reset HID</button>
@@ -435,13 +427,15 @@
           </table>
           <hr>
               <table class="kv">
-                <td>Infinite loop playback:</td>
-                <td align="right">
-                  <div class="switch-box">
-                    <input disabled type="checkbox" id="hid-recorder-loop-switch">
-                    <label for="hid-recorder-loop-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                  </div>
-                </td>
+                <tr>
+                      <td>Infinite loop playback:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input disabled type="checkbox" id="hid-recorder-loop-switch">
+                          <label for="hid-recorder-loop-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
               </table>
           <hr>
           <input type="file" id="hid-recorder-new-script-file">
@@ -472,13 +466,15 @@
           </table>
           <hr>
               <table class="kv">
-                <td>Ask paste confirmation:</td>
-                <td align="right">
-                  <div class="switch-box">
-                    <input checked type="checkbox" id="hid-pak-ask-switch">
-                    <label for="hid-pak-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                  </div>
-                </td>
+                <tr>
+                      <td>Ask paste confirmation:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input checked type="checkbox" id="hid-pak-ask-switch">
+                          <label for="hid-pak-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
               </table>
           <hr>
           <div class="text"></div>

@@ -13,15 +13,19 @@ mixin menu_message(icon, short, classes="")
 						sup(style="line-height:1")
 							block
 
+mixin menu_switch_notable(id, title, enabled, checked)
+	td #{title}:
+	td(align="right")
+		div(class="switch-box")
+			input(checked=checked disabled=!enabled type="checkbox" id=id)
+			label(for=id)
+				span(class="switch-inner")
+				span(class="switch")
+
 mixin menu_switch(id, title, enabled, checked)
 	table(class="kv")
-		td #{title}:
-		td(align="right")
-			div(class="switch-box")
-				input(checked=checked disabled=!enabled type="checkbox" id=id)
-				label(for=id)
-					span(class="switch-inner")
-					span(class="switch")
+		tr
+			+menu_switch_notable(id, title, enabled, checked)
 
 ul(id="navbar")
 	li(class="left")

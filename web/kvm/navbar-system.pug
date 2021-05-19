@@ -48,17 +48,14 @@ li(class="right")
 				tr
 					td Mouse:
 					td #[div(id="hid-outputs-mouse" class="radio-box")]
-		div(id="hid-mouse-squash" class="feature-disabled")
-			hr
-			+menu_switch("hid-mouse-squash-switch", "Squash relative mouse moves", true, true)
-		div(id="hid-connect" class="feature-disabled")
-			hr
-			+menu_switch("hid-connect-switch", "Connect HID to Server", true, true)
-		hr
-		+menu_switch("hid-mute-switch", "Mute HID input events", true, false)
-		hr
-		div(id="v3-usb-breaker" class="feature-disabled")
-			table(class="kv")
+		table(class="kv")
+			tr(id="hid-mouse-squash" class="feature-disabled")
+				+menu_switch_notable("hid-mouse-squash-switch", "Squash relative mouse moves", true, true)
+			tr(id="hid-connect" class="feature-disabled")
+				+menu_switch_notable("hid-connect-switch", "Connect HID to Server", true, true)
+			tr
+				+menu_switch_notable("hid-mute-switch", "Mute HID input events", true, false)
+			tr(id="v3-usb-breaker" class="feature-disabled")
 				td Connect main USB to Server:
 				td(align="right")
 					div(class="switch-box")
@@ -69,7 +66,7 @@ li(class="right")
 						label(for="gpio-switch-__v3_usb_breaker__")
 							span(class="switch-inner")
 							span(class="switch")
-			hr
+		hr
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu id="show-keyboard-button" class="row50") &bull; Show keyboard
 			button(disabled id="hid-reset-button" class="row50") Reset HID
