@@ -204,7 +204,7 @@ export function Hid(get_resolution_callback) {
 	};
 
 	var __clickPasteAsKeysButton = function() {
-		let text = $("hid-pak-text").value.replace(/[^\x00-\x7F]/g, "");  // eslint-disable-line no-control-regex
+		let text = $("hid-pak-text").value;
 		if (text) {
 			let paste_as_keys = function() {
 				wm.setElementEnabled($("hid-pak-text"), false);
