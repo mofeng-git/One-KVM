@@ -28,9 +28,6 @@ set -x
 board="$1"
 port="$2"
 
-# В новом systemd поломали %b в правилах udev
-[ -n "$port" ] || exit 0
-
 # https://gist.github.com/mdevaev/6eb65be689142e5ac16da7542f50830f
 model="`tr < /proc/device-tree/model -d '\000'`"
 

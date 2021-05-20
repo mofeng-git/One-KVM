@@ -75,6 +75,9 @@ depends=(
 	"raspberrypi-io-access>=0.5"
 	"ustreamer>=3.20"
 
+	# Systemd UDEV bug
+	"systemd>=248.3-2"
+
 	# Avoid dhcpcd stack trace
 	dhclient
 	netctl
