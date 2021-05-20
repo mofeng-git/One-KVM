@@ -29,7 +29,7 @@ from .mappings import WebModifiers
 
 
 # =====
-def text_to_web_keys(
+def text_to_web_keys(  # pylint: disable=too-many-branches
     text: str,
     symmap: Dict[int, Dict[int, str]],
     shift_key: str=WebModifiers.SHIFT_LEFT,
@@ -39,18 +39,25 @@ def text_to_web_keys(
 
     shifted = False
     for ch in text:
-        try:
-            code = ord(ch)
-            if 0x20 <= code <= 0x7E:
-                # https://stackoverflow.com/questions/12343987/convert-ascii-character-to-x11-keycode
-                # https://www.ascii-code.com
-                keys = symmap[code]
-            elif code == 0x0A:  # Enter:
-                keys = {0: "Enter"}
-            else:
+        # https://stackoverflow.com/questions/12343987/convert-ascii-character-to-x11-keycode
+        # https://www.ascii-code.com
+        if ch == "\n":
+            keys = {0: "Enter"}
+        elif ch == "\t":
+            keys = {0: "Tab"}
+        elif ch == " ":
+            keys = {0: "Space"}
+        else:
+            if ch in ["‚", "‘", "’"]:
+                ch = "'"
+            elif ch in ["„", "“", "”"]:
+                ch = "\""
+            if not ch.isprintable():
                 continue
-        except Exception:
-            continue
+            try:
+                keys = symmap[ord(ch)]
+            except Exception:
+                continue
 
         for (modifiers, key) in reversed(keys.items()):
             if (modifiers & SymmapModifiers.ALTGR) or (modifiers & SymmapModifiers.CTRL):
