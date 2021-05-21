@@ -7,6 +7,7 @@ Type=oneshot
 ExecStart=/bin/true
 ExecStop=/bin/true
 RemainAfterExit=true
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
