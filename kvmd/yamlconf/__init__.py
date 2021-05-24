@@ -161,7 +161,7 @@ def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, .
 
             if only_if and no_only_if:  # pylint: disable=no-else-raise
                 # Перекрестный only_if запрещен
-                raise RuntimeError(f"Found only_if recursuon on key {make_full_name(key)!r}")
+                raise RuntimeError(f"Found only_if recursion on key {make_full_name(key)!r}")
             elif only_if and (
                 (not only_if_negative and not process_option(only_if, no_only_if=True))
                 or (only_if_negative and process_option(only_if, no_only_if=True))
