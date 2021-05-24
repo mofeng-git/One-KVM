@@ -10,10 +10,12 @@ Restart=always
 RestartSec=3
 AmbientCapabilities=CAP_NET_RAW
 LimitNOFILE=65536
-UMask=0117  # Crutch for UNIX socket perms
+
+# Crutch for UNIX socket perms
+UMask=0117
 
 ExecStart=/usr/bin/kvmd-janus --run
-TimeoutStopSec=5
+TimeoutStopSec=10
 KillMode=mixed
 
 [Install]
