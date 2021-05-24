@@ -48,6 +48,7 @@ depends=(
 	python-spidev
 	python-setproctitle
 	python-psutil
+	python-netifaces
 	python-systemd
 	python-dbus
 	python-pygments
@@ -96,6 +97,7 @@ backup=(
 	etc/kvmd/{override,logging,auth,meta}.yaml
 	etc/kvmd/{ht,ipmi,vnc}passwd
 	etc/kvmd/nginx/{kvmd.ctx-{http,server},loc-{login,nocache,proxy,websocket},mime-types,ssl,nginx}.conf
+	etc/kvmd/janus/janus{,.plugin.ustreamer,.transport.websockets}.jcfg
 	etc/kvmd/web.css
 )
 
@@ -138,6 +140,10 @@ package_kvmd() {
 	chmod 755 "$pkgdir/etc/kvmd/"{nginx,vnc}"/ssl"
 	install -Dm444 -t "$pkgdir/etc/kvmd/nginx" "$_cfg_default/nginx"/*.conf
 	chmod 644 "$pkgdir/etc/kvmd/nginx/nginx.conf"
+
+	mkdir -p "$pkgdir/etc/kvmd/janus"
+	chmod 755 "$pkgdir/etc/kvmd/janus"
+	install -Dm444 -t "$pkgdir/etc/kvmd/janus" "$_cfg_default/janus"/*.jcfg
 
 	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*.yaml
 	install -Dm600 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*passwd

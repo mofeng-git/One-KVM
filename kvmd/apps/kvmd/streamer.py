@@ -435,26 +435,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         get_logger(0).info("Started streamer pid=%d: %s", self.__streamer_proc.pid, cmd)
 
     async def __kill_streamer_proc(self) -> None:
-        logger = get_logger(0)
-        if self.__streamer_proc and self.__streamer_proc.returncode is None:
-            try:
-                self.__streamer_proc.terminate()
-                await asyncio.sleep(1)
-                if self.__streamer_proc.returncode is None:
-                    try:
-                        self.__streamer_proc.kill()
-                    except Exception:
-                        if self.__streamer_proc.returncode is not None:
-                            raise
-                await self.__streamer_proc.wait()
-                logger.info("Streamer killed: pid=%d; retcode=%d",
-                            self.__streamer_proc.pid, self.__streamer_proc.returncode)
-            except asyncio.CancelledError:
-                pass
-            except Exception:
-                if self.__streamer_proc.returncode is None:
-                    logger.exception("Can't kill streamer pid=%d", self.__streamer_proc.pid)
-                else:
-                    logger.info("Streamer killed: pid=%d; retcode=%d",
-                                self.__streamer_proc.pid, self.__streamer_proc.returncode)
+        if self.__streamer_proc:
+            await aioproc.kill_process(self.__streamer_proc, 1, get_logger(0))
         self.__streamer_proc = None

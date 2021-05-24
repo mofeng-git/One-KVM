@@ -47,3 +47,7 @@ otgnet:
             - "/bin/true"
         pre_stop_cmd:
             - "/bin/true"
+
+janus:
+    cmd:
+        - "/bin/true"

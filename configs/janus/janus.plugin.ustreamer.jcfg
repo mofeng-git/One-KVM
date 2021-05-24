@@ -1,0 +1,3 @@
+memsink: {
+	object = "kvmd::ustreamer::h264"
+}

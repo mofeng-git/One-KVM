@@ -658,4 +658,29 @@ def _get_config_scheme() -> Dict:
                 },
             },
         },
+
+        "janus": {
+            "stun": {
+                "host":    Option("stun.l.google.com", type=valid_ip_or_host, unpack_as="stun_host"),
+                "port":    Option(19302, type=valid_port, unpack_as="stun_port"),
+                "timeout": Option(5.0,   type=valid_float_f01, unpack_as="stun_timeout"),
+            },
+
+            "check": {
+                "interval":      Option(10.0, type=valid_float_f01, unpack_as="check_interval"),
+                "retries":       Option(5,    type=valid_int_f1, unpack_as="check_retries"),
+                "retries_delay": Option(5.0,  type=valid_float_f01, unpack_as="check_retries_delay"),
+            },
+
+            "cmd": Option([
+                "/usr/bin/janus",
+                "--disable-colors",
+                "--plugins-folder=/usr/lib/ustreamer/janus",
+                "--configs-folder=/etc/kvmd/janus",
+                "--interface={src_ip}",
+                "--stun-server={stun_host}:{stun_port}",
+            ], type=valid_command),
+            "cmd_remove": Option([], type=valid_options),
+            "cmd_append": Option([], type=valid_options),
+        },
     }

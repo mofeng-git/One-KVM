@@ -27,6 +27,7 @@ RUN pacman -Syu --noconfirm \
 		python-pyserial \
 		python-setproctitle \
 		python-psutil \
+		python-netifaces \
 		python-systemd \
 		python-dbus \
 		python-pygments \
