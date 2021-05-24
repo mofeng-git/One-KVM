@@ -131,7 +131,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 			error: function(error) {
 				__logError("Can't attach uStreamer: ", error);
-				__setInfo(false, false, error)
+				__setInfo(false, false, error);
 				__destroyJanus();
 			},
 
@@ -162,7 +162,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 					__logError("Got janus error:", msg.error);
 					__sendStop();
 					__sendWatch();
-					__setInfo(false, false, msg.error)
+					__setInfo(false, false, msg.error);
 					return;
 				} else {
 					__logInfo("Got Janus message:", msg);
@@ -279,14 +279,14 @@ function _MjpegStreamer(__setActive, __setInactive, __setInfo) {
 			__state = state;
 			__findId();
 			if (__id.length > 0 && __id in __state.stream.clients_stat) {
-				__setActive();
+				__setStreamActive();
 				__stopChecking();
 			} else {
 				__ensureChecking();
 			}
 		} else {
 			__stopChecking();
-			__setInactive();
+			__setStreamInactive();
 		}
 	};
 
@@ -298,7 +298,7 @@ function _MjpegStreamer(__setActive, __setInactive, __setInfo) {
 		}
 	};
 
-	var __setActive = function() {
+	var __setStreamActive = function() {
 		let old_fps = __fps;
 		__fps = __state.stream.clients_stat[__id].fps;
 		if (old_fps < 0) {
@@ -308,7 +308,7 @@ function _MjpegStreamer(__setActive, __setInactive, __setInfo) {
 		__setInfo(true, __state.source.online, `${__fps} fps`);
 	};
 
-	var __setInactive = function() {
+	var __setStreamInactive = function() {
 		let old_fps = __fps;
 		__key = tools.makeId();
 		__id = "";
@@ -348,14 +348,14 @@ function _MjpegStreamer(__setActive, __setInactive, __setInfo) {
 		__findId();
 
 		if (__id.legnth > 0 && __id in __state.stream.clients_stat) {
-			__setActive();
+			__setStreamActive();
 			__stopChecking();
 
 		} else if (__id.length > 0 && __timer_retries >= 0) {
 			__timer_retries -= 1;
 
 		} else {
-			__setInactive();
+			__setStreamInactive();
 			__stopChecking();
 
 			let path = `/streamer/stream?key=${__key}`;
