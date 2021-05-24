@@ -174,7 +174,7 @@ class Plugin(BaseMcuHid):
             "chip":         Option(-1,     type=valid_int_f0),
             "hw_cs":        Option(False,  type=valid_bool),
             "sw_cs_pin":    Option(-1,     type=valid_gpio_pin_optional),
-            "max_freq":     Option(200000, type=valid_int_f1),
+            "max_freq":     Option(100000, type=valid_int_f1),
             "block_usec":   Option(1,      type=valid_int_f0),
             "read_timeout": Option(0.5,    type=valid_float_f01),
         }
