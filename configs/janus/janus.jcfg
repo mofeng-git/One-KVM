@@ -3,9 +3,6 @@ general: {
 }
 nat: {
 	nice_debug = false
-	ice_lite = true
-	ice_tcp = false
-	full_trickle = false
 	ignore_mdns = true
 }
 media: {
