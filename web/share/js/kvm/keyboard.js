@@ -24,12 +24,10 @@ import {tools, $, $$$} from "../tools.js";
 import {Keypad} from "../keypad.js";
 
 
-export function Keyboard(record_callback) {
+export function Keyboard(__recordWsEvent) {
 	var self = this;
 
 	/************************************************************************/
-
-	var __record_callback = record_callback;
 
 	var __ws = null;
 	var __online = true;
@@ -152,7 +150,7 @@ export function Keyboard(record_callback) {
 		if (__ws && !$("hid-mute-switch").checked) {
 			__ws.send(JSON.stringify(event));
 		}
-		__record_callback(event);
+		__recordWsEvent(event);
 	};
 
 	__init__();

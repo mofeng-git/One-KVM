@@ -31,12 +31,10 @@ import {Keyboard} from "./keyboard.js";
 import {Mouse} from "./mouse.js";
 
 
-export function Hid(get_resolution_callback) {
+export function Hid(__getResolution) {
 	var self = this;
 
 	/************************************************************************/
-
-	var __get_resolution_callback = get_resolution_callback;
 
 	var __recorder = null;
 	var __keyboard = null;
@@ -45,7 +43,7 @@ export function Hid(get_resolution_callback) {
 	var __init__ = function() {
 		__recorder = new Recorder();
 		__keyboard = new Keyboard(__recorder.recordWsEvent);
-		__mouse = new Mouse(__get_resolution_callback, __recorder.recordWsEvent);
+		__mouse = new Mouse(__getResolution, __recorder.recordWsEvent);
 
 		let hidden_attr = null;
 		let visibility_change_attr = null;

@@ -27,13 +27,10 @@ import {tools, $} from "../tools.js";
 import {Keypad} from "../keypad.js";
 
 
-export function Mouse(get_resolution_callback, record_callback) {
+export function Mouse(__getResolution, __recordWsEvent) {
 	var self = this;
 
 	/************************************************************************/
-
-	var __get_resolution_callback = get_resolution_callback;
-	var __record_callback = record_callback;
 
 	var __ws = null;
 	var __online = true;
@@ -237,7 +234,7 @@ export function Mouse(get_resolution_callback, record_callback) {
 		//   - Видим нарушение пропорций
 		// Так что теперь используются быстре рассчеты через offset*
 		// вместо getBoundingClientRect().
-		let res = __get_resolution_callback();
+		let res = __getResolution();
 		let ratio = Math.min(res.view_width / res.real_width, res.view_height / res.real_height);
 		return {
 			"x": Math.round((res.view_width - ratio * res.real_width) / 2),
@@ -304,7 +301,7 @@ export function Mouse(get_resolution_callback, record_callback) {
 		if (__ws && !$("hid-mute-switch").checked) {
 			__ws.send(JSON.stringify(event));
 		}
-		__record_callback(event);
+		__recordWsEvent(event);
 	};
 
 	__init__();
