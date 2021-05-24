@@ -41,7 +41,9 @@ from ....inotify import Inotify
 
 from ....yamlconf import Option
 
+from ....validators.basic import valid_bool
 from ....validators.os import valid_abs_dir
+from ....validators.os import valid_printable_filename
 from ....validators.os import valid_command
 
 from .... import aiotools
@@ -138,6 +140,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         remount_cmd: List[str],
         unlock_cmd: List[str],
 
+        initial: Dict,
+
         gadget: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
 
@@ -147,6 +151,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__remount_cmd = remount_cmd
         self.__unlock_cmd = unlock_cmd
+
+        self.__initial_image: str = initial["image"]
+        self.__initial_cdrom: bool = initial["cdrom"]
 
         self.__drive = Drive(gadget, instance=0, lun=0)
 
@@ -168,6 +175,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "storage":      Option("/var/lib/kvmd/msd", type=valid_abs_dir, unpack_as="storage_path"),
             "remount_cmd":  Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-remount", "{mode}"], type=valid_command),
             "unlock_cmd":   Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-unlock", "unlock"],  type=valid_command),
+            "initial": {
+                "image": Option("",    type=(lambda arg: (valid_printable_filename(arg) if arg else ""))),
+                "cdrom": Option(False, type=valid_bool),
+            },
         }
 
     async def get_state(self) -> Dict:
@@ -423,6 +434,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     logger.info("Probing to remount storage ...")
                     await self.__remount_storage(rw=True)
                     await self.__remount_storage(rw=False)
+                    await self.__setup_initial()
 
                 storage_state = self.__get_storage_state()
             except Exception:
@@ -447,6 +459,21 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         self.__state.vd.image = None
 
                     self.__state.vd.connected = False
+
+    async def __setup_initial(self) -> None:
+        if self.__initial_image:
+            logger = get_logger(0)
+            path = os.path.join(self.__images_path, self.__initial_image)
+            if os.path.exists(path):
+                logger.info("Setting up initial image %r ...", self.__initial_image)
+                try:
+                    await self.__unlock_drive()
+                    self.__drive.set_cdrom_flag(self.__initial_cdrom)
+                    self.__drive.set_image_path(path)
+                except Exception:
+                    logger.exception("Can't setup initial image: ignored")
+            else:
+                logger.error("Can't find initial image %r: ignored", self.__initial_image)
 
     # =====
 
