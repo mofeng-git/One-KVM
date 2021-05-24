@@ -30,7 +30,7 @@ import {wm} from "../wm.js";
 var _Janus = null;
 
 
-function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_callback) {
+function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	var self = this;
 
 	var __stop = false;
@@ -67,15 +67,19 @@ function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_cal
 
 	var __ensureJanus = function(internal) {
 		if (__janus === null && !__stop && (!__ensuring || internal)) {
-			set_inactive_callback();
-			set_info_callback(false, false, "");
+			__setInactive();
+			__setInfo(false, false, "");
 			__ensuring = true;
 			__logInfo("Starting Janus ...");
 			__janus = new _Janus({
 				server: `${tools.https ? "wss" : "ws"}://${location.host}/janus/ws`,
 				destroyOnUnload: false,
 				success: __attachJanus,
-				error: function(error) { __logError(error); __finishJanus(); },
+				error: function(error) {
+					__logError(error);
+					__setInfo(false, false, error);
+					__finishJanus();
+				},
 			});
 		}
 	};
@@ -98,8 +102,10 @@ function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_cal
 		__stopInfoInterval();
 		__handle = null;
 		__janus = null;
-		set_inactive_callback();
-		set_info_callback(false, false, "");
+		__setInactive();
+		if (__stop) {
+			__setInfo(false, false, "");
+		}
 	};
 
 	var __destroyJanus = function() {
@@ -125,6 +131,7 @@ function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_cal
 
 			error: function(error) {
 				__logError("Can't attach uStreamer: ", error);
+				__setInfo(false, false, error)
 				__destroyJanus();
 			},
 
@@ -145,15 +152,17 @@ function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_cal
 				if (msg.result) {
 					__logInfo("Got Janus message:", msg.result.status); // starting, started, stopped
 					if (msg.result.status === "started") {
-						set_active_callback();
+						__setActive();
+						__setInfo(false, false, "");
 					} else if (msg.result.status === "stopped") {
-						set_inactive_callback();
-						set_info_callback(false, false, "");
+						__setInactive();
+						__setInfo(false, false, "");
 					}
 				} else if (msg.error) {
 					__logError("Got janus error:", msg.error);
 					__sendStop();
 					__sendWatch();
+					__setInfo(false, false, msg.error)
 					return;
 				} else {
 					__logInfo("Got Janus message:", msg);
@@ -193,7 +202,7 @@ function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_cal
 
 	var __startInfoInterval = function() {
 		__stopInfoInterval();
-		set_active_callback();
+		__setActive();
 		__updateInfo();
 		__info_interval = setInterval(__updateInfo, 1000);
 	};
@@ -209,7 +218,7 @@ function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_cal
 		if (__handle !== null) {
 			let online = !!(__state && __state.source && __state.source.online);
 			let bitrate = (__handle !== null ? __handle.getBitrate() : "");
-			set_info_callback(true, online, bitrate);
+			__setInfo(true, online, bitrate);
 		}
 	};
 
@@ -240,7 +249,7 @@ function _JanusStreamer(set_active_callback, set_inactive_callback, set_info_cal
 	var __logError = (...args) => tools.error("Stream [Janus]:", ...args);
 }
 
-function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_callback) {
+function _MjpegStreamer(__setActive, __setInactive, __setInfo) {
 	var self = this;
 
 	/************************************************************************/
@@ -294,9 +303,9 @@ function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_cal
 		__fps = __state.stream.clients_stat[__id].fps;
 		if (old_fps < 0) {
 			__logInfo("Active");
-			set_active_callback();
+			__setActive();
 		}
-		set_info_callback(true, __state.source.online, `${__fps} fps`);
+		__setInfo(true, __state.source.online, `${__fps} fps`);
 	};
 
 	var __setInactive = function() {
@@ -307,8 +316,8 @@ function _MjpegStreamer(set_active_callback, set_inactive_callback, set_info_cal
 		__state = null;
 		if (old_fps >= 0) {
 			__logInfo("Inactive");
-			set_inactive_callback();
-			set_info_callback(false, false, "");
+			__setInactive();
+			__setInfo(false, false, "");
 		}
 	};
 
@@ -520,8 +529,8 @@ export function Streamer() {
 		$("stream-box").classList.toggle("stream-box-offline", !online);
 		let el_grab = document.querySelector("#stream-window-header .window-grab");
 		let el_info = $("stream-info");
+		let title = "Stream &ndash; ";
 		if (is_active) {
-			let title = "Stream &ndash; ";
 			if (!online) {
 				title += "no signal / ";
 			}
@@ -529,10 +538,14 @@ export function Streamer() {
 			if (text.length > 0) {
 				title += " / " + text;
 			}
-			el_grab.innerHTML = el_info.innerHTML = title;
 		} else {
-			el_grab.innerHTML = el_info.innerHTML = "Stream &ndash; inactive";
+			if (text.length > 0) {
+				title += text;
+			} else {
+				title += "inactive";
+			}
 		}
+		el_grab.innerHTML = el_info.innerHTML = title;
 	};
 
 	var __setMinMax = function(el, limits) {
