@@ -21,6 +21,7 @@
 
 
 import asyncio
+import signal
 import functools
 import types
 
@@ -99,6 +100,20 @@ async def close_writer(writer: asyncio.StreamWriter) -> bool:
     except Exception:
         pass
     return (not closing)
+
+
+# =====
+def run(coro: Coroutine) -> None:
+    def sigint_handler() -> None:
+        raise KeyboardInterrupt()
+
+    def sigterm_handler() -> None:
+        raise SystemExit()
+
+    loop = asyncio.get_event_loop()
+    loop.add_signal_handler(signal.SIGINT, sigint_handler)
+    loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
+    loop.run_until_complete(coro)
 
 
 # =====
