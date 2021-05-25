@@ -30,7 +30,7 @@ class _Netcfg:
 
 # =====
 class JanusRunner:  # pylint: disable=too-many-instance-attributes
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         stun_host: str,
         stun_port: int,
