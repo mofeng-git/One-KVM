@@ -1,5 +1,6 @@
 import asyncio
 import socket
+import ipaddress
 import struct
 import secrets
 import dataclasses
@@ -168,10 +169,9 @@ class Stun:
 
     def __parse_address(self, data: bytes) -> StunAddress:
         family = data[1]
-        if family == 1:
-            parts = struct.unpack(">HBBBB", data[2:8])
-            return StunAddress(
-                ip=".".join(map(str, parts[1:])),
-                port=parts[0],
-            )
-        raise RuntimeError(f"Only IPv4 supported; received: {family}")
+        port = struct.unpack(">H", data[2:4])[0]
+        if family == 0x01:
+            return StunAddress(str(ipaddress.IPv4Address(data[4:8])), port)
+        elif family == 0x02:
+            return StunAddress(str(ipaddress.IPv6Address(data[4:20])), port)
+        raise RuntimeError(f"Unknown family; received: {family}")
