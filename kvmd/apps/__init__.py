@@ -661,9 +661,11 @@ def _get_config_scheme() -> Dict:
 
         "janus": {
             "stun": {
-                "host":    Option("stun.l.google.com", type=valid_ip_or_host, unpack_as="stun_host"),
-                "port":    Option(19302, type=valid_port, unpack_as="stun_port"),
-                "timeout": Option(5.0,   type=valid_float_f01, unpack_as="stun_timeout"),
+                "host":          Option("stun.l.google.com", type=valid_ip_or_host, unpack_as="stun_host"),
+                "port":          Option(19302, type=valid_port, unpack_as="stun_port"),
+                "timeout":       Option(5.0,   type=valid_float_f01, unpack_as="stun_timeout"),
+                "retries":       Option(5,     type=valid_int_f1, unpack_as="stun_retries"),
+                "retries_delay": Option(5.0,   type=valid_float_f01, unpack_as="stun_retries_delay"),
             },
 
             "check": {

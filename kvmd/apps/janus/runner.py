@@ -15,7 +15,7 @@ from ... import aioproc
 
 from ...logging import get_logger
 
-from .stun import stun_get_info
+from .stun import Stun
 
 
 # =====
@@ -35,6 +35,8 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
         stun_host: str,
         stun_port: int,
         stun_timeout: float,
+        stun_retries: int,
+        stun_retries_delay: float,
 
         check_interval: int,
         check_retries: int,
@@ -45,9 +47,7 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
         cmd_append: List[str],
     ) -> None:
 
-        self.__stun_host = stun_host
-        self.__stun_port = stun_port
-        self.__stun_timeout = stun_timeout
+        self.__stun = Stun(stun_host, stun_port, stun_timeout, stun_retries, stun_retries_delay)
 
         self.__check_interval = check_interval
         self.__check_retries = check_retries
@@ -74,12 +74,15 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
         try:
             prev_netcfg: Optional[_Netcfg] = None
             while True:
+                retry = 0
                 netcfg = _Netcfg()
-                for _ in range(self.__check_retries - 1):
+                for retry in range(self.__check_retries):
                     netcfg = await self.__get_netcfg()
                     if netcfg.ext_ip:
                         break
                     await asyncio.sleep(self.__check_retries_delay)
+                if retry != 0 and netcfg.ext_ip:
+                    logger.info("I'm fine, continue working ...")
 
                 if netcfg != prev_netcfg:
                     logger.info("Got new %s", netcfg)
@@ -99,8 +102,8 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
 
     async def __get_netcfg(self) -> _Netcfg:
         src_ip = (self.__get_default_ip() or "0.0.0.0")
-        (nat_type, ext_ip) = await self.__get_stun_info(src_ip)
-        return _Netcfg(nat_type, src_ip, ext_ip, self.__stun_host, self.__stun_port)
+        (stun, (nat_type, ext_ip)) = await self.__get_stun_info(src_ip)
+        return _Netcfg(nat_type, src_ip, ext_ip, stun.host, stun.port)
 
     def __get_default_ip(self) -> str:
         try:
@@ -122,18 +125,12 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
             get_logger().error("Can't get default IP: %s", tools.efmt(err))
         return ""
 
-    async def __get_stun_info(self, src_ip: str) -> Tuple[str, str]:
+    async def __get_stun_info(self, src_ip: str) -> Tuple[Stun, Tuple[str, str]]:
         try:
-            return (await stun_get_info(
-                stun_host=self.__stun_host,
-                stun_port=self.__stun_port,
-                src_ip=src_ip,
-                src_port=0,
-                timeout=self.__stun_timeout,
-            ))
+            return (self.__stun, (await self.__stun.get_info(src_ip, 0)))
         except Exception as err:
             get_logger().error("Can't get STUN info: %s", tools.efmt(err))
-            return ("", "")
+            return (self.__stun, ("", ""))
 
     # =====
 
