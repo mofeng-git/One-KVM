@@ -275,6 +275,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         try:
             if self.__device_file:
                 get_logger().info("Closing device file ...")
+                await aiofs.afile_sync(self.__device_file)
                 await self.__device_file.close()  # type: ignore
         except Exception:
             get_logger().exception("Can't close device file")

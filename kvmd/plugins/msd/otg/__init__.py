@@ -396,9 +396,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         try:
             if self.__new_file:
                 get_logger().info("Closing new image file ...")
+                await aiofs.afile_sync(self.__new_file)
                 await self.__new_file.close()  # type: ignore
         except Exception:
-            get_logger().exception("Can't close device file")
+            get_logger().exception("Can't close image file")
         finally:
             self.__new_file = None
             self.__new_file_written = 0
