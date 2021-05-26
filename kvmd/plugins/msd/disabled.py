@@ -75,6 +75,9 @@ class Plugin(BaseMsd):
             raise MsdDisabledError()
         yield
 
+    def get_upload_chunk_size(self) -> int:
+        raise MsdDisabledError()
+
     async def write_image_chunk(self, chunk: bytes) -> int:
         raise MsdDisabledError()
 

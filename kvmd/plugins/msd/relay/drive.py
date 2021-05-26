@@ -129,7 +129,8 @@ class DeviceInfo:
 
         if self.size - image_info.size > _IMAGE_INFO_SIZE:
             await device_file.seek(self.size - _IMAGE_INFO_SIZE)  # type: ignore
-            await aiofs.afile_write_now(device_file, image_info.to_bytes())
+            await device_file.write(image_info.to_bytes())  # type: ignore
+            await aiofs.afile_sync(device_file)
             await device_file.seek(0)  # type: ignore
             return True
         return False  # Device is full

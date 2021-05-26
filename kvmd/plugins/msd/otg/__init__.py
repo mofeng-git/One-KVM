@@ -24,6 +24,7 @@ import os
 import asyncio
 import contextlib
 import dataclasses
+import functools
 import time
 
 from typing import List
@@ -42,6 +43,7 @@ from ....inotify import Inotify
 from ....yamlconf import Option
 
 from ....validators.basic import valid_bool
+from ....validators.basic import valid_number
 from ....validators.os import valid_abs_dir
 from ....validators.os import valid_printable_filename
 from ....validators.os import valid_command
@@ -135,6 +137,9 @@ class _State:
 class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=super-init-not-called
         self,
+        upload_chunk_size: int,
+        sync_chunk_size: int,
+
         storage_path: str,
 
         remount_cmd: List[str],
@@ -144,6 +149,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         gadget: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
+
+        self.__upload_chunk_size = upload_chunk_size
+        self.__sync_chunk_size = sync_chunk_size
 
         self.__storage_path = os.path.normpath(storage_path)
         self.__images_path = os.path.join(self.__storage_path, "images")
@@ -159,6 +167,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__new_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__new_file_written = 0
+        self.__new_file_unsynced = 0
         self.__new_file_tick = 0.0
 
         self.__notifier = aiotools.AioNotifier()
@@ -172,9 +181,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     def get_plugin_options(cls) -> Dict:
         sudo = ["/usr/bin/sudo", "--non-interactive"]
         return {
-            "storage":      Option("/var/lib/kvmd/msd", type=valid_abs_dir, unpack_as="storage_path"),
-            "remount_cmd":  Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-remount", "{mode}"], type=valid_command),
-            "unlock_cmd":   Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-unlock", "unlock"],  type=valid_command),
+            "upload_chunk_size": Option(65536,   type=functools.partial(valid_number, min=1024)),
+            "sync_chunk_size":   Option(4194304, type=functools.partial(valid_number, min=1024)),
+
+            "storage": Option("/var/lib/kvmd/msd", type=valid_abs_dir, unpack_as="storage_path"),
+
+            "remount_cmd": Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-remount", "{mode}"], type=valid_command),
+            "unlock_cmd":  Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-unlock", "unlock"],  type=valid_command),
+
             "initial": {
                 "image": Option("",    type=(lambda arg: (valid_printable_filename(arg) if arg else ""))),
                 "cdrom": Option(False, type=valid_bool),
@@ -313,6 +327,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         await self.__remount_storage(rw=True)
                         self.__set_image_complete(name, False)
                         self.__new_file_written = 0
+                        self.__new_file_unsynced = 0
                         self.__new_file = await aiofiles.open(path, mode="w+b", buffering=0)  # type: ignore
 
                     await self.__notifier.notify()
@@ -331,10 +346,20 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             await self.__reload_state()
             await self.__notifier.notify()
 
+    def get_upload_chunk_size(self) -> int:
+        return self.__upload_chunk_size
+
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__new_file
-        await aiofs.afile_write_now(self.__new_file, chunk)
+
+        await self.__new_file.write(chunk)  # type: ignore
         self.__new_file_written += len(chunk)
+
+        self.__new_file_unsynced += len(chunk)
+        if self.__new_file_unsynced >= self.__sync_chunk_size:
+            await aiofs.afile_sync(self.__new_file)
+            self.__new_file_unsynced = 0
+
         now = time.monotonic()
         if self.__new_file_tick + 1 < now:
             # Это нужно для ручного оповещения о свободном пространстве на диске, см. get_state()
@@ -377,6 +402,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         finally:
             self.__new_file = None
             self.__new_file_written = 0
+            self.__new_file_unsynced = 0
 
     # =====
 

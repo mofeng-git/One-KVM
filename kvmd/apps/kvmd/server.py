@@ -158,7 +158,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         snapshoter: Snapshoter,
 
         heartbeat: float,
-        sync_chunk_size: int,
 
         keymap_path: str,
         ignore_keys: List[str],
@@ -206,7 +205,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             UserGpioApi(user_gpio),
             self.__hid_api,
             AtxApi(atx),
-            MsdApi(msd, sync_chunk_size),
+            MsdApi(msd),
             StreamerApi(streamer),
             ExportApi(info_manager, atx, user_gpio),
             RedfishApi(info_manager, atx),

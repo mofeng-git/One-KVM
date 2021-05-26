@@ -23,6 +23,7 @@
 import asyncio
 import contextlib
 import dataclasses
+import functools
 
 from typing import Dict
 from typing import AsyncGenerator
@@ -39,6 +40,7 @@ from .... import aiofs
 from ....yamlconf import Option
 
 from ....validators.basic import valid_bool
+from ....validators.basic import valid_number
 from ....validators.basic import valid_int_f1
 from ....validators.basic import valid_float_f01
 from ....validators.os import valid_abs_path
@@ -61,8 +63,11 @@ from .drive import DeviceInfo
 
 # =====
 class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
-    def __init__(  # pylint: disable=super-init-not-called
+    def __init__(  # pylint: disable=super-init-not-called,too-many-arguments
         self,
+        upload_chunk_size: int,
+        sync_chunk_size: int,
+
         gpio_device_path: str,
         target_pin: int,
         reset_inverted: bool,
@@ -73,6 +78,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         init_retries: int,
         reset_delay: float,
     ) -> None:
+
+        self.__upload_chunk_size = upload_chunk_size
+        self.__sync_chunk_size = sync_chunk_size
 
         self.__device_path = device_path
         self.__init_delay = init_delay
@@ -85,6 +93,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__device_file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__written = 0
+        self.__unsynced = 0
 
         self.__notifier = aiotools.AioNotifier()
         self.__region = aiotools.AioExclusiveRegion(MsdIsBusyError, self.__notifier)
@@ -92,6 +101,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
+            "upload_chunk_size": Option(65536,   type=functools.partial(valid_number, min=1024)),
+            "sync_chunk_size":   Option(4194304, type=functools.partial(valid_number, min=1024)),
+
             "gpio_device":    Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="gpio_device_path"),
             "target_pin":     Option(-1, type=valid_gpio_pin),
             "reset_pin":      Option(-1, type=valid_gpio_pin),
@@ -212,6 +224,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                     self.__device_file = await aiofiles.open(self.__device_info.path, mode="w+b", buffering=0)  # type: ignore
                     self.__written = 0
+                    self.__unsynced = 0
 
                     await self.__write_image_info(name, complete=False)
                     await self.__notifier.notify()
@@ -221,10 +234,17 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await self.__close_device_file()
                     await self.__load_device_info()
 
+    def get_upload_chunk_size(self) -> int:
+        return self.__upload_chunk_size
+
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__device_file
-        await aiofs.afile_write_now(self.__device_file, chunk)
+        await self.__device_file.write(chunk)  # type: ignore
         self.__written += len(chunk)
+        self.__unsynced += len(chunk)
+        if self.__unsynced >= self.__sync_chunk_size:
+            await aiofs.afile_sync(self.__device_file)
+            self.__unsynced = 0
         return self.__written
 
     @aiotools.atomic
@@ -261,6 +281,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         finally:
             self.__device_file = None
             self.__written = 0
+            self.__unsynced = 0
 
     async def __load_device_info(self) -> None:
         retries = self.__init_retries

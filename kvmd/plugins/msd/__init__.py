@@ -118,6 +118,9 @@ class BaseMsd(BasePlugin):
             raise NotImplementedError()
         yield
 
+    def get_upload_chunk_size(self) -> int:
+        raise NotImplementedError()
+
     async def write_image_chunk(self, chunk: bytes) -> int:
         raise NotImplementedError()
 

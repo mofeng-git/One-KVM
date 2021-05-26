@@ -37,9 +37,8 @@ from ..http import get_multipart_field
 
 # ======
 class MsdApi:
-    def __init__(self, msd: BaseMsd, sync_chunk_size: int) -> None:
+    def __init__(self, msd: BaseMsd) -> None:
         self.__msd = msd
-        self.__sync_chunk_size = sync_chunk_size
 
     # =====
 
@@ -80,7 +79,7 @@ class MsdApi:
             async with self.__msd.write_image(name):
                 logger.info("Writing image %r to MSD ...", name)
                 while True:
-                    chunk = await data_field.read_chunk(self.__sync_chunk_size)
+                    chunk = await data_field.read_chunk(self.__msd.get_upload_chunk_size())
                     if not chunk:
                         break
                     written = await self.__msd.write_image_chunk(chunk)

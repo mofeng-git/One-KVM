@@ -34,7 +34,6 @@ async def read(path: str) -> str:
         return (await afile.read())
 
 
-async def afile_write_now(afile: aiofiles.base.AiofilesContextManager, data: bytes) -> None:
-    await afile.write(data)  # type: ignore
+async def afile_sync(afile: aiofiles.base.AiofilesContextManager) -> None:
     await afile.flush()  # type: ignore
     await aiotools.run_async(os.fsync, afile.fileno())  # type: ignore
