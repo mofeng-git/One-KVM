@@ -65,7 +65,7 @@ def _find_storage() -> _Storage:
 
 def _remount(path: str, rw: bool) -> None:
     mode = ("rw" if rw else "ro")
-    _log(f"Remouning {path} to {mode.upper()}-mode ...")
+    _log(f"Remounting {path} to {mode.upper()}-mode ...")
     try:
         subprocess.check_call([_MOUNT_PATH, "--options", f"remount,{mode}", path])
     except subprocess.CalledProcessError as err:
