@@ -39,7 +39,8 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	var __janus = null;
 	var __handle = null;
 
-	var __retry_timeout = null;
+	var __retry_ensure_timeout = null;
+	var __retry_emsg_timeout = null;
 	var __info_interval = null;
 
 	var __state = null;
@@ -86,19 +87,20 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 	var __finishJanus = function() {
 		if (__stop) {
-			if (__retry_timeout !== null) {
-				clearTimeout(__retry_timeout);
-				__retry_timeout = null;
+			if (__retry_ensure_timeout !== null) {
+				clearTimeout(__retry_ensure_timeout);
+				__retry_ensure_timeout = null;
 			}
 			__ensuring = false;
 		} else {
-			if (__retry_timeout === null) {
-				__retry_timeout = setTimeout(function() {
-					__retry_timeout = null;
+			if (__retry_ensure_timeout === null) {
+				__retry_ensure_timeout = setTimeout(function() {
+					__retry_ensure_timeout = null;
 					__ensureJanus(true);
 				}, 5000);
 			}
 		}
+		__stopRetryEmsgInterval();
 		__stopInfoInterval();
 		__handle = null;
 		__janus = null;
@@ -109,6 +111,14 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	};
 
 	var __destroyJanus = function() {
+		if (__handle.webrtcStuff.remoteStream !== null) {
+			for (let track of __handle.webrtcStuff.remoteStream.getTracks()) {
+				track.stop();
+				__handle.webrtcStuff.remoteStream.removeTrack(track);
+			}
+			__handle.webrtcStuff.remoteStream = null;
+		}
+		$("stream-video").srcObject = null;
 		if (__janus !== null) {
 			__janus.destroy();
 		}
@@ -121,7 +131,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 		}
 		__janus.attach({
 			plugin: "janus.plugin.ustreamer",
-			oid: "oid-" + _Janus.randomString(12),
+			opaqueId: "oid-" + _Janus.randomString(12),
 
 			success: function(handle) {
 				__handle = handle;
@@ -149,8 +159,10 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 			},
 
 			onmessage: function(msg, jsep) {
+				__stopRetryEmsgInterval();
+
 				if (msg.result) {
-					__logInfo("Got Janus message:", msg.result.status); // starting, started, stopped
+					__logInfo("Got uStreamer result message:", msg.result.status); // starting, started, stopped
 					if (msg.result.status === "started") {
 						__setActive();
 						__setInfo(false, false, "");
@@ -158,14 +170,21 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 						__setInactive();
 						__setInfo(false, false, "");
 					}
-				} else if (msg.error) {
-					__logError("Got janus error:", msg.error);
-					__sendStop();
-					__sendWatch();
-					__setInfo(false, false, msg.error);
+				} else if (msg.error_code || msg.error) {
+					__logError("Got uStreamer error message:", msg.error_code, "-", msg.error);
+					__setInfo(false, false, (msg.error_code === 503 ? "Waiting for keyframe ..." : msg.error));
+					if (__retry_emsg_timeout === null) {
+						__retry_emsg_timeout = setTimeout(function() {
+							if (!__stop) {
+								__sendStop();
+								__sendWatch();
+							}
+							__retry_emsg_timeout = null;
+						}, 2000);
+					}
 					return;
 				} else {
-					__logInfo("Got Janus message:", msg);
+					__logInfo("Got uStreamer other message:", msg);
 				}
 
 				if (jsep) {
@@ -181,6 +200,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 						error: function(error) {
 							__logInfo("Error on SDP handling:", error);
+							__setInfo(false, false, error);
 							//__destroyJanus();
 						},
 					});
@@ -212,6 +232,13 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 			clearInterval(__info_interval);
 		}
 		__info_interval = null;
+	};
+
+	var __stopRetryEmsgInterval = function() {
+		if (__retry_emsg_timeout !== null) {
+			clearTimeout(__retry_emsg_timeout);
+			__retry_emsg_timeout = null;
+		}
 	};
 
 	var __updateInfo = function() {
