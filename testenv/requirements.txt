@@ -1,2 +1,4 @@
 pyghmi
 spidev
+types-PyYAML
+types-aiofiles
