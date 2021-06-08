@@ -29,10 +29,10 @@ import dataclasses
 from typing import IO
 from typing import Optional
 
-import aiofiles.base
-
 from .... import aiotools
 from .... import aiofs
+
+from .. import MsdImageWriter
 
 
 # =====
@@ -121,11 +121,10 @@ class DeviceInfo:
             image=image_info,
         )
 
-    async def write_image_info(
-        self,
-        device_file: aiofiles.base.AiofilesContextManager,
-        image_info: ImageInfo,
-    ) -> bool:
+    async def write_image_info(self, device_writer: MsdImageWriter, complete: bool) -> bool:
+        device_file = device_writer.get_file()
+        state = device_writer.get_state()
+        image_info = ImageInfo(state["name"], state["written"], complete)
 
         if self.size - image_info.size > _IMAGE_INFO_SIZE:
             await device_file.seek(self.size - _IMAGE_INFO_SIZE)  # type: ignore

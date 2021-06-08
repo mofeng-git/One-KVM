@@ -28,10 +28,12 @@ from ....logging import get_logger
 from ....plugins.msd import BaseMsd
 
 from ....validators.basic import valid_bool
+from ....validators.basic import valid_int_f0
 from ....validators.kvm import valid_msd_image_name
 
 from ..http import exposed_http
 from ..http import make_json_response
+from ..http import get_field_value
 from ..http import get_multipart_field
 
 
@@ -71,12 +73,12 @@ class MsdApi:
         name = ""
         written = 0
         try:
-            name_field = await get_multipart_field(reader, "image")
-            name = valid_msd_image_name((await name_field.read()).decode("utf-8"))
+            name = valid_msd_image_name(await get_field_value(reader, "image"))
+            size = valid_int_f0(await get_field_value(reader, "size"))
 
             data_field = await get_multipart_field(reader, "data")
 
-            async with self.__msd.write_image(name):
+            async with self.__msd.write_image(name, size):
                 logger.info("Writing image %r to MSD ...", name)
                 while True:
                     chunk = await data_field.read_chunk(self.__msd.get_upload_chunk_size())

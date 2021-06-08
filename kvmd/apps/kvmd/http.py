@@ -171,6 +171,11 @@ def make_json_exception(err: Exception, status: Optional[int]=None) -> aiohttp.w
 
 
 # =====
+async def get_field_value(reader: aiohttp.MultipartReader, name: str) -> str:
+    field = await get_multipart_field(reader, name)
+    return (await field.read()).decode("utf-8")
+
+
 async def get_multipart_field(reader: aiohttp.MultipartReader, name: str) -> aiohttp.BodyPartReader:
     field = await reader.next()
     if not isinstance(field, aiohttp.BodyPartReader):

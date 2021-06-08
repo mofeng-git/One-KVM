@@ -32,9 +32,6 @@ from typing import Dict
 from typing import AsyncGenerator
 from typing import Optional
 
-import aiofiles
-import aiofiles.base
-
 from ....logging import get_logger
 
 from ....inotify import InotifyMask
@@ -49,7 +46,6 @@ from ....validators.os import valid_printable_filename
 from ....validators.os import valid_command
 
 from .... import aiotools
-from .... import aiofs
 
 from .. import MsdError
 from .. import MsdIsBusyError
@@ -60,6 +56,7 @@ from .. import MsdImageNotSelected
 from .. import MsdUnknownImageError
 from .. import MsdImageExistsError
 from .. import BaseMsd
+from .. import MsdImageWriter
 
 from . import fs
 from . import helpers
@@ -165,10 +162,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__drive = Drive(gadget, instance=0, lun=0)
 
-        self.__new_file: Optional[aiofiles.base.AiofilesContextManager] = None
-        self.__new_file_written = 0
-        self.__new_file_unsynced = 0
-        self.__new_file_tick = 0.0
+        self.__new_writer: Optional[MsdImageWriter] = None
+        self.__new_writer_tick = 0.0
 
         self.__notifier = aiotools.AioNotifier()
         self.__state = _State(self.__notifier)
@@ -204,11 +199,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     del storage["images"][name]["path"]
                     del storage["images"][name]["in_storage"]
 
-                storage["uploading"] = bool(self.__new_file)
-                if self.__new_file:  # При загрузке файла показываем размер вручную
+                if self.__new_writer:
+                    # При загрузке файла показываем актуальную статистику вручную
+                    storage["uploading"] = self.__new_writer.get_state()
                     space = fs.get_fs_space(self.__storage_path, fatal=False)
                     if space:
                         storage.update(dataclasses.asdict(space))
+                else:
+                    storage["uploading"] = None
 
             vd: Optional[Dict] = None
             if self.__state.vd:
@@ -253,7 +251,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def cleanup(self) -> None:
-        await self.__close_new_file()
+        await self.__close_new_writer()
 
     # =====
 
@@ -308,7 +306,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             self.__state.vd.connected = connected
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str) -> AsyncGenerator[None, None]:
+    async def write_image(self, name: str, size: int) -> AsyncGenerator[None, None]:
         try:
             async with self.__state._region:  # pylint: disable=protected-access
                 try:
@@ -326,16 +324,15 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                         await self.__remount_storage(rw=True)
                         self.__set_image_complete(name, False)
-                        self.__new_file_written = 0
-                        self.__new_file_unsynced = 0
-                        self.__new_file = await aiofiles.open(path, mode="w+b", buffering=0)  # type: ignore
+
+                        self.__new_writer = await MsdImageWriter(path, size, self.__sync_chunk_size).open()
 
                     await self.__notifier.notify()
                     yield
                     self.__set_image_complete(name, True)
 
                 finally:
-                    await self.__close_new_file()
+                    await self.__close_new_writer()
                     try:
                         await self.__remount_storage(rw=False)
                     except Exception:
@@ -350,22 +347,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         return self.__upload_chunk_size
 
     async def write_image_chunk(self, chunk: bytes) -> int:
-        assert self.__new_file
-
-        await self.__new_file.write(chunk)  # type: ignore
-        self.__new_file_written += len(chunk)
-
-        self.__new_file_unsynced += len(chunk)
-        if self.__new_file_unsynced >= self.__sync_chunk_size:
-            await aiofs.afile_sync(self.__new_file)
-            self.__new_file_unsynced = 0
-
+        assert self.__new_writer
+        written = await self.__new_writer.write(chunk)
         now = time.monotonic()
-        if self.__new_file_tick + 1 < now:
+        if self.__new_writer_tick + 1 < now:
             # Это нужно для ручного оповещения о свободном пространстве на диске, см. get_state()
-            self.__new_file_tick = now
+            self.__new_writer_tick = now
             await self.__notifier.notify()
-        return self.__new_file_written
+        return written
 
     @aiotools.atomic
     async def remove(self, name: str) -> None:
@@ -392,18 +381,15 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    async def __close_new_file(self) -> None:
+    async def __close_new_writer(self) -> None:
         try:
-            if self.__new_file:
+            if self.__new_writer:
                 get_logger().info("Closing new image file ...")
-                await aiofs.afile_sync(self.__new_file)
-                await self.__new_file.close()  # type: ignore
+                await self.__new_writer.close()
         except Exception:
             get_logger().exception("Can't close image file")
         finally:
-            self.__new_file = None
-            self.__new_file_written = 0
-            self.__new_file_unsynced = 0
+            self.__new_writer = None
 
     # =====
 

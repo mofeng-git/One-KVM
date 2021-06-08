@@ -101,13 +101,13 @@ export function Msd() {
 	var __clickUploadNewImageButton = function() {
 		let form_data = new FormData();
 		form_data.append("image", __image_file.name);
+		form_data.append("size", __image_file.size);
 		form_data.append("data", __image_file);
 
 		__upload_http = new XMLHttpRequest();
 		__upload_http.open("POST", "/api/msd/write", true);
 		__upload_http.upload.timeout = 15000;
 		__upload_http.onreadystatechange = __uploadStateChange;
-		__upload_http.upload.onprogress = __uploadProgress;
 		__upload_http.send(form_data);
 	};
 
@@ -123,16 +123,8 @@ export function Msd() {
 		}
 	};
 
-	var __uploadProgress = function(event) {
-		if(event.lengthComputable) {
-			let percent = Math.round((event.loaded * 100) / event.total);
-			tools.progressSetValue($("msd-uploading-progress"), `${percent}%`, percent);
-		}
-	};
-
 	var __clickAbortUploadingButton = function() {
 		__upload_http.onreadystatechange = null;
-		__upload_http.upload.onprogress = null;
 		__upload_http.abort();
 		__upload_http = null;
 		tools.progressSetValue($("msd-uploading-progress"), "Aborted", 0);
@@ -238,8 +230,12 @@ export function Msd() {
 			tools.hiddenSetVisible($("msd-submenu-new-image"), __image_file);
 			$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
 			$("msd-new-image-size").innerHTML = (__image_file ? tools.formatSize(__image_file.size) : "");
+
 			if (!__upload_http) {
 				tools.progressSetValue($("msd-uploading-progress"), "Waiting for upload (press UPLOAD button) ...", 0);
+			} else if (__state.storage.uploading) {
+				let percent = Math.round(__state.storage.uploading.written * 100 / __state.storage.uploading.size);
+				tools.progressSetValue($("msd-uploading-progress"), `${percent}%`, percent);
 			}
 
 		} else {
