@@ -112,7 +112,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	};
 
 	var __destroyJanus = function() {
-		if (__handle.webrtcStuff.remoteStream !== null) {
+		if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.remoteStream) {
 			for (let track of __handle.webrtcStuff.remoteStream.getTracks()) {
 				track.stop();
 				__handle.webrtcStuff.remoteStream.removeTrack(track);
