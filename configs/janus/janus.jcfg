@@ -6,6 +6,8 @@ nat: {
 	ignore_mdns = true
 }
 media: {
+	ipv6 = true
+	ipv6_linklocal = true
 	min_nack_queue = 2000
 	rtp_port_range = "20000-40000"
 	no_media_timer = 0

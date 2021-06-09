@@ -74,6 +74,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 			__logInfo("Starting Janus ...");
 			__janus = new _Janus({
 				server: `${tools.https ? "wss" : "ws"}://${location.host}/janus/ws`,
+				ipv6: true,
 				destroyOnUnload: false,
 				success: __attachJanus,
 				error: function(error) {
