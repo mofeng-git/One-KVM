@@ -45,6 +45,9 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 	var __state = null;
 
+	self.getName = () => "WebRTC";
+	self.getMode = () => "janus";
+
 	self.getResolution = function() {
 		let el_video = $("stream-video");
 		return {
@@ -291,6 +294,9 @@ function _MjpegStreamer(__setActive, __setInactive, __setInfo) {
 	var __timer_retries = 0;
 
 	/************************************************************************/
+
+	self.getName = () => "MJPEG";
+	self.getMode = () => "mjpeg";
 
 	self.getResolution = function() {
 		let el_image = $("stream-image");
@@ -557,10 +563,10 @@ export function Streamer() {
 		$("stream-box").classList.toggle("stream-box-offline", !online);
 		let el_grab = document.querySelector("#stream-window-header .window-grab");
 		let el_info = $("stream-info");
-		let title = "Stream &ndash; ";
+		let title = `${__streamer.getName()} &ndash; `;
 		if (is_active) {
 			if (!online) {
-				title += "no signal / ";
+				title += "No signal / ";
 			}
 			title += __makeStringResolution(__resolution);
 			if (text.length > 0) {
@@ -570,7 +576,7 @@ export function Streamer() {
 			if (text.length > 0) {
 				title += text;
 			} else {
-				title += "inactive";
+				title += "Inactive";
 			}
 		}
 		el_grab.innerHTML = el_info.innerHTML = title;
@@ -603,18 +609,20 @@ export function Streamer() {
 	var __clickModeRadio = function() {
 		if (_Janus !== null) {
 			let mode = tools.radioGetValue("stream-mode-radio");
-			setTimeout(() => tools.radioSetValue("stream-mode-radio", mode), 100);
-			tools.hiddenSetVisible($("stream-image"), (mode === "mjpeg"));
-			tools.hiddenSetVisible($("stream-video"), (mode !== "mjpeg"));
-			if (mode === "mjpeg") {
-				__streamer.stopStream();
-				__streamer = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
-			} else { // janus
-				__streamer.stopStream();
-				__streamer = new _JanusStreamer(__setActive, __setInactive, __setInfo);
-			}
-			if (wm.isWindowVisible($("stream-window"))) {
-				__streamer.ensureStream(__state);
+			if (mode !== __streamer.getMode()) {
+				setTimeout(() => tools.radioSetValue("stream-mode-radio", mode), 100);
+				tools.hiddenSetVisible($("stream-image"), (mode === "mjpeg"));
+				tools.hiddenSetVisible($("stream-video"), (mode !== "mjpeg"));
+				if (mode === "mjpeg") {
+					__streamer.stopStream();
+					__streamer = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
+				} else { // janus
+					__streamer.stopStream();
+					__streamer = new _JanusStreamer(__setActive, __setInactive, __setInfo);
+				}
+				if (wm.isWindowVisible($("stream-window"))) {
+					__streamer.ensureStream(__state);
+				}
 			}
 		}
 	};
