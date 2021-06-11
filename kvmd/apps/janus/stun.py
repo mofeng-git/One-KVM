@@ -116,9 +116,11 @@ class Stun:
         # More info at: https://tools.ietf.org/html/rfc3489#section-11.2.1
         # And at: https://tools.ietf.org/html/rfc5389#section-15.1
 
+        # https://datatracker.ietf.org/doc/html/rfc5389#section-6
+        trans_id = b"\x21\x12\xA4\x42" + secrets.token_bytes(12)
         (response, error) = (b"", "")
         for _ in range(self.__retries):
-            (response, error) = await self.__inner_make_request(request, host, port)
+            (response, error) = await self.__inner_make_request(trans_id, request, host, port)
             if not error:
                 break
             await asyncio.sleep(self.__retries_delay)
@@ -135,19 +137,19 @@ class Stun:
             offset += 4
             field = {
                 0x0001: "ext",      # MAPPED-ADDRESS
+                0x0020: "ext",      # XOR-MAPPED-ADDRESS
                 0x0004: "src",      # SOURCE-ADDRESS
                 0x0005: "changed",  # CHANGED-ADDRESS
             }.get(attr_type)
             if field is not None:
-                parsed[field] = self.__parse_address(response[offset:])
+                parsed[field] = self.__parse_address(response[offset:], (trans_id if attr_type == 0x0020 else b""))
             offset += attr_len
             remaining -= (4 + attr_len)
         return StunResponse(ok=True, **parsed)
 
-    async def __inner_make_request(self, request: bytes, host: str, port: int) -> Tuple[bytes, str]:
+    async def __inner_make_request(self, trans_id: bytes, request: bytes, host: str, port: int) -> Tuple[bytes, str]:
         assert self.__sock is not None
 
-        trans_id = secrets.token_bytes(16)
         request = struct.pack(">HH", 0x0001, len(request)) + trans_id + request  # Bind Request
 
         try:
@@ -167,11 +169,17 @@ class Stun:
 
         return (response[20 : 20 + payload_len], "")  # noqa: E203
 
-    def __parse_address(self, data: bytes) -> StunAddress:
+    def __parse_address(self, data: bytes, trans_id: bytes) -> StunAddress:
         family = data[1]
-        port = struct.unpack(">H", data[2:4])[0]
+        port = struct.unpack(">H", self.__trans_xor(data[2:4], trans_id))[0]
         if family == 0x01:
-            return StunAddress(str(ipaddress.IPv4Address(data[4:8])), port)
+            return StunAddress(str(ipaddress.IPv4Address(self.__trans_xor(data[4:8], trans_id))), port)
         elif family == 0x02:
-            return StunAddress(str(ipaddress.IPv6Address(data[4:20])), port)
+            return StunAddress(str(ipaddress.IPv6Address(self.__trans_xor(data[4:20], trans_id))), port)
         raise RuntimeError(f"Unknown family; received: {family}")
+
+    def __trans_xor(self, data: bytes, trans_id: bytes) -> bytes:
+        if len(trans_id) == 0:
+            return data
+        assert len(data) <= len(trans_id)
+        return bytes(byte ^ trans_id[index] for (index, byte) in enumerate(data))
