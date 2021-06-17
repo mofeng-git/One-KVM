@@ -21,6 +21,7 @@
 
 
 import os
+import re
 
 from typing import Dict
 from typing import Optional
@@ -51,9 +52,10 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
         try:
             extras_path = self.__global_config.kvmd.info.extras
             extras: Dict[str, Dict] = {}
-            for app in os.listdir(extras_path):
-                if app[0] != "." and os.path.isdir(os.path.join(extras_path, app)):
-                    extras[app] = load_yaml_file(os.path.join(extras_path, app, "manifest.yaml"))
+            for name in os.listdir(extras_path):
+                if name[0] != "." and os.path.isdir(os.path.join(extras_path, name)):
+                    app = re.sub(r"[^a-zA-Z0-9_]+", "_", name)
+                    extras[app] = load_yaml_file(os.path.join(extras_path, name, "manifest.yaml"))
                     self.__rewrite_app_daemon(extras[app])
                     self.__rewrite_app_port(extras[app])
             return extras

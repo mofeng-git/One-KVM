@@ -126,7 +126,10 @@ export function Session() {
 		$("webterm-window").show_hook = show_hook;
 		$("webterm-window").close_hook = close_hook;
 
-		__streamer.setJanusEnabled(state.janus && (state.janus.enabled || state.janus.started));
+		__streamer.setJanusEnabled(
+			(state.janus && (state.janus.enabled || state.janus.started))
+			|| (state.janus_static && (state.janus_static.enabled || state.janus_static.started))
+		);
 	};
 
 	var __formatTemp = function(temp) {

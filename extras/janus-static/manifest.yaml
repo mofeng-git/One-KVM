@@ -1,0 +1,5 @@
+name: Janus Static
+description: Janus WebRTC Gateway (Static Config)
+path: janus
+daemon: kvmd-janus-static
+place: -1
