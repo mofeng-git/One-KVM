@@ -339,7 +339,7 @@ function _MjpegStreamer(__setActive, __setInactive, __setInfo) {
 			__logInfo("Active");
 			__setActive();
 		}
-		__setInfo(true, __state.source.online, `${__fps} fps`);
+		__setInfo(true, __state.source.online, `${__fps} fps dynamic`);
 	};
 
 	var __setStreamInactive = function() {
