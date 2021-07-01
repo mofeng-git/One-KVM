@@ -459,6 +459,7 @@ export function Streamer() {
 			__janus_enabled = (enabled && supported && _Janus !== null);
 			tools.featureSetEnabled($("stream-mode"), __janus_enabled);
 			tools.info(`Stream: Janus WebRTC state: enabled=${enabled}, supported=${supported}, imported=${!!_Janus}`);
+			tools.radioClickValue("stream-mode-radio", tools.storage.get("stream.mode", "mjpeg"));
 			self.setState(__state);
 		};
 		if (enabled && supported) {
@@ -609,16 +610,17 @@ export function Streamer() {
 	var __clickModeRadio = function() {
 		if (_Janus !== null) {
 			let mode = tools.radioGetValue("stream-mode-radio");
+			tools.storage.set("stream.mode", mode);
 			if (mode !== __streamer.getMode()) {
 				setTimeout(() => tools.radioSetValue("stream-mode-radio", mode), 100);
-				tools.hiddenSetVisible($("stream-image"), (mode === "mjpeg"));
-				tools.hiddenSetVisible($("stream-video"), (mode !== "mjpeg"));
-				if (mode === "mjpeg") {
-					__streamer.stopStream();
-					__streamer = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
-				} else { // janus
+				tools.hiddenSetVisible($("stream-image"), (mode !== "janus"));
+				tools.hiddenSetVisible($("stream-video"), (mode === "janus"));
+				if (mode === "janus") {
 					__streamer.stopStream();
 					__streamer = new _JanusStreamer(__setActive, __setInactive, __setInfo);
+				} else { // mjpeg
+					__streamer.stopStream();
+					__streamer = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
 				}
 				if (wm.isWindowVisible($("stream-window"))) {
 					__streamer.ensureStream(__state);

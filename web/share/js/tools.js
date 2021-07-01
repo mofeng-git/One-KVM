@@ -160,6 +160,15 @@ export var tools = new function() {
 			el.checked = (el.value === value);
 		}
 	};
+	this.radioClickValue = function(name, value) {
+		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+			if (el.value === value) {
+				el.click();
+				return;
+			}
+		}
+	};
+				
 
 	this.progressSetValue = function(el, title, percent) {
 		el.setAttribute("data-label", title);
@@ -242,6 +251,16 @@ export var tools = new function() {
 	this.info("Browser:", this.browser);
 
 	this.https = (location.protocol === "https:");
+
+	this.storage = new function() {
+		return {
+			"get": function(key, default_value) {
+				let value = window.localStorage.getItem(key);
+				return (value !== null ? value : default_value);
+			},
+			"set": (key, value) => window.localStorage.setItem(key, value),
+		};
+	};
 };
 
 export var $ = (id) => document.getElementById(id);
