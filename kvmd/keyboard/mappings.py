@@ -150,6 +150,7 @@ KEYMAP: Dict[str, Key] = {
     "NumpadDecimal": Key(mcu=McuKey(code=104), otg=OtgKey(code=99, is_modifier=False)),
     "Power": Key(mcu=McuKey(code=105), otg=OtgKey(code=102, is_modifier=False)),
     "IntlBackslash": Key(mcu=McuKey(code=106), otg=OtgKey(code=100, is_modifier=False)),
+    "IntlYen": Key(mcu=McuKey(code=107), otg=OtgKey(code=137, is_modifier=False)),
 }
 
 
@@ -436,6 +437,7 @@ AT1_TO_WEB = {
     86: "IntlBackslash",
     87: "F11",
     88: "F12",
+    125: "IntlYen",
     57372: "NumpadEnter",
     57373: "ControlRight",
     57397: "NumpadDivide",

@@ -133,6 +133,7 @@ KeyboardKeycode keymapUsb(uint8_t code) {
 		case 104: return KEYPAD_DOT;
 		case 105: return KEY_POWER;
 		case 106: return KEY_NON_US;
+		case 107: return KEY_INTERNATIONAL3;
 		default: return KEY_ERROR_UNDEFINED;
 	}
 }
