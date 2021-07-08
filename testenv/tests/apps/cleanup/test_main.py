@@ -37,9 +37,9 @@ def test_ok(tmpdir) -> None:  # type: ignore
     queue: "multiprocessing.Queue[Literal[True]]" = multiprocessing.Queue()
 
     ustreamer_sock_path = os.path.abspath(str(tmpdir.join("ustreamer-fake.sock")))
-    open(ustreamer_sock_path, "w").close()
+    open(ustreamer_sock_path, "w").close()  # pylint: disable=consider-using-with
     kvmd_sock_path = os.path.abspath(str(tmpdir.join("kvmd-fake.sock")))
-    open(kvmd_sock_path, "w").close()
+    open(kvmd_sock_path, "w").close()  # pylint: disable=consider-using-with
 
     def ustreamer_fake() -> None:
         setproctitle.setproctitle("kvmd/streamer: /usr/bin/ustreamer")

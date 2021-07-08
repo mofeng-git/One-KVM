@@ -164,7 +164,7 @@ def test_fail__unknown_plugin() -> None:
 
 def test_fail__invalid_passwd(mocker, tmpdir) -> None:  # type: ignore
     path = os.path.abspath(str(tmpdir.join("htpasswd")))
-    open(path, "w").close()
+    open(path, "w").close()  # pylint: disable=consider-using-with
     mocker.patch.object(builtins, "input", (lambda: "\n"))
     with pytest.raises(SystemExit, match="The argument is not a valid passwd characters"):
         _run_htpasswd(["set", "admin", "--read-stdin"], path)

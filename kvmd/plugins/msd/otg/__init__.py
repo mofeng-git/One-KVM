@@ -539,7 +539,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     def __set_image_complete(self, name: str, flag: bool) -> None:
         path = os.path.join(self.__meta_path, name + ".complete")
         if flag:
-            open(path, "w").close()
+            open(path, "w").close()  # pylint: disable=consider-using-with
         else:
             if os.path.exists(path):
                 os.remove(path)
