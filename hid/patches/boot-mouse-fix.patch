@@ -1,25 +1,7 @@
-index 27aee63..3440961 100644
+index 27aee63..2d7d6c0 100644
 --- HID-Project/src/SingleReport/BootMouse.cpp
 +++ _HID-Project/src/SingleReport/BootMouse.cpp
-@@ -54,6 +54,17 @@ static const uint8_t _hidReportDescriptorMouse[] PROGMEM = {
-     0xc0                            /* END_COLLECTION */
- };
- 
-+static const uint8_t _hidStandardDescriptorMouse[] PROGMEM = {
-+	// Standard mouse descriptor (see pg.21): http://www.kontest.ru/datasheet/AVAG0TECHN0L0GIES/ADNS-5000.pdf
-+	0x09,		// bLength
-+	0x21,		// bDescriptorType (HID)
-+	0x10, 0x01,	// bcdHID 1.10
-+	0x00,		// bCountryCode
-+	0x01,		// bNumDescriptors
-+	0x22,		// bDescriptorType[0] (HID)
-+	0x32, 0x00,	// wDescriptorLength[0] 50
-+};
-+
- BootMouse_::BootMouse_(void) : PluggableUSBModule(1, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(1)
- {
- 	epType[0] = EP_TYPE_INTERRUPT_IN;
-@@ -73,18 +84,24 @@ int BootMouse_::getInterface(uint8_t* interfaceCount)
+@@ -73,18 +73,23 @@ int BootMouse_::getInterface(uint8_t* interfaceCount)
  
  int BootMouse_::getDescriptor(USBSetup& setup)
  {
@@ -35,24 +17,23 @@ index 27aee63..3440961 100644
 -	protocol = HID_REPORT_PROTOCOL;
 +	// Check if this is a HID Class Descriptor request
 +	if (setup.bmRequestType != REQUEST_DEVICETOHOST_STANDARD_INTERFACE) { return 0; }
-+
-+	if (setup.wValueH == HID_REPORT_DESCRIPTOR_TYPE) {
+ 
+-	return USB_SendControl(TRANSFER_PGM, _hidReportDescriptorMouse, sizeof(_hidReportDescriptorMouse));
++	if (setup.wValueH == HID_HID_DESCRIPTOR_TYPE) {
++		HIDDescDescriptor desc = D_HIDREPORT(sizeof(_hidReportDescriptorMouse));
++		return USB_SendControl(0, &desc, sizeof(desc));
++	} else if (setup.wValueH == HID_REPORT_DESCRIPTOR_TYPE) {
 +		// Reset the protocol on reenumeration. Normally the host should not assume the state of the protocol
 +		// due to the USB specs, but Windows and Linux just assumes its in report mode.
 +		protocol = HID_REPORT_PROTOCOL;
 +		return USB_SendControl(TRANSFER_PGM, _hidReportDescriptorMouse, sizeof(_hidReportDescriptorMouse));
-+	} else if (setup.wValueH == HID_HID_DESCRIPTOR_TYPE) {
-+		// Just for my paranoja
-+		protocol = HID_BOOT_PROTOCOL;
-+		return USB_SendControl(TRANSFER_PGM, _hidStandardDescriptorMouse, sizeof(_hidStandardDescriptorMouse));
 +	}
- 
--	return USB_SendControl(TRANSFER_PGM, _hidReportDescriptorMouse, sizeof(_hidReportDescriptorMouse));
++
 +	return 0;
  }
  
  bool BootMouse_::setup(USBSetup& setup)
-@@ -103,7 +120,17 @@ bool BootMouse_::setup(USBSetup& setup)
+@@ -103,7 +108,17 @@ bool BootMouse_::setup(USBSetup& setup)
  			return true;
  		}
  		if (request == HID_GET_PROTOCOL) {
