@@ -33,12 +33,12 @@ def _patch(path: str, patch_path: str) -> None:
 
 
 # =====
-_patch(_get_pkg_path("framework-arduino-avr"), "patches/no-main.patch")
-_patch(_get_pkg_path("framework-arduino-avr"), "patches/optional-usb-serial.patch")
-_patch(_get_pkg_path("framework-arduino-avr"), "patches/get-plugged-endpoint.patch")
+_patch(_get_pkg_path("framework-arduino-avr"), "patches/arduino-no-main.patch")
+_patch(_get_pkg_path("framework-arduino-avr"), "patches/arduino-optional-usb-serial.patch")
+_patch(_get_pkg_path("framework-arduino-avr"), "patches/arduino-get-plugged-endpoint.patch")
 
 _libs = _get_libs()
-_patch(_libs["HID-Project"], "patches/shut-up.patch")
-_patch(_libs["HID-Project"], "patches/no-hid-singletones.patch")
-_patch(_libs["HID-Project"], "patches/absmouse-win-fix.patch")
-_patch(_libs["HID-Project"], "patches/boot-mouse-fix.patch")
+_patch(_libs["HID-Project"], "patches/hid-shut-up.patch")
+_patch(_libs["HID-Project"], "patches/hid-no-singletones.patch")
+_patch(_libs["HID-Project"], "patches/hid-abs-mouse-win-fix.patch")
+_patch(_libs["HID-Project"], "patches/hid-boot-mouse-fix.patch")

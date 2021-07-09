@@ -1,0 +1,17 @@
+diff -u -r a/cores/arduino/main.cpp b/cores/arduino/main.cpp
+--- a/cores/arduino/main.cpp	2019-05-16 15:52:01.000000000 +0300
++++ b/cores/arduino/main.cpp	2020-11-17 18:56:01.243474508 +0300
+@@ -30,6 +30,7 @@
+ void setupUSB() __attribute__((weak));
+ void setupUSB() { }
+ 
++/*
+ int main(void)
+ {
+ 	init();
+@@ -49,4 +50,5 @@
+         
+ 	return 0;
+ }
++*/
+ 

@@ -1,0 +1,66 @@
+diff -u -r a/src/SingleReport/BootKeyboard.cpp b/src/SingleReport/BootKeyboard.cpp
+--- a/src/SingleReport/BootKeyboard.cpp	2019-07-13 21:16:23.000000000 +0300
++++ b/src/SingleReport/BootKeyboard.cpp	2020-11-17 18:59:36.618815374 +0300
+@@ -206,6 +206,6 @@
+ }
+ 
+ 
+-BootKeyboard_ BootKeyboard;
++//BootKeyboard_ BootKeyboard;
+ 
+ 
+diff -u -r a/src/SingleReport/BootKeyboard.h b/src/SingleReport/BootKeyboard.h
+--- a/src/SingleReport/BootKeyboard.h	2019-07-13 21:16:23.000000000 +0300
++++ b/src/SingleReport/BootKeyboard.h	2020-11-17 19:00:54.967113649 +0300
+@@ -80,6 +80,6 @@
+     uint8_t* featureReport;
+     int featureLength;
+ };
+-extern BootKeyboard_ BootKeyboard;
++//extern BootKeyboard_ BootKeyboard;
+ 
+ 
+diff -u -r a/src/SingleReport/BootMouse.cpp b/src/SingleReport/BootMouse.cpp
+--- a/src/SingleReport/BootMouse.cpp	2019-07-13 21:16:23.000000000 +0300
++++ b/src/SingleReport/BootMouse.cpp	2020-11-17 18:59:22.859113905 +0300
+@@ -139,6 +139,6 @@
+ 	}
+ }
+ 
+-BootMouse_ BootMouse;
++//BootMouse_ BootMouse;
+ 
+ 
+diff -u -r a/src/SingleReport/BootMouse.h b/src/SingleReport/BootMouse.h
+--- a/src/SingleReport/BootMouse.h	2019-07-13 21:16:23.000000000 +0300
++++ b/src/SingleReport/BootMouse.h	2020-11-17 19:01:04.076915591 +0300
+@@ -48,6 +48,6 @@
+     
+     virtual void SendReport(void* data, int length) override;
+ };
+-extern BootMouse_ BootMouse;
++//extern BootMouse_ BootMouse;
+ 
+ 
+diff -u -r a/src/SingleReport/SingleAbsoluteMouse.cpp b/src/SingleReport/SingleAbsoluteMouse.cpp
+--- a/src/SingleReport/SingleAbsoluteMouse.cpp	2020-11-17 18:39:35.314843889 +0300
++++ b/src/SingleReport/SingleAbsoluteMouse.cpp	2020-11-17 18:59:12.189345326 +0300
+@@ -139,6 +139,6 @@
+ 	USB_Send(pluggedEndpoint | TRANSFER_RELEASE, data, length);
+ }
+ 
+-SingleAbsoluteMouse_ SingleAbsoluteMouse;
++//SingleAbsoluteMouse_ SingleAbsoluteMouse;
+ 
+ 
+diff -u -r a/src/SingleReport/SingleAbsoluteMouse.h b/src/SingleReport/SingleAbsoluteMouse.h
+--- a/src/SingleReport/SingleAbsoluteMouse.h	2019-07-13 21:16:23.000000000 +0300
++++ b/src/SingleReport/SingleAbsoluteMouse.h	2020-11-17 19:01:21.356539808 +0300
+@@ -49,6 +49,6 @@
+     
+     virtual inline void SendReport(void* data, int length) override;
+ };
+-extern SingleAbsoluteMouse_ SingleAbsoluteMouse;
++//extern SingleAbsoluteMouse_ SingleAbsoluteMouse;
+ 
+ 

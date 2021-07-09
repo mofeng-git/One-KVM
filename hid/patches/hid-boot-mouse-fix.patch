@@ -1,6 +1,6 @@
 index 27aee63..2d7d6c0 100644
---- HID-Project/src/SingleReport/BootMouse.cpp
-+++ _HID-Project/src/SingleReport/BootMouse.cpp
+--- a/src/SingleReport/BootMouse.cpp
++++ b/src/SingleReport/BootMouse.cpp
 @@ -73,18 +73,23 @@ int BootMouse_::getInterface(uint8_t* interfaceCount)
  
  int BootMouse_::getDescriptor(USBSetup& setup)
