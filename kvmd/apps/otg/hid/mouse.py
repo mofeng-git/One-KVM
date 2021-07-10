@@ -65,6 +65,10 @@ def _make_absolute_hid(horizontal_wheel: bool, report_id: Optional[int]) -> Hid:
             # Report ID
             *([0x85, report_id] if report_id is not None else []),
 
+            # Pointer and Physical are required by Apple Recovery
+            0x09, 0x01,  # USAGE (Pointer)
+            0xA1, 0x00,  # COLLECTION (Physical)
+
             # 8 Buttons
             0x05, 0x09,  # USAGE_PAGE (Button)
             0x19, 0x01,  # USAGE_MINIMUM (Button 1)
@@ -96,6 +100,7 @@ def _make_absolute_hid(horizontal_wheel: bool, report_id: Optional[int]) -> Hid:
             *(_HORIZONTAL_WHEEL if horizontal_wheel else []),
 
             # End
+            0xC0,  # END_COLLECTION (Physical)
             0xC0,  # END_COLLECTION
         ]),
     )
@@ -118,6 +123,10 @@ def _make_relative_hid(horizontal_wheel: bool, report_id: Optional[int]) -> Hid:
 
             # Report ID
             *([0x85, report_id] if report_id is not None else []),
+
+            # Pointer and Physical are required by Apple Recovery
+            0x09, 0x01,  # USAGE (Pointer)
+            0xA1, 0x00,  # COLLECTION (Physical)
 
             # 8 Buttons
             0x05, 0x09,  # USAGE_PAGE (Button)
@@ -145,6 +154,7 @@ def _make_relative_hid(horizontal_wheel: bool, report_id: Optional[int]) -> Hid:
             *(_HORIZONTAL_WHEEL if horizontal_wheel else []),
 
             # End
+            0xC0,  # END_COLLECTION (Physical)
             0xC0,  # END_COLLECTION
         ]),
     )
