@@ -74,6 +74,15 @@ export function Hid(__getResolution) {
 		window.addEventListener("pagehide", __releaseAll);
 		window.addEventListener("blur", __releaseAll);
 
+		$("hid-pak-ask-switch").checked = parseInt(tools.storage.get("hid.pak.ask", "1"));
+		tools.setOnClick($("hid-pak-ask-switch"), function() {
+			tools.storage.set("hid.pak.ask", ($("hid-pak-ask-switch").checked ? 1 : 0));
+		}, false);
+
+		$("hid-pak-keymap-selector").addEventListener("change", function() {
+			tools.storage.set("hid.pak.keymap", $("hid-pak-keymap-selector").value);
+		});
+
 		tools.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
 		tools.setOnClick($("hid-connect-switch"), __clickConnectSwitch);
 		tools.setOnClick($("hid-reset-button"), __clickResetButton);
@@ -163,9 +172,10 @@ export function Hid(__getResolution) {
 	};
 
 	self.setKeymaps = function(state) {
+		let selected = tools.storage.get("hid.pak.keymap", state.keymaps["default"]);
 		let html = "";
 		for (let variant of state.keymaps.available) {
-			html += `<option value=${variant} ${variant === state.keymaps.default ? "selected" : ""}>${variant}</option>`;
+			html += `<option value=${variant} ${variant === selected ? "selected" : ""}>${variant}</option>`;
 		}
 		$("hid-pak-keymap-selector").innerHTML = html;
 	};

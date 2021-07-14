@@ -88,21 +88,27 @@ export var tools = new function() {
 		return (matches ? decodeURIComponent(matches[1]) : "");
 	};
 
-	this.setOnClick = function(el, callback) {
+	this.setOnClick = function(el, callback, prevent_default=true) {
 		el.onclick = el.ontouchend = function(event) {
-			event.preventDefault();
+			if (prevent_default) {
+				event.preventDefault();
+			}
 			callback();
 		};
 	};
-	this.setOnDown = function(el, callback) {
+	this.setOnDown = function(el, callback, prevent_default=true) {
 		el.onmousedown = el.ontouchstart = function(event) {
-			event.preventDefault();
+			if (prevent_default) {
+				event.preventDefault();
+			}
 			callback();
 		};
 	};
-	this.setOnUp = function(el, callback) {
+	this.setOnUp = function(el, callback, prevent_default=true) {
 		el.onmouseup = el.ontouchend = function(event) {
-			event.preventDefault();
+			if (prevent_default) {
+				event.preventDefault();
+			}
 			callback();
 		};
 	};
