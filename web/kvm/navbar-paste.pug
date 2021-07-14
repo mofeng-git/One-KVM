@@ -1,0 +1,17 @@
+li(class="right")
+	a(class="menu-button" href="#") Paste
+	div(data-dont-hide-menu class="menu")
+		div(class="text")
+			b Paste text as keypress sequence#[br]
+			sub Please note that Pi-KVM cannot switch the keyboard layout
+		hr
+		div(class="text")
+			textarea(id="hid-pak-text" placeholder="Enter your text here")
+		table(class="kv")
+			tr
+				td
+					button(disabled data-force-hide-menu id="hid-pak-button") &bull; Paste
+				td using host keymap
+				td
+					select(id="hid-pak-keymap-selector")
+		+menu_switch("hid-pak-ask-switch", "Ask paste confirmation", true, true)

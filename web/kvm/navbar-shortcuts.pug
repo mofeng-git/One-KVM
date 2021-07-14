@@ -1,25 +1,9 @@
 li(class="right")
-	a(class="menu-button" href="#") Keyboard
+	a(class="menu-button" href="#") Shortcuts
 	div(data-dont-hide-menu class="menu")
 		div(class="text")
-			b Paste text as keypress sequence#[br]
-		hr
-		div(class="text" style="margin-right: 20px")
-			textarea(id="hid-pak-text" placeholder="Enter your text here")
-		table(class="kv")
-			tr
-				td
-					button(disabled data-force-hide-menu id="hid-pak-button") &bull; Paste
-				td using host keymap
-				td
-					select(id="hid-pak-keymap-selector")
-		+menu_switch("hid-pak-ask-switch", "Ask paste confirmation", true, true)
-		hr
-		div(class="text")
-		hr
-		button(data-force-hide-menu data-show-window="keyboard-window") &bull; Show keyboard
-		hr
-		div(class="text")
+			b Quick keyboard shortcuts#[br]
+			sub Also see #[i System &rarr; Show keyboard]
 		hr
 		div(class="buttons")
 			div(class="buttons-row")
