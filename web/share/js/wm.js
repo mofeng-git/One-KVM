@@ -63,11 +63,6 @@ function __WindowManager() {
 			__makeWindowMovable(el_window);
 			__windows.push(el_window);
 
-			if (el_window.hasAttribute("data-show-by-button")) {
-				let el_show_button = $(el_window.getAttribute("data-show-by-button"));
-				tools.setOnClick(el_show_button, () => self.showWindow(el_window));
-			}
-
 			if (el_window.classList.contains("window-resizable") && window.ResizeObserver) {
 				new ResizeObserver(function() {
 					// При переполнении рабочей области сократить размер окна по высоте.
@@ -123,6 +118,10 @@ function __WindowManager() {
 					__activateLastWindow(el_window);
 				});
 			}
+		}
+
+		for (let el_button of $$$("button[data-show-window]")) {
+			tools.setOnClick(el_button, () => self.showWindow($(el_button.getAttribute("data-show-window"))));
 		}
 
 		window.onmouseup = __globalMouseButtonHandler;

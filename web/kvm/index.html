@@ -112,10 +112,10 @@
             <tr>
               <td class="value">Runtime settings &amp; tools</td>
               <td class="feature-disabled" id="webterm">
-                <button class="small" data-force-hide-menu id="show-webterm-button">&bull; Term</button>
+                <button class="small" data-force-hide-menu data-show-window="webterm-window">&bull; Term</button>
               </td>
               <td>
-                <button class="small" data-force-hide-menu id="show-about-button">&bull; About</button>
+                <button class="small" data-force-hide-menu data-show-window="about-window">&bull; About</button>
               </td>
               <td>
                 <button class="small" data-force-hide-menu id="open-log-button">&bull; Log</button>
@@ -168,7 +168,7 @@
           </table>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row33" data-force-hide-menu id="show-stream-button">&bull; Show stream</button>
+            <button class="row33" data-force-hide-menu data-show-window="stream-window">&bull; Show stream</button>
             <button class="row33" disabled data-force-hide-menu id="stream-screenshot-button">&bull; Screenshot</button>
             <button class="row33" disabled id="stream-reset-button">Reset stream</button>
           </div>
@@ -229,7 +229,7 @@
           </table>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" data-force-hide-menu id="show-keyboard-button">&bull; Show keyboard</button>
+            <button class="row50" data-force-hide-menu data-show-window="keyboard-window">&bull; Show keyboard</button>
             <button class="row50" disabled id="hid-reset-button">Reset HID</button>
           </div>
         </div>
@@ -456,7 +456,6 @@
           <div class="text" style="margin-right: 20px">
             <textarea id="hid-pak-text" placeholder="Enter your text here"></textarea>
           </div>
-          <hr>
           <table class="kv">
             <tr>
               <td>
@@ -468,7 +467,6 @@
               </td>
             </tr>
           </table>
-          <hr>
               <table class="kv">
                 <tr>
                       <td>Ask paste confirmation:</td>
@@ -480,6 +478,10 @@
                       </td>
                 </tr>
               </table>
+          <hr>
+          <div class="text"></div>
+          <hr>
+          <button data-force-hide-menu data-show-window="keyboard-window">&bull; Show keyboard</button>
           <hr>
           <div class="text"></div>
           <hr>
@@ -530,7 +532,7 @@
         <div class="menu" data-dont-hide-menu id="gpio-menu"></div>
       </li>
     </ul>
-    <div class="window window-resizable" id="stream-window" data-show-by-button="show-stream-button">
+    <div class="window window-resizable" id="stream-window">
       <div class="window-header" id="stream-window-header">
         <div class="window-grab">MJPEG</div>
         <button class="window-button-close">&times;</button>
@@ -564,7 +566,7 @@
         </div>
       </div>
     </div>
-    <div class="window" id="keyboard-window" data-show-by-button="show-keyboard-button">
+    <div class="window" id="keyboard-window">
       <div class="window-header" id="keyboard-window-header">
         <div class="window-grab">Virtual Keyboard</div>
         <button class="window-button-close">&times;</button>
@@ -1411,7 +1413,7 @@
         </div>
       </div>
     </div>
-    <div class="window" id="about-window" data-show-by-button="show-about-button">
+    <div class="window" id="about-window">
       <div class="window-header">
         <div class="window-grab">About</div>
         <button class="window-button-close">&times;</button>
@@ -1893,7 +1895,7 @@
         </p>
       </div>
     </div>
-    <div class="window window-resizable" id="webterm-window" data-show-by-button="show-webterm-button" style="width: 640px; height: 480px">
+    <div class="window window-resizable" id="webterm-window" style="width: 640px; height: 480px">
       <div class="window-header">
         <div class="window-grab">Terminal</div>
         <button class="window-button-close">&times;</button>

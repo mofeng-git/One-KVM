@@ -6,7 +6,6 @@ li(class="right")
 		hr
 		div(class="text" style="margin-right: 20px")
 			textarea(id="hid-pak-text" placeholder="Enter your text here")
-		hr
 		table(class="kv")
 			tr
 				td
@@ -14,8 +13,11 @@ li(class="right")
 				td using host keymap
 				td
 					select(id="hid-pak-keymap-selector")
-		hr
 		+menu_switch("hid-pak-ask-switch", "Ask paste confirmation", true, true)
+		hr
+		div(class="text")
+		hr
+		button(data-force-hide-menu data-show-window="keyboard-window") &bull; Show keyboard
 		hr
 		div(class="text")
 		hr

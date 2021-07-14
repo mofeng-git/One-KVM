@@ -9,8 +9,8 @@ li(class="right")
 		table(class="kv" style="width: calc(100% - 20px)")
 			tr
 				td(class="value") Runtime settings &amp; tools
-				td(id="webterm" class="feature-disabled") #[button(data-force-hide-menu id="show-webterm-button" class="small") &bull; Term]
-				td #[button(data-force-hide-menu id="show-about-button" class="small") &bull; About]
+				td(id="webterm" class="feature-disabled") #[button(data-force-hide-menu data-show-window="webterm-window" class="small") &bull; Term]
+				td #[button(data-force-hide-menu data-show-window="about-window" class="small") &bull; About]
 				td #[button(data-force-hide-menu id="open-log-button" class="small") &bull; Log]
 				td(id="wol" class="feature-disabled") #[button(disabled data-force-hide-menu id="wol-wakeup-button" class="small") &bull; WoL]
 		hr
@@ -40,7 +40,7 @@ li(class="right")
 						label(for="stream-mode-radio-janus") H.264 / WebRTC
 		hr
 		div(class="buttons buttons-row")
-			button(data-force-hide-menu id="show-stream-button" class="row33") &bull; Show stream
+			button(data-force-hide-menu data-show-window="stream-window" class="row33") &bull; Show stream
 			button(disabled data-force-hide-menu id="stream-screenshot-button" class="row33") &bull; Screenshot
 			button(disabled id="stream-reset-button" class="row33") Reset stream
 		div(id="hid-outputs" class="feature-disabled")
@@ -72,5 +72,5 @@ li(class="right")
 							span(class="switch")
 		hr
 		div(class="buttons buttons-row")
-			button(data-force-hide-menu id="show-keyboard-button" class="row50") &bull; Show keyboard
+			button(data-force-hide-menu data-show-window="keyboard-window" class="row50") &bull; Show keyboard
 			button(disabled id="hid-reset-button" class="row50") Reset HID
