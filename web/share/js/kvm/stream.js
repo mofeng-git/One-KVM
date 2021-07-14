@@ -438,7 +438,7 @@ export function Streamer() {
 
 		$("stream-resolution-selector").onchange = (() => __sendParam("resolution", $("stream-resolution-selector").value));
 
-		tools.radioSetOnClick("stream-mode-radio", __clickModeRadio);
+		tools.radioSetOnClick("stream-mode-radio", __clickModeRadio, false);
 
 		tools.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
 		tools.setOnClick($("stream-reset-button"), __clickResetButton);
@@ -612,7 +612,6 @@ export function Streamer() {
 			let mode = tools.radioGetValue("stream-mode-radio");
 			tools.storage.set("stream.mode", mode);
 			if (mode !== __streamer.getMode()) {
-				setTimeout(() => tools.radioSetValue("stream-mode-radio", mode), 100);
 				tools.hiddenSetVisible($("stream-image"), (mode !== "janus"));
 				tools.hiddenSetVisible($("stream-video"), (mode === "janus"));
 				if (mode === "janus") {

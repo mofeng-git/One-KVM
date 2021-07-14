@@ -153,9 +153,9 @@ export var tools = new function() {
 			<label for="${name}-${value}">${title}</label>
 		`;
 	};
-	this.radioSetOnClick = function(name, callback) {
+	this.radioSetOnClick = function(name, callback, prevent_default=true) {
 		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
-			this.setOnClick(el, callback);
+			this.setOnClick(el, callback, prevent_default);
 		}
 	};
 	this.radioGetValue = function(name) {
