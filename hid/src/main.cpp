@@ -212,8 +212,8 @@ static void _cmdMouseMoveEvent(const uint8_t *data) { // 4 bytes
 	// See /kvmd/apps/otg/hid/keyboard.py for details
 	if (_usb_mouse_abs) {
 		_usb_mouse_abs->sendMove(
-			(PROTO::merge8_int(data[0], data[1]) + 32768) / 2,
-			(PROTO::merge8_int(data[2], data[3]) + 32768) / 2
+			PROTO::merge8_int(data[0], data[1]),
+			PROTO::merge8_int(data[2], data[3])
 		);
 	}
 }
