@@ -34,7 +34,7 @@ def _patch(path: str, patch_path: str) -> None:
 
 # =====
 _patch(_get_pkg_path("framework-arduino-avr"), "patches/arduino-no-main.patch")
-_patch(_get_pkg_path("framework-arduino-avr"), "patches/arduino-optional-usb-serial.patch")
+_patch(_get_pkg_path("framework-arduino-avr"), "patches/arduino-optional-cdc.patch")
 _patch(_get_pkg_path("framework-arduino-avr"), "patches/arduino-get-plugged-endpoint.patch")
 
 _libs = _get_libs()
