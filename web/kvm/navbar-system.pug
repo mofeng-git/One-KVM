@@ -12,7 +12,9 @@ li(class="right")
 				td(id="webterm" class="feature-disabled") #[button(data-force-hide-menu data-show-window="webterm-window" class="small") &bull; Term]
 				td #[button(data-force-hide-menu data-show-window="about-window" class="small") &bull; About]
 				td #[button(data-force-hide-menu id="open-log-button" class="small") &bull; Log]
-				td(id="wol" class="feature-disabled") #[button(disabled data-force-hide-menu id="wol-wakeup-button" class="small") &bull; WoL]
+				td(id="wol" class="feature-disabled")
+					button(data-force-hide-menu id="gpio-button-__wol__" class="gpio-button small" data-channel="__wol__"
+						data-confirm="Are you sure to send Wake-on-LAN packet to the server?") &bull; WoL
 		hr
 		table(class="kv" style="width: calc(100% - 20px)")
 			tr(id="stream-resolution" class="feature-disabled")

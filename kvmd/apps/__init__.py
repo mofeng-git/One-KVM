@@ -79,7 +79,6 @@ from ..validators.os import valid_options
 from ..validators.os import valid_command
 
 from ..validators.net import valid_ip_or_host
-from ..validators.net import valid_ip
 from ..validators.net import valid_net
 from ..validators.net import valid_port
 from ..validators.net import valid_ports_list
@@ -183,7 +182,7 @@ def _init_config(config_path: str, override_options: List[str], **load_flags: bo
         raise SystemExit(f"ConfigError: {err}")
 
 
-def _patch_raw(raw_config: Dict) -> None:
+def _patch_raw(raw_config: Dict) -> None:  # pylint: disable=too-many-branches
     if isinstance(raw_config.get("otg"), dict):
         for (old, new) in [
             ("msd", "msd"),
@@ -194,6 +193,23 @@ def _patch_raw(raw_config: Dict) -> None:
                 if not isinstance(raw_config["otg"].get("devices"), dict):
                     raw_config["otg"]["devices"] = {}
                 raw_config["otg"]["devices"][new] = raw_config["otg"].pop(old)
+
+    if isinstance(raw_config.get("kvmd"), dict) and isinstance(raw_config["kvmd"].get("wol"), dict):
+        if not isinstance(raw_config["kvmd"].get("gpio"), dict):
+            raw_config["kvmd"]["gpio"] = {}
+        for section in ["drivers", "scheme"]:
+            if not isinstance(raw_config["kvmd"]["gpio"].get(section), dict):
+                raw_config["kvmd"]["gpio"][section] = {}
+        raw_config["kvmd"]["gpio"]["drivers"]["__wol__"] = {
+            "type": "wol",
+            **raw_config["kvmd"].pop("wol"),
+        }
+        raw_config["kvmd"]["gpio"]["scheme"]["__wol__"] = {
+            "driver": "__wol__",
+            "pin": 0,
+            "mode": "output",
+            "switch": False,
+        }
 
     if isinstance(raw_config.get("kvmd"), dict) and isinstance(raw_config["kvmd"].get("streamer"), dict):
         streamer_config = raw_config["kvmd"]["streamer"]
@@ -357,12 +373,6 @@ def _get_config_scheme() -> Dict:
                     "vcgencmd_cmd":  Option(["/opt/vc/bin/vcgencmd"], type=valid_command),
                     "state_poll":    Option(10.0,  type=valid_float_f01),
                 },
-            },
-
-            "wol": {
-                "ip":   Option("255.255.255.255", type=functools.partial(valid_ip, v6=False)),
-                "port": Option(9, type=valid_port),
-                "mac":  Option("", type=_make_ifarg(valid_mac, "")),
             },
 
             "hid": {

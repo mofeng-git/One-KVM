@@ -65,7 +65,6 @@ from ... import aioproc
 from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
-from .wol import WakeOnLan
 from .ugpio import UserGpio
 from .streamer import Streamer
 from .snapshoter import Snapshoter
@@ -85,7 +84,6 @@ from .api.auth import check_request_auth
 
 from .api.info import InfoApi
 from .api.log import LogApi
-from .api.wol import WolApi
 from .api.ugpio import UserGpioApi
 from .api.hid import HidApi
 from .api.atx import AtxApi
@@ -148,7 +146,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         auth_manager: AuthManager,
         info_manager: InfoManager,
         log_reader: LogReader,
-        wol: WakeOnLan,
         user_gpio: UserGpio,
 
         hid: BaseHid,
@@ -186,7 +183,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 for sub in sorted(info_manager.get_subs())
             ],
             *[
-                _Component("Wake-on-LAN",  "wol_state",      wol),
                 _Component("User-GPIO",    "gpio_state",     user_gpio),
                 _Component("HID",          "hid_state",      hid),
                 _Component("ATX",          "atx_state",      atx),
@@ -201,7 +197,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             AuthApi(auth_manager),
             InfoApi(info_manager),
             LogApi(log_reader),
-            WolApi(wol),
             UserGpioApi(user_gpio),
             self.__hid_api,
             AtxApi(atx),

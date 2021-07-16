@@ -30,7 +30,6 @@ import {Hid} from "./hid.js";
 import {Atx} from "./atx.js";
 import {Msd} from "./msd.js";
 import {Streamer} from "./stream.js";
-import {WakeOnLan} from "./wol.js";
 import {Gpio} from "./gpio.js";
 
 
@@ -48,7 +47,6 @@ export function Session() {
 	var __hid = new Hid(__streamer.getResolution);
 	var __atx = new Atx();
 	var __msd = new Msd();
-	var __wol = new WakeOnLan();
 	var __gpio = new Gpio();
 
 	var __init__ = function() {
@@ -243,7 +241,6 @@ export function Session() {
 			case "info_hw_state": __setAboutInfoHw(data.event); break;
 			case "info_system_state": __setAboutInfoSystem(data.event); break;
 			case "info_extras_state": __setExtras(data.event); break;
-			case "wol_state": __wol.setState(data.event); break;
 			case "gpio_model_state": __gpio.setModel(data.event); break;
 			case "gpio_state": __gpio.setState(data.event); break;
 			case "hid_keymaps_state": __hid.setKeymaps(data.event); break;

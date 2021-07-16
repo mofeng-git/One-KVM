@@ -105,6 +105,7 @@ export function Gpio() {
 		}
 
 		tools.featureSetEnabled($("v3-usb-breaker"), ("__v3_usb_breaker__" in model.scheme.outputs));
+		tools.featureSetEnabled($("wol"), ("__wol__" in model.scheme.outputs));
 
 		self.setState(__state);
 	};

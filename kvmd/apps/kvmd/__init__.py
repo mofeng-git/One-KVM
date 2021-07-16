@@ -34,7 +34,6 @@ from .. import init
 from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
-from .wol import WakeOnLan
 from .ugpio import UserGpio
 from .streamer import Streamer
 from .snapshoter import Snapshoter
@@ -86,7 +85,6 @@ def main(argv: Optional[List[str]]=None) -> None:
         ),
         info_manager=InfoManager(global_config),
         log_reader=LogReader(),
-        wol=WakeOnLan(**config.wol._unpack()),
         user_gpio=UserGpio(config.gpio, global_config.otg.udc),
 
         hid=hid,
