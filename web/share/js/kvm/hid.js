@@ -206,7 +206,7 @@ export function Hid(__getResolution) {
 				} else {
 					resolve(null);
 				}
-			}, 50);
+			}, 100);
 			iterate();
 		});
 	};
