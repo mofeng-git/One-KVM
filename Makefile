@@ -243,6 +243,7 @@ clean:
 
 
 clean-all: testenv clean
+	make -C hid clean-all
 	- docker run --rm \
 			--volume `pwd`:/src \
 		-it $(TESTENV_IMAGE) bash -c "cd src && rm -rf testenv/{.ssl,.tox,.mypy_cache,.coverage}"
