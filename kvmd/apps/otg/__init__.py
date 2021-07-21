@@ -72,8 +72,12 @@ def _unlink(path: str) -> None:
     os.unlink(path)
 
 
-def _write(path: str, text: str) -> None:
-    get_logger().info("WRITE --- %s", path)
+def _write(path: str, text: str, optional: bool=False) -> None:
+    logger = get_logger()
+    if optional and not os.access(path, os.F_OK):
+        logger.info("SKIP ---- %s", path)
+        return
+    logger.info("WRITE --- %s", path)
     with open(path, "w") as param_file:
         param_file.write(text)
 
@@ -128,6 +132,7 @@ def _create_ethernet(gadget_path: str, config_path: str, driver: str, host_mac: 
 def _create_hid(gadget_path: str, config_path: str, instance: int, hid: Hid) -> None:
     func_path = join(gadget_path, f"functions/hid.usb{instance}")
     _mkdir(func_path)
+    _write(join(func_path, "no_out_endpoint"), "1", optional=True)
     _write(join(func_path, "protocol"), str(hid.protocol))
     _write(join(func_path, "subclass"), str(hid.subclass))
     _write(join(func_path, "report_length"), str(hid.report_length))
