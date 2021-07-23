@@ -33,11 +33,11 @@ from .basic import valid_number
 
 # =====
 def valid_hid_keyboard_output(arg: Any) -> str:
-    return check_string_in_list(arg, "Keyboard output", ["usb", "ps2", ""])
+    return check_string_in_list(arg, "Keyboard output", ["usb", "ps2", "disabled"])
 
 
 def valid_hid_mouse_output(arg: Any) -> str:
-    return check_string_in_list(arg, "Mouse output", ["usb", "usb_rel", "ps2", ""])
+    return check_string_in_list(arg, "Mouse output", ["usb", "usb_rel", "ps2", "disabled"])
 
 
 def valid_hid_key(arg: Any) -> str:

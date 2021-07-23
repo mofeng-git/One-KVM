@@ -118,9 +118,9 @@ export function Hid(__getResolution) {
 					for (let args of [
 						["USB", "usb"],
 						["PS/2", "ps2"],
-						["Off", ""],
+						["Off", "disabled"],
 					]) {
-						if (keyboard_outputs.includes(args[1]) || !args[1]) {
+						if (keyboard_outputs.includes(args[1])) {
 							html += tools.radioMakeItem("hid-outputs-keyboard-radio", args[0], args[1]);
 						}
 					}
@@ -138,9 +138,9 @@ export function Hid(__getResolution) {
 						["USB", "usb", false],
 						["USB Relative", "usb_rel", true],
 						["PS/2", "ps2", true],
-						["Off", ""],
+						["Off", "disabled"],
 					]) {
-						if (mouse_outputs.includes(args[1]) || !args[1]) {
+						if (mouse_outputs.includes(args[1])) {
 							html += tools.radioMakeItem("hid-outputs-mouse-radio", args[0], args[1]);
 							has_relative = (has_relative || args[2]);
 						}

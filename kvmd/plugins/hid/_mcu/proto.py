@@ -38,14 +38,15 @@ class BaseEvent:
 
 # =====
 _KEYBOARD_NAMES_TO_CODES = {
-    "usb": 0b00000001,
-    "ps2": 0b00000011,
+    "disabled": 0b00000000,
+    "usb":      0b00000001,
+    "ps2":      0b00000011,
 }
 _KEYBOARD_CODES_TO_NAMES = tools.swapped_kvs(_KEYBOARD_NAMES_TO_CODES)
 
 
 def get_active_keyboard(outputs: int) -> str:
-    return _KEYBOARD_CODES_TO_NAMES.get(outputs & 0b00000111, "")
+    return _KEYBOARD_CODES_TO_NAMES.get(outputs & 0b00000111, "disabled")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -62,15 +63,16 @@ class SetKeyboardOutputEvent(BaseEvent):
 
 # =====
 _MOUSE_NAMES_TO_CODES = {
-    "usb":     0b00001000,
-    "usb_rel": 0b00010000,
-    "ps2":     0b00011000,
+    "disabled": 0b00000000,
+    "usb":      0b00001000,
+    "usb_rel":  0b00010000,
+    "ps2":      0b00011000,
 }
 _MOUSE_CODES_TO_NAMES = tools.swapped_kvs(_MOUSE_NAMES_TO_CODES)
 
 
 def get_active_mouse(outputs: int) -> str:
-    return _MOUSE_CODES_TO_NAMES.get(outputs & 0b00111000, "")
+    return _MOUSE_CODES_TO_NAMES.get(outputs & 0b00111000, "disabled")
 
 
 @dataclasses.dataclass(frozen=True)

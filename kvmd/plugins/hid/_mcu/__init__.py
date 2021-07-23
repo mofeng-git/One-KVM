@@ -179,12 +179,12 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
         if outputs1 & 0b10000000:  # Dynamic
             if outputs2 & 0b00000001:  # USB
-                keyboard_outputs["available"].extend(["usb"])
-                mouse_outputs["available"].extend(["usb", "usb_rel"])
+                keyboard_outputs["available"].extend(["usb", "disabled"])
+                mouse_outputs["available"].extend(["usb", "usb_rel", "disabled"])
 
             if outputs2 & 0b00000010:  # PS/2
-                keyboard_outputs["available"].extend(["ps2"])
-                mouse_outputs["available"].extend(["ps2"])
+                keyboard_outputs["available"].extend(["ps2", "disabled"])
+                mouse_outputs["available"].extend(["ps2", "disabled"])
 
             active_keyboard = get_active_keyboard(outputs1)
             if active_keyboard in keyboard_outputs["available"]:
