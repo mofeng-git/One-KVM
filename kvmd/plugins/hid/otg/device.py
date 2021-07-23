@@ -28,6 +28,7 @@ import errno
 import time
 
 from typing import Dict
+from typing import Generator
 
 from ....logging import get_logger
 
@@ -52,9 +53,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         device_path: str,
         select_timeout: float,
+        queue_timeout: float,
         write_retries: int,
-        write_retries_delay: float,
-        reopen_delay: float,
         noop: bool,
     ) -> None:
 
@@ -67,9 +67,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         self.__device_path = device_path
         self.__select_timeout = select_timeout
+        self.__queue_timeout = queue_timeout
         self.__write_retries = write_retries
-        self.__write_retries_delay = write_retries_delay
-        self.__reopen_delay = reopen_delay
         self.__noop = noop
 
         self.__fd = -1
@@ -77,26 +76,39 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         self.__state_flags = aiomulti.AioSharedFlags({"online": True, **initial_state}, notifier)
         self.__stop_event = multiprocessing.Event()
 
-    def run(self) -> None:
+    def run(self) -> None:  # pylint: disable=too-many-branches
         logger = aioproc.settle(f"HID-{self.__name}", f"hid-{self.__name}")
+        report = b""
+        retries = 0
         while not self.__stop_event.is_set():
             try:
                 while not self.__stop_event.is_set():
-                    if self.__ensure_device():  # Check device and process reports if needed
+                    if self.__ensure_device():
                         self.__read_all_reports()
+
                     try:
-                        event = self.__events_queue.get(timeout=0.1)
+                        event = self.__events_queue.get(timeout=self.__queue_timeout)
                     except queue.Empty:
                         if not self.__udc.can_operate():
-                            self._clear_queue()
-                            self.__close_device()
+                            self.__state_flags.update(online=False)
                     else:
-                        if not self._process_event(event):
-                            self._clear_queue()
+                        # Посылка свежих репортов важнее старого
+                        for report in self._process_event(event):
+                            retries = self.__write_retries
+                            if self.__ensure_device():
+                                if self.__write_report(report):
+                                    retries = 0
+                        continue
+
+                    # Повторение последнего репорта до победного или пока не кончатся попытки
+                    if retries > 0 and self.__ensure_device():
+                        if self.__write_report(report):
+                            retries = 0
+                        else:
+                            retries -= 1
+
             except Exception:
                 logger.exception("Unexpected HID-%s error", self.__name)
-                self._clear_queue()
-                self.__close_device()
                 time.sleep(1)
 
         self.__close_device()
@@ -106,8 +118,10 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
     # =====
 
-    def _process_event(self, event: BaseEvent) -> bool:
-        raise NotImplementedError
+    def _process_event(self, event: BaseEvent) -> Generator[bytes, None, None]:  # pylint: disable=unused-argument
+        if self is not None:  # XXX: Vulture and pylint hack
+            raise NotImplementedError()
+        yield
 
     def _process_read_report(self, report: bytes) -> None:
         pass
@@ -131,53 +145,43 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
     def _clear_queue(self) -> None:
         tools.clear_queue(self.__events_queue)
 
-    def _ensure_write(self, report: bytes, reopen: bool=False, close: bool=False) -> bool:
-        if reopen:
+    def _cleanup_write(self, report: bytes) -> None:
+        assert not self.is_alive()
+        assert self.__fd < 0
+        if self.__ensure_device():
+            self.__write_report(report)
             self.__close_device()
-        try:
-            if self.__ensure_device():
-                return self.__write_report(report)
-            return False
-        finally:
-            if close:
-                self.__close_device()
 
     # =====
 
     def __write_report(self, report: bytes) -> bool:
+        assert report
+
         if self.__noop:
             return True
 
         assert self.__fd >= 0
         logger = get_logger()
 
-        retries = self.__write_retries
-        while retries:
-            try:
-                written = os.write(self.__fd, report)
-                if written == len(report):
-                    self.__state_flags.update(online=True)
-                    return True
-                else:
-                    logger.error("HID-%s write() error: written (%s) != report length (%d)",
-                                 self.__name, written, len(report))
-            except Exception as err:
-                if isinstance(err, OSError) and (
-                    # https://github.com/raspberrypi/linux/commit/61b7f805dc2fd364e0df682de89227e94ce88e25
-                    err.errno == errno.EAGAIN  # pylint: disable=no-member
-                    or err.errno == errno.ESHUTDOWN  # pylint: disable=no-member
-                ):
-                    logger.debug("HID-%s busy/unplugged (write): %s", self.__name, tools.efmt(err))
-                else:
-                    logger.exception("Can't write report to HID-%s", self.__name)
+        try:
+            written = os.write(self.__fd, report)
+            if written == len(report):
+                self.__state_flags.update(online=True)
+                return True
+            else:
+                logger.error("HID-%s write() error: written (%s) != report length (%d)",
+                             self.__name, written, len(report))
+        except Exception as err:
+            if isinstance(err, OSError) and (
+                # https://github.com/raspberrypi/linux/commit/61b7f805dc2fd364e0df682de89227e94ce88e25
+                err.errno == errno.EAGAIN  # pylint: disable=no-member
+                or err.errno == errno.ESHUTDOWN  # pylint: disable=no-member
+            ):
+                logger.debug("HID-%s busy/unplugged (write): %s", self.__name, tools.efmt(err))
+            else:
+                logger.exception("Can't write report to HID-%s", self.__name)
 
-            retries -= 1
-
-            if retries:
-                logger.debug("HID-%s write retries left: %d", self.__name, retries)
-                time.sleep(self.__write_retries_delay)
-
-        self.__close_device()
+        self.__state_flags.update(online=False)
         return False
 
     def __read_all_reports(self) -> None:
@@ -213,27 +217,25 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         logger = get_logger()
 
         if self.__fd < 0:
-            if self.__udc.can_operate():
-                try:
-                    flags = os.O_NONBLOCK
-                    flags |= (os.O_RDWR if self.__read_size else os.O_WRONLY)
-                    self.__fd = os.open(self.__device_path, flags)
-                except Exception as err:
-                    logger.error("Can't open HID-%s device %s: %s", self.__name, self.__device_path, tools.efmt(err))
-                    time.sleep(self.__reopen_delay)
-            else:
-                time.sleep(self.__reopen_delay)
+            try:
+                flags = os.O_NONBLOCK
+                flags |= (os.O_RDWR if self.__read_size else os.O_WRONLY)
+                self.__fd = os.open(self.__device_path, flags)
+            except Exception as err:
+                logger.error("Can't open HID-%s device %s: %s",
+                             self.__name, self.__device_path, tools.efmt(err))
 
         if self.__fd >= 0:
             try:
                 if select.select([], [self.__fd], [], self.__select_timeout)[1]:
-                    self.__state_flags.update(online=True)
+                    # Закомментировано, потому что иногда запись доступна, но устройство отключено
+                    # self.__state_flags.update(online=True)
                     return True
                 else:
+                    # Если запись недоступна, то скорее всего устройство отключено
                     logger.debug("HID-%s is busy/unplugged (write select)", self.__name)
             except Exception as err:
                 logger.error("Can't select() for write HID-%s: %s", self.__name, tools.efmt(err))
-            self.__close_device()
 
         self.__state_flags.update(online=False)
         return False
