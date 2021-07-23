@@ -317,7 +317,7 @@ export function Msd() {
 		let el = $("msd-image-selector");
 
 		if (el.options.length === 0) {
-			el.options[0] = new Option("< Not selected >", "", false, false);
+			el.options[0] = new Option("~ Not selected ~", "", false, false);
 		} else {
 			el.options.length = 1; // Cleanup
 		}
