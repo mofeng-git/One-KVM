@@ -108,6 +108,10 @@ class Section(dict):
             return dict.__getattribute__(self, key)
 
 
+class Stub:
+    pass
+
+
 class Option:
     __type = type
 
@@ -115,6 +119,7 @@ class Option:
         self,
         default: Any,
         type: Optional[Callable[[Any], Any]]=None,  # pylint: disable=redefined-builtin
+        if_empty: Any=Stub,
         only_if: str="",
         unpack_as: str="",
         help: str="",  # pylint: disable=redefined-builtin
@@ -122,12 +127,16 @@ class Option:
 
         self.default = default
         self.type: Callable[[Any], Any] = (type or (self.__type(default) if default is not None else str))  # type: ignore
+        self.if_empty = if_empty
         self.only_if = only_if
         self.unpack_as = unpack_as
         self.help = help
 
     def __repr__(self) -> str:
-        return f"<Option(default={self.default}, type={self.type}, only_if={self.only_if}, unpack_as={self.unpack_as})>"
+        return (
+            f"<Option(default={self.default}, type={self.type}, if_empty={self.if_empty},"
+            f" only_if={self.only_if}, unpack_as={self.unpack_as})>"
+        )
 
 
 # =====
@@ -170,10 +179,13 @@ def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, .
                 value = option.default
             else:
                 value = raw.get(key, option.default)
-                try:
-                    value = option.type(value)
-                except (TypeError, ValueError) as err:
-                    raise ConfigError(f"Invalid value {value!r} for key {make_full_name(key)!r}: {err}")
+                if option.if_empty != Stub and not value:
+                    value = option.if_empty
+                else:
+                    try:
+                        value = option.type(value)
+                    except (TypeError, ValueError) as err:
+                        raise ConfigError(f"Invalid value {value!r} for key {make_full_name(key)!r}: {err}")
 
             config[key] = value
             config._set_meta(  # pylint: disable=protected-access

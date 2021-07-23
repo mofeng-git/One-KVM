@@ -185,7 +185,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "unlock_cmd":  Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-unlock", "unlock"],  type=valid_command),
 
             "initial": {
-                "image": Option("",    type=(lambda arg: (valid_printable_filename(arg) if arg else ""))),
+                "image": Option("",    type=valid_printable_filename, if_empty=""),
                 "cdrom": Option(False, type=valid_bool),
             },
         }

@@ -21,6 +21,7 @@
 
 
 import socket
+import functools
 
 from typing import Dict
 from typing import Optional
@@ -60,9 +61,9 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "ip":   Option("255.255.255.255", type=(lambda arg: valid_ip(arg, v6=False))),
+            "ip":   Option("255.255.255.255", type=functools.partial(valid_ip, v6=False)),
             "port": Option(9, type=valid_port),
-            "mac":  Option("", type=(lambda arg: (valid_mac(arg) if arg else ""))),
+            "mac":  Option("", type=valid_mac, if_empty=""),
         }
 
     def register_input(self, pin: int, debounce: float) -> None:

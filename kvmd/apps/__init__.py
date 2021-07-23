@@ -331,10 +331,6 @@ def _dump_config(config: Section) -> None:
     print(dump)
 
 
-def _make_ifarg(validator, unless):  # type: ignore
-    return (lambda arg: (validator(arg) if arg else unless))
-
-
 def _get_config_scheme() -> Dict:
     return {
         "logging": Option({}),
@@ -410,10 +406,10 @@ def _get_config_scheme() -> Dict:
                 "shutdown_delay": Option(10.0, type=valid_float_f01),
                 "state_poll":     Option(1.0,  type=valid_float_f01),
 
-                "quality": Option(80, type=_make_ifarg(valid_stream_quality, 0)),
+                "quality": Option(80, type=valid_stream_quality, if_empty=0),
 
                 "resolution": {
-                    "default":   Option("", type=_make_ifarg(valid_stream_resolution, ""), unpack_as="resolution"),
+                    "default":   Option("", type=valid_stream_resolution, if_empty="", unpack_as="resolution"),
                     "available": Option(
                         [],
                         type=functools.partial(valid_string_list, subval=valid_stream_resolution),
@@ -428,7 +424,7 @@ def _get_config_scheme() -> Dict:
                 },
 
                 "h264_bitrate": {
-                    "default": Option(0,     type=_make_ifarg(valid_stream_h264_bitrate, 0), unpack_as="h264_bitrate"),
+                    "default": Option(0,     type=valid_stream_h264_bitrate, if_empty=0, unpack_as="h264_bitrate"),
                     "min":     Option(100,   type=valid_stream_h264_bitrate, unpack_as="h264_bitrate_min"),
                     "max":     Option(16000, type=valid_stream_h264_bitrate, unpack_as="h264_bitrate_max"),
                 },
@@ -455,7 +451,7 @@ def _get_config_scheme() -> Dict:
                 "idle_interval": Option(0.0, type=valid_float_f0),
                 "live_interval": Option(0.0, type=valid_float_f0),
 
-                "wakeup_key":  Option("", type=_make_ifarg(valid_hid_key, "")),
+                "wakeup_key":  Option("", type=valid_hid_key, if_empty=""),
                 "wakeup_move": Option(0,  type=valid_hid_mouse_move),
 
                 "online_delay":  Option(5.0, type=valid_float_f0),
@@ -509,8 +505,8 @@ def _get_config_scheme() -> Dict:
                 "ethernet": {
                     "enabled":  Option(False, type=valid_bool),
                     "driver":   Option("ecm", type=valid_otg_ethernet),
-                    "host_mac": Option("", type=_make_ifarg(valid_mac, "")),
-                    "kvm_mac":  Option("", type=_make_ifarg(valid_mac, "")),
+                    "host_mac": Option("", type=valid_mac, if_empty=""),
+                    "kvm_mac":  Option("", type=valid_mac, if_empty=""),
                 },
 
                 "drives": {
@@ -597,7 +593,7 @@ def _get_config_scheme() -> Dict:
             },
 
             "sol": {
-                "device":         Option("",     type=_make_ifarg(valid_abs_path, ""), unpack_as="sol_device_path"),
+                "device":         Option("",     type=valid_abs_path, if_empty="", unpack_as="sol_device_path"),
                 "speed":          Option(115200, type=valid_tty_speed, unpack_as="sol_speed"),
                 "select_timeout": Option(0.1,    type=valid_float_f01, unpack_as="sol_select_timeout"),
                 "proxy_port":     Option(0,      type=valid_port, unpack_as="sol_proxy_port"),
@@ -622,11 +618,11 @@ def _get_config_scheme() -> Dict:
                 },
 
                 "tls": {
-                    "ciphers": Option("ALL:@SECLEVEL=0", type=_make_ifarg(valid_ssl_ciphers, "")),
+                    "ciphers": Option("ALL:@SECLEVEL=0", type=valid_ssl_ciphers, if_empty=""),
                     "timeout": Option(30.0, type=valid_float_f01),
                     "x509": {
-                        "cert": Option("", type=_make_ifarg(valid_abs_file, "")),
-                        "key":  Option("", type=_make_ifarg(valid_abs_file, "")),
+                        "cert": Option("", type=valid_abs_file, if_empty=""),
+                        "key":  Option("", type=valid_abs_file, if_empty=""),
                     },
                 },
             },
