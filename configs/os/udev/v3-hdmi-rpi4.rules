@@ -3,4 +3,5 @@
 KERNEL=="video[0-9]*", SUBSYSTEM=="video4linux", KERNELS=="fe801000.csi|fe801000.csi1", ATTR{name}=="unicam-image", GROUP="kvmd", SYMLINK+="kvmd-video", TAG+="systemd"
 KERNEL=="hidg0", GROUP="kvmd", SYMLINK+="kvmd-hid-keyboard"
 KERNEL=="hidg1", GROUP="kvmd", SYMLINK+="kvmd-hid-mouse"
+KERNEL=="hidg2", GROUP="kvmd", SYMLINK+="kvmd-hid-mouse-alt"
 KERNEL=="sd[a-z]", SUBSYSTEM=="block", KERNELS=="1-1.4:1.0", GROUP="kvmd", SYMLINK+="kvmd-msd-aum"

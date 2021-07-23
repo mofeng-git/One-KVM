@@ -212,6 +212,12 @@ def _cmd_start(config: Section) -> None:
             absolute=config.kvmd.hid.mouse.absolute,
             horizontal_wheel=config.kvmd.hid.mouse.horizontal_wheel,
         ))
+        if config.kvmd.hid.mouse_alt.device:
+            logger.info("===== Required HID-Mouse ALT =====")
+            _create_hid(gadget_path, config_path, 2, make_mouse_hid(
+                absolute=(not config.kvmd.hid.mouse.absolute),
+                horizontal_wheel=config.kvmd.hid.mouse_alt.horizontal_wheel,
+            ))
 
     if config.kvmd.msd.type == "otg":
         logger.info("===== Required MSD =====")
