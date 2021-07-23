@@ -112,10 +112,8 @@ export function Hid(__getResolution) {
 		if (state && state.online) {
 			let keyboard_outputs = state.keyboard.outputs.available;
 			let mouse_outputs = state.mouse.outputs.available;
-			let has_outputs = (keyboard_outputs.length || mouse_outputs.length);
-			let has_relative = false;
-			if (has_outputs) {
-				if ($("hid-outputs-keyboard").outputs !== keyboard_outputs) {
+			if (keyboard_outputs.length) {
+				if ($("hid-outputs-keyboard-box").outputs !== keyboard_outputs) {
 					let html = "";
 					for (let args of [
 						["USB", "usb"],
@@ -126,11 +124,15 @@ export function Hid(__getResolution) {
 							html += tools.radioMakeItem("hid-outputs-keyboard-radio", args[0], args[1]);
 						}
 					}
-					$("hid-outputs-keyboard").innerHTML = html;
-					$("hid-outputs-keyboard").outputs = keyboard_outputs;
+					$("hid-outputs-keyboard-box").innerHTML = html;
+					$("hid-outputs-keyboard-box").outputs = keyboard_outputs;
 					tools.radioSetOnClick("hid-outputs-keyboard-radio", () => __clickOutputsRadio("keyboard"));
 				}
-				if ($("hid-outputs-mouse").outputs !== mouse_outputs) {
+				tools.radioSetValue("hid-outputs-keyboard-radio", state.keyboard.outputs.active);
+			}
+			let has_relative = false;
+			if (mouse_outputs.length) {
+				if ($("hid-outputs-mouse-box").outputs !== mouse_outputs) {
 					let html = "";
 					for (let args of [
 						["USB", "usb", false],
@@ -143,18 +145,19 @@ export function Hid(__getResolution) {
 							has_relative = (has_relative || args[2]);
 						}
 					}
-					$("hid-outputs-mouse").innerHTML = html;
-					$("hid-outputs-mouse").outputs = mouse_outputs;
+					$("hid-outputs-mouse-box").innerHTML = html;
+					$("hid-outputs-mouse-box").outputs = mouse_outputs;
 					tools.radioSetOnClick("hid-outputs-mouse-radio", () => __clickOutputsRadio("mouse"));
 				}
-				tools.radioSetValue("hid-outputs-keyboard-radio", state.keyboard.outputs.active);
 				tools.radioSetValue("hid-outputs-mouse-radio", state.mouse.outputs.active);
 				has_relative_squash = ["usb_rel", "ps2"].includes(state.mouse.outputs.active);
 			} else {
 				has_relative = !state.mouse.absolute;
 				has_relative_squash = has_relative;
 			}
-			tools.featureSetEnabled($("hid-outputs"), has_outputs);
+			tools.featureSetEnabled($("hid-outputs"), (keyboard_outputs.length || mouse_outputs.length));
+			tools.featureSetEnabled($("hid-outputs-keyboard"), keyboard_outputs.length);
+			tools.featureSetEnabled($("hid-outputs-mouse"), mouse_outputs.length);
 			tools.featureSetEnabled($("hid-mouse-squash"), has_relative);
 			tools.featureSetEnabled($("hid-connect"), (state.connected !== null));
 			$("hid-connect-switch").checked = !!state.connected;

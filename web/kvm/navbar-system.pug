@@ -48,12 +48,12 @@ li(class="right")
 		div(id="hid-outputs" class="feature-disabled")
 			hr
 			table(class="kv")
-				tr
+				tr(id="hid-outputs-keyboard", class="feature-disabled")
 					td Keyboard mode:
-					td #[div(id="hid-outputs-keyboard" class="radio-box")]
-				tr
+					td #[div(id="hid-outputs-keyboard-box" class="radio-box")]
+				tr(id="hid-outputs-mouse", class="feature-disabled")
 					td Mouse #[a(target="_blank" href="https://github.com/pikvm/pikvm/blob/master/pages/mouse.md") mode]:
-					td #[div(id="hid-outputs-mouse" class="radio-box")]
+					td #[div(id="hid-outputs-mouse-box" class="radio-box")]
 		table(class="kv")
 			tr(id="hid-mouse-squash" class="feature-disabled")
 				+menu_switch_notable("hid-mouse-squash-switch", "Squash relative mouse moves", true, true)
