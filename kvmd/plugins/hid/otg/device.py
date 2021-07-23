@@ -122,7 +122,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         if self.is_alive():
             get_logger().info("Stopping HID-%s daemon ...", self.__name)
             self.__stop_event.set()
-        if self.exitcode is not None:
+        if self.is_alive() or self.exitcode is not None:
             self.join()
 
     def _queue_event(self, event: BaseEvent) -> None:

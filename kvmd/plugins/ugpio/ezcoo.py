@@ -110,7 +110,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             if self.__proc.is_alive():
                 get_logger(0).info("Stopping %s daemon ...", self)
                 self.__stop_event.set()
-            if self.__proc.exitcode is not None:
+            if self.__proc.is_alive() or self.__proc.exitcode is not None:
                 self.__proc.join()
 
     async def read(self, pin: int) -> bool:

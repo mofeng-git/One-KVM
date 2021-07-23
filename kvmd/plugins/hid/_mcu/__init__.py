@@ -230,7 +230,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         if self.is_alive():
             get_logger(0).info("Stopping HID daemon ...")
             self.__stop_event.set()
-        if self.exitcode is not None:
+        if self.is_alive() or self.exitcode is not None:
             self.join()
 
     # =====

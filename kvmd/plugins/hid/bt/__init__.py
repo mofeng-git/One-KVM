@@ -170,7 +170,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             if self.__proc.is_alive():
                 get_logger(0).info("Stopping HID daemon ...")
                 self.__stop_event.set()
-            if self.__proc.exitcode is not None:
+            if self.__proc.is_alive() or self.__proc.exitcode is not None:
                 self.__proc.join()
 
     # =====
