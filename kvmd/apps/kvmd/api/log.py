@@ -29,6 +29,7 @@ from ....validators.kvm import valid_log_seek
 from ..logreader import LogReader
 
 from ..http import exposed_http
+from ..http import start_streaming
 
 
 # =====
@@ -43,8 +44,7 @@ class LogApi:
         seek = valid_log_seek(request.query.get("seek", "0"))
         follow = valid_bool(request.query.get("follow", "false"))
 
-        response = StreamResponse(status=200, reason="OK", headers={"Content-Type": "text/plain"})
-        await response.prepare(request)
+        response = await start_streaming(request, "text/plain")
 
         async for record in self.__log_reader.poll_log(seek, follow):
             await response.write(("[%s %s] --- %s" % (
