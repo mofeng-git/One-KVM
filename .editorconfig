@@ -1,0 +1,10 @@
+root = true
+
+[*]
+end_of_file = lf
+indent_style = tab
+indent_size = 4
+
+[*.{py,yaml}]
+indent_style = space
+indent_size = 4
