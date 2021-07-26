@@ -33,8 +33,9 @@ from ....validators.kvm import valid_msd_image_name
 
 from ..http import exposed_http
 from ..http import make_json_response
-from ..http import get_field_value
-from ..http import get_multipart_field
+from ..http import get_multipart_reader
+from ..http import get_multipart_reader_str
+from ..http import get_multipart_reader_field
 
 
 # ======
@@ -69,14 +70,14 @@ class MsdApi:
     @exposed_http("POST", "/msd/write")
     async def __write_handler(self, request: Request) -> Response:
         logger = get_logger(0)
-        reader = await request.multipart()
+        reader = await get_multipart_reader(request)
         name = ""
         written = 0
         try:
-            name = valid_msd_image_name(await get_field_value(reader, "image"))
-            size = valid_int_f0(await get_field_value(reader, "size"))
+            name = valid_msd_image_name(await get_multipart_reader_str(reader, "image"))
+            size = valid_int_f0(await get_multipart_reader_str(reader, "size"))
 
-            data_field = await get_multipart_field(reader, "data")
+            data_field = await get_multipart_reader_field(reader, "data")
 
             async with self.__msd.write_image(name, size):
                 logger.info("Writing image %r to MSD ...", name)

@@ -177,12 +177,19 @@ async def start_streaming(request: aiohttp.web.Request, content_type: str) -> ai
 
 
 # =====
-async def get_field_value(reader: aiohttp.MultipartReader, name: str) -> str:
-    field = await get_multipart_field(reader, name)
+async def get_multipart_reader(request: aiohttp.web.Request) -> aiohttp.MultipartReader:
+    try:
+        return (await request.multipart())
+    except Exception:
+        raise ValidatorError("Expected multipart")
+
+
+async def get_multipart_reader_str(reader: aiohttp.MultipartReader, name: str) -> str:
+    field = await get_multipart_reader_field(reader, name)
     return (await field.read()).decode("utf-8")
 
 
-async def get_multipart_field(reader: aiohttp.MultipartReader, name: str) -> aiohttp.BodyPartReader:
+async def get_multipart_reader_field(reader: aiohttp.MultipartReader, name: str) -> aiohttp.BodyPartReader:
     field = await reader.next()
     if not isinstance(field, aiohttp.BodyPartReader):
         raise ValidatorError(f"Expected body part as {name!r} field")
