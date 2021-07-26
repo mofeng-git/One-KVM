@@ -119,9 +119,9 @@ class RedfishApi:
                 variants=set(self.__actions),
                 lower=False,
             )
-        except Exception as err:
-            if isinstance(err, ValidatorError):
-                raise
+        except ValidatorError:
+            raise
+        except Exception:
             raise HttpError("Missing Redfish ResetType", 400)
         await self.__actions[action](False)
         return Response(body=None, status=204)
