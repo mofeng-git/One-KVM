@@ -367,6 +367,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         for client in list(self.__ws_clients):
             await self.__remove_ws_client(client)
 
+        logger.info("On-Shutdown complete")
+
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
         logger = get_logger(0)
         for component in self.__components:
@@ -376,6 +378,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                     await component.cleanup()  # type: ignore
                 except Exception:
                     logger.exception("Cleanup error on %s", component.name)
+        logger.info("On-Cleanup complete")
 
     async def __send_event(self, ws: aiohttp.web.WebSocketResponse, event_type: str, event: Optional[Dict]) -> None:
         await ws.send_str(json.dumps({

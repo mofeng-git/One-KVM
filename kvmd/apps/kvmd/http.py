@@ -240,6 +240,7 @@ class HttpServer:
 
         aiohttp.web.run_app(
             app=self._make_app(),
+            shutdown_timeout=1,
             access_log_format=access_log_format,
             print=self.__run_app_print,
             **socket_kwargs,
