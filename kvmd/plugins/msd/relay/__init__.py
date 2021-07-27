@@ -208,7 +208,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__connected = connected
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int) -> AsyncGenerator[None, None]:
+    async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:
         async with self.__working():
             async with self.__region:
                 try:
@@ -220,14 +220,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                     await self.__write_image_info(False)
                     await self.__notifier.notify()
-                    yield
+                    yield self.__upload_chunk_size
                     await self.__write_image_info(True)
                 finally:
                     await self.__close_device_writer()
                     await self.__load_device_info()
-
-    def get_upload_chunk_size(self) -> int:
-        return self.__upload_chunk_size
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__device_writer

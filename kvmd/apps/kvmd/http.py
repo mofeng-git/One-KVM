@@ -176,6 +176,10 @@ async def start_streaming(request: aiohttp.web.Request, content_type: str) -> ai
     return response
 
 
+async def stream_json(response: aiohttp.web.StreamResponse, result: Dict) -> None:
+    await response.write(json.dumps(result).encode("utf-8") + b"\r\n")
+
+
 # =====
 async def get_multipart_reader(request: aiohttp.web.Request) -> aiohttp.MultipartReader:
     try:

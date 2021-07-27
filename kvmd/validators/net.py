@@ -116,3 +116,8 @@ def valid_ssl_ciphers(arg: Any) -> str:
     except Exception as err:
         raise ValidatorError(f"The argument {arg!r} is not a valid {name}: {err}")
     return arg
+
+
+def valid_url(arg: Any) -> str:
+    # XXX: VERY primitive
+    return check_re_match(arg, "HTTP(S) URL", r"^https?://[\[\w]+\S*")

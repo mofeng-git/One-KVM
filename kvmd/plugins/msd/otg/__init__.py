@@ -306,7 +306,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             self.__state.vd.connected = connected
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int) -> AsyncGenerator[None, None]:
+    async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:
         try:
             async with self.__state._region:  # pylint: disable=protected-access
                 try:
@@ -328,7 +328,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         self.__new_writer = await MsdImageWriter(path, size, self.__sync_chunk_size).open()
 
                     await self.__notifier.notify()
-                    yield
+                    yield self.__upload_chunk_size
                     self.__set_image_complete(name, True)
 
                 finally:
@@ -342,9 +342,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             # так что форсим обновление вручную, чтобы получить актуальное состояние.
             await self.__reload_state()
             await self.__notifier.notify()
-
-    def get_upload_chunk_size(self) -> int:
-        return self.__upload_chunk_size
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__new_writer

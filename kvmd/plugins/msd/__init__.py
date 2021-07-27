@@ -31,6 +31,8 @@ from typing import Optional
 import aiofiles
 import aiofiles.base
 
+from ...logging import get_logger
+
 from ... import aiofs
 
 from ...errors import OperationError
@@ -119,13 +121,10 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int) -> AsyncGenerator[None, None]:  # pylint: disable=unused-argument
+    async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:  # pylint: disable=unused-argument
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
-        yield
-
-    def get_upload_chunk_size(self) -> int:
-        raise NotImplementedError()
+        yield 1
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         raise NotImplementedError()
@@ -158,6 +157,7 @@ class MsdImageWriter:
 
     async def open(self) -> "MsdImageWriter":
         assert self.__file is None
+        get_logger(1).info("Writing %r image (%d bytes) to MSD ...", self.__name, self.__size)
         self.__file = await aiofiles.open(self.__path, mode="w+b", buffering=0)  # type: ignore
         return self
 
@@ -176,6 +176,13 @@ class MsdImageWriter:
 
     async def close(self) -> None:
         assert self.__file is not None
+        if self.__written == self.__size:
+            (log, result) = (get_logger().info, "OK")
+        elif self.__written < self.__size:
+            (log, result) = (get_logger().error, "INCOMPLETE")
+        else:  # written > size
+            (log, result) = (get_logger().warning, "OVERFLOW")
+        log("Written %d of %d bytes to MSD image %r: %s", self.__written, self.__size, self.__name, result)
         await aiofs.afile_sync(self.__file)
         await self.__file.close()  # type: ignore
 
