@@ -8,6 +8,8 @@
 /testenv/.tox/
 /testenv/.mypy_cache/
 /testenv/.ssl/
+/hid/.pio/
+/hid/.platformio/
 /.git/
 /v*.tar.gz
 /*.pkg.tar.xz
