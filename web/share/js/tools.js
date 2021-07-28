@@ -24,7 +24,11 @@
 
 
 export var tools = new function() {
-	this.setDefault = function(dict, key, value) {
+	var self = this;
+
+	/************************************************************************/
+
+	self.setDefault = function(dict, key, value) {
 		if (!(key in dict)) {
 			dict[key] = value;
 		}
@@ -32,7 +36,7 @@ export var tools = new function() {
 
 	/************************************************************************/
 
-	this.makeRequest = function(method, url, callback, body=null, content_type=null) {
+	self.makeRequest = function(method, url, callback, body=null, content_type=null) {
 		let http = new XMLHttpRequest();
 		http.open(method, url, true);
 		if (content_type) {
@@ -46,11 +50,11 @@ export var tools = new function() {
 
 	/************************************************************************/
 
-	this.upperFirst = function(text) {
+	self.upperFirst = function(text) {
 		return text[0].toUpperCase() + text.slice(1);
 	};
 
-	this.makeId = function() {
+	self.makeId = function() {
 		let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 		let id = "";
 		for (let count = 0; count < 16; ++count) {
@@ -59,7 +63,7 @@ export var tools = new function() {
 		return id;
 	};
 
-	this.formatSize = function(size) {
+	self.formatSize = function(size) {
 		if (size > 0) {
 			let index = Math.floor( Math.log(size) / Math.log(1024) );
 			return (size / Math.pow(1024, index)).toFixed(2) * 1 + " " + ["B", "KiB", "MiB", "GiB", "TiB"][index];
@@ -68,7 +72,7 @@ export var tools = new function() {
 		}
 	};
 
-	this.formatDuration = function(duration) {
+	self.formatDuration = function(duration) {
 		let millis = parseInt((duration % 1000) / 100);
 		let secs = Math.floor((duration / 1000) % 60);
 		let mins = Math.floor((duration / (1000 * 60)) % 60);
@@ -81,125 +85,159 @@ export var tools = new function() {
 
 	/************************************************************************/
 
-	this.getCookie = function(name) {
-		let matches = document.cookie.match(new RegExp(
-			"(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, "\\$1") + "=([^;]*)" // eslint-disable-line no-useless-escape
-		));
-		return (matches ? decodeURIComponent(matches[1]) : "");
-	};
-
-	this.setOnClick = function(el, callback, prevent_default=true) {
-		el.onclick = el.ontouchend = function(event) {
-			if (prevent_default) {
-				event.preventDefault();
-			}
-			callback();
+	self.el = new function() {
+		return {
+			"setOnClick": function(el, callback, prevent_default=true) {
+				el.onclick = el.ontouchend = function(event) {
+					if (prevent_default) {
+						event.preventDefault();
+					}
+					callback();
+				};
+			},
+			"setOnDown": function(el, callback, prevent_default=true) {
+				el.onmousedown = el.ontouchstart = function(event) {
+					if (prevent_default) {
+						event.preventDefault();
+					}
+					callback();
+				};
+			},
+			"setOnUp": function(el, callback, prevent_default=true) {
+				el.onmouseup = el.ontouchend = function(event) {
+					if (prevent_default) {
+						event.preventDefault();
+					}
+					callback();
+				};
+			},
+			"setEnabled": function(el, enabled) {
+				if (!enabled && document.activeElement === el) {
+					let el_to_focus = (
+						el.closest(".modal-window")
+						|| el.closest(".window")
+						|| el.closest(".menu")
+					);
+					if (el_to_focus) {
+						el_to_focus.focus();
+					}
+				}
+				el.disabled = !enabled;
+			},
 		};
 	};
-	this.setOnDown = function(el, callback, prevent_default=true) {
-		el.onmousedown = el.ontouchstart = function(event) {
-			if (prevent_default) {
-				event.preventDefault();
-			}
-			callback();
-		};
-	};
-	this.setOnUp = function(el, callback, prevent_default=true) {
-		el.onmouseup = el.ontouchend = function(event) {
-			if (prevent_default) {
-				event.preventDefault();
-			}
-			callback();
-		};
-	};
 
-	this.sliderSetOnUp = function(el, delay, display_callback, execute_callback) {
-		el.execution_timer = null;
-		el.activated = false;
-
-		let clear_timer = function() {
-			if (el.execution_timer) {
-				clearTimeout(el.execution_timer);
+	self.slider = new function() {
+		return {
+			"setOnUp": function(el, delay, display_callback, execute_callback) {
 				el.execution_timer = null;
-			}
+				el.activated = false;
+
+				let clear_timer = function() {
+					if (el.execution_timer) {
+						clearTimeout(el.execution_timer);
+						el.execution_timer = null;
+					}
+				};
+
+				el.oninput = el.onchange = () => display_callback(el.value);
+
+				el.onmousedown = el.ontouchstart = function() {
+					clear_timer();
+					el.activated = true;
+				};
+
+				el.onmouseup = el.ontouchend = function(event) {
+					let value = el.value;
+					event.preventDefault();
+					clear_timer();
+					el.execution_timer = setTimeout(function() {
+						execute_callback(value);
+					}, delay);
+				};
+			},
+			"setParams": function(el, min, max, step, value) {
+				el.min = min;
+				el.max = max;
+				el.step = step;
+				el.value = value;
+			},
 		};
+	};
 
-		el.oninput = el.onchange = () => display_callback(el.value);
-
-		el.onmousedown = el.ontouchstart = function() {
-			clear_timer();
-			el.activated = true;
+	self.radio = new function() {
+		return {
+			"makeItem": function(name, title, value) {
+				return `
+					<input type="radio" id="${name}-${value}" name="${name}" value="${value}" />
+					<label for="${name}-${value}">${title}</label>
+				`;
+			},
+			"setOnClick": function(name, callback, prevent_default=true) {
+				for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+					self.el.setOnClick(el, callback, prevent_default);
+				}
+			},
+			"getValue": function(name) {
+				return document.querySelector(`input[type="radio"][name="${name}"]:checked`).value;
+			},
+			"setValue": function(name, value) {
+				for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+					el.checked = (el.value === value);
+				}
+			},
+			"clickValue": function(name, value) {
+				for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+					if (el.value === value) {
+						el.click();
+						return;
+					}
+				}
+			},
+			"setEnabled": function(name, enabled) {
+				for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+					self.el.setEnabled(el, enabled);
+				}
+			},
 		};
+	};
 
-		el.onmouseup = el.ontouchend = function(event) {
-			let value = el.value;
-			event.preventDefault();
-			clear_timer();
-			el.execution_timer = setTimeout(function() {
-				execute_callback(value);
-			}, delay);
+	self.progress = new function() {
+		return {
+			"setValue": function(el, title, percent) {
+				el.setAttribute("data-label", title);
+				$(`${el.id}-value`).style.width = `${percent}%`;
+			},
 		};
 	};
-	this.sliderSetParams = function(el, min, max, step, value) {
-		el.min = min;
-		el.max = max;
-		el.step = step;
-		el.value = value;
+
+	self.hidden = new function() {
+		return {
+			"setVisible": function(el, visible) {
+				el.classList.toggle("hidden", !visible);
+			},
+		};
 	};
 
-	this.radioMakeItem = function(name, title, value) {
-		return `
-			<input type="radio" id="${name}-${value}" name="${name}" value="${value}" />
-			<label for="${name}-${value}">${title}</label>
-		`;
-	};
-	this.radioSetOnClick = function(name, callback, prevent_default=true) {
-		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
-			this.setOnClick(el, callback, prevent_default);
-		}
-	};
-	this.radioGetValue = function(name) {
-		return document.querySelector(`input[type="radio"][name="${name}"]:checked`).value;
-	};
-	this.radioSetValue = function(name, value) {
-		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
-			el.checked = (el.value === value);
-		}
-	};
-	this.radioClickValue = function(name, value) {
-		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
-			if (el.value === value) {
-				el.click();
-				return;
-			}
-		}
-	};
-				
-
-	this.progressSetValue = function(el, title, percent) {
-		el.setAttribute("data-label", title);
-		$(`${el.id}-value`).style.width = `${percent}%`;
-	};
-
-	this.hiddenSetVisible = function(el, visible) {
-		el.classList.toggle("hidden", !visible);
-	};
-
-	this.featureSetEnabled = function(el, enabled) {
-		el.classList.toggle("feature-disabled", !enabled);
+	self.feature = new function() {
+		return {
+			"setEnabled": function(el, enabled) {
+				el.classList.toggle("feature-disabled", !enabled);
+			},
+		};
 	};
 
 	/************************************************************************/
 
 	let __debug = (new URL(window.location.href)).searchParams.get("debug");
 
-	this.debug = function(...args) {
+	self.debug = function(...args) {
 		if (__debug) {
 			__log("DEBUG", ...args);
 		}
 	};
-	this.info = (...args) => __log("INFO", ...args);
-	this.error = (...args) => __log("ERROR", ...args);
+	self.info = (...args) => __log("INFO", ...args);
+	self.error = (...args) => __log("ERROR", ...args);
 
 	let __log = function(label, ...args) {
 		let now = (new Date()).toISOString().split("T")[1].replace("Z", "");
@@ -208,7 +246,30 @@ export var tools = new function() {
 
 	/************************************************************************/
 
-	this.browser = new function() {
+	self.is_https = (location.protocol === "https:");
+
+	self.cookies = new function() {
+		return {
+			"get": function(name) {
+				let matches = document.cookie.match(new RegExp(
+					"(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, "\\$1") + "=([^;]*)" // eslint-disable-line no-useless-escape
+				));
+				return (matches ? decodeURIComponent(matches[1]) : "");
+			},
+		};
+	};
+
+	self.storage = new function() {
+		return {
+			"get": function(key, default_value) {
+				let value = window.localStorage.getItem(key);
+				return (value !== null ? value : default_value);
+			},
+			"set": (key, value) => window.localStorage.setItem(key, value),
+		};
+	};
+
+	self.browser = new function() {
 		// https://stackoverflow.com/questions/9847580/how-to-detect-safari-chrome-ie-firefox-and-opera-browser/9851769
 
 		// Opera 8.0+
@@ -254,19 +315,7 @@ export var tools = new function() {
 			"is_mac": is_mac,
 		};
 	};
-	this.info("Browser:", this.browser);
-
-	this.https = (location.protocol === "https:");
-
-	this.storage = new function() {
-		return {
-			"get": function(key, default_value) {
-				let value = window.localStorage.getItem(key);
-				return (value !== null ? value : default_value);
-			},
-			"set": (key, value) => window.localStorage.setItem(key, value),
-		};
-	};
+	self.info("Browser:", self.browser);
 };
 
 export var $ = (id) => document.getElementById(id);

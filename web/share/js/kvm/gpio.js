@@ -48,7 +48,7 @@ export function Gpio() {
 				for (let type of ["switch", "button"]) {
 					let el = $(`gpio-${type}-${channel}`);
 					if (el) {
-						wm.setElementEnabled(el, state.outputs[channel].online && !state.outputs[channel].busy);
+						tools.el.setEnabled(el, state.outputs[channel].online && !state.outputs[channel].busy);
 					}
 				}
 				let el = $(`gpio-switch-${channel}`);
@@ -62,7 +62,7 @@ export function Gpio() {
 			}
 			for (let selector of [".gpio-switch", ".gpio-button"]) {
 				for (let el of $$$(selector)) {
-					wm.setElementEnabled(el, false);
+					tools.el.setEnabled(el, false);
 				}
 			}
 		}
@@ -70,7 +70,7 @@ export function Gpio() {
 	};
 
 	self.setModel = function(model) {
-		tools.featureSetEnabled($("gpio-dropdown"), model.view.table.length);
+		tools.feature.setEnabled($("gpio-dropdown"), model.view.table.length);
 		if (model.view.table.length) {
 			$("gpio-menu-button").innerHTML = `${model.view.header.title}`;
 		}
@@ -96,16 +96,16 @@ export function Gpio() {
 		for (let channel in model.scheme.outputs) {
 			let el = $(`gpio-switch-${channel}`);
 			if (el) {
-				tools.setOnClick(el, __createAction(el, __switchChannel));
+				tools.el.setOnClick(el, __createAction(el, __switchChannel));
 			}
 			el = $(`gpio-button-${channel}`);
 			if (el) {
-				tools.setOnClick(el, __createAction(el, __pulseChannel));
+				tools.el.setOnClick(el, __createAction(el, __pulseChannel));
 			}
 		}
 
-		tools.featureSetEnabled($("v3-usb-breaker"), ("__v3_usb_breaker__" in model.scheme.outputs));
-		tools.featureSetEnabled($("wol"), ("__wol__" in model.scheme.outputs));
+		tools.feature.setEnabled($("v3-usb-breaker"), ("__v3_usb_breaker__" in model.scheme.outputs));
+		tools.feature.setEnabled($("wol"), ("__wol__" in model.scheme.outputs));
 
 		self.setState(__state);
 	};

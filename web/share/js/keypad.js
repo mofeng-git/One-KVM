@@ -45,8 +45,8 @@ export function Keypad(keys_parent, key_callback) {
 			tools.setDefault(__merged, code, []);
 			__merged[code].push(el_key);
 
-			tools.setOnDown(el_key, () => __clickHandler(el_key, true));
-			tools.setOnUp(el_key, () => __clickHandler(el_key, false));
+			tools.el.setOnDown(el_key, () => __clickHandler(el_key, true));
+			tools.el.setOnUp(el_key, () => __clickHandler(el_key, false));
 			el_key.onmouseout = function() {
 				if (__isPressed(el_key)) {
 					__clickHandler(el_key, false);
@@ -63,7 +63,7 @@ export function Keypad(keys_parent, key_callback) {
 			tools.setDefault(__merged, code, []);
 			__merged[code].push(el_key);
 
-			tools.setOnDown(el_key, () => __toggleModifierHandler(el_key));
+			tools.el.setOnDown(el_key, () => __toggleModifierHandler(el_key));
 		}
 	};
 

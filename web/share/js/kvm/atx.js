@@ -47,7 +47,7 @@ export function Atx() {
 				Warning! This could case data loss on the server.
 			`],
 		]) {
-			tools.setOnClick($(args[0]), () => __clickButton(args[1], args[2]));
+			tools.el.setOnClick($(args[0]), () => __clickButton(args[1], args[2]));
 		}
 	};
 
@@ -56,7 +56,7 @@ export function Atx() {
 	self.setState = function(state) {
 		let buttons_enabled = false;
 		if (state) {
-			tools.featureSetEnabled($("atx-dropdown"), state.enabled);
+			tools.feature.setEnabled($("atx-dropdown"), state.enabled);
 			$("atx-power-led").className = (state.busy ? "led-yellow" : (state.leds.power ? "led-green" : "led-gray"));
 			$("atx-hdd-led").className = (state.leds.hdd ? "led-red" : "led-gray");
 			buttons_enabled = !state.busy;
@@ -65,7 +65,7 @@ export function Atx() {
 			$("atx-hdd-led").className = "led-gray";
 		}
 		for (let id of ["atx-power-button", "atx-power-button-long", "atx-reset-button"]) {
-			wm.setElementEnabled($(id), buttons_enabled);
+			tools.el.setEnabled($(id), buttons_enabled);
 		}
 	};
 

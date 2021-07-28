@@ -41,14 +41,14 @@ export function Recorder() {
 	var __last_event_ts = 0;
 
 	var __init__ = function() {
-		tools.setOnClick($("hid-recorder-record"), __startRecord);
-		tools.setOnClick($("hid-recorder-stop"), __stopProcess);
-		tools.setOnClick($("hid-recorder-play"), __playRecord);
-		tools.setOnClick($("hid-recorder-clear"), __clearRecord);
+		tools.el.setOnClick($("hid-recorder-record"), __startRecord);
+		tools.el.setOnClick($("hid-recorder-stop"), __stopProcess);
+		tools.el.setOnClick($("hid-recorder-play"), __playRecord);
+		tools.el.setOnClick($("hid-recorder-clear"), __clearRecord);
 
 		$("hid-recorder-new-script-file").onchange = __uploadScript;
-		tools.setOnClick($("hid-recorder-upload"), () => $("hid-recorder-new-script-file").click());
-		tools.setOnClick($("hid-recorder-download"), __downloadScript);
+		tools.el.setOnClick($("hid-recorder-upload"), () => $("hid-recorder-new-script-file").click());
+		tools.el.setOnClick($("hid-recorder-download"), __downloadScript);
 	};
 
 	/************************************************************************/
@@ -241,14 +241,14 @@ export function Recorder() {
 			$("hid-recorder-led").title = "";
 		}
 
-		wm.setElementEnabled($("hid-recorder-record"), (__ws && !__play_timer && !__recording));
-		wm.setElementEnabled($("hid-recorder-stop"), (__ws && (__play_timer || __recording)));
-		wm.setElementEnabled($("hid-recorder-play"), (__ws && !__recording && __events.length));
-		wm.setElementEnabled($("hid-recorder-clear"), (!__play_timer && !__recording && __events.length));
-		wm.setElementEnabled($("hid-recorder-loop-switch"), (__ws && !__recording));
+		tools.el.setEnabled($("hid-recorder-record"), (__ws && !__play_timer && !__recording));
+		tools.el.setEnabled($("hid-recorder-stop"), (__ws && (__play_timer || __recording)));
+		tools.el.setEnabled($("hid-recorder-play"), (__ws && !__recording && __events.length));
+		tools.el.setEnabled($("hid-recorder-clear"), (!__play_timer && !__recording && __events.length));
+		tools.el.setEnabled($("hid-recorder-loop-switch"), (__ws && !__recording));
 
-		wm.setElementEnabled($("hid-recorder-upload"), (!__play_timer && !__recording));
-		wm.setElementEnabled($("hid-recorder-download"), (!__play_timer && !__recording && __events.length));
+		tools.el.setEnabled($("hid-recorder-upload"), (!__play_timer && !__recording));
+		tools.el.setEnabled($("hid-recorder-download"), (!__play_timer && !__recording && __events.length));
 
 		__setCounters(__events.length, __events_time);
 	};

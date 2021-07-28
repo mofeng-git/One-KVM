@@ -50,7 +50,7 @@ function __WindowManager() {
 
 		for (let el_button of $$("menu-button")) {
 			el_button.parentElement.querySelector(".menu").setAttribute("tabindex", "-1");
-			tools.setOnDown(el_button, () => __toggleMenu(el_button));
+			tools.el.setOnDown(el_button, () => __toggleMenu(el_button));
 			__menu_buttons.push(el_button);
 		}
 
@@ -84,7 +84,7 @@ function __WindowManager() {
 			let el_close_button = el_window.querySelector(".window-header .window-button-close");
 			if (el_close_button) {
 				el_close_button.title = "Close window";
-				tools.setOnClick(el_close_button, function() {
+				tools.el.setOnClick(el_close_button, function() {
 					__closeWindow(el_window);
 					__activateLastWindow(el_window);
 				});
@@ -93,7 +93,7 @@ function __WindowManager() {
 			let el_maximize_button = el_window.querySelector(".window-header .window-button-maximize");
 			if (el_maximize_button) {
 				el_maximize_button.title = "Maximize window";
-				tools.setOnClick(el_maximize_button, function() {
+				tools.el.setOnClick(el_maximize_button, function() {
 					__maximizeWindow(el_window);
 					__activateLastWindow(el_window);
 				});
@@ -102,7 +102,7 @@ function __WindowManager() {
 			let el_orig_button = el_window.querySelector(".window-header .window-button-original");
 			if (el_orig_button) {
 				el_orig_button.title = "Reduce window to its original size and center it";
-				tools.setOnClick(el_orig_button, function() {
+				tools.el.setOnClick(el_orig_button, function() {
 					el_window.style.width = "";
 					el_window.style.height = "";
 					__centerWindow(el_window);
@@ -113,7 +113,7 @@ function __WindowManager() {
 			let el_full_screen_button = el_window.querySelector(".window-header .window-button-full-screen");
 			if (el_full_screen_button && __getFullScreenFunction(el_window)) {
 				el_full_screen_button.title = "Go to full-screen mode";
-				tools.setOnClick(el_full_screen_button, function() {
+				tools.el.setOnClick(el_full_screen_button, function() {
 					__fullScreenWindow(el_window);
 					__activateLastWindow(el_window);
 				});
@@ -121,7 +121,7 @@ function __WindowManager() {
 		}
 
 		for (let el_button of $$$("button[data-show-window]")) {
-			tools.setOnClick(el_button, () => self.showWindow($(el_button.getAttribute("data-show-window"))));
+			tools.el.setOnClick(el_button, () => self.showWindow($(el_button.getAttribute("data-show-window"))));
 		}
 
 		window.onmouseup = __globalMouseButtonHandler;
@@ -188,13 +188,13 @@ function __WindowManager() {
 				if (cancel) {
 					var el_cancel_button = document.createElement("button");
 					el_cancel_button.innerHTML = "Cancel";
-					tools.setOnClick(el_cancel_button, () => close(false));
+					tools.el.setOnClick(el_cancel_button, () => close(false));
 					el_buttons.appendChild(el_cancel_button);
 				}
 				if (ok) {
 					var el_ok_button = document.createElement("button");
 					el_ok_button.innerHTML = "OK";
-					tools.setOnClick(el_ok_button, () => close(true));
+					tools.el.setOnClick(el_ok_button, () => close(true));
 					el_buttons.appendChild(el_ok_button);
 				}
 				if (ok && cancel) {
@@ -218,26 +218,6 @@ function __WindowManager() {
 		__activateWindow(el_modal);
 
 		return promise;
-	};
-
-	self.setElementEnabled = function(el, enabled) {
-		if (!enabled && document.activeElement === el) {
-			let el_to_focus = (
-				el.closest(".modal-window")
-				|| el.closest(".window")
-				|| el.closest(".menu")
-			);
-			if (el_to_focus) {
-				el_to_focus.focus();
-			}
-		}
-		el.disabled = !enabled;
-	};
-
-	self.setRadioEnabled = function(name, enabled) {
-		for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
-			self.setElementEnabled(el, enabled);
-		}
 	};
 
 	self.showWindow = function(el_window, activate=true, center=false) {

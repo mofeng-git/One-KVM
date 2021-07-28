@@ -86,7 +86,7 @@ function __loadKvmdInfo() {
 				}
 
 				$("apps").innerHTML += __makeApp("logout-button", "#", "share/svg/logout.svg", "Logout");
-				tools.setOnClick($("logout-button"), __logout);
+				tools.el.setOnClick($("logout-button"), __logout);
 
 				if (info.meta !== null && info.meta.server && info.meta.server.host) {
 					$("kvmd-meta-server-host").innerHTML = info.meta.server.host;

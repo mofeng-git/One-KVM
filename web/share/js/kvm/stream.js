@@ -76,7 +76,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 			__ensuring = true;
 			__logInfo("Starting Janus ...");
 			__janus = new _Janus({
-				server: `${tools.https ? "wss" : "ws"}://${location.host}/janus/ws`,
+				server: `${tools.is_https ? "wss" : "ws"}://${location.host}/janus/ws`,
 				ipv6: true,
 				destroyOnUnload: false,
 				success: __attachJanus,
@@ -371,7 +371,7 @@ function _MjpegStreamer(__setActive, __setInactive, __setInfo) {
 	};
 
 	var __findId = function() {
-		let stream_client = tools.getCookie("stream_client");
+		let stream_client = tools.cookies.get("stream_client");
 		if (__id.length === 0 && stream_client && stream_client.startsWith(__key + "/")) {
 			__logInfo("Found acceptable stream_client cookie:", stream_client);
 			__id = stream_client.slice(stream_client.indexOf("/") + 1);
@@ -427,21 +427,21 @@ export function Streamer() {
 
 		$("stream-led").title = "Stream inactive";
 
-		tools.sliderSetParams($("stream-quality-slider"), 5, 100, 5, 80);
-		tools.sliderSetOnUp($("stream-quality-slider"), 1000, __updateQualityValue, (value) => __sendParam("quality", value));
+		tools.slider.setParams($("stream-quality-slider"), 5, 100, 5, 80);
+		tools.slider.setOnUp($("stream-quality-slider"), 1000, __updateQualityValue, (value) => __sendParam("quality", value));
 
-		tools.sliderSetParams($("stream-h264-bitrate-slider"), 100, 16000, 100, 5000);
-		tools.sliderSetOnUp($("stream-h264-bitrate-slider"), 1000, __updateH264BitrateValue, (value) => __sendParam("h264_bitrate", value));
+		tools.slider.setParams($("stream-h264-bitrate-slider"), 100, 16000, 100, 5000);
+		tools.slider.setOnUp($("stream-h264-bitrate-slider"), 1000, __updateH264BitrateValue, (value) => __sendParam("h264_bitrate", value));
 
-		tools.sliderSetParams($("stream-desired-fps-slider"), 0, 120, 1, 0);
-		tools.sliderSetOnUp($("stream-desired-fps-slider"), 1000, __updateDesiredFpsValue, (value) => __sendParam("desired_fps", value));
+		tools.slider.setParams($("stream-desired-fps-slider"), 0, 120, 1, 0);
+		tools.slider.setOnUp($("stream-desired-fps-slider"), 1000, __updateDesiredFpsValue, (value) => __sendParam("desired_fps", value));
 
 		$("stream-resolution-selector").onchange = (() => __sendParam("resolution", $("stream-resolution-selector").value));
 
-		tools.radioSetOnClick("stream-mode-radio", __clickModeRadio, false);
+		tools.radio.setOnClick("stream-mode-radio", __clickModeRadio, false);
 
-		tools.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
-		tools.setOnClick($("stream-reset-button"), __clickResetButton);
+		tools.el.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
+		tools.el.setOnClick($("stream-reset-button"), __clickResetButton);
 
 		$("stream-window").show_hook = () => __applyState(__state);
 		$("stream-window").close_hook = () => __applyState(null);
@@ -457,9 +457,9 @@ export function Streamer() {
 		let supported = !!window.RTCPeerConnection;
 		let set_enabled = function() {
 			__janus_enabled = (enabled && supported && _Janus !== null);
-			tools.featureSetEnabled($("stream-mode"), __janus_enabled);
+			tools.feature.setEnabled($("stream-mode"), __janus_enabled);
 			tools.info(`Stream: Janus WebRTC state: enabled=${enabled}, supported=${supported}, imported=${!!_Janus}`);
-			tools.radioClickValue("stream-mode-radio", tools.storage.get("stream.mode", "mjpeg"));
+			tools.radio.clickValue("stream-mode-radio", tools.storage.get("stream.mode", "mjpeg"));
 			self.setState(__state);
 		};
 		if (enabled && supported) {
@@ -493,22 +493,22 @@ export function Streamer() {
 
 	var __applyState = function(state) {
 		if (state) {
-			tools.featureSetEnabled($("stream-quality"), state.features.quality && (state.streamer === null || state.streamer.encoder.quality > 0));
-			tools.featureSetEnabled($("stream-h264-bitrate"), state.features.h264 && __janus_enabled);
-			tools.featureSetEnabled($("stream-resolution"), state.features.resolution);
+			tools.feature.setEnabled($("stream-quality"), state.features.quality && (state.streamer === null || state.streamer.encoder.quality > 0));
+			tools.feature.setEnabled($("stream-h264-bitrate"), state.features.h264 && __janus_enabled);
+			tools.feature.setEnabled($("stream-resolution"), state.features.resolution);
 
 			if (state.streamer) {
-				wm.setElementEnabled($("stream-quality-slider"), true);
+				tools.el.setEnabled($("stream-quality-slider"), true);
 				__setIfChanged($("stream-quality-slider"), state.streamer.encoder.quality, __updateQualityValue);
 
 				if (state.features.h264 && __janus_enabled) {
 					__setMinMax($("stream-h264-bitrate-slider"), state.limits.h264_bitrate);
-					wm.setElementEnabled($("stream-h264-bitrate-slider"), true);
+					tools.el.setEnabled($("stream-h264-bitrate-slider"), true);
 					__setIfChanged($("stream-h264-bitrate-slider"), state.streamer.h264.bitrate, __updateH264BitrateValue);
 				}
 
 				__setMinMax($("stream-desired-fps-slider"), state.limits.desired_fps);
-				wm.setElementEnabled($("stream-desired-fps-slider"), true);
+				tools.el.setEnabled($("stream-desired-fps-slider"), true);
 				__setIfChanged($("stream-desired-fps-slider"), state.streamer.source.desired_fps, __updateDesiredFpsValue);
 
 				let resolution_str = __makeStringResolution(state.streamer.source.resolution);
@@ -529,14 +529,14 @@ export function Streamer() {
 						$("stream-resolution-selector").resolutions = state.limits.available_resolutions;
 					}
 					document.querySelector(`#stream-resolution-selector [value="${resolution_str}"]`).selected = true;
-					wm.setElementEnabled($("stream-resolution-selector"), true);
+					tools.el.setEnabled($("stream-resolution-selector"), true);
 				}
 
 			} else {
-				wm.setElementEnabled($("stream-quality-slider"), false);
-				wm.setElementEnabled($("stream-h264-bitrate-slider"), false);
-				wm.setElementEnabled($("stream-desired-fps-slider"), false);
-				wm.setElementEnabled($("stream-resolution-selector"), false);
+				tools.el.setEnabled($("stream-quality-slider"), false);
+				tools.el.setEnabled($("stream-h264-bitrate-slider"), false);
+				tools.el.setEnabled($("stream-desired-fps-slider"), false);
+				tools.el.setEnabled($("stream-resolution-selector"), false);
 			}
 
 			__streamer.ensureStream(state.streamer);
@@ -549,15 +549,15 @@ export function Streamer() {
 	var __setActive = function() {
 		$("stream-led").className = "led-green";
 		$("stream-led").title = "Stream is active";
-		wm.setElementEnabled($("stream-screenshot-button"), true);
-		wm.setElementEnabled($("stream-reset-button"), true);
+		tools.el.setEnabled($("stream-screenshot-button"), true);
+		tools.el.setEnabled($("stream-reset-button"), true);
 	};
 
 	var __setInactive = function() {
 		$("stream-led").className = "led-gray";
 		$("stream-led").title = "Stream inactive";
-		wm.setElementEnabled($("stream-screenshot-button"), false);
-		wm.setElementEnabled($("stream-reset-button"), false);
+		tools.el.setEnabled($("stream-screenshot-button"), false);
+		tools.el.setEnabled($("stream-reset-button"), false);
 	};
 
 	var __setInfo = function(is_active, online, text) {
@@ -609,11 +609,11 @@ export function Streamer() {
 
 	var __clickModeRadio = function() {
 		if (_Janus !== null) {
-			let mode = tools.radioGetValue("stream-mode-radio");
+			let mode = tools.radio.getValue("stream-mode-radio");
 			tools.storage.set("stream.mode", mode);
 			if (mode !== __streamer.getMode()) {
-				tools.hiddenSetVisible($("stream-image"), (mode !== "janus"));
-				tools.hiddenSetVisible($("stream-video"), (mode === "janus"));
+				tools.hidden.setVisible($("stream-image"), (mode !== "janus"));
+				tools.hidden.setVisible($("stream-video"), (mode === "janus"));
 				if (mode === "janus") {
 					__streamer.stopStream();
 					__streamer = new _JanusStreamer(__setActive, __setInactive, __setInfo);

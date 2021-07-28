@@ -75,7 +75,7 @@ export function Hid(__getResolution) {
 		window.addEventListener("blur", __releaseAll);
 
 		$("hid-pak-ask-switch").checked = parseInt(tools.storage.get("hid.pak.ask", "1"));
-		tools.setOnClick($("hid-pak-ask-switch"), function() {
+		tools.el.setOnClick($("hid-pak-ask-switch"), function() {
 			tools.storage.set("hid.pak.ask", ($("hid-pak-ask-switch").checked ? 1 : 0));
 		}, false);
 
@@ -83,21 +83,21 @@ export function Hid(__getResolution) {
 			tools.storage.set("hid.pak.keymap", $("hid-pak-keymap-selector").value);
 		});
 
-		tools.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
-		tools.setOnClick($("hid-connect-switch"), __clickConnectSwitch);
-		tools.setOnClick($("hid-reset-button"), __clickResetButton);
+		tools.el.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
+		tools.el.setOnClick($("hid-connect-switch"), __clickConnectSwitch);
+		tools.el.setOnClick($("hid-reset-button"), __clickResetButton);
 
 		for (let el_shortcut of $$$("[data-shortcut]")) {
-			tools.setOnClick(el_shortcut, () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" ")));
+			tools.el.setOnClick(el_shortcut, () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" ")));
 		}
 	};
 
 	/************************************************************************/
 
 	self.setSocket = function(ws) {
-		wm.setElementEnabled($("hid-pak-text"), ws);
-		wm.setElementEnabled($("hid-pak-button"), ws);
-		wm.setElementEnabled($("hid-reset-button"), ws);
+		tools.el.setEnabled($("hid-pak-text"), ws);
+		tools.el.setEnabled($("hid-pak-button"), ws);
+		tools.el.setEnabled($("hid-reset-button"), ws);
 		if (!ws) {
 			self.setState(null);
 		}
@@ -121,14 +121,14 @@ export function Hid(__getResolution) {
 						["Off", "disabled"],
 					]) {
 						if (keyboard_outputs.includes(args[1])) {
-							html += tools.radioMakeItem("hid-outputs-keyboard-radio", args[0], args[1]);
+							html += tools.radio.makeItem("hid-outputs-keyboard-radio", args[0], args[1]);
 						}
 					}
 					$("hid-outputs-keyboard-box").innerHTML = html;
 					$("hid-outputs-keyboard-box").outputs = keyboard_outputs;
-					tools.radioSetOnClick("hid-outputs-keyboard-radio", () => __clickOutputsRadio("keyboard"));
+					tools.radio.setOnClick("hid-outputs-keyboard-radio", () => __clickOutputsRadio("keyboard"));
 				}
-				tools.radioSetValue("hid-outputs-keyboard-radio", state.keyboard.outputs.active);
+				tools.radio.setValue("hid-outputs-keyboard-radio", state.keyboard.outputs.active);
 			}
 			let has_relative = false;
 			if (mouse_outputs.length) {
@@ -141,32 +141,32 @@ export function Hid(__getResolution) {
 						["Off", "disabled"],
 					]) {
 						if (mouse_outputs.includes(args[1])) {
-							html += tools.radioMakeItem("hid-outputs-mouse-radio", args[0], args[1]);
+							html += tools.radio.makeItem("hid-outputs-mouse-radio", args[0], args[1]);
 							has_relative = (has_relative || args[2]);
 						}
 					}
 					$("hid-outputs-mouse-box").innerHTML = html;
 					$("hid-outputs-mouse-box").outputs = mouse_outputs;
-					tools.radioSetOnClick("hid-outputs-mouse-radio", () => __clickOutputsRadio("mouse"));
+					tools.radio.setOnClick("hid-outputs-mouse-radio", () => __clickOutputsRadio("mouse"));
 				}
-				tools.radioSetValue("hid-outputs-mouse-radio", state.mouse.outputs.active);
+				tools.radio.setValue("hid-outputs-mouse-radio", state.mouse.outputs.active);
 				has_relative_squash = ["usb_rel", "ps2"].includes(state.mouse.outputs.active);
 			} else {
 				has_relative = !state.mouse.absolute;
 				has_relative_squash = has_relative;
 			}
-			tools.featureSetEnabled($("hid-outputs"), (keyboard_outputs.length || mouse_outputs.length));
-			tools.featureSetEnabled($("hid-outputs-keyboard"), keyboard_outputs.length);
-			tools.featureSetEnabled($("hid-outputs-mouse"), mouse_outputs.length);
-			tools.featureSetEnabled($("hid-mouse-squash"), has_relative);
-			tools.featureSetEnabled($("hid-connect"), (state.connected !== null));
+			tools.feature.setEnabled($("hid-outputs"), (keyboard_outputs.length || mouse_outputs.length));
+			tools.feature.setEnabled($("hid-outputs-keyboard"), keyboard_outputs.length);
+			tools.feature.setEnabled($("hid-outputs-mouse"), mouse_outputs.length);
+			tools.feature.setEnabled($("hid-mouse-squash"), has_relative);
+			tools.feature.setEnabled($("hid-connect"), (state.connected !== null));
 			$("hid-connect-switch").checked = !!state.connected;
 		}
 
-		wm.setRadioEnabled("hid-outputs-keyboard-radio", (state && state.online && !state.busy));
-		wm.setRadioEnabled("hid-outputs-mouse-radio", (state && state.online && !state.busy));
-		wm.setElementEnabled($("hid-mouse-squash-switch"), (has_relative_squash && !state.busy));
-		wm.setElementEnabled($("hid-connect-switch"), (state && state.online && !state.busy));
+		tools.radio.setEnabled("hid-outputs-keyboard-radio", (state && state.online && !state.busy));
+		tools.radio.setEnabled("hid-outputs-mouse-radio", (state && state.online && !state.busy));
+		tools.el.setEnabled($("hid-mouse-squash-switch"), (has_relative_squash && !state.busy));
+		tools.el.setEnabled($("hid-connect-switch"), (state && state.online && !state.busy));
 
 		if (state) {
 			__keyboard.setState(state.keyboard, state.online, state.busy);
@@ -218,9 +218,9 @@ export function Hid(__getResolution) {
 		let text = $("hid-pak-text").value;
 		if (text) {
 			let paste_as_keys = function() {
-				wm.setElementEnabled($("hid-pak-text"), false);
-				wm.setElementEnabled($("hid-pak-button"), false);
-				wm.setElementEnabled($("hid-pak-keymap-selector"), false);
+				tools.el.setEnabled($("hid-pak-text"), false);
+				tools.el.setEnabled($("hid-pak-button"), false);
+				tools.el.setEnabled($("hid-pak-keymap-selector"), false);
 
 				let keymap = $("hid-pak-keymap-selector").value;
 
@@ -228,9 +228,9 @@ export function Hid(__getResolution) {
 
 				let http = tools.makeRequest("POST", `/api/hid/print?limit=0&keymap=${keymap}`, function() {
 					if (http.readyState === 4) {
-						wm.setElementEnabled($("hid-pak-text"), true);
-						wm.setElementEnabled($("hid-pak-button"), true);
-						wm.setElementEnabled($("hid-pak-keymap-selector"), true);
+						tools.el.setEnabled($("hid-pak-text"), true);
+						tools.el.setEnabled($("hid-pak-button"), true);
+						tools.el.setEnabled($("hid-pak-keymap-selector"), true);
 						$("hid-pak-text").value = "";
 						if (http.status === 413) {
 							wm.error("Too many text for paste!");
@@ -260,7 +260,7 @@ export function Hid(__getResolution) {
 	};
 
 	var __clickOutputsRadio = function(hid) {
-		let output = tools.radioGetValue(`hid-outputs-${hid}-radio`);
+		let output = tools.radio.getValue(`hid-outputs-${hid}-radio`);
 		let http = tools.makeRequest("POST", `/api/hid/set_params?${hid}_output=${output}`, function() {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {

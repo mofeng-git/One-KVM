@@ -32,7 +32,7 @@ export function main() {
 	if (checkBrowser()) {
 		initWindowManager();
 
-		tools.setOnClick($("login-button"), __login);
+		tools.el.setOnClick($("login-button"), __login);
 		$("user-input").onkeyup = $("passwd-input").onkeyup = function(event) {
 			if (event.code === "Enter") {
 				event.preventDefault();
@@ -75,9 +75,9 @@ function __login() {
 }
 
 function __setEnabled(enabled) {
-	wm.setElementEnabled($("user-input"), enabled);
-	wm.setElementEnabled($("passwd-input"), enabled);
-	wm.setElementEnabled($("login-button"), enabled);
+	tools.el.setEnabled($("user-input"), enabled);
+	tools.el.setEnabled($("passwd-input"), enabled);
+	tools.el.setEnabled($("login-button"), enabled);
 }
 
 function __tryAgain() {

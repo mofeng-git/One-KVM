@@ -97,11 +97,11 @@ export function Session() {
 			let undervoltage = (flags.undervoltage.now || flags.undervoltage.past);
 			let freq_capped = (flags.freq_capped.now || flags.freq_capped.past);
 
-			tools.hiddenSetVisible($("hw-health-dropdown"), (undervoltage || freq_capped));
+			tools.hidden.setVisible($("hw-health-dropdown"), (undervoltage || freq_capped));
 			$("hw-health-undervoltage-led").className = (undervoltage ? (flags.undervoltage.now ? "led-red" : "led-yellow") : "hidden");
 			$("hw-health-overheating-led").className = (freq_capped ? (flags.freq_capped.now ? "led-red" : "led-yellow") : "hidden");
-			tools.hiddenSetVisible($("hw-health-message-undervoltage"), undervoltage);
-			tools.hiddenSetVisible($("hw-health-message-overheating"), freq_capped);
+			tools.hidden.setVisible($("hw-health-message-undervoltage"), undervoltage);
+			tools.hidden.setVisible($("hw-health-message-overheating"), freq_capped);
 		}
 	};
 
@@ -120,7 +120,7 @@ export function Session() {
 				$("webterm-iframe").src = "";
 			};
 		}
-		tools.featureSetEnabled($("webterm"), has_webterm);
+		tools.feature.setEnabled($("webterm"), has_webterm);
 		$("webterm-window").show_hook = show_hook;
 		$("webterm-window").close_hook = close_hook;
 
@@ -206,7 +206,7 @@ export function Session() {
 		let http = tools.makeRequest("GET", "/api/auth/check", function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
-					__ws = new WebSocket(`${tools.https ? "wss" : "ws"}://${location.host}/api/ws`);
+					__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws`);
 					__ws.onopen = __wsOpenHandler;
 					__ws.onmessage = __wsMessageHandler;
 					__ws.onerror = __wsErrorHandler;
