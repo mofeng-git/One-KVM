@@ -207,15 +207,16 @@ export function Msd() {
 
 		wm.setElementEnabled($("msd-reset-button"), (s && s.enabled && !s.busy));
 
-		tools.hiddenSetVisible($("msd-submenu-new-image"), (online && __image_file));
-		$("msd-new-image-name").innerHTML = ((online && __image_file) ? __image_file.name : "");
-		$("msd-new-image-size").innerHTML = ((online && __image_file) ? tools.formatSize(__image_file.size) : "");
+		let uploading = (online ? (s.storage.uploading || __image_file) : null);
+		tools.hiddenSetVisible($("msd-submenu-new-image"), uploading);
+		$("msd-new-image-name").innerHTML = (uploading ? uploading.name : "");
+		$("msd-new-image-size").innerHTML = (uploading ? tools.formatSize(uploading.size) : "");
 		if (online) {
-			if (!__upload_http) {
-				tools.progressSetValue($("msd-uploading-progress"), "Waiting for upload (press UPLOAD button) ...", 0);
-			} else if (s.storage.uploading) {
+			if (s.storage.uploading) {
 				let percent = Math.round(s.storage.uploading.written * 100 / s.storage.uploading.size);
 				tools.progressSetValue($("msd-uploading-progress"), `${percent}%`, percent);
+			} else if (!__upload_http) {
+				tools.progressSetValue($("msd-uploading-progress"), "Waiting for upload (press UPLOAD button) ...", 0);
 			}
 		} else {
 			$("msd-select-new-image-file").value = "";
