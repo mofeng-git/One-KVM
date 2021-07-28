@@ -123,7 +123,7 @@ class MsdApi:
                     name = htclient.get_filename(remote)
                 name = valid_msd_image_name(name)
 
-                size = htclient.get_content_length(remote)
+                size = valid_int_f0(remote.content_length)
 
                 get_logger(0).info("Downloading image %r as %r to MSD ...", url, name)
                 async with self.__msd.write_image(name, size) as chunk_size:

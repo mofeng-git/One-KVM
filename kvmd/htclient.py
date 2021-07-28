@@ -51,16 +51,6 @@ def raise_not_200(response: aiohttp.ClientResponse) -> None:
         )
 
 
-def get_content_length(response: aiohttp.ClientResponse) -> int:
-    try:
-        value = int(response.headers["Content-Length"])
-    except Exception:
-        raise aiohttp.ClientError("Empty or invalid Content-Length")
-    if value < 0:
-        raise aiohttp.ClientError("Negative Content-Length")
-    return value
-
-
 def get_filename(response: aiohttp.ClientResponse) -> str:
     try:
         disp = response.headers["Content-Disposition"]
