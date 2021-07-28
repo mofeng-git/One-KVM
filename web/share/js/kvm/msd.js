@@ -172,192 +172,161 @@ export function Msd() {
 	};
 
 	var __applyState = function() {
-		if (__state) {
-			__toggleMsdFeatures();
-			tools.featureSetEnabled($("msd-dropdown"), __state.enabled);
-			tools.featureSetEnabled($("msd-reset-button"), __state.enabled);
+		__applyStateFeatures();
+		__applyStateStatus();
 
-			__showMessageOffline(!__state.online);
-			__showMessageImageBroken(__state.online && __state.drive.image && !__state.drive.image.complete && !__state.storage.uploading);
-			if (__state.features.cdrom) {
-				__showMessageTooBigForCdrom(__state.online && __state.drive.image && __state.drive.cdrom && __state.drive.image.size >= 2359296000);
-			}
-			__showMessageOutOfStorage(__state.online && __state.features.multi && __state.drive.image && !__state.drive.image.in_storage);
+		let s = __state;
+		let online = (s && s.online);
 
-			if (__state.online && __state.drive.connected) {
-				__showMessageAnotherUserUploads(false);
-				__setStatus("led-green", "Connected to Server");
-			} else if (__state.online && __state.storage.uploading) {
-				if (!__upload_http) {
-					__showMessageAnotherUserUploads(true);
-				}
-				__setStatus("led-yellow-rotating-fast", "Uploading new image");
-			} else {
-				__showMessageAnotherUserUploads(false);
-				__setStatus("led-gray", (__state.online ? "Disconnected" : "Unavailable"));
-			}
+		$("msd-image-name").innerHTML = ((online && s.drive.image) ? s.drive.image.name : "None");
+		$("msd-image-size").innerHTML = ((online && s.drive.image) ? tools.formatSize(s.drive.image.size) : "None");
+		if (online) {
+			let size_str = tools.formatSize(s.storage.size);
+			let used = s.storage.size - s.storage.free;
+			let used_str = tools.formatSize(used);
+			$("msd-storage-size").innerHTML = size_str;
+			tools.progressSetValue($("msd-storage-progress"), `Storage: ${used_str} of ${size_str}`, used / s.storage.size * 100);
+		} else {
+			$("msd-storage-size").innerHTML = "Unavailable";
+			tools.progressSetValue($("msd-storage-progress"), "Storage: unavailable", 0);
+		}
 
-			$("msd-image-name").innerHTML = (__state.online && __state.drive.image ? __state.drive.image.name : "None");
-			$("msd-image-size").innerHTML = (__state.online && __state.drive.image ? tools.formatSize(__state.drive.image.size) : "None");
-			if (__state.online) {
-				let size = __state.storage.size;
-				let used = __state.storage.size - __state.storage.free;
-				$("msd-storage-size").innerHTML = tools.formatSize(size);
-				tools.progressSetValue($("msd-storage-progress"), `Storage: ${tools.formatSize(used)} of ${tools.formatSize(size)} used`, used / size * 100);
-			} else {
-				$("msd-storage-size").innerHTML = "Unavailable";
-				tools.progressSetValue($("msd-storage-progress"), "Storage: unavailable", 0);
-			}
+		wm.setElementEnabled($("msd-image-selector"), (online && s.features.multi && !s.drive.connected && !s.busy));
+		__applyStateImageSelector();
+		wm.setElementEnabled($("msd-remove-image"), (online && s.features.multi && s.drive.image && !s.drive.connected && !s.busy));
 
-			wm.setElementEnabled($("msd-image-selector"), (__state.online && __state.features.multi && !__state.drive.connected && !__state.busy));
-			if (__state.features.multi && !__state.storage.uploading) {
-				__refreshImageSelector();
-			}
-			wm.setElementEnabled($("msd-remove-image"), (__state.online && __state.features.multi && __state.drive.image && !__state.drive.connected && !__state.busy));
+		wm.setRadioEnabled("msd-mode-radio", (online && s.features.cdrom && !s.drive.connected && !s.busy));
+		tools.radioSetValue("msd-mode-radio", `${Number(online && s.features.cdrom && s.drive.cdrom)}`);
 
-			wm.setRadioEnabled("msd-mode-radio", (__state.online && __state.features.cdrom && !__state.drive.connected && !__state.busy));
-			tools.radioSetValue("msd-mode-radio", `${Number(__state.online && __state.features.cdrom && __state.drive.cdrom)}`);
+		wm.setElementEnabled($("msd-connect-button"), (online && (!s.features.multi || s.drive.image) && !s.drive.connected && !s.busy));
+		wm.setElementEnabled($("msd-disconnect-button"), (online && s.drive.connected && !s.busy));
 
-			wm.setElementEnabled($("msd-connect-button"), (__state.online && (!__state.features.multi || __state.drive.image) && !__state.drive.connected && !__state.busy));
-			wm.setElementEnabled($("msd-disconnect-button"), (__state.online && __state.drive.connected && !__state.busy));
+		wm.setElementEnabled($("msd-select-new-image-button"), (online && !s.drive.connected && !__upload_http && !s.busy));
+		wm.setElementEnabled($("msd-upload-new-image-button"), (online && !s.drive.connected && __image_file && !s.busy));
+		wm.setElementEnabled($("msd-abort-uploading-button"), (online && __upload_http));
 
-			wm.setElementEnabled($("msd-select-new-image-button"), (__state.online && !__state.drive.connected && !__upload_http && !__state.busy));
-			wm.setElementEnabled($("msd-upload-new-image-button"), (__state.online && !__state.drive.connected && __image_file && !__state.busy));
-			wm.setElementEnabled($("msd-abort-uploading-button"), (__state.online && __upload_http));
+		wm.setElementEnabled($("msd-reset-button"), (s.enabled && !s.busy));
 
-			wm.setElementEnabled($("msd-reset-button"), (__state.enabled && !__state.busy));
-
-			tools.hiddenSetVisible($("msd-submenu-new-image"), __image_file);
-			$("msd-new-image-name").innerHTML = (__image_file ? __image_file.name : "");
-			$("msd-new-image-size").innerHTML = (__image_file ? tools.formatSize(__image_file.size) : "");
-
+		tools.hiddenSetVisible($("msd-submenu-new-image"), (online && __image_file));
+		$("msd-new-image-name").innerHTML = ((online && __image_file) ? __image_file.name : "");
+		$("msd-new-image-size").innerHTML = ((online && __image_file) ? tools.formatSize(__image_file.size) : "");
+		if (online) {
 			if (!__upload_http) {
 				tools.progressSetValue($("msd-uploading-progress"), "Waiting for upload (press UPLOAD button) ...", 0);
-			} else if (__state.storage.uploading) {
-				let percent = Math.round(__state.storage.uploading.written * 100 / __state.storage.uploading.size);
+			} else if (s.storage.uploading) {
+				let percent = Math.round(s.storage.uploading.written * 100 / s.storage.uploading.size);
 				tools.progressSetValue($("msd-uploading-progress"), `${percent}%`, percent);
 			}
-
 		} else {
-			__showMessageOffline(false);
-			__showMessageImageBroken(false);
-			__showMessageTooBigForCdrom(false);
-			__showMessageAnotherUserUploads(false);
-			__showMessageOutOfStorage(false);
-
-			__setStatus("led-gray", "");
-
-			$("msd-image-name").innerHTML = "";
-			$("msd-image-size").innerHTML = "";
-			$("msd-storage-size").innerHTML = "";
-			tools.progressSetValue($("msd-storage-progress"), "", 0);
-
-			wm.setElementEnabled($("msd-image-selector"), false);
-			$("msd-image-selector").options.length = 1;
-			wm.setElementEnabled($("msd-remove-image"), false);
-
-			wm.setRadioEnabled("msd-mode-radio", false);
-			tools.radioSetValue("msd-mode-radio", "0");
-
-			wm.setElementEnabled($("msd-connect-button"), false);
-			wm.setElementEnabled($("msd-disconnect-button"), false);
-
-			wm.setElementEnabled($("msd-select-new-image-button"), false);
-			wm.setElementEnabled($("msd-upload-new-image-button"), false);
-			wm.setElementEnabled($("msd-abort-uploading-button"), false);
-
-			wm.setElementEnabled($("msd-reset-button"), false);
-
 			$("msd-select-new-image-file").value = "";
-			tools.hiddenSetVisible($("msd-submenu-new-image"), false);
-			$("msd-new-image-name").innerHTML = "";
-			$("msd-new-image-size").innerHTML = "";
 			tools.progressSetValue($("msd-uploading-progress"), "", 0);
 		}
 	};
 
-	var __toggleMsdFeatures = function() {
-		for (let el of $$$(".msd-single-storage")) {
-			tools.featureSetEnabled(el, !__state.features.multi);
+	var __applyStateFeatures = function() {
+		let s = __state;
+		let online = (s && s.online);
+
+		if (s) {
+			tools.featureSetEnabled($("msd-dropdown"), s.enabled);
+			tools.featureSetEnabled($("msd-reset-button"), s.enabled);
+			for (let el of $$$(".msd-single-storage")) {
+				tools.featureSetEnabled(el, !s.features.multi);
+			}
+			for (let el of $$$(".msd-multi-storage")) {
+				tools.featureSetEnabled(el, s.features.multi);
+			}
+			for (let el of $$$(".msd-cdrom-emulation")) {
+				tools.featureSetEnabled(el, s.features.cdrom);
+			}
 		}
-		for (let el of $$$(".msd-multi-storage")) {
-			tools.featureSetEnabled(el, __state.features.multi);
+
+		tools.hiddenSetVisible($("msd-message-offline"), !online);
+		tools.hiddenSetVisible($("msd-message-image-broken"),
+			(online && s.drive.image && !s.drive.image.complete && !s.storage.uploading));
+		tools.hiddenSetVisible($("msd-message-too-big-for-cdrom"),
+			(online && s.features.cdrom && s.drive.cdrom && s.drive.image && s.drive.image.size >= 2359296000));
+		tools.hiddenSetVisible($("msd-message-out-of-storage"),
+			(online && s.features.multi && s.drive.image && !s.drive.image.in_storage));
+		tools.hiddenSetVisible($("msd-message-another-user-uploads"),
+			(online && s.storage.uploading && !__upload_http));
+	};
+
+	var __applyStateStatus = function() {
+		let s = __state;
+		let online = (s && s.online);
+
+		let led_cls = "led-gray";
+		let msg = "Unavailable";
+
+		if (online && s.drive.connected) {
+			led_cls = "led-green";
+			msg = "Connected to Server";
+		} else if (online && s.storage.uploading) {
+			led_cls = "led-yellow-rotating-fast";
+			msg = "Uploading new image";
+		} else if (online) { // Sic!
+			msg = "Disconnected";
 		}
-		for (let el of $$$(".msd-cdrom-emulation")) {
-			tools.featureSetEnabled(el, __state.features.cdrom);
-		}
-	};
 
-	var __showMessageOffline = function(visible) {
-		tools.hiddenSetVisible($("msd-message-offline"), visible);
-	};
-
-	var __showMessageImageBroken = function(visible) {
-		tools.hiddenSetVisible($("msd-message-image-broken"), visible);
-	};
-
-	var __showMessageTooBigForCdrom = function(visible) {
-		tools.hiddenSetVisible($("msd-message-too-big-for-cdrom"), visible);
-	};
-
-	var __showMessageOutOfStorage = function(visible) {
-		tools.hiddenSetVisible($("msd-message-out-of-storage"), visible);
-	};
-
-	var __showMessageAnotherUserUploads = function(visible) {
-		tools.hiddenSetVisible($("msd-message-another-user-uploads"), visible);
-	};
-
-	var __setStatus = function(led_cls, msg) {
 		$("msd-led").className = led_cls;
 		$("msd-status").innerHTML = $("msd-led").title = msg;
 	};
 
-	var __refreshImageSelector = function() {
+	var __applyStateImageSelector = function() {
+		let s = __state;
+		let online = (s && s.online);
+
+		if (!online) {
+			el.options.length = 1; // Cleanup
+			return;
+		}
+		if (!s.features.multi || s.storage.uploading) {
+			return;
+		}
+
 		let el = $("msd-image-selector");
 
 		if (el.options.length === 0) {
 			el.options[0] = new Option("~ Not selected ~", "", false, false);
 		} else {
-			el.options.length = 1; // Cleanup
+			el.options.length = 1;
 		}
 
-		if (__state.online) {
-			let precom = "\xA0\xA0\xA0\xA0\xA0\u21b3";
-			let select_index = 0;
-			let index = 1;
+		let precom = "\xA0\xA0\xA0\xA0\xA0\u21b3";
+		let selected_index = 0;
+		let index = 1;
 
-			for (let name of Object.keys(__state.storage.images).sort()) {
-				let image = __state.storage.images[name];
+		for (let name of Object.keys(s.storage.images).sort()) {
+			let image = s.storage.images[name];
 
-				let separator = new Option("\u2500".repeat(30), false, false);
-				separator.disabled = true;
-				separator.className = "comment";
-				el.options[index] = separator;
-				++index;
+			let separator = new Option("\u2500".repeat(30), false, false);
+			separator.disabled = true;
+			separator.className = "comment";
+			el.options[index] = separator;
+			++index;
 
-				let option = new Option(name, name, false, false);
-				el.options[index] = option;
-				if (__state.drive.image && __state.drive.image.name === name && __state.drive.image.in_storage) {
-					select_index = index;
-				}
-				++index;
-
-				let comment = new Option(`${precom} ${tools.formatSize(image.size)}${image.complete ? "" : ", broken"}`, "", false, false);
-				comment.disabled = true;
-				comment.className = "comment";
-				el.options[index] = comment;
-				++index;
+			let option = new Option(name, name, false, false);
+			el.options[index] = option;
+			if (s.drive.image && s.drive.image.name === name && s.drive.image.in_storage) {
+				selected_index = index;
 			}
+			++index;
 
-			if (__state.drive.image && !__state.drive.image.in_storage) {
-				el.options[index] = new Option(__state.drive.image.name, "", false, false);
-				el.options[index + 1] = new Option(`${precom} ${tools.formatSize(__state.drive.image.size)}, out of storage`, "", false, false);
-				select_index = el.options.length - 2;
-			}
-
-			el.selectedIndex = select_index;
+			let comment = new Option(`${precom} ${tools.formatSize(image.size)}${image.complete ? "" : ", broken"}`, "", false, false);
+			comment.disabled = true;
+			comment.className = "comment";
+			el.options[index] = comment;
+			++index;
 		}
+
+		if (s.drive.image && !s.drive.image.in_storage) {
+			el.options[index] = new Option(s.drive.image.name, "", false, false);
+			el.options[index + 1] = new Option(`${precom} ${tools.formatSize(s.drive.image.size)}, out of storage`, "", false, false);
+			selected_index = el.options.length - 2;
+		}
+
+		el.selectedIndex = selected_index;
 	};
 
 	__init__();
