@@ -205,7 +205,7 @@ export function Msd() {
 		wm.setElementEnabled($("msd-upload-new-image-button"), (online && !s.drive.connected && __image_file && !s.busy));
 		wm.setElementEnabled($("msd-abort-uploading-button"), (online && __upload_http));
 
-		wm.setElementEnabled($("msd-reset-button"), (s.enabled && !s.busy));
+		wm.setElementEnabled($("msd-reset-button"), (s && s.enabled && !s.busy));
 
 		tools.hiddenSetVisible($("msd-submenu-new-image"), (online && __image_file));
 		$("msd-new-image-name").innerHTML = ((online && __image_file) ? __image_file.name : "");
@@ -241,7 +241,7 @@ export function Msd() {
 			}
 		}
 
-		tools.hiddenSetVisible($("msd-message-offline"), !online);
+		tools.hiddenSetVisible($("msd-message-offline"), (s && !s.online));
 		tools.hiddenSetVisible($("msd-message-image-broken"),
 			(online && s.drive.image && !s.drive.image.complete && !s.storage.uploading));
 		tools.hiddenSetVisible($("msd-message-too-big-for-cdrom"),
