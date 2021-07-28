@@ -276,6 +276,7 @@ export function Msd() {
 	var __applyStateImageSelector = function() {
 		let s = __state;
 		let online = (s && s.online);
+		let el = $("msd-image-selector");
 
 		if (!online) {
 			el.options.length = 1; // Cleanup
@@ -284,8 +285,6 @@ export function Msd() {
 		if (!s.features.multi || s.storage.uploading) {
 			return;
 		}
-
-		let el = $("msd-image-selector");
 
 		if (el.options.length === 0) {
 			el.options[0] = new Option("~ Not selected ~", "", false, false);
