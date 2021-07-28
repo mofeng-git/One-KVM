@@ -48,9 +48,6 @@ from ..http import make_json_response
 from ..http import make_json_exception
 from ..http import start_streaming
 from ..http import stream_json
-from ..http import get_multipart_reader
-from ..http import get_multipart_reader_str
-from ..http import get_multipart_reader_field
 
 
 # ======
@@ -86,15 +83,13 @@ class MsdApi:
 
     @exposed_http("POST", "/msd/write")
     async def __write_handler(self, request: Request) -> Response:
-        reader = await get_multipart_reader(request)
-        name = valid_msd_image_name(await get_multipart_reader_str(reader, "image"))
-        size = valid_int_f0(await get_multipart_reader_str(reader, "size"))
-        data_field = await get_multipart_reader_field(reader, "data")
+        name = valid_msd_image_name(request.query.get("image"))
+        size = valid_int_f0(request.content_length)
 
         written = 0
         async with self.__msd.write_image(name, size) as chunk_size:
             while True:
-                chunk = await data_field.read_chunk(chunk_size)
+                chunk = await request.content.read(chunk_size)
                 if not chunk:
                     break
                 written = await self.__msd.write_image_chunk(chunk)

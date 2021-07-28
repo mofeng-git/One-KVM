@@ -99,16 +99,11 @@ export function Msd() {
 	};
 
 	var __clickUploadNewImageButton = function() {
-		let form_data = new FormData();
-		form_data.append("image", __image_file.name);
-		form_data.append("size", __image_file.size);
-		form_data.append("data", __image_file);
-
 		__upload_http = new XMLHttpRequest();
-		__upload_http.open("POST", "/api/msd/write", true);
+		__upload_http.open("POST", `/api/msd/write?image=${encodeURIComponent(__image_file.name)}`, true);
 		__upload_http.upload.timeout = 15000;
 		__upload_http.onreadystatechange = __uploadStateChange;
-		__upload_http.send(form_data);
+		__upload_http.send(__image_file);
 	};
 
 	var __uploadStateChange = function() {

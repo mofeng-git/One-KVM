@@ -41,8 +41,6 @@ except ImportError:
 
 from ...logging import get_logger
 
-from ...validators import ValidatorError
-
 
 # =====
 class HttpError(Exception):
@@ -178,28 +176,6 @@ async def start_streaming(request: aiohttp.web.Request, content_type: str) -> ai
 
 async def stream_json(response: aiohttp.web.StreamResponse, result: Dict) -> None:
     await response.write(json.dumps(result).encode("utf-8") + b"\r\n")
-
-
-# =====
-async def get_multipart_reader(request: aiohttp.web.Request) -> aiohttp.MultipartReader:
-    try:
-        return (await request.multipart())
-    except Exception:
-        raise ValidatorError("Expected multipart")
-
-
-async def get_multipart_reader_str(reader: aiohttp.MultipartReader, name: str) -> str:
-    field = await get_multipart_reader_field(reader, name)
-    return (await field.read()).decode("utf-8")
-
-
-async def get_multipart_reader_field(reader: aiohttp.MultipartReader, name: str) -> aiohttp.BodyPartReader:
-    field = await reader.next()
-    if not isinstance(field, aiohttp.BodyPartReader):
-        raise ValidatorError(f"Expected body part as {name!r} field")
-    if not field or field.name != name:
-        raise ValidatorError(f"Missing {name!r} field")
-    return field
 
 
 # =====
