@@ -4,7 +4,9 @@ li(id="msd-dropdown" class="right feature-disabled")
 		| Drive
 	div(data-dont-hide-menu id="msd-menu" class="menu")
 		div(class="text")
-			b Mass Storage Device emulator#[br]
+			b Mass Storage Drive: 
+			span(id="msd-status")
+			br
 		hr
 		div(id="msd-message-offline" class="hidden")
 			+menu_message("warning", "Mass Storage Drive is offline")
@@ -21,11 +23,6 @@ li(id="msd-dropdown" class="right feature-disabled")
 			+menu_message("warning", "Current image is out of storag")
 				| This image was connected manually using #[b kvmd-otgmsd]
 			hr
-		table(class="kv")
-			tr
-				td Status:
-				td(id="msd-status" class="value")
-		hr
 		table(class="kv msd-single-storage feature-disabled")
 			tr
 				td Current image:
@@ -73,7 +70,6 @@ li(id="msd-dropdown" class="right feature-disabled")
 				tr
 					td Upload size:
 					td(id="msd-new-image-size" class="value")
-			hr
 			div(class="text")
 				div(id="msd-uploading-progress" class="progress")
 					span(id="msd-uploading-progress-value" class="progress-value")

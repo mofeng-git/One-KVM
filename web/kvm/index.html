@@ -248,7 +248,7 @@
       </li>
       <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="msd-led" src="/share/svg/led-msd.svg">Drive</a>
         <div class="menu" data-dont-hide-menu id="msd-menu">
-          <div class="text"><b>Mass Storage Device emulator<br></b></div>
+          <div class="text"><b>Mass Storage Drive: </b><span id="msd-status"></span><br></div>
           <hr>
           <div class="hidden" id="msd-message-offline">
                 <div class="text">
@@ -303,13 +303,6 @@
                 </div>
             <hr>
           </div>
-          <table class="kv">
-            <tr>
-              <td>Status:</td>
-              <td class="value" id="msd-status"></td>
-            </tr>
-          </table>
-          <hr>
           <table class="kv msd-single-storage feature-disabled">
             <tr>
               <td>Current image:</td>
@@ -384,7 +377,6 @@
                 <td class="value" id="msd-new-image-size"></td>
               </tr>
             </table>
-            <hr>
             <div class="text">
               <div class="progress" id="msd-uploading-progress"><span class="progress-value" id="msd-uploading-progress-value"></span></div>
             </div>
