@@ -195,7 +195,9 @@ def _cmd_start(config: Section) -> None:
     _mkdir(config_path)
     _mkdir(join(config_path, "strings/0x409"))
     _write(join(config_path, "strings/0x409/configuration"), f"Config 1: {config.otg.config}")
-    _write(join(config_path, "MaxPower"), str(config.otg.max_power))
+    _write(join(config_path, "MaxPower"), "250")
+    # TODO: Add this and MaxPower=100 to enable Remote Wakeup on Bus Powered
+    # _write(join(config_path, "bmAttributes"), "0xA0")
 
     if config.otg.devices.serial.enabled:
         logger.info("===== Required Serial =====")
