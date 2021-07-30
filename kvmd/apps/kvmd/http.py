@@ -178,8 +178,12 @@ async def start_streaming(request: Request, content_type: str) -> StreamResponse
     return response
 
 
-async def stream_json(response: StreamResponse, result: Dict) -> None:
-    await response.write(json.dumps(result).encode("utf-8") + b"\r\n")
+async def stream_json(response: StreamResponse, result: Dict, err: Optional[Exception]=None) -> None:
+    await response.write(json.dumps({
+        "result": result,
+        "error": ("" if err is None else type(err).__name__),
+        "error_msg": ("" if err is None else str(err)),
+    }).encode("utf-8") + b"\r\n")
 
 
 # =====

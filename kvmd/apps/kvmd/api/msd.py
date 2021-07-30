@@ -106,9 +106,9 @@ class MsdApi:
         size = written = 0
         response: Optional[StreamResponse] = None
 
-        async def stream_write_info() -> None:
+        async def stream_write_info(err: Optional[Exception]=None) -> None:
             assert response is not None
-            await stream_json(response, self.__make_write_info(name, size, written))
+            await stream_json(response, self.__make_write_info(name, size, written), err)
 
         try:
             async with htclient.download(
@@ -141,7 +141,7 @@ class MsdApi:
 
         except Exception as err:
             if response is not None:
-                await stream_write_info()
+                await stream_write_info(err)
             elif isinstance(err, aiohttp.ClientError):
                 return make_json_exception(err, 400)
             raise
