@@ -25,9 +25,10 @@ textarea#hid-pak-text {
 	resize: none;
 	height: 150px;
 	width: 300px;
+	border: var(--border-default-thin);
 	border-radius: 4px;
-	color: var(--cs-window-default-fg);
-	background-color: var(--cs-window-default-bg);
+	color: var(--cs-code-default-fg);
+	background-color: var(--cs-code-default-bg);
 	-webkit-appearance:none;
 }
 
