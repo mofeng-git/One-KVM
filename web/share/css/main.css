@@ -137,12 +137,16 @@ select.key {
 @media (hover: hover), (min--moz-device-pixel-ratio: 0) {
 	/* If we have a mouse cursor */
 	button:enabled:hover,
-	select:enabled:hover {
+	select:enabled:hover,
+	input[type=file]:enabled:hover::-webkit-file-selector-button,
+	input[type=file]:enabled:hover::file-selector-button {
 		color: var(--cs-control-hovered-fg);
 		background-color: var(--cs-control-hovered-bg);
 	}
 	button:active,
-	select:active {
+	select:active,
+	input[type=file]:active::-webkit-file-selector-button,
+	input[type=file]:active::file-selector-button {
 		color: var(--cs-control-pressed-fg) !important;
 		background-color: var(--cs-control-pressed-bg) !important;
 	}
@@ -157,13 +161,17 @@ select.key {
 @media (hover: none) {
 	/* If we DON'T have a mouse cursor */
 	button:active,
-	select:active {
+	select:active,
+	input[type=file]:active::-webkit-file-selector-button,
+	input[type=file]:active::file-selector-button {
 		color: var(--cs-control-hovered-fg);
 		background-color: var(--cs-control-hovered-bg);
 	}
 }
 button:disabled,
-select:disabled {
+select:disabled,
+input[type=file]:disabled::-webkit-file-selector-button,
+input[type=file]:disabled::file-selector-button {
 	color: var(--cs-control-disabled-fg);
 	cursor: default;
 }
