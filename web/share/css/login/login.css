@@ -45,4 +45,5 @@ div#login {
 input[type="text"]#user-input,
 input[type="password"]#passwd-input {
 	text-align: center;
+	border: thin;
 }

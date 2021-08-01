@@ -206,8 +206,8 @@ select option.comment {
 input[type=text], input[type=password] {
 	overflow-x: auto;
 	font-family: monospace;
-	border: thin;
 	border-radius: 4px;
+	border: var(--border-default-thin);
 	color: var(--cs-code-default-fg);
 	background-color: var(--cs-code-default-bg);
 	padding: 2px;
