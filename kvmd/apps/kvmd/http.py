@@ -172,18 +172,27 @@ def make_json_exception(err: Exception, status: Optional[int]=None) -> Response:
     }, status=status)
 
 
-async def start_streaming(request: Request, content_type: str) -> StreamResponse:
+async def start_streaming(request: Request, content_type: str="application/x-ndjson") -> StreamResponse:
     response = StreamResponse(status=200, reason="OK", headers={"Content-Type": content_type})
     await response.prepare(request)
     return response
 
 
-async def stream_json(response: StreamResponse, result: Dict, err: Optional[Exception]=None) -> None:
+async def stream_json(response: StreamResponse, result: Dict, ok: bool=True) -> None:
     await response.write(json.dumps({
+        "ok": ok,
         "result": result,
-        "error": ("" if err is None else type(err).__name__),
-        "error_msg": ("" if err is None else str(err)),
     }).encode("utf-8") + b"\r\n")
+
+
+async def stream_json_exception(response: StreamResponse, err: Exception) -> None:
+    name = type(err).__name__
+    msg = str(err)
+    get_logger().error("API error: %s: %s", name, msg)
+    await stream_json(response, {
+        "error": name,
+        "error_msg": msg,
+    }, False)
 
 
 # =====

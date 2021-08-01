@@ -24,6 +24,7 @@ import time
 
 from typing import Dict
 from typing import Optional
+from typing import Union
 
 import aiohttp
 
@@ -48,6 +49,7 @@ from ..http import make_json_response
 from ..http import make_json_exception
 from ..http import start_streaming
 from ..http import stream_json
+from ..http import stream_json_exception
 
 
 # ======
@@ -97,7 +99,7 @@ class MsdApi:
         return make_json_response(self.__make_write_info(name, size, written))
 
     @exposed_http("POST", "/msd/write_remote")
-    async def __write_remote_handler(self, request: Request) -> StreamResponse:  # pylint: disable=too-many-locals
+    async def __write_remote_handler(self, request: Request) -> Union[Response, StreamResponse]:  # pylint: disable=too-many-locals
         url = valid_url(request.query.get("url"))
         insecure = valid_bool(request.query.get("insecure", "0"))
         timeout = valid_float_f01(request.query.get("timeout", 10.0))
@@ -106,9 +108,9 @@ class MsdApi:
         size = written = 0
         response: Optional[StreamResponse] = None
 
-        async def stream_write_info(err: Optional[Exception]=None) -> None:
+        async def stream_write_info() -> None:
             assert response is not None
-            await stream_json(response, self.__make_write_info(name, size, written), err)
+            await stream_json(response, self.__make_write_info(name, size, written))
 
         try:
             async with htclient.download(
@@ -127,7 +129,8 @@ class MsdApi:
 
                 get_logger(0).info("Downloading image %r as %r to MSD ...", url, name)
                 async with self.__msd.write_image(name, size) as chunk_size:
-                    response = await start_streaming(request, "application/stream+json")
+                    response = await start_streaming(request)
+                    await stream_write_info()
                     last_report_ts = 0
                     async for chunk in remote.content.iter_chunked(chunk_size):
                         written = await self.__msd.write_image_chunk(chunk)
@@ -141,7 +144,8 @@ class MsdApi:
 
         except Exception as err:
             if response is not None:
-                await stream_write_info(err)
+                await stream_write_info()
+                await stream_json_exception(response, err)
             elif isinstance(err, aiohttp.ClientError):
                 return make_json_exception(err, 400)
             raise
