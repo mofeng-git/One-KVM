@@ -324,7 +324,7 @@
                 <select disabled id="msd-image-selector"></select>
               </td>
               <td>
-                <button disabled id="msd-remove-image">Remove</button>
+                <button disabled id="msd-remove-button">Remove</button>
               </td>
             </tr>
           </table>
@@ -348,11 +348,10 @@
             </div>
           </div>
           <hr>
-          <input class="hidden" type="file" id="msd-select-new-image-file">
           <div class="buttons buttons-row">
-            <button class="row50" disabled id="msd-select-new-image-button">Select image to upload</button>
-            <button class="row25" disabled id="msd-upload-new-image-button">Upload</button>
-            <button class="row25" disabled id="msd-abort-uploading-button">Abort</button>
+            <button class="row50" disabled id="msd-select-new-button">Select image to upload</button>
+            <button class="row25" disabled id="msd-upload-new-button">Upload</button>
+            <button class="row25" disabled id="msd-abort-new-button">Abort</button>
           </div>
           <div class="hidden" id="msd-message-another-user-uploads">
             <hr>
@@ -365,32 +364,38 @@
                   </table>
                 </div>
           </div>
-          <div class="hidden" id="msd-submenu-new-image">
+          <div class="hidden" id="msd-new-sub">
+            <hr>
+            <table class="kv">
+              <tr>
+                <td>Specify a local file:</td>
+                <td>
+                  <input type="file" id="msd-new-file">
+                </td>
+              </tr>
+              <tr>
+                <td><b>Or</b> paste a URL:</td>
+                <td>
+                  <input type="text" id="msd-new-url" style="width: 100%">
+                </td>
+              </tr>
+            </table>
+          </div>
+          <div class="hidden" id="msd-uploading-sub">
             <hr>
             <table class="kv">
               <tr>
                 <td>New image:</td>
-                <td class="value" id="msd-new-image-name"></td>
+                <td class="value" id="msd-uploading-name"></td>
               </tr>
               <tr>
                 <td>Upload size:</td>
-                <td class="value" id="msd-new-image-size"></td>
+                <td class="value" id="msd-uploading-size"></td>
               </tr>
             </table>
             <div class="text">
               <div class="progress" id="msd-uploading-progress"><span class="progress-value" id="msd-uploading-progress-value"></span></div>
             </div>
-            <hr>
-            <table class="kv">
-              <tr>
-                <td class="value">Tip:</td>
-                <td>To speed up uploading, close the Stream window.</td>
-              </tr>
-              <tr>
-                <td></td>
-                <td>This will save network bandwidth.</td>
-              </tr>
-            </table>
           </div>
           <hr>
           <div class="buttons buttons-row">

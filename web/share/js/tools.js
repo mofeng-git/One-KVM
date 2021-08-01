@@ -211,10 +211,21 @@ export var tools = new function() {
 		};
 	};
 
+	self.input = new function() {
+		return {
+			"getFile": function(el) {
+				return (el.files.length ? el.files[0] : null);
+			},
+		};
+	};
+
 	self.hidden = new function() {
 		return {
 			"setVisible": function(el, visible) {
 				el.classList.toggle("hidden", !visible);
+			},
+			"isVisible": function(el) {
+				return !el.classList.contains("hidden");
 			},
 		};
 	};
