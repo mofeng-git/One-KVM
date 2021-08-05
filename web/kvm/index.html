@@ -235,8 +235,20 @@
         </div>
       </li>
       <li class="right feature-disabled" id="atx-dropdown"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" data-dont-hide-menu id="atx-hdd-led" src="/share/svg/led-atx-hdd.svg">ATX</a>
-        <div class="menu">
+        <div class="menu" data-dont-hide-menu>
           <div class="text"><b>Control the server's power<br></b><sub>Use the short click for ACPI shutdown</sub></div>
+          <hr>
+              <table class="kv">
+                <tr>
+                      <td>Ask click confirmation:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input checked type="checkbox" id="atx-ask-switch">
+                          <label for="atx-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+              </table>
           <hr>
           <div class="buttons">
             <button disabled id="atx-power-button">&bull; Click Power <sup><i>short</i></sup></button>

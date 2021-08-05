@@ -3,10 +3,12 @@ li(id="atx-dropdown" class="right feature-disabled")
 		+navbar_led("atx-power-led", "led-atx-power")
 		+navbar_led("atx-hdd-led", "led-atx-hdd")
 		| ATX
-	div(class="menu")
+	div(data-dont-hide-menu class="menu")
 		div(class="text")
 			b Control the server's power#[br]
 			sub Use the short click for ACPI shutdown
+		hr
+		+menu_switch("atx-ask-switch", "Ask click confirmation", true, true)
 		hr
 		div(class="buttons")
 			button(disabled id="atx-power-button") &bull; Click Power #[sup #[i short]]

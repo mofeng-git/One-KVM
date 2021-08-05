@@ -36,6 +36,12 @@ export function Atx() {
 		$("atx-power-led").title = "Power Led";
 		$("atx-hdd-led").title = "Disk Activity Led";
 
+		$("atx-ask-switch").checked = parseInt(tools.storage.get("atx.ask", "1"));
+		tools.el.setOnClick($("atx-ask-switch"), function() {
+			tools.storage.set("atx.ask", ($("atx-ask-switch").checked ? 1 : 0));
+		}, false);
+
+
 		for (let args of [
 			["atx-power-button", "power", "Are you sure you want to press the power button?"],
 			["atx-power-button-long", "power_long", `
@@ -70,19 +76,27 @@ export function Atx() {
 	};
 
 	var __clickButton = function(button, confirm_msg) {
-		wm.confirm(confirm_msg).then(function(ok) {
-			if (ok) {
-				let http = tools.makeRequest("POST", `/api/atx/click?button=${button}`, function() {
-					if (http.readyState === 4) {
-						if (http.status === 409) {
-							wm.error("Performing another ATX operation for other client.<br>Please try again later");
-						} else if (http.status !== 200) {
-							wm.error("Click error:<br>", http.responseText);
-						}
+		let click_button = function() {
+			let http = tools.makeRequest("POST", `/api/atx/click?button=${button}`, function() {
+				if (http.readyState === 4) {
+					if (http.status === 409) {
+						wm.error("Performing another ATX operation for other client.<br>Please try again later");
+					} else if (http.status !== 200) {
+						wm.error("Click error:<br>", http.responseText);
 					}
-				});
-			}
-		});
+				}
+			});
+		};
+
+		if ($("atx-ask-switch").checked) {
+			wm.confirm(confirm_msg).then(function(ok) {
+				if (ok) {
+					click_button();
+				}
+			});
+		} else {
+			click_button();
+		}
 	};
 
 	__init__();
