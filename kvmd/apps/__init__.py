@@ -533,7 +533,7 @@ def _get_config_scheme() -> Dict:
                 "allow_tcp":    Option([],   type=valid_ports_list),
                 "allow_udp":    Option([67], type=valid_ports_list),
                 "forward_iface": Option("", type=valid_stripped_string),
-                "iptables_cmd": Option(["/usr/bin/iptables", "--wait=5"], type=valid_command),
+                "iptables_cmd":  Option(["/usr/sbin/iptables", "--wait=5"], type=valid_command),
             },
 
             "commands": {
@@ -544,7 +544,7 @@ def _get_config_scheme() -> Dict:
                 "post_start_cmd": Option([
                     "/usr/bin/systemd-run",
                     "--unit=kvmd-otgnet-dnsmasq",
-                    "/usr/bin/dnsmasq",
+                    "/usr/sbin/dnsmasq",
                     "--conf-file=/dev/null",
                     "--pid-file",
                     "--user=dnsmasq",
