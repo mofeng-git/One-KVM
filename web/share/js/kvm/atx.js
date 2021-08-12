@@ -36,9 +36,9 @@ export function Atx() {
 		$("atx-power-led").title = "Power Led";
 		$("atx-hdd-led").title = "Disk Activity Led";
 
-		$("atx-ask-switch").checked = parseInt(tools.storage.get("atx.ask", "1"));
+		$("atx-ask-switch").checked = tools.storage.getBool("atx.ask", true);
 		tools.el.setOnClick($("atx-ask-switch"), function() {
-			tools.storage.set("atx.ask", ($("atx-ask-switch").checked ? 1 : 0));
+			tools.storage.setBool("atx.ask", $("atx-ask-switch").checked);
 		}, false);
 
 

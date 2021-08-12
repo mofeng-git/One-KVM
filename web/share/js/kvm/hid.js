@@ -74,9 +74,9 @@ export function Hid(__getResolution) {
 		window.addEventListener("pagehide", __releaseAll);
 		window.addEventListener("blur", __releaseAll);
 
-		$("hid-pak-ask-switch").checked = parseInt(tools.storage.get("hid.pak.ask", "1"));
+		$("hid-pak-ask-switch").checked = tools.storage.getBool("hid.pak.ask", true);
 		tools.el.setOnClick($("hid-pak-ask-switch"), function() {
-			tools.storage.set("hid.pak.ask", ($("hid-pak-ask-switch").checked ? 1 : 0));
+			tools.storage.setBool("hid.pak.ask", $("hid-pak-ask-switch").checked);
 		}, false);
 
 		$("hid-pak-keymap-selector").addEventListener("change", function() {
