@@ -36,11 +36,7 @@ export function Atx() {
 		$("atx-power-led").title = "Power Led";
 		$("atx-hdd-led").title = "Disk Activity Led";
 
-		$("atx-ask-switch").checked = tools.storage.getBool("atx.ask", true);
-		tools.el.setOnClick($("atx-ask-switch"), function() {
-			tools.storage.setBool("atx.ask", $("atx-ask-switch").checked);
-		}, false);
-
+		tools.storage.bindSimpleSwitch($("atx-ask-switch"), "atx.ask", true);
 
 		for (let args of [
 			["atx-power-button", "power", "Are you sure you want to press the power button?"],
