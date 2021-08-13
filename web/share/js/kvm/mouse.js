@@ -61,6 +61,11 @@ export function Mouse(__getResolution, __recordWsEvent) {
 		$("stream-box").onwheel = __streamWheelHandler;
 		$("stream-box").ontouchstart = (event) => __streamTouchMoveHandler(event);
 
+		$("hid-mouse-squash-switch").checked = tools.storage.getBool("hid.mouse.squash", true);
+		tools.el.setOnClick($("hid-mouse-squash-switch"), function() {
+			tools.storage.setBool("hid.mouse.squash", $("hid-mouse-squash-switch").checked);
+		}, false);
+
 		setInterval(__sendMove, 100);
 	};
 
