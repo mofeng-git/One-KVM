@@ -23,6 +23,7 @@ RUN pacman -Syu --noconfirm \
 		python-yaml \
 		python-aiohttp \
 		python-aiofiles \
+		python-periphery \
 		python-passlib \
 		python-pyserial \
 		python-setproctitle \

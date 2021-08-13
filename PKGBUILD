@@ -44,6 +44,7 @@ depends=(
 	"python-aiohttp>=3.7.4.post0-1.1"
 	python-aiofiles
 	python-passlib
+	python-periphery
 	python-pyserial
 	python-spidev
 	python-setproctitle

@@ -40,3 +40,5 @@ _Netcfg.net_mask
 _Netcfg.dhcp_option_3
 
 _ScriptWriter.get_args
+
+_pwm.period_ns
