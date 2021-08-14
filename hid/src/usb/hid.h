@@ -161,7 +161,11 @@ class UsbMouseAbsolute {
 
 		void sendMove(int x, int y) {
 			CHECK_HID_EP;
+#ifdef HID_USB_ABS_WIN98_FIX
+			_mouse.moveTo(x << 1, y << 1);
+#else
 			_mouse.moveTo(x, y);
+#endif
 		}
 
 		void sendWheel(int delta_y) {

@@ -72,7 +72,12 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         self.__output_to_mouse: Dict[str, MouseProcess] = {}
         self.__mouse_to_output: Dict[MouseProcess, str] = {}
         if mouse_alt["device_path"]:
-            self.__mouse_alt_proc = MouseProcess(absolute=(not mouse["absolute"]), **common, **mouse_alt)
+            self.__mouse_alt_proc = MouseProcess(
+                absolute=(not mouse["absolute"]),
+                absolute_win98_fix=mouse["absolute_win98_fix"],
+                **common,
+                **mouse_alt,
+            )
             self.__output_to_mouse = {
                 "usb": (self.__mouse_proc if mouse["absolute"] else self.__mouse_alt_proc),
                 "usb_rel": (self.__mouse_alt_proc if mouse["absolute"] else self.__mouse_proc),
@@ -94,6 +99,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 "queue_timeout":    Option(0.1,  type=valid_float_f01),
                 "write_retries":    Option(150,  type=valid_int_f1),
                 "absolute":         Option(True, type=valid_bool),
+                "absolute_win98_fix": Option(False, type=valid_bool),
                 "horizontal_wheel": Option(True, type=valid_bool),
             },
             "mouse_alt": {
@@ -102,6 +108,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 "queue_timeout":    Option(0.1,  type=valid_float_f01),
                 "write_retries":    Option(150,  type=valid_int_f1),
                 # No absolute option here, initialized by (not mouse.absolute)
+                # Also no absolute_win98_fix
                 "horizontal_wheel": Option(True, type=valid_bool),
             },
             "noop": Option(False, type=valid_bool),
