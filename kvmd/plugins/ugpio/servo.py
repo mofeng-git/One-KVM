@@ -50,8 +50,14 @@ class Plugin(PwmPlugin):
         angle_release: int,
     ) -> None:
 
-        duty_cycle_push = 0  # FIXME
-        duty_cycle_release = 0  # FIXME
+        #FIXME - Should we implement check for angles to be between the rangle ranges
+        #FIXME - Same for duty_cycle_push and release to be in ranges (maybe in pwm.py)
+
+
+        duty_cycle_per_degree = (duty_cycle_max - duty_cycle_min) / (angle_max - angle_min)
+
+        duty_cycle_push = int(duty_cycle_per_degree * (angle_push - angle_min) + duty_cycle_min)
+        duty_cycle_release = int(duty_cycle_per_degree * (angle_release - angle_min) + duty_cycle_min)
 
         super().__init__(
             instance_name=instance_name,
@@ -65,16 +71,16 @@ class Plugin(PwmPlugin):
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
-        valid_angle = (lambda arg: valid_number(arg, min=0, max=360))
+        valid_angle = (lambda arg: valid_number(arg, min=-360, max=360, type=float))
         return {
             "chip":           Option(0,        type=valid_int_f0),
             "period":         Option(20000000, type=valid_int_f0),
-            "duty_cycle_min": Option(0, type=valid_int_f0),  # FIXME
-            "duty_cycle_max": Option(0, type=valid_int_f0),  # FIXME
-            "angle_min":      Option(0, type=valid_angle),   # FIXME
-            "angle_max":      Option(0, type=valid_angle),   # FIXME
-            "angle_push":     Option(0, type=valid_angle),   # FIXME
-            "angle_release":  Option(0, type=valid_angle),   # FIXME
+            "duty_cycle_min": Option(1000000, type=valid_int_f0),
+            "duty_cycle_max": Option(2000000, type=valid_int_f0),
+            "angle_min":      Option(0, type=valid_angle),
+            "angle_max":      Option(180, type=valid_angle),
+            "angle_push":     Option(100, type=valid_angle),
+            "angle_release":  Option(120, type=valid_angle),
         }
 
     def __str__(self) -> str:
