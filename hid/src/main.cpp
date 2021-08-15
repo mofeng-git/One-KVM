@@ -102,6 +102,8 @@ static void _initOutputs() {
 		outputs |= PROTO::OUTPUTS1::MOUSE::USB_REL;
 #	elif defined(HID_WITH_PS2) && defined(HID_SET_PS2_MOUSE)
 		outputs |= PROTO::OUTPUTS1::MOUSE::PS2;
+#	elif defined(HID_WITH_USB) && defined(HID_WITH_USB_WIN98) && defined(HID_SET_USB_MOUSE_WIN98)
+		outputs |= PROTO::OUTPUTS1::MOUSE::USB_WIN98;
 #	endif
 
 #	ifdef HID_DYNAMIC
@@ -122,7 +124,8 @@ static void _initOutputs() {
 	uint8_t mouse = outputs & PROTO::OUTPUTS1::MOUSE::MASK;
 	switch (mouse) {
 #	ifdef HID_WITH_USB
-		case PROTO::OUTPUTS1::MOUSE::USB_ABS: _usb_mouse_abs = new UsbMouseAbsolute(); break;
+		case PROTO::OUTPUTS1::MOUSE::USB_ABS:
+		case PROTO::OUTPUTS1::MOUSE::USB_WIN98: _usb_mouse_abs = new UsbMouseAbsolute(); break;
 		case PROTO::OUTPUTS1::MOUSE::USB_REL: _usb_mouse_rel = new UsbMouseRelative(); break;
 #	endif
 	}
@@ -140,7 +143,12 @@ static void _initOutputs() {
 
 	switch (mouse) {
 #	ifdef HID_WITH_USB
-		case PROTO::OUTPUTS1::MOUSE::USB_ABS: _usb_mouse_abs->begin(); break;
+		case PROTO::OUTPUTS1::MOUSE::USB_ABS:
+#		ifdef HID_WITH_USB_WIN98
+		case PROTO::OUTPUTS1::MOUSE::USB_WIN98:
+#		endif
+			_usb_mouse_abs->begin(mouse == PROTO::OUTPUTS1::MOUSE::USB_WIN98);
+			break;
 		case PROTO::OUTPUTS1::MOUSE::USB_REL: _usb_mouse_rel->begin(); break;
 #	endif
 	}
@@ -286,7 +294,11 @@ static void _sendResponse(uint8_t code) {
 		}
 		if (_usb_mouse_abs) {
 			response[1] |= _usb_mouse_abs->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
-			response[2] |= PROTO::OUTPUTS1::MOUSE::USB_ABS;
+			if (_usb_mouse_abs->isWin98FixEnabled()) {
+				response[2] |= PROTO::OUTPUTS1::MOUSE::USB_WIN98;
+			} else {
+				response[2] |= PROTO::OUTPUTS1::MOUSE::USB_ABS;
+			}
 		} else if (_usb_mouse_rel) {
 			response[1] |= _usb_mouse_rel->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
 			response[2] |= PROTO::OUTPUTS1::MOUSE::USB_REL;
@@ -299,6 +311,9 @@ static void _sendResponse(uint8_t code) {
 #		endif
 #		ifdef HID_WITH_USB
 		response[3] |= PROTO::OUTPUTS2::HAS_USB;
+#		ifdef HID_WITH_USB_WIN98
+		response[3] |= PROTO::OUTPUTS2::HAS_USB_WIN98;
+#		endif
 #		endif
 #		ifdef HID_WITH_PS2
 		response[3] |= PROTO::OUTPUTS2::HAS_PS2;

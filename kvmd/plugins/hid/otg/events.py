@@ -124,14 +124,23 @@ class MouseButtonEvent(BaseEvent):
 class MouseMoveEvent(BaseEvent):
     to_x: int
     to_y: int
+    win98_fix: bool = False
     to_fixed_x: int = 0
     to_fixed_y: int = 0
 
     def __post_init__(self) -> None:
         assert MouseRange.MIN <= self.to_x <= MouseRange.MAX
         assert MouseRange.MIN <= self.to_y <= MouseRange.MAX
-        object.__setattr__(self, "to_fixed_x", MouseRange.remap(self.to_x, 0, MouseRange.MAX))
-        object.__setattr__(self, "to_fixed_y", MouseRange.remap(self.to_y, 0, MouseRange.MAX))
+        to_fixed_x = MouseRange.remap(self.to_x, 0, MouseRange.MAX)
+        to_fixed_y = MouseRange.remap(self.to_y, 0, MouseRange.MAX)
+        if self.win98_fix:
+            # https://github.com/pikvm/pikvm/issues/159
+            # For some reason, the correct implementation of this fix
+            # is a shift to the left, and not to the right, as in VirtualBox
+            to_fixed_x <<= 1
+            to_fixed_y <<= 1
+        object.__setattr__(self, "to_fixed_x", to_fixed_x)
+        object.__setattr__(self, "to_fixed_y", to_fixed_y)
 
 
 @dataclasses.dataclass(frozen=True)

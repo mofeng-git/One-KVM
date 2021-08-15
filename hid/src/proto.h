@@ -53,18 +53,20 @@ namespace PROTO {
 			const uint8_t PS2 =		0b00000011;
 		};
 		namespace MOUSE {
-			const uint8_t MASK =	0b00111000;
-			const uint8_t USB_ABS =	0b00001000;
-			const uint8_t USB_REL =	0b00010000;
-			const uint8_t PS2 =		0b00011000;
+			const uint8_t MASK =		0b00111000;
+			const uint8_t USB_ABS =		0b00001000;
+			const uint8_t USB_REL =		0b00010000;
+			const uint8_t PS2 =			0b00011000;
+			const uint8_t USB_WIN98 =	0b00100000;
 		};
 	};
 
 	namespace OUTPUTS2 { // Complex response
-		const uint8_t CONNECTABLE =	0b10000000;
-		const uint8_t CONNECTED =	0b01000000;
-		const uint8_t HAS_USB =		0b00000001;
-		const uint8_t HAS_PS2 =		0b00000010;
+		const uint8_t CONNECTABLE =		0b10000000;
+		const uint8_t CONNECTED =		0b01000000;
+		const uint8_t HAS_USB =			0b00000001;
+		const uint8_t HAS_PS2 =			0b00000010;
+		const uint8_t HAS_USB_WIN98 =	0b00000100;
 	}
 
 	namespace CMD {

@@ -10,6 +10,9 @@ kvmd:
             device: /dev/null
         mouse:
             device: /dev/null
+#            absolute_win98_fix: true
+#        mouse_alt:
+#            device: /dev/null
         noop: true
 
     msd:

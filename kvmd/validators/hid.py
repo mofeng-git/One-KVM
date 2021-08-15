@@ -37,7 +37,7 @@ def valid_hid_keyboard_output(arg: Any) -> str:
 
 
 def valid_hid_mouse_output(arg: Any) -> str:
-    return check_string_in_list(arg, "Mouse output", ["usb", "usb_rel", "ps2", "disabled"])
+    return check_string_in_list(arg, "Mouse output", ["usb", "usb_win98", "usb_rel", "ps2", "disabled"])
 
 
 def valid_hid_key(arg: Any) -> str:

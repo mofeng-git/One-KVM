@@ -27,7 +27,6 @@ from typing import AsyncGenerator
 from typing import Optional
 from typing import Any
 
-from .... import tools
 from .... import aiomulti
 
 from ....yamlconf import Option
@@ -59,30 +58,31 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
         self.__udc = UsbDeviceController(udc)
 
+        win98_fix = mouse.pop("absolute_win98_fix")
         common = {
             "udc": self.__udc,
             "noop": noop,
             "notifier": self.__notifier,
         }
-
         self.__keyboard_proc = KeyboardProcess(**common, **keyboard)
         self.__mouse_current = self.__mouse_proc = MouseProcess(**common, **mouse)
 
         self.__mouse_alt_proc: Optional[MouseProcess] = None
-        self.__output_to_mouse: Dict[str, MouseProcess] = {}
-        self.__mouse_to_output: Dict[MouseProcess, str] = {}
+        self.__mouses: Dict[str, MouseProcess] = {}
         if mouse_alt["device_path"]:
             self.__mouse_alt_proc = MouseProcess(
                 absolute=(not mouse["absolute"]),
-                absolute_win98_fix=mouse["absolute_win98_fix"],
                 **common,
                 **mouse_alt,
             )
-            self.__output_to_mouse = {
+            self.__mouses = {
                 "usb": (self.__mouse_proc if mouse["absolute"] else self.__mouse_alt_proc),
                 "usb_rel": (self.__mouse_alt_proc if mouse["absolute"] else self.__mouse_proc),
             }
-            self.__mouse_to_output = tools.swapped_kvs(self.__output_to_mouse)
+            if win98_fix:
+                # На самом деле мультимышка и win95 не зависят друг от друга,
+                # но так было проще реализовать переключение режимов
+                self.__mouses["usb_win98"] = self.__mouses["usb"]
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
@@ -139,8 +139,8 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             },
             "mouse": {
                 "outputs": {
-                    "available": list(self.__output_to_mouse),
-                    "active": (self.__mouse_to_output[self.__mouse_current] if self.__mouse_alt_proc else ""),
+                    "available": list(self.__mouses),
+                    "active": self.__get_current_mouse_mode(),
                 },
                 **mouse_state,
             },
@@ -157,7 +157,9 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     async def reset(self) -> None:
         self.__keyboard_proc.send_reset_event()
-        self.__mouse_current.send_reset_event()
+        self.__mouse_proc.send_reset_event()
+        if self.__mouse_alt_proc:
+            self.__mouse_alt_proc.send_reset_event()
 
     async def cleanup(self) -> None:
         try:
@@ -188,12 +190,23 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     def set_params(self, keyboard_output: Optional[str]=None, mouse_output: Optional[str]=None) -> None:
         _ = keyboard_output
-        if mouse_output != self.__mouse_to_output[self.__mouse_current]:
-            if mouse_output in self.__output_to_mouse:
-                self.__mouse_current.send_clear_event()
-                self.__mouse_current = self.__output_to_mouse[mouse_output]
-                self.__notifier.notify()
+        if mouse_output in self.__mouses and mouse_output != self.__get_current_mouse_mode():
+            self.__mouse_current.send_clear_event()
+            self.__mouse_current = self.__mouses[mouse_output]
+            self.__mouse_current.set_win98_fix(mouse_output == "usb_win98")
+            self.__notifier.notify()
 
     def clear_events(self) -> None:
         self.__keyboard_proc.send_clear_event()
-        self.__mouse_current.send_clear_event()
+        self.__mouse_proc.send_clear_event()
+        if self.__mouse_alt_proc:
+            self.__mouse_alt_proc.send_clear_event()
+
+    # =====
+
+    def __get_current_mouse_mode(self) -> str:
+        if len(self.__mouses) == 0:
+            return ""
+        if self.__mouse_current.is_absolute():
+            return ("usb_win98" if self.__mouse_current.get_win98_fix() else "usb")
+        return "usb_rel"

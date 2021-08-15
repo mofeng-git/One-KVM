@@ -63,10 +63,11 @@ class SetKeyboardOutputEvent(BaseEvent):
 
 # =====
 _MOUSE_NAMES_TO_CODES = {
-    "disabled": 0b00000000,
-    "usb":      0b00001000,
-    "usb_rel":  0b00010000,
-    "ps2":      0b00011000,
+    "disabled":  0b00000000,
+    "usb":       0b00001000,
+    "usb_rel":   0b00010000,
+    "ps2":       0b00011000,
+    "usb_win98": 0b00100000,
 }
 _MOUSE_CODES_TO_NAMES = tools.swapped_kvs(_MOUSE_NAMES_TO_CODES)
 

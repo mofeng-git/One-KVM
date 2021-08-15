@@ -133,6 +133,7 @@ export function Hid(__getResolution) {
 					let html = "";
 					for (let args of [
 						["USB", "usb", false],
+						["USB Win98", "usb_win98", false],
 						["USB Relative", "usb_rel", true],
 						["PS/2", "ps2", true],
 						["Off", "disabled"],

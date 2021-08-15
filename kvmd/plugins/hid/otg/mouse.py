@@ -42,7 +42,6 @@ from .events import make_mouse_report
 class MouseProcess(BaseDeviceProcess):
     def __init__(self, **kwargs: Any) -> None:
         self.__absolute: bool = kwargs.pop("absolute")
-        self.__absolute_win98_fix: bool = kwargs.pop("absolute_win98_fix")
         self.__horizontal_wheel: bool = kwargs.pop("horizontal_wheel")
 
         super().__init__(
@@ -55,6 +54,16 @@ class MouseProcess(BaseDeviceProcess):
         self.__pressed_buttons = 0
         self.__x = 0  # For absolute
         self.__y = 0
+        self.__win98_fix = False
+
+    def is_absolute(self) -> bool:
+        return self.__absolute
+
+    def set_win98_fix(self, enabled: bool) -> None:
+        self.__win98_fix = enabled
+
+    def get_win98_fix(self) -> bool:
+        return self.__win98_fix
 
     def cleanup(self) -> None:
         self._stop()
@@ -82,7 +91,7 @@ class MouseProcess(BaseDeviceProcess):
 
     def send_move_event(self, to_x: int, to_y: int) -> None:
         if self.__absolute:
-            self._queue_event(MouseMoveEvent(to_x, to_y))
+            self._queue_event(MouseMoveEvent(to_x, to_y, self.__win98_fix))
 
     def send_relative_event(self, delta_x: int, delta_y: int) -> None:
         if not self.__absolute:
@@ -144,12 +153,6 @@ class MouseProcess(BaseDeviceProcess):
             assert relative_event is None
             move_x = self.__x
             move_y = self.__y
-            if self.__absolute_win98_fix:
-                # https://github.com/pikvm/pikvm/issues/159
-                # For some reason, the correct implementation of this fix
-                # is a shift to the left, and not to the right, as in VirtualBox
-                move_x <<= 1
-                move_y <<= 1
         else:
             assert self.__x == self.__y == 0
             if relative_event is not None:
