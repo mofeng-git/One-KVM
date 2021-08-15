@@ -44,15 +44,14 @@ class Plugin(PwmPlugin):
         period: int,
         duty_cycle_min: int,
         duty_cycle_max: int,
-        angle_min: int,
-        angle_max: int,
-        angle_push: int,
-        angle_release: int,
+        angle_min: float,
+        angle_max: float,
+        angle_push: float,
+        angle_release: float,
     ) -> None:
 
-        #FIXME - Should we implement check for angles to be between the rangle ranges
-        #FIXME - Same for duty_cycle_push and release to be in ranges (maybe in pwm.py)
-
+        angle_push = min(max(angle_push, angle_min), angle_max)
+        angle_release = min(max(angle_release, angle_min), angle_max)
 
         duty_cycle_per_degree = (duty_cycle_max - duty_cycle_min) / (angle_max - angle_min)
 
@@ -71,16 +70,16 @@ class Plugin(PwmPlugin):
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
-        valid_angle = (lambda arg: valid_number(arg, min=-360, max=360, type=float))
+        valid_angle = (lambda arg: valid_number(arg, min=-360.0, max=360.0, type=float))
         return {
             "chip":           Option(0,        type=valid_int_f0),
             "period":         Option(20000000, type=valid_int_f0),
-            "duty_cycle_min": Option(1000000, type=valid_int_f0),
-            "duty_cycle_max": Option(2000000, type=valid_int_f0),
-            "angle_min":      Option(0, type=valid_angle),
-            "angle_max":      Option(180, type=valid_angle),
-            "angle_push":     Option(100, type=valid_angle),
-            "angle_release":  Option(120, type=valid_angle),
+            "duty_cycle_min": Option(1000000,  type=valid_int_f0),
+            "duty_cycle_max": Option(2000000,  type=valid_int_f0),
+            "angle_min":      Option(0.0,      type=valid_angle),
+            "angle_max":      Option(180.0,    type=valid_angle),
+            "angle_push":     Option(100.0,    type=valid_angle),
+            "angle_release":  Option(120.0,    type=valid_angle),
         }
 
     def __str__(self) -> str:
