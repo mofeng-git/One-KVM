@@ -1,0 +1,82 @@
+From 82c8aee0ae3739eb22ae11b8f527d0c50b0ced31 Mon Sep 17 00:00:00 2001
+From: Maxim Devaev <mdevaev@gmail.com>
+Date: Sat, 14 Aug 2021 10:10:06 +0300
+Subject: [PATCH] Fixed absolute mouse positioning in Windows 98
+
+Windows 98 contains a buggy HID driver. It allows you to move only
+on the upper right quarter of the screen. Yes, this is indeed exceeding
+the maximum value from the HID report. Yes, it really should work that way.
+
+VirtualBox has a similar fix, but with a shift in the other direction
+(I didn't dig the details). I suppose it can be fixed somehow with a special
+HID descriptor, but the proposed fix is simpler and really works.
+
+Related: https://github.com/pikvm/pikvm/issues/159
+---
+ src/HID-APIs/AbsoluteMouseAPI.h   |  3 +++
+ src/HID-APIs/AbsoluteMouseAPI.hpp | 17 ++++++++++++++++-
+ 2 files changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/src/HID-APIs/AbsoluteMouseAPI.h b/src/HID-APIs/AbsoluteMouseAPI.h
+index 66dbe42..c99e6a5 100644
+--- a/src/HID-APIs/AbsoluteMouseAPI.h
++++ b/src/HID-APIs/AbsoluteMouseAPI.h
+@@ -57,6 +57,7 @@ class AbsoluteMouseAPI
+ 	int16_t xAxis;
+ 	int16_t yAxis;
+ 	uint8_t _buttons;
++	bool win98_fix;
+ 	inline void buttons(uint8_t b);
+ 
+ 	inline int16_t qadd16(int16_t base, int16_t increment);
+@@ -65,6 +66,8 @@ class AbsoluteMouseAPI
+ 	inline AbsoluteMouseAPI(void);
+ 	inline void begin(void);
+ 	inline void end(void);
++	inline void setWin98FixEnabled(bool enabled);
++	inline bool isWin98FixEnabled(void);
+ 
+ 	inline void click(uint8_t b = MOUSE_LEFT);
+ 	inline void moveTo(int x, int y, signed char wheel = 0);
+diff --git a/src/HID-APIs/AbsoluteMouseAPI.hpp b/src/HID-APIs/AbsoluteMouseAPI.hpp
+index 0913c8a..0b9aaa2 100644
+--- a/src/HID-APIs/AbsoluteMouseAPI.hpp
++++ b/src/HID-APIs/AbsoluteMouseAPI.hpp
+@@ -51,7 +51,7 @@ int16_t AbsoluteMouseAPI::qadd16(int16_t base, int16_t increment) {
+ }
+ 
+ AbsoluteMouseAPI::AbsoluteMouseAPI(void):
+-xAxis(0), yAxis(0), _buttons(0)
++xAxis(0), yAxis(0), _buttons(0), win98_fix(false)
+ {
+ 	// Empty
+ }
+@@ -66,6 +66,14 @@ void AbsoluteMouseAPI::end(void){
+ 	moveTo(xAxis, yAxis, 0);
+ }
+ 
++void AbsoluteMouseAPI::setWin98FixEnabled(bool enabled){
++	win98_fix = enabled;
++}
++
++bool AbsoluteMouseAPI::isWin98FixEnabled(void){
++	return win98_fix;
++}
++
+ void AbsoluteMouseAPI::click(uint8_t b){
+ 	_buttons = b;
+ 	moveTo(xAxis, yAxis, 0);
+@@ -84,6 +92,13 @@ void AbsoluteMouseAPI::moveTo(int x, int y, signed char wheel){
+ 	// See detauls in AbsoluteMouse sources and here: https://github.com/NicoHood/HID/pull/306
+ 	report.xAxis = ((int32_t)x + 32768) / 2;
+ 	report.yAxis = ((int32_t)y + 32768) / 2;
++	if (win98_fix) {
++		// Windows 98 contains a buggy driver.
++		// Yes, this is indeed exceeding the maximum value from the HID report.
++		// Yes, it really should work that way.
++		report.xAxis <<= 1;
++		report.yAxis <<= 1;
++	}
+ 	report.wheel = wheel;
+ 	SendReport(&report, sizeof(report));
+ }

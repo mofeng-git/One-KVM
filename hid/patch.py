@@ -40,3 +40,4 @@ _patch(_get_pkg_path("framework-arduino-avr"), "patches/arduino-get-plugged-endp
 _libs = _get_libs()
 _patch(_libs["HID-Project"], "patches/hid-shut-up.patch")
 _patch(_libs["HID-Project"], "patches/hid-no-singletones.patch")
+_patch(_libs["HID-Project"], "patches/hid-win98.patch")
