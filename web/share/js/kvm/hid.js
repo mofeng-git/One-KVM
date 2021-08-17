@@ -157,6 +157,7 @@ export function Hid(__getResolution) {
 			tools.feature.setEnabled($("hid-outputs-keyboard"), keyboard_outputs.length);
 			tools.feature.setEnabled($("hid-outputs-mouse"), mouse_outputs.length);
 			tools.feature.setEnabled($("hid-mouse-squash"), has_relative);
+			tools.feature.setEnabled($("hid-mouse-sens"), has_relative);
 			tools.feature.setEnabled($("hid-connect"), (state.connected !== null));
 			$("hid-connect-switch").checked = !!state.connected;
 		}
@@ -164,6 +165,7 @@ export function Hid(__getResolution) {
 		tools.radio.setEnabled("hid-outputs-keyboard-radio", (state && state.online && !state.busy));
 		tools.radio.setEnabled("hid-outputs-mouse-radio", (state && state.online && !state.busy));
 		tools.el.setEnabled($("hid-mouse-squash-switch"), (has_relative_squash && !state.busy));
+		tools.el.setEnabled($("hid-mouse-sens-slider"), (has_relative_squash && !state.busy));
 		tools.el.setEnabled($("hid-connect-switch"), (state && state.online && !state.busy));
 
 		if (state) {

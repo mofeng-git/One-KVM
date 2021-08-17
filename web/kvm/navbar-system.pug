@@ -55,6 +55,10 @@ li(class="right")
 					td Mouse #[a(target="_blank" href="https://github.com/pikvm/pikvm/blob/master/pages/mouse.md") mode]:
 					td #[div(id="hid-outputs-mouse-box" class="radio-box")]
 		table(class="kv")
+			tr(id="hid-mouse-sens" class="feature-disabled")
+				td Relative mouse sensitivity:
+				td #[input(disabled type="range" id="hid-mouse-sens-slider" class="slider")]
+				td(id="hid-mouse-sens-value" class="value" style="min-width: 30px; max-width:30px")
 			tr(id="hid-mouse-squash" class="feature-disabled")
 				+menu_switch_notable("hid-mouse-squash-switch", "Squash relative mouse moves", true, true)
 			tr(id="hid-connect" class="feature-disabled")

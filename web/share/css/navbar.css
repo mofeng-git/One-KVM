@@ -137,6 +137,9 @@ ul#navbar li div.menu table.kv {
 	margin: 0 10px 0 10px;
 	font-size: 12px;
 }
+ul#navbar li div.menu table.kv td {
+	text-align: left;
+}
 ul#navbar li div.menu table.kv td.value {
 	font-weight: bold;
 	max-width: 310px;

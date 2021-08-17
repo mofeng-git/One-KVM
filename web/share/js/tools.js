@@ -274,7 +274,7 @@ export var tools = new function() {
 		return {
 			"get": function(key, default_value) {
 				let value = window.localStorage.getItem(key);
-				return (value !== null ? value : default_value);
+				return (value !== null ? value : `${default_value}`);
 			},
 			"set": (key, value) => window.localStorage.setItem(key, value),
 

@@ -42,6 +42,7 @@ export function Mouse(__getResolution, __recordWsEvent) {
 	var __sent_pos = {x: 0, y: 0};
 	var __wheel_delta = {x: 0, y: 0};
 	var __relative_deltas = [];
+	var __relative_sens = 1.0;
 
 	var __stream_hovered = false;
 
@@ -60,6 +61,12 @@ export function Mouse(__getResolution, __recordWsEvent) {
 		$("stream-box").onmousemove = __streamMoveHandler;
 		$("stream-box").onwheel = __streamWheelHandler;
 		$("stream-box").ontouchstart = (event) => __streamTouchMoveHandler(event);
+
+		let sens_slider = $("hid-mouse-sens-slider");
+		tools.slider.setParams(sens_slider, 0.1, 1.9, 0.1, 1);
+		sens_slider.oninput = sens_slider.onchange = __updateRelativeSens;
+		sens_slider.value = tools.storage.get("hid.mouse.sens", 1.0);
+		__updateRelativeSens();
 
 		tools.storage.bindSimpleSwitch($("hid-mouse-squash-switch"), "hid.mouse.squash", true);
 
@@ -95,6 +102,12 @@ export function Mouse(__getResolution, __recordWsEvent) {
 
 	self.releaseAll = function() {
 		__keypad.releaseAll();
+	};
+
+	var __updateRelativeSens = function() {
+		__relative_sens = parseFloat($("hid-mouse-sens-slider").value);
+		$("hid-mouse-sens-value").innerHTML = __relative_sens.toFixed(1);
+		tools.storage.set("hid.mouse.sens", __relative_sens);
 	};
 
 	var __streamHoveredHandler = function(hovered) {
@@ -188,8 +201,8 @@ export function Mouse(__getResolution, __recordWsEvent) {
 			};
 		} else if (__isRelativeCaptured()) {
 			let delta = {
-				x: Math.min(Math.max(-127, event.movementX), 127),
-				y: Math.min(Math.max(-127, event.movementY), 127),
+				x: Math.min(Math.max(-127, Math.floor(event.movementX * __relative_sens)), 127),
+				y: Math.min(Math.max(-127, Math.floor(event.movementY * __relative_sens)), 127),
 			};
 			if (__isRelativeSquashed()) {
 				__relative_deltas.push(delta);
