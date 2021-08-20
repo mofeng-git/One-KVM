@@ -478,6 +478,7 @@ def _get_config_scheme() -> Dict:
             "manufacturer": Option("Pi-KVM"),
             "product":      Option("Composite KVM Device"),
             "serial":       Option("CAFEBABE"),
+            "remote_wakeup": Option(False, type=valid_bool),
 
             "gadget":     Option("kvmd", type=valid_otg_gadget),
             "config":     Option("Pi-KVM device", type=valid_stripped_string_not_empty),

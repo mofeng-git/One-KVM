@@ -166,7 +166,7 @@ def _create_msd(
     _symlink(func_path, join(config_path, f"mass_storage.usb{instance}"))
 
 
-def _cmd_start(config: Section) -> None:
+def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     # https://www.kernel.org/doc/Documentation/usb/gadget_configfs.txt
     # https://www.isticktoit.net/?p=1383
 
@@ -196,8 +196,9 @@ def _cmd_start(config: Section) -> None:
     _mkdir(join(config_path, "strings/0x409"))
     _write(join(config_path, "strings/0x409/configuration"), f"Config 1: {config.otg.config}")
     _write(join(config_path, "MaxPower"), "250")
-    # TODO: Add this and MaxPower=100 to enable Remote Wakeup on Bus Powered
-    # _write(join(config_path, "bmAttributes"), "0xA0")
+    if config.otg.remote_wakeup:
+        # XXX: Should we use MaxPower=100 with Remote Wakeup?
+        _write(join(config_path, "bmAttributes"), "0xA0")
 
     if config.otg.devices.serial.enabled:
         logger.info("===== Required Serial =====")
