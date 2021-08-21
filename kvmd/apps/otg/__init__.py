@@ -129,10 +129,12 @@ def _create_ethernet(gadget_path: str, config_path: str, driver: str, host_mac: 
     _symlink(func_path, join(config_path, f"{driver}.usb0"))
 
 
-def _create_hid(gadget_path: str, config_path: str, instance: int, hid: Hid) -> None:
+def _create_hid(gadget_path: str, config_path: str, instance: int, remote_wakeup: bool, hid: Hid) -> None:
     func_path = join(gadget_path, f"functions/hid.usb{instance}")
     _mkdir(func_path)
     _write(join(func_path, "no_out_endpoint"), "1", optional=True)
+    if remote_wakeup:
+        _write(join(func_path, "wakeup_on_write"), "1", optional=True)
     _write(join(func_path, "protocol"), str(hid.protocol))
     _write(join(func_path, "subclass"), str(hid.subclass))
     _write(join(func_path, "report_length"), str(hid.report_length))
@@ -210,14 +212,14 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
 
     if config.kvmd.hid.type == "otg":
         logger.info("===== Required HID =====")
-        _create_hid(gadget_path, config_path, 0, make_keyboard_hid())
-        _create_hid(gadget_path, config_path, 1, make_mouse_hid(
+        _create_hid(gadget_path, config_path, 0, config.otg.remote_wakeup, make_keyboard_hid())
+        _create_hid(gadget_path, config_path, 1, config.otg.remote_wakeup, make_mouse_hid(
             absolute=config.kvmd.hid.mouse.absolute,
             horizontal_wheel=config.kvmd.hid.mouse.horizontal_wheel,
         ))
         if config.kvmd.hid.mouse_alt.device:
             logger.info("===== Required HID-Mouse ALT =====")
-            _create_hid(gadget_path, config_path, 2, make_mouse_hid(
+            _create_hid(gadget_path, config_path, 2, config.otg.remote_wakeup, make_mouse_hid(
                 absolute=(not config.kvmd.hid.mouse.absolute),
                 horizontal_wheel=config.kvmd.hid.mouse_alt.horizontal_wheel,
             ))
