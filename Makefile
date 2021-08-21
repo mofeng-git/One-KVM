@@ -6,7 +6,7 @@ TESTENV_VIDEO ?= /dev/video0
 TESTENV_GPIO ?= /dev/gpiochip0
 TESTENV_RELAY ?= $(if $(shell ls /dev/hidraw0 2>/dev/null || true),/dev/hidraw0,)
 
-LIBGPIOD_VERSION ?= 1.6.2
+LIBGPIOD_VERSION ?= 1.6.3
 
 USTREAMER_MIN_VERSION ?= $(shell grep -o 'ustreamer>=[^"]\+' PKGBUILD | sed 's/ustreamer>=//g')
 
