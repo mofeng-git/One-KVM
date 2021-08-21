@@ -203,33 +203,34 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
         _write(join(config_path, "bmAttributes"), "0xA0")
 
     if config.otg.devices.serial.enabled:
-        logger.info("===== Required Serial =====")
+        logger.info("===== Serial =====")
         _create_serial(gadget_path, config_path)
 
     if config.otg.devices.ethernet.enabled:
-        logger.info("===== Required Ethernet =====")
+        logger.info("===== Ethernet =====")
         _create_ethernet(gadget_path, config_path, **config.otg.devices.ethernet._unpack(ignore=["enabled"]))
 
     if config.kvmd.hid.type == "otg":
-        logger.info("===== Required HID =====")
+        logger.info("===== HID-Keyboard =====")
         _create_hid(gadget_path, config_path, 0, config.otg.remote_wakeup, make_keyboard_hid())
+        logger.info("===== HID-Mouse =====")
         _create_hid(gadget_path, config_path, 1, config.otg.remote_wakeup, make_mouse_hid(
             absolute=config.kvmd.hid.mouse.absolute,
             horizontal_wheel=config.kvmd.hid.mouse.horizontal_wheel,
         ))
         if config.kvmd.hid.mouse_alt.device:
-            logger.info("===== Required HID-Mouse ALT =====")
+            logger.info("===== HID-Mouse-Alt =====")
             _create_hid(gadget_path, config_path, 2, config.otg.remote_wakeup, make_mouse_hid(
                 absolute=(not config.kvmd.hid.mouse.absolute),
                 horizontal_wheel=config.kvmd.hid.mouse_alt.horizontal_wheel,
             ))
 
     if config.kvmd.msd.type == "otg":
-        logger.info("===== Required MSD =====")
+        logger.info("===== MSD =====")
         _create_msd(gadget_path, config_path, 0, config.otg.user, **config.otg.devices.msd.default._unpack())
         if config.otg.devices.drives.enabled:
-            logger.info("===== Required MSD extra drives: %d =====", config.otg.devices.drives.count)
             for instance in range(config.otg.devices.drives.count):
+                logger.info("===== MSD Extra: %d =====", config.otg.devices.drives.count)
                 _create_msd(gadget_path, config_path, instance + 1, "root", **config.otg.devices.drives.default._unpack())
 
     logger.info("===== Preparing complete =====")
