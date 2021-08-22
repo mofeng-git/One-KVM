@@ -55,7 +55,7 @@ depends=(
 	python-pygments
 	python-pyghmi
 	python-pam
-	python-pillow
+	"python-pillow>=8.3.1-1"
 	python-xlib
 	python-hidapi
 	libgpiod
@@ -83,9 +83,6 @@ depends=(
 	# Avoid dhcpcd stack trace
 	dhclient
 	netctl
-
-	# Broken pillow dependency
-	libraqm
 )
 conflicts=(
 	python-pikvm
