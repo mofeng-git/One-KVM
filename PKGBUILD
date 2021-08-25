@@ -65,7 +65,6 @@ depends=(
 	openssl
 	platformio
 	avrdude-svn
-	wiringpi
 	make
 	patch
 	sudo

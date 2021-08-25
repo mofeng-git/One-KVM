@@ -16,8 +16,8 @@ upload:
 	bash -ex -c " \
 		current=`cat .current`; \
 		if [ '$($@_CURRENT)' == 'spi' ] || [ '$($@_CURRENT)' == 'aum' ]; then \
-			gpio -g write 25 1; \
-			gpio -g write 25 0; \
+			gpioset 0 25=1; \
+			gpioset 0 25=0; \
 		fi \
 	"
 	platformio run --environment '$($@_CURRENT)' --target upload
