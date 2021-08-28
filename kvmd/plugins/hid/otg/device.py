@@ -35,8 +35,8 @@ from ....logging import get_logger
 from .... import tools
 from .... import aiomulti
 from .... import aioproc
+from .... import usb
 
-from .usb import UsbDeviceController
 from .events import BaseEvent
 
 
@@ -49,7 +49,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         initial_state: Dict,
         notifier: aiomulti.AioProcessNotifier,
 
-        udc: UsbDeviceController,
+        udc: usb.UsbDeviceController,
 
         device_path: str,
         select_timeout: float,
@@ -89,6 +89,12 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                     try:
                         event = self.__events_queue.get(timeout=self.__queue_timeout)
                     except queue.Empty:
+                        # Проблема в том, что устройство может отвечать EAGAIN или ESHUTDOWN,
+                        # если оно было отключено физически. См:
+                        #    - https://github.com/raspberrypi/linux/issues/3870
+                        #    - https://github.com/raspberrypi/linux/pull/3151
+                        # Так что нам нужно проверять состояние контроллера, чтобы не спамить
+                        # в устройство и отслеживать его состояние.
                         if not self.__udc.can_operate():
                             self.__state_flags.update(online=False)
                     else:

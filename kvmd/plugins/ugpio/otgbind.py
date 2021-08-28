@@ -32,6 +32,7 @@ from ...inotify import Inotify
 
 from ... import env
 from ... import aiotools
+from ... import usb
 
 from . import BaseUserGpioDriver
 
@@ -49,6 +50,7 @@ class Plugin(BaseUserGpioDriver):
         super().__init__(instance_name, notifier)
 
         self.__udc = udc
+        self.__driver = ""
 
     def register_input(self, pin: int, debounce: float) -> None:
         _ = pin
@@ -59,13 +61,7 @@ class Plugin(BaseUserGpioDriver):
         _ = initial
 
     def prepare(self) -> None:
-        candidates = sorted(os.listdir(f"{env.SYSFS_PREFIX}/sys/class/udc"))
-        if not self.__udc:
-            if len(candidates) == 0:
-                raise RuntimeError("Can't find any UDC")
-            self.__udc = candidates[0]
-        elif self.__udc not in candidates:
-            raise RuntimeError(f"Can't find selected UDC: {self.__udc}")
+        (self.__udc, self.__driver) = usb.find_udc(self.__udc)
         get_logger().info("Using UDC %s", self.__udc)
 
     async def run(self) -> None:
@@ -110,7 +106,8 @@ class Plugin(BaseUserGpioDriver):
             ctl_file.write(f"{self.__udc}\n")
 
     def __get_driver_path(self, name: str="") -> str:
-        path = f"{env.SYSFS_PREFIX}/sys/bus/platform/drivers/dwc2"
+        assert self.__driver
+        path = f"{env.SYSFS_PREFIX}/sys/bus/platform/drivers/{self.__driver}"
         return (os.path.join(path, name) if name else path)
 
     def __str__(self) -> str:

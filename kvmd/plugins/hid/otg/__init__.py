@@ -28,6 +28,7 @@ from typing import Optional
 from typing import Any
 
 from .... import aiomulti
+from .... import usb
 
 from ....yamlconf import Option
 
@@ -38,7 +39,6 @@ from ....validators.os import valid_abs_path
 
 from .. import BaseHid
 
-from .usb import UsbDeviceController
 from .keyboard import KeyboardProcess
 from .mouse import MouseProcess
 
@@ -56,7 +56,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
         self.__notifier = aiomulti.AioProcessNotifier()
 
-        self.__udc = UsbDeviceController(udc)
+        self.__udc = usb.UsbDeviceController(udc)
 
         win98_fix = mouse.pop("absolute_win98_fix")
         common = {

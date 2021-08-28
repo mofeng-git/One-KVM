@@ -83,7 +83,11 @@ RUN mkdir -p \
 		/opt/vc/bin \
 		/fake_sysfs/sys/kernel/config/usb_gadget/kvmd/functions/mass_storage.usb0/lun.0 \
 		/fake_sysfs/sys/class/thermal/thermal_zone0 \
-		/fake_procfs/proc/device-tree
+		/fake_procfs/proc/device-tree \
+		/fake_sysfs/sys/class/udc/fe980000.usb/device \
+		/fake_sysfs/sys/bus/platform/drivers/dwc2 \
+	&& echo configured > /fake_sysfs/sys/class/udc/fe980000.usb/state \
+	&& ln -s /fake_sysfs/sys/bus/platform/drivers/dwc2 /fake_sysfs/sys/class/udc/fe980000.usb/device/driver
 
 COPY testenv/fakes/vcgencmd /opt/vc/bin/
 COPY testenv/fakes/msd/* /fake_sysfs/sys/kernel/config/usb_gadget/kvmd/functions/mass_storage.usb0/lun.0/

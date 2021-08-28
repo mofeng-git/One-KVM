@@ -38,6 +38,7 @@ from ...yamlconf import Section
 from ...validators import ValidatorError
 
 from ... import env
+from ... import usb
 
 from .. import init
 
@@ -86,18 +87,6 @@ def _write_bytes(path: str, data: bytes) -> None:
     get_logger().info("WRITE --- %s", path)
     with open(path, "wb") as param_file:
         param_file.write(data)
-
-
-def _find_udc(udc: str) -> str:
-    candidates = sorted(os.listdir(f"{env.SYSFS_PREFIX}/sys/class/udc"))
-    if not udc:
-        if len(candidates) == 0:
-            raise RuntimeError("Can't find any UDC")
-        udc = candidates[0]
-    elif udc not in candidates:
-        raise RuntimeError(f"Can't find selected UDC: {udc}")
-    get_logger().info("Using UDC %s", udc)
-    return udc
 
 
 def _check_config(config: Section) -> None:
@@ -176,7 +165,8 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
 
     _check_config(config)
 
-    udc = _find_udc(config.otg.udc)
+    (udc, usb_driver) = usb.find_udc(config.otg.udc)
+    logger.info("Using UDC %s", udc)
 
     logger.info("Creating gadget %r ...", config.otg.gadget)
     gadget_path = join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", config.otg.gadget)
@@ -239,8 +229,8 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     _write(join(gadget_path, "UDC"), udc)
     time.sleep(config.otg.init_delay)
 
-    logger.info("Setting DWC2 bind permissions ...")
-    driver_path = f"{env.SYSFS_PREFIX}/sys/bus/platform/drivers/dwc2"
+    logger.info("Setting %s bind permissions ...", usb_driver)
+    driver_path = f"{env.SYSFS_PREFIX}/sys/bus/platform/drivers/{usb_driver}"
     _chown(join(driver_path, "bind"), config.otg.user)
     _chown(join(driver_path, "unbind"), config.otg.user)
 
