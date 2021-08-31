@@ -172,10 +172,10 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     gadget_path = join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", config.otg.gadget)
     _mkdir(gadget_path)
 
-    _write(join(gadget_path, "idVendor"), f"0x{config.otg.vendor_id:X}")
-    _write(join(gadget_path, "idProduct"), f"0x{config.otg.product_id:X}")
+    _write(join(gadget_path, "idVendor"), f"0x{config.otg.vendor_id:04X}")
+    _write(join(gadget_path, "idProduct"), f"0x{config.otg.product_id:04X}")
     _write(join(gadget_path, "bcdDevice"), "0x0100")
-    _write(join(gadget_path, "bcdUSB"), "0x0200")
+    _write(join(gadget_path, "bcdUSB"), f"0x{config.otg.usb_version:04X}")
 
     lang_path = join(gadget_path, "strings/0x409")
     _mkdir(lang_path)
