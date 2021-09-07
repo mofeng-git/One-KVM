@@ -89,9 +89,6 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             raise RuntimeError(f"Unsupported port number: {pin}")
         _ = initial
 
-    def prepare(self) -> None:
-        pass
-
     async def run(self) -> None:
         prev_active = -2
         while True:

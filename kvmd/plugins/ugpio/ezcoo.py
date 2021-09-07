@@ -85,14 +85,6 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             "protocol":     Option(1,      type=functools.partial(valid_number, min=1, max=2)),
         }
 
-    def register_input(self, pin: int, debounce: float) -> None:
-        _ = pin
-        _ = debounce
-
-    def register_output(self, pin: int, initial: Optional[bool]) -> None:
-        _ = pin
-        _ = initial
-
     def prepare(self) -> None:
         assert self.__proc is None
         self.__proc = multiprocessing.Process(target=self.__serial_worker, daemon=True)

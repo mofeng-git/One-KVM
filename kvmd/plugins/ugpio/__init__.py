@@ -75,19 +75,21 @@ class BaseUserGpioDriver(BasePlugin):
         return set(UserGpioModes.ALL)
 
     def register_input(self, pin: int, debounce: float) -> None:
-        raise NotImplementedError
+        _ = pin
+        _ = debounce
 
     def register_output(self, pin: int, initial: Optional[bool]) -> None:
-        raise NotImplementedError
+        _ = pin
+        _ = initial
 
     def prepare(self) -> None:
-        raise NotImplementedError
+        pass
 
     async def run(self) -> None:
-        raise NotImplementedError
+        await aiotools.wait_infinite()
 
     async def cleanup(self) -> None:
-        raise NotImplementedError
+        pass
 
     async def read(self, pin: int) -> bool:
         raise NotImplementedError

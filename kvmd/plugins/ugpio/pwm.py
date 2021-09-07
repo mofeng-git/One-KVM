@@ -97,9 +97,6 @@ class Plugin(BaseUserGpioDriver):
                 logger.error("Can't get PWM chip %d channel %d: %s",
                              self.__chip, pin, tools.efmt(err))
 
-    async def run(self) -> None:
-        await aiotools.wait_infinite()
-
     async def cleanup(self) -> None:
         for (pin, pwm) in self.__pwms.items():
             try:
