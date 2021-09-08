@@ -81,8 +81,8 @@ class Plugin(BaseUserGpioDriver):
         return set([UserGpioModes.OUTPUT])
 
     @classmethod
-    def get_pin_validator(cls) -> Callable[[Any], str]:
-        return (lambda arg: str(valid_gpio_pin(arg)))
+    def get_pin_validator(cls) -> Callable[[Any], Any]:
+        return valid_gpio_pin
 
     def register_output(self, pin: str, initial: Optional[bool]) -> None:
         self.__channels[int(pin)] = initial

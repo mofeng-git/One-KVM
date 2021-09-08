@@ -54,7 +54,7 @@ class Plugin(BaseUserGpioDriver):
         self.__driver = ""
 
     @classmethod
-    def get_pin_validator(cls) -> Callable[[Any], str]:
+    def get_pin_validator(cls) -> Callable[[Any], Any]:
         return str
 
     def prepare(self) -> None:

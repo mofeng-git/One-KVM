@@ -67,8 +67,8 @@ class Plugin(BaseUserGpioDriver):
         }
 
     @classmethod
-    def get_pin_validator(cls) -> Callable[[Any], str]:
-        return (lambda arg: str(valid_gpio_pin(arg)))
+    def get_pin_validator(cls) -> Callable[[Any], Any]:
+        return valid_gpio_pin
 
     def register_input(self, pin: str, debounce: float) -> None:
         self.__input_pins[int(pin)] = aiogp.AioReaderPinParams(False, debounce)

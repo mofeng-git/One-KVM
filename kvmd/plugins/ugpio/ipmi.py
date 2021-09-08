@@ -112,7 +112,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         }
 
     @classmethod
-    def get_pin_validator(cls) -> Callable[[Any], str]:
+    def get_pin_validator(cls) -> Callable[[Any], Any]:
         actions = ["0", *_OUTPUTS, "status", *_OUTPUTS.values()]
         return (lambda arg: check_string_in_list(arg, "IPMI action", actions))
 

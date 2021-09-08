@@ -69,7 +69,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         }
 
     @classmethod
-    def get_pin_validator(cls) -> Callable[[Any], str]:
+    def get_pin_validator(cls) -> Callable[[Any], Any]:
         return str
 
     async def read(self, pin: str) -> bool:

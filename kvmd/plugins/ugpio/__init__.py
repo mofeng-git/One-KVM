@@ -75,7 +75,9 @@ class BaseUserGpioDriver(BasePlugin):
         return set(UserGpioModes.ALL)
 
     @classmethod
-    def get_pin_validator(cls) -> Callable[[Any], str]:
+    def get_pin_validator(cls) -> Callable[[Any], Any]:
+        # XXX: The returned value will be forcibly converted to a string
+        # in kvmd/apps/kvmd/ugpio.py, i.e. AFTER validation.
         raise NotImplementedError
 
     def register_input(self, pin: str, debounce: float) -> None:

@@ -88,8 +88,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         }
 
     @classmethod
-    def get_pin_validator(cls) -> Callable[[Any], str]:
-        return (lambda arg: str(valid_number(arg, min=0, max=3, name="Ezcoo channel")))
+    def get_pin_validator(cls) -> Callable[[Any], Any]:
+        return functools.partial(valid_number, min=0, max=3, name="Ezcoo channel")
 
     def prepare(self) -> None:
         assert self.__proc is None

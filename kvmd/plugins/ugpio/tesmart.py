@@ -21,6 +21,7 @@
 
 
 import asyncio
+import functools
 
 from typing import Tuple
 from typing import Dict
@@ -83,8 +84,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         }
 
     @classmethod
-    def get_pin_validator(cls) -> Callable[[Any], str]:
-        return (lambda arg: str(valid_number(arg, min=0, max=15, name="Tesmart channel")))
+    def get_pin_validator(cls) -> Callable[[Any], Any]:
+        return functools.partial(valid_number, min=0, max=15, name="Tesmart channel")
 
     async def run(self) -> None:
         prev_active = -2
