@@ -25,7 +25,9 @@ import functools
 
 from typing import List
 from typing import Dict
+from typing import Callable
 from typing import Optional
+from typing import Any
 
 from ...logging import get_logger
 
@@ -35,6 +37,7 @@ from ... import aioproc
 
 from ...yamlconf import Option
 
+from ...validators import check_string_in_list
 from ...validators.basic import valid_float_f01
 from ...validators.net import valid_ip_or_host
 from ...validators.net import valid_port
@@ -46,12 +49,12 @@ from . import BaseUserGpioDriver
 
 # =====
 _OUTPUTS = {
-    1: "on",
-    2: "off",
-    3: "cycle",
-    4: "reset",
-    5: "diag",
-    6: "soft",
+    "1": "on",
+    "2": "off",
+    "3": "cycle",
+    "4": "reset",
+    "5": "diag",
+    "6": "soft",
 }
 
 
@@ -108,14 +111,19 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             "state_poll": Option(1.0, type=valid_float_f01),
         }
 
-    def register_input(self, pin: int, debounce: float) -> None:
+    @classmethod
+    def get_pin_validator(cls) -> Callable[[Any], str]:
+        actions = ["0", *_OUTPUTS, "status", *_OUTPUTS.values()]
+        return (lambda arg: check_string_in_list(arg, "IPMI action", actions))
+
+    def register_input(self, pin: str, debounce: float) -> None:
         _ = debounce
-        if pin != 0:
+        if pin not in ["0", "status"]:
             raise RuntimeError(f"Unsupported mode 'input' for pin={pin} on {self}")
 
-    def register_output(self, pin: int, initial: Optional[bool]) -> None:
+    def register_output(self, pin: str, initial: Optional[bool]) -> None:
         _ = initial
-        if pin not in _OUTPUTS:
+        if pin not in [*_OUTPUTS, *_OUTPUTS.values()]:
             raise RuntimeError(f"Unsupported mode 'output' for pin={pin} on {self}")
 
     def prepare(self) -> None:
@@ -131,17 +139,17 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 prev = new
             await asyncio.sleep(self.__state_poll)
 
-    async def read(self, pin: int) -> bool:
+    async def read(self, pin: str) -> bool:
         if not self.__online:
             raise GpioDriverOfflineError(self)
-        if pin == 0:
+        if pin == "0":
             return self.__power
         return False
 
-    async def write(self, pin: int, state: bool) -> None:
+    async def write(self, pin: str, state: bool) -> None:
         if not self.__online:
             raise GpioDriverOfflineError(self)
-        action = _OUTPUTS[pin]
+        action = (_OUTPUTS[pin] if pin.isdigit() else pin)
         try:
             proc = await aioproc.log_process(**self.__make_ipmitool_kwargs(action), logger=get_logger(0))
             if proc.returncode != 0:

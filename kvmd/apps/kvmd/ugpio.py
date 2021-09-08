@@ -77,7 +77,7 @@ class _GpioInput:
     ) -> None:
 
         self.__channel = channel
-        self.__pin: int = config.pin
+        self.__pin: str = config.pin
         self.__inverted: bool = config.inverted
 
         self.__driver = driver
@@ -118,7 +118,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
     ) -> None:
 
         self.__channel = channel
-        self.__pin: int = config.pin
+        self.__pin: str = config.pin
         self.__inverted: bool = config.inverted
 
         self.__switch: bool = config.switch

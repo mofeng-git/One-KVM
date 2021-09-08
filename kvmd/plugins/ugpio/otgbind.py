@@ -23,6 +23,9 @@
 import os
 import asyncio
 
+from typing import Callable
+from typing import Any
+
 from ...logging import get_logger
 
 from ...inotify import InotifyMask
@@ -49,6 +52,10 @@ class Plugin(BaseUserGpioDriver):
 
         self.__udc = udc
         self.__driver = ""
+
+    @classmethod
+    def get_pin_validator(cls) -> Callable[[Any], str]:
+        return str
 
     def prepare(self) -> None:
         (self.__udc, self.__driver) = usb.find_udc(self.__udc)
@@ -83,11 +90,11 @@ class Plugin(BaseUserGpioDriver):
             except Exception:
                 logger.exception("Unexpected OTG-bind watcher error")
 
-    async def read(self, pin: int) -> bool:
+    async def read(self, pin: str) -> bool:
         _ = pin
         return os.path.islink(self.__get_driver_path(self.__udc))
 
-    async def write(self, pin: int, state: bool) -> None:
+    async def write(self, pin: str, state: bool) -> None:
         _ = pin
         with open(self.__get_driver_path("bind" if state else "unbind"), "w") as ctl_file:
             ctl_file.write(f"{self.__udc}\n")

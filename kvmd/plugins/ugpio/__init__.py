@@ -22,6 +22,7 @@
 
 from typing import Set
 from typing import Type
+from typing import Callable
 from typing import Optional
 from typing import Any
 
@@ -51,7 +52,6 @@ class GpioDriverOfflineError(GpioOperationError):
 class UserGpioModes:
     INPUT = "input"
     OUTPUT = "output"
-
     ALL = set([INPUT, OUTPUT])
 
 
@@ -74,11 +74,15 @@ class BaseUserGpioDriver(BasePlugin):
     def get_modes(cls) -> Set[str]:
         return set(UserGpioModes.ALL)
 
-    def register_input(self, pin: int, debounce: float) -> None:
+    @classmethod
+    def get_pin_validator(cls) -> Callable[[Any], str]:
+        raise NotImplementedError
+
+    def register_input(self, pin: str, debounce: float) -> None:
         _ = pin
         _ = debounce
 
-    def register_output(self, pin: int, initial: Optional[bool]) -> None:
+    def register_output(self, pin: str, initial: Optional[bool]) -> None:
         _ = pin
         _ = initial
 
@@ -91,10 +95,10 @@ class BaseUserGpioDriver(BasePlugin):
     async def cleanup(self) -> None:
         pass
 
-    async def read(self, pin: int) -> bool:
+    async def read(self, pin: str) -> bool:
         raise NotImplementedError
 
-    async def write(self, pin: int, state: bool) -> None:
+    async def write(self, pin: str, state: bool) -> None:
         raise NotImplementedError
 
 

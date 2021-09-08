@@ -22,8 +22,10 @@
 
 
 from typing import Dict
-from typing import Optional
 from typing import Set
+from typing import Callable
+from typing import Optional
+from typing import Any
 
 from periphery import PWM
 
@@ -35,6 +37,7 @@ from ... import aiotools
 from ...yamlconf import Option
 
 from ...validators.basic import valid_int_f0
+from ...validators.hw import valid_gpio_pin
 
 from . import GpioDriverOfflineError
 from . import UserGpioModes
@@ -77,11 +80,12 @@ class Plugin(BaseUserGpioDriver):
     def get_modes(cls) -> Set[str]:
         return set([UserGpioModes.OUTPUT])
 
-    def register_input(self, pin: int, debounce: float) -> None:
-        raise RuntimeError(f"Unsupported mode 'input' for pin={pin} on {self}")
+    @classmethod
+    def get_pin_validator(cls) -> Callable[[Any], str]:
+        return (lambda arg: str(valid_gpio_pin(arg)))
 
-    def register_output(self, pin: int, initial: Optional[bool]) -> None:
-        self.__channels[pin] = initial
+    def register_output(self, pin: str, initial: Optional[bool]) -> None:
+        self.__channels[int(pin)] = initial
 
     def prepare(self) -> None:
         logger = get_logger(0)
@@ -106,15 +110,15 @@ class Plugin(BaseUserGpioDriver):
                 get_logger(0).error("Can't cleanup PWM chip %d channel %d: %s",
                                     self.__chip, pin, tools.efmt(err))
 
-    async def read(self, pin: int) -> bool:
+    async def read(self, pin: str) -> bool:
         try:
-            return (self.__pwms[pin].duty_cycle_ns == self.__duty_cycle_push)
+            return (self.__pwms[int(pin)].duty_cycle_ns == self.__duty_cycle_push)
         except Exception:
             raise GpioDriverOfflineError(self)
 
-    async def write(self, pin: int, state: bool) -> None:
+    async def write(self, pin: str, state: bool) -> None:
         try:
-            self.__pwms[pin].duty_cycle_ns = self.__get_duty_cycle(state)
+            self.__pwms[int(pin)].duty_cycle_ns = self.__get_duty_cycle(state)
         except Exception:
             raise GpioDriverOfflineError(self)
 
