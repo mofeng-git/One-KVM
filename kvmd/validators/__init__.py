@@ -52,7 +52,7 @@ def raise_error(arg: Any, name: str, hide: bool=False) -> NoReturn:
 
 def check_not_none(arg: Any, name: str) -> Any:
     if arg is None:
-        raise ValidatorError(f"Empty argument is not a valid {name}")
+        raise ValidatorError(f"None argument is not a valid {name}")
     return arg
 
 
