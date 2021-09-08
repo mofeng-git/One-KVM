@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ========================================================================== #
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -72,7 +72,7 @@ def main() -> None:
         license="GPLv3",
         author="Maxim Devaev",
         author_email="mdevaev@gmail.com",
-        description="The main Pi-KVM daemon",
+        description="The main PiKVM daemon",
         platforms="any",
 
         packages=[

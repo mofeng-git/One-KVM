@@ -1,13 +1,13 @@
 extends ../start.pug
 
 append vars
-	- title = "Pi-KVM IPMI Info"
+	- title = "PiKVM IPMI Info"
 	- main_js = "ipmi/main"
 	- index_link = true
 
 block start
 	p(class="text")
-		| This Pi-KVM device has running #[b kvmd-ipmi] daemon and provides IPMI 2.0 interface for some basic
+		| This PiKVM device has running #[b kvmd-ipmi] daemon and provides IPMI 2.0 interface for some basic
 		| BMC operations like on/off/reset the server.
 	p(class="text")
 		| #[b WARNING!] We strongly don't recommend you to use IPMI in untrusted networks because

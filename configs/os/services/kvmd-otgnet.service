@@ -1,5 +1,5 @@
 [Unit]
-Description=Pi-KVM - OTG network service
+Description=PiKVM - OTG network service
 After=kvmd-otg.service
 Wants=network-pre.target
 After=network-pre.target

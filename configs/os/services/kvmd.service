@@ -1,5 +1,5 @@
 [Unit]
-Description=Pi-KVM - The main daemon
+Description=PiKVM - The main daemon
 After=network.target network-online.target nss-lookup.target
 
 [Service]

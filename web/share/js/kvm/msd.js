@@ -1,6 +1,6 @@
 /*****************************************************************************
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -71,7 +71,7 @@ export function Msd() {
 
 	var __clickRemoveButton = function() {
 		let name = $("msd-image-selector").value;
-		wm.confirm(`Are you sure you want to remove the image<br><b>${name}</b> from Pi-KVM?`).then(function(ok) {
+		wm.confirm(`Are you sure you want to remove the image<br><b>${name}</b> from PiKVM?`).then(function(ok) {
 			if (ok) {
 				let http = tools.makeRequest("POST", `/api/msd/remove?image=${name}`, function() {
 					if (http.readyState === 4) {

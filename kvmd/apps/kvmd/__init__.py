@@ -1,6 +1,6 @@
 # ========================================================================== #
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -44,7 +44,7 @@ from .server import KvmdServer
 def main(argv: Optional[List[str]]=None) -> None:
     config = init(
         prog="kvmd",
-        description="The main Pi-KVM daemon",
+        description="The main PiKVM daemon",
         argv=argv,
         check_run=True,
         load_auth=True,

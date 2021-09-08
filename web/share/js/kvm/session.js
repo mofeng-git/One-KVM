@@ -1,6 +1,6 @@
 /*****************************************************************************
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -59,7 +59,7 @@ export function Session() {
 		if (state !== null) {
 			let text = JSON.stringify(state, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
 			$("about-meta").innerHTML = `
-				<span class="code-comment">// The Pi-KVM metadata.<br>
+				<span class="code-comment">// The PiKVM metadata.<br>
 				// You can get this JSON using handle <a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a>.<br>
 				// In the standard configuration this data<br>
 				// is specified in the file /etc/kvmd/meta.yaml.</span><br>
@@ -68,10 +68,10 @@ export function Session() {
 			`;
 			if (state.server && state.server.host) {
 				$("kvmd-meta-server-host").innerHTML = `Server: ${state.server.host}`;
-				document.title = `Pi-KVM Session: ${state.server.host}`;
+				document.title = `PiKVM Session: ${state.server.host}`;
 			} else {
 				$("kvmd-meta-server-host").innerHTML = "";
-				document.title = "Pi-KVM Session";
+				document.title = "PiKVM Session";
 			}
 
 			// Don't use this option, it may be removed in any time

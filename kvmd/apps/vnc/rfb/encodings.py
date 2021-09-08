@@ -1,6 +1,6 @@
 # ========================================================================== #
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2020  Maxim Devaev <mdevaev@gmail.com>                    #
 #                                                                            #
@@ -39,7 +39,7 @@ class RfbEncodings:
         [10,   20,  30,  40,  50,  60,  70,  80,  90, 100],
     ))
 
-    H264 = 50  # Pi-KVM H264 Encoding
+    H264 = 50  # Open H.264 Encoding
 
 
 @dataclasses.dataclass(frozen=True)

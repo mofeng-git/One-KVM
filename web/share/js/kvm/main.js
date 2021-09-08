@@ -1,6 +1,6 @@
 /*****************************************************************************
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -33,7 +33,7 @@ import {Session} from "./session.js";
 export function main() {
 	if (checkBrowser()) {
 		window.onbeforeunload = function(event) {
-			let text = "Are you sure you want to close Pi-KVM session?";
+			let text = "Are you sure you want to close PiKVM session?";
 			event.returnValue = text;
 			return text;
 		};

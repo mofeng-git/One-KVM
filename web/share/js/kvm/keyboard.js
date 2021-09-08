@@ -1,6 +1,6 @@
 /*****************************************************************************
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -123,7 +123,7 @@ export function Keyboard(__recordWsEvent) {
 			}
 		} else {
 			if (is_captured) {
-				title = "Keyboard captured, Pi-KVM offline";
+				title = "Keyboard captured, PiKVM offline";
 			}
 		}
 		$("hid-keyboard-led").className = led;

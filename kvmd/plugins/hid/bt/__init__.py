@@ -1,6 +1,6 @@
 # ========================================================================== #
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -106,12 +106,12 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "manufacturer": Option("Pi-KVM"),
+            "manufacturer": Option("PiKVM"),
             "product":      Option("HID Device"),
             "description":  Option("Bluetooth Keyboard & Mouse"),
 
             "iface":            Option("hci0", type=valid_stripped_string_not_empty),
-            "alias":            Option("Pi-KVM HID"),
+            "alias":            Option("PiKVM HID"),
 
             "pairing_required": Option(True,   type=valid_bool),
             "auth_required":    Option(False,  type=valid_bool),

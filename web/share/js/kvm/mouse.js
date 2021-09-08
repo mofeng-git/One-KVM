@@ -1,6 +1,6 @@
 /*****************************************************************************
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -142,7 +142,7 @@ export function Mouse(__getResolution, __recordWsEvent) {
 			}
 		} else {
 			if (is_captured) {
-				title = "Mouse captured, Pi-KVM offline";
+				title = "Mouse captured, PiKVM offline";
 			}
 		}
 		$("hid-mouse-led").className = led;

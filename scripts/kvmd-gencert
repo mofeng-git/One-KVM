@@ -1,7 +1,7 @@
 #!/bin/bash
 # ========================================================================== #
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -55,7 +55,7 @@ cd /etc/kvmd/$target/ssl
 
 openssl ecparam -out server.key -name prime256v1 -genkey
 openssl req -new -x509 -sha256 -nodes -key server.key -out server.crt -days 3650 \
-	-subj "/C=RU/ST=Moscow/L=Moscow/O=Pi-KVM/OU=Pi-KVM/CN=localhost"
+	-subj "/C=RU/ST=Moscow/L=Moscow/O=PiKVM/OU=PiKVM/CN=localhost"
 
 chown root:kvmd-$target /etc/kvmd/$target/ssl/*
 chmod 440 server.key

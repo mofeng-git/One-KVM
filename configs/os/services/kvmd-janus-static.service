@@ -1,5 +1,5 @@
 [Unit]
-Description=Pi-KVM - Janus WebRTC Gateway (Static Config)
+Description=PiKVM - Janus WebRTC Gateway (Static Config)
 After=network.target network-online.target nss-lookup.target kvmd.service
 
 [Service]

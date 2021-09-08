@@ -1,5 +1,5 @@
 [Unit]
-Description=Pi-KVM - HTTP entrypoint
+Description=PiKVM - HTTP entrypoint
 After=network.target network-online.target nss-lookup.target kvmd.service
 
 [Service]

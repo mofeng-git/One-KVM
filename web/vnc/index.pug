@@ -1,13 +1,13 @@
 extends ../start.pug
 
 append vars
-	- title = "Pi-KVM VNC Info"
+	- title = "PiKVM VNC Info"
 	- main_js = "vnc/main"
 	- index_link = true
 
 block start
 	p(class="text")
-		| This Pi-KVM device has running #[b kvmd-vnc] daemon and provides VNC access to the server.
+		| This PiKVM device has running #[b kvmd-vnc] daemon and provides VNC access to the server.
 	p(class="text")
 		| #[b WARNING!] We strongly don't recommend you to use VNC in untrusted networks without
 		| enabled X.509 or TLS encryption. Otherwise your passwords are transmitted in a plain text

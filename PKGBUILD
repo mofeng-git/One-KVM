@@ -33,7 +33,7 @@ done
 pkgbase=kvmd
 pkgver=3.23
 pkgrel=1
-pkgdesc="The main Pi-KVM daemon"
+pkgdesc="The main PiKVM daemon"
 url="https://github.com/pikvm/kvmd"
 license=(GPL)
 arch=(any)
@@ -159,7 +159,7 @@ for _variant in "${_variants[@]}"; do
 	eval "package_kvmd-platform-$_platform-$_board() {
 		cd \"kvmd-\$pkgver\"
 
-		pkgdesc=\"Pi-KVM platform configs - $_platform for $_board\"
+		pkgdesc=\"PiKVM platform configs - $_platform for $_board\"
 		depends=(kvmd=$pkgver-$pkgrel \"raspberrypi-bootloader>=20210216-1\" \"raspberrypi-bootloader-x>=20210216-1\" \"raspberrypi-firmware>=20210128-2\" \"linux-firmware>=20210221.b79d239-1\")
 
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then

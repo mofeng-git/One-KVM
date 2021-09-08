@@ -1,5 +1,5 @@
 [Unit]
-Description=Pi-KVM - IPMI to KVMD proxy
+Description=PiKVM - IPMI to KVMD proxy
 After=kvmd.service
 
 [Service]

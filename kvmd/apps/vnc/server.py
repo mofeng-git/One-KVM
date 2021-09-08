@@ -1,6 +1,6 @@
 # ========================================================================== #
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2020  Maxim Devaev <mdevaev@gmail.com>                    #
 #                                                                            #
@@ -68,7 +68,7 @@ from .render import make_text_jpeg
 class _SharedParams:
     width: int = dataclasses.field(default=800)
     height: int = dataclasses.field(default=600)
-    name: str = dataclasses.field(default="Pi-KVM")
+    name: str = dataclasses.field(default="PiKVM")
 
 
 class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
@@ -178,7 +178,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 host = None
             else:
                 if isinstance(host, str):
-                    name = f"Pi-KVM: {host}"
+                    name = f"PiKVM: {host}"
                     async with self.__lock:
                         if self._encodings.has_rename:
                             await self._send_rename(name)

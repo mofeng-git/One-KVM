@@ -1,6 +1,6 @@
 # ========================================================================== #
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -89,7 +89,7 @@ def _print_invalidate_tip(prepend_nl: bool) -> None:
         {gray}# Note: Users logged in with this username will stay logged in.
         # To invalidate their cookies you need to restart kvmd & kvmd-nginx:
         #    {reset}{blue}systemctl restart kvmd kvmd-nginx{gray}
-        # Be careful, this will break your connection to the Pi-KVM
+        # Be careful, this will break your connection to the PiKVM
         # and may affect the GPIO relays state. Also don't forget to edit
         # the files {reset}{blue}/etc/kvmd/{{vncpasswd,ipmipasswd}}{gray} and restart
         # the corresponding services {reset}{blue}kvmd-vnc{gray} & {reset}{blue}kvmd-ipmi{gray} if necessary.{reset}
