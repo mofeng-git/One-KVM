@@ -298,13 +298,13 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
 
             scheme["kvmd"]["gpio"]["scheme"][channel] = {
                 "driver":   Option("__gpio__", type=functools.partial(valid_ugpio_driver, variants=set(drivers))),
-                "pin":      Option(None, type=drivers[driver].get_pin_validator()),
-                "mode":     Option("", type=functools.partial(valid_ugpio_mode, variants=drivers[driver].get_modes())),
-                "inverted": Option(False, type=valid_bool),
+                "pin":      Option(None,       type=drivers[driver].get_pin_validator()),
+                "mode":     Option("",         type=functools.partial(valid_ugpio_mode, variants=drivers[driver].get_modes())),
+                "inverted": Option(False,      type=valid_bool),
                 **({
-                    "busy_delay": Option(0.2, type=valid_float_f01),
+                    "busy_delay": Option(0.2,   type=valid_float_f01),
                     "initial":    Option(False, type=(lambda arg: (valid_bool(arg) if arg is not None else None))),
-                    "switch":     Option(True, type=valid_bool),
+                    "switch":     Option(True,  type=valid_bool),
                     "pulse": {  # type: ignore
                         "delay":     Option(0.1, type=valid_float_f0),
                         "min_delay": Option(0.1, type=valid_float_f01),
