@@ -1,3 +1,13 @@
+-
+	sysrq = { 
+	"R": "Turn off keyboard raw mode. Set it to XLATE.",
+	"E": "Send a SIGTERM to all processes, except for init.",
+	"I": "Send a SIGKILL to all processes, except for init.",
+	"S": "Attempt to sync all mounted filesystems.",
+	"U": "Attempt to remount all mounted filesystems read-only.",
+	"B": "Immediately reboot the system without syncing or unmounting your disks."
+	}
+  
 li(class="right")
 	a(class="menu-button" href="#") Shortcuts
 	div(data-dont-hide-menu class="menu")
@@ -33,5 +43,5 @@ li(class="right")
 		hr
 		div(class="buttons")
 			div(class="buttons-row")
-				each key in ["R", "E", "I", "S", "U", "B"]
-					button(data-shortcut=`AltLeft PrintScreen Key${key}` class="row16") #{key}
+				each val, key in sysrq
+					button(data-shortcut=`AltLeft PrintScreen Key${key}` class="row16" title=`${val}`) #{key}
