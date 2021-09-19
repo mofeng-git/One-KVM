@@ -53,7 +53,7 @@ div.stream-box-offline::after {
 	background: radial-gradient(transparent 20%, black);
 }
 div.stream-box-mouse-enabled {
-	cursor: url("../../svg/stream-mouse-cursor.svg"), pointer;
+	cursor: url("../../svg/stream-mouse-cursor.svg") 5 5, pointer;
 }
 
 img#stream-image,
