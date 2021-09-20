@@ -47,7 +47,7 @@ export function Session() {
 	var __streamer = new Streamer();
 	var __recorder = new Recorder();
 	var __hid = new Hid(__streamer.getResolution, __recorder);
-	var __atx = new Atx();
+	var __atx = new Atx(__recorder);
 	var __msd = new Msd();
 	var __gpio = new Gpio(__recorder);
 

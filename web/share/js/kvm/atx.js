@@ -27,7 +27,7 @@ import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
 
 
-export function Atx() {
+export function Atx(__recorder) {
 	var self = this;
 
 	/************************************************************************/
@@ -82,6 +82,7 @@ export function Atx() {
 					}
 				}
 			});
+			__recorder.recordAtxButtonEvent(button);
 		};
 
 		if ($("atx-ask-switch").checked) {
