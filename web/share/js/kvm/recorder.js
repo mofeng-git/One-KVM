@@ -217,7 +217,7 @@ export function Recorder() {
 					}
 				}, event.event.text, "text/plain");
 				return;
-			} else if (["key", "mouse_button", "mouse_move", "mouse_wheel"].includes(event.event_type)) {
+			} else if (["key", "mouse_button", "mouse_move", "mouse_wheel", "gpio_switch", "gpio_pulse"].includes(event.event_type)) {
 				__ws.send(JSON.stringify(event));
 			}
 			index += 1;

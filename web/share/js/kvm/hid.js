@@ -26,22 +26,19 @@
 import {tools, $, $$$} from "../tools.js";
 import {wm} from "../wm.js";
 
-import {Recorder} from "./recorder.js";
 import {Keyboard} from "./keyboard.js";
 import {Mouse} from "./mouse.js";
 
 
-export function Hid(__getResolution) {
+export function Hid(__getResolution, __recorder) {
 	var self = this;
 
 	/************************************************************************/
 
-	var __recorder = null;
 	var __keyboard = null;
 	var __mouse = null;
 
 	var __init__ = function() {
-		__recorder = new Recorder();
 		__keyboard = new Keyboard(__recorder.recordWsEvent);
 		__mouse = new Mouse(__getResolution, __recorder.recordWsEvent);
 
@@ -98,7 +95,6 @@ export function Hid(__getResolution) {
 		if (!ws) {
 			self.setState(null);
 		}
-		__recorder.setSocket(ws);
 		__keyboard.setSocket(ws);
 		__mouse.setSocket(ws);
 	};

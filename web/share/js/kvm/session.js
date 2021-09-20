@@ -26,6 +26,7 @@
 import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
 
+import {Recorder} from "./recorder.js";
 import {Hid} from "./hid.js";
 import {Atx} from "./atx.js";
 import {Msd} from "./msd.js";
@@ -44,10 +45,11 @@ export function Session() {
 	var __missed_heartbeats = 0;
 
 	var __streamer = new Streamer();
-	var __hid = new Hid(__streamer.getResolution);
+	var __recorder = new Recorder();
+	var __hid = new Hid(__streamer.getResolution, __recorder);
 	var __atx = new Atx();
 	var __msd = new Msd();
-	var __gpio = new Gpio();
+	var __gpio = new Gpio(__recorder.recordWsEvent);
 
 	var __init__ = function() {
 		__startSession();
@@ -227,6 +229,7 @@ export function Session() {
 		tools.debug("Session: socket opened:", event);
 		$("link-led").className = "led-green";
 		$("link-led").title = "Connected";
+		__recorder.setSocket(__ws);
 		__hid.setSocket(__ws);
 		__missed_heartbeats = 0;
 		__ping_timer = setInterval(__pingServer, 1000);
@@ -272,6 +275,7 @@ export function Session() {
 
 		__gpio.setState(null);
 		__hid.setSocket(null);
+		__recorder.setSocket(null);
 		__atx.setState(null);
 		__msd.setState(null);
 		__streamer.setState(null);
