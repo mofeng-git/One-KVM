@@ -71,6 +71,14 @@ export function Recorder() {
 		__recordEvent({"event_type": "print", "event": {"text": text}});
 	};
 
+	self.recordGpioSwitchEvent = function(channel, to) {
+		__recordEvent({"event_type": "gpio_switch", "event": {"channel": channel, "state": to}});
+	};
+
+	self.recordGpioPulseEvent = function(channel) {
+		__recordEvent({"event_type": "gpio_pulse", "event": {"channel": channel}});
+	};
+
 	var __recordEvent = function(event) {
 		if (__recording) {
 			let now = new Date().getTime();
@@ -163,8 +171,13 @@ export function Recorder() {
 							__checkType(event.event.delta, "object", "Non-object mouse wheel delta");
 							__checkInt(event.event.delta.x, "Non-int mouse delta X");
 							__checkInt(event.event.delta.y, "Non-int mouse delta Y");
+						} else if (event.event_type === "gpio_switch") {
+							__checkType(event.event.channel, "string", "Non-string GPIO channel");
+							__checkType(event.event.state, "boolean", "Non-bool GPIO state");
+						} else if (event.event_type === "gpio_pulse") {
+							__checkType(event.event.channel, "string", "Non-string GPIO channel");
 						} else {
-							throw "Unknown event type";
+							throw `Unknown event type: ${event.event_type}`;
 						}
 
 						events.push(event);
@@ -217,7 +230,25 @@ export function Recorder() {
 					}
 				}, event.event.text, "text/plain");
 				return;
-			} else if (["key", "mouse_button", "mouse_move", "mouse_wheel", "gpio_switch", "gpio_pulse"].includes(event.event_type)) {
+			} else if (["gpio_switch", "gpio_pulse"].includes(event.event_type)) {
+				let path = "/api/gpio";
+				if (event.event_type === "gpio_switch") {
+					path += `/switch?channel=${event.event.channel}&state=${event.event.to}`;
+				} else { // gpio_pulse
+					path += `/pulse?channel=${event.event.channel}`;
+				}
+				let http = tools.makeRequest("POST", path, function() {
+					if (http.readyState === 4) {
+						if (http.status !== 200) {
+							wm.error("GPIO error:<br>", http.responseText);
+							__stopProcess();
+						} else if (http.status === 200) {
+							__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);
+						}
+					}
+				});
+				return;
+			} else if (["key", "mouse_button", "mouse_move", "mouse_wheel"].includes(event.event_type)) {
 				__ws.send(JSON.stringify(event));
 			}
 			index += 1;

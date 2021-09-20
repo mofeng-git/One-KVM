@@ -49,7 +49,7 @@ export function Session() {
 	var __hid = new Hid(__streamer.getResolution, __recorder);
 	var __atx = new Atx();
 	var __msd = new Msd();
-	var __gpio = new Gpio(__recorder.recordWsEvent);
+	var __gpio = new Gpio(__recorder);
 
 	var __init__ = function() {
 		__startSession();

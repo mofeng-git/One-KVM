@@ -27,7 +27,7 @@ import {tools, $, $$$} from "../tools.js";
 import {wm} from "../wm.js";
 
 
-export function Gpio(__recordWsEvent) {
+export function Gpio(__recorder) {
 	var self = this;
 
 	/************************************************************************/
@@ -167,13 +167,9 @@ export function Gpio(__recordWsEvent) {
 		if (to === "0" && el.hasAttribute("data-confirm-off")) {
 			confirm = el.getAttribute("data-confirm-off");
 		}
-		let event = {
-			"event_type": "gpio_switch",
-			"event": {"channel": channel, "state": to, "wait": 0},
-		};
 		let act = () => {
 			__sendPost(`/api/gpio/switch?channel=${channel}&state=${to}`);
-			__recordWsEvent(event);
+			__recorder.recordGpioSwitchEvent(channel, to);
 		};
 		if (confirm) {
 			wm.confirm(confirm).then(function(ok) {
@@ -191,13 +187,9 @@ export function Gpio(__recordWsEvent) {
 	var __pulseChannel = function(el) {
 		let channel = el.getAttribute("data-channel");
 		let confirm = el.getAttribute("data-confirm");
-		let event = {
-			"event_type": "gpio_pulse",
-			"event": {"channel": channel, "delay": 0, "wait": 0},
-		};
 		let act = () => {
 			__sendPost(`/api/gpio/pulse?channel=${channel}`);
-			__recordWsEvent(event);
+			__recorder.recordGpioPulseEvent(channel);
 		};
 		if (confirm) {
 			wm.confirm(confirm).then(function(ok) { if (ok) act(); });
