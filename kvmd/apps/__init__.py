@@ -64,6 +64,7 @@ from ..validators.basic import valid_stripped_string
 from ..validators.basic import valid_stripped_string_not_empty
 from ..validators.basic import valid_bool
 from ..validators.basic import valid_number
+from ..validators.basic import valid_int_f0
 from ..validators.basic import valid_int_f1
 from ..validators.basic import valid_float_f0
 from ..validators.basic import valid_float_f01
@@ -690,5 +691,11 @@ def _get_config_scheme() -> Dict:
             ], type=valid_command),
             "cmd_remove": Option([], type=valid_options),
             "cmd_append": Option([], type=valid_options),
+        },
+
+        "watchdog": {
+            "device":   Option(0,   type=valid_int_f0),
+            "timeout":  Option(300, type=valid_int_f1),
+            "interval": Option(30,  type=valid_int_f1),
         },
     }

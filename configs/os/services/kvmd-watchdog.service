@@ -1,0 +1,14 @@
+[Unit]
+Description=PiKVM - RTC-based hardware watchdog
+After=systemd-modules-load.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+
+ExecStart=/usr/bin/kvmd-watchdog run
+TimeoutStopSec=3
+
+[Install]
+WantedBy=multi-user.target
