@@ -99,8 +99,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "sync_chunk_size":   Option(4194304, type=functools.partial(valid_number, min=1024)),
 
             "gpio_device":    Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="gpio_device_path"),
-            "target_pin":     Option(-1, type=valid_gpio_pin),
-            "reset_pin":      Option(-1, type=valid_gpio_pin),
+            "target_pin":     Option(-1,    type=valid_gpio_pin),
+            "reset_pin":      Option(-1,    type=valid_gpio_pin),
             "reset_inverted": Option(False, type=valid_bool),
 
             "device":       Option("",  type=valid_abs_path, unpack_as="device_path"),

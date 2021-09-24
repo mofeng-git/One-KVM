@@ -352,7 +352,7 @@ def _get_config_scheme() -> Dict:
                 "enabled": Option(True, type=valid_bool),
 
                 "internal": {
-                    "type":  Option("htpasswd"),
+                    "type":        Option("htpasswd"),
                     "force_users": Option([], type=valid_users_list),
                     # Dynamic content
                 },
@@ -375,7 +375,7 @@ def _get_config_scheme() -> Dict:
             "hid": {
                 "type": Option("", type=valid_stripped_string_not_empty),
 
-                "keymap": Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
+                "keymap":      Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
                 "ignore_keys": Option([], type=functools.partial(valid_string_list, subval=valid_hid_key)),
 
                 "mouse_x_range": {
@@ -474,13 +474,13 @@ def _get_config_scheme() -> Dict:
         },
 
         "otg": {
-            "vendor_id":    Option(0x1D6B, type=valid_otg_id),  # Linux Foundation
-            "product_id":   Option(0x0104, type=valid_otg_id),  # Multifunction Composite Gadget
-            "manufacturer": Option("PiKVM"),
-            "product":      Option("Composite KVM Device"),
-            "serial":       Option("CAFEBABE"),
+            "vendor_id":     Option(0x1D6B, type=valid_otg_id),  # Linux Foundation
+            "product_id":    Option(0x0104, type=valid_otg_id),  # Multifunction Composite Gadget
+            "manufacturer":  Option("PiKVM"),
+            "product":       Option("Composite KVM Device"),
+            "serial":        Option("CAFEBABE"),
             "usb_version":   Option(0x0200, type=valid_otg_id),
-            "remote_wakeup": Option(False, type=valid_bool),
+            "remote_wakeup": Option(False,  type=valid_bool),
 
             "gadget":     Option("kvmd", type=valid_otg_gadget),
             "config":     Option("PiKVM device", type=valid_stripped_string_not_empty),
@@ -507,8 +507,8 @@ def _get_config_scheme() -> Dict:
                 "ethernet": {
                     "enabled":  Option(False, type=valid_bool),
                     "driver":   Option("ecm", type=valid_otg_ethernet),
-                    "host_mac": Option("", type=valid_mac, if_empty=""),
-                    "kvm_mac":  Option("", type=valid_mac, if_empty=""),
+                    "host_mac": Option("",    type=valid_mac, if_empty=""),
+                    "kvm_mac":  Option("",    type=valid_mac, if_empty=""),
                 },
 
                 "drives": {
@@ -528,14 +528,14 @@ def _get_config_scheme() -> Dict:
         "otgnet": {
             "iface": {
                 "net":    Option("169.254.0.0/28", type=functools.partial(valid_net, v6=False)),
-                "ip_cmd": Option(["/usr/bin/ip"], type=valid_command),
+                "ip_cmd": Option(["/usr/bin/ip"],  type=valid_command),
             },
 
             "firewall": {
-                "allow_icmp":   Option(True, type=valid_bool),
-                "allow_tcp":    Option([],   type=valid_ports_list),
-                "allow_udp":    Option([67], type=valid_ports_list),
-                "forward_iface": Option("", type=valid_stripped_string),
+                "allow_icmp":    Option(True, type=valid_bool),
+                "allow_tcp":     Option([],   type=valid_ports_list),
+                "allow_udp":     Option([67], type=valid_ports_list),
+                "forward_iface": Option("",   type=valid_stripped_string),
                 "iptables_cmd":  Option(["/usr/sbin/iptables", "--wait=5"], type=valid_command),
             },
 
@@ -614,9 +614,9 @@ def _get_config_scheme() -> Dict:
                 "no_delay": Option(True, type=valid_bool),
                 "keepalive": {
                     "enabled":  Option(True, type=valid_bool, unpack_as="keepalive_enabled"),
-                    "idle":     Option(10, type=functools.partial(valid_number, min=1, max=3600), unpack_as="keepalive_idle"),
-                    "interval": Option(3, type=functools.partial(valid_number, min=1, max=60), unpack_as="keepalive_interval"),
-                    "count":    Option(3, type=functools.partial(valid_number, min=1, max=10), unpack_as="keepalive_count"),
+                    "idle":     Option(10,   type=functools.partial(valid_number, min=1, max=3600), unpack_as="keepalive_idle"),
+                    "interval": Option(3,    type=functools.partial(valid_number, min=1, max=60), unpack_as="keepalive_interval"),
+                    "count":    Option(3,    type=functools.partial(valid_number, min=1, max=10), unpack_as="keepalive_count"),
                 },
 
                 "tls": {

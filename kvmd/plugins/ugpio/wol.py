@@ -64,7 +64,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
     def get_plugin_options(cls) -> Dict:
         return {
             "ip":   Option("255.255.255.255", type=functools.partial(valid_ip, v6=False)),
-            "port": Option(9, type=valid_port),
+            "port": Option(9,  type=valid_port),
             "mac":  Option("", type=valid_mac, if_empty=""),
         }
 

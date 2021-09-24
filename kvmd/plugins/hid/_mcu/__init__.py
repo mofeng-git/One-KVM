@@ -151,11 +151,11 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
             "reset_inverted": Option(False, type=valid_bool),
             "reset_delay":    Option(0.1,   type=valid_float_f01),
 
-            "read_retries":     Option(5,      type=valid_int_f1),
-            "common_retries":   Option(5,      type=valid_int_f1),
-            "retries_delay":    Option(0.5,    type=valid_float_f01),
-            "errors_threshold": Option(5,      type=valid_int_f0),
-            "noop":             Option(False,  type=valid_bool),
+            "read_retries":     Option(5,     type=valid_int_f1),
+            "common_retries":   Option(5,     type=valid_int_f1),
+            "retries_delay":    Option(0.5,   type=valid_float_f01),
+            "errors_threshold": Option(5,     type=valid_int_f0),
+            "noop":             Option(False, type=valid_bool),
         }
 
     def sysprep(self) -> None:

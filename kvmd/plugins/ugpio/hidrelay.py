@@ -75,7 +75,7 @@ class Plugin(BaseUserGpioDriver):
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "device":     Option("", type=valid_abs_path, unpack_as="device_path"),
+            "device":     Option("",  type=valid_abs_path, unpack_as="device_path"),
             "state_poll": Option(5.0, type=valid_float_f01),
         }
 

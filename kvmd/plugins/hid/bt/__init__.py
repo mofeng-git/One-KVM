@@ -110,17 +110,17 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             "product":      Option("HID Device"),
             "description":  Option("Bluetooth Keyboard & Mouse"),
 
-            "iface":            Option("hci0", type=valid_stripped_string_not_empty),
-            "alias":            Option("PiKVM HID"),
+            "iface": Option("hci0", type=valid_stripped_string_not_empty),
+            "alias": Option("PiKVM HID"),
 
-            "pairing_required": Option(True,   type=valid_bool),
-            "auth_required":    Option(False,  type=valid_bool),
-            "control_public":   Option(True,   type=valid_bool),
-            "unpair_on_close":  Option(True,   type=valid_bool),
+            "pairing_required": Option(True,  type=valid_bool),
+            "auth_required":    Option(False, type=valid_bool),
+            "control_public":   Option(True,  type=valid_bool),
+            "unpair_on_close":  Option(True,  type=valid_bool),
 
-            "max_clients":      Option(1,      type=valid_int_f1),
-            "socket_timeout":   Option(5.0,    type=valid_float_f01),
-            "select_timeout":   Option(1.0,    type=valid_float_f01),
+            "max_clients":    Option(1,   type=valid_int_f1),
+            "socket_timeout": Option(5.0, type=valid_float_f01),
+            "select_timeout": Option(1.0, type=valid_float_f01),
         }
 
     def sysprep(self) -> None:
