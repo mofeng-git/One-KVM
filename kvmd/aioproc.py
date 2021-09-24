@@ -21,6 +21,7 @@
 
 
 import os
+import signal
 import asyncio
 import asyncio.subprocess
 import logging
@@ -96,7 +97,7 @@ async def kill_process(proc: asyncio.subprocess.Process, wait: float, logger: lo
             await asyncio.sleep(wait)
             if proc.returncode is None:
                 try:
-                    proc.kill()
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                 except Exception:
                     if proc.returncode is not None:
                         raise
