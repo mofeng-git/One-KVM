@@ -149,6 +149,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
     async def write(self, pin: str, state: bool) -> None:
         if not self.__online:
             raise GpioDriverOfflineError(self)
+        if not state:
+            return
         action = (_OUTPUTS[pin] if pin.isdigit() else pin)
         try:
             proc = await aioproc.log_process(**self.__make_ipmitool_kwargs(action), logger=get_logger(0))
