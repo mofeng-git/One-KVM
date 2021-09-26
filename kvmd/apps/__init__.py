@@ -694,7 +694,7 @@ def _get_config_scheme() -> Dict:
         },
 
         "watchdog": {
-            "device":   Option(0,   type=valid_int_f0),
+            "rtc":      Option(0,   type=valid_int_f0),
             "timeout":  Option(300, type=valid_int_f1),
             "interval": Option(30,  type=valid_int_f1),
         },

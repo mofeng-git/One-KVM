@@ -42,27 +42,27 @@ class RtcIsNotAvailableError(Exception):
 
 
 # =====
-def _join_rtc(device: int, key: str) -> str:
-    return f"{env.SYSFS_PREFIX}/sys/class/rtc/rtc{device}/{key}"
+def _join_rtc(rtc: int, key: str) -> str:
+    return f"{env.SYSFS_PREFIX}/sys/class/rtc/rtc{rtc}/{key}"
 
 
-def _read_int(device: int, key: str) -> int:
-    with open(_join_rtc(device, key)) as value_file:
+def _read_int(rtc: int, key: str) -> int:
+    with open(_join_rtc(rtc, key)) as value_file:
         return int(value_file.read().strip() or "0")
 
 
-def _write_int(device: int, key: str, value: int) -> None:
-    with open(_join_rtc(device, key), "w") as value_file:
+def _write_int(rtc: int, key: str, value: int) -> None:
+    with open(_join_rtc(rtc, key), "w") as value_file:
         value_file.write(str(value))
 
 
-def _reset_alarm(device: int, timeout: int) -> None:
-    now = _read_int(device, "since_epoch")
+def _reset_alarm(rtc: int, timeout: int) -> None:
+    now = _read_int(rtc, "since_epoch")
     if now == 0:
         raise RtcIsNotAvailableError("Current UNIX time == 0")
     try:
         for wake in [0, now + timeout]:
-            _write_int(device, "wakealarm", wake)
+            _write_int(rtc, "wakealarm", wake)
     except OSError as err:
         if err.errno != errno.EIO:
             raise
@@ -72,30 +72,30 @@ def _reset_alarm(device: int, timeout: int) -> None:
 # =====
 def _cmd_run(config: Section) -> None:
     logger = get_logger(0)
-    logger.info("Running watchdog loop on RTC%d ...", config.device)
+    logger.info("Running watchdog loop on RTC%d ...", config.rtc)
     fail = False
     try:
         while True:
             try:
-                _reset_alarm(config.device, config.timeout)
+                _reset_alarm(config.rtc, config.timeout)
             except RtcIsNotAvailableError as err:
                 if not fail:
-                    logger.error("RTC%d is not available now: %s; waiting ...", config.device, err)
+                    logger.error("RTC%d is not available now: %s; waiting ...", config.rtc, err)
                     fail = True
             else:
                 if fail:
-                    logger.info("RTC%d is available, working ...", config.device)
+                    logger.info("RTC%d is available, working ...", config.rtc)
                     fail = False
             time.sleep(config.interval)
     except (SystemExit, KeyboardInterrupt):
         if not fail:
-            _reset_alarm(config.device, config.timeout)
+            _reset_alarm(config.rtc, config.timeout)
             logger.info("The watchdog remains alarmed. Use 'kvmd-watchdog cancel' to disarm it")
     logger.info("Bye-bye")
 
 
 def _cmd_cancel(config: Section) -> None:
-    _write_int(config.device, "wakealarm", 0)
+    _write_int(config.rtc, "wakealarm", 0)
 
 
 # =====
