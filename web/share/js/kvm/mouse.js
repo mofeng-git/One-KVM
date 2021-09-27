@@ -38,6 +38,7 @@ export function Mouse(__getResolution, __recordWsEvent) {
 
 	var __keypad = null;
 
+	var __timer = null;
 	var __current_pos = {x: 0, y: 0};
 	var __sent_pos = {x: 0, y: 0};
 	var __wheel_delta = {x: 0, y: 0};
@@ -62,6 +63,11 @@ export function Mouse(__getResolution, __recordWsEvent) {
 		$("stream-box").onwheel = __streamWheelHandler;
 		$("stream-box").ontouchstart = (event) => __streamTouchMoveHandler(event);
 
+		let rate_slider = $("hid-mouse-rate-slider");
+		tools.slider.setParams(rate_slider, 10, 100, 10, 100);
+		rate_slider.oninput = rate_slider.onchange = __updateRate;
+		rate_slider.value = tools.storage.get("hid.mouse.rate", 100);
+
 		let sens_slider = $("hid-mouse-sens-slider");
 		tools.slider.setParams(sens_slider, 0.1, 1.9, 0.1, 1);
 		sens_slider.oninput = sens_slider.onchange = __updateRelativeSens;
@@ -70,7 +76,7 @@ export function Mouse(__getResolution, __recordWsEvent) {
 
 		tools.storage.bindSimpleSwitch($("hid-mouse-squash-switch"), "hid.mouse.squash", true);
 
-		setInterval(__sendMove, 100);
+		__updateRate(); // set __timer
 	};
 
 	/************************************************************************/
@@ -102,6 +108,16 @@ export function Mouse(__getResolution, __recordWsEvent) {
 
 	self.releaseAll = function() {
 		__keypad.releaseAll();
+	};
+
+	var __updateRate = function() {
+		let rate = parseInt($("hid-mouse-rate-slider").value);
+		$("hid-mouse-rate-value").innerHTML = rate;
+		tools.storage.set("hid.mouse.rate", rate);
+		if (__timer) {
+			clearInterval(__timer);
+		}
+		__timer = setInterval(__sendMove, rate);
 	};
 
 	var __updateRelativeSens = function() {
