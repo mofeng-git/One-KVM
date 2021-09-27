@@ -123,6 +123,14 @@ ul#navbar li div.menu-active {
 	border-top: var(--border-navbar-menu-top-thin) !important;
 }
 
+ul#navbar li div.menu details summary {
+	cursor: pointer;
+	outline: none;
+	text-decoration: underline;
+	margin: 0 15px 0 15px;
+	font-size: 12px;
+}
+
 ul#navbar li div.menu div.buttons {
 	background-color: var(--cs-control-default-bg);
 }
