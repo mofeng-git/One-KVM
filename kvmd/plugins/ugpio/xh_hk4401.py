@@ -174,7 +174,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
             if found:
                 try:
-                    channel = int(found[-1][2:4])-1
+                    channel = int(found[-1][2:4]) - 1
                 except Exception:
                     return (None, data)
                 assert 0 <= channel <= 3
@@ -182,11 +182,11 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     def __send_channel(self, tty: serial.Serial, channel: int) -> None:
         assert 0 <= channel <= 3
-        cmd = "SW{port}\r\nAG{port:02d}gA".format(port=channel+1).encode()
+        cmd = "SW{port}\r\nAG{port:02d}gA".format(port=(channel + 1)).encode()
         tty.write(cmd)
         tty.flush()
 
     def __str__(self) -> str:
-        return f"Xh_hk4401({self._instance_name})"
+        return f"XH-HK4401({self._instance_name})"
 
     __repr__ = __str__
