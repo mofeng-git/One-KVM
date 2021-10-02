@@ -169,15 +169,13 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         channel: Optional[int] = None
         if tty.in_waiting:
             data += tty.read_all()
-            found = re.findall(b"AG0[0-4]gA", data)
-            data = data[-12:]
-
+            found = re.findall(b"AG0[1-4]gA", data)
             if found:
                 try:
                     channel = int(found[-1][2:4]) - 1
                 except Exception:
-                    return (None, data)
-                assert 0 <= channel <= 3
+                    channel = None
+            data = data[-12:]
         return (channel, data)
 
     def __send_channel(self, tty: serial.Serial, channel: int) -> None:
