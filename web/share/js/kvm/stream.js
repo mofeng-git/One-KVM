@@ -454,15 +454,24 @@ export function Streamer() {
 	};
 
 	self.setJanusEnabled = function(enabled) {
-		let supported = !!window.RTCPeerConnection;
+		let has_webrtc = !!window.RTCPeerConnection;
+
+		let has_h264 = true;
+		if ($("stream-video").canPlayType) {
+			has_h264 = $("stream-video").canPlayType("video/mp4; codecs=\"avc1.42E01F\"");
+		}
+
 		let set_enabled = function() {
-			__janus_enabled = (enabled && supported && _Janus !== null);
+			tools.hidden.setVisible($("stream-message-no-webrtc"), !has_webrtc);
+			tools.hidden.setVisible($("stream-message-no-h264"), !has_h264);
+			__janus_enabled = (enabled && has_webrtc && _Janus !== null); // Don't check has_h264 for sure
 			tools.feature.setEnabled($("stream-mode"), __janus_enabled);
-			tools.info(`Stream: Janus WebRTC state: enabled=${enabled}, supported=${supported}, imported=${!!_Janus}`);
+			tools.info(`Stream: Janus WebRTC state: enabled=${enabled}, webrtc=${has_webrtc}, h264=${has_h264}, imported=${!!_Janus}`);
 			tools.radio.clickValue("stream-mode-radio", tools.storage.get("stream.mode", "mjpeg"));
 			self.setState(__state);
 		};
-		if (enabled && supported) {
+
+		if (enabled && has_webrtc) {
 			if (_Janus === null) {
 				import("./janus.js").then((module) => {
 					module.Janus.init({

@@ -16,6 +16,12 @@ li(class="right")
 					button(data-force-hide-menu id="gpio-button-__wol__" class="gpio-button small" data-channel="__wol__"
 						data-confirm="Are you sure to send Wake-on-LAN packet to the server?") &bull; WoL
 		hr
+		div(id="stream-message-no-webrtc" class="hidden")
+			+menu_message("warning", "WebRTC is not supported by this browser")
+			hr
+		div(id="stream-message-no-h264" class="hidden")
+			+menu_message("warning", "H.264 is not supported by this browser")
+			hr
 		table(class="kv" style="width: calc(100% - 20px)")
 			tr(id="stream-resolution" class="feature-disabled")
 				td Resolution:
