@@ -80,9 +80,9 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "device":       Option("",     type=valid_abs_path, unpack_as="device_path"),
-            "speed":        Option(19200,  type=valid_tty_speed),
-            "read_timeout": Option(2.0,    type=valid_float_f01),
+            "device":       Option("",    type=valid_abs_path, unpack_as="device_path"),
+            "speed":        Option(19200, type=valid_tty_speed),
+            "read_timeout": Option(2.0,   type=valid_float_f01),
         }
 
     @classmethod
