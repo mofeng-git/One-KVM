@@ -30,7 +30,7 @@ doctype html
 - var title = ""
 - var main_js = ""
 - var body_class = ""
-- var css_list = ["vars", "main", "user"]
+- var css_list = ["vars", "main"]
 
 block vars
 
@@ -49,6 +49,7 @@ html(lang="en")
 
 		each name in css_list
 			link(rel="stylesheet" href=`${css_dir}/${name}.css`)
+		link(rel="stylesheet" href=`${css_dir}/user.css`)
 
 		if main_js
 			script(type="module")
