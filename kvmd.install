@@ -39,5 +39,5 @@ post_upgrade() {
 	[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=pi3-disable-bt$/dtoverlay=disable-bt/g' /boot/config.txt
 	[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=dwc2$/dtoverlay=dwc2,dr_mode=peripheral/g' /boot/config.txt
 	[ ! -f /etc/conf.d/rngd ] || (echo 'RNGD_OPTS="-o /dev/random -r /dev/hwrng -x jitter -x pkcs11 -x rtlsdr"' > /etc/conf.d/rngd)
-	[ ! -f /etc/systemd/timesyncd.conf ] || sed -e 's/#NTP=$/NTP=0.arch.pool.ntp.org 1.arch.pool.ntp.org 2.arch.pool.ntp.org 3.arch.pool.ntp.org/g' /etc/systemd/timesyncd.conf
+	[ ! -f /etc/systemd/timesyncd.conf ] || sed -i -e 's/#NTP=$/NTP=0.arch.pool.ntp.org 1.arch.pool.ntp.org 2.arch.pool.ntp.org 3.arch.pool.ntp.org/g' /etc/systemd/timesyncd.conf
 }
