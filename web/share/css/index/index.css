@@ -89,3 +89,10 @@ tr.server {
 	font-weight: bold;
 	font-family: monospace;
 }
+
+@media all and (display-mode: standalone) {
+	div.keyboard-warning {
+		display: none;
+	}
+}
+
