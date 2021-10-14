@@ -1,3 +1,4 @@
+-include config.mk
 -include testenv/config.mk
 
 TESTENV_IMAGE ?= kvmd-testenv
