@@ -6,6 +6,7 @@
 /build/
 /dist/
 /kvmd.egg-info/
+/config.mk
 /testenv/.tox/
 /testenv/.mypy_cache/
 /testenv/.coverage

@@ -1,5 +1,4 @@
 -include config.mk
--include testenv/config.mk
 
 TESTENV_IMAGE ?= kvmd-testenv
 TESTENV_HID ?= /dev/ttyS10
