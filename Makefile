@@ -12,6 +12,8 @@ USTREAMER_MIN_VERSION ?= $(shell grep -o 'ustreamer>=[^"]\+' PKGBUILD | sed 's/u
 
 DEFAULT_PLATFORM ?= v2-hdmi-rpi4
 
+DOCKER ?= docker
+
 
 # =====
 define optbool
@@ -45,14 +47,14 @@ all:
 
 
 testenv:
-	docker build \
+	$(DOCKER) build \
 			$(if $(call optbool,$(NC)),--no-cache,) \
 			--rm \
 			--tag $(TESTENV_IMAGE) \
 			--build-arg LIBGPIOD_VERSION=$(LIBGPIOD_VERSION) \
 			--build-arg USTREAMER_MIN_VERSION=$(USTREAMER_MIN_VERSION) \
 		-f testenv/Dockerfile .
-	test -d testenv/.ssl || docker run --rm \
+	test -d testenv/.ssl || $(DOCKER) run --rm \
 			--volume `pwd`:/src:ro \
 			--volume `pwd`/testenv:/src/testenv:rw \
 		-t $(TESTENV_IMAGE) bash -c " \
@@ -70,7 +72,7 @@ testenv:
 
 
 tox: testenv
-	time docker run --rm \
+	time $(DOCKER) run --rm \
 			--volume `pwd`:/src:ro \
 			--volume `pwd`/testenv:/src/testenv:rw \
 			--volume `pwd`/testenv/tests:/src/testenv/tests:ro \
@@ -96,8 +98,8 @@ $(TESTENV_GPIO):
 
 
 run: testenv $(TESTENV_GPIO)
-	- docker run --rm --name kvmd \
-			--cap-add SYS_ADMIN \
+	- $(DOCKER) run --rm --name kvmd \
+			--privileged \
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
@@ -134,7 +136,7 @@ run: testenv $(TESTENV_GPIO)
 
 
 run-cfg: testenv
-	- docker run --rm --name kvmd-cfg \
+	- $(DOCKER) run --rm --name kvmd-cfg \
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
@@ -153,7 +155,7 @@ run-cfg: testenv
 
 
 run-ipmi: testenv
-	- docker run --rm --name kvmd-ipmi \
+	- $(DOCKER) run --rm --name kvmd-ipmi \
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
@@ -173,7 +175,7 @@ run-ipmi: testenv
 
 
 run-vnc: testenv
-	- docker run --rm --name kvmd-vnc \
+	- $(DOCKER) run --rm --name kvmd-vnc \
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
@@ -196,7 +198,7 @@ regen: keymap pug
 
 
 keymap: testenv
-	docker run --user `id -u`:`id -g` --rm \
+	$(DOCKER) run --user `id -u`:`id -g` --rm \
 		--volume `pwd`:/src \
 	-it $(TESTENV_IMAGE) bash -c "cd src \
 		&& ./genmap.py keymap.csv kvmd/keyboard/mappings.py.mako kvmd/keyboard/mappings.py \
@@ -206,7 +208,7 @@ keymap: testenv
 
 
 pug: testenv
-	docker run --user `id -u`:`id -g` --rm \
+	$(DOCKER) run --user `id -u`:`id -g` --rm \
 		--volume `pwd`:/src \
 	-it $(TESTENV_IMAGE) bash -c "cd src \
 		&& pug --pretty web/index.pug -o web \
@@ -244,7 +246,7 @@ clean:
 
 clean-all: testenv clean
 	make -C hid clean-all
-	- docker run --rm \
+	- $(DOCKER) run --rm \
 			--volume `pwd`:/src \
 		-it $(TESTENV_IMAGE) bash -c "cd src && rm -rf testenv/{.ssl,.tox,.mypy_cache,.coverage}"
 
