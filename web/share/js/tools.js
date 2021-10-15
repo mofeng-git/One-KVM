@@ -302,9 +302,15 @@ export var tools = new function() {
 		let is_firefox = (typeof InstallTrigger !== "undefined");
 
 		// Safari 3.0+ "[object HTMLElementConstructor]" 
-		let is_safari = (/constructor/i.test(window.HTMLElement) || (function (p) {
-			return p.toString() === "[object SafariRemoteNotification]";
-		})(!window["safari"] || (typeof safari !== "undefined" && safari.pushNotification))); // eslint-disable-line no-undef
+		let is_safari = (function() {
+			if (/constructor/i.test(String(window["HTMLElement"]))) {
+				return true;
+			}
+			if (!window.top["safari"]) {
+				return false;
+			}
+			return String(window.top["safari"].pushNotification) === "[object SafariRemoteNotification]";
+		})();
 
 		// Chrome 1+
 		let is_chrome = !!window.chrome;
@@ -314,7 +320,11 @@ export var tools = new function() {
 
 		// iOS browsers
 		// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios
-		let is_ios = (!!navigator.platform && /iPad|iPhone|iPod/.test(navigator.platform));
+		// https://github.com/lancedikson/bowser/issues/329
+		let is_ios = (!!navigator.platform && (
+			/iPad|iPhone|iPod/.test(navigator.platform)
+			|| (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1 && !window["MSStream"])
+		));
 
 		// Any browser on Mac
 		let is_mac = ((
