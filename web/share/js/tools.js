@@ -139,8 +139,6 @@ export var tools = new function() {
 					}
 				};
 
-				el.oninput = el.onchange = () => display_callback(self.slider.getValue(el));
-
 				el.onmousedown = el.ontouchstart = function() {
 					clear_timer();
 				};
@@ -154,7 +152,9 @@ export var tools = new function() {
 					}, delay);
 				};
 
-				display_callback(self.slider.getValue(el));
+				let value = self.slider.getValue(el);
+				el.oninput = el.onchange = () => display_callback(value);
+				display_callback(value);
 			},
 			"setParams": function(el, min, max, step, value) {
 				el.min = min;
