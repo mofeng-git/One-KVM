@@ -153,6 +153,8 @@ export var tools = new function() {
 						execute_callback(value);
 					}, delay);
 				};
+
+				display_callback(self.slider.getValue(el));
 			},
 			"setParams": function(el, min, max, step, value) {
 				el.min = min;
