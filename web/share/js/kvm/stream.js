@@ -428,13 +428,13 @@ export function Streamer() {
 		$("stream-led").title = "Stream inactive";
 
 		tools.slider.setParams($("stream-quality-slider"), 5, 100, 5, 80);
-		tools.slider.setOnUp($("stream-quality-slider"), 1000, __updateQualityValue, (value) => __sendParam("quality", value));
+		tools.slider.setOnUpDelayed($("stream-quality-slider"), 1000, __updateQualityValue, (value) => __sendParam("quality", value));
 
 		tools.slider.setParams($("stream-h264-bitrate-slider"), 100, 16000, 100, 5000);
-		tools.slider.setOnUp($("stream-h264-bitrate-slider"), 1000, __updateH264BitrateValue, (value) => __sendParam("h264_bitrate", value));
+		tools.slider.setOnUpDelayed($("stream-h264-bitrate-slider"), 1000, __updateH264BitrateValue, (value) => __sendParam("h264_bitrate", value));
 
 		tools.slider.setParams($("stream-desired-fps-slider"), 0, 120, 1, 0);
-		tools.slider.setOnUp($("stream-desired-fps-slider"), 1000, __updateDesiredFpsValue, (value) => __sendParam("desired_fps", value));
+		tools.slider.setOnUpDelayed($("stream-desired-fps-slider"), 1000, __updateDesiredFpsValue, (value) => __sendParam("desired_fps", value));
 
 		$("stream-resolution-selector").onchange = (() => __sendParam("resolution", $("stream-resolution-selector").value));
 

@@ -129,7 +129,7 @@ export var tools = new function() {
 
 	self.slider = new function() {
 		return {
-			"setOnUp": function(el, delay, display_callback, execute_callback) {
+			"setOnUpDelayed": function(el, delay, display_callback, execute_callback) {
 				el.execution_timer = null;
 
 				let clear_timer = function() {
