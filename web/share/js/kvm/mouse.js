@@ -66,12 +66,12 @@ export function Mouse(__getResolution, __recordWsEvent) {
 		let rate_slider = $("hid-mouse-rate-slider");
 		tools.slider.setParams(rate_slider, 10, 100, 10, 100);
 		rate_slider.oninput = rate_slider.onchange = __updateRate;
-		rate_slider.value = tools.storage.get("hid.mouse.rate", 100);
+		tools.slider.setValue(rate_slider, tools.storage.get("hid.mouse.rate", 100));
 
 		let sens_slider = $("hid-mouse-sens-slider");
 		tools.slider.setParams(sens_slider, 0.1, 1.9, 0.1, 1);
 		sens_slider.oninput = sens_slider.onchange = __updateRelativeSens;
-		sens_slider.value = tools.storage.get("hid.mouse.sens", 1.0);
+		tools.slider.setValue(sens_slider, tools.storage.get("hid.mouse.sens", 1.0));
 		__updateRelativeSens();
 
 		tools.storage.bindSimpleSwitch($("hid-mouse-squash-switch"), "hid.mouse.squash", true);
@@ -111,7 +111,7 @@ export function Mouse(__getResolution, __recordWsEvent) {
 	};
 
 	var __updateRate = function() {
-		let rate = parseInt($("hid-mouse-rate-slider").value);
+		let rate = tools.slider.getValue($("hid-mouse-rate-slider"));
 		$("hid-mouse-rate-value").innerHTML = rate;
 		tools.storage.set("hid.mouse.rate", rate);
 		if (__timer) {
@@ -121,7 +121,7 @@ export function Mouse(__getResolution, __recordWsEvent) {
 	};
 
 	var __updateRelativeSens = function() {
-		__relative_sens = parseFloat($("hid-mouse-sens-slider").value);
+		__relative_sens = tools.slider.getValue($("hid-mouse-sens-slider"));
 		$("hid-mouse-sens-value").innerHTML = __relative_sens.toFixed(1);
 		tools.storage.set("hid.mouse.sens", __relative_sens);
 	};

@@ -162,6 +162,21 @@ export var tools = new function() {
 				el.step = step;
 				el.value = value;
 			},
+			"setValue": function(el, value, callback=null) {
+				if (el.value != value) {
+					el.value = value;
+					if (callback) {
+						callback(value);
+					}
+				}
+			},
+			"getValue": function(el) {
+				if (el.step % 1 === 0) {
+					return parseInt(el.value);
+				} else {
+					return parseFloat(el.value);
+				}
+			},
 		};
 	};
 
