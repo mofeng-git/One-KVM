@@ -139,14 +139,14 @@ export var tools = new function() {
 					}
 				};
 
-				el.oninput = el.onchange = () => display_callback(el.value);
+				el.oninput = el.onchange = () => display_callback(self.slider.getValue(el));
 
 				el.onmousedown = el.ontouchstart = function() {
 					clear_timer();
 				};
 
 				el.onmouseup = el.ontouchend = function(event) {
-					let value = el.value;
+					let value = self.slider.getValue(el);
 					event.preventDefault();
 					clear_timer();
 					el.execution_timer = setTimeout(function() {
