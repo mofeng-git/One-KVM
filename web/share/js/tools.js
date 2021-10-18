@@ -131,7 +131,6 @@ export var tools = new function() {
 		return {
 			"setOnUp": function(el, delay, display_callback, execute_callback) {
 				el.execution_timer = null;
-				el.activated = false;
 
 				let clear_timer = function() {
 					if (el.execution_timer) {
@@ -144,7 +143,6 @@ export var tools = new function() {
 
 				el.onmousedown = el.ontouchstart = function() {
 					clear_timer();
-					el.activated = true;
 				};
 
 				el.onmouseup = el.ontouchend = function(event) {
