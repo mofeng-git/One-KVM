@@ -33,12 +33,18 @@ if [ "$1" != --do-the-thing ]; then
 	exit 1
 fi
 
+
+# ========== Preparing ==========
+
 if [ ! -f /boot/pikvm.txt ]; then
 	exit 0
 fi
 source <(dos2unix < /boot/pikvm.txt)
 
 rw
+
+
+# ========== First boot configuration ==========
 
 if [ -n "$FIRSTBOOT" ]; then
 	( \
@@ -65,6 +71,9 @@ if [ -n "$FIRSTBOOT" ]; then
 	# fc-cache is required for installed X server
 	which fc-cache && fc-cache || true
 fi
+
+
+# ========== Wi-Fi ==========
 
 # Set the regulatory domain for wifi, if defined.
 if [ -n "$WIFI_REGDOM" ]; then
@@ -93,6 +102,9 @@ end_wifi_config
 	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
 	REBOOT=1
 fi
+
+
+# ========== Finish ==========
 
 rm -f /boot/pikvm.txt
 ro
