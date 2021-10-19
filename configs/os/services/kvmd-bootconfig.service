@@ -1,0 +1,13 @@
+[Unit]
+Description=Pi-KVM - Boot configuration
+After=systemd-modules-load.service
+Before=network-pre.target kvmd-otg.service kvmd-nginx.service kvmd.service sshd.service pikvm-bootconfig.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/kvmd-bootconfig --do-the-thing
+ExecStop=/bin/true
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

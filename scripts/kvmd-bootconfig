@@ -1,0 +1,105 @@
+#!/bin/bash
+# ========================================================================== #
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+# ========================================================================== #
+
+
+set -ex
+
+if [ `whoami` != root ]; then
+	echo "Only root can do that"
+	exit 1
+fi
+
+if [ "$1" != --do-the-thing ]; then
+	echo "This script will make some firstboot magic. Don't run it manually."
+	exit 1
+fi
+
+if [ ! -f /boot/pikvm.txt ]; then
+	exit 0
+fi
+source <(dos2unix < /boot/pikvm.txt)
+
+rw
+
+if [ -n "$FIRSTBOOT" ]; then
+	( \
+		(umount /etc/machine-id || true) \
+		&& echo -n > /etc/machine-id \
+		&& systemd-machine-id-setup \
+	) || true
+
+	rm -f /etc/ssh/ssh_host_*
+	ssh-keygen -v -A
+
+	rm -f /etc/kvmd/nginx/ssl/*
+	rm -f /etc/kvmd/vnc/ssl/*
+	kvmd-gencert --do-the-thing
+	kvmd-gencert --do-the-thing --vnc
+
+	if grep -q 'X-kvmd\.otgmsd' /etc/fstab; then
+		umount /dev/mmcblk0p3
+		parted /dev/mmcblk0 -a optimal -s resizepart 3 100%
+		yes | mkfs.ext4 -F -m 0 /dev/mmcblk0p3
+		mount /dev/mmcblk0p3
+	fi
+
+	# fc-cache is required for installed X server
+	which fc-cache && fc-cache || true
+fi
+
+# Set the regulatory domain for wifi, if defined.
+if [ -n "$WIFI_REGDOM" ]; then
+	sed -i \
+			-e 's/^\(WIRELESS_REGDOM=.*\)$/#\1/' \
+			-e 's/^#\(WIRELESS_REGDOM="'$WIFI_REGDOM'"\)/\1/' \
+		/etc/conf.d/wireless-regdom
+fi
+
+# If the WIFI_ESSID is defined, configure wlan0
+if [ -n "$WIFI_ESSID" ]; then
+	WIFI_IFACE="${WIFI_IFACE:-wlan0}"
+	cat <<end_wifi_config > "/etc/systemd/network/$WIFI_IFACE.network"
+[Match]
+Name=$WIFI_IFACE
+
+[Network]
+DHCP=yes
+DNSSEC=no
+
+# Use same IP by forcing to use MAC address for clientID
+[DHCP]
+ClientIdentifier=mac
+end_wifi_config
+	wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
+	REBOOT=1
+fi
+
+rm -f /boot/pikvm.txt
+ro
+
+if [ -n "$REBOOT" ]; then
+	echo "kvmd-bootconfig: Reboot after 5 seconds" | tee /dev/kmsg
+	sleep 2
+	reboot
+	sleep 3
+fi

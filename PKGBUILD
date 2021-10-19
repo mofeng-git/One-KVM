@@ -82,6 +82,13 @@ depends=(
 	# Avoid dhcpcd stack trace
 	dhclient
 	netctl
+
+	# Bootconfig
+	dos2unix
+	parted
+	e2fsprogs
+	openssh
+	wpa_supplicant
 )
 conflicts=(
 	python-pikvm
