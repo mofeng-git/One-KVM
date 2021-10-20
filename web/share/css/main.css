@@ -286,6 +286,10 @@ ul.footer li a {
 	color: var(--cs-page-obscure-fg);
 }
 
+.credits {
+	font-size: 0.8em;
+}
+
 .feature-disabled {
 	display: none !important;
 }
