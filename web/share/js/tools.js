@@ -129,13 +129,13 @@ export var tools = new function() {
 
 	self.slider = new function() {
 		return {
-			"setOnUpDelayed": function(el, delay, display_callback, execute_callback) {
-				el.execution_timer = null;
+			"setOnUpDelayed": function(el, delay, execute_callback) {
+				el.__execution_timer = null;
 
 				let clear_timer = function() {
-					if (el.execution_timer) {
-						clearTimeout(el.execution_timer);
-						el.execution_timer = null;
+					if (el.__execution_timer) {
+						clearTimeout(el.__execution_timer);
+						el.__execution_timer = null;
 					}
 				};
 
@@ -147,26 +147,27 @@ export var tools = new function() {
 					let value = self.slider.getValue(el);
 					event.preventDefault();
 					clear_timer();
-					el.execution_timer = setTimeout(function() {
+					el.__execution_timer = setTimeout(function() {
 						execute_callback(value);
 					}, delay);
 				};
-
-				let value = self.slider.getValue(el);
-				el.oninput = el.onchange = () => display_callback(value);
-				display_callback(value);
 			},
-			"setParams": function(el, min, max, step, value) {
+			"setParams": function(el, min, max, step, value, display_callback=null) {
 				el.min = min;
 				el.max = max;
 				el.step = step;
 				el.value = value;
+				if (display_callback) {
+					el.oninput = el.onchange = () => display_callback(self.slider.getValue(el));
+					display_callback(self.slider.getValue(el));
+					el.__display_callback = display_callback;
+				}
 			},
-			"setValue": function(el, value, callback=null) {
+			"setValue": function(el, value) {
 				if (el.value != value) {
 					el.value = value;
-					if (callback) {
-						callback(value);
+					if (el.__display_callback) {
+						el.__display_callback(value);
 					}
 				}
 			},

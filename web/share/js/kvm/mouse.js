@@ -63,20 +63,9 @@ export function Mouse(__getResolution, __recordWsEvent) {
 		$("stream-box").onwheel = __streamWheelHandler;
 		$("stream-box").ontouchstart = (event) => __streamTouchMoveHandler(event);
 
-		let rate_slider = $("hid-mouse-rate-slider");
-		tools.slider.setParams(rate_slider, 10, 100, 10, 100);
-		rate_slider.oninput = rate_slider.onchange = __updateRate;
-		tools.slider.setValue(rate_slider, tools.storage.get("hid.mouse.rate", 100));
-
-		let sens_slider = $("hid-mouse-sens-slider");
-		tools.slider.setParams(sens_slider, 0.1, 1.9, 0.1, 1);
-		sens_slider.oninput = sens_slider.onchange = __updateRelativeSens;
-		tools.slider.setValue(sens_slider, tools.storage.get("hid.mouse.sens", 1.0));
-		__updateRelativeSens();
-
 		tools.storage.bindSimpleSwitch($("hid-mouse-squash-switch"), "hid.mouse.squash", true);
-
-		__updateRate(); // set __timer
+		tools.slider.setParams($("hid-mouse-sens-slider"), 0.1, 1.9, 0.1, tools.storage.get("hid.mouse.sens", 1.0), __updateRelativeSens);
+		tools.slider.setParams($("hid-mouse-rate-slider"), 10, 100, 10, tools.storage.get("hid.mouse.rate", 100), __updateRate); // set __timer
 	};
 
 	/************************************************************************/
@@ -110,20 +99,19 @@ export function Mouse(__getResolution, __recordWsEvent) {
 		__keypad.releaseAll();
 	};
 
-	var __updateRate = function() {
-		let rate = tools.slider.getValue($("hid-mouse-rate-slider"));
-		$("hid-mouse-rate-value").innerHTML = rate;
-		tools.storage.set("hid.mouse.rate", rate);
+	var __updateRate = function(value) {
+		$("hid-mouse-rate-value").innerHTML = value;
+		tools.storage.set("hid.mouse.rate", value);
 		if (__timer) {
 			clearInterval(__timer);
 		}
-		__timer = setInterval(__sendMove, rate);
+		__timer = setInterval(__sendMove, value);
 	};
 
-	var __updateRelativeSens = function() {
-		__relative_sens = tools.slider.getValue($("hid-mouse-sens-slider"));
-		$("hid-mouse-sens-value").innerHTML = __relative_sens.toFixed(1);
-		tools.storage.set("hid.mouse.sens", __relative_sens);
+	var __updateRelativeSens = function(value) {
+		$("hid-mouse-sens-value").innerHTML = value.toFixed(1);
+		tools.storage.set("hid.mouse.sens", value);
+		__relative_sens = value;
 	};
 
 	var __streamHoveredHandler = function(hovered) {
