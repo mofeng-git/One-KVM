@@ -131,6 +131,8 @@ export var tools = new function() {
 		return {
 			"setOnUpDelayed": function(el, delay, execute_callback) {
 				el.__execution_timer = null;
+				el.__pressed = false;
+				el.__postponed = null;
 
 				let clear_timer = function() {
 					if (el.__execution_timer) {
@@ -141,6 +143,7 @@ export var tools = new function() {
 
 				el.onmousedown = el.ontouchstart = function() {
 					clear_timer();
+					el.__pressed = true;
 				};
 
 				el.onmouseup = el.ontouchend = function(event) {
@@ -148,6 +151,11 @@ export var tools = new function() {
 					event.preventDefault();
 					clear_timer();
 					el.__execution_timer = setTimeout(function() {
+						el.__pressed = false;
+						if (el.__postponed !== null) {
+							self.slider.setValue(el, el.__postponed);
+							el.__postponed = null;
+						}
 						execute_callback(value);
 					}, delay);
 				};
@@ -165,9 +173,13 @@ export var tools = new function() {
 			},
 			"setValue": function(el, value) {
 				if (el.value != value) {
-					el.value = value;
-					if (el.__display_callback) {
-						el.__display_callback(value);
+					if (el.__pressed) {
+						el.__postponed = value;
+					} else {
+						el.value = value;
+						if (el.__display_callback) {
+							el.__display_callback(value);
+						}
 					}
 				}
 			},
