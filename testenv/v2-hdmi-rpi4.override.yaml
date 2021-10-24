@@ -44,6 +44,12 @@ kvmd:
             relay:
                 type: hidrelay
                 device: /dev/hidraw0
+            cmd1:
+                type: cmd
+                cmd: [/bin/sleep, 5]
+            cmd2:
+                type: cmd
+                cmd: [/bin/ls, -l]
 
         scheme:
             __v3_usb_breaker__:
@@ -86,6 +92,18 @@ kvmd:
                     delay: 2
                     max_delay: 5
 
+            cmd1:
+                pin: 0
+                mode: output
+                driver: cmd1
+                switch: false
+
+            cmd2:
+                pin: 0
+                mode: output
+                driver: cmd2
+                switch: false
+
         view:
             header:
                 title: Switches
@@ -99,6 +117,10 @@ kvmd:
                 - []
                 - ["#Relay #1:", "relay1|confirm|Boop 0.1"]
                 - ["#Relay #2:", "relay2|Boop 2.0"]
+                - []
+                - ["#Commands"]
+                - ["#Cmd #1:", "cmd1|confirm|Run 'sleep 5'"]
+                - ["#Cmd #2:", "cmd2|Run 'ls -l'"]
 
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
