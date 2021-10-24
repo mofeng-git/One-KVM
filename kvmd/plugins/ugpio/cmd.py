@@ -79,7 +79,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             return
 
         try:
-            proc = await aioproc.log_process(self.__cmd, logger=get_logger(0))
+            proc = await aioproc.log_process(self.__cmd, logger=get_logger(0), prefix=str(self))
             if proc.returncode != 0:
                 raise RuntimeError(f"Custom command error: pid={proc.pid}; retcode={proc.returncode}")
         except Exception as err:

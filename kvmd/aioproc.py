@@ -67,13 +67,16 @@ async def log_process(
     cmd: List[str],
     logger: logging.Logger,
     env: Optional[Dict[str, str]]=None,
+    prefix: str="",
 ) -> asyncio.subprocess.Process:  # pylint: disable=no-member
 
     (proc, stdout) = await read_process(cmd, env=env)
     if stdout:
         log = (logger.info if proc.returncode == 0 else logger.error)
+        if prefix:
+            prefix += " "
         for line in stdout.split("\n"):
-            log("=> %s", line)
+            log("%s=> %s", prefix, line)
     return proc
 
 

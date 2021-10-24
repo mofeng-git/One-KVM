@@ -153,7 +153,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             return
         action = (_OUTPUTS[pin] if pin.isdigit() else pin)
         try:
-            proc = await aioproc.log_process(**self.__make_ipmitool_kwargs(action), logger=get_logger(0))
+            proc = await aioproc.log_process(**self.__make_ipmitool_kwargs(action), logger=get_logger(0), prefix=str(self))
             if proc.returncode != 0:
                 raise RuntimeError(f"Ipmitool error: pid={proc.pid}; retcode={proc.returncode}")
         except Exception as err:
