@@ -73,6 +73,13 @@ if [ -n "$FIRSTBOOT" ]; then
 fi
 
 
+# ========== SSH ==========
+
+if [ -n "$SSH_PORT" ]; then
+	sed -i -e "s/^\s*#*\s*Port\s\+.*$/Port $SSH_PORT/g" /etc/ssh/sshd_config
+fi
+
+
 # ========== Wi-Fi ==========
 
 # Set the regulatory domain for wifi, if defined.
