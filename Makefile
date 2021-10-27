@@ -85,6 +85,7 @@ tox: testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
+			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /src/testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& cd /src \
 			&& $(if $(CMD),$(CMD),tox -q -c testenv/tox.ini $(if $(E),-e $(E),-p auto)) \
@@ -126,6 +127,7 @@ run: testenv $(TESTENV_GPIO)
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
+			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& cp /usr/share/kvmd/configs.default/kvmd/web.css /etc/kvmd \
 			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
@@ -149,6 +151,7 @@ run-cfg: testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
+			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& $(if $(CMD),$(CMD),python -m kvmd.apps.kvmd -m) \
 		"
@@ -169,6 +172,7 @@ run-ipmi: testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
+			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& $(if $(CMD),$(CMD),python -m kvmd.apps.ipmi --run) \
 		"
@@ -189,6 +193,7 @@ run-vnc: testenv
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
+			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& $(if $(CMD),$(CMD),python -m kvmd.apps.vnc --run) \
 		"
