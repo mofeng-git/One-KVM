@@ -41,6 +41,12 @@ vnc:
         vncauth:
             enabled: true
 
+    memsink:
+        jpeg:
+            sink: ""
+        h264:
+            sink: ""
+
 otgnet:
     commands:
         post_start_cmd:
