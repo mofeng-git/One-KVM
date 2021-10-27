@@ -46,7 +46,7 @@ rw
 
 # ========== First boot configuration ==========
 
-if [ -n "$FIRSTBOOT" ]; then
+if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
 	( \
 		(umount /etc/machine-id || true) \
 		&& echo -n > /etc/machine-id \
