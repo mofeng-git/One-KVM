@@ -500,10 +500,12 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
 
             logger.info("Listening VNC on TCP [%s]:%d ...", self.__host, self.__port)
 
-            with contextlib.closing(socket.socket(socket.AF_INET6, socket.SOCK_STREAM)) as sock:
-                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            (family, _, _, _, addr) = socket.getaddrinfo(self.__host, self.__port, type=socket.SOCK_STREAM)[0]
+            with contextlib.closing(socket.socket(family, socket.SOCK_STREAM)) as sock:
+                if family == socket.AF_INET6:
+                    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                sock.bind((self.__host, self.__port))
+                sock.bind(addr)
 
                 server = loop.run_until_complete(asyncio.start_server(
                     client_connected_cb=self.__handle_client,
