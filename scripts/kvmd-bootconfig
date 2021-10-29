@@ -85,7 +85,7 @@ otg:
 end_of_file
 	grep '^ttyGS0$' /etc/securetty || echo ttyGS0 >> /etc/securetty
 	mkdir -p /etc/systemd/system/getty@ttyGS0.service.d
-	cat <<end_of_file > /etc/systemd/system/getty@ttyGS0.service.d/ttyGS0.override
+	cat <<end_of_file > /etc/systemd/system/getty@ttyGS0.service.d/override.conf
 [Service]
 TTYReset=no
 TTYVHangup=no
