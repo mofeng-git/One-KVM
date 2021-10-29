@@ -116,7 +116,7 @@ fi
 # If the WIFI_ESSID is defined, configure wlan0
 if [ -n "$WIFI_ESSID" ]; then
 	WIFI_IFACE="${WIFI_IFACE:-wlan0}"
-	cat <<end_wifi_config > "/etc/systemd/network/$WIFI_IFACE.network"
+	cat <<end_of_file > "/etc/systemd/network/$WIFI_IFACE.network"
 [Match]
 Name=$WIFI_IFACE
 
@@ -127,7 +127,7 @@ DNSSEC=no
 # Use same IP by forcing to use MAC address for clientID
 [DHCP]
 ClientIdentifier=mac
-end_wifi_config
+end_of_file
 	wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
 	REBOOT=1
