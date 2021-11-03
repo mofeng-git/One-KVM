@@ -64,6 +64,19 @@ video#stream-video {
 	display: block;
 	background-color: black;
 }
+div#stream-window.window-active:fullscreen {
+	border: 0px !important;
+	border-radius: 0px !important;
+}
+div#stream-window.window-active:fullscreen div#stream-box div#stream-fullscreen-active {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	top: 0;
+	left: 0;
+	border: 0;
+	box-shadow: var(--shadow-window-fullscreen-active);
+}
 
 div#stream-mouse-buttons {
 	display: none;

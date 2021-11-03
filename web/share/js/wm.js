@@ -115,6 +115,7 @@ function __WindowManager() {
 				el_full_screen_button.title = "Go to full-screen mode";
 				tools.el.setOnClick(el_full_screen_button, function() {
 					__fullScreenWindow(el_window);
+					el_window.focus(el_window); // Почему-то теряется фокус
 					__activateLastWindow(el_window);
 				});
 			}
