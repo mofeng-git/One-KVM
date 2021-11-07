@@ -60,7 +60,7 @@ depends=(
 	python-hidapi
 	libgpiod
 	freetype2
-	v4l-utils
+	"v4l-utils>=1.22.1-1"
 	nginx-mainline
 	openssl
 	platformio

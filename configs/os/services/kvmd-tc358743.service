@@ -6,7 +6,7 @@ Before=kvmd.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/v4l2-ctl --device=/dev/kvmd-video --set-edid=file=/etc/kvmd/tc358743-edid.hex --fix-edid-checksums
+ExecStart=/usr/bin/v4l2-ctl --device=/dev/kvmd-video --set-edid=file=/etc/kvmd/tc358743-edid.hex --fix-edid-checksums --info-edid
 ExecStop=/bin/true
 RemainAfterExit=true
 
