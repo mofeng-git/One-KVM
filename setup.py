@@ -21,7 +21,6 @@
 # ========================================================================== #
 
 
-import os
 import textwrap
 
 import setuptools.command.easy_install
@@ -116,12 +115,6 @@ def main() -> None:
         package_data={
             "kvmd.apps.vnc": ["fonts/*.ttf"],
         },
-
-        scripts=[
-            os.path.join("scripts", name)
-            for name in os.listdir("scripts")
-            if not name.startswith(".")
-        ],
 
         entry_points={
             "console_scripts": [

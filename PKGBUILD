@@ -121,6 +121,8 @@ package_kvmd() {
 	cd "$srcdir/$pkgname-build"
 	python setup.py install --root="$pkgdir"
 
+	install -Dm755 -t "$pkgdir/usr/bin" scripts/kvmd-{bootconfig,gencert}
+
 	install -Dm644 -t "$pkgdir/usr/lib/systemd/system" configs/os/services/*.service
 	install -DTm644 configs/os/sysusers.conf "$pkgdir/usr/lib/sysusers.d/kvmd.conf"
 	install -DTm644 configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
@@ -184,6 +186,10 @@ for _variant in "${_variants[@]}"; do
 			etc/udev/rules.d/99-kvmd.rules
 			etc/kvmd/main.yaml
 		)
+
+		if [[ $_platform =~ ^.*-hdmiusb$ ]]; then
+			install -Dm755 -t \"\$pkgdir/usr/bin\" scripts/kvmd-udev-hdmiusb-check
+		fi
 
 		install -DTm644 configs/os/sysctl.conf \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
 		install -DTm644 configs/os/udev/$_platform-$_board.rules \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
