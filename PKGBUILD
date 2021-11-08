@@ -154,7 +154,7 @@ package_kvmd() {
 	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*.yaml
 	install -Dm600 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*passwd
 	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/web.css
-	mkdir -p "$pkgdir/etc/kvmd/override.d"
+	mkdir -p "$pkgdir/etc/kvmd/"{override.d,bootconfig.d}
 
 	mkdir -p "$pkgdir/var/lib/kvmd/msd"
 

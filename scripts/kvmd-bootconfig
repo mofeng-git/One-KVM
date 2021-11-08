@@ -92,7 +92,7 @@ TTYVHangup=no
 TTYVTDisallocate=no
 end_of_file
 	systemctl enable getty@ttyGS0.service
-	REBOOT=1
+	touch /boot/pikvm-reboot.txt
 fi
 
 
@@ -130,8 +130,14 @@ ClientIdentifier=mac
 end_of_file
 	wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
-	REBOOT=1
+	touch /boot/pikvm-reboot.txt
 fi
+
+
+# ========== Custom scripts ==========
+for script in `ls /etc/kvmd/bootconfig.d | sort`; do
+	/etc/kvmd/bootconfig.d/"$script" || true
+done
 
 
 # ========== Finish ==========
@@ -139,7 +145,8 @@ fi
 rm -f /boot/pikvm.txt
 ro
 
-if [ -n "$REBOOT" ]; then
+if [ -f /boot/pikvm-reboot.txt ]; then
+	rm -f /boot/pikvm-reboot.txt
 	echo "kvmd-bootconfig: Reboot after 5 seconds" | tee /dev/kmsg
 	sleep 2
 	reboot
