@@ -135,8 +135,9 @@ fi
 
 
 # ========== Custom scripts ==========
+mkdir -p /boot/kvmd-bootconfig.d
 for script in `ls /etc/kvmd/bootconfig.d | sort`; do
-	/etc/kvmd/bootconfig.d/"$script" || true
+	/boot/kvmd-bootconfig.d/"$script" || true
 done
 
 
