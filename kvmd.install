@@ -15,6 +15,9 @@ post_upgrade() {
 	chown kvmd-ipmi:kvmd-ipmi /etc/kvmd/ipmipasswd
 	chown kvmd-vnc:kvmd-vnc /etc/kvmd/vncpasswd
 	chmod 600 /etc/kvmd/*passwd
+	for target in nginx redirect-to-https ssl listen-http listen-https; do
+		chmod 644 /etc/kvmd/nginx/$target.conf || true
+	done
 
 	chown kvmd /var/lib/kvmd/msd || true
 

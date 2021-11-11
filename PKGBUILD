@@ -100,7 +100,7 @@ md5sums=(SKIP)
 backup=(
 	etc/kvmd/{override,logging,auth,meta}.yaml
 	etc/kvmd/{ht,ipmi,vnc}passwd
-	etc/kvmd/nginx/{kvmd.ctx-{http,server},loc-{login,nocache,proxy,websocket},mime-types,ssl,nginx}.conf
+	etc/kvmd/nginx/{kvmd.ctx-{http,server},listen-http{,s},loc-{login,nocache,proxy,websocket},mime-types,ssl,redirect-to-https,nginx}.conf
 	etc/kvmd/janus/janus{,.plugin.ustreamer,.transport.websockets}.jcfg
 	etc/kvmd/web.css
 )
@@ -136,7 +136,6 @@ package_kvmd() {
 	cp -r configs/* "$_cfg_default"
 
 	find "$pkgdir" -name ".gitignore" -delete
-	sed -i -e "s/^#PROD//g" "$_cfg_default/nginx/nginx.conf"
 	find "$_cfg_default" -type f -exec chmod 444 '{}' \;
 	chmod 400 "$_cfg_default/kvmd"/*passwd
 	chmod 750 "$_cfg_default/os/sudoers"
@@ -145,7 +144,7 @@ package_kvmd() {
 	mkdir -p "$pkgdir/etc/kvmd/"{nginx,vnc}"/ssl"
 	chmod 755 "$pkgdir/etc/kvmd/"{nginx,vnc}"/ssl"
 	install -Dm444 -t "$pkgdir/etc/kvmd/nginx" "$_cfg_default/nginx"/*.conf
-	chmod 644 "$pkgdir/etc/kvmd/nginx/nginx.conf"
+	chmod 644 "$pkgdir/etc/kvmd/nginx/"{nginx,redirect-to-https,ssl,listen-http{,s}}.conf
 
 	mkdir -p "$pkgdir/etc/kvmd/janus"
 	chmod 755 "$pkgdir/etc/kvmd/janus"
