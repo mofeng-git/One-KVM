@@ -135,10 +135,12 @@ fi
 
 
 # ========== Custom scripts ==========
-mkdir -p /boot/kvmd-bootconfig.d
-for script in `ls /etc/kvmd/bootconfig.d | sort`; do
-	/boot/kvmd-bootconfig.d/"$script" || true
-done
+
+if [ -d /boot/pikvm-scripts.d ]; then
+	for script in `ls /boot/pikvm-scripts.d | sort`; do
+		/boot/pikvm-scripts.d/"$script" || true
+	done
+fi
 
 
 # ========== Finish ==========
