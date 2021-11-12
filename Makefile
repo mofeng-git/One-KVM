@@ -120,8 +120,7 @@ run: testenv $(TESTENV_GPIO)
 			&& test -d /sys/kernel/debug/gpio-mockup/`basename $(TESTENV_GPIO)`/ || (echo \"Missing GPIO mockup\" && exit 1) \
 			&& (socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
 			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/kvmd/nginx \
-			&& sed -i '$$ s/.$$//' /etc/kvmd/nginx/nginx.conf \
-			&& cat testenv/nginx.append.conf >> /etc/kvmd/nginx/nginx.conf \
+			&& cp testenv/redirect-to-https.conf /etc/kvmd/nginx \
 			&& cp -a /testenv/.ssl/nginx /etc/kvmd/nginx/ssl \
 			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
