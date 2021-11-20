@@ -146,12 +146,14 @@ fi
 # ========== Finish ==========
 
 rm -f /boot/pikvm.txt
-ro
 
 if [ -f /boot/pikvm-reboot.txt ]; then
 	rm -f /boot/pikvm-reboot.txt
+	ro
 	echo "kvmd-bootconfig: Reboot after 5 seconds" | tee /dev/kmsg
 	sleep 2
 	reboot
 	sleep 3
+else
+	ro
 fi
