@@ -426,8 +426,8 @@ def _get_config_scheme() -> Dict:
 
                 "h264_bitrate": {
                     "default": Option(0,     type=valid_stream_h264_bitrate, if_empty=0, unpack_as="h264_bitrate"),
-                    "min":     Option(100,   type=valid_stream_h264_bitrate, unpack_as="h264_bitrate_min"),
-                    "max":     Option(16000, type=valid_stream_h264_bitrate, unpack_as="h264_bitrate_max"),
+                    "min":     Option(25,    type=valid_stream_h264_bitrate, unpack_as="h264_bitrate_min"),
+                    "max":     Option(25000, type=valid_stream_h264_bitrate, unpack_as="h264_bitrate_max"),
                 },
 
                 "h264_gop": {
