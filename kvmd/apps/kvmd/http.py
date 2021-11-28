@@ -22,6 +22,7 @@
 
 import os
 import socket
+import asyncio
 import dataclasses
 import inspect
 import json
@@ -240,6 +241,7 @@ class HttpServer:
             shutdown_timeout=1,
             access_log_format=access_log_format,
             print=self.__run_app_print,
+            loop=asyncio.get_event_loop(),
             **socket_kwargs,
         )
 
