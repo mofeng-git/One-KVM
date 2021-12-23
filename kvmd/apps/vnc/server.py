@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+import sys
 import os
 import asyncio
 import socket
@@ -458,7 +459,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, keepalive_interval)
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, keepalive_count)
                     timeout = (keepalive_idle + keepalive_interval * keepalive_count) * 1000  # Milliseconds
-                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, timeout)
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, timeout)  # type: ignore
 
                 try:
                     async with kvmd.make_session("", "") as kvmd_session:
@@ -507,11 +508,12 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.bind(addr)
 
+                server_kwargs = ({"loop": loop} if sys.version_info < (3, 10) else {})
                 server = loop.run_until_complete(asyncio.start_server(
                     client_connected_cb=self.__handle_client,
                     sock=sock,
                     backlog=self.__max_clients,
-                    loop=loop,
+                    **server_kwargs,  # type: ignore
                 ))
 
                 try:

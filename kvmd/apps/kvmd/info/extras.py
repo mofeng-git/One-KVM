@@ -75,6 +75,6 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
             extras["port"] = 0
             config = self.__global_config
             for item in filter(None, map(str.strip, port_path.split("/"))):
-                config = getattr(config, item, None)
+                config = getattr(config, item, None)  # type: ignore
             if isinstance(config, int):
                 extras["port"] = config

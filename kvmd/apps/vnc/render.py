@@ -49,5 +49,7 @@ def _inner_make_text_jpeg(width: int, height: int, quality: int, text: str) -> b
 
 @functools.lru_cache()
 def _get_font() -> ImageFont.FreeTypeFont:
-    path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), "fonts", "Azbuka04.ttf")
+    module_path = sys.modules[__name__].__file__
+    assert module_path is not None
+    path = os.path.join(os.path.dirname(module_path), "fonts", "Azbuka04.ttf")
     return ImageFont.truetype(path, size=20)
