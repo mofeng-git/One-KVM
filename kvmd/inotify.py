@@ -48,22 +48,9 @@ from .logging import get_logger
 
 # =====
 def _load_libc() -> ctypes.CDLL:
-    try:
-        path = ctypes.util.find_library("c")
-    except (OSError, IOError, RuntimeError):
-        pass
-    else:
-        if path:
-            return ctypes.CDLL(path)
-
-    names = ["libc.so", "libc.so.6", "libc.so.0"]
-    for (index, name) in enumerate(names):
-        try:
-            return ctypes.CDLL(name)
-        except (OSError, IOError):
-            if index == len(names) - 1:
-                raise
-
+    path = ctypes.util.find_library("c")
+    if path:
+        return ctypes.CDLL(path)
     raise RuntimeError("Where is libc?")
 
 
