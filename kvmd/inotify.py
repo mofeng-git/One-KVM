@@ -26,15 +26,10 @@ import sys
 import os
 import asyncio
 import ctypes
-import ctypes.util
 import struct
 import dataclasses
 import types
 import errno
-
-from ctypes import c_int
-from ctypes import c_uint32
-from ctypes import c_char_p
 
 from typing import Tuple
 from typing import List
@@ -45,28 +40,7 @@ from typing import Optional
 
 from .logging import get_logger
 
-
-# =====
-def _load_libc() -> ctypes.CDLL:
-    path = ctypes.util.find_library("c")
-    if not path:
-        raise RuntimeError("Where is libc?")
-    assert path
-    lib = ctypes.CDLL(path)
-    for (name, restype, argtypes) in [
-        ("inotify_init", c_int, []),
-        ("inotify_add_watch", c_int, [c_int, c_char_p, c_uint32]),
-        ("inotify_rm_watch", c_int, [c_int, c_uint32]),
-    ]:
-        func = getattr(lib, name)
-        if not func:
-            raise RuntimeError(f"Where is libc.{name}?")
-        setattr(func, "restype", restype)
-        setattr(func, "argtypes", argtypes)
-    return lib
-
-
-_libc = _load_libc()
+from . import libc
 
 
 # =====
@@ -225,7 +199,7 @@ class Inotify:
         path = os.path.normpath(path)
         assert path not in self.__wd_by_path, path
         get_logger().info("Watching for %s", path)
-        wd = _inotify_check(_libc.inotify_add_watch(self.__fd, _fs_encode(path), mask))
+        wd = _inotify_check(libc.inotify_add_watch(self.__fd, _fs_encode(path), mask))
         self.__wd_by_path[path] = wd
         self.__path_by_wd[wd] = path
 
@@ -303,7 +277,7 @@ class Inotify:
 
     def __enter__(self) -> "Inotify":
         assert self.__fd < 0
-        self.__fd = _inotify_check(_libc.inotify_init())
+        self.__fd = _inotify_check(libc.inotify_init())
         asyncio.get_event_loop().add_reader(self.__fd, self.__read_and_queue_events)
         return self
 
@@ -317,7 +291,7 @@ class Inotify:
         if self.__fd >= 0:
             asyncio.get_event_loop().remove_reader(self.__fd)
             for wd in list(self.__wd_by_path.values()):
-                _libc.inotify_rm_watch(self.__fd, wd)
+                libc.inotify_rm_watch(self.__fd, wd)
             try:
                 os.close(self.__fd)
             except Exception:
