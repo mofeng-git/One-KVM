@@ -41,8 +41,8 @@ url="https://github.com/pikvm/kvmd"
 license=(GPL)
 arch=(any)
 depends=(
-	"python>=3.10.1-2"
-	"python<3.10"
+	"python>=3.10"
+	"python<3.11"
 	python-yaml
 	"python-aiohttp>=3.7.4.post0-1.1"
 	python-aiofiles
@@ -81,6 +81,10 @@ depends=(
 
 	# Systemd UDEV bug
 	"systemd>=248.3-2"
+
+	# https://bugzilla.redhat.com/show_bug.cgi?id=2035802
+	# https://archlinuxarm.org/forum/viewtopic.php?f=15&t=15725&start=40
+	"zstd>=1.5.1-2.1"
 
 	# Avoid dhcpcd stack trace
 	dhclient
