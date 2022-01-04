@@ -115,6 +115,17 @@ def _create_ethernet(gadget_path: str, config_path: str, driver: str, host_mac: 
         _write(join(func_path, "host_addr"), host_mac)
     if kvm_mac:
         _write(join(func_path, "dev_addr"), kvm_mac)
+    if driver == "rndis":
+        # On Windows 7 and later, the RNDIS 5.1 driver would be used by default,
+        # but it does not work very well. The RNDIS 6.0 driver works better.
+        # In order to get this driver to load automatically, we have to use
+        # a Microsoft-specific extension of USB.
+        _write(join(func_path, "os_desc/interface.rndis/compatible_id"), "RNDIS")
+        _write(join(func_path, "os_desc/interface.rndis/sub_compatible_id"), "5162001")
+        _write(join(gadget_path, "os_desc/use"), "1")
+        _write(join(gadget_path, "os_desc/b_vendor_code"), "0xCD")
+        _write(join(gadget_path, "os_desc/qw_sign"), "MSFT100")
+        _symlink(config_path, join(gadget_path, "os_desc/c.1"))
     _symlink(func_path, join(config_path, f"{driver}.usb0"))
 
 
@@ -174,7 +185,10 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
 
     _write(join(gadget_path, "idVendor"), f"0x{config.otg.vendor_id:04X}")
     _write(join(gadget_path, "idProduct"), f"0x{config.otg.product_id:04X}")
-    _write(join(gadget_path, "bcdDevice"), "0x0100")
+    # bcdDevaev should be incremented any time there are breaking changes
+    # to this script so that the host OS sees it as a new device
+    # and re-enumerates everything rather than relying on cached values.
+    _write(join(gadget_path, "bcdDevice"), "0x0101")
     _write(join(gadget_path, "bcdUSB"), f"0x{config.otg.usb_version:04X}")
 
     lang_path = join(gadget_path, "strings/0x409")
@@ -249,6 +263,9 @@ def _cmd_stop(config: Section) -> None:
 
     logger.info("Disabling gadget %r ...", config.otg.gadget)
     _write(join(gadget_path, "UDC"), "")
+
+    if config.otg.devices.ethernet.driver == "rndis":
+        _unlink(join(gadget_path, "os_desc/c.1"))
 
     config_path = join(gadget_path, "configs/c.1")
     for func in os.listdir(config_path):
