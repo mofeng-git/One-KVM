@@ -188,7 +188,10 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     # bcdDevaev should be incremented any time there are breaking changes
     # to this script so that the host OS sees it as a new device
     # and re-enumerates everything rather than relying on cached values.
-    _write(join(gadget_path, "bcdDevice"), "0x0101")
+    if config.otg.devices.ethernet.enabled and config.otg.devices.ethernet.driver == "rndis":
+        _write(join(gadget_path, "bcdDevice"), "0x0101")
+    else:
+        _write(join(gadget_path, "bcdDevice"), "0x0100")
     _write(join(gadget_path, "bcdUSB"), f"0x{config.otg.usb_version:04X}")
 
     lang_path = join(gadget_path, "strings/0x409")
