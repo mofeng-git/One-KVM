@@ -68,9 +68,14 @@ def _rmdir(path: str) -> None:
     os.rmdir(path)
 
 
-def _unlink(path: str) -> None:
-    get_logger().info("RM ------ %s", path)
+def _unlink(path: str, optional: bool=False) -> None:
+    logger = get_logger()
+    if optional and not os.access(path, os.F_OK):
+        logger.info("SKIP ---- %s", path)
+        return
+    logger.info("RM ------ %s", path)
     os.unlink(path)
+
 
 
 def _write(path: str, text: str, optional: bool=False) -> None:
@@ -267,8 +272,7 @@ def _cmd_stop(config: Section) -> None:
     logger.info("Disabling gadget %r ...", config.otg.gadget)
     _write(join(gadget_path, "UDC"), "")
 
-    if config.otg.devices.ethernet.driver == "rndis":
-        _unlink(join(gadget_path, "os_desc/c.1"))
+    _unlink(join(gadget_path, "os_desc/c.1"), True)
 
     config_path = join(gadget_path, "configs/c.1")
     for func in os.listdir(config_path):
