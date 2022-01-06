@@ -71,11 +71,10 @@ def _rmdir(path: str) -> None:
 def _unlink(path: str, optional: bool=False) -> None:
     logger = get_logger()
     if optional and not os.access(path, os.F_OK):
-        logger.info("SKIP ---- %s", path)
+        logger.info("SKIP-RM - %s", path)
         return
     logger.info("RM ------ %s", path)
     os.unlink(path)
-
 
 
 def _write(path: str, text: str, optional: bool=False) -> None:
