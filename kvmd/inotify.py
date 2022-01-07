@@ -2,7 +2,7 @@
 #                                                                            #
 #    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
-#    Copyright (C) 2018-2021  Maxim Devaev <mdevaev@gmail.com>               #
+#    Copyright (C) 2018-2022  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
 #    This source file is partially based on python-watchdog module.          #
 #                                                                            #
