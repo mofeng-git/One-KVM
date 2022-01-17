@@ -293,9 +293,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     # ===== SYSTEM STUFF
 
     def run(self, **kwargs: Any) -> None:  # type: ignore  # pylint: disable=arguments-differ
-        for component in self.__components:
-            if component.sysprep:
-                component.sysprep()
+        for comp in self.__components:
+            if comp.sysprep:
+                comp.sysprep()
         aioproc.rename_process("main")
         super().run(**kwargs)
 
@@ -309,11 +309,11 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         app.on_cleanup.append(self.__on_cleanup)
 
         self.__run_system_task(self.__stream_controller)
-        for component in self.__components:
-            if component.systask:
-                self.__run_system_task(component.systask)
-            if component.poll_state:
-                self.__run_system_task(self.__poll_state, component.event_type, component.poll_state())
+        for comp in self.__components:
+            if comp.systask:
+                self.__run_system_task(comp.systask)
+            if comp.poll_state:
+                self.__run_system_task(self.__poll_state, comp.event_type, comp.poll_state())
         self.__run_system_task(self.__stream_snapshoter)
 
         for api in self.__apis:
@@ -371,13 +371,13 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
         logger = get_logger(0)
-        for component in self.__components:
-            if component.cleanup:
-                logger.info("Cleaning up %s ...", component.name)
+        for comp in self.__components:
+            if comp.cleanup:
+                logger.info("Cleaning up %s ...", comp.name)
                 try:
-                    await component.cleanup()  # type: ignore
+                    await comp.cleanup()  # type: ignore
                 except Exception:
-                    logger.exception("Cleanup error on %s", component.name)
+                    logger.exception("Cleanup error on %s", comp.name)
         logger.info("On-Cleanup complete")
 
     async def __send_event(self, ws: aiohttp.web.WebSocketResponse, event_type: str, event: Optional[Dict]) -> None:
