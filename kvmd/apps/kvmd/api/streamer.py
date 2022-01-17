@@ -26,7 +26,7 @@ import functools
 from aiohttp.web import Request
 from aiohttp.web import Response
 
-from PIL import Image
+from PIL import Image as PilImage
 
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_int_f0
@@ -104,7 +104,7 @@ class StreamerApi:
         assert not (max_width == snapshot.width and max_height == snapshot.height)
         with io.BytesIO(snapshot.data) as snapshot_bio:
             with io.BytesIO() as preview_bio:
-                with Image.open(snapshot_bio) as image:
-                    image.thumbnail((max_width, max_height), Image.ANTIALIAS)
+                with PilImage.open(snapshot_bio) as image:
+                    image.thumbnail((max_width, max_height), PilImage.ANTIALIAS)
                     image.save(preview_bio, format="jpeg", quality=quality)
                     return preview_bio.getvalue()

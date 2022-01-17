@@ -25,9 +25,9 @@ import os
 import io
 import functools
 
-from PIL import Image
-from PIL import ImageDraw
-from PIL import ImageFont
+from PIL import Image as PilImage
+from PIL import ImageDraw as PilImageDraw
+from PIL import ImageFont as PilImageFont
 
 from ... import aiotools
 
@@ -39,8 +39,8 @@ async def make_text_jpeg(width: int, height: int, quality: int, text: str) -> by
 
 @functools.lru_cache(maxsize=10)
 def _inner_make_text_jpeg(width: int, height: int, quality: int, text: str) -> bytes:
-    image = Image.new("RGB", (width, height), color=(0, 0, 0))
-    draw = ImageDraw.Draw(image)
+    image = PilImage.new("RGB", (width, height), color=(0, 0, 0))
+    draw = PilImageDraw.Draw(image)
     draw.multiline_text((20, 20), text, font=_get_font(), fill=(255, 255, 255))
     with io.BytesIO() as bio:
         image.save(bio, format="jpeg", quality=quality)
@@ -48,8 +48,8 @@ def _inner_make_text_jpeg(width: int, height: int, quality: int, text: str) -> b
 
 
 @functools.lru_cache()
-def _get_font() -> ImageFont.FreeTypeFont:
+def _get_font() -> PilImageFont.FreeTypeFont:
     module_path = sys.modules[__name__].__file__
     assert module_path is not None
     path = os.path.join(os.path.dirname(module_path), "fonts", "Azbuka04.ttf")
-    return ImageFont.truetype(path, size=20)
+    return PilImageFont.truetype(path, size=20)
