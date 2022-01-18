@@ -28,6 +28,7 @@ import ctypes.util
 from ctypes import c_int
 from ctypes import c_uint32
 from ctypes import c_char_p
+from ctypes import c_void_p
 
 
 # =====
@@ -41,6 +42,7 @@ def _load_libc() -> ctypes.CDLL:
         ("inotify_init", c_int, []),
         ("inotify_add_watch", c_int, [c_int, c_char_p, c_uint32]),
         ("inotify_rm_watch", c_int, [c_int, c_uint32]),
+        ("free", c_int, [c_void_p]),
     ]:
         func = getattr(lib, name)
         if not func:
@@ -57,3 +59,4 @@ _libc = _load_libc()
 inotify_init = _libc.inotify_init
 inotify_add_watch = _libc.inotify_add_watch
 inotify_rm_watch = _libc.inotify_rm_watch
+free = _libc.free

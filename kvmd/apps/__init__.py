@@ -448,6 +448,10 @@ def _get_config_scheme() -> Dict:
                 "cmd_append": Option([], type=valid_options),
             },
 
+            "ocr": {
+                "langs": Option(["eng"], type=valid_string_list, unpack_as="default_langs"),
+            },
+
             "snapshot": {
                 "idle_interval": Option(0.0, type=valid_float_f0),
                 "live_interval": Option(0.0, type=valid_float_f0),

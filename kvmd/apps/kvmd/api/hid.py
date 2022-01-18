@@ -112,7 +112,7 @@ class HidApi:
 
     # =====
 
-    def get_keymaps(self) -> Dict:  # Ugly hack to generate hid_keymaps_state (see server.py)
+    async def get_keymaps(self) -> Dict:  # Ugly hack to generate hid_keymaps_state (see server.py)
         keymaps: Set[str] = set()
         for keymap_name in os.listdir(self.__keymaps_dir_path):
             path = os.path.join(self.__keymaps_dir_path, keymap_name)
@@ -127,7 +127,7 @@ class HidApi:
 
     @exposed_http("GET", "/hid/keymaps")
     async def __keymaps_handler(self, _: Request) -> Response:
-        return make_json_response(self.get_keymaps())
+        return make_json_response(await self.get_keymaps())
 
     @exposed_http("POST", "/hid/print")
     async def __print_handler(self, request: Request) -> Response:

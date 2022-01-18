@@ -50,6 +50,9 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-hidapi \
 		freetype2 \
 		nginx-mainline \
+		tesseract \
+		tesseract-data-eng \
+		tesseract-data-rus \
 		ipmitool \
 		socat \
 		eslint \
