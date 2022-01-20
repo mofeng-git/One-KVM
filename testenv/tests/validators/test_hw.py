@@ -121,7 +121,7 @@ def test_fail__valid_otg_id(arg: Any) -> None:
 
 
 # =====
-@pytest.mark.parametrize("arg", ["ECM ", "EeM ", "ncm ", " Rndis"])
+@pytest.mark.parametrize("arg", ["ECM ", "EeM ", "ncm ", " Rndis", "RNDIS5"])
 def test_ok__valid_otg_ethernet(arg: Any) -> None:
     assert valid_otg_ethernet(arg) == arg.strip().lower()
 

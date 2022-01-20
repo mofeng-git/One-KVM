@@ -113,33 +113,30 @@ def _create_serial(gadget_path: str, config_path: str) -> None:
 def _create_ethernet(gadget_path: str, config_path: str, driver: str, host_mac: str, kvm_mac: str) -> None:
     if host_mac and kvm_mac and host_mac == kvm_mac:
         raise RuntimeError("Ethernet host_mac should not be equal to kvm_mac")
-    drv = driver
+    real_driver = driver
     if driver == "rndis5":
-        drv = "rndis"
-    func_path = join(gadget_path, f"functions/{drv}.usb0")
+        real_driver = "rndis"
+    func_path = join(gadget_path, f"functions/{real_driver}.usb0")
     _mkdir(func_path)
     if host_mac:
         _write(join(func_path, "host_addr"), host_mac)
     if kvm_mac:
         _write(join(func_path, "dev_addr"), kvm_mac)
-    if driver == "rndis":
-        # On Windows 7 and later, the RNDIS 5.1 driver would be used by default,
-        # but it does not work very well. The RNDIS 6.0 driver works better.
-        # In order to get this driver to load automatically, we have to use
-        # a Microsoft-specific extension of USB.
-        _write(join(func_path, "os_desc/interface.rndis/compatible_id"), "RNDIS")
-        _write(join(func_path, "os_desc/interface.rndis/sub_compatible_id"), "5162001")
+    if driver in ["ncm", "rndis"]:
         _write(join(gadget_path, "os_desc/use"), "1")
         _write(join(gadget_path, "os_desc/b_vendor_code"), "0xCD")
         _write(join(gadget_path, "os_desc/qw_sign"), "MSFT100")
+        if driver == "ncm":
+            _write(join(func_path, "os_desc/interface.ncm/compatible_id"), "WINNCM")
+        elif driver == "rndis":
+            # On Windows 7 and later, the RNDIS 5.1 driver would be used by default,
+            # but it does not work very well. The RNDIS 6.0 driver works better.
+            # In order to get this driver to load automatically, we have to use
+            # a Microsoft-specific extension of USB.
+            _write(join(func_path, "os_desc/interface.rndis/compatible_id"), "RNDIS")
+            _write(join(func_path, "os_desc/interface.rndis/sub_compatible_id"), "5162001")
         _symlink(config_path, join(gadget_path, "os_desc/c.1"))
-    if driver == "ncm":
-        _write(join(func_path, "os_desc/interface.ncm/compatible_id"), "WINNCM")
-        _write(join(gadget_path, "os_desc/use"), "1")
-        _write(join(gadget_path, "os_desc/b_vendor_code"), "0xCD")
-        _write(join(gadget_path, "os_desc/qw_sign"), "MSFT100")
-        _symlink(config_path, join(gadget_path, "os_desc/c.1"))
-    _symlink(func_path, join(config_path, f"{drv}.usb0"))
+    _symlink(func_path, join(config_path, f"{real_driver}.usb0"))
 
 
 def _create_hid(gadget_path: str, config_path: str, instance: int, remote_wakeup: bool, hid: Hid) -> None:

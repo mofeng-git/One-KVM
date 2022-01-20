@@ -173,13 +173,13 @@ class _Service:  # pylint: disable=too-many-instance-attributes
 
     def __find_iface(self) -> str:
         logger = get_logger()
-        drv = self.__driver
+        real_driver = self.__driver
         if self.__driver == "rndis5":
-            drv = "rndis"
+            real_driver = "rndis"
         path = env.SYSFS_PREFIX + os.path.join(
             "/sys/kernel/config/usb_gadget",
             self.__gadget,
-            f"functions/{drv}.usb0/ifname",
+            f"functions/{real_driver}.usb0/ifname",
         )
         logger.info("Using OTG gadget %r ...", self.__gadget)
         with open(path) as iface_file:
