@@ -113,7 +113,10 @@ def _create_serial(gadget_path: str, config_path: str) -> None:
 def _create_ethernet(gadget_path: str, config_path: str, driver: str, host_mac: str, kvm_mac: str) -> None:
     if host_mac and kvm_mac and host_mac == kvm_mac:
         raise RuntimeError("Ethernet host_mac should not be equal to kvm_mac")
-    func_path = join(gadget_path, f"functions/{driver}.usb0")
+    drv = driver
+    if driver == "rndis5":
+        drv = "rndis"
+    func_path = join(gadget_path, f"functions/{drv}.usb0")
     _mkdir(func_path)
     if host_mac:
         _write(join(func_path, "host_addr"), host_mac)
@@ -130,7 +133,13 @@ def _create_ethernet(gadget_path: str, config_path: str, driver: str, host_mac: 
         _write(join(gadget_path, "os_desc/b_vendor_code"), "0xCD")
         _write(join(gadget_path, "os_desc/qw_sign"), "MSFT100")
         _symlink(config_path, join(gadget_path, "os_desc/c.1"))
-    _symlink(func_path, join(config_path, f"{driver}.usb0"))
+    if driver == "ncm":
+        _write(join(func_path, "os_desc/interface.ncm/compatible_id"), "WINNCM")
+        _write(join(gadget_path, "os_desc/use"), "1")
+        _write(join(gadget_path, "os_desc/b_vendor_code"), "0xCD")
+        _write(join(gadget_path, "os_desc/qw_sign"), "MSFT100")
+        _symlink(config_path, join(gadget_path, "os_desc/c.1"))
+    _symlink(func_path, join(config_path, f"{drv}.usb0"))
 
 
 def _create_hid(gadget_path: str, config_path: str, instance: int, remote_wakeup: bool, hid: Hid) -> None:
@@ -189,10 +198,12 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
 
     _write(join(gadget_path, "idVendor"), f"0x{config.otg.vendor_id:04X}")
     _write(join(gadget_path, "idProduct"), f"0x{config.otg.product_id:04X}")
-    # bcdDevaev should be incremented any time there are breaking changes
+    # bcdDevice should be incremented any time there are breaking changes
     # to this script so that the host OS sees it as a new device
     # and re-enumerates everything rather than relying on cached values.
-    if config.otg.devices.ethernet.enabled and config.otg.devices.ethernet.driver == "rndis":
+    if config.otg.devices.ethernet.enabled and config.otg.devices.ethernet.driver == "ncm":
+        _write(join(gadget_path, "bcdDevice"), "0x0102")
+    elif config.otg.devices.ethernet.enabled and config.otg.devices.ethernet.driver == "rndis":
         _write(join(gadget_path, "bcdDevice"), "0x0101")
     else:
         _write(join(gadget_path, "bcdDevice"), "0x0100")

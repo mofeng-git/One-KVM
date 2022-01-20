@@ -55,4 +55,4 @@ def valid_otg_id(arg: Any) -> int:
 
 
 def valid_otg_ethernet(arg: Any) -> str:
-    return check_string_in_list(arg, "OTG Ethernet driver", ["ecm", "eem", "ncm", "rndis"])
+    return check_string_in_list(arg, "OTG Ethernet driver", ["ecm", "eem", "ncm", "rndis", "rndis5"])
