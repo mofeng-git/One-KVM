@@ -180,8 +180,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     def __send_channel(self, tty: serial.Serial, channel: int) -> None:
         # Set a channel by sending PS [1-16]
-        # Note that the recv is 0-based index, while send is 1-based. We add 1 to the "channel" to 
-        # normalize for the 1-based index on send
+        # Note that the recv is 0-based index, while send is 1-based
+        # We add 1 to the "channel" to normalize for the 1-based index on send
         tty.write(b"PS %d\r" % (channel + 1))
         tty.flush()
 
