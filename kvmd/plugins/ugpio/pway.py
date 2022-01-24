@@ -1,6 +1,6 @@
 # ========================================================================== #
 #                                                                            #
-#    KVMD - The main Pi-KVM daemon.                                          #
+#    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2022  Maxim Devaev <mdevaev@gmail.com>               #
 #                                                                            #
@@ -182,14 +182,12 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         # Set a channel by sending PS [1-16]
         # Note that the recv is 0-based index, while send is 1-based. We add 1 to the "channel" to 
         # normalize for the 1-based index on send
-        cmd = (b"PS")
-        tty.write(b"%s %d\r" % (cmd, channel + 1))
+        tty.write(b"PS %d\r" % (channel + 1))
         tty.flush()
 
     def __reset(self, tty: serial.Serial) -> None:
         # Reset by sending PS without port number
-        cmd = (b"PS")
-        tty.write(b"%s\r" % (cmd))
+        tty.write(b"PS\r")
         tty.flush()
 
     def __str__(self) -> str:
