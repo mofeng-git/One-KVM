@@ -144,7 +144,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                     # Switch and then recieve the state.
                     # FIXME: Get actual state without modifying the current.
                     # I'm lazy and like the idea of the KVM resetting to port 1 on reboot of the PiKVM.
-                    self.__send_channel(tty, 0)
+                    self.__reset(tty)
 
                     while not self.__stop_event.is_set():
                         (channel, data) = self.__recv_channel(tty, data)
@@ -180,15 +180,17 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     def __send_channel(self, tty: serial.Serial, channel: int) -> None:
         # Set a channel by sending PS [1-16]
+        # Note that the recv is 0-based index, while send is 1-based. We add 1 to the "channel" to 
+        # normalize for the 1-based index on send
         cmd = (b"PS")
-        if channel == 0:
-            # when it initializes this will push us to port 1 and set us back to defaults.
-            tty.write(b"%s\r" % (cmd))
-            tty.flush()
-        else:
-            # Basically send `PS [1-15]` that switches the port
-            tty.write(b"%s %d\r" % (cmd, channel))
-            tty.flush()
+        tty.write(b"%s %d\r" % (cmd, channel + 1))
+        tty.flush()
+
+    def __reset(self, tty: serial.Serial) -> None:
+        # Reset by sending PS without port number
+        cmd = (b"PS")
+        tty.write(b"%s\r" % (cmd))
+        tty.flush()
 
     def __str__(self) -> str:
         return f"PWAY({self._instance_name})"
