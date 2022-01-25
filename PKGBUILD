@@ -97,6 +97,9 @@ depends=(
 	openssh
 	wpa_supplicant
 )
+optdepends=(
+	tesseract
+)
 conflicts=(
 	python-pikvm
 	python-aiohttp-pikvm
