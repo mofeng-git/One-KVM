@@ -20,10 +20,12 @@
 # ========================================================================== #
 
 
+import io
 import signal
 import asyncio
 import asyncio.subprocess
 import dataclasses
+import functools
 
 from typing import Tuple
 from typing import List
@@ -33,6 +35,8 @@ from typing import Optional
 from typing import Any
 
 import aiohttp
+
+from PIL import Image as PilImage
 
 from ...logging import get_logger
 
@@ -51,6 +55,31 @@ class StreamerSnapshot:
     mtime: float
     headers: Tuple[Tuple[str, str], ...]
     data: bytes
+
+    async def make_preview(self, max_width: int, max_height: int, quality: int) -> bytes:
+        assert max_width >= 0
+        assert max_height >= 0
+        assert quality > 0
+
+        if max_width == 0 and max_height == 0:
+            max_width = self.width // 5
+            max_height = self.height // 5
+        else:
+            max_width = min((max_width or self.width), self.width)
+            max_height = min((max_height or self.height), self.height)
+
+        if (max_width, max_height) == (self.width, self.height):
+            return self.data
+        return (await aiotools.run_async(self.__inner_make_preview, max_width, max_height, quality))
+
+    @functools.lru_cache(maxsize=1)
+    def __inner_make_preview(self, max_width: int, max_height: int, quality: int) -> bytes:
+        with io.BytesIO(self.data) as snapshot_bio:
+            with io.BytesIO() as preview_bio:
+                with PilImage.open(snapshot_bio) as image:
+                    image.thumbnail((max_width, max_height), PilImage.ANTIALIAS)
+                    image.save(preview_bio, format="jpeg", quality=quality)
+                    return preview_bio.getvalue()
 
 
 class _StreamerParams:
