@@ -139,14 +139,17 @@ class TesseractOcr:
         with _tess_api(langs) as api:
             assert _libtess
             with io.BytesIO(data) as bio:
-                with PilImage.open(bio) as image:
+                image = PilImage.open(bio)
+                try:
                     if left >= 0 or top >= 0 or right >= 0 or bottom >= 0:
                         left = (0 if left < 0 else min(image.width, left))
                         top = (0 if top < 0 else min(image.height, top))
                         right = (image.width if right < 0 else min(image.width, right))
                         bottom = (image.height if bottom < 0 else min(image.height, bottom))
                         if left < right and top < bottom:
-                            image.crop((left, top, right, bottom))
+                            image_cropped = image.crop((left, top, right, bottom))
+                            image.close()
+                            image = image_cropped
 
                     _libtess.TessBaseAPISetImage(api, image.tobytes("raw", "RGB"), image.width, image.height, 3, image.width * 3)
                     text_ptr = None
@@ -159,3 +162,5 @@ class TesseractOcr:
                     finally:
                         if text_ptr is not None:
                             libc.free(text_ptr)
+                finally:
+                    image.close()
