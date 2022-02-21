@@ -30,7 +30,7 @@ import {Keyboard} from "./keyboard.js";
 import {Mouse} from "./mouse.js";
 
 
-export function Hid(__getResolution, __recorder) {
+export function Hid(__getGeometry, __recorder) {
 	var self = this;
 
 	/************************************************************************/
@@ -40,7 +40,7 @@ export function Hid(__getResolution, __recorder) {
 
 	var __init__ = function() {
 		__keyboard = new Keyboard(__recorder.recordWsEvent);
-		__mouse = new Mouse(__getResolution, __recorder.recordWsEvent);
+		__mouse = new Mouse(__getGeometry, __recorder.recordWsEvent);
 
 		let hidden_attr = null;
 		let visibility_change_attr = null;

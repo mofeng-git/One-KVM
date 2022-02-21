@@ -20,6 +20,8 @@
 # ========================================================================== #
 
 
+import os
+import stat
 import io
 import ctypes
 import ctypes.util
@@ -69,7 +71,6 @@ def _load_libtesseract() -> Optional[ctypes.CDLL]:
             ("TessBaseAPISetImage", None, [POINTER(_TessBaseAPI), c_void_p, c_int, c_int, c_int, c_int]),
             ("TessBaseAPIGetUTF8Text", POINTER(c_char), [POINTER(_TessBaseAPI)]),
             ("TessBaseAPISetVariable", c_bool, [POINTER(_TessBaseAPI), c_char_p, c_char_p]),
-            ("TessBaseAPIGetAvailableLanguagesAsVector", POINTER(POINTER(c_char)), [POINTER(_TessBaseAPI)]),
         ]:
             func = getattr(lib, name)
             if not func:
@@ -86,12 +87,12 @@ _libtess = _load_libtesseract()
 
 
 @contextlib.contextmanager
-def _tess_api(langs: List[str]) -> Generator[_TessBaseAPI, None, None]:
+def _tess_api(data_dir_path: str, langs: List[str]) -> Generator[_TessBaseAPI, None, None]:
     if not _libtess:
         raise OcrError("Tesseract is not available")
     api = _libtess.TessBaseAPICreate()
     try:
-        if _libtess.TessBaseAPIInit3(api, None, "+".join(langs).encode()) != 0:
+        if _libtess.TessBaseAPIInit3(api, data_dir_path.encode(), "+".join(langs).encode()) != 0:
             raise OcrError("Can't initialize Tesseract")
         if not _libtess.TessBaseAPISetVariable(api, b"debug_file", b"/dev/null"):
             raise OcrError("Can't set debug_file=/dev/null")
@@ -100,35 +101,32 @@ def _tess_api(langs: List[str]) -> Generator[_TessBaseAPI, None, None]:
         _libtess.TessBaseAPIDelete(api)
 
 
+_LANG_SUFFIX = ".traineddata"
+
+
 # =====
 class TesseractOcr:
-    def __init__(self, default_langs: List[str]) -> None:
+    def __init__(self, data_dir_path: str, default_langs: List[str]) -> None:
+        self.__data_dir_path = data_dir_path
         self.__default_langs = default_langs
 
     def is_available(self) -> bool:
         return bool(_libtess)
 
-    async def get_default_langs(self) -> List[str]:
+    def get_default_langs(self) -> List[str]:
         return list(self.__default_langs)
 
-    async def get_available_langs(self) -> List[str]:
-        return (await aiotools.run_async(self.__inner_get_available_langs))
-
-    def __inner_get_available_langs(self) -> List[str]:
-        with _tess_api(["osd"]) as api:
-            assert _libtess
-            langs: Set[str] = set()
-            langs_ptr = _libtess.TessBaseAPIGetAvailableLanguagesAsVector(api)
-            if langs_ptr is not None:
-                index = 0
-                while langs_ptr[index]:
-                    lang = ctypes.cast(langs_ptr[index], c_char_p).value
-                    if lang is not None:
-                        langs.add(lang.decode())
-                        libc.free(langs_ptr[index])
-                    index += 1
-                libc.free(langs_ptr)
-            return sorted(langs)
+    def get_available_langs(self) -> List[str]:
+        # Это быстрее чем, инициализация либы и TessBaseAPIGetAvailableLanguagesAsVector()
+        langs: Set[str] = set()
+        for lang_name in os.listdir(self.__data_dir_path):
+            if lang_name.endswith(_LANG_SUFFIX):
+                path = os.path.join(self.__data_dir_path, lang_name)
+                if os.access(path, os.R_OK) and stat.S_ISREG(os.stat(path).st_mode):
+                    lang = lang_name[:-len(_LANG_SUFFIX)]
+                    if lang:
+                        langs.add(lang)
+        return sorted(langs)
 
     async def recognize(self, data: bytes, langs: List[str], left: int, top: int, right: int, bottom: int) -> str:
         if not langs:
@@ -136,7 +134,7 @@ class TesseractOcr:
         return (await aiotools.run_async(self.__inner_recognize, data, langs, left, top, right, bottom))
 
     def __inner_recognize(self, data: bytes, langs: List[str], left: int, top: int, right: int, bottom: int) -> str:
-        with _tess_api(langs) as api:
+        with _tess_api(self.__data_dir_path, langs) as api:
             assert _libtess
             with io.BytesIO(data) as bio:
                 image = PilImage.open(bio)

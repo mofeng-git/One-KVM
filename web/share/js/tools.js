@@ -83,6 +83,16 @@ export var tools = new function() {
 		return `${hours}:${mins}:${secs}.${millis}`;
 	};
 
+	self.remap = function(x, a1, b1, a2, b2) {
+		let remapped = Math.round((x - a1) / b1 * (b2 - a2) + a2);
+		if (remapped < a2) {
+			return a2;
+		} else if (remapped > b2) {
+			return b2;
+		}
+		return remapped;
+	};
+
 	/************************************************************************/
 
 	self.el = new function() {

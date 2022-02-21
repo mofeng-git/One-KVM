@@ -455,8 +455,26 @@ export function Streamer() {
 
 	/************************************************************************/
 
-	self.getResolution = function() {
-		return __streamer.getResolution();
+	self.getGeometry = function() {
+		// Первоначально обновление геометрии считалось через ResizeObserver.
+		// Но оно не ловило некоторые события, например в последовательности:
+		//   - Находять в HD переходим в фулскрин
+		//   - Меняем разрешение на маленькое
+		//   - Убираем фулскрин
+		//   - Переходим в HD
+		//   - Видим нарушение пропорций
+		// Так что теперь используются быстре рассчеты через offset*
+		// вместо getBoundingClientRect().
+		let res = __streamer.getResolution();
+		let ratio = Math.min(res.view_width / res.real_width, res.view_height / res.real_height);
+		return {
+			"x": Math.round((res.view_width - ratio * res.real_width) / 2),
+			"y": Math.round((res.view_height - ratio * res.real_height) / 2),
+			"width": Math.round(ratio * res.real_width),
+			"height": Math.round(ratio * res.real_height),
+			"real_width": res.real_width,
+			"real_height": res.real_height,
+		};
 	};
 
 	self.setJanusEnabled = function(enabled) {

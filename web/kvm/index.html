@@ -506,7 +506,7 @@
           </div>
         </div>
       </li>
-      <li class="right"><a class="menu-button" href="#">Paste</a>
+      <li class="right"><a class="menu-button" href="#"><img class="feature-disabled" data-dont-hide-menu id="stream-ocr-led" src="/share/svg/led-gear.svg">Text</a>
         <div class="menu" data-dont-hide-menu>
           <div class="text"><b>Paste text as keypress sequence<br></b><sub>Please note that PiKVM cannot switch the keyboard layout</sub></div>
           <hr>
@@ -535,6 +535,35 @@
                       </td>
                 </tr>
               </table>
+          <div class="feature-disabled" id="stream-ocr">
+            <hr><br>
+            <hr>
+            <div class="text"><b>Text recognition<br></b><sub><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> works locally on PiKVM</sub></div>
+            <hr>
+            <table class="kv">
+              <tr>
+                <td>
+                  <button data-force-hide-menu id="stream-ocr-button">&bull; Select area</button>
+                </td>
+                <td>for</td>
+                <td>
+                  <select id="stream-ocr-lang-selector"></select>
+                </td>
+                <td>text recognition</td>
+              </tr>
+            </table>
+            <table class="kv">
+              <tr>
+                <td colspan="4">&bull; Press <b>Enter</b> to recognize and copy text to clipboard</td>
+              </tr>
+              <tr>
+                <td colspan="4">&bull; Press <b>Esc</b> to cancel selection</td>
+              </tr>
+              <tr>
+                <td></td>
+              </tr>
+            </table>
+          </div>
         </div>
       </li> 
       <li class="right"><a class="menu-button" href="#">Shortcuts</a>
@@ -588,6 +617,9 @@
         <div class="menu" data-dont-hide-menu id="gpio-menu"></div>
       </li>
     </ul>
+    <div class="window" id="stream-ocr-window">
+      <div class="hidden" id="stream-ocr-selection"></div>
+    </div>
     <div class="window window-resizable" id="stream-window">
       <div class="window-header" id="stream-window-header">
         <div class="window-grab">MJPEG</div>

@@ -32,7 +32,6 @@ from typing import List
 from typing import Dict
 from typing import Set
 from typing import Callable
-from typing import Awaitable
 from typing import Coroutine
 from typing import AsyncGenerator
 from typing import Optional
@@ -264,16 +263,27 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         await self.__register_ws_client(client)
 
         try:
-            await self.__send_events_aws(client.ws, [
+            stage1 = [
                 ("gpio_model_state", self.__user_gpio.get_model()),
                 ("hid_keymaps_state", self.__hid_api.get_keymaps()),
                 ("streamer_ocr_state", self.__streamer_api.get_ocr()),
-            ])
-            await self.__send_events_aws(client.ws, [
+            ]
+            stage2 = [
                 (comp.event_type, comp.get_state())
                 for comp in self.__components
                 if comp.get_state
-            ])
+            ]
+            stages = stage1 + stage2
+            events = dict(zip(
+                map(operator.itemgetter(0), stages),
+                await asyncio.gather(*map(operator.itemgetter(1), stages)),
+            ))
+            for stage in [stage1, stage2]:
+                await asyncio.gather(*[
+                    self.__send_event(client.ws, event_type, events.pop(event_type))
+                    for (event_type, _) in stage
+                ])
+
             await self.__send_event(client.ws, "loop", {})
 
             async for msg in client.ws:
@@ -390,15 +400,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 except Exception:
                     logger.exception("Cleanup error on %s", comp.name)
         logger.info("On-Cleanup complete")
-
-    async def __send_events_aws(self, ws: aiohttp.web.WebSocketResponse, sources: List[Tuple[str, Awaitable]]) -> None:
-        await asyncio.gather(*[
-            self.__send_event(ws, event_type, state)
-            for (event_type, state) in zip(
-                map(operator.itemgetter(0), sources),
-                await asyncio.gather(*map(operator.itemgetter(1), sources)),
-            )
-        ])
 
     async def __send_event(self, ws: aiohttp.web.WebSocketResponse, event_type: str, event: Optional[Dict]) -> None:
         await ws.send_str(json.dumps({

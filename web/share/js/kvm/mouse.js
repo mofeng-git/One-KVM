@@ -27,7 +27,7 @@ import {tools, $} from "../tools.js";
 import {Keypad} from "../keypad.js";
 
 
-export function Mouse(__getResolution, __recordWsEvent) {
+export function Mouse(__getGeometry, __recordWsEvent) {
 	var self = this;
 
 	/************************************************************************/
@@ -227,10 +227,10 @@ export function Mouse(__getResolution, __recordWsEvent) {
 		if (__absolute) {
 			let pos = __current_pos;
 			if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
-				let geo = __getVideoGeometry();
+				let geo = __getGeometry();
 				let to = {
-					"x": __translatePosition(pos.x, geo.x, geo.width, -32768, 32767),
-					"y": __translatePosition(pos.y, geo.y, geo.height, -32768, 32767),
+					"x": tools.remap(pos.x, geo.x, geo.width, -32768, 32767),
+					"y": tools.remap(pos.y, geo.y, geo.height, -32768, 32767),
 				};
 				tools.debug("Mouse: moved:", to);
 				__sendEvent("mouse_move", {"to": to});
@@ -241,36 +241,6 @@ export function Mouse(__getResolution, __recordWsEvent) {
 			__sendEvent("mouse_relative", {"delta": __relative_deltas, "squash": true});
 			__relative_deltas = [];
 		}
-	};
-
-	var __getVideoGeometry = function() {
-		// Первоначально обновление геометрии считалось через ResizeObserver.
-		// Но оно не ловило некоторые события, например в последовательности:
-		//   - Находять в HD переходим в фулскрин
-		//   - Меняем разрешение на маленькое
-		//   - Убираем фулскрин
-		//   - Переходим в HD
-		//   - Видим нарушение пропорций
-		// Так что теперь используются быстре рассчеты через offset*
-		// вместо getBoundingClientRect().
-		let res = __getResolution();
-		let ratio = Math.min(res.view_width / res.real_width, res.view_height / res.real_height);
-		return {
-			"x": Math.round((res.view_width - ratio * res.real_width) / 2),
-			"y": Math.round((res.view_height - ratio * res.real_height) / 2),
-			"width": Math.round(ratio * res.real_width),
-			"height": Math.round(ratio * res.real_height),
-		};
-	};
-
-	var __translatePosition = function(x, a, b, c, d) {
-		let translated = Math.round((x - a) / b * (d - c) + c);
-		if (translated < c) {
-			return c;
-		} else if (translated > d) {
-			return d;
-		}
-		return translated;
 	};
 
 	var __streamWheelHandler = function(event) {

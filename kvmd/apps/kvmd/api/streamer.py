@@ -63,7 +63,7 @@ class StreamerApi:
         )
         if snapshot:
             if valid_bool(request.query.get("ocr", "false")):
-                langs = await self.__ocr.get_available_langs()
+                langs = self.__ocr.get_available_langs()
                 return Response(
                     body=(await self.__ocr.recognize(
                         data=snapshot.data,
@@ -107,8 +107,8 @@ class StreamerApi:
         default: List[str] = []
         available: List[str] = []
         if enabled:
-            default = await self.__ocr.get_default_langs()
-            available = await self.__ocr.get_available_langs()
+            default = self.__ocr.get_default_langs()
+            available = self.__ocr.get_available_langs()
         return {
             "ocr": {
                 "enabled": enabled,
