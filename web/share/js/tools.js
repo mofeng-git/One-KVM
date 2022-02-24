@@ -36,14 +36,14 @@ export var tools = new function() {
 
 	/************************************************************************/
 
-	self.makeRequest = function(method, url, callback, body=null, content_type=null) {
+	self.makeRequest = function(method, url, callback, body=null, content_type=null, timeout=15000) {
 		let http = new XMLHttpRequest();
 		http.open(method, url, true);
 		if (content_type) {
 			http.setRequestHeader("Content-Type", content_type);
 		}
 		http.onreadystatechange = callback;
-		http.timeout = 15000;
+		http.timeout = timeout;
 		http.send(body);
 		return http;
 	};

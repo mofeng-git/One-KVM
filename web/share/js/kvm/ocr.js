@@ -186,7 +186,7 @@ export function Ocr(__getGeometry) {
 				tools.el.setEnabled($("stream-ocr-lang-selector"), true);
 				$("stream-ocr-led").className = "led-gray";
 			}
-		});
+		}, null, null, 30000);
 	};
 
 	__init__();
