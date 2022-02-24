@@ -54,8 +54,10 @@ export function Ocr(__getGeometry) {
 		$("stream-ocr-window").onkeyup = function(event) {
 			event.preventDefault();
 			if (event.code === "Enter") {
-				__recognizeSelection();
-				wm.closeWindow($("stream-ocr-window"));
+				if (__selection) {
+					__recognizeSelection();
+					wm.closeWindow($("stream-ocr-window"));
+				}
 			} else if (event.code === "Escape") {
 				wm.closeWindow($("stream-ocr-window"));
 			}
@@ -116,8 +118,9 @@ export function Ocr(__getGeometry) {
 			let rect = $("stream-box").getBoundingClientRect();
 			let rel_left = Math.min(__start_pos.x, __end_pos.x) - rect.left;
 			let rel_right = Math.max(__start_pos.x, __end_pos.x) - rect.left;
-			let rel_top = Math.min(__start_pos.y, __end_pos.y) - rect.top;
-			let rel_bottom = Math.max(__start_pos.y, __end_pos.y) - rect.top;
+			let offset = __getNavbarOffset();
+			let rel_top = Math.min(__start_pos.y, __end_pos.y) - rect.top + offset;
+			let rel_bottom = Math.max(__start_pos.y, __end_pos.y) - rect.top + offset;
 			let geo = __getGeometry();
 			__selection = {
 				left: tools.remap(rel_left, geo.x, geo.width, 0, geo.real_width),
@@ -135,10 +138,19 @@ export function Ocr(__getGeometry) {
 	var __getGlobalPosition = function(event) {
 		let rect = $("stream-box").getBoundingClientRect();
 		let geo = __getGeometry();
+		let offset = __getNavbarOffset();
 		return {
 			x: Math.min(Math.max(event.clientX, rect.left + geo.x), rect.right - geo.x),
-			y: Math.min(Math.max(event.clientY, rect.top + geo.y), rect.bottom - geo.y),
+			y: Math.min(Math.max(event.clientY - offset, rect.top + geo.y - offset), rect.bottom - geo.y - offset),
 		};
+	};
+
+	var __getNavbarOffset = function() {
+		if (tools.browser.is_firefox) {
+			// На лисе наблюдается оффсет из-за навбара, хз почему
+			return wm.getViewGeometry().top;
+		}
+		return 0;
 	};
 
 	var __resetSelection = function() {
@@ -163,8 +175,8 @@ export function Ocr(__getGeometry) {
 				if (http.status === 200) {
 					navigator.clipboard.writeText(http.responseText).then(function() {
 						wm.info("The text is copied to the clipboard");
-					}, function() {
-						wm.error("Can't copy text to the clipboard");
+					}, function(err) {
+						wm.error("Can't copy text to the clipboard:<br>", err);
 					});
 				} else {
 					wm.error("OCR error:<br>", http.responseText);
