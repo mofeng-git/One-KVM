@@ -166,7 +166,7 @@ export function Ocr(__getGeometry) {
 		$("stream-ocr-led").className = "led-yellow-rotating-fast";
 
 		let lang = $("stream-ocr-lang-selector").value;
-		let url = `/api/streamer/snapshot?ocr=1&ocr_lang=${lang}`;
+		let url = `/api/streamer/snapshot?ocr=1&ocr_langs=${lang}`;
 		url += `&ocr_left=${__selection.left}&ocr_top=${__selection.top}`;
 		url += `&ocr_right=${__selection.right}&ocr_bottom=${__selection.bottom}`;
 
