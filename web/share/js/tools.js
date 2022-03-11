@@ -319,9 +319,18 @@ export var tools = new function() {
 			"getBool": (key, default_value) => !!parseInt(self.storage.get(key, (default_value ? "1" : "0"))),
 			"setBool": (key, value) => self.storage.set(key, (value ? "1" : "0")),
 
-			"bindSimpleSwitch": function(el, key, default_value) {
-				el.checked = self.storage.getBool(key, default_value);
-				self.el.setOnClick(el, () => self.storage.setBool(key, el.checked), false);
+			"bindSimpleSwitch": function(el, key, default_value, callback=null) {
+				let value = self.storage.getBool(key, default_value);
+				el.checked = value;
+				if (callback) {
+					callback(value);
+				}
+				self.el.setOnClick(el, function() {
+					if (callback) {
+						callback(el.checked);
+					}
+					self.storage.setBool(key, el.checked);
+				}, false);
 			},
 		};
 	};
