@@ -432,7 +432,7 @@ export function Streamer() {
 		});
 		tools.slider.setOnUpDelayed($("stream-quality-slider"), 1000, (value) => __sendParam("quality", value));
 
-		tools.slider.setParams($("stream-h264-bitrate-slider"), 25, 25000, 25, 5000, function(value) {
+		tools.slider.setParams($("stream-h264-bitrate-slider"), 25, 20000, 25, 5000, function(value) {
 			$("stream-h264-bitrate-value").innerHTML = value;
 		});
 		tools.slider.setOnUpDelayed($("stream-h264-bitrate-slider"), 1000, (value) => __sendParam("h264_bitrate", value));

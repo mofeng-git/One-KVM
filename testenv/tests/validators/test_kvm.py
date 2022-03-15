@@ -131,7 +131,7 @@ def test_fail__valid_stream_resolution(arg: Any) -> None:
 
 
 # =====
-@pytest.mark.parametrize("arg", ["25", " 25000 ", 5000])
+@pytest.mark.parametrize("arg", ["25", " 20000 ", 5000])
 def test_ok__valid_stream_h264_bitrate(arg: Any) -> None:
     value = valid_stream_h264_bitrate(arg)
     assert type(value) == int  # pylint: disable=unidiomatic-typecheck
