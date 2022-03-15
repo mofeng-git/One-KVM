@@ -96,7 +96,7 @@ depends=(
 	e2fsprogs
 	openssh
 	wpa_supplicant
-    hostapd
+	hostapd
 )
 optdepends=(
 	tesseract
