@@ -54,10 +54,9 @@ class HwInfoSubmanager(BaseInfoSubmanager):
         self.__state_poll = state_poll
 
     async def get_state(self) -> Dict:
-        (model, cpu_temp, gpu_temp, throttling) = await asyncio.gather(
+        (model, cpu_temp, throttling) = await asyncio.gather(
             self.__get_dt_model(),
             self.__get_cpu_temp(),
-            self.__get_gpu_temp(),
             self.__get_throttling(),
         )
         return {
@@ -68,7 +67,6 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             "health": {
                 "temp": {
                     "cpu": cpu_temp,
-                    "gpu": gpu_temp,
                 },
                 "throttling": throttling,
             },
@@ -126,12 +124,6 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 },
             }
         return None
-
-    async def __get_gpu_temp(self) -> Optional[float]:
-        return (await self.__parse_vcgencmd(
-            arg="measure_temp",
-            parser=(lambda text: float(text.split("=")[1].split("'")[0])),
-        ))
 
     async def __parse_vcgencmd(self, arg: str, parser: Callable[[str], _RetvalT]) -> Optional[_RetvalT]:
         cmd = [*self.__vcgencmd_cmd, arg]
