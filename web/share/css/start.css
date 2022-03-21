@@ -34,7 +34,7 @@ div.start-box div.start {
 	outline: none;
 	word-wrap: break-word;
 	max-width: 800px;
-	border: var(--border-window-thin);
+	border: var(--border-window-default-thin);
 	border-radius: 8px;
 	box-sizing: border-box;
 	box-shadow: var(--shadow-big);

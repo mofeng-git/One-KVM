@@ -79,10 +79,13 @@
 	--border-hovered-2px: 2px solid #2a2d31;
 	--border-navbar-item-thin: thin solid black;
 	--border-control-thin: thin solid #17191d;
-	--border-window-thin: thin solid #17191d;
 	--border-key-thin: thin solid #202225;
 	--border-intensive-2px: 2px solid #5b90bb;
 	--border-intensive-thin: thin solid #5b90bb;
+
+	--border-window-default-2px: 2px solid #282a2e;
+	--border-window-active-2px: 2px solid #5b90bb;
+	--border-window-default-thin: thin solid #17191d;
 
 	--border-navbar-menu-default-2px: 2px solid black;
 	--border-navbar-menu-active-2px: 2px solid #5b90bb;

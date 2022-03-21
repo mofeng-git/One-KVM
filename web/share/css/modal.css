@@ -37,7 +37,7 @@ div.modal div.modal-window {
 	outline: none;
 	margin: 15% auto;
 	overflow: hidden;
-	border: var(--border-window-thin);
+	border: var(--border-window-default-2px);
 	border-radius: 8px;
 	box-sizing: border-box;
 	box-shadow: var(--shadow-big);
@@ -45,7 +45,7 @@ div.modal div.modal-window {
 	padding: 0;
 }
 div.modal div.modal-window-active {
-	border: var(--border-intensive-2px) !important;
+	border: var(--border-window-active-2px) !important;
 }
 
 div.modal div.modal-window div.modal-header {

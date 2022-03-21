@@ -25,7 +25,7 @@ div.window {
 	outline: none;
 	overflow: hidden;
 	position: fixed;
-	border: var(--border-window-thin);
+	border: var(--border-window-default-2px);
 	border-radius: 8px;
 	box-sizing: border-box;
 	box-shadow: var(--shadow-big);
@@ -38,7 +38,7 @@ div.window-resizable {
 	resize: both;
 }
 div.window-active {
-	border: var(--border-intensive-2px) !important;
+	border: var(--border-window-active-2px) !important;
 }
 div.window-resizable.window-active::-webkit-resizer {
 	width: 0;

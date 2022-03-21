@@ -55,7 +55,7 @@ div#stream-box {
 	object-fit: contain;
 	position: relative;
 	display: inline-block;
-	border: var(--border-window-thin);
+	border: var(--border-window-default-thin);
 }
 div.stream-box-offline {
 	-webkit-filter: grayscale(100%) brightness(75%) sepia(75%);
