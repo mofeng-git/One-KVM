@@ -77,7 +77,7 @@ depends=(
 	ipmitool
 	"janus-gateway-pikvm>=0.11.2-7"
 	"raspberrypi-io-access>=0.5"
-	"ustreamer>=4.4"
+	"ustreamer>=5.1"
 
 	# Systemd UDEV bug
 	"systemd>=248.3-2"
@@ -96,6 +96,8 @@ depends=(
 	e2fsprogs
 	openssh
 	wpa_supplicant
+
+	# Misc
 	hostapd
 )
 optdepends=(
@@ -180,16 +182,7 @@ for _variant in "${_variants[@]}"; do
 		cd \"kvmd-\$pkgver\"
 
 		pkgdesc=\"PiKVM platform configs - $_platform for $_board\"
-		depends=(kvmd=$pkgver-$pkgrel \"raspberrypi-bootloader>=20210216-1\" \"raspberrypi-bootloader-x>=20210216-1\" \"raspberrypi-firmware>=20210128-2\" \"linux-firmware>=20210221.b79d239-1\")
-
-		if [[ $_platform =~ ^.*-hdmi$ ]]; then
-			depends=(\"\${depends[@]}\")
-			if [ $_board == rpi4 ]; then
-				depends=(\"\${depends[@]}\" \"linux-raspberrypi4>=5.10.22-2\" \"linux-raspberrypi4-headers>=5.10.22-2\")
-			else
-				depends=(\"\${depends[@]}\" \"linux-raspberrypi>=5.10.22-2\" \"linux-raspberrypi-headers>=5.10.22-2\")
-			fi
-		fi
+		depends=(kvmd=$pkgver-$pkgrel)
 
 		backup=(
 			etc/sysctl.d/99-kvmd.conf
