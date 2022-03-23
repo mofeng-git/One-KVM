@@ -198,7 +198,7 @@ for _variant in "${_variants[@]}"; do
 		install -DTm644 configs/os/udev/$_platform-$_board.rules \"\$pkgdir/etc/udev/rules.d/99-kvmd.rules\"
 		install -DTm444 configs/kvmd/main/$_platform-$_board.yaml \"\$pkgdir/etc/kvmd/main.yaml\"
 
-		if [ -f configs/fan/$_platform.ini ]; then
+		if [ -f configs/kvmd/fan/$_platform.ini ]; then
 			backup=(\"\${backup[@]}\" etc/kvmd/fan.ini)
 			install -DTm444 configs/kvmd/fan/$_platform.ini \"\$pkgdir/etc/kvmd/fan.ini\"
 		fi
