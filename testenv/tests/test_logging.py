@@ -29,7 +29,7 @@ from kvmd.logging import get_logger
 @pytest.mark.parametrize("depth, name", [
     (0, "tests.test_logging"),
     (1, "_pytest.python"),
-    (2, "pluggy.callers"),
+    (2, "pluggy._callers"),
 ])
 def test_ok__get_logger(depth: int, name: str) -> None:
     assert get_logger(depth).name == name
