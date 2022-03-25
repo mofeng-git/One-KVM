@@ -51,7 +51,7 @@ function __setAppText() {
 }
 
 function __loadKvmdInfo() {
-	let http = tools.makeRequest("GET", "/api/info?fields=meta,extras", function() {
+	let http = tools.makeRequest("GET", "/api/info?fields=auth,meta,extras", function() {
 		if (http.readyState === 4) {
 			if (http.status === 200) {
 				let info = JSON.parse(http.responseText).result;
@@ -85,8 +85,10 @@ function __loadKvmdInfo() {
 					}
 				}
 
-				$("apps").innerHTML += __makeApp("logout-button", "#", "share/svg/logout.svg", "Logout");
-				tools.el.setOnClick($("logout-button"), __logout);
+				if (info.auth.enabled) {
+					$("apps").innerHTML += __makeApp("logout-button", "#", "share/svg/logout.svg", "Logout");
+					tools.el.setOnClick($("logout-button"), __logout);
+				}
 
 				if (info.meta !== null && info.meta.server && info.meta.server.host) {
 					$("kvmd-meta-server-host").innerHTML = info.meta.server.host;

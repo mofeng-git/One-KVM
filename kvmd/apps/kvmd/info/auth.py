@@ -20,33 +20,15 @@
 # ========================================================================== #
 
 
-from typing import Set
-
-from ....yamlconf import Section
+from typing import Dict
 
 from .base import BaseInfoSubmanager
-from .auth import AuthInfoSubmanager
-from .system import SystemInfoSubmanager
-from .meta import MetaInfoSubmanager
-from .extras import ExtrasInfoSubmanager
-from .hw import HwInfoSubmanager
-from .fan import FanInfoSubmanager
 
 
 # =====
-class InfoManager:
-    def __init__(self, config: Section) -> None:
-        self.__subs = {
-            "system": SystemInfoSubmanager(config.kvmd.streamer.cmd),
-            "auth": AuthInfoSubmanager(config.kvmd.auth.enabled),
-            "meta": MetaInfoSubmanager(config.kvmd.info.meta),
-            "extras": ExtrasInfoSubmanager(config),
-            "hw": HwInfoSubmanager(**config.kvmd.info.hw._unpack()),
-            "fan": FanInfoSubmanager(**config.kvmd.info.fan._unpack()),
-        }
+class AuthInfoSubmanager(BaseInfoSubmanager):
+    def __init__(self, enabled: bool) -> None:
+        self.__enabled = enabled
 
-    def get_subs(self) -> Set[str]:
-        return set(self.__subs)
-
-    def get_submanager(self, name: str) -> BaseInfoSubmanager:
-        return self.__subs[name]
+    async def get_state(self) -> Dict:
+        return {"enabled": self.__enabled}
