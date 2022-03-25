@@ -12,6 +12,10 @@ kvmd:
 
     auth: !include auth.yaml
 
+    info:
+        fan:
+            unix: /run/kvmd/fan.sock
+
     hid:
         type: otg
         keyboard:

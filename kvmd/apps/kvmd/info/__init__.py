@@ -29,6 +29,7 @@ from .system import SystemInfoSubmanager
 from .meta import MetaInfoSubmanager
 from .extras import ExtrasInfoSubmanager
 from .hw import HwInfoSubmanager
+from .fan import FanInfoSubmanager
 
 
 # =====
@@ -39,6 +40,7 @@ class InfoManager:
             "meta": MetaInfoSubmanager(config.kvmd.info.meta),
             "extras": ExtrasInfoSubmanager(config),
             "hw": HwInfoSubmanager(**config.kvmd.info.hw._unpack()),
+            "fan": FanInfoSubmanager(**config.kvmd.info.fan._unpack()),
         }
 
     def get_subs(self) -> Set[str]:

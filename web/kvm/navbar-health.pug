@@ -17,3 +17,16 @@ div(id="hw-health-dropdown" class="hidden")
 				+menu_message("led-overheating", "Overheating detected", "led-gray")
 					| Frequency capping due to overheating,#[br]
 					| improve cooling of the Raspberry Pi
+
+div(id="fan-health-dropdown" class="hidden")
+	li(class="left")
+		a(class="menu-button" href="#")
+			+navbar_led("fan-health-led", "led-fan", "hidden")
+		div(data-dont-hide-menu class="menu")
+			+menu_message("warning", "Raspberry Pi's health is at risk")
+				| This is not a drill! A red icon indicates a current issue,#[br]
+				| a yellow one that was observed in the past
+			div(id="fan-health-message-fail")
+				hr
+				+menu_message("led-fan", "Fan failed", "led-gray")
+					| A fan error occured, please check the log

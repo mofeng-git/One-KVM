@@ -375,6 +375,11 @@ def _get_config_scheme() -> Dict:
                     "vcgencmd_cmd":  Option(["/opt/vc/bin/vcgencmd"], type=valid_command),
                     "state_poll":    Option(10.0,  type=valid_float_f01),
                 },
+                "fan": {
+                    "unix":       Option("",  type=valid_abs_path, if_empty="", unpack_as="unix_path"),
+                    "timeout":    Option(5.0, type=valid_float_f01),
+                    "state_poll": Option(5.0, type=valid_float_f01),
+                },
             },
 
             "hid": {

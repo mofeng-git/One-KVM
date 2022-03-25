@@ -200,6 +200,7 @@ for _variant in "${_variants[@]}"; do
 
 		if [ -f configs/kvmd/fan/$_platform.ini ]; then
 			backup=(\"\${backup[@]}\" etc/kvmd/fan.ini)
+			depends=(\"\${depends[@]}\" \"kvmd-fan>=0.18\")
 			install -DTm444 configs/kvmd/fan/$_platform.ini \"\$pkgdir/etc/kvmd/fan.ini\"
 		fi
 

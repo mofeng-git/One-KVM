@@ -53,6 +53,9 @@ export function Session() {
 	var __gpio = new Gpio(__recorder);
 	var __ocr = new Ocr(__streamer.getGeometry);
 
+	var __info_hw_state = null;
+	var __info_fan_state = null;
+
 	var __init__ = function() {
 		__startSession();
 	};
@@ -86,16 +89,6 @@ export function Session() {
 	};
 
 	var __setAboutInfoHw = function(state) {
-		$("about-hw").innerHTML = `
-			Platform base: <span class="code-comment">${state.platform.base}</span><br>
-			<hr>
-			Temperature:
-			${__formatTemp(state.health.temp)}
-			<hr>
-			Throttling:
-			${__formatThrottling(state.health.throttling)}
-		`;
-
 		if (state.health.throttling !== null) {
 			let flags = state.health.throttling.parsed_flags;
 			let undervoltage = (flags.undervoltage.now || flags.undervoltage.past);
@@ -107,31 +100,74 @@ export function Session() {
 			tools.hidden.setVisible($("hw-health-message-undervoltage"), undervoltage);
 			tools.hidden.setVisible($("hw-health-message-overheating"), freq_capped);
 		}
+		__info_hw_state = state;
+		__renderAboutInfoHardware();
 	};
 
-	var __setExtras = function(state) {
-		let show_hook = null;
-		let close_hook = null;
-		let has_webterm = (state.webterm && (state.webterm.enabled || state.webterm.started));
-		if (has_webterm) {
-			let path = "/" + state.webterm.path;
-			show_hook = function() {
-				tools.info("Terminal opened: ", path);
-				$("webterm-iframe").src = path;
-			};
-			close_hook = function() {
-				tools.info("Terminal closed");
-				$("webterm-iframe").src = "";
-			};
+	var __setAboutInfoFan = function(state) {
+		let failed = false;
+		let failed_past = false;
+		if (state.monitored) {
+			if (state.state === null) {
+				failed = true;
+			} else {
+				if (!state.state.fan.ok) {
+					failed = true;
+				} else if (state.state.fan.last_fail_ts >= 0) {
+					failed = true;
+					failed_past = true;
+				}
+			}
 		}
-		tools.feature.setEnabled($("webterm"), has_webterm);
-		$("webterm-window").show_hook = show_hook;
-		$("webterm-window").close_hook = close_hook;
+		tools.hidden.setVisible($("fan-health-dropdown"), failed);
+		$("fan-health-led").className = (failed ? (failed_past ? "led-yellow" : "led-red") : "hidden");
 
-		__streamer.setJanusEnabled(
-			(state.janus && (state.janus.enabled || state.janus.started))
-			|| (state.janus_static && (state.janus_static.enabled || state.janus_static.started))
-		);
+		__info_fan_state = state;
+		__renderAboutInfoHardware();
+	};
+
+	var __renderAboutInfoHardware = function() {
+		let html = "";
+		if (__info_hw_state !== null) {
+			html += `
+				Platform base: <span class="code-comment">${__info_hw_state.platform.base}</span><br>
+				<hr>
+				Temperature:
+				${__formatTemp(__info_hw_state.health.temp)}
+				<hr>
+				Throttling:
+				${__formatThrottling(__info_hw_state.health.throttling)}
+			`;
+		}
+		if (__info_fan_state !== null) {
+			if (html.length > 0) {
+				html += "<hr>";
+			}
+			html += `
+				Fan:
+				${__formatFan(__info_fan_state)}
+			`;
+		}
+		$("about-hardware").innerHTML = html;
+	};
+
+	var __formatFan = function(state) {
+		if (!state.monitored) {
+			return __formatUl([["Status", "Not monitored"]]);
+		} else if (state.state === null) {
+			return __formatUl([["Status", __colored("red", "Not available")]]);
+		} else {
+			state = state.state;
+			let pairs = [
+				["Status", (state.fan.ok ? __colored("green", "Ok") : __colored("red", "Failed"))],
+				["Desired speed", `${state.fan.speed}%`],
+				["PWM", `${state.fan.pwm}`],
+			];
+			if (state.hall.available) {
+				pairs.push(["RPM", __colored((state.fan.ok ? "green" : "red"), state.hall.rpm)]);
+			}
+			return __formatUl(pairs);
+		}
 	};
 
 	var __formatTemp = function(temp) {
@@ -158,11 +194,14 @@ export function Session() {
 	};
 
 	var __formatThrottleError = function(flags) {
-		let colored = ((color, text) => `<font color="${color}">${text}</font>`);
 		return `
-			${flags["now"] ? colored("red", "RIGHT NOW") : colored("green", "No")};
-			${flags["past"] ? colored("red", "In the past") : colored("green", "Never")}
+			${flags["now"] ? __colored("red", "RIGHT NOW") : __colored("green", "No")};
+			${flags["past"] ? __colored("red", "In the past") : __colored("green", "Never")}
 		`;
+	};
+
+	var __colored = function(color, text) {
+		return `<font color="${color}">${text}</font>`;
 	};
 
 	var __setAboutInfoSystem = function(state) {
@@ -201,6 +240,31 @@ export function Session() {
 			text += `<li>${pair[0]}: <span class="code-comment">${pair[1]}</span></li>`;
 		}
 		return text + "</ul>";
+	};
+
+	var __setExtras = function(state) {
+		let show_hook = null;
+		let close_hook = null;
+		let has_webterm = (state.webterm && (state.webterm.enabled || state.webterm.started));
+		if (has_webterm) {
+			let path = "/" + state.webterm.path;
+			show_hook = function() {
+				tools.info("Terminal opened: ", path);
+				$("webterm-iframe").src = path;
+			};
+			close_hook = function() {
+				tools.info("Terminal closed");
+				$("webterm-iframe").src = "";
+			};
+		}
+		tools.feature.setEnabled($("webterm"), has_webterm);
+		$("webterm-window").show_hook = show_hook;
+		$("webterm-window").close_hook = close_hook;
+
+		__streamer.setJanusEnabled(
+			(state.janus && (state.janus.enabled || state.janus.started))
+			|| (state.janus_static && (state.janus_static.enabled || state.janus_static.started))
+		);
 	};
 
 	var __startSession = function() {
@@ -244,6 +308,7 @@ export function Session() {
 			case "pong": __missed_heartbeats = 0; break;
 			case "info_meta_state": __setAboutInfoMeta(data.event); break;
 			case "info_hw_state": __setAboutInfoHw(data.event); break;
+			case "info_fan_state": __setAboutInfoFan(data.event); break;
 			case "info_system_state": __setAboutInfoSystem(data.event); break;
 			case "info_extras_state": __setExtras(data.event); break;
 			case "gpio_model_state": __gpio.setModel(data.event); break;

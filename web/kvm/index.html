@@ -106,6 +106,38 @@
           </div>
         </li>
       </div>
+      <div class="hidden" id="fan-health-dropdown">
+        <li class="left"><a class="menu-button" href="#"><img class="hidden" data-dont-hide-menu id="fan-health-led" src="/share/svg/led-fan.svg"></a>
+          <div class="menu" data-dont-hide-menu>
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
+                    </tr>
+                    <tr>
+                      <td><sup style="line-height:1">This is not a drill! A red icon indicates a current issue,<br>
+                          a yellow one that was observed in the past</sup></td>
+                    </tr>
+                  </table>
+                </div>
+            <div id="fan-health-message-fail">
+              <hr>
+                  <div class="text">
+                    <table>
+                      <tr>
+                        <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-fan.svg"></td>
+                        <td style="line-height:1.5"><b>Fan failed</b></td>
+                      </tr>
+                      <tr>
+                        <td><sup style="line-height:1">A fan error occured, please check the log</sup></td>
+                      </tr>
+                    </table>
+                  </div>
+            </div>
+          </div>
+        </li>
+      </div>
       <li class="right"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" data-dont-hide-menu id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" data-dont-hide-menu id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" data-dont-hide-menu id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg">System</a>
         <div class="menu" data-dont-hide-menu>
           <table class="kv" style="width: calc(100% - 20px)">
@@ -1539,10 +1571,10 @@
                 <div class="code" id="about-meta"><span class="code-comment">No data</span>
                 </div>
               </div>
-              <input type="radio" name="about-tab-button" id="about-tab-hw-button">
-              <label for="about-tab-hw-button">Hardware</label>
+              <input type="radio" name="about-tab-button" id="about-tab-hardware-button">
+              <label for="about-tab-hardware-button">Hardware</label>
               <div class="tab">
-                <div class="code" id="about-hw"><span class="code-comment">No data</span>
+                <div class="code" id="about-hardware"><span class="code-comment">No data</span>
                 </div>
               </div>
               <input type="radio" name="about-tab-button" id="about-tab-version-button">
