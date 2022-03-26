@@ -61,6 +61,8 @@ depends=(
 	"python-pillow>=8.3.1-1"
 	python-xlib
 	python-hidapi
+	python-six
+	python-radius
 	libgpiod
 	freetype2
 	"v4l-utils>=1.22.1-1"
