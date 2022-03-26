@@ -50,9 +50,10 @@ class ExportApi:
 
     @exposed_http("GET", "/export/prometheus/metrics")
     async def __prometheus_metrics_handler(self, _: Request) -> Response:
-        (atx_state, hw_state, gpio_state) = await asyncio.gather(*[
+        (atx_state, hw_state, fan_state, gpio_state) = await asyncio.gather(*[
             self.__atx.get_state(),
             self.__info_manager.get_submanager("hw").get_state(),
+            self.__info_manager.get_submanager("fan").get_state(),
             self.__user_gpio.get_state(),
         ])
         rows: List[str] = []
@@ -65,8 +66,8 @@ class ExportApi:
                 for key in ["online", "state"]:
                     self.__append_prometheus_rows(rows, ch_state["state"], f"pikvm_gpio_{mode}_{key}_{channel}")
 
-        if hw_state is not None:
-            self.__append_prometheus_rows(rows, hw_state["health"], "pikvm_hw")
+        self.__append_prometheus_rows(rows, hw_state["health"], "pikvm_hw")
+        self.__append_prometheus_rows(rows, fan_state, "pikvm_fan")
 
         return Response(text="\n".join(rows))
 
