@@ -76,7 +76,7 @@ depends=(
 	dnsmasq
 	ipmitool
 	"janus-gateway-pikvm>=0.11.2-7"
-	"raspberrypi-io-access>=0.5"
+	platform-io-access
 	"ustreamer>=5.1"
 
 	# Systemd UDEV bug
