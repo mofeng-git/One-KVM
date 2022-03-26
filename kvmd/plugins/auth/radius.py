@@ -40,6 +40,7 @@ from pyrad.client import Client
 from pyrad.dictionary import Dictionary
 import pyrad.packet 
 
+
 # =====
 class Plugin(BaseAuthService):
     def __init__(  # pylint: disable=super-init-not-called
