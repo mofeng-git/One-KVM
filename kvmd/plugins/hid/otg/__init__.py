@@ -88,13 +88,13 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
     def get_plugin_options(cls) -> Dict:
         return {
             "keyboard": {
-                "device":         Option("",  type=valid_abs_path, unpack_as="device_path"),
+                "device":         Option("/dev/kvmd-hid-keyboard", type=valid_abs_path, unpack_as="device_path"),
                 "select_timeout": Option(0.1, type=valid_float_f01),
                 "queue_timeout":  Option(0.1, type=valid_float_f01),
                 "write_retries":  Option(150, type=valid_int_f1),
             },
             "mouse": {
-                "device":             Option("",    type=valid_abs_path, unpack_as="device_path"),
+                "device":             Option("/dev/kvmd-hid-mouse", type=valid_abs_path, unpack_as="device_path"),
                 "select_timeout":     Option(0.1,   type=valid_float_f01),
                 "queue_timeout":      Option(0.1,   type=valid_float_f01),
                 "write_retries":      Option(150,   type=valid_int_f1),

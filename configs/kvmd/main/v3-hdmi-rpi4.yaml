@@ -15,10 +15,6 @@ kvmd:
 
     hid:
         type: otg
-        keyboard:
-            device: /dev/kvmd-hid-keyboard
-        mouse:
-            device: /dev/kvmd-hid-mouse
 
     atx:
         type: gpio
