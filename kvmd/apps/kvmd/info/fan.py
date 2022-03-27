@@ -34,6 +34,8 @@ from ....logging import get_logger
 from .... import aiotools
 from .... import htclient
 
+from ..sysunit import get_service_status
+
 from .base import BaseInfoSubmanager
 
 
@@ -41,19 +43,22 @@ from .base import BaseInfoSubmanager
 class FanInfoSubmanager(BaseInfoSubmanager):
     def __init__(
         self,
+        daemon: str,
         unix_path: str,
         timeout: float,
         state_poll: float,
     ) -> None:
 
+        self.__daemon = daemon
         self.__unix_path = unix_path
         self.__timeout = timeout
         self.__state_poll = state_poll
 
     async def get_state(self) -> Dict:
+        monitored = await self.__get_monitored()
         return {
-            "monitored": bool(self.__unix_path),
-            "state": ((await self.__get_fan_state() if self.__unix_path else None)),
+            "monitored": monitored,
+            "state": ((await self.__get_fan_state() if monitored else None)),
         }
 
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
@@ -76,6 +81,13 @@ class FanInfoSubmanager(BaseInfoSubmanager):
                 await aiotools.wait_infinite()
 
     # =====
+
+    async def __get_monitored(self) -> bool:
+        if self.__unix_path:
+            status = await aiotools.run_async(get_service_status, self.__daemon)
+            if status is not None:
+                return (status[0] or status[1])
+        return False
 
     async def __get_fan_state(self) -> Optional[Dict]:
         try:

@@ -376,6 +376,7 @@ def _get_config_scheme() -> Dict:
                     "state_poll":    Option(10.0,  type=valid_float_f01),
                 },
                 "fan": {
+                    "daemon":     Option("kvmd-fan", type=valid_stripped_string),
                     "unix":       Option("",  type=valid_abs_path, if_empty="", unpack_as="unix_path"),
                     "timeout":    Option(5.0, type=valid_float_f01),
                     "state_poll": Option(5.0, type=valid_float_f01),
