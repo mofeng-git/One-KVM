@@ -147,7 +147,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def get_plugin_options(cls) -> Dict:
         return {
             "gpio_device":    Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="gpio_device_path"),
-            "reset_pin":      Option(-1,    type=valid_gpio_pin_optional),
+            "reset_pin":      Option(4,     type=valid_gpio_pin_optional),
             "reset_inverted": Option(False, type=valid_bool),
             "reset_delay":    Option(0.1,   type=valid_float_f01),
 

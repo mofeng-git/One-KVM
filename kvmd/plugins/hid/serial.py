@@ -101,7 +101,7 @@ class Plugin(BaseMcuHid):
     @classmethod
     def __get_phy_options(cls) -> Dict:
         return {
-            "device":       Option("",     type=valid_abs_path, unpack_as="device_path"),
+            "device":       Option("/dev/kvmd-hid", type=valid_abs_path, unpack_as="device_path"),
             "speed":        Option(115200, type=valid_tty_speed),
             "read_timeout": Option(2.0,    type=valid_float_f01),
         }

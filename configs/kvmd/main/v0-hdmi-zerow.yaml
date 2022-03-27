@@ -11,8 +11,6 @@ kvmd:
 
     hid:
         type: serial
-        reset_pin: 4
-        device: /dev/kvmd-hid
 
     atx:
         type: gpio
