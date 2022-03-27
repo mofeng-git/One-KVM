@@ -66,9 +66,3 @@ vnc:
     memsink:
         jpeg:
             sink: "kvmd::ustreamer::jpeg"
-
-    server:
-        tls:
-            x509:
-                cert: /etc/kvmd/vnc/ssl/server.crt
-                key: /etc/kvmd/vnc/ssl/server.key

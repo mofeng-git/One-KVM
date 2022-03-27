@@ -633,8 +633,8 @@ def _get_config_scheme() -> Dict:
                     "ciphers": Option("ALL:@SECLEVEL=0", type=valid_ssl_ciphers, if_empty=""),
                     "timeout": Option(30.0, type=valid_float_f01),
                     "x509": {
-                        "cert": Option("", type=valid_abs_file, if_empty=""),
-                        "key":  Option("", type=valid_abs_file, if_empty=""),
+                        "cert": Option("/etc/kvmd/vnc/ssl/server.crt", type=valid_abs_file, if_empty=""),
+                        "key":  Option("/etc/kvmd/vnc/ssl/server.key", type=valid_abs_file, if_empty=""),
                     },
                 },
             },

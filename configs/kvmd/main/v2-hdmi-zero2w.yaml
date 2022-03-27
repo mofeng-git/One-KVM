@@ -62,9 +62,3 @@ vnc:
             sink: "kvmd::ustreamer::jpeg"
         h264:
             sink: "kvmd::ustreamer::h264"
-
-    server:
-        tls:
-            x509:
-                cert: /etc/kvmd/vnc/ssl/server.crt
-                key: /etc/kvmd/vnc/ssl/server.key
