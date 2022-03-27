@@ -62,7 +62,7 @@ depends=(
 	python-xlib
 	python-hidapi
 	python-six
-	python-radius
+	python-pyrad
 	libgpiod
 	freetype2
 	"v4l-utils>=1.22.1-1"
