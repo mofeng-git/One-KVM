@@ -95,16 +95,16 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         return {
             "device": Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="device_path"),
 
-            "power_led_pin":      Option(-1,    type=valid_gpio_pin),
+            "power_led_pin":      Option(24,    type=valid_gpio_pin),
             "power_led_inverted": Option(False, type=valid_bool),
             "power_led_debounce": Option(0.1,   type=valid_float_f0),
 
-            "hdd_led_pin":      Option(-1,    type=valid_gpio_pin),
+            "hdd_led_pin":      Option(22,    type=valid_gpio_pin),
             "hdd_led_inverted": Option(False, type=valid_bool),
             "hdd_led_debounce": Option(0.1,   type=valid_float_f0),
 
-            "power_switch_pin": Option(-1,  type=valid_gpio_pin),
-            "reset_switch_pin": Option(-1,  type=valid_gpio_pin),
+            "power_switch_pin": Option(23,  type=valid_gpio_pin),
+            "reset_switch_pin": Option(27,  type=valid_gpio_pin),
             "click_delay":      Option(0.1, type=valid_float_f01),
             "long_click_delay": Option(5.5, type=valid_float_f01),
         }
