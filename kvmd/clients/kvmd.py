@@ -245,15 +245,11 @@ class KvmdClientSession:
 class KvmdClient:
     def __init__(
         self,
-        host: str,
-        port: int,
         unix_path: str,
         timeout: float,
         user_agent: str,
     ) -> None:
 
-        self.__host = host
-        self.__port = port
         self.__unix_path = unix_path
         self.__timeout = timeout
         self.__user_agent = user_agent
@@ -271,12 +267,11 @@ class KvmdClient:
                 "X-KVMD-Passwd": passwd,
                 "User-Agent": self.__user_agent,
             },
+            "connector": aiohttp.UnixConnector(path=self.__unix_path),
             "timeout": aiohttp.ClientTimeout(total=self.__timeout),
         }
-        if self.__unix_path:
-            kwargs["connector"] = aiohttp.UnixConnector(path=self.__unix_path)
         return aiohttp.ClientSession(**kwargs)
 
     def __make_url(self, handle: str) -> str:
         assert not handle.startswith("/"), handle
-        return f"http://{self.__host}:{self.__port}/{handle}"
+        return f"http://localhost:0/{handle}"

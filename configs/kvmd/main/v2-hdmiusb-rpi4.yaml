@@ -7,9 +7,6 @@ override: !include [override.d, override.yaml]
 logging: !include logging.yaml
 
 kvmd:
-    server:
-        unix: /run/kvmd/kvmd.sock
-
     auth: !include auth.yaml
 
     hid:
@@ -45,7 +42,6 @@ kvmd:
                 - 720x576
                 - 720x480
                 - 640x480
-        unix: /run/kvmd/ustreamer.sock
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
@@ -65,17 +61,8 @@ kvmd:
             - "--sink=kvmd::ustreamer::jpeg"
             - "--sink-mode=0660"
 
-ipmi:
-    kvmd:
-        unix: /run/kvmd/kvmd.sock
 
 vnc:
-    kvmd:
-        unix: /run/kvmd/kvmd.sock
-
-    streamer:
-        unix: /run/kvmd/ustreamer.sock
-
     memsink:
         jpeg:
             sink: "kvmd::ustreamer::jpeg"

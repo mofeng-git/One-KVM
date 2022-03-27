@@ -343,9 +343,7 @@ def _get_config_scheme() -> Dict:
 
         "kvmd": {
             "server": {
-                "host":              Option("localhost", type=valid_ip_or_host),
-                "port":              Option(0,     type=valid_port),
-                "unix":              Option("",    type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
+                "unix":              Option("/run/kvmd/kvmd.sock", type=valid_abs_path, unpack_as="unix_path"),
                 "unix_rm":           Option(True,  type=valid_bool),
                 "unix_mode":         Option(0o660, type=valid_unix_mode),
                 "heartbeat":         Option(15.0,  type=valid_float_f01),
@@ -447,9 +445,7 @@ def _get_config_scheme() -> Dict:
                     "max":     Option(60, type=valid_stream_h264_gop, unpack_as="h264_gop_max"),
                 },
 
-                "host":    Option("localhost", type=valid_ip_or_host),
-                "port":    Option(0,   type=valid_port),
-                "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
+                "unix":    Option("/run/kvmd/ustreamer.sock", type=valid_abs_path, unpack_as="unix_path"),
                 "timeout": Option(2.0, type=valid_float_f01),
 
                 "process_name_prefix": Option("kvmd/streamer"),
@@ -600,9 +596,7 @@ def _get_config_scheme() -> Dict:
             },
 
             "kvmd": {
-                "host":    Option("localhost", type=valid_ip_or_host),
-                "port":    Option(0,   type=valid_port),
-                "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
+                "unix":    Option("/run/kvmd/kvmd.sock", type=valid_abs_path, unpack_as="unix_path"),
                 "timeout": Option(5.0, type=valid_float_f01),
             },
 
@@ -646,16 +640,12 @@ def _get_config_scheme() -> Dict:
             },
 
             "kvmd": {
-                "host":    Option("localhost", type=valid_ip_or_host),
-                "port":    Option(0,   type=valid_port),
-                "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
+                "unix":    Option("/run/kvmd/kvmd.sock", type=valid_abs_path, unpack_as="unix_path"),
                 "timeout": Option(5.0, type=valid_float_f01),
             },
 
             "streamer": {
-                "host":    Option("localhost", type=valid_ip_or_host),
-                "port":    Option(0,   type=valid_port),
-                "unix":    Option("",  type=valid_abs_path, only_if="!port", unpack_as="unix_path"),
+                "unix":    Option("/run/kvmd/ustreamer.sock", type=valid_abs_path, unpack_as="unix_path"),
                 "timeout": Option(5.0, type=valid_float_f01),
             },
 

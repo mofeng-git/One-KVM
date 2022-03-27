@@ -182,8 +182,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         shutdown_delay: float,
         state_poll: float,
 
-        host: str,
-        port: int,
         unix_path: str,
         timeout: float,
 
@@ -200,9 +198,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__shutdown_delay = shutdown_delay
         self.__state_poll = state_poll
 
-        assert port or unix_path
-        self.__host = host
-        self.__port = port
         self.__unix_path = unix_path
         self.__timeout = timeout
 
@@ -402,16 +397,15 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         if not self.__http_session:
             kwargs: Dict = {
                 "headers": {"User-Agent": htclient.make_user_agent("KVMD")},
+                "connector": aiohttp.UnixConnector(path=self.__unix_path),
                 "timeout": aiohttp.ClientTimeout(total=self.__timeout),
             }
-            if self.__unix_path:
-                kwargs["connector"] = aiohttp.UnixConnector(path=self.__unix_path)
             self.__http_session = aiohttp.ClientSession(**kwargs)
         return self.__http_session
 
     def __make_url(self, handle: str) -> str:
         assert not handle.startswith("/"), handle
-        return f"http://{self.__host}:{self.__port}/{handle}"
+        return f"http://localhost:0/{handle}"
 
     # =====
 
@@ -452,8 +446,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         assert self.__streamer_proc is None
         cmd = [
             part.format(
-                host=self.__host,
-                port=self.__port,
                 unix=self.__unix_path,
                 process_name_prefix=self.__process_name_prefix,
                 **self.__params.get_params(),

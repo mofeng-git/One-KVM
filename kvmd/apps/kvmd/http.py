@@ -215,34 +215,26 @@ def set_request_auth_info(request: BaseRequest, info: str) -> None:
 class HttpServer:
     def run(
         self,
-        host: str,
-        port: int,
         unix_path: str,
         unix_rm: bool,
         unix_mode: int,
         access_log_format: str,
     ) -> None:
 
-        assert port or unix_path
-        if unix_path:
-            socket_kwargs: Dict = {}
-            if unix_rm and os.path.exists(unix_path):
-                os.remove(unix_path)
-            server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            server_socket.bind(unix_path)
-            if unix_mode:
-                os.chmod(unix_path, unix_mode)
-            socket_kwargs = {"sock": server_socket}
-        else:
-            socket_kwargs = {"host": host, "port": port}
+        if unix_rm and os.path.exists(unix_path):
+            os.remove(unix_path)
+        server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server_socket.bind(unix_path)
+        if unix_mode:
+            os.chmod(unix_path, unix_mode)
 
         run_app(
+            sock=server_socket,
             app=self._make_app(),
             shutdown_timeout=1,
             access_log_format=access_log_format,
             print=self.__run_app_print,
             loop=asyncio.get_event_loop(),
-            **socket_kwargs,
         )
 
     async def _make_app(self) -> Application:

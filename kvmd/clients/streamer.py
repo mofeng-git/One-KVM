@@ -71,17 +71,12 @@ class HttpStreamerClient(BaseStreamerClient):
     def __init__(
         self,
         name: str,
-        host: str,
-        port: int,
         unix_path: str,
         timeout: float,
         user_agent: str,
     ) -> None:
 
-        assert port or unix_path
         self.__name = name
-        self.__host = host
-        self.__port = port
         self.__unix_path = unix_path
         self.__timeout = timeout
         self.__user_agent = user_agent
@@ -125,18 +120,17 @@ class HttpStreamerClient(BaseStreamerClient):
     def __make_http_session(self) -> aiohttp.ClientSession:
         kwargs: Dict = {
             "headers": {"User-Agent": self.__user_agent},
+            "connector": aiohttp.UnixConnector(path=self.__unix_path),
             "timeout": aiohttp.ClientTimeout(
                 connect=self.__timeout,
                 sock_read=self.__timeout,
             ),
         }
-        if self.__unix_path:
-            kwargs["connector"] = aiohttp.UnixConnector(path=self.__unix_path)
         return aiohttp.ClientSession(**kwargs)
 
     def __make_url(self, handle: str) -> str:
         assert not handle.startswith("/"), handle
-        return f"http://{self.__host}:{self.__port}/{handle}"
+        return f"http://localhost:0/{handle}"
 
     def __patch_stream_reader(self, reader: aiohttp.StreamReader) -> None:
         # https://github.com/pikvm/pikvm/issues/92

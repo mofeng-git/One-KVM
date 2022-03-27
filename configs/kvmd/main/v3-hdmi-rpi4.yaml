@@ -7,9 +7,6 @@ override: !include [override.d, override.yaml]
 logging: !include logging.yaml
 
 kvmd:
-    server:
-        unix: /run/kvmd/kvmd.sock
-
     auth: !include auth.yaml
 
     info:
@@ -34,7 +31,6 @@ kvmd:
         type: otg
 
     streamer:
-        unix: /run/kvmd/ustreamer.sock
         h264_bitrate:
             default: 5000
         cmd:
@@ -72,17 +68,8 @@ kvmd:
                 pulse:
                     delay: 0
 
-ipmi:
-    kvmd:
-        unix: /run/kvmd/kvmd.sock
 
 vnc:
-    kvmd:
-        unix: /run/kvmd/kvmd.sock
-
-    streamer:
-        unix: /run/kvmd/ustreamer.sock
-
     memsink:
         jpeg:
             sink: "kvmd::ustreamer::jpeg"
