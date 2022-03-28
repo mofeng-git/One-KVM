@@ -21,7 +21,6 @@
 
 
 import io
-import textwrap
 
 from typing import Dict
 
@@ -43,8 +42,8 @@ from . import BaseAuthService
 
 
 # =====
-_FREERADUIS_DICT = textwrap.dedent("""
-    # https://github.com/pyradius/pyrad/raw/master/example/dictionary
+_FREERADUIS_DICT = """
+# https://github.com/pyradius/pyrad/raw/master/example/dictionary
 
 #
 #	Following are the proper new names. Use these.
@@ -395,7 +394,7 @@ VALUE		Packet-Type	Accounting-Message		10
 VALUE		Packet-Type	Access-Challenge		11
 VALUE		Packet-Type	Status-Server			12
 VALUE		Packet-Type	Status-Client			13
-""")
+"""
 
 
 # =====
