@@ -86,7 +86,7 @@ def main(argv: Optional[List[str]]=None) -> None:
         ),
         info_manager=InfoManager(global_config),
         log_reader=LogReader(),
-        user_gpio=UserGpio(config.gpio, global_config.otg.udc),
+        user_gpio=UserGpio(config.gpio, global_config.otg.udc, global_config.otg.gadget),
         ocr=TesseractOcr(**config.ocr._unpack()),
 
         hid=hid,

@@ -231,7 +231,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
 
 # =====
 class UserGpio:
-    def __init__(self, config: Section, udc: str) -> None:
+    def __init__(self, config: Section, udc: str, gadget: str) -> None:
         self.__view = config.view
 
         self.__notifier = aiotools.AioNotifier()
@@ -241,7 +241,7 @@ class UserGpio:
                 instance_name=driver,
                 notifier=self.__notifier,
                 **drv_config._unpack(ignore=["instance_name", "notifier", "type"]),
-                **({"udc": udc} if drv_config.type == "otgbind" else {}),  # Hack
+                **({"udc": udc, "gadget": gadget} if drv_config.type == "otgbind" else {}),  # Hack
             )
             for (driver, drv_config) in tools.sorted_kvs(config.drivers)
         }

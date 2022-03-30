@@ -46,19 +46,21 @@ class Plugin(BaseUserGpioDriver):
         notifier: aiotools.AioNotifier,
 
         udc: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
+        gadget: str,  # ditto
     ) -> None:
 
         super().__init__(instance_name, notifier)
 
         self.__udc = udc
-        self.__driver = ""
+
+        self.__ctl_path = f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget/{gadget}/UDC"
 
     @classmethod
     def get_pin_validator(cls) -> Callable[[Any], Any]:
         return str
 
     def prepare(self) -> None:
-        (self.__udc, self.__driver) = usb.find_udc(self.__udc)
+        self.__udc = usb.find_udc(self.__udc)[0]
         get_logger().info("Using UDC %s", self.__udc)
 
     async def run(self) -> None:
@@ -67,12 +69,12 @@ class Plugin(BaseUserGpioDriver):
             try:
                 while True:
                     await self._notifier.notify()
-                    if os.path.isdir(self.__get_driver_path()):
+                    if os.path.isfile(self.__ctl_path):
                         break
                     await asyncio.sleep(5)
 
                 with Inotify() as inotify:
-                    inotify.watch(self.__get_driver_path(), InotifyMask.ALL_MODIFY_EVENTS)
+                    inotify.watch(os.path.dirname(self.__ctl_path), InotifyMask.ALL_MODIFY_EVENTS)
                     await self._notifier.notify()
                     while True:
                         need_restart = False
@@ -90,19 +92,19 @@ class Plugin(BaseUserGpioDriver):
             except Exception:
                 logger.exception("Unexpected OTG-bind watcher error")
 
+    async def cleanup(self) -> None:
+        with open(self.__ctl_path) as ctl_file:
+            ctl_file.write(self.__udc)
+
     async def read(self, pin: str) -> bool:
         _ = pin
-        return os.path.islink(self.__get_driver_path(self.__udc))
+        with open(self.__ctl_path) as ctl_file:
+            return bool(ctl_file.read().strip())
 
     async def write(self, pin: str, state: bool) -> None:
         _ = pin
-        with open(self.__get_driver_path("bind" if state else "unbind"), "w") as ctl_file:
-            ctl_file.write(f"{self.__udc}\n")
-
-    def __get_driver_path(self, name: str="") -> str:
-        assert self.__driver
-        path = f"{env.SYSFS_PREFIX}/sys/bus/platform/drivers/{self.__driver}"
-        return (os.path.join(path, name) if name else path)
+        with open(self.__ctl_path, "w") as ctl_file:
+            ctl_file.write(self.__udc if state else "\n")
 
     def __str__(self) -> str:
         return f"GPIO({self._instance_name})"

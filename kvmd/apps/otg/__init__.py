@@ -186,7 +186,7 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
 
     _check_config(config)
 
-    (udc, usb_driver) = usb.find_udc(config.otg.udc)
+    udc = usb.find_udc(config.otg.udc)[0]
     logger.info("Using UDC %s", udc)
 
     logger.info("Creating gadget %r ...", config.otg.gadget)
@@ -258,10 +258,8 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     _write(join(gadget_path, "UDC"), udc)
     time.sleep(config.otg.init_delay)
 
-    logger.info("Setting %s bind permissions ...", usb_driver)
-    driver_path = f"{env.SYSFS_PREFIX}/sys/bus/platform/drivers/{usb_driver}"
-    _chown(join(driver_path, "bind"), config.otg.user)
-    _chown(join(driver_path, "unbind"), config.otg.user)
+    logger.info("Setting UDC permissions ...")
+    _chown(join(gadget_path, "UDC"), config.otg.user)
 
     logger.info("Ready to work")
 
@@ -277,7 +275,7 @@ def _cmd_stop(config: Section) -> None:
     gadget_path = join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", config.otg.gadget)
 
     logger.info("Disabling gadget %r ...", config.otg.gadget)
-    _write(join(gadget_path, "UDC"), "")
+    _write(join(gadget_path, "UDC"), "\n")
 
     _unlink(join(gadget_path, "os_desc/c.1"), True)
 
