@@ -186,7 +186,7 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
 
     _check_config(config)
 
-    udc = usb.find_udc(config.otg.udc)[0]
+    udc = usb.find_udc(config.otg.udc)
     logger.info("Using UDC %s", udc)
 
     logger.info("Creating gadget %r ...", config.otg.gadget)

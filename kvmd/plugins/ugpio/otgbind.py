@@ -60,7 +60,7 @@ class Plugin(BaseUserGpioDriver):
         return str
 
     def prepare(self) -> None:
-        self.__udc = usb.find_udc(self.__udc)[0]
+        self.__udc = usb.find_udc(self.__udc)
         get_logger().info("Using UDC %s", self.__udc)
 
     async def run(self) -> None:

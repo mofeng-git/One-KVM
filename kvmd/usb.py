@@ -22,15 +22,13 @@
 
 import os
 
-from typing import Tuple
-
 from .logging import get_logger
 
 from . import env
 
 
 # =====
-def find_udc(udc: str) -> Tuple[str, str]:
+def find_udc(udc: str) -> str:
     path = f"{env.SYSFS_PREFIX}/sys/class/udc"
     candidates = sorted(os.listdir(path))
     if not udc:
@@ -39,8 +37,7 @@ def find_udc(udc: str) -> Tuple[str, str]:
         udc = candidates[0]
     elif udc not in candidates:
         raise RuntimeError(f"Can't find selected UDC: {udc}")
-    driver = os.path.basename(os.readlink(os.path.join(path, udc, "device/driver")))
-    return (udc, driver)  # (fe980000.usb, dwc2)
+    return udc  # fe980000.usb
 
 
 class UsbDeviceController:
@@ -49,7 +46,7 @@ class UsbDeviceController:
         self.__state_path = ""
 
     def find(self) -> None:
-        udc = find_udc(self.__udc)[0]
+        udc = find_udc(self.__udc)
         self.__state_path = os.path.join(f"{env.SYSFS_PREFIX}/sys/class/udc", udc, "state")
         get_logger().info("Using UDC %s", udc)
 
