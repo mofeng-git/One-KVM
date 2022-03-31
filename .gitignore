@@ -9,7 +9,7 @@
 /config.mk
 /testenv/.tox/
 /testenv/.mypy_cache/
-/testenv/.coverage
+/testenv/.coverage*
 /testenv/run/*.sock
 /testenv/run/*.pid
 /testenv/.ssl/
