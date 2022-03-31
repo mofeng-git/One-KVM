@@ -32,10 +32,10 @@ from typing import Generator
 
 from ....logging import get_logger
 
+from .... import env
 from .... import tools
 from .... import aiomulti
 from .... import aioproc
-from .... import usb
 
 from .events import BaseEvent
 
@@ -49,8 +49,6 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         initial_state: Dict,
         notifier: aiomulti.AioProcessNotifier,
 
-        udc: usb.UsbDeviceController,
-
         device_path: str,
         select_timeout: float,
         queue_timeout: float,
@@ -63,18 +61,21 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         self.__name = name
         self.__read_size = read_size
 
-        self.__udc = udc
-
         self.__device_path = device_path
         self.__select_timeout = select_timeout
         self.__queue_timeout = queue_timeout
         self.__write_retries = write_retries
         self.__noop = noop
 
+        self.__udc_state_path = ""
         self.__fd = -1
         self.__events_queue: "multiprocessing.Queue[BaseEvent]" = multiprocessing.Queue()
         self.__state_flags = aiomulti.AioSharedFlags({"online": True, **initial_state}, notifier)
         self.__stop_event = multiprocessing.Event()
+
+    def start(self, udc: str) -> None:  # type: ignore  # pylint: disable=arguments-differ
+        self.__udc_state_path = os.path.join(f"{env.SYSFS_PREFIX}/sys/class/udc", udc, "state")
+        super().start()
 
     def run(self) -> None:  # pylint: disable=too-many-branches
         logger = aioproc.settle(f"HID-{self.__name}", f"hid-{self.__name}")
@@ -95,7 +96,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                         #    - https://github.com/raspberrypi/linux/pull/3151
                         # Так что нам нужно проверять состояние контроллера, чтобы не спамить
                         # в устройство и отслеживать его состояние.
-                        if not self.__udc.can_operate():
+                        if not self.__is_udc_configured():
                             self.__state_flags.update(online=False)
                     else:
                         # Посылка свежих репортов важнее старого
@@ -159,6 +160,10 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             self.__close_device()
 
     # =====
+
+    def __is_udc_configured(self) -> bool:
+        with open(self.__udc_state_path) as udc_state_file:
+            return (udc_state_file.read().strip().lower() == "configured")
 
     def __write_report(self, report: bytes) -> bool:
         assert report
