@@ -32,10 +32,10 @@ from typing import Generator
 
 from ....logging import get_logger
 
-from .... import env
 from .... import tools
 from .... import aiomulti
 from .... import aioproc
+from .... import usb
 
 from .events import BaseEvent
 
@@ -74,7 +74,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         self.__stop_event = multiprocessing.Event()
 
     def start(self, udc: str) -> None:  # type: ignore  # pylint: disable=arguments-differ
-        self.__udc_state_path = os.path.join(f"{env.SYSFS_PREFIX}/sys/class/udc", udc, "state")
+        self.__udc_state_path = usb.get_udc_path(udc, usb.U_STATE)
         super().start()
 
     def run(self) -> None:  # pylint: disable=too-many-branches

@@ -38,6 +38,15 @@ def find_udc(udc: str) -> str:
     return udc  # fe980000.usb
 
 
+# =====
+U_STATE = "state"
+
+
+def get_udc_path(udc: str, *parts: str) -> str:
+    return os.path.join(f"{env.SYSFS_PREFIX}/sys/class/udc", udc, *parts)
+
+
+# =====
 G_UDC = "UDC"
 G_FUNCTIONS = "functions"
 G_PROFILE_NAME = "c.1"
