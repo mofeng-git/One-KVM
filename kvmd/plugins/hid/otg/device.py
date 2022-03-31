@@ -228,13 +228,17 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         logger = get_logger()
 
         if self.__fd < 0:
-            try:
-                flags = os.O_NONBLOCK
-                flags |= (os.O_RDWR if self.__read_size else os.O_WRONLY)
-                self.__fd = os.open(self.__device_path, flags)
-            except Exception as err:
-                logger.error("Can't open HID-%s device %s: %s",
-                             self.__name, self.__device_path, tools.efmt(err))
+            if os.path.exists(self.__device_path):
+                try:
+                    flags = os.O_NONBLOCK
+                    flags |= (os.O_RDWR if self.__read_size else os.O_WRONLY)
+                    self.__fd = os.open(self.__device_path, flags)
+                except Exception as err:
+                    logger.error("Can't open HID-%s device %s: %s",
+                                 self.__name, self.__device_path, tools.efmt(err))
+                    time.sleep(1)
+            else:
+                time.sleep(1)
 
         if self.__fd >= 0:
             try:
