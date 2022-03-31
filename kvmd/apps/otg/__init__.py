@@ -23,6 +23,7 @@
 import os
 import re
 import shutil
+import json
 import time
 import argparse
 
@@ -105,22 +106,29 @@ def _check_config(config: Section) -> None:
 
 # =====
 class _GadgetConfig:
-    def __init__(self, gadget_path: str, config_path: str) -> None:
+    def __init__(self, gadget_path: str, config_path: str, meta_path: str) -> None:
         self.__gadget_path = gadget_path
         self.__config_path = config_path
+        self.__meta_path = meta_path
+        self.__hid_instance = 0
+        self.__msd_instance = 0
+        _mkdir(meta_path)
 
-    def create_serial(self) -> None:
-        func_path = join(self.__gadget_path, "functions/acm.usb0")
+    def add_serial(self) -> None:
+        func = "acm.usb0"
+        func_path = join(self.__gadget_path, "functions", func)
         _mkdir(func_path)
-        _symlink(func_path, join(self.__config_path, "acm.usb0"))
+        _symlink(func_path, join(self.__config_path, func))
+        self.__create_meta(func, "Serial Port")
 
-    def create_ethernet(self, driver: str, host_mac: str, kvm_mac: str) -> None:
+    def add_ethernet(self, driver: str, host_mac: str, kvm_mac: str) -> None:
         if host_mac and kvm_mac and host_mac == kvm_mac:
             raise RuntimeError("Ethernet host_mac should not be equal to kvm_mac")
         real_driver = driver
         if driver == "rndis5":
             real_driver = "rndis"
-        func_path = join(self.__gadget_path, f"functions/{real_driver}.usb0")
+        func = f"{real_driver}.usb0"
+        func_path = join(self.__gadget_path, "functions", func)
         _mkdir(func_path)
         if host_mac:
             _write(join(func_path, "host_addr"), host_mac)
@@ -140,10 +148,19 @@ class _GadgetConfig:
                 _write(join(func_path, "os_desc/interface.rndis/compatible_id"), "RNDIS")
                 _write(join(func_path, "os_desc/interface.rndis/sub_compatible_id"), "5162001")
             _symlink(self.__config_path, join(self.__gadget_path, "os_desc/c.1"))
-        _symlink(func_path, join(self.__config_path, f"{real_driver}.usb0"))
+        _symlink(func_path, join(self.__config_path, func))
+        self.__create_meta(func, "Ethernet")
 
-    def create_hid(self, instance: int, remote_wakeup: bool, hid: Hid) -> None:
-        func_path = join(self.__gadget_path, f"functions/hid.usb{instance}")
+    def add_keyboard(self, remote_wakeup: bool) -> None:
+        self.__add_hid("Keyboard", remote_wakeup, make_keyboard_hid())
+
+    def add_mouse(self, remote_wakeup: bool, absolute: bool, horizontal_wheel: bool) -> None:
+        name = ("Absolute" if absolute else "Relative") + " Mouse"
+        self.__add_hid(name, remote_wakeup, make_mouse_hid(absolute, horizontal_wheel))
+
+    def __add_hid(self, name: str, remote_wakeup: bool, hid: Hid) -> None:
+        func = f"hid.usb{self.__hid_instance}"
+        func_path = join(self.__gadget_path, "functions", func)
         _mkdir(func_path)
         _write(join(func_path, "no_out_endpoint"), "1", optional=True)
         if remote_wakeup:
@@ -152,10 +169,13 @@ class _GadgetConfig:
         _write(join(func_path, "subclass"), str(hid.subclass))
         _write(join(func_path, "report_length"), str(hid.report_length))
         _write_bytes(join(func_path, "report_desc"), hid.report_descriptor)
-        _symlink(func_path, join(self.__config_path, f"hid.usb{instance}"))
+        _symlink(func_path, join(self.__config_path, func))
+        self.__create_meta(func, name)
+        self.__hid_instance += 1
 
-    def create_msd(self, instance: int, user: str, stall: bool, cdrom: bool, rw: bool, removable: bool, fua: bool) -> None:
-        func_path = join(self.__gadget_path, f"functions/mass_storage.usb{instance}")
+    def add_msd(self, user: str, stall: bool, cdrom: bool, rw: bool, removable: bool, fua: bool) -> None:
+        func = f"mass_storage.usb{self.__msd_instance}"
+        func_path = join(self.__gadget_path, "functions", func)
         _mkdir(func_path)
         _write(join(func_path, "stall"), str(int(stall)))
         _write(join(func_path, "lun.0/cdrom"), str(int(cdrom)))
@@ -166,7 +186,13 @@ class _GadgetConfig:
             _chown(join(func_path, "lun.0/cdrom"), user)
             _chown(join(func_path, "lun.0/ro"), user)
             _chown(join(func_path, "lun.0/file"), user)
-        _symlink(func_path, join(self.__config_path, f"mass_storage.usb{instance}"))
+        _symlink(func_path, join(self.__config_path, func))
+        name = ("Mass Storage Drive" if self.__msd_instance == 0 else f"Extra Drive #{self.__msd_instance}")
+        self.__create_meta(func, name)
+        self.__msd_instance += 1
+
+    def __create_meta(self, func: str, name: str) -> None:
+        _write(join(self.__meta_path, f"{func}@meta.json"), json.dumps({"func": func, "name": name}))
 
 
 def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
@@ -212,38 +238,32 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
         # XXX: Should we use MaxPower=100 with Remote Wakeup?
         _write(join(config_path, "bmAttributes"), "0xA0")
 
-    gc = _GadgetConfig(gadget_path, config_path)
+    gc = _GadgetConfig(gadget_path, config_path, config.otg.meta)
 
     if config.otg.devices.serial.enabled:
         logger.info("===== Serial =====")
-        gc.create_serial()
+        gc.add_serial()
 
     if config.otg.devices.ethernet.enabled:
         logger.info("===== Ethernet =====")
-        gc.create_ethernet(**config.otg.devices.ethernet._unpack(ignore=["enabled"]))
+        gc.add_ethernet(**config.otg.devices.ethernet._unpack(ignore=["enabled"]))
 
     if config.kvmd.hid.type == "otg":
         logger.info("===== HID-Keyboard =====")
-        gc.create_hid(0, config.otg.remote_wakeup, make_keyboard_hid())
+        gc.add_keyboard(config.otg.remote_wakeup)
         logger.info("===== HID-Mouse =====")
-        gc.create_hid(1, config.otg.remote_wakeup, make_mouse_hid(
-            absolute=config.kvmd.hid.mouse.absolute,
-            horizontal_wheel=config.kvmd.hid.mouse.horizontal_wheel,
-        ))
+        gc.add_mouse(config.otg.remote_wakeup, config.kvmd.hid.mouse.absolute, config.kvmd.hid.mouse.horizontal_wheel)
         if config.kvmd.hid.mouse_alt.device:
             logger.info("===== HID-Mouse-Alt =====")
-            gc.create_hid(2, config.otg.remote_wakeup, make_mouse_hid(
-                absolute=(not config.kvmd.hid.mouse.absolute),
-                horizontal_wheel=config.kvmd.hid.mouse_alt.horizontal_wheel,
-            ))
+            gc.add_mouse(config.otg.remote_wakeup, (not config.kvmd.hid.mouse.absolute), config.kvmd.hid.mouse.horizontal_wheel)
 
     if config.kvmd.msd.type == "otg":
         logger.info("===== MSD =====")
-        gc.create_msd(0, config.otg.user, **config.otg.devices.msd.default._unpack())
+        gc.add_msd(config.otg.user, **config.otg.devices.msd.default._unpack())
         if config.otg.devices.drives.enabled:
-            for instance in range(config.otg.devices.drives.count):
-                logger.info("===== MSD Extra: %d =====", config.otg.devices.drives.count)
-                gc.create_msd(instance + 1, "root", **config.otg.devices.drives.default._unpack())
+            for count in range(config.otg.devices.drives.count):
+                logger.info("===== MSD Extra: %d =====", count + 1)
+                gc.add_msd("root", **config.otg.devices.drives.default._unpack())
 
     logger.info("===== Preparing complete =====")
 
@@ -286,6 +306,10 @@ def _cmd_stop(config: Section) -> None:
 
     _rmdir(join(gadget_path, "strings/0x409"))
     _rmdir(gadget_path)
+
+    for meta in os.listdir(config.otg.meta):
+        _unlink(join(config.otg.meta, meta))
+    _rmdir(config.otg.meta)
 
     logger.info("Bye-bye")
 

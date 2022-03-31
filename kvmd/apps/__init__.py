@@ -500,6 +500,7 @@ def _get_config_scheme() -> Dict:
             "init_delay": Option(3.0,    type=valid_float_f01),
 
             "user": Option("kvmd", type=valid_user),
+            "meta": Option("/run/kvmd/otg", type=valid_abs_path),
 
             "devices": {
                 "msd": {
