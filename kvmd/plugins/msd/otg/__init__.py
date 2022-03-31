@@ -216,7 +216,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
             return {
                 "enabled": True,
-                "online": bool(self.__state.vd),
+                "online": (bool(self.__state.vd) and self.__drive.is_enabled()),
                 "busy": self.__state.is_busy(),
                 "storage": storage,
                 "drive": vd,
@@ -405,7 +405,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 with Inotify() as inotify:
                     inotify.watch(self.__images_path, InotifyMask.ALL_MODIFY_EVENTS)
                     inotify.watch(self.__meta_path, InotifyMask.ALL_MODIFY_EVENTS)
-                    inotify.watch(self.__drive.get_sysfs_path(), InotifyMask.ALL_MODIFY_EVENTS)
+                    for path in self.__drive.get_watchable_paths():
+                        inotify.watch(path, InotifyMask.ALL_MODIFY_EVENTS)
 
                     # После установки вотчеров еще раз проверяем стейт, чтобы ничего не потерять
                     await self.__reload_state()
