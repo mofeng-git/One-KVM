@@ -38,7 +38,6 @@ from ...yamlconf import Section
 
 from ...validators import ValidatorError
 
-from ... import env
 from ... import usb
 
 from .. import init
@@ -147,7 +146,7 @@ class _GadgetConfig:
                 # a Microsoft-specific extension of USB.
                 _write(join(func_path, "os_desc/interface.rndis/compatible_id"), "RNDIS")
                 _write(join(func_path, "os_desc/interface.rndis/sub_compatible_id"), "5162001")
-            _symlink(self.__profile_path, join(self.__gadget_path, "os_desc/c.1"))
+            _symlink(self.__profile_path, join(self.__gadget_path, "os_desc", usb.G_PROFILE_NAME))
         _symlink(func_path, join(self.__profile_path, func))
         self.__create_meta(func, "Ethernet")
 
@@ -207,7 +206,7 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     logger.info("Using UDC %s", udc)
 
     logger.info("Creating gadget %r ...", config.otg.gadget)
-    gadget_path = join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", config.otg.gadget)
+    gadget_path = usb.get_gadget_path(config.otg.gadget)
     _mkdir(gadget_path)
 
     _write(join(gadget_path, "idVendor"), f"0x{config.otg.vendor_id:04X}")
@@ -229,7 +228,7 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     _write(join(lang_path, "product"), config.otg.product)
     _write(join(lang_path, "serialnumber"), config.otg.serial)
 
-    profile_path = join(gadget_path, "configs/c.1")
+    profile_path = join(gadget_path, usb.G_PROFILE)
     _mkdir(profile_path)
     _mkdir(join(profile_path, "strings/0x409"))
     _write(join(profile_path, "strings/0x409/configuration"), f"Config 1: {config.otg.config}")
@@ -285,14 +284,14 @@ def _cmd_stop(config: Section) -> None:
 
     _check_config(config)
 
-    gadget_path = join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", config.otg.gadget)
+    gadget_path = usb.get_gadget_path(config.otg.gadget)
 
     logger.info("Disabling gadget %r ...", config.otg.gadget)
     _write(join(gadget_path, "UDC"), "\n")
 
-    _unlink(join(gadget_path, "os_desc/c.1"), True)
+    _unlink(join(gadget_path, "os_desc", usb.G_PROFILE_NAME), True)
 
-    profile_path = join(gadget_path, "configs/c.1")
+    profile_path = join(gadget_path, usb.G_PROFILE)
     for func in os.listdir(profile_path):
         if re.search(r"\.usb\d+$", func):
             _unlink(join(profile_path, func))

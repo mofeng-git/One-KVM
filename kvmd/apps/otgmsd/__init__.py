@@ -34,29 +34,24 @@ from ...validators.basic import valid_bool
 from ...validators.basic import valid_int_f0
 from ...validators.os import valid_abs_file
 
-from ... import env
+from ... import usb
 
 from .. import init
 
 
 # =====
-def _make_param_path(gadget: str, instance: int, param: str) -> str:
-    return os.path.join(
-        f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget",
-        gadget,
-        f"functions/mass_storage.usb{instance}/lun.0",
-        param,
-    )
+def _get_param_path(gadget: str, instance: int, param: str) -> str:
+    return usb.get_gadget_path(gadget, usb.G_FUNCTIONS, f"mass_storage.usb{instance}/lun.0", param)
 
 
 def _get_param(gadget: str, instance: int, param: str) -> str:
-    with open(_make_param_path(gadget, instance, param)) as param_file:
+    with open(_get_param_path(gadget, instance, param)) as param_file:
         return param_file.read().strip()
 
 
 def _set_param(gadget: str, instance: int, param: str, value: str) -> None:
     try:
-        with open(_make_param_path(gadget, instance, param), "w") as param_file:
+        with open(_get_param_path(gadget, instance, param), "w") as param_file:
             param_file.write(value + "\n")
     except OSError as err:
         if err.errno == errno.EBUSY:

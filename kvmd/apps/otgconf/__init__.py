@@ -31,25 +31,16 @@ from typing import Optional
 
 from ...validators.basic import valid_stripped_string_not_empty
 
-from ... import env
 from ... import usb
 
 from .. import init
 
 
 # =====
-def _make_config_path(gadget: str, func: str) -> str:
-    return os.path.join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", gadget, "configs/c.1", func)
-
-
-def _make_func_path(gadget: str, func: str) -> str:
-    return os.path.join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", gadget, "functions", func)
-
-
 @contextlib.contextmanager
 def _udc_stopped(gadget: str, udc: str) -> Generator[None, None, None]:
     udc = usb.find_udc(udc)
-    udc_path = os.path.join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", gadget, "UDC")
+    udc_path = usb.get_gadget_path(gadget, usb.G_UDC)
     with open(udc_path) as udc_file:
         enabled = bool(udc_file.read().strip())
     if enabled:
@@ -65,19 +56,22 @@ def _udc_stopped(gadget: str, udc: str) -> Generator[None, None, None]:
 
 def _enable_function(gadget: str, udc: str, func: str) -> None:
     with _udc_stopped(gadget, udc):
-        os.symlink(_make_func_path(gadget, func), _make_config_path(gadget, func))
+        os.symlink(
+            usb.get_gadget_path(gadget, usb.G_FUNCTIONS, func),
+            usb.get_gadget_path(gadget, usb.G_PROFILE, func),
+        )
 
 
 def _disable_function(gadget: str, udc: str, func: str) -> None:
     with _udc_stopped(gadget, udc):
-        os.unlink(_make_config_path(gadget, func))
+        os.unlink(usb.get_gadget_path(gadget, usb.G_PROFILE, func))
 
 
 def _list_functions(gadget: str, meta_path: str) -> None:
     for meta_name in sorted(os.listdir(meta_path)):
         with open(os.path.join(meta_path, meta_name)) as meta_file:
             meta = json.loads(meta_file.read())
-        enabled = os.path.exists(_make_config_path(gadget, meta["func"]))
+        enabled = os.path.exists(usb.get_gadget_path(gadget, usb.G_PROFILE, meta["func"]))
         print(f"{'+' if enabled else '-'} {meta['func']}  # {meta['name']}")
 
 

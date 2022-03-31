@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import os
 import asyncio
 import ipaddress
 import dataclasses
@@ -34,9 +33,9 @@ from ...logging import get_logger
 
 from ...yamlconf import Section
 
-from ... import env
 from ... import tools
 from ... import aioproc
+from ... import usb
 
 from .. import init
 
@@ -176,11 +175,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         real_driver = self.__driver
         if self.__driver == "rndis5":
             real_driver = "rndis"
-        path = env.SYSFS_PREFIX + os.path.join(
-            "/sys/kernel/config/usb_gadget",
-            self.__gadget,
-            f"functions/{real_driver}.usb0/ifname",
-        )
+        path = usb.get_gadget_path(self.__gadget, usb.G_FUNCTIONS, f"{real_driver}.usb0/ifname")
         logger.info("Using OTG gadget %r ...", self.__gadget)
         with open(path) as iface_file:
             iface = iface_file.read().strip()

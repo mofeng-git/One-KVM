@@ -31,7 +31,6 @@ from ...logging import get_logger
 from ...inotify import InotifyMask
 from ...inotify import Inotify
 
-from ... import env
 from ... import aiotools
 from ... import usb
 
@@ -53,7 +52,7 @@ class Plugin(BaseUserGpioDriver):
 
         self.__udc = udc
 
-        self.__ctl_path = f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget/{gadget}/UDC"
+        self.__udc_path = usb.get_gadget_path(gadget, usb.G_UDC)
 
     @classmethod
     def get_pin_validator(cls) -> Callable[[Any], Any]:
@@ -69,12 +68,12 @@ class Plugin(BaseUserGpioDriver):
             try:
                 while True:
                     await self._notifier.notify()
-                    if os.path.isfile(self.__ctl_path):
+                    if os.path.isfile(self.__udc_path):
                         break
                     await asyncio.sleep(5)
 
                 with Inotify() as inotify:
-                    inotify.watch(os.path.dirname(self.__ctl_path), InotifyMask.ALL_MODIFY_EVENTS)
+                    inotify.watch(os.path.dirname(self.__udc_path), InotifyMask.ALL_MODIFY_EVENTS)
                     await self._notifier.notify()
                     while True:
                         need_restart = False
@@ -94,13 +93,13 @@ class Plugin(BaseUserGpioDriver):
 
     async def read(self, pin: str) -> bool:
         _ = pin
-        with open(self.__ctl_path) as ctl_file:
-            return bool(ctl_file.read().strip())
+        with open(self.__udc_path) as udc_file:
+            return bool(udc_file.read().strip())
 
     async def write(self, pin: str, state: bool) -> None:
         _ = pin
-        with open(self.__ctl_path, "w") as ctl_file:
-            ctl_file.write(self.__udc if state else "\n")
+        with open(self.__udc_path, "w") as udc_file:
+            udc_file.write(self.__udc if state else "\n")
 
     def __str__(self) -> str:
         return f"GPIO({self._instance_name})"

@@ -36,3 +36,13 @@ def find_udc(udc: str) -> str:
     elif udc not in candidates:
         raise RuntimeError(f"Can't find selected UDC: {udc}")
     return udc  # fe980000.usb
+
+
+G_UDC = "UDC"
+G_FUNCTIONS = "functions"
+G_PROFILE_NAME = "c.1"
+G_PROFILE = f"configs/{G_PROFILE_NAME}"
+
+
+def get_gadget_path(gadget: str, *parts: str) -> str:
+    return os.path.join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", gadget, *parts)
