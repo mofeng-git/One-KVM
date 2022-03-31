@@ -122,6 +122,7 @@ def main() -> None:
                 "kvmd-otg = kvmd.apps.otg:main",
                 "kvmd-otgnet = kvmd.apps.otgnet:main",
                 "kvmd-otgmsd = kvmd.apps.otgmsd:main",
+                "kvmd-otgconf = kvmd.apps.otgconf:main",
                 "kvmd-htpasswd = kvmd.apps.htpasswd:main",
                 "kvmd-cleanup = kvmd.apps.cleanup:main",
                 "kvmd-ipmi = kvmd.apps.ipmi:main",
