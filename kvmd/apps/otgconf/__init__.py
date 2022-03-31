@@ -52,8 +52,9 @@ def _udc_stopped(gadget: str, udc: str) -> Generator[None, None, None]:
     udc_path = os.path.join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", gadget, "UDC")
     with open(udc_path) as udc_file:
         enabled = bool(udc_file.read().strip())
-    with open(udc_path, "w") as udc_file:
-        udc_file.write("\n")
+    if enabled:
+        with open(udc_path, "w") as udc_file:
+            udc_file.write("\n")
     try:
         yield
     finally:
