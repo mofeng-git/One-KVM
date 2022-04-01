@@ -429,6 +429,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                             await self.__notifier.notify()
             except Exception:
                 logger.exception("Unexpected MSD watcher error")
+                time.sleep(1)
 
     async def __reload_state(self) -> None:
         logger = get_logger(0)
