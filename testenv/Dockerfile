@@ -96,6 +96,7 @@ RUN mkdir -p \
 		/etc/kvmd/{nginx,vnc} \
 		/var/lib/kvmd/msd/{images,meta} \
 		/opt/vc/bin \
+		/fake_sysfs/sys/kernel/config/usb_gadget/kvmd/configs/c.1 \
 		/fake_sysfs/sys/kernel/config/usb_gadget/kvmd/functions/mass_storage.usb0/lun.0 \
 		/fake_sysfs/sys/class/thermal/thermal_zone0 \
 		/fake_procfs/proc/device-tree \
