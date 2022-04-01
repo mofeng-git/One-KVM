@@ -43,8 +43,8 @@ post_upgrade() {
 	[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=pi3-disable-bt$/dtoverlay=disable-bt/g' /boot/config.txt
 	[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=dwc2$/dtoverlay=dwc2,dr_mode=peripheral/g' /boot/config.txt
 	[ ! -f /etc/conf.d/rngd ] || (echo 'RNGD_OPTS="-o /dev/random -r /dev/hwrng -x jitter -x pkcs11 -x rtlsdr"' > /etc/conf.d/rngd)
-	[ ! -f /etc/pam.d/system-login ] || sed -e '/\<pam_systemd\.so\>/ s/^#*/#/' /etc/pam.d/system-login
-	[ ! -f /etc/pam.d/system-auth ] || sed -e '/\<pam_systemd_home\.so\>/ s/^#*/#/' /etc/pam.d/system-auth
+	[ ! -f /etc/pam.d/system-login ] || sed -i -e '/\<pam_systemd\.so\>/ s/^#*/#/' /etc/pam.d/system-login
+	[ ! -f /etc/pam.d/system-auth ] || sed -i -e '/\<pam_systemd_home\.so\>/ s/^#*/#/' /etc/pam.d/system-auth
 
 	# Some update deletes /etc/motd, WTF
 	[ ! -f /etc/motd -a -f /etc/motd.pacsave ] && mv /etc/motd.pacsave /etc/motd || true
