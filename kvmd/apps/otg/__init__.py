@@ -270,8 +270,9 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     _write(join(gadget_path, "UDC"), udc)
     time.sleep(config.otg.init_delay)
 
-    logger.info("Setting UDC permissions ...")
+    logger.info("Setting up permissions ...")
     _chown(join(gadget_path, "UDC"), config.otg.user)
+    _chown(profile_path, config.otg.user)
 
     logger.info("Ready to work")
 

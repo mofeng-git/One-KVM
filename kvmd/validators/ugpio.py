@@ -42,7 +42,7 @@ def valid_ugpio_driver(arg: Any, variants: Optional[Set[str]]=None) -> str:
 
 def valid_ugpio_channel(arg: Any) -> str:
     name = "GPIO channel"
-    return check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_-]*$"), name, 255)
+    return check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_.-]*$"), name, 255)
 
 
 def valid_ugpio_mode(arg: Any, variants: Set[str]) -> str:

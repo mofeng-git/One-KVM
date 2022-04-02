@@ -27,8 +27,11 @@ import argparse
 import time
 
 from typing import List
+from typing import Dict
 from typing import Generator
 from typing import Optional
+
+import yaml
 
 from ...validators.basic import valid_stripped_string_not_empty
 
@@ -57,10 +60,14 @@ class _GadgetControl:
         try:
             yield
         finally:
-            if enabled:
-                time.sleep(self.__init_delay)
-                with open(udc_path, "w") as udc_file:
-                    udc_file.write(udc)
+            time.sleep(self.__init_delay)
+            with open(udc_path, "w") as udc_file:
+                udc_file.write(udc)
+
+    def __read_metas(self) -> Generator[Dict, None, None]:
+        for meta_name in sorted(os.listdir(self.__meta_path)):
+            with open(os.path.join(self.__meta_path, meta_name)) as meta_file:
+                yield json.loads(meta_file.read())
 
     def enable_function(self, func: str) -> None:
         with self.__udc_stopped():
@@ -74,11 +81,29 @@ class _GadgetControl:
             os.unlink(usb.get_gadget_path(self.__gadget, usb.G_PROFILE, func))
 
     def list_functions(self) -> None:
-        for meta_name in sorted(os.listdir(self.__meta_path)):
-            with open(os.path.join(self.__meta_path, meta_name)) as meta_file:
-                meta = json.loads(meta_file.read())
+        for meta in self.__read_metas():
             enabled = os.path.exists(usb.get_gadget_path(self.__gadget, usb.G_PROFILE, meta["func"]))
             print(f"{'+' if enabled else '-'} {meta['func']}  # {meta['name']}")
+
+    def make_gpio_config(self) -> None:
+        config = {
+            "drivers": {"otgconf": {"type": "otgconf"}},
+            "scheme": {},
+            "view": {"table": []},
+        }
+        for meta in self.__read_metas():
+            config["scheme"][meta["func"]] = {  # type: ignore
+                "driver": "otgconf",
+                "pin": meta["func"],
+                "mode": "output",
+                "pulse": {"delay": 0},
+            }
+            config["view"]["table"].append([  # type: ignore
+                "#" + meta["name"],
+                "#" + meta["func"],
+                meta["func"],
+            ])
+        print(yaml.dump({"kvmd": {"gpio": config}}, indent=4))
 
     def reset(self) -> None:
         with self.__udc_stopped():
@@ -102,14 +127,27 @@ def main(argv: Optional[List[str]]=None) -> None:
     parser.add_argument("-d", "--disable-function", type=valid_stripped_string_not_empty,
                         metavar="<name>", help="Disable function")
     parser.add_argument("-r", "--reset-gadget", action="store_true", help="Reset gadget")
+    parser.add_argument("--make-gpio-config", action="store_true")
     options = parser.parse_args(argv[1:])
 
     gc = _GadgetControl(config.otg.meta, config.otg.gadget, config.otg.udc, config.otg.init_delay)
-    if options.reset_gadget:
-        gc.reset()
-        return
+
+    if options.list_functions:
+        gc.list_functions()
+
     elif options.enable_function:
         gc.enable_function(options.enable_function)
+        gc.list_functions()
+
     elif options.disable_function:
         gc.disable_function(options.disable_function)
-    gc.list_functions()
+        gc.list_functions()
+
+    elif options.reset_gadget:
+        gc.reset()
+
+    elif options.make_gpio_config:
+        gc.make_gpio_config()
+
+    else:
+        gc.list_functions()
