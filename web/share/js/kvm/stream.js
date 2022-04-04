@@ -51,8 +51,9 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	self.getResolution = function() {
 		let el_video = $("stream-video");
 		return {
-			real_width: el_video.videoWidth,
-			real_height: el_video.videoHeight,
+			// Разрешение видео или элемента
+			real_width: (el_video.videoWidth || el_video.offsetWidth),
+			real_height: (el_video.videoHeight || el_video.offsetHeight),
 			view_width: el_video.offsetWidth,
 			view_height: el_video.offsetHeight,
 		};
