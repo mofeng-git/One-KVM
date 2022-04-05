@@ -320,15 +320,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         aioproc.rename_process("main")
         super().run(**kwargs)
 
-    async def _make_app(self) -> aiohttp.web.Application:
-        app = aiohttp.web.Application(middlewares=[aiohttp.web.normalize_path_middleware(
-            append_slash=False,
-            remove_slash=True,
-            merge_slashes=True,
-        )])
-        app.on_shutdown.append(self.__on_shutdown)
-        app.on_cleanup.append(self.__on_cleanup)
-
+    async def _init_app(self, app: aiohttp.web.Application) -> None:
         self.__run_system_task(self.__stream_controller)
         for comp in self.__components:
             if comp.systask:
@@ -342,8 +334,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 self.__add_app_route(app, http_exposed)
             for ws_exposed in get_exposed_ws(api):
                 self.__ws_handlers[ws_exposed.event_type] = ws_exposed.handler
-
-        return app
 
     def __run_system_task(self, method: Callable, *args: Any) -> None:
         async def wrapper() -> None:
@@ -371,7 +361,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 return make_json_exception(err)
         app.router.add_route(exposed.method, exposed.path, wrapper)
 
-    async def __on_shutdown(self, _: aiohttp.web.Application) -> None:
+    async def _on_shutdown(self, _: aiohttp.web.Application) -> None:
         logger = get_logger(0)
 
         logger.info("Waiting short tasks ...")
@@ -390,7 +380,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         logger.info("On-Shutdown complete")
 
-    async def __on_cleanup(self, _: aiohttp.web.Application) -> None:
+    async def _on_cleanup(self, _: aiohttp.web.Application) -> None:
         logger = get_logger(0)
         for comp in self.__components:
             if comp.cleanup:

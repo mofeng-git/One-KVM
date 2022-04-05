@@ -38,6 +38,7 @@ from aiohttp.web import Response
 from aiohttp.web import StreamResponse
 from aiohttp.web import Application
 from aiohttp.web import run_app
+from aiohttp.web import normalize_path_middleware
 
 try:
     from aiohttp.web import AccessLogger  # type: ignore
@@ -230,15 +231,32 @@ class HttpServer:
 
         run_app(
             sock=server_socket,
-            app=self._make_app(),
+            app=self.__make_app(),
             shutdown_timeout=1,
             access_log_format=access_log_format,
             print=self.__run_app_print,
             loop=asyncio.get_event_loop(),
         )
 
-    async def _make_app(self) -> Application:
+    async def _init_app(self, app: Application) -> None:
         raise NotImplementedError
+
+    async def _on_shutdown(self, app: Application) -> None:
+        _ = app
+
+    async def _on_cleanup(self, app: Application) -> None:
+        _ = app
+
+    async def __make_app(self) -> Application:
+        app = Application(middlewares=[normalize_path_middleware(
+            append_slash=False,
+            remove_slash=True,
+            merge_slashes=True,
+        )])
+        app.on_shutdown.append(self._on_shutdown)
+        app.on_cleanup.append(self._on_cleanup)
+        await self._init_app(app)
+        return app
 
     def __run_app_print(self, text: str) -> None:
         logger = get_logger(0)
