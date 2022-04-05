@@ -36,6 +36,13 @@ from aiohttp.web import WebSocketResponse
 
 from ....mouse import MouseRange
 
+from ....keyboard.keysym import build_symmap
+from ....keyboard.printer import text_to_web_keys
+
+from ....htserver import exposed_http
+from ....htserver import exposed_ws
+from ....htserver import make_json_response
+
 from ....plugins.hid import BaseHid
 
 from ....validators import raise_error
@@ -48,13 +55,6 @@ from ....validators.hid import valid_hid_key
 from ....validators.hid import valid_hid_mouse_move
 from ....validators.hid import valid_hid_mouse_button
 from ....validators.hid import valid_hid_mouse_delta
-
-from ....keyboard.keysym import build_symmap
-from ....keyboard.printer import text_to_web_keys
-
-from ..http import exposed_http
-from ..http import exposed_ws
-from ..http import make_json_response
 
 
 # =====

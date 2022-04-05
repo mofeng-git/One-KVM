@@ -30,13 +30,13 @@ from aiohttp.web import Response
 
 from .... import tools
 
+from ....htserver import exposed_http
+
 from ....plugins.atx import BaseAtx
 from ....plugins.ugpio import UserGpioModes
 
 from ..info import InfoManager
 from ..ugpio import UserGpio
-
-from ..http import exposed_http
 
 
 # =====

@@ -25,16 +25,16 @@ import asyncio
 from aiohttp.web import Request
 from aiohttp.web import Response
 
+from ....htserver import HttpError
+from ....htserver import exposed_http
+from ....htserver import make_json_response
+
 from ....plugins.atx import BaseAtx
 
 from ....validators import ValidatorError
 from ....validators import check_string_in_list
 
 from ..info import InfoManager
-
-from ..http import HttpError
-from ..http import exposed_http
-from ..http import make_json_response
 
 
 # =====

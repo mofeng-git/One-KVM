@@ -45,7 +45,7 @@ try:
 except ImportError:
     from aiohttp.helpers import AccessLogger  # type: ignore
 
-from ...logging import get_logger
+from .logging import get_logger
 
 
 # =====

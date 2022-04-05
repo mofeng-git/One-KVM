@@ -23,13 +23,13 @@
 from aiohttp.web import Request
 from aiohttp.web import StreamResponse
 
+from ....htserver import exposed_http
+from ....htserver import start_streaming
+
 from ....validators.basic import valid_bool
 from ....validators.kvm import valid_log_seek
 
 from ..logreader import LogReader
-
-from ..http import exposed_http
-from ..http import start_streaming
 
 
 # =====

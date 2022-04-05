@@ -27,9 +27,9 @@ from typing import Callable
 
 from ...logging import get_logger
 
-from ...plugins.hid import BaseHid
-
 from ... import aiotools
+
+from ...plugins.hid import BaseHid
 
 from .streamer import Streamer
 

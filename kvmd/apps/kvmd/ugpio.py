@@ -31,6 +31,11 @@ from typing import Any
 
 from ...logging import get_logger
 
+from ...errors import IsBusyError
+
+from ... import tools
+from ... import aiotools
+
 from ...plugins.ugpio import GpioError
 from ...plugins.ugpio import GpioOperationError
 from ...plugins.ugpio import GpioDriverOfflineError
@@ -38,12 +43,7 @@ from ...plugins.ugpio import UserGpioModes
 from ...plugins.ugpio import BaseUserGpioDriver
 from ...plugins.ugpio import get_ugpio_driver_class
 
-from ... import tools
-from ... import aiotools
-
 from ...yamlconf import Section
-
-from ...errors import IsBusyError
 
 
 # =====

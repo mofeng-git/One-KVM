@@ -33,10 +33,10 @@ import aiofiles.base
 
 from ...logging import get_logger
 
-from ... import aiofs
-
 from ...errors import OperationError
 from ...errors import IsBusyError
+
+from ... import aiofs
 
 from .. import BasePlugin
 from .. import get_plugin_class

@@ -45,8 +45,20 @@ from ...logging import get_logger
 from ...errors import OperationError
 from ...errors import IsBusyError
 
-from ...plugins import BasePlugin
+from ... import aiotools
+from ... import aioproc
 
+from ...htserver import HttpError
+from ...htserver import HttpExposed
+from ...htserver import exposed_http
+from ...htserver import exposed_ws
+from ...htserver import get_exposed_http
+from ...htserver import get_exposed_ws
+from ...htserver import make_json_response
+from ...htserver import make_json_exception
+from ...htserver import HttpServer
+
+from ...plugins import BasePlugin
 from ...plugins.hid import BaseHid
 from ...plugins.atx import BaseAtx
 from ...plugins.msd import BaseMsd
@@ -59,9 +71,6 @@ from ...validators.kvm import valid_stream_resolution
 from ...validators.kvm import valid_stream_h264_bitrate
 from ...validators.kvm import valid_stream_h264_gop
 
-from ... import aiotools
-from ... import aioproc
-
 from .auth import AuthManager
 from .info import InfoManager
 from .logreader import LogReader
@@ -69,16 +78,6 @@ from .ugpio import UserGpio
 from .streamer import Streamer
 from .snapshoter import Snapshoter
 from .tesseract import TesseractOcr
-
-from .http import HttpError
-from .http import HttpExposed
-from .http import exposed_http
-from .http import exposed_ws
-from .http import get_exposed_http
-from .http import get_exposed_ws
-from .http import make_json_response
-from .http import make_json_exception
-from .http import HttpServer
 
 from .api.auth import AuthApi
 from .api.auth import check_request_auth
