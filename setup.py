@@ -108,9 +108,8 @@ def main() -> None:
             "kvmd.apps.janus",
             "kvmd.apps.watchdog",
             "kvmd.helpers",
-            "kvmd.helpers.otgmsd",
-            "kvmd.helpers.otgmsd.unlock",
-            "kvmd.helpers.otgmsd.remount",
+            "kvmd.helpers.unlock",
+            "kvmd.helpers.remount",
         ],
 
         package_data={
@@ -130,8 +129,8 @@ def main() -> None:
                 "kvmd-vnc = kvmd.apps.vnc:main",
                 "kvmd-janus = kvmd.apps.janus:main",
                 "kvmd-watchdog = kvmd.apps.watchdog:main",
-                "kvmd-helper-otgmsd-unlock = kvmd.helpers.otgmsd.unlock:main",
-                "kvmd-helper-otgmsd-remount = kvmd.helpers.otgmsd.remount:main",
+                "kvmd-helper-otgmsd-unlock = kvmd.helpers.unlock:main",
+                "kvmd-helper-otgmsd-remount = kvmd.helpers.remount:main",
             ],
         },
 

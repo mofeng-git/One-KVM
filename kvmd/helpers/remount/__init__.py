@@ -27,6 +27,8 @@ import shutil
 import dataclasses
 import subprocess
 
+from typing import List
+
 
 # ====
 _MOUNT_PATH = "/bin/mount"
@@ -46,21 +48,22 @@ def _log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
-def _find_storage() -> _Storage:
+def _find_storage(target: str) -> _Storage:
+    assert target
     with open(_FSTAB_PATH) as fstab_file:
         for line in fstab_file.read().split("\n"):
             line = line.strip()
             if line and not line.startswith("#"):
                 parts = line.split()
                 if len(parts) == 6:
-                    options = dict(re.findall(r"X-kvmd\.otgmsd-(root|user)=([^,]+)", parts[3]))
+                    options = dict(re.findall(r"X-kvmd\.%s-(root|user)=([^,]+)" % (target), parts[3]))
                     if options:
                         return _Storage(
                             mount_path=parts[1],
                             root_path=options.get("root", ""),
                             user=options.get("user", ""),
                         )
-    raise RuntimeError(f"Can't find MSD mountpoint in {_FSTAB_PATH}")
+    raise SystemExit(f"Can't find {target!r} mountpoint in {_FSTAB_PATH}")
 
 
 def _remount(path: str, rw: bool) -> None:
@@ -94,13 +97,22 @@ def main() -> None:
     if len(sys.argv) != 2 or sys.argv[1] not in ["ro", "rw"]:
         raise SystemExit(f"Usage: {sys.argv[0]} [ro|rw]")
 
+    target = ""
+    dirs: List[str] = []
+    app = os.path.basename(sys.argv[0])
+    if app == "kvmd-helper-otgmsd-remount":
+        target = "otgmsd"
+        dirs = ["images", "meta"]
+    else:
+        raise SystemExit("Unknown application target")
+
     rw = (sys.argv[1] == "rw")
 
-    storage = _find_storage()
+    storage = _find_storage(target)
     _remount(storage.mount_path, rw)
     if rw:
         if storage.root_path:
-            for name in ["images", "meta"]:
+            for name in dirs:
                 path = os.path.join(storage.root_path, name)
                 _mkdir(path)
                 if storage.user:
