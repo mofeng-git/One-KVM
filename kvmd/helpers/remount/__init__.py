@@ -103,6 +103,9 @@ def main() -> None:
     if app == "kvmd-helper-otgmsd-remount":
         target = "otgmsd"
         dirs = ["images", "meta"]
+    elif app == "kvmd-helper-pst-remount":
+        target = "pst"
+        dirs = ["data"]
     else:
         raise SystemExit("Unknown application target")
 

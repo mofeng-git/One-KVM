@@ -131,6 +131,7 @@ def main() -> None:
                 "kvmd-watchdog = kvmd.apps.watchdog:main",
                 "kvmd-helper-otgmsd-unlock = kvmd.helpers.unlock:main",
                 "kvmd-helper-otgmsd-remount = kvmd.helpers.remount:main",
+                "kvmd-helper-pst-remount = kvmd.helpers.remount:main",
             ],
         },
 
