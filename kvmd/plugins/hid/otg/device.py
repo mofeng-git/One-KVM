@@ -166,6 +166,12 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
     # =====
 
+    def __get_logger(self) -> logging.Logger:
+        # Внутри процесса логгер из цикла, снаружи - каждый раз берем новый
+        if self.__logger is not None:
+            return self.__logger
+        return get_logger()
+
     def __is_udc_configured(self) -> bool:
         with open(self.__udc_state_path) as udc_state_file:
             return (udc_state_file.read().strip().lower() == "configured")
@@ -177,7 +183,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             return True
 
         assert self.__fd >= 0
-        assert self.__logger is not None
+        logger = self.__get_logger()
 
         try:
             written = os.write(self.__fd, report)
@@ -185,17 +191,17 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                 self.__state_flags.update(online=True)
                 return True
             else:
-                self.__logger.error("HID-%s write() error: written (%s) != report length (%d)",
-                                    self.__name, written, len(report))
+                logger.error("HID-%s write() error: written (%s) != report length (%d)",
+                             self.__name, written, len(report))
         except Exception as err:
             if isinstance(err, OSError) and (
                 # https://github.com/raspberrypi/linux/commit/61b7f805dc2fd364e0df682de89227e94ce88e25
                 err.errno == errno.EAGAIN  # pylint: disable=no-member
                 or err.errno == errno.ESHUTDOWN  # pylint: disable=no-member
             ):
-                self.__logger.debug("HID-%s busy/unplugged (write): %s", self.__name, tools.efmt(err))
+                logger.debug("HID-%s busy/unplugged (write): %s", self.__name, tools.efmt(err))
             else:
-                self.__logger.exception("Can't write report to HID-%s", self.__name)
+                logger.exception("Can't write report to HID-%s", self.__name)
 
         self.__state_flags.update(online=False)
         return False
@@ -205,14 +211,14 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             return
 
         assert self.__fd >= 0
-        assert self.__logger is not None
+        logger = self.__get_logger()
 
         read = True
         while read:
             try:
                 read = bool(select.select([self.__fd], [], [], 0)[0])
             except Exception as err:
-                self.__logger.error("Can't select() for read HID-%s: %s", self.__name, tools.efmt(err))
+                logger.error("Can't select() for read HID-%s: %s", self.__name, tools.efmt(err))
                 break
 
             if read:
@@ -220,9 +226,9 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                     report = os.read(self.__fd, self.__read_size)
                 except Exception as err:
                     if isinstance(err, OSError) and err.errno == errno.EAGAIN:  # pylint: disable=no-member
-                        self.__logger.debug("HID-%s busy/unplugged (read): %s", self.__name, tools.efmt(err))
+                        logger.debug("HID-%s busy/unplugged (read): %s", self.__name, tools.efmt(err))
                     else:
-                        self.__logger.exception("Can't read report from HID-%s", self.__name)
+                        logger.exception("Can't read report from HID-%s", self.__name)
                 else:
                     self._process_read_report(report)
 
@@ -230,7 +236,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         if self.__noop:
             return True
 
-        assert self.__logger is not None
+        logger = self.__get_logger()
 
         if not os.path.exists(self.__device_path):
             # Во-первых, не пытаемся открыть устройство, если его нет.
@@ -239,7 +245,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             self.__close_device()
             self.__state_flags.update(online=False)
             if not self.__no_device_reported:
-                self.__logger.error("Missing HID-%s device: %s", self.__name, self.__device_path)
+                logger.error("Missing HID-%s device: %s", self.__name, self.__device_path)
                 self.__no_device_reported = True
             return False
         self.__no_device_reported = False
@@ -251,8 +257,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                     flags |= (os.O_RDWR if self.__read_size else os.O_WRONLY)
                     self.__fd = os.open(self.__device_path, flags)
                 except Exception as err:
-                    self.__logger.error("Can't open HID-%s device %s: %s",
-                                        self.__name, self.__device_path, tools.efmt(err))
+                    logger.error("Can't open HID-%s device %s: %s",
+                                 self.__name, self.__device_path, tools.efmt(err))
 
         if self.__fd >= 0:
             try:
@@ -262,9 +268,9 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                     return True
                 else:
                     # Если запись недоступна, то скорее всего устройство отключено
-                    self.__logger.debug("HID-%s is busy/unplugged (write select)", self.__name)
+                    logger.debug("HID-%s is busy/unplugged (write select)", self.__name)
             except Exception as err:
-                self.__logger.error("Can't select() for write HID-%s: %s", self.__name, tools.efmt(err))
+                logger.error("Can't select() for write HID-%s: %s", self.__name, tools.efmt(err))
 
         self.__state_flags.update(online=False)
         return False
