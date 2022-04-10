@@ -172,14 +172,16 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @classmethod
     def get_plugin_options(cls) -> Dict:
-        sudo = ["/usr/bin/sudo", "--non-interactive"]
         return {
             "upload_chunk_size": Option(65536,   type=functools.partial(valid_number, min=1024)),
             "sync_chunk_size":   Option(4194304, type=functools.partial(valid_number, min=1024)),
 
             "storage": Option("/var/lib/kvmd/msd", type=valid_abs_dir, unpack_as="storage_path"),
 
-            "remount_cmd": Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-remount", "{mode}"], type=valid_command),
+            "remount_cmd": Option([
+                "/usr/bin/sudo", "--non-interactive",
+                "/usr/bin/kvmd-helper-otgmsd-remount", "{mode}",
+            ], type=valid_command),
 
             "initial": {
                 "image": Option("",    type=valid_printable_filename, if_empty=""),
