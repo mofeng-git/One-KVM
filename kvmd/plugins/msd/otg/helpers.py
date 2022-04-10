@@ -45,16 +45,6 @@ async def remount_storage(base_cmd: List[str], rw: bool) -> None:
         raise
 
 
-async def unlock_drive(base_cmd: List[str]) -> None:
-    logger = get_logger(0)
-    logger.info("Unlocking the drive ...")
-    try:
-        await _run_helper(base_cmd)
-    except Exception:
-        logger.error("Can't unlock the drive")
-        raise
-
-
 # =====
 async def _run_helper(cmd: List[str]) -> None:
     logger = get_logger(0)

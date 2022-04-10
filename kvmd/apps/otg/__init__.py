@@ -71,7 +71,7 @@ def _rmdir(path: str) -> None:
 def _unlink(path: str, optional: bool=False) -> None:
     logger = get_logger()
     if optional and not os.access(path, os.F_OK):
-        logger.info("SKIP-RM - %s", path)
+        logger.info("RM ------ [SKIPPED] %s", path)
         return
     logger.info("RM ------ %s", path)
     os.unlink(path)
@@ -185,6 +185,7 @@ class _GadgetConfig:
             _chown(join(func_path, "lun.0/cdrom"), user)
             _chown(join(func_path, "lun.0/ro"), user)
             _chown(join(func_path, "lun.0/file"), user)
+            _chown(join(func_path, "lun.0/forced_eject"), user)
         _symlink(func_path, join(self.__profile_path, func))
         name = ("Mass Storage Drive" if self.__msd_instance == 0 else f"Extra Drive #{self.__msd_instance}")
         self.__create_meta(func, name)
@@ -269,8 +270,6 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     logger.info("Enabling the gadget ...")
     _write(join(gadget_path, "UDC"), udc)
     time.sleep(config.otg.init_delay)
-
-    logger.info("Setting up permissions ...")
     _chown(join(gadget_path, "UDC"), config.otg.user)
     _chown(profile_path, config.otg.user)
 
@@ -290,7 +289,7 @@ def _cmd_stop(config: Section) -> None:
     logger.info("Disabling gadget %r ...", config.otg.gadget)
     _write(join(gadget_path, "UDC"), "\n")
 
-    _unlink(join(gadget_path, "os_desc", usb.G_PROFILE_NAME), True)
+    _unlink(join(gadget_path, "os_desc", usb.G_PROFILE_NAME), optional=True)
 
     profile_path = join(gadget_path, usb.G_PROFILE)
     for func in os.listdir(profile_path):

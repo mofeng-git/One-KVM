@@ -17,7 +17,6 @@ kvmd:
 
     msd:
         remount_cmd: /bin/true
-        unlock_cmd: /bin/true
 
     streamer:
         desired_fps: 30

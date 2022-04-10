@@ -185,6 +185,9 @@ for _variant in "${_variants[@]}"; do
 
 		pkgdesc=\"PiKVM platform configs - $_platform for $_board\"
 		depends=(kvmd=$pkgver-$pkgrel)
+		if [ $_board != generic ]; then
+			depends=(\"\${depends[@]}\" \"linux-rpi-pikvm>=5.15.25-15\")
+		fi
 
 		backup=(
 			etc/sysctl.d/99-kvmd.conf

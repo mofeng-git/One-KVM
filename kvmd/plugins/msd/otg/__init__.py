@@ -140,7 +140,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         storage_path: str,
 
         remount_cmd: List[str],
-        unlock_cmd: List[str],
 
         initial: Dict,
 
@@ -155,7 +154,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__meta_path = os.path.join(self.__storage_path, "meta")
 
         self.__remount_cmd = remount_cmd
-        self.__unlock_cmd = unlock_cmd
 
         self.__initial_image: str = initial["image"]
         self.__initial_cdrom: bool = initial["cdrom"]
@@ -182,7 +180,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "storage": Option("/var/lib/kvmd/msd", type=valid_abs_dir, unpack_as="storage_path"),
 
             "remount_cmd": Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-remount", "{mode}"], type=valid_command),
-            "unlock_cmd":  Option([*sudo, "/usr/bin/kvmd-helper-otgmsd-unlock", "unlock"],  type=valid_command),
 
             "initial": {
                 "image": Option("",    type=valid_printable_filename, if_empty=""),
@@ -242,7 +239,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     async def reset(self) -> None:
         async with self.__state.busy(check_online=False):
             try:
-                await self.__unlock_drive()
                 self.__drive.set_image_path("")
                 self.__drive.set_rw_flag(False)
                 self.__drive.set_cdrom_flag(False)
@@ -292,15 +288,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 if not os.path.exists(self.__state.vd.image.path):
                     raise MsdUnknownImageError()
 
-                await self.__unlock_drive()
                 self.__drive.set_cdrom_flag(self.__state.vd.cdrom)
                 self.__drive.set_image_path(self.__state.vd.image.path)
 
             else:
                 if not (self.__state.vd.connected or self.__drive.get_image_path()):
                     raise MsdDisconnectedError()
-
-                await self.__unlock_drive()
                 self.__drive.set_image_path("")
 
             self.__state.vd.connected = connected
@@ -479,7 +472,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if os.path.exists(path):
                 logger.info("Setting up initial image %r ...", self.__initial_image)
                 try:
-                    await self.__unlock_drive()
                     self.__drive.set_cdrom_flag(self.__initial_cdrom)
                     self.__drive.set_image_path(path)
                 except Exception:
@@ -547,6 +539,3 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     async def __remount_storage(self, rw: bool) -> None:
         await helpers.remount_storage(self.__remount_cmd, rw)
-
-    async def __unlock_drive(self) -> None:
-        await helpers.unlock_drive(self.__unlock_cmd)

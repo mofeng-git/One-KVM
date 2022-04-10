@@ -21,14 +21,11 @@
 
 
 import os
-import signal
 import errno
 import argparse
 
 from typing import List
 from typing import Optional
-
-import psutil
 
 from ...validators.basic import valid_bool
 from ...validators.basic import valid_int_f0
@@ -59,21 +56,6 @@ def _set_param(gadget: str, instance: int, param: str, value: str) -> None:
         raise
 
 
-def _unlock() -> None:
-    # https://github.com/torvalds/linux/blob/3039fad/drivers/usb/gadget/function/f_mass_storage.c#L2924
-    found = False
-    for proc in psutil.process_iter():
-        attrs = proc.as_dict(attrs=["name", "exe", "pid"])
-        if attrs.get("name") == "file-storage" and not attrs.get("exe"):
-            try:
-                proc.send_signal(signal.SIGUSR1)
-                found = True
-            except Exception as err:
-                raise SystemExit(f"Can't send SIGUSR1 to MSD kernel thread with pid={attrs['pid']}: {err}")
-    if not found:
-        raise SystemExit("Can't find MSD kernel thread")
-
-
 # =====
 def main(argv: Optional[List[str]]=None) -> None:
     (parent_parser, argv, config) = init(
@@ -88,8 +70,6 @@ def main(argv: Optional[List[str]]=None) -> None:
     )
     parser.add_argument("-i", "--instance", default=0, type=valid_int_f0,
                         metavar="<N>", help="Drive instance (0 for KVMD drive)")
-    parser.add_argument("--unlock", action="store_true",
-                        help="Send SIGUSR1 to MSD kernel thread")
     parser.add_argument("--set-cdrom", default=None, type=valid_bool,
                         metavar="<1|0|yes|no>", help="Set CD-ROM flag")
     parser.add_argument("--set-rw", default=None, type=valid_bool,
@@ -107,11 +87,8 @@ def main(argv: Optional[List[str]]=None) -> None:
     set_param = (lambda param, value: _set_param(config.otg.gadget, options.instance, param, value))
     get_param = (lambda param: _get_param(config.otg.gadget, options.instance, param))
 
-    if options.unlock:
-        _unlock()
-
     if options.eject:
-        set_param("file", "")
+        set_param("forced_eject", "")
 
     if options.set_cdrom is not None:
         set_param("cdrom", str(int(options.set_cdrom)))
