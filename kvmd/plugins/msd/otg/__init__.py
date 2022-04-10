@@ -46,6 +46,7 @@ from ....validators.os import valid_printable_filename
 from ....validators.os import valid_command
 
 from .... import aiotools
+from .... import aiohelpers
 
 from .. import MsdError
 from .. import MsdIsBusyError
@@ -59,7 +60,6 @@ from .. import BaseMsd
 from .. import MsdImageWriter
 
 from . import fs
-from . import helpers
 
 from .drive import Drive
 
@@ -538,4 +538,5 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def __remount_storage(self, rw: bool) -> None:
-        await helpers.remount_storage(self.__remount_cmd, rw)
+        if not (await aiohelpers.remount("MSD", self.__remount_cmd, rw)):
+            raise MsdError("Can't execute remount helper")

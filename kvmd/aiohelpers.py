@@ -20,35 +20,31 @@
 # ========================================================================== #
 
 
+import subprocess
+
 from typing import List
 
-from ....logging import get_logger
+from .logging import get_logger
 
-from .... import aioproc
-
-from .. import MsdError
+from . import tools
+from . import aioproc
 
 
 # =====
-async def remount_storage(base_cmd: List[str], rw: bool) -> None:
-    logger = get_logger(0)
+async def remount(name: str, base_cmd: List[str], rw: bool) -> bool:
+    logger = get_logger(1)
     mode = ("rw" if rw else "ro")
     cmd = [
         part.format(mode=mode)
         for part in base_cmd
     ]
-    logger.info("Remounting internal storage to %s ...", mode.upper())
+    logger.info("Remounting %s storage to %s: %s ...", name, mode.upper(), cmd)
     try:
-        await _run_helper(cmd)
-    except Exception:
-        logger.error("Can't remount internal storage")
-        raise
-
-
-# =====
-async def _run_helper(cmd: List[str]) -> None:
-    logger = get_logger(0)
-    logger.info("Executing helper %s ...", cmd)
-    proc = await aioproc.log_process(cmd, logger)
-    if proc.returncode != 0:
-        raise MsdError(f"Error while helper execution: pid={proc.pid}; retcode={proc.returncode}")
+        proc = await aioproc.log_process(cmd, logger)
+        if proc.returncode != 0:
+            assert proc.returncode is not None
+            raise subprocess.CalledProcessError(proc.returncode, cmd)
+    except Exception as err:
+        logger.error("Can't remount %s storage: %s", name, tools.efmt(err))
+        return False
+    return True
