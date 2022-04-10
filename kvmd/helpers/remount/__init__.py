@@ -113,10 +113,9 @@ def main() -> None:
 
     storage = _find_storage(target)
     _remount(storage.mount_path, rw)
-    if rw:
-        if storage.root_path:
-            for name in dirs:
-                path = os.path.join(storage.root_path, name)
-                _mkdir(path)
-                if storage.user:
-                    _chown(path, storage.user)
+    if rw and storage.root_path:
+        for name in dirs:
+            path = os.path.join(storage.root_path, name)
+            _mkdir(path)
+            if storage.user:
+                _chown(path, storage.user)
