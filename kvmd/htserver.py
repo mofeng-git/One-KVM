@@ -27,6 +27,7 @@ import dataclasses
 import inspect
 import json
 
+from typing import Tuple
 from typing import List
 from typing import Dict
 from typing import Callable
@@ -36,6 +37,7 @@ from aiohttp.web import BaseRequest
 from aiohttp.web import Request
 from aiohttp.web import Response
 from aiohttp.web import StreamResponse
+from aiohttp.web import WebSocketResponse
 from aiohttp.web import Application
 from aiohttp.web import run_app
 from aiohttp.web import normalize_path_middleware
@@ -195,6 +197,40 @@ async def stream_json_exception(response: StreamResponse, err: Exception) -> Non
         "error": name,
         "error_msg": msg,
     }, False)
+
+
+# =====
+async def send_ws_event(ws: WebSocketResponse, event_type: str, event: Optional[Dict]) -> None:
+    await ws.send_str(json.dumps({
+        "event_type": event_type,
+        "event": event,
+    }))
+
+
+async def broadcast_ws_event(wss: List[WebSocketResponse], event_type: str, event: Optional[Dict]) -> None:
+    if wss:
+        await asyncio.gather(*[
+            send_ws_event(ws, event_type, event)
+            for ws in wss
+            if (
+                not ws.closed
+                and ws._req is not None  # pylint: disable=protected-access
+                and ws._req.transport is not None  # pylint: disable=protected-access
+            )
+        ], return_exceptions=True)
+
+
+def parse_ws_event(msg: str) -> Tuple[str, Dict]:
+    data = json.loads(msg)
+    if not isinstance(data, dict):
+        raise RuntimeError("Top-level event structure is not a dict")
+    event_type = data.get("event_type")
+    if not isinstance(event_type, str):
+        raise RuntimeError("event_type must be a string")
+    event = data["event"]
+    if not isinstance(event, dict):
+        raise RuntimeError("event must be a dict")
+    return (event_type, event)
 
 
 # =====
