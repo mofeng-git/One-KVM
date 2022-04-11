@@ -20,6 +20,7 @@ post_upgrade() {
 	done
 
 	chown kvmd /var/lib/kvmd/msd || true
+	chown kvmd-pst /var/lib/kvmd/pst || true
 
 	if [ ! -e /etc/kvmd/nginx/ssl/server.crt ]; then
 		echo "==> Generating KVMD-Nginx certificate ..."

@@ -170,7 +170,7 @@ package_kvmd() {
 	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/web.css
 	mkdir -p "$pkgdir/etc/kvmd/override.d"
 
-	mkdir -p "$pkgdir/var/lib/kvmd/msd"
+	mkdir -p "$pkgdir/var/lib/kvmd/"{msd,pst}
 
 	# Avoid dhcp problems
 	install -DTm755 configs/os/netctl-dhcp "$pkgdir/etc/netctl/hooks/pikvm-dhcp"
