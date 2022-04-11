@@ -157,8 +157,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         streamer: Streamer,
         snapshoter: Snapshoter,
 
-        heartbeat: float,
-
         keymap_path: str,
         ignore_keys: List[str],
         mouse_x_range: Tuple[int, int],
@@ -172,8 +170,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self.__streamer = streamer
         self.__snapshoter = snapshoter  # Not a component: No state or cleanup
         self.__user_gpio = user_gpio  # Has extra state "gpio_scheme_state"
-
-        self.__heartbeat = heartbeat
 
         self.__stream_forever = stream_forever
 
@@ -254,13 +250,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     @exposed_http("GET", "/ws")
     async def __ws_handler(self, request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
-        logger = get_logger(0)
-
-        client = _WsClient(
-            ws=aiohttp.web.WebSocketResponse(heartbeat=self.__heartbeat),
-            stream=valid_bool(request.query.get("stream", "true")),
-        )
-        await client.ws.prepare(request)
+        stream = valid_bool(request.query.get("stream", "true"))
+        ws = await self._make_ws_response(request)
+        client = _WsClient(ws, stream)
         await self.__register_ws_client(client)
 
         try:
@@ -281,27 +273,27 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             ))
             for stage in [stage1, stage2]:
                 await asyncio.gather(*[
-                    send_ws_event(client.ws, event_type, events.pop(event_type))
+                    send_ws_event(ws, event_type, events.pop(event_type))
                     for (event_type, _) in stage
                 ])
 
-            await send_ws_event(client.ws, "loop", {})
+            await send_ws_event(ws, "loop", {})
 
-            async for msg in client.ws:
+            async for msg in ws:
                 if msg.type != aiohttp.web.WSMsgType.TEXT:
                     break
                 try:
                     (event_type, event) = parse_ws_event(msg.data)
                 except Exception as err:
-                    logger.error("Can't parse JSON event from websocket: %r", err)
+                    get_logger(0).error("Can't parse JSON event from websocket: %r", err)
                 else:
                     handler = self.__ws_handlers.get(event_type)
                     if handler:
-                        await handler(client.ws, event)
+                        await handler(ws, event)
                     else:
-                        logger.error("Unknown websocket event: %r", msg.data)
+                        get_logger(0).error("Unknown websocket event: %r", msg.data)
 
-            return client.ws
+            return ws
         finally:
             await self.__remove_ws_client(client)
 

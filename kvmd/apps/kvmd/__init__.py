@@ -100,14 +100,12 @@ def main(argv: Optional[List[str]]=None) -> None:
             **config.snapshot._unpack(),
         ),
 
-        heartbeat=config.server.heartbeat,
-
         keymap_path=config.hid.keymap,
         ignore_keys=config.hid.ignore_keys,
         mouse_x_range=(config.hid.mouse_x_range.min, config.hid.mouse_x_range.max),
         mouse_y_range=(config.hid.mouse_y_range.min, config.hid.mouse_y_range.max),
 
         stream_forever=config.streamer.forever,
-    ).run(**config.server._unpack(ignore=["heartbeat"]))
+    ).run(**config.server._unpack())
 
     get_logger(0).info("Bye-bye")

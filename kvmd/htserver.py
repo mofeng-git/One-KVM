@@ -255,8 +255,11 @@ class HttpServer:
         unix_path: str,
         unix_rm: bool,
         unix_mode: int,
+        heartbeat: float,
         access_log_format: str,
     ) -> None:
+
+        self.__heartbeat = heartbeat  # pylint: disable=attribute-defined-outside-init
 
         if unix_rm and os.path.exists(unix_path):
             os.remove(unix_path)
@@ -274,6 +277,15 @@ class HttpServer:
             loop=asyncio.get_event_loop(),
         )
 
+    # =====
+
+    async def _make_ws_response(self, request: Request) -> WebSocketResponse:
+        ws = WebSocketResponse(heartbeat=self.__heartbeat)
+        await ws.prepare(request)
+        return ws
+
+    # =====
+
     async def _init_app(self, app: Application) -> None:
         raise NotImplementedError
 
@@ -282,6 +294,8 @@ class HttpServer:
 
     async def _on_cleanup(self, app: Application) -> None:
         _ = app
+
+    # =====
 
     async def __make_app(self) -> Application:
         app = Application(middlewares=[normalize_path_middleware(
