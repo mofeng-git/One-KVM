@@ -78,6 +78,8 @@ def main(argv: Optional[List[str]]=None) -> None:
                         metavar="<path>", help="Set the image file")
     parser.add_argument("--eject", action="store_true",
                         help="Eject the image")
+    parser.add_argument("--unlock", action="store_true",
+                        help="Does nothing, just for backward compatibility")
     options = parser.parse_args(argv[1:])
 
     if config.kvmd.msd.type != "otg":
