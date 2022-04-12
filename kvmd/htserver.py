@@ -50,6 +50,11 @@ except ImportError:
 
 from .logging import get_logger
 
+from .errors import OperationError
+from .errors import IsBusyError
+
+from .validators import ValidatorError
+
 
 # =====
 class HttpError(Exception):
@@ -297,12 +302,28 @@ class HttpServer:
 
     # =====
 
+    def _add_exposed(self, exposed: HttpExposed) -> None:
+        async def wrapper(request: Request) -> Response:
+            try:
+                await self._check_request_auth(exposed, request)
+                return (await exposed.handler(request))
+            except IsBusyError as err:
+                return make_json_exception(err, 409)
+            except (ValidatorError, OperationError) as err:
+                return make_json_exception(err, 400)
+            except HttpError as err:
+                return make_json_exception(err)
+        self.__app.router.add_route(exposed.method, exposed.path, wrapper)
+
     async def _make_ws_response(self, request: Request) -> WebSocketResponse:
         ws = WebSocketResponse(heartbeat=self.__heartbeat)
         await ws.prepare(request)
         return ws
 
     # =====
+
+    async def _check_request_auth(self, exposed: HttpExposed, request: Request) -> None:
+        pass
 
     async def _init_app(self, app: Application) -> None:
         raise NotImplementedError
@@ -316,15 +337,15 @@ class HttpServer:
     # =====
 
     async def __make_app(self) -> Application:
-        app = Application(middlewares=[normalize_path_middleware(
+        self.__app = Application(middlewares=[normalize_path_middleware(  # pylint: disable=attribute-defined-outside-init
             append_slash=False,
             remove_slash=True,
             merge_slashes=True,
         )])
-        app.on_shutdown.append(self._on_shutdown)
-        app.on_cleanup.append(self._on_cleanup)
-        await self._init_app(app)
-        return app
+        self.__app.on_shutdown.append(self._on_shutdown)
+        self.__app.on_cleanup.append(self._on_cleanup)
+        await self._init_app(self.__app)
+        return self.__app
 
     def __run_app_print(self, text: str) -> None:
         logger = get_logger(0)

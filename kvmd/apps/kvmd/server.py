@@ -42,19 +42,16 @@ import aiohttp.web
 from ...logging import get_logger
 
 from ...errors import OperationError
-from ...errors import IsBusyError
 
 from ... import aiotools
 from ... import aioproc
 
-from ...htserver import HttpError
 from ...htserver import HttpExposed
 from ...htserver import exposed_http
 from ...htserver import exposed_ws
 from ...htserver import get_exposed_http
 from ...htserver import get_exposed_ws
 from ...htserver import make_json_response
-from ...htserver import make_json_exception
 from ...htserver import send_ws_event
 from ...htserver import broadcast_ws_event
 from ...htserver import process_ws_messages
@@ -65,7 +62,6 @@ from ...plugins.hid import BaseHid
 from ...plugins.atx import BaseAtx
 from ...plugins.msd import BaseMsd
 
-from ...validators import ValidatorError
 from ...validators.basic import valid_bool
 from ...validators.kvm import valid_stream_quality
 from ...validators.kvm import valid_stream_fps
@@ -296,7 +292,10 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         aioproc.rename_process("main")
         super().run(**kwargs)
 
-    async def _init_app(self, app: aiohttp.web.Application) -> None:
+    async def _check_request_auth(self, exposed: HttpExposed, request: aiohttp.web.Request) -> None:
+        await check_request_auth(self.__auth_manager, exposed, request)
+
+    async def _init_app(self, _: aiohttp.web.Application) -> None:
         self.__run_system_task(self.__stream_controller)
         for comp in self.__components:
             if comp.systask:
@@ -307,7 +306,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         for api in self.__apis:
             for http_exposed in get_exposed_http(api):
-                self.__add_app_route(app, http_exposed)
+                self._add_exposed(http_exposed)
             for ws_exposed in get_exposed_ws(api):
                 self.__ws_handlers[ws_exposed.event_type] = ws_exposed.handler
 
@@ -323,19 +322,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 get_logger().exception("Unhandled exception, killing myself ...")
                 os.kill(os.getpid(), signal.SIGTERM)
         self.__system_tasks.append(asyncio.create_task(wrapper()))
-
-    def __add_app_route(self, app: aiohttp.web.Application, exposed: HttpExposed) -> None:
-        async def wrapper(request: aiohttp.web.Request) -> aiohttp.web.Response:
-            try:
-                await check_request_auth(self.__auth_manager, exposed, request)
-                return (await exposed.handler(request))
-            except IsBusyError as err:
-                return make_json_exception(err, 409)
-            except (ValidatorError, OperationError) as err:
-                return make_json_exception(err, 400)
-            except HttpError as err:
-                return make_json_exception(err)
-        app.router.add_route(exposed.method, exposed.path, wrapper)
 
     async def _on_shutdown(self, _: aiohttp.web.Application) -> None:
         logger = get_logger(0)
