@@ -281,7 +281,7 @@ class UserGpio:
             await self.__notifier.wait()
 
     def sysprep(self) -> None:
-        get_logger().info("Preparing User-GPIO drivers ...")
+        get_logger(0).info("Preparing User-GPIO drivers ...")
         for (_, driver) in tools.sorted_kvs(self.__drivers):
             driver.prepare()
 

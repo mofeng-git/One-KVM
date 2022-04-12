@@ -115,7 +115,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     def sysprep(self) -> None:
         udc = usb.find_udc(self.__udc)
-        get_logger().info("Using UDC %s", udc)
+        get_logger(0).info("Using UDC %s", udc)
         self.__keyboard_proc.start(udc)
         self.__mouse_proc.start(udc)
         if self.__mouse_alt_proc:
