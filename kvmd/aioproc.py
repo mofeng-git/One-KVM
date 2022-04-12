@@ -105,14 +105,14 @@ async def kill_process(proc: asyncio.subprocess.Process, wait: float, logger: lo
                     if proc.returncode is not None:
                         raise
             await proc.wait()
-            logger.info("Process killed: retcode=%d", proc.pid, proc.returncode)
+            logger.info("Process killed: retcode=%d", proc.returncode)
         except asyncio.CancelledError:
             pass
         except Exception:
             if proc.returncode is None:
                 logger.exception("Can't kill process pid=%d", proc.pid)
             else:
-                logger.info("Process killed: retcode=%d", proc.pid, proc.returncode)
+                logger.info("Process killed: retcode=%d", proc.returncode)
 
 
 def rename_process(suffix: str, prefix: str="kvmd") -> None:
