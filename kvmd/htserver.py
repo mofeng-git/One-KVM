@@ -325,14 +325,14 @@ class HttpServer:
     async def _check_request_auth(self, exposed: HttpExposed, request: Request) -> None:
         pass
 
-    async def _init_app(self, app: Application) -> None:
+    async def _init_app(self) -> None:
         raise NotImplementedError
 
-    async def _on_shutdown(self, app: Application) -> None:
-        _ = app
+    async def _on_shutdown(self) -> None:
+        pass
 
-    async def _on_cleanup(self, app: Application) -> None:
-        _ = app
+    async def _on_cleanup(self) -> None:
+        pass
 
     # =====
 
@@ -342,9 +342,16 @@ class HttpServer:
             remove_slash=True,
             merge_slashes=True,
         )])
-        self.__app.on_shutdown.append(self._on_shutdown)
-        self.__app.on_cleanup.append(self._on_cleanup)
-        await self._init_app(self.__app)
+
+        async def on_shutdown(_: Application) -> None:
+            await self._on_shutdown()
+        self.__app.on_shutdown.append(on_shutdown)
+
+        async def on_cleanup(_: Application) -> None:
+            await self._on_cleanup()
+        self.__app.on_cleanup.append(on_cleanup)
+
+        await self._init_app()
         return self.__app
 
     def __run_app_print(self, text: str) -> None:

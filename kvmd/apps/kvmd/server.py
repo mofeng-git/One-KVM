@@ -36,7 +36,6 @@ from typing import AsyncGenerator
 from typing import Optional
 from typing import Any
 
-from aiohttp.web import Application
 from aiohttp.web import Request
 from aiohttp.web import Response
 from aiohttp.web import WebSocketResponse
@@ -297,7 +296,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     async def _check_request_auth(self, exposed: HttpExposed, request: Request) -> None:
         await check_request_auth(self.__auth_manager, exposed, request)
 
-    async def _init_app(self, _: Application) -> None:
+    async def _init_app(self) -> None:
         self.__run_system_task(self.__stream_controller)
         for comp in self.__components:
             if comp.systask:
@@ -325,7 +324,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 os.kill(os.getpid(), signal.SIGTERM)
         self.__system_tasks.append(asyncio.create_task(wrapper()))
 
-    async def _on_shutdown(self, _: Application) -> None:
+    async def _on_shutdown(self) -> None:
         logger = get_logger(0)
 
         logger.info("Waiting short tasks ...")
@@ -344,7 +343,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         logger.info("On-Shutdown complete")
 
-    async def _on_cleanup(self, _: Application) -> None:
+    async def _on_cleanup(self) -> None:
         logger = get_logger(0)
         for comp in self.__components:
             if comp.cleanup:
