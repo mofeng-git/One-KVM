@@ -36,8 +36,10 @@ from typing import AsyncGenerator
 from typing import Optional
 from typing import Any
 
-import aiohttp
-import aiohttp.web
+from aiohttp.web import Application
+from aiohttp.web import Request
+from aiohttp.web import Response
+from aiohttp.web import WebSocketResponse
 
 from ...logging import get_logger
 
@@ -131,7 +133,7 @@ class _Component:  # pylint: disable=too-many-instance-attributes
 
 @dataclasses.dataclass(frozen=True)
 class _WsClient:
-    ws: aiohttp.web.WebSocketResponse
+    ws: WebSocketResponse
     stream: bool
 
     def __str__(self) -> str:
@@ -216,7 +218,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     # ===== STREAMER CONTROLLER
 
     @exposed_http("POST", "/streamer/set_params")
-    async def __streamer_set_params_handler(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __streamer_set_params_handler(self, request: Request) -> Response:
         current_params = self.__streamer.get_params()
         for (name, validator, exc_cls) in [
             ("quality", valid_stream_quality, StreamerQualityNotSupported),
@@ -237,7 +239,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         return make_json_response()
 
     @exposed_http("POST", "/streamer/reset")
-    async def __streamer_reset_handler(self, _: aiohttp.web.Request) -> aiohttp.web.Response:
+    async def __streamer_reset_handler(self, _: Request) -> Response:
         self.__reset_streamer = True
         await self.__streamer_notifier.notify()
         return make_json_response()
@@ -245,7 +247,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     # ===== WEBSOCKET
 
     @exposed_http("GET", "/ws")
-    async def __ws_handler(self, request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
+    async def __ws_handler(self, request: Request) -> WebSocketResponse:
         stream = valid_bool(request.query.get("stream", "true"))
         ws = await self._make_ws_response(request)
         client = _WsClient(ws, stream)
@@ -280,7 +282,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             await self.__remove_ws_client(client)
 
     @exposed_ws("ping")
-    async def __ws_ping_handler(self, ws: aiohttp.web.WebSocketResponse, _: Dict) -> None:
+    async def __ws_ping_handler(self, ws: WebSocketResponse, _: Dict) -> None:
         await send_ws_event(ws, "pong", {})
 
     # ===== SYSTEM STUFF
@@ -292,10 +294,10 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         aioproc.rename_process("main")
         super().run(**kwargs)
 
-    async def _check_request_auth(self, exposed: HttpExposed, request: aiohttp.web.Request) -> None:
+    async def _check_request_auth(self, exposed: HttpExposed, request: Request) -> None:
         await check_request_auth(self.__auth_manager, exposed, request)
 
-    async def _init_app(self, _: aiohttp.web.Application) -> None:
+    async def _init_app(self, _: Application) -> None:
         self.__run_system_task(self.__stream_controller)
         for comp in self.__components:
             if comp.systask:
@@ -323,7 +325,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 os.kill(os.getpid(), signal.SIGTERM)
         self.__system_tasks.append(asyncio.create_task(wrapper()))
 
-    async def _on_shutdown(self, _: aiohttp.web.Application) -> None:
+    async def _on_shutdown(self, _: Application) -> None:
         logger = get_logger(0)
 
         logger.info("Waiting short tasks ...")
@@ -342,7 +344,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         logger.info("On-Shutdown complete")
 
-    async def _on_cleanup(self, _: aiohttp.web.Application) -> None:
+    async def _on_cleanup(self, _: Application) -> None:
         logger = get_logger(0)
         for comp in self.__components:
             if comp.cleanup:
