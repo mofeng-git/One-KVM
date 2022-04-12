@@ -38,6 +38,7 @@ from aiohttp.web import Request
 from aiohttp.web import Response
 from aiohttp.web import StreamResponse
 from aiohttp.web import WebSocketResponse
+from aiohttp.web import WSMsgType
 from aiohttp.web import Application
 from aiohttp.web import run_app
 from aiohttp.web import normalize_path_middleware
@@ -220,7 +221,7 @@ async def broadcast_ws_event(wss: List[WebSocketResponse], event_type: str, even
         ], return_exceptions=True)
 
 
-def parse_ws_event(msg: str) -> Tuple[str, Dict]:
+def _parse_ws_event(msg: str) -> Tuple[str, Dict]:
     data = json.loads(msg)
     if not isinstance(data, dict):
         raise RuntimeError("Top-level event structure is not a dict")
@@ -231,6 +232,23 @@ def parse_ws_event(msg: str) -> Tuple[str, Dict]:
     if not isinstance(event, dict):
         raise RuntimeError("event must be a dict")
     return (event_type, event)
+
+
+async def process_ws_messages(ws: WebSocketResponse, handlers: Dict[str, Callable]) -> None:
+    logger = get_logger(1)
+    async for msg in ws:
+        if msg.type != WSMsgType.TEXT:
+            break
+        try:
+            (event_type, event) = _parse_ws_event(msg.data)
+        except Exception as err:
+            logger.error("Can't parse JSON event from websocket: %r", err)
+        else:
+            handler = handlers.get(event_type)
+            if handler:
+                await handler(ws, event)
+            else:
+                logger.error("Unknown websocket event: %r", msg.data)
 
 
 # =====

@@ -57,7 +57,7 @@ from ...htserver import make_json_response
 from ...htserver import make_json_exception
 from ...htserver import send_ws_event
 from ...htserver import broadcast_ws_event
-from ...htserver import parse_ws_event
+from ...htserver import process_ws_messages
 from ...htserver import HttpServer
 
 from ...plugins import BasePlugin
@@ -278,21 +278,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 ])
 
             await send_ws_event(ws, "loop", {})
-
-            async for msg in ws:
-                if msg.type != aiohttp.web.WSMsgType.TEXT:
-                    break
-                try:
-                    (event_type, event) = parse_ws_event(msg.data)
-                except Exception as err:
-                    get_logger(0).error("Can't parse JSON event from websocket: %r", err)
-                else:
-                    handler = self.__ws_handlers.get(event_type)
-                    if handler:
-                        await handler(ws, event)
-                    else:
-                        get_logger(0).error("Unknown websocket event: %r", msg.data)
-
+            await process_ws_messages(ws, self.__ws_handlers)
             return ws
         finally:
             await self.__remove_ws_client(client)
