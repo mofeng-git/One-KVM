@@ -155,7 +155,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         try:
             proc = await aioproc.log_process(**self.__make_ipmitool_kwargs(action), logger=get_logger(0), prefix=str(self))
             if proc.returncode != 0:
-                raise RuntimeError(f"Ipmitool error: pid={proc.pid}; retcode={proc.returncode}")
+                raise RuntimeError(f"Ipmitool error: retcode={proc.returncode}")
         except Exception as err:
             get_logger(0).error("Can't send IPMI power-%s request to %s:%d: %s",
                                 action, self.__host, self.__port, tools.efmt(err))
@@ -167,7 +167,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         try:
             (proc, text) = await aioproc.read_process(**self.__make_ipmitool_kwargs("status"))
             if proc.returncode != 0:
-                raise RuntimeError(f"Ipmitool error: pid={proc.pid}; retcode={proc.returncode}")
+                raise RuntimeError(f"Ipmitool error: retcode={proc.returncode}")
             stripped = text.strip()
             if stripped.startswith("Chassis Power is "):
                 self.__power = (stripped != "Chassis Power is off")
