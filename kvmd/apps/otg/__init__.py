@@ -212,16 +212,20 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
 
     _write(join(gadget_path, "idVendor"), f"0x{config.otg.vendor_id:04X}")
     _write(join(gadget_path, "idProduct"), f"0x{config.otg.product_id:04X}")
+    _write(join(gadget_path, "bcdUSB"), f"0x{config.otg.usb_version:04X}")
+
     # bcdDevice should be incremented any time there are breaking changes
     # to this script so that the host OS sees it as a new device
     # and re-enumerates everything rather than relying on cached values.
-    if config.otg.devices.ethernet.enabled and config.otg.devices.ethernet.driver == "ncm":
-        _write(join(gadget_path, "bcdDevice"), "0x0102")
-    elif config.otg.devices.ethernet.enabled and config.otg.devices.ethernet.driver == "rndis":
-        _write(join(gadget_path, "bcdDevice"), "0x0101")
-    else:
-        _write(join(gadget_path, "bcdDevice"), "0x0100")
-    _write(join(gadget_path, "bcdUSB"), f"0x{config.otg.usb_version:04X}")
+    device_version = config.otg.device_version
+    if device_version < 0:
+        device_version = 0x0100
+        if config.otg.devices.ethernet.enabled:
+            if config.otg.devices.ethernet.driver == "ncm":
+                device_version = 0x0102
+            elif config.otg.devices.ethernet.driver == "rndis":
+                device_version = 0x0101
+    _write(join(gadget_path, "bcdDevice"), f"0x{device_version:04X}")
 
     lang_path = join(gadget_path, "strings/0x409")
     _mkdir(lang_path)
@@ -233,7 +237,7 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     _mkdir(profile_path)
     _mkdir(join(profile_path, "strings/0x409"))
     _write(join(profile_path, "strings/0x409/configuration"), f"Config 1: {config.otg.config}")
-    _write(join(profile_path, "MaxPower"), "250")
+    _write(join(profile_path, "MaxPower"), str(config.otg.max_power))
     if config.otg.remote_wakeup:
         # XXX: Should we use MaxPower=100 with Remote Wakeup?
         _write(join(profile_path, "bmAttributes"), "0xA0")

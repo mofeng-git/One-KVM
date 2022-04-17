@@ -491,7 +491,9 @@ def _get_config_scheme() -> Dict:
             "manufacturer":  Option("PiKVM"),
             "product":       Option("Composite KVM Device"),
             "serial":        Option("CAFEBABE"),
+            "device_version": Option(-1,     type=functools.partial(valid_number, min=-1, max=0xFFFF)),
             "usb_version":   Option(0x0200, type=valid_otg_id),
+            "max_power":     Option(250,    type=functools.partial(valid_number, min=50, max=500)),
             "remote_wakeup": Option(False,  type=valid_bool),
 
             "gadget":     Option("kvmd", type=valid_otg_gadget),
