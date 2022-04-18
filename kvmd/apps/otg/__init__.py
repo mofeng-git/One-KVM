@@ -195,7 +195,7 @@ class _GadgetConfig:
         _write(join(self.__meta_path, f"{func}@meta.json"), json.dumps({"func": func, "name": name}))
 
 
-def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
+def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,too-many-branches
     # https://www.kernel.org/doc/Documentation/usb/gadget_configfs.txt
     # https://www.isticktoit.net/?p=1383
 
@@ -231,7 +231,8 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements
     _mkdir(lang_path)
     _write(join(lang_path, "manufacturer"), config.otg.manufacturer)
     _write(join(lang_path, "product"), config.otg.product)
-    _write(join(lang_path, "serialnumber"), config.otg.serial)
+    if config.otg.serial is not None:
+        _write(join(lang_path, "serialnumber"), config.otg.serial)
 
     profile_path = join(gadget_path, usb.G_PROFILE)
     _mkdir(profile_path)

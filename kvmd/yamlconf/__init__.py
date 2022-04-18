@@ -119,6 +119,7 @@ class Option:
         self,
         default: Any,
         type: Optional[Callable[[Any], Any]]=None,  # pylint: disable=redefined-builtin
+        if_none: Any=Stub,
         if_empty: Any=Stub,
         only_if: str="",
         unpack_as: str="",
@@ -127,6 +128,7 @@ class Option:
 
         self.default = default
         self.type: Callable[[Any], Any] = (type or (self.__type(default) if default is not None else str))  # type: ignore
+        self.if_none = if_none
         self.if_empty = if_empty
         self.only_if = only_if
         self.unpack_as = unpack_as
@@ -134,8 +136,8 @@ class Option:
 
     def __repr__(self) -> str:
         return (
-            f"<Option(default={self.default}, type={self.type}, if_empty={self.if_empty},"
-            f" only_if={self.only_if}, unpack_as={self.unpack_as})>"
+            f"<Option(default={self.default}, type={self.type}, if_none={self.if_none},"
+            f" if_empty={self.if_empty}, only_if={self.only_if}, unpack_as={self.unpack_as})>"
         )
 
 
@@ -179,7 +181,9 @@ def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, .
                 value = option.default
             else:
                 value = raw.get(key, option.default)
-                if option.if_empty != Stub and not value:
+                if option.if_none != Stub and value is None:
+                    value = option.if_none
+                elif option.if_empty != Stub and not value:
                     value = option.if_empty
                 else:
                     try:
