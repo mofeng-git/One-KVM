@@ -31,6 +31,7 @@ from os.path import join  # pylint: disable=ungrouped-imports
 
 from typing import List
 from typing import Optional
+from typing import Union
 
 from ...logging import get_logger
 
@@ -77,14 +78,10 @@ def _unlink(path: str, optional: bool=False) -> None:
     os.unlink(path)
 
 
-def _write(path: str, text: str, optional: bool=False) -> None:
-    logger = get_logger()
-    if optional and not os.access(path, os.F_OK):
-        logger.info("SKIP ---- %s", path)
-        return
-    logger.info("WRITE --- %s", path)
+def _write(path: str, value: Union[str, int]) -> None:
+    get_logger().info("WRITE --- %s", path)
     with open(path, "w") as param_file:
-        param_file.write(text)
+        param_file.write(str(value))
 
 
 def _write_bytes(path: str, data: bytes) -> None:
@@ -161,12 +158,12 @@ class _GadgetConfig:
         func = f"hid.usb{self.__hid_instance}"
         func_path = join(self.__gadget_path, "functions", func)
         _mkdir(func_path)
-        _write(join(func_path, "no_out_endpoint"), "1", optional=True)
+        _write(join(func_path, "no_out_endpoint"), "1")
         if remote_wakeup:
-            _write(join(func_path, "wakeup_on_write"), "1", optional=True)
-        _write(join(func_path, "protocol"), str(hid.protocol))
-        _write(join(func_path, "subclass"), str(hid.subclass))
-        _write(join(func_path, "report_length"), str(hid.report_length))
+            _write(join(func_path, "wakeup_on_write"), "1")
+        _write(join(func_path, "protocol"), hid.protocol)
+        _write(join(func_path, "subclass"), hid.subclass)
+        _write(join(func_path, "report_length"), hid.report_length)
         _write_bytes(join(func_path, "report_desc"), hid.report_descriptor)
         _symlink(func_path, join(self.__profile_path, func))
         self.__create_meta(func, name)
@@ -176,11 +173,11 @@ class _GadgetConfig:
         func = f"mass_storage.usb{self.__msd_instance}"
         func_path = join(self.__gadget_path, "functions", func)
         _mkdir(func_path)
-        _write(join(func_path, "stall"), str(int(stall)))
-        _write(join(func_path, "lun.0/cdrom"), str(int(cdrom)))
-        _write(join(func_path, "lun.0/ro"), str(int(not rw)))
-        _write(join(func_path, "lun.0/removable"), str(int(removable)))
-        _write(join(func_path, "lun.0/nofua"), str(int(not fua)))
+        _write(join(func_path, "stall"), int(stall))
+        _write(join(func_path, "lun.0/cdrom"), int(cdrom))
+        _write(join(func_path, "lun.0/ro"), int(not rw))
+        _write(join(func_path, "lun.0/removable"), int(removable))
+        _write(join(func_path, "lun.0/nofua"), int(not fua))
         if user != "root":
             _chown(join(func_path, "lun.0/cdrom"), user)
             _chown(join(func_path, "lun.0/ro"), user)
@@ -238,7 +235,7 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
     _mkdir(profile_path)
     _mkdir(join(profile_path, "strings/0x409"))
     _write(join(profile_path, "strings/0x409/configuration"), f"Config 1: {config.otg.config}")
-    _write(join(profile_path, "MaxPower"), str(config.otg.max_power))
+    _write(join(profile_path, "MaxPower"), config.otg.max_power)
     if config.otg.remote_wakeup:
         # XXX: Should we use MaxPower=100 with Remote Wakeup?
         _write(join(profile_path, "bmAttributes"), "0xA0")
