@@ -1,5 +1,5 @@
 [Unit]
-Description=Pi-KVM - Boot configuration
+Description=PiKVM - Boot configuration
 After=systemd-modules-load.service
 Before=network-pre.target kvmd-otg.service kvmd-nginx.service kvmd.service sshd.service pikvm-bootconfig.service
 
