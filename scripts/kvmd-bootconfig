@@ -62,10 +62,22 @@ if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
 	kvmd-gencert --do-the-thing --vnc
 
 	if grep -q 'X-kvmd\.otgmsd' /etc/fstab; then
-		umount /dev/mmcblk0p3
-		parted /dev/mmcblk0 -a optimal -s resizepart 3 100%
-		yes | mkfs.ext4 -F -m 0 /dev/mmcblk0p3
-		mount /dev/mmcblk0p3
+		part=`grep 'X-kvmd\.otgmsd' /etc/fstab | awk '{print $1}'`
+		splitted=(${part//=/ })
+		if [ ${splitted[0]} == "LABEL" ]; then
+			label=${splitted[1]}
+			part=`blkid -c /dev/null -L $label`
+		else
+			label=PIMSD
+		fi
+		unset splitted
+		disk=/dev/`lsblk -no pkname $part`
+		npart=`cat /sys/class/block/${part//\/dev\//}/partition`
+		umount $part
+		parted $disk -a optimal -s resizepart $npart 100%
+		yes | mkfs.ext4 -L $label -F -m 0 $part
+		mount $part
+		unset disk part npart label
 	fi
 
 	# fc-cache is required for installed X server
