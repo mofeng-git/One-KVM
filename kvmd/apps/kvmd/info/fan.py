@@ -31,10 +31,11 @@ import aiohttp
 
 from ....logging import get_logger
 
+from .... import tools
 from .... import aiotools
 from .... import htclient
 
-from ..sysunit import get_service_status
+from .. import sysunit
 
 from .base import BaseInfoSubmanager
 
@@ -84,9 +85,12 @@ class FanInfoSubmanager(BaseInfoSubmanager):
 
     async def __get_monitored(self) -> bool:
         if self.__unix_path:
-            status = await aiotools.run_async(get_service_status, self.__daemon)
-            if status is not None:
-                return (status[0] or status[1])
+            try:
+                async with sysunit.SystemdUnitInfo() as sui:
+                    status = await sui.get_status(self.__daemon)
+                    return (status[0] or status[1])
+            except Exception as err:
+                get_logger(0).error("Can't get info about the service %r: %s", self.__daemon, tools.efmt(err))
         return False
 
     async def __get_fan_state(self) -> Optional[Dict]:

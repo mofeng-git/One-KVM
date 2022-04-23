@@ -22,6 +22,7 @@
 
 import os
 import re
+import asyncio
 
 from typing import Dict
 from typing import Optional
@@ -31,9 +32,10 @@ from ....logging import get_logger
 from ....yamlconf import Section
 from ....yamlconf.loader import load_yaml_file
 
+from .... import tools
 from .... import aiotools
 
-from ..sysunit import get_service_status
+from .. import sysunit
 
 from .base import BaseInfoSubmanager
 
@@ -44,37 +46,57 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
         self.__global_config = global_config
 
     async def get_state(self) -> Optional[Dict]:
-        return (await aiotools.run_async(self.__inner_get_state))
-
-    # =====
-
-    def __inner_get_state(self) -> Optional[Dict]:
         try:
-            extras_path = self.__global_config.kvmd.info.extras
+            sui = sysunit.SystemdUnitInfo()
+            await sui.open()
+        except Exception as err:
+            get_logger(0).error("Can't open systemd bus to get extras state: %s", tools.efmt(err))
+            sui = None
+        try:
             extras: Dict[str, Dict] = {}
-            for name in os.listdir(extras_path):
-                if name[0] != "." and os.path.isdir(os.path.join(extras_path, name)):
-                    app = re.sub(r"[^a-zA-Z0-9_]+", "_", name)
-                    extras[app] = load_yaml_file(os.path.join(extras_path, name, "manifest.yaml"))
-                    self.__rewrite_app_daemon(extras[app])
-                    self.__rewrite_app_port(extras[app])
+            for extra in (await asyncio.gather(*[
+                self.__read_extra(sui, name)
+                for name in os.listdir(self.__get_extras_path())
+                if name[0] != "." and os.path.isdir(self.__get_extras_path(name))
+            ])):
+                extras.update(extra)
             return extras
         except Exception:
-            get_logger(0).exception("Can't parse extras")
+            get_logger(0).exception("Can't read extras")
             return None
+        finally:
+            if sui is not None:
+                await sui.close()
 
-    def __rewrite_app_daemon(self, extras: Dict) -> None:
-        daemon = extras.get("daemon", "")
+    def __get_extras_path(self, *parts: str) -> str:
+        return os.path.join(self.__global_config.kvmd.info.extras, *parts)
+
+    async def __read_extra(self, sui: Optional[sysunit.SystemdUnitInfo], name: str) -> Dict:
+        try:
+            extra = await aiotools.run_async(load_yaml_file, self.__get_extras_path(name, "manifest.yaml"))
+            await self.__rewrite_app_daemon(sui, extra)
+            self.__rewrite_app_port(extra)
+            return {re.sub(r"[^a-zA-Z0-9_]+", "_", name): extra}
+        except Exception:
+            get_logger(0).exception("Can't read extra %r", name)
+            return {}
+
+    async def __rewrite_app_daemon(self, sui: Optional[sysunit.SystemdUnitInfo], extra: Dict) -> None:
+        daemon = extra.get("daemon", "")
         if isinstance(daemon, str) and daemon.strip():
-            status = get_service_status(daemon)
-            (extras["enabled"], extras["started"]) = (status if status is not None else (False, False))
+            extra["enabled"] = extra["started"] = False
+            if sui is not None:
+                try:
+                    (extra["enabled"], extra["started"]) = await sui.get_status(daemon)
+                except Exception as err:
+                    get_logger(0).error("Can't get info about the service %r: %s", daemon, tools.efmt(err))
 
-    def __rewrite_app_port(self, extras: Dict) -> None:
-        port_path = extras.get("port", "")
+    def __rewrite_app_port(self, extra: Dict) -> None:
+        port_path = extra.get("port", "")
         if isinstance(port_path, str) and port_path.strip():
-            extras["port"] = 0
+            extra["port"] = 0
             config = self.__global_config
             for item in filter(None, map(str.strip, port_path.split("/"))):
                 config = getattr(config, item, None)  # type: ignore
             if isinstance(config, int):
-                extras["port"] = config
+                extra["port"] = config

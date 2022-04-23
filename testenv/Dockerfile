@@ -45,6 +45,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-netifaces \
 		python-systemd \
 		python-dbus \
+		python-dbus-next \
 		python-pygments \
 		python-pam \
 		python-pillow \
