@@ -130,7 +130,8 @@ export function Session() {
 		let html = "";
 		if (__info_hw_state !== null) {
 			html += `
-				Platform base: <span class="code-comment">${__info_hw_state.platform.base}</span><br>
+				Platform:
+				${__formatPlatform(__info_hw_state.platform)}
 				<hr>
 				Temperature:
 				${__formatTemp(__info_hw_state.health.temp)}
@@ -149,6 +150,10 @@ export function Session() {
 			`;
 		}
 		$("about-hardware").innerHTML = html;
+	};
+
+	var __formatPlatform = function(state) {
+		return __formatUl([["Base", state.base], ["Serial", state.serial]]);
 	};
 
 	var __formatFan = function(state) {

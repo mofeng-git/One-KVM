@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+import os
 import asyncio
 
 from typing import List
@@ -53,9 +54,12 @@ class HwInfoSubmanager(BaseInfoSubmanager):
         self.__vcgencmd_cmd = vcgencmd_cmd
         self.__state_poll = state_poll
 
+        self.__dt_cache: Dict[str, str] = {}
+
     async def get_state(self) -> Dict:
-        (model, cpu_temp, throttling) = await asyncio.gather(
-            self.__get_dt_model(),
+        (model, serial, cpu_temp, throttling) = await asyncio.gather(
+            self.__read_dt_file("model"),
+            self.__read_dt_file("serial-number"),
             self.__get_cpu_temp(),
             self.__get_throttling(),
         )
@@ -63,6 +67,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             "platform": {
                 "type": "rpi",
                 "base": model,
+                "serial": serial,
             },
             "health": {
                 "temp": {
@@ -83,13 +88,15 @@ class HwInfoSubmanager(BaseInfoSubmanager):
 
     # =====
 
-    async def __get_dt_model(self) -> Optional[str]:
-        model_path = f"{env.PROCFS_PREFIX}/proc/device-tree/model"
-        try:
-            return (await aiofs.read(model_path)).strip(" \t\r\n\0")
-        except Exception as err:
-            get_logger(0).error("Can't read DT model from %s: %s", model_path, err)
-            return None
+    async def __read_dt_file(self, name: str) -> Optional[str]:
+        if name not in self.__dt_cache:
+            path = os.path.join(f"{env.PROCFS_PREFIX}/proc/device-tree", name)
+            try:
+                self.__dt_cache[name] = (await aiofs.read(path)).strip(" \t\r\n\0")
+            except Exception as err:
+                get_logger(0).error("Can't read DT %s from %s: %s", name, path, err)
+                return None
+        return self.__dt_cache[name]
 
     async def __get_cpu_temp(self) -> Optional[float]:
         temp_path = f"{env.SYSFS_PREFIX}/sys/class/thermal/thermal_zone0/temp"
