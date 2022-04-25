@@ -191,7 +191,7 @@ export function Session() {
 				pairs.push([
 					tools.upperFirst(field).replace("_", " "),
 					(flags["now"] ? __colored("red", "RIGHT NOW") : __colored("green", "No"))
-					+ " " +
+					+ "; " +
 					(flags["past"] ? __colored("red", "In the past") : __colored("green", "Never")),
 				]);
 			}
