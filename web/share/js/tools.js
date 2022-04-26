@@ -348,15 +348,22 @@ export var tools = new function() {
 		// Firefox 1.0+
 		let is_firefox = (typeof InstallTrigger !== "undefined");
 
-		// Safari 3.0+ "[object HTMLElementConstructor]" 
+		// Safari 3.0+ "[object HTMLElementConstructor]"
 		let is_safari = (function() {
 			if (/constructor/i.test(String(window["HTMLElement"]))) {
 				return true;
 			}
-			if (!window.top["safari"]) {
-				return false;
+			let push = null;
+			try {
+				push = window.top["safari"].pushNotification;
+			} catch {
+				try {
+					push = window["safari"].pushNotification;
+				} catch {
+					return false;
+				}
 			}
-			return String(window.top["safari"].pushNotification) === "[object SafariRemoteNotification]";
+			return String(push) === "[object SafariRemoteNotification]";
 		})();
 
 		// Chrome 1+
