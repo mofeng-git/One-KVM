@@ -64,6 +64,8 @@ div.window:fullscreen {
 	padding: 0px !important;
 }
 div.window:-webkit-full-screen {
+	border: 0px;
+	border-radius: 0px;
 	resize: none !important;
 	position: absolute !important;
 	top: 0px !important;
