@@ -56,7 +56,7 @@ div#stream-box {
 	position: relative;
 	display: inline-block;
 	border: var(--border-window-default-thin);
-	margin: -1px -1px -1px -1px;
+	margin: -1px -1px -1px -1px; /* See pikvm/kvm#86, pikvm/pikvm#599 */
 }
 div.stream-box-offline {
 	-webkit-filter: grayscale(100%) brightness(75%) sepia(75%);
