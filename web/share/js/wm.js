@@ -125,8 +125,8 @@ function __WindowManager() {
 		window.onmouseup = __globalMouseButtonHandler;
 		window.ontouchend = __globalMouseButtonHandler;
 
-		window.addEventListener("focusin", __focusIn);
-		window.addEventListener("focusout", __focusOut);
+		window.addEventListener("focusin", (event) => __focusInOut(event, true));
+		window.addEventListener("focusout", (event) => __focusInOut(event, false));
 
 		window.addEventListener("resize", __organizeWindowsOnBrowserResize);
 		window.addEventListener("orientationchange", __organizeWindowsOnBrowserResize);
@@ -314,28 +314,16 @@ function __WindowManager() {
 		}
 	};
 
-	var __focusIn = function(event) {
+	var __focusInOut = function(event, focus_in) {
 		let el_parent;
 		if ((el_parent = event.target.closest(".modal-window")) !== null) {
-			el_parent.classList.add("window-active");
+			el_parent.classList.toggle("window-active", focus_in);
 		} else if ((el_parent = event.target.closest(".window")) !== null) {
-			el_parent.classList.add("window-active");
+			el_parent.classList.toggle("window-active", focus_in);
 		} else if ((el_parent = event.target.closest(".menu")) !== null) {
-			el_parent.classList.add("menu-active");
+			el_parent.classList.toggle("menu-active", focus_in);
 		}
-		tools.debug("UI: Focus in:", el_parent);
-	};
-
-	var __focusOut = function(event) {
-		let el_parent;
-		if ((el_parent = event.target.closest(".modal-window")) !== null) {
-			el_parent.classList.remove("window-active");
-		} else if ((el_parent = event.target.closest(".window")) !== null) {
-			el_parent.classList.remove("window-active");
-		} else if ((el_parent = event.target.closest(".menu")) !== null) {
-			el_parent.classList.remove("menu-active");
-		}
-		tools.debug("UI: Focus out:", el_parent);
+		tools.debug(`UI: Focus ${focus_in ? "IN" : "OUT"}:`, el_parent);
 	};
 
 	var __globalMouseButtonHandler = function(event) {
@@ -569,7 +557,8 @@ function __WindowManager() {
 	};
 
 	var __maximizeWindow = function(el_window) {
-		let vertical_offset = $("navbar").offsetHeight;
+		let el_navbar = $("navbar");
+		let vertical_offset = (el_navbar ? el_navbar.offsetHeight : 0);
 		el_window.style.left = "0px";
 		el_window.style.top = vertical_offset + "px";
 		el_window.style.width = window.innerWidth + "px";
