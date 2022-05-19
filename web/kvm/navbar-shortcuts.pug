@@ -35,13 +35,24 @@ li(class="right")
 		div(class="buttons")
 			div(class="buttons-row")
 				-
-					let sysrq = { 
+					let sysrq = {
+						"F": "Call the OOM killer to kill a memory hog process",
+						"M": "Dump current memory info to the console",
+						"D": "Show all locks that are held",
+						"T": "Dump a list of current tasks and their information to the console",
+					}
+				each title, key in sysrq
+					button(data-shortcut=`AltLeft PrintScreen Key${key}` class="row25" title=`${title}`) #{key}
+			hr
+			div(class="buttons-row")
+				-
+					sysrq = { 
 						"R": "Turn off keyboard raw mode, set it to XLATE",
 						"E": "Send a SIGTERM to all processes, except for init",
 						"I": "Send a SIGKILL to all processes, except for init",
 						"S": "Attempt to sync all mounted filesystems",
 						"U": "Attempt to remount all mounted filesystems read-only",
-						"B": "Immediately reboot the system without syncing or unmounting your disks",
+						"B": "Immediately reboot the system without syncing or unmounting disks",
 					}
 				each title, key in sysrq
 					button(data-shortcut=`AltLeft PrintScreen Key${key}` class="row16" title=`${title}`) #{key}
