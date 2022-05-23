@@ -158,10 +158,6 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		return (document.pointerLockElement === $("stream-box"));
 	};
 
-	var __isRelativeSquashed = function() {
-		return $("hid-mouse-squash-switch").checked;
-	};
-
 	var __relativeCapturedHandler = function() {
 		tools.info("Relative mouse", (__isRelativeCaptured() ? "captured" : "released"), "by pointer lock");
 		__updateOnlineLeds();
@@ -209,7 +205,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 				x: Math.min(Math.max(-127, Math.floor(event.movementX * __relative_sens)), 127),
 				y: Math.min(Math.max(-127, Math.floor(event.movementY * __relative_sens)), 127),
 			};
-			if (__isRelativeSquashed()) {
+			if ($("hid-mouse-squash-switch").checked) {
 				__relative_deltas.push(delta);
 			} else {
 				tools.debug("Mouse: relative:", delta);
