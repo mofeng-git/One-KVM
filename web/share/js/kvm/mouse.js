@@ -64,6 +64,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		$("stream-box").ontouchstart = (event) => __streamTouchMoveHandler(event);
 
 		tools.storage.bindSimpleSwitch($("hid-mouse-squash-switch"), "hid.mouse.squash", true);
+		tools.storage.bindSimpleSwitch($("hid-mouse-reverse-scrolling-switch"), "hid.mouse.reverse_scrolling", false);
 		tools.slider.setParams($("hid-mouse-sens-slider"), 0.1, 1.9, 0.1, tools.storage.get("hid.mouse.sens", 1.0), __updateRelativeSens);
 		tools.slider.setParams($("hid-mouse-rate-slider"), 10, 100, 10, tools.storage.get("hid.mouse.rate", 100), __updateRate); // set __timer
 	};
@@ -280,6 +281,10 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 
 		if (delta.x || delta.y) {
+			if ($("hid-mouse-reverse-scrolling-switch").checked) {
+				delta.x *= -1;
+				delta.y *= -1;
+			}
 			tools.debug("Mouse: scrolled:", delta);
 			__sendEvent("mouse_wheel", {"delta": delta});
 		}

@@ -71,6 +71,8 @@ li(class="right")
 				td(id="hid-mouse-sens-value" class="value" style="min-width: 30px; max-width:30px")
 			tr(id="hid-mouse-squash" class="feature-disabled")
 				+menu_switch_notable("hid-mouse-squash-switch", "Squash relative mouse moves", true, true)
+			tr
+				+menu_switch_notable("hid-mouse-reverse-scrolling-switch", "Reverse mouse scrolling", true, false)
 			tr(id="hid-connect" class="feature-disabled")
 				+menu_switch_notable("hid-connect-switch", "Connect HID to Server", true, true)
 			tr
