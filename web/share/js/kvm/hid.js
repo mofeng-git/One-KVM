@@ -90,8 +90,27 @@ export function Hid(__getGeometry, __recorder) {
 		tools.el.setOnClick($("hid-reset-button"), __clickResetButton);
 
 		for (let el_shortcut of $$$("[data-shortcut]")) {
-			tools.el.setOnClick(el_shortcut, () => __emitShortcut(el_shortcut.getAttribute("data-shortcut").split(" ")));
+			tools.el.setOnClick(el_shortcut, function() {
+				let ask = false;
+				let confirm_id = el_shortcut.getAttribute("data-shortcut-confirm");
+				if (confirm_id) {
+					ask = $(confirm_id).checked;
+				}
+				let codes = el_shortcut.getAttribute("data-shortcut").split(" ");
+				if (ask) {
+					let confirm_msg = `Do you want to press <b>${codes.join(" + ")}</b>?`;
+					wm.confirm(confirm_msg).then(function(ok) {
+						if (ok) {
+							__emitShortcut(codes);
+						}
+					});
+				} else {
+					__emitShortcut(codes);
+				}
+			});
 		}
+
+		tools.storage.bindSimpleSwitch($("hid-sysrq-ask-switch"), "hid.sysrq.ask", true);
 	};
 
 	/************************************************************************/

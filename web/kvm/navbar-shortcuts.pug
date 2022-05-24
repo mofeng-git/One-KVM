@@ -42,7 +42,7 @@ li(class="right")
 						"T": "Dump a list of current tasks and their information to the console",
 					}
 				each title, key in sysrq
-					button(data-shortcut=`AltLeft PrintScreen Key${key}` class="row25" title=`${title}`) #{key}
+					button(data-shortcut=`AltLeft PrintScreen Key${key}` data-shortcut-confirm="hid-sysrq-ask-switch" class="row25" style="text-align: center;" title=`${title}`) #{key}
 			hr
 			div(class="buttons-row")
 				-
@@ -55,4 +55,6 @@ li(class="right")
 						"B": "Immediately reboot the system without syncing or unmounting disks",
 					}
 				each title, key in sysrq
-					button(data-shortcut=`AltLeft PrintScreen Key${key}` class="row16" title=`${title}`) #{key}
+					button(data-shortcut=`AltLeft PrintScreen Key${key}` data-shortcut-confirm="hid-sysrq-ask-switch" class="row16" style="text-align: center;" title=`${title}`) #{key}
+		hr
+		+menu_switch("hid-sysrq-ask-switch", "Ask the magic confirmation", true, true)

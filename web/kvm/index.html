@@ -653,21 +653,33 @@
           <hr>
           <div class="buttons">
             <div class="buttons-row">
-              <button class="row25" data-shortcut="AltLeft PrintScreen KeyF" title="Call the OOM killer to kill a memory hog process">F</button>
-              <button class="row25" data-shortcut="AltLeft PrintScreen KeyM" title="Dump current memory info to the console">M</button>
-              <button class="row25" data-shortcut="AltLeft PrintScreen KeyD" title="Show all locks that are held">D</button>
-              <button class="row25" data-shortcut="AltLeft PrintScreen KeyT" title="Dump a list of current tasks and their information to the console">T</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyF" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Call the OOM killer to kill a memory hog process">F</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyM" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Dump current memory info to the console">M</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyD" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Show all locks that are held">D</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyT" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Dump a list of current tasks and their information to the console">T</button>
             </div>
             <hr>
             <div class="buttons-row">
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyR" title="Turn off keyboard raw mode, set it to XLATE">R</button>
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyE" title="Send a SIGTERM to all processes, except for init">E</button>
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyI" title="Send a SIGKILL to all processes, except for init">I</button>
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyS" title="Attempt to sync all mounted filesystems">S</button>
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyU" title="Attempt to remount all mounted filesystems read-only">U</button>
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyB" title="Immediately reboot the system without syncing or unmounting disks">B</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyR" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Turn off keyboard raw mode, set it to XLATE">R</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyE" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Send a SIGTERM to all processes, except for init">E</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyI" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Send a SIGKILL to all processes, except for init">I</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyS" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Attempt to sync all mounted filesystems">S</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyU" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Attempt to remount all mounted filesystems read-only">U</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyB" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Immediately reboot the system without syncing or unmounting disks">B</button>
             </div>
           </div>
+          <hr>
+              <table class="kv">
+                <tr>
+                      <td>Ask the magic confirmation:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input checked type="checkbox" id="hid-sysrq-ask-switch">
+                          <label for="hid-sysrq-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+              </table>
         </div>
       </li>
       <li class="right feature-disabled" id="gpio-dropdown"><a class="menu-button" id="gpio-menu-button" href="#">GPIO</a>
