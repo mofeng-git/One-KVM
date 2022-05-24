@@ -125,7 +125,7 @@ class RfbClientStream:
 
         ssl_reader.set_transport(transport)
         ssl_writer = asyncio.StreamWriter(
-            transport=transport,
+            transport=transport,  # type: ignore
             protocol=protocol,
             reader=ssl_reader,
             loop=loop,
