@@ -79,10 +79,11 @@ def _unlink(path: str, optional: bool=False) -> None:
 
 
 def _write(path: str, value: Union[str, int], optional: bool=False) -> None:
-    get_logger().info("WRITE --- %s", path)
+    logger = get_logger()
     if optional and not os.access(path, os.F_OK):
-        get_logger().info("SKIP ---- %s", path)
+        logger.info("WRITE --- [SKIPPED] %s", path)
         return
+    logger.info("WRITE --- %s", path)
     with open(path, "w") as param_file:
         param_file.write(str(value))
 
