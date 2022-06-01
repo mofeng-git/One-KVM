@@ -46,6 +46,10 @@ li(class="right")
 						label(for="stream-mode-radio-mjpeg") MJPEG / HTTP
 						input(type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus")
 						label(for="stream-mode-radio-janus") H.264 / WebRTC
+			tr(id="stream-audio", class="feature-disabled")
+				td Audio volume:
+				td #[input(type="range" id="stream-audio-volume-slider" class="slider")]
+				td(id="stream-audio-volume-value" class="value" style="min-width: 30px; max-width:30px")
 		hr
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu data-show-window="stream-window" class="row33") &bull; Show stream

@@ -124,6 +124,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 			__handle.webrtcStuff.remoteStream = null;
 		}
 		$("stream-video").srcObject = null;
+		__setAudioEnabled(false);
 		if (__janus !== null) {
 			__janus.destroy();
 		}
@@ -214,6 +215,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 			onremotestream: function(stream) {
 				__logInfo("Got a remote stream:", stream);
+				__setAudioEnabled(!!stream.getAudioTracks());
 				_Janus.attachMediaStream($("stream-video"), stream);
 				__startInfoInterval();
 			},
@@ -223,6 +225,10 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 				__stopInfoInterval();
 			},
 		});
+	};
+
+	var __setAudioEnabled = function(enabled) {
+		tools.feature.setEnabled($("stream-audio"), enabled);
 	};
 
 	var __startInfoInterval = function() {
@@ -446,6 +452,12 @@ export function Streamer() {
 		$("stream-resolution-selector").onchange = (() => __sendParam("resolution", $("stream-resolution-selector").value));
 
 		tools.radio.setOnClick("stream-mode-radio", __clickModeRadio, false);
+
+		tools.slider.setParams($("stream-audio-volume-slider"), 0, 100, 1, 0, function(value) {
+			$("stream-video").muted = !value;
+			$("stream-video").volume = value / 100;
+			$("stream-audio-volume-value").innerHTML = value + "%";
+		});
 
 		tools.el.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
 		tools.el.setOnClick($("stream-reset-button"), __clickResetButton);
