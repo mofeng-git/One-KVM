@@ -215,7 +215,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 			onremotestream: function(stream) {
 				__logInfo("Got a remote stream:", stream);
-				__setAudioEnabled(!!stream.getAudioTracks());
+				__setAudioEnabled(!!stream.getAudioTracks().length);
 				_Janus.attachMediaStream($("stream-video"), stream);
 				__startInfoInterval();
 			},
