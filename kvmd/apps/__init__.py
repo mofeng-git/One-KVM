@@ -120,22 +120,22 @@ def init(
     argv = (argv or sys.argv)
     assert len(argv) > 0
 
-    args_parser = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         prog=(prog or argv[0]),
         description=description,
         add_help=add_help,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    args_parser.add_argument("-c", "--config", dest="config_path", default="/etc/kvmd/main.yaml", type=valid_abs_file,
-                             help="Set config file path", metavar="<file>")
-    args_parser.add_argument("-o", "--set-options", dest="set_options", default=[], nargs="+",
-                             help="Override config options list (like sec/sub/opt=value)", metavar="<k=v>",)
-    args_parser.add_argument("-m", "--dump-config", dest="dump_config", action="store_true",
-                             help="View current configuration (include all overrides)")
+    parser.add_argument("-c", "--config", dest="config_path", default="/etc/kvmd/main.yaml", type=valid_abs_file,
+                        help="Set config file path", metavar="<file>")
+    parser.add_argument("-o", "--set-options", dest="set_options", default=[], nargs="+",
+                        help="Override config options list (like sec/sub/opt=value)", metavar="<k=v>",)
+    parser.add_argument("-m", "--dump-config", dest="dump_config", action="store_true",
+                        help="View current configuration (include all overrides)")
     if check_run:
-        args_parser.add_argument("--run", dest="run", action="store_true",
-                                 help="Run the service")
-    (options, remaining) = args_parser.parse_known_args(argv)
+        parser.add_argument("--run", dest="run", action="store_true",
+                            help="Run the service")
+    (options, remaining) = parser.parse_known_args(argv)
 
     if options.dump_config:
         _dump_config(_init_config(
@@ -160,7 +160,7 @@ def init(
             "Make sure you understand exactly what you are doing!"
         )
 
-    return (args_parser, remaining, config)
+    return (parser, remaining, config)
 
 
 # =====
