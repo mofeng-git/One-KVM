@@ -1,3 +1,3 @@
-memsink: {
-	object = "kvmd::ustreamer::h264"
+video: {
+	sink = "kvmd::ustreamer::h264"
 }

@@ -75,7 +75,7 @@ depends=(
 	ipmitool
 	"janus-gateway-pikvm>=0.11.2-7"
 	platform-io-access
-	"ustreamer>=4.13"
+	"ustreamer>=5.8"
 
 	# Systemd UDEV bug
 	"systemd>=248.3-2"
