@@ -57,7 +57,12 @@ def _write_int(rtc: int, key: str, value: int) -> None:
 
 
 def _reset_alarm(rtc: int, timeout: int) -> None:
-    now = _read_int(rtc, "since_epoch")
+    try:
+        now = _read_int(rtc, "since_epoch")
+    except OSError as err:
+        if err.errno != errno.EINVAL:
+            raise
+        raise RtcIsNotAvailableError("Can't read since_epoch right now")
     if now == 0:
         raise RtcIsNotAvailableError("Current UNIX time == 0")
     try:
