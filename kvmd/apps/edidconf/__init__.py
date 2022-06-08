@@ -186,7 +186,7 @@ def main(argv: Optional[List[str]]=None) -> None:
     edid = _Edid(options.path)
     changed = False
 
-    for cmd in dir(options):
+    for cmd in dir(_Edid):
         if cmd.startswith("set_"):
             value = getattr(options, cmd)
             if value is not None:
