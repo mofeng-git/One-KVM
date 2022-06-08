@@ -42,3 +42,9 @@ _Netcfg.dhcp_option_3
 _ScriptWriter.get_args
 
 _pwm.period_ns
+
+_Edid.set_mfc_id
+_Edid.set_product_id
+_Edid.set_serial
+_Edid.set_monitor_name
+_Edid.set_audio
