@@ -197,8 +197,8 @@ def main(argv: Optional[List[str]]=None) -> None:
         edid.write("" if options.stdout else options.path)
 
     if options.show_info:
-        print("Mfc ID:      ", edid.get_mfc_id())
-        print("Product ID:  ", edid.get_product_id())
-        print("Serial:      ", edid.get_serial())
-        print("Monitor name:", edid.get_monitor_name())
-        print("Audio:       ", ("yes" if edid.get_audio() else "no"), file=sys.stderr)
+        print("Manufacturer ID:", edid.get_mfc_id())
+        print("Product ID:     ", edid.get_product_id())
+        print("Serial number:  ", edid.get_serial())
+        print("Monitor name:   ", edid.get_monitor_name())
+        print("Basic audio:    ", ("yes" if edid.get_audio() else "no"), file=sys.stderr)
