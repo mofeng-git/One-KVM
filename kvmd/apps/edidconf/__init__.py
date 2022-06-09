@@ -29,6 +29,7 @@ import argparse
 from typing import List
 from typing import IO
 from typing import Generator
+from typing import Callable
 from typing import Optional
 
 from ...validators.basic import valid_bool
@@ -167,6 +168,14 @@ class _Edid:
             self.__data[131] &= (0xFF - 0b01000000)  # ~X
 
 
+def _format_bool(value: bool) -> str:
+    return ("yes" if value else "no")
+
+
+def _make_format_hex(size: int) -> Callable[[int], str]:
+    return (lambda value: ("0x{:0%dX} ({})" % (size * 2)).format(value, value))
+
+
 # =====
 def main(argv: Optional[List[str]]=None) -> None:
     # (parent_parser, argv, _) = init(
@@ -182,21 +191,21 @@ def main(argv: Optional[List[str]]=None) -> None:
     )
     parser.add_argument("-f", "--edid-file", dest="path", default="/etc/kvmd/tc358743-edid.hex",
                         help="The hex/bin EDID file path", metavar="<file>")
-    parser.add_argument("--export-hex", default=None,
+    parser.add_argument("--export-hex",
                         help="Export [--edid-file] to the new file as a hex text", metavar="<file>")
-    parser.add_argument("--export-bin", default=None,
+    parser.add_argument("--export-bin",
                         help="Export [--edid-file] to the new file as a bin data", metavar="<file>")
-    parser.add_argument("--import", default=None, dest="imp",
+    parser.add_argument("--import", dest="imp",
                         help="Import specified bin/hex EDID to the [--edid-file] as a hex text", metavar="<file>")
-    parser.add_argument("--set-audio", type=valid_bool, default=None,
+    parser.add_argument("--set-audio", type=valid_bool,
                         help="Enable or disable basic audio", metavar="<yes|no>")
-    parser.add_argument("--set-mfc-id", default=None,
+    parser.add_argument("--set-mfc-id",
                         help="Set manufacturer ID (https://uefi.org/pnp_id_list)", metavar="<ABC>")
-    parser.add_argument("--set-product-id", type=valid_int_f0, default=None,
+    parser.add_argument("--set-product-id", type=valid_int_f0,
                         help="Set product ID (decimal)", metavar="<uint>")
-    parser.add_argument("--set-serial", type=valid_int_f0, default=None,
+    parser.add_argument("--set-serial", type=valid_int_f0,
                         help="Set serial number (decimal)", metavar="<uint>")
-    parser.add_argument("--set-monitor-name", default=None,
+    parser.add_argument("--set-monitor-name",
                         help="Set monitor name in DTD/MND (ASCII, max 13 characters)", metavar="<str>")
     options = parser.parse_args(argv[1:])
 
@@ -221,11 +230,11 @@ def main(argv: Optional[List[str]]=None) -> None:
     elif changed:
         edid.write_hex(options.path)
 
-    for (key, value) in [
-        ("Manufacturer ID:", edid.get_mfc_id()),
-        ("Product ID:     ", edid.get_product_id()),
-        ("Serial number:  ", edid.get_serial()),
-        ("Monitor name:   ", edid.get_monitor_name()),
-        ("Basic audio:    ", ("yes" if edid.get_audio() else "no")),
+    for (key, get, fmt) in [
+        ("Manufacturer ID:", edid.get_mfc_id,       str),
+        ("Product ID:     ", edid.get_product_id,   _make_format_hex(2)),
+        ("Serial number:  ", edid.get_serial,       _make_format_hex(4)),
+        ("Monitor name:   ", edid.get_monitor_name, str),
+        ("Basic audio:    ", edid.get_audio,        _format_bool),
     ]:
-        print(key, value, file=sys.stderr)
+        print(key, fmt(get()), file=sys.stderr)  # type: ignore
