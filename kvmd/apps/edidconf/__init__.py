@@ -21,27 +21,53 @@
 
 
 import sys
+import os
 import re
+import contextlib
 import argparse
 
 from typing import List
+from typing import IO
+from typing import Generator
 from typing import Optional
 
 from ...validators.basic import valid_bool
 from ...validators.basic import valid_int_f0
 
-from .. import init
+# from .. import init
 
 
 # =====
+@contextlib.contextmanager
+def _smart_open(path: str, mode: str) -> Generator[IO, None, None]:
+    fd = (0 if "r" in mode else 1)
+    with (os.fdopen(fd, mode, closefd=False) if path == "-" else open(path, mode)) as file:
+        yield file
+        if "w" in mode:
+            file.flush()
+
+
 class _Edid:
     # https://en.wikipedia.org/wiki/Extended_Display_Identification_Data
 
     def __init__(self, path: str) -> None:
-        with open(path) as file:
-            self.__load_from_hex(file.read())
+        with _smart_open(path, "rb") as file:
+            data = file.read()
+            if data.startswith(b"\x00\xFF\xFF\xFF\xFF\xFF\xFF\x00"):
+                self.__data = list(data)
+            else:
+                text = re.sub(r"\s", "", data.decode())
+                self.__data = [
+                    int(text[index:index + 2], 16)
+                    for index in range(0, len(text), 2)
+                ]
+            assert len(self.__data) == 256, f"Invalid EDID length: {len(self.__data)}, should be 256 bytes"
+            assert self.__data[126] == 1, "Zero extensions number"
+            assert (self.__data[128], self.__data[129]) == (0x02, 0x03), "Can't find CEA-861"
 
-    def write(self, path: str) -> None:
+    # =====
+
+    def write_hex(self, path: str) -> None:
         self.__update_checksums()
         text = "\n".join(
             "".join(
@@ -49,12 +75,17 @@ class _Edid:
                 for item in self.__data[index:index + 16]
             )
             for index in range(0, len(self.__data), 16)
-        )
-        if path:
-            with open(path, "w") as file:
-                file.write(text + "\n")
-        else:
-            print(text)
+        ) + "\n"
+        with _smart_open(path, "w") as file:
+            file.write(text)
+
+    def write_bin(self, path: str) -> None:
+        with _smart_open(path, "wb") as file:
+            file.write(bytes(self.__data))
+
+    def __update_checksums(self) -> None:
+        self.__data[127] = 256 - (sum(self.__data[:127]) % 256)
+        self.__data[255] = 256 - (sum(self.__data[128:255]) % 256)
 
     # =====
 
@@ -109,16 +140,20 @@ class _Edid:
     # =====
 
     def get_monitor_name(self) -> str:
-        index = self.__find_dtd_value(0xFC)
-        assert index > 0, "Can't find DTD Monitor name"
+        index = self.__find_mnd_text()
         return bytes(self.__data[index:index + 13]).decode("cp437").strip()
 
     def set_monitor_name(self, name: str) -> None:
-        index = self.__find_dtd_value(0xFC)
-        assert index > 0, "Can't find DTD Monitor name"
+        index = self.__find_mnd_text()
         encoded = (name[:13] + "\n" + " " * 12)[:13].encode("cp437")
         for (offset, byte) in enumerate(encoded):
             self.__data[index + offset] = byte
+
+    def __find_mnd_text(self) -> int:
+        for index in [54, 72, 90, 108]:
+            if self.__data[index + 3] == 0xFC:
+                return index + 5
+        raise AssertionError("Can't find DTD Monitor name")
 
     # =====
 
@@ -131,44 +166,28 @@ class _Edid:
         else:
             self.__data[131] &= (0xFF - 0b01000000)  # ~X
 
-    # =====
-
-    def __find_dtd_value(self, dtype: int) -> int:
-        for index in [54, 72, 90, 108]:
-            if self.__data[index + 3] == dtype:
-                return index + 5
-        return -1
-
-    def __load_from_hex(self, text: str) -> None:
-        text = re.sub(r"\s", "", text)
-        self.__data = [
-            int(text[index:index + 2], 16)
-            for index in range(0, len(text), 2)
-        ]
-        assert len(self.__data) == 256, f"Invalid EDID length: {len(self.__data)}, should be 256 bytes"
-        assert self.__data[126] == 1, "Zero extensions number"
-        assert (self.__data[128], self.__data[129]) == (0x02, 0x03), "Can't find CEA-861"
-
-    def __update_checksums(self) -> None:
-        self.__data[127] = 256 - (sum(self.__data[:127]) % 256)
-        self.__data[255] = 256 - (sum(self.__data[128:255]) % 256)
-
 
 # =====
 def main(argv: Optional[List[str]]=None) -> None:
-    (parent_parser, argv, _) = init(
-        add_help=False,
-        argv=argv,
-    )
+    # (parent_parser, argv, _) = init(
+    #     add_help=False,
+    #     argv=argv,
+    # )
+    if argv is None:
+        argv = sys.argv
     parser = argparse.ArgumentParser(
         prog="kvmd-edidconf",
         description="A simple and primitive KVMD EDID editor",
-        parents=[parent_parser],
+        # parents=[parent_parser],
     )
     parser.add_argument("-f", "--edid-file", dest="path", default="/etc/kvmd/tc358743-edid.hex",
-                        help="EDID hex text file path", metavar="<file>")
-    parser.add_argument("--stdout", action="store_true",
-                        help="Write to stdout instead of the rewriting the source file")
+                        help="The hex/bin EDID file path", metavar="<file>")
+    parser.add_argument("--export-hex", default=None,
+                        help="Export [--edid-file] to the new file as a hex text", metavar="<file>")
+    parser.add_argument("--export-bin", default=None,
+                        help="Export [--edid-file] to the new file as a bin data", metavar="<file>")
+    parser.add_argument("--import", default=None, dest="imp",
+                        help="Import specified bin/hex EDID to the [--edid-file] as a hex text", metavar="<file>")
     parser.add_argument("--set-audio", type=valid_bool, default=None,
                         help="Enable or disable basic audio", metavar="<yes|no>")
     parser.add_argument("--set-mfc-id", default=None,
@@ -179,9 +198,11 @@ def main(argv: Optional[List[str]]=None) -> None:
                         help="Set serial number (decimal)", metavar="<uint>")
     parser.add_argument("--set-monitor-name", default=None,
                         help="Set monitor name in DTD/MND (ASCII, max 13 characters)", metavar="<str>")
-    parser.add_argument("--show-info", action="store_true",
-                        help="Write summary info to stderr")
     options = parser.parse_args(argv[1:])
+
+    if options.imp:
+        options.export_hex = options.path
+        options.path = options.imp
 
     edid = _Edid(options.path)
     changed = False
@@ -193,12 +214,18 @@ def main(argv: Optional[List[str]]=None) -> None:
                 getattr(edid, cmd)(value)
                 changed = True
 
-    if changed:
-        edid.write("" if options.stdout else options.path)
+    if options.export_hex is not None:
+        edid.write_hex(options.export_hex)
+    elif options.export_bin is not None:
+        edid.write_bin(options.export_bin)
+    elif changed:
+        edid.write_hex(options.path)
 
-    if options.show_info:
-        print("Manufacturer ID:", edid.get_mfc_id())
-        print("Product ID:     ", edid.get_product_id())
-        print("Serial number:  ", edid.get_serial())
-        print("Monitor name:   ", edid.get_monitor_name())
-        print("Basic audio:    ", ("yes" if edid.get_audio() else "no"), file=sys.stderr)
+    for (key, value) in [
+        ("Manufacturer ID:", edid.get_mfc_id()),
+        ("Product ID:     ", edid.get_product_id()),
+        ("Serial number:  ", edid.get_serial()),
+        ("Monitor name:   ", edid.get_monitor_name()),
+        ("Basic audio:    ", ("yes" if edid.get_audio() else "no")),
+    ]:
+        print(key, value, file=sys.stderr)
