@@ -23,8 +23,10 @@
 import sys
 import os
 import re
+import subprocess
 import contextlib
 import argparse
+import time
 
 from typing import List
 from typing import IO
@@ -177,7 +179,7 @@ def _make_format_hex(size: int) -> Callable[[int], str]:
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: Optional[List[str]]=None) -> None:  # pylint: disable=too-many-branches
     # (parent_parser, argv, _) = init(
     #     add_help=False,
     #     argv=argv,
@@ -189,14 +191,14 @@ def main(argv: Optional[List[str]]=None) -> None:
         description="A simple and primitive KVMD EDID editor",
         # parents=[parent_parser],
     )
-    parser.add_argument("-f", "--edid-file", dest="path", default="/etc/kvmd/tc358743-edid.hex",
+    parser.add_argument("-f", "--edid-file", dest="edid_path", default="/etc/kvmd/tc358743-edid.hex",
                         help="The hex/bin EDID file path", metavar="<file>")
     parser.add_argument("--export-hex",
                         help="Export [--edid-file] to the new file as a hex text", metavar="<file>")
     parser.add_argument("--export-bin",
                         help="Export [--edid-file] to the new file as a bin data", metavar="<file>")
     parser.add_argument("--import", dest="imp",
-                        help="Import specified bin/hex EDID to the [--edid-file] as a hex text", metavar="<file>")
+                        help="Import the specified bin/hex EDID to the [--edid-file] as a hex text", metavar="<file>")
     parser.add_argument("--set-audio", type=valid_bool,
                         help="Enable or disable basic audio", metavar="<yes|no>")
     parser.add_argument("--set-mfc-id",
@@ -207,13 +209,19 @@ def main(argv: Optional[List[str]]=None) -> None:
                         help="Set serial number (decimal)", metavar="<uint>")
     parser.add_argument("--set-monitor-name",
                         help="Set monitor name in DTD/MND (ASCII, max 13 characters)", metavar="<str>")
+    parser.add_argument("--clear", action="store_true",
+                        help="Clear the EDID in the [--device]")
+    parser.add_argument("--apply", action="store_true",
+                        help="Apply [--edid-file] on the [--device]")
+    parser.add_argument("--device", dest="device_path", default="/dev/kvmd-video",
+                        help="The video device", metavar="<device>")
     options = parser.parse_args(argv[1:])
 
     if options.imp:
-        options.export_hex = options.path
-        options.path = options.imp
+        options.export_hex = options.edid_path
+        options.edid_path = options.imp
 
-    edid = _Edid(options.path)
+    edid = _Edid(options.edid_path)
     changed = False
 
     for cmd in dir(_Edid):
@@ -228,7 +236,7 @@ def main(argv: Optional[List[str]]=None) -> None:
     elif options.export_bin is not None:
         edid.write_bin(options.export_bin)
     elif changed:
-        edid.write_hex(options.path)
+        edid.write_hex(options.edid_path)
 
     for (key, get, fmt) in [
         ("Manufacturer ID:", edid.get_mfc_id,       str),
@@ -238,3 +246,23 @@ def main(argv: Optional[List[str]]=None) -> None:
         ("Basic audio:    ", edid.get_audio,        _format_bool),
     ]:
         print(key, fmt(get()), file=sys.stderr)  # type: ignore
+
+    try:
+        if options.clear:
+            subprocess.run([
+                "/usr/bin/v4l2-ctl",
+                f"--device={options.device_path}",
+                "--clear-edid",
+            ], stdout=sys.stderr, check=True)
+            if options.apply:
+                time.sleep(1)
+        if options.apply:
+            subprocess.run([
+                "/usr/bin/v4l2-ctl",
+                f"--device={options.device_path}",
+                f"--set-edid=file={options.edid_path}",
+                "--fix-edid-checksums",
+                "--info-edid",
+            ], stdout=sys.stderr, check=True)
+    except subprocess.CalledProcessError as err:
+        raise SystemExit(str(err))
