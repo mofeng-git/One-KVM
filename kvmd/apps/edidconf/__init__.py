@@ -191,14 +191,14 @@ def main(argv: Optional[List[str]]=None) -> None:  # pylint: disable=too-many-br
         description="A simple and primitive KVMD EDID editor",
         # parents=[parent_parser],
     )
-    parser.add_argument("-f", "--edid-file", dest="edid_path", default="/etc/kvmd/tc358743-edid.hex",
+    parser.add_argument("-f", "--edid", dest="edid_path", default="/etc/kvmd/tc358743-edid.hex",
                         help="The hex/bin EDID file path", metavar="<file>")
     parser.add_argument("--export-hex",
-                        help="Export [--edid-file] to the new file as a hex text", metavar="<file>")
+                        help="Export [--edid] file to the new file as a hex text", metavar="<file>")
     parser.add_argument("--export-bin",
-                        help="Export [--edid-file] to the new file as a bin data", metavar="<file>")
+                        help="Export [--edid] file to the new file as a bin data", metavar="<file>")
     parser.add_argument("--import", dest="imp",
-                        help="Import the specified bin/hex EDID to the [--edid-file] as a hex text", metavar="<file>")
+                        help="Import the specified bin/hex EDID to the [--edid] file as a hex text", metavar="<file>")
     parser.add_argument("--set-audio", type=valid_bool,
                         help="Enable or disable basic audio", metavar="<yes|no>")
     parser.add_argument("--set-mfc-id",
@@ -212,7 +212,7 @@ def main(argv: Optional[List[str]]=None) -> None:  # pylint: disable=too-many-br
     parser.add_argument("--clear", action="store_true",
                         help="Clear the EDID in the [--device]")
     parser.add_argument("--apply", action="store_true",
-                        help="Apply [--edid-file] on the [--device]")
+                        help="Apply [--edid] on the [--device]")
     parser.add_argument("--device", dest="device_path", default="/dev/kvmd-video",
                         help="The video device", metavar="<device>")
     options = parser.parse_args(argv[1:])
