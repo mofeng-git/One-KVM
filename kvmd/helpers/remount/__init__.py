@@ -56,11 +56,11 @@ def _find_storage(target: str) -> _Storage:
             if line and not line.startswith("#"):
                 parts = line.split()
                 if len(parts) == 6:
-                    options = dict(re.findall(r"X-kvmd\.%s-(root|user)=([^,]+)" % (target), parts[3]))
+                    options = dict(re.findall(r"X-kvmd\.%s-(root|user)(?:=([^,]+))?" % (target), parts[3]))
                     if options:
                         return _Storage(
                             mount_path=parts[1],
-                            root_path=options.get("root", ""),
+                            root_path=(options.get("root", "") or parts[1]),
                             user=options.get("user", ""),
                         )
     raise SystemExit(f"Can't find {target!r} mountpoint in {_FSTAB_PATH}")
