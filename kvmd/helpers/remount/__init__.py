@@ -38,8 +38,7 @@ _FSTAB_PATH = "/etc/fstab"
 # =====
 @dataclasses.dataclass(frozen=True)
 class _Storage:
-    mount_path: str
-    root_path: str
+    path: str
     user: str
 
 
@@ -56,11 +55,10 @@ def _find_storage(target: str) -> _Storage:
             if line and not line.startswith("#"):
                 parts = line.split()
                 if len(parts) == 6:
-                    options = dict(re.findall(r"X-kvmd\.%s-(root|user)=([^,]+)" % (target), parts[3]))
+                    options = dict(re.findall(r"X-kvmd\.%s-(user)=([^,]+)" % (target), parts[3]))
                     if options:
                         return _Storage(
-                            mount_path=parts[1],
-                            root_path=options.get("root", ""),
+                            path=parts[1],
                             user=options.get("user", ""),
                         )
     raise SystemExit(f"Can't find {target!r} mountpoint in {_FSTAB_PATH}")
@@ -112,10 +110,10 @@ def main() -> None:
     rw = (sys.argv[1] == "rw")
 
     storage = _find_storage(target)
-    _remount(storage.mount_path, rw)
-    if rw and storage.root_path:
+    _remount(storage.path, rw)
+    if rw:
         for name in dirs:
-            path = os.path.join(storage.root_path, name)
+            path = os.path.join(storage.path, name)
             _mkdir(path)
             if storage.user:
                 _chown(path, storage.user)
