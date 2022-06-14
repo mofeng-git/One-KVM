@@ -33,6 +33,9 @@ kvmd:
             - "--notify-parent"
             - "--no-log-colors"
 
+pst:
+    remount_cmd: /bin/true
+
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
 

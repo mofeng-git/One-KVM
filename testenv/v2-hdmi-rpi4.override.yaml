@@ -121,6 +121,9 @@ kvmd:
                 - ["#Cmd #1:", "cmd1|confirm|Run 'sleep 5'"]
                 - ["#Cmd #2:", "cmd2|Run 'ls -l'"]
 
+pst:
+    remount_cmd: /bin/true
+
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
 

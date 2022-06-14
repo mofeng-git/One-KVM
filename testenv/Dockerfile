@@ -98,6 +98,7 @@ RUN git clone https://github.com/pikvm/ustreamer \
 RUN mkdir -p \
 		/etc/kvmd/{nginx,vnc} \
 		/var/lib/kvmd/msd/{images,meta} \
+		/var/lib/kvmd/pst/data \
 		/opt/vc/bin
 
 COPY testenv/fakes/vcgencmd /opt/vc/bin/

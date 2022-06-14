@@ -485,6 +485,25 @@ def _get_config_scheme() -> Dict:
             },
         },
 
+        "pst": {
+            "server": {
+                "unix":              Option("/run/kvmd/pst.sock", type=valid_abs_path, unpack_as="unix_path"),
+                "unix_rm":           Option(True,  type=valid_bool),
+                "unix_mode":         Option(0o660, type=valid_unix_mode),
+                "heartbeat":         Option(15.0,  type=valid_float_f01),
+                "access_log_format": Option("[%P / %{X-Real-IP}i] '%r' => %s; size=%b ---"
+                                            " referer='%{Referer}i'; user_agent='%{User-Agent}i'"),
+            },
+
+            "storage":          Option("/var/lib/kvmd/pst", type=valid_abs_dir, unpack_as="storage_path"),
+            "ro_retries_delay": Option(10.0, type=valid_float_f01),
+
+            "remount_cmd": Option([
+                "/usr/bin/sudo", "--non-interactive",
+                "/usr/bin/kvmd-helper-pst-remount", "{mode}",
+            ], type=valid_command),
+        },
+
         "otg": {
             "vendor_id":      Option(0x1D6B, type=valid_otg_id),  # Linux Foundation
             "product_id":     Option(0x0104, type=valid_otg_id),  # Multifunction Composite Gadget
