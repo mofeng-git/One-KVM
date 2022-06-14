@@ -32,7 +32,6 @@ from typing import Callable
 
 from aiohttp.web import Request
 from aiohttp.web import Response
-from aiohttp.web import WebSocketResponse
 
 from ....mouse import MouseRange
 
@@ -42,6 +41,7 @@ from ....keyboard.printer import text_to_web_keys
 from ....htserver import exposed_http
 from ....htserver import exposed_ws
 from ....htserver import make_json_response
+from ....htserver import WsSession
 
 from ....plugins.hid import BaseHid
 
@@ -158,7 +158,7 @@ class HidApi:
     # =====
 
     @exposed_ws("key")
-    async def __ws_key_handler(self, _: WebSocketResponse, event: Dict) -> None:
+    async def __ws_key_handler(self, _: WsSession, event: Dict) -> None:
         try:
             key = valid_hid_key(event["key"])
             state = valid_bool(event["state"])
@@ -168,7 +168,7 @@ class HidApi:
             self.__hid.send_key_events([(key, state)])
 
     @exposed_ws("mouse_button")
-    async def __ws_mouse_button_handler(self, _: WebSocketResponse, event: Dict) -> None:
+    async def __ws_mouse_button_handler(self, _: WsSession, event: Dict) -> None:
         try:
             button = valid_hid_mouse_button(event["button"])
             state = valid_bool(event["state"])
@@ -177,7 +177,7 @@ class HidApi:
         self.__hid.send_mouse_button_event(button, state)
 
     @exposed_ws("mouse_move")
-    async def __ws_mouse_move_handler(self, _: WebSocketResponse, event: Dict) -> None:
+    async def __ws_mouse_move_handler(self, _: WsSession, event: Dict) -> None:
         try:
             to_x = valid_hid_mouse_move(event["to"]["x"])
             to_y = valid_hid_mouse_move(event["to"]["y"])
@@ -186,11 +186,11 @@ class HidApi:
         self.__send_mouse_move_event_remapped(to_x, to_y)
 
     @exposed_ws("mouse_relative")
-    async def __ws_mouse_relative_handler(self, _: WebSocketResponse, event: Dict) -> None:
+    async def __ws_mouse_relative_handler(self, _: WsSession, event: Dict) -> None:
         self.__process_delta_ws_request(event, self.__hid.send_mouse_relative_event)
 
     @exposed_ws("mouse_wheel")
-    async def __ws_mouse_wheel_handler(self, _: WebSocketResponse, event: Dict) -> None:
+    async def __ws_mouse_wheel_handler(self, _: WsSession, event: Dict) -> None:
         self.__process_delta_ws_request(event, self.__hid.send_mouse_wheel_event)
 
     def __process_delta_ws_request(self, event: Dict, handler: Callable[[int, int], None]) -> None:
