@@ -119,7 +119,8 @@ def run_sync(coro: Coroutine[Any, Any, _RetvalT]) -> _RetvalT:
 
 # =====
 async def wait_infinite() -> None:
-    await asyncio.get_event_loop().create_future()
+    while True:
+        await asyncio.sleep(3600)
 
 
 async def wait_first(*aws: Awaitable) -> Tuple[Set[asyncio.Task], Set[asyncio.Task]]:
