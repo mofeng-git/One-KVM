@@ -1,8 +1,0 @@
-# See /boot/overlays/README for all available options
-initramfs initramfs-linux.img followkernel
-
-hdmi_force_hotplug=1
-gpu_mem=64
-enable_uart=1
-dtoverlay=tc358743,i2c_pins_28_29=1
-dtoverlay=disable-bt
