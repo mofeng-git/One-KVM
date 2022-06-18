@@ -208,6 +208,19 @@ async def stream_json_exception(response: StreamResponse, err: Exception) -> Non
     }, False)
 
 
+def parse_ws_event(msg: str) -> Tuple[str, Dict]:
+    data = json.loads(msg)
+    if not isinstance(data, dict):
+        raise RuntimeError("Top-level event structure is not a dict")
+    event_type = data.get("event_type")
+    if not isinstance(event_type, str):
+        raise RuntimeError("event_type must be a string")
+    event = data["event"]
+    if not isinstance(event, dict):
+        raise RuntimeError("event must be a dict")
+    return (event_type, event)
+
+
 # =====
 _REQUEST_AUTH_INFO = "_kvmd_auth_info"
 
@@ -323,7 +336,7 @@ class HttpServer:
             if msg.type != WSMsgType.TEXT:
                 break
             try:
-                (event_type, event) = self.__parse_ws_event(msg.data)
+                (event_type, event) = parse_ws_event(msg.data)
             except Exception as err:
                 logger.error("Can't parse JSON event from websocket: %r", err)
             else:
@@ -362,18 +375,6 @@ class HttpServer:
             except Exception:
                 pass
         await self._on_ws_closed()
-
-    def __parse_ws_event(self, msg: str) -> Tuple[str, Dict]:
-        data = json.loads(msg)
-        if not isinstance(data, dict):
-            raise RuntimeError("Top-level event structure is not a dict")
-        event_type = data.get("event_type")
-        if not isinstance(event_type, str):
-            raise RuntimeError("event_type must be a string")
-        event = data["event"]
-        if not isinstance(event, dict):
-            raise RuntimeError("event must be a dict")
-        return (event_type, event)
 
     # =====
 
