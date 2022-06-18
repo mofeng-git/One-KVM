@@ -43,16 +43,16 @@ from .logging import get_logger
 
 
 # =====
-_MethodT = TypeVar("_MethodT", bound=Callable[..., Any])
+_FunctionT = TypeVar("_FunctionT", bound=Callable[..., Any])
 _RetvalT = TypeVar("_RetvalT")
 
 
 # =====
-def atomic(method: _MethodT) -> _MethodT:
-    @functools.wraps(method)
+def atomic(func: _FunctionT) -> _FunctionT:
+    @functools.wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
-        return (await asyncio.shield(method(*args, **kwargs)))
-    return typing.cast(_MethodT, wrapper)
+        return (await asyncio.shield(func(*args, **kwargs)))
+    return typing.cast(_FunctionT, wrapper)
 
 
 # =====
@@ -109,8 +109,8 @@ async def stop_all_deadly_tasks() -> None:
 
 
 # =====
-async def run_async(method: Callable[..., _RetvalT], *args: Any) -> _RetvalT:
-    return (await asyncio.get_running_loop().run_in_executor(None, method, *args))
+async def run_async(func: Callable[..., _RetvalT], *args: Any) -> _RetvalT:
+    return (await asyncio.get_running_loop().run_in_executor(None, func, *args))
 
 
 def run_sync(coro: Coroutine[Any, Any, _RetvalT]) -> _RetvalT:
@@ -254,7 +254,7 @@ class AioExclusiveRegion:
 async def run_region_task(
     msg: str,
     region: AioExclusiveRegion,
-    method: Callable[..., Coroutine[Any, Any, None]],
+    func: Callable[..., Coroutine[Any, Any, None]],
     *args: Any,
     **kwargs: Any,
 ) -> None:
@@ -265,7 +265,7 @@ async def run_region_task(
         try:
             async with region:
                 entered.set_result(None)
-                await method(*args, **kwargs)
+                await func(*args, **kwargs)
         except region.get_exc_type():
             raise
         except Exception:

@@ -182,20 +182,20 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
     # =====
 
     @aiotools.atomic
-    async def __run_action(self, wait: bool, name: str, method: Callable, *args: Any) -> None:
+    async def __run_action(self, wait: bool, name: str, func: Callable, *args: Any) -> None:
         if wait:
             async with self.__region:
-                await method(*args)
+                await func(*args)
         else:
             await aiotools.run_region_task(
                 f"Can't perform {name} of {self} or operation was not completed",
-                self.__region, self.__action_task_wrapper, name, method, *args,
+                self.__region, self.__action_task_wrapper, name, func, *args,
             )
 
     @aiotools.atomic
-    async def __action_task_wrapper(self, name: str, method: Callable, *args: Any) -> None:
+    async def __action_task_wrapper(self, name: str, func: Callable, *args: Any) -> None:
         try:
-            return (await method(*args))
+            return (await func(*args))
         except GpioDriverOfflineError:
             get_logger(0).error("Can't perform %s of %s or operation was not completed: driver offline", name, self)
 

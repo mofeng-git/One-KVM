@@ -85,12 +85,12 @@ def main(argv: Optional[List[str]]=None) -> None:
     logger = get_logger(0)
     logger.info("Cleaning up ...")
 
-    for method in [
+    for func in [
         _kill_streamer,
         _remove_sockets,
     ]:
         try:
-            method(config)
+            func(config)
         except Exception:
             pass
 

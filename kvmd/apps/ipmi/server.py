@@ -161,7 +161,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
             code = 0xCC  # Invalid request
         session.send_ipmi_response(code=code)
 
-    def __make_request(self, session: IpmiServerSession, name: str, method_path: str, **kwargs):  # type: ignore
+    def __make_request(self, session: IpmiServerSession, name: str, func_path: str, **kwargs):  # type: ignore
         async def runner():  # type: ignore
             logger = get_logger(0)
             credentials = self.__auth_manager.get_credentials(session.username.decode())
@@ -169,8 +169,8 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
                         session.sockaddr[0], name, credentials.ipmi_user, credentials.kvmd_user)
             try:
                 async with self.__kvmd.make_session(credentials.kvmd_user, credentials.kvmd_passwd) as kvmd_session:
-                    method = functools.reduce(getattr, method_path.split("."), kvmd_session)
-                    return (await method(**kwargs))
+                    func = functools.reduce(getattr, func_path.split("."), kvmd_session)
+                    return (await func(**kwargs))
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
                 logger.error("[%s]: Can't perform request %s: %s", session.sockaddr[0], name, err)
                 raise
