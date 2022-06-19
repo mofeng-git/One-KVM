@@ -46,6 +46,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
         self,
         storage_path: str,
         ro_retries_delay: float,
+        ro_cleanup_delay: float,
         remount_cmd: List[str],
     ) -> None:
 
@@ -53,6 +54,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
 
         self.__data_path = os.path.join(storage_path, "data")
         self.__ro_retries_delay = ro_retries_delay
+        self.__ro_cleanup_delay = ro_cleanup_delay
         self.__remount_cmd = remount_cmd
 
         self.__notifier = aiotools.AioNotifier()
@@ -83,7 +85,8 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
         await aiotools.stop_all_deadly_tasks()
         logger.info("Disconnecting clients ...")
         await self.__broadcast_storage_state(False)
-        await self._close_all_wss()
+        if (await self._close_all_wss()):
+            await asyncio.sleep(self.__ro_cleanup_delay)
         logger.info("On-Shutdown complete")
 
     async def _on_cleanup(self) -> None:

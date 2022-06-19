@@ -359,9 +359,11 @@ class HttpServer:
                 )
             ], return_exceptions=True)
 
-    async def _close_all_wss(self) -> None:
-        for ws in self._get_wss():
+    async def _close_all_wss(self) -> bool:
+        wss = self._get_wss()
+        for ws in wss:
             await self.__close_ws(ws)
+        return bool(wss)
 
     def _get_wss(self) -> List[WsSession]:
         return list(self.__ws_sessions)

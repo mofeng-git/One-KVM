@@ -497,6 +497,7 @@ def _get_config_scheme() -> Dict:
 
             "storage":          Option("/var/lib/kvmd/pst", type=valid_abs_dir, unpack_as="storage_path"),
             "ro_retries_delay": Option(10.0, type=valid_float_f01),
+            "ro_cleanup_delay": Option(3.0,  type=valid_float_f01),
 
             "remount_cmd": Option([
                 "/usr/bin/sudo", "--non-interactive",
