@@ -113,6 +113,7 @@ def init(
     description: Optional[str]=None,
     add_help: bool=True,
     check_run: bool=False,
+    cli_logging: bool=False,
     argv: Optional[List[str]]=None,
     **load: bool,
 ) -> Tuple[argparse.ArgumentParser, List[str], Section]:
@@ -152,6 +153,11 @@ def init(
 
     logging.captureWarnings(True)
     logging.config.dictConfig(config.logging)
+    if cli_logging:
+        logging.getLogger().handlers[0].setFormatter(logging.Formatter(
+            "-- {levelname:>7} -- {message}",
+            style="{",
+        ))
 
     if check_run and not options.run:
         raise SystemExit(

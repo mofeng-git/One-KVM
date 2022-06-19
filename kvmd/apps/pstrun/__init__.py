@@ -112,6 +112,7 @@ async def _run_cmd(cmd: List[str], unix_path: str) -> None:
 def main(argv: Optional[List[str]]=None) -> None:
     (parent_parser, argv, config) = init(
         add_help=False,
+        cli_logging=True,
         argv=argv,
     )
     parser = argparse.ArgumentParser(

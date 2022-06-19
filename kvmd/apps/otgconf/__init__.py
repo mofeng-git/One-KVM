@@ -114,6 +114,7 @@ class _GadgetControl:
 def main(argv: Optional[List[str]]=None) -> None:
     (parent_parser, argv, config) = init(
         add_help=False,
+        cli_logging=True,
         argv=argv,
     )
     parser = argparse.ArgumentParser(
