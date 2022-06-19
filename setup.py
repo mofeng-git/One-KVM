@@ -96,6 +96,7 @@ def main() -> None:
             "kvmd.apps.kvmd.info",
             "kvmd.apps.kvmd.api",
             "kvmd.apps.pst",
+            "kvmd.apps.pstrun",
             "kvmd.apps.otg",
             "kvmd.apps.otg.hid",
             "kvmd.apps.otgnet",
@@ -121,6 +122,7 @@ def main() -> None:
             "console_scripts": [
                 "kvmd = kvmd.apps.kvmd:main",
                 "kvmd-pst = kvmd.apps.pst:main",
+                "kvmd-pstrun = kvmd.apps.pstrun:main",
                 "kvmd-otg = kvmd.apps.otg:main",
                 "kvmd-otgnet = kvmd.apps.otgnet:main",
                 "kvmd-otgmsd = kvmd.apps.otgmsd:main",
