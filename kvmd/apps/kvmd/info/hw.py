@@ -33,6 +33,7 @@ from typing import Optional
 from ....logging import get_logger
 
 from .... import env
+from .... import tools
 from .... import aiofs
 from .... import aioproc
 
@@ -137,10 +138,10 @@ class HwInfoSubmanager(BaseInfoSubmanager):
         try:
             text = (await aioproc.read_process(cmd, err_to_null=True))[1]
         except Exception:
-            get_logger(0).exception("Error while executing %s", cmd)
+            get_logger(0).exception("Error while executing: %s", tools.cmdfmt(cmd))
             return None
         try:
             return parser(text)
         except Exception as err:
-            get_logger(0).error("Can't parse %s output: %r: %s", cmd, text, err)
+            get_logger(0).error("Can't parse [ %s ] output: %r: %s", tools.cmdfmt(cmd), text, tools.efmt(err))
             return None

@@ -83,7 +83,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             if proc.returncode != 0:
                 raise RuntimeError(f"Custom command error: retcode={proc.returncode}")
         except Exception as err:
-            get_logger(0).error("Can't run custom command %s: %s", self.__cmd, tools.efmt(err))
+            get_logger(0).error("Can't run custom command [ %s ]: %s",
+                                tools.cmdfmt(self.__cmd), tools.efmt(err))
             raise GpioDriverOfflineError(self)
 
     def __str__(self) -> str:

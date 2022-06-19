@@ -131,7 +131,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
     async def __run_ctl(self, ctl: BaseCtl, direct: bool) -> bool:
         logger = get_logger()
         cmd = ctl.get_command(direct)
-        logger.info("CMD: %s", " ".join(cmd))
+        logger.info("CMD: %s", tools.cmdfmt(cmd))
         try:
             return (not (await aioproc.log_process(cmd, logger)).returncode)
         except Exception as err:

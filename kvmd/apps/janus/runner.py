@@ -175,7 +175,7 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
             for part in self.__cmd
         ]
         self.__janus_proc = await aioproc.run_process(cmd)
-        get_logger(0).info("Started Janus pid=%d: %s", self.__janus_proc.pid, cmd)
+        get_logger(0).info("Started Janus pid=%d: %s", self.__janus_proc.pid, tools.cmdfmt(cmd))
 
     async def __kill_janus_proc(self) -> None:
         if self.__janus_proc:

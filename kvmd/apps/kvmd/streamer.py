@@ -453,7 +453,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             for part in self.__cmd
         ]
         self.__streamer_proc = await aioproc.run_process(cmd)
-        get_logger(0).info("Started streamer pid=%d: %s", self.__streamer_proc.pid, cmd)
+        get_logger(0).info("Started streamer pid=%d: %s", self.__streamer_proc.pid, tools.cmdfmt(cmd))
 
     async def __kill_streamer_proc(self) -> None:
         if self.__streamer_proc:
