@@ -104,7 +104,6 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
     # ===== SYSTEM TASKS
 
     async def __controller(self) -> None:
-        logger = get_logger(0)
         prev: int = 0
         while True:
             cur = len(self._get_wss())
