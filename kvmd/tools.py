@@ -24,6 +24,7 @@ import operator
 import functools
 import multiprocessing.queues
 import queue
+import shlex
 
 from typing import Tuple
 from typing import List
@@ -38,6 +39,10 @@ def remap(value: int, in_min: int, in_max: int, out_min: int, out_max: int) -> i
 
 
 # =====
+def cmdfmt(cmd: List[str]) -> str:
+    return " ".join(map(shlex.quote, cmd))
+
+
 def efmt(err: Exception) -> str:
     return f"{type(err).__name__}: {err}"
 

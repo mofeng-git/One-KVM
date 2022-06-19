@@ -38,7 +38,7 @@ async def remount(name: str, base_cmd: List[str], rw: bool) -> bool:
         part.format(mode=mode)
         for part in base_cmd
     ]
-    logger.info("Remounting %s storage to %s: %s ...", name, mode.upper(), cmd)
+    logger.info("Remounting %s storage to %s: %s ...", name, mode.upper(), tools.cmdfmt(cmd))
     try:
         proc = await aioproc.log_process(cmd, logger)
         if proc.returncode != 0:
