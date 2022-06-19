@@ -10,7 +10,7 @@ Restart=always
 RestartSec=3
 
 ExecStart=/usr/bin/kvmd-pst --run
-TimeoutStopSec=3
+TimeoutStopSec=5
 
 [Install]
 WantedBy=multi-user.target

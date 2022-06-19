@@ -31,6 +31,7 @@ from aiohttp.web import WebSocketResponse
 
 from ...logging import get_logger
 
+from ... import tools
 from ... import aiotools
 from ... import aiohelpers
 
@@ -84,7 +85,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
         logger.info("Stopping system tasks ...")
         await aiotools.stop_all_deadly_tasks()
         logger.info("Disconnecting clients ...")
-        await self.__broadcast_storage_state(False)
+        await self.__broadcast_storage_state(len(self._get_wss()), False)
         if (await self._close_all_wss()):
             await asyncio.sleep(self.__ro_cleanup_delay)
         logger.info("On-Shutdown complete")
@@ -103,27 +104,37 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
     # ===== SYSTEM TASKS
 
     async def __controller(self) -> None:
-        prev = False
+        prev: int = 0
         while True:
-            cur = self.__has_clients()
-            if not prev and cur:
-                await self.__broadcast_storage_state(await self.__remount_storage(True))
-            elif prev and not cur:
+            cur = len(self._get_wss())
+            if cur > 0:
+                if not self.__is_write_available():
+                    await self.__remount_storage(True)
+            elif prev > 0 and cur == 0:
                 while not (await self.__remount_storage(False)):
-                    if self.__has_clients():
+                    if len(self._get_wss()) > 0:
                         continue
                     await asyncio.sleep(self.__ro_retries_delay)
+            await self.__broadcast_storage_state(cur, self.__is_write_available())
             prev = cur
             await self.__notifier.wait()
 
-    def __has_clients(self) -> bool:
-        return bool(self._get_wss())
-
-    async def __broadcast_storage_state(self, write_allowed: bool) -> None:
+    async def __broadcast_storage_state(self, clients: int, write_allowed: bool) -> None:
         await self._broadcast_ws_event("storage_state", {
-            "data": {"path": self.__data_path},
-            "write_allowed": write_allowed,
+            "clients": clients,
+            "data": {
+                "path": self.__data_path,
+                "write_allowed": write_allowed,
+            },
         })
+
+    def __is_write_available(self) -> bool:
+        try:
+            return (not (os.statvfs(self.__data_path).f_flag & os.ST_RDONLY))
+        except Exception as err:
+            get_logger(0).info("Can't get filesystem state of PST (%s): %s",
+                               self.__data_path, tools.efmt(err))
+            return False
 
     async def __remount_storage(self, rw: bool) -> bool:
         return (await aiohelpers.remount("PST", self.__remount_cmd, rw))
