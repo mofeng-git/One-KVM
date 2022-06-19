@@ -126,11 +126,11 @@ def init(
         add_help=add_help,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("-c", "--config", dest="config_path", default="/etc/kvmd/main.yaml", type=valid_abs_file,
+    parser.add_argument("-c", "--config", default="/etc/kvmd/main.yaml", type=valid_abs_file,
                         help="Set config file path", metavar="<file>")
-    parser.add_argument("-o", "--set-options", dest="set_options", default=[], nargs="+",
+    parser.add_argument("-o", "--set-options", default=[], nargs="+",
                         help="Override config options list (like sec/sub/opt=value)", metavar="<k=v>",)
-    parser.add_argument("-m", "--dump-config", dest="dump_config", action="store_true",
+    parser.add_argument("-m", "--dump-config", action="store_true",
                         help="View current configuration (include all overrides)")
     if check_run:
         parser.add_argument("--run", dest="run", action="store_true",
@@ -139,7 +139,7 @@ def init(
 
     if options.dump_config:
         _dump_config(_init_config(
-            config_path=options.config_path,
+            config_path=options.config,
             override_options=options.set_options,
             load_auth=True,
             load_hid=True,
@@ -148,7 +148,7 @@ def init(
             load_gpio=True,
         ))
         raise SystemExit()
-    config = _init_config(options.config_path, options.set_options, **load)
+    config = _init_config(options.config, options.set_options, **load)
 
     logging.captureWarnings(True)
     logging.config.dictConfig(config.logging)
