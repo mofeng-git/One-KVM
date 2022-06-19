@@ -47,7 +47,7 @@ async def _run_cmd_ws(cmd: List[str], ws: aiohttp.ClientWebSocketResponse) -> in
     receive_task: Optional[asyncio.Task] = None
     proc_task: Optional[asyncio.Task] = None
     proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
-    retval = 1
+
     try:  # pylint: disable=too-many-nested-blocks
         while True:
             if receive_task is None:
@@ -64,6 +64,8 @@ async def _run_cmd_ws(cmd: List[str], ws: aiohttp.ClientWebSocketResponse) -> in
                     (event_type, event) = htserver.parse_ws_event(msg.data)
                     if event_type == "storage_state":
                         if event["data"]["write_allowed"] and proc is None:
+                            logger.info("PST write is allowed: %s", event["data"]["path"])
+                            logger.info("Running the process ...")
                             proc = (await asyncio.create_subprocess_exec(
                                 *cmd,
                                 preexec_fn=os.setpgrp,
@@ -81,24 +83,24 @@ async def _run_cmd_ws(cmd: List[str], ws: aiohttp.ClientWebSocketResponse) -> in
                 receive_task = None
 
             if proc_task in done:
-                assert proc is not None
-                assert proc.returncode is not None
-                logger.info("Process finished: returncode=%s", proc.returncode)
                 break
+    except Exception:
+        logger.exception("Unhandled exception")
 
-    finally:
-        if receive_task:
-            receive_task.cancel()
-        if proc_task:
-            proc_task.cancel()
-        if proc is not None:
-            await aioproc.kill_process(proc, 1, logger)
-            assert proc.returncode is not None
-            retval = proc.returncode
-    return retval
+    if receive_task:
+        receive_task.cancel()
+    if proc_task:
+        proc_task.cancel()
+    if proc is not None:
+        await aioproc.kill_process(proc, 1, logger)
+        assert proc.returncode is not None
+        logger.info("Process finished: returncode=%d", proc.returncode)
+        return proc.returncode
+    return 1
 
 
 async def _run_cmd(cmd: List[str], unix_path: str) -> None:
+    get_logger(0).info("Opening PST session ...")
     async with aiohttp.ClientSession(
         headers={"User-Agent": htclient.make_user_agent("KVMD-PSTRun")},
         connector=aiohttp.UnixConnector(path=unix_path),
