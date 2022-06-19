@@ -119,3 +119,4 @@ def main() -> None:
             _mkdir(path)
             if storage.user:
                 _chown(path, storage.user)
+    _log(f"Storage in the {'RW' if rw else 'RO'}-mode now")

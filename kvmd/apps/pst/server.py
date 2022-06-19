@@ -75,8 +75,8 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
     # ===== SYSTEM STUFF
 
     async def _init_app(self) -> None:
-        if (await self.__remount_storage(True)):
-            await self.__remount_storage(False)
+        if (await self.__remount_storage(rw=True)):
+            await self.__remount_storage(rw=False)
         aiotools.create_deadly_task("Controller", self.__controller())
         self._add_exposed(self)
 
@@ -92,7 +92,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
 
     async def _on_cleanup(self) -> None:
         logger = get_logger(0)
-        await self.__remount_storage(False)
+        await self.__remount_storage(rw=False)
         logger.info("On-Cleanup complete")
 
     async def _on_ws_opened(self) -> None:
@@ -104,14 +104,15 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
     # ===== SYSTEM TASKS
 
     async def __controller(self) -> None:
+        logger = get_logger(0)
         prev: int = 0
         while True:
             cur = len(self._get_wss())
             if cur > 0:
                 if not self.__is_write_available():
-                    await self.__remount_storage(True)
+                    await self.__remount_storage(rw=True)
             elif prev > 0 and cur == 0:
-                while not (await self.__remount_storage(False)):
+                while not (await self.__remount_storage(rw=False)):
                     if len(self._get_wss()) > 0:
                         continue
                     await asyncio.sleep(self.__ro_retries_delay)
