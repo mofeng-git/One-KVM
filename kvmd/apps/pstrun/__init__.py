@@ -22,6 +22,7 @@
 
 import sys
 import os
+import signal
 import asyncio
 import asyncio.subprocess
 import argparse
@@ -33,6 +34,7 @@ import aiohttp
 
 from ...logging import get_logger
 
+from ... import tools
 from ... import aiotools
 from ... import aioproc
 from ... import htclient
@@ -42,6 +44,26 @@ from .. import init
 
 
 # =====
+def _preexec() -> None:
+    os.setpgrp()
+    if os.isatty(0):
+        try:
+            os.tcsetpgrp(0, os.getpgid(0))
+        except Exception as err:
+            get_logger(0).info("Can't perform tcsetpgrp(0): %s", tools.efmt(err))
+
+
+async def _run_process(cmd: List[str], data_path: str) -> asyncio.subprocess.Process:  # pylint: disable=no-member
+    # https://stackoverflow.com/questions/58918188/why-is-stdin-not-propagated-to-child-process-of-different-process-group
+    if os.isatty(0):
+        signal.signal(signal.SIGTTOU, signal.SIG_IGN)
+    return (await asyncio.create_subprocess_exec(
+        *cmd,
+        preexec_fn=_preexec,
+        env={"KVMD_PST_DATA": data_path},
+    ))
+
+
 async def _run_cmd_ws(cmd: List[str], ws: aiohttp.ClientWebSocketResponse) -> int:  # pylint: disable=too-many-branches
     logger = get_logger(0)
     receive_task: Optional[asyncio.Task] = None
@@ -66,11 +88,7 @@ async def _run_cmd_ws(cmd: List[str], ws: aiohttp.ClientWebSocketResponse) -> in
                         if event["data"]["write_allowed"] and proc is None:
                             logger.info("PST write is allowed: %s", event["data"]["path"])
                             logger.info("Running the process ...")
-                            proc = (await asyncio.create_subprocess_exec(
-                                *cmd,
-                                preexec_fn=os.setpgrp,
-                                env={"KVMD_PST_DATA": event["data"]["path"]},
-                            ))
+                            proc = await _run_process(cmd, event["data"]["path"])
                         elif not event["data"]["write_allowed"]:
                             logger.error("PST write is not allowed")
                             break
@@ -87,9 +105,9 @@ async def _run_cmd_ws(cmd: List[str], ws: aiohttp.ClientWebSocketResponse) -> in
     except Exception:
         logger.exception("Unhandled exception")
 
-    if receive_task:
+    if receive_task is not None:
         receive_task.cancel()
-    if proc_task:
+    if proc_task is not None:
         proc_task.cancel()
     if proc is not None:
         await aioproc.kill_process(proc, 1, logger)
