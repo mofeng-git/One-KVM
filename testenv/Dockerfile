@@ -60,6 +60,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		socat \
 		eslint \
 		npm \
+		shellcheck \
 	&& (pacman -Sc --noconfirm || true) \
 	&& rm -rf /var/cache/pacman/pkg/*
 

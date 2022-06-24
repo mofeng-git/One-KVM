@@ -94,6 +94,7 @@ depends=(
 	e2fsprogs
 	openssh
 	wpa_supplicant
+	run-parts
 
 	# Misc
 	hostapd

@@ -29,7 +29,7 @@ board="$1"
 port="$2"
 
 # https://gist.github.com/mdevaev/6eb65be689142e5ac16da7542f50830f
-model="`tr < /proc/device-tree/model -d '\000'`"
+model="$(tr < /proc/device-tree/model -d '\000')"
 
 case "$board" in
 	"rpi2")

@@ -23,7 +23,7 @@
 
 set -ex
 
-if [ `whoami` != root ]; then
+if [ "$(whoami)" != root ]; then
 	echo "Only root can do that"
 	exit 1
 fi
@@ -39,6 +39,7 @@ fi
 if [ ! -f /boot/pikvm.txt ]; then
 	exit 0
 fi
+# shellcheck disable=SC1090
 source <(dos2unix < /boot/pikvm.txt)
 
 rw
@@ -62,25 +63,27 @@ if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
 	kvmd-gencert --do-the-thing --vnc
 
 	if grep -q 'X-kvmd\.otgmsd' /etc/fstab; then
-		part=`grep 'X-kvmd\.otgmsd' /etc/fstab | awk '{print $1}'`
+		part=$(grep 'X-kvmd\.otgmsd' /etc/fstab | awk '{print $1}')
+		# shellcheck disable=SC2206
 		splitted=(${part//=/ })
-		if [ ${splitted[0]} == "LABEL" ]; then
+		if [ "${splitted[0]}" == LABEL ]; then
 			label=${splitted[1]}
-			part=`blkid -c /dev/null -L $label`
+			part=$(blkid -c /dev/null -L "$label")
 		else
 			label=PIMSD
 		fi
 		unset splitted
-		disk=/dev/`lsblk -no pkname $part`
-		npart=`cat /sys/class/block/${part//\/dev\//}/partition`
-		umount $part
-		parted $disk -a optimal -s resizepart $npart 100%
-		yes | mkfs.ext4 -L $label -F -m 0 $part
-		mount $part
+		disk=/dev/$(lsblk -no pkname "$part")
+		npart=$(cat "/sys/class/block/${part//\/dev\//}/partition")
+		umount "$part"
+		parted "$disk" -a optimal -s resizepart "$npart" 100%
+		yes | mkfs.ext4 -L "$label" -F -m 0 "$part"
+		mount "$part"
 		unset disk part npart label
 	fi
 
 	# fc-cache is required for installed X server
+	# shellcheck disable=SC2015
 	which fc-cache && fc-cache || true
 fi
 
@@ -121,7 +124,7 @@ fi
 if [ -n "$WIFI_REGDOM" ]; then
 	sed -i \
 			-e 's/^\(WIRELESS_REGDOM=.*\)$/#\1/' \
-			-e 's/^#\(WIRELESS_REGDOM="'$WIFI_REGDOM'"\)/\1/' \
+			-e 's/^#\(WIRELESS_REGDOM="'"$WIFI_REGDOM"'"\)/\1/' \
 		/etc/conf.d/wireless-regdom
 fi
 
@@ -149,9 +152,7 @@ fi
 # ========== Custom scripts ==========
 
 if [ -d /boot/pikvm-scripts.d ]; then
-	for script in `ls /boot/pikvm-scripts.d | sort`; do
-		/boot/pikvm-scripts.d/"$script" || true
-	done
+	run-parts --regex='^.+$' /boot/pikvm-scripts.d || true
 fi
 
 
