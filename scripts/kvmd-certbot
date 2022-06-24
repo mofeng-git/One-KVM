@@ -90,7 +90,7 @@ case "$1" in
 			--webroot-path="$web" \
 			--deploy-hook="/usr/bin/bash -c '
 				set -ex
-				chmod 750 '$cur/config/'{archive,live}
+				chmod 755 '$cur/config/'{archive,live}
 				cd \"\$RENEWED_LINEAGE\"
 				chmod 640 privkey.pem
 				ln -s fullchain.pem server.crt
