@@ -1,0 +1,105 @@
+#!/bin/bash
+# ========================================================================== #
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2022  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+# ========================================================================== #
+
+
+set -e
+export LC_ALL=C
+
+if [ "$(whoami)" != root ]; then
+	echo "Only root can do that"
+	exit 1
+fi
+
+user=kvmd-certbot
+web=/run/kvmd-certbot/webroot
+pstbase=/var/lib/kvmd/pst/data/certbot
+cur="$pstbase/runroot"
+new="$pstbase/runroot.new"
+tmp=/tmp/kvmd-certbot/runroot
+
+function cleanup() {
+	rm -rf "$tmp"
+}
+
+function create_tmp() {
+	mkdir "$tmp" # Acts as a lock
+	chown "$user:" "$tmp"
+	trap cleanup EXIT
+}
+
+if [ "$1" == "renew" ]; then
+	create_tmp
+	cp -a "$cur"/{config,work,logs} "$tmp"
+	sed -s -i -e "s| = $cur/| = $tmp/|g" "$tmp/config/renewal/"*
+	shift
+	sudo -u "$user" certbot renew "$@" \
+		--config-dir="$tmp/config" \
+		--work-dir="$tmp/work" \
+		--logs-dir="$tmp/logs" \
+		--deploy-hook="/usr/bin/touch '$tmp/updated'"
+	if [ -f "$tmp/updated" ]; then
+		sudo -u "$user" kvmd-pstrun -- bash -c "
+			set -ex
+			rm -rf '$new'
+			cp -a '$tmp' '$new'
+			rm '$new/updated'
+			chmod 640 '$new'/config/archive/*/privkey*.pem
+			sed -s -i -e 's| = $tmp/| = $cur/|g' '$new/config/renewal/'*
+			sync
+			kvmd-helper-swapfiles '$new' '$cur'
+			rm -rf '$new'
+		"
+		echo "Reloading KVMD-Nginx ..."
+		systemctl reload kvmd-nginx || true
+	fi
+
+else
+	create_tmp
+	if [ ! -d "$cur" ]; then
+		kvmd-pstrun -- bash -c "
+			set -ex
+			mkdir -p '$cur'
+			chown '$user:' '$cur'
+		"
+	fi
+	if [ "$1" == "certonly-webroot" ]; then
+		shift
+		sudo -u "$user" kvmd-pstrun -- certbot certonly "$@" \
+			--config-dir="$cur/config" \
+			--work-dir="$cur/work" \
+			--logs-dir="$cur/logs" \
+			--webroot \
+			--webroot-path="$web" \
+			--deploy-hook="/usr/bin/bash -c '
+				set -ex
+				cd \"\$RENEWED_LINEAGE\"
+				chmod 640 privkey.pem
+				ln -s fullchain.pem server.crt
+				ln -s privkey.pem server.key
+			'"
+	else
+		sudo -u "$user" kvmd-pstrun -- certbot "$@" \
+			--config-dir="$cur/config" \
+			--work-dir="$cur/work" \
+			--logs-dir="$cur/logs"
+	fi
+fi

@@ -74,6 +74,7 @@ depends=(
 	dnsmasq
 	ipmitool
 	"janus-gateway-pikvm>=0.11.2-7"
+	certbot
 	platform-io-access
 	"ustreamer>=5.8"
 
@@ -112,7 +113,10 @@ md5sums=(SKIP)
 backup=(
 	etc/kvmd/{override,logging,auth,meta}.yaml
 	etc/kvmd/{ht,ipmi,vnc}passwd
-	etc/kvmd/nginx/{kvmd.ctx-{http,server},listen-http{,s},loc-{login,nocache,proxy,websocket},mime-types,ssl,redirect-to-https,nginx}.conf
+	etc/kvmd/nginx/{kvmd.ctx-{http,server},certbot.ctx-server}.conf
+	etc/kvmd/nginx/listen-http{,s}.conf
+	etc/kvmd/nginx/loc-{login,nocache,proxy,websocket}.conf
+	etc/kvmd/nginx/{mime-types,ssl,redirect-to-https,nginx}.conf
 	etc/kvmd/janus/janus{,.plugin.ustreamer,.transport.websockets}.jcfg
 	etc/kvmd/web.css
 )
@@ -133,9 +137,9 @@ package_kvmd() {
 	cd "$srcdir/$pkgname-build"
 	python setup.py install --root="$pkgdir"
 
-	install -Dm755 -t "$pkgdir/usr/bin" scripts/kvmd-{bootconfig,gencert}
+	install -Dm755 -t "$pkgdir/usr/bin" scripts/kvmd-{bootconfig,gencert,certbot}
 
-	install -Dm644 -t "$pkgdir/usr/lib/systemd/system" configs/os/services/*.service
+	install -Dm644 -t "$pkgdir/usr/lib/systemd/system" configs/os/services/*
 	install -DTm644 configs/os/sysusers.conf "$pkgdir/usr/lib/sysusers.d/kvmd.conf"
 	install -DTm644 configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
