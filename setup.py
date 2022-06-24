@@ -112,7 +112,7 @@ def main() -> None:
             "kvmd.apps.watchdog",
             "kvmd.helpers",
             "kvmd.helpers.remount",
-            "kvmd.helpers.exchange",
+            "kvmd.helpers.swapfiles",
         ],
 
         package_data={
@@ -137,7 +137,7 @@ def main() -> None:
                 "kvmd-watchdog = kvmd.apps.watchdog:main",
                 "kvmd-helper-pst-remount = kvmd.helpers.remount:main",
                 "kvmd-helper-otgmsd-remount = kvmd.helpers.remount:main",
-                "kvmd-helper-exchange = kvmd.helpers.exchange:main",
+                "kvmd-helper-swapfiles = kvmd.helpers.swapfiles:main",
             ],
         },
 
