@@ -1,3 +1,5 @@
+# shellcheck disable=SC2148
+
 post_install() {
 	post_upgrade
 }
@@ -7,8 +9,9 @@ post_upgrade() {
 	systemd-sysusers /usr/lib/sysusers.d/kvmd.conf
 
 	# https://github.com/systemd/systemd/issues/13522
-	for user in `grep '^u ' /usr/lib/sysusers.d/kvmd.conf | awk '{print $2}'`; do
-		usermod --expiredate= $user >/dev/null
+	# shellcheck disable=SC2013
+	for user in $(grep '^u ' /usr/lib/sysusers.d/kvmd.conf | awk '{print $2}'); do
+		usermod --expiredate= "$user" >/dev/null
 	done
 
 	chown kvmd:kvmd /etc/kvmd/htpasswd || true
@@ -16,7 +19,7 @@ post_upgrade() {
 	chown kvmd-vnc:kvmd-vnc /etc/kvmd/vncpasswd || true
 	chmod 600 /etc/kvmd/*passwd || true
 	for target in nginx redirect-to-https ssl listen-http listen-https; do
-		chmod 644 /etc/kvmd/nginx/$target.conf || true
+		chmod 644 "/etc/kvmd/nginx/$target.conf" || true
 	done
 
 	chown kvmd /var/lib/kvmd/msd || true
@@ -34,13 +37,16 @@ post_upgrade() {
 
 	for target in nginx vnc; do
 		chown root:root /etc/kvmd/$target/ssl || true
-		if [ ! -L /etc/kvmd/$target/ssl/server.key ]; then
-			chown root:kvmd-$target /etc/kvmd/$target/ssl/server.key || true
-			chmod 440 /etc/kvmd/$target/ssl/server.key || true
+		owner="root:kvmd-$target"
+		path="/etc/kvmd/$target/ssl/server.key"
+		if [ ! -L "$path" ]; then
+			chown "$owner" "$path" || true
+			chmod 440 "$path" || true
 		fi
-		if [ ! -L /etc/kvmd/$target/ssl/server.crt ]; then
-			chown root:kvmd-$target /etc/kvmd/$target/ssl/server.crt || true
-			chmod 444 /etc/kvmd/$target/ssl/server.crt || true
+		path="/etc/kvmd/$target/ssl/server.crt"
+		if [ ! -L "$path" ]; then
+			chown "$owner" "$path" || true
+			chmod 444 "$path" || true
 		fi
 	done
 
@@ -53,5 +59,6 @@ post_upgrade() {
 	[ ! -f /etc/pam.d/system-auth ] || sed -i -e '/\<pam_systemd_home\.so\>/ s/^#*/#/' /etc/pam.d/system-auth
 
 	# Some update deletes /etc/motd, WTF
+	# shellcheck disable=SC2015,SC2166
 	[ ! -f /etc/motd -a -f /etc/motd.pacsave ] && mv /etc/motd.pacsave /etc/motd || true
 }
