@@ -62,6 +62,7 @@ if [ "$1" == "renew" ]; then
 			rm -rf '$new'
 			cp -a '$tmp' '$new'
 			rm '$new/updated'
+			chmod 750 '$new/config/'{archive,live}
 			chmod 640 '$new'/config/archive/*/privkey*.pem
 			sed -s -i -e 's| = $tmp/| = $cur/|g' '$new/config/renewal/'*
 			sync
@@ -91,6 +92,7 @@ else
 			--webroot-path="$web" \
 			--deploy-hook="/usr/bin/bash -c '
 				set -ex
+				chmod 750 '$cur/config/'{archive,live}
 				cd \"\$RENEWED_LINEAGE\"
 				chmod 640 privkey.pem
 				ln -s fullchain.pem server.crt
