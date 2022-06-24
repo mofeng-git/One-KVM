@@ -46,6 +46,13 @@ function create_tmp() {
 	trap cleanup EXIT
 }
 
+function restart_if_running() {
+	if systemctl is-active --quiet "$2"; then
+		echo "=> systemctl $1 $2"
+		systemctl "$1" "$2" || true
+	fi
+}
+
 if [ "$1" == "renew" ]; then
 	create_tmp
 	cp -a "$cur"/{config,work,logs} "$tmp"
@@ -69,8 +76,8 @@ if [ "$1" == "renew" ]; then
 			kvmd-helper-swapfiles '$new' '$cur'
 			rm -rf '$new'
 		"
-		echo "Reloading KVMD-Nginx ..."
-		systemctl reload kvmd-nginx || true
+		restart_if_running reload kvmd-nginx
+		restart_if_running restart kvmd-vnc
 	fi
 
 else
