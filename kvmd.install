@@ -34,9 +34,14 @@ post_upgrade() {
 
 	for target in nginx vnc; do
 		chown root:root /etc/kvmd/$target/ssl
-		chown root:kvmd-$target /etc/kvmd/$target/ssl/*
-		chmod 440 /etc/kvmd/$target/ssl/server.key
-		chmod 444 /etc/kvmd/$target/ssl/server.crt
+		if [ -f /etc/kvmd/$target/ssl/server.key ]; then
+			chown root:kvmd-$target /etc/kvmd/$target/ssl/server.key
+			chmod 440 /etc/kvmd/$target/ssl/server.key
+		fi
+		if [ -f /etc/kvmd/$target/ssl/server.crt ]; then
+			chown root:kvmd-$target /etc/kvmd/$target/ssl/server.crt
+			chmod 444 /etc/kvmd/$target/ssl/server.crt
+		fi
 	done
 
 	echo "==> Patching configs ..."
