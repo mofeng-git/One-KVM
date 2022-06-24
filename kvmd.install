@@ -11,10 +11,10 @@ post_upgrade() {
 		usermod --expiredate= $user >/dev/null
 	done
 
-	chown kvmd:kvmd /etc/kvmd/htpasswd
-	chown kvmd-ipmi:kvmd-ipmi /etc/kvmd/ipmipasswd
-	chown kvmd-vnc:kvmd-vnc /etc/kvmd/vncpasswd
-	chmod 600 /etc/kvmd/*passwd
+	chown kvmd:kvmd /etc/kvmd/htpasswd || true
+	chown kvmd-ipmi:kvmd-ipmi /etc/kvmd/ipmipasswd || true
+	chown kvmd-vnc:kvmd-vnc /etc/kvmd/vncpasswd || true
+	chmod 600 /etc/kvmd/*passwd || true
 	for target in nginx redirect-to-https ssl listen-http listen-https; do
 		chmod 644 /etc/kvmd/nginx/$target.conf || true
 	done
@@ -33,14 +33,14 @@ post_upgrade() {
 	fi
 
 	for target in nginx vnc; do
-		chown root:root /etc/kvmd/$target/ssl
-		if [ -f /etc/kvmd/$target/ssl/server.key ]; then
-			chown root:kvmd-$target /etc/kvmd/$target/ssl/server.key
-			chmod 440 /etc/kvmd/$target/ssl/server.key
+		chown root:root /etc/kvmd/$target/ssl || true
+		if [ ! -L /etc/kvmd/$target/ssl/server.key ]; then
+			chown root:kvmd-$target /etc/kvmd/$target/ssl/server.key || true
+			chmod 440 /etc/kvmd/$target/ssl/server.key || true
 		fi
-		if [ -f /etc/kvmd/$target/ssl/server.crt ]; then
-			chown root:kvmd-$target /etc/kvmd/$target/ssl/server.crt
-			chmod 444 /etc/kvmd/$target/ssl/server.crt
+		if [ ! -L /etc/kvmd/$target/ssl/server.crt ]; then
+			chown root:kvmd-$target /etc/kvmd/$target/ssl/server.crt || true
+			chmod 444 /etc/kvmd/$target/ssl/server.crt || true
 		fi
 	done
 
