@@ -31,10 +31,12 @@ fi
 
 user=kvmd-certbot
 web=/run/kvmd-certbot/webroot
-pstbase=/var/lib/kvmd/pst/data/certbot
-cur="$pstbase/runroot"
-new="$pstbase/runroot.new"
+cur=/var/lib/kvmd/pst/data/certbot/runroot
+new=/var/lib/kvmd/pst/data/certbot/runroot.new
 tmp=/tmp/kvmd-certbot/runroot
+
+cur_opts=("--config-dir=$cur/config" "--work-dir=$cur/work" "--logs-dir=$cur/logs")
+
 
 function cleanup() {
 	rm -rf "$tmp"
@@ -73,28 +75,23 @@ function restart_if_running_vnc() {
 
 case "$1" in
 	-h|--help|help)
-		sudo -u "$user" certbot "$@" \
-			--config-dir="$cur/config" \
-			--work-dir="$cur/work" \
-			--logs-dir="$cur/logs"
+		sudo -u "$user" certbot "$@" "${cur_opts[@]}"
 	;;
 
-	certonly)
+	certonly|certonly_webroot)
+		webroot_opts=()
+		if [ "$1" == certonly_webroot ]; then
+			webroot_opts=(--webroot "--webroot-path=$web")
+		fi
+		shift
 		create_tmp
 		ensure_runroot
-		sudo -u "$user" kvmd-pstrun -- certbot "$@" \
-			--config-dir="$cur/config" \
-			--work-dir="$cur/work" \
-			--logs-dir="$cur/logs" \
-			--webroot \
-			--webroot-path="$web" \
+		sudo -u "$user" kvmd-pstrun -- certbot certonly "$@" "${cur_opts[@]}" \
+			"${webroot_opts[@]}" \
 			--deploy-hook="/usr/bin/bash -c '
 				set -ex
 				chmod 755 '$cur/config/'{archive,live}
-				cd \"\$RENEWED_LINEAGE\"
-				chmod 640 privkey.pem
-				ln -s fullchain.pem server.crt
-				ln -s privkey.pem server.key
+				chmod 640 \"\$RENEWED_LINEAGE/privkey.pem\"
 			'"
 	;;
 
@@ -126,33 +123,23 @@ case "$1" in
 		fi
 	;;
 
-	install)
-		case "$2" in
-			nginx|vnc)
-				if [ -z "$2" ]; then
-					echo "Usage: kvmd-certbot install <nginx|vnc> <domain>"
-					exit 1
-				fi
-				set -x 
-				rm -f "/etc/kvmd/$2/ssl/server."{crt,key}
-				ln -s "$cur/config/live/$3/server."{crt,key} "/etc/kvmd/$2/ssl/"
-				"restart_if_running_$2"
-			;;
-			*)
-				echo "Usage: kvmd-certbot install <nginx|vnc> <domain>"
-				exit 1
-			;;
-		esac
+	install_nginx|install_vnc)
+		target="${1/install_/}"
+		if [ -z "$2" ]; then
+			echo "Usage: kvmd-certbot $1 <domain>"
+			exit 1
+		fi
+		rm -f "/etc/kvmd/$target/ssl/server."{crt,key}
+		ln -s "$cur/config/live/$2/fullchain.pem" "/etc/kvmd/$target/ssl/server.crt"
+		ln -s "$cur/config/live/$2/privkey.pem" "/etc/kvmd/$target/ssl/server.key"
+		"restart_if_running_$target"
 	;;
 
 	--)
 		shift
 		create_tmp
 		ensure_runroot
-		sudo -u "$user" kvmd-pstrun -- certbot "$@" \
-			--config-dir="$cur/config" \
-			--work-dir="$cur/work" \
-			--logs-dir="$cur/logs"
+		sudo -u "$user" kvmd-pstrun -- certbot "$@" "${cur_opts[@]}"
 	;;
 
 	*)
