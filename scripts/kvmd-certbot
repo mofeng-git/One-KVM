@@ -114,6 +114,7 @@ case "$1" in
 				chmod 755 '$new/config/'{archive,live}
 				chmod 640 '$new'/config/archive/*/privkey*.pem
 				sed -s -i -e 's| = $tmp/| = $cur/|g' '$new/config/renewal/'*
+				rm -f '$new/logs/'*.log.* '$new/config/'{csr,keys}/*.pem
 				sync
 				kvmd-helper-swapfiles '$new' '$cur'
 				rm -rf '$new'
