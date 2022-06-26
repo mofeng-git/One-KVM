@@ -49,13 +49,11 @@ function create_tmp() {
 }
 
 function ensure_runroot() {
-	if [ ! -d "$cur" ]; then
-		kvmd-pstrun -- bash -c "
-			set -ex
-			mkdir -p '$cur'
-			chown '$user:' '$cur'
-		"
-	fi
+	kvmd-pstrun -- bash -c "
+		set -ex
+		mkdir -p '$cur'
+		chown -R '$user:' '$cur/..'
+	"
 }
 
 function restart_if_running() {
@@ -99,6 +97,7 @@ case "$1" in
 		shift
 		create_tmp
 		cp -a "$cur"/{config,work,logs} "$tmp"
+		chown -R "$user:" "$tmp"
 		sed -s -i -e "s| = $cur/| = $tmp/|g" "$tmp/config/renewal/"*
 		sudo -u "$user" certbot renew "$@" \
 			--config-dir="$tmp/config" \
