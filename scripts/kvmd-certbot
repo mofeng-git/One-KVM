@@ -73,7 +73,15 @@ function restart_if_running_vnc() {
 
 case "$1" in
 	-h|--help|help)
+		create_tmp
 		sudo -u "$user" certbot "$@" "${cur_opts[@]}"
+	;;
+
+	--)
+		shift
+		create_tmp
+		ensure_runroot
+		sudo -u "$user" kvmd-pstrun -- certbot "$@" "${cur_opts[@]}"
 	;;
 
 	certonly|certonly_webroot)
@@ -129,17 +137,11 @@ case "$1" in
 			echo "Usage: kvmd-certbot $1 <domain>"
 			exit 1
 		fi
+		set -x
 		rm -f "/etc/kvmd/$target/ssl/server."{crt,key}
 		ln -s "$cur/config/live/$2/fullchain.pem" "/etc/kvmd/$target/ssl/server.crt"
 		ln -s "$cur/config/live/$2/privkey.pem" "/etc/kvmd/$target/ssl/server.key"
 		"restart_if_running_$target"
-	;;
-
-	--)
-		shift
-		create_tmp
-		ensure_runroot
-		sudo -u "$user" kvmd-pstrun -- certbot "$@" "${cur_opts[@]}"
 	;;
 
 	*)
