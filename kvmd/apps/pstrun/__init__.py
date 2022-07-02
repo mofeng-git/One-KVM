@@ -60,7 +60,10 @@ async def _run_process(cmd: List[str], data_path: str) -> asyncio.subprocess.Pro
     return (await asyncio.create_subprocess_exec(
         *cmd,
         preexec_fn=_preexec,
-        env={"KVMD_PST_DATA": data_path},
+        env={
+            **os.environ,
+            "KVMD_PST_DATA": data_path,
+        },
     ))
 
 
