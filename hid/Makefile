@@ -8,7 +8,8 @@ _build:
 	rm -f .current
 	platformio run --environment $(E)
 	echo -n $(E) > .current
-#added to easy test all builds
+
+# Added to easy test all builds
 _build_all: aum spi serial
 	rm -f .current
 
