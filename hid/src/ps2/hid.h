@@ -74,8 +74,8 @@ class Ps2Keyboard {
 			}
 		}
 
-		uint8_t getOfflineAs(uint8_t offline) {
-			return 0;
+		bool isOffline() {
+			return false;
 		}
 
 		uint8_t getLedsAs(uint8_t caps, uint8_t scroll, uint8_t num) {

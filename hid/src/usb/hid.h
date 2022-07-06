@@ -37,12 +37,12 @@
 // https://github.com/arduino/ArduinoCore-avr/blob/2f67c916f6ab6193c404eebe22efe901e0f9542d/cores/arduino/USBCore.cpp#L249
 // https://sourceforge.net/p/arduinomidilib/svn/41/tree/branch/3.1/Teensy/teensy_core/usb_midi/usb_api.cpp#l103
 #	ifdef AUM
-#		define CHECK_AUM_USB { if (!aumIsUsbConnected()) { return offline; } }
+#		define CHECK_AUM_USB { if (!aumIsUsbConnected()) { return true; } }
 #	else
 #		define CHECK_AUM_USB
 #	endif
-#	define CLS_GET_OFFLINE_AS(_hid) \
-		uint8_t getOfflineAs(uint8_t offline) { \
+#	define CLS_IS_OFFLINE(_hid) \
+		bool isOffline() { \
 			CHECK_AUM_USB; \
 			uint8_t ep = _hid.getPluggedEndpoint(); \
 			uint8_t intr_state = SREG; \
@@ -51,16 +51,16 @@
 			bool rw_allowed = UEINTX & (1 << RWAL); \
 			SREG = intr_state; \
 			if (rw_allowed) { \
-				return 0; \
+				return false; \
 			} \
-			return offline; \
+			return true; \
 		}
-#	define CHECK_HID_EP { if (getOfflineAs(1)) return; }
+#	define CHECK_HID_EP { if (isOffline()) return; }
 
 #else
-#	define CLS_GET_OFFLINE_AS(_hid) \
-		uint8_t getOfflineAs(uint8_t offline) { \
-			return 0; \
+#	define CLS_IS_OFFLINE(_hid) \
+		bool isOffline() { \
+			return false; \
 		}
 #	define CHECK_HID_EP
 
@@ -79,7 +79,7 @@ class UsbKeyboard {
 			static unsigned long prev_ts = 0;
 			if (is_micros_timed_out(prev_ts, 50000)) {
 				static bool prev_online = true;
-				bool online = !getOfflineAs(1);
+				bool online = !isOffline();
 				if (!_sent || (online && !prev_online)) {
 					_sendCurrent();
 				}
@@ -102,7 +102,7 @@ class UsbKeyboard {
 			}
 		}
 
-		CLS_GET_OFFLINE_AS(_kbd)
+		CLS_IS_OFFLINE(_kbd)
 
 		uint8_t getLedsAs(uint8_t caps, uint8_t scroll, uint8_t num) {
 			uint8_t leds = _kbd.getLeds();
@@ -119,7 +119,7 @@ class UsbKeyboard {
 
 		void _sendCurrent() {
 #			ifdef HID_USB_CHECK_ENDPOINT
-			if (getOfflineAs(1)) {
+			if (isOffline()) {
 				_sent = false;
 			} else {
 #			endif
@@ -175,7 +175,7 @@ class UsbMouseAbsolute {
 			_mouse.move(0, 0, delta_y);
 		}
 
-		CLS_GET_OFFLINE_AS(_mouse)
+		CLS_IS_OFFLINE(_mouse)
 
 	private:
 		SingleAbsoluteMouse_ _mouse;
@@ -212,7 +212,7 @@ class UsbMouseRelative {
 			_mouse.move(0, 0, delta_y);
 		}
 
-		CLS_GET_OFFLINE_AS(_mouse)
+		CLS_IS_OFFLINE(_mouse)
 
 	private:
 		BootMouse_ _mouse;
@@ -225,5 +225,5 @@ class UsbMouseRelative {
 };
 
 #undef CLS_SEND_BUTTONS
-#undef CLS_GET_OFFLINE_AS
+#undef CLS_IS_OFFLINE
 #undef CHECK_HID_EP

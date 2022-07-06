@@ -284,23 +284,23 @@ static void _sendResponse(uint8_t code) {
 		response[2] = PROTO::OUTPUTS1::DYNAMIC;
 #		endif
 		if (_usb_kbd) {
-			response[1] |= _usb_kbd->getOfflineAs(PROTO::PONG::KEYBOARD_OFFLINE);
+			response[1] |= _usb_kbd->isOffline() ? PROTO::PONG::KEYBOARD_OFFLINE : 0;
 			response[1] |= _usb_kbd->getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM);
 			response[2] |= PROTO::OUTPUTS1::KEYBOARD::USB;
 		} else if (_ps2_kbd) {
-			response[1] |= _ps2_kbd->getOfflineAs(PROTO::PONG::KEYBOARD_OFFLINE);
+			response[1] |= _ps2_kbd->isOffline() ? PROTO::PONG::KEYBOARD_OFFLINE : 0;
 			response[1] |= _ps2_kbd->getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM);
 			response[2] |= PROTO::OUTPUTS1::KEYBOARD::PS2;
 		}
 		if (_usb_mouse_abs) {
-			response[1] |= _usb_mouse_abs->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
+			response[1] |= _usb_mouse_abs->isOffline() ? PROTO::PONG::MOUSE_OFFLINE : 0;
 			if (_usb_mouse_abs->isWin98FixEnabled()) {
 				response[2] |= PROTO::OUTPUTS1::MOUSE::USB_WIN98;
 			} else {
 				response[2] |= PROTO::OUTPUTS1::MOUSE::USB_ABS;
 			}
 		} else if (_usb_mouse_rel) {
-			response[1] |= _usb_mouse_rel->getOfflineAs(PROTO::PONG::MOUSE_OFFLINE);
+			response[1] |= _usb_mouse_rel->isOffline() ? PROTO::PONG::MOUSE_OFFLINE : 0;
 			response[2] |= PROTO::OUTPUTS1::MOUSE::USB_REL;
 		} // TODO: ps2
 #		ifdef AUM
