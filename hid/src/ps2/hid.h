@@ -80,12 +80,12 @@ class Ps2Keyboard {
 		}
 
 		KeyboardLedsState getLeds() {
-			KeyboardLedsState result;
-
 			periodic();
-			result.caps = _leds & 0b00000100;
-			result.scroll = _leds & 0b00000001;
-			result.num = _leds & 0b00000010;
+			KeyboardLedsState result = {
+				.caps = _leds & 0b00000100,
+				.scroll = _leds & 0b00000001,
+				.num = _leds & 0b00000010,
+			};
 			return result;
 		}
 

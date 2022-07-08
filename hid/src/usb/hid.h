@@ -107,10 +107,11 @@ class UsbKeyboard {
 
 		KeyboardLedsState getLeds() {
 			uint8_t leds = _kbd.getLeds();
-			KeyboardLedsState result;
-			result.caps =  leds & LED_CAPS_LOCK;
-			result.scroll = leds & LED_SCROLL_LOCK;
-			result.num = leds & LED_NUM_LOCK;
+			KeyboardLedsState result = {
+				.caps =  leds & LED_CAPS_LOCK,
+				.scroll = leds & LED_SCROLL_LOCK,
+				.num = leds & LED_NUM_LOCK,
+			};
 			return result;
 		}
 

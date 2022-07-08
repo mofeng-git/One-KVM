@@ -21,8 +21,8 @@
 
 #pragma once
 
-typedef struct
-{
+
+typedef struct {
     bool caps;
     bool scroll;
     bool num;
