@@ -25,6 +25,7 @@
 #include <Arduino.h>
 #include <HID-Project.h>
 
+#include "keyboard.h"
 #include "../tools.h"
 #ifdef AUM
 #	include "../aum.h"
@@ -104,12 +105,12 @@ class UsbKeyboard {
 
 		CLS_IS_OFFLINE(_kbd)
 
-		uint8_t getLedsAs(uint8_t caps, uint8_t scroll, uint8_t num) {
+		KeyboardLedsState getLeds() {
 			uint8_t leds = _kbd.getLeds();
-			uint8_t result = 0;
-			if (leds & LED_CAPS_LOCK) result |= caps;
-			if (leds & LED_SCROLL_LOCK) result |= scroll;
-			if (leds & LED_NUM_LOCK) result |= num;
+			KeyboardLedsState result;
+			result.caps =  leds & LED_CAPS_LOCK;
+			result.scroll = leds & LED_SCROLL_LOCK;
+			result.num = leds & LED_NUM_LOCK;
 			return result;
 		}
 

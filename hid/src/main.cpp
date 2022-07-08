@@ -285,11 +285,17 @@ static void _sendResponse(uint8_t code) {
 #		endif
 		if (_usb_kbd) {
 			response[1] |= _usb_kbd->isOffline() ? PROTO::PONG::KEYBOARD_OFFLINE : 0;
-			response[1] |= _usb_kbd->getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM);
+			KeyboardLedsState leds = _usb_kbd->getLeds();
+			response[1] |= leds.caps ? PROTO::PONG::CAPS : 0;
+			response[1] |= leds.num ? PROTO::PONG::NUM : 0;
+			response[1] |= leds.scroll ? PROTO::PONG::SCROLL : 0;
 			response[2] |= PROTO::OUTPUTS1::KEYBOARD::USB;
 		} else if (_ps2_kbd) {
 			response[1] |= _ps2_kbd->isOffline() ? PROTO::PONG::KEYBOARD_OFFLINE : 0;
-			response[1] |= _ps2_kbd->getLedsAs(PROTO::PONG::CAPS, PROTO::PONG::SCROLL, PROTO::PONG::NUM);
+			KeyboardLedsState leds = _usb_kbd->getLeds();
+			response[1] |= leds.caps ? PROTO::PONG::CAPS : 0;
+			response[1] |= leds.num ? PROTO::PONG::NUM : 0;
+			response[1] |= leds.scroll ? PROTO::PONG::SCROLL : 0;
 			response[2] |= PROTO::OUTPUTS1::KEYBOARD::PS2;
 		}
 		if (_usb_mouse_abs) {
