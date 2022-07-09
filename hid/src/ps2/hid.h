@@ -32,21 +32,21 @@
 // #define HID_PS2_KBD_DATA_PIN		5
 
 
-class Ps2Keyboard {
+class Ps2Keyboard : public DRIVERS::Keyboard {
 	// https://wiki.osdev.org/PS/2_Keyboard
 
 	public:
-		Ps2Keyboard() : _dev(HID_PS2_KBD_CLOCK_PIN, HID_PS2_KBD_DATA_PIN) {}
+		Ps2Keyboard() : DRIVERS::Keyboard(DRIVERS::PS2_KEYBOARD), _dev(HID_PS2_KBD_CLOCK_PIN, HID_PS2_KBD_DATA_PIN) {}
 
-		void begin() {
+		void begin() override {
 			_dev.keyboard_init();
 		}
 
-		void periodic() {
+		void periodic() override {
 			_dev.keyboard_handle(&_leds);
 		}
 
-		void sendKey(uint8_t code, bool state) {
+		void sendKey(uint8_t code, bool state) override {
 			Ps2KeyType ps2_type;
 			uint8_t ps2_code;
 
@@ -75,11 +75,11 @@ class Ps2Keyboard {
 			}
 		}
 
-		bool isOffline() {
+		bool isOffline() override {
 			return false;
 		}
 
-		KeyboardLedsState getLeds() {
+		KeyboardLedsState getLeds() override {
 			periodic();
 			KeyboardLedsState result = {
 				.caps = _leds & 0b00000100,

@@ -25,18 +25,21 @@
 
 namespace DRIVERS {
 
-    enum type {
-        USB_MOUSE_ABSOLUTE,
-        USB_MOUSE_RELATIVE,
-        USB_MOUSE_ABSOLUTE_WIN98,
-    };
+	enum type {
+		DUMMY = 0,
+		USB_MOUSE_ABSOLUTE,
+		USB_MOUSE_RELATIVE,
+		USB_MOUSE_ABSOLUTE_WIN98,
+		USB_KEYBOARD,
+		PS2_KEYBOARD,
+	};
 
-    class Driver {
-    public:
-        Driver(type _type) : _type(_type) {}
-        uint8_t getType() { return _type; }
+	class Driver {
+	public:
+		Driver(type _type) : _type(_type) {}
+		uint8_t getType() { return _type; }
 
-    private:
-        type _type;
-    };
+	private:
+		type _type;
+	};
 }

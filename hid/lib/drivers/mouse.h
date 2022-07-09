@@ -26,7 +26,7 @@
 
 namespace DRIVERS {
 
-    class Mouse : public Driver {
-        using Driver::Driver;
-    };
+	class Mouse : public Driver {
+		using Driver::Driver;
+	};
 }

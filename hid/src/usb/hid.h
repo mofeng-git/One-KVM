@@ -69,15 +69,15 @@ using namespace DRIVERS;
 
 #endif
 
-class UsbKeyboard {
+class UsbKeyboard : public DRIVERS::Keyboard {
 	public:
-		UsbKeyboard() {}
+		UsbKeyboard() : DRIVERS::Keyboard(DRIVERS::USB_KEYBOARD) {}
 
-		void begin() {
+		void begin() override {
 			_kbd.begin();
 		}
 
-		void periodic() {
+		void periodic() override {
 #			ifdef HID_USB_CHECK_ENDPOINT
 			static unsigned long prev_ts = 0;
 			if (is_micros_timed_out(prev_ts, 50000)) {
@@ -92,11 +92,11 @@ class UsbKeyboard {
 #			endif
 		}
 
-		void clear() {
+		void clear() override {
 			_kbd.releaseAll();
 		}
 
-		void sendKey(uint8_t code, bool state) {
+		void sendKey(uint8_t code, bool state) override {
 			KeyboardKeycode usb_code = keymapUsb(code);
 			if (usb_code != KEY_ERROR_UNDEFINED) {
 				if (state ? _kbd.add(usb_code) : _kbd.remove(usb_code)) {
@@ -107,7 +107,7 @@ class UsbKeyboard {
 
 		CLS_IS_OFFLINE(_kbd)
 
-		KeyboardLedsState getLeds() {
+		KeyboardLedsState getLeds() override {
 			uint8_t leds = _kbd.getLeds();
 			KeyboardLedsState result = {
 				.caps =  leds & LED_CAPS_LOCK,
