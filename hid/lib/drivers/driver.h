@@ -22,13 +22,21 @@
 #pragma once
 
 #include <stdint.h>
-#include "driver.h"
 
 namespace DRIVERS {
 
-    typedef struct {
-        bool caps;
-        bool scroll;
-        bool num;
-    } KeyboardLedsState;
+    enum type {
+        USB_MOUSE_ABSOLUTE,
+        USB_MOUSE_RELATIVE,
+        USB_MOUSE_ABSOLUTE_WIN98,
+    };
+
+    class Driver {
+    public:
+        Driver(type _type) : _type(_type) {}
+        uint8_t getType() { return _type; }
+
+    private:
+        type _type;
+    };
 }

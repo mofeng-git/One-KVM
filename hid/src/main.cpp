@@ -125,7 +125,11 @@ static void _initOutputs() {
 	switch (mouse) {
 #	ifdef HID_WITH_USB
 		case PROTO::OUTPUTS1::MOUSE::USB_ABS:
-		case PROTO::OUTPUTS1::MOUSE::USB_WIN98: _usb_mouse_abs = new UsbMouseAbsolute(); break;
+			_usb_mouse_abs = new UsbMouseAbsolute(DRIVERS::USB_MOUSE_ABSOLUTE);
+			break;
+		case PROTO::OUTPUTS1::MOUSE::USB_WIN98:
+			_usb_mouse_abs = new UsbMouseAbsolute(DRIVERS::USB_MOUSE_ABSOLUTE_WIN98);
+			break;
 		case PROTO::OUTPUTS1::MOUSE::USB_REL: _usb_mouse_rel = new UsbMouseRelative(); break;
 #	endif
 	}
@@ -147,7 +151,7 @@ static void _initOutputs() {
 #		ifdef HID_WITH_USB_WIN98
 		case PROTO::OUTPUTS1::MOUSE::USB_WIN98:
 #		endif
-			_usb_mouse_abs->begin(mouse == PROTO::OUTPUTS1::MOUSE::USB_WIN98);
+			_usb_mouse_abs->begin();
 			break;
 		case PROTO::OUTPUTS1::MOUSE::USB_REL: _usb_mouse_rel->begin(); break;
 #	endif
@@ -299,8 +303,8 @@ static void _sendResponse(uint8_t code) {
 			response[2] |= PROTO::OUTPUTS1::KEYBOARD::PS2;
 		}
 		if (_usb_mouse_abs) {
-			response[1] |= (_usb_mouse_abs->isOffline() ? PROTO::PONG::MOUSE_OFFLINE : 0);
-			if (_usb_mouse_abs->isWin98FixEnabled()) {
+			response[1] |= _usb_mouse_abs->isOffline() ? PROTO::PONG::MOUSE_OFFLINE : 0;
+			if (_usb_mouse_abs->getType() == DRIVERS::USB_MOUSE_ABSOLUTE_WIN98) {
 				response[2] |= PROTO::OUTPUTS1::MOUSE::USB_WIN98;
 			} else {
 				response[2] |= PROTO::OUTPUTS1::MOUSE::USB_ABS;

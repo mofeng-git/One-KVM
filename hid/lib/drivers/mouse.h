@@ -26,9 +26,7 @@
 
 namespace DRIVERS {
 
-    typedef struct {
-        bool caps;
-        bool scroll;
-        bool num;
-    } KeyboardLedsState;
+    class Mouse : public Driver {
+        using Driver::Driver;
+    };
 }

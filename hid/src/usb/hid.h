@@ -26,12 +26,14 @@
 #include <HID-Project.h>
 
 #include "keyboard.h"
+#include "mouse.h"
 #include "../tools.h"
 #ifdef AUM
 #	include "../aum.h"
 #endif
 #include "keymap.h"
 
+using namespace DRIVERS;
 
 // -----------------------------------------------------------------------------
 #ifdef HID_USB_CHECK_ENDPOINT
@@ -147,17 +149,13 @@ class UsbKeyboard {
 			if (down_select) _sendButton(MOUSE_NEXT, down_state); \
 		}
 
-class UsbMouseAbsolute {
+class UsbMouseAbsolute : public DRIVERS::Mouse {
 	public:
-		UsbMouseAbsolute() {}
+		UsbMouseAbsolute(DRIVERS::type _type) : Mouse(_type) {}
 
-		void begin(bool win98_fix) {
+		void begin() {
 			_mouse.begin();
-			_mouse.setWin98FixEnabled(win98_fix);
-		}
-
-		bool isWin98FixEnabled() {
-			return _mouse.isWin98FixEnabled();
+			_mouse.setWin98FixEnabled(getType() == DRIVERS::USB_MOUSE_ABSOLUTE_WIN98);
 		}
 
 		void clear() {
