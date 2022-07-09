@@ -19,12 +19,13 @@
 #                                                                            #
 *****************************************************************************/
 
+
 #pragma once
 
 #include <stdint.h>
 
-namespace DRIVERS {
 
+namespace DRIVERS {
 	enum type {
 		DUMMY = 0,
 		USB_MOUSE_ABSOLUTE,

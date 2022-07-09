@@ -19,19 +19,20 @@
 #                                                                            #
 *****************************************************************************/
 
+
 #pragma once
 
 #include <stdint.h>
+
 #include "driver.h"
 
-namespace DRIVERS {
 
+namespace DRIVERS {
 	typedef struct {
 		bool caps;
 		bool scroll;
 		bool num;
 	} KeyboardLedsState;
-
 
 	struct Keyboard : public Driver {
 		using Driver::Driver;
@@ -55,10 +56,12 @@ namespace DRIVERS {
 		/**
 		* False if online or unknown. Otherwise true.
 		*/
-		virtual bool isOffline() { return false; }
+		virtual bool isOffline() {
+			return false;
+		}
 	
 		virtual KeyboardLedsState getLeds() {
-			KeyboardLedsState result = {};
+			KeyboardLedsState result = {0};
 			return result;
 		}
 

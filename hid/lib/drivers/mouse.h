@@ -19,13 +19,15 @@
 #                                                                            #
 *****************************************************************************/
 
+
 #pragma once
 
 #include <stdint.h>
+
 #include "driver.h"
 
-namespace DRIVERS {
 
+namespace DRIVERS {
 	class Mouse : public Driver {
 		using Driver::Driver;
 	};

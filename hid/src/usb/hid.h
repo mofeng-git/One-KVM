@@ -69,6 +69,7 @@ using namespace DRIVERS;
 
 #endif
 
+
 class UsbKeyboard : public DRIVERS::Keyboard {
 	public:
 		UsbKeyboard() : DRIVERS::Keyboard(DRIVERS::USB_KEYBOARD) {}
@@ -110,7 +111,7 @@ class UsbKeyboard : public DRIVERS::Keyboard {
 		KeyboardLedsState getLeds() override {
 			uint8_t leds = _kbd.getLeds();
 			KeyboardLedsState result = {
-				.caps =  leds & LED_CAPS_LOCK,
+				.caps = leds & LED_CAPS_LOCK,
 				.scroll = leds & LED_SCROLL_LOCK,
 				.num = leds & LED_NUM_LOCK,
 			};
