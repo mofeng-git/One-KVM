@@ -1,0 +1,19 @@
+name: HID CI
+
+on:
+    push:
+        branches: [master]
+    pull_request:
+        branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: python
+    steps:
+      - uses: actions/checkout@v3
+      - name: Prepare platformio
+        run: pip install platformio
+      - name: Build all
+        run: make -C hid _build_all
