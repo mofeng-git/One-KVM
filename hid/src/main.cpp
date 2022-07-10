@@ -49,10 +49,8 @@
 
 
 // -----------------------------------------------------------------------------
-static UsbMouseAbsolute *_usb_mouse_abs = NULL;
-static UsbMouseRelative *_usb_mouse_rel = NULL;
-
 static DRIVERS::Keyboard *_kbd = nullptr;
+static DRIVERS::Mouse * _mouse = nullptr;
 
 #ifdef HID_DYNAMIC
 static bool _reset_required = false;
@@ -131,34 +129,24 @@ static void _initOutputs() {
 	switch (mouse) {
 #	ifdef HID_WITH_USB
 		case PROTO::OUTPUTS1::MOUSE::USB_ABS:
-			_usb_mouse_abs = new UsbMouseAbsolute(DRIVERS::USB_MOUSE_ABSOLUTE);
+			_mouse = new UsbMouseAbsolute(DRIVERS::USB_MOUSE_ABSOLUTE);
 			break;
 		case PROTO::OUTPUTS1::MOUSE::USB_WIN98:
-			_usb_mouse_abs = new UsbMouseAbsolute(DRIVERS::USB_MOUSE_ABSOLUTE_WIN98);
+			_mouse = new UsbMouseAbsolute(DRIVERS::USB_MOUSE_ABSOLUTE_WIN98);
 			break;
 		case PROTO::OUTPUTS1::MOUSE::USB_REL:
-			_usb_mouse_rel = new UsbMouseRelative();
+			_mouse = new UsbMouseRelative();
 			break;
 #	endif
+		default:
+			_mouse = new DRIVERS::Mouse(DRIVERS::DUMMY);
+			break;
 	}
 
 	USBDevice.attach();
 
 	_kbd->begin();
-
-	switch (mouse) {
-#	ifdef HID_WITH_USB
-		case PROTO::OUTPUTS1::MOUSE::USB_ABS:
-#		ifdef HID_WITH_USB_WIN98
-		case PROTO::OUTPUTS1::MOUSE::USB_WIN98:
-#		endif
-			_usb_mouse_abs->begin();
-			break;
-		case PROTO::OUTPUTS1::MOUSE::USB_REL:
-			_usb_mouse_rel->begin();
-			break;
-#	endif
-	}
+	_mouse->begin();
 }
 
 
@@ -185,11 +173,7 @@ static void _cmdSetConnected(const uint8_t *data) { // 1 byte
 
 static void _cmdClearHid(const uint8_t *_) { // 0 bytes
 	_kbd->clear();
-	if (_usb_mouse_abs) {
-		_usb_mouse_abs->clear();
-	} else if (_usb_mouse_rel) {
-		_usb_mouse_rel->clear();
-	}
+	_mouse->clear();
 }
 
 static void _cmdKeyEvent(const uint8_t *data) { // 2 bytes
@@ -200,46 +184,31 @@ static void _cmdMouseButtonEvent(const uint8_t *data) { // 2 bytes
 #	define MOUSE_PAIR(_state, _button) \
 		_state & PROTO::CMD::MOUSE::_button::SELECT, \
 		_state & PROTO::CMD::MOUSE::_button::STATE
-#	define SEND_BUTTONS(_hid) \
-		_hid->sendButtons( \
-			MOUSE_PAIR(data[0], LEFT), \
-			MOUSE_PAIR(data[0], RIGHT), \
-			MOUSE_PAIR(data[0], MIDDLE), \
-			MOUSE_PAIR(data[1], EXTRA_UP), \
-			MOUSE_PAIR(data[1], EXTRA_DOWN) \
+	_mouse->sendButtons(
+			MOUSE_PAIR(data[0], LEFT),
+			MOUSE_PAIR(data[0], RIGHT),
+			MOUSE_PAIR(data[0], MIDDLE),
+			MOUSE_PAIR(data[1], EXTRA_UP),
+			MOUSE_PAIR(data[1], EXTRA_DOWN)
 		);
-	if (_usb_mouse_abs) {
-		SEND_BUTTONS(_usb_mouse_abs);
-	} else if (_usb_mouse_rel) {
-		SEND_BUTTONS(_usb_mouse_rel);
-	}
-#	undef SEND_BUTTONS
 #	undef MOUSE_PAIR
 }
 
 static void _cmdMouseMoveEvent(const uint8_t *data) { // 4 bytes
 	// See /kvmd/apps/otg/hid/keyboard.py for details
-	if (_usb_mouse_abs) {
-		_usb_mouse_abs->sendMove(
+	_mouse->sendMove(
 			PROTO::merge8_int(data[0], data[1]),
 			PROTO::merge8_int(data[2], data[3])
 		);
-	}
 }
 
 static void _cmdMouseRelativeEvent(const uint8_t *data) { // 2 bytes
-	if (_usb_mouse_rel) {
-		_usb_mouse_rel->sendRelative(data[0], data[1]);
-	}
+	_mouse->sendRelative(data[0], data[1]);
 }
 
 static void _cmdMouseWheelEvent(const uint8_t *data) { // 2 bytes
 	// Y only, X is not supported
-	if (_usb_mouse_abs) {
-		_usb_mouse_abs->sendWheel(data[1]);
-	} else if (_usb_mouse_rel) {
-		_usb_mouse_rel->sendWheel(data[1]);
-	}
+	_mouse->sendWheel(data[1]);
 }
 
 static uint8_t _handleRequest(const uint8_t *data) { // 8 bytes
@@ -299,16 +268,20 @@ static void _sendResponse(uint8_t code) {
 					break;			
 			}	
 		}
-		if (_usb_mouse_abs) {
-			response[1] |= (_usb_mouse_abs->isOffline() ? PROTO::PONG::MOUSE_OFFLINE : 0);
-			if (_usb_mouse_abs->getType() == DRIVERS::USB_MOUSE_ABSOLUTE_WIN98) {
-				response[2] |= PROTO::OUTPUTS1::MOUSE::USB_WIN98;
-			} else {
-				response[2] |= PROTO::OUTPUTS1::MOUSE::USB_ABS;
+		if(_mouse->getType() != DRIVERS::DUMMY) {
+			response[1] |= (_mouse->isOffline() ? PROTO::PONG::MOUSE_OFFLINE : 0);
+			switch (_mouse->getType())
+			{
+				case DRIVERS::USB_MOUSE_ABSOLUTE_WIN98:
+					response[2] |= PROTO::OUTPUTS1::MOUSE::USB_WIN98;
+					break;
+				case DRIVERS::USB_MOUSE_ABSOLUTE:
+					response[2] |= PROTO::OUTPUTS1::MOUSE::USB_ABS;
+					break;
+				case DRIVERS::USB_MOUSE_RELATIVE:
+					response[2] |= PROTO::OUTPUTS1::MOUSE::USB_REL;
+					break;
 			}
-		} else if (_usb_mouse_rel) {
-			response[1] |= (_usb_mouse_rel->isOffline() ? PROTO::PONG::MOUSE_OFFLINE : 0);
-			response[2] |= PROTO::OUTPUTS1::MOUSE::USB_REL;
 		} // TODO: ps2
 #		ifdef AUM
 		response[3] |= PROTO::OUTPUTS2::CONNECTABLE;

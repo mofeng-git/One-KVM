@@ -45,7 +45,7 @@ using namespace DRIVERS;
 #		define CHECK_AUM_USB
 #	endif
 #	define CLS_IS_OFFLINE(_hid) \
-		bool isOffline() { \
+		bool isOffline() override { \
 			CHECK_AUM_USB; \
 			uint8_t ep = _hid.getPluggedEndpoint(); \
 			uint8_t intr_state = SREG; \
@@ -62,13 +62,12 @@ using namespace DRIVERS;
 
 #else
 #	define CLS_IS_OFFLINE(_hid) \
-		bool isOffline() { \
+		bool isOffline() override { \
 			return false; \
 		}
 #	define CHECK_HID_EP
 
 #endif
-
 
 class UsbKeyboard : public DRIVERS::Keyboard {
 	public:
@@ -142,7 +141,7 @@ class UsbKeyboard : public DRIVERS::Keyboard {
 			bool middle_select, bool middle_state, \
 			bool up_select, bool up_state, \
 			bool down_select, bool down_state \
-		) { \
+		) override { \
 			if (left_select) _sendButton(MOUSE_LEFT, left_state); \
 			if (right_select) _sendButton(MOUSE_RIGHT, right_state); \
 			if (middle_select) _sendButton(MOUSE_MIDDLE, middle_state); \
@@ -154,23 +153,23 @@ class UsbMouseAbsolute : public DRIVERS::Mouse {
 	public:
 		UsbMouseAbsolute(DRIVERS::type _type) : Mouse(_type) {}
 
-		void begin() {
+		void begin() override {
 			_mouse.begin();
 			_mouse.setWin98FixEnabled(getType() == DRIVERS::USB_MOUSE_ABSOLUTE_WIN98);
 		}
 
-		void clear() {
+		void clear() override {
 			_mouse.releaseAll();
 		}
 
 		CLS_SEND_BUTTONS
 
-		void sendMove(int x, int y) {
+		void sendMove(int x, int y) override {
 			CHECK_HID_EP;
 			_mouse.moveTo(x, y);
 		}
 
-		void sendWheel(int delta_y) {
+		void sendWheel(int delta_y) override {
 			// delta_x is not supported by hid-project now
 			CHECK_HID_EP;
 			_mouse.move(0, 0, delta_y);
@@ -188,26 +187,26 @@ class UsbMouseAbsolute : public DRIVERS::Mouse {
 		}
 };
 
-class UsbMouseRelative {
+class UsbMouseRelative : public DRIVERS::Mouse{
 	public:
-		UsbMouseRelative() {}
+		UsbMouseRelative() : DRIVERS::Mouse(DRIVERS::USB_MOUSE_RELATIVE) {}
 
-		void begin() {
+		void begin() override {
 			_mouse.begin();
 		}
 
-		void clear() {
+		void clear() override {
 			_mouse.releaseAll();
 		}
 
 		CLS_SEND_BUTTONS
 
-		void sendRelative(int x, int y) {
+		void sendRelative(int x, int y) override {
 			CHECK_HID_EP;
 			_mouse.move(x, y, 0);
 		}
 
-		void sendWheel(int delta_y) {
+		void sendWheel(int delta_y) override {
 			// delta_x is not supported by hid-project now
 			CHECK_HID_EP;
 			_mouse.move(0, 0, delta_y);
