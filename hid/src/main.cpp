@@ -268,10 +268,9 @@ static void _sendResponse(uint8_t code) {
 					break;			
 			}	
 		}
-		if(_mouse->getType() != DRIVERS::DUMMY) {
+		if (_mouse->getType() != DRIVERS::DUMMY) {
 			response[1] |= (_mouse->isOffline() ? PROTO::PONG::MOUSE_OFFLINE : 0);
-			switch (_mouse->getType())
-			{
+			switch (_mouse->getType()) {
 				case DRIVERS::USB_MOUSE_ABSOLUTE_WIN98:
 					response[2] |= PROTO::OUTPUTS1::MOUSE::USB_WIN98;
 					break;

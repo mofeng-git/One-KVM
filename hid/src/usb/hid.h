@@ -187,7 +187,7 @@ class UsbMouseAbsolute : public DRIVERS::Mouse {
 		}
 };
 
-class UsbMouseRelative : public DRIVERS::Mouse{
+class UsbMouseRelative : public DRIVERS::Mouse {
 	public:
 		UsbMouseRelative() : DRIVERS::Mouse(DRIVERS::USB_MOUSE_RELATIVE) {}
 
