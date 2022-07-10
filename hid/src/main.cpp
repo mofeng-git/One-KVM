@@ -44,9 +44,8 @@
 #ifdef AUM
 #	include "aum.h"
 #endif
-#include "usb/hid.h"
-#include "ps2/hid.h"
 
+#include "factory.h"
 
 // -----------------------------------------------------------------------------
 static DRIVERS::Keyboard *_kbd = nullptr;
@@ -110,36 +109,30 @@ static void _initOutputs() {
 
 	uint8_t kbd = outputs & PROTO::OUTPUTS1::KEYBOARD::MASK;
 	switch (kbd) {
-#	ifdef HID_WITH_USB
 		case PROTO::OUTPUTS1::KEYBOARD::USB:
-			_kbd = new UsbKeyboard();
+			_kbd = DRIVERS::Factory::makeKeyboard(DRIVERS::USB_KEYBOARD);
 			break;
-#	endif
-#	ifdef HID_WITH_PS2
 		case PROTO::OUTPUTS1::KEYBOARD::PS2:
-			_kbd = new Ps2Keyboard();
+			_kbd = DRIVERS::Factory::makeKeyboard(DRIVERS::PS2_KEYBOARD);
 			break;
-#	endif
 		default:
-			_kbd = new DRIVERS::Keyboard(DRIVERS::DUMMY);
+			_kbd = DRIVERS::Factory::makeKeyboard(DRIVERS::DUMMY);
 			break;
 	}
 
 	uint8_t mouse = outputs & PROTO::OUTPUTS1::MOUSE::MASK;
 	switch (mouse) {
-#	ifdef HID_WITH_USB
 		case PROTO::OUTPUTS1::MOUSE::USB_ABS:
-			_mouse = new UsbMouseAbsolute(DRIVERS::USB_MOUSE_ABSOLUTE);
+			_mouse = DRIVERS::Factory::makeMouse(DRIVERS::USB_MOUSE_ABSOLUTE);
 			break;
 		case PROTO::OUTPUTS1::MOUSE::USB_WIN98:
-			_mouse = new UsbMouseAbsolute(DRIVERS::USB_MOUSE_ABSOLUTE_WIN98);
+			_mouse = DRIVERS::Factory::makeMouse(DRIVERS::USB_MOUSE_ABSOLUTE_WIN98);
 			break;
 		case PROTO::OUTPUTS1::MOUSE::USB_REL:
-			_mouse = new UsbMouseRelative();
+			_mouse = DRIVERS::Factory::makeMouse(DRIVERS::USB_MOUSE_RELATIVE);
 			break;
-#	endif
 		default:
-			_mouse = new DRIVERS::Mouse(DRIVERS::DUMMY);
+			_mouse = DRIVERS::Factory::makeMouse(DRIVERS::DUMMY);
 			break;
 	}
 
@@ -255,7 +248,7 @@ static void _sendResponse(uint8_t code) {
 #		endif
 		if (_kbd->getType() != DRIVERS::DUMMY) {
 			response[1] |= (_kbd->isOffline() ? PROTO::PONG::KEYBOARD_OFFLINE : 0);
-			KeyboardLedsState leds = _kbd->getLeds();
+			DRIVERS::KeyboardLedsState leds = _kbd->getLeds();
 			response[1] |= (leds.caps ? PROTO::PONG::CAPS : 0);
 			response[1] |= (leds.num ? PROTO::PONG::NUM : 0);
 			response[1] |= (leds.scroll ? PROTO::PONG::SCROLL : 0);

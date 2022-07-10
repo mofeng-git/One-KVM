@@ -27,9 +27,9 @@
 
 #include "keyboard.h"
 #include "mouse.h"
-#include "../tools.h"
+#include "tools.h"
 #ifdef AUM
-#	include "../aum.h"
+#	include "aum.h"
 #endif
 #include "keymap.h"
 
