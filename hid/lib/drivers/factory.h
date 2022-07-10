@@ -24,8 +24,8 @@
 #include "keyboard.h"
 #include "mouse.h"
 
-namespace DRIVERS {
 
+namespace DRIVERS {
 	struct Factory {
 		static Keyboard *makeKeyboard(type _type);
 		static Mouse *makeMouse(type _type);

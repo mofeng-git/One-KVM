@@ -22,9 +22,6 @@
 
 #include "spi.h"
 
-#include <Arduino.h>
-#include <SPI.h>
-
 
 static volatile uint8_t _spi_in[8] = {0};
 static volatile uint8_t _spi_in_index = 0;

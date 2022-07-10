@@ -69,6 +69,7 @@ using namespace DRIVERS;
 
 #endif
 
+
 class UsbKeyboard : public DRIVERS::Keyboard {
 	public:
 		UsbKeyboard() : DRIVERS::Keyboard(DRIVERS::USB_KEYBOARD) {}

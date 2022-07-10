@@ -19,7 +19,9 @@
 #                                                                            #
 *****************************************************************************/
 
-#include <Arduino.h>
+
+#include "tools.h"
+
 
 bool is_micros_timed_out(unsigned long start_ts, unsigned long timeout) {
 	unsigned long now = micros();

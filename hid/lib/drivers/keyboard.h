@@ -64,6 +64,5 @@ namespace DRIVERS {
 			KeyboardLedsState result = {0};
 			return result;
 		}
-
 	};
 }

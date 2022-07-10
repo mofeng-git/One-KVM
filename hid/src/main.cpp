@@ -178,21 +178,21 @@ static void _cmdMouseButtonEvent(const uint8_t *data) { // 2 bytes
 		_state & PROTO::CMD::MOUSE::_button::SELECT, \
 		_state & PROTO::CMD::MOUSE::_button::STATE
 	_mouse->sendButtons(
-			MOUSE_PAIR(data[0], LEFT),
-			MOUSE_PAIR(data[0], RIGHT),
-			MOUSE_PAIR(data[0], MIDDLE),
-			MOUSE_PAIR(data[1], EXTRA_UP),
-			MOUSE_PAIR(data[1], EXTRA_DOWN)
-		);
+		MOUSE_PAIR(data[0], LEFT),
+		MOUSE_PAIR(data[0], RIGHT),
+		MOUSE_PAIR(data[0], MIDDLE),
+		MOUSE_PAIR(data[1], EXTRA_UP),
+		MOUSE_PAIR(data[1], EXTRA_DOWN)
+	);
 #	undef MOUSE_PAIR
 }
 
 static void _cmdMouseMoveEvent(const uint8_t *data) { // 4 bytes
 	// See /kvmd/apps/otg/hid/keyboard.py for details
 	_mouse->sendMove(
-			PROTO::merge8_int(data[0], data[1]),
-			PROTO::merge8_int(data[2], data[3])
-		);
+		PROTO::merge8_int(data[0], data[1]),
+		PROTO::merge8_int(data[2], data[3])
+	);
 }
 
 static void _cmdMouseRelativeEvent(const uint8_t *data) { // 2 bytes
