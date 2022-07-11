@@ -23,6 +23,7 @@
 #include "usb/hid.h"
 #include "ps2/hid.h"
 #include "factory.h"
+#include "eeprom.h"
 
 
 namespace DRIVERS {
@@ -56,4 +57,16 @@ namespace DRIVERS {
 				return new Mouse(DRIVERS::DUMMY);
 		}
 	}
+	Storage* Factory::makeStorage(type _type) {
+		switch (_type)
+		{
+#			ifdef HID_DYNAMIC
+			case NON_VOLATILE_STORAGE:
+				return new Eeprom(DRIVERS::NON_VOLATILE_STORAGE);
+#			endif
+			default:
+				return new Storage(DRIVERS::DUMMY);
+        }
+	}
+
 }

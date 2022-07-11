@@ -19,29 +19,22 @@
 #                                                                            #
 *****************************************************************************/
 
-
-#pragma once
-
-#include <stdint.h>
-
+#include "storage.h"
+#ifdef HID_DYNAMIC
+#include <avr/eeprom.h>
+#endif
 
 namespace DRIVERS {
-	enum type {
-		DUMMY = 0,
-		USB_MOUSE_ABSOLUTE,
-		USB_MOUSE_RELATIVE,
-		USB_MOUSE_ABSOLUTE_WIN98,
-		USB_KEYBOARD,
-		PS2_KEYBOARD,
-		NON_VOLATILE_STORAGE,
-	};
 
-	class Driver {
-	public:
-		Driver(type _type) : _type(_type) {}
-		uint8_t getType() { return _type; }
+	struct Eeprom : public Storage {
+		using Storage::Storage;
 
-	private:
-		type _type;
+		void read_block (void *_dst, const void *_src, size_t _n) override {
+			eeprom_read_block(_dst, _src, _n);
+		}
+
+		void update_block (const void *_src, void *_dst, size_t _n) override {
+			eeprom_update_block(_src, _dst, _n);
+		}
 	};
 }

@@ -32,9 +32,6 @@
 
 
 #include <Arduino.h>
-#ifdef HID_DYNAMIC
-#	include <avr/eeprom.h>
-#endif
 
 #include "tools.h"
 #include "proto.h"
@@ -49,14 +46,15 @@
 
 // -----------------------------------------------------------------------------
 static DRIVERS::Keyboard *_kbd = nullptr;
-static DRIVERS::Mouse * _mouse = nullptr;
+static DRIVERS::Mouse *_mouse = nullptr;
 
 #ifdef HID_DYNAMIC
 static bool _reset_required = false;
+static DRIVERS::Storage *_storage = nullptr;
 
 static int _readOutputs(void) {
 	uint8_t data[8];
-	eeprom_read_block(data, 0, 8);
+	_storage->read_block(data, 0, 8);
 	if (data[0] != PROTO::MAGIC || PROTO::crc16(data, 6) != PROTO::merge8(data[6], data[7])) {
 		return -1;
 	}
@@ -75,13 +73,14 @@ static void _writeOutputs(uint8_t mask, uint8_t outputs, bool force) {
 	data[0] = PROTO::MAGIC;
 	data[1] = (old & ~mask) | outputs;
 	PROTO::split16(PROTO::crc16(data, 6), &data[6], &data[7]);
-	eeprom_update_block(data, 0, 8);
+	_storage->read_block(data, 0, 8);
 }
 #endif
 
 static void _initOutputs() {
 	int outputs;
 #	ifdef HID_DYNAMIC
+	_storage = DRIVERS::Factory::makeStorage(DRIVERS::NON_VOLATILE_STORAGE);
 	outputs = _readOutputs();
 	if (outputs < 0) {
 #	endif

@@ -23,11 +23,13 @@
 
 #include "keyboard.h"
 #include "mouse.h"
+#include "storage.h"
 
 
 namespace DRIVERS {
 	struct Factory {
 		static Keyboard *makeKeyboard(type _type);
 		static Mouse *makeMouse(type _type);
+		static Storage* makeStorage(type _type);
 	};
 }
