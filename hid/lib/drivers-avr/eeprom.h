@@ -19,22 +19,22 @@
 #                                                                            #
 *****************************************************************************/
 
-#include "storage.h"
-#ifdef HID_DYNAMIC
+
 #include <avr/eeprom.h>
-#endif
+
+#include "storage.h"
+
 
 namespace DRIVERS {
-
 	struct Eeprom : public Storage {
 		using Storage::Storage;
 
-		void read_block (void *_dst, const void *_src, size_t _n) override {
-			eeprom_read_block(_dst, _src, _n);
+		void readBlock(void *dest, const void *src, size_t size) override {
+			eeprom_read_block(dest, src, size);
 		}
 
-		void update_block (const void *_src, void *_dst, size_t _n) override {
-			eeprom_update_block(_src, _dst, _n);
+		void updateBlock(const void *src, void *dest, size_t size) override {
+			eeprom_update_block(src, dest, size);
 		}
 	};
 }

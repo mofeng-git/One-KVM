@@ -54,7 +54,7 @@ static DRIVERS::Storage *_storage = nullptr;
 
 static int _readOutputs(void) {
 	uint8_t data[8];
-	_storage->read_block(data, 0, 8);
+	_storage->readBlock(data, 0, 8);
 	if (data[0] != PROTO::MAGIC || PROTO::crc16(data, 6) != PROTO::merge8(data[6], data[7])) {
 		return -1;
 	}
@@ -73,7 +73,7 @@ static void _writeOutputs(uint8_t mask, uint8_t outputs, bool force) {
 	data[0] = PROTO::MAGIC;
 	data[1] = (old & ~mask) | outputs;
 	PROTO::split16(PROTO::crc16(data, 6), &data[6], &data[7]);
-	_storage->read_block(data, 0, 8);
+	_storage->updateBlock(data, 0, 8);
 }
 #endif
 

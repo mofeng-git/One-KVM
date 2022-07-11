@@ -19,16 +19,16 @@
 #                                                                            #
 *****************************************************************************/
 
+
 #pragma once
 
 #include "driver.h"
 
+
 namespace DRIVERS {
-
-
 	struct Storage : public Driver {
 		using Driver::Driver;
-		virtual void read_block (void *_dst, const void *_src, size_t _n) {}
-		virtual void update_block (const void *_src, void *_dst, size_t _n) {}
+		virtual void readBlock(void *dest, const void *src, size_t size) {}
+		virtual void updateBlock(const void *src, void *dest, size_t size) {}
 	};
 }

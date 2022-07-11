@@ -57,9 +57,9 @@ namespace DRIVERS {
 				return new Mouse(DRIVERS::DUMMY);
 		}
 	}
+
 	Storage* Factory::makeStorage(type _type) {
-		switch (_type)
-		{
+		switch (_type) {
 #			ifdef HID_DYNAMIC
 			case NON_VOLATILE_STORAGE:
 				return new Eeprom(DRIVERS::NON_VOLATILE_STORAGE);
