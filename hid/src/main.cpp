@@ -135,7 +135,9 @@ static void _initOutputs() {
 			break;
 	}
 
+#ifdef ARDUINO_ARCH_AVR
 	USBDevice.attach();
+#endif
 
 	_kbd->begin();
 	_mouse->begin();
