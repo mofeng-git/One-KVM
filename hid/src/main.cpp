@@ -334,7 +334,7 @@ int main() {
 			if (index == 7) {
 				_sendResponse(_handleRequest(buffer));
 				index = 0;
-			} else {
+			} else if (buffer[0] == PROTO::MAGIC) {
 				last = micros();
 				++index;
 			}
