@@ -21,15 +21,14 @@
 
 
 #include "usb/hid.h"
-#ifdef HID_WITH_PS2
 #include "ps2/hid.h"
-#endif
 #include "factory.h"
 #include "eeprom.h"
 
 #ifndef ARDUINO_ARCH_AVR
-	#error "Only AVR is supported"
+#	error "Only AVR is supported"
 #endif
+
 
 namespace DRIVERS {
 	Keyboard *Factory::makeKeyboard(type _type) {
