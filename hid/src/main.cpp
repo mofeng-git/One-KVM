@@ -334,7 +334,7 @@ int main() {
 			if (index == 7) {
 				_sendResponse(_handleRequest(buffer));
 				index = 0;
-			} else if (buffer[0] == PROTO::MAGIC) {
+			} else /*if (buffer[0] == PROTO::MAGIC)*/ { // FIXME: See kvmd/kvmd#80
 				last = micros();
 				++index;
 			}
