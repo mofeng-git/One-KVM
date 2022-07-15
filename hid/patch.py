@@ -28,6 +28,7 @@ def _patch(path: str, patch_path: str) -> None:
     assert exists(path)
     flag_path: str = join(path, f".{basename(patch_path)}.done")
     if not exists(flag_path):
+        # TODO check for failure
         env.Execute(f"patch -p1 -d {path} < {patch_path}")
         env.Execute(lambda *_, **__: open(flag_path, "w").close())
 

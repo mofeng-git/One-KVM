@@ -1,17 +1,24 @@
-diff -u -r a/cores/arduino/main.cpp b/cores/arduino/main.cpp
---- a/cores/arduino/main.cpp	2019-05-16 15:52:01.000000000 +0300
-+++ b/cores/arduino/main.cpp	2020-11-17 18:56:01.243474508 +0300
-@@ -30,6 +30,7 @@
- void setupUSB() __attribute__((weak));
- void setupUSB() { }
+diff --git a/cores/arduino/main.cpp b/cores/arduino/main.cpp
+index 434cd40..7aba76f 100644
+--- a/cores/arduino/main.cpp
++++ b/cores/arduino/main.cpp
+@@ -36,15 +36,15 @@ int main(void)
  
-+/*
- int main(void)
- {
- 	init();
-@@ -49,4 +50,5 @@
+ 	initVariant();
+ 
+-#if defined(USBCON)
+-	USBDevice.attach();
+-#endif
++// #if defined(USBCON)
++// 	USBDevice.attach();
++// #endif
+ 	
+ 	setup();
+     
+ 	for (;;) {
+ 		loop();
+-		if (serialEventRun) serialEventRun();
++		// if (serialEventRun) serialEventRun();
+ 	}
          
  	return 0;
- }
-+*/
- 

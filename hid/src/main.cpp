@@ -303,9 +303,7 @@ static void _sendResponse(uint8_t code) {
 #	endif
 }
 
-int main() {
-	init(); // Embedded
-	initVariant(); // Arduino
+void setup() {
 	_initOutputs();
 
 #	ifdef AUM
@@ -314,41 +312,40 @@ int main() {
 
 #	ifdef CMD_SERIAL
 	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
-	unsigned long last = micros();
-	uint8_t buffer[8];
-	uint8_t index = 0;
 #	elif defined(CMD_SPI)
 	spiBegin();
 #	endif
+}
 
-	while (true) {
-#		ifdef AUM
-		aumProxyUsbVbus();
-#		endif
+void loop() {
+#	ifdef AUM
+	aumProxyUsbVbus();
+#	endif
 
-		_kbd->periodic();
+	_kbd->periodic();
 
-#		ifdef CMD_SERIAL
-		if (CMD_SERIAL.available() > 0) {
-			buffer[index] = (uint8_t)CMD_SERIAL.read();
-			if (index == 7) {
-				_sendResponse(_handleRequest(buffer));
-				index = 0;
-			} else /*if (buffer[0] == PROTO::MAGIC)*/ { // FIXME: See kvmd/kvmd#80
-				last = micros();
-				++index;
-			}
-		} else if (index > 0) {
-			if (is_micros_timed_out(last, CMD_SERIAL_TIMEOUT)) {
-				_sendResponse(PROTO::RESP::TIMEOUT_ERROR);
-				index = 0;
-			}
+#	ifdef CMD_SERIAL
+	static unsigned long last = micros();
+	static uint8_t buffer[8];
+	static uint8_t index = 0;
+	if (CMD_SERIAL.available() > 0) {
+		buffer[index] = (uint8_t)CMD_SERIAL.read();
+		if (index == 7) {
+			_sendResponse(_handleRequest(buffer));
+			index = 0;
+		} else /*if (buffer[0] == PROTO::MAGIC)*/ { // FIXME: See kvmd/kvmd#80
+			last = micros();
+			++index;
 		}
-#		elif defined(CMD_SPI)
-		if (spiReady()) {
-			_sendResponse(_handleRequest(spiGet()));
+	} else if (index > 0) {
+		if (is_micros_timed_out(last, CMD_SERIAL_TIMEOUT)) {
+			_sendResponse(PROTO::RESP::TIMEOUT_ERROR);
+			index = 0;
 		}
-#		endif
 	}
-	return 0;
+#	elif defined(CMD_SPI)
+	if (spiReady()) {
+		_sendResponse(_handleRequest(spiGet()));
+	}
+#	endif
 }
