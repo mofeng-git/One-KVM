@@ -19,8 +19,10 @@
 #                                                                            #
 *****************************************************************************/
 
+
 #include "factory.h"
 #include "proto.h"
+
 
 class Outputs {
 	public:
@@ -40,16 +42,15 @@ class Outputs {
 		}
 
 		void initOutputs() {
-			int outputs;
 #			ifdef HID_DYNAMIC
 			_storage = DRIVERS::Factory::makeStorage(DRIVERS::NON_VOLATILE_STORAGE);
 #			else
 			_storage = DRIVERS::Factory::makeStorage(DRIVERS::DUMMY);
 #			endif
-			outputs = _readOutputs();
+
+			uint8_t outputs = _readOutputs();
 			if (outputs < 0) {
 				outputs = 0;
-
 #				if defined(HID_WITH_USB) && defined(HID_SET_USB_KBD)
 				outputs |= PROTO::OUTPUTS1::KEYBOARD::USB;
 #				elif defined(HID_WITH_PS2) && defined(HID_SET_PS2_KBD)
@@ -95,9 +96,11 @@ class Outputs {
 					mouse = DRIVERS::Factory::makeMouse(DRIVERS::DUMMY);
 					break;
 			}
+
 #			ifdef ARDUINO_ARCH_AVR
 			USBDevice.attach();
 #			endif
+
 			kbd->begin();
 			mouse->begin();
 		}

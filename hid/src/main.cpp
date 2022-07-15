@@ -43,10 +43,12 @@
 #endif
 #include "outputs.h"
 
+
+static Outputs _out;
 #ifdef HID_DYNAMIC
 static bool _reset_required = false;
 #endif
-static Outputs _out;
+
 
 // -----------------------------------------------------------------------------
 static void _cmdSetKeyboard(const uint8_t *data) { // 1 bytes
