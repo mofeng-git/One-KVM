@@ -218,13 +218,15 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 				__setAudioEnabled(!!stream.getAudioTracks().length);
 				_Janus.attachMediaStream($("stream-video"), stream);
 				__startInfoInterval();
-				if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.pc) {
+				// FIXME: Задержка уменьшается, но начинаются заикания на кейфреймах.
+				//   - https://github.com/Glimesh/janus-ftl-plugin/issues/101
+				/*if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.pc) {
 					for (let receiver of __handle.webrtcStuff.pc.getReceivers()) {
 						if (receiver.track && receiver.track.kind == "video" && receiver.playoutDelayHint !== undefined) {
 							receiver.playoutDelayHint = 0;
 						}
 					}
-				}
+				}*/
 			},
 
 			oncleanup: function() {
