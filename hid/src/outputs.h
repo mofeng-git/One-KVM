@@ -48,7 +48,7 @@ class Outputs {
 			_storage = DRIVERS::Factory::makeStorage(DRIVERS::DUMMY);
 #			endif
 
-			uint8_t outputs = _readOutputs();
+			int outputs = _readOutputs();
 			if (outputs < 0) {
 				outputs = 0;
 #				if defined(HID_WITH_USB) && defined(HID_SET_USB_KBD)
