@@ -116,7 +116,8 @@ run: testenv $(TESTENV_GPIO)
 			--publish 8080:80/tcp \
 			--publish 4430:443/tcp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
-			mount -t debugfs none /sys/kernel/debug \
+			mkdir -p /tmp/kvmd-nginx \
+			&& mount -t debugfs none /sys/kernel/debug \
 			&& test -d /sys/kernel/debug/gpio-mockup/`basename $(TESTENV_GPIO)`/ || (echo \"Missing GPIO mockup\" && exit 1) \
 			&& (socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
 			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/kvmd/nginx \
