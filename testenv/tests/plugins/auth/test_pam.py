@@ -29,6 +29,7 @@ from typing import AsyncGenerator
 from typing import Optional
 
 import pytest
+import pytest_asyncio
 
 from . import get_configured_auth_service
 
@@ -50,7 +51,7 @@ async def _run_process(cmd: str, input: Optional[str]=None) -> None:  # pylint: 
     assert proc.returncode == 0
 
 
-@pytest.fixture(name="test_user")
+@pytest_asyncio.fixture(name="test_user")
 async def _test_user() -> AsyncGenerator[None, None]:
     with pytest.raises(KeyError):
         pwd.getpwnam(_USER)

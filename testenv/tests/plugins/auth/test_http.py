@@ -27,6 +27,7 @@ import aiohttp.web
 import aiohttp_basicauth
 
 import pytest
+import pytest_asyncio
 
 from . import get_configured_auth_service
 
@@ -41,7 +42,7 @@ async def _handle_auth(request: aiohttp.web.BaseRequest) -> aiohttp.web.Response
     return aiohttp.web.Response(text=str(status), status=status)
 
 
-@pytest.fixture(name="auth_server_port")
+@pytest_asyncio.fixture(name="auth_server_port")
 async def _auth_server_port_fixture(aiohttp_server) -> AsyncGenerator[int, None]:  # type: ignore
     auth = aiohttp_basicauth.BasicAuthMiddleware(
         username="server-admin",
