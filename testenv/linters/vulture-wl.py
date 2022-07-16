@@ -48,3 +48,6 @@ _Edid.set_product_id
 _Edid.set_serial
 _Edid.set_monitor_name
 _Edid.set_audio
+
+_auth_server_port_fixture
+_test_user
