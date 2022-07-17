@@ -61,10 +61,7 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
     def run(self) -> None:
         logger = get_logger(0)
         logger.info("Starting Janus Runner ...")
-        try:
-            aiotools.run(self.__run())
-        except (SystemExit, KeyboardInterrupt):
-            aiotools.run(self.__stop_janus())
+        aiotools.run(self.__run(), self.__stop_janus())
         logger.info("Bye-bye")
 
     # =====

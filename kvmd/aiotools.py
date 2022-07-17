@@ -44,6 +44,41 @@ from .logging import get_logger
 
 
 # =====
+def run(coro: Coroutine, final: Optional[Coroutine]=None) -> None:
+    # https://github.com/aio-libs/aiohttp/blob/a1d4dac1d/aiohttp/web.py#L515
+
+    def sigint_handler() -> None:
+        raise KeyboardInterrupt()
+
+    def sigterm_handler() -> None:
+        raise SystemExit()
+
+    loop = asyncio.get_event_loop()
+    loop.add_signal_handler(signal.SIGINT, sigint_handler)
+    loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
+
+    main_task = loop.create_task(coro)
+    try:
+        loop.run_until_complete(main_task)
+    except (SystemExit, KeyboardInterrupt):
+        pass
+    finally:
+        main_task.cancel()
+        loop.run_until_complete(asyncio.gather(main_task, return_exceptions=True))
+
+        if final is not None:
+            loop.run_until_complete(final)
+
+        tasks = asyncio.all_tasks(loop)
+        for task in tasks:
+            task.cancel()
+        loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
+
+
+# =====
 _FunctionT = TypeVar("_FunctionT", bound=Callable[..., Any])
 _RetvalT = TypeVar("_RetvalT")
 
@@ -149,20 +184,6 @@ async def close_writer(writer: asyncio.StreamWriter) -> bool:
             except Exception:
                 pass
     return (not closing)
-
-
-# =====
-def run(coro: Coroutine) -> None:
-    def sigint_handler() -> None:
-        raise KeyboardInterrupt()
-
-    def sigterm_handler() -> None:
-        raise SystemExit()
-
-    loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGINT, sigint_handler)
-    loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
-    loop.run_until_complete(coro)
 
 
 # =====
