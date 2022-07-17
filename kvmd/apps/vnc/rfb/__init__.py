@@ -287,7 +287,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
         await self._write_struct("VeNCrypt auth types list", "B" + "L" * len(auth_types), len(auth_types), *auth_types)
 
-        auth_type = await self._read_number("selected VeNCrype auth type", "L")
+        auth_type = await self._read_number("selected VeNCrypt auth type", "L")
         if auth_type not in auth_types:
             raise RfbError(f"Invalid VeNCrypt auth type: {auth_type}")
 
