@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import sys
 import os
 import asyncio
 import socket
@@ -484,8 +483,6 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     none_auth_only=none_auth_only,
                     shared_params=shared_params,
                 ).run()
-            except asyncio.CancelledError:
-                raise
             except Exception:
                 logger.exception("[entry] %s: Unhandled exception in client task", remote)
             finally:
