@@ -23,6 +23,7 @@
 import os
 import signal
 import asyncio
+import ssl
 import functools
 import types
 
@@ -133,10 +134,20 @@ async def close_writer(writer: asyncio.StreamWriter) -> bool:
     if not closing:
         writer.transport.abort()  # type: ignore
         writer.close()
-    try:
-        await writer.wait_closed()
-    except Exception:
-        pass
+        # FIXME: Unwrap the SSL socket, ignoring want-read errors
+        #   - https://bugs.python.org/issue39758
+        #   - https://github.com/encode/httpcore/pull/84/files
+        try:
+            ssl_obj = writer.get_extra_info("ssl_object")
+            if ssl_obj is not None:
+                ssl_obj.unwrap()
+        except ssl.SSLWantReadError:
+            pass
+        else:
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
     return (not closing)
 
 
