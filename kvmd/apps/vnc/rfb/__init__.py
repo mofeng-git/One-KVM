@@ -253,6 +253,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         await handler()
 
     async def __handshake_security_vencrypt(self) -> None:  # pylint: disable=too-many-branches
+        logger = get_logger(0)
+
         await self._write_struct("VeNCrypt server version", "BB", 0, 2)  # VeNCrypt 0.2
 
         vencrypt_version = "%d.%d" % (await self._read_struct("VeNCrypt client version", "BB"))
@@ -292,16 +294,19 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             raise RfbError(f"Invalid VeNCrypt auth type: {auth_type}")
 
         (auth_name, tls, handler) = auth_types[auth_type]
-        get_logger(0).info("[main] %s: Using %s auth type", self._remote, auth_name)
+        logger.info("[main] %s: Using %s auth type", self._remote, auth_name)
 
         if tls:
             assert self.__tls_ciphers, (self.__tls_ciphers, auth_name, tls, handler)
             await self._write_struct("VeNCrypt TLS Ack", "B", 1)  # Ack
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            tls_str = "anonymous"
             if tls == 2:
+                tls_str = "valid"
                 assert self.__x509_cert_path
                 ssl_context.load_cert_chain(self.__x509_cert_path, (self.__x509_key_path or None))
             ssl_context.set_ciphers(self.__tls_ciphers)
+            logger.info("[main] %s: Starting TLS (%s) ...", self._remote, tls_str)
             await self._start_tls(ssl_context, self.__tls_timeout)
 
         await handler()
