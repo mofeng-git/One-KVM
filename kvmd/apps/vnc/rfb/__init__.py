@@ -22,7 +22,6 @@
 
 import asyncio
 import ssl
-import dataclasses
 
 from typing import Tuple
 from typing import List
@@ -423,9 +422,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             raise RfbError(f"Too many encodings: {encodings_count}")
 
         self._encodings = RfbClientEncodings(frozenset(await self._read_struct("encodings list", "l" * encodings_count)))
-        logger.info("[main] %s: Client features (SetEncodings): ...", self._remote)
-        for (key, value) in dataclasses.asdict(self._encodings).items():
-            logger.info("[main] %s: ... %s=%s", self._remote, key, value)
+        logger.info("[main] %s: Client features (SetEncodings):", self._remote)
+        for item in self._encodings.get_summary():
+            logger.info("[main] %s: ... %s", self._remote, item)
         self.__check_tight_jpeg()
 
         if self._encodings.has_ext_keys:  # Preferred method
