@@ -22,7 +22,6 @@
 
 import asyncio
 import contextlib
-import json
 import types
 
 from typing import Tuple
@@ -37,6 +36,7 @@ import aiohttp
 
 from .. import aiotools
 from .. import htclient
+from .. import htserver
 
 
 # =====
@@ -132,10 +132,10 @@ class KvmdClientWs:
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         self.__ws = ws
 
-        self.__writer_queue: "asyncio.Queue[Dict]" = asyncio.Queue()
+        self.__writer_queue: "asyncio.Queue[Tuple[str, Dict]]" = asyncio.Queue()
         self.__communicated = False
 
-    async def communicate(self) -> AsyncGenerator[Dict, None]:
+    async def communicate(self) -> AsyncGenerator[Tuple[str, Dict], None]:
         assert not self.__communicated
         self.__communicated = True
         receive_task: Optional[asyncio.Task] = None
@@ -152,7 +152,7 @@ class KvmdClientWs:
                 if receive_task in done:
                     msg = receive_task.result()
                     if msg.type == aiohttp.WSMsgType.TEXT:
-                        yield json.loads(msg.data)
+                        yield htserver.parse_ws_event(msg.data)
                     elif msg.type == aiohttp.WSMsgType.CLOSE:
                         await self.__ws.close()
                     elif msg.type == aiohttp.WSMsgType.CLOSED:
@@ -162,7 +162,7 @@ class KvmdClientWs:
                     receive_task = None
 
                 if writer_task in done:
-                    await self.__ws.send_str(json.dumps(writer_task.result()))
+                    await htserver.send_ws_event(self.__ws, *writer_task.result())
                     writer_task = None
         finally:
             if receive_task:
@@ -176,28 +176,16 @@ class KvmdClientWs:
             self.__communicated = False
 
     async def send_key_event(self, key: str, state: bool) -> None:
-        await self.__writer_queue.put({
-            "event_type": "key",
-            "event": {"key": key, "state": state},
-        })
+        await self.__writer_queue.put(("key", {"key": key, "state": state}))
 
     async def send_mouse_button_event(self, button: str, state: bool) -> None:
-        await self.__writer_queue.put({
-            "event_type": "mouse_button",
-            "event": {"button": button, "state": state},
-        })
+        await self.__writer_queue.put(("mouse_button", {"button": button, "state": state}))
 
     async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        await self.__writer_queue.put({
-            "event_type": "mouse_move",
-            "event": {"to": {"x": to_x, "y": to_y}},
-        })
+        await self.__writer_queue.put(("mouse_move", {"to": {"x": to_x, "y": to_y}}))
 
     async def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
-        await self.__writer_queue.put({
-            "event_type": "mouse_wheel",
-            "event": {"delta": {"x": delta_x, "y": delta_y}},
-        })
+        await self.__writer_queue.put(("mouse_wheel", {"delta": {"x": delta_x, "y": delta_y}}))
 
 
 class KvmdClientSession:

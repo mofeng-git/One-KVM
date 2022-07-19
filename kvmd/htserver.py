@@ -208,6 +208,13 @@ async def stream_json_exception(response: StreamResponse, err: Exception) -> Non
     }, False)
 
 
+async def send_ws_event(wsr: WebSocketResponse, event_type: str, event: Optional[Dict]) -> None:
+    await wsr.send_str(json.dumps({
+        "event_type": event_type,
+        "event": event,
+    }))
+
+
 def parse_ws_event(msg: str) -> Tuple[str, Dict]:
     data = json.loads(msg)
     if not isinstance(data, dict):
@@ -246,10 +253,7 @@ class WsSession:
         return f"WsSession(id={id(self)}, {self.kwargs})"
 
     async def send_event(self, event_type: str, event: Optional[Dict]) -> None:
-        await self.wsr.send_str(json.dumps({
-            "event_type": event_type,
-            "event": event,
-        }))
+        await send_ws_event(self.wsr, event_type, event)
 
 
 class HttpServer:

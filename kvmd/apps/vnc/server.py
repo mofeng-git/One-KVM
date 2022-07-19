@@ -164,16 +164,16 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             async with self.__kvmd_session.ws() as self.__kvmd_ws:
                 logger.info("[kvmd] %s: Connected to KVMD websocket", self._remote)
                 self.__stage3_ws_connected.set_passed()
-                async for event in self.__kvmd_ws.communicate():
-                    await self.__process_ws_event(event)
+                async for (event_type, event) in self.__kvmd_ws.communicate():
+                    await self.__process_ws_event(event_type, event)
                 raise RfbError("KVMD closed the websocket (the server may have been stopped)")
         finally:
             self.__kvmd_ws = None
 
-    async def __process_ws_event(self, event: Dict) -> None:
-        if event["event_type"] == "info_meta_state":
+    async def __process_ws_event(self, event_type: str, event: Dict) -> None:
+        if event_type == "info_meta_state":
             try:
-                host = event["event"]["server"]["host"]
+                host = event["server"]["host"]
             except Exception:
                 host = None
             else:
@@ -184,10 +184,10 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                             await self._send_rename(name)
                     self.__shared_params.name = name
 
-        elif event["event_type"] == "hid_state":
+        elif event_type == "hid_state":
             async with self.__lock:
                 if self._encodings.has_leds_state:
-                    await self._send_leds_state(**event["event"]["keyboard"]["leds"])
+                    await self._send_leds_state(**event["keyboard"]["leds"])
 
     # =====
 
