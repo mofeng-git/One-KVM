@@ -135,7 +135,7 @@ class KvmdClientWs:
         self.__writer_queue: "asyncio.Queue[Tuple[str, Dict]]" = asyncio.Queue()
         self.__communicated = False
 
-    async def communicate(self) -> AsyncGenerator[Tuple[str, Dict], None]:
+    async def communicate(self) -> AsyncGenerator[Tuple[str, Dict], None]:  # pylint: disable=too-many-branches
         assert not self.__communicated
         self.__communicated = True
         receive_task: Optional[asyncio.Task] = None

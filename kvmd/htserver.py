@@ -34,8 +34,10 @@ from typing import Dict
 from typing import Callable
 from typing import AsyncGenerator
 from typing import Optional
+from typing import Union
 from typing import Any
 
+from aiohttp import ClientWebSocketResponse
 from aiohttp.web import BaseRequest
 from aiohttp.web import Request
 from aiohttp.web import Response
@@ -208,7 +210,12 @@ async def stream_json_exception(response: StreamResponse, err: Exception) -> Non
     }, False)
 
 
-async def send_ws_event(wsr: WebSocketResponse, event_type: str, event: Optional[Dict]) -> None:
+async def send_ws_event(
+    wsr: Union[ClientWebSocketResponse, WebSocketResponse],
+    event_type: str,
+    event: Optional[Dict],
+) -> None:
+
     await wsr.send_str(json.dumps({
         "event_type": event_type,
         "event": event,

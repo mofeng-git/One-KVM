@@ -23,6 +23,7 @@
 import dataclasses
 
 from typing import List
+from typing import Dict
 from typing import FrozenSet
 from typing import Union
 from typing import Any
@@ -44,25 +45,23 @@ class RfbEncodings:
     H264 = 50  # Open H.264 Encoding
 
 
-def _feature(default: Any, variants: Union[int, FrozenSet[int]]) -> dataclasses.Field:
-    return dataclasses.field(default=default, metadata={
-        "variants": (frozenset([variants]) if isinstance(variants, int) else variants),
-    })
+def _make_meta(variants: Union[int, FrozenSet[int]]) -> Dict:
+    return {"variants": (frozenset([variants]) if isinstance(variants, int) else variants)}
 
 
 @dataclasses.dataclass(frozen=True)
 class RfbClientEncodings:  # pylint: disable=too-many-instance-attributes
     encodings: FrozenSet[int]
 
-    has_resize: bool =		    _feature(False, RfbEncodings.RESIZE)
-    has_rename: bool =		    _feature(False, RfbEncodings.RENAME)
-    has_leds_state: bool =	    _feature(False, RfbEncodings.LEDS_STATE)
-    has_ext_keys: bool =	    _feature(False, RfbEncodings.EXT_KEYS)
+    has_resize: bool =		    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.RESIZE))  # noqa: E224
+    has_rename: bool =		    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.RENAME))  # noqa: E224
+    has_leds_state: bool =	    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.LEDS_STATE))  # noqa: E224
+    has_ext_keys: bool =	    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.EXT_KEYS))  # noqa: E224
 
-    has_tight: bool =		    _feature(False, RfbEncodings.TIGHT)
-    tight_jpeg_quality: int =	_feature(0,     frozenset(RfbEncodings.TIGHT_JPEG_QUALITIES))
+    has_tight: bool =		    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.TIGHT))  # noqa: E224
+    tight_jpeg_quality: int =	dataclasses.field(default=0,     metadata=_make_meta(frozenset(RfbEncodings.TIGHT_JPEG_QUALITIES)))  # noqa: E224
 
-    has_h264: bool =			_feature(False, RfbEncodings.H264)
+    has_h264: bool =			dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.H264))  # noqa: E224
 
     def get_summary(self) -> List[str]:
         summary: List[str] = [f"encodings -- {sorted(self.encodings)}"]
@@ -81,7 +80,7 @@ class RfbClientEncodings:  # pylint: disable=too-many-instance-attributes
     def __set_value(self, key: str, value: Any) -> None:
         object.__setattr__(self, key, value)
 
-    def __get_found(self, field: dataclasses.Field) -> None:
+    def __get_found(self, field: dataclasses.Field) -> FrozenSet[int]:
         return self.encodings.intersection(field.metadata["variants"])
 
     def __get_tight_jpeg_quality(self) -> int:
