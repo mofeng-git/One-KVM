@@ -153,6 +153,8 @@ class KvmdClientWs:
                     msg = receive_task.result()
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         yield json.loads(msg.data)
+                    elif msg.type == aiohttp.WSMsgType.CLOSE:
+                        await self.__ws.close()
                     elif msg.type == aiohttp.WSMsgType.CLOSED:
                         break
                     else:
@@ -167,6 +169,10 @@ class KvmdClientWs:
                 receive_task.cancel()
             if writer_task:
                 writer_task.cancel()
+            try:
+                await self.__ws.close()
+            except Exception:
+                pass
             self.__communicated = False
 
     async def send_key_event(self, key: str, state: bool) -> None:

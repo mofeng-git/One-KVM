@@ -166,7 +166,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 self.__stage3_ws_connected.set_passed()
                 async for event in self.__kvmd_ws.communicate():
                     await self.__process_ws_event(event)
-                raise RfbError("KVMD closes the websocket (the server may have been stopped)")
+                raise RfbError("KVMD closed the websocket (the server may have been stopped)")
         finally:
             self.__kvmd_ws = None
 
