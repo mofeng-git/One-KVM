@@ -698,6 +698,9 @@ def _get_config_scheme() -> Dict:
                     "enabled": Option(False, type=valid_bool),
                     "file":    Option("/etc/kvmd/vncpasswd", type=valid_abs_file, unpack_as="path"),
                 },
+                "vencrypt": {
+                    "enabled": Option(True, type=valid_bool, unpack_as="vencrypt_enabled"),
+                },
             },
         },
 

@@ -72,7 +72,7 @@ class _SharedParams:
 
 
 class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
@@ -89,6 +89,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         streamers: List[BaseStreamerClient],
 
         vnc_credentials: Dict[str, VncAuthKvmdCredentials],
+        vencrypt: bool,
         none_auth_only: bool,
         shared_params: _SharedParams,
     ) -> None:
@@ -103,6 +104,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             x509_cert_path=x509_cert_path,
             x509_key_path=x509_key_path,
             vnc_passwds=list(vnc_credentials),
+            vencrypt=vencrypt,
             none_auth_only=none_auth_only,
             **dataclasses.asdict(shared_params),
         )
@@ -423,6 +425,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         x509_cert_path: str,
         x509_key_path: str,
 
+        vencrypt_enabled: bool,
+
         desired_fps: int,
         keymap_path: str,
 
@@ -481,6 +485,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     streamers=streamers,
                     vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
                     none_auth_only=none_auth_only,
+                    vencrypt=vencrypt_enabled,
                     shared_params=shared_params,
                 ).run()
             except Exception:

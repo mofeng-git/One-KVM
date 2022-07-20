@@ -67,6 +67,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         height: int,
         name: str,
         vnc_passwds: List[str],
+        vencrypt: bool,
         none_auth_only: bool,
     ) -> None:
 
@@ -81,6 +82,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self._height = height
         self.__name = name
         self.__vnc_passwds = vnc_passwds
+        self.__vencrypt = vencrypt
         self.__none_auth_only = none_auth_only
 
         self.__rfb_version = 0
@@ -229,7 +231,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def __handshake_security(self) -> None:
         sec_types: Dict[int, Tuple[str, Callable]] = {}
-        if self.__rfb_version > 3:
+        if self.__vencrypt and self.__rfb_version > 3:
             sec_types[19] = ("VeNCrypt", self.__handshake_security_vencrypt)
         if self.__none_auth_only:
             sec_types[1] = ("None", self.__handshake_security_none)
@@ -276,10 +278,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
                     auth_types[262] = ("VeNCrypt/X509Plain", 2, self.__handshake_security_vencrypt_userpass)
                 auth_types[259] = ("VeNCrypt/TLSPlain", 1, self.__handshake_security_vencrypt_userpass)
             if self.__vnc_passwds:
-                # Vinagre не умеет работать с VNC Auth через VeNCrypt, но это его проблемы,
-                # так как он своеобразно трактует рекомендации VeNCrypt.
-                # Подробнее: https://bugzilla.redhat.com/show_bug.cgi?id=692048
-                # Hint: используйте любой другой нормальный VNC-клиент.
+                # Некоторые клиенты не умеют работать с нешифрованными соединениями внутри VeNCrypt:
+                #   - https://github.com/LibVNC/libvncserver/issues/458
+                #   - https://bugzilla.redhat.com/show_bug.cgi?id=692048
                 auth_types[2] = ("VeNCrypt/VNCAuth", 0, self.__handshake_security_vnc_auth)
                 if self.__tls_ciphers:
                     if self.__x509_cert_path:

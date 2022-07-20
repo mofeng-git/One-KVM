@@ -79,4 +79,5 @@ def main(argv: Optional[List[str]]=None) -> None:
         vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),
 
         **config.server.keepalive._unpack(),
+        **config.auth.vencrypt._unpack(),
     ).run()
