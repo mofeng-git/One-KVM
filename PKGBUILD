@@ -44,6 +44,7 @@ depends=(
 	python-passlib
 	python-periphery
 	python-pyserial
+	python-pyserial-asyncio
 	python-spidev
 	python-setproctitle
 	python-psutil

@@ -1,3 +1,4 @@
+pyserial-asyncio
 pyghmi
 spidev
 pyrad
