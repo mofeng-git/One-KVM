@@ -419,6 +419,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         logger = get_logger(0)
 
         encodings_count = (await self._read_struct("encodings number", "x H"))[0]
+        if encodings_count == 0:
+            raise RfbError("Empty encodings list received")
         if encodings_count > 1024:
             raise RfbError(f"Too many encodings: {encodings_count}")
 
@@ -426,16 +428,24 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         logger.info("[main] %s: Client features (SetEncodings):", self._remote)
         for item in self._encodings.get_summary():
             logger.info("[main] %s: ... %s", self._remote, item)
-        self.__check_tight_jpeg()
+        self.__check_encodings()
 
         if self._encodings.has_ext_keys:  # Preferred method
             await self._write_fb_update("ExtKeys FBUR", 0, 0, RfbEncodings.EXT_KEYS, drain=True)
         await self._on_set_encodings()
 
     async def __handle_fb_update_request(self) -> None:
-        self.__check_tight_jpeg()  # If we don't receive SetEncodings from client
+        self.__check_encodings()
         await self._read_struct("FBUR", "? HH HH")  # Ignore any arguments, just perform the full update
         await self._on_fb_update_request()
+
+    def __check_encodings(self) -> None:
+        # JpegCompression may only be used when the client has advertized
+        # a quality level using the JPEG Quality Level Pseudo-encoding
+        if len(self._encodings.encodings) == 0:
+            raise RfbError("The client did not send SetEncodings")
+        if not self._encodings.has_tight or self._encodings.tight_jpeg_quality == 0:
+            raise RfbError("Tight JPEG encoding is not supported by client")
 
     async def __handle_key_event(self) -> None:
         (state, code) = await self._read_struct("key event", "? xx L")
@@ -474,9 +484,3 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         if code & 0x80:
             code = (0xE0 << 8) | (code & ~0x80)
         await self._on_ext_key_event(code, bool(state))
-
-    def __check_tight_jpeg(self) -> None:
-        # JpegCompression may only be used when the client has advertized
-        # a quality level using the JPEG Quality Level Pseudo-encoding
-        if not self._encodings.has_tight or self._encodings.tight_jpeg_quality == 0:
-            raise RfbError(f"Tight JPEG encoding is not supported by client: {self._encodings}")
