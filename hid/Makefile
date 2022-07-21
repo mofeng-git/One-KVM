@@ -25,7 +25,7 @@ upload:
 			gpioset 0 25=0; \
 		fi \
 	"
-	platformio run --environment '$($@_CURRENT)' --project-conf '$($@_CONFIG)' --target upload
+	platformio run --environment '$($@_CURRENT)' --project-conf 'platformio-$($@_CONFIG).ini' --target upload
 
 
 bootloader-spi: install-bootloader-spi
