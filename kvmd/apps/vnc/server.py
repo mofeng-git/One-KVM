@@ -157,14 +157,14 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         logger = get_logger(0)
         await self.__stage1_authorized.wait_passed()
 
-        logger.info("[kvmd] %s: Waiting for the SetEncodings message ...", self._remote)
+        logger.info("%s [kvmd]: Waiting for the SetEncodings message ...", self._remote)
         if not (await self.__stage2_encodings_accepted.wait_passed(timeout=5)):
             raise RfbError("No SetEncodings message recieved from the client in 5 secs")
 
         assert self.__kvmd_session
         try:
             async with self.__kvmd_session.ws() as self.__kvmd_ws:
-                logger.info("[kvmd] %s: Connected to KVMD websocket", self._remote)
+                logger.info("%s [kvmd]: Connected to KVMD websocket", self._remote)
                 self.__stage3_ws_connected.set_passed()
                 async for (event_type, event) in self.__kvmd_ws.communicate():
                     await self.__process_ws_event(event_type, event)
@@ -202,7 +202,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 streaming = False
                 async for frame in streamer.read_stream():
                     if not streaming:
-                        logger.info("[streamer] %s: Streaming ...", self._remote)
+                        logger.info("%s [streamer]: Streaming ...", self._remote)
                         streaming = True
                     if frame["online"]:
                         await self.__queue_frame(frame)
@@ -211,9 +211,9 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             except StreamerError as err:
                 if isinstance(err, StreamerPermError):
                     streamer = self.__get_default_streamer()
-                    logger.info("[streamer] %s: Permanent error: %s; switching to %s ...", self._remote, err, streamer)
+                    logger.info("%s [streamer]: Permanent error: %s; switching to %s ...", self._remote, err, streamer)
                 else:
-                    logger.info("[streamer] %s: Waiting for stream: %s", self._remote, err)
+                    logger.info("%s [streamer]: Waiting for stream: %s", self._remote, err)
                 await self.__queue_frame("Waiting for stream ...")
                 await asyncio.sleep(1)
 
@@ -225,13 +225,13 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         streamer: Optional[BaseStreamerClient] = None
         for streamer in self.__streamers:
             if getattr(self._encodings, formats[streamer.get_format()]):
-                get_logger(0).info("[streamer] %s: Using preferred %s", self._remote, streamer)
+                get_logger(0).info("%s [streamer]: Using preferred %s", self._remote, streamer)
                 return streamer
         raise RuntimeError("No streamers found")
 
     def __get_default_streamer(self) -> BaseStreamerClient:
         streamer = self.__streamers[-1]
-        get_logger(0).info("[streamer] %s: Using default %s", self._remote, streamer)
+        get_logger(0).info("%s [streamer]: Using default %s", self._remote, streamer)
         return streamer
 
     async def __queue_frame(self, frame: Union[Dict, str]) -> None:
@@ -382,14 +382,14 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         assert self.__stage1_authorized.is_passed()
         assert self.__kvmd_session
         logger = get_logger(0)
-        logger.info("[main] %s: Printing %d characters ...", self._remote, len(text))
+        logger.info("%s [main]: Printing %d characters ...", self._remote, len(text))
         try:
             (keymap_name, available) = await self.__kvmd_session.hid.get_keymaps()
             if self.__keymap_name in available:
                 keymap_name = self.__keymap_name
             await self.__kvmd_session.hid.print(text, 0, keymap_name)
         except Exception:
-            logger.exception("[main] %s: Can't print characters", self._remote)
+            logger.exception("%s [main]: Can't print characters", self._remote)
 
     async def _on_set_encodings(self) -> None:
         assert self.__stage1_authorized.is_passed()
@@ -398,7 +398,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         has_quality = (await self.__kvmd_session.streamer.get_state())["features"]["quality"]
         quality = (self._encodings.tight_jpeg_quality if has_quality else None)
-        get_logger(0).info("[main] %s: Applying streamer params: jpeg_quality=%s; desired_fps=%d ...",
+        get_logger(0).info("%s [main]: Applying streamer params: jpeg_quality=%s; desired_fps=%d ...",
                            self._remote, quality, self.__desired_fps)
         await self.__kvmd_session.streamer.set_params(quality, self.__desired_fps)
 
@@ -449,7 +449,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             logger = get_logger(0)
             remote = rfb_format_remote(writer)
-            logger.info("[entry] %s: Connected client", remote)
+            logger.info("%s [entry]: Connected client", remote)
             try:
                 sock = writer.get_extra_info("socket")
                 if no_delay:
@@ -468,7 +468,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     async with kvmd.make_session("", "") as kvmd_session:
                         none_auth_only = await kvmd_session.auth.check()
                 except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                    logger.error("[entry] %s: Can't check KVMD auth mode: %s", remote, tools.efmt(err))
+                    logger.error("%s [entry]: Can't check KVMD auth mode: %s", remote, tools.efmt(err))
                     return
 
                 await _Client(
@@ -489,10 +489,10 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     shared_params=shared_params,
                 ).run()
             except Exception:
-                logger.exception("[entry] %s: Unhandled exception in client task", remote)
+                logger.exception("%s [entry]: Unhandled exception in client task", remote)
             finally:
                 if (await aiotools.close_writer(writer)):
-                    logger.info("[entry] %s: Connection is closed in an emergency", remote)
+                    logger.info("%s [entry]: Connection is closed in an emergency", remote)
 
         self.__handle_client = handle_client
 

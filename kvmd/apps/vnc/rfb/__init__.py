@@ -94,7 +94,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def _run(self, **coros: Coroutine) -> None:
         logger = get_logger(0)
-        logger.info("[entry] %s: Starting client tasks ...", self._remote)
+        logger.info("%s [entry]: Starting client tasks ...", self._remote)
         tasks = list(map(asyncio.create_task, [  # type: ignore  # Я хз, почему github action фейлится здесь
             self.__wrapper(name, coro)
             for (name, coro) in {"main": self.__main_task_loop(), **coros}.items()
@@ -106,7 +106,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             await self._close()
-            logger.info("[entry] %s: Connection closed", self._remote)
+            logger.info("%s [entry]: Connection closed", self._remote)
 
     async def __wrapper(self, name: str, coro: Coroutine) -> None:
         logger = get_logger(0)
@@ -114,14 +114,14 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             await coro
             raise RuntimeError("Subtask just finished without any exception")
         except asyncio.CancelledError:
-            logger.info("[%s] %s: Cancelling subtask ...", name, self._remote)
+            logger.info("%s [%s]: Cancelling subtask ...", self._remote, name)
             raise
         except RfbConnectionError as err:
-            logger.info("[%s] %s: Gone: %s", name, self._remote, err)
+            logger.info("%s [%s]: Gone: %s", self._remote, name, err)
         except (RfbError, ssl.SSLError) as err:
-            logger.error("[%s] %s: Error: %s", name, self._remote, err)
+            logger.error("%s [%s]: Error: %s", self._remote, name, err)
         except Exception:
-            logger.exception("[%s] %s: Unhandled exception", name, self._remote)
+            logger.exception("%s [%s]: Unhandled exception", self._remote, name)
 
     async def __main_task_loop(self) -> None:
         await self.__handshake_version()
@@ -225,7 +225,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         except ValueError:
             raise RfbError(f"Invalid version response: {response!r}")
         self.__rfb_version = (3 if version == 5 else version)
-        get_logger(0).info("[main] %s: Using RFB version 3.%d", self._remote, self.__rfb_version)
+        get_logger(0).info("%s [main]: Using RFB version 3.%d", self._remote, self.__rfb_version)
 
     # =====
 
@@ -250,7 +250,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             raise RfbError(f"Invalid security type: {sec_type}")
 
         (sec_name, handler) = sec_types[sec_type]
-        get_logger(0).info("[main] %s: Using %s security type", self._remote, sec_name)
+        get_logger(0).info("%s [main]: Using %s security type", self._remote, sec_name)
         await handler()
 
     async def __handshake_security_vencrypt(self) -> None:  # pylint: disable=too-many-branches
@@ -294,7 +294,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             raise RfbError(f"Invalid VeNCrypt auth type: {auth_type}")
 
         (auth_name, tls, handler) = auth_types[auth_type]
-        logger.info("[main] %s: Using %s auth type", self._remote, auth_name)
+        logger.info("%s [main]: Using %s auth type", self._remote, auth_name)
 
         if tls:
             assert self.__tls_ciphers, (self.__tls_ciphers, auth_name, tls, handler)
@@ -306,7 +306,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
                 assert self.__x509_cert_path
                 ssl_context.load_cert_chain(self.__x509_cert_path, (self.__x509_key_path or None))
             ssl_context.set_ciphers(self.__tls_ciphers)
-            logger.info("[main] %s: Starting TLS (%s) ...", self._remote, tls_str)
+            logger.info("%s [main]: Starting TLS (%s) ...", self._remote, tls_str)
             await self._start_tls(ssl_context, self.__tls_timeout)
 
         await handler()
@@ -358,7 +358,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def __handshake_security_send_result(self, allow: bool, allow_msg: str, deny_msg: str, deny_reason: str) -> None:
         if allow:
-            get_logger(0).info("[main] %s: %s", self._remote, allow_msg)
+            get_logger(0).info("%s [main]: %s", self._remote, allow_msg)
             await self._write_struct("access OK", "L", 0)
         else:
             await self._write_struct("access denial flag", "L", 1, drain=(self.__rfb_version < 8))
@@ -425,9 +425,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             raise RfbError(f"Too many encodings: {encodings_count}")
 
         self._encodings = RfbClientEncodings(frozenset(await self._read_struct("encodings list", "l" * encodings_count)))
-        logger.info("[main] %s: Client features (SetEncodings):", self._remote)
+        logger.info("%s [main]: Client features (SetEncodings):", self._remote)
         for item in self._encodings.get_summary():
-            logger.info("[main] %s: ... %s", self._remote, item)
+            logger.info("%s [main]: ... %s", self._remote, item)
         self.__check_encodings()
 
         if self._encodings.has_ext_keys:  # Preferred method
