@@ -24,6 +24,8 @@ SpiDev.max_speed_hz
 
 _AtxApiPart.switch_power
 
+_UsbKey.arduino_modifier_code
+
 _KeyMapping.web_name
 _KeyMapping.mcu_code
 _KeyMapping.usb_key
