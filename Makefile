@@ -209,6 +209,7 @@ keymap: testenv
 		&& ./genmap.py keymap.csv kvmd/keyboard/mappings.py.mako kvmd/keyboard/mappings.py \
 		&& ./genmap.py keymap.csv hid/lib/drivers-avr/usb/keymap.h.mako hid/lib/drivers-avr/usb/keymap.h \
 		&& ./genmap.py keymap.csv hid/lib/drivers-avr/ps2/keymap.h.mako hid/lib/drivers-avr/ps2/keymap.h \
+		&& ./genmap.py keymap.csv hid/lib/drivers-stm32/usb/keymap.h.mako hid/lib/drivers-stm32/usb/keymap.h \
 	"
 
 

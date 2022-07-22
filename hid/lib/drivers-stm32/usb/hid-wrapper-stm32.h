@@ -19,33 +19,63 @@
 #                                                                            #
 *****************************************************************************/
 
-
 #pragma once
 
-#include <stdint.h>
-
-#include "driver.h"
-
+#include <USBComposite.h>
 
 namespace DRIVERS {
-	struct Mouse : public Driver {
-		using Driver::Driver;
-		virtual void begin() {}
+
+	class HidWrapper {
+		public:
+			HidWrapper(USBCompositeSerial* _serial = nullptr) : _serial(_serial) {}
+
+			void begin() {
+				if(_init)
+					return;
+				_init = true;
+
+				_report_descriptor_length = 0;
+				for(uint8 i = 0; i<_count; ++i) {
+					_report_descriptor_length += _descriptors_size[i];
+				}
+
+				_report_descriptor = new uint8[_report_descriptor_length];
+
+				uint16_t index = 0;
+				for(uint8 i = 0; i<_count; ++i) {
+					memcpy(_report_descriptor + index, _report_descriptors[i], _descriptors_size[i]);
+					index += _descriptors_size[i];
+				}
+
+				if(_serial) {
+					usbHid.begin(*_serial, _report_descriptor, _report_descriptor_length);
+				} else {
+					usbHid.begin(_report_descriptor, _report_descriptor_length);
+				}
+			}
+			
+			void addReportDescriptor(const uint8_t* report_descriptor, uint16_t report_descriptor_length) {
+				_report_descriptors[_count] = report_descriptor;
+				_descriptors_size[_count] = report_descriptor_length;
+				++_count;
+			}
+
+			USBCompositeSerial* serial() {
+				return _serial;
+			}
+
+			USBHID usbHid;
 		
-		/**
-		 * Release all keys
-		 */
-		virtual void clear() {}
-		virtual void sendButtons(
-			bool left_select, bool left_state,
-			bool right_select, bool right_state,
-			bool middle_select, bool middle_state,
-			bool up_select, bool up_state,
-			bool down_select, bool down_state) {}
-		virtual void sendMove(int x, int y) {}
-		virtual void sendRelative(int x, int y) {}
-		virtual void sendWheel(int delta_y) {}
-		virtual bool isOffline() { return false; }
-		virtual void periodic() {}
+		private:
+			USBCompositeSerial* _serial;
+			bool _init = false;
+
+			static constexpr uint8_t MAX_USB_DESCRIPTORS = 2;
+			const uint8_t* _report_descriptors[MAX_USB_DESCRIPTORS];
+			uint8_t _descriptors_size[MAX_USB_DESCRIPTORS];
+
+			uint8_t _count = 0;
+			uint8_t* _report_descriptor;
+			uint16_t _report_descriptor_length;
 	};
 }

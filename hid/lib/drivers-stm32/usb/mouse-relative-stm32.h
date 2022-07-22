@@ -19,33 +19,58 @@
 #                                                                            #
 *****************************************************************************/
 
-
 #pragma once
 
-#include <stdint.h>
-
-#include "driver.h"
-
+#include "mouse.h"
+#include "hid-wrapper-stm32.h"
+#include <USBComposite.h>
 
 namespace DRIVERS {
-	struct Mouse : public Driver {
-		using Driver::Driver;
-		virtual void begin() {}
-		
-		/**
-		 * Release all keys
-		 */
-		virtual void clear() {}
-		virtual void sendButtons(
+
+	const uint8_t reportDescriptionMouseRelative[] = {
+		HID_MOUSE_REPORT_DESCRIPTOR()
+	};
+
+	class UsbMouseRelative : public Mouse {
+		public:
+			UsbMouseRelative(HidWrapper& _hidWrapper) : Mouse(USB_MOUSE_RELATIVE),
+			_hidWrapper(_hidWrapper), _mouse(_hidWrapper.usbHid) {
+				_hidWrapper.addReportDescriptor(reportDescriptionMouseRelative, sizeof(reportDescriptionMouseRelative));
+			}
+
+			void begin() override {
+				_hidWrapper.begin();
+			}
+
+			void clear() override {
+				_mouse.release(0xff);
+			}
+
+			void sendButtons (
 			bool left_select, bool left_state,
 			bool right_select, bool right_state,
 			bool middle_select, bool middle_state,
 			bool up_select, bool up_state,
-			bool down_select, bool down_state) {}
-		virtual void sendMove(int x, int y) {}
-		virtual void sendRelative(int x, int y) {}
-		virtual void sendWheel(int delta_y) {}
-		virtual bool isOffline() { return false; }
-		virtual void periodic() {}
+			bool down_select, bool down_state) override {
+				if(left_select) left_state ? _mouse.press(MOUSE_LEFT) : _mouse.release(MOUSE_LEFT);
+				if(right_select) right_state ? _mouse.press(MOUSE_RIGHT) : _mouse.release(MOUSE_RIGHT);
+				if(middle_select) middle_state ? _mouse.press(MOUSE_MIDDLE) : _mouse.release(MOUSE_MIDDLE);
+			}
+
+			void sendRelative(int x, int y) override {
+				_mouse.move(x, y);
+			}
+
+			void sendWheel(int delta_y) override {
+				_mouse.move(0, 0, delta_y);
+			}
+
+			bool isOffline() override {
+				return USBComposite == false;
+			}
+
+		private:
+			HidWrapper& _hidWrapper;
+			HIDMouse _mouse;
 	};
 }

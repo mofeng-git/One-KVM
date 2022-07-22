@@ -4,6 +4,9 @@ spi:
 	make _build E=spi C=avr
 aum:
 	make _build E=aum C=avr
+stm32:
+	platformio run --environment patch --project-conf platformio-stm32.ini
+	make _build E=serial C=stm32
 _build:
 	rm -f .current .config
 	platformio run --environment $(E) --project-conf platformio-$(C).ini
@@ -11,7 +14,7 @@ _build:
 	echo -n $(C) > .config
 
 # Added to easy test all builds
-_build_all: aum spi serial
+_build_all: aum spi serial stm32
 	rm -f .current .config
 
 install: upload

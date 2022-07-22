@@ -229,6 +229,7 @@ void loop() {
 #	endif
 
 	_out.kbd->periodic();
+	_out.mouse->periodic();
 
 #	ifdef CMD_SERIAL
 	static unsigned long last = micros();

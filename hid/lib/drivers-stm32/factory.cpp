@@ -19,33 +19,63 @@
 #                                                                            #
 *****************************************************************************/
 
+#include "factory.h"
+#include "usb/keyboard-stm32.h"
+#include "usb/hid-wrapper-stm32.h"
+#include "usb/mouse-absolute-stm32.h"
+#include "usb/mouse-relative-stm32.h"
+#include "backup-register.h"
 
-#pragma once
+#ifndef __STM32F1__
+#	error "Only STM32F1 is supported"
+#endif
+#ifdef SERIAL_USB
+#	error "Disable random USB enumeration"
+#endif
 
-#include <stdint.h>
+namespace DRIVERS
+{
+#if 0
+	USBCompositeSerial _serial;
+	HidWrapper _hidWrapper(&_serial);
+#else
+	HidWrapper _hidWrapper;
+#endif
 
-#include "driver.h"
+	Keyboard *Factory::makeKeyboard(type _type) {
+		switch (_type) {
+#			ifdef HID_WITH_USB
+			case USB_KEYBOARD:
+				return new UsbKeyboard(_hidWrapper);
+#			endif
+			default:
+				return new Keyboard(DUMMY);
+		}
+	}
 
+	Mouse *Factory::makeMouse(type _type) {
+		switch(_type) {
+#			ifdef HID_WITH_USB
+			case USB_MOUSE_ABSOLUTE:
+				return new UsbMouseAbsolute(_hidWrapper);
+			case USB_MOUSE_RELATIVE:
+				return new UsbMouseRelative(_hidWrapper);
+#			endif
+			default:
+				return new Mouse(DRIVERS::DUMMY);
+		}
+	}
 
-namespace DRIVERS {
-	struct Mouse : public Driver {
-		using Driver::Driver;
-		virtual void begin() {}
-		
-		/**
-		 * Release all keys
-		 */
-		virtual void clear() {}
-		virtual void sendButtons(
-			bool left_select, bool left_state,
-			bool right_select, bool right_state,
-			bool middle_select, bool middle_state,
-			bool up_select, bool up_state,
-			bool down_select, bool down_state) {}
-		virtual void sendMove(int x, int y) {}
-		virtual void sendRelative(int x, int y) {}
-		virtual void sendWheel(int delta_y) {}
-		virtual bool isOffline() { return false; }
-		virtual void periodic() {}
-	};
+	Storage* Factory::makeStorage(type _type) {
+		switch (_type) {
+#			ifdef HID_DYNAMIC
+			case NON_VOLATILE_STORAGE:
+				return new BackupRegister();
+#			endif
+			default:
+				return new Storage(DRIVERS::DUMMY);
+		}
+	}
 }
+
+
