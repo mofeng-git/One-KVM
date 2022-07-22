@@ -22,8 +22,6 @@
 
 #pragma once
 
-#include <HID-Project.h>
-
 <%! import operator %>
 uint8_t keymapUsb(uint8_t code) {
 	switch (code) {

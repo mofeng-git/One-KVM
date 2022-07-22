@@ -44,7 +44,7 @@ update:
 clean-all: clean
 	rm -rf .platformio
 clean:
-	rm -rf .pio .current .config
+	rm -rf .pio .current .config platformio.ini
 
 
 help:

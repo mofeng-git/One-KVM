@@ -19,6 +19,7 @@
 #                                                                            #
 *****************************************************************************/
 
+
 #include "factory.h"
 #include "usb/keyboard-stm32.h"
 #include "usb/hid-wrapper-stm32.h"
@@ -33,14 +34,9 @@
 #	error "Disable random USB enumeration"
 #endif
 
-namespace DRIVERS
-{
-#if 0
-	USBCompositeSerial _serial;
-	HidWrapper _hidWrapper(&_serial);
-#else
+
+namespace DRIVERS {
 	HidWrapper _hidWrapper;
-#endif
 
 	Keyboard *Factory::makeKeyboard(type _type) {
 		switch (_type) {
@@ -77,5 +73,3 @@ namespace DRIVERS
 		}
 	}
 }
-
-
