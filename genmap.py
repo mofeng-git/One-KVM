@@ -44,6 +44,18 @@ class _UsbKey:
     code: int
     is_modifier: bool
 
+    @property
+    def arduino_modifier_code(self) -> int:
+        # https://github.com/NicoHood/HID/blob/4bf6cd6/src/HID-APIs/DefaultKeyboardAPI.hpp#L31
+        assert self.is_modifier
+        code = self.code
+        offset = 0
+        while not (code & 0x1):
+            code >>= 1
+            offset += 1
+            assert offset < 8
+        return ((0xE << 4) | offset)
+
 
 @dataclasses.dataclass(frozen=True)
 class _Ps2Key:
@@ -62,7 +74,6 @@ class _X11Key:
 class _KeyMapping:
     web_name: str
     mcu_code: int
-    arduino_name: str
     usb_key: _UsbKey
     ps2_key: _Ps2Key
     at1_code: int
@@ -116,7 +127,6 @@ def _read_keymap_csv(path: str) -> List[_KeyMapping]:
                 keymap.append(_KeyMapping(
                     web_name=row["web_name"],
                     mcu_code=int(row["mcu_code"]),
-                    arduino_name=row["arduino_name"],
                     usb_key=_parse_usb_key(row["usb_key"]),
                     ps2_key=_parse_ps2_key(row["ps2_key"]),
                     at1_code=int(row["at1_code"], 16),
@@ -145,8 +155,7 @@ def main() -> None:
     # Fields list:
     #   - Web
     #   - MCU code
-    #   - Arduino name
-    #   - USB code (^ for mod mask)
+    #   - USB code (^ for the modifier mask)
     #   - PS/2 key
     #   - AT set1
     #   - X11 keysyms (^ for shift)
