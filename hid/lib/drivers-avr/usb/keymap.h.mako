@@ -34,6 +34,6 @@ uint8_t keymapUsb(uint8_t code) {
 		case ${km.mcu_code}: return ${km.usb_key.code}; // ${km.web_name}
 	% endif
 % endfor
-		default: return KEY_ERROR_UNDEFINED;
+		default: return 0;
 	}
 }

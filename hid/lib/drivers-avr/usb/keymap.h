@@ -134,6 +134,6 @@ uint8_t keymapUsb(uint8_t code) {
 		case 105: return 102; // Power
 		case 106: return 100; // IntlBackslash
 		case 107: return 137; // IntlYen
-		default: return KEY_ERROR_UNDEFINED;
+		default: return 0;
 	}
 }
