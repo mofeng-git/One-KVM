@@ -98,7 +98,7 @@ class UsbKeyboard : public DRIVERS::Keyboard {
 		}
 
 		void sendKey(uint8_t code, bool state) override {
-			KeyboardKeycode usb_code = keymapUsb(code);
+			uint8_t usb_code = keymapUsb(code);
 			if (usb_code != KEY_ERROR_UNDEFINED) {
 				if (state ? _kbd.add(usb_code) : _kbd.remove(usb_code)) {
 					_sendCurrent();

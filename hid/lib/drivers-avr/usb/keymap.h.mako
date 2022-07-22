@@ -25,7 +25,7 @@
 #include <HID-Project.h>
 
 <%! import operator %>
-KeyboardKeycode keymapUsb(uint8_t code) {
+uint8_t keymapUsb(uint8_t code) {
 	switch (code) {
 % for km in sorted(keymap, key=operator.attrgetter("mcu_code")):
 	% if km.usb_key.is_modifier:
