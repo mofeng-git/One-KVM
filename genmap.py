@@ -40,7 +40,7 @@ import mako.template
 
 # =====
 @dataclasses.dataclass(frozen=True)
-class _OtgKey:
+class _UsbKey:
     code: int
     is_modifier: bool
 
@@ -63,7 +63,7 @@ class _KeyMapping:
     web_name: str
     mcu_code: int
     arduino_name: str
-    otg_key: _OtgKey
+    usb_key: _UsbKey
     ps2_key: _Ps2Key
     at1_code: int
     x11_keys: Set[_X11Key]
@@ -94,10 +94,10 @@ def _parse_x11_names(names: str) -> Set[_X11Key]:
     return keys
 
 
-def _parse_otg_key(key: str) -> _OtgKey:
+def _parse_usb_key(key: str) -> _UsbKey:
     is_modifier = key.startswith("^")
     code = int((key[1:] if is_modifier else key), 16)
-    return _OtgKey(code, is_modifier)
+    return _UsbKey(code, is_modifier)
 
 
 def _parse_ps2_key(key: str) -> _Ps2Key:
@@ -117,7 +117,7 @@ def _read_keymap_csv(path: str) -> List[_KeyMapping]:
                     web_name=row["web_name"],
                     mcu_code=int(row["mcu_code"]),
                     arduino_name=row["arduino_name"],
-                    otg_key=_parse_otg_key(row["otg_key"]),
+                    usb_key=_parse_usb_key(row["usb_key"]),
                     ps2_key=_parse_ps2_key(row["ps2_key"]),
                     at1_code=int(row["at1_code"], 16),
                     x11_keys=_parse_x11_names(row["x11_names"] or ""),
@@ -146,7 +146,7 @@ def main() -> None:
     #   - Web
     #   - MCU code
     #   - Arduino name
-    #   - OTG code (^ for mod)
+    #   - USB code (^ for mod mask)
     #   - PS/2 key
     #   - AT set1
     #   - X11 keysyms (^ for shift)

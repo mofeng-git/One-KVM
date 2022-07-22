@@ -30,7 +30,7 @@ from typing import Any
 
 from ....logging import get_logger
 
-from ....keyboard.mappings import OtgKey
+from ....keyboard.mappings import UsbKey
 
 from .device import BaseDeviceProcess
 
@@ -56,8 +56,8 @@ class KeyboardProcess(BaseDeviceProcess):
             **kwargs,
         )
 
-        self.__pressed_modifiers: Set[OtgKey] = set()
-        self.__pressed_keys: List[Optional[OtgKey]] = [None] * 6
+        self.__pressed_modifiers: Set[UsbKey] = set()
+        self.__pressed_keys: List[Optional[UsbKey]] = [None] * 6
 
     def cleanup(self) -> None:
         self._stop()

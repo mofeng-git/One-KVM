@@ -40,7 +40,7 @@ from ....logging import get_logger
 from .... import tools
 from .... import aiomulti
 
-from ....keyboard.mappings import OtgKey
+from ....keyboard.mappings import UsbKey
 
 from ..otg.events import BaseEvent
 from ..otg.events import ClearEvent
@@ -115,8 +115,8 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
             "scroll": False,
             "num": False,
         }, notifier)
-        self.__modifiers: Set[OtgKey] = set()
-        self.__keys: List[Optional[OtgKey]] = [None] * 6
+        self.__modifiers: Set[UsbKey] = set()
+        self.__keys: List[Optional[UsbKey]] = [None] * 6
         self.__mouse_buttons = 0
 
     def run(self) -> None:

@@ -27,7 +27,7 @@ _AtxApiPart.switch_power
 _KeyMapping.web_name
 _KeyMapping.mcu_code
 _KeyMapping.arduino_name
-_KeyMapping.otg_key
+_KeyMapping.usb_key
 _KeyMapping.ps2_key
 _KeyMapping.at1_code
 _KeyMapping.x11_keys

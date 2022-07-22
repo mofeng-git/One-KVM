@@ -28,7 +28,7 @@ from typing import Set
 from typing import Optional
 from typing import Union
 
-from ....keyboard.mappings import OtgKey
+from ....keyboard.mappings import UsbKey
 from ....keyboard.mappings import KEYMAP
 
 from ....mouse import MouseRange
@@ -50,7 +50,7 @@ class ResetEvent(BaseEvent):
 # =====
 @dataclasses.dataclass(frozen=True)
 class KeyEvent(BaseEvent):
-    key: OtgKey
+    key: UsbKey
     state: bool
 
     def __post_init__(self) -> None:
@@ -59,7 +59,7 @@ class KeyEvent(BaseEvent):
 
 @dataclasses.dataclass(frozen=True)
 class ModifierEvent(BaseEvent):
-    modifier: OtgKey
+    modifier: UsbKey
     state: bool
 
     def __post_init__(self) -> None:
@@ -67,10 +67,10 @@ class ModifierEvent(BaseEvent):
 
 
 def make_keyboard_event(key: str, state: bool) -> Union[KeyEvent, ModifierEvent]:
-    otg_key = KEYMAP[key].otg
-    if otg_key.is_modifier:
-        return ModifierEvent(otg_key, state)
-    return KeyEvent(otg_key, state)
+    usb_key = KEYMAP[key].usb
+    if usb_key.is_modifier:
+        return ModifierEvent(usb_key, state)
+    return KeyEvent(usb_key, state)
 
 
 def get_led_caps(flags: int) -> bool:
@@ -87,8 +87,8 @@ def get_led_num(flags: int) -> bool:
 
 
 def make_keyboard_report(
-    pressed_modifiers: Set[OtgKey],
-    pressed_keys: List[Optional[OtgKey]],
+    pressed_modifiers: Set[UsbKey],
+    pressed_keys: List[Optional[UsbKey]],
 ) -> bytes:
 
     modifiers = 0
