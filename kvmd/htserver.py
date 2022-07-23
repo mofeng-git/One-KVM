@@ -187,7 +187,7 @@ def make_json_exception(err: Exception, status: Optional[int]=None) -> Response:
     }, status=status)
 
 
-async def start_streaming(request: Request, content_type: str="application/x-ndjson") -> StreamResponse:
+async def start_streaming(request: Request, content_type: str) -> StreamResponse:
     response = StreamResponse(status=200, reason="OK", headers={"Content-Type": content_type})
     await response.prepare(request)
     return response

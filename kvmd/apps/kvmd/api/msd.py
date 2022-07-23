@@ -129,7 +129,7 @@ class MsdApi:
 
                 get_logger(0).info("Downloading image %r as %r to MSD ...", url, name)
                 async with self.__msd.write_image(name, size) as chunk_size:
-                    response = await start_streaming(request)
+                    response = await start_streaming(request, "application/x-ndjson")
                     await stream_write_info()
                     last_report_ts = 0
                     async for chunk in remote.content.iter_chunked(chunk_size):
