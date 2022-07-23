@@ -218,6 +218,17 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__connected = connected
 
     @contextlib.asynccontextmanager
+    async def read_image(self, name: str) -> AsyncGenerator[int, None]:
+        async with self.__working():
+            if self is not None:  # XXX: Vulture and pylint hack
+                raise MsdMultiNotSupported()
+        yield 1
+
+    async def read_image_chunk(self) -> bytes:
+        async with self.__working():
+            raise MsdMultiNotSupported()
+
+    @contextlib.asynccontextmanager
     async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:
         async with self.__working():
             async with self.__region:

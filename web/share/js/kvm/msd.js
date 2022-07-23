@@ -39,6 +39,7 @@ export function Msd() {
 		$("msd-led").title = "Unknown state";
 
 		$("msd-image-selector").onchange = __selectImage;
+		tools.el.setOnClick($("msd-download-button"), __clickDownloadButton);
 		tools.el.setOnClick($("msd-remove-button"), __clickRemoveButton);
 
 		tools.radio.setOnClick("msd-mode-radio", __clickModeRadio);
@@ -67,8 +68,14 @@ export function Msd() {
 
 	var __selectImage = function() {
 		tools.el.setEnabled($("msd-image-selector"), false);
+		tools.el.setEnabled($("msd-download-button"), false);
 		tools.el.setEnabled($("msd-remove-button"), false);
 		__sendParam("image", $("msd-image-selector").value);
+	};
+
+	var __clickDownloadButton = function() {
+		let name = $("msd-image-selector").value;
+		window.open(`/api/msd/read?image=${name}`);
 	};
 
 	var __clickRemoveButton = function() {
@@ -244,6 +251,7 @@ export function Msd() {
 
 		tools.el.setEnabled($("msd-image-selector"), (online && s.features.multi && !s.drive.connected && !s.busy));
 		__applyStateImageSelector();
+		tools.el.setEnabled($("msd-download-button"), (online && s.features.multi && s.drive.image && !s.drive.connected && !s.busy));
 		tools.el.setEnabled($("msd-remove-button"), (online && s.features.multi && s.drive.image && !s.drive.connected && !s.busy));
 
 		tools.radio.setEnabled("msd-mode-radio", (online && s.features.cdrom && !s.drive.connected && !s.busy));

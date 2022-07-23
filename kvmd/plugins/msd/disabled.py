@@ -77,6 +77,15 @@ class Plugin(BaseMsd):
         raise MsdDisabledError()
 
     @contextlib.asynccontextmanager
+    async def read_image(self, name: str) -> AsyncGenerator[int, None]:
+        if self is not None:  # XXX: Vulture and pylint hack
+            raise MsdDisabledError()
+        yield 1
+
+    async def read_image_chunk(self) -> bytes:
+        raise MsdDisabledError()
+
+    @contextlib.asynccontextmanager
     async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise MsdDisabledError()

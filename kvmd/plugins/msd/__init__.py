@@ -132,6 +132,15 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
     @contextlib.asynccontextmanager
+    async def read_image(self, name: str) -> AsyncGenerator[int, None]:  # pylint: disable=unused-argument
+        if self is not None:  # XXX: Vulture and pylint hack
+            raise NotImplementedError()
+        yield 1
+
+    async def read_image_chunk(self) -> bytes:
+        raise NotImplementedError()
+
+    @contextlib.asynccontextmanager
     async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:  # pylint: disable=unused-argument
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
@@ -142,6 +151,40 @@ class BaseMsd(BasePlugin):
 
     async def remove(self, name: str) -> None:
         raise NotImplementedError()
+
+
+class MsdImageReader:
+    def __init__(self, path: str, chunk_size: int) -> None:
+        self.__name = os.path.basename(path)
+        self.__path = path
+        self.__chunk_size = chunk_size
+
+        self.__file: Optional[aiofiles.base.AiofilesContextManager] = None
+        self.__file_size: int = 0
+
+    async def open(self) -> "MsdImageReader":
+        assert self.__file is None
+        get_logger(1).info("Reading %r image from MSD ...", self.__name)
+        self.__file_size = os.stat(self.__path).st_size
+        self.__file = await aiofiles.open(self.__path, mode="rb")  # type: ignore
+        return self
+
+    def get_size(self) -> int:
+        assert self.__file is not None
+        return self.__file_size
+
+    async def read(self) -> bytes:
+        assert self.__file is not None
+        return (await self.__file.read(self.__chunk_size))  # type: ignore
+
+    async def close(self) -> None:
+        assert self.__file is not None
+        logger = get_logger()
+        logger.info("Closed image reader ...")
+        try:
+            await self.__file.close()  # type: ignore
+        except Exception:
+            logger.exception("Can't close image reader")
 
 
 class MsdImageWriter:

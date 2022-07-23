@@ -26,6 +26,7 @@ import asyncio
 import contextlib
 import dataclasses
 import inspect
+import urllib.parse
 import json
 
 from typing import Tuple
@@ -187,8 +188,20 @@ def make_json_exception(err: Exception, status: Optional[int]=None) -> Response:
     }, status=status)
 
 
-async def start_streaming(request: Request, content_type: str) -> StreamResponse:
-    response = StreamResponse(status=200, reason="OK", headers={"Content-Type": content_type})
+async def start_streaming(
+    request: Request,
+    content_type: str,
+    content_length: int=-1,
+    file_name: str="",
+) -> StreamResponse:
+
+    response = StreamResponse(status=200, reason="OK")
+    response.content_type = content_type
+    if content_length >= 0:
+        response.content_length = content_length
+    if file_name:
+        file_name = urllib.parse.quote(file_name, safe="")
+        response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{file_name}"
     await response.prepare(request)
     return response
 

@@ -57,6 +57,7 @@ from .. import MsdImageNotSelected
 from .. import MsdUnknownImageError
 from .. import MsdImageExistsError
 from .. import BaseMsd
+from .. import MsdImageReader
 from .. import MsdImageWriter
 
 from . import fs
@@ -136,6 +137,7 @@ class _State:
 class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=super-init-not-called
         self,
+        read_chunk_size: int,
         write_chunk_size: int,
         sync_chunk_size: int,
 
@@ -148,6 +150,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         gadget: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
 
+        self.__read_chunk_size = read_chunk_size
         self.__write_chunk_size = write_chunk_size
         self.__sync_chunk_size = sync_chunk_size
 
@@ -162,6 +165,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__drive = Drive(gadget, instance=0, lun=0)
 
+        self.__reader: Optional[MsdImageReader] = None
         self.__writer: Optional[MsdImageWriter] = None
         self.__writer_tick = 0.0
 
@@ -175,6 +179,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
+            "read_chunk_size":   Option(65536,   type=functools.partial(valid_number, min=1024)),
             "write_chunk_size":  Option(65536,   type=functools.partial(valid_number, min=1024)),
             "sync_chunk_size":   Option(4194304, type=functools.partial(valid_number, min=1024)),
 
@@ -253,6 +258,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def cleanup(self) -> None:
+        await self.__close_reader()
         await self.__close_writer()
 
     # =====
@@ -316,6 +322,29 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 await self.__remount_rw(False, fatal=False)
 
             self.__state.vd.connected = connected
+
+    @contextlib.asynccontextmanager
+    async def read_image(self, name: str) -> AsyncGenerator[int, None]:
+        async with self.__state.busy():
+            assert self.__state.storage
+            assert self.__state.vd
+
+            if self.__state.vd.connected or self.__drive.get_image_path():
+                raise MsdConnectedError()
+
+            path = os.path.join(self.__images_path, name)
+            if name not in self.__state.storage.images or not os.path.exists(path):
+                raise MsdUnknownImageError()
+
+            try:
+                self.__reader = await MsdImageReader(path, self.__read_chunk_size).open()
+                yield self.__reader.get_size()
+            finally:
+                await self.__close_reader()
+
+    async def read_image_chunk(self) -> bytes:
+        assert self.__reader
+        return (await self.__reader.read())
 
     @contextlib.asynccontextmanager
     async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:
@@ -386,6 +415,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             await self.__remount_rw(False)
 
     # =====
+
+    async def __close_reader(self) -> None:
+        if self.__reader:
+            await self.__reader.close()
+            self.__reader = None
 
     async def __close_writer(self) -> None:
         if self.__writer:
