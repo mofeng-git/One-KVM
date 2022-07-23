@@ -56,6 +56,7 @@ from .. import MsdDisconnectedError
 from .. import MsdImageNotSelected
 from .. import MsdUnknownImageError
 from .. import MsdImageExistsError
+from .. import MsdRwNotSupported
 from .. import BaseMsd
 from .. import MsdImageWriter
 
@@ -222,6 +223,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 "features": {
                     "multi": True,
                     "cdrom": True,
+                    "rw": False,
                 },
             }
 
@@ -254,8 +256,17 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     # =====
 
     @aiotools.atomic
-    async def set_params(self, name: Optional[str]=None, cdrom: Optional[bool]=None) -> None:
+    async def set_params(
+        self,
+        name: Optional[str]=None,
+        cdrom: Optional[bool]=None,
+        rw: Optional[bool]=None,
+    ) -> None:
+
         async with self.__state.busy():
+            if rw is not None:
+                raise MsdRwNotSupported()
+
             assert self.__state.storage
             assert self.__state.vd
 

@@ -50,6 +50,7 @@ class Plugin(BaseMsd):
             "features": {
                 "multi": False,
                 "cdrom": False,
+                "rw": False,
             },
         }
 
@@ -63,7 +64,13 @@ class Plugin(BaseMsd):
 
     # =====
 
-    async def set_params(self, name: Optional[str]=None, cdrom: Optional[bool]=None) -> None:
+    async def set_params(
+        self,
+        name: Optional[str]=None,
+        cdrom: Optional[bool]=None,
+        rw: Optional[bool]=None,
+    ) -> None:
+
         raise MsdDisabledError()
 
     async def set_connected(self, connected: bool) -> None:

@@ -49,6 +49,7 @@ from .. import MsdConnectedError
 from .. import MsdDisconnectedError
 from .. import MsdMultiNotSupported
 from .. import MsdCdromNotSupported
+from .. import MsdRwNotSupported
 from .. import BaseMsd
 from .. import MsdImageWriter
 
@@ -141,6 +142,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "features": {
                 "multi": False,
                 "cdrom": False,
+                "rw": False,
             },
         }
 
@@ -178,12 +180,20 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     # =====
 
     @aiotools.atomic
-    async def set_params(self, name: Optional[str]=None, cdrom: Optional[bool]=None) -> None:
+    async def set_params(
+        self,
+        name: Optional[str]=None,
+        cdrom: Optional[bool]=None,
+        rw: Optional[bool]=None,
+    ) -> None:
+
         async with self.__working():
             if name is not None:
                 raise MsdMultiNotSupported()
             if cdrom is not None:
                 raise MsdCdromNotSupported()
+            if rw is not None:
+                raise MsdRwNotSupported()
 
     @aiotools.atomic
     async def set_connected(self, connected: bool) -> None:

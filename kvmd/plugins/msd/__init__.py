@@ -93,7 +93,12 @@ class MsdMultiNotSupported(MsdOperationError):
 
 class MsdCdromNotSupported(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__("This MSD does not support CD-ROM emulation")
+        super().__init__("This MSD does not support CD-ROM switching")
+
+
+class MsdRwNotSupported(MsdOperationError):
+    def __init__(self) -> None:
+        super().__init__("This MSD does not support RW switching")
 
 
 # =====
@@ -114,7 +119,13 @@ class BaseMsd(BasePlugin):
 
     # =====
 
-    async def set_params(self, name: Optional[str]=None, cdrom: Optional[bool]=None) -> None:
+    async def set_params(
+        self,
+        name: Optional[str]=None,
+        cdrom: Optional[bool]=None,
+        rw: Optional[bool]=None,
+    ) -> None:
+
         raise NotImplementedError()
 
     async def set_connected(self, connected: bool) -> None:

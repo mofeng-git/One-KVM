@@ -70,6 +70,7 @@ class MsdApi:
             for (param, key, validator) in [
                 ("image", "name", (lambda arg: str(arg).strip() and valid_msd_image_name(arg))),
                 ("cdrom", "cdrom", valid_bool),
+                ("rw", "rw", valid_bool),
             ]
             if request.query.get(param) is not None
         }
