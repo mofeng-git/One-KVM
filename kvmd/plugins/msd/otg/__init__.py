@@ -136,7 +136,7 @@ class _State:
 class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=super-init-not-called
         self,
-        upload_chunk_size: int,
+        write_chunk_size: int,
         sync_chunk_size: int,
 
         storage_path: str,
@@ -148,7 +148,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         gadget: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
 
-        self.__upload_chunk_size = upload_chunk_size
+        self.__write_chunk_size = write_chunk_size
         self.__sync_chunk_size = sync_chunk_size
 
         self.__storage_path = os.path.normpath(storage_path)
@@ -175,7 +175,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @classmethod
     def get_plugin_options(cls) -> Dict:
         return {
-            "upload_chunk_size": Option(65536,   type=functools.partial(valid_number, min=1024)),
+            "write_chunk_size":  Option(65536,   type=functools.partial(valid_number, min=1024)),
             "sync_chunk_size":   Option(4194304, type=functools.partial(valid_number, min=1024)),
 
             "storage": Option("/var/lib/kvmd/msd", type=valid_abs_dir, unpack_as="storage_path"),
@@ -340,7 +340,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         self.__writer = await MsdImageWriter(path, size, self.__sync_chunk_size).open()
 
                     await self.__notifier.notify()
-                    yield self.__upload_chunk_size
+                    yield self.__write_chunk_size
                     self.__set_image_complete(name, True)
 
                 finally:
