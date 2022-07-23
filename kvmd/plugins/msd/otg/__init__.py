@@ -328,7 +328,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         if name in self.__state.storage.images or os.path.exists(path):
                             raise MsdImageExistsError()
 
-                        await self.__remount_storage(rw=True)
+                        await self.__remount_rw(True)
                         self.__set_image_complete(name, False)
 
                         self.__new_writer = await MsdImageWriter(path, size, self.__sync_chunk_size).open()
@@ -340,7 +340,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 finally:
                     await self.__close_new_writer()
                     try:
-                        await self.__remount_storage(rw=False)
+                        await self.__remount_rw(False)
                     except Exception:
                         pass
         finally:
@@ -377,10 +377,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__state.vd.image = None
             del self.__state.storage.images[name]
 
-            await self.__remount_storage(rw=True)
+            await self.__remount_rw(True)
             os.remove(image.path)
             self.__set_image_complete(name, False)
-            await self.__remount_storage(rw=False)
+            await self.__remount_rw(False)
 
     # =====
 
@@ -450,8 +450,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     # Если только что включились и образ не подключен - попробовать
                     # перемонтировать хранилище (и создать images и meta).
                     logger.info("Probing to remount storage ...")
-                    await self.__remount_storage(rw=True)
-                    await self.__remount_storage(rw=False)
+                    await self.__remount_rw(True)
+                    await self.__remount_rw(False)
                     await self.__setup_initial()
 
                 storage_state = self.__get_storage_state()
@@ -550,6 +550,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    async def __remount_storage(self, rw: bool) -> None:
+    async def __remount_rw(self, rw: bool) -> None:
         if not (await aiohelpers.remount("MSD", self.__remount_cmd, rw)):
             raise MsdError("Can't execute remount helper")
