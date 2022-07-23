@@ -162,8 +162,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__drive = Drive(gadget, instance=0, lun=0)
 
-        self.__new_writer: Optional[MsdImageWriter] = None
-        self.__new_writer_tick = 0.0
+        self.__writer: Optional[MsdImageWriter] = None
+        self.__writer_tick = 0.0
 
         self.__notifier = aiotools.AioNotifier()
         self.__state = _State(self.__notifier)
@@ -200,9 +200,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     del storage["images"][name]["path"]
                     del storage["images"][name]["in_storage"]
 
-                if self.__new_writer:
+                if self.__writer:
                     # При загрузке файла показываем актуальную статистику вручную
-                    storage["uploading"] = self.__new_writer.get_state()
+                    storage["uploading"] = self.__writer.get_state()
                     space = fs.get_fs_space(self.__storage_path, fatal=False)
                     if space:
                         storage.update(dataclasses.asdict(space))
@@ -253,7 +253,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic
     async def cleanup(self) -> None:
-        await self.__close_new_writer()
+        await self.__close_writer()
 
     # =====
 
@@ -337,14 +337,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         await self.__remount_rw(True)
                         self.__set_image_complete(name, False)
 
-                        self.__new_writer = await MsdImageWriter(path, size, self.__sync_chunk_size).open()
+                        self.__writer = await MsdImageWriter(path, size, self.__sync_chunk_size).open()
 
                     await self.__notifier.notify()
                     yield self.__upload_chunk_size
                     self.__set_image_complete(name, True)
 
                 finally:
-                    await self.__close_new_writer()
+                    await self.__close_writer()
                     await self.__remount_rw(False, fatal=False)
         finally:
             # Между закрытием файла и эвентом айнотифи состояние может быть не обновлено,
@@ -353,12 +353,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             await self.__notifier.notify()
 
     async def write_image_chunk(self, chunk: bytes) -> int:
-        assert self.__new_writer
-        written = await self.__new_writer.write(chunk)
+        assert self.__writer
+        written = await self.__writer.write(chunk)
         now = time.monotonic()
-        if self.__new_writer_tick + 1 < now:
+        if self.__writer_tick + 1 < now:
             # Это нужно для ручного оповещения о свободном пространстве на диске, см. get_state()
-            self.__new_writer_tick = now
+            self.__writer_tick = now
             await self.__notifier.notify()
         return written
 
@@ -387,15 +387,15 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    async def __close_new_writer(self) -> None:
+    async def __close_writer(self) -> None:
         try:
-            if self.__new_writer:
+            if self.__writer:
                 get_logger().info("Closing new image file ...")
-                await self.__new_writer.close()
+                await self.__writer.close()
         except Exception:
             get_logger().exception("Can't close image file")
         finally:
-            self.__new_writer = None
+            self.__writer = None
 
     # =====
 
