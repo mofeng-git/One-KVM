@@ -56,7 +56,6 @@ from .. import MsdDisconnectedError
 from .. import MsdImageNotSelected
 from .. import MsdUnknownImageError
 from .. import MsdImageExistsError
-from .. import MsdRwNotSupported
 from .. import BaseMsd
 from .. import MsdImageWriter
 
@@ -95,6 +94,7 @@ class _VirtualDriveState:
     image: Optional[_DriveImage]
     connected: bool
     cdrom: bool
+    rw: bool
 
     @classmethod
     def from_drive_state(cls, state: _DriveState) -> "_VirtualDriveState":
@@ -102,6 +102,7 @@ class _VirtualDriveState:
             image=state.image,
             connected=bool(state.image),
             cdrom=state.cdrom,
+            rw=state.rw,
         )
 
 
@@ -223,7 +224,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 "features": {
                     "multi": True,
                     "cdrom": True,
-                    "rw": False,
+                    "rw": True,
                 },
             }
 
@@ -244,10 +245,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         async with self.__state.busy(check_online=False):
             try:
                 self.__drive.set_image_path("")
-                self.__drive.set_rw_flag(False)
                 self.__drive.set_cdrom_flag(False)
+                self.__drive.set_rw_flag(False)
+                await self.__remount_rw(False)
             except Exception:
-                get_logger(0).exception("Can't reset MSD")
+                get_logger(0).exception("Can't reset MSD properly")
 
     @aiotools.atomic
     async def cleanup(self) -> None:
@@ -264,9 +266,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     ) -> None:
 
         async with self.__state.busy():
-            if rw is not None:
-                raise MsdRwNotSupported()
-
             assert self.__state.storage
             assert self.__state.vd
 
@@ -286,6 +285,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if cdrom is not None:
                 self.__state.vd.cdrom = cdrom
 
+            if rw is not None:
+                self.__state.vd.rw = rw
+
     @aiotools.atomic
     async def set_connected(self, connected: bool) -> None:
         async with self.__state.busy():
@@ -301,13 +303,17 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 if not os.path.exists(self.__state.vd.image.path):
                     raise MsdUnknownImageError()
 
+                self.__drive.set_rw_flag(self.__state.vd.rw)
                 self.__drive.set_cdrom_flag(self.__state.vd.cdrom)
+                if self.__state.vd.rw:
+                    await self.__remount_rw(True)
                 self.__drive.set_image_path(self.__state.vd.image.path)
 
             else:
                 if not (self.__state.vd.connected or self.__drive.get_image_path()):
                     raise MsdDisconnectedError()
                 self.__drive.set_image_path("")
+                await self.__remount_rw(False, fatal=False)
 
             self.__state.vd.connected = connected
 
@@ -339,10 +345,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                 finally:
                     await self.__close_new_writer()
-                    try:
-                        await self.__remount_rw(False)
-                    except Exception:
-                        pass
+                    await self.__remount_rw(False, fatal=False)
         finally:
             # Между закрытием файла и эвентом айнотифи состояние может быть не обновлено,
             # так что форсим обновление вручную, чтобы получить актуальное состояние.
@@ -442,9 +445,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         async with self.__state._lock:  # pylint: disable=protected-access
             try:
                 drive_state = self.__get_drive_state()
-                if drive_state.rw:
-                    # Внештатное использование MSD, ломаемся
-                    raise MsdError("MSD has been switched to RW-mode manually")
 
                 if self.__state.vd is None and drive_state.image is None:
                     # Если только что включились и образ не подключен - попробовать
@@ -485,6 +485,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if os.path.exists(path):
                 logger.info("Setting up initial image %r ...", self.__initial_image)
                 try:
+                    self.__drive.set_rw_flag(False)
                     self.__drive.set_cdrom_flag(self.__initial_cdrom)
                     self.__drive.set_image_path(path)
                 except Exception:
@@ -550,6 +551,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    async def __remount_rw(self, rw: bool) -> None:
+    async def __remount_rw(self, rw: bool, fatal: bool=True) -> None:
         if not (await aiohelpers.remount("MSD", self.__remount_cmd, rw)):
-            raise MsdError("Can't execute remount helper")
+            if fatal:
+                raise MsdError("Can't execute remount helper")

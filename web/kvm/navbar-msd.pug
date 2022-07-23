@@ -47,6 +47,9 @@ li(id="msd-dropdown" class="right feature-disabled")
 						label(for="msd-mode-radio-cdrom") CD-ROM
 						input(type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0")
 						label(for="msd-mode-radio-flash") Flash
+		table(class="kv msd-rw feature-disabled")
+			tr
+				+menu_switch_notable("msd-rw-switch", "Read-write mode", false, false)
 		div(class="msd-multi-storage feature-disabled")
 			hr
 			div(class="text")

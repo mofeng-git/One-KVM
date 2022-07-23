@@ -43,6 +43,8 @@ export function Msd() {
 
 		tools.radio.setOnClick("msd-mode-radio", __clickModeRadio);
 
+		tools.el.setOnClick($("msd-rw-switch"), __clickRwSwitch);
+
 		tools.el.setOnClick($("msd-select-new-button"), __toggleSelectSub);
 		$("msd-new-file").onchange = __selectNewFile;
 		$("msd-new-url").oninput = __selectNewUrl;
@@ -86,6 +88,10 @@ export function Msd() {
 
 	var __clickModeRadio = function() {
 		__sendParam("cdrom", tools.radio.getValue("msd-mode-radio"));
+	};
+
+	var __clickRwSwitch = function() {
+		__sendParam("rw", $("msd-rw-switch").checked);
 	};
 
 	var __sendParam = function(name, value) {
@@ -243,6 +249,9 @@ export function Msd() {
 		tools.radio.setEnabled("msd-mode-radio", (online && s.features.cdrom && !s.drive.connected && !s.busy));
 		tools.radio.setValue("msd-mode-radio", `${Number(online && s.features.cdrom && s.drive.cdrom)}`);
 
+		tools.el.setEnabled($("msd-rw-switch"), (online && s.features.rw && !s.drive.connected && !s.busy));
+		$("msd-rw-switch").checked = (online && s.features.rw && s.drive.rw);
+
 		tools.el.setEnabled($("msd-connect-button"), (online && (!s.features.multi || s.drive.image) && !s.drive.connected && !s.busy));
 		tools.el.setEnabled($("msd-disconnect-button"), (online && s.drive.connected && !s.busy));
 
@@ -288,6 +297,9 @@ export function Msd() {
 			}
 			for (let el of $$$(".msd-cdrom-emulation")) {
 				tools.feature.setEnabled(el, s.features.cdrom);
+			}
+			for (let el of $$$(".msd-rw")) {
+				tools.feature.setEnabled(el, s.features.rw);
 			}
 		}
 
