@@ -87,7 +87,6 @@ class MsdApi:
     async def __write_handler(self, request: Request) -> Response:
         name = valid_msd_image_name(request.query.get("image"))
         size = valid_int_f0(request.content_length)
-
         written = 0
         async with self.__msd.write_image(name, size) as chunk_size:
             while True:
@@ -95,7 +94,6 @@ class MsdApi:
                 if not chunk:
                     break
                 written = await self.__msd.write_image_chunk(chunk)
-
         return make_json_response(self.__make_write_info(name, size, written))
 
     @exposed_http("POST", "/msd/write_remote")
