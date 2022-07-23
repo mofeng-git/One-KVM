@@ -187,15 +187,22 @@ class MsdImageWriter:
 
     async def close(self) -> None:
         assert self.__file is not None
-        if self.__written == self.__size:
-            (log, result) = (get_logger().info, "OK")
-        elif self.__written < self.__size:
-            (log, result) = (get_logger().error, "INCOMPLETE")
-        else:  # written > size
-            (log, result) = (get_logger().warning, "OVERFLOW")
-        log("Written %d of %d bytes to MSD image %r: %s", self.__written, self.__size, self.__name, result)
-        await aiofs.afile_sync(self.__file)
-        await self.__file.close()  # type: ignore
+        logger = get_logger()
+        logger.info("Closing image writer ...")
+        try:
+            if self.__written == self.__size:
+                (log, result) = (logger.info, "OK")
+            elif self.__written < self.__size:
+                (log, result) = (logger.error, "INCOMPLETE")
+            else:  # written > size
+                (log, result) = (logger.warning, "OVERFLOW")
+            log("Written %d of %d bytes to MSD image %r: %s", self.__written, self.__size, self.__name, result)
+            try:
+                await aiofs.afile_sync(self.__file)
+            finally:
+                await self.__file.close()  # type: ignore
+        except Exception:
+            logger.exception("Can't close image writer")
 
 
 # =====

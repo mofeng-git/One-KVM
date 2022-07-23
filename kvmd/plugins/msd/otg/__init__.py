@@ -388,13 +388,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def __close_writer(self) -> None:
-        try:
-            if self.__writer:
-                get_logger().info("Closing new image file ...")
-                await self.__writer.close()
-        except Exception:
-            get_logger().exception("Can't close image file")
-        finally:
+        if self.__writer:
+            await self.__writer.close()
             self.__writer = None
 
     # =====

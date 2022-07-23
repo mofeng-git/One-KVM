@@ -262,13 +262,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             get_logger().error("Can't write image info because device is full")
 
     async def __close_device_writer(self) -> None:
-        try:
-            if self.__device_writer:
-                get_logger().info("Closing device file ...")
-                await self.__device_writer.close()  # type: ignore
-        except Exception:
-            get_logger().exception("Can't close device file")
-        finally:
+        if self.__device_writer:
+            await self.__device_writer.close()  # type: ignore
             self.__device_writer = None
 
     async def __load_device_info(self) -> None:
