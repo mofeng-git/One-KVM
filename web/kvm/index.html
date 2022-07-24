@@ -407,7 +407,9 @@
                       <td style="line-height:1.5"><b>Read-write mode is enabled</b></td>
                     </tr>
                     <tr>
-                      <td><sup style="line-height:1">Do not turn off PiKVM during this to prevent filesystem corruption</sup></td>
+                      <td><sup style="line-height:1">Do not turn off PiKVM during this to prevent filesystem<br>
+                          corruption, and don't use this mode unnecessarily.<br>
+                          It can reduce the resource of the memory card.</sup></td>
                     </tr>
                   </table>
                 </div>
@@ -443,7 +445,7 @@
           </table>
           <table class="kv msd-cdrom-emulation feature-disabled">
             <tr>
-              <td>Drive emulation <a target="_blank" href="https://docs.pikvm.org/msd">mode</a>:</td>
+              <td>Drive <a target="_blank" href="https://docs.pikvm.org/msd">mode</a>:</td>
               <td>
                 <div class="radio-box">
                   <input checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1">
@@ -452,12 +454,9 @@
                   <label for="msd-mode-radio-flash">Flash</label>
                 </div>
               </td>
-            </tr>
-          </table>
-          <table class="kv msd-rw feature-disabled">
-            <tr>
-                  <td>Read-write mode:</td>
-                  <td align="right">
+              <td>&nbsp;</td>
+                  <td class="msd-rw feature-disabled">Writable:</td>
+                  <td class="msd-rw feature-disabled" align="right">
                     <div class="switch-box">
                       <input disabled type="checkbox" id="msd-rw-switch">
                       <label for="msd-rw-switch"><span class="switch-inner"></span><span class="switch"></span></label>

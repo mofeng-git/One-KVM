@@ -25,7 +25,9 @@ li(id="msd-dropdown" class="right feature-disabled")
 			hr
 		div(id="msd-message-rw-enabled" class="hidden")
 			+menu_message("warning", "Read-write mode is enabled")
-				| Do not turn off PiKVM during this to prevent filesystem corruption
+				| Do not turn off PiKVM during this to prevent filesystem#[br]
+				| corruption, and don't use this mode unnecessarily.#[br]
+				| It can reduce the resource of the memory card.
 			hr
 		table(class="kv msd-single-storage feature-disabled")
 			tr
@@ -45,16 +47,15 @@ li(id="msd-dropdown" class="right feature-disabled")
 				td #[button(disabled id="msd-remove-button" title="Remove image") #[b &nbsp;&nbsp;&times;&nbsp;&nbsp;]]
 		table(class="kv msd-cdrom-emulation feature-disabled")
 			tr
-				td Drive emulation #[a(target="_blank" href="https://docs.pikvm.org/msd") mode]:
+				td Drive #[a(target="_blank" href="https://docs.pikvm.org/msd") mode]:
 				td
 					div(class="radio-box")
 						input(checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1")
 						label(for="msd-mode-radio-cdrom") CD-ROM
 						input(type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0")
 						label(for="msd-mode-radio-flash") Flash
-		table(class="kv msd-rw feature-disabled")
-			tr
-				+menu_switch_notable("msd-rw-switch", "Read-write mode", false, false)
+				td &nbsp;
+				+menu_switch_notable("msd-rw-switch", "Writable", false, false, "msd-rw feature-disabled")
 		div(class="msd-multi-storage feature-disabled")
 			hr
 			div(class="text")

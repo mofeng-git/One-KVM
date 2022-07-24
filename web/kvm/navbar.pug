@@ -13,9 +13,9 @@ mixin menu_message(icon, short, classes="")
 						sup(style="line-height:1")
 							block
 
-mixin menu_switch_notable(id, title, enabled, checked)
-	td #{title}:
-	td(align="right")
+mixin menu_switch_notable(id, title, enabled, checked, classes="")
+	td(class=`${classes}`) #{title}:
+	td(class=`${classes}` align="right")
 		div(class="switch-box")
 			input(checked=checked disabled=!enabled type="checkbox" id=id)
 			label(for=id)
