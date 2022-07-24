@@ -167,7 +167,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__reader: Optional[MsdImageReader] = None
         self.__writer: Optional[MsdImageWriter] = None
-        self.__writer_tick = 0.0
 
         self.__notifier = aiotools.AioNotifier()
         self.__state = _State(self.__notifier)
@@ -377,7 +376,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         await self.__remount_rw(True)
                         self.__set_image_complete(name, False)
 
-                        self.__writer = await MsdImageWriter(path, size, self.__sync_chunk_size).open()
+                        self.__writer = await MsdImageWriter(
+                            notifier=self.__notifier,
+                            path=path,
+                            size=size,
+                            sync=self.__sync_chunk_size,
+                        ).open()
 
                     await self.__notifier.notify()
                     yield self.__write_chunk_size
@@ -394,13 +398,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     async def write_image_chunk(self, chunk: bytes) -> int:
         assert self.__writer
-        written = await self.__writer.write(chunk)
-        now = time.monotonic()
-        if self.__writer_tick + 1 < now:
-            # Это нужно для ручного оповещения о свободном пространстве на диске, см. get_state()
-            self.__writer_tick = now
-            await self.__notifier.notify()
-        return written
+        return (await self.__writer.write(chunk))
 
     @aiotools.atomic
     async def remove(self, name: str) -> None:

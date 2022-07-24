@@ -22,6 +22,7 @@
 
 import os
 import contextlib
+import time
 
 from typing import Dict
 from typing import Type
@@ -36,6 +37,7 @@ from ...logging import get_logger
 from ...errors import OperationError
 from ...errors import IsBusyError
 
+from ... import aiotools
 from ... import aiofs
 
 from .. import BasePlugin
@@ -187,8 +189,9 @@ class MsdImageReader:
             logger.exception("Can't close image reader")
 
 
-class MsdImageWriter:
-    def __init__(self, path: str, size: int, sync: int) -> None:
+class MsdImageWriter:  # pylint: disable=too-many-instance-attributes
+    def __init__(self, notifier: aiotools.AioNotifier, path: str, size: int, sync: int) -> None:
+        self.__notifier = notifier
         self.__name = os.path.basename(path)
         self.__path = path
         self.__size = size
@@ -197,6 +200,7 @@ class MsdImageWriter:
         self.__file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__written = 0
         self.__unsynced = 0
+        self.__tick = 0.0
 
     def get_file(self) -> aiofiles.base.AiofilesContextManager:
         assert self.__file is not None
@@ -225,6 +229,11 @@ class MsdImageWriter:
         if self.__unsynced >= self.__sync:
             await aiofs.afile_sync(self.__file)
             self.__unsynced = 0
+
+        now = time.monotonic()
+        if self.__tick + 1 < now or self.__written == self.__size:
+            self.__tick = now
+            await self.__notifier.notify()
 
         return self.__written
 

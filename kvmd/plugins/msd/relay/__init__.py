@@ -237,7 +237,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     if self.__connected:
                         raise MsdConnectedError()
 
-                    self.__device_writer = await MsdImageWriter(self.__device_info.path, size, self.__sync_chunk_size).open()
+                    self.__device_writer = await MsdImageWriter(
+                        notifier=self.__notifier,
+                        path=self.__device_info.path,
+                        size=size,
+                        sync=self.__sync_chunk_size,
+                    ).open()
 
                     await self.__write_image_info(False)
                     await self.__notifier.notify()
