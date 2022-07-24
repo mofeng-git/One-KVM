@@ -329,22 +329,29 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @contextlib.asynccontextmanager
     async def read_image(self, name: str) -> AsyncGenerator[int, None]:
-        async with self.__state.busy():
-            assert self.__state.storage
-            assert self.__state.vd
+        try:
+            async with self.__state._region:  # pylint: disable=protected-access
+                try:
+                    async with self.__state._lock:  # pylint: disable=protected-access
+                        await self.__notifier.notify()
+                        assert self.__state.storage
+                        assert self.__state.vd
 
-            if self.__state.vd.connected or self.__drive.get_image_path():
-                raise MsdConnectedError()
+                        if self.__state.vd.connected or self.__drive.get_image_path():
+                            raise MsdConnectedError()
 
-            path = os.path.join(self.__images_path, name)
-            if name not in self.__state.storage.images or not os.path.exists(path):
-                raise MsdUnknownImageError()
+                        path = os.path.join(self.__images_path, name)
+                        if name not in self.__state.storage.images or not os.path.exists(path):
+                            raise MsdUnknownImageError()
 
-            try:
-                self.__reader = await MsdImageReader(path, self.__read_chunk_size).open()
-                yield self.__reader.get_size()
-            finally:
-                await self.__close_reader()
+                        self.__reader = await MsdImageReader(path, self.__read_chunk_size).open()
+
+                    yield self.__reader.get_size()
+
+                finally:
+                    await self.__close_reader()
+        finally:
+            await self.__notifier.notify()
 
     async def read_image_chunk(self) -> bytes:
         assert self.__reader
