@@ -322,6 +322,8 @@ export function Msd() {
 			(online && s.features.rw && s.drive.rw));
 		tools.hidden.setVisible($("msd-message-another-user-uploads"),
 			(online && s.storage.uploading && !__http));
+		tools.hidden.setVisible($("msd-message-downloads"),
+			(online && s.features.multi && s.storage.downloading));
 	};
 
 	var __applyStateStatus = function() {
@@ -337,6 +339,9 @@ export function Msd() {
 		} else if (online && s.storage.uploading) {
 			led_cls = "led-yellow-rotating-fast";
 			msg = "Uploading new image";
+		} else if (online && s.features.multi && s.storage.downloading) {
+			led_cls = "led-yellow-rotating-fast";
+			msg = "Serving the image to download";
 		} else if (online) { // Sic!
 			msg = "Disconnected";
 		}
@@ -354,7 +359,7 @@ export function Msd() {
 			el.options.length = 1; // Cleanup
 			return;
 		}
-		if (!s.features.multi || s.storage.uploading) {
+		if (!s.features.multi || s.storage.uploading || s.storage.downloading) {
 			return;
 		}
 
