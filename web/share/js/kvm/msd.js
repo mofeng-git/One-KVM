@@ -318,6 +318,8 @@ export function Msd() {
 			(online && s.features.cdrom && s.drive.cdrom && s.drive.image && s.drive.image.size >= 2359296000));
 		tools.hidden.setVisible($("msd-message-out-of-storage"),
 			(online && s.features.multi && s.drive.image && !s.drive.image.in_storage));
+		tools.hidden.setVisible($("msd-message-rw-enabled"),
+			(online && s.features.rw && s.drive.rw));
 		tools.hidden.setVisible($("msd-message-another-user-uploads"),
 			(online && s.storage.uploading && !__http));
 	};

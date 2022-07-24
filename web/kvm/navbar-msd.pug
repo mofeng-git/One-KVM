@@ -23,6 +23,10 @@ li(id="msd-dropdown" class="right feature-disabled")
 			+menu_message("warning", "Current image is out of storage")
 				| This image was connected manually using #[b kvmd-otgmsd]
 			hr
+		div(id="msd-message-rw-enabled" class="hidden")
+			+menu_message("warning", "Read-write mode is enabled")
+				| Do not turn off PiKVM during this to prevent filesystem corruption
+			hr
 		table(class="kv msd-single-storage feature-disabled")
 			tr
 				td Current image:
