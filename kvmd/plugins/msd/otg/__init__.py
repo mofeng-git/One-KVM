@@ -416,7 +416,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             await self.__remount_rw(True)
             os.remove(image.path)
             self.__set_image_complete(name, False)
-            await self.__remount_rw(False)
+            await self.__remount_rw(False, fatal=False)
 
     # =====
 
