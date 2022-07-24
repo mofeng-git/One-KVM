@@ -155,14 +155,28 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
 
-class MsdImageReader:
-    def __init__(self, path: str, chunk_size: int) -> None:
+class MsdImageReader:  # pylint: disable=too-many-instance-attributes
+    def __init__(self, notifier: aiotools.AioNotifier, path: str, chunk_size: int) -> None:
+        self.__notifier = notifier
         self.__name = os.path.basename(path)
         self.__path = path
         self.__chunk_size = chunk_size
 
         self.__file: Optional[aiofiles.base.AiofilesContextManager] = None
-        self.__file_size: int = 0
+        self.__file_size = 0
+        self.__readed = 0
+        self.__tick = 0.0
+
+    def get_size(self) -> int:
+        assert self.__file is not None
+        return self.__file_size
+
+    def get_state(self) -> Dict:
+        return {
+            "name": self.__name,
+            "size": self.__file_size,
+            "readed": self.__readed,
+        }
 
     async def open(self) -> "MsdImageReader":
         assert self.__file is None
@@ -171,18 +185,22 @@ class MsdImageReader:
         self.__file = await aiofiles.open(self.__path, mode="rb")  # type: ignore
         return self
 
-    def get_size(self) -> int:
-        assert self.__file is not None
-        return self.__file_size
-
     async def read(self) -> bytes:
         assert self.__file is not None
-        return (await self.__file.read(self.__chunk_size))  # type: ignore
+        chunk = await self.__file.read(self.__chunk_size)  # type: ignore
+        self.__readed += len(chunk)
+
+        now = time.monotonic()
+        if self.__tick + 1 < now or self.__readed == self.__file_size:
+            self.__tick = now
+            await self.__notifier.notify()
+
+        return chunk
 
     async def close(self) -> None:
         assert self.__file is not None
         logger = get_logger()
-        logger.info("Closed image reader ...")
+        logger.info("Closing image reader ...")
         try:
             await self.__file.close()  # type: ignore
         except Exception:

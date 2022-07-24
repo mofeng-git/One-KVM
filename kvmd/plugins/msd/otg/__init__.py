@@ -204,6 +204,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     del storage["images"][name]["path"]
                     del storage["images"][name]["in_storage"]
 
+                storage["downloading"] = (self.__reader.get_state() if self.__reader else None)
+
                 if self.__writer:
                     # При загрузке файла показываем актуальную статистику вручную
                     storage["uploading"] = self.__writer.get_state()
@@ -343,7 +345,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         if name not in self.__state.storage.images or not os.path.exists(path):
                             raise MsdUnknownImageError()
 
-                        self.__reader = await MsdImageReader(path, self.__read_chunk_size).open()
+                        self.__reader = await MsdImageReader(
+                            notifier=self.__notifier,
+                            path=path,
+                            chunk_size=self.__read_chunk_size,
+                        ).open()
 
                     yield self.__reader.get_size()
 
