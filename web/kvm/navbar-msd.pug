@@ -25,9 +25,9 @@ li(id="msd-dropdown" class="right feature-disabled")
 			hr
 		div(id="msd-message-rw-enabled" class="hidden")
 			+menu_message("warning", "Read-write mode is enabled")
-				| Do not turn off PiKVM during this to prevent filesystem#[br]
-				| corruption, and don't use this mode unnecessarily.#[br]
-				| It can reduce the resource of the memory card.
+				| Do not turn off PiKVM while this is active to prevent#[br]
+				| filesystem corruption. Use read-only mode where possible,#[br]
+				| as writing to SD card often can reduce its lifespan.
 			hr
 		div(id="msd-message-downloads" class="hidden")
 			hr
