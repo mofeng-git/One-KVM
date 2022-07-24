@@ -290,9 +290,13 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
             if cdrom is not None:
                 self.__state.vd.cdrom = cdrom
+                if cdrom:
+                    rw = False
 
             if rw is not None:
                 self.__state.vd.rw = rw
+                if rw:
+                    self.__state.vd.cdrom = False
 
     @aiotools.atomic
     async def set_connected(self, connected: bool) -> None:
