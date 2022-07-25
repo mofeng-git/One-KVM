@@ -22,8 +22,8 @@ post_upgrade() {
 		chmod 644 "/etc/kvmd/nginx/$target.conf" || true
 	done
 
-	chown kvmd /var/lib/kvmd/msd || true
-	chown kvmd-pst /var/lib/kvmd/pst || true
+	chown kvmd /var/lib/kvmd/msd 2>/dev/null || true
+	chown kvmd-pst /var/lib/kvmd/pst 2>/dev/null || true
 
 	if [ ! -e /etc/kvmd/nginx/ssl/server.crt ]; then
 		echo "==> Generating KVMD-Nginx certificate ..."
