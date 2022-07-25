@@ -222,7 +222,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 				//   - https://github.com/Glimesh/janus-ftl-plugin/issues/101
 				/*if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.pc) {
 					for (let receiver of __handle.webrtcStuff.pc.getReceivers()) {
-						if (receiver.track && receiver.track.kind == "video" && receiver.playoutDelayHint !== undefined) {
+						if (receiver.track && receiver.track.kind === "video" && receiver.playoutDelayHint !== undefined) {
 							receiver.playoutDelayHint = 0;
 						}
 					}
