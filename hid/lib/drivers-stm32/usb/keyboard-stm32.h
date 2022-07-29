@@ -26,8 +26,8 @@
 
 #include "tools.h"
 #include "keyboard.h"
+#include "usb-keymap.h"
 #include "hid-wrapper-stm32.h"
-#include "keymap.h"
 
 
 namespace DRIVERS {

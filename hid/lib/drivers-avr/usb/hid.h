@@ -28,10 +28,10 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "tools.h"
+#include "usb-keymap.h"
 #ifdef AUM
 #	include "aum.h"
 #endif
-#include "keymap.h"
 
 using namespace DRIVERS;
 
