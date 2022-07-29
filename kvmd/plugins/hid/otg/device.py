@@ -130,7 +130,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
     # =====
 
-    def _process_event(self, event: BaseEvent) -> Generator[bytes, None, None]:  # pylint: disable=unused-argument
+    def _process_event(self, event: BaseEvent) -> Generator[bytes, None, None]:
+        _ = event
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield

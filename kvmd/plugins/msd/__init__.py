@@ -134,7 +134,8 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
     @contextlib.asynccontextmanager
-    async def read_image(self, name: str) -> AsyncGenerator[int, None]:  # pylint: disable=unused-argument
+    async def read_image(self, name: str) -> AsyncGenerator[int, None]:
+        _ = name
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield 1
@@ -143,7 +144,9 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:  # pylint: disable=unused-argument
+    async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:
+        _ = name
+        _ = size
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield 1
