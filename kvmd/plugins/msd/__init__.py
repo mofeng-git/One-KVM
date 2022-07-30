@@ -144,9 +144,10 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:
         _ = name
         _ = size
+        _ = remove_incomplete
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield 1
@@ -223,6 +224,9 @@ class MsdImageWriter:  # pylint: disable=too-many-instance-attributes
         self.__unsynced = 0
         self.__tick = 0.0
 
+    def is_complete(self) -> bool:
+        return (self.__written >= self.__size)
+
     def get_file(self) -> aiofiles.base.AiofilesContextManager:
         assert self.__file is not None
         return self.__file
@@ -252,7 +256,7 @@ class MsdImageWriter:  # pylint: disable=too-many-instance-attributes
             self.__unsynced = 0
 
         now = time.monotonic()
-        if self.__tick + 1 < now or self.__written == self.__size:
+        if self.__tick + 1 < now:
             self.__tick = now
             await self.__notifier.notify()
 

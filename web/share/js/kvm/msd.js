@@ -115,10 +115,10 @@ export function Msd() {
 		let file = tools.input.getFile($("msd-new-file"));
 		__http = new XMLHttpRequest();
 		if (file) {
-			__http.open("POST", `/api/msd/write?image=${encodeURIComponent(file.name)}`, true);
+			__http.open("POST", `/api/msd/write?image=${encodeURIComponent(file.name)}&remove_incomplete=1`, true);
 		} else {
 			let url = $("msd-new-url").value;
-			__http.open("POST", `/api/msd/write_remote?url=${encodeURIComponent(url)}`, true);
+			__http.open("POST", `/api/msd/write_remote?url=${encodeURIComponent(url)}&remove_incomplete=1`, true);
 		}
 		__http.upload.timeout = 7 * 24 * 3600;
 		__http.onreadystatechange = __httpStateChange;

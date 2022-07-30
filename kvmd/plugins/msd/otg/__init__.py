@@ -363,9 +363,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         return (await self.__reader.read())
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:
         try:
             async with self.__state._region:  # pylint: disable=protected-access
+                path: str = ""
                 try:
                     async with self.__state._lock:  # pylint: disable=protected-access
                         await self.__notifier.notify()
@@ -391,9 +392,15 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                     await self.__notifier.notify()
                     yield self.__write_chunk_size
-                    self.__set_image_complete(name, True)
+                    self.__set_image_complete(name, self.__writer.is_complete())
 
                 finally:
+                    if remove_incomplete and self.__writer and not self.__writer.is_complete():
+                        # Можно сперва удалить файл, потом закрыть его
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
                     await self.__close_writer()
                     await self.__remount_rw(False, fatal=False)
         finally:

@@ -229,8 +229,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             raise MsdMultiNotSupported()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int) -> AsyncGenerator[int, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:
         async with self.__working():
+            if remove_incomplete is not None:
+                raise MsdMultiNotSupported()
             async with self.__region:
                 try:
                     assert self.__device_info

@@ -100,8 +100,9 @@ class MsdApi:
     async def __write_handler(self, request: Request) -> Response:
         name = valid_msd_image_name(request.query.get("image"))
         size = valid_int_f0(request.content_length)
+        remove_incomplete = self.__get_remove_incomplete(request)
         written = 0
-        async with self.__msd.write_image(name, size) as chunk_size:
+        async with self.__msd.write_image(name, size, remove_incomplete) as chunk_size:
             while True:
                 chunk = await request.content.read(chunk_size)
                 if not chunk:
@@ -114,6 +115,7 @@ class MsdApi:
         url = valid_url(request.query.get("url"))
         insecure = valid_bool(request.query.get("insecure", "0"))
         timeout = valid_float_f01(request.query.get("timeout", 10.0))
+        remove_incomplete = self.__get_remove_incomplete(request)
 
         name = ""
         size = written = 0
@@ -139,7 +141,7 @@ class MsdApi:
                 size = valid_int_f0(remote.content_length)
 
                 get_logger(0).info("Downloading image %r as %r to MSD ...", url, name)
-                async with self.__msd.write_image(name, size) as chunk_size:
+                async with self.__msd.write_image(name, size, remove_incomplete) as chunk_size:
                     response = await start_streaming(request, "application/x-ndjson")
                     await stream_write_info()
                     last_report_ts = 0
@@ -160,6 +162,10 @@ class MsdApi:
             elif isinstance(err, aiohttp.ClientError):
                 return make_json_exception(err, 400)
             raise
+
+    def __get_remove_incomplete(self, request: Request) -> Optional[bool]:
+        flag: Optional[str] = request.query.get("remove_incomplete")
+        return (valid_bool(flag) if flag is not None else None)
 
     def __make_write_info(self, name: str, size: int, written: int) -> Dict:
         return {"image": {"name": name, "size": size, "written": written}}
