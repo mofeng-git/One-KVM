@@ -107,6 +107,22 @@ function __WindowManager() {
 				});
 			}
 
+			let el_enter_full_tab_button = el_window.querySelector(".window-header .window-button-enter-full-tab");
+			let el_exit_full_tab_button = el_window.querySelector(".window-button-exit-full-tab");
+			if (el_enter_full_tab_button && el_exit_full_tab_button) {
+				el_enter_full_tab_button.title = "Stretch to the entire tab";
+				let toggle_full_tab = function(enabled) {
+					el_window.classList.toggle("window-full-tab", enabled);
+					__activateLastWindow(el_window);
+					let el_navbar = $("navbar");
+					if (el_navbar) {
+						tools.hidden.setVisible(el_navbar, !enabled);
+					}
+				};
+				tools.el.setOnClick(el_enter_full_tab_button, () => toggle_full_tab(true));
+				tools.el.setOnClick(el_exit_full_tab_button, () => toggle_full_tab(false));
+			}
+
 			let el_full_screen_button = el_window.querySelector(".window-header .window-button-full-screen");
 			if (el_full_screen_button && __getFullScreenFunction(el_window)) {
 				el_full_screen_button.title = "Go to full-screen mode";

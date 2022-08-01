@@ -7,11 +7,13 @@ div(id="stream-window" class="window window-resizable")
 		button(class="window-button-close") #[b &times;]
 		button(class="window-button-maximize") &#9744;
 		button(class="window-button-original") &bull;
+		button(class="window-button-enter-full-tab") &#9650;
 		button(class="window-button-full-screen") &#10530;
 
 	div(id="stream-info")
 
 	div(id="stream-box" class="stream-box-offline")
+		button(class="window-button-exit-full-tab") &#9660;
 		img(id="stream-image" src=`${png_dir}/blank-stream.png`)
 		video(id="stream-video" class="hidden" autoplay playsinline muted)
 		div(id="stream-fullscreen-active")

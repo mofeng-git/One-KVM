@@ -74,6 +74,16 @@ div.window:-webkit-full-screen {
 	height: 100% !important;
 	padding: 0px !important;
 }
+div.window.window-full-tab {
+	border: 0px;
+	border-radius: 0px;
+	resize: none !important;
+	top: 0px !important;
+	left: 0px !important;
+	width: 100% !important;
+	height: 100% !important;
+	padding: 0px !important;
+}
 
 div.window div.window-header {
 	overflow: hidden;
@@ -112,6 +122,7 @@ div.window div.window-header-grabbed {
 }
 
 div.window div.window-header button.window-button-full-screen,
+div.window div.window-header button.window-button-enter-full-tab,
 div.window div.window-header button.window-button-original,
 div.window div.window-header button.window-button-maximize,
 div.window div.window-header button.window-button-close {
@@ -126,6 +137,9 @@ div.window div.window-header button.window-button-close {
 	display: inline-block;
 }
 div.window div.window-header button.window-button-full-screen {
+	right: 180px;
+}
+div.window div.window-header button.window-button-enter-full-tab {
 	right: 135px;
 }
 div.window div.window-header button.window-button-original {
@@ -136,6 +150,23 @@ div.window div.window-header button.window-button-maximize {
 }
 div.window div.window-header button.window-button-close {
 	right: 0px;
+}
+
+div.window button.window-button-exit-full-tab {
+	width: 50px;
+	height: 10px;
+	left: calc(50% - 25px);
+	font-size: 8px;
+	position: absolute;
+	opacity: 0.5;
+	border-radius: 0px;
+	visibility: hidden;
+}
+div.window button.window-button-exit-full-tab:hover {
+	opacity: 1;
+}
+div.window.window-full-tab button.window-button-exit-full-tab {
+	visibility: visible !important;
 }
 
 @media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
@@ -150,6 +181,9 @@ div.window div.window-header button.window-button-close {
 		height: 35px !important;
 	}
 	div.window div.window-header button.window-button-full-screen,
+	div.window div.window-header button.window-button-enter-full-tab,
+	div.window div.window-header button.window-button-original,
+	div.window div.window-header button.window-button-maximize,
 	div.window div.window-header button.window-button-close {
 		height: 40px !important;
 	}
