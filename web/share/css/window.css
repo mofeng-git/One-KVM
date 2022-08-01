@@ -161,6 +161,7 @@ div.window button.window-button-exit-full-tab {
 	opacity: 0.5;
 	border-radius: 0px;
 	visibility: hidden;
+	z-index: 1;
 }
 div.window button.window-button-exit-full-tab:hover {
 	opacity: 1;
