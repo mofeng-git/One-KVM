@@ -57,7 +57,7 @@ from .. import MsdImageNotSelected
 from .. import MsdUnknownImageError
 from .. import MsdImageExistsError
 from .. import BaseMsd
-from .. import MsdImageReader
+from .. import MsdFileReader
 from .. import MsdImageWriter
 
 from . import fs
@@ -165,7 +165,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__drive = Drive(gadget, instance=0, lun=0)
 
-        self.__reader: Optional[MsdImageReader] = None
+        self.__reader: Optional[MsdFileReader] = None
         self.__writer: Optional[MsdImageWriter] = None
 
         self.__notifier = aiotools.AioNotifier()
@@ -329,7 +329,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             self.__state.vd.connected = connected
 
     @contextlib.asynccontextmanager
-    async def read_image(self, name: str) -> AsyncGenerator[int, None]:
+    async def read_image(self, name: str) -> AsyncGenerator[MsdFileReader, None]:
         try:
             async with self.__state._region:  # pylint: disable=protected-access
                 try:
@@ -345,22 +345,18 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         if name not in self.__state.storage.images or not os.path.exists(path):
                             raise MsdUnknownImageError()
 
-                        self.__reader = await MsdImageReader(
+                        self.__reader = await MsdFileReader(
                             notifier=self.__notifier,
                             path=path,
                             chunk_size=self.__read_chunk_size,
                         ).open()
 
-                    yield self.__reader.get_size()
+                    yield self.__reader
 
                 finally:
                     await self.__close_reader()
         finally:
             await self.__notifier.notify()
-
-    async def read_image_chunk(self) -> bytes:
-        assert self.__reader
-        return (await self.__reader.read())
 
     @contextlib.asynccontextmanager
     async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:

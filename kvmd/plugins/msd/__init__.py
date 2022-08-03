@@ -104,6 +104,19 @@ class MsdRwNotSupported(MsdOperationError):
 
 
 # =====
+class BaseMsdReader:
+    def get_state(self) -> Dict:
+        raise NotImplementedError()
+
+    def get_total_size(self) -> int:
+        raise NotImplementedError()
+
+    async def read_chunked(self) -> AsyncGenerator[bytes, None]:
+        if self is not None:  # XXX: Vulture and pylint hack
+            raise NotImplementedError()
+        yield
+
+
 class BaseMsd(BasePlugin):
     async def get_state(self) -> Dict:
         raise NotImplementedError()
@@ -134,14 +147,11 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
     @contextlib.asynccontextmanager
-    async def read_image(self, name: str) -> AsyncGenerator[int, None]:
+    async def read_image(self, name: str) -> AsyncGenerator[BaseMsdReader, None]:
         _ = name
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
-        yield 1
-
-    async def read_image_chunk(self) -> bytes:
-        raise NotImplementedError()
+        yield BaseMsdReader()
 
     @contextlib.asynccontextmanager
     async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:
@@ -159,7 +169,7 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
 
-class MsdImageReader:  # pylint: disable=too-many-instance-attributes
+class MsdFileReader(BaseMsdReader):  # pylint: disable=too-many-instance-attributes
     def __init__(self, notifier: aiotools.AioNotifier, path: str, chunk_size: int) -> None:
         self.__notifier = notifier
         self.__name = os.path.basename(path)
@@ -171,10 +181,6 @@ class MsdImageReader:  # pylint: disable=too-many-instance-attributes
         self.__readed = 0
         self.__tick = 0.0
 
-    def get_size(self) -> int:
-        assert self.__file is not None
-        return self.__file_size
-
     def get_state(self) -> Dict:
         return {
             "name": self.__name,
@@ -182,24 +188,32 @@ class MsdImageReader:  # pylint: disable=too-many-instance-attributes
             "readed": self.__readed,
         }
 
-    async def open(self) -> "MsdImageReader":
+    def get_total_size(self) -> int:
+        assert self.__file is not None
+        return self.__file_size
+
+    async def read_chunked(self) -> AsyncGenerator[bytes, None]:
+        assert self.__file is not None
+        while True:
+            chunk = await self.__file.read(self.__chunk_size)  # type: ignore
+            if not chunk:
+                break
+
+            self.__readed += len(chunk)
+
+            now = time.monotonic()
+            if self.__tick + 1 < now or self.__readed == self.__file_size:
+                self.__tick = now
+                await self.__notifier.notify()
+
+            yield chunk
+
+    async def open(self) -> "MsdFileReader":
         assert self.__file is None
         get_logger(1).info("Reading %r image from MSD ...", self.__name)
         self.__file_size = os.stat(self.__path).st_size
         self.__file = await aiofiles.open(self.__path, mode="rb")  # type: ignore
         return self
-
-    async def read(self) -> bytes:
-        assert self.__file is not None
-        chunk = await self.__file.read(self.__chunk_size)  # type: ignore
-        self.__readed += len(chunk)
-
-        now = time.monotonic()
-        if self.__tick + 1 < now or self.__readed == self.__file_size:
-            self.__tick = now
-            await self.__notifier.notify()
-
-        return chunk
 
     async def close(self) -> None:
         assert self.__file is not None

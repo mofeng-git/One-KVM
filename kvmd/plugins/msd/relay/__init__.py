@@ -50,6 +50,7 @@ from .. import MsdDisconnectedError
 from .. import MsdMultiNotSupported
 from .. import MsdCdromNotSupported
 from .. import MsdRwNotSupported
+from .. import BaseMsdReader
 from .. import BaseMsd
 from .. import MsdImageWriter
 
@@ -218,15 +219,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__connected = connected
 
     @contextlib.asynccontextmanager
-    async def read_image(self, name: str) -> AsyncGenerator[int, None]:
+    async def read_image(self, name: str) -> AsyncGenerator[BaseMsdReader, None]:
         async with self.__working():
             if self is not None:  # XXX: Vulture and pylint hack
                 raise MsdMultiNotSupported()
-        yield 1
-
-    async def read_image_chunk(self) -> bytes:
-        async with self.__working():
-            raise MsdMultiNotSupported()
+        yield BaseMsdReader()
 
     @contextlib.asynccontextmanager
     async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:

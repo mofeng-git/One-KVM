@@ -87,12 +87,10 @@ class MsdApi:
     @exposed_http("GET", "/msd/read")
     async def __read_handler(self, request: Request) -> StreamResponse:
         name = valid_msd_image_name(request.query.get("image"))
-        async with self.__msd.read_image(name) as size:
+        async with self.__msd.read_image(name) as reader:
+            size = reader.get_total_size()
             response = await start_streaming(request, "application/octet-stream", size, name)
-            while True:
-                chunk = await self.__msd.read_image_chunk()
-                if not chunk:
-                    return response
+            async for chunk in reader.read_chunked():
                 await response.write(chunk)
             return response
 

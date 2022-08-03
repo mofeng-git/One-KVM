@@ -29,6 +29,7 @@ from typing import Optional
 from ... import aiotools
 
 from . import MsdOperationError
+from . import BaseMsdReader
 from . import BaseMsd
 
 
@@ -77,13 +78,10 @@ class Plugin(BaseMsd):
         raise MsdDisabledError()
 
     @contextlib.asynccontextmanager
-    async def read_image(self, name: str) -> AsyncGenerator[int, None]:
+    async def read_image(self, name: str) -> AsyncGenerator[BaseMsdReader, None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise MsdDisabledError()
-        yield 1
-
-    async def read_image_chunk(self) -> bytes:
-        raise MsdDisabledError()
+        yield BaseMsdReader()
 
     @contextlib.asynccontextmanager
     async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:
