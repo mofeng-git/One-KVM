@@ -52,7 +52,7 @@ from .. import MsdCdromNotSupported
 from .. import MsdRwNotSupported
 from .. import BaseMsdReader
 from .. import BaseMsd
-from .. import MsdImageWriter
+from .. import MsdFileWriter
 
 from .gpio import Gpio
 
@@ -89,7 +89,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__device_info: Optional[DeviceInfo] = None
         self.__connected = False
 
-        self.__device_writer: Optional[MsdImageWriter] = None
+        self.__device_writer: Optional[MsdFileWriter] = None
 
         self.__notifier = aiotools.AioNotifier()
         self.__region = aiotools.AioExclusiveRegion(MsdIsBusyError, self.__notifier)
@@ -226,7 +226,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         yield BaseMsdReader()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[MsdFileWriter, None]:
         async with self.__working():
             if remove_incomplete is not None:
                 raise MsdMultiNotSupported()
@@ -236,24 +236,21 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     if self.__connected:
                         raise MsdConnectedError()
 
-                    self.__device_writer = await MsdImageWriter(
+                    self.__device_writer = await MsdFileWriter(
                         notifier=self.__notifier,
                         path=self.__device_info.path,
-                        size=size,
-                        sync=self.__sync_chunk_size,
+                        file_size=size,
+                        sync_size=self.__sync_chunk_size,
+                        chunk_size=self.__upload_chunk_size,
                     ).open()
 
                     await self.__write_image_info(False)
                     await self.__notifier.notify()
-                    yield self.__upload_chunk_size
+                    yield self.__device_writer
                     await self.__write_image_info(True)
                 finally:
                     await self.__close_device_writer()
                     await self.__load_device_info()
-
-    async def write_image_chunk(self, chunk: bytes) -> int:
-        assert self.__device_writer
-        return (await self.__device_writer.write(chunk))
 
     @aiotools.atomic
     async def remove(self, name: str) -> None:

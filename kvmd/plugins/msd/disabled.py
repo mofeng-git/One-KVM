@@ -30,6 +30,7 @@ from ... import aiotools
 
 from . import MsdOperationError
 from . import BaseMsdReader
+from . import BaseMsdWriter
 from . import BaseMsd
 
 
@@ -84,13 +85,10 @@ class Plugin(BaseMsd):
         yield BaseMsdReader()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[BaseMsdWriter, None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise MsdDisabledError()
-        yield 1
-
-    async def write_image_chunk(self, chunk: bytes) -> int:
-        raise MsdDisabledError()
+        yield BaseMsdWriter()
 
     async def remove(self, name: str) -> None:
         raise MsdDisabledError()

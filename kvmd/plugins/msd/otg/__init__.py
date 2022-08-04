@@ -58,7 +58,7 @@ from .. import MsdUnknownImageError
 from .. import MsdImageExistsError
 from .. import BaseMsd
 from .. import MsdFileReader
-from .. import MsdImageWriter
+from .. import MsdFileWriter
 
 from . import fs
 
@@ -166,7 +166,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__drive = Drive(gadget, instance=0, lun=0)
 
         self.__reader: Optional[MsdFileReader] = None
-        self.__writer: Optional[MsdImageWriter] = None
+        self.__writer: Optional[MsdFileWriter] = None
 
         self.__notifier = aiotools.AioNotifier()
         self.__state = _State(self.__notifier)
@@ -359,7 +359,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             await self.__notifier.notify()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[MsdFileWriter, None]:
         try:
             async with self.__state._region:  # pylint: disable=protected-access
                 path: str = ""
@@ -379,15 +379,16 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         await self.__remount_rw(True)
                         self.__set_image_complete(name, False)
 
-                        self.__writer = await MsdImageWriter(
+                        self.__writer = await MsdFileWriter(
                             notifier=self.__notifier,
                             path=path,
-                            size=size,
-                            sync=self.__sync_chunk_size,
+                            file_size=size,
+                            sync_size=self.__sync_chunk_size,
+                            chunk_size=self.__write_chunk_size,
                         ).open()
 
                     await self.__notifier.notify()
-                    yield self.__write_chunk_size
+                    yield self.__writer
                     self.__set_image_complete(name, self.__writer.is_complete())
 
                 finally:
@@ -404,10 +405,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             # так что форсим обновление вручную, чтобы получить актуальное состояние.
             await self.__reload_state()
             await self.__notifier.notify()
-
-    async def write_image_chunk(self, chunk: bytes) -> int:
-        assert self.__writer
-        return (await self.__writer.write(chunk))
 
     @aiotools.atomic
     async def remove(self, name: str) -> None:

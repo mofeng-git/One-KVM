@@ -32,7 +32,7 @@ from typing import Optional
 from .... import aiotools
 from .... import aiofs
 
-from .. import MsdImageWriter
+from .. import MsdFileWriter
 
 
 # =====
@@ -121,7 +121,7 @@ class DeviceInfo:
             image=image_info,
         )
 
-    async def write_image_info(self, device_writer: MsdImageWriter, complete: bool) -> bool:
+    async def write_image_info(self, device_writer: MsdFileWriter, complete: bool) -> bool:
         device_file = device_writer.get_file()
         state = device_writer.get_state()
         image_info = ImageInfo(state["name"], state["written"], complete)

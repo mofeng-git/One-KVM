@@ -117,6 +117,17 @@ class BaseMsdReader:
         yield
 
 
+class BaseMsdWriter:
+    def get_state(self) -> Dict:
+        raise NotImplementedError()
+
+    def get_chunk_size(self) -> int:
+        raise NotImplementedError()
+
+    async def write_chunk(self, chunk: bytes) -> int:
+        raise NotImplementedError()
+
+
 class BaseMsd(BasePlugin):
     async def get_state(self) -> Dict:
         raise NotImplementedError()
@@ -154,16 +165,13 @@ class BaseMsd(BasePlugin):
         yield BaseMsdReader()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[int, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[BaseMsdWriter, None]:
         _ = name
         _ = size
         _ = remove_incomplete
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
-        yield 1
-
-    async def write_image_chunk(self, chunk: bytes) -> int:
-        raise NotImplementedError()
+        yield BaseMsdWriter()
 
     async def remove(self, name: str) -> None:
         raise NotImplementedError()
@@ -225,47 +233,38 @@ class MsdFileReader(BaseMsdReader):  # pylint: disable=too-many-instance-attribu
             logger.exception("Can't close image reader")
 
 
-class MsdImageWriter:  # pylint: disable=too-many-instance-attributes
-    def __init__(self, notifier: aiotools.AioNotifier, path: str, size: int, sync: int) -> None:
+class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attributes
+    def __init__(self, notifier: aiotools.AioNotifier, path: str, file_size: int, sync_size: int, chunk_size: int) -> None:
         self.__notifier = notifier
         self.__name = os.path.basename(path)
         self.__path = path
-        self.__size = size
-        self.__sync = sync
+        self.__file_size = file_size
+        self.__sync_size = sync_size
+        self.__chunk_size = chunk_size
 
         self.__file: Optional[aiofiles.base.AiofilesContextManager] = None
         self.__written = 0
         self.__unsynced = 0
         self.__tick = 0.0
 
-    def is_complete(self) -> bool:
-        return (self.__written >= self.__size)
-
-    def get_file(self) -> aiofiles.base.AiofilesContextManager:
-        assert self.__file is not None
-        return self.__file
-
     def get_state(self) -> Dict:
         return {
             "name": self.__name,
-            "size": self.__size,
+            "size": self.__file_size,
             "written": self.__written,
         }
 
-    async def open(self) -> "MsdImageWriter":
-        assert self.__file is None
-        get_logger(1).info("Writing %r image (%d bytes) to MSD ...", self.__name, self.__size)
-        self.__file = await aiofiles.open(self.__path, mode="w+b", buffering=0)  # type: ignore
-        return self
+    def get_chunk_size(self) -> int:
+        return self.__chunk_size
 
-    async def write(self, chunk: bytes) -> int:
+    async def write_chunk(self, chunk: bytes) -> int:
         assert self.__file is not None
 
         await self.__file.write(chunk)  # type: ignore
         self.__written += len(chunk)
 
         self.__unsynced += len(chunk)
-        if self.__unsynced >= self.__sync:
+        if self.__unsynced >= self.__sync_size:
             await aiofs.afile_sync(self.__file)
             self.__unsynced = 0
 
@@ -276,18 +275,31 @@ class MsdImageWriter:  # pylint: disable=too-many-instance-attributes
 
         return self.__written
 
+    def is_complete(self) -> bool:
+        return (self.__written >= self.__file_size)
+
+    def get_file(self) -> aiofiles.base.AiofilesContextManager:
+        assert self.__file is not None
+        return self.__file
+
+    async def open(self) -> "MsdFileWriter":
+        assert self.__file is None
+        get_logger(1).info("Writing %r image (%d bytes) to MSD ...", self.__name, self.__file_size)
+        self.__file = await aiofiles.open(self.__path, mode="w+b", buffering=0)  # type: ignore
+        return self
+
     async def close(self) -> None:
         assert self.__file is not None
         logger = get_logger()
         logger.info("Closing image writer ...")
         try:
-            if self.__written == self.__size:
+            if self.__written == self.__file_size:
                 (log, result) = (logger.info, "OK")
-            elif self.__written < self.__size:
+            elif self.__written < self.__file_size:
                 (log, result) = (logger.error, "INCOMPLETE")
             else:  # written > size
                 (log, result) = (logger.warning, "OVERFLOW")
-            log("Written %d of %d bytes to MSD image %r: %s", self.__written, self.__size, self.__name, result)
+            log("Written %d of %d bytes to MSD image %r: %s", self.__written, self.__file_size, self.__name, result)
             try:
                 await aiofs.afile_sync(self.__file)
             finally:
