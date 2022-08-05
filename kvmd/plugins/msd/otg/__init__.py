@@ -354,9 +354,17 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     yield self.__reader
 
                 finally:
-                    await self.__close_reader()
+                    # FIXME: Перехват важен потому что по какой-то причине await
+                    # во вложенных finally путаются и выполняются не по порядку
+                    try:
+                        await asyncio.shield(self.__close_reader())
+                    except asyncio.CancelledError:
+                        pass
         finally:
-            await self.__notifier.notify()
+            try:
+                await asyncio.shield(self.__notifier.notify())
+            except asyncio.CancelledError:
+                pass
 
     @contextlib.asynccontextmanager
     async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[MsdFileWriter, None]:
@@ -398,13 +406,25 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                             os.remove(path)
                         except Exception:
                             pass
-                    await self.__close_writer()
-                    await self.__remount_rw(False, fatal=False)
+                    try:
+                        await asyncio.shield(self.__close_writer())
+                    except asyncio.CancelledError:
+                        pass
+                    try:
+                        await asyncio.shield(self.__remount_rw(False, fatal=False))
+                    except asyncio.CancelledError:
+                        pass
         finally:
             # Между закрытием файла и эвентом айнотифи состояние может быть не обновлено,
             # так что форсим обновление вручную, чтобы получить актуальное состояние.
-            await self.__reload_state()
-            await self.__notifier.notify()
+            try:
+                await asyncio.shield(self.__reload_state())
+            except asyncio.CancelledError:
+                pass
+            try:
+                await asyncio.shield(self.__notifier.notify())
+            except asyncio.CancelledError:
+                pass
 
     @aiotools.atomic
     async def remove(self, name: str) -> None:
