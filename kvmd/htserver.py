@@ -352,7 +352,7 @@ class HttpServer:
             await self._on_ws_opened()
             yield ws
         finally:
-            await self.__close_ws(ws)
+            await asyncio.shield(self.__close_ws(ws))
 
     async def _ws_loop(self, ws: WsSession) -> WebSocketResponse:
         logger = get_logger()

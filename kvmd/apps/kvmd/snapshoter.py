@@ -116,7 +116,7 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
             logger.exception("Unhandled exception while taking snapshot")
         finally:
             self.__snapshoting = False
-            await notifier.notify()
+            await asyncio.shield(notifier.notify())
 
     async def __wakeup(self) -> None:
         logger = get_logger(0)

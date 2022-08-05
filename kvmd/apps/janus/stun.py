@@ -63,7 +63,6 @@ class Stun:
         self.__sock: Optional[socket.socket] = None
 
     async def get_info(self, src_ip: str, src_port: int) -> Tuple[str, str]:
-
         (family, _, _, _, addr) = socket.getaddrinfo(src_ip, src_port, type=socket.SOCK_DGRAM)[0]
         try:
             with socket.socket(family, socket.SOCK_DGRAM) as self.__sock:

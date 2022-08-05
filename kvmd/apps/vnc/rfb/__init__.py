@@ -93,8 +93,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     # =====
 
     async def _run(self, **coros: Coroutine) -> None:
-        logger = get_logger(0)
-        logger.info("%s [entry]: Starting client tasks ...", self._remote)
+        get_logger(0).info("%s [entry]: Starting client tasks ...", self._remote)
         tasks = list(map(asyncio.create_task, [  # type: ignore  # Я хз, почему github action фейлится здесь
             self.__wrapper(name, coro)
             for (name, coro) in {"main": self.__main_task_loop(), **coros}.items()
@@ -102,11 +101,14 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         try:
             await aiotools.wait_first(*tasks)
         finally:
-            for task in tasks:
-                task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
-            await self._close()
-            logger.info("%s [entry]: Connection closed", self._remote)
+            await asyncio.shield(self.__cleanup(tasks))
+
+    async def __cleanup(self, tasks: List[asyncio.Task]) -> None:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await self._close()
+        get_logger(0).info("%s [entry]: Connection closed", self._remote)
 
     async def __wrapper(self, name: str, coro: Coroutine) -> None:
         logger = get_logger(0)

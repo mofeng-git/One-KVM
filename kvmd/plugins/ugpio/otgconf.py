@@ -123,8 +123,10 @@ class Plugin(BaseUserGpioDriver):
                     else:
                         os.unlink(os.path.join(self.__profile_path, pin))
                 finally:
-                    await asyncio.sleep(self.__init_delay)
-                    self.__set_udc_enabled(True)
+                    try:
+                        await asyncio.sleep(self.__init_delay)
+                    finally:
+                        self.__set_udc_enabled(True)
 
     def __set_udc_enabled(self, enabled: bool) -> None:
         with open(self.__udc_path, "w") as udc_file:

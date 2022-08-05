@@ -147,9 +147,12 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 fb_sender=self.__fb_sender_task_loop(),
             )
         finally:
-            if self.__kvmd_session:
-                await self.__kvmd_session.close()
-                self.__kvmd_session = None
+            await asyncio.shield(self.__cleanup())
+
+    async def __cleanup(self) -> None:
+        if self.__kvmd_session:
+            await self.__kvmd_session.close()
+            self.__kvmd_session = None
 
     # =====
 
@@ -446,6 +449,10 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
 
         shared_params = _SharedParams()
 
+        async def cleanup_client(writer: asyncio.StreamWriter) -> None:
+            if (await aiotools.close_writer(writer)):
+                get_logger(0).info("%s [entry]: Connection is closed in an emergency", rfb_format_remote(writer))
+
         async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             logger = get_logger(0)
             remote = rfb_format_remote(writer)
@@ -491,8 +498,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             except Exception:
                 logger.exception("%s [entry]: Unhandled exception in client task", remote)
             finally:
-                if (await aiotools.close_writer(writer)):
-                    logger.info("%s [entry]: Connection is closed in an emergency", remote)
+                await asyncio.shield(cleanup_client(writer))
 
         self.__handle_client = handle_client
 

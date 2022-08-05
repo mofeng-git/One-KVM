@@ -170,10 +170,11 @@ class KvmdClientWs:
             if writer_task:
                 writer_task.cancel()
             try:
-                await self.__ws.close()
+                await asyncio.shield(self.__ws.close())
             except Exception:
                 pass
-            self.__communicated = False
+            finally:
+                self.__communicated = False
 
     async def send_key_event(self, key: str, state: bool) -> None:
         await self.__writer_queue.put(("key", {"key": key, "state": state}))
