@@ -111,6 +111,9 @@ class BaseMsdReader:
     def get_total_size(self) -> int:
         raise NotImplementedError()
 
+    def get_chunk_size(self) -> int:
+        raise NotImplementedError()
+
     async def read_chunked(self) -> AsyncGenerator[bytes, None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
@@ -199,6 +202,9 @@ class MsdFileReader(BaseMsdReader):  # pylint: disable=too-many-instance-attribu
     def get_total_size(self) -> int:
         assert self.__file is not None
         return self.__file_size
+
+    def get_chunk_size(self) -> int:
+        return self.__chunk_size
 
     async def read_chunked(self) -> AsyncGenerator[bytes, None]:
         assert self.__file is not None

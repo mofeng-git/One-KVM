@@ -20,9 +20,11 @@
 # ========================================================================== #
 
 
+import lzma
 import time
 
 from typing import Dict
+from typing import AsyncGenerator
 from typing import Optional
 from typing import Union
 
@@ -34,6 +36,7 @@ from aiohttp.web import StreamResponse
 
 from ....logging import get_logger
 
+from .... import aiotools
 from .... import htclient
 
 from ....htserver import exposed_http
@@ -87,12 +90,35 @@ class MsdApi:
     @exposed_http("GET", "/msd/read")
     async def __read_handler(self, request: Request) -> StreamResponse:
         name = valid_msd_image_name(request.query.get("image"))
+        compress = valid_bool(request.query.get("compress", False))
         async with self.__msd.read_image(name) as reader:
             size = reader.get_total_size()
+            src = reader.read_chunked()
+            if compress:
+                name += ".xz"
+                size = -1
+                src = self.__compressed(reader.get_chunk_size(), src)
             response = await start_streaming(request, "application/octet-stream", size, name)
-            async for chunk in reader.read_chunked():
+            async for chunk in src:
                 await response.write(chunk)
             return response
+
+    async def __compressed(self, limit: int, src: AsyncGenerator[bytes, None]) -> AsyncGenerator[bytes, None]:
+        buf = b""
+        xz = lzma.LZMACompressor()
+        try:
+            async for chunk in src:
+                buf += await aiotools.run_async(xz.compress, chunk)
+                if len(buf) >= limit:
+                    yield buf
+                    buf = b""
+        finally:
+            # Закрыть в любом случае
+            buf += await aiotools.run_async(xz.flush)
+        if len(buf) > 0:
+            yield buf
+
+    # =====
 
     @exposed_http("POST", "/msd/write")
     async def __write_handler(self, request: Request) -> Response:
