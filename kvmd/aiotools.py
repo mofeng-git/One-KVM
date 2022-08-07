@@ -84,6 +84,47 @@ _RetvalT = TypeVar("_RetvalT")
 
 
 # =====
+class _ArmoredFuture(asyncio.Future):
+    def cancel(self, *_, **__) -> bool:  # type: ignore
+        # FIXME: Выяснить, почему это работает
+        return False
+
+    def forced_cancel(self) -> bool:
+        return super().cancel()
+
+
+def shield_fg(aw: Awaitable):  # type: ignore
+    # XXX: Копия asyncio.shield() с небольшими изменениями
+
+    inner = asyncio.ensure_future(aw)
+    if inner.done():
+        return inner
+    outer = _ArmoredFuture(loop=inner.get_loop())
+
+    def inner_done(_) -> None:  # type: ignore
+        if outer.cancelled():
+            if not inner.cancelled():
+                inner.exception()  # Mark inner's result as retrieved
+            return
+
+        if inner.cancelled():
+            outer.forced_cancel()
+        else:
+            err = inner.exception()
+            if err is not None:
+                outer.set_exception(err)
+            else:
+                outer.set_result(inner.result())
+
+    def outer_done(_) -> None:  # type: ignore
+        if not inner.done():
+            inner.remove_done_callback(inner_done)
+
+    inner.add_done_callback(inner_done)
+    outer.add_done_callback(outer_done)
+    return outer
+
+
 def atomic(func: _FunctionT) -> _FunctionT:
     @functools.wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:

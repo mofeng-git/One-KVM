@@ -22,9 +22,12 @@
 
 import asyncio
 
+from typing import List
+
 import pytest
 
 from kvmd.aiotools import AioExclusiveRegion
+from kvmd.aiotools import shield_fg
 
 
 # =====
@@ -115,3 +118,34 @@ async def test_fail__region__access_two() -> None:
     assert not region.is_busy()
     await region.exit()
     assert not region.is_busy()
+
+
+# =====
+@pytest.mark.asyncio
+async def test_ok__shield_fg() -> None:
+    ops: List[str] = []
+
+    async def foo(op: str, delay: float) -> None:  # pylint: disable=disallowed-name
+        await asyncio.sleep(delay)
+        ops.append(op)
+
+    async def bar() -> None:  # pylint: disable=disallowed-name
+        try:
+            try:
+                try:
+                    raise RuntimeError()
+                finally:
+                    await shield_fg(foo("foo1", 2.0))
+                    ops.append("foo1-noexc")
+            finally:
+                await shield_fg(foo("foo2", 1.0))
+                ops.append("foo2-noexc")
+        finally:
+            ops.append("done")
+
+    task = asyncio.create_task(bar())
+    await asyncio.sleep(0.1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert ops == ["foo1", "foo2", "foo2-noexc", "done"]
