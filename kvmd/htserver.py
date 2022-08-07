@@ -61,6 +61,8 @@ from .errors import IsBusyError
 
 from .validators import ValidatorError
 
+from . import aiotools
+
 
 # =====
 class HttpError(Exception):
@@ -352,7 +354,7 @@ class HttpServer:
             await self._on_ws_opened()
             yield ws
         finally:
-            await asyncio.shield(self.__close_ws(ws))
+            await aiotools.shield_fg(self.__close_ws(ws))
 
     async def _ws_loop(self, ws: WsSession) -> WebSocketResponse:
         logger = get_logger()

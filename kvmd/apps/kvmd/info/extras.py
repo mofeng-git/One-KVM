@@ -66,7 +66,7 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
             return None
         finally:
             if sui is not None:
-                await asyncio.shield(sui.close())
+                await aiotools.shield_fg(sui.close())
 
     def __get_extras_path(self, *parts: str) -> str:
         return os.path.join(self.__global_config.kvmd.info.extras, *parts)

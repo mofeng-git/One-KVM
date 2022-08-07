@@ -354,12 +354,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     yield self.__reader
 
                 finally:
-                    # FIXME: Перехват важен потому что по какой-то причине await
-                    # во вложенных finally путаются и выполняются не по порядку
-                    try:
-                        await asyncio.shield(self.__close_reader())
-                    except asyncio.CancelledError:
-                        pass
+                    await aiotools.shield_fg(self.__close_reader())
         finally:
             self.__notifier.notify()
 
@@ -404,20 +399,13 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         except Exception:
                             pass
                     try:
-                        await asyncio.shield(self.__close_writer())
-                    except asyncio.CancelledError:
-                        pass
-                    try:
-                        await asyncio.shield(self.__remount_rw(False, fatal=False))
-                    except asyncio.CancelledError:
-                        pass
+                        await aiotools.shield_fg(self.__close_writer())
+                    finally:
+                        await aiotools.shield_fg(self.__remount_rw(False, fatal=False))
         finally:
             # Между закрытием файла и эвентом айнотифи состояние может быть не обновлено,
             # так что форсим обновление вручную, чтобы получить актуальное состояние.
-            try:
-                await asyncio.shield(self.__reload_state())
-            except asyncio.CancelledError:
-                pass
+            await aiotools.shield_fg(self.__reload_state())
 
     @aiotools.atomic
     async def remove(self, name: str) -> None:

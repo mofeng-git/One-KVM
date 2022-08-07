@@ -170,7 +170,7 @@ class KvmdClientWs:
             if writer_task:
                 writer_task.cancel()
             try:
-                await asyncio.shield(self.__ws.close())
+                await aiotools.shield_fg(self.__ws.close())
             except Exception:
                 pass
             finally:

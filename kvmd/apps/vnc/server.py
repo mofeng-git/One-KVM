@@ -147,7 +147,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 fb_sender=self.__fb_sender_task_loop(),
             )
         finally:
-            await asyncio.shield(self.__cleanup())
+            await aiotools.shield_fg(self.__cleanup())
 
     async def __cleanup(self) -> None:
         if self.__kvmd_session:
@@ -498,7 +498,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             except Exception:
                 logger.exception("%s [entry]: Unhandled exception in client task", remote)
             finally:
-                await asyncio.shield(cleanup_client(writer))
+                await aiotools.shield_fg(cleanup_client(writer))
 
         self.__handle_client = handle_client
 

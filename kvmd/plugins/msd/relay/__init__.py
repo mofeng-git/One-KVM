@@ -250,13 +250,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await self.__write_image_info(True)
                 finally:
                     try:
-                        await asyncio.shield(self.__close_device_writer())
-                    except asyncio.CancelledError:
-                        pass
-                    try:
-                        await asyncio.shield(self.__load_device_info())
-                    except asyncio.CancelledError:
-                        pass
+                        await aiotools.shield_fg(self.__close_device_writer())
+                    finally:
+                        await aiotools.shield_fg(self.__load_device_info())
 
     @aiotools.atomic
     async def remove(self, name: str) -> None:

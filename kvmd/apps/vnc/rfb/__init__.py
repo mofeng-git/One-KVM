@@ -101,7 +101,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         try:
             await aiotools.wait_first(*tasks)
         finally:
-            await asyncio.shield(self.__cleanup(tasks))
+            await aiotools.shield_fg(self.__cleanup(tasks))
 
     async def __cleanup(self, tasks: List[asyncio.Task]) -> None:
         for task in tasks:
