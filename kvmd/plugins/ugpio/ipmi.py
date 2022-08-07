@@ -135,7 +135,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             await self.__update_power()
             new = (self.__online, self.__power)
             if new != prev:
-                await self._notifier.notify()
+                self._notifier.notify()
                 prev = new
             await asyncio.sleep(self.__state_poll)
 

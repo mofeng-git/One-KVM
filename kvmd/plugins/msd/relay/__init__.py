@@ -245,7 +245,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     ).open()
 
                     await self.__write_image_info(False)
-                    await self.__notifier.notify()
+                    self.__notifier.notify()
                     yield self.__device_writer
                     await self.__write_image_info(True)
                 finally:

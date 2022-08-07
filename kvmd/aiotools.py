@@ -232,10 +232,7 @@ class AioNotifier:
     def __init__(self) -> None:
         self.__queue: "asyncio.Queue[None]" = asyncio.Queue()
 
-    async def notify(self) -> None:
-        await self.__queue.put(None)
-
-    def notify_sync(self) -> None:
+    def notify(self) -> None:
         self.__queue.put_nowait(None)
 
     async def wait(self, timeout: Optional[float]=None) -> None:
@@ -299,7 +296,7 @@ class AioExclusiveRegion:
             self.__busy = True
             try:
                 if self.__notifier:
-                    await self.__notifier.notify()
+                    self.__notifier.notify()
             except:  # noqa: E722
                 self.__busy = False
                 raise
@@ -309,7 +306,7 @@ class AioExclusiveRegion:
     async def exit(self) -> None:
         self.__busy = False
         if self.__notifier:
-            await self.__notifier.notify()
+            self.__notifier.notify()
 
     async def __aenter__(self) -> None:
         await self.enter()

@@ -109,7 +109,7 @@ class Plugin(BaseUserGpioDriver):
             except Exception:
                 raw = -1
             if raw != prev_raw:
-                await self._notifier.notify()
+                self._notifier.notify()
                 prev_raw = raw
             await asyncio.sleep(self.__state_poll)
 

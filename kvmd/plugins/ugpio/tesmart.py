@@ -111,7 +111,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             except Exception:
                 pass
             if self.__active != prev_active:
-                await self._notifier.notify()
+                self._notifier.notify()
                 prev_active = self.__active
             await self.__update_notifier.wait(self.__state_poll)
 
@@ -127,7 +127,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         assert 1 <= channel <= 16
         if state:
             await self.__send_command("{:c}{:c}".format(1, channel).encode())
-            await self.__update_notifier.notify()
+            self.__update_notifier.notify()
             await asyncio.sleep(self.__switch_delay)  # Slowdown
 
     # =====

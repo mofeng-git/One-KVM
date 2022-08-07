@@ -103,7 +103,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             (got, channel) = await aiomulti.queue_get_last(self.__channel_queue, 1)
             if got and self.__channel != channel:
                 self.__channel = channel
-                await self._notifier.notify()
+                self._notifier.notify()
 
     async def cleanup(self) -> None:
         if self.__proc is not None:

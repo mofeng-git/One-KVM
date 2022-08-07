@@ -319,7 +319,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     async def poll_state(self) -> AsyncGenerator[Dict, None]:
         def signal_handler(*_: Any) -> None:
             get_logger(0).info("Got SIGUSR2, checking the stream state ...")
-            asyncio.ensure_future(self.__notifier.notify())
+            self.__notifier.notify()
 
         get_logger(0).info("Installing SIGUSR2 streamer handler ...")
         asyncio.get_event_loop().add_signal_handler(signal.SIGUSR2, signal_handler)
@@ -370,7 +370,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                         )
                         if save:
                             self.__snapshot = snapshot
-                            await self.__notifier.notify()
+                            self.__notifier.notify()
                         return snapshot
                     logger.error("Stream is offline, no signal or so")
             except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as err:

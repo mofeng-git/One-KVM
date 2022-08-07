@@ -122,7 +122,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 get_logger().error("Failed Hue bulk GET request: %s", tools.efmt(err))
                 self.__state = dict.fromkeys(self.__state, None)
             if self.__state != prev_state:
-                await self._notifier.notify()
+                self._notifier.notify()
                 prev_state = self.__state
             await self.__update_notifier.wait(self.__state_poll)
 
@@ -148,7 +148,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             get_logger().error("Failed Hue PUT request to pin %s: %s", pin, tools.efmt(err))
             raise GpioDriverOfflineError(self)
         else:
-            await self.__update_notifier.notify()
+            self.__update_notifier.notify()
 
     def __ensure_http_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:

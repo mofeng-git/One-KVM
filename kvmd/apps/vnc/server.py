@@ -294,7 +294,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
                 if len(last["data"]) == 0:
                     # Вдруг какой-то баг
-                    await self.__fb_notifier.notify()
+                    self.__fb_notifier.notify()
                     continue
 
                 if last["format"] == StreamFormats.JPEG:
@@ -305,7 +305,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                     if has_h264_key:
                         await self._send_fb_h264(last["data"])
                     else:
-                        await self.__fb_notifier.notify()
+                        self.__fb_notifier.notify()
                 else:
                     raise RuntimeError(f"Unknown format: {last['format']}")
                 last["data"] = b""
@@ -406,7 +406,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         await self.__kvmd_session.streamer.set_params(quality, self.__desired_fps)
 
     async def _on_fb_update_request(self) -> None:
-        await self.__fb_notifier.notify()
+        self.__fb_notifier.notify()
 
 
 # =====

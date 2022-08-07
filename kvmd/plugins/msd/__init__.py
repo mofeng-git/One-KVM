@@ -218,7 +218,7 @@ class MsdFileReader(BaseMsdReader):  # pylint: disable=too-many-instance-attribu
             now = time.monotonic()
             if self.__tick + 1 < now or self.__readed == self.__file_size:
                 self.__tick = now
-                await self.__notifier.notify()
+                self.__notifier.notify()
 
             yield chunk
 
@@ -277,7 +277,7 @@ class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attribu
         now = time.monotonic()
         if self.__tick + 1 < now:
             self.__tick = now
-            await self.__notifier.notify()
+            self.__notifier.notify()
 
         return self.__written
 

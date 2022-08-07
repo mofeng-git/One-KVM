@@ -76,7 +76,7 @@ class Plugin(BaseUserGpioDriver):
         while True:
             try:
                 while True:
-                    await self._notifier.notify()
+                    self._notifier.notify()
                     if os.path.isfile(self.__udc_path):
                         break
                     await asyncio.sleep(5)
@@ -84,7 +84,7 @@ class Plugin(BaseUserGpioDriver):
                 with Inotify() as inotify:
                     inotify.watch(os.path.dirname(self.__udc_path), InotifyMask.ALL_MODIFY_EVENTS)
                     inotify.watch(self.__profile_path, InotifyMask.ALL_MODIFY_EVENTS)
-                    await self._notifier.notify()
+                    self._notifier.notify()
                     while True:
                         need_restart = False
                         need_notify = False
@@ -97,7 +97,7 @@ class Plugin(BaseUserGpioDriver):
                         if need_restart:
                             break
                         if need_notify:
-                            await self._notifier.notify()
+                            self._notifier.notify()
             except Exception:
                 logger.exception("Unexpected OTG-bind watcher error")
                 await asyncio.sleep(1)
