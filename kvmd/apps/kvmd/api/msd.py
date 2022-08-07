@@ -138,7 +138,7 @@ class MsdApi:
     @exposed_http("POST", "/msd/write_remote")
     async def __write_remote_handler(self, request: Request) -> Union[Response, StreamResponse]:  # pylint: disable=too-many-locals
         url = valid_url(request.query.get("url"))
-        insecure = valid_bool(request.query.get("insecure", "0"))
+        insecure = valid_bool(request.query.get("insecure", False))
         timeout = valid_float_f01(request.query.get("timeout", 10.0))
         remove_incomplete = self.__get_remove_incomplete(request)
 

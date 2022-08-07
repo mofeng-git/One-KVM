@@ -57,12 +57,12 @@ class StreamerApi:
     @exposed_http("GET", "/streamer/snapshot")
     async def __take_snapshot_handler(self, request: Request) -> Response:
         snapshot = await self.__streamer.take_snapshot(
-            save=valid_bool(request.query.get("save", "false")),
-            load=valid_bool(request.query.get("load", "false")),
-            allow_offline=valid_bool(request.query.get("allow_offline", "false")),
+            save=valid_bool(request.query.get("save", False)),
+            load=valid_bool(request.query.get("load", False)),
+            allow_offline=valid_bool(request.query.get("allow_offline", False)),
         )
         if snapshot:
-            if valid_bool(request.query.get("ocr", "false")):
+            if valid_bool(request.query.get("ocr", False)):
                 langs = self.__ocr.get_available_langs()
                 return Response(
                     body=(await self.__ocr.recognize(
@@ -72,19 +72,19 @@ class StreamerApi:
                             subval=(lambda lang: check_string_in_list(lang, "OCR lang", langs)),
                             name="OCR langs list",
                         ),
-                        left=int(valid_number(request.query.get("ocr_left", "-1"))),
-                        top=int(valid_number(request.query.get("ocr_top", "-1"))),
-                        right=int(valid_number(request.query.get("ocr_right", "-1"))),
-                        bottom=int(valid_number(request.query.get("ocr_bottom", "-1"))),
+                        left=int(valid_number(request.query.get("ocr_left", -1))),
+                        top=int(valid_number(request.query.get("ocr_top", -1))),
+                        right=int(valid_number(request.query.get("ocr_right", -1))),
+                        bottom=int(valid_number(request.query.get("ocr_bottom", -1))),
                     )),
                     headers=dict(snapshot.headers),
                     content_type="text/plain",
                 )
-            elif valid_bool(request.query.get("preview", "false")):
+            elif valid_bool(request.query.get("preview", False)):
                 data = await snapshot.make_preview(
-                    max_width=valid_int_f0(request.query.get("preview_max_width", "0")),
-                    max_height=valid_int_f0(request.query.get("preview_max_height", "0")),
-                    quality=valid_stream_quality(request.query.get("preview_quality", "80")),
+                    max_width=valid_int_f0(request.query.get("preview_max_width", 0)),
+                    max_height=valid_int_f0(request.query.get("preview_max_height", 0)),
+                    quality=valid_stream_quality(request.query.get("preview_quality", 80)),
                 )
             else:
                 data = snapshot.data

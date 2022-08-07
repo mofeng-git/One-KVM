@@ -226,7 +226,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     @exposed_http("GET", "/ws")
     async def __ws_handler(self, request: Request) -> WebSocketResponse:
-        stream = valid_bool(request.query.get("stream", "true"))
+        stream = valid_bool(request.query.get("stream", True))
         async with self._ws_session(request, stream=stream) as ws:
             stage1 = [
                 ("gpio_model_state", self.__user_gpio.get_model()),

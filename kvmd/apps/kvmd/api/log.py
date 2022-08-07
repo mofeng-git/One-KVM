@@ -41,16 +41,13 @@ class LogApi:
 
     @exposed_http("GET", "/log")
     async def __log_handler(self, request: Request) -> StreamResponse:
-        seek = valid_log_seek(request.query.get("seek", "0"))
-        follow = valid_bool(request.query.get("follow", "false"))
-
+        seek = valid_log_seek(request.query.get("seek", 0))
+        follow = valid_bool(request.query.get("follow", False))
         response = await start_streaming(request, "text/plain")
-
         async for record in self.__log_reader.poll_log(seek, follow):
             await response.write(("[%s %s] --- %s" % (
                 record["dt"].strftime("%Y-%m-%d %H:%M:%S"),
                 record["service"],
                 record["msg"],
             )).encode("utf-8") + b"\r\n")
-
         return response
