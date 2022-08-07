@@ -164,7 +164,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         self.clear_events()
         self.__server.queue_event(ResetEvent())
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def cleanup(self) -> None:
         if self.__proc is not None:
             if self.__proc.is_alive():

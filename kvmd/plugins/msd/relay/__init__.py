@@ -156,14 +156,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 prev_state = state
             await self.__notifier.wait()
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def reset(self) -> None:
         await aiotools.run_region_task(
             "Can't reset MSD or operation was not completed",
             self.__region, self.__inner_reset,
         )
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __inner_reset(self) -> None:
         await self.__gpio.reset()
         self.__gpio.switch_to_local()
@@ -171,7 +171,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         await self.__load_device_info()
         get_logger(0).info("MSD reset has been successful")
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def cleanup(self) -> None:
         try:
             await self.__close_device_writer()
@@ -180,7 +180,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def set_params(
         self,
         name: Optional[str]=None,
@@ -196,7 +196,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if rw is not None:
                 raise MsdRwNotSupported()
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def set_connected(self, connected: bool) -> None:
         async with self.__working():
             async with self.__region:
@@ -254,7 +254,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     finally:
                         await aiotools.shield_fg(self.__load_device_info())
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def remove(self, name: str) -> None:
         async with self.__working():
             raise MsdMultiNotSupported()

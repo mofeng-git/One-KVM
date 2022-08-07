@@ -185,7 +185,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
     async def __get_power(self) -> bool:
         return (await self.get_state())["leds"]["power"]
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __click(self, name: str, line: gpiod.Line, delay: float, wait: bool) -> None:
         if wait:
             async with self.__region:
@@ -196,7 +196,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
                 self.__region, self.__inner_click, name, line, delay,
             )
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __inner_click(self, name: str, line: gpiod.Line, delay: float) -> None:
         await aiogp.pulse(line, delay, 1)
         get_logger(0).info("Clicked ATX button %r", name)

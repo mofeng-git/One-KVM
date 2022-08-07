@@ -126,13 +126,13 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __start_janus(self, netcfg: _Netcfg) -> None:
         get_logger(0).info("Starting Janus ...")
         assert not self.__janus_task
         self.__janus_task = asyncio.create_task(self.__janus_task_loop(netcfg))
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __stop_janus(self) -> None:
         if self.__janus_task:
             get_logger(0).info("Stopping Janus ...")

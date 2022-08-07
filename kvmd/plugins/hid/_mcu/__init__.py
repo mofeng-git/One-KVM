@@ -234,7 +234,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     async def reset(self) -> None:
         self.__reset_required_event.set()
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def cleanup(self) -> None:
         if self.is_alive():
             get_logger(0).info("Stopping HID daemon ...")

@@ -125,10 +125,10 @@ def shield_fg(aw: Awaitable):  # type: ignore
     return outer
 
 
-def atomic(func: _FunctionT) -> _FunctionT:
+def atomic_fg(func: _FunctionT) -> _FunctionT:
     @functools.wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
-        return (await asyncio.shield(func(*args, **kwargs)))
+        return (await shield_fg(func(*args, **kwargs)))
     return typing.cast(_FunctionT, wrapper)
 
 

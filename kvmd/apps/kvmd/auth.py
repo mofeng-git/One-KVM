@@ -113,7 +113,7 @@ class AuthManager:
         assert self.__enabled
         return self.__tokens.get(token)
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def cleanup(self) -> None:
         if self.__enabled:
             assert self.__internal_service

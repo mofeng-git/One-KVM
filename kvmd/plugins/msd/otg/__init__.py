@@ -246,7 +246,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     async def systask(self) -> None:
         await self.__watch_inotify()
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def reset(self) -> None:
         async with self.__state.busy(check_online=False):
             try:
@@ -257,14 +257,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             except Exception:
                 get_logger(0).exception("Can't reset MSD properly")
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def cleanup(self) -> None:
         await self.__close_reader()
         await self.__close_writer()
 
     # =====
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def set_params(
         self,
         name: Optional[str]=None,
@@ -299,7 +299,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 if rw:
                     self.__state.vd.cdrom = False
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def set_connected(self, connected: bool) -> None:
         async with self.__state.busy():
             assert self.__state.vd
@@ -407,7 +407,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             # так что форсим обновление вручную, чтобы получить актуальное состояние.
             await aiotools.shield_fg(self.__reload_state())
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def remove(self, name: str) -> None:
         async with self.__state.busy():
             assert self.__state.storage

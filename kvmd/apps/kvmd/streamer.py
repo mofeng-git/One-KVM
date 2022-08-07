@@ -221,7 +221,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def ensure_start(self, reset: bool) -> None:
         if not self.__streamer_task or self.__stop_task:
             logger = get_logger(0)
@@ -241,7 +241,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             logger.info("Starting streamer ...")
             await self.__inner_start()
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def ensure_stop(self, immediately: bool) -> None:
         if self.__streamer_task:
             logger = get_logger(0)
@@ -384,7 +384,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def cleanup(self) -> None:
         await self.ensure_stop(immediately=True)
         if self.__http_session:
@@ -409,12 +409,12 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __inner_start(self) -> None:
         assert not self.__streamer_task
         self.__streamer_task = asyncio.create_task(self.__streamer_task_loop())
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __inner_stop(self) -> None:
         assert self.__streamer_task
         self.__streamer_task.cancel()

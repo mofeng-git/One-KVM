@@ -172,7 +172,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
             raise GpioSwitchNotSupported()
         await self.__run_action(wait, "switch", self.__inner_switch, state)
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def pulse(self, delay: float, wait: bool) -> None:
         if not self.__pulse_delay:
             raise GpioPulseNotSupported()
@@ -181,7 +181,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __run_action(self, wait: bool, name: str, func: Callable, *args: Any) -> None:
         if wait:
             async with self.__region:
@@ -192,20 +192,20 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
                 self.__region, self.__action_task_wrapper, name, func, *args,
             )
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __action_task_wrapper(self, name: str, func: Callable, *args: Any) -> None:
         try:
             return (await func(*args))
         except GpioDriverOfflineError:
             get_logger(0).error("Can't perform %s of %s or operation was not completed: driver offline", name, self)
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __inner_switch(self, state: bool) -> None:
         await self.__write(state)
         get_logger(0).info("Ensured switch %s to state=%d", self, state)
         await asyncio.sleep(self.__busy_delay)
 
-    @aiotools.atomic
+    @aiotools.atomic_fg
     async def __inner_pulse(self, delay: float) -> None:
         try:
             await self.__write(True)
