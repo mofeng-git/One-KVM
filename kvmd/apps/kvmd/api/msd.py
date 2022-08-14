@@ -29,6 +29,7 @@ from typing import Optional
 from typing import Union
 
 import aiohttp
+import zstandard
 
 from aiohttp.web import Request
 from aiohttp.web import Response
@@ -48,6 +49,7 @@ from ....htserver import stream_json_exception
 
 from ....plugins.msd import BaseMsd
 
+from ....validators import check_string_in_list
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_int_f0
 from ....validators.basic import valid_float_f01
@@ -90,33 +92,48 @@ class MsdApi:
     @exposed_http("GET", "/msd/read")
     async def __read_handler(self, request: Request) -> StreamResponse:
         name = valid_msd_image_name(request.query.get("image"))
-        compress = valid_bool(request.query.get("compress", False))
+        compressors = {
+            "": ("", None),
+            "none": ("", None),
+            "lzma": (".xz", (lambda: lzma.LZMACompressor())),  # pylint: disable=unnecessary-lambda
+            "zstd": (".zst", (lambda: zstandard.ZstdCompressor().compressobj())),  # pylint: disable=unnecessary-lambda
+        }
+        (suffix, make_compressor) = compressors[check_string_in_list(
+            arg=request.query.get("compress", ""),
+            name="Compression mode",
+            variants=set(compressors),
+        )]
+
         async with self.__msd.read_image(name) as reader:
-            size = reader.get_total_size()
-            src = reader.read_chunked()
-            if compress:
-                name += ".xz"
+            if make_compressor is None:
+                src = reader.read_chunked()
+                size = reader.get_total_size()
+
+            else:
+                async def compressed() -> AsyncGenerator[bytes, None]:
+                    assert make_compressor is not None
+                    compressor = make_compressor()  # pylint: disable=not-callable
+                    limit = reader.get_chunk_size()
+                    buf = b""
+                    try:
+                        async for chunk in reader.read_chunked():
+                            buf += await aiotools.run_async(compressor.compress, chunk)
+                            if len(buf) >= limit:
+                                yield buf
+                                buf = b""
+                    finally:
+                        # Закрыть в любом случае
+                        buf += await aiotools.run_async(compressor.flush)
+                    if len(buf) > 0:
+                        yield buf
+
+                src = compressed()
                 size = -1
-                src = self.__compressed(reader.get_chunk_size(), src)
-            response = await start_streaming(request, "application/octet-stream", size, name)
+
+            response = await start_streaming(request, "application/octet-stream", size, name + suffix)
             async for chunk in src:
                 await response.write(chunk)
             return response
-
-    async def __compressed(self, limit: int, src: AsyncGenerator[bytes, None]) -> AsyncGenerator[bytes, None]:
-        buf = b""
-        xz = lzma.LZMACompressor()
-        try:
-            async for chunk in src:
-                buf += await aiotools.run_async(xz.compress, chunk)
-                if len(buf) >= limit:
-                    yield buf
-                    buf = b""
-        finally:
-            # Закрыть в любом случае
-            buf += await aiotools.run_async(xz.flush)
-        if len(buf) > 0:
-            yield buf
 
     # =====
 

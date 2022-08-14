@@ -51,6 +51,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-pillow \
 		python-xlib \
 		python-hidapi \
+		python-zstandard \
 		freetype2 \
 		nginx-mainline \
 		tesseract \
