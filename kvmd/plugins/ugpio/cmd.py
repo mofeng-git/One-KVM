@@ -63,7 +63,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     @classmethod
     def get_modes(cls) -> Set[str]:
-        return set([UserGpioModes.OUTPUT])
+        return set([UserGpioModes.OUTPUT, UserGpioModes.INPUT])
 
     @classmethod
     def get_pin_validator(cls) -> Callable[[Any], Any]:
@@ -71,6 +71,13 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     async def read(self, pin: str) -> bool:
         _ = pin
+        try:
+            proc = await aioproc.log_process(self.__cmd, logger=get_logger(0), prefix=str(self))
+            return proc.returncode == 0
+        except Exception as err:
+            get_logger(0).error("Can't run custom command [ %s ]: %s",
+                                tools.cmdfmt(self.__cmd), tools.efmt(err))
+            raise GpioDriverOfflineError(self)
         return False
 
     async def write(self, pin: str, state: bool) -> None:
