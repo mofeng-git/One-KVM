@@ -114,7 +114,6 @@ ul#navbar li div.menu {
 	border-radius: 0 0 8px 8px;
 	position: absolute;
 	background-color: var(--cs-navbar-default-bg);
-	min-width: 180px;
 	box-shadow: var(--shadow-big);
 	z-index: 2147483645;
 }
