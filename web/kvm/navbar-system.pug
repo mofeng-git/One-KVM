@@ -64,19 +64,23 @@ li(class="right")
 				tr(id="hid-outputs-mouse", class="feature-disabled")
 					td Mouse #[a(target="_blank" href="https://docs.pikvm.org/mouse") mode]:
 					td #[div(id="hid-outputs-mouse-box" class="radio-box")]
+		details
+			summary Mouse settings
+			div(class="spoiler")
+				table(class="kv")
+					tr
+						td Mouse polling rate:
+						td #[input(type="range" id="hid-mouse-rate-slider" class="slider")]
+						td(id="hid-mouse-rate-value" class="value" style="min-width: 30px; max-width:30px")
+					tr(id="hid-mouse-sens" class="feature-disabled")
+						td Relative mouse sensitivity:
+						td #[input(disabled type="range" id="hid-mouse-sens-slider" class="slider")]
+						td(id="hid-mouse-sens-value" class="value" style="min-width: 30px; max-width:30px")
+					tr(id="hid-mouse-squash" class="feature-disabled")
+						+menu_switch_notable("hid-mouse-squash-switch", "Squash relative mouse moves", true, true)
+					tr
+						+menu_switch_notable("hid-mouse-reverse-scrolling-switch", "Reverse mouse scrolling", true, false)
 		table(class="kv")
-			tr
-				td Mouse polling rate:
-				td #[input(type="range" id="hid-mouse-rate-slider" class="slider")]
-				td(id="hid-mouse-rate-value" class="value" style="min-width: 30px; max-width:30px")
-			tr(id="hid-mouse-sens" class="feature-disabled")
-				td Relative mouse sensitivity:
-				td #[input(disabled type="range" id="hid-mouse-sens-slider" class="slider")]
-				td(id="hid-mouse-sens-value" class="value" style="min-width: 30px; max-width:30px")
-			tr(id="hid-mouse-squash" class="feature-disabled")
-				+menu_switch_notable("hid-mouse-squash-switch", "Squash relative mouse moves", true, true)
-			tr
-				+menu_switch_notable("hid-mouse-reverse-scrolling-switch", "Reverse mouse scrolling", true, false)
 			tr(id="hid-connect" class="feature-disabled")
 				+menu_switch_notable("hid-connect-switch", "Connect HID to Server", true, true)
 			tr
