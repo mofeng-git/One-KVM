@@ -33,10 +33,14 @@ export function Keyboard(__recordWsEvent) {
 	var __online = true;
 
 	var __keypad = null;
-	var __fix_mac_cmd = false;
 
 	var __init__ = function() {
-		__keypad = new Keypad("div#keyboard-window", __sendKey);
+		let fix_mac_cmd = tools.browser.is_mac;
+		if (fix_mac_cmd) {
+			tools.info("Keyboard: enabled Fix-Mac-CMD");
+		}
+
+		__keypad = new Keypad("div#keyboard-window", __sendKey, fix_mac_cmd);
 
 		$("hid-keyboard-led").title = "Keyboard free";
 
@@ -52,13 +56,6 @@ export function Keyboard(__recordWsEvent) {
 
 		window.addEventListener("focusin", __updateOnlineLeds);
 		window.addEventListener("focusout", __updateOnlineLeds);
-
-		if (tools.browser.is_mac) {
-			// https://bugs.chromium.org/p/chromium/issues/detail?id=28089
-			// https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
-			tools.info("Keyboard: enabled Fix-Mac-CMD");
-			__fix_mac_cmd = true;
-		}
 	};
 
 	/************************************************************************/
@@ -135,9 +132,7 @@ export function Keyboard(__recordWsEvent) {
 			event.preventDefault();
 		}
 		if (!event.repeat) {
-			// https://bugs.chromium.org/p/chromium/issues/detail?id=28089
-			// https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
-			__keypad.emit(event.code, state, __fix_mac_cmd);
+			__keypad.emit(event.code, state);
 		}
 	};
 

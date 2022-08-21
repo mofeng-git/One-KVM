@@ -26,7 +26,7 @@
 import {tools, $$$} from "./tools.js";
 
 
-export function Keypad(keys_parent, key_callback) {
+export function Keypad(__keys_parent, __sendKey, __fix_mac_cmd=false) {
 	var self = this;
 
 	/************************************************************************/
@@ -36,7 +36,7 @@ export function Keypad(keys_parent, key_callback) {
 	var __modifiers = {};
 
 	var __init__ = function() {
-		for (let el_key of $$$(`${keys_parent} div.key`)) {
+		for (let el_key of $$$(`${__keys_parent} div.key`)) {
 			let code = el_key.getAttribute("data-code");
 
 			tools.setDefault(__keys, code, []);
@@ -54,7 +54,7 @@ export function Keypad(keys_parent, key_callback) {
 			};
 		}
 
-		for (let el_key of $$$(`${keys_parent} div.modifier`)) {
+		for (let el_key of $$$(`${__keys_parent} div.modifier`)) {
 			let code = el_key.getAttribute("data-code");
 
 			tools.setDefault(__modifiers, code, []);
@@ -79,10 +79,10 @@ export function Keypad(keys_parent, key_callback) {
 		}
 	};
 
-	self.emit = function(code, state, fix_mac_cmd=false) {
+	self.emit = function(code, state, apply_fixes=true) {
 		if (code in __merged) {
 			__commonHandler(__merged[code][0], state, false);
-			if (fix_mac_cmd) {
+			if (__fix_mac_cmd && apply_fixes) {
 				__fixMacCmd();
 			}
 			__unholdModifiers();
@@ -90,19 +90,17 @@ export function Keypad(keys_parent, key_callback) {
 	};
 
 	var __fixMacCmd = function() {
-		if (__isMacCmdActive()) {
+		// https://bugs.chromium.org/p/chromium/issues/detail?id=28089
+		// https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
+		if (__isActive(__modifiers["MetaLeft"][0]) || __isActive(__modifiers["MetaRight"][0])) {
 			for (let code in __keys) {
 				setTimeout(function() {
 					if (__isActive(__keys[code][0])) {
-						self.emit(code, false);
+						self.emit(code, false, false);
 					}
 				}, 100);
 			}
 		}
-	};
-
-	var __isMacCmdActive = function() {
-		return (__isActive(__modifiers["MetaLeft"][0]) || __isActive(__modifiers["MetaRight"][0]));
 	};
 
 	var __clickHandler = function(el_key, state) {
@@ -184,7 +182,7 @@ export function Keypad(keys_parent, key_callback) {
 
 	var __process = function(el_key, state) {
 		let code = el_key.getAttribute("data-code");
-		key_callback(code, state);
+		__sendKey(code, state);
 	};
 
 	__init__();
