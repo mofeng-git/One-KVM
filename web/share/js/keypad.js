@@ -26,7 +26,7 @@
 import {tools, $$$} from "./tools.js";
 
 
-export function Keypad(__keys_parent, __sendKey, __fix_mac_cmd=false) {
+export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 	var self = this;
 
 	/************************************************************************/
@@ -35,7 +35,22 @@ export function Keypad(__keys_parent, __sendKey, __fix_mac_cmd=false) {
 	var __keys = {};
 	var __modifiers = {};
 
+	var __fix_mac_cmd = false;
+	var __fix_win_altgr = false;
+	var __altgr_ctrl_timer = null;
+
 	var __init__ = function() {
+		if (__apply_fixes) {
+			__fix_mac_cmd = tools.browser.is_mac;
+			if (__fix_mac_cmd) {
+				tools.info(`Keymap at ${__keys_parent}: enabled Fix-Mac-CMD`);
+			}
+			__fix_win_altgr = tools.browser.is_win;
+			if (__fix_win_altgr) {
+				tools.info(`Keymap at ${__keys_parent}: enabled Fix-Win-AltGr`);
+			}
+		}
+
 		for (let el_key of $$$(`${__keys_parent} div.key`)) {
 			let code = el_key.getAttribute("data-code");
 
@@ -81,6 +96,11 @@ export function Keypad(__keys_parent, __sendKey, __fix_mac_cmd=false) {
 
 	self.emit = function(code, state, apply_fixes=true) {
 		if (code in __merged) {
+			if (__fix_win_altgr && apply_fixes) {
+				if (!__fixWinAltgr(code, state)) {
+					return;
+				}
+			}
 			__commonHandler(__merged[code][0], state, false);
 			if (__fix_mac_cmd && apply_fixes) {
 				__fixMacCmd();
@@ -101,6 +121,34 @@ export function Keypad(__keys_parent, __sendKey, __fix_mac_cmd=false) {
 				}, 100);
 			}
 		}
+	};
+
+	var __fixWinAltgr = function(code, state) {
+		// https://github.com/pikvm/pikvm/issues/375
+		// https://github.com/novnc/noVNC/blob/84f102d6/core/input/keyboard.js
+		if (state) {
+			if (__altgr_ctrl_timer) {
+				clearTimeout(__altgr_ctrl_timer);
+				__altgr_ctrl_timer = null;
+				if (code !== "AltRight") {
+					self.emit("ControlLeft", true, false);
+				}
+			}
+			if (code === "ControlLeft" && !__isActive(__modifiers["ControlLeft"][0])) {
+				__altgr_ctrl_timer = setTimeout(function() {
+					__altgr_ctrl_timer = null;
+					self.emit("ControlLeft", true, false);
+				}, 50);
+				return false; // Stop handling
+			}
+		} else {
+			if (__altgr_ctrl_timer) {
+				clearTimeout(__altgr_ctrl_timer);
+				__altgr_ctrl_timer = null;
+				self.emit("ControlLeft", true, false);
+			}
+		}
+		return true; // Continue handling
 	};
 
 	var __clickHandler = function(el_key, state) {

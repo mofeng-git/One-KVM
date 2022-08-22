@@ -388,6 +388,9 @@ export var tools = new function() {
 			|| "Unknown"
 		).indexOf("Mac") !== -1);
 
+		// Any Windows
+		let is_win = (navigator && !!(/win/i).exec(navigator.platform));
+
 		return {
 			"is_opera": is_opera,
 			"is_firefox": is_firefox,
@@ -396,6 +399,7 @@ export var tools = new function() {
 			"is_blink": is_blink,
 			"is_ios": is_ios,
 			"is_mac": is_mac,
+			"is_win": is_win,
 		};
 	};
 	self.info("Browser:", self.browser);

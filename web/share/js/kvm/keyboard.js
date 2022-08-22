@@ -35,12 +35,7 @@ export function Keyboard(__recordWsEvent) {
 	var __keypad = null;
 
 	var __init__ = function() {
-		let fix_mac_cmd = tools.browser.is_mac;
-		if (fix_mac_cmd) {
-			tools.info("Keyboard: enabled Fix-Mac-CMD");
-		}
-
-		__keypad = new Keypad("div#keyboard-window", __sendKey, fix_mac_cmd);
+		__keypad = new Keypad("div#keyboard-window", __sendKey, true);
 
 		$("hid-keyboard-led").title = "Keyboard free";
 
