@@ -83,6 +83,7 @@ class _Edid:
             file.write(text)
 
     def write_bin(self, path: str) -> None:
+        self.__update_checksums()
         with _smart_open(path, "wb") as file:
             file.write(bytes(self.__data))
 
