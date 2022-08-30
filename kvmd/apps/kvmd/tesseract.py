@@ -41,6 +41,7 @@ from typing import Set
 from typing import Generator
 from typing import Optional
 
+from PIL import ImageOps
 from PIL import Image as PilImage
 
 from ...errors import OperationError
@@ -149,6 +150,8 @@ class TesseractOcr:
                             image.close()
                             image = image_cropped
 
+                    ImageOps.grayscale(image)
+                    image=image.resize((int(image.size[0]*2),int(image.size[1]*2)), PilImage.BICUBIC)
                     _libtess.TessBaseAPISetImage(api, image.tobytes("raw", "RGB"), image.width, image.height, 3, image.width * 3)
                     text_ptr = None
                     try:
