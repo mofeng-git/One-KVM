@@ -151,7 +151,10 @@ class TesseractOcr:
                             image = image_cropped
 
                     ImageOps.grayscale(image)
-                    image=image.resize((int(image.size[0]*2),int(image.size[1]*2)), PilImage.BICUBIC)
+                    image_resized = image.resize((int(image.size[0] * 2), int(image.size[1] * 2)), PilImage.BICUBIC)
+                    image.close()
+                    image = image_resized
+
                     _libtess.TessBaseAPISetImage(api, image.tobytes("raw", "RGB"), image.width, image.height, 3, image.width * 3)
                     text_ptr = None
                     try:
