@@ -32,11 +32,17 @@ import {Session} from "./session.js";
 
 export function main() {
 	if (checkBrowser()) {
-		window.onbeforeunload = function(event) {
-			let text = "Are you sure you want to close PiKVM session?";
-			event.returnValue = text;
-			return text;
-		};
+		tools.storage.bindSimpleSwitch($("page-close-ask-switch"), "page.close.ask", true, function(value) {
+			if (value) {
+				window.onbeforeunload = function(event) {
+					let text = "Are you sure you want to close PiKVM session?";
+					event.returnValue = text;
+					return text;
+				};
+			} else {
+				window.onbeforeunload = null;
+			}
+		});
 
 		initWindowManager();
 
