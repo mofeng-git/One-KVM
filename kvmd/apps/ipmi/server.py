@@ -28,9 +28,6 @@ import multiprocessing
 import functools
 import queue
 
-from typing import Dict
-from typing import Optional
-
 import aiohttp
 import serial
 
@@ -83,8 +80,8 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
         self.__sol_proxy_port = (sol_proxy_port or port)
 
         self.__sol_lock = threading.Lock()
-        self.__sol_console: Optional[IpmiConsole] = None
-        self.__sol_thread: Optional[threading.Thread] = None
+        self.__sol_console: (IpmiConsole | None) = None
+        self.__sol_thread: (threading.Thread | None) = None
         self.__sol_stop = False
 
     def run(self) -> None:
@@ -100,7 +97,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
 
     # =====
 
-    def handle_raw_request(self, request: Dict, session: IpmiServerSession) -> None:
+    def handle_raw_request(self, request: dict, session: IpmiServerSession) -> None:
         handler = {
             (6, 1): (lambda _, session: self.send_device_id(session)),  # Get device ID
             (6, 7): self.__get_power_state_handler,  # Power state
@@ -125,13 +122,13 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
 
     # =====
 
-    def __get_power_state_handler(self, _: Dict, session: IpmiServerSession) -> None:
+    def __get_power_state_handler(self, _: dict, session: IpmiServerSession) -> None:
         # https://github.com/arcress0/ipmiutil/blob/e2f6e95127d22e555f959f136d9bb9543c763896/util/ireset.c#L654
         result = self.__make_request(session, "atx.get_state() [power]", "atx.get_state")
         data = [(0 if result["leds"]["power"] else 5)]
         session.send_ipmi_response(data=data)
 
-    def __get_selftest_status_handler(self, _: Dict, session: IpmiServerSession) -> None:
+    def __get_selftest_status_handler(self, _: dict, session: IpmiServerSession) -> None:
         # https://github.com/arcress0/ipmiutil/blob/e2f6e95127d22e555f959f136d9bb9543c763896/util/ihealth.c#L858
         data = [0x0055]
         try:
@@ -140,12 +137,12 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
             data = [0]
         session.send_ipmi_response(data=data)
 
-    def __get_chassis_status_handler(self, _: Dict, session: IpmiServerSession) -> None:
+    def __get_chassis_status_handler(self, _: dict, session: IpmiServerSession) -> None:
         result = self.__make_request(session, "atx.get_state() [chassis]", "atx.get_state")
         data = [int(result["leds"]["power"]), 0, 0]
         session.send_ipmi_response(data=data)
 
-    def __chassis_control_handler(self, request: Dict, session: IpmiServerSession) -> None:
+    def __chassis_control_handler(self, request: dict, session: IpmiServerSession) -> None:
         action = {
             0: "off_hard",
             1: "on",
@@ -179,7 +176,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
 
     # =====
 
-    def __activate_sol_handler(self, _: Dict, session: IpmiServerSession) -> None:
+    def __activate_sol_handler(self, _: dict, session: IpmiServerSession) -> None:
         with self.__sol_lock:
             if not self.__sol_device_path:
                 session.send_ipmi_response(code=0x81)  # SOL disabled
@@ -198,7 +195,7 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
                 ])
                 self.__start_sol_worker(session)
 
-    def __deactivate_sol_handler(self, _: Dict, session: IpmiServerSession) -> None:
+    def __deactivate_sol_handler(self, _: dict, session: IpmiServerSession) -> None:
         with self.__sol_lock:
             if not self.__sol_device_path:
                 session.send_ipmi_response(code=0x81)

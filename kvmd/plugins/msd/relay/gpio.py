@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Optional
-
 import gpiod
 
 from .... import aiogp
@@ -44,9 +42,9 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
         self.__reset_inverted = reset_inverted
         self.__reset_delay = reset_delay
 
-        self.__chip: Optional[gpiod.Chip] = None
-        self.__target_line: Optional[gpiod.Line] = None
-        self.__reset_line: Optional[gpiod.Line] = None
+        self.__chip: (gpiod.Chip | None) = None
+        self.__target_line: (gpiod.Line | None) = None
+        self.__reset_line: (gpiod.Line | None) = None
 
     def open(self) -> None:
         assert self.__chip is None

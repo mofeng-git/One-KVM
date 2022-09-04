@@ -26,9 +26,6 @@ import dataclasses
 import itertools
 import argparse
 
-from typing import List
-from typing import Optional
-
 from ...logging import get_logger
 
 from ...yamlconf import Section
@@ -66,25 +63,25 @@ class _Netcfg:  # pylint: disable=too-many-instance-attributes
 class _Service:  # pylint: disable=too-many-instance-attributes
     def __init__(self, config: Section) -> None:
         self.__iface_net: str = config.otgnet.iface.net
-        self.__ip_cmd: List[str] = config.otgnet.iface.ip_cmd
+        self.__ip_cmd: list[str] = config.otgnet.iface.ip_cmd
 
         self.__allow_icmp: bool = config.otgnet.firewall.allow_icmp
-        self.__allow_tcp: List[int] = sorted(set(config.otgnet.firewall.allow_tcp))
-        self.__allow_udp: List[int] = sorted(set(config.otgnet.firewall.allow_udp))
+        self.__allow_tcp: list[int] = sorted(set(config.otgnet.firewall.allow_tcp))
+        self.__allow_udp: list[int] = sorted(set(config.otgnet.firewall.allow_udp))
         self.__forward_iface: str = config.otgnet.firewall.forward_iface
-        self.__iptables_cmd: List[str] = config.otgnet.firewall.iptables_cmd
+        self.__iptables_cmd: list[str] = config.otgnet.firewall.iptables_cmd
 
-        def build_cmd(key: str) -> List[str]:
+        def build_cmd(key: str) -> list[str]:
             return tools.build_cmd(
                 getattr(config.otgnet.commands, key),
                 getattr(config.otgnet.commands, f"{key}_remove"),
                 getattr(config.otgnet.commands, f"{key}_append"),
             )
 
-        self.__pre_start_cmd: List[str] = build_cmd("pre_start_cmd")
-        self.__post_start_cmd: List[str] = build_cmd("post_start_cmd")
-        self.__pre_stop_cmd: List[str] = build_cmd("pre_stop_cmd")
-        self.__post_stop_cmd: List[str] = build_cmd("post_stop_cmd")
+        self.__pre_start_cmd: list[str] = build_cmd("pre_start_cmd")
+        self.__post_start_cmd: list[str] = build_cmd("post_start_cmd")
+        self.__pre_stop_cmd: list[str] = build_cmd("pre_stop_cmd")
+        self.__post_stop_cmd: list[str] = build_cmd("post_stop_cmd")
 
         self.__gadget: str = config.otg.gadget
         self.__driver: str = config.otg.devices.ethernet.driver
@@ -101,7 +98,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
             key: str(value)
             for (key, value) in dataclasses.asdict(netcfg).items()
         }
-        ctls: List[BaseCtl] = [
+        ctls: list[BaseCtl] = [
             CustomCtl(self.__pre_start_cmd, self.__post_stop_cmd, placeholders),
             IfaceUpCtl(self.__ip_cmd, netcfg.iface),
             *([IptablesAllowIcmpCtl(self.__iptables_cmd, netcfg.iface)] if self.__allow_icmp else []),
@@ -185,7 +182,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     (parent_parser, argv, config) = init(
         add_help=False,
         argv=argv,

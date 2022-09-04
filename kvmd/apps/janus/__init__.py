@@ -20,16 +20,13 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Optional
-
 from .. import init
 
 from .runner import JanusRunner
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     config = init(
         prog="kvmd-Janus",
         description="Janus WebRTC Gateway Runner",

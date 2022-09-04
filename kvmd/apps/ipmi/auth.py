@@ -22,9 +22,6 @@
 
 import dataclasses
 
-from typing import List
-from typing import Dict
-
 
 # =====
 class IpmiPasswdError(Exception):
@@ -55,8 +52,8 @@ class IpmiAuthManager:
     def get_credentials(self, ipmi_user: str) -> IpmiUserCredentials:
         return self.__credentials[ipmi_user]
 
-    def __parse_passwd_file(self, lines: List[str]) -> Dict[str, IpmiUserCredentials]:
-        credentials: Dict[str, IpmiUserCredentials] = {}
+    def __parse_passwd_file(self, lines: list[str]) -> dict[str, IpmiUserCredentials]:
+        credentials: dict[str, IpmiUserCredentials] = {}
         for (lineno, line) in enumerate(lines):
             if len(line.strip()) == 0 or line.lstrip().startswith("#"):
                 continue

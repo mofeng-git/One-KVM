@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Dict
-
 from .base import BaseInfoSubmanager
 
 
@@ -30,5 +28,5 @@ class AuthInfoSubmanager(BaseInfoSubmanager):
     def __init__(self, enabled: bool) -> None:
         self.__enabled = enabled
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         return {"enabled": self.__enabled}

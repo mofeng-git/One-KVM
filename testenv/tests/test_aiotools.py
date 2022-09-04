@@ -22,8 +22,6 @@
 
 import asyncio
 
-from typing import List
-
 import pytest
 
 from kvmd.aiotools import AioExclusiveRegion
@@ -123,7 +121,7 @@ async def test_fail__region__access_two() -> None:
 # =====
 @pytest.mark.asyncio
 async def test_ok__shield_fg() -> None:
-    ops: List[str] = []
+    ops: list[str] = []
 
     async def foo(op: str, delay: float) -> None:  # pylint: disable=disallowed-name
         await asyncio.sleep(delay)

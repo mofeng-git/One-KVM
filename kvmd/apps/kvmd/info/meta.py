@@ -20,9 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Dict
-from typing import Optional
-
 from ....logging import get_logger
 
 from ....yamlconf.loader import load_yaml_file
@@ -37,7 +34,7 @@ class MetaInfoSubmanager(BaseInfoSubmanager):
     def __init__(self, meta_path: str) -> None:
         self.__meta_path = meta_path
 
-    async def get_state(self) -> Optional[Dict]:
+    async def get_state(self) -> (dict | None):
         try:
             return ((await aiotools.run_async(load_yaml_file, self.__meta_path)) or {})
         except Exception:

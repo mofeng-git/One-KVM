@@ -20,9 +20,7 @@
 # ========================================================================== #
 
 
-from typing import Dict
 from typing import AsyncGenerator
-from typing import Optional
 
 import gpiod
 
@@ -76,9 +74,9 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__notifier = aiotools.AioNotifier()
         self.__region = aiotools.AioExclusiveRegion(AtxIsBusyError, self.__notifier)
 
-        self.__chip: Optional[gpiod.Chip] = None
-        self.__power_switch_line: Optional[gpiod.Line] = None
-        self.__reset_switch_line: Optional[gpiod.Line] = None
+        self.__chip: (gpiod.Chip | None) = None
+        self.__power_switch_line: (gpiod.Line | None) = None
+        self.__reset_switch_line: (gpiod.Line | None) = None
 
         self.__reader = aiogp.AioReader(
             path=self.__device_path,
@@ -91,7 +89,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         )
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "device": Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="device_path"),
 
@@ -122,7 +120,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__reset_switch_line = self.__chip.get_line(self.__reset_switch_pin)
         self.__reset_switch_line.request("kvmd::atx::reset_switch", gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         return {
             "enabled": True,
             "busy": self.__region.is_busy(),
@@ -132,8 +130,8 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
             },
         }
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        prev_state: Dict = {}
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
+        prev_state: dict = {}
         while True:
             state = await self.get_state()
             if state != prev_state:

@@ -22,8 +22,6 @@
 
 import os
 
-from typing import List
-from typing import Dict
 from typing import IO
 from typing import Any
 
@@ -52,7 +50,7 @@ class _YamlLoader(yaml.SafeLoader):
         self.__root = os.path.dirname(yaml_file.name)
 
     def include(self, node: yaml.nodes.Node) -> Any:
-        incs: List[str]
+        incs: list[str]
         if isinstance(node, yaml.nodes.SequenceNode):
             incs = [
                 str(child)
@@ -63,8 +61,8 @@ class _YamlLoader(yaml.SafeLoader):
             incs = [str(self.construct_scalar(node))]  # type: ignore
         return self.__inner_include(list(filter(None, incs)))
 
-    def __inner_include(self, incs: List[str]) -> Any:
-        tree: Dict = {}
+    def __inner_include(self, incs: list[str]) -> Any:
+        tree: dict = {}
         for inc in filter(None, incs):
             assert inc, inc
             inc_path = os.path.join(self.__root, inc)

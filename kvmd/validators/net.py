@@ -23,7 +23,6 @@
 import ipaddress
 import ssl
 
-from typing import List
 from typing import Callable
 from typing import Any
 
@@ -52,8 +51,8 @@ def valid_ip_or_host(arg: Any) -> str:
 
 def valid_ip(arg: Any, v4: bool=True, v6: bool=True) -> str:
     assert v4 or v6
-    validators: List[Callable] = []
-    versions: List[str] = []
+    validators: list[Callable] = []
+    versions: list[str] = []
     if v4:
         validators.append(lambda arg: str(ipaddress.IPv4Address(arg)))
         versions.append("4")
@@ -70,8 +69,8 @@ def valid_ip(arg: Any, v4: bool=True, v6: bool=True) -> str:
 
 def valid_net(arg: Any, v4: bool=True, v6: bool=True) -> str:
     assert v4 or v6
-    validators: List[Callable] = []
-    versions: List[str] = []
+    validators: list[Callable] = []
+    versions: list[str] = []
     if v4:
         validators.append(lambda arg: str(ipaddress.IPv4Network(arg)))
         versions.append("4")
@@ -99,7 +98,7 @@ def valid_port(arg: Any) -> int:
     return int(valid_number(arg, min=0, max=65535, name="network port"))
 
 
-def valid_ports_list(arg: Any) -> List[int]:
+def valid_ports_list(arg: Any) -> list[int]:
     return list(map(int, valid_string_list(arg, subval=valid_port, name="ports list")))
 
 

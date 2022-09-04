@@ -20,12 +20,8 @@
 # ========================================================================== #
 
 
-from typing import Tuple
-from typing import Dict
 from typing import Iterable
 from typing import AsyncGenerator
-from typing import Type
-from typing import Optional
 
 from .. import BasePlugin
 from .. import get_plugin_class
@@ -36,10 +32,10 @@ class BaseHid(BasePlugin):
     def sysprep(self) -> None:
         raise NotImplementedError
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         raise NotImplementedError
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
         yield {}
         raise NotImplementedError
 
@@ -51,7 +47,7 @@ class BaseHid(BasePlugin):
 
     # =====
 
-    def send_key_events(self, keys: Iterable[Tuple[str, bool]]) -> None:
+    def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
         raise NotImplementedError
 
     def send_mouse_button_event(self, button: str, state: bool) -> None:
@@ -68,7 +64,7 @@ class BaseHid(BasePlugin):
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         raise NotImplementedError
 
-    def set_params(self, keyboard_output: Optional[str]=None, mouse_output: Optional[str]=None) -> None:
+    def set_params(self, keyboard_output: (str | None)=None, mouse_output: (str | None)=None) -> None:
         _ = keyboard_output
         _ = mouse_output
 
@@ -80,5 +76,5 @@ class BaseHid(BasePlugin):
 
 
 # =====
-def get_hid_class(name: str) -> Type[BaseHid]:
+def get_hid_class(name: str) -> type[BaseHid]:
     return get_plugin_class("hid", name)  # type: ignore

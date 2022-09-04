@@ -22,8 +22,6 @@
 
 import asyncio
 
-from typing import List
-
 from aiohttp.web import Request
 from aiohttp.web import Response
 
@@ -51,7 +49,7 @@ class InfoApi:
         ])))
         return make_json_response(results)
 
-    def __valid_info_fields(self, request: Request) -> List[str]:
+    def __valid_info_fields(self, request: Request) -> list[str]:
         subs = self.__info_manager.get_subs()
         return sorted(valid_info_fields(
             arg=request.query.get("fields", ",".join(subs)),

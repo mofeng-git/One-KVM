@@ -24,10 +24,6 @@ import os
 import stat
 import functools
 
-from typing import Tuple
-from typing import List
-from typing import Dict
-from typing import Set
 from typing import Callable
 
 from aiohttp.web import Request
@@ -64,10 +60,10 @@ class HidApi:
         hid: BaseHid,
 
         keymap_path: str,
-        ignore_keys: List[str],
+        ignore_keys: list[str],
 
-        mouse_x_range: Tuple[int, int],
-        mouse_y_range: Tuple[int, int],
+        mouse_x_range: tuple[int, int],
+        mouse_y_range: tuple[int, int],
     ) -> None:
 
         self.__hid = hid
@@ -112,8 +108,8 @@ class HidApi:
 
     # =====
 
-    async def get_keymaps(self) -> Dict:  # Ugly hack to generate hid_keymaps_state (see server.py)
-        keymaps: Set[str] = set()
+    async def get_keymaps(self) -> dict:  # Ugly hack to generate hid_keymaps_state (see server.py)
+        keymaps: set[str] = set()
         for keymap_name in os.listdir(self.__keymaps_dir_path):
             path = os.path.join(self.__keymaps_dir_path, keymap_name)
             if os.access(path, os.R_OK) and stat.S_ISREG(os.stat(path).st_mode):
@@ -139,7 +135,7 @@ class HidApi:
         self.__hid.send_key_events(text_to_web_keys(text, symmap))
         return make_json_response()
 
-    def __ensure_symmap(self, keymap_name: str) -> Dict[int, Dict[int, str]]:
+    def __ensure_symmap(self, keymap_name: str) -> dict[int, dict[int, str]]:
         keymap_name = valid_printable_filename(keymap_name, "keymap")
         path = os.path.join(self.__keymaps_dir_path, keymap_name)
         try:
@@ -151,14 +147,14 @@ class HidApi:
         return self.__inner_ensure_symmap(path, st.st_mtime)
 
     @functools.lru_cache(maxsize=10)
-    def __inner_ensure_symmap(self, path: str, mtime: int) -> Dict[int, Dict[int, str]]:
+    def __inner_ensure_symmap(self, path: str, mtime: int) -> dict[int, dict[int, str]]:
         _ = mtime  # For LRU
         return build_symmap(path)
 
     # =====
 
     @exposed_ws("key")
-    async def __ws_key_handler(self, _: WsSession, event: Dict) -> None:
+    async def __ws_key_handler(self, _: WsSession, event: dict) -> None:
         try:
             key = valid_hid_key(event["key"])
             state = valid_bool(event["state"])
@@ -168,7 +164,7 @@ class HidApi:
             self.__hid.send_key_events([(key, state)])
 
     @exposed_ws("mouse_button")
-    async def __ws_mouse_button_handler(self, _: WsSession, event: Dict) -> None:
+    async def __ws_mouse_button_handler(self, _: WsSession, event: dict) -> None:
         try:
             button = valid_hid_mouse_button(event["button"])
             state = valid_bool(event["state"])
@@ -177,7 +173,7 @@ class HidApi:
         self.__hid.send_mouse_button_event(button, state)
 
     @exposed_ws("mouse_move")
-    async def __ws_mouse_move_handler(self, _: WsSession, event: Dict) -> None:
+    async def __ws_mouse_move_handler(self, _: WsSession, event: dict) -> None:
         try:
             to_x = valid_hid_mouse_move(event["to"]["x"])
             to_y = valid_hid_mouse_move(event["to"]["y"])
@@ -186,14 +182,14 @@ class HidApi:
         self.__send_mouse_move_event_remapped(to_x, to_y)
 
     @exposed_ws("mouse_relative")
-    async def __ws_mouse_relative_handler(self, _: WsSession, event: Dict) -> None:
+    async def __ws_mouse_relative_handler(self, _: WsSession, event: dict) -> None:
         self.__process_delta_ws_request(event, self.__hid.send_mouse_relative_event)
 
     @exposed_ws("mouse_wheel")
-    async def __ws_mouse_wheel_handler(self, _: WsSession, event: Dict) -> None:
+    async def __ws_mouse_wheel_handler(self, _: WsSession, event: dict) -> None:
         self.__process_delta_ws_request(event, self.__hid.send_mouse_wheel_event)
 
-    def __process_delta_ws_request(self, event: Dict, handler: Callable[[int, int], None]) -> None:
+    def __process_delta_ws_request(self, event: dict, handler: Callable[[int, int], None]) -> None:
         try:
             raw_delta = event["delta"]
             deltas = [

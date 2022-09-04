@@ -23,9 +23,7 @@
 import asyncio
 import functools
 
-from typing import Dict
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 import serial_asyncio
@@ -79,13 +77,13 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         self.__switch_delay = switch_delay
         self.__state_poll = state_poll
 
-        self.__reader: Optional[asyncio.StreamReader] = None
-        self.__writer: Optional[asyncio.StreamWriter] = None
+        self.__reader: (asyncio.StreamReader | None) = None
+        self.__writer: (asyncio.StreamWriter | None) = None
         self.__active: int = -1
         self.__update_notifier = aiotools.AioNotifier()
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "host":         Option("",   type=valid_ip_or_host, if_empty=""),
             "port":         Option(5000, type=valid_port),

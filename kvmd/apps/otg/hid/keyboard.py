@@ -20,13 +20,11 @@
 # ========================================================================== #
 
 
-from typing import Optional
-
 from . import Hid
 
 
 # =====
-def make_keyboard_hid(report_id: Optional[int]=None) -> Hid:
+def make_keyboard_hid(report_id: (int | None)=None) -> Hid:
     return Hid(
         protocol=1,  # Keyboard protocol
         subclass=1,  # Boot interface subclass

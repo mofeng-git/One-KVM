@@ -27,8 +27,6 @@ import shutil
 import dataclasses
 import subprocess
 
-from typing import List
-
 
 # ====
 _MOUNT_PATH = "/bin/mount"
@@ -98,7 +96,7 @@ def main() -> None:
         raise SystemExit(f"Usage: {sys.argv[0]} [ro|rw]")
 
     target = ""
-    dirs: List[str] = []
+    dirs: list[str] = []
     app = os.path.basename(sys.argv[0])
     if app == "kvmd-helper-otgmsd-remount":
         target = "otgmsd"

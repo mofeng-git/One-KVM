@@ -26,7 +26,6 @@ import tempfile
 import builtins
 import getpass
 
-from typing import List
 from typing import Generator
 from typing import Any
 
@@ -54,7 +53,7 @@ def _htpasswd_fixture(request) -> Generator[passlib.apache.HtpasswdFile, None, N
     os.remove(path)
 
 
-def _run_htpasswd(cmd: List[str], htpasswd_path: str, internal_type: str="htpasswd") -> None:
+def _run_htpasswd(cmd: list[str], htpasswd_path: str, internal_type: str="htpasswd") -> None:
     cmd = ["kvmd-htpasswd", *cmd, "--set-options"]
     if internal_type != "htpasswd":  # By default
         cmd.append("kvmd/auth/internal/type=" + internal_type)

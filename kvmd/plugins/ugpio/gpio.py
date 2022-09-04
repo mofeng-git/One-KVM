@@ -20,9 +20,7 @@
 # ========================================================================== #
 
 
-from typing import Dict
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 import gpiod
@@ -52,16 +50,16 @@ class Plugin(BaseUserGpioDriver):
 
         self.__device_path = device_path
 
-        self.__input_pins: Dict[int, aiogp.AioReaderPinParams] = {}
-        self.__output_pins: Dict[int, Optional[bool]] = {}
+        self.__input_pins: dict[int, aiogp.AioReaderPinParams] = {}
+        self.__output_pins: dict[int, (bool | None)] = {}
 
-        self.__reader: Optional[aiogp.AioReader] = None
+        self.__reader: (aiogp.AioReader | None) = None
 
-        self.__chip: Optional[gpiod.Chip] = None
-        self.__output_lines: Dict[int, gpiod.Line] = {}
+        self.__chip: (gpiod.Chip | None) = None
+        self.__output_lines: dict[int, gpiod.Line] = {}
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "device": Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="device_path"),
         }
@@ -73,7 +71,7 @@ class Plugin(BaseUserGpioDriver):
     def register_input(self, pin: str, debounce: float) -> None:
         self.__input_pins[int(pin)] = aiogp.AioReaderPinParams(False, debounce)
 
-    def register_output(self, pin: str, initial: Optional[bool]) -> None:
+    def register_output(self, pin: str, initial: (bool | None)) -> None:
         self.__output_pins[int(pin)] = initial
 
     def prepare(self) -> None:

@@ -22,9 +22,6 @@
 
 import dataclasses
 
-from typing import Tuple
-from typing import Dict
-
 from ...logging import get_logger
 
 from ... import aiofs
@@ -53,7 +50,7 @@ class VncAuthManager:
         self.__path = path
         self.__enabled = enabled
 
-    async def read_credentials(self) -> Tuple[Dict[str, VncAuthKvmdCredentials], bool]:
+    async def read_credentials(self) -> tuple[dict[str, VncAuthKvmdCredentials], bool]:
         if self.__enabled:
             try:
                 return (await self.__inner_read_credentials(), True)
@@ -63,10 +60,10 @@ class VncAuthManager:
                 get_logger(0).exception("Unhandled exception while reading VNCAuth passwd file")
         return ({}, (not self.__enabled))
 
-    async def __inner_read_credentials(self) -> Dict[str, VncAuthKvmdCredentials]:
+    async def __inner_read_credentials(self) -> dict[str, VncAuthKvmdCredentials]:
         lines = (await aiofs.read(self.__path)).split("\n")
 
-        credentials: Dict[str, VncAuthKvmdCredentials] = {}
+        credentials: dict[str, VncAuthKvmdCredentials] = {}
         for (lineno, line) in enumerate(lines):
             if len(line.strip()) == 0 or line.lstrip().startswith("#"):
                 continue

@@ -22,7 +22,6 @@
 
 import os
 
-from typing import List
 from typing import Any
 
 import pytest
@@ -148,7 +147,7 @@ def test_fail__valid_unix_mode(arg: Any) -> None:
     ("/bin/true, 1, 2, 3,",  ["/bin/true", "1", "2", "3"]),
     ("/bin/true",            ["/bin/true"]),
 ])
-def test_ok__valid_command(arg: Any, retval: List[str]) -> None:
+def test_ok__valid_command(arg: Any, retval: list[str]) -> None:
     assert valid_command(arg) == retval
 
 

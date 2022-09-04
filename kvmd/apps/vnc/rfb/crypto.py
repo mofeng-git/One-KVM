@@ -22,8 +22,6 @@
 
 import os
 
-from typing import List
-
 import passlib.crypto.des
 
 
@@ -43,7 +41,7 @@ def rfb_encrypt_challenge(challenge: bytes, passwd: bytes) -> bytes:
 
 def _make_key(passwd: bytes) -> bytes:
     passwd = (passwd + b"\0" * 8)[:8]
-    key: List[int] = []
+    key: list[int] = []
     for ch in passwd:
         btgt = 0
         for index in range(8):

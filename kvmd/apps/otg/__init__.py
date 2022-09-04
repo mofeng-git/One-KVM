@@ -29,10 +29,6 @@ import argparse
 
 from os.path import join  # pylint: disable=ungrouped-imports
 
-from typing import List
-from typing import Optional
-from typing import Union
-
 from ...logging import get_logger
 
 from ...yamlconf import Section
@@ -78,7 +74,7 @@ def _unlink(path: str, optional: bool=False) -> None:
     os.unlink(path)
 
 
-def _write(path: str, value: Union[str, int], optional: bool=False) -> None:
+def _write(path: str, value: (str | int), optional: bool=False) -> None:
     logger = get_logger()
     if optional and not os.access(path, os.F_OK):
         logger.info("WRITE --- [SKIPPED] %s", path)
@@ -320,7 +316,7 @@ def _cmd_stop(config: Section) -> None:
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     (parent_parser, argv, config) = init(
         add_help=False,
         argv=argv,

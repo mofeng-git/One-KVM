@@ -20,10 +20,7 @@
 # ========================================================================== #
 
 
-from typing import Set
-from typing import Type
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 from ...errors import OperationError
@@ -71,7 +68,7 @@ class BaseUserGpioDriver(BasePlugin):
         return self._instance_name
 
     @classmethod
-    def get_modes(cls) -> Set[str]:
+    def get_modes(cls) -> set[str]:
         return set(UserGpioModes.ALL)
 
     @classmethod
@@ -84,7 +81,7 @@ class BaseUserGpioDriver(BasePlugin):
         _ = pin
         _ = debounce
 
-    def register_output(self, pin: str, initial: Optional[bool]) -> None:
+    def register_output(self, pin: str, initial: (bool | None)) -> None:
         _ = pin
         _ = initial
 
@@ -105,5 +102,5 @@ class BaseUserGpioDriver(BasePlugin):
 
 
 # =====
-def get_ugpio_driver_class(name: str) -> Type[BaseUserGpioDriver]:
+def get_ugpio_driver_class(name: str) -> type[BaseUserGpioDriver]:
     return get_plugin_class("ugpio", name)  # type: ignore

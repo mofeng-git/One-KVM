@@ -28,9 +28,7 @@ import contextlib
 import textwrap
 import argparse
 
-from typing import List
 from typing import Generator
-from typing import Optional
 
 import passlib.apache
 
@@ -125,7 +123,7 @@ def _cmd_delete(config: Section, options: argparse.Namespace) -> None:
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     (parent_parser, argv, config) = init(
         add_help=False,
         cli_logging=True,

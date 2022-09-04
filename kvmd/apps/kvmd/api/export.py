@@ -23,7 +23,6 @@
 import asyncio
 
 from typing import Any
-from typing import List
 
 from aiohttp.web import Request
 from aiohttp.web import Response
@@ -56,7 +55,7 @@ class ExportApi:
             self.__info_manager.get_submanager("fan").get_state(),
             self.__user_gpio.get_state(),
         ])
-        rows: List[str] = []
+        rows: list[str] = []
 
         self.__append_prometheus_rows(rows, atx_state["enabled"], "pikvm_atx_enabled")
         self.__append_prometheus_rows(rows, atx_state["leds"]["power"], "pikvm_atx_power")
@@ -71,7 +70,7 @@ class ExportApi:
 
         return Response(text="\n".join(rows))
 
-    def __append_prometheus_rows(self, rows: List[str], value: Any, path: str) -> None:
+    def __append_prometheus_rows(self, rows: list[str], value: Any, path: str) -> None:
         if isinstance(value, bool):
             value = int(value)
         if isinstance(value, (int, float)):

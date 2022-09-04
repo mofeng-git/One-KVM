@@ -23,8 +23,6 @@
 import os
 import dataclasses
 
-from typing import Optional
-
 from ....logging import get_logger
 
 
@@ -44,7 +42,7 @@ def get_file_size(path: str) -> int:
         return -1
 
 
-def get_fs_space(path: str, fatal: bool) -> Optional[FsSpace]:
+def get_fs_space(path: str, fatal: bool) -> (FsSpace | None):
     try:
         st = os.statvfs(path)
     except Exception as err:

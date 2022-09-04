@@ -31,12 +31,7 @@ import dataclasses
 import types
 import errno
 
-from typing import Tuple
-from typing import List
-from typing import Dict
-from typing import Type
 from typing import Generator
-from typing import Optional
 
 from .logging import get_logger
 
@@ -53,7 +48,7 @@ _FS_ENCODING = (sys.getfilesystemencoding() or _FS_FALLBACK_ENCODING)
 
 
 # =====
-def _inotify_parsed_buffer(data: bytes) -> Generator[Tuple[int, int, int, bytes], None, None]:
+def _inotify_parsed_buffer(data: bytes) -> Generator[tuple[int, int, int, bytes], None, None]:
     offset = 0
     while offset + _EVENT_HEAD_SIZE <= len(data):
         (wd, mask, cookie, length) = struct.unpack_from("iIII", data, offset)
@@ -157,7 +152,7 @@ class InotifyMask:
 
     @classmethod
     def to_string(cls, mask: int) -> str:
-        flags: List[str] = []
+        flags: list[str] = []
         for name in dir(cls):
             if (
                 name[0].isupper()
@@ -188,10 +183,10 @@ class Inotify:
     def __init__(self) -> None:
         self.__fd = -1
 
-        self.__wd_by_path: Dict[str, int] = {}
-        self.__path_by_wd: Dict[int, str] = {}
+        self.__wd_by_path: dict[str, int] = {}
+        self.__path_by_wd: dict[int, str] = {}
 
-        self.__moved: Dict[int, str] = {}
+        self.__moved: dict[int, str] = {}
 
         self.__events_queue: "asyncio.Queue[InotifyEvent]" = asyncio.Queue()
 
@@ -215,15 +210,15 @@ class Inotify:
 #    def has_events(self) -> bool:
 #        return (not self.__events_queue.empty())
 
-    async def get_event(self, timeout: float) -> Optional[InotifyEvent]:
+    async def get_event(self, timeout: float) -> (InotifyEvent | None):
         assert timeout > 0
         try:
             return (await asyncio.wait_for(self.__events_queue.get(), timeout=timeout))
         except asyncio.TimeoutError:
             return None
 
-    async def get_series(self, timeout: float) -> List[InotifyEvent]:
-        series: List[InotifyEvent] = []
+    async def get_series(self, timeout: float) -> list[InotifyEvent]:
+        series: list[InotifyEvent] = []
         event = await self.get_event(timeout)
         if event:
             series.append(event)
@@ -283,7 +278,7 @@ class Inotify:
 
     def __exit__(
         self,
-        _exc_type: Type[BaseException],
+        _exc_type: type[BaseException],
         _exc: BaseException,
         _tb: types.TracebackType,
     ) -> None:

@@ -5,10 +5,6 @@ import struct
 import secrets
 import dataclasses
 
-from typing import Tuple
-from typing import Dict
-from typing import Optional
-
 from ... import tools
 from ... import aiotools
 
@@ -25,9 +21,9 @@ class StunAddress:
 @dataclasses.dataclass(frozen=True)
 class StunResponse:
     ok: bool
-    ext: Optional[StunAddress] = dataclasses.field(default=None)
-    src: Optional[StunAddress] = dataclasses.field(default=None)
-    changed: Optional[StunAddress] = dataclasses.field(default=None)
+    ext: (StunAddress | None) = dataclasses.field(default=None)
+    src: (StunAddress | None) = dataclasses.field(default=None)
+    changed: (StunAddress | None) = dataclasses.field(default=None)
 
 
 class StunNatType:
@@ -60,9 +56,9 @@ class Stun:
         self.__retries = retries
         self.__retries_delay = retries_delay
 
-        self.__sock: Optional[socket.socket] = None
+        self.__sock: (socket.socket | None) = None
 
-    async def get_info(self, src_ip: str, src_port: int) -> Tuple[str, str]:
+    async def get_info(self, src_ip: str, src_port: int) -> tuple[str, str]:
         (family, _, _, _, addr) = socket.getaddrinfo(src_ip, src_port, type=socket.SOCK_DGRAM)[0]
         try:
             with socket.socket(family, socket.SOCK_DGRAM) as self.__sock:
@@ -74,7 +70,7 @@ class Stun:
         finally:
             self.__sock = None
 
-    async def __get_nat_type(self, src_ip: str) -> Tuple[str, StunResponse]:  # pylint: disable=too-many-return-statements
+    async def __get_nat_type(self, src_ip: str) -> tuple[str, StunResponse]:  # pylint: disable=too-many-return-statements
         first = await self.__make_request("First probe")
         if not first.ok:
             return (StunNatType.BLOCKED, first)
@@ -128,7 +124,7 @@ class Stun:
                                 ctx, self.__retries, error)
             return StunResponse(ok=False)
 
-        parsed: Dict[str, StunAddress] = {}
+        parsed: dict[str, StunAddress] = {}
         offset = 0
         remaining = len(response)
         while remaining > 0:
@@ -146,7 +142,7 @@ class Stun:
             remaining -= (4 + attr_len)
         return StunResponse(ok=True, **parsed)
 
-    async def __inner_make_request(self, trans_id: bytes, request: bytes, host: str, port: int) -> Tuple[bytes, str]:
+    async def __inner_make_request(self, trans_id: bytes, request: bytes, host: str, port: int) -> tuple[bytes, str]:
         assert self.__sock is not None
 
         request = struct.pack(">HH", 0x0001, len(request)) + trans_id + request  # Bind Request

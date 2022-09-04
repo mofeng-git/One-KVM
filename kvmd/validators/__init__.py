@@ -22,14 +22,11 @@
 
 import re
 
-from typing import List
-from typing import Set
 from typing import Mapping
 from typing import Sequence
 from typing import Callable
 from typing import TypeVar
 from typing import NoReturn
-from typing import Union
 from typing import Any
 
 
@@ -63,7 +60,7 @@ def check_not_none_string(arg: Any, name: str, strip: bool=True) -> str:
     return arg
 
 
-def check_in_list(arg: Any, name: str, variants: Union[Sequence, Mapping, Set]) -> Any:
+def check_in_list(arg: Any, name: str, variants: (Sequence | Mapping | set)) -> Any:
     if arg not in variants:
         raise_error(arg, name)
     return arg
@@ -72,7 +69,7 @@ def check_in_list(arg: Any, name: str, variants: Union[Sequence, Mapping, Set]) 
 def check_string_in_list(
     arg: Any,
     name: str,
-    variants: Union[Sequence[str], Mapping[str, Any], Set[str]],
+    variants: (Sequence[str] | Mapping[str, Any] | set[str]),
     lower: bool=True,
 ) -> str:
 
@@ -95,7 +92,7 @@ def check_len(arg: _RetvalSeqT, name: str, limit: int) -> _RetvalSeqT:
     return arg
 
 
-def check_any(arg: Any, name: str, validators: List[Callable[[Any], Any]]) -> Any:  # pylint: disable=inconsistent-return-statements
+def check_any(arg: Any, name: str, validators: list[Callable[[Any], Any]]) -> Any:  # pylint: disable=inconsistent-return-statements
     for validator in validators:
         try:
             return validator(arg)

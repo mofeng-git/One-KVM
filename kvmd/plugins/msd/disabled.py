@@ -22,9 +22,7 @@
 
 import contextlib
 
-from typing import Dict
 from typing import AsyncGenerator
-from typing import Optional
 
 from ... import aiotools
 
@@ -42,7 +40,7 @@ class MsdDisabledError(MsdOperationError):
 
 # =====
 class Plugin(BaseMsd):
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         return {
             "enabled": False,
             "online": False,
@@ -56,7 +54,7 @@ class Plugin(BaseMsd):
             },
         }
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
         while True:
             yield (await self.get_state())
             await aiotools.wait_infinite()
@@ -68,9 +66,9 @@ class Plugin(BaseMsd):
 
     async def set_params(
         self,
-        name: Optional[str]=None,
-        cdrom: Optional[bool]=None,
-        rw: Optional[bool]=None,
+        name: (str | None)=None,
+        cdrom: (bool | None)=None,
+        rw: (bool | None)=None,
     ) -> None:
 
         raise MsdDisabledError()
@@ -85,7 +83,7 @@ class Plugin(BaseMsd):
         yield BaseMsdReader()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[BaseMsdWriter, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: (bool | None)) -> AsyncGenerator[BaseMsdWriter, None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise MsdDisabledError()
         yield BaseMsdWriter()

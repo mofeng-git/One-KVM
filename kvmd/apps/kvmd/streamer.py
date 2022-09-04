@@ -27,11 +27,7 @@ import asyncio.subprocess
 import dataclasses
 import functools
 
-from typing import Tuple
-from typing import List
-from typing import Dict
 from typing import AsyncGenerator
-from typing import Optional
 from typing import Any
 
 import aiohttp
@@ -53,7 +49,7 @@ class StreamerSnapshot:
     width: int
     height: int
     mtime: float
-    headers: Tuple[Tuple[str, str], ...]
+    headers: tuple[tuple[str, str], ...]
     data: bytes
 
     async def make_preview(self, max_width: int, max_height: int, quality: int) -> bytes:
@@ -98,7 +94,7 @@ class _StreamerParams:
         quality: int,
 
         resolution: str,
-        available_resolutions: List[str],
+        available_resolutions: list[str],
 
         desired_fps: int,
         desired_fps_min: int,
@@ -117,8 +113,8 @@ class _StreamerParams:
         self.__has_resolution = bool(resolution)
         self.__has_h264 = bool(h264_bitrate)
 
-        self.__params: Dict = {self.__DESIRED_FPS: min(max(desired_fps, desired_fps_min), desired_fps_max)}
-        self.__limits: Dict = {self.__DESIRED_FPS: {"min": desired_fps_min, "max": desired_fps_max}}
+        self.__params: dict = {self.__DESIRED_FPS: min(max(desired_fps, desired_fps_min), desired_fps_max)}
+        self.__limits: dict = {self.__DESIRED_FPS: {"min": desired_fps_min, "max": desired_fps_max}}
 
         if self.__has_quality:
             self.__params[self.__QUALITY] = quality
@@ -133,23 +129,23 @@ class _StreamerParams:
             self.__params[self.__H264_GOP] = min(max(h264_gop, h264_gop_min), h264_gop_max)
             self.__limits[self.__H264_GOP] = {"min": h264_gop_min, "max": h264_gop_max}
 
-    def get_features(self) -> Dict:
+    def get_features(self) -> dict:
         return {
             self.__QUALITY: self.__has_quality,
             self.__RESOLUTION: self.__has_resolution,
             "h264": self.__has_h264,
         }
 
-    def get_limits(self) -> Dict:
+    def get_limits(self) -> dict:
         limits = dict(self.__limits)
         if self.__has_resolution:
             limits[self.__AVAILABLE_RESOLUTIONS] = list(limits[self.__AVAILABLE_RESOLUTIONS])
         return limits
 
-    def get_params(self) -> Dict:
+    def get_params(self) -> dict:
         return dict(self.__params)
 
-    def set_params(self, params: Dict) -> None:
+    def set_params(self, params: dict) -> None:
         new_params = dict(self.__params)
 
         if self.__QUALITY in params and self.__has_quality:
@@ -187,9 +183,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         process_name_prefix: str,
 
-        cmd: List[str],
-        cmd_remove: List[str],
-        cmd_append: List[str],
+        cmd: list[str],
+        cmd_remove: list[str],
+        cmd_append: list[str],
 
         **params_kwargs: Any,
     ) -> None:
@@ -207,15 +203,15 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__params = _StreamerParams(**params_kwargs)
 
-        self.__stop_task: Optional[asyncio.Task] = None
+        self.__stop_task: (asyncio.Task | None) = None
         self.__stop_wip = False
 
-        self.__streamer_task: Optional[asyncio.Task] = None
-        self.__streamer_proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
+        self.__streamer_task: (asyncio.Task | None) = None
+        self.__streamer_proc: (asyncio.subprocess.Process | None) = None  # pylint: disable=no-member
 
-        self.__http_session: Optional[aiohttp.ClientSession] = None
+        self.__http_session: (aiohttp.ClientSession | None) = None
 
-        self.__snapshot: Optional[StreamerSnapshot] = None
+        self.__snapshot: (StreamerSnapshot | None) = None
 
         self.__notifier = aiotools.AioNotifier()
 
@@ -280,16 +276,16 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    def set_params(self, params: Dict) -> None:
+    def set_params(self, params: dict) -> None:
         assert not self.__streamer_task
         return self.__params.set_params(params)
 
-    def get_params(self) -> Dict:
+    def get_params(self) -> dict:
         return self.__params.get_params()
 
     # =====
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         streamer_state = None
         if self.__streamer_task:
             session = self.__ensure_http_session()
@@ -302,7 +298,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             except Exception:
                 get_logger().exception("Invalid streamer response from /state")
 
-        snapshot: Optional[Dict] = None
+        snapshot: (dict | None) = None
         if self.__snapshot:
             snapshot = dataclasses.asdict(self.__snapshot)
             del snapshot["headers"]
@@ -316,7 +312,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             "features": self.__params.get_features(),
         }
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
         def signal_handler(*_: Any) -> None:
             get_logger(0).info("Got SIGUSR2, checking the stream state ...")
             self.__notifier.notify()
@@ -324,8 +320,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         get_logger(0).info("Installing SIGUSR2 streamer handler ...")
         asyncio.get_event_loop().add_signal_handler(signal.SIGUSR2, signal_handler)
 
-        waiter_task: Optional[asyncio.Task] = None
-        prev_state: Dict = {}
+        waiter_task: (asyncio.Task | None) = None
+        prev_state: dict = {}
         while True:
             state = await self.get_state()
             if state != prev_state:
@@ -339,7 +335,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    async def take_snapshot(self, save: bool, load: bool, allow_offline: bool) -> Optional[StreamerSnapshot]:
+    async def take_snapshot(self, save: bool, load: bool, allow_offline: bool) -> (StreamerSnapshot | None):
         if load:
             return self.__snapshot
         else:
@@ -395,7 +391,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     def __ensure_http_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:
-            kwargs: Dict = {
+            kwargs: dict = {
                 "headers": {"User-Agent": htclient.make_user_agent("KVMD")},
                 "connector": aiohttp.UnixConnector(path=self.__unix_path),
                 "timeout": aiohttp.ClientTimeout(total=self.__timeout),

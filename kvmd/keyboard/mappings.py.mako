@@ -22,8 +22,6 @@
 
 import dataclasses
 
-from typing import Dict
-
 
 # =====
 @dataclasses.dataclass(frozen=True)
@@ -43,7 +41,7 @@ class Key:
     usb: UsbKey
 
 <%! import operator %>
-KEYMAP: Dict[str, Key] = {
+KEYMAP: dict[str, Key] = {
 % for km in sorted(keymap, key=operator.attrgetter("mcu_code")):
     "${km.web_name}": Key(mcu=McuKey(code=${km.mcu_code}), usb=UsbKey(code=${km.usb_key.code}, is_modifier=${km.usb_key.is_modifier})),
 % endfor

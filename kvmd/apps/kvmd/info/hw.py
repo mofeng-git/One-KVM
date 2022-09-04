@@ -23,12 +23,9 @@
 import os
 import asyncio
 
-from typing import List
-from typing import Dict
 from typing import Callable
 from typing import AsyncGenerator
 from typing import TypeVar
-from typing import Optional
 
 from ....logging import get_logger
 
@@ -48,16 +45,16 @@ _RetvalT = TypeVar("_RetvalT")
 class HwInfoSubmanager(BaseInfoSubmanager):
     def __init__(
         self,
-        vcgencmd_cmd: List[str],
+        vcgencmd_cmd: list[str],
         state_poll: float,
     ) -> None:
 
         self.__vcgencmd_cmd = vcgencmd_cmd
         self.__state_poll = state_poll
 
-        self.__dt_cache: Dict[str, str] = {}
+        self.__dt_cache: dict[str, str] = {}
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         (model, serial, cpu_temp, throttling) = await asyncio.gather(
             self.__read_dt_file("model"),
             self.__read_dt_file("serial-number"),
@@ -78,8 +75,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             },
         }
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        prev_state: Dict = {}
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
+        prev_state: dict = {}
         while True:
             state = await self.get_state()
             if state != prev_state:
@@ -89,7 +86,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
 
     # =====
 
-    async def __read_dt_file(self, name: str) -> Optional[str]:
+    async def __read_dt_file(self, name: str) -> (str | None):
         if name not in self.__dt_cache:
             path = os.path.join(f"{env.PROCFS_PREFIX}/proc/device-tree", name)
             try:
@@ -99,7 +96,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 return None
         return self.__dt_cache[name]
 
-    async def __get_cpu_temp(self) -> Optional[float]:
+    async def __get_cpu_temp(self) -> (float | None):
         temp_path = f"{env.SYSFS_PREFIX}/sys/class/thermal/thermal_zone0/temp"
         try:
             return int((await aiofs.read(temp_path)).strip()) / 1000
@@ -107,7 +104,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             get_logger(0).error("Can't read CPU temp from %s: %s", temp_path, err)
             return None
 
-    async def __get_throttling(self) -> Optional[Dict]:
+    async def __get_throttling(self) -> (dict | None):
         # https://www.raspberrypi.org/forums/viewtopic.php?f=63&t=147781&start=50#p972790
         flags = await self.__parse_vcgencmd(
             arg="get_throttled",
@@ -133,7 +130,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             }
         return None
 
-    async def __parse_vcgencmd(self, arg: str, parser: Callable[[str], _RetvalT]) -> Optional[_RetvalT]:
+    async def __parse_vcgencmd(self, arg: str, parser: Callable[[str], _RetvalT]) -> (_RetvalT | None):
         cmd = [*self.__vcgencmd_cmd, arg]
         try:
             text = (await aioproc.read_process(cmd, err_to_null=True))[1]

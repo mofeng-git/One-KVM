@@ -22,10 +22,6 @@
 
 import secrets
 
-from typing import List
-from typing import Dict
-from typing import Optional
-
 from ...logging import get_logger
 
 from ... import aiotools
@@ -40,12 +36,12 @@ class AuthManager:
         self,
 
         internal_type: str,
-        internal_kwargs: Dict,
+        internal_kwargs: dict,
 
         external_type: str,
-        external_kwargs: Dict,
+        external_kwargs: dict,
 
-        force_internal_users: List[str],
+        force_internal_users: list[str],
         enabled: bool,
     ) -> None:
 
@@ -53,19 +49,19 @@ class AuthManager:
         if not enabled:
             get_logger().warning("AUTHORIZATION IS DISABLED")
 
-        self.__internal_service: Optional[BaseAuthService] = None
+        self.__internal_service: (BaseAuthService | None) = None
         if enabled:
             self.__internal_service = get_auth_service_class(internal_type)(**internal_kwargs)
             get_logger().info("Using internal auth service %r", self.__internal_service.get_plugin_name())
 
-        self.__external_service: Optional[BaseAuthService] = None
+        self.__external_service: (BaseAuthService | None) = None
         if enabled and external_type:
             self.__external_service = get_auth_service_class(external_type)(**external_kwargs)
             get_logger().info("Using external auth service %r", self.__external_service.get_plugin_name())
 
         self.__force_internal_users = force_internal_users
 
-        self.__tokens: Dict[str, str] = {}  # {token: user}
+        self.__tokens: dict[str, str] = {}  # {token: user}
 
     def is_auth_enabled(self) -> bool:
         return self.__enabled
@@ -88,7 +84,7 @@ class AuthManager:
             get_logger().error("Got access denied for user %r from auth service %r", user, service.get_plugin_name())
         return ok
 
-    async def login(self, user: str, passwd: str) -> Optional[str]:
+    async def login(self, user: str, passwd: str) -> (str | None):
         assert user == user.strip()
         assert user
         assert self.__enabled
@@ -109,7 +105,7 @@ class AuthManager:
         if user:
             get_logger().info("Logged out user %r", user)
 
-    def check(self, token: str) -> Optional[str]:
+    def check(self, token: str) -> (str | None):
         assert self.__enabled
         return self.__tokens.get(token)
 

@@ -22,11 +22,8 @@
 
 import re
 
-from typing import List
 from typing import Type
 from typing import Callable
-from typing import Optional
-from typing import Union
 from typing import Any
 
 from . import ValidatorError
@@ -63,11 +60,11 @@ def valid_bool(arg: Any) -> bool:
 
 def valid_number(
     arg: Any,
-    min: Union[int, float, None]=None,  # pylint: disable=redefined-builtin
-    max: Union[int, float, None]=None,  # pylint: disable=redefined-builtin
-    type: Union[Type[int], Type[float]]=int,  # pylint: disable=redefined-builtin
+    min: (int | float | None)=None,  # pylint: disable=redefined-builtin
+    max: (int | float | None)=None,  # pylint: disable=redefined-builtin
+    type: (Type[int] | Type[float])=int,  # pylint: disable=redefined-builtin
     name: str="",
-) -> Union[int, float]:
+) -> (int | float):
 
     name = (name or type.__name__)
 
@@ -103,9 +100,9 @@ def valid_float_f01(arg: Any) -> float:
 def valid_string_list(
     arg: Any,
     delim: str=r"[,\t ]+",
-    subval: Optional[Callable[[Any], Any]]=None,
+    subval: (Callable[[Any], Any] | None)=None,
     name: str="",
-) -> List[str]:
+) -> list[str]:
 
     if not name:
         name = "string list"

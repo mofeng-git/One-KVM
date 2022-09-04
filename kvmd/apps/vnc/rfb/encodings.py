@@ -22,10 +22,6 @@
 
 import dataclasses
 
-from typing import List
-from typing import Dict
-from typing import FrozenSet
-from typing import Union
 from typing import Any
 
 
@@ -45,13 +41,13 @@ class RfbEncodings:
     H264 = 50  # Open H.264 Encoding
 
 
-def _make_meta(variants: Union[int, FrozenSet[int]]) -> Dict:
+def _make_meta(variants: (int | frozenset[int])) -> dict:
     return {"variants": (frozenset([variants]) if isinstance(variants, int) else variants)}
 
 
 @dataclasses.dataclass(frozen=True)
 class RfbClientEncodings:  # pylint: disable=too-many-instance-attributes
-    encodings: FrozenSet[int]
+    encodings: frozenset[int]
 
     has_resize: bool =		    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.RESIZE))  # noqa: E224
     has_rename: bool =		    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.RENAME))  # noqa: E224
@@ -63,8 +59,8 @@ class RfbClientEncodings:  # pylint: disable=too-many-instance-attributes
 
     has_h264: bool =			dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.H264))  # noqa: E224
 
-    def get_summary(self) -> List[str]:
-        summary: List[str] = [f"encodings -- {sorted(self.encodings)}"]
+    def get_summary(self) -> list[str]:
+        summary: list[str] = [f"encodings -- {sorted(self.encodings)}"]
         for field in dataclasses.fields(self):
             if field.name != "encodings":
                 found = ", ".join(map(str, sorted(map(int, self.__get_found(field)))))
@@ -80,7 +76,7 @@ class RfbClientEncodings:  # pylint: disable=too-many-instance-attributes
     def __set_value(self, key: str, value: Any) -> None:
         object.__setattr__(self, key, value)
 
-    def __get_found(self, field: dataclasses.Field) -> FrozenSet[int]:
+    def __get_found(self, field: dataclasses.Field) -> frozenset[int]:
         return self.encodings.intersection(field.metadata["variants"])
 
     def __get_tight_jpeg_quality(self) -> int:

@@ -27,9 +27,6 @@ import asyncio
 import asyncio.subprocess
 import argparse
 
-from typing import List
-from typing import Optional
-
 import aiohttp
 
 from ...logging import get_logger
@@ -53,7 +50,7 @@ def _preexec() -> None:
             get_logger(0).info("Can't perform tcsetpgrp(0): %s", tools.efmt(err))
 
 
-async def _run_process(cmd: List[str], data_path: str) -> asyncio.subprocess.Process:  # pylint: disable=no-member
+async def _run_process(cmd: list[str], data_path: str) -> asyncio.subprocess.Process:  # pylint: disable=no-member
     # https://stackoverflow.com/questions/58918188/why-is-stdin-not-propagated-to-child-process-of-different-process-group
     if os.isatty(0):
         signal.signal(signal.SIGTTOU, signal.SIG_IGN)
@@ -67,11 +64,11 @@ async def _run_process(cmd: List[str], data_path: str) -> asyncio.subprocess.Pro
     ))
 
 
-async def _run_cmd_ws(cmd: List[str], ws: aiohttp.ClientWebSocketResponse) -> int:  # pylint: disable=too-many-branches
+async def _run_cmd_ws(cmd: list[str], ws: aiohttp.ClientWebSocketResponse) -> int:  # pylint: disable=too-many-branches
     logger = get_logger(0)
-    receive_task: Optional[asyncio.Task] = None
-    proc_task: Optional[asyncio.Task] = None
-    proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
+    receive_task: (asyncio.Task | None) = None
+    proc_task: (asyncio.Task | None) = None
+    proc: (asyncio.subprocess.Process | None) = None  # pylint: disable=no-member
 
     try:  # pylint: disable=too-many-nested-blocks
         while True:
@@ -120,7 +117,7 @@ async def _run_cmd_ws(cmd: List[str], ws: aiohttp.ClientWebSocketResponse) -> in
     return 1
 
 
-async def _run_cmd(cmd: List[str], unix_path: str) -> None:
+async def _run_cmd(cmd: list[str], unix_path: str) -> None:
     get_logger(0).info("Opening PST session ...")
     async with aiohttp.ClientSession(
         headers={"User-Agent": htclient.make_user_agent("KVMD-PSTRun")},
@@ -132,7 +129,7 @@ async def _run_cmd(cmd: List[str], unix_path: str) -> None:
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     (parent_parser, argv, config) = init(
         add_help=False,
         cli_logging=True,

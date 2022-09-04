@@ -23,12 +23,8 @@
 import contextlib
 import json
 
-from typing import Tuple
-from typing import List
-from typing import Dict
 from typing import Generator
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 
@@ -38,8 +34,8 @@ class ConfigError(ValueError):
 
 
 # =====
-def build_raw_from_options(options: List[str]) -> Dict[str, Any]:
-    raw: Dict[str, Any] = {}
+def build_raw_from_options(options: list[str]) -> dict[str, Any]:
+    raw: dict[str, Any] = {}
     for option in options:
         (key, value) = (option.split("=", 1) + [None])[:2]  # type: ignore
         if len(key.strip()) == 0:
@@ -71,12 +67,12 @@ def _parse_value(value: str) -> Any:
 class Section(dict):
     def __init__(self) -> None:
         dict.__init__(self)
-        self.__meta: Dict[str, Dict[str, Any]] = {}
+        self.__meta: dict[str, dict[str, Any]] = {}
 
-    def _unpack(self, ignore: Optional[List[str]]=None) -> Dict[str, Any]:
+    def _unpack(self, ignore: (list[str] | None)=None) -> dict[str, Any]:
         if ignore is None:
             ignore = []
-        unpacked: Dict[str, Any] = {}
+        unpacked: dict[str, Any] = {}
         for (key, value) in self.items():
             if key not in ignore:
                 if isinstance(value, Section):
@@ -118,7 +114,7 @@ class Option:
     def __init__(
         self,
         default: Any,
-        type: Optional[Callable[[Any], Any]]=None,  # pylint: disable=redefined-builtin
+        type: (Callable[[Any], Any] | None)=None,  # pylint: disable=redefined-builtin
         if_none: Any=Stub,
         if_empty: Any=Stub,
         only_if: str="",
@@ -150,13 +146,13 @@ def manual_validated(value: Any, *path: str) -> Generator[None, None, None]:
         raise ConfigError(f"Invalid value {value!r} for key {'/'.join(path)!r}: {err}")
 
 
-def make_config(raw: Dict[str, Any], scheme: Dict[str, Any], _keys: Tuple[str, ...]=()) -> Section:
+def make_config(raw: dict[str, Any], scheme: dict[str, Any], _keys: tuple[str, ...]=()) -> Section:
     if not isinstance(raw, dict):
         raise ConfigError(f"The node {('/'.join(_keys) or '/')!r} must be a dictionary")
 
     config = Section()
 
-    def make_full_key(key: str) -> Tuple[str, ...]:
+    def make_full_key(key: str) -> tuple[str, ...]:
         return _keys + (key,)
 
     def make_full_name(key: str) -> str:

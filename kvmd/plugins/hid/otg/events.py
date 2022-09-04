@@ -23,11 +23,6 @@
 import struct
 import dataclasses
 
-from typing import List
-from typing import Set
-from typing import Optional
-from typing import Union
-
 from ....keyboard.mappings import UsbKey
 from ....keyboard.mappings import KEYMAP
 
@@ -66,7 +61,7 @@ class ModifierEvent(BaseEvent):
         assert self.modifier.is_modifier
 
 
-def make_keyboard_event(key: str, state: bool) -> Union[KeyEvent, ModifierEvent]:
+def make_keyboard_event(key: str, state: bool) -> (KeyEvent | ModifierEvent):
     usb_key = KEYMAP[key].usb
     if usb_key.is_modifier:
         return ModifierEvent(usb_key, state)
@@ -87,8 +82,8 @@ def get_led_num(flags: int) -> bool:
 
 
 def make_keyboard_report(
-    pressed_modifiers: Set[UsbKey],
-    pressed_keys: List[Optional[UsbKey]],
+    pressed_modifiers: set[UsbKey],
+    pressed_keys: list[UsbKey | None],
 ) -> bytes:
 
     modifiers = 0
@@ -168,7 +163,7 @@ def make_mouse_report(
     buttons: int,
     move_x: int,
     move_y: int,
-    wheel_x: Optional[int],
+    wheel_x: (int | None),
     wheel_y: int,
 ) -> bytes:
 

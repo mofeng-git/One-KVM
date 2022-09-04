@@ -27,10 +27,7 @@ import dataclasses
 import functools
 import time
 
-from typing import List
-from typing import Dict
 from typing import AsyncGenerator
-from typing import Optional
 
 from ....logging import get_logger
 
@@ -77,7 +74,7 @@ class _DriveImage:
 
 @dataclasses.dataclass(frozen=True)
 class _DriveState:
-    image: Optional[_DriveImage]
+    image: (_DriveImage | None)
     cdrom: bool
     rw: bool
 
@@ -86,13 +83,13 @@ class _DriveState:
 class _StorageState:
     size: int
     free: int
-    images: Dict[str, _DriveImage]
+    images: dict[str, _DriveImage]
 
 
 # =====
 @dataclasses.dataclass
 class _VirtualDriveState:
-    image: Optional[_DriveImage]
+    image: (_DriveImage | None)
     connected: bool
     cdrom: bool
     rw: bool
@@ -111,8 +108,8 @@ class _State:
     def __init__(self, notifier: aiotools.AioNotifier) -> None:
         self.__notifier = notifier
 
-        self.storage: Optional[_StorageState] = None
-        self.vd: Optional[_VirtualDriveState] = None
+        self.storage: (_StorageState | None) = None
+        self.vd: (_VirtualDriveState | None) = None
 
         self._lock = asyncio.Lock()
         self._region = aiotools.AioExclusiveRegion(MsdIsBusyError)
@@ -143,9 +140,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         storage_path: str,
 
-        remount_cmd: List[str],
+        remount_cmd: list[str],
 
-        initial: Dict,
+        initial: dict,
 
         gadget: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
@@ -165,8 +162,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__drive = Drive(gadget, instance=0, lun=0)
 
-        self.__reader: Optional[MsdFileReader] = None
-        self.__writer: Optional[MsdFileWriter] = None
+        self.__reader: (MsdFileReader | None) = None
+        self.__writer: (MsdFileWriter | None) = None
 
         self.__notifier = aiotools.AioNotifier()
         self.__state = _State(self.__notifier)
@@ -176,7 +173,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         aiotools.run_sync(self.__reload_state(notify=False))
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "read_chunk_size":   Option(65536,   type=functools.partial(valid_number, min=1024)),
             "write_chunk_size":  Option(65536,   type=functools.partial(valid_number, min=1024)),
@@ -195,9 +192,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             },
         }
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         async with self.__state._lock:  # pylint: disable=protected-access
-            storage: Optional[Dict] = None
+            storage: (dict | None) = None
             if self.__state.storage:
                 storage = dataclasses.asdict(self.__state.storage)
                 for name in list(storage["images"]):
@@ -215,7 +212,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 else:
                     storage["uploading"] = None
 
-            vd: Optional[Dict] = None
+            vd: (dict | None) = None
             if self.__state.vd:
                 vd = dataclasses.asdict(self.__state.vd)
                 if vd["image"]:
@@ -234,8 +231,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 },
             }
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        prev_state: Dict = {}
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
+        prev_state: dict = {}
         while True:
             state = await self.get_state()
             if state != prev_state:
@@ -267,9 +264,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @aiotools.atomic_fg
     async def set_params(
         self,
-        name: Optional[str]=None,
-        cdrom: Optional[bool]=None,
-        rw: Optional[bool]=None,
+        name: (str | None)=None,
+        cdrom: (bool | None)=None,
+        rw: (bool | None)=None,
     ) -> None:
 
         async with self.__state.busy():
@@ -359,7 +356,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             self.__notifier.notify()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[MsdFileWriter, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: (bool | None)) -> AsyncGenerator[MsdFileWriter, None]:
         try:
             async with self.__state._region:  # pylint: disable=protected-access
                 path: str = ""
@@ -540,7 +537,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     # =====
 
     def __get_storage_state(self) -> _StorageState:
-        images: Dict[str, _DriveImage] = {}
+        images: dict[str, _DriveImage] = {}
         for name in os.listdir(self.__images_path):
             path = os.path.join(self.__images_path, name)
             if os.path.exists(path):
@@ -562,7 +559,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         )
 
     def __get_drive_state(self) -> _DriveState:
-        image: Optional[_DriveImage] = None
+        image: (_DriveImage | None) = None
         path = self.__drive.get_image_path()
         if path:
             name = os.path.basename(path)

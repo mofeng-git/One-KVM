@@ -23,10 +23,7 @@
 import lzma
 import time
 
-from typing import Dict
 from typing import AsyncGenerator
-from typing import Optional
-from typing import Union
 
 import aiohttp
 import zstandard
@@ -153,7 +150,7 @@ class MsdApi:
         return make_json_response(self.__make_write_info(name, size, written))
 
     @exposed_http("POST", "/msd/write_remote")
-    async def __write_remote_handler(self, request: Request) -> Union[Response, StreamResponse]:  # pylint: disable=too-many-locals
+    async def __write_remote_handler(self, request: Request) -> (Response | StreamResponse):  # pylint: disable=too-many-locals
         url = valid_url(request.query.get("url"))
         insecure = valid_bool(request.query.get("insecure", False))
         timeout = valid_float_f01(request.query.get("timeout", 10.0))
@@ -161,7 +158,7 @@ class MsdApi:
 
         name = ""
         size = written = 0
-        response: Optional[StreamResponse] = None
+        response: (StreamResponse | None) = None
 
         async def stream_write_info() -> None:
             assert response is not None
@@ -206,11 +203,11 @@ class MsdApi:
                 return make_json_exception(err, 400)
             raise
 
-    def __get_remove_incomplete(self, request: Request) -> Optional[bool]:
-        flag: Optional[str] = request.query.get("remove_incomplete")
+    def __get_remove_incomplete(self, request: Request) -> (bool | None):
+        flag: (str | None) = request.query.get("remove_incomplete")
         return (valid_bool(flag) if flag is not None else None)
 
-    def __make_write_info(self, name: str, size: int, written: int) -> Dict:
+    def __make_write_info(self, name: str, size: int, written: int) -> dict:
         return {"image": {"name": name, "size": size, "written": written}}
 
     # =====

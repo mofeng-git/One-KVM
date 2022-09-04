@@ -23,9 +23,6 @@
 import asyncio
 import pwd
 
-from typing import List
-from typing import Dict
-
 import pam
 
 from ...yamlconf import Option
@@ -45,8 +42,8 @@ class Plugin(BaseAuthService):
     def __init__(  # pylint: disable=super-init-not-called
         self,
         service: str,
-        allow_users: List[str],
-        deny_users: List[str],
+        allow_users: list[str],
+        deny_users: list[str],
         allow_uids_at: int,
     ) -> None:
 
@@ -58,7 +55,7 @@ class Plugin(BaseAuthService):
         self.__lock = asyncio.Lock()
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "service":       Option("login"),
             "allow_users":   Option([], type=valid_users_list),

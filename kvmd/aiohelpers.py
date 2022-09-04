@@ -22,8 +22,6 @@
 
 import subprocess
 
-from typing import List
-
 from .logging import get_logger
 
 from . import tools
@@ -31,7 +29,7 @@ from . import aioproc
 
 
 # =====
-async def remount(name: str, base_cmd: List[str], rw: bool) -> bool:
+async def remount(name: str, base_cmd: list[str], rw: bool) -> bool:
     logger = get_logger(1)
     mode = ("rw" if rw else "ro")
     cmd = [

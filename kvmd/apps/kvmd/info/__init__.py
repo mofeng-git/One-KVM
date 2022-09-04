@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Set
-
 from ....yamlconf import Section
 
 from .base import BaseInfoSubmanager
@@ -45,7 +43,7 @@ class InfoManager:
             "fan": FanInfoSubmanager(**config.kvmd.info.fan._unpack()),
         }
 
-    def get_subs(self) -> Set[str]:
+    def get_subs(self) -> set[str]:
         return set(self.__subs)
 
     def get_submanager(self, name: str) -> BaseInfoSubmanager:

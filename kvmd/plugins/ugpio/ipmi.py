@@ -23,10 +23,7 @@
 import asyncio
 import functools
 
-from typing import List
-from typing import Dict
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 from ...logging import get_logger
@@ -71,7 +68,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         passwd: str,
 
         passwd_env: str,
-        cmd: List[str],
+        cmd: list[str],
 
         state_poll: float,
     ) -> None:
@@ -92,7 +89,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         self.__power = False
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "host":   Option("",  type=valid_ip_or_host),
             "port":   Option(623, type=valid_port),
@@ -121,7 +118,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         if pin not in ["0", "status"]:
             raise RuntimeError(f"Unsupported mode 'input' for pin={pin} on {self}")
 
-    def register_output(self, pin: str, initial: Optional[bool]) -> None:
+    def register_output(self, pin: str, initial: (bool | None)) -> None:
         _ = initial
         if pin not in [*_OUTPUTS, *_OUTPUTS.values()]:
             raise RuntimeError(f"Unsupported mode 'output' for pin={pin} on {self}")
@@ -181,7 +178,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             self.__online = False
 
     @functools.lru_cache()
-    def __make_ipmitool_kwargs(self, action: str) -> Dict:
+    def __make_ipmitool_kwargs(self, action: str) -> dict:
         return {
             "cmd": [
                 part.format(

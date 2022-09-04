@@ -22,9 +22,7 @@
 
 import asyncio
 
-from typing import Dict
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 import aiohttp
@@ -70,15 +68,15 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         self.__state_poll = state_poll
         self.__timeout = timeout
 
-        self.__initial: Dict[str, Optional[bool]] = {}
+        self.__initial: dict[str, (bool | None)] = {}
 
-        self.__state: Dict[str, Optional[bool]] = {}
+        self.__state: dict[str, (bool | None)] = {}
         self.__update_notifier = aiotools.AioNotifier()
 
-        self.__http_session: Optional[aiohttp.ClientSession] = None
+        self.__http_session: (aiohttp.ClientSession | None) = None
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "url":        Option("",   type=valid_stripped_string_not_empty),
             "verify":     Option(True, type=valid_bool),
@@ -95,7 +93,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         _ = debounce
         self.__state[pin] = None
 
-    def register_output(self, pin: str, initial: Optional[bool]) -> None:
+    def register_output(self, pin: str, initial: (bool | None)) -> None:
         self.__initial[pin] = initial
         self.__state[pin] = None
 
@@ -109,7 +107,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         aiotools.run_sync(inner_prepare())
 
     async def run(self) -> None:
-        prev_state: Optional[Dict] = None
+        prev_state: (dict | None) = None
         while True:
             session = self.__ensure_http_session()
             try:
@@ -152,7 +150,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     def __ensure_http_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:
-            kwargs: Dict = {
+            kwargs: dict = {
                 "headers": {
                     "User-Agent": htclient.make_user_agent("KVMD"),
                 },

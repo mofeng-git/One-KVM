@@ -20,9 +20,6 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Dict
-
 from aiohttp.web import Request
 from aiohttp.web import Response
 
@@ -102,10 +99,10 @@ class StreamerApi:
 
     # =====
 
-    async def get_ocr(self) -> Dict:  # XXX: Ugly hack
+    async def get_ocr(self) -> dict:  # XXX: Ugly hack
         enabled = self.__ocr.is_available()
-        default: List[str] = []
-        available: List[str] = []
+        default: list[str] = []
+        available: list[str] = []
         if enabled:
             default = self.__ocr.get_default_langs()
             available = self.__ocr.get_available_langs()

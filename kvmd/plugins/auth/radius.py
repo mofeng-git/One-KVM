@@ -22,8 +22,6 @@
 
 import io
 
-from typing import Dict
-
 import pyrad.client
 import pyrad.packet
 import pyrad.dictionary
@@ -413,7 +411,7 @@ class Plugin(BaseAuthService):
         self.__timeout = timeout
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "host":    Option("localhost", type=valid_ip_or_host),
             "port":    Option(1812, type=valid_port),

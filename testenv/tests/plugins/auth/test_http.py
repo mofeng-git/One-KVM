@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Dict
 from typing import AsyncGenerator
 
 import aiohttp.web
@@ -68,7 +67,7 @@ async def _auth_server_port_fixture(aiohttp_server) -> AsyncGenerator[int, None]
     {"verify": False},
     {"user": "server-admin", "passwd": "server-pass"},
 ])
-async def test_ok(auth_server_port: int, kwargs: Dict) -> None:
+async def test_ok(auth_server_port: int, kwargs: dict) -> None:
     url = "http://localhost:%d/%s" % (
         auth_server_port,
         ("auth_plus_basic" if kwargs.get("user") else "auth"),

@@ -20,9 +20,6 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Dict
-from typing import Set
 from typing import Callable
 from typing import Any
 
@@ -48,7 +45,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         instance_name: str,
         notifier: aiotools.AioNotifier,
 
-        cmd: List[str],
+        cmd: list[str],
     ) -> None:
 
         super().__init__(instance_name, notifier)
@@ -56,13 +53,13 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         self.__cmd = cmd
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "cmd": Option([], type=valid_command),
         }
 
     @classmethod
-    def get_modes(cls) -> Set[str]:
+    def get_modes(cls) -> set[str]:
         return set([UserGpioModes.INPUT])
 
     @classmethod

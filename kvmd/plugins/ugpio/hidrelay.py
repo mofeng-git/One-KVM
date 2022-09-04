@@ -24,10 +24,7 @@ import asyncio
 import contextlib
 import functools
 
-from typing import Dict
-from typing import Set
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 import hid
@@ -67,27 +64,27 @@ class Plugin(BaseUserGpioDriver):
         self.__device_path = device_path
         self.__state_poll = state_poll
 
-        self.__device: Optional[hid.device] = None
+        self.__device: (hid.device | None) = None
         self.__stop = False
 
-        self.__initials: Dict[int, Optional[bool]] = {}
+        self.__initials: dict[int, (bool | None)] = {}
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "device":     Option("",  type=valid_abs_path, unpack_as="device_path"),
             "state_poll": Option(5.0, type=valid_float_f01),
         }
 
     @classmethod
-    def get_modes(cls) -> Set[str]:
+    def get_modes(cls) -> set[str]:
         return set([UserGpioModes.OUTPUT])
 
     @classmethod
     def get_pin_validator(cls) -> Callable[[Any], Any]:
         return functools.partial(valid_number, min=0, max=7, name="HID relay channel")
 
-    def register_output(self, pin: str, initial: Optional[bool]) -> None:
+    def register_output(self, pin: str, initial: (bool | None)) -> None:
         self.__initials[int(pin)] = initial
 
     def prepare(self) -> None:

@@ -26,10 +26,7 @@ import contextlib
 import argparse
 import time
 
-from typing import List
-from typing import Dict
 from typing import Generator
-from typing import Optional
 
 import yaml
 
@@ -64,7 +61,7 @@ class _GadgetControl:
             with open(udc_path, "w") as udc_file:
                 udc_file.write(udc)
 
-    def __read_metas(self) -> Generator[Dict, None, None]:
+    def __read_metas(self) -> Generator[dict, None, None]:
         for meta_name in sorted(os.listdir(self.__meta_path)):
             with open(os.path.join(self.__meta_path, meta_name)) as meta_file:
                 yield json.loads(meta_file.read())
@@ -111,7 +108,7 @@ class _GadgetControl:
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     (parent_parser, argv, config) = init(
         add_help=False,
         cli_logging=True,

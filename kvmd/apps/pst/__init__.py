@@ -20,9 +20,6 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Optional
-
 from ...logging import get_logger
 
 from .. import init
@@ -31,7 +28,7 @@ from .server import PstServer
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     config = init(
         prog="kvmd-pst",
         description="The KVMD persistent storage manager",

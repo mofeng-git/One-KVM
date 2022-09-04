@@ -24,9 +24,6 @@ import os
 import signal
 import time
 
-from typing import List
-from typing import Optional
-
 import psutil
 
 from ...logging import get_logger
@@ -74,7 +71,7 @@ def _remove_sockets(config: Section) -> None:
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     config = init(
         prog="kvmd-cleanup",
         description="Kill KVMD and clear resources",

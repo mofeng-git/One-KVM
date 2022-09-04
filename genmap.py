@@ -26,10 +26,6 @@ import csv
 import textwrap
 import dataclasses
 
-from typing import Set
-from typing import List
-from typing import Optional
-
 import Xlib.keysymdef.latin1
 import Xlib.keysymdef.miscellany
 import Xlib.keysymdef.xf86
@@ -77,11 +73,11 @@ class _KeyMapping:
     usb_key: _UsbKey
     ps2_key: _Ps2Key
     at1_code: int
-    x11_keys: Set[_X11Key]
+    x11_keys: set[_X11Key]
 
 
 def _resolve_keysym(name: str) -> int:
-    code: Optional[int] = None
+    code: (int | None) = None
     for module in [
         Xlib.keysymdef.latin1,
         Xlib.keysymdef.miscellany,
@@ -95,8 +91,8 @@ def _resolve_keysym(name: str) -> int:
     return code
 
 
-def _parse_x11_names(names: str) -> Set[_X11Key]:
-    keys: Set[_X11Key] = set()
+def _parse_x11_names(names: str) -> set[_X11Key]:
+    keys: set[_X11Key] = set()
     for name in filter(None, names.split(",")):
         shift = name.startswith("^")
         name = (name[1:] if shift else name)
@@ -119,8 +115,8 @@ def _parse_ps2_key(key: str) -> _Ps2Key:
     )
 
 
-def _read_keymap_csv(path: str) -> List[_KeyMapping]:
-    keymap: List[_KeyMapping] = []
+def _read_keymap_csv(path: str) -> list[_KeyMapping]:
+    keymap: list[_KeyMapping] = []
     with open(path) as keymap_file:
         for row in csv.DictReader(keymap_file):
             if len(row) >= 6:
@@ -135,7 +131,7 @@ def _read_keymap_csv(path: str) -> List[_KeyMapping]:
     return keymap
 
 
-def _render_keymap(keymap: List[_KeyMapping], template_path: str, out_path: str) -> None:
+def _render_keymap(keymap: list[_KeyMapping], template_path: str, out_path: str) -> None:
     with open(template_path) as template_file:
         with open(out_path, "w") as out_file:
             template = textwrap.dedent(template_file.read())

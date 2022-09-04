@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Dict
-
 import passlib.apache
 
 from ...yamlconf import Option
@@ -37,7 +35,7 @@ class Plugin(BaseAuthService):
         self.__path = path
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "file": Option("/etc/kvmd/htpasswd", type=valid_abs_file, unpack_as="path"),
         }

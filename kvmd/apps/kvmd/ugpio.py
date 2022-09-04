@@ -22,11 +22,8 @@
 
 import asyncio
 
-from typing import List
-from typing import Dict
 from typing import AsyncGenerator
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 from ...logging import get_logger
@@ -83,7 +80,7 @@ class _GpioInput:
         self.__driver = driver
         self.__driver.register_input(self.__pin, config.debounce)
 
-    def get_scheme(self) -> Dict:
+    def get_scheme(self) -> dict:
         return {
             "hw": {
                 "driver": self.__driver.get_instance_id(),
@@ -91,7 +88,7 @@ class _GpioInput:
             },
         }
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         (online, state) = (True, False)
         try:
             state = (await self.__driver.read(self.__pin) ^ self.__inverted)
@@ -139,7 +136,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
 
         self.__region = aiotools.AioExclusiveRegion(GpioChannelIsBusyError, notifier)
 
-    def get_scheme(self) -> Dict:
+    def get_scheme(self) -> dict:
         return {
             "switch": self.__switch,
             "pulse": {
@@ -153,7 +150,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
             },
         }
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         busy = self.__region.is_busy()
         (online, state) = (True, False)
         if not busy:
@@ -246,8 +243,8 @@ class UserGpio:
             for (driver, drv_config) in tools.sorted_kvs(config.drivers)
         }
 
-        self.__inputs: Dict[str, _GpioInput] = {}
-        self.__outputs: Dict[str, _GpioOutput] = {}
+        self.__inputs: dict[str, _GpioInput] = {}
+        self.__outputs: dict[str, _GpioOutput] = {}
 
         for (channel, ch_config) in tools.sorted_kvs(config.scheme):
             driver = self.__drivers[ch_config.driver]
@@ -256,7 +253,7 @@ class UserGpio:
             else:  # output:
                 self.__outputs[channel] = _GpioOutput(channel, ch_config, driver, self.__notifier)
 
-    async def get_model(self) -> Dict:
+    async def get_model(self) -> dict:
         return {
             "scheme": {
                 "inputs": {channel: gin.get_scheme() for (channel, gin) in self.__inputs.items()},
@@ -265,14 +262,14 @@ class UserGpio:
             "view": self.__make_view(),
         }
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         return {
             "inputs": {channel: await gin.get_state() for (channel, gin) in self.__inputs.items()},
             "outputs": {channel: await gout.get_state() for (channel, gout) in self.__outputs.items()},
         }
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        prev_state: Dict = {}
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
+        prev_state: dict = {}
         while True:
             state = await self.get_state()
             if state != prev_state:
@@ -313,14 +310,14 @@ class UserGpio:
 
     # =====
 
-    def __make_view(self) -> Dict:
-        table: List[Optional[List[Dict]]] = []
+    def __make_view(self) -> dict:
+        table: list[list[dict] | None] = []
         for row in self.__view["table"]:
             if len(row) == 0:
                 table.append(None)
                 continue
 
-            items: List[Dict] = []
+            items: list[dict] = []
             for item in map(str.strip, row):
                 if item.startswith("#") or len(item) == 0:
                     items.append(self.__make_view_label(item))
@@ -338,14 +335,14 @@ class UserGpio:
             "table": table,
         }
 
-    def __make_view_label(self, item: str) -> Dict:
+    def __make_view_label(self, item: str) -> dict:
         assert item.startswith("#")
         return {
             "type": "label",
             "text": item[1:].strip(),
         }
 
-    def __make_view_input(self, parts: List[str]) -> Dict:
+    def __make_view_input(self, parts: list[str]) -> dict:
         assert len(parts) >= 1
         color = (parts[1] if len(parts) > 1 else None)
         if color not in ["green", "yellow", "red"]:
@@ -356,7 +353,7 @@ class UserGpio:
             "color": color,
         }
 
-    def __make_view_output(self, parts: List[str]) -> Dict:
+    def __make_view_output(self, parts: list[str]) -> dict:
         assert len(parts) >= 1
         confirm = False
         text = "Click"

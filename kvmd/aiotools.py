@@ -29,22 +29,17 @@ import types
 
 import typing
 
-from typing import Tuple
-from typing import List
-from typing import Set
 from typing import Callable
 from typing import Awaitable
 from typing import Coroutine
-from typing import Type
 from typing import TypeVar
-from typing import Optional
 from typing import Any
 
 from .logging import get_logger
 
 
 # =====
-def run(coro: Coroutine, final: Optional[Coroutine]=None) -> None:
+def run(coro: Coroutine, final: (Coroutine | None)=None) -> None:
     # https://github.com/aio-libs/aiohttp/blob/a1d4dac1d/aiohttp/web.py#L515
 
     def sigint_handler() -> None:
@@ -177,7 +172,7 @@ def create_deadly_task(name: str, coro: Coroutine) -> asyncio.Task:
 
 
 async def stop_all_deadly_tasks() -> None:
-    tasks: List[asyncio.Task] = []
+    tasks: list[asyncio.Task] = []
     for task in asyncio.all_tasks():
         if getattr(task, _ATTR_DEADLY_TASK, False):
             tasks.append(task)
@@ -200,7 +195,7 @@ async def wait_infinite() -> None:
         await asyncio.sleep(3600)
 
 
-async def wait_first(*aws: Awaitable) -> Tuple[Set[asyncio.Task], Set[asyncio.Task]]:
+async def wait_first(*aws: Awaitable) -> tuple[set[asyncio.Task], set[asyncio.Task]]:
     return (await asyncio.wait(list(aws), return_when=asyncio.FIRST_COMPLETED))
 
 
@@ -235,7 +230,7 @@ class AioNotifier:
     def notify(self) -> None:
         self.__queue.put_nowait(None)
 
-    async def wait(self, timeout: Optional[float]=None) -> None:
+    async def wait(self, timeout: (float | None)=None) -> None:
         if timeout is None:
             await self.__queue.get()
         else:
@@ -276,8 +271,8 @@ class AioStage:
 class AioExclusiveRegion:
     def __init__(
         self,
-        exc_type: Type[Exception],
-        notifier: Optional[AioNotifier]=None,
+        exc_type: type[Exception],
+        notifier: (AioNotifier | None)=None,
     ) -> None:
 
         self.__exc_type = exc_type
@@ -285,7 +280,7 @@ class AioExclusiveRegion:
 
         self.__busy = False
 
-    def get_exc_type(self) -> Type[Exception]:
+    def get_exc_type(self) -> type[Exception]:
         return self.__exc_type
 
     def is_busy(self) -> bool:
@@ -313,7 +308,7 @@ class AioExclusiveRegion:
 
     async def __aexit__(
         self,
-        _exc_type: Type[BaseException],
+        _exc_type: type[BaseException],
         _exc: BaseException,
         _tb: types.TracebackType,
     ) -> None:

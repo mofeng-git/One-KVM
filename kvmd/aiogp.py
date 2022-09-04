@@ -24,10 +24,6 @@ import asyncio
 import threading
 import dataclasses
 
-from typing import Tuple
-from typing import Dict
-from typing import Optional
-
 import gpiod
 
 from . import aiotools
@@ -55,7 +51,7 @@ class AioReader:  # pylint: disable=too-many-instance-attributes
         self,
         path: str,
         consumer: str,
-        pins: Dict[int, AioReaderPinParams],
+        pins: dict[int, AioReaderPinParams],
         notifier: aiotools.AioNotifier,
     ) -> None:
 
@@ -64,12 +60,12 @@ class AioReader:  # pylint: disable=too-many-instance-attributes
         self.__pins = pins
         self.__notifier = notifier
 
-        self.__values: Optional[Dict[int, _DebouncedValue]] = None
+        self.__values: (dict[int, _DebouncedValue] | None) = None
 
         self.__thread = threading.Thread(target=self.__run, daemon=True)
         self.__stop_event = threading.Event()
 
-        self.__loop: Optional[asyncio.AbstractEventLoop] = None
+        self.__loop: (asyncio.AbstractEventLoop | None) = None
 
     def get(self, pin: int) -> bool:
         value = (self.__values[pin].get() if self.__values is not None else False)
@@ -123,7 +119,7 @@ class AioReader:  # pylint: disable=too-many-instance-attributes
                     for (pin, value) in zip(pins, lines.get_values()):
                         self.__values[pin].set(bool(value))
 
-    def __parse_event(self, event: gpiod.LineEvent) -> Tuple[int, int]:
+    def __parse_event(self, event: gpiod.LineEvent) -> tuple[int, int]:
         pin = event.source.offset()
         if event.type == gpiod.LineEvent.RISING_EDGE:
             return (pin, 1)

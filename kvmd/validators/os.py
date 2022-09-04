@@ -23,7 +23,6 @@
 import os
 import stat
 
-from typing import List
 from typing import Any
 
 from . import raise_error
@@ -94,13 +93,13 @@ def valid_unix_mode(arg: Any) -> int:
     return int(valid_number(arg, min=0, name="UNIX mode"))
 
 
-def valid_options(arg: Any, name: str="") -> List[str]:
+def valid_options(arg: Any, name: str="") -> list[str]:
     if not name:
         name = "options"
     return valid_string_list(arg, delim=r"[,\t]+", name=name)
 
 
-def valid_command(arg: Any) -> List[str]:
+def valid_command(arg: Any) -> list[str]:
     cmd = valid_options(arg, name="command")
     if len(cmd) == 0:
         raise_error(arg, "command")

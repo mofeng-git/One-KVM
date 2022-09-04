@@ -22,10 +22,6 @@
 
 import types
 
-from typing import Tuple
-from typing import Type
-from typing import Optional
-
 import dbus_next
 import dbus_next.aio
 import dbus_next.aio.proxy_object
@@ -36,11 +32,11 @@ import dbus_next.errors
 # =====
 class SystemdUnitInfo:
     def __init__(self) -> None:
-        self.__bus: Optional[dbus_next.aio.MessageBus] = None
-        self.__intr: Optional[dbus_next.introspection.Node] = None
-        self.__manager: Optional[dbus_next.aio.proxy_object.ProxyInterface] = None
+        self.__bus: (dbus_next.aio.MessageBus | None) = None
+        self.__intr: (dbus_next.introspection.Node | None) = None
+        self.__manager: (dbus_next.aio.proxy_object.ProxyInterface | None) = None
 
-    async def get_status(self, name: str) -> Tuple[bool, bool]:
+    async def get_status(self, name: str) -> tuple[bool, bool]:
         assert self.__bus is not None
         assert self.__intr is not None
         assert self.__manager is not None
@@ -89,7 +85,7 @@ class SystemdUnitInfo:
 
     async def __aexit__(
         self,
-        _exc_type: Type[BaseException],
+        _exc_type: type[BaseException],
         _exc: BaseException,
         _tb: types.TracebackType,
     ) -> None:

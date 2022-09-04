@@ -23,9 +23,6 @@
 import types
 import time
 
-from typing import Type
-from typing import Optional
-
 import gpiod
 
 from ....logging import get_logger
@@ -46,8 +43,8 @@ class Gpio:
         self.__reset_inverted = reset_inverted
         self.__reset_delay = reset_delay
 
-        self.__chip: Optional[gpiod.Chip] = None
-        self.__reset_line: Optional[gpiod.Line] = None
+        self.__chip: (gpiod.Chip | None) = None
+        self.__reset_line: (gpiod.Line | None) = None
 
     def __enter__(self) -> None:
         if self.__reset_pin >= 0:
@@ -59,7 +56,7 @@ class Gpio:
 
     def __exit__(
         self,
-        _exc_type: Type[BaseException],
+        _exc_type: type[BaseException],
         _exc: BaseException,
         _tb: types.TracebackType,
     ) -> None:

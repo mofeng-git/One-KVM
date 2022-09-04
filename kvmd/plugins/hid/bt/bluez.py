@@ -22,8 +22,6 @@
 
 import types
 
-from typing import Type
-from typing import Optional
 from typing import Any
 
 import dbus
@@ -56,7 +54,7 @@ class BluezIface:
         self.__pairing_required = pairing_required
         self.__auth_required = auth_required
 
-        self.__bus: Optional[dbus.SystemBus] = None
+        self.__bus: (dbus.SystemBus | None) = None
 
     def get_address(self) -> str:
         return self.__get_prop("Address")
@@ -100,7 +98,7 @@ class BluezIface:
 
     def __exit__(
         self,
-        _exc_type: Type[BaseException],
+        _exc_type: type[BaseException],
         _exc: BaseException,
         _tb: types.TracebackType,
     ) -> None:

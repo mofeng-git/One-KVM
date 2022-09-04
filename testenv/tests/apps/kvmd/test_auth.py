@@ -23,10 +23,7 @@
 import os
 import contextlib
 
-from typing import List
-from typing import Dict
 from typing import AsyncGenerator
-from typing import Optional
 
 import passlib.apache
 
@@ -40,7 +37,7 @@ from kvmd.plugins.auth import get_auth_service_class
 
 
 # =====
-def _make_service_kwargs(path: str) -> Dict:
+def _make_service_kwargs(path: str) -> dict:
     cls = get_auth_service_class("htpasswd")
     scheme = cls.get_plugin_options()
     return make_config({"file": path}, scheme)._unpack()
@@ -50,7 +47,7 @@ def _make_service_kwargs(path: str) -> Dict:
 async def _get_configured_manager(
     internal_path: str,
     external_path: str="",
-    force_internal_users: Optional[List[str]]=None,
+    force_internal_users: (list[str] | None)=None,
 ) -> AsyncGenerator[AuthManager, None]:
 
     manager = AuthManager(

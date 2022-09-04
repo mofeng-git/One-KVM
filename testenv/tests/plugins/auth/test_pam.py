@@ -24,9 +24,7 @@ import os
 import asyncio
 import pwd
 
-from typing import Dict
 from typing import AsyncGenerator
-from typing import Optional
 
 import pytest
 import pytest_asyncio
@@ -41,7 +39,7 @@ _PASSWD = "query"
 
 
 # =====
-async def _run_process(cmd: str, input: Optional[str]=None) -> None:  # pylint: disable=redefined-builtin
+async def _run_process(cmd: str, input: (str | None)=None) -> None:  # pylint: disable=redefined-builtin
     proc = await asyncio.create_subprocess_exec(
         *cmd.split(" "),
         stdin=(asyncio.subprocess.PIPE if input is not None else None),
@@ -75,7 +73,7 @@ async def _test_user() -> AsyncGenerator[None, None]:
     {"allow_users": [_USER]},
     {"allow_uids_at": _UID},
 ])
-async def test_ok(test_user, kwargs: Dict) -> None:  # type: ignore
+async def test_ok(test_user, kwargs: dict) -> None:  # type: ignore
     _ = test_user
     async with get_configured_auth_service("pam", **kwargs) as service:
         assert not (await service.authorize(_USER, "invalid_password"))
@@ -88,7 +86,7 @@ async def test_ok(test_user, kwargs: Dict) -> None:  # type: ignore
     {"deny_users": [_USER]},
     {"allow_uids_at": _UID + 1},
 ])
-async def test_fail(test_user, kwargs: Dict) -> None:  # type: ignore
+async def test_fail(test_user, kwargs: dict) -> None:  # type: ignore
     _ = test_user
     async with get_configured_auth_service("pam", **kwargs) as service:
         assert not (await service.authorize(_USER, "invalid_password"))

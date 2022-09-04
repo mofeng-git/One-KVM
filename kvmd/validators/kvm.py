@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Set
 from typing import Any
 
 from . import raise_error
@@ -45,7 +44,7 @@ def valid_msd_image_name(arg: Any) -> str:
     return valid_printable_filename(arg, name="MSD image name")  # pragma: nocover
 
 
-def valid_info_fields(arg: Any, variants: Set[str]) -> Set[str]:
+def valid_info_fields(arg: Any, variants: set[str]) -> set[str]:
     return set(valid_string_list(
         arg=str(arg).strip(),
         subval=(lambda field: check_string_in_list(field, "info field", variants)),

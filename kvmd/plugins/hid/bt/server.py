@@ -29,11 +29,7 @@ import contextlib
 import queue
 
 from typing import Literal
-from typing import List
-from typing import Dict
-from typing import Set
 from typing import Generator
-from typing import Optional
 
 from ....logging import get_logger
 
@@ -72,8 +68,8 @@ _SockAttrT = Literal["ctl_sock", "int_sock"]
 @dataclasses.dataclass
 class _BtClient:
     addr: str
-    ctl_sock: Optional[socket.socket] = None
-    int_sock: Optional[socket.socket] = None
+    ctl_sock: (socket.socket | None) = None
+    int_sock: (socket.socket | None) = None
 
 
 # =====
@@ -104,8 +100,8 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
 
         self.__stop_event = stop_event
 
-        self.__clients: Dict[str, _BtClient] = {}
-        self.__to_read: Set[socket.socket] = set()
+        self.__clients: dict[str, _BtClient] = {}
+        self.__to_read: set[socket.socket] = set()
 
         self.__events_queue: "multiprocessing.Queue[BaseEvent]" = multiprocessing.Queue()
 
@@ -115,8 +111,8 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
             "scroll": False,
             "num": False,
         }, notifier)
-        self.__modifiers: Set[UsbKey] = set()
-        self.__keys: List[Optional[UsbKey]] = [None] * 6
+        self.__modifiers: set[UsbKey] = set()
+        self.__keys: list[UsbKey | None] = [None] * 6
         self.__mouse_buttons = 0
 
     def run(self) -> None:
@@ -132,7 +128,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
                 self.__close_all_clients(no_change_public=True)
                 self.__set_public(False)
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         return (await self.__state_flags.get())
 
     def queue_event(self, event: BaseEvent) -> None:

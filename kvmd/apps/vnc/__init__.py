@@ -20,9 +20,6 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Optional
-
 from ...clients.kvmd import KvmdClient
 from ...clients.streamer import StreamFormats
 from ...clients.streamer import BaseStreamerClient
@@ -38,7 +35,7 @@ from .server import VncServer
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     config = init(
         prog="kvmd-vnc",
         description="VNC to KVMD proxy",
@@ -48,12 +45,12 @@ def main(argv: Optional[List[str]]=None) -> None:
 
     user_agent = htclient.make_user_agent("KVMD-VNC")
 
-    def make_memsink_streamer(name: str, fmt: int) -> Optional[MemsinkStreamerClient]:
+    def make_memsink_streamer(name: str, fmt: int) -> (MemsinkStreamerClient | None):
         if getattr(config.memsink, name).sink:
             return MemsinkStreamerClient(name.upper(), fmt, **getattr(config.memsink, name)._unpack())
         return None
 
-    streamers: List[BaseStreamerClient] = list(filter(None, [
+    streamers: list[BaseStreamerClient] = list(filter(None, [
         make_memsink_streamer("h264", StreamFormats.H264),
         make_memsink_streamer("jpeg", StreamFormats.JPEG),
         HttpStreamerClient(name="JPEG", user_agent=user_agent, **config.streamer._unpack()),

@@ -20,12 +20,8 @@
 # ========================================================================== #
 
 
-from typing import Tuple
-from typing import List
-from typing import Set
 from typing import Iterable
 from typing import Generator
-from typing import Optional
 from typing import Any
 
 from ....logging import get_logger
@@ -56,8 +52,8 @@ class KeyboardProcess(BaseDeviceProcess):
             **kwargs,
         )
 
-        self.__pressed_modifiers: Set[UsbKey] = set()
-        self.__pressed_keys: List[Optional[UsbKey]] = [None] * 6
+        self.__pressed_modifiers: set[UsbKey] = set()
+        self.__pressed_keys: list[UsbKey | None] = [None] * 6
 
     def cleanup(self) -> None:
         self._stop()
@@ -72,7 +68,7 @@ class KeyboardProcess(BaseDeviceProcess):
         self._clear_queue()
         self._queue_event(ResetEvent())
 
-    def send_key_events(self, keys: Iterable[Tuple[str, bool]]) -> None:
+    def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
         for (key, state) in keys:
             self._queue_event(make_keyboard_event(key, state))
 

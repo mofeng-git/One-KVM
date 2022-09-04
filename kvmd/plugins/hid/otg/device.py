@@ -28,9 +28,7 @@ import errno
 import logging
 import time
 
-from typing import Dict
 from typing import Generator
-from typing import Optional
 
 from ....logging import get_logger
 
@@ -48,7 +46,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         self,
         name: str,
         read_size: int,
-        initial_state: Dict,
+        initial_state: dict,
         notifier: aiomulti.AioProcessNotifier,
 
         device_path: str,
@@ -76,7 +74,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         self.__stop_event = multiprocessing.Event()
         self.__no_device_reported = False
 
-        self.__logger: Optional[logging.Logger] = None
+        self.__logger: (logging.Logger | None) = None
 
     def start(self, udc: str) -> None:  # type: ignore  # pylint: disable=arguments-differ
         self.__udc_state_path = usb.get_udc_path(udc, usb.U_STATE)
@@ -125,7 +123,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         self.__close_device()
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         return (await self.__state_flags.get())
 
     # =====

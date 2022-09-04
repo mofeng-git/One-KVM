@@ -3,10 +3,6 @@ import asyncio.subprocess
 import socket
 import dataclasses
 
-from typing import Tuple
-from typing import List
-from typing import Optional
-
 import netifaces
 
 from ... import tools
@@ -42,9 +38,9 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
         check_retries: int,
         check_retries_delay: float,
 
-        cmd: List[str],
-        cmd_remove: List[str],
-        cmd_append: List[str],
+        cmd: list[str],
+        cmd_remove: list[str],
+        cmd_append: list[str],
     ) -> None:
 
         self.__stun = Stun(stun_host, stun_port, stun_timeout, stun_retries, stun_retries_delay)
@@ -55,8 +51,8 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
 
         self.__cmd = tools.build_cmd(cmd, cmd_remove, cmd_append)
 
-        self.__janus_task: Optional[asyncio.Task] = None
-        self.__janus_proc: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
+        self.__janus_task: (asyncio.Task | None) = None
+        self.__janus_proc: (asyncio.subprocess.Process | None) = None  # pylint: disable=no-member
 
     def run(self) -> None:
         logger = get_logger(0)
@@ -68,7 +64,7 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
 
     async def __run(self) -> None:
         logger = get_logger(0)
-        prev_netcfg: Optional[_Netcfg] = None
+        prev_netcfg: (_Netcfg | None) = None
         while True:
             retry = 0
             netcfg = _Netcfg()
@@ -117,7 +113,7 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
             get_logger().error("Can't get default IP: %s", tools.efmt(err))
         return ""
 
-    async def __get_stun_info(self, src_ip: str) -> Tuple[Stun, Tuple[str, str]]:
+    async def __get_stun_info(self, src_ip: str) -> tuple[Stun, tuple[str, str]]:
         try:
             return (self.__stun, (await self.__stun.get_info(src_ip, 0)))
         except Exception as err:

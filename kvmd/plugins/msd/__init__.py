@@ -24,10 +24,7 @@ import os
 import contextlib
 import time
 
-from typing import Dict
-from typing import Type
 from typing import AsyncGenerator
-from typing import Optional
 
 import aiofiles
 import aiofiles.base
@@ -105,7 +102,7 @@ class MsdRwNotSupported(MsdOperationError):
 
 # =====
 class BaseMsdReader:
-    def get_state(self) -> Dict:
+    def get_state(self) -> dict:
         raise NotImplementedError()
 
     def get_total_size(self) -> int:
@@ -121,7 +118,7 @@ class BaseMsdReader:
 
 
 class BaseMsdWriter:
-    def get_state(self) -> Dict:
+    def get_state(self) -> dict:
         raise NotImplementedError()
 
     def get_chunk_size(self) -> int:
@@ -132,10 +129,10 @@ class BaseMsdWriter:
 
 
 class BaseMsd(BasePlugin):
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         raise NotImplementedError()
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield
@@ -150,9 +147,9 @@ class BaseMsd(BasePlugin):
 
     async def set_params(
         self,
-        name: Optional[str]=None,
-        cdrom: Optional[bool]=None,
-        rw: Optional[bool]=None,
+        name: (str | None)=None,
+        cdrom: (bool | None)=None,
+        rw: (bool | None)=None,
     ) -> None:
 
         raise NotImplementedError()
@@ -168,7 +165,7 @@ class BaseMsd(BasePlugin):
         yield BaseMsdReader()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[BaseMsdWriter, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: (bool | None)) -> AsyncGenerator[BaseMsdWriter, None]:
         _ = name
         _ = size
         _ = remove_incomplete
@@ -187,12 +184,12 @@ class MsdFileReader(BaseMsdReader):  # pylint: disable=too-many-instance-attribu
         self.__path = path
         self.__chunk_size = chunk_size
 
-        self.__file: Optional[aiofiles.base.AiofilesContextManager] = None
+        self.__file: (aiofiles.base.AiofilesContextManager | None) = None
         self.__file_size = 0
         self.__readed = 0
         self.__tick = 0.0
 
-    def get_state(self) -> Dict:
+    def get_state(self) -> dict:
         return {
             "name": self.__name,
             "size": self.__file_size,
@@ -248,12 +245,12 @@ class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attribu
         self.__sync_size = sync_size
         self.__chunk_size = chunk_size
 
-        self.__file: Optional[aiofiles.base.AiofilesContextManager] = None
+        self.__file: (aiofiles.base.AiofilesContextManager | None) = None
         self.__written = 0
         self.__unsynced = 0
         self.__tick = 0.0
 
-    def get_state(self) -> Dict:
+    def get_state(self) -> dict:
         return {
             "name": self.__name,
             "size": self.__file_size,
@@ -315,5 +312,5 @@ class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attribu
 
 
 # =====
-def get_msd_class(name: str) -> Type[BaseMsd]:
+def get_msd_class(name: str) -> type[BaseMsd]:
     return get_plugin_class("msd", name)  # type: ignore

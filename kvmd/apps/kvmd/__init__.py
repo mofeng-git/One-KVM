@@ -20,9 +20,6 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Optional
-
 from ...logging import get_logger
 
 from ...plugins.hid import get_hid_class
@@ -42,7 +39,7 @@ from .server import KvmdServer
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     config = init(
         prog="kvmd",
         description="The main PiKVM daemon",

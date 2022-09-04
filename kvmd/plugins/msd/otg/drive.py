@@ -23,8 +23,6 @@
 import os
 import errno
 
-from typing import List
-
 from .... import usb
 
 from .. import MsdOperationError
@@ -47,7 +45,7 @@ class Drive:
     def is_enabled(self) -> bool:
         return os.path.exists(self.__profile_func_path)
 
-    def get_watchable_paths(self) -> List[str]:
+    def get_watchable_paths(self) -> list[str]:
         return [self.__lun_path, self.__profile_path]
 
     # =====

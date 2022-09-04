@@ -23,9 +23,7 @@
 import socket
 import functools
 
-from typing import Dict
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 from ...logging import get_logger
@@ -61,7 +59,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         self.__mac = mac
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "ip":   Option("255.255.255.255", type=functools.partial(valid_ip, v6=False)),
             "port": Option(9,  type=valid_port),
@@ -81,7 +79,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         if not state:
             return
 
-        sock: Optional[socket.socket] = None
+        sock: (socket.socket | None) = None
         try:
             # TODO: IPv6 support: http://lists.cluenet.de/pipermail/ipv6-ops/2014-September/010139.html
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

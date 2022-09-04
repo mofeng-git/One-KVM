@@ -24,9 +24,6 @@ import asyncio
 import ssl
 import struct
 
-from typing import Tuple
-from typing import Union
-
 from .... import aiotools
 
 from .errors import RfbConnectionError
@@ -57,7 +54,7 @@ class RfbClientStream:
         except (ConnectionError, asyncio.IncompleteReadError) as err:
             raise RfbConnectionError(f"Can't read {msg}", err)
 
-    async def _read_struct(self, msg: str, fmt: str) -> Tuple[int, ...]:
+    async def _read_struct(self, msg: str, fmt: str) -> tuple[int, ...]:
         assert len(fmt) > 1
         try:
             fmt = f">{fmt}"
@@ -73,7 +70,7 @@ class RfbClientStream:
 
     # =====
 
-    async def _write_struct(self, msg: str, fmt: str, *values: Union[int, bytes], drain: bool=True) -> None:
+    async def _write_struct(self, msg: str, fmt: str, *values: (int | bytes), drain: bool=True) -> None:
         try:
             if not fmt:
                 for value in values:

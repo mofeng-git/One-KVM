@@ -20,11 +20,8 @@
 # ========================================================================== #
 
 
-from typing import Tuple
-from typing import Dict
 from typing import Iterable
 from typing import AsyncGenerator
-from typing import Optional
 from typing import Any
 
 from ....logging import get_logger
@@ -49,9 +46,9 @@ from .mouse import MouseProcess
 class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=super-init-not-called
         self,
-        keyboard: Dict[str, Any],
-        mouse: Dict[str, Any],
-        mouse_alt: Dict[str, Any],
+        keyboard: dict[str, Any],
+        mouse: dict[str, Any],
+        mouse_alt: dict[str, Any],
         noop: bool,
         udc: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
@@ -66,8 +63,8 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         self.__keyboard_proc = KeyboardProcess(**common, **keyboard)
         self.__mouse_current = self.__mouse_proc = MouseProcess(**common, **mouse)
 
-        self.__mouse_alt_proc: Optional[MouseProcess] = None
-        self.__mouses: Dict[str, MouseProcess] = {}
+        self.__mouse_alt_proc: (MouseProcess | None) = None
+        self.__mouses: dict[str, MouseProcess] = {}
         if mouse_alt["device_path"]:
             self.__mouse_alt_proc = MouseProcess(
                 absolute=(not mouse["absolute"]),
@@ -84,7 +81,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 self.__mouses["usb_win98"] = self.__mouses["usb"]
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "keyboard": {
                 "device":         Option("/dev/kvmd-hid-keyboard", type=valid_abs_path, unpack_as="device_path"),
@@ -121,7 +118,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         if self.__mouse_alt_proc:
             self.__mouse_alt_proc.start(udc)
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         keyboard_state = await self.__keyboard_proc.get_state()
         mouse_state = await self.__mouse_current.get_state()
         return {
@@ -146,8 +143,8 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             },
         }
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        prev_state: Dict = {}
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
+        prev_state: dict = {}
         while True:
             state = await self.get_state()
             if state != prev_state:
@@ -173,7 +170,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    def send_key_events(self, keys: Iterable[Tuple[str, bool]]) -> None:
+    def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
         self.__keyboard_proc.send_key_events(keys)
 
     def send_mouse_button_event(self, button: str, state: bool) -> None:
@@ -188,7 +185,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         self.__mouse_current.send_wheel_event(delta_x, delta_y)
 
-    def set_params(self, keyboard_output: Optional[str]=None, mouse_output: Optional[str]=None) -> None:
+    def set_params(self, keyboard_output: (str | None)=None, mouse_output: (str | None)=None) -> None:
         _ = keyboard_output
         if mouse_output in self.__mouses and mouse_output != self.__get_current_mouse_mode():
             self.__mouse_current.send_clear_event()

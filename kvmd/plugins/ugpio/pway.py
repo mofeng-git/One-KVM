@@ -28,10 +28,7 @@ import functools
 import errno
 import time
 
-from typing import Tuple
-from typing import Dict
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 import serial
@@ -74,14 +71,14 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         self.__protocol = protocol
 
         self.__ctl_queue: "multiprocessing.Queue[int]" = multiprocessing.Queue()
-        self.__channel_queue: "multiprocessing.Queue[Optional[int]]" = multiprocessing.Queue()
-        self.__channel: Optional[int] = -1
+        self.__channel_queue: "multiprocessing.Queue[int | None]" = multiprocessing.Queue()
+        self.__channel: (int | None) = -1
 
-        self.__proc: Optional[multiprocessing.Process] = None
+        self.__proc: (multiprocessing.Process | None) = None
         self.__stop_event = multiprocessing.Event()
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "device":       Option("",    type=valid_abs_path, unpack_as="device_path"),
             "speed":        Option(19200, type=valid_tty_speed),
@@ -167,8 +164,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
     def __get_serial(self) -> serial.Serial:
         return serial.Serial(self.__device_path, self.__speed, timeout=self.__read_timeout)
 
-    def __recv_channel(self, tty: serial.Serial, data: bytes) -> Tuple[Optional[int], bytes]:
-        channel: Optional[int] = None
+    def __recv_channel(self, tty: serial.Serial, data: bytes) -> tuple[(int | None), bytes]:
+        channel: (int | None) = None
         if tty.in_waiting:
             data += tty.read_all()
             # When you switch ports you see something like "VGA_SWITCH_CONTROL=[0-15]" for ports 1-16

@@ -21,10 +21,7 @@
 # ========================================================================== #
 
 
-from typing import Dict
-from typing import Set
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 from periphery import PWM
@@ -64,11 +61,11 @@ class Plugin(BaseUserGpioDriver):
         self.__duty_cycle_push = duty_cycle_push
         self.__duty_cycle_release = duty_cycle_release
 
-        self.__channels: Dict[int, Optional[bool]] = {}
-        self.__pwms: Dict[int, PWM] = {}
+        self.__channels: dict[int, (bool | None)] = {}
+        self.__pwms: dict[int, PWM] = {}
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "chip":               Option(0,        type=valid_int_f0),
             "period":             Option(20000000, type=valid_int_f0),
@@ -77,14 +74,14 @@ class Plugin(BaseUserGpioDriver):
         }
 
     @classmethod
-    def get_modes(cls) -> Set[str]:
+    def get_modes(cls) -> set[str]:
         return set([UserGpioModes.OUTPUT])
 
     @classmethod
     def get_pin_validator(cls) -> Callable[[Any], Any]:
         return valid_gpio_pin
 
-    def register_output(self, pin: str, initial: Optional[bool]) -> None:
+    def register_output(self, pin: str, initial: (bool | None)) -> None:
         self.__channels[int(pin)] = initial
 
     def prepare(self) -> None:

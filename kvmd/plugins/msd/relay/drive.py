@@ -27,7 +27,6 @@ import struct
 import dataclasses
 
 from typing import IO
-from typing import Optional
 
 from .... import aiotools
 from .... import aiofs
@@ -57,7 +56,7 @@ class ImageInfo:
     complete: bool
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> Optional["ImageInfo"]:
+    def from_bytes(cls, data: bytes) -> ("ImageInfo" | None):
         try:
             parsed = list(struct.unpack(_IMAGE_INFO_FORMAT, data))
         except struct.error:
@@ -97,7 +96,7 @@ class DeviceInfo:
     path: str
     size: int
     free: int
-    image: Optional[ImageInfo]
+    image: (ImageInfo | None)
 
     @classmethod
     async def read(cls, device_path: str) -> "DeviceInfo":

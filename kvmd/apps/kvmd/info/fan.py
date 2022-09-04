@@ -23,9 +23,7 @@
 import copy
 import asyncio
 
-from typing import Dict
 from typing import AsyncGenerator
-from typing import Optional
 
 import aiohttp
 
@@ -55,15 +53,15 @@ class FanInfoSubmanager(BaseInfoSubmanager):
         self.__timeout = timeout
         self.__state_poll = state_poll
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         monitored = await self.__get_monitored()
         return {
             "monitored": monitored,
             "state": ((await self.__get_fan_state() if monitored else None)),
         }
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        prev_state: Dict = {}
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
+        prev_state: dict = {}
         while True:
             if self.__unix_path:
                 pure = state = await self.get_state()
@@ -93,7 +91,7 @@ class FanInfoSubmanager(BaseInfoSubmanager):
                 get_logger(0).error("Can't get info about the service %r: %s", self.__daemon, tools.efmt(err))
         return False
 
-    async def __get_fan_state(self) -> Optional[Dict]:
+    async def __get_fan_state(self) -> (dict | None):
         try:
             async with self.__make_http_session() as session:
                 async with session.get("http://localhost/state") as response:
@@ -104,7 +102,7 @@ class FanInfoSubmanager(BaseInfoSubmanager):
             return None
 
     def __make_http_session(self) -> aiohttp.ClientSession:
-        kwargs: Dict = {
+        kwargs: dict = {
             "headers": {
                 "User-Agent": htclient.make_user_agent("KVMD"),
             },

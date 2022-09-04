@@ -23,7 +23,6 @@
 import os
 import contextlib
 
-from typing import Dict
 from typing import Generator
 from typing import Any
 
@@ -85,21 +84,21 @@ class _SerialPhy(BasePhy):
 # =====
 class Plugin(BaseMcuHid):
     def __init__(self, **kwargs: Any) -> None:
-        phy_kwargs: Dict = {
+        phy_kwargs: dict = {
             (option.unpack_as or key): kwargs.pop(option.unpack_as or key)
             for (key, option) in self.__get_phy_options().items()
         }
         super().__init__(phy=_SerialPhy(**phy_kwargs), **kwargs)
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             **cls.__get_phy_options(),
             **BaseMcuHid.get_plugin_options(),
         }
 
     @classmethod
-    def __get_phy_options(cls) -> Dict:
+    def __get_phy_options(cls) -> dict:
         return {
             "device":       Option("/dev/kvmd-hid", type=valid_abs_path, unpack_as="device_path"),
             "speed":        Option(115200, type=valid_tty_speed),

@@ -24,9 +24,6 @@ import os
 import errno
 import argparse
 
-from typing import List
-from typing import Optional
-
 from ...validators.basic import valid_bool
 from ...validators.basic import valid_int_f0
 from ...validators.os import valid_abs_file
@@ -57,7 +54,7 @@ def _set_param(gadget: str, instance: int, param: str, value: str) -> None:
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     (parent_parser, argv, config) = init(
         add_help=False,
         cli_logging=True,

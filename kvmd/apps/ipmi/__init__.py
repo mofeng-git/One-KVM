@@ -20,9 +20,6 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Optional
-
 from ...clients.kvmd import KvmdClient
 
 from ... import htclient
@@ -34,7 +31,7 @@ from .server import IpmiServer
 
 
 # =====
-def main(argv: Optional[List[str]]=None) -> None:
+def main(argv: (list[str] | None)=None) -> None:
     config = init(
         prog="kvmd-ipmi",
         description="IPMI to KVMD proxy",

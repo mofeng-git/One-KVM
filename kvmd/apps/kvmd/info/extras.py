@@ -24,9 +24,6 @@ import os
 import re
 import asyncio
 
-from typing import Dict
-from typing import Optional
-
 from ....logging import get_logger
 
 from ....yamlconf import Section
@@ -45,7 +42,7 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
     def __init__(self, global_config: Section) -> None:
         self.__global_config = global_config
 
-    async def get_state(self) -> Optional[Dict]:
+    async def get_state(self) -> (dict | None):
         try:
             sui = sysunit.SystemdUnitInfo()
             await sui.open()
@@ -53,7 +50,7 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
             get_logger(0).error("Can't open systemd bus to get extras state: %s", tools.efmt(err))
             sui = None
         try:
-            extras: Dict[str, Dict] = {}
+            extras: dict[str, dict] = {}
             for extra in (await asyncio.gather(*[
                 self.__read_extra(sui, name)
                 for name in os.listdir(self.__get_extras_path())
@@ -71,7 +68,7 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
     def __get_extras_path(self, *parts: str) -> str:
         return os.path.join(self.__global_config.kvmd.info.extras, *parts)
 
-    async def __read_extra(self, sui: Optional[sysunit.SystemdUnitInfo], name: str) -> Dict:
+    async def __read_extra(self, sui: (sysunit.SystemdUnitInfo | None), name: str) -> dict:
         try:
             extra = await aiotools.run_async(load_yaml_file, self.__get_extras_path(name, "manifest.yaml"))
             await self.__rewrite_app_daemon(sui, extra)
@@ -81,7 +78,7 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
             get_logger(0).exception("Can't read extra %r", name)
             return {}
 
-    async def __rewrite_app_daemon(self, sui: Optional[sysunit.SystemdUnitInfo], extra: Dict) -> None:
+    async def __rewrite_app_daemon(self, sui: (sysunit.SystemdUnitInfo | None), extra: dict) -> None:
         daemon = extra.get("daemon", "")
         if isinstance(daemon, str) and daemon.strip():
             extra["enabled"] = extra["started"] = False
@@ -91,7 +88,7 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
                 except Exception as err:
                     get_logger(0).error("Can't get info about the service %r: %s", daemon, tools.efmt(err))
 
-    def __rewrite_app_port(self, extra: Dict) -> None:
+    def __rewrite_app_port(self, extra: dict) -> None:
         port_path = extra.get("port", "")
         if isinstance(port_path, str) and port_path.strip():
             extra["port"] = 0

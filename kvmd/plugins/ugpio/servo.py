@@ -21,8 +21,6 @@
 # ========================================================================== #
 
 
-from typing import Dict
-
 from ... import aiotools
 
 from ...yamlconf import Option
@@ -69,7 +67,7 @@ class Plugin(PwmPlugin):
         )
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         valid_angle = (lambda arg: valid_number(arg, min=-360.0, max=360.0, type=float))
         return {
             "chip":           Option(0,        type=valid_int_f0),

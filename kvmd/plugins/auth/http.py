@@ -20,9 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Dict
-from typing import Optional
-
 import aiohttp
 import aiohttp.web
 
@@ -57,10 +54,10 @@ class Plugin(BaseAuthService):
         self.__passwd = passwd
         self.__timeout = timeout
 
-        self.__http_session: Optional[aiohttp.ClientSession] = None
+        self.__http_session: (aiohttp.ClientSession | None) = None
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "url":     Option("http://localhost/auth"),
             "verify":  Option(True, type=valid_bool),
@@ -102,7 +99,7 @@ class Plugin(BaseAuthService):
 
     def __ensure_http_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:
-            kwargs: Dict = {}
+            kwargs: dict = {}
             if self.__user:
                 kwargs["auth"] = aiohttp.BasicAuth(login=self.__user, password=self.__passwd)
             if not self.__verify:

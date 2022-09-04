@@ -23,12 +23,9 @@
 import multiprocessing
 import queue
 
-from typing import Tuple
-from typing import Dict
 from typing import Type
 from typing import TypeVar
 from typing import Generic
-from typing import Optional
 
 from . import aiotools
 
@@ -40,7 +37,7 @@ _QueueItemT = TypeVar("_QueueItemT")
 async def queue_get_last(  # pylint: disable=invalid-name
     q: "multiprocessing.Queue[_QueueItemT]",
     timeout: float,
-) -> Tuple[bool, Optional[_QueueItemT]]:
+) -> tuple[bool, (_QueueItemT | None)]:
 
     return (await aiotools.run_async(queue_get_last_sync, q, timeout))
 
@@ -48,7 +45,7 @@ async def queue_get_last(  # pylint: disable=invalid-name
 def queue_get_last_sync(  # pylint: disable=invalid-name
     q: "multiprocessing.Queue[_QueueItemT]",
     timeout: float,
-) -> Tuple[bool, Optional[_QueueItemT]]:
+) -> tuple[bool, (_QueueItemT | None)]:
 
     try:
         item = q.get(timeout=timeout)
@@ -79,7 +76,7 @@ _SharedFlagT = TypeVar("_SharedFlagT", int, bool)
 class AioSharedFlags(Generic[_SharedFlagT]):
     def __init__(
         self,
-        initial: Dict[str, _SharedFlagT],
+        initial: dict[str, _SharedFlagT],
         notifier: AioProcessNotifier,
         type: Type[_SharedFlagT]=bool,  # pylint: disable=redefined-builtin
     ) -> None:
@@ -105,10 +102,10 @@ class AioSharedFlags(Generic[_SharedFlagT]):
         if changed:
             self.__notifier.notify()
 
-    async def get(self) -> Dict[str, _SharedFlagT]:
+    async def get(self) -> dict[str, _SharedFlagT]:
         return (await aiotools.run_async(self.__inner_get))
 
-    def __inner_get(self) -> Dict[str, _SharedFlagT]:
+    def __inner_get(self) -> dict[str, _SharedFlagT]:
         with self.__lock:
             return {
                 key: self.__type(shared.value)

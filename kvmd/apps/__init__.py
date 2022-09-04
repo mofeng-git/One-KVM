@@ -27,12 +27,6 @@ import argparse
 import logging
 import logging.config
 
-from typing import Tuple
-from typing import List
-from typing import Dict
-from typing import Type
-from typing import Optional
-
 import pygments
 import pygments.lexers.data
 import pygments.formatters
@@ -109,14 +103,14 @@ from ..validators.hw import valid_otg_ethernet
 
 # =====
 def init(
-    prog: Optional[str]=None,
-    description: Optional[str]=None,
+    prog: (str | None)=None,
+    description: (str | None)=None,
     add_help: bool=True,
     check_run: bool=False,
     cli_logging: bool=False,
-    argv: Optional[List[str]]=None,
+    argv: (list[str] | None)=None,
     **load: bool,
-) -> Tuple[argparse.ArgumentParser, List[str], Section]:
+) -> tuple[argparse.ArgumentParser, list[str], Section]:
 
     argv = (argv or sys.argv)
     assert len(argv) > 0
@@ -170,10 +164,10 @@ def init(
 
 
 # =====
-def _init_config(config_path: str, override_options: List[str], **load_flags: bool) -> Section:
+def _init_config(config_path: str, override_options: list[str], **load_flags: bool) -> Section:
     config_path = os.path.expanduser(config_path)
     try:
-        raw_config: Dict = load_yaml_file(config_path)
+        raw_config: dict = load_yaml_file(config_path)
     except Exception as err:
         raise SystemExit(f"ConfigError: Can't read config file {config_path!r}:\n{tools.efmt(err)}")
     if not isinstance(raw_config, dict):
@@ -194,7 +188,7 @@ def _init_config(config_path: str, override_options: List[str], **load_flags: bo
         raise SystemExit(f"ConfigError: {err}")
 
 
-def _patch_raw(raw_config: Dict) -> None:  # pylint: disable=too-many-branches
+def _patch_raw(raw_config: dict) -> None:  # pylint: disable=too-many-branches
     if isinstance(raw_config.get("otg"), dict):
         for (old, new) in [
             ("msd", "msd"),
@@ -250,9 +244,9 @@ def _patch_raw(raw_config: Dict) -> None:  # pylint: disable=too-many-branches
 
 
 def _patch_dynamic(  # pylint: disable=too-many-locals
-    raw_config: Dict,
+    raw_config: dict,
     config: Section,
-    scheme: Dict,
+    scheme: dict,
     load_auth: bool=False,
     load_hid: bool=False,
     load_atx: bool=False,
@@ -279,7 +273,7 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
 
     if load_gpio:
         driver: str
-        drivers: Dict[str, Type[BaseUserGpioDriver]] = {}  # Name to drivers
+        drivers: dict[str, type[BaseUserGpioDriver]] = {}  # Name to drivers
         for (driver, params) in {  # type: ignore
             "__gpio__": {},
             **tools.rget(raw_config, "kvmd", "gpio", "drivers"),
@@ -343,7 +337,7 @@ def _dump_config(config: Section) -> None:
     print(dump)
 
 
-def _get_config_scheme() -> Dict:
+def _get_config_scheme() -> dict:
     return {
         "logging": Option({}),
 

@@ -23,9 +23,6 @@
 import os
 import asyncio
 
-from typing import List
-from typing import Dict
-
 from aiohttp.web import Request
 from aiohttp.web import WebSocketResponse
 
@@ -48,7 +45,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
         storage_path: str,
         ro_retries_delay: float,
         ro_cleanup_delay: float,
-        remount_cmd: List[str],
+        remount_cmd: list[str],
     ) -> None:
 
         super().__init__()
@@ -69,7 +66,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
             return (await self._ws_loop(ws))
 
     @exposed_ws("ping")
-    async def __ws_ping_handler(self, ws: WsSession, _: Dict) -> None:
+    async def __ws_ping_handler(self, ws: WsSession, _: dict) -> None:
         await ws.send_event("pong", {})
 
     # ===== SYSTEM STUFF

@@ -23,9 +23,6 @@
 import asyncio
 import ssl
 
-from typing import Tuple
-from typing import List
-from typing import Dict
 from typing import Callable
 from typing import Coroutine
 
@@ -66,7 +63,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         width: int,
         height: int,
         name: str,
-        vnc_passwds: List[str],
+        vnc_passwds: list[str],
         vencrypt: bool,
         none_auth_only: bool,
     ) -> None:
@@ -103,7 +100,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         finally:
             await aiotools.shield_fg(self.__cleanup(tasks))
 
-    async def __cleanup(self, tasks: List[asyncio.Task]) -> None:
+    async def __cleanup(self, tasks: list[asyncio.Task]) -> None:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -150,7 +147,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _on_ext_key_event(self, code: int, state: bool) -> None:
         raise NotImplementedError
 
-    async def _on_pointer_event(self, buttons: Dict[str, bool], wheel: Dict[str, int], move: Dict[str, int]) -> None:
+    async def _on_pointer_event(self, buttons: dict[str, bool], wheel: dict[str, int], move: dict[str, int]) -> None:
         raise NotImplementedError
 
     async def _on_cut_event(self, text: str) -> None:
@@ -232,7 +229,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     # =====
 
     async def __handshake_security(self) -> None:
-        sec_types: Dict[int, Tuple[str, Callable]] = {}
+        sec_types: dict[int, tuple[str, Callable]] = {}
         if self.__vencrypt and self.__rfb_version > 3:
             sec_types[19] = ("VeNCrypt", self.__handshake_security_vencrypt)
         if self.__none_auth_only:

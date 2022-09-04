@@ -22,10 +22,7 @@
 
 import asyncio
 
-from typing import Dict
-from typing import Set
 from typing import Callable
-from typing import Optional
 from typing import Any
 
 import gpiod
@@ -55,26 +52,26 @@ class Plugin(BaseUserGpioDriver):
 
         self.__device_path = device_path
 
-        self.__tasks: Dict[int, Optional[asyncio.Task]] = {}
+        self.__tasks: dict[int, (asyncio.Task | None)] = {}
 
-        self.__chip: Optional[gpiod.Chip] = None
-        self.__lines: Dict[int, gpiod.Line] = {}
+        self.__chip: (gpiod.Chip | None) = None
+        self.__lines: dict[int, gpiod.Line] = {}
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "device": Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="device_path"),
         }
 
     @classmethod
-    def get_modes(cls) -> Set[str]:
+    def get_modes(cls) -> set[str]:
         return set([UserGpioModes.OUTPUT])
 
     @classmethod
     def get_pin_validator(cls) -> Callable[[Any], Any]:
         return valid_gpio_pin
 
-    def register_output(self, pin: str, initial: Optional[bool]) -> None:
+    def register_output(self, pin: str, initial: (bool | None)) -> None:
         _ = initial
         self.__tasks[int(pin)] = None
 

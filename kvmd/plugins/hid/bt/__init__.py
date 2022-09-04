@@ -23,11 +23,8 @@
 import multiprocessing
 import time
 
-from typing import Tuple
-from typing import Dict
 from typing import Iterable
 from typing import AsyncGenerator
-from typing import Optional
 
 from ....logging import get_logger
 
@@ -81,7 +78,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         select_timeout: float,
     ) -> None:
 
-        self.__proc: Optional[multiprocessing.Process] = None
+        self.__proc: (multiprocessing.Process | None) = None
         self.__stop_event = multiprocessing.Event()
 
         self.__notifier = aiomulti.AioProcessNotifier()
@@ -104,7 +101,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         )
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "manufacturer": Option("PiKVM"),
             "product":      Option("HID Device"),
@@ -128,9 +125,9 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         self.__proc = multiprocessing.Process(target=self.__server_worker, daemon=True)
         self.__proc.start()
 
-    async def get_state(self) -> Dict:
+    async def get_state(self) -> dict:
         state = await self.__server.get_state()
-        outputs: Dict = {"available": [], "active": ""}
+        outputs: dict = {"available": [], "active": ""}
         return {
             "online": True,
             "busy": False,
@@ -151,8 +148,8 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             },
         }
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        prev_state: Dict = {}
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
+        prev_state: dict = {}
         while True:
             state = await self.get_state()
             if state != prev_state:
@@ -175,7 +172,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    def send_key_events(self, keys: Iterable[Tuple[str, bool]]) -> None:
+    def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
         for (key, state) in keys:
             self.__server.queue_event(make_keyboard_event(key, state))
 

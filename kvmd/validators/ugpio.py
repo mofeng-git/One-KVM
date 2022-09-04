@@ -20,9 +20,6 @@
 # ========================================================================== #
 
 
-from typing import List
-from typing import Set
-from typing import Optional
 from typing import Any
 
 from . import raise_error
@@ -32,7 +29,7 @@ from . import check_len
 
 
 # =====
-def valid_ugpio_driver(arg: Any, variants: Optional[Set[str]]=None) -> str:
+def valid_ugpio_driver(arg: Any, variants: (set[str] | None)=None) -> str:
     name = "GPIO driver"
     arg = check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_-]*$"), name, 255)
     if variants is not None:
@@ -45,11 +42,11 @@ def valid_ugpio_channel(arg: Any) -> str:
     return check_len(check_re_match(arg, name, r"^[a-zA-Z_][a-zA-Z0-9_.-]*$"), name, 255)
 
 
-def valid_ugpio_mode(arg: Any, variants: Set[str]) -> str:
+def valid_ugpio_mode(arg: Any, variants: set[str]) -> str:
     return check_string_in_list(arg, "GPIO driver's pin mode", variants)
 
 
-def valid_ugpio_view_table(arg: Any) -> List[List[str]]:  # pylint: disable=inconsistent-return-statements
+def valid_ugpio_view_table(arg: Any) -> list[list[str]]:  # pylint: disable=inconsistent-return-statements
     try:
         return [list(map(str, row)) for row in list(arg)]
     except Exception:

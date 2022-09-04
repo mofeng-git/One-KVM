@@ -23,9 +23,7 @@
 import os
 import contextlib
 
-from typing import Dict
 from typing import AsyncGenerator
-from typing import Optional
 
 import aiohttp
 import aiohttp.multipart
@@ -68,11 +66,11 @@ async def download(
     url: str,
     verify: bool=True,
     timeout: float=10.0,
-    read_timeout: Optional[float]=None,
+    read_timeout: (float | None)=None,
     app: str="KVMD",
 ) -> AsyncGenerator[aiohttp.ClientResponse, None]:
 
-    kwargs: Dict = {
+    kwargs: dict = {
         "headers": {"User-Agent": make_user_agent(app)},
         "timeout": aiohttp.ClientTimeout(
             connect=timeout,

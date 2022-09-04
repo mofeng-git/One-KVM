@@ -20,13 +20,11 @@
 # ========================================================================== #
 
 
-from typing import Optional
-
 from . import Hid
 
 
 # =====
-def make_mouse_hid(absolute: bool, horizontal_wheel: bool, report_id: Optional[int]=None) -> Hid:
+def make_mouse_hid(absolute: bool, horizontal_wheel: bool, report_id: (int | None)=None) -> Hid:
     maker = (_make_absolute_hid if absolute else _make_relative_hid)
     return maker(horizontal_wheel, report_id)
 
@@ -42,7 +40,7 @@ _HORIZONTAL_WHEEL = [
 ]
 
 
-def _make_absolute_hid(horizontal_wheel: bool, report_id: Optional[int]) -> Hid:
+def _make_absolute_hid(horizontal_wheel: bool, report_id: (int | None)) -> Hid:
     return Hid(
         protocol=0,  # None protocol
         subclass=0,  # No subclass
@@ -106,7 +104,7 @@ def _make_absolute_hid(horizontal_wheel: bool, report_id: Optional[int]) -> Hid:
     )
 
 
-def _make_relative_hid(horizontal_wheel: bool, report_id: Optional[int]) -> Hid:
+def _make_relative_hid(horizontal_wheel: bool, report_id: (int | None)) -> Hid:
     return Hid(
         protocol=2,  # Mouse protocol
         subclass=1,  # Boot interface subclass

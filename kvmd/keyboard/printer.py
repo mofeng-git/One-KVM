@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Tuple
-from typing import Dict
 from typing import Generator
 
 from .keysym import SymmapModifiers
@@ -31,9 +29,9 @@ from .mappings import WebModifiers
 # =====
 def text_to_web_keys(  # pylint: disable=too-many-branches
     text: str,
-    symmap: Dict[int, Dict[int, str]],
+    symmap: dict[int, dict[int, str]],
     shift_key: str=WebModifiers.SHIFT_LEFT,
-) -> Generator[Tuple[str, bool], None, None]:
+) -> Generator[tuple[str, bool], None, None]:
 
     assert shift_key in WebModifiers.SHIFTS
 

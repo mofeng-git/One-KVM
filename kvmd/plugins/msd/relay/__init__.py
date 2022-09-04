@@ -25,9 +25,7 @@ import contextlib
 import dataclasses
 import functools
 
-from typing import Dict
 from typing import AsyncGenerator
-from typing import Optional
 
 from ....logging import get_logger
 
@@ -86,16 +84,16 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__gpio = Gpio(gpio_device_path, target_pin, reset_pin, reset_inverted, reset_delay)
 
-        self.__device_info: Optional[DeviceInfo] = None
+        self.__device_info: (DeviceInfo | None) = None
         self.__connected = False
 
-        self.__device_writer: Optional[MsdFileWriter] = None
+        self.__device_writer: (MsdFileWriter | None) = None
 
         self.__notifier = aiotools.AioNotifier()
         self.__region = aiotools.AioExclusiveRegion(MsdIsBusyError, self.__notifier)
 
     @classmethod
-    def get_plugin_options(cls) -> Dict:
+    def get_plugin_options(cls) -> dict:
         return {
             "upload_chunk_size": Option(65536,   type=functools.partial(valid_number, min=1024)),
             "sync_chunk_size":   Option(4194304, type=functools.partial(valid_number, min=1024)),
@@ -121,9 +119,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             log = (logger.error if isinstance(err, MsdError) else logger.exception)
             log("MSD is offline: %s", err)
 
-    async def get_state(self) -> Dict:
-        storage: Optional[Dict] = None
-        drive: Optional[Dict] = None
+    async def get_state(self) -> dict:
+        storage: (dict | None) = None
+        drive: (dict | None) = None
         if self.__device_info:
             storage = {
                 "size": self.__device_info.size,
@@ -147,8 +145,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             },
         }
 
-    async def poll_state(self) -> AsyncGenerator[Dict, None]:
-        prev_state: Dict = {}
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
+        prev_state: dict = {}
         while True:
             state = await self.get_state()
             if state != prev_state:
@@ -183,9 +181,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @aiotools.atomic_fg
     async def set_params(
         self,
-        name: Optional[str]=None,
-        cdrom: Optional[bool]=None,
-        rw: Optional[bool]=None,
+        name: (str | None)=None,
+        cdrom: (bool | None)=None,
+        rw: (bool | None)=None,
     ) -> None:
 
         async with self.__working():
@@ -226,7 +224,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         yield BaseMsdReader()
 
     @contextlib.asynccontextmanager
-    async def write_image(self, name: str, size: int, remove_incomplete: Optional[bool]) -> AsyncGenerator[MsdFileWriter, None]:
+    async def write_image(self, name: str, size: int, remove_incomplete: (bool | None)) -> AsyncGenerator[MsdFileWriter, None]:
         async with self.__working():
             if remove_incomplete is not None:
                 raise MsdMultiNotSupported()

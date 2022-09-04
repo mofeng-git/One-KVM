@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Type
-
 from .. import BasePlugin
 from .. import get_plugin_class
 
@@ -36,5 +34,5 @@ class BaseAuthService(BasePlugin):
 
 
 # =====
-def get_auth_service_class(name: str) -> Type[BaseAuthService]:
+def get_auth_service_class(name: str) -> type[BaseAuthService]:
     return get_plugin_class("auth", name)  # type: ignore

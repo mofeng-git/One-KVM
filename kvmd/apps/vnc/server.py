@@ -26,11 +26,6 @@ import socket
 import dataclasses
 import contextlib
 
-from typing import List
-from typing import Dict
-from typing import Union
-from typing import Optional
-
 import aiohttp
 
 from ...logging import get_logger
@@ -83,12 +78,12 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         desired_fps: int,
         keymap_name: str,
-        symmap: Dict[int, Dict[int, str]],
+        symmap: dict[int, dict[int, str]],
 
         kvmd: KvmdClient,
-        streamers: List[BaseStreamerClient],
+        streamers: list[BaseStreamerClient],
 
-        vnc_credentials: Dict[str, VncAuthKvmdCredentials],
+        vnc_credentials: dict[str, VncAuthKvmdCredentials],
         vencrypt: bool,
         none_auth_only: bool,
         shared_params: _SharedParams,
@@ -122,15 +117,15 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         self.__stage2_encodings_accepted = aiotools.AioStage()
         self.__stage3_ws_connected = aiotools.AioStage()
 
-        self.__kvmd_session: Optional[KvmdClientSession] = None
-        self.__kvmd_ws: Optional[KvmdClientWs] = None
+        self.__kvmd_session: (KvmdClientSession | None) = None
+        self.__kvmd_ws: (KvmdClientWs | None) = None
 
         self.__fb_notifier = aiotools.AioNotifier()
-        self.__fb_queue: "asyncio.Queue[Dict]" = asyncio.Queue()
+        self.__fb_queue: "asyncio.Queue[dict]" = asyncio.Queue()
 
         # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
         # Все это нужно только чтобы не посылать лишние жсоны в сокет KVMD
-        self.__mouse_buttons: Dict[str, Optional[bool]] = dict.fromkeys(["left", "right", "middle"], None)
+        self.__mouse_buttons: dict[str, (bool | None)] = dict.fromkeys(["left", "right", "middle"], None)
         self.__mouse_move = {"x": -1, "y": -1}
 
         self.__lock = asyncio.Lock()
@@ -175,7 +170,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         finally:
             self.__kvmd_ws = None
 
-    async def __process_ws_event(self, event_type: str, event: Dict) -> None:
+    async def __process_ws_event(self, event_type: str, event: dict) -> None:
         if event_type == "info_meta_state":
             try:
                 host = event["server"]["host"]
@@ -225,7 +220,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             StreamFormats.JPEG: "has_tight",
             StreamFormats.H264: "has_h264",
         }
-        streamer: Optional[BaseStreamerClient] = None
+        streamer: (BaseStreamerClient | None) = None
         for streamer in self.__streamers:
             if getattr(self._encodings, formats[streamer.get_format()]):
                 get_logger(0).info("%s [streamer]: Using preferred %s", self._remote, streamer)
@@ -237,12 +232,12 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         get_logger(0).info("%s [streamer]: Using default %s", self._remote, streamer)
         return streamer
 
-    async def __queue_frame(self, frame: Union[Dict, str]) -> None:
+    async def __queue_frame(self, frame: (dict | str)) -> None:
         if isinstance(frame, str):
             frame = await self.__make_text_frame(frame)
         self.__fb_queue.put_nowait(frame)
 
-    async def __make_text_frame(self, text: str) -> Dict:
+    async def __make_text_frame(self, text: str) -> dict:
         return {
             "data": (await make_text_jpeg(self._width, self._height, self._encodings.tight_jpeg_quality, text)),
             "width": self._width,
@@ -252,7 +247,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def __fb_sender_task_loop(self) -> None:  # pylint: disable=too-many-branches
         has_h264_key = False
-        last: Optional[Dict] = None
+        last: (dict | None) = None
         while True:
             await self.__fb_notifier.wait()
 
@@ -351,7 +346,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             if self.__kvmd_ws:
                 await self.__kvmd_ws.send_key_event(web_key, state)
 
-    def __switch_modifiers(self, key: Union[int, str], state: bool) -> bool:
+    def __switch_modifiers(self, key: (int | str), state: bool) -> bool:
         mod = 0
         if key in X11Modifiers.SHIFTS or key in WebModifiers.SHIFTS:
             mod = SymmapModifiers.SHIFT
@@ -367,7 +362,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             self.__modifiers &= ~mod
         return True
 
-    async def _on_pointer_event(self, buttons: Dict[str, bool], wheel: Dict[str, int], move: Dict[str, int]) -> None:
+    async def _on_pointer_event(self, buttons: dict[str, bool], wheel: dict[str, int], move: dict[str, int]) -> None:
         if self.__kvmd_ws:
             for (button, state) in buttons.items():
                 if self.__mouse_buttons[button] != state:
@@ -434,7 +429,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         keymap_path: str,
 
         kvmd: KvmdClient,
-        streamers: List[BaseStreamerClient],
+        streamers: list[BaseStreamerClient],
         vnc_auth_manager: VncAuthManager,
     ) -> None:
 

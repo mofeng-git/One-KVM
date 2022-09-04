@@ -24,7 +24,6 @@ import re
 import asyncio
 import time
 
-from typing import Dict
 from typing import AsyncGenerator
 
 import systemd.journal
@@ -32,7 +31,7 @@ import systemd.journal
 
 # =====
 class LogReader:
-    async def poll_log(self, seek: int, follow: bool) -> AsyncGenerator[Dict, None]:
+    async def poll_log(self, seek: int, follow: bool) -> AsyncGenerator[dict, None]:
         reader = systemd.journal.Reader()
         reader.this_boot()
         reader.this_machine()
@@ -59,7 +58,7 @@ class LogReader:
             else:
                 await asyncio.sleep(1)
 
-    def __entry_to_record(self, entry: Dict) -> Dict[str, Dict]:
+    def __entry_to_record(self, entry: dict) -> dict[str, dict]:
         return {
             "dt": entry["__REALTIME_TIMESTAMP"],
             "service": entry["_SYSTEMD_UNIT"],

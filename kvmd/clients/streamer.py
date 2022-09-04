@@ -22,7 +22,6 @@
 
 import types
 
-from typing import Dict
 from typing import AsyncGenerator
 
 import aiohttp
@@ -61,7 +60,7 @@ class BaseStreamerClient:
     def get_format(self) -> int:
         raise NotImplementedError()
 
-    async def read_stream(self) -> AsyncGenerator[Dict, None]:
+    async def read_stream(self) -> AsyncGenerator[dict, None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield
@@ -84,7 +83,7 @@ class HttpStreamerClient(BaseStreamerClient):
     def get_format(self) -> int:
         return StreamFormats.JPEG
 
-    async def read_stream(self) -> AsyncGenerator[Dict, None]:
+    async def read_stream(self) -> AsyncGenerator[dict, None]:
         try:
             async with self.__make_http_session() as session:
                 async with session.get(
@@ -118,7 +117,7 @@ class HttpStreamerClient(BaseStreamerClient):
         raise StreamerTempError("Reached EOF")
 
     def __make_http_session(self) -> aiohttp.ClientSession:
-        kwargs: Dict = {
+        kwargs: dict = {
             "headers": {"User-Agent": self.__user_agent},
             "connector": aiohttp.UnixConnector(path=self.__unix_path),
             "timeout": aiohttp.ClientTimeout(
@@ -162,7 +161,7 @@ class MemsinkStreamerClient(BaseStreamerClient):
 
         self.__name = name
         self.__fmt = fmt
-        self.__kwargs: Dict = {
+        self.__kwargs: dict = {
             "obj": obj,
             "lock_timeout": lock_timeout,
             "wait_timeout": wait_timeout,
@@ -172,7 +171,7 @@ class MemsinkStreamerClient(BaseStreamerClient):
     def get_format(self) -> int:
         return self.__fmt
 
-    async def read_stream(self) -> AsyncGenerator[Dict, None]:
+    async def read_stream(self) -> AsyncGenerator[dict, None]:
         if ustreamer is None:
             raise StreamerPermError("Missing ustreamer library")
         try:

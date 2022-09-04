@@ -21,7 +21,6 @@
 
 
 from typing import Generator
-from typing import Optional
 from typing import Any
 
 from ....logging import get_logger
@@ -145,8 +144,8 @@ class MouseProcess(BaseDeviceProcess):
 
     def __make_report(
         self,
-        relative_event: Optional[MouseRelativeEvent]=None,
-        wheel_event: Optional[MouseWheelEvent]=None,
+        relative_event: (MouseRelativeEvent | None)=None,
+        wheel_event: (MouseWheelEvent | None)=None,
     ) -> bytes:
 
         if self.__absolute:

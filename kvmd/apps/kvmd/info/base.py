@@ -20,11 +20,7 @@
 # ========================================================================== #
 
 
-from typing import Dict
-from typing import Optional
-
-
 # =====
 class BaseInfoSubmanager:
-    async def get_state(self) -> Optional[Dict]:
+    async def get_state(self) -> (dict | None):
         raise NotImplementedError

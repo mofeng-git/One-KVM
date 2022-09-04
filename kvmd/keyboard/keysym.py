@@ -24,9 +24,6 @@ import pkgutil
 import functools
 import importlib.machinery
 
-from typing import List
-from typing import Dict
-
 import Xlib.keysymdef
 
 from ..logging import get_logger
@@ -44,11 +41,11 @@ class SymmapModifiers:
     CTRL: int = 0x4
 
 
-def build_symmap(path: str) -> Dict[int, Dict[int, str]]:
+def build_symmap(path: str) -> dict[int, dict[int, str]]:
     # https://github.com/qemu/qemu/blob/95a9457fd44ad97c518858a4e1586a5498f9773c/ui/keymaps.c
     logger = get_logger()
 
-    symmap: Dict[int, Dict[int, str]] = {}
+    symmap: dict[int, dict[int, str]] = {}
     for (src, items) in [
         ("<builtin>", list(X11_TO_AT1.items())),
         (path, list(_read_keyboard_layout(path).items())),
@@ -78,8 +75,8 @@ def build_symmap(path: str) -> Dict[int, Dict[int, str]]:
 
 # =====
 @functools.lru_cache()
-def _get_keysyms() -> Dict[str, int]:
-    keysyms: Dict[str, int] = {}
+def _get_keysyms() -> dict[str, int]:
+    keysyms: dict[str, int] = {}
     for (finder, module_name, _) in pkgutil.walk_packages(Xlib.keysymdef.__path__):
         if not isinstance(finder, importlib.machinery.FileFinder):
             continue
@@ -109,14 +106,14 @@ def _resolve_keysym(name: str) -> int:
     return 0
 
 
-def _read_keyboard_layout(path: str) -> Dict[int, List[At1Key]]:  # Keysym to evdev (at1)
+def _read_keyboard_layout(path: str) -> dict[int, list[At1Key]]:  # Keysym to evdev (at1)
     logger = get_logger(0)
     logger.info("Reading keyboard layout %s ...", path)
 
     with open(path) as layout_file:
         lines = list(map(str.strip, layout_file.read().split("\n")))
 
-    layout: Dict[int, List[At1Key]] = {}
+    layout: dict[int, list[At1Key]] = {}
     for (lineno, line) in enumerate(lines):
         if len(line) == 0 or line.startswith(("#", "map ", "include ")):
             continue
