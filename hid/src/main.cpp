@@ -41,27 +41,35 @@
 #ifdef AUM
 #	include "aum.h"
 #endif
+#include "board.h"
 #include "outputs.h"
 
-
+static DRIVERS::Board* _board;
 static Outputs _out;
 #ifdef HID_DYNAMIC
 static bool _reset_required = false;
+static unsigned long _reset_timestamp;
+#define RESET_TIMEOUT (500000)
 #endif
 
 
 // -----------------------------------------------------------------------------
+static void _resetRequest() {
+	_reset_required = true;
+	_reset_timestamp = micros();
+}
+
 static void _cmdSetKeyboard(const uint8_t *data) { // 1 bytes
 #	ifdef HID_DYNAMIC
 	_out.writeOutputs(PROTO::OUTPUTS1::KEYBOARD::MASK, data[0], false);
-	_reset_required = true;
+	_resetRequest();
 #	endif
 }
 
 static void _cmdSetMouse(const uint8_t *data) { // 1 bytes
 #	ifdef HID_DYNAMIC
 	_out.writeOutputs(PROTO::OUTPUTS1::MOUSE::MASK, data[0], false);
-	_reset_required = true;
+	_resetRequest();
 #	endif
 }
 
@@ -150,6 +158,9 @@ static void _sendResponse(uint8_t code) {
 #		ifdef HID_DYNAMIC
 		if (_reset_required) {
 			response[1] |= PROTO::PONG::RESET_REQUIRED;
+			if (is_micros_timed_out(_reset_timestamp, RESET_TIMEOUT)) {
+				_board->reset();
+			}
 		}
 		response[2] = PROTO::OUTPUTS1::DYNAMIC;
 #		endif
@@ -221,6 +232,7 @@ void setup() {
 #	elif defined(CMD_SPI)
 	spiBegin();
 #	endif
+	_board = DRIVERS::Factory::makeBoard(DRIVERS::BOARD);
 }
 
 void loop() {
