@@ -49,7 +49,7 @@ static Outputs _out;
 #ifdef HID_DYNAMIC
 static bool _reset_required = false;
 static unsigned long _reset_timestamp;
-#define RESET_TIMEOUT (500000)
+#	define RESET_TIMEOUT 500000
 #endif
 
 
