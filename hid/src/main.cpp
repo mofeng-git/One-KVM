@@ -120,6 +120,7 @@ static void _cmdMouseWheelEvent(const uint8_t *data) { // 2 bytes
 }
 
 static uint8_t _handleRequest(const uint8_t *data) { // 8 bytes
+	_board->updateStatus(DRIVERS::RX_DATA);
 	if (PROTO::crc16(data, 6) == PROTO::merge8(data[6], data[7])) {
 #		define HANDLE(_handler) { _handler(data + 2); return PROTO::PONG::OK; }
 		switch (data[1]) {
@@ -165,7 +166,11 @@ static void _sendResponse(uint8_t code) {
 		response[2] = PROTO::OUTPUTS1::DYNAMIC;
 #		endif
 		if (_out.kbd->getType() != DRIVERS::DUMMY) {
-			response[1] |= (_out.kbd->isOffline() ? PROTO::PONG::KEYBOARD_OFFLINE : 0);
+			if(_out.kbd->isOffline()) {
+				response[1] |= PROTO::PONG::KEYBOARD_OFFLINE;
+			} else {
+				_board->updateStatus(DRIVERS::KEYBOARD_ONLINE);
+			}
 			DRIVERS::KeyboardLedsState leds = _out.kbd->getLeds();
 			response[1] |= (leds.caps ? PROTO::PONG::CAPS : 0);
 			response[1] |= (leds.num ? PROTO::PONG::NUM : 0);
@@ -180,7 +185,11 @@ static void _sendResponse(uint8_t code) {
 			}	
 		}
 		if (_out.mouse->getType() != DRIVERS::DUMMY) {
-			response[1] |= (_out.mouse->isOffline() ? PROTO::PONG::MOUSE_OFFLINE : 0);
+			if(_out.mouse->isOffline()) {
+				response[1] |= PROTO::PONG::MOUSE_OFFLINE;
+			} else {
+				_board->updateStatus(DRIVERS::MOUSE_ONLINE);
+			}
 			switch (_out.mouse->getType()) {
 				case DRIVERS::USB_MOUSE_ABSOLUTE_WIN98:
 					response[2] |= PROTO::OUTPUTS1::MOUSE::USB_WIN98;
