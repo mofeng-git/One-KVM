@@ -42,8 +42,7 @@ namespace DRIVERS {
 			void periodic() override {
 				iwdg_feed();
 				if (is_micros_timed_out(_prev_ts, 100000)) {
-					switch(_state)
-					{
+					switch(_state) {
 						case 0:
 							digitalWrite(LED_BUILTIN, LOW);
 							break;
@@ -81,8 +80,7 @@ namespace DRIVERS {
 			}
 
 			void updateStatus(status status) override {
-				switch (status)
-				{
+				switch (status) {
 					case RX_DATA:
 						_rx_data = true;
 						break;
@@ -94,6 +92,7 @@ namespace DRIVERS {
 						break;
 				}
 			}
+
 		private:
 			unsigned long _prev_ts = 0;
 			uint8_t _state = 0;
