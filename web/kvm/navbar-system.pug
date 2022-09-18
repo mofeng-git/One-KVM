@@ -1,4 +1,4 @@
-li(class="right")
+li(id="system-dropdown" class="right")
 	a(class="menu-button" href="#")
 		+navbar_led("link-led", "led-link")
 		+navbar_led("stream-led", "led-stream")
@@ -9,10 +9,10 @@ li(class="right")
 		table(class="kv" style="width: calc(100% - 20px)")
 			tr
 				td(class="value") Runtime settings &amp; tools
-				td(id="webterm" class="feature-disabled") #[button(data-force-hide-menu data-show-window="webterm-window" class="small") &bull; Term]
-				td #[button(data-force-hide-menu data-show-window="about-window" class="small") &bull; About]
-				td #[button(data-force-hide-menu id="open-log-button" class="small") &bull; Log]
-				td(id="wol" class="feature-disabled")
+				td(id="system-tool-webterm" class="feature-disabled") #[button(data-force-hide-menu data-show-window="webterm-window" class="small") &bull; Term]
+				td(id="system-tool-about") #[button(data-force-hide-menu data-show-window="about-window" class="small") &bull; About]
+				td(id="system-tool-log") #[button(data-force-hide-menu id="open-log-button" class="small") &bull; Log]
+				td(id="system-tool-wol" class="feature-disabled")
 					button(data-force-hide-menu id="gpio-button-__wol__" class="gpio-button small" data-channel="__wol__"
 						data-confirm="Are you sure to send Wake-on-LAN packet to the server?") &bull; WoL
 		hr

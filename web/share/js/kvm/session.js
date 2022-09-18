@@ -258,7 +258,7 @@ export function Session() {
 				$("webterm-iframe").src = "";
 			};
 		}
-		tools.feature.setEnabled($("webterm"), has_webterm);
+		tools.feature.setEnabled($("system-tool-webterm"), has_webterm);
 		$("webterm-window").show_hook = show_hook;
 		$("webterm-window").close_hook = close_hook;
 

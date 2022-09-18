@@ -139,21 +139,21 @@
           </div>
         </li>
       </div>
-      <li class="right"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" data-dont-hide-menu id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" data-dont-hide-menu id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" data-dont-hide-menu id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg">System</a>
+      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" data-dont-hide-menu id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" data-dont-hide-menu id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" data-dont-hide-menu id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg">System</a>
         <div class="menu" data-dont-hide-menu id="system-menu">
           <table class="kv" style="width: calc(100% - 20px)">
             <tr>
               <td class="value">Runtime settings &amp; tools</td>
-              <td class="feature-disabled" id="webterm">
+              <td class="feature-disabled" id="system-tool-webterm">
                 <button class="small" data-force-hide-menu data-show-window="webterm-window">&bull; Term</button>
               </td>
-              <td>
+              <td id="system-tool-about">
                 <button class="small" data-force-hide-menu data-show-window="about-window">&bull; About</button>
               </td>
-              <td>
+              <td id="system-tool-log">
                 <button class="small" data-force-hide-menu id="open-log-button">&bull; Log</button>
               </td>
-              <td class="feature-disabled" id="wol">
+              <td class="feature-disabled" id="system-tool-wol">
                 <button class="gpio-button small" data-force-hide-menu id="gpio-button-__wol__" data-channel="__wol__" data-confirm="Are you sure to send Wake-on-LAN packet to the server?">&bull; WoL</button>
               </td>
             </tr>
@@ -570,7 +570,7 @@
           </div>
         </div>
       </li>
-      <li class="right"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="hid-recorder-led" src="/share/svg/led-gear.svg">Macro</a>
+      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" data-dont-hide-menu id="hid-recorder-led" src="/share/svg/led-gear.svg">Macro</a>
         <div class="menu" data-dont-hide-menu>
           <div class="text"><b>Record and play HID/ATX/GPIO actions<br></b><sub>For security reasons, the record will not be saved on the PiKVM</sub></div>
           <hr>
@@ -612,7 +612,7 @@
           </div>
         </div>
       </li>
-      <li class="right"><a class="menu-button" href="#"><img class="feature-disabled" data-dont-hide-menu id="stream-ocr-led" src="/share/svg/led-gear.svg">Text</a>
+      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" data-dont-hide-menu id="stream-ocr-led" src="/share/svg/led-gear.svg">Text</a>
         <div class="menu" data-dont-hide-menu>
           <div class="text"><b>Paste text as keypress sequence<br></b><sub>Please note that PiKVM cannot switch the keyboard layout</sub></div>
           <hr>
@@ -680,8 +680,8 @@
             </table>
           </div>
         </div>
-      </li> 
-      <li class="right"><a class="menu-button" href="#">Shortcuts</a>
+      </li>
+      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#">Shortcuts</a>
         <div class="menu" data-dont-hide-menu>
           <div class="text"><b>Quick keyboard shortcuts<br></b><sub>Also see <i>System &rarr; Show keyboard</i></sub></div>
           <hr>
