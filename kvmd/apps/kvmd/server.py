@@ -128,7 +128,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self,
         auth_manager: AuthManager,
         info_manager: InfoManager,
-        log_reader: LogReader,
+        log_reader: (LogReader | None),
         user_gpio: UserGpio,
         ocr: TesseractOcr,
 

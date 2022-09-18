@@ -82,7 +82,7 @@ def main(argv: (list[str] | None)=None) -> None:
             enabled=config.auth.enabled,
         ),
         info_manager=InfoManager(global_config),
-        log_reader=LogReader(),
+        log_reader=(LogReader() if config.log_reader.enabled else None),
         user_gpio=UserGpio(config.gpio, global_config.otg),
         ocr=TesseractOcr(**config.ocr._unpack()),
 

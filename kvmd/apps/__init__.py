@@ -381,6 +381,10 @@ def _get_config_scheme() -> dict:
                 },
             },
 
+            "log_reader": {
+                "enabled": Option(True, type=valid_bool),
+            },
+
             "hid": {
                 "type": Option("", type=valid_stripped_string_not_empty),
 
