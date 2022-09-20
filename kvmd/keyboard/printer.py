@@ -50,6 +50,10 @@ def text_to_web_keys(  # pylint: disable=too-many-branches
                 ch = "'"
             elif ch in ["„", "“", "”"]:
                 ch = "\""
+            elif ch == "–":  # Short
+                ch = "-"
+            elif ch == "—":  # Long
+                ch = "--"
             if not ch.isprintable():
                 continue
             try:
