@@ -102,9 +102,9 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 		let code = event.code;
 		if (__apply_fixes) {
 			// https://github.com/pikvm/pikvm/issues/819
-			if (code == "IntlBackslash" && event.key in ["`", "~"]) {
+			if (code == "IntlBackslash" && ["`", "~"].includes(event.key)) {
 				code = "Backquote";
-			} else if (code == "Backquote" && event.key in ["§", "±"]) {
+			} else if (code == "Backquote" && ["§", "±"].includes(event.key)) {
 				code = "IntlBackslash";
 			}
 		}
