@@ -95,9 +95,21 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 	};
 
 	self.emitByKeyEvent = function(event, state) {
-		if (!event.repeat) {
-			self.emitByCode(event.code, state);
+		if (event.repeat) {
+			return;
 		}
+
+		let code = event.code;
+		if (__apply_fixes) {
+			// https://github.com/pikvm/pikvm/issues/819
+			if (code == "IntlBackslash" && event.key in ["`", "~"]) {
+				code = "Backquote";
+			} else if (code == "Backquote" && event.key in ["§", "±"]) {
+				code = "IntlBackslash";
+			}
+		}
+
+		self.emitByCode(code, state);
 	};
 
 	self.emitByCode = function(code, state, apply_fixes=true) {
