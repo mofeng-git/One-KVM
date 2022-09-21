@@ -89,7 +89,7 @@ export function Keyboard(__recordWsEvent) {
 	};
 
 	self.emit = function(code, state) {
-		__keyboardHandler({code: code}, state);
+		__keypad.emitByCode(code, state);
 	};
 
 	var __updateOnlineLeds = function() {
@@ -126,9 +126,7 @@ export function Keyboard(__recordWsEvent) {
 		if (event.preventDefault) {
 			event.preventDefault();
 		}
-		if (!event.repeat) {
-			__keypad.emit(event.code, state);
-		}
+		__keypad.emitByKeyEvent(event, state);
 	};
 
 	var __sendKey = function(code, state) {

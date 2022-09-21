@@ -168,11 +168,11 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		event.preventDefault();
 		if (__absolute || __isRelativeCaptured()) {
 			switch (event.button) {
-				case 0: __keypad.emit("left", state); break;
-				case 2: __keypad.emit("right", state); break;
-				case 1: __keypad.emit("middle", state); break;
-				case 3: __keypad.emit("up", state); break;
-				case 4: __keypad.emit("down", state); break;
+				case 0: __keypad.emitByCode("left", state); break;
+				case 2: __keypad.emitByCode("right", state); break;
+				case 1: __keypad.emitByCode("middle", state); break;
+				case 3: __keypad.emitByCode("up", state); break;
+				case 4: __keypad.emitByCode("down", state); break;
 			}
 		} else if (!__absolute && !__isRelativeCaptured() && !state) {
 			$("stream-box").requestPointerLock();
