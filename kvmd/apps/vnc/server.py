@@ -328,6 +328,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     async def _on_key_event(self, code: int, state: bool) -> None:
         is_modifier = self.__switch_modifiers(code, state)
         variants = self.__symmap.get(code)
+        fake_shift = False
+
         if variants:
             if is_modifier:
                 web_key = variants.get(0)
@@ -335,8 +337,19 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 web_key = variants.get(self.__modifiers)
                 if web_key is None:
                     web_key = variants.get(0)
+
+                if web_key is None and self.__modifiers == 0 and SymmapModifiers.SHIFT in variants:
+                    # JUMP doesn't send shift events:
+                    #   - https://github.com/pikvm/pikvm/issues/820
+                    web_key = variants[SymmapModifiers.SHIFT]
+                    fake_shift = True
+
             if web_key and self.__kvmd_ws:
+                if fake_shift:
+                    await self.__kvmd_ws.send_key_event(WebModifiers.SHIFT_LEFT, True)
                 await self.__kvmd_ws.send_key_event(web_key, state)
+                if fake_shift:
+                    await self.__kvmd_ws.send_key_event(WebModifiers.SHIFT_LEFT, False)
 
     async def _on_ext_key_event(self, code: int, state: bool) -> None:
         web_key = AT1_TO_WEB.get(code)
