@@ -327,21 +327,20 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def _on_key_event(self, code: int, state: bool) -> None:
         is_modifier = self.__switch_modifiers(code, state)
-        if self.__kvmd_ws:
-            web_keys = self.__symmap.get(code)
-            if web_keys:
-                if is_modifier:
-                    web_key = web_keys.get(0)
-                else:
-                    web_key = web_keys.get(self.__modifiers)
-                    if web_key is None:
-                        web_key = web_keys.get(0)
-                if web_key is not None:
-                    await self.__kvmd_ws.send_key_event(web_key, state)
+        variants = self.__symmap.get(code)
+        if variants:
+            if is_modifier:
+                web_key = variants.get(0)
+            else:
+                web_key = variants.get(self.__modifiers)
+                if web_key is None:
+                    web_key = variants.get(0)
+            if web_key and self.__kvmd_ws:
+                await self.__kvmd_ws.send_key_event(web_key, state)
 
     async def _on_ext_key_event(self, code: int, state: bool) -> None:
         web_key = AT1_TO_WEB.get(code)
-        if web_key is not None:
+        if web_key:
             self.__switch_modifiers(web_key, state)  # Предполагаем, что модификаторы всегда известны
             if self.__kvmd_ws:
                 await self.__kvmd_ws.send_key_event(web_key, state)
