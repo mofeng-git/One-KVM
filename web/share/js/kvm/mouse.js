@@ -39,11 +39,12 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __keypad = null;
 
 	var __timer = null;
-	var __current_pos = {x: 0, y: 0};
+	var __planned_pos = {x: 0, y: 0};
 	var __sent_pos = {x: 0, y: 0};
-	var __wheel_delta = {x: 0, y: 0};
 	var __relative_deltas = [];
+	var __relative_touch_pos = null;
 	var __relative_sens = 1.0;
+	var __wheel_delta = {x: 0, y: 0};
 
 	var __stream_hovered = false;
 
@@ -61,7 +62,9 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		$("stream-box").oncontextmenu = (event) => event.preventDefault();
 		$("stream-box").onmousemove = __streamMoveHandler;
 		$("stream-box").onwheel = __streamWheelHandler;
-		$("stream-box").ontouchstart = (event) => __streamTouchMoveHandler(event);
+		$("stream-box").ontouchstart = (event) => __streamTouchStartHandler(event);
+		$("stream-box").ontouchmove = (event) => __streamTouchMoveHandler(event);
+		$("stream-box").ontouchend = (event) => __streamTouchEndHandler(event);
 
 		tools.storage.bindSimpleSwitch($("hid-mouse-squash-switch"), "hid.mouse.squash", true);
 		tools.storage.bindSimpleSwitch($("hid-mouse-reverse-scrolling-switch"), "hid.mouse.reverse_scrolling", false);
@@ -91,6 +94,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 		if (__absolute && !state.absolute) {
 			__relative_deltas = [];
+			__relative_touch_pos = null;
 		}
 		__absolute = state.absolute;
 		__updateOnlineLeds();
@@ -106,7 +110,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		if (__timer) {
 			clearInterval(__timer);
 		}
-		__timer = setInterval(__sendMove, value);
+		__timer = setInterval(__sendPlannedMove, value);
 	};
 
 	var __updateRelativeSens = function(value) {
@@ -179,64 +183,64 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
-	var __streamTouchMoveHandler = function(event) {
+	var __streamTouchStartHandler = function(event) {
 		event.preventDefault();
-		if (__absolute) {
-			if (event.touches[0].target && event.touches[0].target.getBoundingClientRect) {
-				let rect = event.touches[0].target.getBoundingClientRect();
-				__current_pos = {
-					x: Math.round(event.touches[0].clientX - rect.left),
-					y: Math.round(event.touches[0].clientY - rect.top),
-				};
-				__sendMove();
+		if (event.touches.length === 1) {
+			if (__absolute) {
+				__planned_pos = __getTouchPosition(event, 0);
+				__sendPlannedMove();
+			} else {
+				__relative_touch_pos = __getTouchPosition(event, 0);
 			}
 		}
+	};
+
+	var __streamTouchMoveHandler = function(event) {
+		event.preventDefault();
+		if (event.touches.length === 1) {
+			if (__absolute) {
+				__planned_pos = __getTouchPosition(event, 0);
+			} else if (__relative_touch_pos === null) {
+				__relative_touch_pos = __getTouchPosition(event, 0);
+			} else {
+				let pos = __getTouchPosition(event, 0);
+				__sendOrPlanRelativeMove({
+					x: (pos.x - __relative_touch_pos.x),
+					y: (pos.y - __relative_touch_pos.y),
+				});
+				__relative_touch_pos = pos;
+			}
+		}
+	};
+
+	var __streamTouchEndHandler = function(event) {
+		event.preventDefault();
+		__sendPlannedMove();
+	};
+
+	var __getTouchPosition = function(event, index) {
+		if (event.touches[index].target && event.touches[index].target.getBoundingClientRect) {
+			let rect = event.touches[index].target.getBoundingClientRect();
+			return {
+				x: Math.round(event.touches[index].clientX - rect.left),
+				y: Math.round(event.touches[index].clientY - rect.top),
+			};
+		}
+		return null;
 	};
 
 	var __streamMoveHandler = function(event) {
 		if (__absolute) {
 			let rect = event.target.getBoundingClientRect();
-			__current_pos = {
+			__planned_pos = {
 				x: Math.max(Math.round(event.clientX - rect.left), 0),
 				y: Math.max(Math.round(event.clientY - rect.top), 0),
 			};
 		} else if (__isRelativeCaptured()) {
-			let delta = {
-				x: Math.min(Math.max(-127, Math.floor(event.movementX * __relative_sens)), 127),
-				y: Math.min(Math.max(-127, Math.floor(event.movementY * __relative_sens)), 127),
-			};
-			if ($("hid-mouse-squash-switch").checked) {
-				__relative_deltas.push(delta);
-			} else {
-				tools.debug("Mouse: relative:", delta);
-				__sendEvent("mouse_relative", {"delta": delta});
-			}
-		}
-	};
-
-	var __sendButton = function(button, state) {
-		tools.debug("Mouse: button", (state ? "pressed:" : "released:"), button);
-		__sendMove();
-		__sendEvent("mouse_button", {"button": button, "state": state});
-	};
-
-	var __sendMove = function() {
-		if (__absolute) {
-			let pos = __current_pos;
-			if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
-				let geo = __getGeometry();
-				let to = {
-					"x": tools.remap(pos.x, geo.x, geo.width, -32768, 32767),
-					"y": tools.remap(pos.y, geo.y, geo.height, -32768, 32767),
-				};
-				tools.debug("Mouse: moved:", to);
-				__sendEvent("mouse_move", {"to": to});
-				__sent_pos = pos;
-			}
-		} else if (__relative_deltas.length) {
-			tools.debug("Mouse: relative:", __relative_deltas);
-			__sendEvent("mouse_relative", {"delta": __relative_deltas, "squash": true});
-			__relative_deltas = [];
+			__sendOrPlanRelativeMove({
+				x: event.movementX,
+				y: event.movementY,
+			});
 		}
 	};
 
@@ -252,7 +256,6 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 
 		let delta = {x: 0, y: 0};
-
 		if (tools.browser.is_firefox && !tools.browser.is_mac) {
 			if (event.deltaX !== 0) {
 				delta.x = event.deltaX / Math.abs(event.deltaX) * (-5);
@@ -276,6 +279,25 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			}
 		}
 
+		__sendWheel(delta);
+	};
+
+	var __sendOrPlanRelativeMove = function(delta) {
+		delta = {
+			x: Math.min(Math.max(-127, Math.floor(delta.x * __relative_sens)), 127),
+			y: Math.min(Math.max(-127, Math.floor(delta.y * __relative_sens)), 127),
+		};
+		if (delta.x || delta.y) {
+			if ($("hid-mouse-squash-switch").checked) {
+				__relative_deltas.push(delta);
+			} else {
+				tools.debug("Mouse: relative:", delta);
+				__sendEvent("mouse_relative", {"delta": delta});
+			}
+		}
+	};
+
+	var __sendWheel = function(delta) {
 		if (delta.x || delta.y) {
 			if ($("hid-mouse-reverse-scrolling-switch").checked) {
 				delta.x *= -1;
@@ -284,6 +306,32 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			tools.debug("Mouse: scrolled:", delta);
 			__sendEvent("mouse_wheel", {"delta": delta});
 		}
+	};
+
+	var __sendPlannedMove = function() {
+		if (__absolute) {
+			let pos = __planned_pos;
+			if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
+				let geo = __getGeometry();
+				let to = {
+					x: tools.remap(pos.x, geo.x, geo.width, -32768, 32767),
+					y: tools.remap(pos.y, geo.y, geo.height, -32768, 32767),
+				};
+				tools.debug("Mouse: moved:", to);
+				__sendEvent("mouse_move", {"to": to});
+				__sent_pos = pos;
+			}
+		} else if (__relative_deltas.length) {
+			tools.debug("Mouse: relative:", __relative_deltas);
+			__sendEvent("mouse_relative", {"delta": __relative_deltas, "squash": true});
+			__relative_deltas = [];
+		}
+	};
+
+	var __sendButton = function(button, state) {
+		tools.debug("Mouse: button", (state ? "pressed:" : "released:"), button);
+		__sendPlannedMove();
+		__sendEvent("mouse_button", {"button": button, "state": state});
 	};
 
 	var __sendEvent = function(event_type, event) {
