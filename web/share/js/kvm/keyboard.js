@@ -123,9 +123,7 @@ export function Keyboard(__recordWsEvent) {
 	};
 
 	var __keyboardHandler = function(event, state) {
-		if (event.preventDefault) {
-			event.preventDefault();
-		}
+		event.preventDefault();
 		__keypad.emitByKeyEvent(event, state);
 	};
 

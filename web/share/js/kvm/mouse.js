@@ -247,9 +247,8 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __streamWheelHandler = function(event) {
 		// https://learn.javascript.ru/mousewheel
 		// https://stackoverflow.com/a/24595588
-		if (event.preventDefault) {
-			event.preventDefault();
-		}
+
+		event.preventDefault();
 
 		if (!__absolute && !__isRelativeCaptured()) {
 			return;
