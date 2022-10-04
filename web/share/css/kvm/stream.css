@@ -103,7 +103,7 @@ div#stream-mouse-buttons {
 	display: none;
 }
 
-@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
+@media only screen and (hover: none) and (pointer: coarse) {
 	div#stream-window {
 		padding-top: 3px !important;
 		border-top: 0 !important;

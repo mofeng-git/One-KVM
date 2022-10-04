@@ -170,8 +170,7 @@ div.window.window-full-tab button.window-button-exit-full-tab {
 	visibility: visible !important;
 }
 
-@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
-	/* iPad */
+@media only screen and (hover: none) and (pointer: coarse) {
 	div.window {
 		padding-top: 45px !important;
 	}

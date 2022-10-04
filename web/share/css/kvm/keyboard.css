@@ -20,7 +20,7 @@
 *****************************************************************************/
 
 
-@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
+@media only screen and (hover: none) and (pointer: coarse) {
 	div#keyboard-window {
 		visibility: visible !important;
 		padding-top: 9px !important;
@@ -47,7 +47,7 @@ div#keyboard-desktop {
 div#keyboard-mobile {
 	display: none;
 }
-@media only screen and (min-device-width: 768px) and (max-device-width: 1024px) {
+@media only screen and (hover: none) and (pointer: coarse) {
 	div#keyboard-desktop {
 		display: none !important;
 	}
