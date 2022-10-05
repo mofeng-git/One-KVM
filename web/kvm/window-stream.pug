@@ -21,17 +21,17 @@ div(id="stream-window" class="window window-resizable")
 	div(id="stream-mouse-buttons" class="keypad" align="center")
 		div(class="keypad-block")
 			div(class="keypad-row")
-				div(data-code="left" class="key wide-4 left small") #[span Mouse#[br]Left]
-				div(data-code="left" class="modifier wide-2 left small") #[span #[b &bull;]#[br]&larr; Hold]
-				div(class="empty-key" style="width:10px")
-				div(data-code="middle" class="key wide-2 left small") #[span Mouse#[br]Middle]
-				div(data-code="middle" class="modifier wide-2 left small") #[span #[b &bull;]#[br]&larr; Hold]
-				div(class="empty-key" style="width:10px")
-				div(data-code="right" class="modifier wide-2 right small") #[span #[b &bull;]#[br]Hold &rarr;]
-				div(data-code="right" class="key wide-4 right small") #[span Mouse#[br]Right]
-			div(class="keypad-row" style="display:none")
-				div(data-code="up" class="key wide-4 left small") #[span Mouse#[br]Up/Back]
-				div(data-code="up" class="modifier wide-2 left small") #[span #[b &bull;]#[br]&larr; Hold]
-				div(class="empty-key" style="width:10px")
-				div(data-code="down" class="modifier wide-2 right small") #[span #[b &bull;]#[br]Hold &rarr;]
-				div(data-code="down" class="key wide-4 right small") #[span Mouse#[br]Down/Fw]
+				div(data-code="left" class="key wide-3 left rounded-left")
+					div(class="label") Left
+				div(data-code="left" class="modifier left small rounded-right")
+					div(class="label") #[b &bull;]#[br]Hold
+				div(class="empty" style="width:15px")
+				div(data-code="middle" class="key wide-1 left rounded-left")
+					div(class="label") Mid
+				div(data-code="middle" class="modifier left small rounded-right")
+					div(class="label") #[b &bull;]#[br]Hold
+				div(class="empty" style="width:15px")
+				div(data-code="right" class="modifier right small rounded-left")
+					div(class="label") #[b &bull;]#[br]Hold
+				div(data-code="right" class="key wide-3 right rounded-right")
+					div(class="label") Right

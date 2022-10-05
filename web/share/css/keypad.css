@@ -33,6 +33,8 @@ div.keypad div.keypad-block:not(:first-child) {
 }
 
 div.keypad div.keypad-row {
+	display: flex;
+	flex-wrap: wrap;
 	white-space: nowrap;
 	height: 40px;
 	margin-bottom: 5px;
@@ -41,12 +43,18 @@ div.keypad div.keypad-row:last-child {
 	margin-bottom: 0;
 }
 
+div.keypad div.keypad-row div.spacer {
+	margin: 2px;
+	flex-grow: 1;
+}
+div.keypad div.keypad-row div.spacer-fixed {
+	margin: 3px;
+}
+
 div.keypad div.key,
 div.keypad div.modifier,
-div.keypad div.empty-key {
+div.keypad div.empty {
 	box-sizing: border-box;
-	display: inline-block;
-	margin-right: 5px;
 	padding: 0;
 	width: 40px;
 }
@@ -68,6 +76,15 @@ div.keypad div.modifier:hover {
 	color: var(--cs-key-hovered-fg);
 	background-color: var(--cs-key-hovered-bg);
 }
+div.keypad div.rounded-left {
+	border-radius: 6px 0px 0px 6px !important;
+}
+div.keypad div.rounded-right {
+	border-radius: 0px 6px 6px 0px !important;
+}
+div.keypad div.rounded-none {
+	border-radius: 0px !important;
+}
 div.keypad div.pressed {
 	box-shadow: none;
 	color: var(--cs-key-pressed-fg) !important;
@@ -79,29 +96,24 @@ div.keypad div.holded {
 	background-color: var(--cs-key-holded-bg) !important;
 }
 div.keypad div.key:last-child,
-div.keypad div.empty-key:last-child,
+div.keypad div.empty:last-child,
 div.keypad div.modifier:last-child {
 	margin-right: 0;
 }
-div.keypad div.margin-0 {
-	margin-right: 0px;
-}
 div.keypad div.wide-0 {
-	width: 26px;
+	width: 28px;
 }
 div.keypad div.wide-1 {
 	width: 61px;
 }
 div.keypad div.wide-2 {
-	width: 64px;
-}
-div.keypad div.wide-3 {
 	width: 77px;
 }
-div.keypad div.wide-4 {
+div.keypad div.wide-3 {
 	width: 102px;
 }
-div.keypad div.wide-5 {
+div.keypad div.wide-4 {
+	flex-grow: 1;
 	width: 288px;
 }
 div.keypad div.left {
