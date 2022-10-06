@@ -106,6 +106,7 @@ div#stream-mouse-buttons {
 @media only screen and (hover: none) and (pointer: coarse) {
 	div#stream-window {
 		padding-top: 3px !important;
+		padding-bottom: 80px !important;
 		border-top: 0 !important;
 		border-left: 0 !important;
 		border-right: 0 !important;
