@@ -362,7 +362,7 @@ function __WindowManager() {
 	var __organizeWindowsOnBrowserResize = function() {
 		for (let el_window of $$("window")) {
 			if (el_window.style.visibility === "visible") {
-				if (tools.browser.is_ios && el_window.classList.contains("window-resizable")) {
+				if (tools.browser.is_mobile && el_window.classList.contains("window-resizable")) {
 					// FIXME: При смене ориентации на мобильном браузере надо сбрасывать
 					// настройки окна стрима, поэтому тут стоит вот этот костыль
 					el_window.style.width = "";

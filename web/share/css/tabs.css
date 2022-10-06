@@ -53,7 +53,7 @@ div.tabs-box label {
 	position: relative;
 	top: 1px;
 }
-@media only screen and (hover: none) and (pointer: coarse) and (orientation: portrait) {
+@media only screen and (pointer: coarse) and (orientation: portrait) {
 	div.tabs-box label {
 		height: 30px !important;
 	}

@@ -140,7 +140,7 @@ div.keypad b {
 	color: var(--cs-key-holded-bg);
 }
 
-@media only screen and (hover: none) and (pointer: coarse) {
+@media only screen and (pointer: coarse) {
 	div.keypad {
 		zoom: 1.28 !important;
 	}

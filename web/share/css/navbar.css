@@ -80,7 +80,7 @@ ul#navbar li a#logo:hover:not(.active),
 ul#navbar li a.menu-button:hover:not(.active) {
 	background-color: var(--cs-navbar-item-hovered-bg);
 }
-@media only screen and (hover: none) and (pointer: coarse) {
+@media only screen and (pointer: coarse) {
 	ul#navbar li a#logo:hover:not(.active),
 	ul#navbar li a.menu-button:hover:not(.active) {
 		background-color: var(--cs-navbar-default-bg) !important;

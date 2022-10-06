@@ -214,7 +214,7 @@ input[type=text], input[type=password] {
 	height: 30px;
 }
 
-@media only screen and (hover: none) and (pointer: coarse) and (orientation: portrait) {
+@media only screen and (pointer: coarse) and (orientation: portrait) {
 	button,
 	select,
 	input[type=text],

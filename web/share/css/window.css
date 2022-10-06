@@ -170,7 +170,7 @@ div.window.window-full-tab button.window-button-exit-full-tab {
 	visibility: visible !important;
 }
 
-@media only screen and (hover: none) and (pointer: coarse) {
+@media only screen and (pointer: coarse) {
 	div.window {
 		padding-top: 45px !important;
 	}

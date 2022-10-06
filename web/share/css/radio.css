@@ -45,7 +45,7 @@ div.radio-box label:not(:last-of-type) {
 	margin-right: 1px;
 	box-shadow: 1px 0 0 0 var(--cs-control-pressed-bg);
 }
-@media only screen and (hover: none) and (pointer: coarse) and (orientation: portrait) {
+@media only screen and (pointer: coarse) and (orientation: portrait) {
 	div.radio-box input[type=radio] + label {
 		height: 30px !important;
 	}

@@ -42,7 +42,7 @@
 		margin-right: 0;
 	}
 }
-@media only screen and (hover: none) and (pointer: coarse) and (orientation: portrait) {
+@media only screen and (pointer: coarse) and (orientation: portrait) {
 	@supports (-webkit-appearance: none) {
 		input[type=range].slider {
 			margin: 20px 0 20px 0 !important;

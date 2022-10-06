@@ -103,7 +103,7 @@ div#stream-mouse-buttons {
 	display: none;
 }
 
-@media only screen and (hover: none) and (pointer: coarse) {
+@media only screen and (pointer: coarse) {
 	div#stream-window {
 		padding-top: 3px !important;
 		padding-bottom: 80px !important;

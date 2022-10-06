@@ -129,7 +129,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __updateOnlineLeds = function() {
 		let is_captured;
 		if (__absolute) {
-			is_captured = (__stream_hovered || tools.browser.is_ios);
+			is_captured = (__stream_hovered || tools.browser.is_mobile);
 		} else {
 			is_captured = __isRelativeCaptured();
 		}
