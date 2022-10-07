@@ -37,6 +37,7 @@ class ConfigError(ValueError):
 def build_raw_from_options(options: list[str]) -> dict[str, Any]:
     raw: dict[str, Any] = {}
     for option in options:
+        key: str
         (key, value) = (option.split("=", 1) + [None])[:2]  # type: ignore
         if len(key.strip()) == 0:
             raise ConfigError(f"Empty option key (required 'key=value' instead of {option!r})")
