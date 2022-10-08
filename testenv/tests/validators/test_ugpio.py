@@ -29,6 +29,7 @@ from kvmd.validators import ValidatorError
 from kvmd.validators.ugpio import valid_ugpio_driver
 from kvmd.validators.ugpio import valid_ugpio_channel
 from kvmd.validators.ugpio import valid_ugpio_mode
+from kvmd.validators.ugpio import valid_ugpio_view_title
 from kvmd.validators.ugpio import valid_ugpio_view_table
 
 from kvmd.plugins.ugpio import UserGpioModes
@@ -91,6 +92,19 @@ def test_ok__valid_ugpio_mode(arg: Any) -> None:
 def test_fail__valid_ugpio_mode(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_ugpio_mode(arg, UserGpioModes.ALL))
+
+
+# =====
+@pytest.mark.parametrize("arg,retval", [
+    ([],            []),
+    ("",            ""),
+    ("ab",          "ab"),
+    ([""],          [""]),
+    ([[]],          ["[]"]),
+    (["a", None],   ["a", "None"]),
+])
+def test_ok__valid_ugpio_view_title(arg: Any, retval: Any) -> None:
+    assert valid_ugpio_view_title(arg) == retval
 
 
 # =====

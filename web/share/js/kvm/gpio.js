@@ -72,7 +72,16 @@ export function Gpio(__recorder) {
 	self.setModel = function(model) {
 		tools.feature.setEnabled($("gpio-dropdown"), model.view.table.length);
 		if (model.view.table.length) {
-			$("gpio-menu-button").innerHTML = `${model.view.header.title}`;
+			let title = [];
+			let last_is_label = false;
+			for (let item of model.view.header.title) {
+				if (last_is_label && item.type === "label") {
+					title.push("<span></span>");
+				}
+				last_is_label = (item.type === "label");
+				title.push(__createItem(item));
+			}
+			$("gpio-menu-button").innerHTML = title.join(" ");
 		}
 
 		let content = "<table class=\"kv\">";

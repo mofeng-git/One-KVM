@@ -46,6 +46,10 @@ def valid_ugpio_mode(arg: Any, variants: set[str]) -> str:
     return check_string_in_list(arg, "GPIO driver's pin mode", variants)
 
 
+def valid_ugpio_view_title(arg: Any) -> (str | list[str]):
+    return (list(map(str, arg)) if isinstance(arg, list) else str(arg))
+
+
 def valid_ugpio_view_table(arg: Any) -> list[list[str]]:  # pylint: disable=inconsistent-return-statements
     try:
         return [list(map(str, row)) for row in list(arg)]

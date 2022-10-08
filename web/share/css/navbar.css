@@ -44,6 +44,7 @@ ul#navbar li.left {
 }
 
 ul#navbar li a#logo {
+	height: 50px; /* Чтобы вертикальные разделители не вылезали за пределы навбара */
 	line-height: 50px;
 	outline: none;
 	cursor: pointer;
@@ -55,6 +56,7 @@ ul#navbar li a#logo {
 }
 
 ul#navbar li a.menu-button {
+	height: 50px; /* То же самое */
 	line-height: 50px;
 	outline: none;
 	cursor: pointer;
@@ -83,7 +85,7 @@ ul#navbar li a.menu-button:hover:not(.active) {
 @media only screen and (pointer: coarse) {
 	ul#navbar li a#logo:hover:not(.active),
 	ul#navbar li a.menu-button:hover:not(.active) {
-		background-color: var(--cs-navbar-default-bg) !important;
+		background-color: var(--cs-navbar-default-bg);
 	}
 }
 
@@ -92,10 +94,14 @@ ul#navbar li a#logo img {
 	height: 24px;
 }
 
+ul#navbar li a.menu-button span,
 ul#navbar li a.menu-button img {
 	vertical-align: middle;
-	margin-right: 10px;
 	height: 20px;
+}
+ul#navbar li a.menu-button span:not(:last-child),
+ul#navbar li a.menu-button img:not(:last-child) {
+	margin-right: 10px;
 }
 
 ul#navbar li a.menu-button-pressed {

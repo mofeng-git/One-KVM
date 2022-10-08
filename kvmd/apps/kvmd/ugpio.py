@@ -311,6 +311,27 @@ class UserGpio:
     # =====
 
     def __make_view(self) -> dict:
+        return {
+            "header": {"title": self.__make_view_title()},
+            "table": self.__make_view_table(),
+        }
+
+    def __make_view_title(self) -> list[dict]:
+        raw_title = self.__view["header"]["title"]
+        title: list[dict] = []
+        if isinstance(raw_title, list):
+            for item in raw_title:
+                if item.startswith("#") or len(item) == 0:
+                    title.append(self.__make_item_label(item))
+                else:
+                    parts = list(map(str.strip, item.split("|", 2)))
+                    if parts and parts[0] in self.__inputs:
+                        title.append(self.__make_item_input(parts))
+        else:
+            title.append(self.__make_item_label(f"#{raw_title}"))
+        return title
+
+    def __make_view_table(self) -> list[list[dict] | None]:
         table: list[list[dict] | None] = []
         for row in self.__view["table"]:
             if len(row) == 0:
@@ -320,29 +341,24 @@ class UserGpio:
             items: list[dict] = []
             for item in map(str.strip, row):
                 if item.startswith("#") or len(item) == 0:
-                    items.append(self.__make_view_label(item))
+                    items.append(self.__make_item_label(item))
                 else:
                     parts = list(map(str.strip, item.split("|", 2)))
                     if parts:
                         if parts[0] in self.__inputs:
-                            items.append(self.__make_view_input(parts))
+                            items.append(self.__make_item_input(parts))
                         elif parts[0] in self.__outputs:
-                            items.append(self.__make_view_output(parts))
+                            items.append(self.__make_item_output(parts))
             table.append(items)
+        return table
 
-        return {
-            "header": self.__view["header"],
-            "table": table,
-        }
-
-    def __make_view_label(self, item: str) -> dict:
-        assert item.startswith("#")
+    def __make_item_label(self, item: str) -> dict:
         return {
             "type": "label",
             "text": item[1:].strip(),
         }
 
-    def __make_view_input(self, parts: list[str]) -> dict:
+    def __make_item_input(self, parts: list[str]) -> dict:
         assert len(parts) >= 1
         color = (parts[1] if len(parts) > 1 else None)
         if color not in ["green", "yellow", "red"]:
@@ -353,7 +369,7 @@ class UserGpio:
             "color": color,
         }
 
-    def __make_view_output(self, parts: list[str]) -> dict:
+    def __make_item_output(self, parts: list[str]) -> dict:
         assert len(parts) >= 1
         confirm = False
         text = "Click"

@@ -93,6 +93,7 @@ from ..validators.kvm import valid_stream_h264_gop
 from ..validators.ugpio import valid_ugpio_driver
 from ..validators.ugpio import valid_ugpio_channel
 from ..validators.ugpio import valid_ugpio_mode
+from ..validators.ugpio import valid_ugpio_view_title
 from ..validators.ugpio import valid_ugpio_view_table
 
 from ..validators.hw import valid_tty_speed
@@ -482,7 +483,7 @@ def _get_config_scheme() -> dict:
                 "scheme": {},  # Dymanic content
                 "view": {
                     "header": {
-                        "title": Option("GPIO"),
+                        "title": Option("GPIO", type=valid_ugpio_view_title),
                     },
                     "table": Option([], type=valid_ugpio_view_table),
                 },
