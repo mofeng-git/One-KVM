@@ -349,10 +349,10 @@ function __WindowManager() {
 			&& !event.target.closest(".modal")
 		) {
 			for (let el_item = event.target; el_item && el_item !== document; el_item = el_item.parentNode) {
-				if (el_item.hasAttribute("data-force-hide-menu")) {
-					break;
-				} else if (el_item.hasAttribute("data-dont-hide-menu")) {
+				if (el_item.classList.contains("menu")) {
 					return;
+				} else if (el_item.hasAttribute("data-force-hide-menu")) {
+					break;
 				}
 			}
 			__closeAllMenues();

@@ -3,7 +3,7 @@ div(id="hw-health-dropdown" class="hidden")
 		a(class="menu-button" href="#")
 			+navbar_led("hw-health-undervoltage-led", "led-undervoltage", "hidden")
 			+navbar_led("hw-health-overheating-led", "led-overheating", "hidden")
-		div(data-dont-hide-menu class="menu")
+		div(class="menu")
 			+menu_message("warning", "Raspberry Pi's health is at risk")
 				| This is not a drill! A red icon indicates a current issue,#[br]
 				| a yellow one that was observed since the device booted up
@@ -22,7 +22,7 @@ div(id="fan-health-dropdown" class="hidden")
 	li(class="left")
 		a(class="menu-button" href="#")
 			+navbar_led("fan-health-led", "led-fan", "hidden")
-		div(data-dont-hide-menu class="menu")
+		div(class="menu")
 			+menu_message("warning", "Raspberry Pi's health is at risk")
 				| This is not a drill! A red icon indicates a current issue,#[br]
 				| a yellow one that was observed in the past

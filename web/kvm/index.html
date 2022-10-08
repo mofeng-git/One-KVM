@@ -61,7 +61,7 @@
       <li class="left"><a id="logo" href="/">&larr;&nbsp;&nbsp;<img class="svg-gray" src="/share/svg/logo.svg" alt="&amp;pi;-kvm"></a></li>
       <div class="hidden" id="hw-health-dropdown">
         <li class="left"><a class="menu-button" href="#"><img class="hidden" id="hw-health-undervoltage-led" src="/share/svg/led-undervoltage.svg"><img class="hidden" id="hw-health-overheating-led" src="/share/svg/led-overheating.svg"></a>
-          <div class="menu" data-dont-hide-menu>
+          <div class="menu">
                 <div class="text">
                   <table>
                     <tr>
@@ -109,7 +109,7 @@
       </div>
       <div class="hidden" id="fan-health-dropdown">
         <li class="left"><a class="menu-button" href="#"><img class="hidden" id="fan-health-led" src="/share/svg/led-fan.svg"></a>
-          <div class="menu" data-dont-hide-menu>
+          <div class="menu">
                 <div class="text">
                   <table>
                     <tr>
@@ -140,7 +140,7 @@
         </li>
       </div>
       <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg"><span>System</span></a>
-        <div class="menu" data-dont-hide-menu id="system-menu">
+        <div class="menu" id="system-menu">
           <table class="kv" style="width: calc(100% - 20px)">
             <tr>
               <td class="value">Runtime settings &amp; tools</td>
@@ -185,7 +185,7 @@
             <tr class="feature-disabled" id="stream-resolution">
               <td>Resolution:</td>
               <td>
-                <select disabled data-dont-hide-menu id="stream-resolution-selector"></select>
+                <select disabled id="stream-resolution-selector"></select>
               </td>
             </tr>
             <tr class="feature-disabled" id="stream-quality">
@@ -336,7 +336,7 @@
         </div>
       </li>
       <li class="right feature-disabled" id="atx-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" id="atx-hdd-led" src="/share/svg/led-atx-hdd.svg"><span>ATX</span></a>
-        <div class="menu" data-dont-hide-menu>
+        <div class="menu">
           <div class="text"><b>Control the server's power<br></b><sub>Use the short click for ACPI shutdown</sub></div>
           <hr>
               <table class="kv">
@@ -360,7 +360,7 @@
         </div>
       </li>
       <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="/share/svg/led-msd.svg"><span>Drive</span></a>
-        <div class="menu" data-dont-hide-menu id="msd-menu">
+        <div class="menu" id="msd-menu">
           <div class="text"><b>Mass Storage Drive: </b><span id="msd-status"></span><br></div>
           <hr>
           <div class="hidden" id="msd-message-offline">
@@ -571,7 +571,7 @@
         </div>
       </li>
       <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="/share/svg/led-gear.svg"><span>Macro</span></a>
-        <div class="menu" data-dont-hide-menu>
+        <div class="menu">
           <div class="text"><b>Record and play HID/ATX/GPIO actions<br></b><sub>For security reasons, the record will not be saved on the PiKVM</sub></div>
           <hr>
           <div class="buttons buttons-row">
@@ -613,7 +613,7 @@
         </div>
       </li>
       <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="/share/svg/led-gear.svg"><span>Text</span></a>
-        <div class="menu" data-dont-hide-menu>
+        <div class="menu">
           <div class="text"><b>Paste text as keypress sequence<br></b><sub>Please note that PiKVM cannot switch the keyboard layout</sub></div>
           <hr>
           <div class="text">
@@ -682,7 +682,7 @@
         </div>
       </li>
       <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#">Shortcuts</a>
-        <div class="menu" data-dont-hide-menu>
+        <div class="menu">
           <div class="text"><b>Quick keyboard shortcuts<br></b><sub>Also see <i>System &rarr; Show keyboard</i></sub></div>
           <hr>
           <div class="buttons">
@@ -748,7 +748,7 @@
         </div>
       </li>
       <li class="right feature-disabled" id="gpio-dropdown"><a class="menu-button" id="gpio-menu-button" href="#"><span>GPIO</span></a>
-        <div class="menu" data-dont-hide-menu id="gpio-menu"></div>
+        <div class="menu" id="gpio-menu"></div>
       </li>
     </ul>
     <div class="window" id="stream-ocr-window">

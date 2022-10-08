@@ -5,7 +5,7 @@ li(id="system-dropdown" class="right")
 		+navbar_led("hid-keyboard-led", "led-hid-keyboard")
 		+navbar_led("hid-mouse-led", "led-hid-mouse")
 		span System
-	div(data-dont-hide-menu id="system-menu" class="menu")
+	div(id="system-menu" class="menu")
 		table(class="kv" style="width: calc(100% - 20px)")
 			tr
 				td(class="value") Runtime settings &amp; tools
@@ -25,7 +25,7 @@ li(id="system-dropdown" class="right")
 		table(class="kv" style="width: calc(100% - 20px)")
 			tr(id="stream-resolution" class="feature-disabled")
 				td Resolution:
-				td #[select(disabled data-dont-hide-menu id="stream-resolution-selector")]
+				td #[select(disabled id="stream-resolution-selector")]
 			tr(id="stream-quality" class="feature-disabled")
 				td JPEG quality:
 				td #[input(disabled type="range" id="stream-quality-slider" class="slider")]
