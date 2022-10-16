@@ -45,11 +45,6 @@ div.radio-box label:not(:last-of-type) {
 	margin-right: 1px;
 	box-shadow: 1px 0 0 0 var(--cs-control-pressed-bg);
 }
-@media only screen and (pointer: coarse) and (orientation: portrait) {
-	div.radio-box input[type=radio] + label {
-		height: 30px !important;
-	}
-}
 div.radio-box label:first-of-type {
 	border-top-left-radius: 4px;
 	border-bottom-left-radius: 4px;
@@ -57,15 +52,6 @@ div.radio-box label:first-of-type {
 div.radio-box label:last-of-type {
 	border-top-right-radius: 4px;
 	border-bottom-right-radius: 4px;
-}
-
-@media (hover: hover), (min--moz-device-pixel-ratio: 0) {
-	/* If we have a mouse cursor */
-	div.radio-box input[type=radio]:not(:checked):not(:disabled) + label:hover {
-		border: var(--border-hovered-2px);
-		color: var(--cs-control-hovered-fg) !important;
-		background-color: var(--cs-control-hovered-bg) !important;
-	}
 }
 
 div.radio-box input[type=radio]:checked + label {

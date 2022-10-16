@@ -79,16 +79,6 @@ div.switch-box label span.switch-inner:after {
 	text-align: right;
 }
 
-@media (hover: hover), (min--moz-device-pixel-ratio: 0) {
-	/* If we have a mouse cursor */
-	div.switch-box label span.switch-inner:not(:disabled):hover::before {
-		background-color: var(--cs-control-hovered-bg);
-	}
-	div.switch-box label span.switch-inner:not(:disabled):hover::after {
-		background-color: var(--cs-control-hovered-bg);
-	}
-}
-
 div.switch-box label span.switch {
 	display: block;
 	width: 13px;

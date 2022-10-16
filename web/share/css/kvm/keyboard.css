@@ -20,38 +20,9 @@
 *****************************************************************************/
 
 
-@media only screen and (pointer: coarse) {
-	div#keyboard-window {
-		visibility: visible !important;
-		padding-top: 9px !important;
-		padding-bottom: 30px !important;
-		border-bottom: 0 !important;
-		border-left: 0 !important;
-		border-right: 0 !important;
-		border-radius: 0 !important;
-		top: unset !important;
-		bottom: 0 !important;
-		width: 100% !important;
-		left: 50% !important;
-		-webkit-transform: translateX(-50%) !important;
-		transform: translateX(-50%) !important;
-	}
-	div#keyboard-window-header {
-		display: none !important
-	}
-}
-
 div#keyboard-desktop {
 	display: block;
 }
 div#keyboard-mobile {
 	display: none;
-}
-@media only screen and (pointer: coarse) {
-	div#keyboard-desktop {
-		display: none !important;
-	}
-	div#keyboard-mobile {
-		display: block !important;
-	}
 }

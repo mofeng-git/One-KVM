@@ -29,7 +29,7 @@ import {wm, initWindowManager} from "../wm.js";
 
 
 export function main() {
-	if (checkBrowser()) {
+	if (checkBrowser(null, null)) {
 		initWindowManager();
 
 		tools.el.setOnClick($("login-button"), __login);

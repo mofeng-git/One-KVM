@@ -102,33 +102,3 @@ div#stream-window.window-active:fullscreen div#stream-box div#stream-fullscreen-
 div#stream-mouse-buttons {
 	display: none;
 }
-
-@media only screen and (pointer: coarse) {
-	div#stream-window {
-		padding-top: 3px !important;
-		padding-bottom: 80px !important;
-		border-top: 0 !important;
-		border-left: 0 !important;
-		border-right: 0 !important;
-		border-radius: 0 !important;
-		top: 50px !important;
-		left: 50% !important;
-		width: 100% !important;
-		-webkit-transform: translateX(-50%) !important;
-		transform: translateX(-50%) !important;
-	}
-	div#stream-window-header {
-		display: none !important;
-	}
-	div#stream-info {
-		display: block !important;
-		margin: 0;
-		padding: 0;
-		padding-bottom: 3px;
-		font-size: 0.8em;
-		color: var(--cs-window-header-default-fg);
-	}
-	div#stream-mouse-buttons {
-		display: block !important;
-	}
-}

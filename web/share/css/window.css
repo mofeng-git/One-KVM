@@ -169,22 +169,3 @@ div.window button.window-button-exit-full-tab:hover {
 div.window.window-full-tab button.window-button-exit-full-tab {
 	visibility: visible !important;
 }
-
-@media only screen and (pointer: coarse) {
-	div.window {
-		padding-top: 45px !important;
-	}
-	div.window div.window-header {
-		height: 35px !important;
-	}
-	div.window div.window-header div.window-grab {
-		height: 35px !important;
-	}
-	div.window div.window-header button.window-button-full-screen,
-	div.window div.window-header button.window-button-enter-full-tab,
-	div.window div.window-header button.window-button-original,
-	div.window div.window-header button.window-button-maximize,
-	div.window div.window-header button.window-button-close {
-		height: 40px !important;
-	}
-}

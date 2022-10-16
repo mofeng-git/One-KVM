@@ -42,13 +42,6 @@
 		margin-right: 0;
 	}
 }
-@media only screen and (pointer: coarse) and (orientation: portrait) {
-	@supports (-webkit-appearance: none) {
-		input[type=range].slider {
-			margin: 20px 0 20px 0 !important;
-		}
-	}
-}
 input[type=range].slider:disabled {
 	cursor: default;
 }
@@ -60,13 +53,6 @@ input[type=range].slider::-webkit-slider-runnable-track {
 }
 input[type=range].slider:disabled::-webkit-slider-runnable-track {
 	cursor: default;
-}
-@media (hover: hover), (min--moz-device-pixel-ratio: 0) {
-	/* If we have a mouse cursor */
-	/*div.switch-box label span.switch-inner:not(:disabled):hover::before {*/
-	input[type=range].slider:not(:disabled):hover::-webkit-slider-runnable-track {
-		background-color: var(--cs-control-hovered-bg);
-	}
 }
 
 input[type=range].slider::-webkit-slider-thumb {
@@ -91,13 +77,6 @@ input[type=range].slider::-moz-range-track {
 }
 input[type=range].slider:disabled::-moz-range-track {
 	cursor: default;
-}
-@media (hover: hover), (min--moz-device-pixel-ratio: 0) {
-	/* If we have a mouse cursor */
-	/*div.switch-box label span.switch-inner:not(:disabled):hover::before {*/
-	input[type=range].slider:not(:disabled):hover::-moz-range-track {
-		background-color: var(--cs-control-hovered-bg);
-	}
 }
 
 input[type=range].slider::-moz-range-thumb {

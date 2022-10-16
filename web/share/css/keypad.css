@@ -139,15 +139,3 @@ div.keypad div.label {
 div.keypad b {
 	color: var(--cs-key-holded-bg);
 }
-
-@media only screen and (pointer: coarse) {
-	div.keypad {
-		zoom: 1.28 !important;
-	}
-
-	div.keypad div.key:hover,
-	div.keypad div.modifier:hover {
-		color: var(--cs-key-default-fg);
-		background-color: var(--cs-key-default-bg);
-	}
-}

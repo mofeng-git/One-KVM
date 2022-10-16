@@ -20,78 +20,66 @@
 *****************************************************************************/
 
 
-div#apps-box {
-	display: table;
-	margin: 0 auto;
+/* ===== stream.css ===== */
+
+div#stream-window {
+	padding-top: 3px !important;
+	padding-bottom: 80px !important;
+	border-top: 0 !important;
+	border-left: 0 !important;
+	border-right: 0 !important;
+	border-radius: 0 !important;
+	top: 50px !important;
+	left: 50% !important;
+	width: 100% !important;
+	-webkit-transform: translateX(-50%) !important;
+	transform: translateX(-50%) !important;
 }
 
-div#apps-box ul#apps {
-	list-style-type: none;
-	padding: 0;
+div#stream-window-header {
+	display: none !important;
+}
+
+div#stream-info {
+	display: block !important;
 	margin: 0;
-}
-
-div#apps-box ul#apps li {
-	float: left;
-	margin-left: 5px;
-	margin-right: 5px;
-}
-
-div#apps-box ul#apps li div.app {
-	height: 100px;
-	width: 100px;
-	text-align: center;
-	background-color: var(--cs-control-default-bg);
-	box-shadow: var(--shadow-micro);
-	border: var(--border-key-thin);
-	border-radius: 8px;
-}
-
-div#apps-box ul#apps li div:hover.app {
-	border: var(--border-intensive-thin);
-	box-shadow: none;
-}
-
-div#apps-box ul#apps li div:active.app {
-	color: var(--cs-control-pressed-fg) !important;
-	background-color: var(--cs-control-pressed-bg) !important;
-	border: var(--border-key-thin);
-	box-shadow: none;
-}
-
-div#apps-box ul#apps li div.app img {
-	display: block;
-	margin: auto;
-	height: 50px;
-	padding-bottom: 5px;
-}
-
-div#apps-box ul#apps li div.app a {
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	height: 100%;
-	text-decoration: none;
-	font-weight: bold;
-}
-
-td.logo {
-	padding-right: 25px;
-}
-td.title {
-	font-size: 1.2em;
-}
-td.copyright {
+	padding: 0;
+	padding-bottom: 3px;
 	font-size: 0.8em;
-}
-tr.server {
-	font-size: 1.4em;
-	font-weight: bold;
-	font-family: monospace;
+	color: var(--cs-window-header-default-fg);
 }
 
-@media only screen and (display-mode: standalone) {
-	div#app-keyboard-warning {
-		display: none;
-	}
+div#stream-mouse-buttons {
+	display: block !important;
+}
+
+
+/* ===== keyboard.css ===== */
+
+div#keyboard-window {
+	visibility: visible !important;
+	padding-top: 9px !important;
+	padding-bottom: 30px !important;
+	border-bottom: 0 !important;
+	border-left: 0 !important;
+	border-right: 0 !important;
+	border-radius: 0 !important;
+	top: unset !important;
+	bottom: 0 !important;
+	width: 100% !important;
+	left: 50% !important;
+	-webkit-transform: translateX(-50%) !important;
+	transform: translateX(-50%) !important;
+}
+
+div#keyboard-window-header {
+	display: none !important
+}
+
+div#keyboard-desktop {
+	display: none !important;
+}
+
+div#keyboard-mobile {
+	display: block !important;
 }

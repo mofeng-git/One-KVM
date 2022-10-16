@@ -23,6 +23,9 @@
 "use strict";
 
 
+import {browser} from "./bb.js";
+
+
 export var tools = new function() {
 	var self = this;
 
@@ -335,78 +338,7 @@ export var tools = new function() {
 		};
 	};
 
-	self.browser = new function() {
-		// https://stackoverflow.com/questions/9847580/how-to-detect-safari-chrome-ie-firefox-and-opera-browser/9851769
-
-		// Opera 8.0+
-		let is_opera = (
-			(!!window.opr && !!opr.addons) // eslint-disable-line no-undef
-			|| !!window.opera
-			|| (navigator.userAgent.indexOf(" OPR/") >= 0)
-		);
-
-		// Firefox 1.0+
-		let is_firefox = (typeof InstallTrigger !== "undefined");
-
-		// Safari 3.0+ "[object HTMLElementConstructor]"
-		let is_safari = (function() {
-			if (/constructor/i.test(String(window["HTMLElement"]))) {
-				return true;
-			}
-			let push = null;
-			try {
-				push = window.top["safari"].pushNotification;
-			} catch {
-				try {
-					push = window["safari"].pushNotification;
-				} catch {
-					return false;
-				}
-			}
-			return String(push) === "[object SafariRemoteNotification]";
-		})();
-
-		// Chrome 1+
-		let is_chrome = !!window.chrome;
-
-		// Blink engine detection
-		let is_blink = ((is_chrome || is_opera) && !!window.CSS);
-
-		// Any browser on Mac
-		let is_mac = ((
-			window.navigator.oscpu
-			|| window.navigator.platform
-			|| window.navigator.appVersion
-			|| "Unknown"
-		).indexOf("Mac") !== -1);
-
-		// Any Windows
-		let is_win = (navigator && !!(/win/i).exec(navigator.platform));
-
-		// iOS browsers
-		// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios
-		// https://github.com/lancedikson/bowser/issues/329
-		let is_ios = (!!navigator.platform && (
-			/iPad|iPhone|iPod/.test(navigator.platform)
-			|| (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1 && !window["MSStream"])
-		));
-
-		let is_android = /android/i.test(navigator.userAgent);
-
-		return {
-			"is_opera": is_opera,
-			"is_firefox": is_firefox,
-			"is_safari": is_safari,
-			"is_chrome": is_chrome,
-			"is_blink": is_blink,
-			"is_mac": is_mac,
-			"is_win": is_win,
-			"is_ios": is_ios,
-			"is_android": is_android,
-			"is_mobile": (is_ios || is_android),
-		};
-	};
-	self.info("Browser:", self.browser);
+	self.browser = browser;
 };
 
 export var $ = (id) => document.getElementById(id);

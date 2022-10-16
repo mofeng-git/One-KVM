@@ -53,11 +53,6 @@ div.tabs-box label {
 	position: relative;
 	top: 1px;
 }
-@media only screen and (pointer: coarse) and (orientation: portrait) {
-	div.tabs-box label {
-		height: 30px !important;
-	}
-}
 
 div.tabs-box label:last-of-type {
 	border-right: var(--border-default-thin);
@@ -65,12 +60,6 @@ div.tabs-box label:last-of-type {
 
 div.tabs-box input[type="radio"]:checked + label {
 	background-color: var(--cs-control-default-bg);
-}
-@media (hover: hover), (min--moz-device-pixel-ratio: 0) {
-	/* If we have a mouse cursor */
-	div.tabs-box input[type="radio"]:not(:checked):hover + label {
-		color: var(--cs-control-hovered-fg);
-	}
 }
 
 div.tabs-box input[type="radio"]:checked + label + .tab {
