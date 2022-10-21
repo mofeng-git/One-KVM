@@ -172,7 +172,7 @@ export function Recorder() {
 							__checkInt(event.event.to.x, "Non-int mouse move X");
 							__checkInt(event.event.to.y, "Non-int mouse move Y");
 						} else if (event.event_type === "mouse_relative") {
-							__checkMouseRelativeDelta(event.event.delta)
+							__checkMouseRelativeDelta(event.event.delta);
 							__checkType(event.event.squash, "boolean", "Non-boolean squash");
 						} else if (event.event_type === "mouse_wheel") {
 							__checkType(event.event.delta, "object", "Non-object mouse wheel delta");
