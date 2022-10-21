@@ -171,6 +171,9 @@ export function Recorder() {
 							__checkType(event.event.to, "object", "Non-object mouse move target");
 							__checkInt(event.event.to.x, "Non-int mouse move X");
 							__checkInt(event.event.to.y, "Non-int mouse move Y");
+						} else if (event.event_type === "mouse_relative") {
+							__checkMouseRelativeDelta(event.event.delta)
+							__checkType(event.event.squash, "boolean", "Non-boolean squash");
 						} else if (event.event_type === "mouse_wheel") {
 							__checkType(event.event.delta, "object", "Non-object mouse wheel delta");
 							__checkInt(event.event.delta.x, "Non-int mouse delta X");
@@ -212,6 +215,21 @@ export function Recorder() {
 		if (!Number.isInteger(obj)) {
 			throw msg;
 		}
+	};
+
+	var __checkArray = function (obj, msg) {
+		if (!Array.isArray(obj)) {
+			throw msg;
+		}
+	};
+
+	var __checkMouseRelativeDelta = function(delta) {
+		__checkArray(delta, "Non-array relative mouse delta");
+		delta.forEach(element => {
+			__checkType(element, "object", "Non-object relative mouse delta element");
+			__checkInt(element.x, "Non-int mouse delta X");
+			__checkInt(element.y, "Non-int mouse delta Y");
+		});
 	};
 
 	var __runEvents = function(index, time=0) {
@@ -271,7 +289,7 @@ export function Recorder() {
 				});
 				return;
 
-			} else if (["key", "mouse_button", "mouse_move", "mouse_wheel"].includes(event.event_type)) {
+			} else if (["key", "mouse_button", "mouse_move", "mouse_wheel", "mouse_relative"].includes(event.event_type)) {
 				__ws.send(JSON.stringify(event));
 			}
 
