@@ -141,7 +141,7 @@
       </div>
       <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg"><span>System</span></a>
         <div class="menu" id="system-menu">
-          <table class="kv" style="width: calc(100% - 20px)">
+          <table class="kv">
             <tr>
               <td class="value">Runtime settings &amp; tools</td>
               <td class="feature-disabled" id="system-tool-webterm">
@@ -181,7 +181,7 @@
                 </div>
             <hr>
           </div>
-          <table class="kv" style="width: calc(100% - 20px)">
+          <table class="kv">
             <tr class="feature-disabled" id="stream-resolution">
               <td>Resolution:</td>
               <td>
@@ -190,24 +190,24 @@
             </tr>
             <tr class="feature-disabled" id="stream-quality">
               <td>JPEG quality:</td>
-              <td>
+              <td class="value-slider">
                 <input class="slider" disabled type="range" id="stream-quality-slider">
               </td>
-              <td class="value" id="stream-quality-value" style="min-width: 30px; max-width:30px"></td>
+              <td class="value-number" id="stream-quality-value"></td>
             </tr>
             <tr class="feature-disabled" id="stream-h264-bitrate">
               <td>H.264 kbps:</td>
-              <td>
+              <td class="value-slider">
                 <input class="slider" disabled type="range" id="stream-h264-bitrate-slider">
               </td>
-              <td class="value" id="stream-h264-bitrate-value" style="min-width: 30px; max-width:30px"></td>
+              <td class="value-number" id="stream-h264-bitrate-value"></td>
             </tr>
             <tr>
               <td>Max FPS:</td>
-              <td>
+              <td class="value-slider">
                 <input class="slider" disabled type="range" id="stream-desired-fps-slider">
               </td>
-              <td class="value" id="stream-desired-fps-value" style="min-width: 30px; max-width:30px"></td>
+              <td class="value-number" id="stream-desired-fps-value"></td>
             </tr>
             <tr class="feature-disabled" id="stream-mode">
               <td>Video <a target="_blank" href="https://docs.pikvm.org/webrtc">mode</a>:</td>
@@ -222,10 +222,10 @@
             </tr>
             <tr class="feature-disabled" id="stream-audio">
               <td>Audio volume:</td>
-              <td>
+              <td class="value-slider">
                 <input class="slider" type="range" id="stream-audio-volume-slider">
               </td>
-              <td class="value" id="stream-audio-volume-value" style="min-width: 30px; max-width:30px"></td>
+              <td class="value-number" id="stream-audio-volume-value"></td>
             </tr>
           </table>
           <hr>
@@ -256,21 +256,21 @@
             <div class="spoiler">
               <table class="kv">
                 <tr>
-                  <td>Mouse polling rate:</td>
-                  <td>
+                  <td>Polling rate:</td>
+                  <td class="value-slider">
                     <input class="slider" type="range" id="hid-mouse-rate-slider">
                   </td>
-                  <td class="value" id="hid-mouse-rate-value" style="min-width: 30px; max-width:30px"></td>
+                  <td class="value-number" id="hid-mouse-rate-value"></td>
                 </tr>
                 <tr class="feature-disabled" id="hid-mouse-sens">
-                  <td>Relative mouse sensitivity:</td>
-                  <td>
+                  <td>Relative sensitivity:</td>
+                  <td class="value-slider">
                     <input class="slider" disabled type="range" id="hid-mouse-sens-slider">
                   </td>
-                  <td class="value" id="hid-mouse-sens-value" style="min-width: 30px; max-width:30px"></td>
+                  <td class="value-number" id="hid-mouse-sens-value"></td>
                 </tr>
                 <tr class="feature-disabled" id="hid-mouse-squash">
-                      <td>Squash relative mouse moves:</td>
+                      <td>Squash relative moves:</td>
                       <td align="right">
                         <div class="switch-box">
                           <input checked type="checkbox" id="hid-mouse-squash-switch">
@@ -279,7 +279,7 @@
                       </td>
                 </tr>
                 <tr>
-                      <td>Reverse mouse scrolling:</td>
+                      <td>Reverse scrolling:</td>
                       <td align="right">
                         <div class="switch-box">
                           <input type="checkbox" id="hid-mouse-reverse-scrolling-switch">

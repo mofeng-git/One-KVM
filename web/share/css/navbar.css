@@ -158,6 +158,16 @@ ul#navbar li div.menu table.kv td.value {
 	max-width: 310px;
 	overflow: hidden;
 }
+ul#navbar li div.menu table.kv td.value-slider {
+	width: 100%;
+}
+ul#navbar li div.menu table.kv td.value-number {
+	font-weight: bold;
+	max-width: 310px;
+	overflow: hidden;
+	min-width: 40px;
+	max-width: 40px;
+}
 
 ul#navbar li div.menu div.buttons button,
 ul#navbar li div.menu div.buttons select {

@@ -105,7 +105,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	};
 
 	var __updateRate = function(value) {
-		$("hid-mouse-rate-value").innerHTML = value;
+		$("hid-mouse-rate-value").innerHTML = value + " ms";
 		tools.storage.set("hid.mouse.rate", value);
 		if (__timer) {
 			clearInterval(__timer);
