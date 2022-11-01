@@ -78,7 +78,7 @@ depends=(
 	"janus-gateway-pikvm>=0.11.2-7"
 	certbot
 	platform-io-access
-	"ustreamer>=5.8"
+	"ustreamer>=5.26"
 
 	# Systemd UDEV bug
 	"systemd>=248.3-2"

@@ -176,10 +176,13 @@ class MemsinkStreamerClient(BaseStreamerClient):
             raise StreamerPermError("Missing ustreamer library")
         try:
             with ustreamer.Memsink(**self.__kwargs) as sink:
+                key_required = (self.__fmt == StreamFormats.H264)
                 while True:
-                    frame = await aiotools.run_async(sink.wait_frame)
+                    frame = await aiotools.run_async(sink.wait_frame, key_required)
                     if frame is not None:
                         self.__check_format(frame["format"])
+                        if frame["key"]:
+                            key_required = False
                         yield frame
         except StreamerPermError:
             raise
