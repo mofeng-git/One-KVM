@@ -159,6 +159,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _on_fb_update_request(self) -> None:
         raise NotImplementedError
 
+    async def _on_enable_cont_updates(self, enabled: bool) -> None:
+        raise NotImplementedError
+
     # =====
 
     async def _send_fb_jpeg(self, data: bytes) -> None:
@@ -398,6 +401,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             4: self.__handle_key_event,
             5: self.__handle_pointer_event,
             6: self.__handle_client_cut_text,
+            150: self.__handle_enable_cont_updates,
             255: self.__handle_qemu_event,
         }
         while True:
@@ -428,6 +432,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         for item in self._encodings.get_summary():
             logger.info("%s [main]: ... %s", self._remote, item)
         self.__check_encodings()
+
+        if self._encodings.has_cont_updates:
+            await self._write_struct("allow ContUpdates", "B", 150)
 
         if self._encodings.has_ext_keys:  # Preferred method
             await self._write_fb_update("ExtKeys FBUR", 0, 0, RfbEncodings.EXT_KEYS, drain=True)
@@ -472,6 +479,12 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         length = (await self._read_struct("cut text length", "xxx L"))[0]
         text = await self._read_text("cut text data", length)
         await self._on_cut_event(text)
+
+    async def __handle_enable_cont_updates(self) -> None:
+        enabled = bool((await self._read_struct("enabled ContUpdates", "B HH HH"))[0])
+        await self._on_enable_cont_updates(enabled)
+        if not enabled:
+            await self._write_struct("disabled ContUpdates", "B", 150)
 
     async def __handle_qemu_event(self) -> None:
         (sub_type, state, code) = await self._read_struct("QEMU event (key?)", "B H xxxx L")
