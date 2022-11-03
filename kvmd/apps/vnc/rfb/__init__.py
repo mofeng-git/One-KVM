@@ -86,10 +86,11 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self.__rfb_version = 0
         self._encodings = RfbClientEncodings(frozenset())
 
-        self.__reset_h264 = False
-
         self.__fb_notifier = aiotools.AioNotifier()
         self.__fb_cont_updates = False
+        self.__fb_reset_h264 = False
+
+        self.__lock = asyncio.Lock()
 
     # =====
 
@@ -174,46 +175,51 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         assert self._encodings.has_tight
         assert self._encodings.tight_jpeg_quality > 0
         assert len(data) <= 4194303, len(data)
-        await self._write_fb_update("JPEG FBUR", self._width, self._height, RfbEncodings.TIGHT, drain=False)
-        length = len(data)
-        if length <= 127:
-            length_bytes = bytes([0b10011111, length & 0x7F])
-        elif length <= 16383:
-            length_bytes = bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F])
-        else:
-            length_bytes = bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F | 0x80, length >> 14 & 0xFF])
-        await self._write_struct("JPEG length + data", "", length_bytes, data)
-        self.__reset_h264 = True
-        if self.__fb_cont_updates:
-            self.__fb_notifier.notify()
+        async with self.__lock:
+            await self._write_fb_update("JPEG FBUR", self._width, self._height, RfbEncodings.TIGHT, drain=False)
+            length = len(data)
+            if length <= 127:
+                length_bytes = bytes([0b10011111, length & 0x7F])
+            elif length <= 16383:
+                length_bytes = bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F])
+            else:
+                length_bytes = bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F | 0x80, length >> 14 & 0xFF])
+            await self._write_struct("JPEG length + data", "", length_bytes, data)
+            self.__fb_reset_h264 = True
+            if self.__fb_cont_updates:
+                self.__fb_notifier.notify()
 
     async def _send_fb_h264(self, data: bytes) -> None:
         assert self._encodings.has_h264
         assert len(data) <= 0xFFFFFFFF, len(data)
-        await self._write_fb_update("H264 FBUR", self._width, self._height, RfbEncodings.H264, drain=False)
-        await self._write_struct("H264 length + flags", "LL", len(data), int(self.__reset_h264), drain=False)
-        await self._write_struct("H264 data", "", data)
-        self.__reset_h264 = False
-        if self.__fb_cont_updates:
-            self.__fb_notifier.notify()
+        async with self.__lock:
+            await self._write_fb_update("H264 FBUR", self._width, self._height, RfbEncodings.H264, drain=False)
+            await self._write_struct("H264 length + flags", "LL", len(data), int(self.__fb_reset_h264), drain=False)
+            await self._write_struct("H264 data", "", data)
+            self.__fb_reset_h264 = False
+            if self.__fb_cont_updates:
+                self.__fb_notifier.notify()
 
     async def _send_resize(self, width: int, height: int) -> None:
         assert self._encodings.has_resize
-        await self._write_fb_update("resize FBUR", width, height, RfbEncodings.RESIZE)
-        self._width = width
-        self._height = height
-        self.__reset_h264 = True
+        async with self.__lock:
+            await self._write_fb_update("resize FBUR", width, height, RfbEncodings.RESIZE)
+            self._width = width
+            self._height = height
+            self.__fb_reset_h264 = True
 
     async def _send_rename(self, name: str) -> None:
         assert self._encodings.has_rename
-        await self._write_fb_update("new server name FBUR", 0, 0, RfbEncodings.RENAME, drain=False)
-        await self._write_reason("new server name data", name)
-        self.__name = name
+        async with self.__lock:
+            await self._write_fb_update("new server name FBUR", 0, 0, RfbEncodings.RENAME, drain=False)
+            await self._write_reason("new server name data", name)
+            self.__name = name
 
     async def _send_leds_state(self, caps: bool, scroll: bool, num: bool) -> None:
         assert self._encodings.has_leds_state
-        await self._write_fb_update("new LEDs state FBUR", 0, 0, RfbEncodings.LEDS_STATE, drain=False)
-        await self._write_struct("new LEDs state data", "B", int(scroll) | int(num) << 1 | int(caps) << 2)
+        async with self.__lock:
+            await self._write_fb_update("new LEDs state FBUR", 0, 0, RfbEncodings.LEDS_STATE, drain=False)
+            await self._write_struct("new LEDs state data", "B", int(scroll) | int(num) << 1 | int(caps) << 2)
 
     # =====
 
