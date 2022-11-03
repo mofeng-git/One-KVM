@@ -121,7 +121,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         self.__kvmd_ws: (KvmdClientWs | None) = None
 
         self.__fb_queue: "asyncio.Queue[dict]" = asyncio.Queue()
-        self.__fb_key_required = False
+        self.__fb_has_key = False
 
         # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
         # Все это нужно только чтобы не посылать лишние жсоны в сокет KVMD
@@ -196,7 +196,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 streaming = False
                 async with streamer.reading() as read_frame:
                     while True:
-                        frame = await read_frame(self.__fb_key_required)
+                        frame = await read_frame(not self.__fb_has_key)
                         if not streaming:
                             logger.info("%s [streamer]: Streaming ...", self._remote)
                             streaming = True
@@ -244,7 +244,6 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         }
 
     async def __fb_sender_task_loop(self) -> None:  # pylint: disable=too-many-branches
-        has_h264_key = False
         last: (dict | None) = None
         async for _ in self._send_fb_allowed():
             while True:
@@ -260,7 +259,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         or len(last["data"]) + len(frame["data"]) > 4194304
                     ))
                 ):
-                    has_h264_key = (frame["format"] == StreamFormats.H264 and frame["key"])
+                    self.__fb_has_key = (frame["format"] == StreamFormats.H264 and frame["key"])
                     last = frame
                     if self.__fb_queue.qsize() == 0:
                         break
@@ -292,11 +291,9 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             elif last["format"] == StreamFormats.H264:
                 if not self._encodings.has_h264:
                     raise RfbError("The client doesn't want to accept H264 anymore")
-                if has_h264_key:
-                    self.__fb_key_required = False
+                if self.__fb_has_key:
                     await self._send_fb_h264(last["data"])
                 else:
-                    self.__fb_key_required = True
                     await self._send_fb_allow_again()
             else:
                 raise RuntimeError(f"Unknown format: {last['format']}")
