@@ -120,9 +120,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         self.__kvmd_session: (KvmdClientSession | None) = None
         self.__kvmd_ws: (KvmdClientWs | None) = None
 
-        self.__fb_notifier = aiotools.AioNotifier()
         self.__fb_queue: "asyncio.Queue[dict]" = asyncio.Queue()
-        self.__fb_cont_updates = False
         self.__fb_key_required = False
 
         # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
@@ -252,9 +250,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     async def __fb_sender_task_loop(self) -> None:  # pylint: disable=too-many-branches
         has_h264_key = False
         last: (dict | None) = None
-        while True:
-            await self.__fb_notifier.wait()
-
+        async for _ in self._send_fb_allowed():
             while True:
                 frame = await self.__fb_queue.get()
                 if (
@@ -288,31 +284,25 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                             f" -> {last['width']}x{last['height']}\nPlease reconnect"
                         )
                         await self._send_fb_jpeg((await self.__make_text_frame(msg))["data"])
-                        if self.__fb_cont_updates:
-                            self.__fb_notifier.notify()
                         continue
                     await self._send_resize(last["width"], last["height"])
 
                 if len(last["data"]) == 0:
                     # Вдруг какой-то баг
-                    self.__fb_notifier.notify()
+                    await self._send_fb_allow_again()
                     continue
 
                 if last["format"] == StreamFormats.JPEG:
                     await self._send_fb_jpeg(last["data"])
-                    if self.__fb_cont_updates:
-                        self.__fb_notifier.notify()
                 elif last["format"] == StreamFormats.H264:
                     if not self._encodings.has_h264:
                         raise RfbError("The client doesn't want to accept H264 anymore")
                     if has_h264_key:
                         self.__fb_key_required = False
                         await self._send_fb_h264(last["data"])
-                        if self.__fb_cont_updates:
-                            self.__fb_notifier.notify()
                     else:
                         self.__fb_key_required = True
-                        self.__fb_notifier.notify()
+                        await self._send_fb_allow_again()
                 else:
                     raise RuntimeError(f"Unknown format: {last['format']}")
                 last["data"] = b""
@@ -423,16 +413,6 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         get_logger(0).info("%s [main]: Applying streamer params: jpeg_quality=%s; desired_fps=%d ...",
                            self._remote, quality, self.__desired_fps)
         await self.__kvmd_session.streamer.set_params(quality, self.__desired_fps)
-
-    async def _on_fb_update_request(self) -> None:
-        if not self.__fb_cont_updates:
-            self.__fb_notifier.notify()
-
-    async def _on_enable_cont_updates(self, enabled: bool) -> None:
-        get_logger(0).info("%s [main]: Applying ContUpdates=%s ...", self._remote, enabled)
-        self.__fb_cont_updates = enabled
-        if enabled:
-            self.__fb_notifier.notify()
 
 
 # =====

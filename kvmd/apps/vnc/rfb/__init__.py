@@ -25,6 +25,7 @@ import ssl
 
 from typing import Callable
 from typing import Coroutine
+from typing import AsyncGenerator
 
 from ....logging import get_logger
 
@@ -86,6 +87,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self._encodings = RfbClientEncodings(frozenset())
 
         self.__reset_h264 = False
+
+        self.__fb_notifier = aiotools.AioNotifier()
+        self.__fb_cont_updates = False
 
     # =====
 
@@ -156,13 +160,15 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _on_set_encodings(self) -> None:
         raise NotImplementedError
 
-    async def _on_fb_update_request(self) -> None:
-        raise NotImplementedError
-
-    async def _on_enable_cont_updates(self, enabled: bool) -> None:
-        raise NotImplementedError
-
     # =====
+
+    async def _send_fb_allowed(self) -> AsyncGenerator[None, None]:
+        while True:
+            await self.__fb_notifier.wait()
+            yield
+
+    async def _send_fb_allow_again(self) -> None:
+        self.__fb_notifier.notify()
 
     async def _send_fb_jpeg(self, data: bytes) -> None:
         assert self._encodings.has_tight
@@ -178,6 +184,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             length_bytes = bytes([0b10011111, length & 0x7F | 0x80, length >> 7 & 0x7F | 0x80, length >> 14 & 0xFF])
         await self._write_struct("JPEG length + data", "", length_bytes, data)
         self.__reset_h264 = True
+        if self.__fb_cont_updates:
+            self.__fb_notifier.notify()
 
     async def _send_fb_h264(self, data: bytes) -> None:
         assert self._encodings.has_h264
@@ -186,6 +194,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         await self._write_struct("H264 length + flags", "LL", len(data), int(self.__reset_h264), drain=False)
         await self._write_struct("H264 data", "", data)
         self.__reset_h264 = False
+        if self.__fb_cont_updates:
+            self.__fb_notifier.notify()
 
     async def _send_resize(self, width: int, height: int) -> None:
         assert self._encodings.has_resize
@@ -443,7 +453,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def __handle_fb_update_request(self) -> None:
         self.__check_encodings()
         await self._read_struct("FBUR", "? HH HH")  # Ignore any arguments, just perform the full update
-        await self._on_fb_update_request()
+        if not self.__fb_cont_updates:
+            self.__fb_notifier.notify()
 
     def __check_encodings(self) -> None:
         # JpegCompression may only be used when the client has advertized
@@ -482,8 +493,11 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def __handle_enable_cont_updates(self) -> None:
         enabled = bool((await self._read_struct("enabled ContUpdates", "B HH HH"))[0])
-        await self._on_enable_cont_updates(enabled)
-        if not enabled:
+        get_logger(0).info("%s [main]: Applying ContUpdates=%s ...", self._remote, enabled)
+        self.__fb_cont_updates = enabled
+        if enabled:
+            self.__fb_notifier.notify()
+        else:
             await self._write_struct("disabled ContUpdates", "B", 150)
 
     async def __handle_qemu_event(self) -> None:
