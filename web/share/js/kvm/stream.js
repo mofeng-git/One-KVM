@@ -162,6 +162,9 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 			webrtcState: function(up) {
 				__logInfo("Janus says our WebRTC PeerConnection is", (up ? "up" : "down"), "now");
+				if (up) {
+					__sendKeyRequired();
+				}
 			},
 
 			onmessage: function(msg, jsep) {
@@ -217,6 +220,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 				__logInfo("Got a remote stream:", stream);
 				__setAudioEnabled(!!stream.getAudioTracks().length);
 				_Janus.attachMediaStream($("stream-video"), stream);
+				__sendKeyRequired();
 				__startInfoInterval();
 				// FIXME: Задержка уменьшается, но начинаются заикания на кейфреймах.
 				//   - https://github.com/Glimesh/janus-ftl-plugin/issues/101
@@ -280,6 +284,14 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 		if (__handle) {
 			__logInfo("Sending START ...");
 			__handle.send({message: {request: "start"}, jsep: jsep});
+		}
+	};
+
+	var __sendKeyRequired = function() {
+		if (__handle) {
+			// На этом шаге мы говорим что стрим пошел и надо запросить кейфрейм
+			__logInfo("Sending KEY_REQUIRED ...");
+			__handle.send({message: {request: "key_required"}});
 		}
 	};
 
