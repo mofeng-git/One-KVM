@@ -34,6 +34,10 @@ li(id="system-dropdown" class="right")
 				td H.264 kbps:
 				td(class="value-slider") #[input(disabled type="range" id="stream-h264-bitrate-slider" class="slider")]
 				td(id="stream-h264-bitrate-value" class="value-number")
+			tr(id="stream-h264-gop" class="feature-disabled")
+				td H.264 #[a(target="_blank" href="https://docs.pikvm.org/webrtc") gop]:
+				td(class="value-slider") #[input(disabled type="range" id="stream-h264-gop-slider" class="slider")]
+				td(id="stream-h264-gop-value" class="value-number")
 			tr
 				td Max FPS:
 				td(class="value-slider") #[input(disabled type="range" id="stream-desired-fps-slider" class="slider")]

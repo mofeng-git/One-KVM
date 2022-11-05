@@ -288,11 +288,11 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	};
 
 	var __sendKeyRequired = function() {
-		if (__handle) {
+		/*if (__handle) {
 			// На этом шаге мы говорим что стрим пошел и надо запросить кейфрейм
 			__logInfo("Sending KEY_REQUIRED ...");
 			__handle.send({message: {request: "key_required"}});
-		}
+		}*/
 	};
 
 	var __sendStop = function() {
@@ -465,6 +465,11 @@ export function Streamer() {
 		});
 		tools.slider.setOnUpDelayed($("stream-h264-bitrate-slider"), 1000, (value) => __sendParam("h264_bitrate", value));
 
+		tools.slider.setParams($("stream-h264-gop-slider"), 0, 60, 1, 30, function(value) {
+			$("stream-h264-gop-value").innerHTML = value;
+		});
+		tools.slider.setOnUpDelayed($("stream-h264-gop-slider"), 1000, (value) => __sendParam("h264_gop", value));
+
 		tools.slider.setParams($("stream-desired-fps-slider"), 0, 120, 1, 0, function(value) {
 			$("stream-desired-fps-value").innerHTML = (value === 0 ? "Unlimited" : value);
 		});
@@ -562,6 +567,7 @@ export function Streamer() {
 		if (state) {
 			tools.feature.setEnabled($("stream-quality"), state.features.quality && (state.streamer === null || state.streamer.encoder.quality > 0));
 			tools.feature.setEnabled($("stream-h264-bitrate"), state.features.h264 && __janus_enabled);
+			tools.feature.setEnabled($("stream-h264-gop"), state.features.h264 && __janus_enabled);
 			tools.feature.setEnabled($("stream-resolution"), state.features.resolution);
 
 			if (state.streamer) {
@@ -572,6 +578,10 @@ export function Streamer() {
 					__setMinMax($("stream-h264-bitrate-slider"), state.limits.h264_bitrate);
 					tools.el.setEnabled($("stream-h264-bitrate-slider"), true);
 					tools.slider.setValue($("stream-h264-bitrate-slider"), state.streamer.h264.bitrate);
+
+					__setMinMax($("stream-h264-gop-slider"), state.limits.h264_gop);
+					tools.el.setEnabled($("stream-h264-gop-slider"), true);
+					tools.slider.setValue($("stream-h264-gop-slider"), state.streamer.h264.gop);
 				}
 
 				__setMinMax($("stream-desired-fps-slider"), state.limits.desired_fps);
@@ -602,6 +612,7 @@ export function Streamer() {
 			} else {
 				tools.el.setEnabled($("stream-quality-slider"), false);
 				tools.el.setEnabled($("stream-h264-bitrate-slider"), false);
+				tools.el.setEnabled($("stream-h264-gop-slider"), false);
 				tools.el.setEnabled($("stream-desired-fps-slider"), false);
 				tools.el.setEnabled($("stream-resolution-selector"), false);
 			}
