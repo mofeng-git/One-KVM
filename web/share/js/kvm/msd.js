@@ -369,7 +369,6 @@ export function Msd() {
 			el.options.length = 1;
 		}
 
-		let precom = "\xA0\xA0\xA0\xA0\xA0\u21b3";
 		let selected_index = 0;
 		let index = 1;
 
@@ -389,20 +388,29 @@ export function Msd() {
 			}
 			++index;
 
-			let comment = new Option(`${precom} ${tools.formatSize(image.size)}${image.complete ? "" : ", broken"}`, "", false, false);
-			comment.disabled = true;
-			comment.className = "comment";
-			el.options[index] = comment;
+			el.options[index] = __makeImageSelectorInfo(image);
 			++index;
 		}
 
 		if (s.drive.image && !s.drive.image.in_storage) {
 			el.options[index] = new Option(s.drive.image.name, "", false, false);
-			el.options[index + 1] = new Option(`${precom} ${tools.formatSize(s.drive.image.size)}, out of storage`, "", false, false);
+			el.options[index + 1] = __makeImageSelectorInfo(s.drive.image);
 			selected_index = el.options.length - 2;
 		}
 
 		el.selectedIndex = selected_index;
+	};
+
+	var __makeImageSelectorInfo = function(image) {
+		let title = `\xA0\xA0\xA0\xA0\xA0\u21b3 ${tools.formatSize(image.size)}`;
+		title += (image.complete ? "" : ", broken");
+		if (image.in_storage !== undefined && !image.in_storage) {
+			title += ", out of storage";
+		}
+		let el = new Option(title, "", false, false);
+		el.disabled = true;
+		el.className = "comment";
+		return el;
 	};
 
 	__init__();
