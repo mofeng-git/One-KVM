@@ -57,8 +57,7 @@ from .. import BaseMsd
 from .. import MsdFileReader
 from .. import MsdFileWriter
 
-from . import fs
-
+from .storage import Storage
 from .drive import Drive
 
 
@@ -67,9 +66,15 @@ from .drive import Drive
 class _DriveImage:
     name: str
     path: str
-    size: int
     complete: bool
     in_storage: bool
+    size: int = dataclasses.field(default=0)
+
+    def __post_init__(self) -> None:
+        try:
+            object.__setattr__(self, "size", max(os.path.getsize(self.path), 0))
+        except Exception as err:
+            get_logger().warning("Can't get size of file %s: %s", self.path, err)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -151,16 +156,13 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__write_chunk_size = write_chunk_size
         self.__sync_chunk_size = sync_chunk_size
 
-        self.__storage_path = os.path.normpath(storage_path)
-        self.__images_path = os.path.join(self.__storage_path, "images")
-        self.__meta_path = os.path.join(self.__storage_path, "meta")
-
         self.__remount_cmd = remount_cmd
 
         self.__initial_image: str = initial["image"]
         self.__initial_cdrom: bool = initial["cdrom"]
 
         self.__drive = Drive(gadget, instance=0, lun=0)
+        self.__storage = Storage(storage_path)
 
         self.__reader: (MsdFileReader | None) = None
         self.__writer: (MsdFileWriter | None) = None
@@ -206,7 +208,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 if self.__writer:
                     # При загрузке файла показываем актуальную статистику вручную
                     storage["uploading"] = self.__writer.get_state()
-                    space = fs.get_fs_space(self.__storage_path, fatal=False)
+                    space = self.__storage.get_space(fatal=False)
                     if space:
                         storage.update(dataclasses.asdict(space))
                 else:
@@ -338,7 +340,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         if self.__state.vd.connected or self.__drive.get_image_path():
                             raise MsdConnectedError()
 
-                        path = os.path.join(self.__images_path, name)
+                        path = self.__storage.get_image_path(name)
                         if name not in self.__state.storage.images or not os.path.exists(path):
                             raise MsdUnknownImageError()
 
@@ -369,12 +371,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         if self.__state.vd.connected or self.__drive.get_image_path():
                             raise MsdConnectedError()
 
-                        path = os.path.join(self.__images_path, name)
+                        path = self.__storage.get_image_path(name)
                         if name in self.__state.storage.images or os.path.exists(path):
                             raise MsdImageExistsError()
 
                         await self.__remount_rw(True)
-                        self.__set_image_complete(name, False)
+                        self.__storage.set_image_complete(name, False)
 
                         self.__writer = await MsdFileWriter(
                             notifier=self.__notifier,
@@ -386,7 +388,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                     self.__notifier.notify()
                     yield self.__writer
-                    self.__set_image_complete(name, self.__writer.is_complete())
+                    self.__storage.set_image_complete(name, self.__writer.is_complete())
 
                 finally:
                     if remove_incomplete and self.__writer and not self.__writer.is_complete():
@@ -424,7 +426,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
             await self.__remount_rw(True)
             os.remove(image.path)
-            self.__set_image_complete(name, False)
+            self.__storage.set_image_complete(name, False)
             await self.__remount_rw(False, fatal=False)
 
     # =====
@@ -453,9 +455,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await asyncio.sleep(5)
 
                 with Inotify() as inotify:
-                    inotify.watch(self.__images_path, InotifyMask.ALL_MODIFY_EVENTS)
-                    inotify.watch(self.__meta_path, InotifyMask.ALL_MODIFY_EVENTS)
-                    for path in self.__drive.get_watchable_paths():
+                    for path in [
+                        *self.__storage.get_watchable_paths(),
+                        *self.__drive.get_watchable_paths(),
+                    ]:
                         inotify.watch(path, InotifyMask.ALL_MODIFY_EVENTS)
 
                     # После установки вотчеров еще раз проверяем стейт, чтобы ничего не потерять
@@ -522,7 +525,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     async def __setup_initial(self) -> None:
         if self.__initial_image:
             logger = get_logger(0)
-            path = os.path.join(self.__images_path, self.__initial_image)
+            path = self.__storage.get_image_path(self.__initial_image)
             if os.path.exists(path):
                 logger.info("Setting up initial image %r ...", self.__initial_image)
                 try:
@@ -538,19 +541,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     def __get_storage_state(self) -> _StorageState:
         images: dict[str, _DriveImage] = {}
-        for name in os.listdir(self.__images_path):
-            path = os.path.join(self.__images_path, name)
-            if os.path.exists(path):
-                size = fs.get_file_size(path)
-                if size >= 0:
-                    images[name] = _DriveImage(
-                        name=name,
-                        path=path,
-                        size=size,
-                        complete=self.__is_image_complete(name),
-                        in_storage=True,
-                    )
-        space = fs.get_fs_space(self.__storage_path, fatal=True)
+        for name in self.__storage.get_images():
+            images[name] = _DriveImage(
+                name=name,
+                path=self.__storage.get_image_path(name),
+                complete=self.__storage.is_image_complete(name),
+                in_storage=True,
+            )
+        space = self.__storage.get_space(fatal=True)
         assert space
         return _StorageState(
             size=space.size,
@@ -563,12 +561,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         path = self.__drive.get_image_path()
         if path:
             name = os.path.basename(path)
-            in_storage = (os.path.dirname(path) == self.__images_path)
+            in_storage = self.__storage.is_image_path_in_storage(path)
             image = _DriveImage(
                 name=name,
                 path=path,
-                size=max(fs.get_file_size(path), 0),
-                complete=(self.__is_image_complete(name) if in_storage else True),
+                complete=(self.__storage.is_image_complete(name) if in_storage else True),
                 in_storage=in_storage,
             )
         return _DriveState(
@@ -576,19 +573,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             cdrom=self.__drive.get_cdrom_flag(),
             rw=self.__drive.get_rw_flag(),
         )
-
-    # =====
-
-    def __is_image_complete(self, name: str) -> bool:
-        return os.path.exists(os.path.join(self.__meta_path, name + ".complete"))
-
-    def __set_image_complete(self, name: str, flag: bool) -> None:
-        path = os.path.join(self.__meta_path, name + ".complete")
-        if flag:
-            open(path, "w").close()  # pylint: disable=consider-using-with
-        else:
-            if os.path.exists(path):
-                os.remove(path)
 
     # =====
 
