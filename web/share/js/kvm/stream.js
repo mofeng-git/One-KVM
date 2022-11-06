@@ -45,7 +45,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 	var __state = null;
 
-	self.getName = () => "WebRTC";
+	self.getName = () => "H.264";
 	self.getMode = () => "janus";
 
 	self.getResolution = function() {
