@@ -64,27 +64,26 @@ def main() -> None:
     if len(sys.argv) != 2 or sys.argv[1] not in ["ro", "rw"]:
         raise SystemExit(f"Usage: {sys.argv[0]} [ro|rw]")
 
-    target = ""
+    part_type = ""
     dirs: list[str] = []
     app = os.path.basename(sys.argv[0])
     if app == "kvmd-helper-otgmsd-remount":
-        target = "otgmsd"
+        part_type = fstab.PartitionType.MSD
         dirs = ["images", "meta"]
     elif app == "kvmd-helper-pst-remount":
-        target = "pst"
+        part_type = fstab.PartitionType.PST
         dirs = ["data"]
     else:
         raise SystemExit("Unknown application target")
 
     rw = (sys.argv[1] == "rw")
 
-    assert target
-    storage = fstab.find_storage(target)
-    _remount(storage.mount_path, rw)
-    if rw and storage.root_path:
+    part = fstab.find_partition(part_type)
+    _remount(part.mount_path, rw)
+    if rw and part.root_path:
         for name in dirs:
-            path = os.path.join(storage.root_path, name)
+            path = os.path.join(part.root_path, name)
             _mkdir(path)
-            if storage.user:
-                _chown(path, storage.user)
+            if part.user:
+                _chown(path, part.user)
     _log(f"Storage in the {'RW' if rw else 'RO'}-mode now")

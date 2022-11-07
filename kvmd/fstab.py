@@ -25,14 +25,24 @@ import dataclasses
 
 
 # =====
+class PartitionType:
+    MSD = "otgmsd"
+    PST = "pst"
+    ALL = (
+        MSD,
+        PST,
+    )
+
+
 @dataclasses.dataclass(frozen=True)
-class FstabStorage:
+class Partition:
     mount_path: str
     root_path: str
     user: str
 
 
-def find_storage(target: str) -> FstabStorage:
+def find_partition(part_type: str) -> Partition:
+    assert part_type in PartitionType.ALL
     fstab_path = "/etc/fstab"
     with open(fstab_path) as file:
         for line in file.read().split("\n"):
@@ -40,11 +50,11 @@ def find_storage(target: str) -> FstabStorage:
             if line and not line.startswith("#"):
                 parts = line.split()
                 if len(parts) == 6:
-                    options = dict(re.findall(r"X-kvmd\.%s-(root|user)(?:=([^,]+))?" % (target), parts[3]))
+                    options = dict(re.findall(r"X-kvmd\.%s-(root|user)(?:=([^,]+))?" % (part_type), parts[3]))
                     if options:
-                        return FstabStorage(
+                        return Partition(
                             mount_path=parts[1],
                             root_path=(options.get("root", "") or parts[1]),
                             user=options.get("user", ""),
                         )
-    raise RuntimeError(f"Can't find {target!r} mountpoint in {fstab_path}")
+    raise RuntimeError(f"Can't find {part_type!r} mountpoint in {fstab_path}")
