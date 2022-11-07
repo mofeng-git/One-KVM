@@ -160,7 +160,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__initial_cdrom: bool = initial["cdrom"]
 
         self.__drive = Drive(gadget, instance=0, lun=0)
-        self.__storage = Storage(fstab.find_partition(fstab.PartitionType.MSD).root_path)
+        self.__storage = Storage(fstab.find_msd().root_path)
 
         self.__reader: (MsdFileReader | None) = None
         self.__writer: (MsdFileWriter | None) = None

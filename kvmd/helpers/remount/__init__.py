@@ -64,21 +64,22 @@ def main() -> None:
     if len(sys.argv) != 2 or sys.argv[1] not in ["ro", "rw"]:
         raise SystemExit(f"Usage: {sys.argv[0]} [ro|rw]")
 
-    part_type = ""
+    finder = None
     dirs: list[str] = []
     app = os.path.basename(sys.argv[0])
     if app == "kvmd-helper-otgmsd-remount":
-        part_type = fstab.PartitionType.MSD
+        finder = fstab.find_msd
         dirs = ["images", "meta"]
     elif app == "kvmd-helper-pst-remount":
-        part_type = fstab.PartitionType.PST
+        finder = fstab.find_pst
         dirs = ["data"]
     else:
         raise SystemExit("Unknown application target")
 
     rw = (sys.argv[1] == "rw")
 
-    part = fstab.find_partition(part_type)
+    assert finder is not None
+    part = finder()
     _remount(part.mount_path, rw)
     if rw and part.root_path:
         for name in dirs:

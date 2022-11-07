@@ -27,15 +27,6 @@ from . import env
 
 
 # =====
-class PartitionType:
-    MSD = "otgmsd"
-    PST = "pst"
-    ALL = (
-        MSD,
-        PST,
-    )
-
-
 @dataclasses.dataclass(frozen=True)
 class Partition:
     mount_path: str
@@ -43,20 +34,38 @@ class Partition:
     user: str
 
 
-def find_partition(part_type: str) -> Partition:
-    assert part_type in PartitionType.ALL
-    fstab_path = f"{env.ETC_PREFIX}/etc/fstab"
-    with open(fstab_path) as file:
+# =====
+def find_msd() -> Partition:
+    return _find_single("otgmsd")
+
+
+def find_pst() -> Partition:
+    return _find_single("pst")
+
+
+# =====
+def _find_single(part_type: str) -> Partition:
+    parts = _find_partitions(part_type, True)
+    if len(parts) == 0:
+        raise RuntimeError(f"Can't find {part_type!r} mountpoint")
+    return parts[0]
+
+
+def _find_partitions(part_type: str, single: bool) -> list[Partition]:
+    parts: list[Partition] = []
+    with open(f"{env.ETC_PREFIX}/etc/fstab") as file:
         for line in file.read().split("\n"):
             line = line.strip()
             if line and not line.startswith("#"):
-                parts = line.split()
-                if len(parts) == 6:
-                    options = dict(re.findall(r"X-kvmd\.%s-(root|user)(?:=([^,]+))?" % (part_type), parts[3]))
+                fields = line.split()
+                if len(fields) == 6:
+                    options = dict(re.findall(r"X-kvmd\.%s-(root|user)(?:=([^,]+))?" % (part_type), fields[3]))
                     if options:
-                        return Partition(
-                            mount_path=parts[1],
-                            root_path=(options.get("root", "") or parts[1]),
+                        parts.append(Partition(
+                            mount_path=fields[1],
+                            root_path=(options.get("root", "") or fields[1]),
                             user=options.get("user", ""),
-                        )
-    raise RuntimeError(f"Can't find {part_type!r} mountpoint in {fstab_path}")
+                        ))
+                        if single:
+                            break
+    return parts
