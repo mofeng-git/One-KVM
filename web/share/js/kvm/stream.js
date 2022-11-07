@@ -44,6 +44,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	var __info_interval = null;
 
 	var __state = null;
+	var __frames = 0;
 
 	self.getName = () => "H.264";
 	self.getMode = () => "janus";
@@ -268,8 +269,28 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	var __updateInfo = function() {
 		if (__handle !== null) {
 			let online = !!(__state && __state.source && __state.source.online);
-			let bitrate = (__handle !== null ? __handle.getBitrate() : "");
-			__setInfo(true, online, bitrate);
+			let info = "";
+			if (__handle !== null) {
+				// https://wiki.whatwg.org/wiki/Video_Metrics
+				let frames = null;
+				let el = $("stream-video");
+				if (el.webkitDecodedFrameCount !== undefined) {
+					frames = el.webkitDecodedFrameCount;
+				} else if (el.mozPaintedFrames !== undefined) {
+					frames = el.mozPaintedFrames;
+				}
+				if (frames !== null) {
+					info = `${frames - __frames} fps dynamic`;
+					__frames = frames;
+				}
+
+				if (info.length > 0) {
+					info += " / ";
+				}
+
+				info += `${__handle.getBitrate()}`.replace("kbits/sec", "kbps");
+			}
+			__setInfo(true, online, info);
 		}
 	};
 
