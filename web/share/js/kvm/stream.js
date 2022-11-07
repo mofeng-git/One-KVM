@@ -551,7 +551,7 @@ export function Streamer() {
 			__janus_enabled = (enabled && has_webrtc && _Janus !== null); // Don't check has_h264 for sure
 			tools.feature.setEnabled($("stream-mode"), __janus_enabled);
 			tools.info(`Stream: Janus WebRTC state: enabled=${enabled}, webrtc=${has_webrtc}, h264=${has_h264}, imported=${!!_Janus}`);
-			tools.radio.clickValue("stream-mode-radio", tools.storage.get("stream.mode", "mjpeg"));
+			tools.radio.clickValue("stream-mode-radio", tools.storage.get("stream.mode", "janus"));
 			self.setState(__state);
 		};
 
