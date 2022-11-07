@@ -107,5 +107,6 @@ RUN mkdir -p \
 COPY testenv/fakes/vcgencmd /opt/vc/bin/
 COPY testenv/fakes/sys /fake_sysfs/sys
 COPY testenv/fakes/proc /fake_procfs/proc
+COPY testenv/fakes/etc /fake_etc/etc
 
 CMD /bin/bash

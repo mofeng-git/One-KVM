@@ -23,6 +23,8 @@
 import re
 import dataclasses
 
+from . import env
+
 
 # =====
 class PartitionType:
@@ -43,7 +45,7 @@ class Partition:
 
 def find_partition(part_type: str) -> Partition:
     assert part_type in PartitionType.ALL
-    fstab_path = "/etc/fstab"
+    fstab_path = f"{env.ETC_PREFIX}/etc/fstab"
     with open(fstab_path) as file:
         for line in file.read().split("\n"):
             line = line.strip()

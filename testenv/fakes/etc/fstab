@@ -1,0 +1,2 @@
+LABEL=PIPST /var/lib/kvmd/pst  ext4  nodev,nosuid,noexec,ro,errors=remount-ro,data=journal,X-kvmd.pst-user=kvmd-pst  0 0
+LABEL=PIMSD /var/lib/kvmd/msd  ext4  nodev,nosuid,noexec,ro,errors=remount-ro,data=journal,X-kvmd.otgmsd-user=kvmd  0 0

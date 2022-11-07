@@ -21,6 +21,6 @@
 
 
 # =====
-ETC_PREFIX = ""
-SYSFS_PREFIX = ""
-PROCFS_PREFIX = ""
+ETC_PREFIX = "/fake_etc"
+SYSFS_PREFIX = "/fake_sysfs"
+PROCFS_PREFIX = "/fake_procfs"

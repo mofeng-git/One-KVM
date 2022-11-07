@@ -104,14 +104,13 @@ run: testenv $(TESTENV_GPIO)
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
+			--volume `pwd`/testenv/env.py:/kvmd/env.py:ro \
 			--volume `pwd`/web:/usr/share/kvmd/web:ro \
 			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
 			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
 			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
 			--device $(TESTENV_GPIO):$(TESTENV_GPIO) \
-			--env KVMD_SYSFS_PREFIX=/fake_sysfs \
-			--env KVMD_PROCFS_PREFIX=/fake_procfs \
 			$(if $(TESTENV_RELAY),--device $(TESTENV_RELAY):$(TESTENV_RELAY),) \
 			--publish 8080:80/tcp \
 			--publish 4430:443/tcp \
