@@ -31,6 +31,7 @@ from ...logging import get_logger
 from ... import tools
 from ... import aiotools
 from ... import aiohelpers
+from ... import fstab
 
 from ...htserver import exposed_http
 from ...htserver import exposed_ws
@@ -42,7 +43,6 @@ from ...htserver import HttpServer
 class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
-        storage_path: str,
         ro_retries_delay: float,
         ro_cleanup_delay: float,
         remount_cmd: list[str],
@@ -50,7 +50,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
 
         super().__init__()
 
-        self.__data_path = os.path.join(storage_path, "data")
+        self.__data_path = os.path.join(fstab.find_partition(fstab.PartitionType.PST).root_path, "data")
         self.__ro_retries_delay = ro_retries_delay
         self.__ro_cleanup_delay = ro_cleanup_delay
         self.__remount_cmd = remount_cmd

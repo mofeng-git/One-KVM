@@ -500,7 +500,6 @@ def _get_config_scheme() -> dict:
                                             " referer='%{Referer}i'; user_agent='%{User-Agent}i'"),
             },
 
-            "storage":          Option("/var/lib/kvmd/pst", type=valid_abs_dir, unpack_as="storage_path"),
             "ro_retries_delay": Option(10.0, type=valid_float_f01),
             "ro_cleanup_delay": Option(3.0,  type=valid_float_f01),
 
