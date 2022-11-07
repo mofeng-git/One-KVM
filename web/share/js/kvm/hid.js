@@ -155,9 +155,9 @@ export function Hid(__getGeometry, __recorder) {
 				if ($("hid-outputs-mouse-box").outputs !== mouse_outputs) {
 					let html = "";
 					for (let args of [
-						["USB", "usb", false],
-						["USB Win98", "usb_win98", false],
-						["USB Relative", "usb_rel", true],
+						["Absolute", "usb", false],
+						["Abs-Win98", "usb_win98", false],
+						["Relative", "usb_rel", true],
 						["PS/2", "ps2", true],
 						["Off", "disabled"],
 					]) {
