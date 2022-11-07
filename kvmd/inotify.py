@@ -25,7 +25,6 @@
 import sys
 import os
 import asyncio
-import ctypes
 import struct
 import dataclasses
 import types
@@ -64,7 +63,7 @@ def _inotify_parsed_buffer(data: bytes) -> Generator[tuple[int, int, int, bytes]
 
 def _inotify_check(retval: int) -> int:
     if retval < 0:
-        c_errno = ctypes.get_errno()
+        c_errno = libc.get_errno()
         if c_errno == errno.ENOSPC:  # pylint: disable=no-else-raise
             raise OSError(c_errno, "Inotify watch limit reached")
         elif c_errno == errno.EMFILE:

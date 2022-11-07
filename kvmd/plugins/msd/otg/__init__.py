@@ -38,12 +38,12 @@ from ....yamlconf import Option
 
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_number
-from ....validators.os import valid_abs_dir
 from ....validators.os import valid_printable_filename
 from ....validators.os import valid_command
 
 from .... import aiotools
 from .... import aiohelpers
+from .... import fstab
 
 from .. import MsdError
 from .. import MsdIsBusyError
@@ -143,8 +143,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         write_chunk_size: int,
         sync_chunk_size: int,
 
-        storage_path: str,
-
         remount_cmd: list[str],
 
         initial: dict,
@@ -162,7 +160,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__initial_cdrom: bool = initial["cdrom"]
 
         self.__drive = Drive(gadget, instance=0, lun=0)
-        self.__storage = Storage(storage_path)
+        self.__storage = Storage(fstab.find_storage("otgmsd").root_path)
 
         self.__reader: (MsdFileReader | None) = None
         self.__writer: (MsdFileWriter | None) = None
@@ -180,8 +178,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             "read_chunk_size":   Option(65536,   type=functools.partial(valid_number, min=1024)),
             "write_chunk_size":  Option(65536,   type=functools.partial(valid_number, min=1024)),
             "sync_chunk_size":   Option(4194304, type=functools.partial(valid_number, min=1024)),
-
-            "storage": Option("/var/lib/kvmd/msd", type=valid_abs_dir, unpack_as="storage_path"),
 
             "remount_cmd": Option([
                 "/usr/bin/sudo", "--non-interactive",

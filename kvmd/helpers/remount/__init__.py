@@ -22,23 +22,10 @@
 
 import sys
 import os
-import re
 import shutil
-import dataclasses
 import subprocess
 
-
-# ====
-_MOUNT_PATH = "/bin/mount"
-_FSTAB_PATH = "/etc/fstab"
-
-
-# =====
-@dataclasses.dataclass(frozen=True)
-class _Storage:
-    mount_path: str
-    root_path: str
-    user: str
+from ... import fstab
 
 
 # =====
@@ -46,29 +33,11 @@ def _log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
-def _find_storage(target: str) -> _Storage:
-    assert target
-    with open(_FSTAB_PATH) as fstab_file:
-        for line in fstab_file.read().split("\n"):
-            line = line.strip()
-            if line and not line.startswith("#"):
-                parts = line.split()
-                if len(parts) == 6:
-                    options = dict(re.findall(r"X-kvmd\.%s-(root|user)(?:=([^,]+))?" % (target), parts[3]))
-                    if options:
-                        return _Storage(
-                            mount_path=parts[1],
-                            root_path=(options.get("root", "") or parts[1]),
-                            user=options.get("user", ""),
-                        )
-    raise SystemExit(f"Can't find {target!r} mountpoint in {_FSTAB_PATH}")
-
-
 def _remount(path: str, rw: bool) -> None:
     mode = ("rw" if rw else "ro")
     _log(f"Remounting {path} to {mode.upper()}-mode ...")
     try:
-        subprocess.check_call([_MOUNT_PATH, "--options", f"remount,{mode}", path])
+        subprocess.check_call(["/bin/mount", "--options", f"remount,{mode}", path])
     except subprocess.CalledProcessError as err:
         raise SystemExit(f"Can't remount: {err}")
 
@@ -109,7 +78,8 @@ def main() -> None:
 
     rw = (sys.argv[1] == "rw")
 
-    storage = _find_storage(target)
+    assert target
+    storage = fstab.find_storage(target)
     _remount(storage.mount_path, rw)
     if rw and storage.root_path:
         for name in dirs:
