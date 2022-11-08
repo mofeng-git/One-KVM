@@ -64,7 +64,7 @@ class Plugin(BaseUserGpioDriver):
         self.__device_path = device_path
         self.__state_poll = state_poll
 
-        self.__device: (hid.device | None) = None
+        self.__device: (hid.device | None) = None  # type: ignore
         self.__stop = False
 
         self.__initials: dict[int, (bool | None)] = {}
@@ -158,10 +158,10 @@ class Plugin(BaseUserGpioDriver):
                 raise RuntimeError(f"Retval of send_feature_report() < 0: {result}")
 
     @contextlib.contextmanager
-    def __ensure_device(self, context: str) -> hid.device:
+    def __ensure_device(self, context: str) -> hid.device:  # type: ignore
         assert not self.__stop
         if self.__device is None:
-            device = hid.device()
+            device = hid.device()  # type: ignore
             device.open_path(self.__device_path.encode("utf-8"))
             device.set_nonblocking(True)
             self.__device = device

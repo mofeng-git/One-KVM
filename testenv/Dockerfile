@@ -11,6 +11,9 @@ RUN pacman --noconfirm --ask=4 -Syy \
 	&& pacman --needed --noconfirm --ask=4 -S \
 		glibc \
 		pacman \
+		openssl \
+		openssl-1.0 \
+		openssl-1.1 \
 	&& pacman-db-upgrade \
 	&& pacman --noconfirm --ask=4 -Syu \
 	&& pacman --needed --noconfirm --ask=4 -S \
