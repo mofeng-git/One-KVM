@@ -48,7 +48,6 @@ class StreamerSnapshot:
     online: bool
     width: int
     height: int
-    mtime: float
     headers: tuple[tuple[str, str], ...]
     data: bytes
 
@@ -350,7 +349,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                             online=online,
                             width=int(response.headers["X-UStreamer-Width"]),
                             height=int(response.headers["X-UStreamer-Height"]),
-                            mtime=float(response.headers["X-Timestamp"]),
                             headers=tuple(
                                 (key, value)
                                 for (key, value) in tools.sorted_kvs(dict(response.headers))
