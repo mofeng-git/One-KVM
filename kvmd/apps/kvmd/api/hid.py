@@ -147,8 +147,8 @@ class HidApi:
         return self.__inner_ensure_symmap(path, st.st_mtime)
 
     @functools.lru_cache(maxsize=10)
-    def __inner_ensure_symmap(self, path: str, mtime: int) -> dict[int, dict[int, str]]:
-        _ = mtime  # For LRU
+    def __inner_ensure_symmap(self, path: str, mod_ts: int) -> dict[int, dict[int, str]]:
+        _ = mod_ts  # For LRU
         return build_symmap(path)
 
     # =====
