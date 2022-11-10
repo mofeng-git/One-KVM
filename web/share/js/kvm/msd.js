@@ -364,7 +364,7 @@ export function Msd() {
 		}
 
 		if (el.options.length === 0) {
-			el.options[0] = new Option("~ Not selected ~", "", false, false);
+			el.options[0] = new Option("\u2500 Not selected \u2500", "", false, false);
 		} else {
 			el.options.length = 1;
 		}
@@ -375,11 +375,13 @@ export function Msd() {
 		for (let name of Object.keys(s.storage.images).sort()) {
 			let image = s.storage.images[name];
 
-			let separator = new Option("\u2500".repeat(30), false, false);
-			separator.disabled = true;
-			separator.className = "comment";
-			el.options[index] = separator;
-			++index;
+			if (!tools.browser.is_mobile) {
+				let separator = new Option("\u2500".repeat(30), false, false);
+				separator.disabled = true;
+				separator.className = "comment";
+				el.options[index] = separator;
+				++index;
+			}
 
 			let option = new Option(name, name, false, false);
 			el.options[index] = option;
@@ -402,7 +404,7 @@ export function Msd() {
 	};
 
 	var __makeImageSelectorInfo = function(image) {
-		let title = `\xA0\xA0\xA0\xA0\xA0\u21b3 ${tools.formatSize(image.size)}`;
+		let title = `\xA0\xA0\xA0\xA0\xA0\u2570 ${tools.formatSize(image.size)}`;
 		title += (image.complete ? "" : ", broken");
 		if (image.in_storage !== undefined && !image.in_storage) {
 			title += ", out of storage";
