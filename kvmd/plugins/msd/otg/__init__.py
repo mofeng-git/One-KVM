@@ -69,12 +69,16 @@ class _DriveImage:
     complete: bool
     in_storage: bool
     size: int = dataclasses.field(default=0)
+    mod_ts: float = dataclasses.field(default=0)
 
     def __post_init__(self) -> None:
         try:
-            object.__setattr__(self, "size", max(os.path.getsize(self.path), 0))
+            st = os.stat(self.path)
         except Exception as err:
-            get_logger().warning("Can't get size of file %s: %s", self.path, err)
+            get_logger().warning("Can't stat() file %s: %s", self.path, err)
+        else:
+            object.__setattr__(self, "size", st.st_size)
+            object.__setattr__(self, "mod_ts", st.st_mtime)
 
 
 @dataclasses.dataclass(frozen=True)

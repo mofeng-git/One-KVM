@@ -409,6 +409,11 @@ export function Msd() {
 		if (image.in_storage !== undefined && !image.in_storage) {
 			title += ", out of storage";
 		}
+
+		let dt = new Date(image.mod_ts * 1000);
+		dt = new Date(dt.getTime() - (dt.getTimezoneOffset() * 60000));
+		title += " \u2500 " + dt.toISOString().slice(0, -8).replaceAll("-", ".").replace("T", "-");
+
 		let el = new Option(title, "", false, false);
 		el.disabled = true;
 		el.className = "comment";
