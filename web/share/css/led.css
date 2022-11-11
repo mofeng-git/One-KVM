@@ -44,21 +44,25 @@
 }
 
 img.led-gray {
+	-webkit-transform: translateZ(0); /* Без этого новый сафари не переключает иконки */
 	-webkit-filter: var(--led-filter-gray);
 	filter: var(--led-filter-gray);
 }
 
 img.led-green {
+	-webkit-transform: translateZ(0);
 	-webkit-filter: var(--led-filter-green);
 	filter: var(--led-filter-green);
 }
 
 img.led-red {
+	-webkit-transform: translateZ(0);
 	-webkit-filter: var(--led-filter-red);
 	filter: var(--led-filter-red);
 }
 
 img.led-yellow {
+	-webkit-transform: translateZ(0);
 	-webkit-filter: var(--led-filter-yellow);
 	filter: var(--led-filter-yellow);
 }
