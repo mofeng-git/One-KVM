@@ -2,12 +2,12 @@ li(id="text-dropdown" class="right")
 	a(class="menu-button" href="#")
 		+navbar_led("stream-ocr-led", "led-gear", "feature-disabled")
 		span Text
-	div(class="menu")
+	div(id="text-menu" class="menu")
 		div(class="text")
 			b Paste text as keypress sequence#[br]
 			sub Please note that PiKVM cannot switch the keyboard layout
 		hr
-		div(class="text")
+		div(class="text" style="margin-right: 20px")
 			textarea(id="hid-pak-text" placeholder="Enter your text here")
 		table(class="kv")
 			tr

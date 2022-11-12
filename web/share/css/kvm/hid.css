@@ -20,11 +20,15 @@
 *****************************************************************************/
 
 
+div#text-menu {
+	width: 340px;
+}
+
 textarea#hid-pak-text {
 	display: block;
 	resize: none;
 	height: 120px;
-	width: 320px;
+	width: 100%;
 	border: var(--border-default-thin);
 	border-radius: 4px;
 	color: var(--cs-code-default-fg);
