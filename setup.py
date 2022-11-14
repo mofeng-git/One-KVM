@@ -66,7 +66,7 @@ def main() -> None:
 
     setup(
         name="kvmd",
-        version="3.169",
+        version="3.170",
         url="https://github.com/pikvm/kvmd",
         license="GPLv3",
         author="Maxim Devaev",
