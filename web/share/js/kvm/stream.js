@@ -50,13 +50,13 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	self.getMode = () => "janus";
 
 	self.getResolution = function() {
-		let el_video = $("stream-video");
+		let el = $("stream-video");
 		return {
 			// Разрешение видео или элемента
-			real_width: (el_video.videoWidth || el_video.offsetWidth),
-			real_height: (el_video.videoHeight || el_video.offsetHeight),
-			view_width: el_video.offsetWidth,
-			view_height: el_video.offsetHeight,
+			real_width: (el.videoWidth || el.offsetWidth),
+			real_height: (el.videoHeight || el.offsetHeight),
+			view_width: el.offsetWidth,
+			view_height: el.offsetHeight,
 		};
 	};
 
@@ -344,12 +344,12 @@ function _MjpegStreamer(__setActive, __setInactive, __setInfo) {
 	self.getMode = () => "mjpeg";
 
 	self.getResolution = function() {
-		let el_image = $("stream-image");
+		let el = $("stream-image");
 		return {
-			real_width: el_image.naturalWidth,
-			real_height: el_image.naturalHeight,
-			view_width: el_image.offsetWidth,
-			view_height: el_image.offsetHeight,
+			real_width: el.naturalWidth,
+			real_height: el.naturalHeight,
+			view_width: el.offsetWidth,
+			view_height: el.offsetHeight,
 		};
 	};
 
@@ -703,12 +703,12 @@ export function Streamer() {
 	};
 
 	var __clickScreenshotButton = function() {
-		let el_a = document.createElement("a");
-		el_a.href = "/api/streamer/snapshot?allow_offline=1";
-		el_a.target = "_blank";
-		document.body.appendChild(el_a);
-		el_a.click();
-		setTimeout(() => document.body.removeChild(el_a), 0);
+		let el = document.createElement("a");
+		el.href = "/api/streamer/snapshot?allow_offline=1";
+		el.target = "_blank";
+		document.body.appendChild(el);
+		el.click();
+		setTimeout(() => document.body.removeChild(el), 0);
 	};
 
 	var __clickResetButton = function() {
