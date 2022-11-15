@@ -592,14 +592,14 @@ export function Streamer() {
 				tools.slider.setValue($("stream-quality-slider"), state.streamer.encoder.quality);
 
 				if (state.features.h264 && __janus_enabled) {
-					__setValueAndLimits($("stream-h264-bitrate-slider"), state.streamer.h264.bitrate, state.limits.h264_bitrate);
+					__setLimitsAndValue($("stream-h264-bitrate-slider"), state.limits.h264_bitrate, state.streamer.h264.bitrate);
 					tools.el.setEnabled($("stream-h264-bitrate-slider"), true);
 
-					__setValueAndLimits($("stream-h264-gop-slider"), state.streamer.h264.gop, state.limits.h264_gop);
+					__setLimitsAndValue($("stream-h264-gop-slider"), state.limits.h264_gop, state.streamer.h264.gop);
 					tools.el.setEnabled($("stream-h264-gop-slider"), true);
 				}
 
-				__setValueAndLimits($("stream-desired-fps-slider"), state.streamer.source.desired_fps, state.limits.desired_fps);
+				__setLimitsAndValue($("stream-desired-fps-slider"), state.limits.desired_fps, state.streamer.source.desired_fps);
 				tools.el.setEnabled($("stream-desired-fps-slider"), true);
 
 				let resolution_str = __makeStringResolution(state.streamer.source.resolution);
@@ -675,10 +675,9 @@ export function Streamer() {
 		el_grab.innerHTML = el_info.innerHTML = title;
 	};
 
-	var __setValueAndLimits = function(el, value, limits) {
+	var __setLimitsAndValue = function(el, limits, value) {
+		tools.slider.setRange(el, limits.min, limits.max);
 		tools.slider.setValue(el, value);
-		el.min = limits.min;
-		el.max = limits.max;
 	};
 
 	var __clickModeRadio = function() {

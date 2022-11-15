@@ -184,8 +184,16 @@ export var tools = new function() {
 					el.__display_callback = display_callback;
 				}
 			},
-			"setValue": function(el, value) {
+			"setRange": function(el, min, max) {
+				let value = el.value;
+				el.min = min;
+				el.max = max;
 				if (el.value != value) {
+					self.slider.setValue(el, el.value, true);
+				}
+			},
+			"setValue": function(el, value, force=false) {
+				if (el.value != value || force) {
 					if (el.__pressed) {
 						el.__postponed = value;
 					} else {
