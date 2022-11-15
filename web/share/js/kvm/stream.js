@@ -282,13 +282,9 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 				if (frames !== null) {
 					info = `${frames - __frames} fps dynamic`;
 					__frames = frames;
+				} else {
+					info = `${__handle.getBitrate()}`.replace("kbits/sec", "kbps");
 				}
-
-				if (info.length > 0) {
-					info += " / ";
-				}
-
-				info += `${__handle.getBitrate()}`.replace("kbits/sec", "kbps");
 			}
 			__setInfo(true, online, info);
 		}
