@@ -260,10 +260,10 @@ function __WindowManager() {
 	self.getViewGeometry = function() {
 		let el_navbar = $("navbar");
 		return {
-			top: (el_navbar ? el_navbar.clientHeight : 0), // Navbar height
-			bottom: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
-			left: 0,
-			right: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
+			"top": (el_navbar ? el_navbar.clientHeight : 0), // Navbar height
+			"bottom": Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
+			"left": 0,
+			"right": Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
 		};
 	};
 
@@ -482,7 +482,7 @@ function __WindowManager() {
 			return;
 		}
 
-		let prev_pos = {x: 0, y: 0};
+		let prev_pos = {"x": 0, "y": 0};
 
 		function startMoving(event) {
 			// При перетаскивании resizable-окна за правый кран экрана оно ужимается.
@@ -535,9 +535,9 @@ function __WindowManager() {
 
 		function getEventPosition(event) {
 			if (event.touches) {
-				return {x: event.touches[0].clientX, y: event.touches[0].clientY};
+				return {"x": event.touches[0].clientX, "y": event.touches[0].clientY};
 			} else {
-				return {x: event.clientX, y: event.clientY};
+				return {"x": event.clientX, "y": event.clientY};
 			}
 		}
 

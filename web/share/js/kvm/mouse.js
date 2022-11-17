@@ -39,12 +39,12 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __keypad = null;
 
 	var __timer = null;
-	var __planned_pos = {x: 0, y: 0};
-	var __sent_pos = {x: 0, y: 0};
+	var __planned_pos = {"x": 0, "y": 0};
+	var __sent_pos = {"x": 0, "y": 0};
 	var __relative_deltas = [];
 	var __relative_touch_pos = null;
 	var __relative_sens = 1.0;
-	var __wheel_delta = {x: 0, y: 0};
+	var __wheel_delta = {"x": 0, "y": 0};
 
 	var __stream_hovered = false;
 
@@ -205,8 +205,8 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			} else {
 				let pos = __getTouchPosition(event, 0);
 				__sendOrPlanRelativeMove({
-					x: (pos.x - __relative_touch_pos.x),
-					y: (pos.y - __relative_touch_pos.y),
+					"x": (pos.x - __relative_touch_pos.x),
+					"y": (pos.y - __relative_touch_pos.y),
 				});
 				__relative_touch_pos = pos;
 			}
@@ -222,8 +222,8 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		if (event.touches[index].target && event.touches[index].target.getBoundingClientRect) {
 			let rect = event.touches[index].target.getBoundingClientRect();
 			return {
-				x: Math.round(event.touches[index].clientX - rect.left),
-				y: Math.round(event.touches[index].clientY - rect.top),
+				"x": Math.round(event.touches[index].clientX - rect.left),
+				"y": Math.round(event.touches[index].clientY - rect.top),
 			};
 		}
 		return null;
@@ -233,13 +233,13 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		if (__absolute) {
 			let rect = event.target.getBoundingClientRect();
 			__planned_pos = {
-				x: Math.max(Math.round(event.clientX - rect.left), 0),
-				y: Math.max(Math.round(event.clientY - rect.top), 0),
+				"x": Math.max(Math.round(event.clientX - rect.left), 0),
+				"y": Math.max(Math.round(event.clientY - rect.top), 0),
 			};
 		} else if (__isRelativeCaptured()) {
 			__sendOrPlanRelativeMove({
-				x: event.movementX,
-				y: event.movementY,
+				"x": event.movementX,
+				"y": event.movementY,
 			});
 		}
 	};
@@ -254,7 +254,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			return;
 		}
 
-		let delta = {x: 0, y: 0};
+		let delta = {"x": 0, "y": 0};
 		if (tools.browser.is_firefox && !tools.browser.is_mac) {
 			if (event.deltaX !== 0) {
 				delta.x = event.deltaX / Math.abs(event.deltaX) * (-5);
@@ -283,8 +283,8 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 
 	var __sendOrPlanRelativeMove = function(delta) {
 		delta = {
-			x: Math.min(Math.max(-127, Math.floor(delta.x * __relative_sens)), 127),
-			y: Math.min(Math.max(-127, Math.floor(delta.y * __relative_sens)), 127),
+			"x": Math.min(Math.max(-127, Math.floor(delta.x * __relative_sens)), 127),
+			"y": Math.min(Math.max(-127, Math.floor(delta.y * __relative_sens)), 127),
 		};
 		if (delta.x || delta.y) {
 			if ($("hid-mouse-squash-switch").checked) {
@@ -313,8 +313,8 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
 				let geo = __getGeometry();
 				let to = {
-					x: tools.remap(pos.x, geo.x, geo.width, -32768, 32767),
-					y: tools.remap(pos.y, geo.y, geo.height, -32768, 32767),
+					"x": tools.remap(pos.x, geo.x, geo.width, -32768, 32767),
+					"y": tools.remap(pos.y, geo.y, geo.height, -32768, 32767),
 				};
 				tools.debug("Mouse: moved:", to);
 				__sendEvent("mouse_move", {"to": to});

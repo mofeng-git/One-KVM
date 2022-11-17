@@ -53,10 +53,10 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 		let el = $("stream-video");
 		return {
 			// Разрешение видео или элемента
-			real_width: (el.videoWidth || el.offsetWidth),
-			real_height: (el.videoHeight || el.offsetHeight),
-			view_width: el.offsetWidth,
-			view_height: el.offsetHeight,
+			"real_width": (el.videoWidth || el.offsetWidth),
+			"real_height": (el.videoHeight || el.offsetHeight),
+			"view_width": el.offsetWidth,
+			"view_height": el.offsetHeight,
 		};
 	};
 
@@ -78,11 +78,11 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 			__ensuring = true;
 			__logInfo("Starting Janus ...");
 			__janus = new _Janus({
-				server: `${tools.is_https ? "wss" : "ws"}://${location.host}/janus/ws`,
-				ipv6: true,
-				destroyOnUnload: false,
-				success: __attachJanus,
-				error: function(error) {
+				"server": `${tools.is_https ? "wss" : "ws"}://${location.host}/janus/ws`,
+				"ipv6": true,
+				"destroyOnUnload": false,
+				"success": __attachJanus,
+				"error": function(error) {
 					__logError(error);
 					__setInfo(false, false, error);
 					__finishJanus();
@@ -137,22 +137,22 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 			return;
 		}
 		__janus.attach({
-			plugin: "janus.plugin.ustreamer",
-			opaqueId: "oid-" + _Janus.randomString(12),
+			"plugin": "janus.plugin.ustreamer",
+			"opaqueId": "oid-" + _Janus.randomString(12),
 
-			success: function(handle) {
+			"success": function(handle) {
 				__handle = handle;
 				__logInfo("uStreamer attached:", handle.getPlugin(), handle.getId());
 				__sendWatch();
 			},
 
-			error: function(error) {
+			"error": function(error) {
 				__logError("Can't attach uStreamer: ", error);
 				__setInfo(false, false, error);
 				__destroyJanus();
 			},
 
-			iceState: function(state) {
+			"iceState": function(state) {
 				__logInfo("ICE state changed to", state);
 				// Если раскомментировать, то он начнет дрючить соединение,
 				// так как каллбек вызывает сильно после завершения работы
@@ -161,14 +161,14 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 				}*/
 			},
 
-			webrtcState: function(up) {
+			"webrtcState": function(up) {
 				__logInfo("Janus says our WebRTC PeerConnection is", (up ? "up" : "down"), "now");
 				if (up) {
 					__sendKeyRequired();
 				}
 			},
 
-			onmessage: function(msg, jsep) {
+			"onmessage": function(msg, jsep) {
 				__stopRetryEmsgInterval();
 
 				if (msg.result) {
@@ -200,15 +200,15 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 				if (jsep) {
 					__logInfo("Handling SDP:", jsep);
 					__handle.createAnswer({
-						jsep: jsep,
-						media: {audioSend: false, videoSend: false, data: false},
+						"jsep": jsep,
+						"media": {"audioSend": false, "videoSend": false, "data": false},
 
-						success: function(jsep) {
+						"success": function(jsep) {
 							__logInfo("Got SDP:", jsep);
 							__sendStart(jsep);
 						},
 
-						error: function(error) {
+						"error": function(error) {
 							__logInfo("Error on SDP handling:", error);
 							__setInfo(false, false, error);
 							//__destroyJanus();
@@ -217,7 +217,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 				}
 			},
 
-			onremotestream: function(stream) {
+			"onremotestream": function(stream) {
 				__logInfo("Got a remote stream:", stream);
 				__setAudioEnabled(!!stream.getAudioTracks().length);
 				_Janus.attachMediaStream($("stream-video"), stream);
@@ -234,7 +234,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 				}*/
 			},
 
-			oncleanup: function() {
+			"oncleanup": function() {
 				__logInfo("Got a cleanup notification");
 				__stopInfoInterval();
 			},
@@ -293,14 +293,14 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	var __sendWatch = function() {
 		if (__handle) {
 			__logInfo("Sending WATCH ...");
-			__handle.send({message: {request: "watch"}});
+			__handle.send({"message": {"request": "watch"}});
 		}
 	};
 
 	var __sendStart = function(jsep) {
 		if (__handle) {
 			__logInfo("Sending START ...");
-			__handle.send({message: {request: "start"}, jsep: jsep});
+			__handle.send({"message": {"request": "start"}, "jsep": jsep});
 		}
 	};
 
@@ -316,7 +316,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 		__stopInfoInterval();
 		if (__handle) {
 			__logInfo("Sending STOP ...");
-			__handle.send({message: {request: "stop"}});
+			__handle.send({"message": {"request": "stop"}});
 			__handle.hangup();
 		}
 	};
@@ -346,10 +346,10 @@ function _MjpegStreamer(__setActive, __setInactive, __setInfo) {
 	self.getResolution = function() {
 		let el = $("stream-image");
 		return {
-			real_width: el.naturalWidth,
-			real_height: el.naturalHeight,
-			view_width: el.offsetWidth,
-			view_height: el.offsetHeight,
+			"real_width": el.naturalWidth,
+			"real_height": el.naturalHeight,
+			"view_width": el.offsetWidth,
+			"view_height": el.offsetHeight,
 		};
 	};
 
@@ -465,7 +465,7 @@ export function Streamer() {
 	var __streamer = null;
 
 	var __state = null;
-	var __resolution = {width: 640, height: 480};
+	var __resolution = {"width": 640, "height": 480};
 
 	var __init__ = function() {
 		__streamer = new _MjpegStreamer(__setActive, __setInactive, __setInfo);
@@ -555,8 +555,8 @@ export function Streamer() {
 			if (_Janus === null) {
 				import("./janus.js").then((module) => {
 					module.Janus.init({
-						debug: "all",
-						callback: function() {
+						"debug": "all",
+						"callback": function() {
 							_Janus = module.Janus;
 							set_enabled();
 						},

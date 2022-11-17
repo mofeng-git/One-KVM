@@ -219,7 +219,7 @@ export function Hid(__getGeometry, __recorder) {
 			[[codes, true], [codes.slice().reverse(), false]].forEach(function(op) {
 				let [op_codes, state] = op;
 				for (let code of op_codes) {
-					raw_events.push({code: code, state: state});
+					raw_events.push({"code": code, "state": state});
 				}
 			});
 

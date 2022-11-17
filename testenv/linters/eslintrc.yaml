@@ -22,6 +22,9 @@ rules:
     quotes:
         - error
         - double
+    quote-props:
+        - error
+        - always
     semi:
         - error
         - always
