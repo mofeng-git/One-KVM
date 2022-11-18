@@ -57,6 +57,7 @@ post_upgrade() {
 	[ ! -f /etc/conf.d/rngd ] || (echo 'RNGD_OPTS="-o /dev/random -r /dev/hwrng -x jitter -x pkcs11 -x rtlsdr"' > /etc/conf.d/rngd)
 	[ ! -f /etc/pam.d/system-login ] || sed -i -e '/\<pam_systemd\.so\>/ s/^#*/#/' /etc/pam.d/system-login
 	[ ! -f /etc/pam.d/system-auth ] || sed -i -e '/\<pam_systemd_home\.so\>/ s/^#*/#/' /etc/pam.d/system-auth
+	[ ! -e /etc/systemd/network/99-default.link ] || ln -s /dev/null /etc/systemd/network/99-default.link
 
 	# Some update deletes /etc/motd, WTF
 	# shellcheck disable=SC2015,SC2166
