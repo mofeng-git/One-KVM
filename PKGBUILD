@@ -93,7 +93,7 @@ depends=(
 
 	# Possible hotfix for the new os update
 	openssl-1.0
-	# openssl-1.1
+	openssl-1.1
 
 	# Bootconfig
 	dos2unix
