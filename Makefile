@@ -103,7 +103,6 @@ run: testenv $(TESTENV_GPIO)
 			--privileged \
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
-			--volume `pwd`/testenv/web.css:/etc/kvmd/web.css:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
 			--volume `pwd`/testenv/env.py:/kvmd/env.py:ro \
 			--volume `pwd`/web:/usr/share/kvmd/web:ro \
@@ -127,6 +126,7 @@ run: testenv $(TESTENV_GPIO)
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
+			&& ln -s /testenv/web.css /etc/kvmd/web.css \
 			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
 			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
