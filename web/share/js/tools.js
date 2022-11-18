@@ -346,6 +346,16 @@ export var tools = new function() {
 		};
 	};
 
+	self.config = new function() {
+		return {
+			"get": function(key, default_value) {
+				let value = window.getComputedStyle(document.documentElement).getPropertyValue(`--config-ui--${key}`);
+				return (value || default_value);
+			},
+			"getBool": (key, default_value) => !!parseInt(self.config.get(key, (default_value ? "1" : "0"))),
+		};
+	};
+
 	self.browser = browser;
 };
 

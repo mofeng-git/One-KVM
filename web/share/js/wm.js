@@ -111,16 +111,8 @@ function __WindowManager() {
 			let el_exit_full_tab_button = el_window.querySelector(".window-button-exit-full-tab");
 			if (el_enter_full_tab_button && el_exit_full_tab_button) {
 				el_enter_full_tab_button.title = "Stretch to the entire tab";
-				let toggle_full_tab = function(enabled) {
-					el_window.classList.toggle("window-full-tab", enabled);
-					__activateLastWindow(el_window);
-					let el_navbar = $("navbar");
-					if (el_navbar) {
-						tools.hidden.setVisible(el_navbar, !enabled);
-					}
-				};
-				tools.el.setOnClick(el_enter_full_tab_button, () => toggle_full_tab(true));
-				tools.el.setOnClick(el_exit_full_tab_button, () => toggle_full_tab(false));
+				tools.el.setOnClick(el_enter_full_tab_button, () => self.toggleFullTabWindow(el_window, true));
+				tools.el.setOnClick(el_exit_full_tab_button, () => self.toggleFullTabWindow(el_window, false));
 			}
 
 			let el_full_screen_button = el_window.querySelector(".window-header .window-button-full-screen");
@@ -270,6 +262,15 @@ function __WindowManager() {
 	self.closeWindow = function(el_window) {
 		__closeWindow(el_window);
 		__activateLastWindow(el_window);
+	};
+
+	self.toggleFullTabWindow = function(el_window, enabled) {
+		el_window.classList.toggle("window-full-tab", enabled);
+		__activateLastWindow(el_window);
+		let el_navbar = $("navbar");
+		if (el_navbar) {
+			tools.hidden.setVisible(el_navbar, !enabled);
+		}
 	};
 
 	var __closeWindow = function(el_window) {

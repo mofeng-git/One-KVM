@@ -74,7 +74,10 @@ function __loadKvmdInfo() {
 				$("apps-box").innerHTML = "<ul id=\"apps\"></ul>";
 
 				// Don't use this option, it may be removed in any time
-				let hide_kvm_button = (info.meta !== null && info.meta.web && info.meta.web.hide_kvm_button);
+				let hide_kvm_button = (
+					(info.meta !== null && info.meta.web && info.meta.web.hide_kvm_button)
+					|| tools.config.getBool("index--hide-kvm-button", false)
+				);
 				if (!hide_kvm_button) {
 					$("apps").innerHTML += __makeApp(null, "kvm", "share/svg/kvm.svg", "KVM");
 				}
