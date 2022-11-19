@@ -723,7 +723,7 @@ def _get_config_scheme() -> dict:
                 "--plugins-folder=/usr/lib/ustreamer/janus",
                 "--configs-folder=/etc/kvmd/janus",
                 "--interface={src_ip}",
-                "--stun-server={stun_host}:{stun_port}",
+                "{o_stun_server}",
             ], type=valid_command),
             "cmd_remove": Option([], type=valid_options),
             "cmd_append": Option([], type=valid_options),

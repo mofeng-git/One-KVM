@@ -78,11 +78,11 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
 
             if netcfg != prev_netcfg:
                 logger.info("Got new %s", netcfg)
-                if netcfg.src_ip and netcfg.ext_ip:
+                if netcfg.src_ip:
                     await self.__stop_janus()
                     await self.__start_janus(netcfg)
                 else:
-                    logger.error("Empty src_ip or ext_ip; stopping Janus ...")
+                    logger.error("Empty src_ip; stopping Janus ...")
                     await self.__stop_janus()
                 prev_netcfg = netcfg
 
@@ -160,12 +160,20 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
     async def __start_janus_proc(self, netcfg: _Netcfg) -> None:
         assert self.__janus_proc is None
         placeholders = {
-            key: str(value)
-            for (key, value) in dataclasses.asdict(netcfg).items()
+            "o_stun_server": f"--stun-server={netcfg.stun_host}:{netcfg.stun_port}",
+            **{
+                key: str(value)
+                for (key, value) in dataclasses.asdict(netcfg).items()
+            },
         }
+        cmd = list(self.__cmd)
+        if not netcfg.ext_ip:
+            placeholders["o_stun_server"] = ""
+            while "{o_stun_server}" in cmd:
+                cmd.remove("{o_stun_server}")
         cmd = [
             part.format(**placeholders)
-            for part in self.__cmd
+            for part in cmd
         ]
         self.__janus_proc = await aioproc.run_process(cmd)
         get_logger(0).info("Started Janus pid=%d: %s", self.__janus_proc.pid, tools.cmdfmt(cmd))
