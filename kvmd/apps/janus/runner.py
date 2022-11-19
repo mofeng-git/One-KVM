@@ -64,11 +64,13 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
 
     async def __run(self) -> None:
         logger = get_logger(0)
+        logger.info("Probbing the network first time ...")
+
         prev_netcfg: (_Netcfg | None) = None
         while True:
             retry = 0
             netcfg = _Netcfg()
-            for retry in range(self.__check_retries):
+            for retry in range(1 if prev_netcfg is None else self.__check_retries):
                 netcfg = await self.__get_netcfg()
                 if netcfg.ext_ip:
                     break
