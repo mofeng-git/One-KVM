@@ -88,7 +88,7 @@ class Stun:
 
         if first.changed is None:
             raise RuntimeError(f"Changed addr is None: {first}")
-        response = await self.__make_request("Change request [ext_ip != src_ip]", b"", *first.changed.ip)
+        response = await self.__make_request("Change request [ext_ip != src_ip]", b"", first.changed.ip, first.changed.port)
         if not response.ok:
             return (StunNatType.CHANGED_ADDR_ERROR, response)
 
