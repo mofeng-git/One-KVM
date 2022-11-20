@@ -98,19 +98,19 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
     def __get_default_ip(self) -> str:
         try:
             gws = netifaces.gateways()
-            if "default" not in gws:
-                raise RuntimeError(f"No default gateway: {gws}")
+            if "default" in gws:
+                for proto in [socket.AF_INET, socket.AF_INET6]:
+                    if proto in gws["default"]:
+                        iface = gws["default"][proto][1]
+                        addrs = netifaces.ifaddresses(iface)
+                        return addrs[proto][0]["addr"]
 
-            iface = ""
-            for proto in [socket.AF_INET, socket.AF_INET6]:
-                if proto in gws["default"]:
-                    iface = gws["default"][proto][1]
-                    break
-            else:
-                raise RuntimeError(f"No iface for the gateway {gws['default']}")
-
-            for addr in netifaces.ifaddresses(iface).get(proto, []):
-                return addr["addr"]
+            for iface in netifaces.interfaces():
+                if not iface.startswith(("lo", "docker")):
+                    addrs = netifaces.ifaddresses(iface)
+                    for proto in [socket.AF_INET, socket.AF_INET6]:
+                        if proto in addrs:
+                            return addrs[proto][0]["addr"]
         except Exception as err:
             get_logger().error("Can't get default IP: %s", tools.efmt(err))
         return ""
