@@ -88,20 +88,20 @@ class Stun:
 
         if first.changed is None:
             raise RuntimeError(f"Changed addr is None: {first}")
-        response = await self.__make_request("Change request [ext_ip != src_ip]", b"", first.changed.ip, first.changed.port)
+        response = await self.__make_request("Change request [ext_ip != src_ip]", addr=first.changed)
         if not response.ok:
             return (StunNatType.CHANGED_ADDR_ERROR, response)
 
         if response.ext == first.ext:
             request = struct.pack(">HHI", 0x0003, 0x0004, 0x00000002)
-            response = await self.__make_request("Change port", request, first.changed.ip)
+            response = await self.__make_request("Change port", request, addr=first.changed.ip)
             if response.ok:
                 return (StunNatType.RESTRICTED_NAT, response)
             return (StunNatType.RESTRICTED_PORT_NAT, response)
 
         return (StunNatType.SYMMETRIC_NAT, response)
 
-    async def __make_request(self, ctx: str, request: bytes=b"", host: str="", port: int=0) -> StunResponse:
+    async def __make_request(self, ctx: str, request: bytes=b"", addr: (StunAddress | str | None)=None) -> StunResponse:
         # TODO: Support IPv6 and RFC 5389
         # The first 4 bytes of the response are the Type (2) and Length (2)
         # The 5th byte is Reserved
@@ -111,11 +111,19 @@ class Stun:
         # More info at: https://tools.ietf.org/html/rfc3489#section-11.2.1
         # And at: https://tools.ietf.org/html/rfc5389#section-15.1
 
+        if isinstance(addr, StunAddress):
+            addr_t = (addr.ip, addr.port)
+        elif isinstance(addr, str):
+            addr_t = (addr, self.port)
+        else:
+            assert addr_t is None
+            addr_t = (self.host, self.port)
+
         # https://datatracker.ietf.org/doc/html/rfc5389#section-6
         trans_id = b"\x21\x12\xA4\x42" + secrets.token_bytes(12)
         (response, error) = (b"", "")
         for _ in range(self.__retries):
-            (response, error) = await self.__inner_make_request(trans_id, request, host, port)
+            (response, error) = await self.__inner_make_request(trans_id, request, addr_t)
             if not error:
                 break
             await asyncio.sleep(self.__retries_delay)
@@ -142,13 +150,13 @@ class Stun:
             remaining -= (4 + attr_len)
         return StunResponse(ok=True, **parsed)
 
-    async def __inner_make_request(self, trans_id: bytes, request: bytes, host: str, port: int) -> tuple[bytes, str]:
+    async def __inner_make_request(self, trans_id: bytes, request: bytes, addr: tuple[str, int]) -> tuple[bytes, str]:
         assert self.__sock is not None
 
         request = struct.pack(">HH", 0x0001, len(request)) + trans_id + request  # Bind Request
 
         try:
-            await aiotools.run_async(self.__sock.sendto, request, ((host or self.host), (port or self.port)))
+            await aiotools.run_async(self.__sock.sendto, request, addr)
         except Exception as err:
             return (b"", f"Send error: {tools.efmt(err)}")
         try:
