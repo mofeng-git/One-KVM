@@ -116,7 +116,7 @@ class Stun:
         elif isinstance(addr, str):
             addr_t = (addr, self.port)
         else:
-            assert addr_t is None
+            assert addr is None
             addr_t = (self.host, self.port)
 
         # https://datatracker.ietf.org/doc/html/rfc5389#section-6
