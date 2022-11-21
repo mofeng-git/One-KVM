@@ -23,7 +23,10 @@
 div#stream-window {
 	min-width: 400px;
 	min-height: 200px;
-	padding-top: 23px;
+	/*padding-top: 23px;
+	padding-bottom: 2px;
+	padding-left: 2px;
+	padding-right: 2px;*/
 }
 
 div#stream-info {
