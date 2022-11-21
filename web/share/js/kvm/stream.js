@@ -280,7 +280,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 					frames = el.mozPaintedFrames;
 				}
 				if (frames !== null) {
-					info = `${frames - __frames} fps dynamic`;
+					info = `${Math.max(0, frames - __frames)} fps dynamic`;
 					__frames = frames;
 				} else {
 					info = `${__handle.getBitrate()}`.replace("kbits/sec", "kbps");
