@@ -87,7 +87,6 @@ def main() -> None:
             "kvmd.plugins.hid.bt",
             "kvmd.plugins.atx",
             "kvmd.plugins.msd",
-            "kvmd.plugins.msd.relay",
             "kvmd.plugins.msd.otg",
             "kvmd.plugins.ugpio",
             "kvmd.clients",

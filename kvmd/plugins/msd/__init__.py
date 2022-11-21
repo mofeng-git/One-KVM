@@ -85,21 +85,6 @@ class MsdImageExistsError(MsdOperationError):
         super().__init__("This image is already exists")
 
 
-class MsdMultiNotSupported(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("This MSD does not support storing multiple images")
-
-
-class MsdCdromNotSupported(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("This MSD does not support CD-ROM switching")
-
-
-class MsdRwNotSupported(MsdOperationError):
-    def __init__(self) -> None:
-        super().__init__("This MSD does not support RW switching")
-
-
 # =====
 class BaseMsdReader:
     def get_state(self) -> dict:
@@ -280,10 +265,6 @@ class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attribu
 
     def is_complete(self) -> bool:
         return (self.__written >= self.__file_size)
-
-    def get_file(self) -> aiofiles.base.AiofilesContextManager:
-        assert self.__file is not None
-        return self.__file
 
     async def open(self) -> "MsdFileWriter":
         assert self.__file is None

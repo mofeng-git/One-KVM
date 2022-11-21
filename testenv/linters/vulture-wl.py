@@ -22,6 +22,8 @@ SpiDev.no_cs
 SpiDev.cshigh
 SpiDev.max_speed_hz
 
+_DriveImage.complete
+
 _AtxApiPart.switch_power
 
 _UsbKey.arduino_modifier_code
