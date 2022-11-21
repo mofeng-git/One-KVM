@@ -36,6 +36,10 @@ div#stream-window {
 	transform: translateX(-50%) !important;
 }
 
+div#stream-window::after {
+	display: none;
+}
+
 div#stream-window-header {
 	display: none !important;
 }

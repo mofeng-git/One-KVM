@@ -40,17 +40,16 @@ div.window-resizable {
 div.window-active {
 	border: var(--border-window-active-2px) !important;
 }
-div.window-resizable.window-active::-webkit-resizer {
+div.window-resizable.window-active::after {
+	content: "";
 	width: 0;
 	height: 0;
 	border-style: solid;
-	border-width: 0 0 20px 20px;
+	border-width: 0 0 15px 15px;
 	border-color: transparent transparent var(--cs-corner-bg) transparent;
-	/* border-bottom-right-radius: 8px; */
-	/* Size does not work */
-	display:block;
-	width: 20px !important;
-	height: 20px !important;
+	right: 0;
+	bottom: 0;
+	position: absolute;
 }
 div.window:fullscreen {
 	border: 0px;
@@ -63,6 +62,9 @@ div.window:fullscreen {
 	height: 100% !important;
 	padding: 0px !important;
 }
+div.window:fullscreen::after {
+	display: none;
+}
 div.window:-webkit-full-screen {
 	border: 0px;
 	border-radius: 0px;
@@ -73,6 +75,9 @@ div.window:-webkit-full-screen {
 	width: 100% !important;
 	height: 100% !important;
 	padding: 0px !important;
+}
+div.window:-webkit-full-screen::after {
+	display: none;
 }
 div.window.window-full-tab {
 	border: 0px;
