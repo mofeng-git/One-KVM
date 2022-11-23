@@ -19,6 +19,9 @@ _variants=(
 	v2-hdmiusb:generic
 
 	v3-hdmi:rpi4
+
+	v4mini-hdmi:rpi4
+	v4plus-hdmi:rpi4
 )
 
 
@@ -229,7 +232,7 @@ for _variant in "${_variants[@]}"; do
 
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
 			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex)
-			install -DTm444 configs/kvmd/tc358743-edid.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
+			install -DTm444 configs/kvmd/edid/$_platform.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 		fi
 	}"
 done
