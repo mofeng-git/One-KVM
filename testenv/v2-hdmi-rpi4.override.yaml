@@ -40,6 +40,9 @@ kvmd:
         drivers:
             __gpio__:
                 device: /dev/kvmd-gpio
+            __v4_locator__:
+                type: locator
+                device: /dev/kvmd-gpio
             relay:
                 type: hidrelay
                 device: /dev/hidraw0
@@ -55,6 +58,13 @@ kvmd:
                 pin: 5
                 mode: output
                 initial: true
+                pulse:
+                    delay: 0
+
+            __v4_locator__:
+                driver: __v4_locator__
+                pin: 12
+                mode: output
                 pulse:
                     delay: 0
 

@@ -100,6 +100,15 @@ li(id="system-dropdown" class="right")
 						label(for="gpio-switch-__v3_usb_breaker__")
 							span(class="switch-inner")
 							span(class="switch")
+			tr(id="v4-locator" class="feature-disabled")
+				td Enable locator LED:
+				td(align="right")
+					div(class="switch-box")
+						input(disabled type="checkbox" id="gpio-switch-__v4_locator__" class="gpio-switch"
+							data-channel="__v4_locator__")
+						label(for="gpio-switch-__v4_locator__")
+							span(class="switch-inner")
+							span(class="switch")
 			tr
 				+menu_switch_notable("page-close-ask-switch", "Ask page close confirmation", true, true)
 		hr

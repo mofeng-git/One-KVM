@@ -114,6 +114,7 @@ export function Gpio(__recorder) {
 		}
 
 		tools.feature.setEnabled($("v3-usb-breaker"), ("__v3_usb_breaker__" in model.scheme.outputs));
+		tools.feature.setEnabled($("v4-locator"), ("__v4_locator__" in model.scheme.outputs));
 		tools.feature.setEnabled($("system-tool-wol"), ("__wol__" in model.scheme.outputs));
 
 		self.setState(__state);
