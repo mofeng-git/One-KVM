@@ -182,7 +182,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 					}
 				} else if (msg.error_code || msg.error) {
 					__logError("Got uStreamer error message:", msg.error_code, "-", msg.error);
-					__setInfo(false, false, (msg.error_code === 503 ? "Waiting for keyframe ..." : msg.error));
+					__setInfo(false, false, msg.error);
 					if (__retry_emsg_timeout === null) {
 						__retry_emsg_timeout = setTimeout(function() {
 							if (!__stop) {
@@ -293,7 +293,7 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 	var __sendWatch = function() {
 		if (__handle) {
 			__logInfo("Sending WATCH ...");
-			__handle.send({"message": {"request": "watch"}});
+			__handle.send({"message": {"request": "watch", "params": {"audio": true}}});
 		}
 	};
 
