@@ -179,6 +179,8 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 					} else if (msg.result.status === "stopped") {
 						__setInactive();
 						__setInfo(false, false, "");
+					} else if (msg.result.status === "features") {
+						__setAudioEnabled(msg.result.features.audio);
 					}
 				} else if (msg.error_code || msg.error) {
 					__logError("Got uStreamer error message:", msg.error_code, "-", msg.error);
@@ -219,7 +221,6 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 			"onremotestream": function(stream) {
 				__logInfo("Got a remote stream:", stream);
-				__setAudioEnabled(!!stream.getAudioTracks().length);
 				_Janus.attachMediaStream($("stream-video"), stream);
 				__sendKeyRequired();
 				__startInfoInterval();
@@ -292,7 +293,8 @@ function _JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 	var __sendWatch = function() {
 		if (__handle) {
-			__logInfo("Sending WATCH ...");
+			__logInfo("Sending WATCH + FEATURES ...");
+			__handle.send({"message": {"request": "features"}});
 			__handle.send({"message": {"request": "watch", "params": {"audio": true}}});
 		}
 	};
