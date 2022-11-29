@@ -333,20 +333,16 @@ JanusStreamer.ensure_janus = function(callback) {
 				"debug": "all",
 				"callback": function() {
 					_Janus = module.Janus;
-					callback();
+					callback(true);
 				},
 			});
 		}).catch((err) => {
 			tools.error("Stream: Can't import Janus module:", err);
-			callback();
+			callback(false);
 		});
 	} else {
-		callback();
+		callback(true);
 	}
-};
-
-JanusStreamer.is_imported = function() {
-	return (_Janus !== null);
 };
 
 JanusStreamer.is_webrtc_available = function() {
