@@ -81,22 +81,22 @@ ul#navbar li a.menu-button:hover:not(.active) {
 
 /* ===== radio.css ===== */
 
-@media only screen and (orientation: portrait) {
+/*@media only screen and (orientation: portrait) {
 	div.radio-box input[type=radio] + label {
 		height: 30px !important;
 	}
-}
+}*/
 
 
 /* ===== slider.css ===== */
 
-@media only screen and (orientation: portrait) {
+/*@media only screen and (orientation: portrait) {
 	@supports (-webkit-appearance: none) {
 		input[type=range].slider {
 			margin: 20px 0 20px 0 !important;
 		}
 	}
-}
+}*/
 
 
 /* ===== tabs.css ===== */
