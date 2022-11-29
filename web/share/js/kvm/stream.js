@@ -74,6 +74,12 @@ export function Streamer() {
 			$("stream-video").muted = !value;
 			$("stream-video").volume = value / 100;
 			$("stream-audio-volume-value").innerHTML = value + "%";
+			if (__streamer.getMode() === "janus") {
+				let allow_audio = !$("stream-video").muted;
+				if (__streamer.isAudioAllowed() !== allow_audio) {
+					__resetStream();
+				}
+			}
 		});
 
 		tools.el.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
@@ -122,6 +128,9 @@ export function Streamer() {
 			);
 			let mode = (__janus_enabled ? tools.storage.get("stream.mode", "janus") : "mjpeg");
 			tools.radio.clickValue("stream-mode-radio", mode);
+			if (!__janus_enabled) {
+				tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
+			}
 			self.setState(__state);
 		};
 
@@ -239,22 +248,29 @@ export function Streamer() {
 		tools.slider.setValue(el, value);
 	};
 
+	var __resetStream = function(mode=null) {
+		if (mode === null) {
+			mode = __streamer.getMode();
+		}
+		__streamer.stopStream();
+		if (mode === "janus") {
+			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo, !$("stream-video").muted);
+		} else { // mjpeg
+			__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
+			tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
+		}
+		if (wm.isWindowVisible($("stream-window"))) {
+			__streamer.ensureStream(__state);
+		}
+	};
+
 	var __clickModeRadio = function() {
 		let mode = tools.radio.getValue("stream-mode-radio");
 		tools.storage.set("stream.mode", mode);
 		if (mode !== __streamer.getMode()) {
 			tools.hidden.setVisible($("stream-image"), (mode !== "janus"));
 			tools.hidden.setVisible($("stream-video"), (mode === "janus"));
-			if (mode === "janus") {
-				__streamer.stopStream();
-				__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo);
-			} else { // mjpeg
-				__streamer.stopStream();
-				__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
-			}
-			if (wm.isWindowVisible($("stream-window"))) {
-				__streamer.ensureStream(__state);
-			}
+			__resetStream(mode);
 		}
 	};
 
@@ -270,11 +286,7 @@ export function Streamer() {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset stream?").then(function (ok) {
 			if (ok) {
-				if (wm.isWindowVisible($("stream-window"))) {
-					__streamer.stopStream();
-					__streamer.ensureStream(__state);
-				}
-
+				__resetStream();
 				let http = tools.makeRequest("POST", "/api/streamer/reset", function() {
 					if (http.readyState === 4) {
 						if (http.status !== 200) {

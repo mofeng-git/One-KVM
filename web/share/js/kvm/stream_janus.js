@@ -29,7 +29,7 @@ import {tools, $} from "../tools.js";
 var _Janus = null;
 
 
-export function JanusStreamer(__setActive, __setInactive, __setInfo) {
+export function JanusStreamer(__setActive, __setInactive, __setInfo, __allow_audio) {
 	var self = this;
 
 	var __stop = false;
@@ -45,7 +45,9 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo) {
 	var __state = null;
 	var __frames = 0;
 
-	self.getName = () => "H.264";
+	self.isAudioAllowed = () => __allow_audio;
+
+	self.getName = () => (__allow_audio ? "H.264 + Audio" : "H.264");
 	self.getMode = () => "janus";
 
 	self.getResolution = function() {
@@ -124,7 +126,6 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo) {
 			__handle.webrtcStuff.remoteStream = null;
 		}
 		$("stream-video").srcObject = null;
-		__setAudioEnabled(false);
 		if (__janus !== null) {
 			__janus.destroy();
 		}
@@ -179,7 +180,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo) {
 						__setInactive();
 						__setInfo(false, false, "");
 					} else if (msg.result.status === "features") {
-						__setAudioEnabled(msg.result.features.audio);
+						tools.feature.setEnabled($("stream-audio"), msg.result.features.audio);
 					}
 				} else if (msg.error_code || msg.error) {
 					__logError("Got uStreamer error message:", msg.error_code, "-", msg.error);
@@ -241,10 +242,6 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo) {
 		});
 	};
 
-	var __setAudioEnabled = function(enabled) {
-		tools.feature.setEnabled($("stream-audio"), enabled);
-	};
-
 	var __startInfoInterval = function() {
 		__stopInfoInterval();
 		__setActive();
@@ -292,9 +289,9 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo) {
 
 	var __sendWatch = function() {
 		if (__handle) {
-			__logInfo("Sending WATCH + FEATURES ...");
+			__logInfo(`Sending WATCH(audio=${__allow_audio}) + FEATURES ...`);
 			__handle.send({"message": {"request": "features"}});
-			__handle.send({"message": {"request": "watch", "params": {"audio": true}}});
+			__handle.send({"message": {"request": "watch", "params": {"audio": __allow_audio}}});
 		}
 	};
 
