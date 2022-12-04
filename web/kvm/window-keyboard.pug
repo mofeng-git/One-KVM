@@ -49,31 +49,31 @@ div(id="keyboard-window" class="window")
 					+key(1, `Digit${index + 1}`) #{key}#[br]#{index + 1}
 				+key(1, "Digit0") )#[br]0
 				+key(1, "Minus") _#[br]-
-				+key(2, "Equal") +#[br]=
+				+key(1, "Equal") +#[br]=
 				+key(0, "Backspace", "wide-1 right") &#8612;
 			div(class="keypad-row")
-				+key(2, "Tab", "wide-1 left") &#8676;#[br]&#8677;
+				+key(1, "Tab", "wide-1 left") &#8676;#[br]&#8677;
 				each key in ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"]
 					+key(1, `Key${key}`, "single") #{key}
 				+key(1, "BracketLeft") {#[br][
 				+key(1, "BracketRight") }#[br]]
 				+key(0, "Backslash") |#[br]&bsol;
 			div(class="keypad-row")
-				+key(2, "CapsLock", "wide-2 left small")
+				+key(1, "CapsLock", "wide-2 left small")
 					+lamp("hid-keyboard-caps-led")
 					| #[br] Caps Lock
 				each key in ["A", "S", "D", "F", "G", "H", "J", "K", "L"]
 					+key(1, `Key${key}`, "single") #{key}
 				+key(1, "Semicolon") :#[br];
-				+key(2, "Quote") "#[br]'
+				+key(1, "Quote") "#[br]'
 				+key(0, "Enter", "wide-2 right small") Enter#[br]&crarr;
 			div(class="keypad-row")
-				+modifier(2, "ShiftLeft", "wide-3 left small") Shift
+				+modifier(1, "ShiftLeft", "wide-3 left small") Shift
 				each key in ["Z", "X", "C", "V", "B", "N", "M"]
 					+key(1, `Key${key}`, "single") #{key}
 				+key(1, "Comma") &lt;#[br],
 				+key(1, "Period") &gt;#[br].
-				+key(2, "Slash") ?#[br]/
+				+key(1, "Slash") ?#[br]/
 				+modifier(0, "ShiftRight", "wide-3 right small") Shift
 			div(class="keypad-row")
 				+modifier(2, "ControlLeft", "wide-1 left small") Ctrl
