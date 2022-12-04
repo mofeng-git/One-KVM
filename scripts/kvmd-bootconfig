@@ -118,6 +118,45 @@ if [ -n "$SSH_PORT" ]; then
 fi
 
 
+# ========== Ethernet ==========
+
+# If the ETH_DHCP is defined, configure eth0 for DHCP
+if [ -n "$ETH_DHCP" ]; then
+	ETH_IFACE="${ETH_IFACE:-eth0}"
+	cat <<end_of_file > "/etc/systemd/network/$ETH_IFACE.network"
+[Match]
+Name=$ETH_IFACE
+
+[Network]
+DHCP=yes
+DNSSEC=no
+
+[DHCP]
+# Use same IP by forcing to use MAC address for clientID
+ClientIdentifier=mac
+# https://github.com/pikvm/pikvm/issues/583
+RouteMetric=10
+end_of_file
+fi
+
+# If the ETH_ADDR is defined, configure a static address on eth0
+if [ -n "$ETH_ADDR" ]; then
+	ETH_IFACE="${ETH_IFACE:-eth0}"
+	cat <<end_of_file > "/etc/systemd/network/$ETH_IFACE.network"
+[Match]
+Name=$ETH_IFACE
+
+[Network]
+Address=$ETH_ADDR
+DNS=$ETH_DNS
+DNSSEC=no
+
+[Route]
+Gateway=$ETH_GW
+end_of_file
+fi
+
+
 # ========== Wi-Fi ==========
 
 # Set the regulatory domain for wifi, if defined.
