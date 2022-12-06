@@ -54,10 +54,12 @@ static unsigned long _reset_timestamp;
 
 
 // -----------------------------------------------------------------------------
+#ifdef HID_DYNAMIC
 static void _resetRequest() {
 	_reset_required = true;
 	_reset_timestamp = micros();
 }
+#endif
 
 static void _cmdSetKeyboard(const uint8_t *data) { // 1 bytes
 #	ifdef HID_DYNAMIC
