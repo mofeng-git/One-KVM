@@ -22,8 +22,6 @@
 
 import dataclasses
 
-from typing import Dict
-
 
 # =====
 @dataclasses.dataclass(frozen=True)
@@ -43,7 +41,7 @@ class Key:
     usb: UsbKey
 
 
-KEYMAP: Dict[str, Key] = {
+KEYMAP: dict[str, Key] = {
     "KeyA": Key(mcu=McuKey(code=1), usb=UsbKey(code=4, is_modifier=False)),
     "KeyB": Key(mcu=McuKey(code=2), usb=UsbKey(code=5, is_modifier=False)),
     "KeyC": Key(mcu=McuKey(code=3), usb=UsbKey(code=6, is_modifier=False)),
