@@ -54,22 +54,25 @@ div.keypad div.keypad-row div.spacer-fixed {
 div.keypad div.key,
 div.keypad div.modifier,
 div.keypad div.empty {
+	vertical-align: top;
+	font-size: 0.9em;
+	text-align: center;
 	box-sizing: border-box;
 	padding: 0;
 	width: 40px;
+	height: 40px;
+}
+div.keypad div.empty {
+	border: thin solid transparent;
 }
 div.keypad div.key,
 div.keypad div.modifier {
-	font-size: 0.9em;
-	text-align: center;
-	vertical-align: top;
 	box-shadow: var(--shadow-micro);
 	border: var(--border-key-thin);
 	border-radius: 6px;
 	color: var(--cs-key-default-fg);
 	background-color: var(--cs-key-default-bg);
 	cursor: pointer;
-	height: 40px;
 }
 div.keypad div.key:hover,
 div.keypad div.modifier:hover {

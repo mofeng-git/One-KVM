@@ -144,5 +144,9 @@ void keymapPs2(uint8_t code, Ps2KeyType *ps2_type, uint8_t *ps2_code) {
 		case 105: *ps2_type = PS2_KEY_TYPE_SPEC; *ps2_code = 94; return; // Power
 		case 106: *ps2_type = PS2_KEY_TYPE_REG; *ps2_code = 97; return; // IntlBackslash
 		case 107: *ps2_type = PS2_KEY_TYPE_REG; *ps2_code = 106; return; // IntlYen
+		case 108: *ps2_type = PS2_KEY_TYPE_REG; *ps2_code = 81; return; // IntlRo
+		case 109: *ps2_type = PS2_KEY_TYPE_REG; *ps2_code = 19; return; // KanaMode
+		case 110: *ps2_type = PS2_KEY_TYPE_REG; *ps2_code = 100; return; // Convert
+		case 111: *ps2_type = PS2_KEY_TYPE_REG; *ps2_code = 103; return; // NonConvert
 	}
 }

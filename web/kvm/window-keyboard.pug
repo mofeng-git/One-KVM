@@ -112,8 +112,8 @@ div(id="keyboard-window" class="window")
 		div(class="keypad-block")
 			div(class="keypad-row")
 				+empty(2, "small")
-				+key(2, "IntlYen", "small") Yen
-				+key(2, "IntlBackslash", "small") N/US
+				+empty(2, "small")
+				+empty(2, "small")
 				+key(0, "Power", "small") PWR
 			hr
 			div(class="keypad-row")
@@ -143,6 +143,20 @@ div(id="keyboard-window" class="window")
 				+empty(2, "")
 				+key(2, "NumpadDecimal", "small") .#[br]Del
 				+key(0, "NumpadEnter", "small") Ent
+		div(class="keypad-block")
+			div(class="keypad-row")
+				+key(0, "IntlBackslash", "small") &bsol;#[br]|
+			hr
+			div(class="keypad-row")
+				+key(0, "IntlYen", "small") ¥#[br]_
+			div(class="keypad-row")
+				+key(0, "IntlRo", "small") &bsol;#[br]ろ
+			div(class="keypad-row")
+				+modifier(0, "KanaMode", "small") Kana
+			div(class="keypad-row")
+				+modifier(0, "NonConvert", "small") N/Cnv
+			div(class="keypad-row")
+				+modifier(0, "Convert", "small") Cnv
 
 	div(id="keyboard-mobile" class="keypad" align="center")
 		div(class="keypad-block")

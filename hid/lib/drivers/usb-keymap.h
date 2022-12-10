@@ -132,6 +132,10 @@ uint8_t keymapUsb(uint8_t code) {
 		case 105: return 102; // Power
 		case 106: return 100; // IntlBackslash
 		case 107: return 137; // IntlYen
+		case 108: return 135; // IntlRo
+		case 109: return 136; // KanaMode
+		case 110: return 138; // Convert
+		case 111: return 139; // NonConvert
 		default: return 0;
 	}
 }
