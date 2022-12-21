@@ -23,6 +23,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		ca-certificates-utils \
 	&& pacman -Syu --noconfirm --ask=4 \
 	&& pacman -S --needed --noconfirm --ask=4 \
+		base-devel \
 		autoconf-archive \
 		help2man \
 		m4 \
