@@ -1,4 +1,4 @@
-FROM archlinux/archlinux:base-devel
+FROM archlinux/archlinux:base
 
 RUN mkdir -p /etc/pacman.d/hooks \
 	&& ln -s /dev/null /etc/pacman.d/hooks/30-systemd-tmpfiles.hook
