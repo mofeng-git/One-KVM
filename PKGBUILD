@@ -95,7 +95,6 @@ depends=(
 	netctl
 
 	# Possible hotfix for the new os update
-	openssl-1.0
 	openssl-1.1
 
 	# Bootconfig
