@@ -71,6 +71,10 @@ class _DriveImage:
     size: int = dataclasses.field(default=0)
     mod_ts: float = dataclasses.field(default=0)
 
+    @property
+    def exists(self) -> bool:  # Not exposed as a field
+        return os.path.exists(self.path)
+
     def __post_init__(self) -> None:
         try:
             st = os.stat(self.path)
@@ -275,14 +279,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             assert self.__state.storage
             assert self.__state.vd
 
-            if self.__state.vd.connected or self.__drive.get_image_path():
-                raise MsdConnectedError()
+            self.__check_disconnected()
 
             if name is not None:
                 if name:
-                    image = self.__state.storage.images.get(name)
-                    if image is None or not os.path.exists(image.path):
-                        raise MsdUnknownImageError()
+                    image = self.__get_image(name)
                     assert image.in_storage
                     self.__state.vd.image = image
                 else:
@@ -303,14 +304,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         async with self.__state.busy():
             assert self.__state.vd
             if connected:
-                if self.__state.vd.connected or self.__drive.get_image_path():
-                    raise MsdConnectedError()
+                self.__check_disconnected()
+
                 if self.__state.vd.image is None:
                     raise MsdImageNotSelected()
 
                 assert self.__state.vd.image.in_storage
 
-                if not os.path.exists(self.__state.vd.image.path):
+                if not self.__state.vd.image.exists:
                     raise MsdUnknownImageError()
 
                 self.__drive.set_rw_flag(self.__state.vd.rw)
@@ -320,8 +321,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__drive.set_image_path(self.__state.vd.image.path)
 
             else:
-                if not (self.__state.vd.connected or self.__drive.get_image_path()):
-                    raise MsdDisconnectedError()
+                self.__check_connected()
                 self.__drive.set_image_path("")
                 await self.__remount_rw(False, fatal=False)
 
@@ -337,16 +337,13 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         assert self.__state.storage
                         assert self.__state.vd
 
-                        if self.__state.vd.connected or self.__drive.get_image_path():
-                            raise MsdConnectedError()
+                        self.__check_disconnected()
 
-                        path = self.__storage.get_image_path(name)
-                        if name not in self.__state.storage.images or not os.path.exists(path):
-                            raise MsdUnknownImageError()
+                        image = self.__get_image(name)
 
                         self.__reader = await MsdFileReader(
                             notifier=self.__notifier,
-                            path=path,
+                            path=image.path,
                             chunk_size=self.__read_chunk_size,
                         ).open()
 
@@ -368,8 +365,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         assert self.__state.storage
                         assert self.__state.vd
 
-                        if self.__state.vd.connected or self.__drive.get_image_path():
-                            raise MsdConnectedError()
+                        self.__check_disconnected()
 
                         path = self.__storage.get_image_path(name)
                         if name in self.__state.storage.images or os.path.exists(path):
@@ -412,12 +408,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             assert self.__state.storage
             assert self.__state.vd
 
-            if self.__state.vd.connected or self.__drive.get_image_path():
-                raise MsdConnectedError()
+            self.__check_disconnected()
 
-            image = self.__state.storage.images.get(name)
-            if image is None or not os.path.exists(image.path):
-                raise MsdUnknownImageError()
+            image = self.__get_image(name)
             assert image.in_storage
 
             if self.__state.vd.image == image:
@@ -430,6 +423,23 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             await self.__remount_rw(False, fatal=False)
 
     # =====
+
+    def __check_connected(self) -> None:
+        assert self.__state.vd
+        if not (self.__state.vd.connected or self.__drive.get_image_path()):
+            raise MsdDisconnectedError()
+
+    def __check_disconnected(self) -> None:
+        assert self.__state.vd
+        if self.__state.vd.connected or self.__drive.get_image_path():
+            raise MsdConnectedError()
+
+    def __get_image(self, name: str) -> _DriveImage:
+        assert self.__state.storage
+        image = self.__state.storage.images.get(name)
+        if image is None or not image.exists:
+            raise MsdUnknownImageError()
+        return image
 
     async def __close_reader(self) -> None:
         if self.__reader:
@@ -513,7 +523,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                     if (
                         self.__state.vd.image
-                        and (not self.__state.vd.image.in_storage or not os.path.exists(self.__state.vd.image.path))
+                        and (not self.__state.vd.image.in_storage or not self.__state.vd.image.exists)
                     ):
                         # Если только что отключили ручной образ вне хранилища или ранее выбранный образ был удален
                         self.__state.vd.image = None
