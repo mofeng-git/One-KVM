@@ -28,6 +28,30 @@ from ....logging import get_logger
 
 # =====
 @dataclasses.dataclass(frozen=True)
+class Image:
+    name: str
+    path: str
+
+    complete: bool = dataclasses.field(compare=False)
+    in_storage: bool = dataclasses.field(compare=False)
+
+    size: int = dataclasses.field(default=0, compare=False)
+    mod_ts: float = dataclasses.field(default=0, compare=False)
+
+    def exists(self) -> bool:
+        return os.path.exists(self.path)
+
+    def __post_init__(self) -> None:
+        try:
+            st = os.stat(self.path)
+        except Exception:
+            pass
+        else:
+            object.__setattr__(self, "size", st.st_size)
+            object.__setattr__(self, "mod_ts", st.st_mtime)
+
+
+@dataclasses.dataclass(frozen=True)
 class StorageSpace:
     size: int
     free: int
@@ -42,34 +66,52 @@ class Storage:
     def get_watchable_paths(self) -> list[str]:
         return [self.__images_path, self.__meta_path]
 
-    def get_images(self) -> list[str]:
-        images: list[str] = []
-        for name in os.listdir(self.__images_path):
-            path = os.path.join(self.__images_path, name)
-            if os.path.exists(path):
-                try:
-                    if os.path.getsize(path) >= 0:
-                        images.append(name)
-                except Exception:
-                    pass
-        return images
+    def get_images(self) -> dict[str, Image]:
+        return {
+            name: self.get_image_by_name(name)
+            for name in os.listdir(self.__images_path)
+        }
 
-    def get_image_path(self, name: str) -> str:
-        return os.path.join(self.__images_path, name)
+    def get_image_by_name(self, name: str) -> Image:
+        assert name
+        path = os.path.join(self.__images_path, name)
+        return self.__get_image(name, path)
 
-    def is_image_path_in_storage(self, path: str) -> bool:
-        return (os.path.dirname(path) == self.__images_path)
+    def get_image_by_path(self, path: str) -> Image:
+        assert path
+        name = os.path.basename(path)
+        return self.__get_image(name, path)
 
-    def is_image_complete(self, name: str) -> bool:
-        return os.path.exists(os.path.join(self.__meta_path, name + ".complete"))
+    def __get_image(self, name: str, path: str) -> Image:
+        assert name
+        assert path
+        complete = True
+        in_storage = (os.path.dirname(path) == self.__images_path)
+        if in_storage:
+            complete = os.path.exists(os.path.join(self.__meta_path, name + ".complete"))
+        return Image(name, path, complete, in_storage)
 
-    def set_image_complete(self, name: str, flag: bool) -> None:
-        path = os.path.join(self.__meta_path, name + ".complete")
+    def remove_image(self, image: Image, fatal: bool) -> None:
+        assert image.in_storage
+        try:
+            os.remove(image.path)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            if fatal:
+                raise
+        self.set_image_complete(image, False)
+
+    def set_image_complete(self, image: Image, flag: bool) -> None:
+        assert image.in_storage
+        path = os.path.join(self.__meta_path, image.name + ".complete")
         if flag:
             open(path, "w").close()  # pylint: disable=consider-using-with
         else:
-            if os.path.exists(path):
+            try:
                 os.remove(path)
+            except FileNotFoundError:
+                pass
 
     def get_space(self, fatal: bool) -> (StorageSpace | None):
         try:
