@@ -67,6 +67,10 @@ function restart_if_running_nginx() {
 	restart_if_running reload kvmd-nginx
 }
 
+function restart_if_running_cloud() {
+	restart_if_running reload kvmd-cloud
+}
+
 function restart_if_running_vnc() {
 	restart_if_running restart kvmd-vnc
 }
@@ -131,7 +135,7 @@ case "$1" in
 		fi
 	;;
 
-	install_nginx|install_vnc)
+	install_nginx|install_vnc|install_cloud)
 		target="${1/install_/}"
 		if [ -z "$2" ]; then
 			echo "Usage: kvmd-certbot $1 <domain>"
