@@ -68,7 +68,7 @@ function restart_if_running_nginx() {
 }
 
 function restart_if_running_cloud() {
-	restart_if_running reload kvmd-cloud
+	restart_if_running reload kvmd-nginx
 }
 
 function restart_if_running_vnc() {
