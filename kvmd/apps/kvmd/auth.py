@@ -34,15 +34,14 @@ from ...plugins.auth import get_auth_service_class
 class AuthManager:
     def __init__(
         self,
+        enabled: bool,
 
         internal_type: str,
         internal_kwargs: dict,
+        force_internal_users: list[str],
 
         external_type: str,
         external_kwargs: dict,
-
-        force_internal_users: list[str],
-        enabled: bool,
     ) -> None:
 
         self.__enabled = enabled

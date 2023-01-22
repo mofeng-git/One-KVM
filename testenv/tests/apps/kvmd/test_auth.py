@@ -51,12 +51,14 @@ async def _get_configured_manager(
 ) -> AsyncGenerator[AuthManager, None]:
 
     manager = AuthManager(
+        enabled=True,
+
         internal_type="htpasswd",
         internal_kwargs=_make_service_kwargs(internal_path),
+        force_internal_users=(force_internal_users or []),
+
         external_type=("htpasswd" if external_path else ""),
         external_kwargs=(_make_service_kwargs(external_path) if external_path else {}),
-        force_internal_users=(force_internal_users or []),
-        enabled=True,
     )
 
     try:
@@ -139,12 +141,14 @@ async def test_ok__external(tmpdir) -> None:  # type: ignore
 async def test_ok__disabled() -> None:
     try:
         manager = AuthManager(
+            enabled=False,
+
             internal_type="foobar",
             internal_kwargs={},
+            force_internal_users=[],
+
             external_type="",
             external_kwargs={},
-            force_internal_users=[],
-            enabled=False,
         )
 
         assert not manager.is_auth_enabled()
