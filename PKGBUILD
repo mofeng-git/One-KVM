@@ -45,6 +45,8 @@ depends=(
 	"python-aiohttp>=3.7.4.post0-1.1"
 	python-aiofiles
 	python-passlib
+	python-pyotp
+	python-qrcode
 	python-periphery
 	python-pyserial
 	python-pyserial-asyncio
@@ -121,6 +123,7 @@ md5sums=(SKIP)
 backup=(
 	etc/kvmd/{override,logging,auth,meta}.yaml
 	etc/kvmd/{ht,ipmi,vnc}passwd
+	etc/kvmd/totp.secret
 	etc/kvmd/nginx/{kvmd.ctx-{http,server},certbot.ctx-server}.conf
 	etc/kvmd/nginx/listen-http{,s}.conf
 	etc/kvmd/nginx/loc-{login,nocache,proxy,websocket,nobuffering,bigpost}.conf
@@ -162,6 +165,7 @@ package_kvmd() {
 	find "$pkgdir" -name ".gitignore" -delete
 	find "$_cfg_default" -type f -exec chmod 444 '{}' \;
 	chmod 400 "$_cfg_default/kvmd"/*passwd
+	chmod 400 "$_cfg_default/kvmd"/*.secret
 	chmod 750 "$_cfg_default/os/sudoers"
 	chmod 400 "$_cfg_default/os/sudoers"/*
 
@@ -176,6 +180,7 @@ package_kvmd() {
 
 	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*.yaml
 	install -Dm600 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*passwd
+	install -Dm600 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/*.secret
 	install -Dm644 -t "$pkgdir/etc/kvmd" "$_cfg_default/kvmd"/web.css
 	mkdir -p "$pkgdir/etc/kvmd/override.d"
 

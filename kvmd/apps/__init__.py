@@ -365,6 +365,12 @@ def _get_config_scheme() -> dict:
                     "type": Option("", type=valid_stripped_string),
                     # Dynamic content
                 },
+
+                "totp": {
+                    "secret": {
+                        "file": Option("/etc/kvmd/totp.secret", type=valid_abs_path, if_empty=""),
+                    },
+                },
             },
 
             "info": {  # Accessed via global config, see kvmd/info for details

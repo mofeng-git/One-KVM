@@ -15,6 +15,7 @@ post_upgrade() {
 	done
 
 	chown kvmd:kvmd /etc/kvmd/htpasswd || true
+	chown kvmd:kvmd /etc/kvmd/totp.secret || true
 	chown kvmd-ipmi:kvmd-ipmi /etc/kvmd/ipmipasswd || true
 	chown kvmd-vnc:kvmd-vnc /etc/kvmd/vncpasswd || true
 	chmod 600 /etc/kvmd/*passwd || true

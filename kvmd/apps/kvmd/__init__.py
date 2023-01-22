@@ -82,6 +82,8 @@ def main(argv: (list[str] | None)=None) -> None:
 
             external_type=config.auth.external.type,
             external_kwargs=(config.auth.external._unpack(ignore=["type"]) if config.auth.external.type else {}),
+
+            totp_secret_path=config.auth.totp.secret.file,
         ),
         info_manager=InfoManager(global_config),
         log_reader=(LogReader() if config.log_reader.enabled else None),

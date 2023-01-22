@@ -21,6 +21,7 @@
 
 
 import secrets
+import pyotp
 
 from ...logging import get_logger
 
@@ -42,6 +43,8 @@ class AuthManager:
 
         external_type: str,
         external_kwargs: dict,
+
+        totp_secret_path: str,
     ) -> None:
 
         self.__enabled = enabled
@@ -53,12 +56,14 @@ class AuthManager:
             self.__internal_service = get_auth_service_class(internal_type)(**internal_kwargs)
             get_logger().info("Using internal auth service %r", self.__internal_service.get_plugin_name())
 
+        self.__force_internal_users = force_internal_users
+
         self.__external_service: (BaseAuthService | None) = None
         if enabled and external_type:
             self.__external_service = get_auth_service_class(external_type)(**external_kwargs)
             get_logger().info("Using external auth service %r", self.__external_service.get_plugin_name())
 
-        self.__force_internal_users = force_internal_users
+        self.__totp_secret_path = totp_secret_path
 
         self.__tokens: dict[str, str] = {}  # {token: user}
 
@@ -70,6 +75,16 @@ class AuthManager:
         assert user
         assert self.__enabled
         assert self.__internal_service
+
+        if self.__totp_secret_path:
+            with open(self.__totp_secret_path) as secret_file:
+                secret = secret_file.read().strip()
+            if secret:
+                code = passwd[-6:]
+                if not pyotp.TOTP(secret).verify(code):
+                    get_logger().error("Got access denied for user %r by TOTP", user)
+                    return False
+                passwd = passwd[:-6]
 
         if user not in self.__force_internal_users and self.__external_service:
             service = self.__external_service

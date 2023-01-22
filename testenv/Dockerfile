@@ -43,6 +43,8 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-aiofiles \
 		python-periphery \
 		python-passlib \
+		python-pyotp \
+		python-qrcode \
 		python-pyserial \
 		python-setproctitle \
 		python-psutil \
