@@ -43,7 +43,8 @@ div#login {
 }
 
 input[type="text"]#user-input,
-input[type="password"]#passwd-input {
+input[type="password"]#passwd-input,
+input[type="text"]#code-input {
 	text-align: center;
 	border: thin;
 }

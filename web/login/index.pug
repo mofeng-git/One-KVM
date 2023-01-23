@@ -11,11 +11,17 @@ block body
 			div(id="login")
 				table
 					tr
-						td Username:
+						td Username:&nbsp;
 						td #[input(type="text" id="user-input")]
 					tr
-						td Password:
+						td Password:&nbsp;
 						td #[input(type="password" id="passwd-input")]
+					tr
+						td 2FA code:&nbsp;
+						td #[input(type="text" id="code-input" placeholder="if enabled")]
+					tr
+						td(colspan=2)
+							hr
 					tr
 						td
 						td #[button(id="login-button" class="key") Login]
