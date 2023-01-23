@@ -84,6 +84,7 @@ tox: testenv
 			&& cp -a /src/testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
 			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /src/testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
@@ -125,6 +126,7 @@ run: testenv $(TESTENV_GPIO)
 			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
 			&& ln -s /testenv/web.css /etc/kvmd/web.css \
 			&& mkdir -p /etc/kvmd/override.d \
@@ -149,6 +151,7 @@ run-cfg: testenv
 			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
 			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
@@ -170,6 +173,7 @@ run-ipmi: testenv
 			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
 			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
@@ -191,6 +195,7 @@ run-vnc: testenv
 			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
 			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
