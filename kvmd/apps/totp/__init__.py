@@ -67,6 +67,12 @@ def _cmd_show(config: Section, _: argparse.Namespace) -> None:
     print()
 
 
+def _cmd_delete(config: Section, _: argparse.Namespace) -> None:
+    with open(_get_secret_path(config), "w") as file:
+        file.write("")
+    print("TOTP is disabled now")
+
+
 # =====
 def main(argv: (list[str] | None)=None) -> None:
     (parent_parser, argv, config) = init(
@@ -88,6 +94,9 @@ def main(argv: (list[str] | None)=None) -> None:
 
     cmd_show_parser = subparsers.add_parser("show", help="Show the current TOTP secret with QR code")
     cmd_show_parser.set_defaults(cmd=_cmd_show)
+
+    cmd_delete_parser = subparsers.add_parser("del", help="Remove TOTP secret and disable 2FA auth")
+    cmd_delete_parser.set_defaults(cmd=_cmd_delete)
 
     options = parser.parse_args(argv[1:])
     options.cmd(config, options)
