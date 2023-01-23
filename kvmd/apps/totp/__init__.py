@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+import socket
 import argparse
 
 import pyotp
@@ -53,16 +54,18 @@ def _cmd_init(config: Section, options: argparse.Namespace) -> None:
     _cmd_show(config, options)
 
 
-def _cmd_show(config: Section, _: argparse.Namespace) -> None:
+def _cmd_show(config: Section, options: argparse.Namespace) -> None:
     secret = _read_secret(config)
     if len(secret) == 0:
         raise SystemExit("Error: TOTP secret is not configured")
-    uri = pyotp.totp.TOTP(secret).provisioning_uri(issuer_name="PiKVM")
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(
+        name=(options.name or socket.getfqdn()),
+        issuer_name="PiKVM",
+    )
     qr = qrcode.QRCode()
     qr.add_data(uri)
-    print()
-    print(uri)
-    print()
+    print("\nSecret:", secret, "\n")
+    print("URI:", uri, "\n")
     qr.print_ascii(invert=True)
     print()
 
@@ -90,6 +93,7 @@ def main(argv: (list[str] | None)=None) -> None:
 
     cmd_setup_parser = subparsers.add_parser("init", help="Generate and show TOTP secret with QR code")
     cmd_setup_parser.add_argument("-f", "--force", action="store_true", help="Overwrite an existing secret")
+    cmd_setup_parser.add_argument("-n", "--name", default="", help="PiKVM instance name, FQDN by default")
     cmd_setup_parser.set_defaults(cmd=_cmd_init)
 
     cmd_show_parser = subparsers.add_parser("show", help="Show the current TOTP secret with QR code")
