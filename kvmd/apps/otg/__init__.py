@@ -245,31 +245,32 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
         _write(join(profile_path, "bmAttributes"), "0xA0")
 
     gc = _GadgetConfig(gadget_path, profile_path, config.otg.meta)
+    cod = config.otg.devices
 
-    if config.otg.devices.serial.enabled:
+    if cod.serial.enabled:
         logger.info("===== Serial =====")
-        gc.add_serial(config.otg.devices.serial.start)
+        gc.add_serial(cod.serial.start)
 
-    if config.otg.devices.ethernet.enabled:
+    if cod.ethernet.enabled:
         logger.info("===== Ethernet =====")
-        gc.add_ethernet(**config.otg.devices.ethernet._unpack(ignore=["enabled"]))
+        gc.add_ethernet(**cod.ethernet._unpack(ignore=["enabled"]))
 
     if config.kvmd.hid.type == "otg":
         logger.info("===== HID-Keyboard =====")
-        gc.add_keyboard(config.otg.devices.hid.keyboard.start, config.otg.remote_wakeup)
+        gc.add_keyboard(cod.hid.keyboard.start, config.otg.remote_wakeup)
         logger.info("===== HID-Mouse =====")
-        gc.add_mouse(config.otg.devices.hid.mouse.start, config.otg.remote_wakeup, config.kvmd.hid.mouse.absolute, config.kvmd.hid.mouse.horizontal_wheel)
+        gc.add_mouse(cod.hid.mouse.start, config.otg.remote_wakeup, config.kvmd.hid.mouse.absolute, config.kvmd.hid.mouse.horizontal_wheel)
         if config.kvmd.hid.mouse_alt.device:
             logger.info("===== HID-Mouse-Alt =====")
-            gc.add_mouse(config.otg.devices.hid.mouse.start, config.otg.remote_wakeup, (not config.kvmd.hid.mouse.absolute), config.kvmd.hid.mouse.horizontal_wheel)
+            gc.add_mouse(cod.hid.mouse.start, config.otg.remote_wakeup, (not config.kvmd.hid.mouse.absolute), config.kvmd.hid.mouse.horizontal_wheel)
 
     if config.kvmd.msd.type == "otg":
         logger.info("===== MSD =====")
-        gc.add_msd(config.otg.devices.msd.start, config.otg.user, **config.otg.devices.msd.default._unpack())
-        if config.otg.devices.drives.enabled:
-            for count in range(config.otg.devices.drives.count):
+        gc.add_msd(cod.msd.start, config.otg.user, **cod.msd.default._unpack())
+        if cod.drives.enabled:
+            for count in range(cod.drives.count):
                 logger.info("===== MSD Extra: %d =====", count + 1)
-                gc.add_msd(config.otg.devices.drives.start, "root", **config.otg.devices.drives.default._unpack())
+                gc.add_msd(cod.drives.start, "root", **cod.drives.default._unpack())
 
     logger.info("===== Preparing complete =====")
 
