@@ -183,6 +183,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 for name in list(storage["images"]):
                     del storage["images"][name]["path"]
                     del storage["images"][name]["in_storage"]
+                    del storage["images"][name]["storage"]
 
                 storage["downloading"] = (self.__reader.get_state() if self.__reader else None)
 
@@ -200,6 +201,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 vd = dataclasses.asdict(self.__state.vd)
                 if vd["image"]:
                     del vd["image"]["path"]
+                    del vd["image"]["storage"]
 
             return {
                 "enabled": True,
@@ -336,7 +338,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                             raise MsdImageExistsError()
 
                         await self.__remount_rw(True)
-                        self.__storage.set_image_complete(image, False)
+                        image.set_complete(False)
 
                         self.__writer = await MsdFileWriter(
                             notifier=self.__notifier,
@@ -348,11 +350,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                     self.__notifier.notify()
                     yield self.__writer
-                    self.__storage.set_image_complete(image, self.__writer.is_complete())
+                    image.set_complete(self.__writer.is_complete())
 
                 finally:
                     if image and remove_incomplete and self.__writer and not self.__writer.is_complete():
-                        self.__storage.remove_image(image, fatal=False)
+                        image.remove(fatal=False)
                     try:
                         await aiotools.shield_fg(self.__close_writer())
                     finally:
@@ -377,7 +379,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
             await self.__remount_rw(True)
             try:
-                self.__storage.remove_image(image, fatal=True)
+                image.remove(fatal=True)
             finally:
                 await self.__remount_rw(False, fatal=False)
 

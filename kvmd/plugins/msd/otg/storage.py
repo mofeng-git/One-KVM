@@ -23,32 +23,74 @@
 import os
 import dataclasses
 
+from typing import Optional
+
 from ....logging import get_logger
 
 
 # =====
 @dataclasses.dataclass(frozen=True)
-class Image:
+class _Image:
     name: str
     path: str
+    storage: Optional["Storage"] = dataclasses.field(compare=False)
 
-    complete: bool = dataclasses.field(compare=False)
-    in_storage: bool = dataclasses.field(compare=False)
+    complete: bool = dataclasses.field(init=False, compare=False)
+    in_storage: bool = dataclasses.field(init=False, compare=False)
 
-    size: int = dataclasses.field(default=0, compare=False)
-    mod_ts: float = dataclasses.field(default=0, compare=False)
+    size: int = dataclasses.field(init=False, compare=False)
+    mod_ts: float = dataclasses.field(init=False, compare=False)
+
+
+class Image(_Image):
+    @property
+    def complete(self) -> bool:
+        if self.storage is not None:
+            return os.path.exists(self.storage._get_complete_path(self))  # pylint: disable=protected-access
+        return True
+
+    @property
+    def in_storage(self) -> bool:
+        return (self.storage is not None)
+
+    @property
+    def size(self) -> int:
+        try:
+            return os.stat(self.path).st_size
+        except Exception:
+            return 0
+
+    @property
+    def mod_ts(self) -> float:
+        try:
+            return os.stat(self.path).st_mtime
+        except Exception:
+            return 0
 
     def exists(self) -> bool:
         return os.path.exists(self.path)
 
-    def __post_init__(self) -> None:
+    def remove(self, fatal: bool) -> None:
+        assert self.storage is not None
         try:
-            st = os.stat(self.path)
-        except Exception:
+            os.remove(self.path)
+        except FileNotFoundError:
             pass
+        except Exception:
+            if fatal:
+                raise
+        self.set_complete(False)
+
+    def set_complete(self, flag: bool) -> None:
+        assert self.storage is not None
+        path = self.storage._get_complete_path(self)  # pylint: disable=protected-access
+        if flag:
+            open(path, "w").close()  # pylint: disable=consider-using-with
         else:
-            object.__setattr__(self, "size", st.st_size)
-            object.__setattr__(self, "mod_ts", st.st_mtime)
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
 
 
 @dataclasses.dataclass(frozen=True)
@@ -62,6 +104,9 @@ class Storage:
         self.__path = path
         self.__images_path = os.path.join(self.__path, "images")
         self.__meta_path = os.path.join(self.__path, "meta")
+
+    def _get_complete_path(self, image: Image) -> str:
+        return os.path.join(self.__meta_path, image.name + ".complete")
 
     def get_watchable_paths(self) -> list[str]:
         return [self.__images_path, self.__meta_path]
@@ -85,33 +130,8 @@ class Storage:
     def __get_image(self, name: str, path: str) -> Image:
         assert name
         assert path
-        complete = True
         in_storage = (os.path.dirname(path) == self.__images_path)
-        if in_storage:
-            complete = os.path.exists(os.path.join(self.__meta_path, name + ".complete"))
-        return Image(name, path, complete, in_storage)
-
-    def remove_image(self, image: Image, fatal: bool) -> None:
-        assert image.in_storage
-        try:
-            os.remove(image.path)
-        except FileNotFoundError:
-            pass
-        except Exception:
-            if fatal:
-                raise
-        self.set_image_complete(image, False)
-
-    def set_image_complete(self, image: Image, flag: bool) -> None:
-        assert image.in_storage
-        path = os.path.join(self.__meta_path, image.name + ".complete")
-        if flag:
-            open(path, "w").close()  # pylint: disable=consider-using-with
-        else:
-            try:
-                os.remove(path)
-            except FileNotFoundError:
-                pass
+        return Image(name, path, (self if in_storage else None))
 
     def get_space(self, fatal: bool) -> (StorageSpace | None):
         try:
