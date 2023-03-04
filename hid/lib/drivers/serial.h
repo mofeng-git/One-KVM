@@ -21,12 +21,14 @@
 
 
 #pragma once
+
 #ifdef CMD_SERIAL
 #include "connection.h"
 
+
 namespace DRIVERS {
 #ifdef Serial
-#undef Serial
+#	undef Serial
 #endif
 	struct Serial : public Connection {
 		Serial() : Connection(CONNECTION) {}

@@ -21,14 +21,16 @@
 
 
 #include "spi.h"
+
 #ifdef CMD_SPI
-#include <SPI.h>
+
 
 static volatile uint8_t _spi_in[8] = {0};
 static volatile uint8_t _spi_in_index = 0;
 
 static volatile uint8_t _spi_out[8] = {0};
 static volatile uint8_t _spi_out_index = 0;
+
 
 namespace DRIVERS {
 	void Spi::begin() {
@@ -77,4 +79,5 @@ ISR(SPI_STC_vect) {
 		SPDR = 0;
 	}
 }
+
 #endif

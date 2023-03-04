@@ -23,7 +23,9 @@
 #pragma once
 
 #include <Arduino.h>
+
 #include "connection.h"
+
 
 namespace DRIVERS {
 	struct Spi : public Connection {

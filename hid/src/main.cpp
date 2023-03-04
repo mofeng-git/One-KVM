@@ -115,7 +115,7 @@ static uint8_t _handleRequest(const uint8_t *data) { // 8 bytes
 	if (data[0] == PROTO::MAGIC && PROTO::crc16(data, 6) == PROTO::merge8(data[6], data[7])) {
 #		define HANDLE(_handler) { _handler(data + 2); return PROTO::PONG::OK; }
 		switch (data[1]) {
-			case PROTO::CMD::PING:				return PROTO::PONG::OK;
+			case PROTO::CMD::PING:		return PROTO::PONG::OK;
 			case PROTO::CMD::SET_KEYBOARD:		HANDLE(_cmdSetKeyboard);
 			case PROTO::CMD::SET_MOUSE:			HANDLE(_cmdSetMouse);
 			case PROTO::CMD::SET_CONNECTED:		HANDLE(_cmdSetConnected);
@@ -220,7 +220,7 @@ static void _onTimeout() {
 	_sendResponse(PROTO::RESP::TIMEOUT_ERROR);
 }
 
-static void _onData(const uint8_t * data, size_t len) {
+static void _onData(const uint8_t *data, size_t size) {
 	_sendResponse(_handleRequest(data));
 }
 

@@ -25,9 +25,10 @@
 #include "driver.h"
 #include "stdint.h"
 
+
 namespace DRIVERS {
-	typedef void(*DataHandler)(const uint8_t * data, size_t len);
-	typedef void(*TimeoutHandler)();
+	typedef void (*DataHandler)(const uint8_t *data, size_t size);
+	typedef void (*TimeoutHandler)();
 
 	struct Connection : public Driver {
 		using Driver::Driver;
