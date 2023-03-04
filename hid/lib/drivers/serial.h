@@ -20,75 +20,47 @@
 *****************************************************************************/
 
 
-#include "factory.h"
-#include "usb/keyboard-stm32.h"
-#include "usb/hid-wrapper-stm32.h"
-#include "usb/mouse-absolute-stm32.h"
-#include "usb/mouse-relative-stm32.h"
-#include "backup-register.h"
-#include "board-stm32.h"
-#include "serial.h"
-
-#ifndef __STM32F1__
-#	error "Only STM32F1 is supported"
-#endif
-#ifdef SERIAL_USB
-#	error "Disable random USB enumeration"
-#endif
-
+#pragma once
+#ifdef CMD_SERIAL
+#include "connection.h"
 
 namespace DRIVERS {
-	HidWrapper _hidWrapper;
+#ifdef Serial
+#undef Serial
+#endif
+	struct Serial : public Connection {
+		Serial() : Connection(CONNECTION) {}
 
-	Keyboard *Factory::makeKeyboard(type _type) {
-		switch (_type) {
-#			ifdef HID_WITH_USB
-			case USB_KEYBOARD:
-				return new UsbKeyboard(_hidWrapper);
-#			endif
-			default:
-				return new Keyboard(DUMMY);
+		void begin() override {
+			CMD_SERIAL.begin(CMD_SERIAL_SPEED);
 		}
-	}
 
-	Mouse *Factory::makeMouse(type _type) {
-		switch(_type) {
-#			ifdef HID_WITH_USB
-			case USB_MOUSE_ABSOLUTE:
-				return new UsbMouseAbsolute(_hidWrapper);
-			case USB_MOUSE_RELATIVE:
-				return new UsbMouseRelative(_hidWrapper);
-#			endif
-			default:
-				return new Mouse(DRIVERS::DUMMY);
+		void periodic() override {
+			if (CMD_SERIAL.available() > 0) {
+				_buffer[_index] = (uint8_t)CMD_SERIAL.read();
+				if (_index == 7) {
+					_data_cb(_buffer, 8);
+					_index = 0;
+				} else {
+					_last = micros();
+					++_index;
+				}
+			} else if (_index > 0) {
+				if (is_micros_timed_out(_last, CMD_SERIAL_TIMEOUT)) {
+					_timeout_cb();
+					_index = 0;
+				}
+			}
 		}
-	}
 
-	Storage* Factory::makeStorage(type _type) {
-		switch (_type) {
-#			ifdef HID_DYNAMIC
-			case NON_VOLATILE_STORAGE:
-				return new BackupRegister();
-#			endif
-			default:
-				return new Storage(DRIVERS::DUMMY);
+		void write(const uint8_t *data, size_t size) override {
+			CMD_SERIAL.write(data, size);
 		}
-	}
 
-	Board* Factory::makeBoard(type _type) {
-		switch (_type) {
-			case BOARD:
-				return new BoardStm32();
-			default:
-				return new Board(DRIVERS::DUMMY);
-        }
-	}
-  
-	Connection* Factory::makeConnection(type _type) {
-#		ifdef CMD_SERIAL
-		return new Serial();
-#		else
-#		error CMD phy is not defined
-#		endif		
-	}
+		private:
+			unsigned long _last = 0;
+			uint8_t _index = 0;
+			uint8_t _buffer[8];
+	};
 }
+#endif

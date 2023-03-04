@@ -35,6 +35,7 @@ namespace DRIVERS {
 		PS2_KEYBOARD,
 		NON_VOLATILE_STORAGE,
 		BOARD,
+		CONNECTION,
 	};
 
 	class Driver {

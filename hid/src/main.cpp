@@ -20,30 +20,17 @@
 *****************************************************************************/
 
 
-// #define CMD_SERIAL			Serial1
-// #define CMD_SERIAL_SPEED		115200
-// #define CMD_SERIAL_TIMEOUT	100000
-// -- OR --
-// #define CMD_SPI
-
-#if !(defined(CMD_SERIAL) || defined(CMD_SPI))
-#	error CMD phy is not defined
-#endif
-
-
 #include <Arduino.h>
 
 #include "tools.h"
 #include "proto.h"
-#ifdef CMD_SPI
-#	include "spi.h"
-#endif
 #ifdef AUM
 #	include "aum.h"
 #endif
 #include "board.h"
 #include "outputs.h"
 
+static DRIVERS::Connection* _conn;
 static DRIVERS::Board* _board;
 static Outputs _out;
 #ifdef HID_DYNAMIC
@@ -123,7 +110,9 @@ static void _cmdMouseWheelEvent(const uint8_t *data) { // 2 bytes
 
 static uint8_t _handleRequest(const uint8_t *data) { // 8 bytes
 	_board->updateStatus(DRIVERS::RX_DATA);
-	if (PROTO::crc16(data, 6) == PROTO::merge8(data[6], data[7])) {
+	// FIXME: See kvmd/kvmd#80
+	// Should input buffer be cleared in this case?
+	if (data[0] == PROTO::MAGIC && PROTO::crc16(data, 6) == PROTO::merge8(data[6], data[7])) {
 #		define HANDLE(_handler) { _handler(data + 2); return PROTO::PONG::OK; }
 		switch (data[1]) {
 			case PROTO::CMD::PING:				return PROTO::PONG::OK;
@@ -224,11 +213,15 @@ static void _sendResponse(uint8_t code) {
 	}
 	PROTO::split16(PROTO::crc16(response, 6), &response[6], &response[7]);
 
-#	ifdef CMD_SERIAL
-	CMD_SERIAL.write(response, 8);
-#	elif defined(CMD_SPI)
-	spiWrite(response);
-#	endif
+	_conn->write(response, 8);
+}
+
+static void _onTimeout() {
+	_sendResponse(PROTO::RESP::TIMEOUT_ERROR);
+}
+
+static void _onData(const uint8_t * data, size_t len) {
+	_sendResponse(_handleRequest(data));
 }
 
 void setup() {
@@ -238,11 +231,11 @@ void setup() {
 	aumInit();
 #	endif
 
-#	ifdef CMD_SERIAL
-	CMD_SERIAL.begin(CMD_SERIAL_SPEED);
-#	elif defined(CMD_SPI)
-	spiBegin();
-#	endif
+	_conn = DRIVERS::Factory::makeConnection(DRIVERS::CONNECTION);
+	_conn->onTimeout(_onTimeout);
+	_conn->onData(_onData);
+	_conn->begin();
+
 	_board = DRIVERS::Factory::makeBoard(DRIVERS::BOARD);
 }
 
@@ -254,29 +247,5 @@ void loop() {
 	_out.kbd->periodic();
 	_out.mouse->periodic();
 	_board->periodic();
-
-#	ifdef CMD_SERIAL
-	static unsigned long last = micros();
-	static uint8_t buffer[8];
-	static uint8_t index = 0;
-	if (CMD_SERIAL.available() > 0) {
-		buffer[index] = (uint8_t)CMD_SERIAL.read();
-		if (index == 7) {
-			_sendResponse(_handleRequest(buffer));
-			index = 0;
-		} else /*if (buffer[0] == PROTO::MAGIC)*/ { // FIXME: See kvmd/kvmd#80
-			last = micros();
-			++index;
-		}
-	} else if (index > 0) {
-		if (is_micros_timed_out(last, CMD_SERIAL_TIMEOUT)) {
-			_sendResponse(PROTO::RESP::TIMEOUT_ERROR);
-			index = 0;
-		}
-	}
-#	elif defined(CMD_SPI)
-	if (spiReady()) {
-		_sendResponse(_handleRequest(spiGet()));
-	}
-#	endif
+	_conn->periodic();
 }

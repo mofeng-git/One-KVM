@@ -25,6 +25,7 @@
 #include "mouse.h"
 #include "storage.h"
 #include "board.h"
+#include "connection.h"
 
 
 namespace DRIVERS {
@@ -33,5 +34,6 @@ namespace DRIVERS {
 		static Mouse *makeMouse(type _type);
 		static Storage* makeStorage(type _type);
 		static Board* makeBoard(type _type);
+		static Connection* makeConnection(type _type);
 	};
 }

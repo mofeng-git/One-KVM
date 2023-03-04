@@ -24,6 +24,8 @@
 #include "ps2/hid.h"
 #include "factory.h"
 #include "eeprom.h"
+#include "serial.h"
+#include "spi.h"
 
 #ifndef ARDUINO_ARCH_AVR
 #	error "Only AVR is supported"
@@ -70,13 +72,23 @@ namespace DRIVERS {
 #			endif
 			default:
 				return new Storage(DRIVERS::DUMMY);
-        }
+		}
 	}
 
 	Board* Factory::makeBoard(type _type) {
 		switch (_type) {
 			default:
 				return new Board(DRIVERS::DUMMY);
-        }
+		}
+	}
+
+	Connection* Factory::makeConnection(type _type) {
+#		ifdef CMD_SERIAL
+		return new Serial();
+#		elif defined(CMD_SPI)
+		return new Spi();
+#		else
+#		error CMD phy is not defined
+#		endif		
 	}
 }
