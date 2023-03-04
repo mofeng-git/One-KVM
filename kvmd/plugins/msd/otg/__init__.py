@@ -256,11 +256,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         async with self.__state.busy():
             assert self.__state.vd
-            self.__state_check_disconnected()
+            self.__STATE_check_disconnected()
 
             if name is not None:
                 if name:
-                    self.__state.vd.image = self.__state_get_storage_image(name)
+                    self.__state.vd.image = self.__STATE_get_storage_image(name)
                 else:
                     self.__state.vd.image = None
 
@@ -279,7 +279,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         async with self.__state.busy():
             assert self.__state.vd
             if connected:
-                self.__state_check_disconnected()
+                self.__STATE_check_disconnected()
 
                 if self.__state.vd.image is None:
                     raise MsdImageNotSelected()
@@ -296,7 +296,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__drive.set_image_path(self.__state.vd.image.path)
 
             else:
-                self.__state_check_connected()
+                self.__STATE_check_connected()
                 self.__drive.set_image_path("")
                 await self.__remount_rw(False, fatal=False)
 
@@ -309,8 +309,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 try:
                     async with self.__state._lock:  # pylint: disable=protected-access
                         self.__notifier.notify()
-                        self.__state_check_disconnected()
-                        image = self.__state_get_storage_image(name)
+                        self.__STATE_check_disconnected()
+                        image = self.__STATE_get_storage_image(name)
                         self.__reader = await MsdFileReader(
                             notifier=self.__notifier,
                             path=image.path,
@@ -330,12 +330,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 try:
                     async with self.__state._lock:  # pylint: disable=protected-access
                         self.__notifier.notify()
-                        assert self.__state.storage
-                        self.__state_check_disconnected()
-
-                        image = self.__storage.get_image_by_name(name)
-                        if image.name in self.__state.storage.images or image.exists():
-                            raise MsdImageExistsError()
+                        self.__STATE_check_disconnected()
+                        image = self.__STORAGE_create_new_image(name)
 
                         await self.__remount_rw(True)
                         image.set_complete(False)
@@ -369,9 +365,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         async with self.__state.busy():
             assert self.__state.storage
             assert self.__state.vd
-            self.__state_check_disconnected()
-
-            image = self.__state_get_storage_image(name)
+            self.__STATE_check_disconnected()
+            image = self.__STATE_get_storage_image(name)
 
             if self.__state.vd.image == image:
                 self.__state.vd.image = None
@@ -385,23 +380,32 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    def __state_check_connected(self) -> None:
+    def __STATE_check_connected(self) -> None:  # pylint: disable=invalid-name
         assert self.__state.vd
         if not (self.__state.vd.connected or self.__drive.get_image_path()):
             raise MsdDisconnectedError()
 
-    def __state_check_disconnected(self) -> None:
+    def __STATE_check_disconnected(self) -> None:  # pylint: disable=invalid-name
         assert self.__state.vd
         if self.__state.vd.connected or self.__drive.get_image_path():
             raise MsdConnectedError()
 
-    def __state_get_storage_image(self, name: str) -> Image:
+    def __STATE_get_storage_image(self, name: str) -> Image:  # pylint: disable=invalid-name
         assert self.__state.storage
         image = self.__state.storage.images.get(name)
         if image is None or not image.exists():
             raise MsdUnknownImageError()
         assert image.in_storage
         return image
+
+    def __STORAGE_create_new_image(self, name: str) -> Image:  # pylint: disable=invalid-name
+        assert self.__state.storage
+        image = self.__storage.get_image_by_name(name)
+        if image.name in self.__state.storage.images or image.exists():
+            raise MsdImageExistsError()
+        return image
+
+    # =====
 
     async def __close_reader(self) -> None:
         if self.__reader:
