@@ -375,11 +375,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
             if self.__state.vd.image == image:
                 self.__state.vd.image = None
-            del self.__state.storage.images[name]
 
             await self.__remount_rw(True)
             try:
                 image.remove(fatal=True)
+                del self.__state.storage.images[name]
             finally:
                 await self.__remount_rw(False, fatal=False)
 
