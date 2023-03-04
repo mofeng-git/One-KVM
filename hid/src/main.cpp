@@ -24,19 +24,21 @@
 
 #include "tools.h"
 #include "proto.h"
+#include "board.h"
+#include "outputs.h"
 #ifdef AUM
 #	include "aum.h"
 #endif
-#include "board.h"
-#include "outputs.h"
 
-static DRIVERS::Connection* _conn;
-static DRIVERS::Board* _board;
+
+static DRIVERS::Connection *_conn;
+static DRIVERS::Board *_board;
 static Outputs _out;
+
 #ifdef HID_DYNAMIC
+#	define RESET_TIMEOUT 500000
 static bool _reset_required = false;
 static unsigned long _reset_timestamp;
-#	define RESET_TIMEOUT 500000
 #endif
 
 

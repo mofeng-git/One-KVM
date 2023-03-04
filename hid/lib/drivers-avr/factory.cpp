@@ -64,7 +64,7 @@ namespace DRIVERS {
 		}
 	}
 
-	Storage* Factory::makeStorage(type _type) {
+	Storage *Factory::makeStorage(type _type) {
 		switch (_type) {
 #			ifdef HID_DYNAMIC
 			case NON_VOLATILE_STORAGE:
@@ -75,14 +75,14 @@ namespace DRIVERS {
 		}
 	}
 
-	Board* Factory::makeBoard(type _type) {
+	Board *Factory::makeBoard(type _type) {
 		switch (_type) {
 			default:
 				return new Board(DRIVERS::DUMMY);
 		}
 	}
 
-	Connection* Factory::makeConnection(type _type) {
+	Connection *Factory::makeConnection(type _type) {
 #		ifdef CMD_SERIAL
 		return new Serial();
 #		elif defined(CMD_SPI)
