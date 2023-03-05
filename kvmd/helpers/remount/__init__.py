@@ -22,6 +22,7 @@
 
 import sys
 import os
+import pwd
 import shutil
 import subprocess
 
@@ -74,11 +75,12 @@ def _move(src: str, dest: str) -> None:
 
 
 def _chown(path: str, user: str) -> None:
-    _log(f"CHOWN --- {user} - {path}")
-    try:
-        shutil.chown(path, user)
-    except Exception as err:
-        raise SystemExit(f"Can't change ownership: {err}")
+    if pwd.getpwuid(os.stat(path).st_uid).pw_name != user:
+        _log(f"CHOWN --- {user} - {path}")
+        try:
+            shutil.chown(path, user)
+        except Exception as err:
+            raise SystemExit(f"Can't change ownership: {err}")
 
 
 # =====
