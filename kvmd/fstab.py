@@ -20,6 +20,7 @@
 # ========================================================================== #
 
 
+import os
 import re
 import dataclasses
 
@@ -62,8 +63,8 @@ def _find_partitions(part_type: str, single: bool) -> list[Partition]:
                     options = dict(re.findall(r"X-kvmd\.%s-(root|user)(?:=([^,]+))?" % (part_type), fields[3]))
                     if options:
                         parts.append(Partition(
-                            mount_path=fields[1],
-                            root_path=(options.get("root", "") or fields[1]),
+                            mount_path=os.path.normpath(fields[1]),
+                            root_path=os.path.normpath(options.get("root", "") or fields[1]),
                             user=options.get("user", ""),
                         ))
                         if single:

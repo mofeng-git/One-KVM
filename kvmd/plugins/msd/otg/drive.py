@@ -57,7 +57,8 @@ class Drive:
             self.__set_param("forced_eject", "")
 
     def get_image_path(self) -> str:
-        return self.__get_param("file")
+        path = self.__get_param("file")
+        return (os.path.normpath(path) if path else "")
 
     def set_cdrom_flag(self, flag: bool) -> None:
         self.__set_param("cdrom", str(int(flag)))
