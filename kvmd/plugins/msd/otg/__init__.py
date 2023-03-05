@@ -41,10 +41,8 @@ from ....validators.os import valid_command
 from ....validators.kvm import valid_msd_image_name
 
 from .... import aiotools
-from .... import aiohelpers
 from .... import fstab
 
-from .. import MsdError
 from .. import MsdIsBusyError
 from .. import MsdOfflineError
 from .. import MsdConnectedError
@@ -139,13 +137,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__write_chunk_size = write_chunk_size
         self.__sync_chunk_size = sync_chunk_size
 
-        self.__remount_cmd = remount_cmd
-
         self.__initial_image: str = initial["image"]
         self.__initial_cdrom: bool = initial["cdrom"]
 
         self.__drive = Drive(gadget, instance=0, lun=0)
-        self.__storage = Storage(fstab.find_msd().root_path)
+        self.__storage = Storage(fstab.find_msd().root_path, remount_cmd)
 
         self.__reader: (MsdFileReader | None) = None
         self.__writer: (MsdFileWriter | None) = None
@@ -235,7 +231,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__drive.set_image_path("")
                 self.__drive.set_cdrom_flag(False)
                 self.__drive.set_rw_flag(False)
-                await self.__remount_rw(False)
+                await self.__storage.remount_rw(False)
             except Exception:
                 get_logger(0).exception("Can't reset MSD properly")
 
@@ -292,13 +288,13 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__drive.set_rw_flag(self.__state.vd.rw)
                 self.__drive.set_cdrom_flag(self.__state.vd.cdrom)
                 if self.__state.vd.rw:
-                    await self.__remount_rw(True)
+                    await self.__state.vd.image.remount_rw(True)
                 self.__drive.set_image_path(self.__state.vd.image.path)
 
             else:
                 self.__STATE_check_connected()
                 self.__drive.set_image_path("")
-                await self.__remount_rw(False, fatal=False)
+                await self.__storage.remount_rw(False, fatal=False)
 
             self.__state.vd.connected = connected
 
@@ -333,7 +329,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         self.__STATE_check_disconnected()
                         image = self.__STORAGE_create_new_image(name)
 
-                        await self.__remount_rw(True)
+                        await image.remount_rw(True)
                         image.set_complete(False)
 
                         self.__writer = await MsdFileWriter(
@@ -354,7 +350,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     try:
                         await aiotools.shield_fg(self.__close_writer())
                     finally:
-                        await aiotools.shield_fg(self.__remount_rw(False, fatal=False))
+                        if image:
+                            await aiotools.shield_fg(image.remount_rw(False, fatal=False))
         finally:
             # Между закрытием файла и эвентом айнотифи состояние может быть не обновлено,
             # так что форсим обновление вручную, чтобы получить актуальное состояние.
@@ -371,12 +368,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if self.__state.vd.image == image:
                 self.__state.vd.image = None
 
-            await self.__remount_rw(True)
+            await image.remount_rw(True)
             try:
                 image.remove(fatal=True)
                 del self.__state.storage.images[name]
             finally:
-                await self.__remount_rw(False, fatal=False)
+                await image.remount_rw(False, fatal=False)
 
     # =====
 
@@ -468,8 +465,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     # Если только что включились и образ не подключен - попробовать
                     # перемонтировать хранилище (и создать images и meta).
                     logger.info("Probing to remount storage ...")
-                    await self.__remount_rw(True)
-                    await self.__remount_rw(False)
+                    await self.__storage.remount_rw(True)
+                    await self.__storage.remount_rw(False)
                     await self.__setup_initial()
 
                 storage_state = self.__get_storage_state()
@@ -532,10 +529,3 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             cdrom=self.__drive.get_cdrom_flag(),
             rw=self.__drive.get_rw_flag(),
         )
-
-    # =====
-
-    async def __remount_rw(self, rw: bool, fatal: bool=True) -> None:
-        if not (await aiohelpers.remount("MSD", self.__remount_cmd, rw)):
-            if fatal:
-                raise MsdError("Can't execute remount helper")

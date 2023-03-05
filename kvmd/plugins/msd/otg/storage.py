@@ -27,6 +27,10 @@ from typing import Optional
 
 from ....logging import get_logger
 
+from .... import aiohelpers
+
+from .. import MsdError
+
 
 # =====
 @dataclasses.dataclass(frozen=True)
@@ -70,6 +74,10 @@ class Image(_Image):
     def exists(self) -> bool:
         return os.path.exists(self.path)
 
+    async def remount_rw(self, rw: bool, fatal: bool=True) -> None:
+        assert self.storage
+        await self.storage.remount_rw(rw, fatal)
+
     def remove(self, fatal: bool) -> None:
         assert self.storage is not None
         try:
@@ -103,8 +111,9 @@ class StorageSpace:
 
 
 class Storage:
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, remount_cmd: list[str]) -> None:
         self.__path = path
+        self.__remount_cmd = remount_cmd
 
     def get_watchable_paths(self) -> list[str]:
         return [self.__path]
@@ -146,3 +155,8 @@ class Storage:
             size=(st.f_blocks * st.f_frsize),
             free=(st.f_bavail * st.f_frsize),
         )
+
+    async def remount_rw(self, rw: bool, fatal: bool=True) -> None:
+        if not (await aiohelpers.remount("MSD", self.__remount_cmd, rw)):
+            if fatal:
+                raise MsdError("Can't execute remount helper")
