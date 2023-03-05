@@ -12,7 +12,12 @@ block body
 	include windows.pug
 
 	ul(class="footer")
-		li(id="kvmd-meta-server-host" class="footer-left")
+		li(class="footer-left")
+			span(id="kvmd-meta-server-host" title="Server name (see System/About)")
+			| &nbsp; | &nbsp;
+			span(id="kvmd-version-kvmd" title="KVMD version")
+			| &nbsp; | &nbsp;
+			span(id="kvmd-version-streamer" title="Streamer version")
 		li(class="footer-right")
 			a(target="_blank" href="https://pikvm.org") PiKVM Project
 			| &nbsp; | &nbsp;
