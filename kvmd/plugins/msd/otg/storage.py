@@ -46,7 +46,7 @@ class Image(_Image):
     @property
     def complete(self) -> bool:
         if self.storage is not None:
-            return os.path.exists(self.storage._get_complete_path(self))  # pylint: disable=protected-access
+            return os.path.exists(self.__get_complete_path())
         return True
 
     @property
@@ -83,7 +83,7 @@ class Image(_Image):
 
     def set_complete(self, flag: bool) -> None:
         assert self.storage is not None
-        path = self.storage._get_complete_path(self)  # pylint: disable=protected-access
+        path = self.__get_complete_path()
         if flag:
             open(path, "w").close()  # pylint: disable=consider-using-with
         else:
@@ -91,6 +91,9 @@ class Image(_Image):
                 os.remove(path)
             except FileNotFoundError:
                 pass
+
+    def __get_complete_path(self) -> str:
+        return os.path.join(os.path.dirname(self.path), f".__{self.name}.complete")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -102,24 +105,20 @@ class StorageSpace:
 class Storage:
     def __init__(self, path: str) -> None:
         self.__path = path
-        self.__images_path = os.path.join(self.__path, "images")
-        self.__meta_path = os.path.join(self.__path, "meta")
-
-    def _get_complete_path(self, image: Image) -> str:
-        return os.path.join(self.__meta_path, image.name + ".complete")
 
     def get_watchable_paths(self) -> list[str]:
-        return [self.__images_path, self.__meta_path]
+        return [self.__path]
 
     def get_images(self) -> dict[str, Image]:
         return {
             name: self.get_image_by_name(name)
-            for name in os.listdir(self.__images_path)
+            for name in os.listdir(self.__path)
+            if not name.startswith(".__") and name != "lost+found"
         }
 
     def get_image_by_name(self, name: str) -> Image:
         assert name
-        path = os.path.join(self.__images_path, name)
+        path = os.path.join(self.__path, name)
         return self.__get_image(name, path)
 
     def get_image_by_path(self, path: str) -> Image:
@@ -129,8 +128,10 @@ class Storage:
 
     def __get_image(self, name: str, path: str) -> Image:
         assert name
+        assert not name.startswith(".__")
+        assert name != "lost+found"
         assert path
-        in_storage = (os.path.dirname(path) == self.__images_path)
+        in_storage = (os.path.dirname(path) == self.__path)
         return Image(name, path, (self if in_storage else None))
 
     def get_space(self, fatal: bool) -> (StorageSpace | None):

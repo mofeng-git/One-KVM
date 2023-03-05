@@ -37,8 +37,8 @@ from ....yamlconf import Option
 
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_number
-from ....validators.os import valid_printable_filename
 from ....validators.os import valid_command
+from ....validators.kvm import valid_msd_image_name
 
 from .... import aiotools
 from .... import aiohelpers
@@ -170,7 +170,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             ], type=valid_command),
 
             "initial": {
-                "image": Option("",    type=valid_printable_filename, if_empty=""),
+                "image": Option("",    type=valid_msd_image_name, if_empty=""),
                 "cdrom": Option(False, type=valid_bool),
             },
         }

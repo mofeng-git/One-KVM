@@ -25,7 +25,12 @@ import os
 import shutil
 import subprocess
 
-from ... import fstab
+from os.path import join  # pylint: disable=ungrouped-imports
+from os.path import exists  # pylint: disable=ungrouped-imports
+
+from ...fstab import Partition
+from ...fstab import find_msd
+from ...fstab import find_pst
 
 
 # =====
@@ -43,12 +48,29 @@ def _remount(path: str, rw: bool) -> None:
 
 
 def _mkdir(path: str) -> None:
-    if not os.path.exists(path):
+    if not exists(path):
         _log(f"MKDIR --- {path}")
         try:
             os.mkdir(path)
         except Exception as err:
             raise SystemExit(f"Can't create directory: {err}")
+
+
+def _rmdir(path: str) -> None:
+    if exists(path):
+        _log(f"RMDIR --- {path}")
+        try:
+            os.rmdir(path)
+        except Exception as err:
+            raise SystemExit(f"Can't remove directory: {err}")
+
+
+def _move(src: str, dest: str) -> None:
+    _log(f"MOVE  --- {src} --> {dest}")
+    try:
+        os.rename(src, dest)
+    except Exception as err:
+        raise SystemExit(f"Can't move file: {err}")
 
 
 def _chown(path: str, user: str) -> None:
@@ -60,19 +82,41 @@ def _chown(path: str, user: str) -> None:
 
 
 # =====
+def _fix_msd(part: Partition) -> None:
+    images_path = join(part.root_path, "images")
+    meta_path = join(part.root_path, "meta")
+    if exists(images_path) and exists(meta_path):
+        for name in os.listdir(meta_path):
+            _move(join(meta_path, name), join(part.root_path, f".__{name}"))
+        _rmdir(meta_path)
+        for name in os.listdir(images_path):
+            _move(join(images_path, name), os.path.join(part.root_path, name))
+        _rmdir(images_path)
+    if part.user:
+        _chown(part.root_path, part.user)
+
+
+def _fix_pst(part: Partition) -> None:
+    path = os.path.join(part.root_path, "data")
+    _mkdir(path)
+    if part.user:
+        _chown(path, part.user)
+
+
+# =====
 def main() -> None:
     if len(sys.argv) != 2 or sys.argv[1] not in ["ro", "rw"]:
         raise SystemExit(f"Usage: {sys.argv[0]} [ro|rw]")
 
     finder = None
-    dirs: list[str] = []
+    fix = None
     app = os.path.basename(sys.argv[0])
     if app == "kvmd-helper-otgmsd-remount":
-        finder = fstab.find_msd
-        dirs = ["images", "meta"]
+        finder = find_msd
+        fix = _fix_msd
     elif app == "kvmd-helper-pst-remount":
-        finder = fstab.find_pst
-        dirs = ["data"]
+        finder = find_pst
+        fix = _fix_pst
     else:
         raise SystemExit("Unknown application target")
 
@@ -82,9 +126,5 @@ def main() -> None:
     part = finder()
     _remount(part.mount_path, rw)
     if rw and part.root_path:
-        for name in dirs:
-            path = os.path.join(part.root_path, name)
-            _mkdir(path)
-            if part.user:
-                _chown(path, part.user)
+        fix(part)
     _log(f"Storage in the {'RW' if rw else 'RO'}-mode now")
