@@ -179,7 +179,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 for name in list(storage["images"]):
                     del storage["images"][name]["path"]
                     del storage["images"][name]["in_storage"]
-                    del storage["images"][name]["storage"]
 
                 storage["downloading"] = (self.__reader.get_state() if self.__reader else None)
 
@@ -197,7 +196,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 vd = dataclasses.asdict(self.__state.vd)
                 if vd["image"]:
                     del vd["image"]["path"]
-                    del vd["image"]["storage"]
 
             return {
                 "enabled": True,

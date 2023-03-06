@@ -38,24 +38,30 @@ from .. import MsdError
 class _Image:
     name: str
     path: str
-    storage: Optional["Storage"] = dataclasses.field(compare=False)
-
     in_storage: bool = dataclasses.field(init=False)
-
     complete: bool = dataclasses.field(init=False, compare=False)
     size: int = dataclasses.field(init=False, compare=False)
     mod_ts: float = dataclasses.field(init=False, compare=False)
 
 
 class Image(_Image):
+    def __init__(self, name: str, path: str, storage: Optional["Storage"]) -> None:
+        super().__init__(name, path)
+        self.__storage = storage
+        self.__complete_path = os.path.join(
+            os.path.dirname(path),
+            ".__" + os.path.basename(path) + ".complete",
+        )
+        self.__adopted = (storage._is_adopted(self) if storage else True)
+
     @property
     def in_storage(self) -> bool:
-        return (self.storage is not None)
+        return bool(self.__storage)
 
     @property
     def complete(self) -> bool:
-        if self.storage is not None:
-            return os.path.exists(self.__get_complete_path())
+        if self.__storage:
+            return os.path.exists(self.__complete_path)
         return True
 
     @property
@@ -76,12 +82,12 @@ class Image(_Image):
         return os.path.exists(self.path)
 
     async def remount_rw(self, rw: bool, fatal: bool=True) -> None:
-        assert self.storage
-        if self.storage._is_mounted(self):  # pylint: disable=protected-access
-            await self.storage.remount_rw(rw, fatal)
+        assert self.__storage
+        if not self.__adopted:
+            await self.__storage.remount_rw(rw, fatal)
 
     def remove(self, fatal: bool) -> None:
-        assert self.storage is not None
+        assert self.__storage
         try:
             os.remove(self.path)
         except FileNotFoundError:
@@ -92,21 +98,14 @@ class Image(_Image):
         self.set_complete(False)
 
     def set_complete(self, flag: bool) -> None:
-        assert self.storage is not None
-        path = self.__get_complete_path()
+        assert self.__storage
         if flag:
-            open(path, "w").close()  # pylint: disable=consider-using-with
+            open(self.__complete_path, "w").close()  # pylint: disable=consider-using-with
         else:
             try:
-                os.remove(path)
+                os.remove(self.__complete_path)
             except FileNotFoundError:
                 pass
-
-    def __get_complete_path(self) -> str:
-        return os.path.join(
-            os.path.dirname(self.path),
-            ".__" + os.path.basename(self.path) + ".complete",
-        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -173,11 +172,15 @@ class Storage:
             free=(st.f_bavail * st.f_frsize),
         )
 
-    def _is_mounted(self, image: Image) -> bool:
+    def _is_adopted(self, image: Image) -> bool:
+        # True, если образ находится вне хранилища
+        # или в другой точке монтирования под ним
+        if not image.in_storage:
+            return True
         path = image.path
         while not os.path.ismount(path):
             path = os.path.dirname(path)
-        return (path == self.__path)
+        return (self.__path != path)
 
     async def remount_rw(self, rw: bool, fatal: bool=True) -> None:
         if not (await aiohelpers.remount("MSD", self.__remount_cmd, rw)):
