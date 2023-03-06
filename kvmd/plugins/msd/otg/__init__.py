@@ -307,6 +307,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         image = self.__STATE_get_storage_image(name)
                         self.__reader = await MsdFileReader(
                             notifier=self.__notifier,
+                            name=image.name,
                             path=image.path,
                             chunk_size=self.__read_chunk_size,
                         ).open()
@@ -332,6 +333,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                         self.__writer = await MsdFileWriter(
                             notifier=self.__notifier,
+                            name=image.name,
                             path=image.path,
                             file_size=size,
                             sync_size=self.__sync_chunk_size,

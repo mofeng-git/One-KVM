@@ -163,9 +163,9 @@ class BaseMsd(BasePlugin):
 
 
 class MsdFileReader(BaseMsdReader):  # pylint: disable=too-many-instance-attributes
-    def __init__(self, notifier: aiotools.AioNotifier, path: str, chunk_size: int) -> None:
+    def __init__(self, notifier: aiotools.AioNotifier, name: str, path: str, chunk_size: int) -> None:
         self.__notifier = notifier
-        self.__name = os.path.basename(path)
+        self.__name = name
         self.__path = path
         self.__chunk_size = chunk_size
 
@@ -222,9 +222,9 @@ class MsdFileReader(BaseMsdReader):  # pylint: disable=too-many-instance-attribu
 
 
 class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attributes
-    def __init__(self, notifier: aiotools.AioNotifier, path: str, file_size: int, sync_size: int, chunk_size: int) -> None:
+    def __init__(self, notifier: aiotools.AioNotifier, name: str, path: str, file_size: int, sync_size: int, chunk_size: int) -> None:
         self.__notifier = notifier
-        self.__name = os.path.basename(path)
+        self.__name = name
         self.__path = path
         self.__file_size = file_size
         self.__sync_size = sync_size
