@@ -442,9 +442,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         need_reload_state = False
                         for event in (await inotify.get_series(timeout=1)):
                             need_reload_state = True
-                            if event.mask & (InotifyMask.DELETE_SELF | InotifyMask.MOVE_SELF | InotifyMask.UNMOUNT):
-                                # Если выгрузили OTG, что-то отмонтировали или делают еще какую-то странную фигню
-                                logger.warning("Got fatal inotify event: %s; reinitializing MSD ...", event)
+                            if event.mask & (InotifyMask.DELETE_SELF | InotifyMask.MOVE_SELF | InotifyMask.UNMOUNT | InotifyMask.ISDIR):
+                                # Если выгрузили OTG, изменили каталоги, что-то отмонтировали или делают еще какую-то странную фигню
+                                logger.info("Got a big inotify event: %s; reinitializing MSD ...", event)
                                 need_restart = True
                                 break
                         if need_restart:

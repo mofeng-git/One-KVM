@@ -23,6 +23,7 @@
 import os
 import dataclasses
 
+from typing import Generator
 from typing import Optional
 
 from ....logging import get_logger
@@ -39,23 +40,23 @@ class _Image:
     path: str
     storage: Optional["Storage"] = dataclasses.field(compare=False)
 
-    complete: bool = dataclasses.field(init=False, compare=False)
-    in_storage: bool = dataclasses.field(init=False, compare=False)
+    in_storage: bool = dataclasses.field(init=False)
 
+    complete: bool = dataclasses.field(init=False, compare=False)
     size: int = dataclasses.field(init=False, compare=False)
     mod_ts: float = dataclasses.field(init=False, compare=False)
 
 
 class Image(_Image):
     @property
+    def in_storage(self) -> bool:
+        return (self.storage is not None)
+
+    @property
     def complete(self) -> bool:
         if self.storage is not None:
             return os.path.exists(self.__get_complete_path())
         return True
-
-    @property
-    def in_storage(self) -> bool:
-        return (self.storage is not None)
 
     @property
     def size(self) -> int:
@@ -69,14 +70,15 @@ class Image(_Image):
         try:
             return os.stat(self.path).st_mtime
         except Exception:
-            return 0
+            return 0.0
 
     def exists(self) -> bool:
         return os.path.exists(self.path)
 
     async def remount_rw(self, rw: bool, fatal: bool=True) -> None:
         assert self.storage
-        await self.storage.remount_rw(rw, fatal)
+        if self.storage._is_mounted(self):  # pylint: disable=protected-access
+            await self.storage.remount_rw(rw, fatal)
 
     def remove(self, fatal: bool) -> None:
         assert self.storage is not None
@@ -101,7 +103,10 @@ class Image(_Image):
                 pass
 
     def __get_complete_path(self) -> str:
-        return os.path.join(os.path.dirname(self.path), f".__{self.name}.complete")
+        return os.path.join(
+            os.path.dirname(self.path),
+            ".__" + os.path.basename(self.path) + ".complete",
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -116,31 +121,43 @@ class Storage:
         self.__remount_cmd = remount_cmd
 
     def get_watchable_paths(self) -> list[str]:
-        return [self.__path]
+        paths: list[str] = []
+        for (root_path, dirs, _) in os.walk(self.__path):
+            dirs[:] = list(self.__filter(dirs))
+            paths.append(root_path)
+        return paths
 
     def get_images(self) -> dict[str, Image]:
-        return {
-            name: self.get_image_by_name(name)
-            for name in os.listdir(self.__path)
-            if not name.startswith(".__") and name != "lost+found"
-        }
+        images: dict[str, Image] = {}
+        for (root_path, dirs, files) in os.walk(self.__path):
+            dirs[:] = list(self.__filter(dirs))
+            for file in self.__filter(files):
+                name = os.path.relpath(os.path.join(root_path, file), self.__path)
+                images[name] = self.get_image_by_name(name)
+        return images
+
+    def __filter(self, items: list[str]) -> Generator[str, None, None]:
+        for item in sorted(map(str.strip, items)):
+            if not item.startswith(".__") and item != "lost+found":
+                yield item
 
     def get_image_by_name(self, name: str) -> Image:
         assert name
         path = os.path.join(self.__path, name)
-        return self.__get_image(name, path)
+        return self.__get_image(name, path, True)
 
     def get_image_by_path(self, path: str) -> Image:
         assert path
-        name = os.path.basename(path)
-        return self.__get_image(name, path)
+        in_storage = (os.path.commonpath([self.__path, path]) == self.__path)
+        if in_storage:
+            name = os.path.relpath(path, self.__path)
+        else:
+            name = os.path.basename(path)
+        return self.__get_image(name, path, in_storage)
 
-    def __get_image(self, name: str, path: str) -> Image:
+    def __get_image(self, name: str, path: str, in_storage: bool) -> Image:
         assert name
-        assert not name.startswith(".__")
-        assert name != "lost+found"
         assert path
-        in_storage = (os.path.dirname(path) == self.__path)
         return Image(name, path, (self if in_storage else None))
 
     def get_space(self, fatal: bool) -> (StorageSpace | None):
@@ -155,6 +172,12 @@ class Storage:
             size=(st.f_blocks * st.f_frsize),
             free=(st.f_bavail * st.f_frsize),
         )
+
+    def _is_mounted(self, image: Image) -> bool:
+        path = image.path
+        while not os.path.ismount(path):
+            path = os.path.dirname(path)
+        return (path == self.__path)
 
     async def remount_rw(self, rw: bool, fatal: bool=True) -> None:
         if not (await aiohelpers.remount("MSD", self.__remount_cmd, rw)):
