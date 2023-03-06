@@ -269,6 +269,7 @@ class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attribu
     async def open(self) -> "MsdFileWriter":
         assert self.__file is None
         get_logger(1).info("Writing %r image (%d bytes) to MSD ...", self.__name, self.__file_size)
+        os.makedirs(os.path.dirname(self.__path), exist_ok=True)
         self.__file = await aiofiles.open(self.__path, mode="w+b", buffering=0)  # type: ignore
         return self
 
