@@ -138,7 +138,7 @@ class Storage:
 
     def __filter(self, items: list[str]) -> Generator[str, None, None]:
         for item in sorted(map(str.strip, items)):
-            if not item.startswith(".__") and item != "lost+found":
+            if not item.startswith(".") and item != "lost+found":
                 yield item
 
     def get_image_by_name(self, name: str) -> Image:

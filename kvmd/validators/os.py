@@ -78,7 +78,12 @@ def valid_printable_filename(arg: Any, name: str="") -> str:
 
     arg = valid_stripped_string_not_empty(arg, name)
 
-    if "/" in arg or "\0" in arg or arg in [".", ".."]:
+    if (
+        "/" in arg
+        or "\0" in arg
+        or arg.startswith(".")
+        or arg == "lost+found"
+    ):
         raise_error(arg, name)
 
     arg = "".join(

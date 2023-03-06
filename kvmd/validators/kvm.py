@@ -48,8 +48,6 @@ def valid_msd_image_name(arg: Any) -> str:
         raise_error(arg, name)
     for (index, part) in enumerate(list(parts)):
         parts[index] = valid_printable_filename(part, name=name)
-        if part.startswith(".__") or part == "lost+found":
-            raise_error(part, name)
     return "/".join(parts)
 
 
