@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import os
 import multiprocessing
 import time
 
@@ -32,14 +31,9 @@ from kvmd.apps.cleanup import main
 
 
 # =====
-def test_ok(tmpdir) -> None:  # type: ignore
+def test_ok() -> None:
     _ = Literal  # Makes liters happy
     queue: "multiprocessing.Queue[Literal[True]]" = multiprocessing.Queue()
-
-    ustreamer_sock_path = os.path.abspath(str(tmpdir.join("ustreamer-fake.sock")))
-    open(ustreamer_sock_path, "w").close()  # pylint: disable=consider-using-with
-    kvmd_sock_path = os.path.abspath(str(tmpdir.join("kvmd-fake.sock")))
-    open(kvmd_sock_path, "w").close()  # pylint: disable=consider-using-with
 
     def ustreamer_fake() -> None:
         setproctitle.setproctitle("kvmd/streamer: /usr/bin/ustreamer")
@@ -52,16 +46,7 @@ def test_ok(tmpdir) -> None:  # type: ignore
     assert queue.get(timeout=5)
 
     assert proc.is_alive()
-    main([
-        "kvmd-cleanup",
-        "--set-options",
-        f"kvmd/server/unix={kvmd_sock_path}",
-        f"kvmd/streamer/unix={ustreamer_sock_path}",
-        "--run",
-    ])
-
-    assert not os.path.exists(ustreamer_sock_path)
-    assert not os.path.exists(kvmd_sock_path)
+    main(["kvmd-cleanup", "--run"])
 
     assert not proc.is_alive()
     proc.join()

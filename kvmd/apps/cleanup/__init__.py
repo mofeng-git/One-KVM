@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import os
 import signal
 import time
 
@@ -56,20 +55,6 @@ def _kill_streamer(config: Section) -> None:
                         logger.exception("Can't send SIGKILL to streamer with pid=%d", proc.pid)
 
 
-def _remove_sockets(config: Section) -> None:
-    logger = get_logger(0)
-    for (owner, unix_path) in [
-        ("KVMD", config.server.unix),
-        ("streamer", config.streamer.unix),
-    ]:
-        if unix_path and os.path.exists(unix_path):
-            logger.info("Removing %s socket %r ...", owner, unix_path)
-            try:
-                os.remove(unix_path)
-            except Exception:  # pragma: nocover
-                logger.exception("Can't remove %s socket %r", owner, unix_path)
-
-
 # =====
 def main(argv: (list[str] | None)=None) -> None:
     config = init(
@@ -82,13 +67,9 @@ def main(argv: (list[str] | None)=None) -> None:
     logger = get_logger(0)
     logger.info("Cleaning up ...")
 
-    for func in [
-        _kill_streamer,
-        _remove_sockets,
-    ]:
-        try:
-            func(config)
-        except Exception:
-            pass
+    try:
+        _kill_streamer(config)
+    except Exception:
+        pass
 
     logger.info("Bye-bye")
