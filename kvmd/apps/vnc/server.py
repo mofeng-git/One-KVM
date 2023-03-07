@@ -370,17 +370,17 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def _on_pointer_event(self, buttons: dict[str, bool], wheel: dict[str, int], move: dict[str, int]) -> None:
         if self.__kvmd_ws:
-            for (button, state) in buttons.items():
-                if self.__mouse_buttons[button] != state:
-                    await self.__kvmd_ws.send_mouse_button_event(button, state)
-                    self.__mouse_buttons[button] = state
-
             if wheel["x"] or wheel["y"]:
                 await self.__kvmd_ws.send_mouse_wheel_event(wheel["x"], wheel["y"])
 
             if self.__mouse_move != move:
                 await self.__kvmd_ws.send_mouse_move_event(move["x"], move["y"])
                 self.__mouse_move = move
+
+            for (button, state) in buttons.items():
+                if self.__mouse_buttons[button] != state:
+                    await self.__kvmd_ws.send_mouse_button_event(button, state)
+                    self.__mouse_buttons[button] = state
 
     async def _on_cut_event(self, text: str) -> None:
         assert self.__stage1_authorized.is_passed()
