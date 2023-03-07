@@ -174,8 +174,8 @@ class _Service:  # pylint: disable=too-many-instance-attributes
             real_driver = "rndis"
         path = usb.get_gadget_path(self.__gadget, usb.G_FUNCTIONS, f"{real_driver}.usb0/ifname")
         logger.info("Using OTG gadget %r ...", self.__gadget)
-        with open(path) as iface_file:
-            iface = iface_file.read().strip()
+        with open(path) as file:
+            iface = file.read().strip()
             logger.info("Using OTG Ethernet interface %r ...", iface)
             assert iface
             return iface

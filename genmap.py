@@ -117,8 +117,8 @@ def _parse_ps2_key(key: str) -> _Ps2Key:
 
 def _read_keymap_csv(path: str) -> list[_KeyMapping]:
     keymap: list[_KeyMapping] = []
-    with open(path) as keymap_file:
-        for row in csv.DictReader(keymap_file):
+    with open(path) as file:
+        for row in csv.DictReader(file):
             if len(row) >= 6:
                 keymap.append(_KeyMapping(
                     web_name=row["web_name"],

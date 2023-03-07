@@ -35,9 +35,9 @@ from .. import tools
 
 # =====
 def load_yaml_file(path: str) -> Any:
-    with open(path) as yaml_file:
+    with open(path) as file:
         try:
-            return yaml.load(yaml_file, _YamlLoader)
+            return yaml.load(file, _YamlLoader)
         except Exception as err:
             # Reraise internal exception as standard ValueError and show the incorrect file
             raise ValueError(f"Invalid YAML in the file {path!r}:\n{tools.efmt(err)}") from None
@@ -45,9 +45,9 @@ def load_yaml_file(path: str) -> Any:
 
 # =====
 class _YamlLoader(yaml.SafeLoader):
-    def __init__(self, yaml_file: IO) -> None:
-        super().__init__(yaml_file)
-        self.__root = os.path.dirname(yaml_file.name)
+    def __init__(self, file: IO) -> None:
+        super().__init__(file)
+        self.__root = os.path.dirname(file.name)
 
     def include(self, node: yaml.nodes.Node) -> Any:
         incs: list[str]

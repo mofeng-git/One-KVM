@@ -75,13 +75,13 @@ class Drive:
     # =====
 
     def __get_param(self, param: str) -> str:
-        with open(os.path.join(self.__lun_path, param)) as param_file:
-            return param_file.read().strip()
+        with open(os.path.join(self.__lun_path, param)) as file:
+            return file.read().strip()
 
     def __set_param(self, param: str, value: str) -> None:
         try:
-            with open(os.path.join(self.__lun_path, param), "w") as param_file:
-                param_file.write(value + "\n")
+            with open(os.path.join(self.__lun_path, param), "w") as file:
+                file.write(value + "\n")
         except OSError as err:
             if err.errno == errno.EBUSY:
                 raise MsdDriveLockedError()

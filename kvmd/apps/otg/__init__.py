@@ -80,14 +80,14 @@ def _write(path: str, value: (str | int), optional: bool=False) -> None:
         logger.info("WRITE --- [SKIPPED] %s", path)
         return
     logger.info("WRITE --- %s", path)
-    with open(path, "w") as param_file:
-        param_file.write(str(value))
+    with open(path, "w") as file:
+        file.write(str(value))
 
 
 def _write_bytes(path: str, data: bytes) -> None:
     get_logger().info("WRITE --- %s", path)
-    with open(path, "wb") as param_file:
-        param_file.write(data)
+    with open(path, "wb") as file:
+        file.write(data)
 
 
 def _check_config(config: Section) -> None:

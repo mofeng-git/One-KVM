@@ -426,8 +426,8 @@ class Plugin(BaseAuthService):
         assert user == user.strip()
         assert user
         try:
-            with io.StringIO(_FREERADUIS_DICT) as dct_file:
-                dct = pyrad.dictionary.Dictionary(dct_file)
+            with io.StringIO(_FREERADUIS_DICT) as file:
+                dct = pyrad.dictionary.Dictionary(file)
             client = pyrad.client.Client(
                 server=self.__host,
                 authport=self.__port,

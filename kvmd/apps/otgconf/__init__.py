@@ -49,22 +49,22 @@ class _GadgetControl:
     def __udc_stopped(self) -> Generator[None, None, None]:
         udc = usb.find_udc(self.__udc)
         udc_path = usb.get_gadget_path(self.__gadget, usb.G_UDC)
-        with open(udc_path) as udc_file:
-            enabled = bool(udc_file.read().strip())
+        with open(udc_path) as file:
+            enabled = bool(file.read().strip())
         if enabled:
-            with open(udc_path, "w") as udc_file:
-                udc_file.write("\n")
+            with open(udc_path, "w") as file:
+                file.write("\n")
         try:
             yield
         finally:
             time.sleep(self.__init_delay)
-            with open(udc_path, "w") as udc_file:
-                udc_file.write(udc)
+            with open(udc_path, "w") as file:
+                file.write(udc)
 
     def __read_metas(self) -> Generator[dict, None, None]:
         for meta_name in sorted(os.listdir(self.__meta_path)):
-            with open(os.path.join(self.__meta_path, meta_name)) as meta_file:
-                yield json.loads(meta_file.read())
+            with open(os.path.join(self.__meta_path, meta_name)) as file:
+                yield json.loads(file.read())
 
     def enable_function(self, func: str) -> None:
         with self.__udc_stopped():

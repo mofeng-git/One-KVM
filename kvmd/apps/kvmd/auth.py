@@ -77,8 +77,8 @@ class AuthManager:
         assert self.__internal_service
 
         if self.__totp_secret_path:
-            with open(self.__totp_secret_path) as secret_file:
-                secret = secret_file.read().strip()
+            with open(self.__totp_secret_path) as file:
+                secret = file.read().strip()
             if secret:
                 code = passwd[-6:]
                 if not pyotp.TOTP(secret).verify(code):

@@ -110,8 +110,8 @@ def _read_keyboard_layout(path: str) -> dict[int, list[At1Key]]:  # Keysym to ev
     logger = get_logger(0)
     logger.info("Reading keyboard layout %s ...", path)
 
-    with open(path) as layout_file:
-        lines = list(map(str.strip, layout_file.read().split("\n")))
+    with open(path) as file:
+        lines = list(map(str.strip, file.read().split("\n")))
 
     layout: dict[int, list[At1Key]] = {}
     for (lineno, line) in enumerate(lines):

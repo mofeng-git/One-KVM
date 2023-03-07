@@ -59,8 +59,8 @@ def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.Htpassw
     try:
         try:
             st = os.stat(path)
-            with open(path, "rb") as htpasswd_file:
-                os.write(tmp_fd, htpasswd_file.read())
+            with open(path, "rb") as file:
+                os.write(tmp_fd, file.read())
                 os.fchown(tmp_fd, st.st_uid, st.st_gid)
                 os.fchmod(tmp_fd, st.st_mode)
         finally:

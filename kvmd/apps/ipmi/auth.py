@@ -40,8 +40,8 @@ class IpmiUserCredentials:
 class IpmiAuthManager:
     def __init__(self, path: str) -> None:
         self.__path = path
-        with open(path) as passwd_file:
-            self.__credentials = self.__parse_passwd_file(passwd_file.read().split("\n"))
+        with open(path) as file:
+            self.__credentials = self.__parse_passwd_file(file.read().split("\n"))
 
     def __contains__(self, ipmi_user: str) -> bool:
         return (ipmi_user in self.__credentials)

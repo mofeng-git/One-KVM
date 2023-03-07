@@ -44,13 +44,13 @@ def _join_rtc(rtc: int, key: str) -> str:
 
 
 def _read_int(rtc: int, key: str) -> int:
-    with open(_join_rtc(rtc, key)) as value_file:
-        return int(value_file.read().strip() or "0")
+    with open(_join_rtc(rtc, key)) as file:
+        return int(file.read().strip() or "0")
 
 
 def _write_int(rtc: int, key: str, value: int) -> None:
-    with open(_join_rtc(rtc, key), "w") as value_file:
-        value_file.write(str(value))
+    with open(_join_rtc(rtc, key), "w") as file:
+        file.write(str(value))
 
 
 def _reset_alarm(rtc: int, timeout: int) -> None:
