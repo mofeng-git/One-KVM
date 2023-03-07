@@ -40,6 +40,7 @@ class _Image:
     path: str
     in_storage: bool = dataclasses.field(init=False)
     complete: bool = dataclasses.field(init=False, compare=False)
+    removable: bool = dataclasses.field(init=False, compare=False)
     size: int = dataclasses.field(init=False, compare=False)
     mod_ts: float = dataclasses.field(init=False, compare=False)
 
@@ -48,10 +49,8 @@ class Image(_Image):
     def __init__(self, name: str, path: str, storage: Optional["Storage"]) -> None:
         super().__init__(name, path)
         self.__storage = storage
-        self.__complete_path = os.path.join(
-            os.path.dirname(path),
-            ".__" + os.path.basename(path) + ".complete",
-        )
+        (self.__dir_path, file_name) = os.path.split(path)
+        self.__complete_path = os.path.join(self.__dir_path, f".__{file_name}.complete")
         self.__adopted = (storage._is_adopted(self) if storage else True)
 
     @property
@@ -63,6 +62,14 @@ class Image(_Image):
         if self.__storage:
             return os.path.exists(self.__complete_path)
         return True
+
+    @property
+    def removable(self) -> bool:
+        if not self.__storage:
+            return False
+        if not self.__adopted:
+            return True
+        return os.access(self.__dir_path, os.W_OK)
 
     @property
     def size(self) -> int:

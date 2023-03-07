@@ -249,7 +249,7 @@ export function Msd() {
 		tools.el.setEnabled($("msd-image-selector"), (online && !s.drive.connected && !s.busy));
 		__applyStateImageSelector();
 		tools.el.setEnabled($("msd-download-button"), (online && s.drive.image && !s.drive.connected && !s.busy));
-		tools.el.setEnabled($("msd-remove-button"), (online && s.drive.image && !s.drive.connected && !s.busy));
+		tools.el.setEnabled($("msd-remove-button"), (online && s.drive.image && s.drive.image.removable && !s.drive.connected && !s.busy));
 
 		tools.radio.setEnabled("msd-mode-radio", (online && s.features.cdrom && !s.drive.connected && !s.busy));
 		tools.radio.setValue("msd-mode-radio", `${Number(online && s.features.cdrom && s.drive.cdrom)}`);
