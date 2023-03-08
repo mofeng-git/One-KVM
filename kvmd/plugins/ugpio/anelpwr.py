@@ -140,7 +140,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         session = self.__ensure_http_session()
         try:
             async with session.post(
-                url=f"{self.__url}//ctrl.htm",
+                url=f"{self.__url}/ctrl.htm",
                 data=f"F{pin}={int(state)}",
                 headers={"Content-Type": "text/plain"},
             ) as response:
