@@ -27,8 +27,7 @@ from ....mouse import MouseRange
 class Mouse:  # pylint: disable=too-many-instance-attributes
     def __init__(self) -> None:
         self.__active = "usb"
-        self.__button = ""
-        self.__clicked = False
+        self.__buttons = 0x00
         self.__to_x = [0, 0]
         self.__to_y = [0, 0]
         self.__wheel_y = 0
@@ -36,8 +35,11 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
         self.__delta_y = 0
 
     def button(self, button: str, clicked: bool) -> list[int]:
-        self.__button = button
-        self.__clicked = clicked
+        code = self.__button_code(button)
+        if code and self.__buttons:
+            self.__buttons &= ~code
+        if clicked:
+            self.__buttons |= code
         self.__wheel_y = 0
         if self.__active != "usb":
             self.__to_x = [0, 0]
@@ -74,25 +76,22 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
         self.__active = name
 
     def __absolute(self) -> list[int]:
-        code = 0x00
-        if self.__clicked:
-            code = self.__button_code(self.__button)
-        cmd = [0x00, 0x04, 0x07, 0x02, code, 0x00, 0x00, 0x00, 0x00, 0x00]
-        if len(self.__to_x) == 2:
-            cmd[6] = self.__to_x[0]
-            cmd[5] = self.__to_x[1]
-        if len(self.__to_y) == 2:
-            cmd[8] = self.__to_y[0]
-            cmd[7] = self.__to_y[1]
+        cmd = [
+            0x00, 0x04, 0x07, 0x02,
+            self.__buttons,
+            self.__to_x[1], self.__to_x[0],
+            self.__to_y[1], self.__to_y[0],
+            0x00]
         if self.__wheel_y:
             cmd[9] = self.__wheel_y
         return cmd
 
     def __relative(self) -> list[int]:
-        code = 0x00
-        if self.__clicked:
-            code = self.__button_code(self.__button)
-        cmd = [0x00, 0x05, 0x05, 0x01, code, self.__delta_x, self.__delta_y, 0x00]
+        cmd = [
+            0x00, 0x05, 0x05, 0x01,
+            self.__buttons,
+            self.__delta_x, self.__delta_y,
+            0x00]
         return cmd
 
     def __button_code(self, name: str) -> int:

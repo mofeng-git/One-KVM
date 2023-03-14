@@ -256,11 +256,11 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             self.__set_state_online(True)
             return True
 
-        except Exception as err:
+        except _ResError as err:
             self.__set_state_online(False)
             get_logger(0).info(err)
-            time.sleep(2)
             error_retval = False
+            time.sleep(2)
 
         return error_retval
 
