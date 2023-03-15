@@ -33,14 +33,22 @@ class Keyboard:
             "caps": False,
             "scroll": False,
         }, self.__notifier, type=bool)
-
-        self.__active_keys: list[list] = []
+        self.__modifiers = 0x00
+        self.__active_keys: list[int] = []
 
     def key(self, key: str, state: bool) -> list[int]:
+        modifier = self.__is_modifier(key)
+        code = self.__keycode(key)
+        if not state:
+            if not modifier and code in self.__active_keys:
+                self.__active_keys.remove(code)
+            if modifier and self.__modifiers:
+                self.__modifiers &= ~code
         if state:
-            self.__active_keys.append([key, self.__is_modifier(key)])
-        else:
-            self.__active_keys.remove([key, self.__is_modifier(key)])
+            if not modifier and len(self.__active_keys) < 6:
+                self.__active_keys.append(code)
+            if modifier:
+                self.__modifiers |= code
         return self.__key()
 
     async def leds(self) -> dict:
@@ -54,13 +62,14 @@ class Keyboard:
         self.__leds.update(num=num, caps=caps, scroll=scroll)
 
     def __key(self) -> list[int]:
-        cmd = [0x00, 0x02, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        cmd = [
+            0x00, 0x02, 0x08,
+            self.__modifiers,
+            0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
         counter = 0
-        for key in self.__active_keys:
-            if key[1]:
-                cmd[3 + counter] = self.__keycode(key[0])
-            else:
-                cmd[5 + counter] = self.__keycode(key[0])
+        for code in self.__active_keys:
+            cmd[5 + counter] = code
             counter += 1
         return cmd
 
