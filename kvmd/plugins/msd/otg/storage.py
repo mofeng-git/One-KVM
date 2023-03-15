@@ -26,6 +26,9 @@ import dataclasses
 from typing import Generator
 from typing import Optional
 
+import aiofiles
+import aiofiles.os
+
 from ....logging import get_logger
 
 from .... import aiohelpers
@@ -85,32 +88,33 @@ class Image(_Image):
         except Exception:
             return 0.0
 
-    def exists(self) -> bool:
-        return os.path.exists(self.path)
+    async def exists(self) -> bool:
+        return (await aiofiles.os.path.exists(self.path))
 
     async def remount_rw(self, rw: bool, fatal: bool=True) -> None:
         assert self.__storage
         if not self.__adopted:
             await self.__storage.remount_rw(rw, fatal)
 
-    def remove(self, fatal: bool) -> None:
+    async def remove(self, fatal: bool) -> None:
         assert self.__storage
         try:
-            os.remove(self.path)
+            await aiofiles.os.remove(self.path)
         except FileNotFoundError:
             pass
         except Exception:
             if fatal:
                 raise
-        self.set_complete(False)
+        await self.set_complete(False)
 
-    def set_complete(self, flag: bool) -> None:
+    async def set_complete(self, flag: bool) -> None:
         assert self.__storage
         if flag:
-            open(self.__complete_path, "w").close()  # pylint: disable=consider-using-with
+            async with aiofiles.open(self.__complete_path, "w"):
+                pass
         else:
             try:
-                os.remove(self.__complete_path)
+                await aiofiles.os.remove(self.__complete_path)
             except FileNotFoundError:
                 pass
 

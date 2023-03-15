@@ -254,7 +254,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
             if name is not None:
                 if name:
-                    self.__state.vd.image = self.__STATE_get_storage_image(name)
+                    self.__state.vd.image = await self.__STATE_get_storage_image(name)
                 else:
                     self.__state.vd.image = None
 
@@ -278,7 +278,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 if self.__state.vd.image is None:
                     raise MsdImageNotSelected()
 
-                if not self.__state.vd.image.exists():
+                if not (await self.__state.vd.image.exists()):
                     raise MsdUnknownImageError()
 
                 assert self.__state.vd.image.in_storage
@@ -304,7 +304,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     async with self.__state._lock:  # pylint: disable=protected-access
                         self.__notifier.notify()
                         self.__STATE_check_disconnected()
-                        image = self.__STATE_get_storage_image(name)
+                        image = await self.__STATE_get_storage_image(name)
                         self.__reader = await MsdFileReader(
                             notifier=self.__notifier,
                             name=image.name,
@@ -326,10 +326,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     async with self.__state._lock:  # pylint: disable=protected-access
                         self.__notifier.notify()
                         self.__STATE_check_disconnected()
-                        image = self.__STORAGE_create_new_image(name)
+                        image = await self.__STORAGE_create_new_image(name)
 
                         await image.remount_rw(True)
-                        image.set_complete(False)
+                        await image.set_complete(False)
 
                         self.__writer = await MsdFileWriter(
                             notifier=self.__notifier,
@@ -342,16 +342,18 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                     self.__notifier.notify()
                     yield self.__writer
-                    image.set_complete(self.__writer.is_complete())
+                    await image.set_complete(self.__writer.is_complete())
 
                 finally:
-                    if image and remove_incomplete and self.__writer and not self.__writer.is_complete():
-                        image.remove(fatal=False)
                     try:
-                        await aiotools.shield_fg(self.__close_writer())
+                        if image and remove_incomplete and self.__writer and not self.__writer.is_complete():
+                            await image.remove(fatal=False)
                     finally:
-                        if image:
-                            await aiotools.shield_fg(image.remount_rw(False, fatal=False))
+                        try:
+                            await aiotools.shield_fg(self.__close_writer())
+                        finally:
+                            if image:
+                                await aiotools.shield_fg(image.remount_rw(False, fatal=False))
         finally:
             # Между закрытием файла и эвентом айнотифи состояние может быть не обновлено,
             # так что форсим обновление вручную, чтобы получить актуальное состояние.
@@ -363,17 +365,17 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             assert self.__state.storage
             assert self.__state.vd
             self.__STATE_check_disconnected()
-            image = self.__STATE_get_storage_image(name)
+            image = await self.__STATE_get_storage_image(name)
 
             if self.__state.vd.image == image:
                 self.__state.vd.image = None
 
             await image.remount_rw(True)
             try:
-                image.remove(fatal=True)
+                await image.remove(fatal=True)
                 del self.__state.storage.images[name]
             finally:
-                await image.remount_rw(False, fatal=False)
+                await aiotools.shield_fg(image.remount_rw(False, fatal=False))
 
     # =====
 
@@ -387,18 +389,18 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         if self.__state.vd.connected or self.__drive.get_image_path():
             raise MsdConnectedError()
 
-    def __STATE_get_storage_image(self, name: str) -> Image:  # pylint: disable=invalid-name
+    async def __STATE_get_storage_image(self, name: str) -> Image:  # pylint: disable=invalid-name
         assert self.__state.storage
         image = self.__state.storage.images.get(name)
-        if image is None or not image.exists():
+        if image is None or not (await image.exists()):
             raise MsdUnknownImageError()
         assert image.in_storage
         return image
 
-    def __STORAGE_create_new_image(self, name: str) -> Image:  # pylint: disable=invalid-name
+    async def __STORAGE_create_new_image(self, name: str) -> Image:  # pylint: disable=invalid-name
         assert self.__state.storage
         image = self.__storage.get_image_by_name(name)
-        if image.name in self.__state.storage.images or image.exists():
+        if image.name in self.__state.storage.images or (await image.exists()):
             raise MsdImageExistsError()
         return image
 
