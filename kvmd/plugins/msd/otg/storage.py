@@ -21,6 +21,7 @@
 
 
 import os
+import operator
 import dataclasses
 
 from typing import Generator
@@ -31,6 +32,7 @@ import aiofiles.os
 
 from ....logging import get_logger
 
+from .... import aiotools
 from .... import aiohelpers
 
 from .. import MsdError
@@ -130,26 +132,42 @@ class Storage:
         self.__path = path
         self.__remount_cmd = remount_cmd
 
-    def get_watchable_paths(self) -> list[str]:
-        paths: list[str] = []
-        for (root_path, dirs, _) in os.walk(self.__path):
-            dirs[:] = list(self.__filtered(dirs))
-            paths.append(root_path)
-        return paths
+    async def get_watchable_paths(self) -> list[str]:
+        return (await aiotools.run_async(self.__get_watchable_paths))
 
-    def get_images(self) -> dict[str, Image]:
+    async def get_images(self) -> dict[str, Image]:
+        return (await aiotools.run_async(self.__get_images))
+
+    def __get_watchable_paths(self) -> list[str]:
+        return list(map(operator.itemgetter(0), self.__walk(with_files=False)))
+
+    def __get_images(self) -> dict[str, Image]:
         images: dict[str, Image] = {}
-        for (root_path, dirs, files) in os.walk(self.__path):
-            dirs[:] = list(self.__filtered(dirs))
-            for file in self.__filtered(files):
-                name = os.path.relpath(os.path.join(root_path, file), self.__path)
+        for (_, files) in self.__walk(with_files=True):
+            for path in files:
+                name = os.path.relpath(path, self.__path)
                 images[name] = self.get_image_by_name(name)
         return images
 
-    def __filtered(self, items: list[str]) -> Generator[str, None, None]:
-        for item in sorted(map(str.strip, items)):
-            if not item.startswith(".") and item != "lost+found":
-                yield item
+    def __walk(self, with_files: bool, root_path: (str | None)=None) -> Generator[tuple[str, list[str]], None, None]:
+        if root_path is None:
+            root_path = self.__path
+        files: list[str] = []
+        with os.scandir(root_path) as dir_iter:
+            for item in sorted(dir_iter, key=operator.attrgetter("name")):
+                if item.name.startswith(".") or item.name == "lost+found":
+                    continue
+                try:
+                    if item.is_dir(follow_symlinks=False):
+                        item.stat()  # Проверяем, не сдохла ли смонтированная NFS
+                        yield from self.__walk(with_files, item.path)
+                    elif with_files and item.is_file(follow_symlinks=False):
+                        files.append(item.path)
+                except Exception:
+                    pass
+        yield (root_path, files)
+
+    # =====
 
     def get_image_by_name(self, name: str) -> Image:
         assert name
@@ -169,6 +187,8 @@ class Storage:
         assert name
         assert path
         return Image(name, path, (self if in_storage else None))
+
+    # =====
 
     def get_space(self, fatal: bool) -> (StorageSpace | None):
         try:

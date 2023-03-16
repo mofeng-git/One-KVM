@@ -34,6 +34,7 @@ from typing import Generator
 
 from .logging import get_logger
 
+from . import aiotools
 from . import libc
 
 
@@ -189,11 +190,12 @@ class Inotify:
 
         self.__events_queue: "asyncio.Queue[InotifyEvent]" = asyncio.Queue()
 
-    def watch(self, path: str, mask: int) -> None:
+    async def watch(self, path: str, mask: int) -> None:
         path = os.path.normpath(path)
         assert path not in self.__wd_by_path, path
         get_logger().info("Watching for %s", path)
-        wd = _inotify_check(libc.inotify_add_watch(self.__fd, _fs_encode(path), mask))
+        # Асинхронно, чтобы не висло на NFS
+        wd = _inotify_check(await aiotools.run_async(libc.inotify_add_watch, self.__fd, _fs_encode(path), mask))
         self.__wd_by_path[path] = wd
         self.__path_by_wd[wd] = path
 

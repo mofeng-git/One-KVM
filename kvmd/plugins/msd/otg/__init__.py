@@ -431,10 +431,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                 with Inotify() as inotify:
                     for path in [
-                        *self.__storage.get_watchable_paths(),
+                        *(await self.__storage.get_watchable_paths()),
                         *self.__drive.get_watchable_paths(),
                     ]:
-                        inotify.watch(path, InotifyMask.ALL_MODIFY_EVENTS)
+                        await inotify.watch(path, InotifyMask.ALL_MODIFY_EVENTS)
 
                     # После установки вотчеров еще раз проверяем стейт, чтобы ничего не потерять
                     await self.__reload_state()
@@ -471,7 +471,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await self.__storage.remount_rw(False)
                     await self.__setup_initial()
 
-                storage_state = self.__get_storage_state()
+                storage_state = await self.__get_storage_state()
 
             except Exception:
                 logger.exception("Error while reloading MSD state; switching to offline")
@@ -514,8 +514,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    def __get_storage_state(self) -> _StorageState:
-        images = self.__storage.get_images()
+    async def __get_storage_state(self) -> _StorageState:
+        images = await self.__storage.get_images()
         space = self.__storage.get_space(fatal=True)
         assert space
         return _StorageState(

@@ -82,8 +82,8 @@ class Plugin(BaseUserGpioDriver):
                     await asyncio.sleep(5)
 
                 with Inotify() as inotify:
-                    inotify.watch(os.path.dirname(self.__udc_path), InotifyMask.ALL_MODIFY_EVENTS)
-                    inotify.watch(self.__profile_path, InotifyMask.ALL_MODIFY_EVENTS)
+                    await inotify.watch(os.path.dirname(self.__udc_path), InotifyMask.ALL_MODIFY_EVENTS)
+                    await inotify.watch(self.__profile_path, InotifyMask.ALL_MODIFY_EVENTS)
                     self._notifier.notify()
                     while True:
                         need_restart = False
