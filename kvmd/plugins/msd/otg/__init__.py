@@ -489,7 +489,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         self.__state.vd = _VirtualDriveState.from_drive_state(drive_state)
 
                     image = self.__state.vd.image
-                    if image and (not image.in_storage or not image.exists()):
+                    if image and (not image.in_storage or not (await image.exists())):
                         # Если только что отключили ручной образ вне хранилища или ранее выбранный образ был удален
                         self.__state.vd.image = None
 
@@ -501,7 +501,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         if self.__initial_image:
             logger = get_logger(0)
             image = self.__storage.get_image_by_name(self.__initial_image)
-            if image.exists():
+            if (await image.exists()):
                 logger.info("Setting up initial image %r ...", self.__initial_image)
                 try:
                     self.__drive.set_rw_flag(False)
