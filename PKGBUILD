@@ -43,7 +43,7 @@ depends=(
 	"python<3.11"
 	python-yaml
 	"python-aiohttp>=3.7.4.post0-1.1"
-	python-aiofiles
+	"python-aiofiles>=23.1.0-1"
 	python-passlib
 	python-pyotp
 	python-qrcode

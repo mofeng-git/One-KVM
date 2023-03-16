@@ -399,7 +399,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     async def __STORAGE_create_new_image(self, name: str) -> Image:  # pylint: disable=invalid-name
         assert self.__state.storage
-        image = self.__storage.get_image_by_name(name)
+        image = await self.__storage.get_image_by_name(name)
         if image.name in self.__state.storage.images or (await image.exists()):
             raise MsdImageExistsError()
         return image
@@ -461,7 +461,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         logger = get_logger(0)
         async with self.__state._lock:  # pylint: disable=protected-access
             try:
-                drive_state = self.__get_drive_state()
+                drive_state = await self.__get_drive_state()
 
                 if self.__state.vd is None and drive_state.image is None:
                     # Если только что включились и образ не подключен - попробовать
@@ -500,7 +500,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     async def __setup_initial(self) -> None:
         if self.__initial_image:
             logger = get_logger(0)
-            image = self.__storage.get_image_by_name(self.__initial_image)
+            image = await self.__storage.get_image_by_name(self.__initial_image)
             if (await image.exists()):
                 logger.info("Setting up initial image %r ...", self.__initial_image)
                 try:
@@ -524,10 +524,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             images=images,
         )
 
-    def __get_drive_state(self) -> _DriveState:
+    async def __get_drive_state(self) -> _DriveState:
         path = self.__drive.get_image_path()
         return _DriveState(
-            image=(self.__storage.get_image_by_path(path) if path else None),
+            image=((await self.__storage.get_image_by_path(path)) if path else None),
             cdrom=self.__drive.get_cdrom_flag(),
             rw=self.__drive.get_rw_flag(),
         )

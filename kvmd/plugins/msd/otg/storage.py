@@ -21,6 +21,7 @@
 
 
 import os
+import asyncio
 import operator
 import dataclasses
 
@@ -43,7 +44,7 @@ from .. import MsdError
 class _Image:
     name: str
     path: str
-    in_storage: bool = dataclasses.field(init=False)
+    in_storage: bool = dataclasses.field(init=False, compare=False)
     complete: bool = dataclasses.field(init=False, compare=False)
     removable: bool = dataclasses.field(init=False, compare=False)
     size: int = dataclasses.field(init=False, compare=False)
@@ -56,39 +57,55 @@ class Image(_Image):
         self.__storage = storage
         (self.__dir_path, file_name) = os.path.split(path)
         self.__complete_path = os.path.join(self.__dir_path, f".__{file_name}.complete")
-        self.__adopted = (storage._is_adopted(self) if storage else True)
+        self.__adopted = False
 
-    @property
-    def in_storage(self) -> bool:
-        return bool(self.__storage)
+    async def _update(self) -> None:
+        # adopted используется в последующих проверках
+        self.__adopted = await aiotools.run_async(self.__is_adopted)
+        (complete, removable, (size, mod_ts)) = await asyncio.gather(
+            self.__is_complete(),
+            self.__is_removable(),
+            self.__get_stat(),
+        )
+        object.__setattr__(self, "complete", complete)
+        object.__setattr__(self, "removable", removable)
+        object.__setattr__(self, "size", size)
+        object.__setattr__(self, "mod_ts", mod_ts)
 
-    @property
-    def complete(self) -> bool:
+    def __is_adopted(self) -> bool:
+        # True, если образ находится вне хранилища
+        # или в другой точке монтирования под ним
+        if self.__storage is None:
+            return True
+        path = self.path
+        while not os.path.ismount(path):
+            path = os.path.dirname(path)
+        return (self.__storage.get_root_path() != path)
+
+    async def __is_complete(self) -> bool:
         if self.__storage:
-            return os.path.exists(self.__complete_path)
+            return (await aiofiles.os.path.exists(self.__complete_path))
         return True
 
-    @property
-    def removable(self) -> bool:
+    async def __is_removable(self) -> bool:
         if not self.__storage:
             return False
         if not self.__adopted:
             return True
-        return os.access(self.__dir_path, os.W_OK)
+        return (await aiofiles.os.access(self.__dir_path, os.W_OK))  # type: ignore
+
+    async def __get_stat(self) -> tuple[int, float]:
+        try:
+            st = (await aiofiles.os.stat(self.path))
+            return (st.st_size, st.st_mtime)
+        except Exception:
+            return (0, 0.0)
+
+    # =====
 
     @property
-    def size(self) -> int:
-        try:
-            return os.stat(self.path).st_size
-        except Exception:
-            return 0
-
-    @property
-    def mod_ts(self) -> float:
-        try:
-            return os.stat(self.path).st_mtime
-        except Exception:
-            return 0.0
+    def in_storage(self) -> bool:
+        return bool(self.__storage)
 
     async def exists(self) -> bool:
         return (await aiofiles.os.path.exists(self.path))
@@ -119,6 +136,7 @@ class Image(_Image):
                 await aiofiles.os.remove(self.__complete_path)
             except FileNotFoundError:
                 pass
+        await self._update()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -132,22 +150,27 @@ class Storage:
         self.__path = path
         self.__remount_cmd = remount_cmd
 
+    def get_root_path(self) -> str:
+        return self.__path
+
     async def get_watchable_paths(self) -> list[str]:
-        return (await aiotools.run_async(self.__get_watchable_paths))
+        return (await aiotools.run_async(self.__inner_get_watchable_paths))
 
     async def get_images(self) -> dict[str, Image]:
-        return (await aiotools.run_async(self.__get_images))
+        return {
+            name: (await self.get_image_by_name(name))
+            for name in (await aiotools.run_async(self.__inner_get_images))
+        }
 
-    def __get_watchable_paths(self) -> list[str]:
+    def __inner_get_watchable_paths(self) -> list[str]:
         return list(map(operator.itemgetter(0), self.__walk(with_files=False)))
 
-    def __get_images(self) -> dict[str, Image]:
-        images: dict[str, Image] = {}
-        for (_, files) in self.__walk(with_files=True):
-            for path in files:
-                name = os.path.relpath(path, self.__path)
-                images[name] = self.get_image_by_name(name)
-        return images
+    def __inner_get_images(self) -> list[str]:
+        return [
+            os.path.relpath(path, self.__path)  # == name
+            for (_, files) in self.__walk(with_files=True)
+            for path in files
+        ]
 
     def __walk(self, with_files: bool, root_path: (str | None)=None) -> Generator[tuple[str, list[str]], None, None]:
         if root_path is None:
@@ -169,24 +192,26 @@ class Storage:
 
     # =====
 
-    def get_image_by_name(self, name: str) -> Image:
+    async def get_image_by_name(self, name: str) -> Image:
         assert name
         path = os.path.join(self.__path, name)
-        return self.__get_image(name, path, True)
+        return (await self.__get_image(name, path, True))
 
-    def get_image_by_path(self, path: str) -> Image:
+    async def get_image_by_path(self, path: str) -> Image:
         assert path
         in_storage = (os.path.commonpath([self.__path, path]) == self.__path)
         if in_storage:
             name = os.path.relpath(path, self.__path)
         else:
             name = os.path.basename(path)
-        return self.__get_image(name, path, in_storage)
+        return (await self.__get_image(name, path, in_storage))
 
-    def __get_image(self, name: str, path: str, in_storage: bool) -> Image:
+    async def __get_image(self, name: str, path: str, in_storage: bool) -> Image:
         assert name
         assert path
-        return Image(name, path, (self if in_storage else None))
+        image = Image(name, path, (self if in_storage else None))
+        await image._update()  # pylint: disable=protected-access
+        return image
 
     # =====
 
@@ -202,16 +227,6 @@ class Storage:
             size=(st.f_blocks * st.f_frsize),
             free=(st.f_bavail * st.f_frsize),
         )
-
-    def _is_adopted(self, image: Image) -> bool:
-        # True, если образ находится вне хранилища
-        # или в другой точке монтирования под ним
-        if not image.in_storage:
-            return True
-        path = image.path
-        while not os.path.ismount(path):
-            path = os.path.dirname(path)
-        return (self.__path != path)
 
     async def remount_rw(self, rw: bool, fatal: bool=True) -> None:
         if not (await aiohelpers.remount("MSD", self.__remount_cmd, rw)):
