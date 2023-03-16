@@ -136,7 +136,8 @@ class MsdApi:
 
     @exposed_http("POST", "/msd/write")
     async def __write_handler(self, request: Request) -> Response:
-        name = valid_msd_image_name(request.query.get("image"))
+        unsafe_prefix = request.query.get("prefix", "") + "/"
+        name = valid_msd_image_name(unsafe_prefix + request.query.get("image", ""))
         size = valid_int_f0(request.content_length)
         remove_incomplete = self.__get_remove_incomplete(request)
         written = 0
@@ -151,6 +152,7 @@ class MsdApi:
 
     @exposed_http("POST", "/msd/write_remote")
     async def __write_remote_handler(self, request: Request) -> (Response | StreamResponse):  # pylint: disable=too-many-locals
+        unsafe_prefix = request.query.get("prefix", "") + "/"
         url = valid_url(request.query.get("url"))
         insecure = valid_bool(request.query.get("insecure", False))
         timeout = valid_float_f01(request.query.get("timeout", 10.0))
@@ -175,7 +177,7 @@ class MsdApi:
                 name = str(request.query.get("image", "")).strip()
                 if len(name) == 0:
                     name = htclient.get_filename(remote)
-                name = valid_msd_image_name(name)
+                name = valid_msd_image_name(unsafe_prefix + name)
 
                 size = valid_int_f0(remote.content_length)
 

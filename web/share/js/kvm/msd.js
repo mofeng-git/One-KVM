@@ -114,11 +114,12 @@ export function Msd() {
 	var __clickUploadNewButton = function() {
 		let file = tools.input.getFile($("msd-new-file"));
 		__http = new XMLHttpRequest();
+		let prefix = encodeURIComponent($("msd-new-prefix").value);
 		if (file) {
-			__http.open("POST", `/api/msd/write?image=${encodeURIComponent(file.name)}&remove_incomplete=1`, true);
+			__http.open("POST", `/api/msd/write?prefix=${prefix}&image=${encodeURIComponent(file.name)}&remove_incomplete=1`, true);
 		} else {
 			let url = $("msd-new-url").value;
-			__http.open("POST", `/api/msd/write_remote?url=${encodeURIComponent(url)}&remove_incomplete=1`, true);
+			__http.open("POST", `/api/msd/write_remote?prefix=${prefix}&url=${encodeURIComponent(url)}&remove_incomplete=1`, true);
 		}
 		__http.upload.timeout = 7 * 24 * 3600;
 		__http.onreadystatechange = __httpStateChange;

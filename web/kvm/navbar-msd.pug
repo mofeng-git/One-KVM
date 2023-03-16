@@ -71,6 +71,9 @@ li(id="msd-dropdown" class="right feature-disabled")
 				tr
 					td #[b Or] paste a URL:
 					td #[input(type="text" id="msd-new-url" style="width: 100%")]
+				tr
+					td Optional upload prefix:
+					td #[input(type="text" id="msd-new-prefix" style="width: 100%" placeholder="... like /foo/bar")]
 			hr
 			table(class="kv")
 				tr
@@ -79,6 +82,9 @@ li(id="msd-dropdown" class="right feature-disabled")
 				tr
 					td
 					td &bull; To speed up the upload, close the stream window.
+				tr
+					td
+					td &bull; A non-empty upload prefix will be created when uploading.
 		div(id="msd-uploading-sub" class="hidden")
 			hr
 			table(class="kv")

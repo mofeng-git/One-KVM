@@ -176,6 +176,16 @@ ul#navbar li div.menu div.buttons select {
 	padding: 0 16px;
 }
 
+ul#navbar li div.menu input[type=text] {
+	height: 1.5em;
+}
+ul#navbar li div.menu input[type=text]::-moz-placeholder {
+	text-align: center;
+}
+ul#navbar li div.menu input[type=text]::-webkit-input-placeholder {
+	text-align: center;
+}
+
 ul#navbar li div.menu hr {
 	margin: 0;
 	display: block;
