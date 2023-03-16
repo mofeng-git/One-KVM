@@ -133,20 +133,20 @@ class Storage:
     def get_watchable_paths(self) -> list[str]:
         paths: list[str] = []
         for (root_path, dirs, _) in os.walk(self.__path):
-            dirs[:] = list(self.__filter(dirs))
+            dirs[:] = list(self.__filtered(dirs))
             paths.append(root_path)
         return paths
 
     def get_images(self) -> dict[str, Image]:
         images: dict[str, Image] = {}
         for (root_path, dirs, files) in os.walk(self.__path):
-            dirs[:] = list(self.__filter(dirs))
-            for file in self.__filter(files):
+            dirs[:] = list(self.__filtered(dirs))
+            for file in self.__filtered(files):
                 name = os.path.relpath(os.path.join(root_path, file), self.__path)
                 images[name] = self.get_image_by_name(name)
         return images
 
-    def __filter(self, items: list[str]) -> Generator[str, None, None]:
+    def __filtered(self, items: list[str]) -> Generator[str, None, None]:
         for item in sorted(map(str.strip, items)):
             if not item.startswith(".") and item != "lost+found":
                 yield item
