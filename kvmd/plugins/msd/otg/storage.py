@@ -80,7 +80,7 @@ class Image(_Image):
         path = self.path
         while not os.path.ismount(path):
             path = os.path.dirname(path)
-        return (self.__storage.get_root_path() != path)
+        return (self.__storage._get_root_path() != path)
 
     async def __is_complete(self) -> bool:
         if self.__storage:
@@ -150,7 +150,7 @@ class Storage:
         self.__path = path
         self.__remount_cmd = remount_cmd
 
-    def get_root_path(self) -> str:
+    def _get_root_path(self) -> str:
         return self.__path
 
     async def get_watchable_paths(self) -> list[str]:
@@ -158,7 +158,7 @@ class Storage:
 
     async def get_images(self) -> dict[str, Image]:
         return {
-            name: (await self.get_image_by_name(name))
+            name: (await self.make_image_by_name(name))
             for name in (await aiotools.run_async(self.__inner_get_images))
         }
 
@@ -192,12 +192,12 @@ class Storage:
 
     # =====
 
-    async def get_image_by_name(self, name: str) -> Image:
+    async def make_image_by_name(self, name: str) -> Image:
         assert name
         path = os.path.join(self.__path, name)
         return (await self.__get_image(name, path, True))
 
-    async def get_image_by_path(self, path: str) -> Image:
+    async def make_image_by_path(self, path: str) -> Image:
         assert path
         in_storage = (os.path.commonpath([self.__path, path]) == self.__path)
         if in_storage:
