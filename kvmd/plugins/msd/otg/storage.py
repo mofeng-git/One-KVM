@@ -31,8 +31,6 @@ from typing import Optional
 import aiofiles
 import aiofiles.os
 
-from ....logging import get_logger
-
 from .... import aiotools
 from .... import aiohelpers
 
@@ -59,7 +57,7 @@ class Image(_Image):
         self.__complete_path = os.path.join(self.__dir_path, f".__{file_name}.complete")
         self.__adopted = False
 
-    async def _update(self) -> None:
+    async def _reload(self) -> None:  # Only for Storage() and set_complete()
         # adopted используется в последующих проверках
         self.__adopted = await aiotools.run_async(self.__is_adopted)
         (complete, removable, (size, mod_ts)) = await asyncio.gather(
@@ -80,7 +78,7 @@ class Image(_Image):
         path = self.path
         while not os.path.ismount(path):
             path = os.path.dirname(path)
-        return (self.__storage._get_root_path() != path)
+        return (self.__storage._get_root_path() != path)  # pylint: disable=protected-access
 
     async def __is_complete(self) -> bool:
         if self.__storage:
@@ -119,6 +117,7 @@ class Image(_Image):
         assert self.__storage
         try:
             await aiofiles.os.remove(self.path)
+            self.__storage.images.pop(self.name, None)
         except FileNotFoundError:
             pass
         except Exception:
@@ -136,45 +135,60 @@ class Image(_Image):
                 await aiofiles.os.remove(self.__complete_path)
             except FileNotFoundError:
                 pass
-        await self._update()
+        await self._reload()
 
 
-@dataclasses.dataclass(frozen=True)
-class StorageSpace:
+@dataclasses.dataclass(frozen=True, eq=False)
+class _Storage:
     size: int
     free: int
+    images: dict[str, Image] = dataclasses.field(init=False)
 
 
-class Storage:
+class Storage(_Storage):
     def __init__(self, path: str, remount_cmd: list[str]) -> None:
+        super().__init__(0, 0)
         self.__path = path
         self.__remount_cmd = remount_cmd
+        self.__watchable_paths: (list[str] | None) = None
+        self.__images: (dict[str, Image] | None) = None
 
-    def _get_root_path(self) -> str:
-        return self.__path
+    @property
+    def images(self) -> dict[str, Image]:
+        assert self.__watchable_paths is not None
+        assert self.__images is not None
+        return self.__images
 
-    async def get_watchable_paths(self) -> list[str]:
-        return (await aiotools.run_async(self.__inner_get_watchable_paths))
+    async def reload(self) -> None:
+        self.__watchable_paths = None
+        self.__images = {}
 
-    async def get_images(self) -> dict[str, Image]:
-        return {
-            name: (await self.make_image_by_name(name))
-            for name in (await aiotools.run_async(self.__inner_get_images))
-        }
+        watchable_paths: list[str] = []
+        images: dict[str, Image] = {}
+        for (root_path, files) in (await aiotools.run_async(self.__walk)):
+            watchable_paths.append(root_path)
+            for path in files:
+                name = os.path.relpath(path, self.__path)
+                images[name] = await self.make_image_by_name(name)
 
-    def __inner_get_watchable_paths(self) -> list[str]:
-        return list(map(operator.itemgetter(0), self.__walk(with_files=False)))
+        await self.reload_size_only()
 
-    def __inner_get_images(self) -> list[str]:
-        return [
-            os.path.relpath(path, self.__path)  # == name
-            for (_, files) in self.__walk(with_files=True)
-            for path in files
-        ]
+        self.__watchable_paths = watchable_paths
+        self.__images = images
 
-    def __walk(self, with_files: bool, root_path: (str | None)=None) -> Generator[tuple[str, list[str]], None, None]:
-        if root_path is None:
-            root_path = self.__path
+    async def reload_size_only(self) -> None:
+        st = os.statvfs(self.__path)  # FIXME
+        object.__setattr__(self, "size", st.f_blocks * st.f_frsize)
+        object.__setattr__(self, "free", st.f_bavail * st.f_frsize)
+
+    def get_watchable_paths(self) -> list[str]:
+        assert self.__watchable_paths is not None
+        return list(self.__watchable_paths)
+
+    def __walk(self) -> list[tuple[str, list[str]]]:
+        return list(self.__inner_walk(self.__path))
+
+    def __inner_walk(self, root_path: str) -> Generator[tuple[str, list[str]], None, None]:
         files: list[str] = []
         with os.scandir(root_path) as dir_iter:
             for item in sorted(dir_iter, key=operator.attrgetter("name")):
@@ -183,8 +197,8 @@ class Storage:
                 try:
                     if item.is_dir(follow_symlinks=False):
                         item.stat()  # Проверяем, не сдохла ли смонтированная NFS
-                        yield from self.__walk(with_files, item.path)
-                    elif with_files and item.is_file(follow_symlinks=False):
+                        yield from self.__inner_walk(item.path)
+                    elif item.is_file(follow_symlinks=False):
                         files.append(item.path)
                 except Exception:
                     pass
@@ -195,7 +209,7 @@ class Storage:
     async def make_image_by_name(self, name: str) -> Image:
         assert name
         path = os.path.join(self.__path, name)
-        return (await self.__get_image(name, path, True))
+        return (await self.__make_image(name, path, True))
 
     async def make_image_by_path(self, path: str) -> Image:
         assert path
@@ -204,29 +218,19 @@ class Storage:
             name = os.path.relpath(path, self.__path)
         else:
             name = os.path.basename(path)
-        return (await self.__get_image(name, path, in_storage))
+        return (await self.__make_image(name, path, in_storage))
 
-    async def __get_image(self, name: str, path: str, in_storage: bool) -> Image:
+    async def __make_image(self, name: str, path: str, in_storage: bool) -> Image:
         assert name
         assert path
         image = Image(name, path, (self if in_storage else None))
-        await image._update()  # pylint: disable=protected-access
+        await image._reload()  # pylint: disable=protected-access
         return image
 
-    # =====
+    def _get_root_path(self) -> str:  # Only for Image()
+        return self.__path
 
-    def get_space(self, fatal: bool) -> (StorageSpace | None):
-        try:
-            st = os.statvfs(self.__path)
-        except Exception as err:
-            if fatal:
-                raise
-            get_logger().warning("Can't get free space of filesystem %s: %s", self.__path, err)
-            return None
-        return StorageSpace(
-            size=(st.f_blocks * st.f_frsize),
-            free=(st.f_bavail * st.f_frsize),
-        )
+    # =====
 
     async def remount_rw(self, rw: bool, fatal: bool=True) -> None:
         if not (await aiohelpers.remount("MSD", self.__remount_cmd, rw)):
