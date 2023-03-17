@@ -417,11 +417,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await asyncio.sleep(5)
 
                 with Inotify() as inotify:
-                    for path in [
-                        *self.__storage.get_watchable_paths(),
-                        *self.__drive.get_watchable_paths(),
-                    ]:
-                        await inotify.watch(path, InotifyMask.ALL_MODIFY_EVENTS)
+                    await inotify.watch(InotifyMask.ALL_MODIFY_EVENTS, *self.__storage.get_watchable_paths())
+                    await inotify.watch(InotifyMask.ALL_MODIFY_EVENTS, *self.__drive.get_watchable_paths())
 
                     # После установки вотчеров еще раз проверяем стейт, чтобы ничего не потерять
                     await self.__reload_state()

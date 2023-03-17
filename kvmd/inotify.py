@@ -190,14 +190,15 @@ class Inotify:
 
         self.__events_queue: "asyncio.Queue[InotifyEvent]" = asyncio.Queue()
 
-    async def watch(self, path: str, mask: int) -> None:
-        path = os.path.normpath(path)
-        assert path not in self.__wd_by_path, path
-        get_logger().info("Watching for %s", path)
-        # Асинхронно, чтобы не висло на NFS
-        wd = _inotify_check(await aiotools.run_async(libc.inotify_add_watch, self.__fd, _fs_encode(path), mask))
-        self.__wd_by_path[path] = wd
-        self.__path_by_wd[wd] = path
+    async def watch(self, mask: int, *paths: str) -> None:
+        for path in paths:
+            path = os.path.normpath(path)
+            assert path not in self.__wd_by_path, path
+            get_logger().info("Watching for %s", path)
+            # Асинхронно, чтобы не висло на NFS
+            wd = _inotify_check(await aiotools.run_async(libc.inotify_add_watch, self.__fd, _fs_encode(path), mask))
+            self.__wd_by_path[path] = wd
+            self.__path_by_wd[wd] = path
 
 #    def unwatch(self, path: str) -> None:
 #        path = os.path.normpath(path)
