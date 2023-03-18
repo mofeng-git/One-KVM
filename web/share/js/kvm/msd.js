@@ -342,38 +342,24 @@ export function Msd() {
 		}
 
 		let s = __state;
-		let selected_index = 0;
-		let index = 1;
+		let selected = "";
 
 		for (let name of Object.keys(s.storage.images).sort()) {
-			let image = s.storage.images[name];
-
-			if (!tools.browser.is_mobile) {
-				let separator = new Option("\u2500".repeat(30), false, false);
-				separator.disabled = true;
-				separator.className = "comment";
-				el.options[index] = separator;
-				++index;
-			}
-
-			let option = new Option(name, name, false, false);
-			el.options[index] = option;
+			tools.selector.addSeparator(el);
+			tools.selector.addOption(el, name, name);
+			tools.selector.addComment(el, __makeImageSelectorInfo(s.storage.images[name]));
 			if (s.drive.image && s.drive.image.name === name && s.drive.image.in_storage) {
-				selected_index = index;
+				selected = name;
 			}
-			++index;
-
-			el.options[index] = __makeImageSelectorInfo(image);
-			++index;
 		}
 
 		if (s.drive.image && !s.drive.image.in_storage) {
-			el.options[index] = new Option(s.drive.image.name, "", false, false);
-			el.options[index + 1] = __makeImageSelectorInfo(s.drive.image);
-			selected_index = el.options.length - 2;
+			selected = ".__external";
+			tools.selector.addOption(el, s.drive.image.name, selected);
+			tools.selector.addComment(el, __makeImageSelectorInfo(s.drive.image));
 		}
 
-		el.selectedIndex = selected_index;
+		el.value = selected;
 	};
 
 	var __makeImageSelectorInfo = function(image) {
@@ -382,15 +368,10 @@ export function Msd() {
 		if (image.in_storage !== undefined && !image.in_storage) {
 			title += ", out of storage";
 		}
-
 		let dt = new Date(image.mod_ts * 1000);
 		dt = new Date(dt.getTime() - (dt.getTimezoneOffset() * 60000));
 		title += " \u2500 " + dt.toISOString().slice(0, -8).replaceAll("-", ".").replace("T", "-");
-
-		let el = new Option(title, "", false, false);
-		el.disabled = true;
-		el.className = "comment";
-		return el;
+		return title;
 	};
 
 	var __applyStatePartSelector = function() {
@@ -400,17 +381,15 @@ export function Msd() {
 		}
 		for (let name of Object.keys(__state.storage.parts).sort()) {
 			if (name != "" && __state.storage.parts[name].writable) {
-				el.add(new Option(name, name, false, false));
+				tools.selector.addOption(el, name, name);
 			}
 		}
-		console.log(el.options);
 		tools.hidden.setVisible($("msd-new-part"), (el.options.length > 1));
 	};
 
 	var __prepareSelector = function(el, first) {
 		let s = __state;
 		let online = (s && s.online);
-
 		if (!online) {
 			el.options.length = 1; // Cleanup
 			return false;
@@ -418,12 +397,7 @@ export function Msd() {
 		if (s.storage.uploading || s.storage.downloading) {
 			return false;
 		}
-
-		if (el.options.length === 0) {
-			el.options[0] = new Option(`\u2500 ${first} \u2500`, "", false, false);
-		} else {
-			el.options.length = 1;
-		}
+		tools.selector.initDefault(el, first, "");
 		return true;
 	};
 

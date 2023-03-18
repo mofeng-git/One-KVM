@@ -251,6 +251,32 @@ export var tools = new function() {
 		};
 	};
 
+	self.selector = new function() {
+		return {
+			"initDefault": function(el, title, value) {
+				if (el.options.length === 0) {
+					self.selector.addOption(el, `\u2500 ${title} \u2500`, value);
+				} else {
+					el.options.length = 1;
+				}
+			},
+			"addOption": function(el, title, value) {
+				el.add(new Option(title, value, false, false));
+			},
+			"addComment": function(el, title) {
+				let option = new Option(title, ".".repeat(30), false, false); // Kinda magic value
+				option.disabled = true;
+				option.className = "comment";
+				el.add(option);
+			},
+			"addSeparator": function(el) {
+				if (!self.browser.is_mobile) {
+					self.selector.addComment(el, "\u2500".repeat(30));
+				}
+			},
+		};
+	};
+
 	self.progress = new function() {
 		return {
 			"setValue": function(el, title, percent) {
