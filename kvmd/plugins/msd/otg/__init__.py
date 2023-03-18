@@ -169,7 +169,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if self.__state.storage:
                 if self.__writer:
                     # При загрузке файла показываем актуальную статистику вручную
-                    await self.__storage.reload_size_only()
+                    await self.__storage.reload_parts_info()
 
                 storage = dataclasses.asdict(self.__state.storage)
                 for name in list(storage["images"]):

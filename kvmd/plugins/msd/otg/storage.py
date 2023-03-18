@@ -39,7 +39,7 @@ from .. import MsdError
 
 # =====
 @dataclasses.dataclass(frozen=True)
-class _Image:
+class _ImageDc:
     name: str
     path: str
     in_storage: bool = dataclasses.field(init=False, compare=False)
@@ -49,7 +49,7 @@ class _Image:
     mod_ts: float = dataclasses.field(init=False, compare=False)
 
 
-class Image(_Image):
+class Image(_ImageDc):
     def __init__(self, name: str, path: str, storage: Optional["Storage"]) -> None:
         super().__init__(name, path)
         self.__storage = storage
@@ -60,11 +60,9 @@ class Image(_Image):
     async def _reload(self) -> None:  # Only for Storage() and set_complete()
         # adopted используется в последующих проверках
         self.__adopted = await aiotools.run_async(self.__is_adopted)
-        (complete, removable, (size, mod_ts)) = await asyncio.gather(
-            self.__is_complete(),
-            self.__is_removable(),
-            self.__get_stat(),
-        )
+        complete = await self.__is_complete()
+        removable = await self.__is_removable()
+        (size, mod_ts) = await self.__get_stat()
         object.__setattr__(self, "complete", complete)
         object.__setattr__(self, "removable", removable)
         object.__setattr__(self, "size", size)
@@ -138,26 +136,66 @@ class Image(_Image):
         await self._reload()
 
 
+# =====
+@dataclasses.dataclass(frozen=True)
+class _PartDc:
+    name: str
+    size: int = dataclasses.field(init=False, compare=False)
+    free: int = dataclasses.field(init=False, compare=False)
+    writable: bool = dataclasses.field(init=False, compare=False)
+
+
+class _Part(_PartDc):
+    def __init__(self, name: str, path: str) -> None:
+        super().__init__(name)
+        self.__path = path
+
+    async def _reload(self) -> None:  # Only for Storage()
+        st = await aiotools.run_async(os.statvfs, self.__path)
+        writable = await aiofiles.os.access(self.__path, os.W_OK)  # type: ignore
+        object.__setattr__(self, "size", st.f_blocks * st.f_frsize)
+        object.__setattr__(self, "free", st.f_bavail * st.f_frsize)
+        object.__setattr__(self, "writable", writable)
+
+
+# =====
 @dataclasses.dataclass(frozen=True, eq=False)
-class _Storage:
-    size: int
-    free: int
+class _StorageDc:
+    size: int = dataclasses.field(init=False)
+    free: int = dataclasses.field(init=False)
     images: dict[str, Image] = dataclasses.field(init=False)
+    parts: dict[str, _Part] = dataclasses.field(init=False)
 
 
-class Storage(_Storage):
+class Storage(_StorageDc):
     def __init__(self, path: str, remount_cmd: list[str]) -> None:
-        super().__init__(0, 0)
+        super().__init__()
         self.__path = path
         self.__remount_cmd = remount_cmd
+
         self.__watchable_paths: (list[str] | None) = None
         self.__images: (dict[str, Image] | None) = None
+        self.__parts: (dict[str, _Part] | None) = None
+
+    @property
+    def size(self) -> int:  # API Legacy
+        assert self.__parts is not None
+        return self.__parts[""].size
+
+    @property
+    def free(self) -> int:  # API Legacy
+        assert self.__parts is not None
+        return self.__parts[""].free
 
     @property
     def images(self) -> dict[str, Image]:
-        assert self.__watchable_paths is not None
         assert self.__images is not None
         return self.__images
+
+    @property
+    def parts(self) -> dict[str, _Part]:
+        assert self.__parts is not None
+        return self.__parts
 
     async def reload(self) -> None:
         self.__watchable_paths = None
@@ -165,30 +203,33 @@ class Storage(_Storage):
 
         watchable_paths: list[str] = []
         images: dict[str, Image] = {}
-        for (root_path, files) in (await aiotools.run_async(self.__walk)):
+        parts: dict[str, _Part] = {}
+        for (root_path, is_part, files) in (await aiotools.run_async(self.__walk)):
             watchable_paths.append(root_path)
             for path in files:
-                name = os.path.relpath(path, self.__path)
+                name = self.__make_relative_name(path)
                 images[name] = await self.make_image_by_name(name)
-
-        await self.reload_size_only()
+            if is_part:
+                name = self.__make_relative_name(root_path, dot_to_empty=True)
+                part = _Part(name, root_path)
+                await part._reload()  # pylint: disable=protected-access
+                parts[name] = part
 
         self.__watchable_paths = watchable_paths
         self.__images = images
+        self.__parts = parts
 
-    async def reload_size_only(self) -> None:
-        st = os.statvfs(self.__path)  # FIXME
-        object.__setattr__(self, "size", st.f_blocks * st.f_frsize)
-        object.__setattr__(self, "free", st.f_bavail * st.f_frsize)
+    async def reload_parts_info(self) -> None:
+        await asyncio.gather(*[part._reload() for part in self.parts.values()])  # pylint: disable=protected-access
 
     def get_watchable_paths(self) -> list[str]:
         assert self.__watchable_paths is not None
         return list(self.__watchable_paths)
 
-    def __walk(self) -> list[tuple[str, list[str]]]:
+    def __walk(self) -> list[tuple[str, bool, list[str]]]:
         return list(self.__inner_walk(self.__path))
 
-    def __inner_walk(self, root_path: str) -> Generator[tuple[str, list[str]], None, None]:
+    def __inner_walk(self, root_path: str) -> Generator[tuple[str, bool, list[str]], None, None]:
         files: list[str] = []
         with os.scandir(root_path) as dir_iter:
             for item in sorted(dir_iter, key=operator.attrgetter("name")):
@@ -202,7 +243,15 @@ class Storage(_Storage):
                         files.append(item.path)
                 except Exception:
                     pass
-        yield (root_path, files)
+        yield (root_path, (root_path == self.__path or os.path.ismount(root_path)), files)
+
+    def __make_relative_name(self, path: str, dot_to_empty: bool=False) -> str:
+        name = os.path.relpath(path, self.__path)
+        assert name
+        if dot_to_empty and name == ".":
+            name = ""
+        assert not name.startswith(".")
+        return name
 
     # =====
 
@@ -215,7 +264,7 @@ class Storage(_Storage):
         assert path
         in_storage = (os.path.commonpath([self.__path, path]) == self.__path)
         if in_storage:
-            name = os.path.relpath(path, self.__path)
+            name = self.__make_relative_name(path)
         else:
             name = os.path.basename(path)
         return (await self.__make_image(name, path, in_storage))
