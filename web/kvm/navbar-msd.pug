@@ -39,7 +39,7 @@ li(id="msd-dropdown" class="right feature-disabled")
 				td(width="100%") #[select(disabled id="msd-image-selector")]
 				td #[button(disabled id="msd-download-button" title="Download image") &nbsp;&nbsp;&#128426;&nbsp;&nbsp;]
 				td #[button(disabled id="msd-remove-button" title="Remove image") #[b &nbsp;&nbsp;&times;&nbsp;&nbsp;]]
-		table(class="kv msd-cdrom-emulation feature-disabled")
+		table(class="kv")
 			tr
 				td Drive #[a(target="_blank" href="https://docs.pikvm.org/msd") mode]:
 				td
@@ -49,7 +49,7 @@ li(id="msd-dropdown" class="right feature-disabled")
 						input(type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0")
 						label(for="msd-mode-radio-flash") Flash
 				td &nbsp;
-				+menu_switch_notable("msd-rw-switch", "Writable", false, false, "msd-rw feature-disabled")
+				+menu_switch_notable("msd-rw-switch", "Writable", false, false)
 		hr
 		div(class="text")
 			div(id="msd-storage-progress" class="progress")

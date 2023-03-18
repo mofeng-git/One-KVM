@@ -173,8 +173,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                 storage = dataclasses.asdict(self.__state.storage)
                 for name in list(storage["images"]):
+                    del storage["images"][name]["name"]
                     del storage["images"][name]["path"]
                     del storage["images"][name]["in_storage"]
+                for name in list(storage["parts"]):
+                    del storage["parts"][name]["name"]
 
                 storage["downloading"] = (self.__reader.get_state() if self.__reader else None)
                 storage["uploading"] = (self.__writer.get_state() if self.__writer else None)
@@ -191,11 +194,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 "busy": self.__state.is_busy(),
                 "storage": storage,
                 "drive": vd,
-                "features": {
-                    "multi": True,
-                    "cdrom": True,
-                    "rw": True,
-                },
             }
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:

@@ -215,8 +215,8 @@ export function Msd() {
 		let file = tools.input.getFile($("msd-new-file"));
 		if (file) {
 			$("msd-new-url").value = "";
-			if (file.size > __state.storage.size) {
-				wm.error("New image is too big for your Mass Storage Drive.<br>Maximum:", tools.formatSize(__state.storage.size));
+			if (file.size > __state.storage.parts[""].size) {
+				wm.error("New image is too big for your Mass Storage Drive.<br>Maximum:", tools.formatSize(__state.storage.parts[""].size));
 				el_input.value = "";
 			}
 		}
@@ -238,10 +238,10 @@ export function Msd() {
 		let online = (s && s.online);
 
 		if (online) {
-			let size_str = tools.formatSize(s.storage.size);
-			let used = s.storage.size - s.storage.free;
+			let size_str = tools.formatSize(s.storage.parts[""].size);
+			let used = s.storage.parts[""].size - s.storage.parts[""].free;
 			let used_str = tools.formatSize(used);
-			let percent = used / s.storage.size * 100;
+			let percent = used / s.storage.parts[""].size * 100;
 			tools.progress.setValue($("msd-storage-progress"), `Storage: ${used_str} of ${size_str}`, percent);
 		} else {
 			tools.progress.setValue($("msd-storage-progress"), "Storage: unavailable", 0);
@@ -252,11 +252,11 @@ export function Msd() {
 		tools.el.setEnabled($("msd-download-button"), (online && s.drive.image && !s.drive.connected && !s.busy));
 		tools.el.setEnabled($("msd-remove-button"), (online && s.drive.image && s.drive.image.removable && !s.drive.connected && !s.busy));
 
-		tools.radio.setEnabled("msd-mode-radio", (online && s.features.cdrom && !s.drive.connected && !s.busy));
-		tools.radio.setValue("msd-mode-radio", `${Number(online && s.features.cdrom && s.drive.cdrom)}`);
+		tools.radio.setEnabled("msd-mode-radio", (online && !s.drive.connected && !s.busy));
+		tools.radio.setValue("msd-mode-radio", `${Number(online && s.drive.cdrom)}`);
 
-		tools.el.setEnabled($("msd-rw-switch"), (online && s.features.rw && !s.drive.connected && !s.busy));
-		$("msd-rw-switch").checked = (online && s.features.rw && s.drive.rw);
+		tools.el.setEnabled($("msd-rw-switch"), (online && !s.drive.connected && !s.busy));
+		$("msd-rw-switch").checked = (online && s.drive.rw);
 
 		tools.el.setEnabled($("msd-connect-button"), (online && s.drive.image && !s.drive.connected && !s.busy));
 		tools.el.setEnabled($("msd-disconnect-button"), (online && s.drive.connected && !s.busy));
@@ -295,23 +295,17 @@ export function Msd() {
 		if (s) {
 			tools.feature.setEnabled($("msd-dropdown"), s.enabled);
 			tools.feature.setEnabled($("msd-reset-button"), s.enabled);
-			for (let el of $$$(".msd-cdrom-emulation")) {
-				tools.feature.setEnabled(el, s.features.cdrom);
-			}
-			for (let el of $$$(".msd-rw")) {
-				tools.feature.setEnabled(el, s.features.rw);
-			}
 		}
 
 		tools.hidden.setVisible($("msd-message-offline"), (s && !s.online));
 		tools.hidden.setVisible($("msd-message-image-broken"),
 			(online && s.drive.image && !s.drive.image.complete && !s.storage.uploading));
 		tools.hidden.setVisible($("msd-message-too-big-for-cdrom"),
-			(online && s.features.cdrom && s.drive.cdrom && s.drive.image && s.drive.image.size >= 2359296000));
+			(online && s.drive.cdrom && s.drive.image && s.drive.image.size >= 2359296000));
 		tools.hidden.setVisible($("msd-message-out-of-storage"),
 			(online && s.drive.image && !s.drive.image.in_storage));
 		tools.hidden.setVisible($("msd-message-rw-enabled"),
-			(online && s.features.rw && s.drive.rw));
+			(online && s.drive.rw));
 		tools.hidden.setVisible($("msd-message-another-user-uploads"),
 			(online && s.storage.uploading && !__http));
 		tools.hidden.setVisible($("msd-message-downloads"),

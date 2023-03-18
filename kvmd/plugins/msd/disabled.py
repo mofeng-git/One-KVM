@@ -47,11 +47,6 @@ class Plugin(BaseMsd):
             "busy": False,
             "storage": None,
             "drive": None,
-            "features": {
-                "multi": False,
-                "cdrom": False,
-                "rw": False,
-            },
         }
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
