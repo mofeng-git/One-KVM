@@ -136,7 +136,6 @@ export function Msd() {
 				try {
 					let end = __http.responseText.lastIndexOf("\r\n");
 					if (end < 0) {
-						console.log(1);
 						end = __http.responseText.length;
 					}
 					let begin = __http.responseText.lastIndexOf("\r\n", end - 2);
