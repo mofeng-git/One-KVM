@@ -23,7 +23,7 @@
 "use strict";
 
 
-import {tools, $, $$$} from "../tools.js";
+import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
 
 
@@ -114,7 +114,7 @@ export function Msd() {
 	var __clickUploadNewButton = function() {
 		let file = tools.input.getFile($("msd-new-file"));
 		__http = new XMLHttpRequest();
-		let prefix = encodeURIComponent($("msd-new-prefix").value);
+		let prefix = encodeURIComponent($("msd-new-part-selector").value);
 		if (file) {
 			__http.open("POST", `/api/msd/write?prefix=${prefix}&image=${encodeURIComponent(file.name)}&remove_incomplete=1`, true);
 		} else {
@@ -270,6 +270,8 @@ export function Msd() {
 
 		tools.el.setEnabled($("msd-new-file"), (online && !s.drive.connected && !__http && !s.busy));
 		tools.el.setEnabled($("msd-new-url"), (online && !s.drive.connected && !__http && !s.busy));
+		tools.el.setEnabled($("msd-new-part"), (online && !s.drive.connected && !__http && !s.busy));
+		__applyStatePartSelector();
 
 		tools.hidden.setVisible($("msd-uploading-sub"), (online && s.storage.uploading));
 		$("msd-uploading-name").innerHTML = ((online && s.storage.uploading) ? s.storage.uploading.name : "");
@@ -291,12 +293,10 @@ export function Msd() {
 	var __applyStateFeatures = function() {
 		let s = __state;
 		let online = (s && s.online);
-
 		if (s) {
 			tools.feature.setEnabled($("msd-dropdown"), s.enabled);
 			tools.feature.setEnabled($("msd-reset-button"), s.enabled);
 		}
-
 		tools.hidden.setVisible($("msd-message-offline"), (s && !s.online));
 		tools.hidden.setVisible($("msd-message-image-broken"),
 			(online && s.drive.image && !s.drive.image.complete && !s.storage.uploading));
@@ -337,24 +337,12 @@ export function Msd() {
 	};
 
 	var __applyStateImageSelector = function() {
-		let s = __state;
-		let online = (s && s.online);
 		let el = $("msd-image-selector");
-
-		if (!online) {
-			el.options.length = 1; // Cleanup
-			return;
-		}
-		if (s.storage.uploading || s.storage.downloading) {
+		if (!__prepareSelector(el, "Not selected")) {
 			return;
 		}
 
-		if (el.options.length === 0) {
-			el.options[0] = new Option("\u2500 Not selected \u2500", "", false, false);
-		} else {
-			el.options.length = 1;
-		}
-
+		let s = __state;
 		let selected_index = 0;
 		let index = 1;
 
@@ -404,6 +392,40 @@ export function Msd() {
 		el.disabled = true;
 		el.className = "comment";
 		return el;
+	};
+
+	var __applyStatePartSelector = function() {
+		let el = $("msd-new-part-selector");
+		if (!__prepareSelector(el, "Internal")) {
+			return;
+		}
+		for (let name of Object.keys(__state.storage.parts).sort()) {
+			if (name != "" && __state.storage.parts[name].writable) {
+				el.add(new Option(name, name, false, false));
+			}
+		}
+		console.log(el.options);
+		tools.hidden.setVisible($("msd-new-part"), (el.options.length > 1));
+	};
+
+	var __prepareSelector = function(el, first) {
+		let s = __state;
+		let online = (s && s.online);
+
+		if (!online) {
+			el.options.length = 1; // Cleanup
+			return false;
+		}
+		if (s.storage.uploading || s.storage.downloading) {
+			return false;
+		}
+
+		if (el.options.length === 0) {
+			el.options[0] = new Option(`\u2500 ${first} \u2500`, "", false, false);
+		} else {
+			el.options.length = 1;
+		}
+		return true;
 	};
 
 	__init__();

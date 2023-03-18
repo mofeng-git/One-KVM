@@ -533,10 +533,10 @@
                   <input type="text" id="msd-new-url" style="width: 100%">
                 </td>
               </tr>
-              <tr>
-                <td>Optional upload prefix:</td>
-                <td>
-                  <input type="text" id="msd-new-prefix" style="width: 100%" placeholder="... like /foo/bar">
+              <tr class="hidden" id="msd-new-part">
+                <td>Upload partition:</td>
+                <td width="100%">
+                  <select id="msd-new-part-selector"></select>
                 </td>
               </tr>
             </table>
@@ -549,10 +549,6 @@
               <tr>
                 <td></td>
                 <td>&bull; To speed up the upload, close the stream window.</td>
-              </tr>
-              <tr>
-                <td></td>
-                <td>&bull; A non-empty upload prefix will be created when uploading.</td>
               </tr>
             </table>
           </div>
