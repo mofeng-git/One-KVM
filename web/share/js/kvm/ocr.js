@@ -73,12 +73,9 @@ export function Ocr(__getGeometry) {
 	self.setState = function(state) {
 		let enabled = (state && state.ocr.enabled && navigator.clipboard && !tools.browser.is_mobile);
 		if (enabled) {
-			let selected = tools.storage.get("stream.ocr.lang", state.ocr.langs["default"]);
-			let html = "";
-			for (let variant of state.ocr.langs.available) {
-				html += `<option value=${variant} ${variant === selected ? "selected" : ""}>${variant}</option>`;
-			}
-			$("stream-ocr-lang-selector").innerHTML = html;
+			let el = $("stream-ocr-lang-selector");
+			tools.selector.setValues(el, state.ocr.langs.available);
+			tools.selector.setSelectedValue(el, tools.storage.get("stream.ocr.lang", state.ocr.langs["default"]));
 		}
 		tools.feature.setEnabled($("stream-ocr"), enabled);
 		$("stream-ocr-led").className = (enabled ? "led-gray" : "hidden");

@@ -152,7 +152,10 @@ class _Part(_PartDc):
 
     async def _reload(self) -> None:  # Only for Storage()
         st = await aiotools.run_async(os.statvfs, self.__path)
-        writable = await aiofiles.os.access(self.__path, os.W_OK)  # type: ignore
+        if self.name == "":
+            writable = True
+        else:
+            writable = await aiofiles.os.access(self.__path, os.W_OK)  # type: ignore
         object.__setattr__(self, "size", st.f_blocks * st.f_frsize)
         object.__setattr__(self, "free", st.f_bavail * st.f_frsize)
         object.__setattr__(self, "writable", writable)

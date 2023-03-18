@@ -176,19 +176,13 @@ export function Streamer() {
 				}
 
 				if (state.features.resolution) {
-					if ($("stream-resolution-selector").resolutions !== state.limits.available_resolutions) {
-						let resolutions_html = "";
-						for (let variant of state.limits.available_resolutions) {
-							resolutions_html += `<option value="${variant}">${variant}</option>`;
-						}
-						if (!state.limits.available_resolutions.includes(resolution_str)) {
-							resolutions_html += `<option value="${resolution_str}">${resolution_str}</option>`;
-						}
-						$("stream-resolution-selector").innerHTML = resolutions_html;
-						$("stream-resolution-selector").resolutions = state.limits.available_resolutions;
+					let el = $("stream-resolution-selector");
+					if (!state.limits.available_resolutions.includes(resolution_str)) {
+						state.limits.available_resolutions.push(resolution_str);
 					}
-					document.querySelector(`#stream-resolution-selector [value="${resolution_str}"]`).selected = true;
-					tools.el.setEnabled($("stream-resolution-selector"), true);
+					tools.selector.setValues(el, state.limits.available_resolutions);
+					tools.selector.setSelectedValue(el, resolution_str);
+					tools.el.setEnabled(el, true);
 				}
 
 			} else {

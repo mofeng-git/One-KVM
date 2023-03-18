@@ -198,12 +198,9 @@ export function Hid(__getGeometry, __recorder) {
 	};
 
 	self.setKeymaps = function(state) {
-		let selected = tools.storage.get("hid.pak.keymap", state.keymaps["default"]);
-		let html = "";
-		for (let variant of state.keymaps.available) {
-			html += `<option value=${variant} ${variant === selected ? "selected" : ""}>${variant}</option>`;
-		}
-		$("hid-pak-keymap-selector").innerHTML = html;
+		let el = $("hid-pak-keymap-selector");
+		tools.selector.setValues(el, state.keymaps.available);
+		tools.selector.setSelectedValue(el, tools.storage.get("hid.pak.keymap", state.keymaps["default"]));
 	};
 
 	var __releaseAll = function() {

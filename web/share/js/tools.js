@@ -253,15 +253,8 @@ export var tools = new function() {
 
 	self.selector = new function() {
 		return {
-			"initDefault": function(el, title, value) {
-				if (el.options.length === 0) {
-					self.selector.addOption(el, `\u2500 ${title} \u2500`, value);
-				} else {
-					el.options.length = 1;
-				}
-			},
-			"addOption": function(el, title, value) {
-				el.add(new Option(title, value, false, false));
+			"addOption": function(el, title, value, selected=false) {
+				el.add(new Option(title, value, selected, selected));
 			},
 			"addComment": function(el, title) {
 				let option = new Option(title, ".".repeat(30), false, false); // Kinda magic value
@@ -272,6 +265,30 @@ export var tools = new function() {
 			"addSeparator": function(el) {
 				if (!self.browser.is_mobile) {
 					self.selector.addComment(el, "\u2500".repeat(30));
+				}
+			},
+
+			"setValues": function(el, values, empty_title=null) {
+				if (values.constructor == Object) {
+					values = Object.keys(values).sort();
+				}
+				let values_json = JSON.stringify(values);
+				if (el.__values_json !== values_json) {
+					el.options.length = 0;
+					for (let value of values) {
+						let title = value;
+						if (title.length === 0 && empty_title !== null) {
+							title = empty_title;
+						}
+						self.selector.addOption(el, title, value);
+					}
+					el.__values_json = values_json;
+					el.__values = values;
+				}
+			},
+			"setSelectedValue": function(el, value) {
+				if (el.__values && el.__values.includes(value)) {
+					el.value = value;
 				}
 			},
 		};

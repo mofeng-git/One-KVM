@@ -38,7 +38,9 @@ export function Msd() {
 	var __init__ = function() {
 		$("msd-led").title = "Unknown state";
 
+		tools.selector.addOption($("msd-image-selector"), "\u2500 Not selected \u2500", "");
 		$("msd-image-selector").onchange = __selectImage;
+
 		tools.el.setOnClick($("msd-download-button"), __clickDownloadButton);
 		tools.el.setOnClick($("msd-remove-button"), __clickRemoveButton);
 
@@ -336,12 +338,17 @@ export function Msd() {
 	};
 
 	var __applyStateImageSelector = function() {
+		let s = __state;
 		let el = $("msd-image-selector");
-		if (!__prepareSelector(el, "Not selected")) {
+		if (!(s && s.online)) {
+			el.options.length = 1; // Cleanup
 			return;
 		}
+		if (s.storage.uploading || s.storage.downloading) {
+			return;
+		}
+		el.options.length = 1;
 
-		let s = __state;
 		let selected = "";
 
 		for (let name of Object.keys(s.storage.images).sort()) {
@@ -363,42 +370,26 @@ export function Msd() {
 	};
 
 	var __makeImageSelectorInfo = function(image) {
-		let title = `\xA0\xA0\xA0\xA0\xA0\u2570 ${tools.formatSize(image.size)}`;
-		title += (image.complete ? "" : ", broken");
+		let info = `\xA0\xA0\xA0\xA0\xA0\u2570 ${tools.formatSize(image.size)}`;
+		info += (image.complete ? "" : ", broken");
 		if (image.in_storage !== undefined && !image.in_storage) {
-			title += ", out of storage";
+			info += ", out of storage";
 		}
 		let dt = new Date(image.mod_ts * 1000);
 		dt = new Date(dt.getTime() - (dt.getTimezoneOffset() * 60000));
-		title += " \u2500 " + dt.toISOString().slice(0, -8).replaceAll("-", ".").replace("T", "-");
-		return title;
+		info += " \u2500 " + dt.toISOString().slice(0, -8).replaceAll("-", ".").replace("T", "-");
+		return info;
 	};
 
 	var __applyStatePartSelector = function() {
-		let el = $("msd-new-part-selector");
-		if (!__prepareSelector(el, "Internal")) {
+		let s = __state;
+		if (!(s && s.online) || s.storage.uploading || s.storage.downloading) {
 			return;
 		}
-		for (let name of Object.keys(__state.storage.parts).sort()) {
-			if (name != "" && __state.storage.parts[name].writable) {
-				tools.selector.addOption(el, name, name);
-			}
-		}
-		tools.hidden.setVisible($("msd-new-part"), (el.options.length > 1));
-	};
-
-	var __prepareSelector = function(el, first) {
-		let s = __state;
-		let online = (s && s.online);
-		if (!online) {
-			el.options.length = 1; // Cleanup
-			return false;
-		}
-		if (s.storage.uploading || s.storage.downloading) {
-			return false;
-		}
-		tools.selector.initDefault(el, first, "");
-		return true;
+		let el = $("msd-new-part-selector");
+		let parts = Object.keys(s.storage.parts).sort().filter(name => (name === "" || s.storage.parts[name].writable));
+		tools.selector.setValues(el, parts, "\u2500 Internal \u2500");
+		tools.hidden.setVisible($("msd-new-part"), (parts.length > 1));
 	};
 
 	__init__();
