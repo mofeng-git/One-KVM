@@ -299,18 +299,12 @@ export function Msd() {
 			tools.feature.setEnabled($("msd-reset-button"), s.enabled);
 		}
 		tools.hidden.setVisible($("msd-message-offline"), (s && !s.online));
-		tools.hidden.setVisible($("msd-message-image-broken"),
-			(online && s.drive.image && !s.drive.image.complete && !s.storage.uploading));
-		tools.hidden.setVisible($("msd-message-too-big-for-cdrom"),
-			(online && s.drive.cdrom && s.drive.image && s.drive.image.size >= 2359296000));
-		tools.hidden.setVisible($("msd-message-out-of-storage"),
-			(online && s.drive.image && !s.drive.image.in_storage));
-		tools.hidden.setVisible($("msd-message-rw-enabled"),
-			(online && s.drive.rw));
-		tools.hidden.setVisible($("msd-message-another-user-uploads"),
-			(online && s.storage.uploading && !__http));
-		tools.hidden.setVisible($("msd-message-downloads"),
-			(online && s.storage.downloading));
+		tools.hidden.setVisible($("msd-message-image-broken"), (online && s.drive.image && !s.drive.image.complete && !s.storage.uploading));
+		tools.hidden.setVisible($("msd-message-too-big-for-cdrom"), (online && s.drive.cdrom && s.drive.image && s.drive.image.size >= 2359296000));
+		tools.hidden.setVisible($("msd-message-out-of-storage"), (online && s.drive.image && !s.drive.image.in_storage));
+		tools.hidden.setVisible($("msd-message-rw-enabled"), (online && s.drive.rw));
+		tools.hidden.setVisible($("msd-message-another-user-uploads"), (online && s.storage.uploading && !__http));
+		tools.hidden.setVisible($("msd-message-downloads"), (online && s.storage.downloading));
 	};
 
 	var __applyStateStatus = function() {
