@@ -300,6 +300,18 @@ export var tools = new function() {
 				el.setAttribute("data-label", title);
 				$(`${el.id}-value`).style.width = `${percent}%`;
 			},
+			"setPercentOf": function(el, max, value) {
+				let percent = Math.round(value * 100 / max);
+				self.progress.setValue(el, `${percent}%`, percent);
+			},
+			"setSizeOf": function(el, title, size, free) {
+				let size_str = self.formatSize(size);
+				let used = size - free;
+				let used_str = self.formatSize(used);
+				let percent = used / size * 100;
+				title = title.replace("%s", `${used_str} of ${size_str}`);
+				self.progress.setValue(el, title, percent);
+			},
 		};
 	};
 

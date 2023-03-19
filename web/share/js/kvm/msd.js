@@ -44,9 +44,9 @@ export function Msd() {
 		tools.el.setOnClick($("msd-download-button"), __clickDownloadButton);
 		tools.el.setOnClick($("msd-remove-button"), __clickRemoveButton);
 
-		tools.radio.setOnClick("msd-mode-radio", __clickModeRadio);
+		tools.radio.setOnClick("msd-mode-radio", () => __sendParam("cdrom", tools.radio.getValue("msd-mode-radio")));
 
-		tools.el.setOnClick($("msd-rw-switch"), __clickRwSwitch);
+		tools.el.setOnClick($("msd-rw-switch"), () => __sendParam("rw", $("msd-rw-switch").checked));
 
 		tools.el.setOnClick($("msd-select-new-button"), __toggleSelectSub);
 		$("msd-new-file").onchange = __selectNewFile;
@@ -93,14 +93,6 @@ export function Msd() {
 				});
 			}
 		});
-	};
-
-	var __clickModeRadio = function() {
-		__sendParam("cdrom", tools.radio.getValue("msd-mode-radio"));
-	};
-
-	var __clickRwSwitch = function() {
-		__sendParam("rw", $("msd-rw-switch").checked);
 	};
 
 	var __sendParam = function(name, value) {
@@ -232,18 +224,25 @@ export function Msd() {
 	};
 
 	var __applyState = function() {
-		__applyStateFeatures();
 		__applyStateStatus();
 
 		let s = __state;
 		let online = (s && s.online);
 
+		if (s) {
+			tools.feature.setEnabled($("msd-dropdown"), s.enabled);
+			tools.feature.setEnabled($("msd-reset-button"), s.enabled);
+		}
+		tools.hidden.setVisible($("msd-message-offline"), (s && !s.online));
+		tools.hidden.setVisible($("msd-message-image-broken"), (online && s.drive.image && !s.drive.image.complete && !s.storage.uploading));
+		tools.hidden.setVisible($("msd-message-too-big-for-cdrom"), (online && s.drive.cdrom && s.drive.image && s.drive.image.size >= 2359296000));
+		tools.hidden.setVisible($("msd-message-out-of-storage"), (online && s.drive.image && !s.drive.image.in_storage));
+		tools.hidden.setVisible($("msd-message-rw-enabled"), (online && s.drive.rw));
+		tools.hidden.setVisible($("msd-message-another-user-uploads"), (online && s.storage.uploading && !__http));
+		tools.hidden.setVisible($("msd-message-downloads"), (online && s.storage.downloading));
+
 		if (online) {
-			let size_str = tools.formatSize(s.storage.parts[""].size);
-			let used = s.storage.parts[""].size - s.storage.parts[""].free;
-			let used_str = tools.formatSize(used);
-			let percent = used / s.storage.parts[""].size * 100;
-			tools.progress.setValue($("msd-storage-progress"), `Storage: ${used_str} of ${size_str}`, percent);
+			tools.progress.setSizeOf($("msd-storage-progress"), "Storage: %s", s.storage.parts[""].size, s.storage.parts[""].free);
 		} else {
 			tools.progress.setValue($("msd-storage-progress"), "Storage: unavailable", 0);
 		}
@@ -279,8 +278,7 @@ export function Msd() {
 		$("msd-uploading-size").innerHTML = ((online && s.storage.uploading) ? tools.formatSize(s.storage.uploading.size) : "");
 		if (online) {
 			if (s.storage.uploading) {
-				let percent = Math.round(s.storage.uploading.written * 100 / s.storage.uploading.size);
-				tools.progress.setValue($("msd-uploading-progress"), `${percent}%`, percent);
+				tools.progress.setPercentOf($("msd-uploading-progress"), s.storage.uploading.size, s.storage.uploading.written);
 			} else if (!__http) {
 				tools.progress.setValue($("msd-uploading-progress"), "Waiting for upload (press UPLOAD button) ...", 0);
 			}
@@ -289,22 +287,6 @@ export function Msd() {
 			$("msd-new-url").value = "";
 			tools.progress.setValue($("msd-uploading-progress"), "", 0);
 		}
-	};
-
-	var __applyStateFeatures = function() {
-		let s = __state;
-		let online = (s && s.online);
-		if (s) {
-			tools.feature.setEnabled($("msd-dropdown"), s.enabled);
-			tools.feature.setEnabled($("msd-reset-button"), s.enabled);
-		}
-		tools.hidden.setVisible($("msd-message-offline"), (s && !s.online));
-		tools.hidden.setVisible($("msd-message-image-broken"), (online && s.drive.image && !s.drive.image.complete && !s.storage.uploading));
-		tools.hidden.setVisible($("msd-message-too-big-for-cdrom"), (online && s.drive.cdrom && s.drive.image && s.drive.image.size >= 2359296000));
-		tools.hidden.setVisible($("msd-message-out-of-storage"), (online && s.drive.image && !s.drive.image.in_storage));
-		tools.hidden.setVisible($("msd-message-rw-enabled"), (online && s.drive.rw));
-		tools.hidden.setVisible($("msd-message-another-user-uploads"), (online && s.storage.uploading && !__http));
-		tools.hidden.setVisible($("msd-message-downloads"), (online && s.storage.downloading));
 	};
 
 	var __applyStateStatus = function() {
