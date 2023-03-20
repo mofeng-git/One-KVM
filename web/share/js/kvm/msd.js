@@ -320,14 +320,11 @@ export function Msd() {
 
 	var __applyStateImageSelector = function() {
 		let s = __state;
+		if (!(s && s.online) || s.storage.uploading || s.storage.downloading) {
+			return;
+		}
+
 		let el = $("msd-image-selector");
-		if (!(s && s.online)) {
-			el.options.length = 1; // Cleanup
-			return;
-		}
-		if (s.storage.uploading || s.storage.downloading) {
-			return;
-		}
 		el.options.length = 1;
 
 		let selected = "";
