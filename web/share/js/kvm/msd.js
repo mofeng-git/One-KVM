@@ -45,12 +45,12 @@ export function Msd() {
 		tools.el.setOnClick($("msd-remove-button"), __clickRemoveButton);
 
 		tools.radio.setOnClick("msd-mode-radio", () => __sendParam("cdrom", tools.radio.getValue("msd-mode-radio")));
-
 		tools.el.setOnClick($("msd-rw-switch"), () => __sendParam("rw", $("msd-rw-switch").checked));
 
 		tools.el.setOnClick($("msd-select-new-button"), __toggleSelectSub);
 		$("msd-new-file").onchange = __selectNewFile;
 		$("msd-new-url").oninput = __selectNewUrl;
+		$("msd-new-part-selector").onchange = __selectNewFile;
 
 		tools.el.setOnClick($("msd-upload-new-button"), __clickUploadNewButton);
 		tools.el.setOnClick($("msd-abort-new-button"), __clickAbortNewButton);
@@ -208,8 +208,9 @@ export function Msd() {
 		let file = tools.input.getFile($("msd-new-file"));
 		if (file) {
 			$("msd-new-url").value = "";
-			if (file.size > __state.storage.parts[""].size) {
-				wm.error("New image is too big for your Mass Storage Drive.<br>Maximum:", tools.formatSize(__state.storage.parts[""].size));
+			let part = __state.storage.parts[$("msd-new-part-selector").value];
+			if (file.size > part.size) {
+				wm.error("New image is too big for the MSD partition.<br>Maximum:", tools.formatSize(part.size));
 				el_input.value = "";
 			}
 		}
