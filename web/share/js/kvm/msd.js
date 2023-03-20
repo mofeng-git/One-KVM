@@ -270,8 +270,12 @@ export function Msd() {
 
 		tools.el.setEnabled($("msd-new-file"), (online && !s.drive.connected && !__http && !s.busy));
 		tools.el.setEnabled($("msd-new-url"), (online && !s.drive.connected && !__http && !s.busy));
-		tools.el.setEnabled($("msd-new-part"), (online && !s.drive.connected && !__http && !s.busy));
-		__applyStatePartSelector();
+		tools.el.setEnabled($("msd-new-part-selector"), (online && !s.drive.connected && !__http && !s.busy));
+		if (online && !s.storage.uploading && !s.storage.downloading) {
+			let parts = Object.keys(s.storage.parts).sort().filter(name => (name === "" || s.storage.parts[name].writable));
+			tools.selector.setValues($("msd-new-part-selector"), parts, "\u2500 Internal \u2500");
+			tools.hidden.setVisible($("msd-new-part"), (parts.length > 1));
+		}
 
 		tools.hidden.setVisible($("msd-uploading-sub"), (online && s.storage.uploading));
 		$("msd-uploading-name").innerHTML = ((online && s.storage.uploading) ? s.storage.uploading.name : "");
@@ -355,17 +359,6 @@ export function Msd() {
 		dt = new Date(dt.getTime() - (dt.getTimezoneOffset() * 60000));
 		info += " \u2500 " + dt.toISOString().slice(0, -8).replaceAll("-", ".").replace("T", "-");
 		return info;
-	};
-
-	var __applyStatePartSelector = function() {
-		let s = __state;
-		if (!(s && s.online) || s.storage.uploading || s.storage.downloading) {
-			return;
-		}
-		let el = $("msd-new-part-selector");
-		let parts = Object.keys(s.storage.parts).sort().filter(name => (name === "" || s.storage.parts[name].writable));
-		tools.selector.setValues(el, parts, "\u2500 Internal \u2500");
-		tools.hidden.setVisible($("msd-new-part"), (parts.length > 1));
 	};
 
 	__init__();
