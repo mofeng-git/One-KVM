@@ -66,6 +66,10 @@ export var tools = new function() {
 		return id;
 	};
 
+	self.makeIdByText = function(text) {
+		return btoa(text).replace("=", "_");
+	};
+
 	self.formatSize = function(size) {
 		if (size > 0) {
 			let index = Math.floor( Math.log(size) / Math.log(1024) );
@@ -298,7 +302,7 @@ export var tools = new function() {
 		return {
 			"setValue": function(el, title, percent) {
 				el.setAttribute("data-label", title);
-				$(`${el.id}-value`).style.width = `${percent}%`;
+				el.querySelector(".progress-value").style.width = `${percent}%`;
 			},
 			"setPercentOf": function(el, max, value) {
 				let percent = Math.round(value * 100 / max);

@@ -35,6 +35,10 @@ export function Msd() {
 	var __state = null;
 	var __http = null;
 
+	var __parts_json = "";
+	var __parts = {};
+	var __parts_len = 0;
+
 	var __init__ = function() {
 		$("msd-led").title = "Unknown state";
 
@@ -243,9 +247,34 @@ export function Msd() {
 		tools.hidden.setVisible($("msd-message-downloads"), (online && s.storage.downloading));
 
 		if (online) {
-			tools.progress.setSizeOf($("msd-storage-progress"), "Storage: %s", s.storage.parts[""].size, s.storage.parts[""].free);
-		} else {
-			tools.progress.setValue($("msd-storage-progress"), "Storage: unavailable", 0);
+			let names = Object.keys(s.storage.parts).sort();
+			let parts_json = JSON.stringify(names);
+			if (__parts_json !== parts_json) {
+				$("msd-storages").innerHTML = names.map(name => `
+					<div class="text">
+						<div id="msd-storage-${tools.makeIdByText(name)}-progress" class="progress">
+							<span class="progress-value"></span>
+						</div>
+					</div>
+				`).join("<hr>");
+				__parts_json = parts_json;
+				__parts = s.storage.parts;
+				__parts_len = names.length;
+			}
+		}
+		for (let name in __parts) {
+			let part = __parts[name];
+			let title = (
+				name.length === 0
+				? `${__parts_len === 1 ? "Storage: %s" : "Internal storage: %s"}` // eslint-disable-line
+				: `Storage [${name}${part.writable ? "]" : ", read-only]"}: %s` // eslint-disable-line
+			);
+			let id = `msd-storage-${tools.makeIdByText(name)}-progress`;
+			if (online) {
+				tools.progress.setSizeOf($(id), title, part.size, part.free);
+			} else {
+				tools.progress.setValue($(id), title.replace("%s", "unavailable"), 0);
+			}
 		}
 
 		tools.el.setEnabled($("msd-image-selector"), (online && !s.drive.connected && !s.busy));
