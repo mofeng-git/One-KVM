@@ -19,84 +19,28 @@
 #                                                                            #
 # ========================================================================== #
 
+
 import math
 
 from ....mouse import MouseRange
 
 
+# =====
 class Mouse:  # pylint: disable=too-many-instance-attributes
     def __init__(self) -> None:
-        self.__active = "usb"
-        self.__buttons = 0x00
-        self.__to_x = [0, 0]
-        self.__to_y = [0, 0]
+        self.__absolute = True
+        self.__buttons = 0
         self.__wheel_y = 0
-        self.__delta_x = 0
-        self.__delta_y = 0
 
-    def button(self, button: str, clicked: bool) -> list[int]:
-        code = self.__button_code(button)
-        if code and self.__buttons:
-            self.__buttons &= ~code
-        if clicked:
-            self.__buttons |= code
-        self.__wheel_y = 0
-        if self.__active != "usb":
-            self.__to_x = [0, 0]
-            self.__to_y = [0, 0]
-        return self.__absolute()
+    def set_absolute(self, flag: bool) -> None:
+        self.__absolute = flag
 
-    def move(self, to_x: int, to_y: int) -> list[int]:
-        assert MouseRange.MIN <= to_x <= MouseRange.MAX
-        assert MouseRange.MIN <= to_y <= MouseRange.MAX
-        self.__to_x = self.__to_fixed(to_x)
-        self.__to_y = self.__to_fixed(to_y)
-        self.__wheel_y = 0
-        return self.__absolute()
+    def is_absolute(self) -> bool:
+        return self.__absolute
 
-    def wheel(self, delta_x: int, delta_y: int) -> list[int]:
-        assert -127 <= delta_y <= 127
-        _ = delta_x
-        self.__wheel_y = 1 if delta_y > 0 else 255
-        return self.__absolute()
-
-    def relative(self, delta_x: int, delta_y: int) -> list[int]:
-        assert -127 <= delta_x <= 127
-        assert -127 <= delta_y <= 127
-        delta_x = math.ceil(delta_x / 3)
-        delta_y = math.ceil(delta_y / 3)
-        self.__delta_x = delta_x if delta_x >= 0 else 255 + delta_x
-        self.__delta_y = delta_y if delta_y >= 0 else 255 + delta_y
-        return self.__relative()
-
-    def active(self) -> str:
-        return self.__active
-
-    def set_active(self, name: str) -> None:
-        self.__active = name
-
-    def __absolute(self) -> list[int]:
-        cmd = [
-            0x00, 0x04, 0x07, 0x02,
-            self.__buttons,
-            self.__to_x[1], self.__to_x[0],
-            self.__to_y[1], self.__to_y[0],
-            0x00]
-        if self.__wheel_y:
-            cmd[9] = self.__wheel_y
-        return cmd
-
-    def __relative(self) -> list[int]:
-        cmd = [
-            0x00, 0x05, 0x05, 0x01,
-            self.__buttons,
-            self.__delta_x, self.__delta_y,
-            0x00]
-        return cmd
-
-    def __button_code(self, name: str) -> int:
+    def process_button(self, button: str, state: bool) -> list[int]:
         code = 0x00
-        match name:
+        match button:
             case "left":
                 code = 0x01
             case "right":
@@ -107,8 +51,51 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
                 code = 0x08
             case "down":
                 code = 0x10
-        return code
+        if code:
+            if state:
+                self.__buttons |= code
+            else:
+                self.__buttons &= ~code
+        self.__wheel_y = 0
+        return self.__make_absolute_cmd(0, 0)
 
-    def __to_fixed(self, num: int) -> list[int]:
-        to_fixed = math.ceil(MouseRange.remap(num, 0, MouseRange.MAX) / 8)
-        return [to_fixed >> 8, to_fixed & 0xFF]
+    def process_move(self, to_x: int, to_y: int) -> list[int]:
+        self.__wheel_y = 0
+        return self.__make_absolute_cmd(to_x, to_y)
+
+    def process_wheel(self, delta_x: int, delta_y: int) -> list[int]:
+        _ = delta_x
+        assert -127 <= delta_y <= 127
+        self.__wheel_y = (1 if delta_y > 0 else 255)
+        return self.__make_absolute_cmd(0, 0)
+
+    def __make_absolute_cmd(self, to_x: int, to_y: int) -> list[int]:
+        fixed_x = self.__fix_absolute(to_x)
+        fixed_y = self.__fix_absolute(to_y)
+        return [
+            0, 0x04, 0x07, 0x02,
+            self.__buttons,
+            fixed_x[1], fixed_x[0],
+            fixed_y[1], fixed_y[0],
+            self.__wheel_y,
+        ]
+
+    def __fix_absolute(self, value: int) -> tuple[int, int]:
+        assert MouseRange.MIN <= value <= MouseRange.MAX
+        to_fixed = math.ceil(MouseRange.remap(value, 0, MouseRange.MAX) / 8)
+        return (to_fixed >> 8, to_fixed & 0xFF)
+
+    def process_relative(self, delta_x: int, delta_y: int) -> list[int]:
+        delta_x = self.__fix_relative(delta_x)
+        delta_y = self.__fix_relative(delta_y)
+        return [
+            0, 0x05, 0x05, 0x01,
+            self.__buttons,
+            delta_x, delta_y,
+            self.__wheel_y,
+        ]
+
+    def __fix_relative(self, value: int) -> int:
+        assert -127 <= value <= 127
+        value = math.ceil(value / 3)
+        return (value if value >= 0 else (255 + value))

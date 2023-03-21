@@ -117,26 +117,23 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
     async def get_state(self) -> dict:
         state = await self.__state_flags.get()
-        online = bool(state["online"])
-        active_mouse = self.__mouse.active()
-        absolute = (active_mouse == "usb")
-        keyboard_leds = await self.__keyboard.leds()
-
+        absolute = self.__mouse.is_absolute()
+        leds = await self.__keyboard.get_leds()
         return {
-            "online": online,
+            "online": state["online"],
             "busy": False,
             "connected": None,
             "keyboard": {
-                "online": True,
-                "leds": keyboard_leds,
+                "online": state["online"],
+                "leds": leds,
                 "outputs": {"available": [], "active": ""},
             },
             "mouse": {
-                "online": True,
+                "online": state["online"],
                 "absolute": absolute,
                 "outputs": {
                     "available": ["usb", "usb_rel"],
-                    "active": active_mouse
+                    "active": ("usb" if absolute else "usb_rel"),
                 },
             },
         }
@@ -165,24 +162,24 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
     def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
         for (key, state) in keys:
-            self.__queue_cmd(self.__keyboard.key(key, state))
+            self.__queue_cmd(self.__keyboard.process_key(key, state))
 
     def send_mouse_button_event(self, button: str, state: bool) -> None:
-        self.__queue_cmd(self.__mouse.button(button, state))
+        self.__queue_cmd(self.__mouse.process_button(button, state))
 
     def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        self.__queue_cmd(self.__mouse.move(to_x, to_y))
+        self.__queue_cmd(self.__mouse.process_move(to_x, to_y))
 
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
-        self.__queue_cmd(self.__mouse.wheel(delta_x, delta_y))
+        self.__queue_cmd(self.__mouse.process_wheel(delta_x, delta_y))
 
     def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
-        self.__queue_cmd(self.__mouse.relative(delta_x, delta_y))
+        self.__queue_cmd(self.__mouse.process_relative(delta_x, delta_y))
 
     def set_params(self, keyboard_output: (str | None)=None, mouse_output: (str | None)=None) -> None:
         if mouse_output is not None:
             get_logger(0).info("HID : mouse output = %s", mouse_output)
-            self.__mouse.set_active(mouse_output)
+            self.__mouse.set_absolute(mouse_output == "usb")
             self.__notifier.notify()
 
     def set_connected(self, connected: bool) -> None:
