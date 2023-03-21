@@ -30,6 +30,8 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
     def __init__(self) -> None:
         self.__absolute = True
         self.__buttons = 0
+        self.__to_x = (0, 0)
+        self.__to_y = (0, 0)
         self.__wheel_y = 0
 
     def set_absolute(self, flag: bool) -> None:
@@ -57,33 +59,33 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
             else:
                 self.__buttons &= ~code
         self.__wheel_y = 0
-        return self.__make_absolute_cmd(0, 0)
+        return self.__make_absolute_cmd()
 
     def process_move(self, to_x: int, to_y: int) -> list[int]:
+        self.__to_x = self.__fix_absolute(to_x)
+        self.__to_y = self.__fix_absolute(to_y)
         self.__wheel_y = 0
-        return self.__make_absolute_cmd(to_x, to_y)
-
-    def process_wheel(self, delta_x: int, delta_y: int) -> list[int]:
-        _ = delta_x
-        assert -127 <= delta_y <= 127
-        self.__wheel_y = (1 if delta_y > 0 else 255)
-        return self.__make_absolute_cmd(0, 0)
-
-    def __make_absolute_cmd(self, to_x: int, to_y: int) -> list[int]:
-        fixed_x = self.__fix_absolute(to_x)
-        fixed_y = self.__fix_absolute(to_y)
-        return [
-            0, 0x04, 0x07, 0x02,
-            self.__buttons,
-            fixed_x[1], fixed_x[0],
-            fixed_y[1], fixed_y[0],
-            self.__wheel_y,
-        ]
+        return self.__make_absolute_cmd()
 
     def __fix_absolute(self, value: int) -> tuple[int, int]:
         assert MouseRange.MIN <= value <= MouseRange.MAX
         to_fixed = math.ceil(MouseRange.remap(value, 0, MouseRange.MAX) / 8)
         return (to_fixed >> 8, to_fixed & 0xFF)
+
+    def process_wheel(self, delta_x: int, delta_y: int) -> list[int]:
+        _ = delta_x
+        assert -127 <= delta_y <= 127
+        self.__wheel_y = (1 if delta_y > 0 else 255)
+        return self.__make_absolute_cmd()
+
+    def __make_absolute_cmd(self) -> list[int]:
+        return [
+            0, 0x04, 0x07, 0x02,
+            self.__buttons,
+            self.__to_x[1], self.__to_x[0],
+            self.__to_y[1], self.__to_y[0],
+            self.__wheel_y,
+        ]
 
     def process_relative(self, delta_x: int, delta_y: int) -> list[int]:
         delta_x = self.__fix_relative(delta_x)
