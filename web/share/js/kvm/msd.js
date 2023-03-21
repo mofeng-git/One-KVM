@@ -35,9 +35,9 @@ export function Msd() {
 	var __state = null;
 	var __http = null;
 
-	var __parts_json = "";
+	var __parts_names_json = "";
+	var __parts_names_len = 0;
 	var __parts = {};
-	var __parts_len = 0;
 
 	var __init__ = function() {
 		$("msd-led").title = "Unknown state";
@@ -248,8 +248,8 @@ export function Msd() {
 
 		if (online) {
 			let names = Object.keys(s.storage.parts).sort();
-			let parts_json = JSON.stringify(names);
-			if (__parts_json !== parts_json) {
+			let parts_names_json = JSON.stringify(names);
+			if (__parts_names_json !== parts_names_json) {
 				$("msd-storages").innerHTML = names.map(name => `
 					<div class="text">
 						<div id="msd-storage-${tools.makeIdByText(name)}-progress" class="progress">
@@ -257,16 +257,16 @@ export function Msd() {
 						</div>
 					</div>
 				`).join("<hr>");
-				__parts_json = parts_json;
-				__parts = s.storage.parts;
-				__parts_len = names.length;
+				__parts_names_json = parts_names_json;
+				__parts_names_len = names.length;
 			}
+			__parts = s.storage.parts;
 		}
 		for (let name in __parts) {
 			let part = __parts[name];
 			let title = (
 				name.length === 0
-				? `${__parts_len === 1 ? "Storage: %s" : "Internal storage: %s"}` // eslint-disable-line
+				? `${__parts_names_len === 1 ? "Storage: %s" : "Internal storage: %s"}` // eslint-disable-line
 				: `Storage [${name}${part.writable ? "]" : ", read-only]"}: %s` // eslint-disable-line
 			);
 			let id = `msd-storage-${tools.makeIdByText(name)}-progress`;
