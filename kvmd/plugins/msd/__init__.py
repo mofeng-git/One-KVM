@@ -199,7 +199,7 @@ class MsdFileReader(BaseMsdReader):  # pylint: disable=too-many-instance-attribu
             self.__readed += len(chunk)
 
             now = time.monotonic()
-            if self.__tick + 3 < now or self.__readed == self.__file_size:
+            if self.__tick + 1 < now or self.__readed == self.__file_size:
                 self.__tick = now
                 self.__notifier.notify()
 
@@ -258,7 +258,7 @@ class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attribu
             self.__unsynced = 0
 
         now = time.monotonic()
-        if self.__tick + 3 < now:
+        if self.__tick + 1 < now:
             self.__tick = now
             self.__notifier.notify()
 
