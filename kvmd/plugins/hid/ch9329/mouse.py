@@ -58,6 +58,9 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
                 self.__buttons |= code
             else:
                 self.__buttons &= ~code
+        if not self.__absolute:
+            self.__to_x = (0, 0)
+            self.__to_y = (0, 0)
         self.__wheel_y = 0
         return self.__make_absolute_cmd()
 
