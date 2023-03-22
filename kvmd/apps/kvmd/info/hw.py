@@ -31,7 +31,7 @@ from ....logging import get_logger
 
 from .... import env
 from .... import tools
-from .... import aiofs
+from .... import aiotools
 from .... import aioproc
 
 from .base import BaseInfoSubmanager
@@ -90,7 +90,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
         if name not in self.__dt_cache:
             path = os.path.join(f"{env.PROCFS_PREFIX}/proc/device-tree", name)
             try:
-                self.__dt_cache[name] = (await aiofs.read(path)).strip(" \t\r\n\0")
+                self.__dt_cache[name] = (await aiotools.read_file(path)).strip(" \t\r\n\0")
             except Exception as err:
                 get_logger(0).error("Can't read DT %s from %s: %s", name, path, err)
                 return None
@@ -99,7 +99,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
     async def __get_cpu_temp(self) -> (float | None):
         temp_path = f"{env.SYSFS_PREFIX}/sys/class/thermal/thermal_zone0/temp"
         try:
-            return int((await aiofs.read(temp_path)).strip()) / 1000
+            return int((await aiotools.read_file(temp_path)).strip()) / 1000
         except Exception as err:
             get_logger(0).error("Can't read CPU temp from %s: %s", temp_path, err)
             return None

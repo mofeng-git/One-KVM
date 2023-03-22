@@ -24,7 +24,7 @@ import dataclasses
 
 from ...logging import get_logger
 
-from ... import aiofs
+from ... import aiotools
 
 
 # =====
@@ -61,8 +61,7 @@ class VncAuthManager:
         return ({}, (not self.__enabled))
 
     async def __inner_read_credentials(self) -> dict[str, VncAuthKvmdCredentials]:
-        lines = (await aiofs.read(self.__path)).split("\n")
-
+        lines = (await aiotools.read_file(self.__path)).split("\n")
         credentials: dict[str, VncAuthKvmdCredentials] = {}
         for (lineno, line) in enumerate(lines):
             if len(line.strip()) == 0 or line.lstrip().startswith("#"):

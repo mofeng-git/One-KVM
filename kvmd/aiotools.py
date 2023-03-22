@@ -26,7 +26,6 @@ import asyncio
 import ssl
 import functools
 import types
-
 import typing
 
 from typing import Callable
@@ -35,7 +34,15 @@ from typing import Coroutine
 from typing import TypeVar
 from typing import Any
 
+import aiofiles
+
 from .logging import get_logger
+
+
+# =====
+async def read_file(path: str) -> str:
+    async with aiofiles.open(path) as file:
+        return (await file.read())
 
 
 # =====

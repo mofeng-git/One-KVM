@@ -36,7 +36,6 @@ from ...errors import OperationError
 from ...errors import IsBusyError
 
 from ... import aiotools
-from ... import aiofs
 
 from .. import BasePlugin
 from .. import get_plugin_class
@@ -254,7 +253,7 @@ class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attribu
 
         self.__unsynced += len(chunk)
         if self.__unsynced >= self.__sync_size:
-            await aiofs.afile_sync(self.__file)
+            await self.__sync()
             self.__unsynced = 0
 
         now = time.monotonic()
@@ -287,11 +286,16 @@ class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attribu
                 (log, result) = (logger.warning, "OVERFLOW")
             log("Written %d of %d bytes to MSD image %r: %s", self.__written, self.__file_size, self.__name, result)
             try:
-                await aiofs.afile_sync(self.__file)
+                await self.__sync()
             finally:
                 await self.__file.close()  # type: ignore
         except Exception:
             logger.exception("Can't close image writer")
+
+    async def __sync(self) -> None:
+        assert self.__file is not None
+        await self.__file.flush()  # type: ignore
+        await aiotools.run_async(os.fsync, self.__file.fileno())  # type: ignore
 
 
 # =====
