@@ -81,7 +81,9 @@ def build_symmap(path: str) -> dict[int, dict[int, str]]:  # x11 keysym -> [(mod
 # =====
 @functools.lru_cache()
 def _get_keysyms() -> dict[str, int]:
-    keysyms: dict[str, int] = {}
+    keysyms: dict[str, int] = {
+        "EuroSign": 0x20AC,  # FIXME: https://github.com/python-xlib/python-xlib/pull/264
+    }
     for (finder, module_name, _) in pkgutil.walk_packages(Xlib.keysymdef.__path__):
         if not isinstance(finder, importlib.machinery.FileFinder):
             continue
