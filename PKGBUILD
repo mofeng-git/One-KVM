@@ -62,6 +62,7 @@ depends=(
 	python-pam
 	"python-pillow>=8.3.1-1"
 	python-xlib
+	libxkbcommon
 	python-hidapi
 	python-six
 	python-pyrad

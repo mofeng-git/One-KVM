@@ -41,15 +41,19 @@ class SymmapModifiers:
     CTRL: int = 0x4
 
 
-def build_symmap(path: str) -> dict[int, dict[int, str]]:
+def build_symmap(path: str) -> dict[int, dict[int, str]]:  # x11 keysym -> [(modifiers, webkey), ...]
     # https://github.com/qemu/qemu/blob/95a9457fd44ad97c518858a4e1586a5498f9773c/ui/keymaps.c
     logger = get_logger()
 
     symmap: dict[int, dict[int, str]] = {}
     for (src, items) in [
-        ("<builtin>", list(X11_TO_AT1.items())),
         (path, list(_read_keyboard_layout(path).items())),
+        ("<builtin>", list(X11_TO_AT1.items())),
     ]:
+        # Пока лучшая логика - самые первые записи в файле раскладки
+        # должны иметь приоритет над следующими, а дефолтный маппинг
+        # только дополняет отсутствующие значения.
+
         for (code, keys) in items:
             for key in keys:
                 web_name = AT1_TO_WEB.get(key.code)
@@ -62,14 +66,15 @@ def build_symmap(path: str) -> dict[int, dict[int, str]]:
                         logger.error("Invalid modifier key at mapping %s: %s / %s", src, web_name, key)
                         continue
 
-                    if code not in symmap:
-                        symmap[code] = {}
-                    symmap[code][
+                    modifiers = (
                         0
                         | (SymmapModifiers.SHIFT if key.shift else 0)
                         | (SymmapModifiers.ALTGR if key.altgr else 0)
                         | (SymmapModifiers.CTRL if key.ctrl else 0)
-                    ] = web_name
+                    )
+                    if code not in symmap:
+                        symmap[code] = {}
+                    symmap[code].setdefault(modifiers, web_name)
     return symmap
 
 

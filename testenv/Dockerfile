@@ -56,6 +56,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-pam \
 		python-pillow \
 		python-xlib \
+		libxkbcommon \
 		python-hidapi \
 		python-zstandard \
 		freetype2 \
