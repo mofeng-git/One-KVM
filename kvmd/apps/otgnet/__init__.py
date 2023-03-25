@@ -39,6 +39,7 @@ from .. import init
 from .netctl import BaseCtl
 from .netctl import IfaceUpCtl
 from .netctl import IfaceAddIpCtl
+from .netctl import IptablesAllowEstRelCtl
 from .netctl import IptablesDropAllCtl
 from .netctl import IptablesAllowIcmpCtl
 from .netctl import IptablesAllowPortCtl
@@ -101,6 +102,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         ctls: list[BaseCtl] = [
             CustomCtl(self.__pre_start_cmd, self.__post_stop_cmd, placeholders),
             IfaceUpCtl(self.__ip_cmd, netcfg.iface),
+            IptablesAllowEstRelCtl(self.__iptables_cmd, netcfg.iface),
             *([IptablesAllowIcmpCtl(self.__iptables_cmd, netcfg.iface)] if self.__allow_icmp else []),
             *[
                 IptablesAllowPortCtl(self.__iptables_cmd, netcfg.iface, port, tcp)
