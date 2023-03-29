@@ -108,7 +108,7 @@ case "$1" in
 	renew)
 		shift
 		create_tmp
-		cp -a "$cur"/{config,work,logs} "$tmp"
+		cp -a "$cur"/* "$tmp"
 		chown -R "$user:" "$tmp"
 		sed -s -i -e "s| = $cur/| = $tmp/|g" "$tmp/config/renewal/"*
 		sudo --preserve-env -u "$user" certbot renew "$@" \
