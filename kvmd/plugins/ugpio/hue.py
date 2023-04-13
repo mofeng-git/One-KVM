@@ -145,8 +145,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         except Exception as err:
             get_logger().error("Failed Hue PUT request to pin %s: %s", pin, tools.efmt(err))
             raise GpioDriverOfflineError(self)
-        else:
-            self.__update_notifier.notify()
+        self.__update_notifier.notify()
 
     def __ensure_http_session(self) -> aiohttp.ClientSession:
         if not self.__http_session:
