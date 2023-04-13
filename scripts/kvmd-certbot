@@ -108,7 +108,7 @@ case "$1" in
 	renew)
 		shift
 		create_tmp
-		cp -a "$cur"/* "$tmp"
+		cp -a "$cur"/. "$tmp"
 		chown -R "$user:" "$tmp"
 		sed -s -i -e "s| = $cur/| = $tmp/|g" "$tmp/config/renewal/"*
 		sudo --preserve-env -u "$user" certbot renew "$@" \
@@ -120,7 +120,7 @@ case "$1" in
 			sudo --preserve-env -u "$user" kvmd-pstrun -- bash -c "
 				set -ex
 				rm -rf '$new'
-				cp -a '$tmp' '$new'
+				cp -a '$tmp'/. '$new'
 				rm '$new/updated'
 				chmod 755 '$new/config/'{archive,live}
 				chmod 640 '$new'/config/archive/*/privkey*.pem
