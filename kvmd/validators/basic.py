@@ -113,9 +113,9 @@ def valid_string_list(
     if not isinstance(arg, (list, tuple)):
         arg = check_not_none_string(arg, name)
         arg = list(filter(None, re.split(delim, arg)))
-    if subval is not None:
-        try:
-            arg = list(map(subval, arg))
-        except Exception:
-            raise ValidatorError(f"Failed sub-validator on one of the item of {arg!r}")
+
+    try:
+        arg = list(map(subval, arg))
+    except Exception:
+        raise ValidatorError(f"Failed sub-validator on one of the item of {arg!r}")
     return arg
