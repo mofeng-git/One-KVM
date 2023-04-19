@@ -58,6 +58,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-xlib \
 		libxkbcommon \
 		python-hidapi \
+		python-ldap \
 		python-zstandard \
 		freetype2 \
 		nginx-mainline \

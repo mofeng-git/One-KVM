@@ -66,6 +66,7 @@ depends=(
 	python-hidapi
 	python-six
 	python-pyrad
+	python-ldap
 	python-zstandard
 	libgpiod
 	freetype2
