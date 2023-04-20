@@ -25,6 +25,7 @@ import ldap
 from ...yamlconf import Option
 
 from ...validators.basic import valid_stripped_string_not_empty
+from ...validators.basic import valid_bool
 from ...validators.basic import valid_int_f1
 
 from ...logging import get_logger
@@ -40,6 +41,7 @@ class Plugin(BaseAuthService):
     def __init__(  # pylint: disable=super-init-not-called
         self,
         url: str,
+        verify: bool,
         base: str,
         group: str,
         user_domain: str,
@@ -47,6 +49,7 @@ class Plugin(BaseAuthService):
     ) -> None:
 
         self.__url = url
+        self.__verify = verify
         self.__base = base
         self.__group = group
         self.__user_domain = user_domain
@@ -55,9 +58,10 @@ class Plugin(BaseAuthService):
     @classmethod
     def get_plugin_options(cls) -> dict:
         return {
-            "url":         Option("", type=valid_stripped_string_not_empty),
-            "base":        Option("", type=valid_stripped_string_not_empty),
-            "group":       Option("", type=valid_stripped_string_not_empty),
+            "url":         Option("",   type=valid_stripped_string_not_empty),
+            "verify":      Option(True, type=valid_bool),
+            "base":        Option("",   type=valid_stripped_string_not_empty),
+            "group":       Option("",   type=valid_stripped_string_not_empty),
             "user_domain": Option(""),
             "timeout":     Option(5, type=valid_int_f1),
         }
@@ -73,6 +77,12 @@ class Plugin(BaseAuthService):
             conn = ldap.initialize(self.__url)
             conn.set_option(ldap.OPT_REFERRALS, 0)
             conn.set_option(ldap.OPT_TIMEOUT, self.__timeout)
+            if self.__url.lower().startswith("ldaps://"):
+                conn.set_option(ldap.OPT_X_TLS, ldap.OPT_X_TLS_DEMAND)
+                conn.set_option(ldap.OPT_X_TLS_DEMAND, True)
+                if not self.__verify:
+                    conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
+                conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
             conn.simple_bind_s(user, passwd)
             for (dn, attrs) in (conn.search_st(
                 base=self.__base,
@@ -85,8 +95,8 @@ class Plugin(BaseAuthService):
                     return True
         except ldap.INVALID_CREDENTIALS:
             pass
-        except ldap.SERVER_DOWN:
-            get_logger().error("LDAP server is down")
+        except ldap.SERVER_DOWN as err:
+            get_logger().error("LDAP server is down: %s", tools.efmt(err))
         except Exception as err:
             get_logger().error("Unexpected LDAP error: %s", tools.efmt(err))
         finally:
