@@ -44,6 +44,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __relative_deltas = [];
 	var __relative_touch_pos = null;
 	var __relative_sens = 1.0;
+	var __relative_scroll_rate = 5;
 	var __wheel_delta = {"x": 0, "y": 0};
 
 	var __stream_hovered = false;
@@ -70,6 +71,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		tools.storage.bindSimpleSwitch($("hid-mouse-reverse-scrolling-switch"), "hid.mouse.reverse_scrolling", false);
 		tools.slider.setParams($("hid-mouse-sens-slider"), 0.1, 1.9, 0.1, tools.storage.get("hid.mouse.sens", 1.0), __updateRelativeSens);
 		tools.slider.setParams($("hid-mouse-rate-slider"), 10, 100, 10, tools.storage.get("hid.mouse.rate", 100), __updateRate); // set __timer
+		tools.slider.setParams($("hid-mouse-scroll-slider"), 1, 100, 1, tools.storage.get("hid.mouse.scroll_rate", 5), __updateScrollRate);
 	};
 
 	/************************************************************************/
@@ -111,6 +113,12 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			clearInterval(__timer);
 		}
 		__timer = setInterval(__sendPlannedMove, value);
+	};
+
+	var __updateScrollRate = function(value) {
+		$("hid-mouse-scroll-value").innerHTML = value + " #";
+		tools.storage.set("hid.mouse.scroll_rate", value);
+		__relative_scroll_rate = value;
 	};
 
 	var __updateRelativeSens = function(value) {
@@ -250,30 +258,33 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 
 		event.preventDefault();
 
+		//set default rate of -5, but allow localStorage hid.mouse.scroll_rate value to be used.
+		var rate = -(__relative_scroll_rate);
 		if (!__absolute && !__isRelativeCaptured()) {
 			return;
 		}
 
 		let delta = {"x": 0, "y": 0};
-		if (tools.browser.is_firefox && !tools.browser.is_mac) {
+		//This is for firefox and chrome, but not on mac. Mac uses 5-lines-per-scroll.
+		if ((tools.browser.is_firefox || tools.browser.is_chrome) && !tools.browser.is_mac) {
 			if (event.deltaX !== 0) {
-				delta.x = event.deltaX / Math.abs(event.deltaX) * (-5);
+				delta.x = event.deltaX / Math.abs(event.deltaX) * (rate);
 			}
 			if (event.deltaY !== 0) {
-				delta.y = event.deltaY / Math.abs(event.deltaY) * (-5);
+				delta.y = event.deltaY / Math.abs(event.deltaY) * (rate);
 			}
 		} else {
 			let factor = (tools.browser.is_mac ? 5 : 1);
 
 			__wheel_delta.x += event.deltaX * factor; // Horizontal scrolling
 			if (Math.abs(__wheel_delta.x) >= 100) {
-				delta.x = __wheel_delta.x / Math.abs(__wheel_delta.x) * (-5);
+				delta.x = __wheel_delta.x / Math.abs(__wheel_delta.x) * (rate);
 				__wheel_delta.x = 0;
 			}
 
 			__wheel_delta.y += event.deltaY * factor; // Vertical scrolling
 			if (Math.abs(__wheel_delta.y) >= 100) {
-				delta.y = __wheel_delta.y / Math.abs(__wheel_delta.y) * (-5);
+				delta.y = __wheel_delta.y / Math.abs(__wheel_delta.y) * (rate);
 				__wheel_delta.y = 0;
 			}
 		}
