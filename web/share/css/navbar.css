@@ -131,6 +131,7 @@ ul#navbar li div.menu details summary {
 ul#navbar li div.menu details div.spoiler {
 	margin-left: 20px !important;
 	border-left: var(--border-default-thin);
+	border-bottom: var(--border-default-thin);
 }
 ul#navbar li div.menu details summary::marker {
 	color: var(--cs-marker-fg);

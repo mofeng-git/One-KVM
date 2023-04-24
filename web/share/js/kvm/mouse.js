@@ -44,8 +44,8 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __relative_deltas = [];
 	var __relative_touch_pos = null;
 	var __relative_sens = 1.0;
-	var __relative_scroll_rate = 5;
-	var __wheel_delta = {"x": 0, "y": 0};
+	var __scroll_rate = 5;
+	var __scroll_delta = {"x": 0, "y": 0};
 
 	var __stream_hovered = false;
 
@@ -62,7 +62,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		$("stream-box").onmouseup = (event) => __streamButtonHandler(event, false);
 		$("stream-box").oncontextmenu = (event) => event.preventDefault();
 		$("stream-box").onmousemove = __streamMoveHandler;
-		$("stream-box").onwheel = __streamWheelHandler;
+		$("stream-box").onwheel = __streamScrollHandler;
 		$("stream-box").ontouchstart = (event) => __streamTouchStartHandler(event);
 		$("stream-box").ontouchmove = (event) => __streamTouchMoveHandler(event);
 		$("stream-box").ontouchend = (event) => __streamTouchEndHandler(event);
@@ -118,7 +118,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __updateScrollRate = function(value) {
 		$("hid-mouse-scroll-value").innerHTML = value + " #";
 		tools.storage.set("hid.mouse.scroll_rate", value);
-		__relative_scroll_rate = value;
+		__scroll_rate = value;
 	};
 
 	var __updateRelativeSens = function(value) {
@@ -252,21 +252,19 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
-	var __streamWheelHandler = function(event) {
+	var __streamScrollHandler = function(event) {
 		// https://learn.javascript.ru/mousewheel
 		// https://stackoverflow.com/a/24595588
 
 		event.preventDefault();
 
-		//set default rate of -5, but allow localStorage hid.mouse.scroll_rate value to be used.
-		var rate = -(__relative_scroll_rate);
+		let rate = -__scroll_rate;
 		if (!__absolute && !__isRelativeCaptured()) {
 			return;
 		}
 
 		let delta = {"x": 0, "y": 0};
-		//This is for firefox and chrome, but not on mac. Mac uses 5-lines-per-scroll.
-		if ((tools.browser.is_firefox || tools.browser.is_chrome) && !tools.browser.is_mac) {
+		if (tools.browser.is_firefox && !tools.browser.is_mac) {
 			if (event.deltaX !== 0) {
 				delta.x = event.deltaX / Math.abs(event.deltaX) * (rate);
 			}
@@ -276,20 +274,20 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		} else {
 			let factor = (tools.browser.is_mac ? 5 : 1);
 
-			__wheel_delta.x += event.deltaX * factor; // Horizontal scrolling
-			if (Math.abs(__wheel_delta.x) >= 100) {
-				delta.x = __wheel_delta.x / Math.abs(__wheel_delta.x) * (rate);
-				__wheel_delta.x = 0;
+			__scroll_delta.x += event.deltaX * factor; // Horizontal scrolling
+			if (Math.abs(__scroll_delta.x) >= 100) {
+				delta.x = __scroll_delta.x / Math.abs(__scroll_delta.x) * (rate);
+				__scroll_delta.x = 0;
 			}
 
-			__wheel_delta.y += event.deltaY * factor; // Vertical scrolling
-			if (Math.abs(__wheel_delta.y) >= 100) {
-				delta.y = __wheel_delta.y / Math.abs(__wheel_delta.y) * (rate);
-				__wheel_delta.y = 0;
+			__scroll_delta.y += event.deltaY * factor; // Vertical scrolling
+			if (Math.abs(__scroll_delta.y) >= 100) {
+				delta.y = __scroll_delta.y / Math.abs(__scroll_delta.y) * (rate);
+				__scroll_delta.y = 0;
 			}
 		}
 
-		__sendWheel(delta);
+		__sendScroll(delta);
 	};
 
 	var __sendOrPlanRelativeMove = function(delta) {
@@ -307,7 +305,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
-	var __sendWheel = function(delta) {
+	var __sendScroll = function(delta) {
 		if (delta.x || delta.y) {
 			if ($("hid-mouse-reverse-scrolling-switch").checked) {
 				delta.x *= -1;
