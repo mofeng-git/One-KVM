@@ -68,9 +68,12 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		$("stream-box").ontouchend = (event) => __streamTouchEndHandler(event);
 
 		tools.storage.bindSimpleSwitch($("hid-mouse-squash-switch"), "hid.mouse.squash", true);
-		tools.storage.bindSimpleSwitch($("hid-mouse-reverse-scrolling-switch"), "hid.mouse.reverse_scrolling", false);
 		tools.slider.setParams($("hid-mouse-sens-slider"), 0.1, 1.9, 0.1, tools.storage.get("hid.mouse.sens", 1.0), __updateRelativeSens);
 		tools.slider.setParams($("hid-mouse-rate-slider"), 10, 100, 10, tools.storage.get("hid.mouse.rate", 100), __updateRate); // set __timer
+
+		tools.storage.bindSimpleSwitch($("hid-mouse-reverse-scrolling-switch"), "hid.mouse.reverse_scrolling", false);
+		let cumulative_scrolling = !(tools.browser.is_firefox && !tools.browser.is_mac);
+		tools.storage.bindSimpleSwitch($("hid-mouse-cumulative-scrolling-switch"), "hid.mouse.cumulative_scrolling", cumulative_scrolling);
 		tools.slider.setParams($("hid-mouse-scroll-slider"), 1, 100, 1, tools.storage.get("hid.mouse.scroll_rate", 5), __updateScrollRate);
 	};
 
@@ -116,7 +119,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	};
 
 	var __updateScrollRate = function(value) {
-		$("hid-mouse-scroll-value").innerHTML = value + " #";
+		$("hid-mouse-scroll-value").innerHTML = value;
 		tools.storage.set("hid.mouse.scroll_rate", value);
 		__scroll_rate = value;
 	};
@@ -258,32 +261,31 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 
 		event.preventDefault();
 
-		let rate = -__scroll_rate;
 		if (!__absolute && !__isRelativeCaptured()) {
 			return;
 		}
 
 		let delta = {"x": 0, "y": 0};
-		if (tools.browser.is_firefox && !tools.browser.is_mac) {
-			if (event.deltaX !== 0) {
-				delta.x = event.deltaX / Math.abs(event.deltaX) * (rate);
-			}
-			if (event.deltaY !== 0) {
-				delta.y = event.deltaY / Math.abs(event.deltaY) * (rate);
-			}
-		} else {
+		if ($("hid-mouse-cumulative-scrolling-switch").checked) {
 			let factor = (tools.browser.is_mac ? 5 : 1);
 
 			__scroll_delta.x += event.deltaX * factor; // Horizontal scrolling
 			if (Math.abs(__scroll_delta.x) >= 100) {
-				delta.x = __scroll_delta.x / Math.abs(__scroll_delta.x) * (rate);
+				delta.x = __scroll_delta.x / Math.abs(__scroll_delta.x) * (-__scroll_rate);
 				__scroll_delta.x = 0;
 			}
 
 			__scroll_delta.y += event.deltaY * factor; // Vertical scrolling
 			if (Math.abs(__scroll_delta.y) >= 100) {
-				delta.y = __scroll_delta.y / Math.abs(__scroll_delta.y) * (rate);
+				delta.y = __scroll_delta.y / Math.abs(__scroll_delta.y) * (-__scroll_rate);
 				__scroll_delta.y = 0;
+			}
+		} else {
+			if (event.deltaX !== 0) {
+				delta.x = event.deltaX / Math.abs(event.deltaX) * (-__scroll_rate);
+			}
+			if (event.deltaY !== 0) {
+				delta.y = event.deltaY / Math.abs(event.deltaY) * (-__scroll_rate);
 			}
 		}
 
