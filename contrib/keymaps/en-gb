@@ -114,6 +114,8 @@ ISO_Left_Tab 0x0f shift
 # evdev 16 (0x10), QKeyCode "q", number 0x10
 q 0x10
 Q 0x10 shift
+# XXX: KVMD
+at 0x28 shift
 at 0x10 altgr
 Greek_OMEGA 0x10 shift altgr
 
@@ -249,7 +251,8 @@ dead_doubleacute 0x27 shift altgr
 
 # evdev 40 (0x28), QKeyCode "apostrophe", number 0x28
 apostrophe 0x28
-at 0x28 shift
+# XXX: KVMD
+#at 0x28 shift
 dead_circumflex 0x28 altgr
 dead_caron 0x28 shift altgr
 
