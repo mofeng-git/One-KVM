@@ -298,7 +298,8 @@ function __WindowManager() {
 
 				el_button.classList.add("menu-button-pressed");
 				el_menu.style.visibility = "visible";
-				el_menu.focus();
+				let el_focus = el_menu.querySelector("[data-focus]");
+				(el_focus !== null ? el_focus : el_menu).focus();
 				all_hidden &= false;
 			} else {
 				el_button.classList.remove("menu-button-pressed");
