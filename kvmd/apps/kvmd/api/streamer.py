@@ -36,12 +36,12 @@ from ....validators.kvm import valid_stream_quality
 
 from ..streamer import Streamer
 
-from ..tesseract import TesseractOcr
+from ..ocr import Ocr
 
 
 # =====
 class StreamerApi:
-    def __init__(self, streamer: Streamer, ocr: TesseractOcr) -> None:
+    def __init__(self, streamer: Streamer, ocr: Ocr) -> None:
         self.__streamer = streamer
         self.__ocr = ocr
 

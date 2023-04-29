@@ -103,7 +103,7 @@ _LANG_SUFFIX = ".traineddata"
 
 
 # =====
-class TesseractOcr:
+class Ocr:
     def __init__(self, data_dir_path: str, default_langs: list[str]) -> None:
         self.__data_dir_path = data_dir_path
         self.__default_langs = default_langs
