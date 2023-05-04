@@ -137,8 +137,14 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         assert self.__writer is not None
         try:
             self.__writer.write(b"\xAA\xBB\x03%s\xEE" % (cmd))
-            await asyncio.wait_for(self.__writer.drain(), timeout=self.__timeout)
-            return (await asyncio.wait_for(self.__reader.readexactly(6), timeout=self.__timeout))[4]
+            await asyncio.wait_for(
+                asyncio.ensure_future(self.__writer.drain()),
+                timeout=self.__timeout,
+            )
+            return (await asyncio.wait_for(
+                asyncio.ensure_future(self.__reader.readexactly(6)),
+                timeout=self.__timeout,
+            ))[4]
         except Exception as err:
             get_logger(0).error("Can't send command to TESmart KVM [%s]:%d: %s",
                                 self.__host, self.__port, tools.efmt(err))
@@ -155,7 +161,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
     async def __ensure_device_net(self) -> None:
         try:
             (self.__reader, self.__writer) = await asyncio.wait_for(
-                asyncio.open_connection(self.__host, self.__port),
+                asyncio.ensure_future(asyncio.open_connection(self.__host, self.__port)),
                 timeout=self.__timeout,
             )
         except Exception as err:

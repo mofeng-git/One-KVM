@@ -39,11 +39,11 @@ url="https://github.com/pikvm/kvmd"
 license=(GPL)
 arch=(any)
 depends=(
-	"python>=3.10"
-	"python<3.11"
+	"python>=3.11"
+	"python<3.12"
 	python-yaml
-	"python-aiohttp>=3.7.4.post0-1.1"
-	"python-aiofiles>=23.1.0-1"
+	python-aiohttp
+	python-aiofiles
 	python-passlib
 	python-pyotp
 	python-qrcode
@@ -60,7 +60,7 @@ depends=(
 	python-pygments
 	python-pyghmi
 	python-pam
-	"python-pillow>=8.3.1-1"
+	python-pillow
 	python-xlib
 	libxkbcommon
 	python-hidapi

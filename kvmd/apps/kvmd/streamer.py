@@ -329,7 +329,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
             if waiter_task is None:
                 waiter_task = asyncio.create_task(self.__notifier.wait())
-            if waiter_task in (await aiotools.wait_first(asyncio.sleep(self.__state_poll), waiter_task))[0]:
+            if waiter_task in (await aiotools.wait_first(
+                asyncio.ensure_future(asyncio.sleep(self.__state_poll)),
+                waiter_task,
+            ))[0]:
                 waiter_task = None
 
     # =====
