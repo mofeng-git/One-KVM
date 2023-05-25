@@ -74,7 +74,7 @@ depends=(
 	nginx-mainline
 	openssl
 	platformio
-	avrdude-svn
+	avrdude-pikvm
 	make
 	patch
 	sudo
