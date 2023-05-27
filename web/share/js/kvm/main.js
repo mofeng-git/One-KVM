@@ -36,7 +36,9 @@ export function main() {
 			if (value) {
 				window.onbeforeunload = function(event) {
 					let text = "Are you sure you want to close PiKVM session?";
-					event.returnValue = text;
+					if (event) {
+						event.returnValue = text;
+					}
 					return text;
 				};
 			} else {
