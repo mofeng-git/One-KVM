@@ -1,6 +1,6 @@
 [Unit]
 Description=PiKVM - Boot configuration
-After=systemd-modules-load.service
+After=systemd-modules-load.service kvmd-oled.service
 Before=network-pre.target kvmd-otg.service kvmd-nginx.service kvmd.service sshd.service pikvm-bootconfig.service
 
 [Service]

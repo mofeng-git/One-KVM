@@ -39,6 +39,14 @@ fi
 if [ ! -f /boot/pikvm.txt ]; then
 	exit 0
 fi
+
+if systemctl is-enabled -q kvmd-oled; then
+	# Stop regular kvmd-oled service and show first time setup status in oled
+	systemctl stop kvmd-oled || true
+	kvmd-oled --interval=0 --text="On-boot setup...\nDO NOT INTERRUPT!\nPlease wait" || true
+	has_oled=1
+fi
+
 # shellcheck disable=SC1090
 source <(dos2unix < /boot/pikvm.txt)
 
@@ -48,10 +56,6 @@ rw
 # ========== First boot configuration ==========
 
 if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
-    ### stop regular kvmd-oled service and show first time setup status in oled
-    systemctl stop kvmd-oled
-    /usr/bin/kvmd-oled --interval=0 --text="First time setup\nDo NOT interrupt\nPlease Wait...\n"
-    	
 	( \
 		(umount /etc/machine-id || true) \
 		&& echo -n > /etc/machine-id \
@@ -211,6 +215,8 @@ if [ -f /boot/pikvm-reboot.txt ]; then
 	sleep 3
 else
 	ro
-    # critical tasks have completed so start kvmd-oled service as an indicator that first boot tasks are complete
-    systemctl restart kvmd-oled
+	if [ -n "$has_oled" ]; then
+		# Critical tasks have completed so start kvmd-oled service as an indicator that on-boot tasks are complete
+		systemctl start kvmd-oled || true
+	fi
 fi
