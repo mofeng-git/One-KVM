@@ -48,6 +48,10 @@ rw
 # ========== First boot configuration ==========
 
 if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
+    ### stop regular kvmd-oled service and show first time setup status in oled
+    systemctl stop kvmd-oled
+    /usr/bin/kvmd-oled --interval=0 --text="First time setup\nDo NOT interrupt\nPlease Wait...\n"
+    	
 	( \
 		(umount /etc/machine-id || true) \
 		&& echo -n > /etc/machine-id \
@@ -196,7 +200,6 @@ fi
 
 
 # ========== Finish ==========
-
 rm -f /boot/pikvm.txt
 
 if [ -f /boot/pikvm-reboot.txt ]; then
@@ -208,4 +211,6 @@ if [ -f /boot/pikvm-reboot.txt ]; then
 	sleep 3
 else
 	ro
+    # critical tasks have completed so start kvmd-oled service as an indicator that first boot tasks are complete
+    systemctl restart kvmd-oled
 fi
