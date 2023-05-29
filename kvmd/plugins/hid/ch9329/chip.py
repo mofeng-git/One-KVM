@@ -43,7 +43,8 @@ class Chip:
         # GET_INFO = [0x00,0x01,0x00]
         if len(cmd) == 0:
             cmd = [0x00, 0x01, 0x00]
-        cmd = [0x57, 0xAB, *cmd, self.__make_checksum(cmd)]
+        cmd = [0x57, 0xAB] + cmd
+        cmd.append(self.__make_checksum(cmd))
         self.__tty.write(serial.to_bytes(cmd))
 
     def __recv(self) -> int:
