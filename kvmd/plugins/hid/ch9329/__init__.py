@@ -36,9 +36,6 @@ from .... import aioproc
 
 from ....yamlconf import Option
 
-from ....validators.basic import valid_bool
-from ....validators.basic import valid_int_f0
-from ....validators.basic import valid_int_f1
 from ....validators.basic import valid_float_f01
 from ....validators.os import valid_abs_path
 from ....validators.hw import valid_tty_speed
@@ -58,11 +55,6 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         device_path: str,
         speed: int,
         read_timeout: float,
-        read_retries: int,
-        common_retries: int,
-        retries_delay: float,
-        errors_threshold: int,
-        noop: bool,
     ) -> None:
 
         multiprocessing.Process.__init__(self, daemon=True)
@@ -70,11 +62,6 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__device_path = device_path
         self.__speed = speed
         self.__read_timeout = read_timeout
-        self.__read_retries = read_retries
-        self.__common_retries = common_retries
-        self.__retries_delay = retries_delay
-        self.__errors_threshold = errors_threshold
-        self.__noop = noop
 
         self.__reset_required_event = multiprocessing.Event()
         self.__cmd_queue: "multiprocessing.Queue[list]" = multiprocessing.Queue()
@@ -94,14 +81,9 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
     @classmethod
     def get_plugin_options(cls) -> dict:
         return {
-            "device":           Option("/dev/kvmd-hid", type=valid_abs_path, unpack_as="device_path"),
-            "speed":            Option(9600,  type=valid_tty_speed),
-            "read_timeout":     Option(0.3,   type=valid_float_f01),
-            "read_retries":     Option(5,     type=valid_int_f1),
-            "common_retries":   Option(5,     type=valid_int_f1),
-            "retries_delay":    Option(0.5,   type=valid_float_f01),
-            "errors_threshold": Option(5,     type=valid_int_f0),
-            "noop":             Option(False, type=valid_bool),
+            "device":       Option("/dev/kvmd-hid", type=valid_abs_path, unpack_as="device_path"),
+            "speed":        Option(9600, type=valid_tty_speed),
+            "read_timeout": Option(0.3,  type=valid_float_f01),
         }
 
     def sysprep(self) -> None:
@@ -203,7 +185,6 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
     def __hid_loop(self) -> None:
         while not self.__stop_event.is_set():
             try:
-
                 while not (self.__stop_event.is_set() and self.__cmd_queue.qsize() == 0):
                     if self.__reset_required_event.is_set():
                         try:
