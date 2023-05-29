@@ -75,6 +75,7 @@ def main() -> None:
             "kvmd.plugins.hid._mcu",
             "kvmd.plugins.hid.otg",
             "kvmd.plugins.hid.bt",
+            "kvmd.plugins.hid.ch9329",
             "kvmd.plugins.atx",
             "kvmd.plugins.msd",
             "kvmd.plugins.msd.otg",
