@@ -45,17 +45,10 @@ from ....validators.hw import valid_tty_speed
 
 from .. import BaseHid
 
-from .tty import TTY
+from .chip import ChipResponseError
+from .chip import Chip
 from .mouse import Mouse
 from .keyboard import Keyboard
-
-from .tty import get_info
-
-
-class _ResError(Exception):
-    def __init__(self, msg: str) -> None:
-        super().__init__(msg)
-        self.msg = msg
 
 
 # =====
@@ -94,7 +87,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         }, self.__notifier, type=int)
 
         self.__stop_event = multiprocessing.Event()
-        self.__tty = TTY(device_path, speed, read_timeout)
+        self.__chip = Chip(device_path, speed, read_timeout)
         self.__keyboard = Keyboard()
         self.__mouse = Mouse()
 
@@ -201,7 +194,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         logger = aioproc.settle("HID", "hid")
         while not self.__stop_event.is_set():
             try:
-                # self.__tty.connect()
+                # self.__chip.connect()
                 self.__hid_loop()
             except Exception:
                 logger.exception("Unexpected error in the run loop")
@@ -222,7 +215,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                         cmd = self.__cmd_queue.get(timeout=0.1)
                         # get_logger(0).info(f"HID : cmd = {cmd}")
                     except queue.Empty:
-                        self.__process_cmd(get_info())
+                        self.__process_cmd([])
                     else:
                         self.__process_cmd(cmd)
             except Exception:
@@ -231,35 +224,19 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                 time.sleep(2)
 
     def __process_cmd(self, cmd: list[int]) -> bool:  # pylint: disable=too-many-branches
-        error_retval = False
         try:
-            res = self.__tty.send(cmd)
-            # get_logger(0).info(f"HID response = {res}")
-            if len(res) < 4:
-                raise _ResError("No response from HID - might be disconnected")
-
-            if not self.__tty.check_res(res):
-                raise _ResError("Invalid response checksum ...")
-
-            # Response Error
-            if res[4] == 1 and res[5] != 0:
-                raise _ResError("Command error code = " + str(res[5]))
-
-            # get_info response
-            if res[3] == 0x81:
-                self.__keyboard.set_leds(res[7])
-                self.__notifier.notify()
-
-            self.__set_state_online(True)
-            return True
-
-        except _ResError as err:
+            led_byte = self.__chip.xfer(cmd)
+        except ChipResponseError as err:
             self.__set_state_online(False)
             get_logger(0).info(err)
-            error_retval = False
             time.sleep(2)
-
-        return error_retval
+        else:
+            if led_byte >= 0:
+                self.__keyboard.set_leds(led_byte)
+                self.__notifier.notify()
+            self.__set_state_online(True)
+            return True
+        return False
 
     def __set_state_online(self, online: bool) -> None:
         self.__state_flags.update(online=int(online))

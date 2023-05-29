@@ -20,43 +20,48 @@
 # ========================================================================== #
 
 
-import os
 import serial
 
 
-class TTY:
+# =====
+class ChipResponseError(Exception):
+    pass
+
+
+# =====
+class Chip:
     def __init__(self, device_path: str, speed: int, read_timeout: float) -> None:
         self.__tty = serial.Serial(device_path, speed, timeout=read_timeout)
         self.__device_path = device_path
 
-    def has_device(self) -> bool:
-        return os.path.exists(self.__device_path)
+    def xfer(self, cmd: list[int]) -> int:
+        self.__send(cmd)
+        return self.__recv()
 
-    def send(self, cmd: list[int]) -> list[int]:
-        cmd = self.__wrap_cmd(cmd)
+    def __send(self, cmd: list[int]) -> None:
+        # RESET = [0x00,0x0F,0x00]
+        # GET_INFO = [0x00,0x01,0x00]
+        if len(cmd) == 0:
+            cmd = [0x00, 0x01, 0x00]
+        cmd = [0x57, 0xAB, *cmd, self.__make_checksum(cmd)]
         self.__tty.write(serial.to_bytes(cmd))
-        data = list(self.__tty.read(5))
+
+    def __recv(self) -> int:
+        data = self.__tty.read(5)
+        if len(data) < 5:
+            raise ChipResponseError("Too short response, HID might be disconnected")
+
         if data and data[4]:
-            more_data = list(self.__tty.read(data[4] + 1))
-            data.extend(more_data)
-        return data
+            data += self.__tty.read(data[4] + 1)
 
-    def check_res(self, res: list[int]) -> bool:
-        res_sum = res.pop()
-        return (self.__checksum(res) == res_sum)
+        if self.__make_checksum(data[:-1]) != data[-1]:
+            raise ChipResponseError("Invalid response checksum")
 
-    def __wrap_cmd(self, cmd: list[int]) -> list[int]:
-        cmd.insert(0, 0xAB)
-        cmd.insert(0, 0x57)
-        cmd.append(self.__checksum(cmd))
-        return cmd
+        if data[4] == 1 and data[5] != 0:
+            raise ChipResponseError(f"Response error code = {data[5]!r}")
 
-    def __checksum(self, cmd: list[int]) -> int:
-        return sum(cmd) % 256
+        # led_byte (info) response
+        return (data[7] if data[3] == 0x81 else -1)
 
-
-def get_info() -> list[int]:
-    return [0x00, 0x01, 0x00]
-
-# RESET = [0x00,0x0F,0x00]
-# GET_INFO = [0x00,0x01,0x00]
+    def __make_checksum(self, cmd: (list[int] | bytes)) -> int:
+        return (sum(cmd) % 256)
