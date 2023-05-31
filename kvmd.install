@@ -52,6 +52,7 @@ post_upgrade() {
 	done
 
 	echo "==> Patching configs ..."
+	[ ! -f /etc/fstab ] || (sed -i -e "s|,data=journal||g" /etc/fstab && touch -t 200701011000 /etc/fstab)
 	[ ! -f /etc/pacman.conf ] || sed -i -e "s|^Server = https://pikvm.org/repos/|Server = https://files.pikvm.org/repos/arch/|g" /etc/pacman.conf
 	[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=pi3-disable-bt$/dtoverlay=disable-bt/g' /boot/config.txt
 	[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=dwc2$/dtoverlay=dwc2,dr_mode=peripheral/g' /boot/config.txt
