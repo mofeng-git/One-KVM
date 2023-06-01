@@ -68,6 +68,12 @@ kvmd:
                 pulse:
                     delay: 0
 
+            __v4_const1__:
+                pin: 6
+                mode: output
+                switch: false
+                pulse: false
+
             led1:
                 pin: 19
                 mode: input

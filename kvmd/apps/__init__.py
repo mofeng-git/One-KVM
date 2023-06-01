@@ -303,6 +303,9 @@ def _patch_dynamic(  # pylint: disable=too-many-locals
             with manual_validated(mode, *path, channel, "mode"):
                 mode = valid_ugpio_mode(mode, drivers[driver].get_modes())
 
+            if params.get("pulse") == False:  # noqa: E712  # pylint: disable=singleton-comparison
+                params["pulse"] = {"delay": 0}
+
             scheme["kvmd"]["gpio"]["scheme"][channel] = {
                 "driver":   Option("__gpio__", type=functools.partial(valid_ugpio_driver, variants=set(drivers))),
                 "pin":      Option(None,       type=drivers[driver].get_pin_validator()),
