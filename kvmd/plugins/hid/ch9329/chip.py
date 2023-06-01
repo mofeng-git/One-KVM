@@ -44,8 +44,8 @@ class Chip:
         if len(cmd) == 0:
             cmd = b"\x00\x01\x00"
         cmd = b"\x57\xAB" + cmd
-        cmd += self.__make_checksum(cmd).to_bytes()
-        self.__tty.write(serial.to_bytes(cmd))
+        cmd += self.__make_checksum(cmd).to_bytes(1, "big")
+        self.__tty.write(cmd)
 
     def __recv(self) -> int:
         data = self.__tty.read(5)
