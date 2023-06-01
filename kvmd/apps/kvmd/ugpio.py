@@ -136,6 +136,9 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
 
         self.__region = aiotools.AioExclusiveRegion(GpioChannelIsBusyError, notifier)
 
+    def is_const(self) -> bool:
+        return (not self.__switch and not self.__pulse_delay)
+
     def get_scheme(self) -> dict:
         return {
             "switch": self.__switch,
@@ -257,7 +260,11 @@ class UserGpio:
         return {
             "scheme": {
                 "inputs": {channel: gin.get_scheme() for (channel, gin) in self.__inputs.items()},
-                "outputs": {channel: gout.get_scheme() for (channel, gout) in self.__outputs.items()},
+                "outputs": {
+                    channel: gout.get_scheme()
+                    for (channel, gout) in self.__outputs.items()
+                    if not gout.is_const()
+                },
             },
             "view": self.__make_view(),
         }
@@ -265,7 +272,11 @@ class UserGpio:
     async def get_state(self) -> dict:
         return {
             "inputs": {channel: await gin.get_state() for (channel, gin) in self.__inputs.items()},
-            "outputs": {channel: await gout.get_state() for (channel, gout) in self.__outputs.items()},
+            "outputs": {
+                channel: await gout.get_state()
+                for (channel, gout) in self.__outputs.items()
+                if not gout.is_const()
+            },
         }
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
