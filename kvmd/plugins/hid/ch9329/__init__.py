@@ -64,7 +64,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__read_timeout = read_timeout
 
         self.__reset_required_event = multiprocessing.Event()
-        self.__cmd_queue: "multiprocessing.Queue[list]" = multiprocessing.Queue()
+        self.__cmd_queue: "multiprocessing.Queue[bytes]" = multiprocessing.Queue()
 
         self.__notifier = aiomulti.AioProcessNotifier()
         self.__state_flags = aiomulti.AioSharedFlags({
@@ -163,7 +163,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
     def clear_events(self) -> None:
         tools.clear_queue(self.__cmd_queue)
 
-    def __queue_cmd(self, cmd: list[int], clear: bool=False) -> None:
+    def __queue_cmd(self, cmd: bytes, clear: bool=False) -> None:
         if not self.__stop_event.is_set():
             if clear:
                 # FIXME: Если очистка производится со стороны процесса хида, то возможна гонка между
@@ -196,7 +196,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                         cmd = self.__cmd_queue.get(timeout=0.1)
                         # get_logger(0).info(f"HID : cmd = {cmd}")
                     except queue.Empty:
-                        self.__process_cmd([])
+                        self.__process_cmd(b"")
                     else:
                         self.__process_cmd(cmd)
             except Exception:
@@ -204,7 +204,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                 get_logger(0).exception("Unexpected error in the HID loop")
                 time.sleep(2)
 
-    def __process_cmd(self, cmd: list[int]) -> bool:  # pylint: disable=too-many-branches
+    def __process_cmd(self, cmd: bytes) -> bool:  # pylint: disable=too-many-branches
         try:
             led_byte = self.__chip.xfer(cmd)
         except ChipResponseError as err:

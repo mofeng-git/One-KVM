@@ -34,17 +34,17 @@ class Chip:
         self.__tty = serial.Serial(device_path, speed, timeout=read_timeout)
         self.__device_path = device_path
 
-    def xfer(self, cmd: list[int]) -> int:
+    def xfer(self, cmd: bytes) -> int:
         self.__send(cmd)
         return self.__recv()
 
-    def __send(self, cmd: list[int]) -> None:
+    def __send(self, cmd: bytes) -> None:
         # RESET = [0x00,0x0F,0x00]
         # GET_INFO = [0x00,0x01,0x00]
         if len(cmd) == 0:
-            cmd = [0x00, 0x01, 0x00]
-        cmd = [0x57, 0xAB] + cmd
-        cmd.append(self.__make_checksum(cmd))
+            cmd = b"\x00\x01\x00"
+        cmd = b"\x57\xAB" + cmd
+        cmd += self.__make_checksum(cmd).to_bytes()
         self.__tty.write(serial.to_bytes(cmd))
 
     def __recv(self) -> int:
@@ -64,5 +64,5 @@ class Chip:
         # led_byte (info) response
         return (data[7] if data[3] == 0x81 else -1)
 
-    def __make_checksum(self, cmd: (list[int] | bytes)) -> int:
+    def __make_checksum(self, cmd: bytes) -> int:
         return (sum(cmd) % 256)
