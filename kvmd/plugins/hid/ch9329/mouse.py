@@ -58,11 +58,11 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
                 self.__buttons |= code
             else:
                 self.__buttons &= ~code
-        if not self.__absolute:
-            self.__to_x = (0, 0)
-            self.__to_y = (0, 0)
         self.__wheel_y = 0
-        return self.__make_absolute_cmd()
+        if not self.__absolute:
+        	return self.__make_relative_cmd()
+        else:
+        	return self.__make_absolute_cmd()
 
     def process_move(self, to_x: int, to_y: int) -> list[int]:
         self.__to_x = self.__fix_absolute(to_x)
@@ -79,7 +79,16 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
         _ = delta_x
         assert -127 <= delta_y <= 127
         self.__wheel_y = (1 if delta_y > 0 else 255)
-        return self.__make_absolute_cmd()
+        if not self.__absolute:
+        	return self.__make_relative_cmd()
+        else:
+        	return self.__make_absolute_cmd()
+   
+   def process_relative(self, delta_x: int, delta_y: int) -> list[int]:
+        self.__delta_x = self.__fix_relative(delta_x)
+        self.__delta_y = self.__fix_relative(delta_y)
+        self.__wheel_y = 0
+        return self.__make_relative_cmd()
 
     def __make_absolute_cmd(self) -> list[int]:
         return [
@@ -89,16 +98,14 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
             self.__to_y[1], self.__to_y[0],
             self.__wheel_y,
         ]
-
-    def process_relative(self, delta_x: int, delta_y: int) -> list[int]:
-        delta_x = self.__fix_relative(delta_x)
-        delta_y = self.__fix_relative(delta_y)
+        
+    def __make_relative_cmd(self) -> list[int]:
         return [
             0, 0x05, 0x05, 0x01,
             self.__buttons,
-            delta_x, delta_y,
+            self.__delta_x, self.__delta_y,
             self.__wheel_y,
-        ]
+        ] 	
 
     def __fix_relative(self, value: int) -> int:
         assert -127 <= value <= 127
