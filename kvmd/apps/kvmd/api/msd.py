@@ -189,7 +189,7 @@ class MsdApi:
                     last_report_ts = 0
                     async for chunk in remote.content.iter_chunked(chunk_size):
                         written = await writer.write_chunk(chunk)
-                        now = int(time.time())
+                        now = int(time.monotonic())
                         if last_report_ts + 1 < now:
                             await stream_write_info()
                             last_report_ts = now
