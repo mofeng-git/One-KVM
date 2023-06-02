@@ -77,6 +77,13 @@ kvmd:
                 pulse:
                     delay: 0
 
+            __v4_const1__:
+                pin: 6
+                mode: output
+                initial: false
+                switch: false
+                pulse: false
+
 
 vnc:
     memsink:
