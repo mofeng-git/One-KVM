@@ -57,8 +57,7 @@ kvmd:
                 pin: 5
                 mode: output
                 initial: true
-                pulse:
-                    delay: 0
+                pulse: false
 
 
 vnc:
