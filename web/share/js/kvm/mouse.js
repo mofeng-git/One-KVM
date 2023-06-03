@@ -345,11 +345,38 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	};
 
 	var __sendEvent = function(event_type, event) {
-		event = {"event_type": event_type, "event": event};
+		let wrapped_event = {"event_type": event_type, "event": event};
 		if (__ws && !$("hid-mute-switch").checked) {
-			__ws.send(JSON.stringify(event));
+			if (event_type == "mouse_move") {
+				let data = new Uint8Array([
+					3,
+					(event.to.x >> 8) & 0xFF, event.to.x & 0xFF,
+					(event.to.y >> 8) & 0xFF, event.to.y & 0xFF,
+				]);
+				__ws.send(data);
+
+			} else if (event_type == "mouse_relative" || event_type == "mouse_wheel") {
+				let data;
+				if (Array.isArray(event.delta)) {
+					data = new Int8Array(2 + event.delta.length * 2);
+					let index = 0;
+					for (let delta of event.delta) {
+						data[index + 2] = delta["x"];
+						data[index + 3] = delta["y"];
+						index += 2;
+					}
+				} else {
+					data = new Int8Array([0, 0, event.delta.x, event.delta.y]);
+				}
+				data[0] = (event_type == "mouse_relative" ? 4 : 5);
+				data[1] = (event.squash ? 1 : 0);
+				__ws.send(data);
+
+			} else {
+				__ws.send(JSON.stringify(wrapped_event));
+			}
 		}
-		__recordWsEvent(event);
+		__recordWsEvent(wrapped_event);
 	};
 
 	__init__();

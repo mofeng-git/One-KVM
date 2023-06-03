@@ -22,6 +22,7 @@
 
 import asyncio
 import contextlib
+import struct
 import types
 
 from typing import Callable
@@ -127,7 +128,7 @@ class KvmdClientWs:
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         self.__ws = ws
 
-        self.__writer_queue: "asyncio.Queue[tuple[str, dict]]" = asyncio.Queue()
+        self.__writer_queue: "asyncio.Queue[tuple[str, dict] | bytes]" = asyncio.Queue()
         self.__communicated = False
 
     async def communicate(self) -> AsyncGenerator[tuple[str, dict], None]:  # pylint: disable=too-many-branches
@@ -157,7 +158,11 @@ class KvmdClientWs:
                     receive_task = None
 
                 if writer_task in done:
-                    await htserver.send_ws_event(self.__ws, *writer_task.result())
+                    payload = writer_task.result()
+                    if isinstance(payload, bytes):
+                        await self.__ws.send_bytes(payload)
+                    else:
+                        await htserver.send_ws_event(self.__ws, *payload)
                     writer_task = None
         finally:
             if receive_task:
@@ -178,10 +183,10 @@ class KvmdClientWs:
         await self.__writer_queue.put(("mouse_button", {"button": button, "state": state}))
 
     async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        await self.__writer_queue.put(("mouse_move", {"to": {"x": to_x, "y": to_y}}))
+        await self.__writer_queue.put(struct.pack(">bhh", 3, to_x, to_y))
 
     async def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
-        await self.__writer_queue.put(("mouse_wheel", {"delta": {"x": delta_x, "y": delta_y}}))
+        await self.__writer_queue.put(struct.pack(">bbbb", 5, 0, delta_x, delta_y))
 
 
 class KvmdClientSession:

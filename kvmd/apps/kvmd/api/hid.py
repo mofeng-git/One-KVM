@@ -23,6 +23,7 @@
 import os
 import stat
 import functools
+import struct
 
 from typing import Callable
 
@@ -153,6 +154,38 @@ class HidApi:
 
     # =====
 
+    @exposed_ws(3, binary=True)
+    async def __ws_bin_mouse_move_handler(self, _: WsSession, data: bytes) -> None:
+        try:
+            (to_x, to_y) = struct.unpack(">hh", data)
+            to_x = valid_hid_mouse_move(to_x)
+            to_y = valid_hid_mouse_move(to_y)
+        except Exception:
+            return
+        self.__send_mouse_move_event(to_x, to_y)
+
+    @exposed_ws(4, binary=True)
+    async def __ws_bin_mouse_relative_handler(self, _: WsSession, data: bytes) -> None:
+        self.__process_ws_bin_delta_request(data, self.__hid.send_mouse_relative_event)
+
+    @exposed_ws(5, binary=True)
+    async def __ws_bin_mouse_wheel_handler(self, _: WsSession, data: bytes) -> None:
+        self.__process_ws_bin_delta_request(data, self.__hid.send_mouse_wheel_event)
+
+    def __process_ws_bin_delta_request(self, data: bytes, handler: Callable[[int, int], None]) -> None:
+        try:
+            squash = valid_bool(data[0])
+            data = data[1:]
+            deltas: list[tuple[int, int]] = []
+            for index in range(0, len(data), 2):
+                (delta_x, delta_y) = struct.unpack(">bb", data[index:index + 2])
+                deltas.append((valid_hid_mouse_delta(delta_x), valid_hid_mouse_delta(delta_y)))
+        except Exception:
+            return
+        self.__send_mouse_delta_event(deltas, squash, handler)
+
+    # =====
+
     @exposed_ws("key")
     async def __ws_key_handler(self, _: WsSession, event: dict) -> None:
         try:
@@ -179,17 +212,17 @@ class HidApi:
             to_y = valid_hid_mouse_move(event["to"]["y"])
         except Exception:
             return
-        self.__send_mouse_move_event_remapped(to_x, to_y)
+        self.__send_mouse_move_event(to_x, to_y)
 
     @exposed_ws("mouse_relative")
     async def __ws_mouse_relative_handler(self, _: WsSession, event: dict) -> None:
-        self.__process_delta_ws_request(event, self.__hid.send_mouse_relative_event)
+        self.__process_ws_delta_event(event, self.__hid.send_mouse_relative_event)
 
     @exposed_ws("mouse_wheel")
     async def __ws_mouse_wheel_handler(self, _: WsSession, event: dict) -> None:
-        self.__process_delta_ws_request(event, self.__hid.send_mouse_wheel_event)
+        self.__process_ws_delta_event(event, self.__hid.send_mouse_wheel_event)
 
-    def __process_delta_ws_request(self, event: dict, handler: Callable[[int, int], None]) -> None:
+    def __process_ws_delta_event(self, event: dict, handler: Callable[[int, int], None]) -> None:
         try:
             raw_delta = event["delta"]
             deltas = [
@@ -199,19 +232,7 @@ class HidApi:
             squash = valid_bool(event.get("squash", False))
         except Exception:
             return
-        if squash:
-            prev = (0, 0)
-            for cur in deltas:
-                if abs(prev[0] + cur[0]) > 127 or abs(prev[1] + cur[1]) > 127:
-                    handler(*prev)
-                    prev = cur
-                else:
-                    prev = (prev[0] + cur[0], prev[1] + cur[1])
-            if prev[0] or prev[1]:
-                handler(*prev)
-        else:
-            for xy in deltas:
-                handler(*xy)
+        self.__send_mouse_delta_event(deltas, squash, handler)
 
     # =====
 
@@ -241,26 +262,49 @@ class HidApi:
     async def __events_send_mouse_move_handler(self, request: Request) -> Response:
         to_x = valid_hid_mouse_move(request.query.get("to_x"))
         to_y = valid_hid_mouse_move(request.query.get("to_y"))
-        self.__send_mouse_move_event_remapped(to_x, to_y)
+        self.__send_mouse_move_event(to_x, to_y)
         return make_json_response()
 
     @exposed_http("POST", "/hid/events/send_mouse_relative")
     async def __events_send_mouse_relative_handler(self, request: Request) -> Response:
-        return self.__process_delta_request(request, self.__hid.send_mouse_relative_event)
+        return self.__process_http_delta_event(request, self.__hid.send_mouse_relative_event)
 
     @exposed_http("POST", "/hid/events/send_mouse_wheel")
     async def __events_send_mouse_wheel_handler(self, request: Request) -> Response:
-        return self.__process_delta_request(request, self.__hid.send_mouse_wheel_event)
+        return self.__process_http_delta_event(request, self.__hid.send_mouse_wheel_event)
 
-    def __send_mouse_move_event_remapped(self, to_x: int, to_y: int) -> None:
+    def __process_http_delta_event(self, request: Request, handler: Callable[[int, int], None]) -> Response:
+        delta_x = valid_hid_mouse_delta(request.query.get("delta_x"))
+        delta_y = valid_hid_mouse_delta(request.query.get("delta_y"))
+        handler(delta_x, delta_y)
+        return make_json_response()
+
+    # =====
+
+    def __send_mouse_move_event(self, to_x: int, to_y: int) -> None:
         if self.__mouse_x_range != MouseRange.RANGE:
             to_x = MouseRange.remap(to_x, *self.__mouse_x_range)
         if self.__mouse_y_range != MouseRange.RANGE:
             to_y = MouseRange.remap(to_y, *self.__mouse_y_range)
         self.__hid.send_mouse_move_event(to_x, to_y)
 
-    def __process_delta_request(self, request: Request, handler: Callable[[int, int], None]) -> Response:
-        delta_x = valid_hid_mouse_delta(request.query.get("delta_x"))
-        delta_y = valid_hid_mouse_delta(request.query.get("delta_y"))
-        handler(delta_x, delta_y)
-        return make_json_response()
+    def __send_mouse_delta_event(
+        self,
+        deltas: list[tuple[int, int]],
+        squash: bool,
+        handler: Callable[[int, int], None],
+    ) -> None:
+
+        if squash:
+            prev = (0, 0)
+            for cur in deltas:
+                if abs(prev[0] + cur[0]) > 127 or abs(prev[1] + cur[1]) > 127:
+                    handler(*prev)
+                    prev = cur
+                else:
+                    prev = (prev[0] + cur[0], prev[1] + cur[1])
+            if prev[0] or prev[1]:
+                handler(*prev)
+        else:
+            for xy in deltas:
+                handler(*xy)

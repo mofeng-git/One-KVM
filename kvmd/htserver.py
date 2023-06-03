@@ -123,17 +123,25 @@ def _get_exposed_http(obj: object) -> list[HttpExposed]:
 @dataclasses.dataclass(frozen=True)
 class WsExposed:
     event_type: str
+    binary: bool
     handler: Callable
 
 
 _WS_EXPOSED = "_ws_exposed"
+_WS_BINARY = "_ws_binary"
 _WS_EVENT_TYPE = "_ws_event_type"
 
 
-def exposed_ws(event_type: str) -> Callable:
+def exposed_ws(event_type: (str | int), binary: bool=False) -> Callable:
+    if binary:
+        assert isinstance(event_type, int)
+    else:
+        assert isinstance(event_type, str)
+
     def set_attrs(handler: Callable) -> Callable:
         setattr(handler, _WS_EXPOSED, True)
-        setattr(handler, _WS_EVENT_TYPE, event_type)
+        setattr(handler, _WS_BINARY, binary)
+        setattr(handler, _WS_EVENT_TYPE, str(event_type))
         return handler
     return set_attrs
 
@@ -142,6 +150,7 @@ def _get_exposed_ws(obj: object) -> list[WsExposed]:
     return [
         WsExposed(
             event_type=getattr(handler, _WS_EVENT_TYPE),
+            binary=getattr(handler, _WS_BINARY),
             handler=handler,
         )
         for handler in [getattr(obj, name) for name in dir(obj)]
@@ -277,6 +286,7 @@ class HttpServer:
     def __init__(self) -> None:
         self.__ws_heartbeat: (float | None) = None
         self.__ws_handlers: dict[str, Callable] = {}
+        self.__ws_bin_handlers: dict[int, Callable] = {}
         self.__ws_sessions: list[WsSession] = []
         self.__ws_sessions_lock = asyncio.Lock()
 
@@ -330,7 +340,10 @@ class HttpServer:
         self.__app.router.add_route(exposed.method, exposed.path, wrapper)
 
     def __add_exposed_ws(self, exposed: WsExposed) -> None:
-        self.__ws_handlers[exposed.event_type] = exposed.handler
+        if exposed.binary:
+            self.__ws_bin_handlers[int(exposed.event_type)] = exposed.handler
+        else:
+            self.__ws_handlers[exposed.event_type] = exposed.handler
 
     # =====
 
@@ -354,18 +367,27 @@ class HttpServer:
     async def _ws_loop(self, ws: WsSession) -> WebSocketResponse:
         logger = get_logger()
         async for msg in ws.wsr:
-            if msg.type != WSMsgType.TEXT:
-                break
-            try:
-                (event_type, event) = parse_ws_event(msg.data)
-            except Exception as err:
-                logger.error("Can't parse JSON event from websocket: %r", err)
-            else:
-                handler = self.__ws_handlers.get(event_type)
-                if handler:
-                    await handler(ws, event)
+            if msg.type == WSMsgType.TEXT:
+                try:
+                    (event_type, event) = parse_ws_event(msg.data)
+                except Exception as err:
+                    logger.error("Can't parse JSON event from websocket: %r", err)
                 else:
-                    logger.error("Unknown websocket event: %r", msg.data)
+                    handler = self.__ws_handlers.get(event_type)
+                    if handler:
+                        await handler(ws, event)
+                    else:
+                        logger.error("Unknown websocket event: %r", msg.data)
+
+            elif msg.type == WSMsgType.BINARY and len(msg.data) >= 1:
+                handler = self.__ws_bin_handlers.get(msg.data[0])
+                if handler:
+                    await handler(ws, msg.data[1:])
+                else:
+                    logger.error("Unknown websocket binary event: %r", msg.data)
+
+            else:
+                break
         return ws.wsr
 
     async def _broadcast_ws_event(self, event_type: str, event: (dict | None)) -> None:
