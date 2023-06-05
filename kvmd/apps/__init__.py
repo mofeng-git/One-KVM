@@ -82,6 +82,7 @@ from ..validators.net import valid_mac
 from ..validators.net import valid_ssl_ciphers
 
 from ..validators.hid import valid_hid_key
+from ..validators.hid import valid_hid_mouse_output
 from ..validators.hid import valid_hid_mouse_move
 
 from ..validators.kvm import valid_stream_quality
@@ -662,8 +663,9 @@ def _get_config_scheme() -> dict:
         },
 
         "vnc": {
-            "desired_fps": Option(30, type=valid_stream_fps),
-            "keymap":      Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
+            "desired_fps":  Option(30, type=valid_stream_fps),
+            "mouse_output": Option("usb", type=valid_hid_mouse_output),
+            "keymap":       Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
 
             "server": {
                 "host":        Option("::", type=valid_ip_or_host),

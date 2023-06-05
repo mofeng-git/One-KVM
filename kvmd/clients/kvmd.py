@@ -46,6 +46,18 @@ class _BaseApiPart:
         self._ensure_http_session = ensure_http_session
         self._make_url = make_url
 
+    async def _set_params(self, handle: str, **params: (int | str | None)) -> None:
+        session = self._ensure_http_session()
+        async with session.post(
+            url=self._make_url(handle),
+            params={
+                key: value
+                for (key, value) in params.items()
+                if value is not None
+            },
+        ) as response:
+            htclient.raise_not_200(response)
+
 
 class _AuthApiPart(_BaseApiPart):
     async def check(self) -> bool:
@@ -68,19 +80,11 @@ class _StreamerApiPart(_BaseApiPart):
             return (await response.json())["result"]
 
     async def set_params(self, quality: (int | None)=None, desired_fps: (int | None)=None) -> None:
-        session = self._ensure_http_session()
-        async with session.post(
-            url=self._make_url("streamer/set_params"),
-            params={
-                key: value
-                for (key, value) in [
-                    ("quality", quality),
-                    ("desired_fps", desired_fps),
-                ]
-                if value is not None
-            },
-        ) as response:
-            htclient.raise_not_200(response)
+        await self._set_params(
+            "streamer/set_params",
+            quality=quality,
+            desired_fps=desired_fps,
+        )
 
 
 class _HidApiPart(_BaseApiPart):
@@ -99,6 +103,13 @@ class _HidApiPart(_BaseApiPart):
             data=text,
         ) as response:
             htclient.raise_not_200(response)
+
+    async def set_params(self, keyboard_output: (str | None)=None, mouse_output: (str | None)=None) -> None:
+        await self._set_params(
+            "hid/set_params",
+            keyboard_output=keyboard_output,
+            mouse_output=mouse_output,
+        )
 
 
 class _AtxApiPart(_BaseApiPart):

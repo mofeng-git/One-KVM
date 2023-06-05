@@ -69,6 +69,7 @@ def main(argv: (list[str] | None)=None) -> None:
         x509_key_path=config.server.tls.x509.key,
 
         desired_fps=config.desired_fps,
+        mouse_output=config.mouse_output,
         keymap_path=config.keymap,
 
         kvmd=KvmdClient(user_agent=user_agent, **config.kvmd._unpack()),

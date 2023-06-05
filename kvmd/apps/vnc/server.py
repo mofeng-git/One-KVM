@@ -77,6 +77,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         x509_key_path: str,
 
         desired_fps: int,
+        mouse_output: str,
         keymap_name: str,
         symmap: dict[int, dict[int, str]],
 
@@ -105,6 +106,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         )
 
         self.__desired_fps = desired_fps
+        self.__mouse_output = mouse_output
         self.__keymap_name = keymap_name
         self.__symmap = symmap
 
@@ -159,6 +161,9 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         assert self.__kvmd_session
         try:
+            logger.info("%s [kvmd]: Applying HID params: mouse_output=%s ...", self._remote, self.__mouse_output)
+            await self.__kvmd_session.hid.set_params(mouse_output=self.__mouse_output)
+
             async with self.__kvmd_session.ws() as self.__kvmd_ws:
                 logger.info("%s [kvmd]: Connected to KVMD websocket", self._remote)
                 self.__stage3_ws_connected.set_passed()
@@ -429,6 +434,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         vencrypt_enabled: bool,
 
         desired_fps: int,
+        mouse_output: str,
         keymap_path: str,
 
         kvmd: KvmdClient,
@@ -484,6 +490,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     x509_cert_path=x509_cert_path,
                     x509_key_path=x509_key_path,
                     desired_fps=desired_fps,
+                    mouse_output=mouse_output,
                     keymap_name=keymap_name,
                     symmap=symmap,
                     kvmd=kvmd,
