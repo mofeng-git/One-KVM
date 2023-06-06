@@ -154,7 +154,7 @@ class HidApi:
 
     # =====
 
-    @exposed_ws(3, binary=True)
+    @exposed_ws(3)
     async def __ws_bin_mouse_move_handler(self, _: WsSession, data: bytes) -> None:
         try:
             (to_x, to_y) = struct.unpack(">hh", data)
@@ -164,11 +164,11 @@ class HidApi:
             return
         self.__send_mouse_move_event(to_x, to_y)
 
-    @exposed_ws(4, binary=True)
+    @exposed_ws(4)
     async def __ws_bin_mouse_relative_handler(self, _: WsSession, data: bytes) -> None:
         self.__process_ws_bin_delta_request(data, self.__hid.send_mouse_relative_event)
 
-    @exposed_ws(5, binary=True)
+    @exposed_ws(5)
     async def __ws_bin_mouse_wheel_handler(self, _: WsSession, data: bytes) -> None:
         self.__process_ws_bin_delta_request(data, self.__hid.send_mouse_wheel_event)
 

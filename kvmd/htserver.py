@@ -132,15 +132,10 @@ _WS_BINARY = "_ws_binary"
 _WS_EVENT_TYPE = "_ws_event_type"
 
 
-def exposed_ws(event_type: (str | int), binary: bool=False) -> Callable:
-    if binary:
-        assert isinstance(event_type, int)
-    else:
-        assert isinstance(event_type, str)
-
+def exposed_ws(event_type: (str | int)) -> Callable:
     def set_attrs(handler: Callable) -> Callable:
         setattr(handler, _WS_EXPOSED, True)
-        setattr(handler, _WS_BINARY, binary)
+        setattr(handler, _WS_BINARY, isinstance(event_type, int))
         setattr(handler, _WS_EVENT_TYPE, str(event_type))
         return handler
     return set_attrs
@@ -341,8 +336,11 @@ class HttpServer:
 
     def __add_exposed_ws(self, exposed: WsExposed) -> None:
         if exposed.binary:
-            self.__ws_bin_handlers[int(exposed.event_type)] = exposed.handler
+            event_type = int(exposed.event_type)
+            assert event_type not in self.__ws_bin_handlers
+            self.__ws_bin_handlers[event_type] = exposed.handler
         else:
+            assert exposed.event_type not in self.__ws_handlers
             self.__ws_handlers[exposed.event_type] = exposed.handler
 
     # =====
