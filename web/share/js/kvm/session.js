@@ -408,12 +408,7 @@ export function Session() {
 			}
 			__ws.send("{\"event_type\": \"ping\", \"event\": {}}");
 		} catch (err) {
-			tools.error("Session: ping error:", err.message);
-			if (__ws) {
-				__ws.onclose = null;
-				__ws.close();
-				__wsCloseHandler(null);
-			}
+			__wsErrorHandler(err.message);
 		}
 	};
 
