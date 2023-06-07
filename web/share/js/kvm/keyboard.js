@@ -134,7 +134,7 @@ export function Keyboard(__recordWsEvent) {
 			"event": {"key": code, "state": state},
 		};
 		if (__ws && !$("hid-mute-switch").checked) {
-			__ws.send(JSON.stringify(event));
+			__ws.sendHidEvent(event);
 		}
 		__recordWsEvent(event);
 	};

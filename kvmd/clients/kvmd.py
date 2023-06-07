@@ -188,10 +188,10 @@ class KvmdClientWs:
                 self.__communicated = False
 
     async def send_key_event(self, key: str, state: bool) -> None:
-        await self.__writer_queue.put(("key", {"key": key, "state": state}))
+        await self.__writer_queue.put(bytes([1, state]) + key.encode("ascii"))
 
     async def send_mouse_button_event(self, button: str, state: bool) -> None:
-        await self.__writer_queue.put(("mouse_button", {"button": button, "state": state}))
+        await self.__writer_queue.put(bytes([2, state]) + button.encode("ascii"))
 
     async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
         await self.__writer_queue.put(struct.pack(">bhh", 3, to_x, to_y))

@@ -290,7 +290,7 @@ export function Recorder() {
 				return;
 
 			} else if (["key", "mouse_button", "mouse_move", "mouse_wheel", "mouse_relative"].includes(event.event_type)) {
-				__ws.send(JSON.stringify(event));
+				__ws.sendHidEvent(event);
 			}
 
 			index += 1;

@@ -154,6 +154,25 @@ class HidApi:
 
     # =====
 
+    @exposed_ws(1)
+    async def __ws_bin_key_handler(self, _: WsSession, data: bytes) -> None:
+        try:
+            key = valid_hid_key(data[1:].decode("ascii"))
+            state = valid_bool(data[0])
+        except Exception:
+            return
+        if key not in self.__ignore_keys:
+            self.__hid.send_key_events([(key, state)])
+
+    @exposed_ws(2)
+    async def __ws_bin_mouse_button_handler(self, _: WsSession, data: bytes) -> None:
+        try:
+            button = valid_hid_mouse_button(data[1:].decode("ascii"))
+            state = valid_bool(data[0])
+        except Exception:
+            return
+        self.__hid.send_mouse_button_event(button, state)
+
     @exposed_ws(3)
     async def __ws_bin_mouse_move_handler(self, _: WsSession, data: bytes) -> None:
         try:

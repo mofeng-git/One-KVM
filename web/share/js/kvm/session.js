@@ -278,6 +278,7 @@ export function Session() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
 					__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws`);
+					__ws.sendHidEvent = (event) => __sendHidEvent(__ws, event.event_type, event.event);
 					__ws.onopen = __wsOpenHandler;
 					__ws.onmessage = __wsMessageHandler;
 					__ws.onerror = __wsErrorHandler;
@@ -292,6 +293,46 @@ export function Session() {
 				}
 			}
 		});
+	};
+
+	var __ascii_encoder = new TextEncoder("ascii");
+
+	var __sendHidEvent = function(ws, event_type, event) {
+		if (event_type == "key") {
+			let data = __ascii_encoder.encode("\x01\x00" + event.key);
+			data[1] = (event.state ? 1 : 0);
+			ws.send(data);
+
+		} else if (event_type == "mouse_button") {
+			let data = __ascii_encoder.encode("\x02\x00" + event.button);
+			data[1] = (event.state ? 1 : 0);
+			ws.send(data);
+
+		} else if (event_type == "mouse_move") {
+			let data = new Uint8Array([
+				3,
+				(event.to.x >> 8) & 0xFF, event.to.x & 0xFF,
+				(event.to.y >> 8) & 0xFF, event.to.y & 0xFF,
+			]);
+			ws.send(data);
+
+		} else if (event_type == "mouse_relative" || event_type == "mouse_wheel") {
+			let data;
+			if (Array.isArray(event.delta)) {
+				data = new Int8Array(2 + event.delta.length * 2);
+				let index = 0;
+				for (let delta of event.delta) {
+					data[index + 2] = delta["x"];
+					data[index + 3] = delta["y"];
+					index += 2;
+				}
+			} else {
+				data = new Int8Array([0, 0, event.delta.x, event.delta.y]);
+			}
+			data[0] = (event_type == "mouse_relative" ? 4 : 5);
+			data[1] = (event.squash ? 1 : 0);
+			ws.send(data);
+		}
 	};
 
 	var __wsOpenHandler = function(event) {
@@ -365,7 +406,7 @@ export function Session() {
 			if (__missed_heartbeats >= 15) {
 				throw new Error("Too many missed heartbeats");
 			}
-			__ws.send(JSON.stringify({"event_type": "ping", "event": {}}));
+			__ws.send("{\"event_type\": \"ping\", \"event\": {}}");
 		} catch (err) {
 			tools.error("Session: ping error:", err.message);
 			if (__ws) {
