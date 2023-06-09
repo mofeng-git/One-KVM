@@ -106,7 +106,9 @@ ul#navbar li a.menu-button-pressed {
 ul#navbar li div.menu {
 	visibility: hidden;
 	outline: none;
-	overflow: hidden;
+	overflow-x: hidden;
+	overflow-y: auto;
+	max-height: calc(100vh - 55px);
 	white-space: nowrap;
 	border: var(--border-navbar-menu-default-2px);
 	border-top: var(--border-navbar-menu-top-thin);
@@ -119,6 +121,21 @@ ul#navbar li div.menu {
 ul#navbar li div.menu-active {
 	border: var(--border-navbar-menu-active-2px) !important;
 	border-top: var(--border-navbar-menu-top-thin) !important;
+}
+
+ul#navbar li div.menu::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+ul#navbar li div.menu::-webkit-scrollbar-thumb {
+	border-radius: 4px;
+	background: var(--cs-scroll-default-bg);
+}
+@-moz-document url-prefix() {
+	ul#navbar li div.menu {
+		scrollbar-width: 8px;
+		scrollbar-color: var(--cs-scroll-default-bg) var(--cs-code-default-bg);
+	}
 }
 
 ul#navbar li div.menu details summary {
