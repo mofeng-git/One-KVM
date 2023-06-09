@@ -72,7 +72,7 @@ div.code::-webkit-scrollbar-thumb {
 }
 @-moz-document url-prefix() {
 	div.code {
-		scrollbar-width: thin;
+		scrollbar-width: 8px;
 		scrollbar-color: var(--cs-scroll-default-bg) var(--cs-code-default-bg);
 	}
 }
