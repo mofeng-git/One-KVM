@@ -75,7 +75,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 	&& rm -rf /var/cache/pacman/pkg/*
 
 COPY testenv/requirements.txt requirements.txt
-RUN pip install -r requirements.txt
+RUN pip install --break-system-packages -r requirements.txt
 
 # https://stackoverflow.com/questions/57534295
 WORKDIR /root
