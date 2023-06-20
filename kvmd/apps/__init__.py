@@ -53,6 +53,7 @@ from ..yamlconf import Option
 from ..yamlconf import build_raw_from_options
 from ..yamlconf.dumper import make_config_dump
 from ..yamlconf.loader import load_yaml_file
+from ..yamlconf.merger import yaml_merge
 
 from ..validators.basic import valid_stripped_string
 from ..validators.basic import valid_stripped_string_not_empty
@@ -177,8 +178,8 @@ def _init_config(config_path: str, override_options: list[str], **load_flags: bo
 
     scheme = _get_config_scheme()
     try:
-        tools.merge(raw_config, (raw_config.pop("override", {}) or {}))
-        tools.merge(raw_config, build_raw_from_options(override_options))
+        yaml_merge(raw_config, (raw_config.pop("override", {}) or {}))
+        yaml_merge(raw_config, build_raw_from_options(override_options), "raw command line options")
         _patch_raw(raw_config)
         config = make_config(raw_config, scheme)
 

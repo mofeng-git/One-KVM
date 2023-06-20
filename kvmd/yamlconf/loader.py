@@ -22,6 +22,8 @@
 
 import os
 
+from .. import tools
+
 from typing import IO
 from typing import Any
 
@@ -30,7 +32,7 @@ import yaml.nodes
 import yaml.resolver
 import yaml.constructor
 
-from .. import tools
+from .merger import yaml_merge
 
 
 # =====
@@ -70,9 +72,9 @@ class _YamlLoader(yaml.SafeLoader):
                 for child in sorted(os.listdir(inc_path)):
                     child_path = os.path.join(inc_path, child)
                     if os.path.isfile(child_path) or os.path.islink(child_path):
-                        tools.merge(tree, (load_yaml_file(child_path) or {}))
+                        yaml_merge(tree, (load_yaml_file(child_path) or {}), child_path)
             else:  # Try file
-                tools.merge(tree, (load_yaml_file(inc_path) or {}))
+                yaml_merge(tree, (load_yaml_file(inc_path) or {}), inc_path)
         return tree
 
 
