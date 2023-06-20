@@ -21,6 +21,7 @@
 
 
 import pytest
+
 from kvmd.yamlconf import merger
 
 
@@ -108,7 +109,7 @@ def test_non_dict_values_in_source() -> None:
 
 
 def test_empty_base() -> None:
-    base = {}
+    base: dict = {}
     incoming = {"key1": "value1"}
     merger.yaml_merge(base, incoming)
     assert base == {"key1": "value1"}

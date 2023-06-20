@@ -179,7 +179,7 @@ def _init_config(config_path: str, override_options: list[str], **load_flags: bo
     scheme = _get_config_scheme()
     try:
         yaml_merge(raw_config, (raw_config.pop("override", {}) or {}))
-        yaml_merge(raw_config, build_raw_from_options(override_options), "raw command line options")
+        yaml_merge(raw_config, build_raw_from_options(override_options), "raw CLI options")
         _patch_raw(raw_config)
         config = make_config(raw_config, scheme)
 
