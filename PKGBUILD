@@ -119,7 +119,10 @@ conflicts=(
 	python-pikvm
 	python-aiohttp-pikvm
 )
-makedepends=(python-setuptools)
+makedepends=(
+	python-setuptools
+	python-pip
+)
 source=("$url/archive/v$pkgver.tar.gz")
 md5sums=(SKIP)
 backup=(
@@ -135,20 +138,11 @@ backup=(
 )
 
 
-build() {
-	cd "$srcdir"
-	rm -rf $pkgname-build
-	cp -r kvmd-$pkgver $pkgname-build
-	cd $pkgname-build
-	python setup.py build
-}
-
-
 package_kvmd() {
 	install=$pkgname.install
 
-	cd "$srcdir/$pkgname-build"
-	python setup.py install --root="$pkgdir"
+	cd "$srcdir/kvmd-$pkgver"
+	pip install --root="$pkgdir" --no-deps .
 
 	install -Dm755 -t "$pkgdir/usr/bin" scripts/kvmd-{bootconfig,gencert,certbot}
 
