@@ -32,7 +32,7 @@ class _Template(str):
     def __init__(self, text: str) -> None:
         self.__text = textwrap.dedent(text).strip()
 
-    def __mod__(self, kv: dict) -> None:
+    def __mod__(self, kv: dict) -> str:
         kv = {"module_name": kv["ep"].module_name, **kv}
         return (self.__text % (kv))
 
