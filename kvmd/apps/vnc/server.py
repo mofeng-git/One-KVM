@@ -238,6 +238,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     async def __queue_frame(self, frame: (dict | str)) -> None:
         if isinstance(frame, str):
             frame = await self.__make_text_frame(frame)
+        if self.__fb_queue.qsize() > 10:
+            self.__fb_queue.get_nowait()
         self.__fb_queue.put_nowait(frame)
 
     async def __make_text_frame(self, text: str) -> dict:
