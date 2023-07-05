@@ -148,7 +148,7 @@ class Ocr:
                             image = image_cropped
 
                     ImageOps.grayscale(image)
-                    image_resized = image.resize((int(image.size[0] * 2), int(image.size[1] * 2)), PilImage.BICUBIC)
+                    image_resized = image.resize((int(image.size[0] * 2), int(image.size[1] * 2)), PilImage.Resampling.BICUBIC)
                     image.close()
                     image = image_resized
 

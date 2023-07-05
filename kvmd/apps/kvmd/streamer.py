@@ -72,7 +72,7 @@ class StreamerSnapshot:
         with io.BytesIO(self.data) as snapshot_bio:
             with io.BytesIO() as preview_bio:
                 with PilImage.open(snapshot_bio) as image:
-                    image.thumbnail((max_width, max_height), PilImage.ANTIALIAS)
+                    image.thumbnail((max_width, max_height), PilImage.Resampling.LANCZOS)
                     image.save(preview_bio, format="jpeg", quality=quality)
                     return preview_bio.getvalue()
 
