@@ -16,7 +16,7 @@ div(id="hw-health-dropdown" class="hidden")
 				hr
 				+menu_message("led-overheating", "Overheating detected", "led-gray")
 					| Frequency capping due to overheating,#[br]
-					| improve cooling of the Raspberry Pi
+					| please improve cooling of the Raspberry Pi
 
 div(id="fan-health-dropdown" class="hidden")
 	li(class="left")
@@ -29,4 +29,4 @@ div(id="fan-health-dropdown" class="hidden")
 			div(id="fan-health-message-fail")
 				hr
 				+menu_message("led-fan", "Fan failed", "led-gray")
-					| A fan error occured, please check the log
+					| A fan error occured, please #[a(href="/api/log?seek=3600&follow=1" target="_blank") check the log]
