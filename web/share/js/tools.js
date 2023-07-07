@@ -70,6 +70,12 @@ export var tools = new function() {
 		return btoa(text).replace("=", "_");
 	};
 
+	self.getRandomInt = function(min, max) {
+		min = Math.ceil(min);
+		max = Math.floor(max);
+		return Math.floor(Math.random() * (max - min + 1)) + min;
+	};
+
 	self.formatSize = function(size) {
 		if (size > 0) {
 			let index = Math.floor( Math.log(size) / Math.log(1024) );

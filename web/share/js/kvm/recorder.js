@@ -154,37 +154,57 @@ export function Recorder() {
 						__checkType(event.event, "object", "Non-dict event");
 
 						if (event.event_type === "delay") {
-							__checkInt(event.event.millis, "Non-integer delay");
-							if (event.event.millis < 0) {
-								throw "Negative delay";
-							}
+							__checkUnsigned(event.event.millis, "Non-unsigned delay");
 							events_time += event.event.millis;
+
 						} else if (event.event_type === "print") {
 							__checkType(event.event.text, "string", "Non-string print text");
+
 						} else if (event.event_type === "key") {
 							__checkType(event.event.key, "string", "Non-string key code");
 							__checkType(event.event.state, "boolean", "Non-bool key state");
+
 						} else if (event.event_type === "mouse_button") {
 							__checkType(event.event.button, "string", "Non-string mouse button code");
 							__checkType(event.event.state, "boolean", "Non-bool mouse button state");
+
 						} else if (event.event_type === "mouse_move") {
 							__checkType(event.event.to, "object", "Non-object mouse move target");
 							__checkInt(event.event.to.x, "Non-int mouse move X");
 							__checkInt(event.event.to.y, "Non-int mouse move Y");
+
 						} else if (event.event_type === "mouse_relative") {
 							__checkMouseRelativeDelta(event.event.delta);
 							__checkType(event.event.squash, "boolean", "Non-boolean squash");
+
 						} else if (event.event_type === "mouse_wheel") {
 							__checkType(event.event.delta, "object", "Non-object mouse wheel delta");
 							__checkInt(event.event.delta.x, "Non-int mouse delta X");
 							__checkInt(event.event.delta.y, "Non-int mouse delta Y");
+
 						} else if (event.event_type === "atx_button") {
 							__checkType(event.event.button, "string", "Non-string ATX button");
+
 						} else if (event.event_type === "gpio_switch") {
 							__checkType(event.event.channel, "string", "Non-string GPIO channel");
 							__checkType(event.event.state, "boolean", "Non-bool GPIO state");
+
 						} else if (event.event_type === "gpio_pulse") {
 							__checkType(event.event.channel, "string", "Non-string GPIO channel");
+
+						} else if (event.event_type === "delay_random") {
+							__checkType(event.event.range, "object", "Non-object random delay range");
+							__checkUnsigned(event.event.range.min, "Non-unsigned random delay range min");
+							__checkUnsigned(event.event.range.max, "Non-unsigned random delay range max");
+							__checkRangeMinMax(event.event.range, "Invalid random delay range");
+							events_time += event.event.range.max;
+
+						} else if (event.event_type === "mouse_move_random") { // Hack for pikvm/pikvm#1041
+							__checkType(event.event.range, "object", "Non-object random mouse move range");
+							__checkInt(event.event.range.min, "Non-int random mouse move range min");
+							__checkInt(event.event.range.max, "Non-int random mouse move range max");
+							__checkRangeMinMax(event.event.range, "Invalid random mouse move range");
+
 						} else {
 							throw `Unknown event type: ${event.event_type}`;
 						}
@@ -217,6 +237,19 @@ export function Recorder() {
 		}
 	};
 
+	var __checkUnsigned = function(obj, msg) {
+		__checkInt(obj, msg);
+		if (obj < 0) {
+			throw msg;
+		}
+	};
+
+	var __checkRangeMinMax = function(obj, msg) {
+		if (obj.min > obj.max) {
+			throw msg;
+		}
+	};
+
 	var __checkArray = function (obj, msg) {
 		if (!Array.isArray(obj)) {
 			throw msg;
@@ -237,8 +270,13 @@ export function Recorder() {
 			__setCounters(__events.length - index + 1, __events_time - time);
 			let event = __events[index];
 
-			if (event.event_type === "delay") {
-				__play_timer = setTimeout(() => __runEvents(index + 1, time + event.event.millis), event.event.millis);
+			if (["delay", "delay_random"].includes(event.event_type)) {
+				let millis = (
+					event.event_type === "delay"
+						? event.event.millis
+						: tools.getRandomInt(event.event.range.min, event.event.range.max)
+				);
+				__play_timer = setTimeout(() => __runEvents(index + 1, time + millis), millis);
 				return;
 
 			} else if (event.event_type === "print") {
@@ -291,6 +329,15 @@ export function Recorder() {
 
 			} else if (["key", "mouse_button", "mouse_move", "mouse_wheel", "mouse_relative"].includes(event.event_type)) {
 				__ws.sendHidEvent(event);
+
+			} else if (event.event_type === "mouse_move_random") {
+				__ws.sendHidEvent({
+					"event_type": "mouse_move",
+					"event": {"to": {
+						"x": tools.getRandomInt(event.event.range.min, event.event.range.max),
+						"y": tools.getRandomInt(event.event.range.min, event.event.range.max),
+					}},
+				});
 			}
 
 			index += 1;
