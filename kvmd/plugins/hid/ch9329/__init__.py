@@ -43,6 +43,7 @@ from ....validators.hw import valid_tty_speed
 from .. import BaseHid
 
 from .chip import ChipResponseError
+from .chip import ChipConnection
 from .chip import Chip
 from .mouse import Mouse
 from .keyboard import Keyboard
@@ -176,7 +177,6 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         logger = aioproc.settle("HID", "hid")
         while not self.__stop_event.is_set():
             try:
-                # self.__chip.connect()
                 self.__hid_loop()
             except Exception:
                 logger.exception("Unexpected error in the run loop")
@@ -185,28 +185,29 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
     def __hid_loop(self) -> None:
         while not self.__stop_event.is_set():
             try:
-                while not (self.__stop_event.is_set() and self.__cmd_queue.qsize() == 0):
-                    if self.__reset_required_event.is_set():
+                with self.__chip.connected() as conn:
+                    while not (self.__stop_event.is_set() and self.__cmd_queue.qsize() == 0):
+                        if self.__reset_required_event.is_set():
+                            try:
+                                self.__set_state_busy(True)
+                                # self.__process_request(conn, RESET)
+                            finally:
+                                self.__reset_required_event.clear()
                         try:
-                            self.__set_state_busy(True)
-                            # self.__process_request(conn, RESET)
-                        finally:
-                            self.__reset_required_event.clear()
-                    try:
-                        cmd = self.__cmd_queue.get(timeout=0.1)
-                        # get_logger(0).info(f"HID : cmd = {cmd}")
-                    except queue.Empty:
-                        self.__process_cmd(b"")
-                    else:
-                        self.__process_cmd(cmd)
+                            cmd = self.__cmd_queue.get(timeout=0.1)
+                            # get_logger(0).info(f"HID : cmd = {cmd}")
+                        except queue.Empty:
+                            self.__process_cmd(conn, b"")
+                        else:
+                            self.__process_cmd(conn, cmd)
             except Exception:
                 self.clear_events()
                 get_logger(0).exception("Unexpected error in the HID loop")
                 time.sleep(2)
 
-    def __process_cmd(self, cmd: bytes) -> bool:  # pylint: disable=too-many-branches
+    def __process_cmd(self, conn: ChipConnection, cmd: bytes) -> bool:  # pylint: disable=too-many-branches
         try:
-            led_byte = self.__chip.xfer(cmd)
+            led_byte = conn.xfer(cmd)
         except ChipResponseError as err:
             self.__set_state_online(False)
             get_logger(0).info(err)

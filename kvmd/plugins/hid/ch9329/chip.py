@@ -21,6 +21,9 @@
 
 
 import serial
+import contextlib
+
+from typing import Generator
 
 
 # =====
@@ -29,10 +32,9 @@ class ChipResponseError(Exception):
 
 
 # =====
-class Chip:
-    def __init__(self, device_path: str, speed: int, read_timeout: float) -> None:
-        self.__tty = serial.Serial(device_path, speed, timeout=read_timeout)
-        self.__device_path = device_path
+class ChipConnection:
+    def __init__(self, tty: serial.Serial) -> None:
+        self.__tty = tty
 
     def xfer(self, cmd: bytes) -> int:
         self.__send(cmd)
@@ -66,3 +68,15 @@ class Chip:
 
     def __make_checksum(self, cmd: bytes) -> int:
         return (sum(cmd) % 256)
+
+
+class Chip:
+    def __init__(self, device_path: str, speed: int, read_timeout: float) -> None:
+        self.__device_path = device_path
+        self.__speed = speed
+        self.__read_timeout = read_timeout
+
+    @contextlib.contextmanager
+    def connected(self) -> Generator[ChipConnection, None, None]:  # type: ignore
+        with serial.Serial(self.__device_path, self.__speed, timeout=self.__read_timeout) as tty:
+            yield ChipConnection(tty)
