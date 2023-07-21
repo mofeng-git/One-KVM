@@ -119,24 +119,20 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 					return;
 				}
 			}
-			__commonHandler(__merged[code][0], state, false);
 			if (__fix_mac_cmd && apply_fixes) {
-				__fixMacCmd();
+				__fixMacCmd(code, state);
 			}
+			__commonHandler(__merged[code][0], state, false);
 			__unholdModifiers();
 		}
 	};
 
-	var __fixMacCmd = function() {
-		// https://bugs.chromium.org/p/chromium/issues/detail?id=28089
-		// https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
-		if (__isActive(__modifiers["MetaLeft"][0]) || __isActive(__modifiers["MetaRight"][0])) {
-			for (let code in __keys) {
-				setTimeout(function() {
-					if (__isActive(__keys[code][0])) {
-						self.emitByCode(code, false, false);
-					}
-				}, 100);
+	var __fixMacCmd = function(code, state) {
+		if ((code == "MetaLeft" || code == "MetaRight") && !state) {
+			for (code in __keys) {
+				if (__isActive(__keys[code][0])) {
+					self.emitByCode(code, false, false);
+				}
 			}
 		}
 	};
