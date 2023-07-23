@@ -220,19 +220,26 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __allow_aud
 			},
 
 			"onremotestream": function(stream) {
-				__logInfo("Got a remote stream:", stream);
-				_Janus.attachMediaStream($("stream-video"), stream);
-				__sendKeyRequired();
-				__startInfoInterval();
-				// FIXME: Задержка уменьшается, но начинаются заикания на кейфреймах.
-				//   - https://github.com/Glimesh/janus-ftl-plugin/issues/101
-				/*if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.pc) {
-					for (let receiver of __handle.webrtcStuff.pc.getReceivers()) {
-						if (receiver.track && receiver.track.kind === "video" && receiver.playoutDelayHint !== undefined) {
-							receiver.playoutDelayHint = 0;
+				__logInfo("Got a remote stream changes:", stream);
+				if (stream.active) {
+					_Janus.attachMediaStream($("stream-video"), stream);
+					__sendKeyRequired();
+					__startInfoInterval();
+					// FIXME: Задержка уменьшается, но начинаются заикания на кейфреймах.
+					//   - https://github.com/Glimesh/janus-ftl-plugin/issues/101
+					/*if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.pc) {
+						for (let receiver of __handle.webrtcStuff.pc.getReceivers()) {
+							if (receiver.track && receiver.track.kind === "video" && receiver.playoutDelayHint !== undefined) {
+								receiver.playoutDelayHint = 0;
+							}
 						}
-					}
-				}*/
+					}*/
+				} else {
+					// В каких-то случаях стрим может иметь флаг active=false,
+					// но при этом янус работает. Хз почему.
+					//   - https://github.com/pikvm/pikvm/issues/1057
+					__destroyJanus();
+				}
 			},
 
 			"oncleanup": function() {
