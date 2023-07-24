@@ -44,6 +44,7 @@ depends=(
 	python-yaml
 	python-aiohttp
 	python-aiofiles
+	python-async-lru
 	python-passlib
 	python-pyotp
 	python-qrcode

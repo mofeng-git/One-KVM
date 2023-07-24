@@ -24,6 +24,8 @@ import asyncio
 
 from typing import Any
 
+import async_lru
+
 from aiohttp.web import Request
 from aiohttp.web import Response
 
@@ -49,6 +51,10 @@ class ExportApi:
 
     @exposed_http("GET", "/export/prometheus/metrics")
     async def __prometheus_metrics_handler(self, _: Request) -> Response:
+        return Response(text=(await self.__get_prometheus_metrics()))
+
+    @async_lru.alru_cache(maxsize=1, ttl=5)
+    async def __get_prometheus_metrics(self) -> str:
         (atx_state, hw_state, fan_state, gpio_state) = await asyncio.gather(*[
             self.__atx.get_state(),
             self.__info_manager.get_submanager("hw").get_state(),
@@ -68,7 +74,7 @@ class ExportApi:
         self.__append_prometheus_rows(rows, hw_state["health"], "pikvm_hw")
         self.__append_prometheus_rows(rows, fan_state, "pikvm_fan")
 
-        return Response(text="\n".join(rows))
+        return "\n".join(rows)
 
     def __append_prometheus_rows(self, rows: list[str], value: Any, path: str) -> None:
         if isinstance(value, bool):
