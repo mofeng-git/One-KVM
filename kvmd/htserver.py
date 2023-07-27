@@ -41,13 +41,9 @@ from aiohttp.web import StreamResponse
 from aiohttp.web import WebSocketResponse
 from aiohttp.web import WSMsgType
 from aiohttp.web import Application
+from aiohttp.web import AccessLogger
 from aiohttp.web import run_app
 from aiohttp.web import normalize_path_middleware
-
-try:
-    from aiohttp.web import AccessLogger  # type: ignore
-except ImportError:
-    from aiohttp.helpers import AccessLogger  # type: ignore
 
 from .logging import get_logger
 
