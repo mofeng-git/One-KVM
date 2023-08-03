@@ -1,4 +1,4 @@
-name: HID CI
+name: Arduino HID CI
 
 on:
     push:
@@ -20,4 +20,4 @@ jobs:
             run: pip install platformio
 
           - name: Build all
-            run: make -C hid _build_all
+            run: make -C hid/arduino _build_all
