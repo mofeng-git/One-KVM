@@ -108,6 +108,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         reset_pin: int,
         reset_inverted: bool,
         reset_delay: float,
+        reset_self: bool,
 
         read_retries: int,
         common_retries: int,
@@ -126,6 +127,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
         self.__phy = phy
         self.__gpio = Gpio(gpio_device_path, reset_pin, reset_inverted, reset_delay)
+        self.__reset_self = reset_self
 
         self.__reset_required_event = multiprocessing.Event()
         self.__events_queue: "multiprocessing.Queue[BaseEvent]" = multiprocessing.Queue()
@@ -146,6 +148,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
             "reset_pin":      Option(4,     type=valid_gpio_pin_optional),
             "reset_inverted": Option(False, type=valid_bool),
             "reset_delay":    Option(0.1,   type=valid_float_f01),
+            "reset_self":     Option(False, type=valid_bool),
 
             "read_retries":     Option(5,     type=valid_int_f1),
             "common_retries":   Option(5,     type=valid_int_f1),
@@ -418,4 +421,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         reset_required = (1 if response[1] & 0b01000000 else 0)
         self.__state_flags.update(online=1, busy=reset_required, status=status)
         if reset_required:
-            self.__reset_required_event.set()
+            if self.__reset_self:
+                time.sleep(1)  # Pico перезагружается сам вскоре после ответа
+            else:
+                self.__reset_required_event.set()

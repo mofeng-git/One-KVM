@@ -100,6 +100,7 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
         chip: int,
         hw_cs: bool,
         sw_cs_pin: int,
+        sw_cs_per_byte: bool,
         max_freq: int,
         block_usec: int,
         read_timeout: float,
@@ -110,6 +111,7 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
         self.__chip = chip
         self.__hw_cs = hw_cs
         self.__sw_cs_pin = sw_cs_pin
+        self.__sw_cs_per_byte = sw_cs_per_byte
         self.__max_freq = max_freq
         self.__block_usec = block_usec
         self.__read_timeout = read_timeout
@@ -125,7 +127,7 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
                 spi.no_cs = (not self.__hw_cs)
                 spi.max_speed_hz = self.__max_freq
 
-                def xfer(data: bytes) -> bytes:
+                def inner_xfer(data: bytes) -> bytes:
                     try:
                         if sw_cs_line is not None:
                             sw_cs_line.set_value(0)
@@ -133,6 +135,17 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
                     finally:
                         if sw_cs_line is not None:
                             sw_cs_line.set_value(1)
+
+                if self.__sw_cs_per_byte:
+                    # Режим для Pico, когда CS должен взводиться для отдельных байтов
+                    def xfer(data: bytes) -> bytes:
+                        got: list[int] = []
+                        for byte in data:
+                            got.extend(inner_xfer(byte.to_bytes(1, "big")))
+                        return bytes(got)
+                else:
+                    # Режим для Arduino, когда CS взводится для целого блока данных
+                    xfer = inner_xfer
 
                 yield _SpiPhyConnection(
                     xfer=xfer,
@@ -167,11 +180,12 @@ class Plugin(BaseMcuHid):
     @classmethod
     def __get_phy_options(cls) -> dict:
         return {
-            "bus":          Option(-1,     type=valid_int_f0),
-            "chip":         Option(-1,     type=valid_int_f0),
-            "hw_cs":        Option(False,  type=valid_bool),
-            "sw_cs_pin":    Option(-1,     type=valid_gpio_pin_optional),
-            "max_freq":     Option(100000, type=valid_int_f1),
-            "block_usec":   Option(1,      type=valid_int_f0),
-            "read_timeout": Option(0.5,    type=valid_float_f01),
+            "bus":            Option(-1,     type=valid_int_f0),
+            "chip":           Option(-1,     type=valid_int_f0),
+            "hw_cs":          Option(False,  type=valid_bool),
+            "sw_cs_pin":      Option(-1,     type=valid_gpio_pin_optional),
+            "sw_cs_per_byte": Option(False,  type=valid_bool),
+            "max_freq":       Option(100000, type=valid_int_f1),
+            "block_usec":     Option(1,      type=valid_int_f0),
+            "read_timeout":   Option(0.5,    type=valid_float_f01),
         }

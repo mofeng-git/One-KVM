@@ -213,6 +213,7 @@ keymap: testenv
 		&& ./genmap.py keymap.csv kvmd/keyboard/mappings.py.mako kvmd/keyboard/mappings.py \
 		&& ./genmap.py keymap.csv hid/arduino/lib/drivers/usb-keymap.h.mako hid/arduino/lib/drivers/usb-keymap.h \
 		&& ./genmap.py keymap.csv hid/arduino/lib/drivers-avr/ps2/keymap.h.mako hid/arduino/lib/drivers-avr/ps2/keymap.h \
+		&& ./genmap.py keymap.csv hid/pico/src/ph_usb_keymap.h.mako hid/pico/src/ph_usb_keymap.h \
 	"
 
 
@@ -251,10 +252,12 @@ clean:
 	rm -rf testenv/run/*.{pid,sock} build site dist pkg src v*.tar.gz *.pkg.tar.{xz,zst} *.egg-info kvmd-*.tar.gz
 	find kvmd testenv/tests -name __pycache__ | xargs rm -rf
 	make -C hid/arduino clean
+	make -C hid/pico clean
 
 
 clean-all: testenv clean
 	make -C hid/arduino clean-all
+	make -C hid/pico clean-all
 	- $(DOCKER) run --rm \
 			--volume `pwd`:/src \
 		-it $(TESTENV_IMAGE) bash -c "cd src && rm -rf testenv/{.ssl,.tox,.mypy_cache,.coverage}"
