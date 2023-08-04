@@ -22,6 +22,7 @@
 
 #include "ph_outputs.h"
 
+#include "pico/stdlib.h"
 #include "hardware/gpio.h"
 #include "hardware/structs/watchdog.h"
 
