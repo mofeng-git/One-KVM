@@ -127,7 +127,8 @@ int main(void) {
 	gpio_init(_COMM_PIN);
 	gpio_set_dir(_COMM_PIN, GPIO_IN);
 	gpio_pull_up(_COMM_PIN);
-	_comm_use_spi = !gpio_get(_COMM_PIN);
+	sleep_ms(10); // Нужен небольшой слип для активации pull-up
+	_comm_use_spi = gpio_get(_COMM_PIN);
 	_COMM(init, _data_handler, _timeout_handler);
 
 	while (true) {

@@ -58,6 +58,7 @@ void ph_outputs_init(void) {
 	INIT_SWITCH(_USB_SET_MOUSE_REL_PIN);
 	INIT_SWITCH(_USB_SET_MOUSE_W98_PIN);
 #	undef INIT_SWITCH
+	sleep_ms(10); // Нужен небольшой слип для активации pull-up
 
 	const bool o_ps2_enabled = !gpio_get(_PS2_ENABLED_PIN); // Note: all pins are pulled up!
 	const bool o_ps2_kbd = !gpio_get(_PS2_SET_KBD_PIN);
