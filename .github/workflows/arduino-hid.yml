@@ -1,23 +1,23 @@
 name: Arduino HID CI
 
 on:
-    push:
-        branches: [master]
-    pull_request:
-        branches: [master]
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
 
 jobs:
-    build:
-        runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-        container:
-            image: python
+    container:
+      image: python
 
-        steps:
-          - uses: actions/checkout@v3
+    steps:
+    - uses: actions/checkout@v3
 
-          - name: Prepare platformio
-            run: pip install platformio
+    - name: Prepare platformio
+      run: pip install platformio
 
-          - name: Build all
-            run: make -C hid/arduino _build_all
+    - name: Build all
+      run: make -C hid/arduino _build_all
