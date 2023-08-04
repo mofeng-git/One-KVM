@@ -115,7 +115,7 @@ int main(void) {
 		ph_usb_task();
 		if (!_reset_required) {
 			ph_spi_task();
-			ph_debug_act_pulse(50);
+			ph_debug_act_pulse(100);
 		}
 	}
 	return 0;

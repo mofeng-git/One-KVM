@@ -41,12 +41,16 @@ void ph_debug_init(bool enable_uart) {
 	gpio_set_dir(_ACT_PIN, GPIO_OUT);
 }
 
+void ph_debug_act(bool flag) {
+	gpio_put(_ACT_PIN, flag);
+}
+
 void ph_debug_act_pulse(u64 delay_ms) {
 	static bool flag = false;
 	static u64 next_ts = 0;
 	const u64 now_ts = time_us_64();
 	if (now_ts >= next_ts) {
-		gpio_put(_ACT_PIN, flag);
+		ph_debug_act(flag);
 		flag = !flag;
 		next_ts = now_ts + (delay_ms * 1000);
 	}
