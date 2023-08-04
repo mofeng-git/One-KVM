@@ -132,7 +132,7 @@ void ph_usb_kbd_send_key(u8 key, bool state) {
 				}
 			}
 			_kbd_keys[pos >= 0 ? pos : 0] = key;
-			already_pressed:
+			// already_pressed:
 		} else {
 			for (u8 i = 0; i < 6; ++i) {
 				if (_kbd_keys[i] == key) {
@@ -142,6 +142,7 @@ void ph_usb_kbd_send_key(u8 key, bool state) {
 			}
 		}
 	}
+	already_pressed: // Old GCC doesn't like ^ that label in the end of block
 
 	_kbd_sync_report(true);
 }
