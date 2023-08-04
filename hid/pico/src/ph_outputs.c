@@ -48,7 +48,7 @@ static int _read_outputs(void);
 
 
 void ph_outputs_init(void) {
-#	define INIT_SWITCH(x_pin) { gpio_init(x_pin); gpio_set_dir(x_pin, GPIO_IN); gpio_pull_down(x_pin); }
+#	define INIT_SWITCH(x_pin) { gpio_init(x_pin); gpio_set_dir(x_pin, GPIO_IN); gpio_pull_up(x_pin); }
 	INIT_SWITCH(_PS2_ENABLED_PIN);
 	INIT_SWITCH(_PS2_SET_KBD_PIN);
 	INIT_SWITCH(_PS2_SET_MOUSE_PIN);
@@ -59,14 +59,14 @@ void ph_outputs_init(void) {
 	INIT_SWITCH(_USB_SET_MOUSE_W98_PIN);
 #	undef INIT_SWITCH
 
-	const bool o_ps2_enabled = gpio_get(_PS2_ENABLED_PIN);
-	const bool o_ps2_kbd = gpio_get(_PS2_SET_KBD_PIN);
-	const bool o_ps2_mouse = gpio_get(_PS2_SET_MOUSE_PIN);
+	const bool o_ps2_enabled = !gpio_get(_PS2_ENABLED_PIN); // Note: all pins are pulled up!
+	const bool o_ps2_kbd = !gpio_get(_PS2_SET_KBD_PIN);
+	const bool o_ps2_mouse = !gpio_get(_PS2_SET_MOUSE_PIN);
 
-	const bool o_usb_disabled = gpio_get(_USB_DISABLED_PIN);
-	const bool o_usb_enabled_w98 = gpio_get(_USB_ENABLE_W98_PIN);
-	const bool o_usb_mouse_rel = gpio_get(_USB_SET_MOUSE_REL_PIN);
-	const bool o_usb_mouse_w98 = gpio_get(_USB_SET_MOUSE_W98_PIN);
+	const bool o_usb_disabled = !gpio_get(_USB_DISABLED_PIN);
+	const bool o_usb_enabled_w98 = !gpio_get(_USB_ENABLE_W98_PIN);
+	const bool o_usb_mouse_rel = !gpio_get(_USB_SET_MOUSE_REL_PIN);
+	const bool o_usb_mouse_w98 = !gpio_get(_USB_SET_MOUSE_W98_PIN);
 
 	int outputs = _read_outputs();
 	if (outputs < 0) {

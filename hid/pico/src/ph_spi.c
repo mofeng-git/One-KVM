@@ -51,8 +51,9 @@ static void (*_data_cb)(const u8 *) = NULL;
 static void _xfer_isr(void);
 
 
-void ph_spi_init(void (*data_cb)(const u8 *)) {
+void ph_spi_init(void (*data_cb)(const u8 *), void (*timeout_cb)(void)) {
 	_data_cb = data_cb;
+	(void)timeout_cb;
 
 	spi_init(_BUS, _FREQ);
 	spi_set_slave(_BUS, true);

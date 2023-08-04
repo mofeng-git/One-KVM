@@ -29,10 +29,20 @@
 #include "ph_outputs.h"
 #include "ph_usb.h"
 #include "ph_spi.h"
+#include "ph_uart.h"
 #include "ph_proto.h"
 #include "ph_cmds.h"
 #include "ph_debug.h"
 
+
+#define _COMM_PIN 22
+
+
+static bool _comm_use_spi = true;
+#define _COMM(x_func, ...) { \
+		if (_comm_use_spi) { ph_spi_##x_func(__VA_ARGS__); } \
+		else { ph_uart_##x_func(__VA_ARGS__); } \
+	}
 
 static bool _reset_required = false;
 
@@ -93,15 +103,19 @@ static void _send_response(u8 code) {
 
 	ph_split16(ph_crc16(resp, 6), &resp[6], &resp[7]);
 
-	ph_spi_write(resp);
+	_COMM(write, resp);
 
 	if (_reset_required) {
 		watchdog_reboot(0, 0, 100); // Даем немного времени чтобы отправить ответ, а потом ребутимся
 	}
 }
 
-static void _spi_data_handler(const u8 *data) {
+static void _data_handler(const u8 *data) {
 	_send_response(_handle_request(data));
+}
+
+static void _timeout_handler(void) {
+	_send_response(PH_PROTO_RESP_TIMEOUT_ERROR);
 }
 
 
@@ -109,12 +123,17 @@ int main(void) {
 	ph_debug_init(false); // No UART
 	ph_outputs_init();
 	ph_usb_init();
-	ph_spi_init(_spi_data_handler);
+
+	gpio_init(_COMM_PIN);
+	gpio_set_dir(_COMM_PIN, GPIO_IN);
+	gpio_pull_up(_COMM_PIN);
+	_comm_use_spi = !gpio_get(_COMM_PIN);
+	_COMM(init, _data_handler, _timeout_handler);
 
 	while (true) {
 		ph_usb_task();
 		if (!_reset_required) {
-			ph_spi_task();
+			_COMM(task);
 			ph_debug_act_pulse(100);
 		}
 	}

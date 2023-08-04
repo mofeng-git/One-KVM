@@ -9,6 +9,7 @@ target_sources(${target_name} PRIVATE
 	ph_usb_mouse.c
 	ph_cmds.c
 	ph_spi.c
+	ph_uart.c
 	ph_debug.c
 )
 target_link_options(${target_name} PRIVATE -Xlinker --print-memory-usage)
