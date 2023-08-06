@@ -18,6 +18,8 @@ kvmd:
         reset_pin: 25
         reset_inverted: true
         reset_self: true
+        power_detect_pin: 16
+        power_detect_pull_down: true
 
     atx:
         type: gpio
