@@ -66,16 +66,18 @@ class _GadgetControl:
             with open(os.path.join(self.__meta_path, meta_name)) as file:
                 yield json.loads(file.read())
 
-    def enable_function(self, func: str) -> None:
+    def enable_functions(self, funcs: list[str]) -> None:
         with self.__udc_stopped():
-            os.symlink(
-                usb.get_gadget_path(self.__gadget, usb.G_FUNCTIONS, func),
-                usb.get_gadget_path(self.__gadget, usb.G_PROFILE, func),
-            )
+            for func in funcs:
+                os.symlink(
+                    usb.get_gadget_path(self.__gadget, usb.G_FUNCTIONS, func),
+                    usb.get_gadget_path(self.__gadget, usb.G_PROFILE, func),
+                )
 
-    def disable_function(self, func: str) -> None:
+    def disable_functions(self, funcs: list[str]) -> None:
         with self.__udc_stopped():
-            os.unlink(usb.get_gadget_path(self.__gadget, usb.G_PROFILE, func))
+            for func in funcs:
+                os.unlink(usb.get_gadget_path(self.__gadget, usb.G_PROFILE, func))
 
     def list_functions(self) -> None:
         for meta in self.__read_metas():
@@ -120,10 +122,8 @@ def main(argv: (list[str] | None)=None) -> None:
         parents=[parent_parser],
     )
     parser.add_argument("-l", "--list-functions", action="store_true", help="List functions")
-    parser.add_argument("-e", "--enable-function", type=valid_stripped_string_not_empty,
-                        metavar="<name>", help="Enable function")
-    parser.add_argument("-d", "--disable-function", type=valid_stripped_string_not_empty,
-                        metavar="<name>", help="Disable function")
+    parser.add_argument("-e", "--enable-function", nargs="+", metavar="<name>", help="Enable function(s)")
+    parser.add_argument("-d", "--disable-function", nargs="+", metavar="<name>", help="Disable function(s)")
     parser.add_argument("-r", "--reset-gadget", action="store_true", help="Reset gadget")
     parser.add_argument("--make-gpio-config", action="store_true")
     options = parser.parse_args(argv[1:])
@@ -134,11 +134,13 @@ def main(argv: (list[str] | None)=None) -> None:
         gc.list_functions()
 
     elif options.enable_function:
-        gc.enable_function(options.enable_function)
+        funcs = list(map(valid_stripped_string_not_empty, options.enable_function))
+        gc.enable_functions(funcs)
         gc.list_functions()
 
     elif options.disable_function:
-        gc.disable_function(options.disable_function)
+        funcs = list(map(valid_stripped_string_not_empty, options.disable_function))
+        gc.disable_functions(funcs)
         gc.list_functions()
 
     elif options.reset_gadget:
