@@ -28,6 +28,7 @@ import time
 from typing import Iterable
 from typing import Generator
 from typing import AsyncGenerator
+from typing import Any
 
 from ....logging import get_logger
 
@@ -103,18 +104,13 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def __init__(  # pylint: disable=too-many-arguments,super-init-not-called
         self,
         phy: BasePhy,
-
-        gpio_device_path: str,
-        reset_pin: int,
-        reset_inverted: bool,
-        reset_delay: float,
         reset_self: bool,
-
         read_retries: int,
         common_retries: int,
         retries_delay: float,
         errors_threshold: int,
         noop: bool,
+        **gpio_kwargs: Any,
     ) -> None:
 
         multiprocessing.Process.__init__(self, daemon=True)
@@ -126,7 +122,8 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         self.__noop = noop
 
         self.__phy = phy
-        self.__gpio = Gpio(gpio_device_path, reset_pin, reset_inverted, reset_delay)
+        gpio_device_path = gpio_kwargs.pop("gpio_device_path")
+        self.__gpio = Gpio(device_path=gpio_device_path, **gpio_kwargs)
         self.__reset_self = reset_self
 
         self.__reset_required_event = multiprocessing.Event()
@@ -144,11 +141,15 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     @classmethod
     def get_plugin_options(cls) -> dict:
         return {
-            "gpio_device":    Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="gpio_device_path"),
-            "reset_pin":      Option(4,     type=valid_gpio_pin_optional),
-            "reset_inverted": Option(False, type=valid_bool),
-            "reset_delay":    Option(0.1,   type=valid_float_f01),
-            "reset_self":     Option(False, type=valid_bool),
+            # <gpio_kwargs>
+            "gpio_device":            Option("/dev/gpiochip0", type=valid_abs_path, unpack_as="gpio_device_path"),
+            "power_detect_pin":       Option(-1,    type=valid_gpio_pin_optional),
+            "power_detect_pull_down": Option(False, type=valid_bool),
+            "reset_pin":              Option(4,     type=valid_gpio_pin_optional),
+            "reset_inverted":         Option(False, type=valid_bool),
+            "reset_delay":            Option(0.1,   type=valid_float_f01),
+            # </gpio_kwargs>
+            "reset_self":             Option(False, type=valid_bool),
 
             "read_retries":     Option(5,     type=valid_int_f1),
             "common_retries":   Option(5,     type=valid_int_f1),
@@ -329,18 +330,18 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
     def __hid_loop_wait_device(self) -> bool:
         logger = get_logger(0)
-        logger.info("Initial HID reset and wait ...")
+        logger.info("Initial HID reset and wait for %s ...", self.__phy)
         self.__gpio.reset()
         # На самом деле SPI и Serial-девайсы не пропадают, просто резет и ожидание
         # логичнее всего делать именно здесь. Ну и на будущее, да
         for _ in range(10):
             if self.__phy.has_device():
-                logger.info("HID found")
+                logger.info("Physical HID interface found: %s", self.__phy)
                 return True
             if self.__stop_event.is_set():
                 break
             time.sleep(1)
-        logger.error("Missing HID")
+        logger.error("Missing physical HID interface: %s", self.__phy)
         return False
 
     def __process_request(self, conn: BasePhyConnection, request: bytes) -> bool:  # pylint: disable=too-many-branches
@@ -352,7 +353,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         read_retries = self.__read_retries
         error_retval = False
 
-        while common_retries and read_retries:
+        while self.__gpio.is_powered() and common_retries and read_retries:
             response = (RESPONSE_LEGACY_OK if self.__noop else conn.send(request))
             try:
                 if len(response) < 4:
@@ -401,6 +402,10 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
                 if common_retries and read_retries:
                     time.sleep(self.__retries_delay)
+
+        if not self.__gpio.is_powered():
+            self.__set_state_online(False)
+            return True
 
         for msg in error_messages:
             logger.error(msg)

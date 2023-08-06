@@ -162,6 +162,9 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
         else:
             yield None
 
+    def __str__(self) -> str:
+        return f"SPI(bus={self.__bus}, chip={self.__chip})"
+
 
 # =====
 class Plugin(BaseMcuHid):

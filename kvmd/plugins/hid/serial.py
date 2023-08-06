@@ -80,6 +80,9 @@ class _SerialPhy(BasePhy):
         with serial.Serial(self.__device_path, self.__speed, timeout=self.__read_timeout) as tty:
             yield _SerialPhyConnection(tty)
 
+    def __str__(self) -> str:
+        return f"Serial(path={self.__device_path})"
+
 
 # =====
 class Plugin(BaseMcuHid):
