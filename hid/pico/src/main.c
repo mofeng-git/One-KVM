@@ -120,7 +120,8 @@ static void _timeout_handler(void) {
 
 
 int main(void) {
-	ph_debug_init(false); // No UART
+	//ph_debug_act_init();
+	//ph_debug_uart_init();
 	ph_outputs_init();
 	ph_usb_init();
 
@@ -135,7 +136,7 @@ int main(void) {
 		ph_usb_task();
 		if (!_reset_required) {
 			_COMM(task);
-			ph_debug_act_pulse(100);
+			//ph_debug_act_pulse(100);
 		}
 	}
 	return 0;

@@ -33,10 +33,11 @@
 #define _ACT_PIN	25
 
 
-void ph_debug_init(bool enable_uart) {
-	if (enable_uart) {
-		stdio_uart_init_full(_UART, _SPEED, _TX_PIN, _RX_PIN);
-	}
+void ph_debug_uart_init(void) {
+	stdio_uart_init_full(_UART, _SPEED, _TX_PIN, _RX_PIN);
+}
+
+void ph_debug_act_init(void) {
 	gpio_init(_ACT_PIN);
 	gpio_set_dir(_ACT_PIN, GPIO_OUT);
 }
