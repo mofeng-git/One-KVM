@@ -24,7 +24,6 @@ _variants=(
 	v2-hdmi:rpi4
 
 	v2-hdmiusb:rpi4
-	v2-hdmiusb:generic
 
 	v3-hdmi:rpi4
 
@@ -203,10 +202,7 @@ for _variant in "${_variants[@]}"; do
 		cd \"kvmd-\$pkgver\"
 
 		pkgdesc=\"PiKVM platform configs - $_platform for $_board\"
-		depends=(kvmd=$pkgver-$pkgrel)
-		if [ $_board != generic ]; then
-			depends=(\"\${depends[@]}\" \"linux-rpi-pikvm>=5.15.25-16\")
-		fi
+		depends=(kvmd=$pkgver-$pkgrel \"linux-rpi-pikvm>=5.15.68-3\")
 
 		backup=(
 			etc/sysctl.d/99-kvmd.conf
