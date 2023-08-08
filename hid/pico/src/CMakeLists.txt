@@ -7,10 +7,12 @@ target_sources(${target_name} PRIVATE
 	ph_usb.c
 	ph_usb_kbd.c
 	ph_usb_mouse.c
+	ph_ps2.c
 	ph_cmds.c
 	ph_spi.c
 	ph_uart.c
 	ph_debug.c
+	# TODO: PS2: ${PS2_PATH}/foo.c
 )
 target_link_options(${target_name} PRIVATE -Xlinker --print-memory-usage)
 target_compile_options(${target_name} PRIVATE -Wall -Wextra)
@@ -22,5 +24,6 @@ target_link_libraries(${target_name} PRIVATE
 	hardware_spi
 	hardware_watchdog
 	tinyusb_device
+	# TODO: PS2: ... or make a library
 )
 pico_add_extra_outputs(${target_name})

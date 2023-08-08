@@ -18,19 +18,16 @@ clean-all: clean
 	rm -rf .pico-sdk.tmp .pico-sdk .tinyusb.tmp .tinyusb
 
 
+define libdep
+	rm -rf .$(1).tmp
+	git clone https://github.com/$(2) .$(1).tmp
+	cd .$(1).tmp \
+		&& git checkout $(3) \
+		&& (test ! -f .gitmodules || git submodule update --init)
+	mv .$(1).tmp .$(1)
+endef
 .pico-sdk:
-	rm -rf .pico-sdk.tmp
-	git clone https://github.com/raspberrypi/pico-sdk .pico-sdk.tmp
-	cd .pico-sdk.tmp \
-		&& git checkout 62201a83e2693ea165fdc7669b4ab2f3b4f43c36 \
-		&& git submodule update --init
-	mv .pico-sdk.tmp .pico-sdk
-
-
+	$(call libdep,pico-sdk,raspberrypi/pico-sdk,62201a83e2693ea165fdc7669b4ab2f3b4f43c36)
 .tinyusb:
-	rm -rf .tinyusb.tmp
-	git clone https://github.com/hathach/tinyusb .tinyusb.tmp
-	cd .tinyusb.tmp \
-		&& git checkout c998e9c60bc76894006c3bd049d661124a9bfbfd \
-		&& git submodule update --init
-	mv .tinyusb.tmp .tinyusb
+	$(call libdep,tinyusb,hathach/tinyusb,c998e9c60bc76894006c3bd049d661124a9bfbfd)
+# TODO: PS2: Add your library here and add it to "all" and "clean-all" targets

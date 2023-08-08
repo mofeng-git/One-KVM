@@ -28,31 +28,38 @@
 #include "ph_outputs.h"
 #include "ph_usb.h"
 #include "ph_usb_keymap.h"
+#include "ph_ps2.h"
 
 
 u8 ph_cmd_kbd_get_leds(void) {
-	u8 retval = 0;
+	u8 leds = 0;
 	if (PH_O_IS_KBD_USB) {
-#		define GET(x_mod) ((ph_g_usb_kbd_leds & KEYBOARD_LED_##x_mod##LOCK) ? PH_PROTO_PONG_##x_mod : 0)
-		retval = GET(CAPS) | GET(SCROLL) | GET(NUM);
-#		undef GET
+		leds = ph_g_usb_kbd_leds;
+	} else if (PH_O_IS_KBD_PS2) {
+		leds = ph_g_ps2_kbd_leds;
 	}
-	return retval;
+#	define GET(x_mod) ((leds & KEYBOARD_LED_##x_mod##LOCK) ? PH_PROTO_PONG_##x_mod : 0)
+	return (GET(CAPS) | GET(SCROLL) | GET(NUM));
+#	undef GET
 }
 
 u8 ph_cmd_get_offlines(void) {
-	u8 retval = 0;
+	bool kbd_online = true;
 	if (PH_O_IS_KBD_USB) {
-		if (!ph_g_usb_kbd_online) {
-			retval |= PH_PROTO_PONG_KBD_OFFLINE;
-		}
+		kbd_online = ph_g_usb_kbd_online;
+	} else if (PH_O_IS_KBD_PS2) {
+		kbd_online = ph_g_ps2_kbd_online;
 	}
+	bool mouse_online = true;
 	if (PH_O_IS_MOUSE_USB) {
-		if (!ph_g_usb_mouse_online) {
-			retval |= PH_PROTO_PONG_MOUSE_OFFLINE;
-		}
+		mouse_online = ph_g_usb_mouse_online;
+	} else if (PH_O_IS_MOUSE_PS2) {
+		mouse_online = ph_g_ps2_mouse_online;
 	}
-	return retval;
+	return (
+		(kbd_online ? 0 : PH_PROTO_PONG_KBD_OFFLINE)
+		| (mouse_online ? 0 : PH_PROTO_PONG_MOUSE_OFFLINE)
+	);
 }
 
 void ph_cmd_set_kbd(const u8 *args) { // 1 byte
@@ -66,12 +73,17 @@ void ph_cmd_set_mouse(const u8 *args) { // 1 byte
 void ph_cmd_send_clear(const u8 *args) { // 0 bytes
 	(void)args;
 	ph_usb_send_clear();
+	ph_ps2_send_clear();
 }
 
 void ph_cmd_kbd_send_key(const u8 *args) { // 2 bytes
 	const u8 key = ph_usb_keymap(args[0]);
 	if (key > 0) {
-		ph_usb_kbd_send_key(key, args[1]);
+		if (PH_O_IS_KBD_USB) {
+			ph_usb_kbd_send_key(key, args[1]);
+		} else if (PH_O_IS_KBD_PS2) {
+			ph_ps2_kbd_send_key(key, args[1]);
+		}
 	}
 }
 
@@ -79,7 +91,11 @@ void ph_cmd_mouse_send_button(const u8 *args) { // 2 bytes
 #	define HANDLE(x_byte_n, x_button) { \
 			if (args[x_byte_n] & PH_PROTO_CMD_MOUSE_##x_button##_SELECT) { \
 				const bool m_state = !!(args[x_byte_n] & PH_PROTO_CMD_MOUSE_##x_button##_STATE); \
-				ph_usb_mouse_send_button(MOUSE_BUTTON_##x_button, m_state); \
+				if (PH_O_IS_MOUSE_USB) { \
+					ph_usb_mouse_send_button(MOUSE_BUTTON_##x_button, m_state); \
+				} else if (PH_O_IS_MOUSE_PS2) { \
+					ph_ps2_mouse_send_button(MOUSE_BUTTON_##x_button, m_state); \
+				} \
 			} \
 		}
 	HANDLE(0, LEFT);
@@ -91,15 +107,25 @@ void ph_cmd_mouse_send_button(const u8 *args) { // 2 bytes
 }
 
 void ph_cmd_mouse_send_abs(const u8 *args) { // 4 bytes
-	ph_usb_mouse_send_abs(
-		ph_merge8_s16(args[0], args[1]),
-		ph_merge8_s16(args[2], args[3]));
+	if (PH_O_IS_MOUSE_USB_ABS) {
+		const s16 x = ph_merge8_s16(args[0], args[1]);
+		const s16 y = ph_merge8_s16(args[2], args[3]);
+		ph_usb_mouse_send_abs(x, y);
+	}
 }
 
 void ph_cmd_mouse_send_rel(const u8 *args) { // 2 bytes
-	ph_usb_mouse_send_rel(args[0], args[1]);
+	if (PH_O_IS_MOUSE_USB_REL) {
+		ph_usb_mouse_send_rel(args[0], args[1]);
+	} else if (PH_O_IS_MOUSE_PS2) {
+		ph_ps2_mouse_send_rel(args[0], args[1]);
+	}
 }
 
 void ph_cmd_mouse_send_wheel(const u8 *args) { // 2 bytes
-	ph_usb_mouse_send_wheel(args[0], args[1]);
+	if (PH_O_IS_MOUSE_USB) {
+		ph_usb_mouse_send_wheel(args[0], args[1]);
+	} else if (PH_O_IS_MOUSE_PS2) {
+		ph_ps2_mouse_send_wheel(args[0], args[1]);
+	}
 }

@@ -28,6 +28,7 @@
 #include "ph_tools.h"
 #include "ph_outputs.h"
 #include "ph_usb.h"
+#include "ph_ps2.h"
 #include "ph_spi.h"
 #include "ph_uart.h"
 #include "ph_proto.h"
@@ -124,6 +125,7 @@ int main(void) {
 	//ph_debug_uart_init();
 	ph_outputs_init();
 	ph_usb_init();
+	ph_ps2_init();
 
 	gpio_init(_COMM_PIN);
 	gpio_set_dir(_COMM_PIN, GPIO_IN);
@@ -134,6 +136,7 @@ int main(void) {
 
 	while (true) {
 		ph_usb_task();
+		ph_ps2_task();
 		if (!_reset_required) {
 			_COMM(task);
 			//ph_debug_act_pulse(100);

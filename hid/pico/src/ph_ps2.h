@@ -23,22 +23,20 @@
 #pragma once
 
 #include "ph_types.h"
-#include "ph_proto.h"
 
 
-#define PH_O_KBD(x_id)			((ph_g_outputs_active & PH_PROTO_OUT1_KBD_MASK) == PH_PROTO_OUT1_KBD_##x_id)
-#define PH_O_MOUSE(x_id)		((ph_g_outputs_active & PH_PROTO_OUT1_MOUSE_MASK) == PH_PROTO_OUT1_MOUSE_##x_id)
-#define PH_O_IS_KBD_USB			PH_O_KBD(USB)
-#define PH_O_IS_MOUSE_USB		(PH_O_MOUSE(USB_ABS) || PH_O_MOUSE(USB_REL) || PH_O_MOUSE(USB_W98))
-#define PH_O_IS_MOUSE_USB_ABS	(PH_O_MOUSE(USB_ABS) || PH_O_MOUSE(USB_W98))
-#define PH_O_IS_MOUSE_USB_REL	PH_O_MOUSE(USB_REL)
-#define PH_O_IS_KBD_PS2			PH_O_KBD(PS2)
-#define PH_O_IS_MOUSE_PS2		PH_O_MOUSE(PS2)
+extern u8 ph_g_ps2_kbd_leds;
+extern bool ph_g_ps2_kbd_online;
+extern bool ph_g_ps2_mouse_online;
 
 
-extern u8 ph_g_outputs_active;
-extern u8 ph_g_outputs_avail;
+void ph_ps2_init(void);
+void ph_ps2_task(void);
 
+void ph_ps2_kbd_send_key(u8 key, bool state);
 
-void ph_outputs_init(void);
-void ph_outputs_write(u8 mask, u8 outputs, bool force);
+void ph_ps2_mouse_send_button(u8 button, bool state);
+void ph_ps2_mouse_send_rel(s8 x, s8 y);
+void ph_ps2_mouse_send_wheel(s8 h, s8 v);
+
+void ph_ps2_send_clear(void);
