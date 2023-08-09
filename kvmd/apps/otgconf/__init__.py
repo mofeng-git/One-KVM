@@ -114,11 +114,11 @@ class _GadgetControl:
                 "mode": "output",
                 "pulse": {"delay": 0},
             }
-            config["view"]["table"].append([  # type: ignore
+            config["view"]["table"].append(InlineList([  # type: ignore
                 "#" + meta["name"],
                 "#" + meta["func"],
                 meta["func"],
-            ])
+            ]))
         print(yaml.dump({"kvmd": {"gpio": config}}, indent=4, Dumper=Dumper))
 
     def reset(self) -> None:
