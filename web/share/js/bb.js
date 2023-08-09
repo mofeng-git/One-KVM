@@ -130,15 +130,17 @@ export function checkBrowser(desktop_css, mobile_css) {
 		return false;
 
 	} else {
-		if (browser.is_mobile) {
-			__addCssLink("/share/css/x-mobile.css");
-			if (mobile_css) {
-				__addCssLink(mobile_css);
-			}
-		} else {
+		let force_desktop = (new URL(window.location.href)).searchParams.get("force_desktop");
+		let force_mobile = (new URL(window.location.href)).searchParams.get("force_mobile");
+		if ((force_desktop || !browser.is_mobile) && !force_mobile) {
 			__addCssLink("/share/css/x-desktop.css");
 			if (desktop_css) {
 				__addCssLink(desktop_css);
+			}
+		} else {
+			__addCssLink("/share/css/x-mobile.css");
+			if (mobile_css) {
+				__addCssLink(mobile_css);
 			}
 		}
 		return true;
