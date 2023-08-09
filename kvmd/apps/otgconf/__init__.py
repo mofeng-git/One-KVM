@@ -112,7 +112,7 @@ class _GadgetControl:
                 "driver": "otgconf",
                 "pin": meta["func"],
                 "mode": "output",
-                "pulse": {"delay": 0},
+                "pulse": False,
             }
             config["view"]["table"].append(InlineList([  # type: ignore
                 "#" + meta["name"],
