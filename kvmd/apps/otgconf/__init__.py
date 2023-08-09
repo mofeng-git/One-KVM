@@ -85,6 +85,23 @@ class _GadgetControl:
             print(f"{'+' if enabled else '-'} {meta['func']}  # {meta['name']}")
 
     def make_gpio_config(self) -> None:
+        class Dumper(yaml.Dumper):
+            def increase_indent(self, flow: bool=False, indentless: bool=False) -> None:
+                _ = indentless
+                super().increase_indent(flow, False)
+
+            def ignore_aliases(self, data) -> bool:  # type: ignore
+                _ = data
+                return True
+
+        class InlineList(list):
+            pass
+
+        def represent_inline_list(dumper: yaml.Dumper, data):  # type: ignore
+            return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
+
+        Dumper.add_representer(InlineList, represent_inline_list)
+
         config = {
             "drivers": {"otgconf": {"type": "otgconf"}},
             "scheme": {},
@@ -102,7 +119,7 @@ class _GadgetControl:
                 "#" + meta["func"],
                 meta["func"],
             ])
-        print(yaml.dump({"kvmd": {"gpio": config}}, indent=4))
+        print(yaml.dump({"kvmd": {"gpio": config}}, indent=4, Dumper=Dumper))
 
     def reset(self) -> None:
         with self.__udc_stopped():

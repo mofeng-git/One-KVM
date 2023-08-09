@@ -52,5 +52,7 @@ _Edid.set_serial
 _Edid.set_monitor_name
 _Edid.set_audio
 
+Dumper.ignore_aliases
+
 _auth_server_port_fixture
 _test_user
