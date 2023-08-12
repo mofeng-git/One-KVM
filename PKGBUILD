@@ -154,7 +154,7 @@ package_kvmd() {
 
 	install -Dm755 -t "$pkgdir/usr/bin" scripts/kvmd-{bootconfig,gencert,certbot}
 
-	install -Dm644 -t "$pkgdir/usr/lib/systemd/system" configs/os/services/*.service
+	install -Dm644 -t "$pkgdir/usr/lib/systemd/system" configs/os/services/*
 	install -DTm644 configs/os/sysusers.conf "$pkgdir/usr/lib/sysusers.d/kvmd.conf"
 	install -DTm644 configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
