@@ -20,9 +20,12 @@ target_link_options(${target_name} PRIVATE -Xlinker --print-memory-usage)
 target_compile_options(${target_name} PRIVATE -Wall -Wextra)
 target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 
+pico_generate_pio_header(${target_name} ${CMAKE_CURRENT_LIST_DIR}/ph_ps2.pio)
+
 target_link_libraries(${target_name} PRIVATE
 	pico_stdlib
 	pico_unique_id
+	hardware_pio
 	hardware_spi
 	hardware_watchdog
 	tinyusb_device
