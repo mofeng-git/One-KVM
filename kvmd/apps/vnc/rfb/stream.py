@@ -126,7 +126,7 @@ class RfbClientStream:
         except ConnectionError as err:
             raise RfbConnectionError("Can't start TLS", err)
 
-        ssl_reader.set_transport(transport)
+        ssl_reader.set_transport(transport)  # type: ignore
         ssl_writer = asyncio.StreamWriter(
             transport=transport,  # type: ignore
             protocol=protocol,
