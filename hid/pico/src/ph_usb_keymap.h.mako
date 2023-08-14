@@ -25,7 +25,7 @@
 #include "ph_types.h"
 
 <%! import operator %>
-u8 ph_usb_keymap(u8 key) {
+inline u8 ph_usb_keymap(u8 key) {
 	switch (key) {
 % for km in sorted(keymap, key=operator.attrgetter("mcu_code")):
 	% if km.usb_key.is_modifier:

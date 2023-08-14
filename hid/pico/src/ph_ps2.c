@@ -26,9 +26,9 @@
 #include "ph_outputs.h"
 
 
-u8 ph_g_ps2_kbd_leds;
-bool ph_g_ps2_kbd_online;
-bool ph_g_ps2_mouse_online;
+u8 ph_g_ps2_kbd_leds = 0;
+bool ph_g_ps2_kbd_online = 0;
+bool ph_g_ps2_mouse_online = 0;
 
 
 void ph_ps2_init(void) {

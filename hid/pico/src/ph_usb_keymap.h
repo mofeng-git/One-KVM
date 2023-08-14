@@ -25,7 +25,7 @@
 #include "ph_types.h"
 
 
-u8 ph_usb_keymap(u8 key) {
+inline u8 ph_usb_keymap(u8 key) {
 	switch (key) {
 		case 1: return 4; // KeyA
 		case 2: return 5; // KeyB
