@@ -1,6 +1,4 @@
-/.pico-sdk.tmp/
-/.pico-sdk/
-/.tinyusb.tmp/
-/.tinyusb/
+/.pico-sdk*
+/.tinyusb*
 /.build/
 /*.uf2
