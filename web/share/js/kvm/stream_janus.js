@@ -295,11 +295,10 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __allow_aud
 				} else if (el.mozPaintedFrames !== undefined) {
 					frames = el.mozPaintedFrames;
 				}
+				info = `${__handle.getBitrate()}`.replace("kbits/sec", "kbps");
 				if (frames !== null) {
-					info = `${Math.max(0, frames - __frames)} fps dynamic`;
+					info += ` / ${Math.max(0, frames - __frames)} fps dynamic`;
 					__frames = frames;
-				} else {
-					info = `${__handle.getBitrate()}`.replace("kbits/sec", "kbps");
 				}
 			}
 			__setInfo(true, __isOnline(), info);
