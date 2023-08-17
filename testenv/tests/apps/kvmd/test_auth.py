@@ -35,8 +35,15 @@ from kvmd.apps.kvmd.auth import AuthManager
 
 from kvmd.plugins.auth import get_auth_service_class
 
+from kvmd.htserver import HttpExposed
+
 
 # =====
+_E_AUTH = HttpExposed("GET", "/foo_auth", True, (lambda: None))
+_E_UNAUTH = HttpExposed("GET", "/bar_unauth", True, (lambda: None))
+_E_FREE = HttpExposed("GET", "/baz_free", False, (lambda: None))
+
+
 def _make_service_kwargs(path: str) -> dict:
     cls = get_auth_service_class("htpasswd")
     scheme = cls.get_plugin_options()
@@ -45,6 +52,7 @@ def _make_service_kwargs(path: str) -> dict:
 
 @contextlib.asynccontextmanager
 async def _get_configured_manager(
+    unauth_paths: list[str],
     internal_path: str,
     external_path: str="",
     force_internal_users: (list[str] | None)=None,
@@ -52,6 +60,7 @@ async def _get_configured_manager(
 
     manager = AuthManager(
         enabled=True,
+        unauth_paths=unauth_paths,
 
         internal_type="htpasswd",
         internal_kwargs=_make_service_kwargs(internal_path),
@@ -78,8 +87,11 @@ async def test_ok__internal(tmpdir) -> None:  # type: ignore
     htpasswd.set_password("admin", "pass")
     htpasswd.save()
 
-    async with _get_configured_manager(path) as manager:
+    async with _get_configured_manager([], path) as manager:
         assert manager.is_auth_enabled()
+        assert manager.is_auth_required(_E_AUTH)
+        assert manager.is_auth_required(_E_UNAUTH)
+        assert not manager.is_auth_required(_E_FREE)
 
         assert manager.check("xxx") is None
         manager.logout("xxx")
@@ -118,8 +130,11 @@ async def test_ok__external(tmpdir) -> None:  # type: ignore
     htpasswd2.set_password("user", "foobar")
     htpasswd2.save()
 
-    async with _get_configured_manager(path1, path2, ["admin"]) as manager:
+    async with _get_configured_manager([], path1, path2, ["admin"]) as manager:
         assert manager.is_auth_enabled()
+        assert manager.is_auth_required(_E_AUTH)
+        assert manager.is_auth_required(_E_UNAUTH)
+        assert not manager.is_auth_required(_E_FREE)
 
         assert (await manager.login("local", "foobar")) is None
         assert (await manager.login("admin", "pass2")) is None
@@ -140,10 +155,32 @@ async def test_ok__external(tmpdir) -> None:  # type: ignore
 
 
 @pytest.mark.asyncio
+async def test_ok__unauth(tmpdir) -> None:  # type: ignore
+    path = os.path.abspath(str(tmpdir.join("htpasswd")))
+
+    htpasswd = passlib.apache.HtpasswdFile(path, new=True)
+    htpasswd.set_password("admin", "pass")
+    htpasswd.save()
+
+    async with _get_configured_manager([
+        "", " ",
+        "foo_auth", "/foo_auth ", " /foo_auth",
+        "/foo_authx", "/foo_auth/", "/foo_auth/x",
+        "/bar_unauth",  # Only this one is matching
+    ], path) as manager:
+
+        assert manager.is_auth_enabled()
+        assert manager.is_auth_required(_E_AUTH)
+        assert not manager.is_auth_required(_E_UNAUTH)
+        assert not manager.is_auth_required(_E_FREE)
+
+
+@pytest.mark.asyncio
 async def test_ok__disabled() -> None:
     try:
         manager = AuthManager(
             enabled=False,
+            unauth_paths=[],
 
             internal_type="foobar",
             internal_kwargs={},
@@ -156,6 +193,9 @@ async def test_ok__disabled() -> None:
         )
 
         assert not manager.is_auth_enabled()
+        assert not manager.is_auth_required(_E_AUTH)
+        assert not manager.is_auth_required(_E_UNAUTH)
+        assert not manager.is_auth_required(_E_FREE)
 
         with pytest.raises(AssertionError):
             await manager.authorize("admin", "admin")

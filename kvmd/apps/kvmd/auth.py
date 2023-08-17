@@ -30,12 +30,15 @@ from ... import aiotools
 from ...plugins.auth import BaseAuthService
 from ...plugins.auth import get_auth_service_class
 
+from ...htserver import HttpExposed
+
 
 # =====
 class AuthManager:
     def __init__(
         self,
         enabled: bool,
+        unauth_paths: list[str],
 
         internal_type: str,
         internal_kwargs: dict,
@@ -50,6 +53,10 @@ class AuthManager:
         self.__enabled = enabled
         if not enabled:
             get_logger().warning("AUTHORIZATION IS DISABLED")
+
+        self.__unauth_paths = frozenset(unauth_paths)  # To speed up
+        for path in self.__unauth_paths:
+            get_logger().warning("Authorization is disabled for API %r", path)
 
         self.__internal_service: (BaseAuthService | None) = None
         if enabled:
@@ -69,6 +76,13 @@ class AuthManager:
 
     def is_auth_enabled(self) -> bool:
         return self.__enabled
+
+    def is_auth_required(self, exposed: HttpExposed) -> bool:
+        return (
+            self.is_auth_enabled()
+            and exposed.auth_required
+            and exposed.path not in self.__unauth_paths
+        )
 
     async def authorize(self, user: str, passwd: str) -> bool:
         assert user == user.strip()

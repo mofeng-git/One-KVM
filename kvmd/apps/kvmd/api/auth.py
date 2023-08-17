@@ -44,7 +44,7 @@ _COOKIE_AUTH_TOKEN = "auth_token"
 
 
 async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, request: Request) -> None:
-    if exposed.auth_required and auth_manager.is_auth_enabled():
+    if auth_manager.is_auth_required(exposed):
         user = request.headers.get("X-KVMD-User", "")
         if user:
             user = valid_user(user)
