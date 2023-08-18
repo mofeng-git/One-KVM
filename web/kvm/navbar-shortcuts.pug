@@ -1,6 +1,6 @@
 li(id="shortcuts-dropdown" class="right")
 	a(class="menu-button" href="#") Shortcuts
-	div(class="menu")
+	div(id="shortcuts-menu" class="menu")
 		div(class="text")
 			b Quick keyboard shortcuts#[br]
 			sub Also see #[i System &rarr; Show keyboard]
@@ -27,11 +27,13 @@ li(id="shortcuts-dropdown" class="right")
 			hr
 			div(class="buttons-row")
 				button(data-force-hide-menu data-shortcut="ControlLeft AltLeft F1" class="row50") &bull; Ctrl+Alt+F1
+				button(data-force-hide-menu data-shortcut="MetaLeft KeyL" class="row50") &bull; Win+L
+			div(class="buttons-row")
 				button(data-force-hide-menu data-shortcut="ControlLeft AltLeft F2" class="row50") &bull; Ctrl+Alt+F2
+				button(data-force-hide-menu data-shortcut="PrintScreen" class="row50") &bull; Print Screen
 			hr
 			div(class="buttons-row")
-				button(data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete" class="row50") &bull; Ctrl+Alt+Del
-				button(data-force-hide-menu data-shortcut="MetaLeft KeyL" class="row50") &bull; Win+L
+				button(data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete") &bull; Ctrl+Alt+Del
 		hr
 		div(class="text")
 			| &darr; &bull; Alt+SysRq+... <sup><i>linux magic
