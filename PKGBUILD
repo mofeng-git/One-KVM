@@ -117,6 +117,9 @@ depends=(
 	wpa_supplicant
 	run-parts
 
+	# fsck for /boot
+	dosfstools
+
 	# Misc
 	hostapd
 )
