@@ -57,13 +57,22 @@ def _mkdir(path: str) -> None:
             raise SystemExit(f"Can't create directory: {err}")
 
 
-def _rmdir(path: str) -> None:
+def _rmtree(path: str) -> None:
     if exists(path):
-        _log(f"RMDIR --- {path}")
+        _log(f"RMALL --- {path}")
         try:
-            os.rmdir(path)
+            shutil.rmtree(path)
         except Exception as err:
             raise SystemExit(f"Can't remove directory: {err}")
+
+
+def _rm(path: str) -> None:
+    if exists(path):
+        _log(f"RM    --- {path}")
+        try:
+            os.remove(path)
+        except Exception as err:
+            raise SystemExit(f"Can't remove file: {err}")
 
 
 def _move(src: str, dest: str) -> None:
@@ -85,15 +94,22 @@ def _chown(path: str, user: str) -> None:
 
 # =====
 def _fix_msd(part: Partition) -> None:
+    # First images migration
     images_path = join(part.root_path, "images")
     meta_path = join(part.root_path, "meta")
     if exists(images_path) and exists(meta_path):
-        for name in os.listdir(meta_path):
-            _move(join(meta_path, name), join(part.root_path, f".__{name}"))
-        _rmdir(meta_path)
         for name in os.listdir(images_path):
             _move(join(images_path, name), os.path.join(part.root_path, name))
-        _rmdir(images_path)
+            if not exists(join(meta_path, f"{name}.complete")):
+                open(os.path.join(part.root_path, f".__{name}.incomplete")).close()  # pylint: disable=consider-using-with
+        _rmtree(images_path)
+        _rmtree(meta_path)
+
+    # Second images migration
+    for name in os.listdir(part.root_path):
+        if name.startswith(".__") and name.endswith(".complete"):
+            _rm(join(part.root_path, name))
+
     if part.user:
         _chown(part.root_path, part.user)
 

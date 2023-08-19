@@ -54,7 +54,7 @@ class Image(_ImageDc):
         super().__init__(name, path)
         self.__storage = storage
         (self.__dir_path, file_name) = os.path.split(path)
-        self.__complete_path = os.path.join(self.__dir_path, f".__{file_name}.complete")
+        self.__incomplete_path = os.path.join(self.__dir_path, f".__{file_name}.incomplete")
         self.__adopted = False
 
     async def _reload(self) -> None:  # Only for Storage() and set_complete()
@@ -80,7 +80,7 @@ class Image(_ImageDc):
 
     async def __is_complete(self) -> bool:
         if self.__storage:
-            return (await aiofiles.os.path.exists(self.__complete_path))
+            return (not (await aiofiles.os.path.exists(self.__incomplete_path)))
         return True
 
     async def __is_removable(self) -> bool:
@@ -113,25 +113,30 @@ class Image(_ImageDc):
 
     async def remove(self, fatal: bool) -> None:
         assert self.__storage
+        removed = False
         try:
             await aiofiles.os.remove(self.path)
+            removed = True
             self.__storage.images.pop(self.name, None)
         except FileNotFoundError:
             pass
         except Exception:
             if fatal:
                 raise
-        await self.set_complete(False)
+        finally:
+            # Удаляем .incomplete вместе с файлом
+            if removed:
+                await self.set_complete(True)
 
     async def set_complete(self, flag: bool) -> None:
         assert self.__storage
         if flag:
-            async with aiofiles.open(self.__complete_path, "w"):
+            try:
+                await aiofiles.os.remove(self.__incomplete_path)
+            except FileNotFoundError:
                 pass
         else:
-            try:
-                await aiofiles.os.remove(self.__complete_path)
-            except FileNotFoundError:
+            async with aiofiles.open(self.__incomplete_path, "w"):
                 pass
         await self._reload()
 
