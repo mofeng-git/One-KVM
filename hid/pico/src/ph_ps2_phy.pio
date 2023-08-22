@@ -1,0 +1,81 @@
+;
+; Copyright (c) 2022 No0ne (https://github.com/No0ne)
+;           (c) 2023 Dustin Hoffman
+;
+; SPDX-License-Identifier: MIT
+;
+
+.program ps2phy
+.side_set 1 opt pindirs
+
+restart:
+  irq clear 0 rel
+  set pindirs 0 side 0 // clock and data to input mode
+  
+receivecheck:
+  jmp pin sendcheck // if clock is high, see if we have data to send
+  irq set 0 rel     // clock is being pulled low, set busy flag
+  wait 1 pin 1      // wait for clock to be pulled high
+
+  // we are not sending, look for a start bit (clock high, data low)
+  in pins 1      // read in from data
+  mov x isr      // move what we read to x
+  mov isr null   // clear ISR.
+  jmp !x receive // if x is low, start the receive process.
+  jmp restart    // not receiving
+
+receive:
+  set pindirs, 1 [6] // clock low.
+  set x, 8           // set loop counter.
+
+receiveloop:
+  set pindirs, 0      [6] // clock high
+  in pins, 1          [4] // read a bit into ISR.
+  set pindirs, 1      [6] // clock low
+  jmp x-- receiveloop [4] // iterate
+  set pindirs, 0      [6] // clock high
+  nop side 1          [6] // data low
+  set pindirs, 1      [7] // clock low
+  jmp restart
+  
+sendcheck:
+  jmp !osre wait_to_write // see if we have data to send
+  jmp receivecheck        // no data to send, restart
+
+wait_to_write:
+  irq set 0 rel
+  set x 10 // number of bits to write out
+
+sendloop:
+  set pindirs, 0   [6] // clock set to input (high)
+  jmp pin sendcontinue // if clock is high, host is still receiving data
+  irq set 1 rel        // clock was low, host wants to send data, notify of failure to send data
+  mov osr null         // clear OSR
+  jmp restart
+sendcontinue:
+  out pindirs, 1   [6] // write out data
+  set pindirs, 1   [6] // set clock low
+  jmp x-- sendloop [6]
+
+% c-sdk {
+  void ps2phy_program_init(PIO pio, uint sm, uint offset, uint dat) {
+    pio_sm_config c = ps2phy_program_get_default_config(offset);
+    
+    u8 clk = dat + 1;
+    pio_gpio_init(pio, clk);
+    pio_gpio_init(pio, dat);
+    
+    // Use a frequency high enough to effectivly sample clock and data.
+    sm_config_set_clkdiv(&c, 427); // 2560 is 20 µs,  640 is 5 µs,  427 is 3.3333 µs
+    sm_config_set_jmp_pin(&c, clk);
+    sm_config_set_set_pins(&c, clk, 1);
+    sm_config_set_sideset_pins(&c, dat);
+    sm_config_set_out_pins(&c, dat, 1);
+    sm_config_set_out_shift(&c, true, true, 11);
+    sm_config_set_in_pins(&c, dat);
+    sm_config_set_in_shift(&c, true, true, 9);
+    
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+  }
+%}
