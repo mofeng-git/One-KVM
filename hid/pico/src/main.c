@@ -29,21 +29,11 @@
 #include "ph_outputs.h"
 #include "ph_usb.h"
 #include "ph_ps2.h"
-#include "ph_spi.h"
-#include "ph_uart.h"
+#include "ph_com.h"
 #include "ph_proto.h"
 #include "ph_cmds.h"
 #include "ph_debug.h"
 
-
-#define _COMM_PIN 22
-
-
-static bool _comm_use_spi = true;
-#define _COMM(x_func, ...) { \
-		if (_comm_use_spi) { ph_spi_##x_func(__VA_ARGS__); } \
-		else { ph_uart_##x_func(__VA_ARGS__); } \
-	}
 
 static bool _reset_required = false;
 
@@ -104,7 +94,7 @@ static void _send_response(u8 code) {
 
 	ph_split16(ph_crc16(resp, 6), &resp[6], &resp[7]);
 
-	_COMM(write, resp);
+	ph_com_write(resp);
 
 	if (_reset_required) {
 		watchdog_reboot(0, 0, 100); // Даем немного времени чтобы отправить ответ, а потом ребутимся
@@ -126,19 +116,13 @@ int main(void) {
 	ph_outputs_init();
 	ph_usb_init();
 	ph_ps2_init();
-
-	gpio_init(_COMM_PIN);
-	gpio_set_dir(_COMM_PIN, GPIO_IN);
-	gpio_pull_up(_COMM_PIN);
-	sleep_ms(10); // Нужен небольшой слип для активации pull-up
-	_comm_use_spi = gpio_get(_COMM_PIN);
-	_COMM(init, _data_handler, _timeout_handler);
+	ph_com_init(_data_handler, _timeout_handler);
 
 	while (true) {
 		ph_usb_task();
 		ph_ps2_task();
 		if (!_reset_required) {
-			_COMM(task);
+			ph_com_task();
 			//ph_debug_act_pulse(100);
 		}
 	}

@@ -20,7 +20,7 @@
 *****************************************************************************/
 
 
-#include "ph_spi.h"
+#include "ph_com_spi.h"
 
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
@@ -51,7 +51,7 @@ static void (*_data_cb)(const u8 *) = NULL;
 static void _xfer_isr(void);
 
 
-void ph_spi_init(void (*data_cb)(const u8 *), void (*timeout_cb)(void)) {
+void ph_com_spi_init(void (*data_cb)(const u8 *), void (*timeout_cb)(void)) {
 	_data_cb = data_cb;
 	(void)timeout_cb;
 
@@ -70,13 +70,13 @@ void ph_spi_init(void (*data_cb)(const u8 *), void (*timeout_cb)(void)) {
 	irq_set_enabled(_IRQ, true);
 }
 
-void ph_spi_task(void) {
+void ph_com_spi_task(void) {
 	if (!_out_buf[0] && _in_index == 8) {
 		_data_cb((const u8 *)_in_buf);
 	}
 }
 
-void ph_spi_write(const u8 *data) {
+void ph_com_spi_write(const u8 *data) {
 	// Меджик в нулевом байте разрешает начать ответ
 	for (s8 i = 7; i >= 0; --i) {
 		_out_buf[i] = data[i];
