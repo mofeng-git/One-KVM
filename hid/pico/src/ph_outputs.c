@@ -74,13 +74,13 @@ void ph_outputs_init(void) {
 	if (outputs < 0) {
 		outputs = 0;
 
-		if (o_ps2_enabled && o_ps2_kbd) {
+		if (o_ps2_enabled && (o_ps2_kbd || o_usb_disabled)) {
 			outputs |= PH_PROTO_OUT1_KBD_PS2;
 		} else if (!o_usb_disabled) {
 			outputs |= PH_PROTO_OUT1_KBD_USB;
 		}
 
-		if (o_ps2_enabled && o_ps2_mouse) {
+		if (o_ps2_enabled && (o_ps2_mouse || o_usb_disabled)) {
 			outputs |= PH_PROTO_OUT1_MOUSE_PS2;
 		} else if (!o_usb_disabled) {
 			if (o_usb_enabled_w98 && o_usb_mouse_w98) {
