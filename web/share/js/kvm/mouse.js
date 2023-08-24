@@ -72,6 +72,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		tools.slider.setParams($("hid-mouse-rate-slider"), 10, 100, 10, tools.storage.get("hid.mouse.rate", 100), __updateRate); // set __timer
 
 		tools.storage.bindSimpleSwitch($("hid-mouse-reverse-scrolling-switch"), "hid.mouse.reverse_scrolling", false);
+		tools.storage.bindSimpleSwitch($("hid-mouse-reverse-panning-switch"), "hid.mouse.reverse_panning", false);
 		let cumulative_scrolling = !(tools.browser.is_firefox && !tools.browser.is_mac);
 		tools.storage.bindSimpleSwitch($("hid-mouse-cumulative-scrolling-switch"), "hid.mouse.cumulative_scrolling", cumulative_scrolling);
 		tools.slider.setParams($("hid-mouse-scroll-slider"), 1, 25, 1, tools.storage.get("hid.mouse.scroll_rate", 5), __updateScrollRate);
@@ -310,8 +311,10 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __sendScroll = function(delta) {
 		if (delta.x || delta.y) {
 			if ($("hid-mouse-reverse-scrolling-switch").checked) {
-				delta.x *= -1;
 				delta.y *= -1;
+			}
+			if ($("hid-mouse-reverse-panning-switch").checked) {
+				delta.x *= -1;
 			}
 			tools.debug("Mouse: scrolled:", delta);
 			__sendEvent("mouse_wheel", {"delta": delta});

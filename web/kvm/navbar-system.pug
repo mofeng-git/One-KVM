@@ -83,7 +83,13 @@ li(id="system-dropdown" class="right")
 					tr(id="hid-mouse-squash" class="feature-disabled")
 						+menu_switch_notable("hid-mouse-squash-switch", "Squash relative moves", true, true)
 					tr
-						+menu_switch_notable("hid-mouse-reverse-scrolling-switch", "Reverse scrolling", true, false)
+						td Reverse scrolling:
+						td
+							table
+								tr
+									+menu_switch_notable("hid-mouse-reverse-scrolling-switch", "Y", true, false)
+									td &nbsp;&nbsp;
+									+menu_switch_notable("hid-mouse-reverse-panning-switch", "X", true, false)
 					tr
 						+menu_switch_notable("hid-mouse-cumulative-scrolling-switch", "Cumulative scrolling", true, false)
 					tr
