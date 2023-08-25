@@ -35,6 +35,8 @@
 #define	_PS2_SET_KBD_PIN		3
 #define _PS2_SET_MOUSE_PIN		4
 
+#define _BRIDGE_MODE_PIN		5
+
 #define _USB_DISABLED_PIN		6
 #define _USB_ENABLE_W98_PIN		7
 #define _USB_SET_MOUSE_REL_PIN	8
@@ -43,6 +45,7 @@
 
 u8 ph_g_outputs_active = 0;
 u8 ph_g_outputs_avail = 0;
+bool ph_g_is_bridge = false;
 
 
 static int _read_outputs(void);
@@ -53,6 +56,8 @@ void ph_outputs_init(void) {
 	INIT_SWITCH(_PS2_ENABLED_PIN);
 	INIT_SWITCH(_PS2_SET_KBD_PIN);
 	INIT_SWITCH(_PS2_SET_MOUSE_PIN);
+
+	INIT_SWITCH(_BRIDGE_MODE_PIN);
 
 	INIT_SWITCH(_USB_DISABLED_PIN);
 	INIT_SWITCH(_USB_ENABLE_W98_PIN);
@@ -65,7 +70,9 @@ void ph_outputs_init(void) {
 	const bool o_ps2_kbd = !gpio_get(_PS2_SET_KBD_PIN);
 	const bool o_ps2_mouse = !gpio_get(_PS2_SET_MOUSE_PIN);
 
-	const bool o_usb_disabled = !gpio_get(_USB_DISABLED_PIN);
+	ph_g_is_bridge = !gpio_get(_BRIDGE_MODE_PIN);
+
+	const bool o_usb_disabled = (ph_g_is_bridge || !gpio_get(_USB_DISABLED_PIN));
 	const bool o_usb_enabled_w98 = !gpio_get(_USB_ENABLE_W98_PIN);
 	const bool o_usb_mouse_rel = !gpio_get(_USB_SET_MOUSE_REL_PIN);
 	const bool o_usb_mouse_w98 = !gpio_get(_USB_SET_MOUSE_W98_PIN);

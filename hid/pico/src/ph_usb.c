@@ -62,13 +62,13 @@ static void _mouse_rel_send_report(s8 x, s8 y, s8 h, s8 v);
 
 
 void ph_usb_init(void) {
-	if (PH_O_IS_KBD_USB || PH_O_IS_MOUSE_USB) {
+	if (ph_g_is_bridge || PH_O_IS_KBD_USB || PH_O_IS_MOUSE_USB) {
 		tud_init(0);
 	}
 }
 
 void ph_usb_task(void) {
-	if (PH_O_IS_KBD_USB || PH_O_IS_MOUSE_USB) {
+	if (ph_g_is_bridge || PH_O_IS_KBD_USB || PH_O_IS_MOUSE_USB) {
 		tud_task();
 
 		static u64 next_ts = 0;
@@ -298,10 +298,31 @@ const u8 *tud_hid_descriptor_report_cb(u8 iface) {
 	return PH_USB_KBD_DESC; // _kbd_iface, PH_O_IS_KBD_USB
 }
 
-const u8 *tud_descriptor_configuration_cb(u8 index) {
-	// Invoked when received GET CONFIGURATION DESCRIPTOR
-	(void)index;
+const u8 *_bridge_tud_descriptor_configuration_cb(void) {
+	enum {num_cdc = 0, num_cdc_data, num_total};
+	static const u8 desc[] = {
+		TUD_CONFIG_DESCRIPTOR(
+			1,      // Config number
+			num_total,// Interface count
+			0,      // String index
+			(TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN), // Total length
+			0,      // Attribute
+			100     // Power in mA
+		),
+		TUD_CDC_DESCRIPTOR(
+			num_cdc,// Interface number
+			4,      // String index
+			0x81,   // EPNUM_CDC_NOTIF - EP notification address
+			8,      // EP notification size
+			0x02,   // EPNUM_CDC_OUT - EP OUT data address
+			0x82,   // EPNUM_CDC_IN - EP IN data address
+			64      // EP size
+		),
+	};
+	return desc;
+}
 
+const u8 *_hid_tud_descriptor_configuration_cb(void) {
 	static u8 desc[TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN * 2] = {0};
 	static bool filled = false;
 
@@ -338,10 +359,18 @@ const u8 *tud_descriptor_configuration_cb(u8 index) {
 	return desc;
 }
 
+const u8 *tud_descriptor_configuration_cb(u8 index) {
+	// Invoked when received GET CONFIGURATION DESCRIPTOR
+	(void)index;
+	if (ph_g_is_bridge) {
+		return _bridge_tud_descriptor_configuration_cb();
+	}
+	return _hid_tud_descriptor_configuration_cb();
+}
+
 const u8 *tud_descriptor_device_cb(void) {
 	// Invoked when received GET DEVICE DESCRIPTOR
-
-	static const tusb_desc_device_t desc = {
+	static tusb_desc_device_t desc = {
 		.bLength			= sizeof(tusb_desc_device_t),
 		.bDescriptorType	= TUSB_DESC_DEVICE,
 		.bcdUSB				= 0x0200,
@@ -362,6 +391,12 @@ const u8 *tud_descriptor_device_cb(void) {
 
 		.bNumConfigurations	= 1,
 	};
+	if (ph_g_is_bridge) {
+		desc.bDeviceClass = TUSB_CLASS_MISC;
+		desc.bDeviceSubClass = MISC_SUBCLASS_COMMON;
+		desc.bDeviceProtocol = MISC_PROTOCOL_IAD;
+		desc.idProduct = 0xEDA3;
+	}
 	return (const u8 *)&desc;
 }
 
@@ -379,8 +414,15 @@ const u16 *tud_descriptor_string_cb(u8 index, u16 lang_id) {
 		char str[32];
 		switch (index) {
 			case 1: strcpy(str, "PiKVM"); break; // Manufacturer
-			case 2: strcpy(str, "PiKVM HID"); break; // Product
+			case 2: strcpy(str, (ph_g_is_bridge ? "PiKVM HID Bridge" : "PiKVM HID")); break; // Product
 			case 3: pico_get_unique_board_id_string(str, 32); break; // Serial
+			case 4: {
+					if (ph_g_is_bridge) {
+						strcpy(str, "PiKVM HID Bridge CDC");
+					} else {
+						return NULL;
+					}
+				}; break;
 			default: return NULL;
 		}
 		desc_str_len = strlen(str);

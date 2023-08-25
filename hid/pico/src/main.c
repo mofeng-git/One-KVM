@@ -114,8 +114,8 @@ int main(void) {
 	//ph_debug_act_init();
 	//ph_debug_uart_init();
 	ph_outputs_init();
-	ph_usb_init();
 	ph_ps2_init();
+	ph_usb_init(); // Тут может быть инициализация USB-CDC для бриджа
 	ph_com_init(_data_handler, _timeout_handler);
 
 	while (true) {

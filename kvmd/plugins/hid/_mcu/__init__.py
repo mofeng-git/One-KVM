@@ -71,6 +71,10 @@ from .proto import check_response
 
 
 # =====
+class _SelfResetError(Exception):
+    pass
+
+
 class _RequestError(Exception):
     def __init__(self, msg: str) -> None:
         super().__init__(msg)
@@ -302,18 +306,18 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 time.sleep(1)
 
     def __hid_loop(self) -> None:
+        reset = True
         while not self.__stop_event.is_set():
             try:
-                if not self.__hid_loop_wait_device():
+                if not self.__hid_loop_wait_device(reset):
                     continue
+                reset = True
                 with self.__phy.connected() as conn:
                     while not (self.__stop_event.is_set() and self.__events_queue.qsize() == 0):
                         if self.__reset_required_event.is_set():
-                            try:
-                                self.__set_state_busy(True)
-                                self.__gpio.reset()
-                            finally:
-                                self.__reset_required_event.clear()
+                            self.__set_state_busy(True)
+                            self.__reset_required_event.clear()
+                            break  # Проваливаемся и резетим в __hid_loop_wait_device()
                         try:
                             event = self.__events_queue.get(timeout=0.1)
                         except queue.Empty:
@@ -323,17 +327,21 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                                 self.__set_state_busy(True)
                             if not self.__process_request(conn, event.make_request()):
                                 self.clear_events()
+            except _SelfResetError:
+                time.sleep(1)  # Pico перезагружается сам вскоре после ответа
+                reset = False
             except Exception:
                 self.clear_events()
                 get_logger(0).exception("Unexpected error in the HID loop")
                 time.sleep(1)
 
-    def __hid_loop_wait_device(self) -> bool:
+    def __hid_loop_wait_device(self, reset: bool) -> bool:
         logger = get_logger(0)
-        logger.info("Initial HID reset and wait for %s ...", self.__phy)
-        self.__gpio.reset()
-        # На самом деле SPI и Serial-девайсы не пропадают, просто резет и ожидание
-        # логичнее всего делать именно здесь. Ну и на будущее, да
+        if reset:
+            logger.info("Initial HID reset and wait for %s ...", self.__phy)
+            self.__gpio.reset()
+            # На самом деле SPI и Serial-девайсы не пропадают,
+            # а вот USB CDC (Pico HID Bridge) вполне себе пропадает
         for _ in range(10):
             if self.__phy.has_device():
                 logger.info("Physical HID interface found: %s", self.__phy)
@@ -342,6 +350,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 break
             time.sleep(1)
         logger.error("Missing physical HID interface: %s", self.__phy)
+        self.__set_state_online(False)
         return False
 
     def __process_request(self, conn: BasePhyConnection, request: bytes) -> bool:  # pylint: disable=too-many-branches
@@ -427,6 +436,5 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         self.__state_flags.update(online=1, busy=reset_required, status=status)
         if reset_required:
             if self.__reset_self:
-                time.sleep(1)  # Pico перезагружается сам вскоре после ответа
-            else:
-                self.__reset_required_event.set()
+                raise _SelfResetError()
+            self.__reset_required_event.set()

@@ -59,9 +59,21 @@
 #	define CFG_TUD_ENDPOINT0_SIZE 64
 #endif
 
+// HID: Keyboard + Mouse
 #define CFG_TUD_HID 2
 
 // HID buffer size Should be sufficient to hold ID (if any) + Data
 #ifndef CFG_TUD_HID_EP_BUFSIZE
 #	define CFG_TUD_HID_EP_BUFSIZE 16
 #endif
+
+
+// CDC for the bridge mode
+#define CFG_TUD_CDC             1
+
+// CDC FIFO size of TX and RX
+#define CFG_TUD_CDC_RX_BUFSIZE 4096
+#define CFG_TUD_CDC_TX_BUFSIZE 4096
+
+// CDC Endpoint transfer buffer size, more is faster
+#define CFG_TUD_CDC_EP_BUFSIZE 64

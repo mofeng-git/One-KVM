@@ -36,6 +36,7 @@
 #define PH_O_IS_MOUSE_PS2		PH_O_MOUSE(PS2)
 
 
+extern bool ph_g_is_bridge;
 extern u8 ph_g_outputs_active;
 extern u8 ph_g_outputs_avail;
 

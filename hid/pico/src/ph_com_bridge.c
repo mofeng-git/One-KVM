@@ -20,48 +20,65 @@
 *****************************************************************************/
 
 
-#include "ph_com.h"
+#include "ph_com_bridge.h"
 
 #include "pico/stdlib.h"
-#include "hardware/gpio.h"
+
+#include "tusb.h"
 
 #include "ph_types.h"
-#include "ph_outputs.h"
-#include "ph_com_bridge.h"
-#include "ph_com_spi.h"
-#include "ph_com_uart.h"
 
 
-#define _USE_SPI_PIN 22
+#define _TIMEOUT_US	100000
 
 
-static bool _use_spi = true;
+static u8 _buf[8] = {0};
+static u8 _index = 0;
+static u64 _last_ts = 0;
+
+static void (*_data_cb)(const u8 *) = NULL;
+static void (*_timeout_cb)(void) = NULL;
 
 
-#define _COM(x_func, ...) { \
-		if (ph_g_is_bridge) { \
-			ph_com_bridge_##x_func(__VA_ARGS__); \
-		} else if (_use_spi) { \
-			ph_com_spi_##x_func(__VA_ARGS__); \
-		} else { \
-			ph_com_uart_##x_func(__VA_ARGS__); \
-		} \
+void ph_com_bridge_init(void (*data_cb)(const u8 *), void (*timeout_cb)(void)) {
+	_data_cb = data_cb;
+	_timeout_cb = timeout_cb;
+}
+
+void ph_com_bridge_task(void) {
+	if (!tud_cdc_connected()) {
+		tud_cdc_write_clear();
+		return;
 	}
 
+	if (tud_cdc_available() > 0) {
+		const s32 ch = tud_cdc_read_char();
+		if (ch < 0) {
+			goto no_data;
+		}
+		_buf[_index] = (u8)ch;
+		if (_index == 7) {
+			_data_cb(_buf);
+			_index = 0;
+		} else {
+			_last_ts = time_us_64();
+			++_index;
+		}
+		return;
+	}
 
-void ph_com_init(void (*data_cb)(const u8 *), void (*timeout_cb)(void)) {
-	gpio_init(_USE_SPI_PIN);
-	gpio_set_dir(_USE_SPI_PIN, GPIO_IN);
-	gpio_pull_up(_USE_SPI_PIN);
-	sleep_ms(10); // Нужен небольшой слип для активации pull-up
-	_use_spi = gpio_get(_USE_SPI_PIN);
-	_COM(init, data_cb, timeout_cb);
+	no_data:
+	if (_index > 0) {
+		if (_last_ts + _TIMEOUT_US < time_us_64()) {
+			_timeout_cb();
+			_index = 0;
+		}
+	}
 }
 
-void ph_com_task(void) {
-	_COM(task);
-}
-
-void ph_com_write(const u8 *data) {
-	_COM(write, data);
+void ph_com_bridge_write(const u8 *data) {
+	if (tud_cdc_connected()) {
+		tud_cdc_write(data, 8);
+		tud_cdc_write_flush();
+	}
 }

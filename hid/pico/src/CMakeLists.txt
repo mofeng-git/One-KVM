@@ -10,6 +10,7 @@ target_sources(${target_name} PRIVATE
 	ph_ps2.c
 	ph_cmds.c
 	ph_com.c
+	ph_com_bridge.c
 	ph_com_spi.c
 	ph_com_uart.c
 	ph_debug.c
