@@ -33,6 +33,7 @@ bool ph_g_ps2_mouse_online = 0;
 ph_ps2_phy ph_ps2_kbd;
 ph_ps2_phy ph_ps2_mouse;
 
+u8 const ph_ps2_led2ps2[] = { 0, 4, 1, 5, 2, 6, 3, 7 };
 u8 const ph_ps2_mod2ps2[] = { 0x14, 0x12, 0x11, 0x1f, 0x14, 0x59, 0x11, 0x27 };
 u8 const ph_ps2_hid2ps2[] = {
 	0x00, 0x00, 0xfc, 0x00, 0x1c, 0x32, 0x21, 0x23, 0x24, 0x2b, 0x34, 0x33, 0x43, 0x3b, 0x42, 0x4b,
@@ -60,10 +61,10 @@ void ph_ps2_kbd_maybe_send_e0(u8 byte) {
 	}
 }
 
-void ph_ps2_kbd_receive(u8 byte) {
-	switch(byte) {
+void ph_ps2_kbd_receive(u8 byte, u8 prev_byte) {
+	switch(prev_byte) {
 		case 0xed: // CMD: Set LEDs
-			
+			ph_g_ps2_kbd_leds = ph_ps2_led2ps2[byte];
 		break;
 		
 		case 0xf3: // CMD: Set typematic rate and delay
@@ -73,14 +74,10 @@ void ph_ps2_kbd_receive(u8 byte) {
 		default:
 			switch(byte) {
 				case 0xff: // CMD: Reset
-					//pio_sm_clear_fifos(pio, sm);
-					//pio_sm_drain_tx_fifo(pio, sm);
+					ph_g_ps2_kbd_online = true;
+					ph_g_ps2_kbd_leds = 0;
 					ph_ps2_kbd_send(0xfa);
 					ph_ps2_kbd_send(0xaa);
-				return;
-				
-				case 0xfe: // CMD: Resend
-					
 				return;
 				
 				case 0xee: // CMD: Echo
@@ -93,18 +90,14 @@ void ph_ps2_kbd_receive(u8 byte) {
 					ph_ps2_kbd_send(0x83);
 				return;
 				
-				case 0xf3: // CMD: Set typematic rate and delay
-				case 0xed: // CMD: Set LEDs
-					
-				break;
-				
 				case 0xf4: // CMD: Enable scanning
-					
+					ph_g_ps2_kbd_online = true;
 				break;
 				
 				case 0xf5: // CMD: Disable scanning, restore default parameters
 				case 0xf6: // CMD: Set default parameters
-					
+					ph_g_ps2_kbd_online = byte == 0xf6;
+					ph_g_ps2_kbd_leds = 0;
 				break;
 			}
 	  break;
@@ -129,6 +122,7 @@ void ph_ps2_init(void) {
 	if (PH_O_IS_KBD_PS2) {
 		ph_ps2_phy_init(&ph_ps2_kbd, pio0, 11, &ph_ps2_kbd_receive); // keyboard: GPIO11=data, GPIO12=clock
 		ph_ps2_kbd_send(0xaa);
+		ph_g_ps2_kbd_online = true;
 	}
 	
 	if (PH_O_IS_MOUSE_PS2) {
@@ -144,16 +138,10 @@ void ph_ps2_task(void) {
 	if (PH_O_IS_MOUSE_PS2) {
 		ph_ps2_phy_task(&ph_ps2_mouse);
 	}
-	// Here you should update some values:
-	//   - ph_g_ps2_kbd_leds - keyboard LEDs mask like on USB
-	//   - ph_g_ps2_kbd_online - if keyboard online (by clock?)
-	//   - ph_g_ps2_mouse_online if mouse online (by clock?)
-	// It is important not to have ANY sleep() call inside it.
-	// There should also be no freezes if the keyboard or mouse is not available.
 }
 
 void ph_ps2_kbd_send_key(u8 key, bool state) {
-	if (PH_O_IS_KBD_PS2) {
+	if (PH_O_IS_KBD_PS2 && ph_g_ps2_kbd_online) {
 		if (key >= 0xe0 && key <= 0xe7) {
 			key -= 0xe0;
 			

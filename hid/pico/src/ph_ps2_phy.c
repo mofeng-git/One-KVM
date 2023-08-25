@@ -11,9 +11,11 @@ void ph_ps2_phy_init(ph_ps2_phy* this, PIO pio, u8 data_pin, rx_callback rx) {
   
   this->sent = 0;
   this->rx = rx;
+  this->last_rx = 0;
+  this->last_tx = 0;
 }
 
-u16 ph_ps2_frame(u8 byte) {
+u32 ph_ps2_frame(u8 byte) {
   u8 parity = 1;
   for (u8 i = 0; i < 8; i++) {
     parity = parity ^ (byte >> i & 1);
@@ -23,11 +25,10 @@ u16 ph_ps2_frame(u8 byte) {
 
 void ph_ps2_phy_task(ph_ps2_phy* this) {
   u8 i = 0;
+  u8 byte;
   u8 pack[9];
   
   if (!queue_is_empty(&this->qbytes)) {
-    u8 byte;
-    
     while (i < 9 && queue_try_remove(&this->qbytes, &byte)) {
       i++;
       pack[i] = byte;
@@ -37,16 +38,23 @@ void ph_ps2_phy_task(ph_ps2_phy* this) {
     queue_try_add(&this->qpacks, &pack);
   }
   
-  if (!queue_is_empty(&this->qpacks) && pio_sm_is_tx_fifo_empty(this->pio, this->sm) && !pio_interrupt_get(this->pio, 0)) {
+  if (!queue_is_empty(&this->qpacks) && pio_sm_is_tx_fifo_empty(this->pio, this->sm) && !pio_interrupt_get(this->pio, this->sm * 2 + 0)) {
     if (queue_try_peek(&this->qpacks, &pack)) {
       if (this->sent == pack[0]) {
         this->sent = 0;
         queue_try_remove(&this->qpacks, &pack);
       } else {
         this->sent++;
-        pio_sm_put(this->pio, this->sm, ph_ps2_frame(pack[this->sent]));
+        this->last_tx = pack[this->sent];
+        pio_sm_put(this->pio, this->sm, ph_ps2_frame(this->last_tx));
       }
     }
+  }
+  
+  if (pio_interrupt_get(this->pio, this->sm * 2 + 1)) {
+    this->sent = 0;
+    pio_sm_drain_tx_fifo(this->pio, this->sm);
+    pio_interrupt_clear(this->pio, this->sm * 2 + 1);
   }
   
   if (!pio_sm_is_rx_fifo_empty(this->pio, this->sm)) {
@@ -59,10 +67,14 @@ void ph_ps2_phy_task(ph_ps2_phy* this) {
     }
     
     if (parity != fifo >> 8) {
-      //ph_ps2_kbd_send(0xfe);
+      pio_sm_put(this->pio, this->sm, ph_ps2_frame(0xfe));
       return;
     }
     
-    (*this->rx)(fifo);
+    while(queue_try_remove(&this->qbytes, &byte));
+    while(queue_try_remove(&this->qpacks, &pack));
+    
+    (*this->rx)(fifo, this->last_rx);
+    this->last_rx = fifo;
   }
 }

@@ -9,8 +9,8 @@
 .side_set 1 opt pindirs
 
 restart:
-  irq clear 0 rel
-  set pindirs 0 side 0 // clock and data to input mode
+  set pindirs 0 [4]      // set clock to input mode
+  irq clear 0 rel side 0 // clear busy flag, set data to input mode
   
 receivecheck:
   jmp pin sendcheck // if clock is high, see if we have data to send
@@ -20,17 +20,17 @@ receivecheck:
   // we are not sending, look for a start bit (clock high, data low)
   in pins 1      // read in from data
   mov x isr      // move what we read to x
-  mov isr null   // clear ISR.
-  jmp !x receive // if x is low, start the receive process.
+  mov isr null   // clear ISR
+  jmp !x receive // if x is low, start the receive process
   jmp restart    // not receiving
 
 receive:
-  set pindirs, 1 [6] // clock low.
-  set x, 8           // set loop counter.
+  set pindirs, 1 [6] // clock low
+  set x, 8           // set loop counter
 
 receiveloop:
   set pindirs, 0      [6] // clock high
-  in pins, 1          [4] // read a bit into ISR.
+  in pins, 1          [4] // read a bit into ISR
   set pindirs, 1      [6] // clock low
   jmp x-- receiveloop [4] // iterate
   set pindirs, 0      [6] // clock high
@@ -43,15 +43,14 @@ sendcheck:
   jmp receivecheck        // no data to send, restart
 
 wait_to_write:
-  irq set 0 rel
-  set x 10 // number of bits to write out
+  irq set 0 rel // set busy flag
+  set x 10      // number of bits to write out
 
 sendloop:
   set pindirs, 0   [6] // clock set to input (high)
   jmp pin sendcontinue // if clock is high, host is still receiving data
-  irq set 1 rel        // clock was low, host wants to send data, notify of failure to send data
-  mov osr null         // clear OSR
-  jmp restart
+  irq wait 1 rel       // clock was low, host wants to send data, notify of failure to send data
+  jmp restart          // and wait for restart
 sendcontinue:
   out pindirs, 1   [6] // write out data
   set pindirs, 1   [6] // set clock low
