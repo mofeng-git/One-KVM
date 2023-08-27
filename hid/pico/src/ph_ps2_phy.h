@@ -15,6 +15,7 @@ typedef struct {
   rx_callback rx;
   u8 last_rx;
   u8 last_tx;
+  bool idle;
 } ph_ps2_phy;
 
 void ph_ps2_phy_init(ph_ps2_phy* this, PIO pio, u8 data_pin, rx_callback rx);
