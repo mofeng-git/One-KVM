@@ -9,6 +9,8 @@ target_sources(${target_name} PRIVATE
 	ph_usb_mouse.c
 	ph_ps2.c
 	ph_ps2_phy.c
+	ph_ps2_kbd.c
+	ph_ps2_mouse.c
 	ph_cmds.c
 	ph_com.c
 	ph_com_bridge.c

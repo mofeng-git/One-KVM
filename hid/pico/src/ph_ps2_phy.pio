@@ -4,8 +4,9 @@
 ;
 ; SPDX-License-Identifier: MIT
 ;
+; Source: https://github.com/No0ne/ps2x2pico/blob/main/ps2phy.pio
 
-.program ps2phy
+.program ph_ps2_phy
 .side_set 1 opt pindirs
 
 restart:
@@ -49,7 +50,7 @@ wait_to_write:
 sendloop:
   set pindirs, 0   [6] // clock set to input (high)
   jmp pin sendcontinue // if clock is high, host is still receiving data
-  irq wait 1 rel       // clock was low, host wants to send data, notify of failure to send data
+  irq wait 4 rel       // clock was low, host wants to send data, notify of failure to send data
   jmp restart          // and wait for restart
 sendcontinue:
   out pindirs, 1   [6] // write out data
@@ -57,8 +58,8 @@ sendcontinue:
   jmp x-- sendloop [6]
 
 % c-sdk {
-  void ps2phy_program_init(PIO pio, uint sm, uint offset, uint dat) {
-    pio_sm_config c = ps2phy_program_get_default_config(offset);
+  void ph_ps2_phy_program_init(PIO pio, uint sm, uint offset, uint dat) {
+    pio_sm_config c = ph_ps2_phy_program_get_default_config(offset);
     
     u8 clk = dat + 1;
     pio_gpio_init(pio, clk);
