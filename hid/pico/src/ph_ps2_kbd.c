@@ -213,7 +213,7 @@ void ph_ps2_kbd_receive(u8 byte, u8 prev_byte) {
 
 void ph_ps2_kbd_task(void) {
   ph_ps2_phy_task(&ph_ps2_kbd);
-  ph_g_ps2_kbd_online = ph_ps2_kbd_scanning && ph_ps2_kbd.idle;
+  ph_g_ps2_kbd_online = ph_ps2_kbd_scanning && !ph_ps2_kbd.busy;
 }
 
 void ph_ps2_kbd_init(u8 gpio) {

@@ -11,11 +11,11 @@ typedef struct {
   uint sm;
   queue_t qbytes;
   queue_t qpacks;
-  u8 sent;
   rx_callback rx;
   u8 last_rx;
   u8 last_tx;
-  bool idle;
+  u8 sent;
+  u8 busy;
 } ph_ps2_phy;
 
 void ph_ps2_phy_init(ph_ps2_phy* this, PIO pio, u8 data_pin, rx_callback rx);
