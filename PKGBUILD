@@ -245,6 +245,7 @@ for _variant in "${_variants[@]}"; do
 			install -DTm444 configs/kvmd/edid/$_platform.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 		fi
 
+		mkdir -p \"\$pkgdir/usr/share/kvmd\"
 		local _device=\"\$pkgdir/usr/share/kvmd/device\"
 		rm -f \"\$_device\"
 		echo PIKVM_BASE=$_base > \"\$_device\"
