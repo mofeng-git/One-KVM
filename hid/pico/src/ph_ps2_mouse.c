@@ -1,9 +1,10 @@
+#include "ps2phy.h"
+
 #include "ph_outputs.h"
-#include "ph_ps2_phy.h"
 
 extern bool ph_g_ps2_mouse_online;
 
-ph_ps2_phy ph_ps2_mouse;
+ps2phy ph_ps2_mouse;
 bool ph_ps2_mouse_streaming = false;
 u32 ph_ps2_mouse_magic_seq = 0;
 u8 ph_ps2_mouse_type = 0;
@@ -138,10 +139,10 @@ void ph_ps2_mouse_receive(u8 byte, u8 prev_byte) {
 }
 
 void ph_ps2_mouse_task(void) {
-  ph_ps2_phy_task(&ph_ps2_mouse);
+  ps2phy_task(&ph_ps2_mouse);
   ph_g_ps2_mouse_online = ph_ps2_mouse_streaming && !ph_ps2_mouse.busy;
 }
 
 void ph_ps2_mouse_init(u8 gpio) {
-  ph_ps2_phy_init(&ph_ps2_mouse, pio0, gpio, &ph_ps2_mouse_receive);
+  ps2phy_init(&ph_ps2_mouse, pio0, gpio, &ph_ps2_mouse_receive);
 }

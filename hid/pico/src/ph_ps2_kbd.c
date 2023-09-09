@@ -1,10 +1,11 @@
+#include "ps2phy.h"
+
 #include "ph_outputs.h"
-#include "ph_ps2_phy.h"
 
 extern u8 ph_g_ps2_kbd_leds;
 extern bool ph_g_ps2_kbd_online;
 
-ph_ps2_phy ph_ps2_kbd;
+ps2phy ph_ps2_kbd;
 bool ph_ps2_kbd_scanning;
 u32 ph_ps2_kbd_repeat_us;
 u16 ph_ps2_kbd_delay_ms;
@@ -212,11 +213,11 @@ void ph_ps2_kbd_receive(u8 byte, u8 prev_byte) {
 }
 
 void ph_ps2_kbd_task(void) {
-  ph_ps2_phy_task(&ph_ps2_kbd);
+  ps2phy_task(&ph_ps2_kbd);
   ph_g_ps2_kbd_online = ph_ps2_kbd_scanning && !ph_ps2_kbd.busy;
 }
 
 void ph_ps2_kbd_init(u8 gpio) {
-  ph_ps2_phy_init(&ph_ps2_kbd, pio0, gpio, &ph_ps2_kbd_receive); 
+  ps2phy_init(&ph_ps2_kbd, pio0, gpio, &ph_ps2_kbd_receive); 
   ph_ps2_kbd_reset();
 }
