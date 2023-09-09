@@ -24,25 +24,33 @@
 
 #include "ph_types.h"
 #include "ph_outputs.h"
+
 #include "hardware/gpio.h"
+
+
+#define _LS_POWER_PIN	13
+#define _KBD_DATA_PIN	11 // CLK == 12
+#define _MOUSE_DATA_PIN	14 // CLK == 15
+
 
 u8 ph_g_ps2_kbd_leds = 0;
 bool ph_g_ps2_kbd_online = 0;
 bool ph_g_ps2_mouse_online = 0;
 
+
 void ph_ps2_init(void) {
-	if (PH_O_IS_KBD_PS2 || PH_O_IS_MOUSE_PS2) {
-		gpio_init(13); // GPIO13=LV pull-up voltage
-		gpio_set_dir(13, GPIO_OUT);
-		gpio_put(13, 1);
+	if (PH_O_HAS_PS2) {
+		gpio_init(_LS_POWER_PIN);
+		gpio_set_dir(_LS_POWER_PIN, GPIO_OUT);
+		gpio_put(_LS_POWER_PIN, true);
 	}
 	
 	if (PH_O_IS_KBD_PS2) {
-		ph_ps2_kbd_init(11); // keyboard: GPIO11=data, GPIO12=clock
+		ph_ps2_kbd_init(_KBD_DATA_PIN);
 	}
 	
 	if (PH_O_IS_MOUSE_PS2) {
-		ph_ps2_mouse_init(14); // mouse: GPIO14=data, GPIO15=clock
+		ph_ps2_mouse_init(_MOUSE_DATA_PIN);
 	}
 }
 
