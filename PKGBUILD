@@ -201,6 +201,8 @@ package_kvmd() {
 for _variant in "${_variants[@]}"; do
 	_platform=${_variant%:*}
 	_board=${_variant#*:}
+	_base=${_platform%-*}
+	_video=${_platform#*-}
 	eval "package_kvmd-platform-$_platform-$_board() {
 		cd \"kvmd-\$pkgver\"
 
@@ -242,5 +244,12 @@ for _variant in "${_variants[@]}"; do
 			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex)
 			install -DTm444 configs/kvmd/edid/$_platform.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
 		fi
+
+		local _device=\"\$pkgdir/usr/share/kvmd/device\"
+		rm -f \"\$_device\"
+		echo PIKVM_BASE=$_base > \"\$_device\"
+		echo PIKVM_VIDEO=$_video >> \"\$_device\"
+		echo PIKVM_BOARD=$_board >> \"\$_device\"
+		chmod 444 \"\$_device\"
 	}"
 done
