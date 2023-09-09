@@ -25,6 +25,13 @@
 #include "ph_types.h"
 #include "ph_outputs.h"
 
+#include "hardware/gpio.h"
+
+
+#define _LS_POWER_PIN	13
+#define _KBD_DATA_PIN	11 // CLK == 12
+#define _MOUSE_DATA_PIN	14 // CLK == 15
+
 
 u8 ph_g_ps2_kbd_leds = 0;
 bool ph_g_ps2_kbd_online = 0;
@@ -32,59 +39,40 @@ bool ph_g_ps2_mouse_online = 0;
 
 
 void ph_ps2_init(void) {
-	// TODO: PS2: Initialize PS/2 stuff here IF you have at least one PS/2 device, check ph_usb.c for the example
-	// Use macro PH_O_IS_KBD_PS2 and PH_O_IS_MOUSE_PS2
-	if (PH_O_IS_KBD_PS2 || PH_O_IS_MOUSE_PS2) {
-		// ...
+	if (PH_O_HAS_PS2) {
+		gpio_init(_LS_POWER_PIN);
+		gpio_set_dir(_LS_POWER_PIN, GPIO_OUT);
+		gpio_put(_LS_POWER_PIN, true);
 	}
+
+#	define INIT_STUB(x_pin) { \
+		gpio_init(x_pin); gpio_set_dir(x_pin, GPIO_IN); \
+		gpio_init(x_pin + 1); gpio_set_dir(x_pin + 1, GPIO_IN); \
+	}
+
+	if (PH_O_IS_KBD_PS2) {
+		ph_ps2_kbd_init(_KBD_DATA_PIN);
+	} else {
+		INIT_STUB(_KBD_DATA_PIN);
+	}
+
+	if (PH_O_IS_MOUSE_PS2) {
+		ph_ps2_mouse_init(_MOUSE_DATA_PIN);
+	} else {
+		INIT_STUB(_MOUSE_DATA_PIN);
+	}
+
+#	undef INIT_STUB
 }
 
 void ph_ps2_task(void) {
-	// TODO: PS2: Perform periodic stuff here IF you have at least one PS/2 device, check ph_usb.c
-	if (PH_O_IS_KBD_PS2 || PH_O_IS_MOUSE_PS2) {
-		// ...
+	if (PH_O_IS_KBD_PS2) {
+		ph_ps2_kbd_task();
 	}
-	// Here you should update some values:
-	//   - ph_g_ps2_kbd_leds - keyboard LEDs mask like on USB
-	//   - ph_g_ps2_kbd_online - if keyboard online (by clock?)
-	//   - ph_g_ps2_mouse_online if mouse online (by clock?)
-	// It is important not to have ANY sleep() call inside it.
-	// There should also be no freezes if the keyboard or mouse is not available.
-}
 
-void ph_ps2_kbd_send_key(u8 key, bool state) {
-	// TODO: PS2: Send keyboard key
-	//   @key - is a USB keycode, modifier keys has range 0xE0...0xE7, check ph_usb_kbd_send_key()
-	//   @state - true if pressed, false if released
-	// The function should take care not to send duplicate events (if needed for PS/2)
-	// If the PS2 keyboard is not used (PH_O_IS_KBD_PS2 is false), the function should do nothing.
-	(void)key; // Remove this
-	(void)state; // Remove this
-}
-
-void ph_ps2_mouse_send_button(u8 button, bool state) {
-	// TODO: PS2: Send mouse button
-	//   @button - USB button code
-	//   @state - true if pressed, false if released
-	// The function should take care not to send duplicate events (if needed for PS/2)
-	// If the PS2 keyboard is not used (PH_O_IS_MOUSE_PS2 is false), the function should do nothing.
-	(void)button; // Remove this
-	(void)state; // Remove this
-}
-
-void ph_ps2_mouse_send_rel(s8 x, s8 y) {
-	// TODO: PS2: Send relative move event
-	// If the PS2 keyboard is not used (PH_O_IS_MOUSE_PS2 is false), the function should do nothing.
-	(void)x; // Remove this
-	(void)y; // Remove this
-}
-
-void ph_ps2_mouse_send_wheel(s8 h, s8 v) {
-	(void)h;
-	// TODO: PS2: Send wheel. As I understand, PS/2 has no horizontal scrolling, so @h just can be ignored.
-	//   @v - vertical scrolling like on USB
-	// If the PS2 keyboard is not used (PH_O_IS_MOUSE_PS2 is false), the function should do nothing.
-	(void)v; // Remove this
+	if (PH_O_IS_MOUSE_PS2) {
+		ph_ps2_mouse_task();
+	}
 }
 
 void ph_ps2_send_clear(void) {
