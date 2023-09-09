@@ -44,21 +44,32 @@ void ph_ps2_init(void) {
 		gpio_set_dir(_LS_POWER_PIN, GPIO_OUT);
 		gpio_put(_LS_POWER_PIN, true);
 	}
-	
+
+#	define INIT_STUB(x_pin) { \
+		gpio_init(x_pin); gpio_set_dir(x_pin, GPIO_IN); \
+		gpio_init(x_pin + 1); gpio_set_dir(x_pin + 1, GPIO_IN); \
+	}
+
 	if (PH_O_IS_KBD_PS2) {
 		ph_ps2_kbd_init(_KBD_DATA_PIN);
+	} else {
+		INIT_STUB(_KBD_DATA_PIN);
 	}
-	
+
 	if (PH_O_IS_MOUSE_PS2) {
 		ph_ps2_mouse_init(_MOUSE_DATA_PIN);
+	} else {
+		INIT_STUB(_MOUSE_DATA_PIN);
 	}
+
+#	undef INIT_STUB
 }
 
 void ph_ps2_task(void) {
 	if (PH_O_IS_KBD_PS2) {
 		ph_ps2_kbd_task();
 	}
-	
+
 	if (PH_O_IS_MOUSE_PS2) {
 		ph_ps2_mouse_task();
 	}
