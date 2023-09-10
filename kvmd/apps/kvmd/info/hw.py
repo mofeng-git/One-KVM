@@ -46,10 +46,12 @@ class HwInfoSubmanager(BaseInfoSubmanager):
     def __init__(
         self,
         vcgencmd_cmd: list[str],
+        ignore_past: bool,
         state_poll: float,
     ) -> None:
 
         self.__vcgencmd_cmd = vcgencmd_cmd
+        self.__ignore_past = ignore_past
         self.__state_poll = state_poll
 
         self.__dt_cache: dict[str, str] = {}
@@ -127,6 +129,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                         "past": bool(flags & (1 << 18)),
                     },
                 },
+                "ignore_past": self.__ignore_past,
             }
         return None
 

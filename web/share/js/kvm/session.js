@@ -91,8 +91,9 @@ export function Session() {
 	var __setAboutInfoHw = function(state) {
 		if (state.health.throttling !== null) {
 			let flags = state.health.throttling.parsed_flags;
-			let undervoltage = (flags.undervoltage.now || flags.undervoltage.past);
-			let freq_capped = (flags.freq_capped.now || flags.freq_capped.past);
+			let ignore_past = state.health.throttling.ignore_past;
+			let undervoltage = (flags.undervoltage.now || (flags.undervoltage.past && !ignore_past));
+			let freq_capped = (flags.freq_capped.now || (flags.freq_capped.past && !ignore_past));
 
 			tools.hidden.setVisible($("hw-health-dropdown"), (undervoltage || freq_capped));
 			$("hw-health-undervoltage-led").className = (undervoltage ? (flags.undervoltage.now ? "led-red" : "led-yellow") : "hidden");
@@ -188,12 +189,12 @@ export function Session() {
 			let pairs = [];
 			for (let field of Object.keys(throttling.parsed_flags).sort()) {
 				let flags = throttling.parsed_flags[field];
-				pairs.push([
-					tools.upperFirst(field).replace("_", " "),
-					(flags["now"] ? __colored("red", "RIGHT NOW") : __colored("green", "No"))
-					+ "; " +
-					(flags["past"] ? __colored("red", "In the past") : __colored("green", "Never")),
-				]);
+				let key = tools.upperFirst(field).replace("_", " ");
+				let value = (flags["now"] ? __colored("red", "RIGHT NOW") : __colored("green", "No"));
+				if (!throttling.ignore_past) {
+					value += "; " + (flags["past"] ? __colored("red", "In the past") : __colored("green", "Never"));
+				}
+				pairs.push([key, value]);
 			}
 			return __formatUl(pairs);
 		} else {

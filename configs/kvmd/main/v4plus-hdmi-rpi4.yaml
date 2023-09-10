@@ -10,6 +10,8 @@ kvmd:
     auth: !include auth.yaml
 
     info:
+        hw:
+            ignore_past: true
         fan:
             unix: /run/kvmd/fan.sock
 
