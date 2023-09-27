@@ -91,7 +91,12 @@ class Plugin(BaseAuthService):
                 attrlist=["memberOf"],
                 timeout=self.__timeout,
             ) or []):
-                if dn is not None and isinstance(attrs, dict) and self.__group.encode() in attrs.get("memberOf"):  # type: ignore
+                if (
+                    dn is not None
+                    and isinstance(attrs, dict)
+                    and isinstance(attrs["memberOf"], (list, dict))
+                    and self.__group.encode() in attrs["memberOf"]
+                ):
                     return True
         except ldap.INVALID_CREDENTIALS:
             pass
