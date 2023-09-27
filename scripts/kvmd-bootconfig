@@ -191,6 +191,7 @@ DNSSEC=no
 ClientIdentifier=mac
 end_of_file
 	wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+	chmod 640 "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
 	touch /boot/pikvm-reboot.txt
 fi
