@@ -8,8 +8,6 @@ target_sources(${target_name} PRIVATE
 	ph_usb_kbd.c
 	ph_usb_mouse.c
 	ph_ps2.c
-	ph_ps2_kbd.c
-	ph_ps2_mouse.c
 	ph_cmds.c
 	ph_com.c
 	ph_com_bridge.c
@@ -18,6 +16,8 @@ target_sources(${target_name} PRIVATE
 	ph_debug.c
 
 	${PS2_PATH}/ps2phy.c
+	${PS2_PATH}/ps2kb.c
+	${PS2_PATH}/ps2ms.c
 )
 target_link_options(${target_name} PRIVATE -Xlinker --print-memory-usage)
 target_compile_options(${target_name} PRIVATE -Wall -Wextra)

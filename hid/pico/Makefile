@@ -31,7 +31,7 @@ endef
 .tinyusb:
 	$(call libdep,tinyusb,hathach/tinyusb,d713571cd44f05d2fc72efc09c670787b74106e0)
 .ps2x2pico:
-	$(call libdep,ps2x2pico,No0ne/ps2x2pico,706b5c34cb6a2fcefeb7f1ee0f673c7de9452fc6)
+	$(call libdep,ps2x2pico,No0ne/ps2x2pico,d95332b4ea11cad4a11da070857e613c80f9b935)
 deps: .pico-sdk .tinyusb .ps2x2pico
 
 

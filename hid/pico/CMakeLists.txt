@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.13)
 
 set(PICO_SDK_PATH ${CMAKE_CURRENT_LIST_DIR}/.pico-sdk)
 set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/.tinyusb)
-SET(PS2_PATH ${CMAKE_CURRENT_LIST_DIR}/.ps2x2pico)
+set(PS2_PATH ${CMAKE_CURRENT_LIST_DIR}/.ps2x2pico)
 
 # For TinyUSB
 set(FAMILY rp2040)
