@@ -19,6 +19,8 @@ kvmd:
         type: otg
 
     streamer:
+        h264_bitrate:
+            default: 5000
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
