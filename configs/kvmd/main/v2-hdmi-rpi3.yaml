@@ -40,9 +40,15 @@ kvmd:
             - "--no-log-colors"
             - "--sink=kvmd::ustreamer::jpeg"
             - "--sink-mode=0660"
+            - "--h264-sink=kvmd::ustreamer::h264"
+            - "--h264-sink-mode=0660"
+            - "--h264-bitrate={h264_bitrate}"
+            - "--h264-gop={h264_gop}"
 
 
 vnc:
     memsink:
         jpeg:
             sink: "kvmd::ustreamer::jpeg"
+        h264:
+            sink: "kvmd::ustreamer::h264"
