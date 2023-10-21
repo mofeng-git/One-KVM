@@ -81,10 +81,6 @@ depends=(
 	"v4l-utils>=1.22.1-1"
 	"nginx-mainline>=1.25.1"
 	openssl
-	platformio
-	avrdude-pikvm
-	make
-	patch
 	sudo
 	iptables
 	iproute2
@@ -214,6 +210,10 @@ for _variant in "${_variants[@]}"; do
 			etc/udev/rules.d/99-kvmd.rules
 			etc/kvmd/main.yaml
 		)
+
+		if [[ $_base == v0 ]]; then
+			depends=(\"\${depends[@]}\" platformio avrdude-pikvm make patch)
+		fi
 
 		if [[ $_platform =~ ^.*-hdmiusb$ ]]; then
 			install -Dm755 -t \"\$pkgdir/usr/bin\" scripts/kvmd-udev-hdmiusb-check
