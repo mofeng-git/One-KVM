@@ -98,10 +98,6 @@ depends=(
 	# https://archlinuxarm.org/forum/viewtopic.php?f=15&t=15725&start=40
 	"zstd>=1.5.1-2.1"
 
-	# Avoid dhcpcd stack trace
-	dhclient
-	netctl
-
 	# Possible hotfix for the new os update
 	openssl-1.1
 
@@ -188,9 +184,6 @@ package_kvmd() {
 	mkdir -p "$pkgdir/etc/kvmd/override.d"
 
 	mkdir -p "$pkgdir/var/lib/kvmd/"{msd,pst}
-
-	# Avoid dhcp problems
-	install -DTm755 configs/os/netctl-dhcp "$pkgdir/etc/netctl/hooks/pikvm-dhcp"
 }
 
 
