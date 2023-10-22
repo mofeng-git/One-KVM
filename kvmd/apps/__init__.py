@@ -382,7 +382,7 @@ def _get_config_scheme() -> dict:
                 "meta":   Option("/etc/kvmd/meta.yaml",    type=valid_abs_file),
                 "extras": Option("/usr/share/kvmd/extras", type=valid_abs_dir),
                 "hw": {
-                    "vcgencmd_cmd":  Option(["/opt/vc/bin/vcgencmd"], type=valid_command),
+                    "vcgencmd_cmd":  Option(["/usr/bin/vcgencmd"], type=valid_command),
                     "ignore_past":   Option(False, type=valid_bool),
                     "state_poll":    Option(10.0,  type=valid_float_f01),
                 },

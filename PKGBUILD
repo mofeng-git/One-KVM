@@ -89,6 +89,7 @@ depends=(
 	"janus-gateway-pikvm>=0.11.2-7"
 	certbot
 	platform-io-access
+	raspberrypi-utils
 	"ustreamer>=5.32"
 
 	# Systemd UDEV bug
