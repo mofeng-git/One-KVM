@@ -59,7 +59,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
     # https://gist.github.com/whitelynx/9f9bd4cb266b3924c64dfdff14bce2e8
     # https://archlinuxarm.org/forum/viewtopic.php?f=67&t=14244
 
-    def __init__(  # pylint: disable=too-many-arguments,too-many-locals,super-init-not-called
+    def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
         manufacturer: str,
         product: str,
@@ -77,6 +77,9 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         socket_timeout: float,
         select_timeout: float,
     ) -> None:
+
+        super().__init__()
+        self._set_jiggler_absolute(False)
 
         self.__proc: (multiprocessing.Process | None) = None
         self.__stop_event = multiprocessing.Event()
@@ -146,6 +149,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 "absolute": False,
                 "outputs": outputs,
             },
+            "jiggler": self._get_jiggler_state(),
         }
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
@@ -175,18 +179,36 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
     def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
         for (key, state) in keys:
             self.__server.queue_event(make_keyboard_event(key, state))
+            self._bump_activity()
 
     def send_mouse_button_event(self, button: str, state: bool) -> None:
         self.__server.queue_event(MouseButtonEvent(button, state))
+        self._bump_activity()
 
     def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
         self.__server.queue_event(MouseRelativeEvent(delta_x, delta_y))
+        self._bump_activity()
 
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         self.__server.queue_event(MouseWheelEvent(delta_x, delta_y))
+        self._bump_activity()
 
     def clear_events(self) -> None:
         self.__server.clear_events()
+        self._bump_activity()
+
+    def set_params(
+        self,
+        keyboard_output: (str | None)=None,
+        mouse_output: (str | None)=None,
+        jiggler: (bool | None)=None,
+    ) -> None:
+
+        _ = keyboard_output
+        _ = mouse_output
+        if jiggler is not None:
+            self._set_jiggler_enabled(jiggler)
+            self.__notifier.notify()
 
     # =====
 

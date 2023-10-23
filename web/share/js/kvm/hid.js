@@ -111,6 +111,8 @@ export function Hid(__getGeometry, __recorder) {
 		}
 
 		tools.storage.bindSimpleSwitch($("hid-sysrq-ask-switch"), "hid.sysrq.ask", true);
+
+		tools.el.setOnClick($("hid-jiggler-switch"), __clickJigglerSwitch);
 	};
 
 	/************************************************************************/
@@ -119,6 +121,7 @@ export function Hid(__getGeometry, __recorder) {
 		tools.el.setEnabled($("hid-pak-text"), ws);
 		tools.el.setEnabled($("hid-pak-button"), ws);
 		tools.el.setEnabled($("hid-reset-button"), ws);
+		tools.el.setEnabled($("hid-jiggler-switch"), ws);
 		if (!ws) {
 			self.setState(null);
 		}
@@ -129,6 +132,9 @@ export function Hid(__getGeometry, __recorder) {
 	self.setState = function(state) {
 		let has_relative_squash = false;
 
+		if (state) {
+			$("hid-jiggler-switch").checked = !!state.jiggler.enabled;
+		}
 		if (state && state.online) {
 			let keyboard_outputs = state.keyboard.outputs.available;
 			let mouse_outputs = state.mouse.outputs.available;
@@ -285,6 +291,17 @@ export function Hid(__getGeometry, __recorder) {
 			if (http.readyState === 4) {
 				if (http.status !== 200) {
 					wm.error("Can't configure HID:<br>", http.responseText);
+				}
+			}
+		});
+	};
+
+	var __clickJigglerSwitch = function() {
+		let enabled = $("hid-jiggler-switch").checked;
+		let http = tools.makeRequest("POST", `/api/hid/set_params?jiggler=${enabled}`, function() {
+			if (http.readyState === 4) {
+				if (http.status !== 200) {
+					wm.error(`Can't ${enabled ? "enabled" : "disable"} mouse juggler:<br>`, http.responseText);
 				}
 			}
 		});

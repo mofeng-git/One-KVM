@@ -44,7 +44,7 @@ from .mouse import MouseProcess
 
 # =====
 class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
-    def __init__(  # pylint: disable=super-init-not-called
+    def __init__(
         self,
         keyboard: dict[str, Any],
         mouse: dict[str, Any],
@@ -52,6 +52,8 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         noop: bool,
         udc: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
+
+        super().__init__()
 
         self.__udc = udc
 
@@ -79,6 +81,8 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 # На самом деле мультимышка и win95 не зависят друг от друга,
                 # но так было проще реализовать переключение режимов
                 self.__mouses["usb_win98"] = self.__mouses["usb"]
+
+        self._set_jiggler_absolute(self.__mouse_current.is_absolute())
 
     @classmethod
     def get_plugin_options(cls) -> dict:
@@ -141,6 +145,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 },
                 **mouse_state,
             },
+            "jiggler": self._get_jiggler_state(),
         }
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
@@ -172,25 +177,40 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
         self.__keyboard_proc.send_key_events(keys)
+        self._bump_activity()
 
     def send_mouse_button_event(self, button: str, state: bool) -> None:
         self.__mouse_current.send_button_event(button, state)
+        self._bump_activity()
 
     def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
         self.__mouse_current.send_move_event(to_x, to_y)
+        self._bump_activity()
 
     def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
         self.__mouse_current.send_relative_event(delta_x, delta_y)
+        self._bump_activity()
 
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         self.__mouse_current.send_wheel_event(delta_x, delta_y)
+        self._bump_activity()
 
-    def set_params(self, keyboard_output: (str | None)=None, mouse_output: (str | None)=None) -> None:
+    def set_params(
+        self,
+        keyboard_output: (str | None)=None,
+        mouse_output: (str | None)=None,
+        jiggler: (bool | None)=None,
+    ) -> None:
+
         _ = keyboard_output
         if mouse_output in self.__mouses and mouse_output != self.__get_current_mouse_mode():
             self.__mouse_current.send_clear_event()
             self.__mouse_current = self.__mouses[mouse_output]
             self.__mouse_current.set_win98_fix(mouse_output == "usb_win98")
+            self._set_jiggler_absolute(self.__mouse_current.is_absolute())
+            self.__notifier.notify()
+        if jiggler is not None:
+            self._set_jiggler_enabled(jiggler)
             self.__notifier.notify()
 
     def clear_events(self) -> None:
@@ -198,6 +218,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         self.__mouse_proc.send_clear_event()
         if self.__mouse_alt_proc:
             self.__mouse_alt_proc.send_clear_event()
+        self._bump_activity()
 
     # =====
 

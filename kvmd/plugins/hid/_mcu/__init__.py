@@ -117,6 +117,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         **gpio_kwargs: Any,
     ) -> None:
 
+        BaseHid.__init__(self)
         multiprocessing.Process.__init__(self, daemon=True)
 
         self.__read_retries = read_retries
@@ -177,6 +178,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         active_mouse = get_active_mouse(outputs1)
         if online and active_mouse in ["usb_rel", "ps2"]:
             absolute = False
+        self._set_jiggler_absolute(absolute)
 
         keyboard_outputs: dict = {"available": [], "active": ""}
         mouse_outputs: dict = {"available": [], "active": ""}
@@ -224,6 +226,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 "absolute": absolute,
                 "outputs": mouse_outputs,
             },
+            "jiggler": self._get_jiggler_state(),
         }
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
@@ -251,20 +254,31 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
         for (key, state) in keys:
             self.__queue_event(KeyEvent(key, state))
+            self._bump_activity()
 
     def send_mouse_button_event(self, button: str, state: bool) -> None:
         self.__queue_event(MouseButtonEvent(button, state))
+        self._bump_activity()
 
     def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
         self.__queue_event(MouseMoveEvent(to_x, to_y))
+        self._bump_activity()
 
     def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
         self.__queue_event(MouseRelativeEvent(delta_x, delta_y))
+        self._bump_activity()
 
     def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         self.__queue_event(MouseWheelEvent(delta_x, delta_y))
+        self._bump_activity()
 
-    def set_params(self, keyboard_output: (str | None)=None, mouse_output: (str | None)=None) -> None:
+    def set_params(
+        self,
+        keyboard_output: (str | None)=None,
+        mouse_output: (str | None)=None,
+        jiggler: (bool | None)=None,
+    ) -> None:
+
         events: list[BaseEvent] = []
         if keyboard_output is not None:
             events.append(SetKeyboardOutputEvent(keyboard_output))
@@ -272,12 +286,16 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
             events.append(SetMouseOutputEvent(mouse_output))
         for (index, event) in enumerate(events, 1):
             self.__queue_event(event, clear=(index == len(events)))
+        if jiggler is not None:
+            self._set_jiggler_enabled(jiggler)
+            self.__notifier.notify()
 
     def set_connected(self, connected: bool) -> None:
         self.__queue_event(SetConnectedEvent(connected), clear=True)
 
     def clear_events(self) -> None:
         self.__queue_event(ClearEvent(), clear=True)
+        self._bump_activity()
 
     def __queue_event(self, event: BaseEvent, clear: bool=False) -> None:
         if not self.__stop_event.is_set():

@@ -91,6 +91,7 @@ class HidApi:
             for (key, validator) in [
                 ("keyboard_output", valid_hid_keyboard_output),
                 ("mouse_output", valid_hid_mouse_output),
+                ("jiggler", valid_bool),
             ]
             if request.query.get(key) is not None
         }
