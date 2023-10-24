@@ -51,6 +51,8 @@ export function Keyboard(__recordWsEvent) {
 
 		window.addEventListener("focusin", __updateOnlineLeds);
 		window.addEventListener("focusout", __updateOnlineLeds);
+
+		tools.storage.bindSimpleSwitch($("hid-keyboard-swap-cc-switch"), "hid.keyboard.swap_cc", false);
 	};
 
 	/************************************************************************/
@@ -129,6 +131,13 @@ export function Keyboard(__recordWsEvent) {
 
 	var __sendKey = function(code, state) {
 		tools.debug("Keyboard: key", (state ? "pressed:" : "released:"), code);
+		if ($("hid-keyboard-swap-cc-switch").checked) {
+			if (code === "ControlLeft") {
+				code = "CapsLock";
+			} else if (code === "CapsLock") {
+				code = "ControlLeft";
+			}
+		}
 		let event = {
 			"event_type": "key",
 			"event": {"key": code, "state": state},

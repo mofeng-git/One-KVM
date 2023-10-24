@@ -150,6 +150,10 @@ ul#navbar li div.menu details div.spoiler {
 	border-left: var(--border-default-thin);
 	border-bottom: var(--border-default-thin);
 }
+ul#navbar li div.menu details div.spoiler hr {
+	border: none;
+	border-top: var(--border-default-thin);
+}
 ul#navbar li div.menu details summary::marker {
 	color: var(--cs-marker-fg);
 }

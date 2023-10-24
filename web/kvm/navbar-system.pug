@@ -69,11 +69,15 @@ li(id="system-dropdown" class="right")
 					td Mouse #[a(target="_blank" href="https://docs.pikvm.org/mouse") mode]:
 					td #[div(id="hid-outputs-mouse-box" class="radio-box")]
 		details
-			summary Mouse settings
+			summary Keyboard &amp; Mouse (HID) settings
 			div(class="spoiler")
 				table(class="kv")
 					tr
-						td Polling interval:
+						+menu_switch_notable("hid-keyboard-swap-cc-switch", "Swap Left Ctrl and Caps keys", true, false)
+				hr
+				table(class="kv")
+					tr
+						td Mouse polling:
 						td(class="value-slider") #[input(type="range" id="hid-mouse-rate-slider" class="slider")]
 						td(id="hid-mouse-rate-value" class="value-number")
 					tr(id="hid-mouse-sens" class="feature-disabled")

@@ -259,11 +259,23 @@
             </table>
           </div>
           <details>
-            <summary>Mouse settings</summary>
+            <summary>Keyboard &amp; Mouse (HID) settings</summary>
             <div class="spoiler">
               <table class="kv">
                 <tr>
-                  <td>Polling interval:</td>
+                      <td>Swap Left Ctrl and Caps keys:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input type="checkbox" id="hid-keyboard-swap-cc-switch">
+                          <label for="hid-keyboard-swap-cc-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+              </table>
+              <hr>
+              <table class="kv">
+                <tr>
+                  <td>Mouse polling:</td>
                   <td class="value-slider">
                     <input class="slider" type="range" id="hid-mouse-rate-slider">
                   </td>
