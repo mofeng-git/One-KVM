@@ -48,7 +48,7 @@ case "$board" in
 		esac;;
 	"rpi4")
 		case "$model" in
-			"Raspberry Pi 4 Model B Rev 1.1" | "Raspberry Pi 4 Model B Rev 1.2" | "Raspberry Pi 4 Model B Rev 1.4")
+			"Raspberry Pi 4 Model B Rev 1.1" | "Raspberry Pi 4 Model B Rev 1.2" | "Raspberry Pi 4 Model B Rev 1.4" | "Raspberry Pi 4 Model B Rev 1.5")
 				if [ "$port" == "1-1.4:1.0" ]; then exit 0; else exit 1; fi;;
 			*) exit 0;;
 		esac;;
