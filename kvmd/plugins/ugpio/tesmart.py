@@ -115,6 +115,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     async def cleanup(self) -> None:
         await self.__close_device()
+        self.__active = -1
 
     async def read(self, pin: str) -> bool:
         return (self.__active == int(pin))
@@ -125,8 +126,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         assert 1 <= channel <= 16
         if state:
             await self.__send_command("{:c}{:c}".format(1, channel).encode())
-            self.__update_notifier.notify()
             await asyncio.sleep(self.__switch_delay)  # Slowdown
+            self.__update_notifier.notify()
 
     # =====
 
@@ -149,7 +150,10 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             get_logger(0).error("Can't send command to TESmart KVM [%s]:%d: %s",
                                 self.__host, self.__port, tools.efmt(err))
             await self.__close_device()
+            self.__active = -1
             raise GpioDriverOfflineError(self)
+        finally:
+            await self.__close_device()
 
     async def __ensure_device(self) -> None:
         if self.__reader is None or self.__writer is None:
@@ -185,7 +189,6 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             await aiotools.close_writer(self.__writer)
         self.__reader = None
         self.__writer = None
-        self.__active = -1
 
     # =====
 
