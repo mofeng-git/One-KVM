@@ -108,25 +108,10 @@ li(id="system-dropdown" class="right")
 			tr
 				+menu_switch_notable("hid-mute-switch", "Mute HID input events", true, false)
 			tr(id="v3-usb-breaker" class="feature-disabled")
-				td Connect main USB to Server:
-				td(align="right")
-					div(class="switch-box")
-						-let msg = "Turning off this switch will disconnect the main USB<br>from the server."
-						-msg += " Are you sure you want to continue?"
-						input(disabled type="checkbox" id="gpio-switch-__v3_usb_breaker__" class="gpio-switch"
-							data-channel="__v3_usb_breaker__" data-confirm-off=msg)
-						label(for="gpio-switch-__v3_usb_breaker__")
-							span(class="switch-inner")
-							span(class="switch")
+				+menu_switch_notable_gpio("__v3_usb_breaker__", "Connect main USB to Server",
+					"Turning off this switch will disconnect the main USB<br>from the server.  Are you sure you want to continue?")
 			tr(id="v4-locator" class="feature-disabled")
-				td Enable locator LED:
-				td(align="right")
-					div(class="switch-box")
-						input(disabled type="checkbox" id="gpio-switch-__v4_locator__" class="gpio-switch"
-							data-channel="__v4_locator__")
-						label(for="gpio-switch-__v4_locator__")
-							span(class="switch-inner")
-							span(class="switch")
+				+menu_switch_notable_gpio("__v4_locator__", "Enable locator LED")
 			tr
 				+menu_switch_notable("page-close-ask-switch", "Ask page close confirmation", true, true)
 		hr
