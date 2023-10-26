@@ -49,11 +49,12 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         keyboard: dict[str, Any],
         mouse: dict[str, Any],
         mouse_alt: dict[str, Any],
+        jiggler: dict[str, Any],
         noop: bool,
         udc: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
 
-        super().__init__()
+        super().__init__(**jiggler)
 
         self.__udc = udc
 
@@ -112,6 +113,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 "horizontal_wheel": Option(True, type=valid_bool),
             },
             "noop": Option(False, type=valid_bool),
+            **cls._get_jiggler_options(),
         }
 
     def sysprep(self) -> None:
@@ -145,7 +147,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 },
                 **mouse_state,
             },
-            "jiggler": self._get_jiggler_state(),
+            **self._get_jiggler_state(),
         }
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
@@ -210,7 +212,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             self._set_jiggler_absolute(self.__mouse_current.is_absolute())
             self.__notifier.notify()
         if jiggler is not None:
-            self._set_jiggler_enabled(jiggler)
+            self._set_jiggler_active(jiggler)
             self.__notifier.notify()
 
     def clear_events(self) -> None:

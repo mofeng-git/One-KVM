@@ -133,7 +133,8 @@ export function Hid(__getGeometry, __recorder) {
 		let has_relative_squash = false;
 
 		if (state) {
-			$("hid-jiggler-switch").checked = !!state.jiggler.enabled;
+			tools.feature.setEnabled($("hid-jiggler"), state.jiggler.enabled);
+			$("hid-jiggler-switch").checked = state.jiggler.active;
 		}
 		if (state && state.online) {
 			let keyboard_outputs = state.keyboard.outputs.available;

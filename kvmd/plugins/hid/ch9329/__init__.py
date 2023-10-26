@@ -26,6 +26,7 @@ import time
 
 from typing import Iterable
 from typing import AsyncGenerator
+from typing import Any
 
 from ....logging import get_logger
 
@@ -56,9 +57,10 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         device_path: str,
         speed: int,
         read_timeout: float,
+        jiggler: dict[str, Any],
     ) -> None:
 
-        BaseHid.__init__(self)
+        BaseHid.__init__(self, **jiggler)
         multiprocessing.Process.__init__(self, daemon=True)
 
         self.__device_path = device_path
@@ -86,6 +88,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             "device":       Option("/dev/kvmd-hid", type=valid_abs_path, unpack_as="device_path"),
             "speed":        Option(9600, type=valid_tty_speed),
             "read_timeout": Option(0.3,  type=valid_float_f01),
+            **cls._get_jiggler_options(),
         }
 
     def sysprep(self) -> None:
@@ -113,7 +116,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                     "active": ("usb" if absolute else "usb_rel"),
                 },
             },
-            "jiggler": self._get_jiggler_state(),
+            **self._get_jiggler_state(),
         }
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
@@ -174,7 +177,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             self._set_jiggler_absolute(absolute)
             self.__notifier.notify()
         if jiggler is not None:
-            self._set_jiggler_enabled(jiggler)
+            self._set_jiggler_active(jiggler)
             self.__notifier.notify()
 
     def set_connected(self, connected: bool) -> None:

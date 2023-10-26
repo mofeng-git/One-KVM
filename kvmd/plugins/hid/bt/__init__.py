@@ -25,6 +25,7 @@ import time
 
 from typing import Iterable
 from typing import AsyncGenerator
+from typing import Any
 
 from ....logging import get_logger
 
@@ -61,6 +62,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
+
         manufacturer: str,
         product: str,
         description: str,
@@ -76,9 +78,11 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         max_clients: int,
         socket_timeout: float,
         select_timeout: float,
+
+        jiggler: dict[str, Any],
     ) -> None:
 
-        super().__init__()
+        super().__init__(**jiggler)
         self._set_jiggler_absolute(False)
 
         self.__proc: (multiprocessing.Process | None) = None
@@ -121,6 +125,8 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             "max_clients":    Option(1,   type=valid_int_f1),
             "socket_timeout": Option(5.0, type=valid_float_f01),
             "select_timeout": Option(1.0, type=valid_float_f01),
+
+            **cls._get_jiggler_options(),
         }
 
     def sysprep(self) -> None:
@@ -149,7 +155,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 "absolute": False,
                 "outputs": outputs,
             },
-            "jiggler": self._get_jiggler_state(),
+            **self._get_jiggler_state(),
         }
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
@@ -207,7 +213,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         _ = keyboard_output
         _ = mouse_output
         if jiggler is not None:
-            self._set_jiggler_enabled(jiggler)
+            self._set_jiggler_active(jiggler)
             self.__notifier.notify()
 
     # =====

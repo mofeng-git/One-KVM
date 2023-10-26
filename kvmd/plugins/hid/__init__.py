@@ -25,6 +25,11 @@ import time
 
 from typing import Iterable
 from typing import AsyncGenerator
+from typing import Any
+
+from ...yamlconf import Option
+
+from ...validators.basic import valid_bool
 
 from .. import BasePlugin
 from .. import get_plugin_class
@@ -32,10 +37,21 @@ from .. import get_plugin_class
 
 # =====
 class BaseHid(BasePlugin):
-    def __init__(self) -> None:
-        self.__jiggler_enabled = False
+    def __init__(self, jiggler_enabled: bool) -> None:
+        self.__jiggler_enabled = jiggler_enabled
+        self.__jiggler_active = False
         self.__jiggler_absolute = True
         self.__activity_ts = 0
+
+    @classmethod
+    def _get_jiggler_options(cls) -> dict[str, Any]:
+        return {
+            "jiggler": {
+                "enabled": Option(True, type=valid_bool, unpack_as="jiggler_enabled"),
+            },
+        }
+
+    # =====
 
     def sysprep(self) -> None:
         raise NotImplementedError
@@ -92,7 +108,7 @@ class BaseHid(BasePlugin):
     async def systask(self) -> None:
         factor = 1
         while True:
-            if self.__jiggler_enabled and (self.__activity_ts + 60 < int(time.monotonic())):
+            if self.__jiggler_active and (self.__activity_ts + 60 < int(time.monotonic())):
                 if self.__jiggler_absolute:
                     self.send_mouse_move_event(100 * factor, 100 * factor)
                 else:
@@ -106,11 +122,17 @@ class BaseHid(BasePlugin):
     def _set_jiggler_absolute(self, absolute: bool) -> None:
         self.__jiggler_absolute = absolute
 
-    def _set_jiggler_enabled(self, enabled: bool) -> None:
-        self.__jiggler_enabled = enabled
+    def _set_jiggler_active(self, active: bool) -> None:
+        if self.__jiggler_enabled:
+            self.__jiggler_active = active
 
     def _get_jiggler_state(self) -> dict:
-        return {"enabled": self.__jiggler_enabled}
+        return {
+            "jiggler": {
+                "enabled": self.__jiggler_enabled,
+                "active":  self.__jiggler_active,
+            },
+        }
 
 
 # =====

@@ -114,10 +114,11 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         retries_delay: float,
         errors_threshold: int,
         noop: bool,
+        jiggler: dict[str, Any],
         **gpio_kwargs: Any,
     ) -> None:
 
-        BaseHid.__init__(self)
+        BaseHid.__init__(self, **jiggler)
         multiprocessing.Process.__init__(self, daemon=True)
 
         self.__read_retries = read_retries
@@ -161,6 +162,8 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
             "retries_delay":    Option(0.5,   type=valid_float_f01),
             "errors_threshold": Option(5,     type=valid_int_f0),
             "noop":             Option(False, type=valid_bool),
+
+            **cls._get_jiggler_options(),
         }
 
     def sysprep(self) -> None:
@@ -226,7 +229,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 "absolute": absolute,
                 "outputs": mouse_outputs,
             },
-            "jiggler": self._get_jiggler_state(),
+            **self._get_jiggler_state(),
         }
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
@@ -287,7 +290,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         for (index, event) in enumerate(events, 1):
             self.__queue_event(event, clear=(index == len(events)))
         if jiggler is not None:
-            self._set_jiggler_enabled(jiggler)
+            self._set_jiggler_active(jiggler)
             self.__notifier.notify()
 
     def set_connected(self, connected: bool) -> None:
