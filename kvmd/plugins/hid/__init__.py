@@ -47,7 +47,7 @@ class BaseHid(BasePlugin):
     def _get_jiggler_options(cls) -> dict[str, Any]:
         return {
             "jiggler": {
-                "enabled": Option(True, type=valid_bool, unpack_as="jiggler_enabled"),
+                "enabled": Option(False, type=valid_bool, unpack_as="jiggler_enabled"),
             },
         }
 
