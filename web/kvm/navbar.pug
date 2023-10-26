@@ -14,7 +14,7 @@ mixin menu_message(icon, short, classes="")
 							block
 
 mixin menu_switch_notable_gpio(channel, title, confirm_off="")
-	td #{title}:
+	td !{title}:
 	td(align="right")
 		div(class="switch-box")
 			input(disabled type="checkbox" id=`gpio-switch-${channel}` class="gpio-switch"
@@ -24,7 +24,7 @@ mixin menu_switch_notable_gpio(channel, title, confirm_off="")
 				span(class="switch")
 
 mixin menu_switch_notable(id, title, enabled, checked)
-	td #{title}:
+	td !{title}:
 	td(align="right")
 		div(class="switch-box")
 			input(checked=checked disabled=!enabled type="checkbox" id=id)
