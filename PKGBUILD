@@ -122,6 +122,8 @@ optdepends=(
 conflicts=(
 	python-pikvm
 	python-aiohttp-pikvm
+	platformio
+	avrdude-pikvm
 )
 makedepends=(
 	python-setuptools
@@ -206,7 +208,7 @@ for _variant in "${_variants[@]}"; do
 		)
 
 		if [[ $_base == v0 ]]; then
-			depends=(\"\${depends[@]}\" platformio avrdude-pikvm make patch)
+			depends=(\"\${depends[@]}\" platformio-core avrdude make patch)
 		fi
 
 		if [[ $_platform =~ ^.*-hdmiusb$ ]]; then
