@@ -110,11 +110,13 @@ class BaseHid(BasePlugin):
         factor = 1
         while True:
             if self.__jiggler_active and (self.__activity_ts + 60 < int(time.monotonic())):
-                if self.__jiggler_absolute:
-                    self.send_mouse_move_event(100 * factor, 100 * factor)
-                else:
-                    self.send_mouse_relative_event(10 * factor, 10 * factor)
-                factor *= -1
+                for _ in range(5):
+                    if self.__jiggler_absolute:
+                        self.send_mouse_move_event(100 * factor, 100 * factor)
+                    else:
+                        self.send_mouse_relative_event(10 * factor, 10 * factor)
+                    factor *= -1
+                    await asyncio.sleep(0.1)
             await asyncio.sleep(1)
 
     def _bump_activity(self) -> None:
