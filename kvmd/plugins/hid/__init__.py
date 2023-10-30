@@ -37,9 +37,9 @@ from .. import get_plugin_class
 
 # =====
 class BaseHid(BasePlugin):
-    def __init__(self, jiggler_enabled: bool) -> None:
+    def __init__(self, jiggler_enabled: bool, jiggler_active: bool) -> None:
         self.__jiggler_enabled = jiggler_enabled
-        self.__jiggler_active = False
+        self.__jiggler_active = jiggler_active
         self.__jiggler_absolute = True
         self.__activity_ts = 0
 
@@ -48,6 +48,7 @@ class BaseHid(BasePlugin):
         return {
             "jiggler": {
                 "enabled": Option(False, type=valid_bool, unpack_as="jiggler_enabled"),
+                "active":  Option(False, type=valid_bool, unpack_as="jiggler_active"),
             },
         }
 
