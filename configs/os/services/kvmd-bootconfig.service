@@ -1,7 +1,23 @@
 [Unit]
 Description=PiKVM - Boot configuration
 After=systemd-modules-load.service kvmd-oled.service
-Before=network-pre.target kvmd-otg.service kvmd-nginx.service kvmd.service sshd.service pikvm-bootconfig.service
+Before=\
+	kvmd-webterm.service \
+	kvmd-certbot.service \
+	kvmd-ipmi.service \
+	kvmd-janus-static.service \
+	kvmd-janus.service \
+	kvmd-nginx.service \
+	kvmd-otg.service \
+	kvmd-otgnet.service \
+	kvmd-pst.service \
+	kvmd-tc358743.service \
+	kvmd-vnc.service \
+	kvmd-watchdog.service \
+	kvmd.service \
+	pikvm-bootconfig.service \
+	sshd.service \
+	network-pre.target
 
 [Service]
 Type=oneshot
