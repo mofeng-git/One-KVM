@@ -34,7 +34,8 @@ class LogReader:
     async def poll_log(self, seek: int, follow: bool) -> AsyncGenerator[dict, None]:
         reader = systemd.journal.Reader()
         reader.this_boot()
-        reader.this_machine()
+        # XXX: Из-за смены ID машины в bootconfig это не работает при первой загрузке.
+        # reader.this_machine()
         reader.log_level(systemd.journal.LOG_DEBUG)
 
         services = set(
