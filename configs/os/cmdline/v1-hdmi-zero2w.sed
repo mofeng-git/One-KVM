@@ -1,1 +1,1 @@
-s/rootwait/cma=96M rootwait/g
+s/rootwait/rootwait cma=96M/g
