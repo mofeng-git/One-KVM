@@ -202,7 +202,7 @@ async def wait_infinite() -> None:
         await asyncio.sleep(3600)
 
 
-async def wait_first(*aws: (asyncio.Future | asyncio.Task)) -> tuple[set[asyncio.Task], set[asyncio.Task]]:
+async def wait_first(*aws: asyncio.Task) -> tuple[set[asyncio.Task], set[asyncio.Task]]:
     return (await asyncio.wait(list(aws), return_when=asyncio.FIRST_COMPLETED))
 
 

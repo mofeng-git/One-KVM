@@ -93,7 +93,7 @@ class RedfishApi:
             self.__info_manager.get_submanager("meta").get_state(),
         ])
         try:
-            host = meta_state.get("server", {})["host"]
+            host = str(meta_state.get("server", {})["host"])  # type: ignore
         except Exception:
             host = ""
         return make_json_response({
@@ -107,7 +107,7 @@ class RedfishApi:
             },
             "Id": "0",
             "HostName": host,
-            "PowerState": ("On" if atx_state["leds"]["power"] else "Off"),
+            "PowerState": ("On" if atx_state["leds"]["power"] else "Off"),  # type: ignore
         }, wrap_result=False)
 
     @exposed_http("POST", "/redfish/v1/Systems/0/Actions/ComputerSystem.Reset")
