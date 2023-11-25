@@ -9,28 +9,6 @@
 # Not: Sections should be combined under shared keys.              #
 #                                                                  #
 ####################################################################
-#
-#########
-# Wrong #
-#########
-#kvmd:
-#    gpio:
-#        drivers: ...
-#kvmd:
-#    gpio:
-#        scheme: ...
-#
-###########
-# Correct #
-###########
-#kvmd:
-#    gpio:
-#        drivers: ...
-#        scheme: ...
-#
-###########
-# Example #
-###########
 vnc:
     # See https://github.com/pikvm/pikvm/blob/master/pages/vnc.md
     keymap: /usr/share/kvmd/keymaps/ru # Set russian keymap
