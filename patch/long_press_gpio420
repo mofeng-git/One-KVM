@@ -1,0 +1,7 @@
+#!/bin/bash
+echo 420 > /sys/class/gpio/export
+echo out > /sys/class/gpio/gpio420/direction
+echo 0 > /sys/class/gpio/gpio420/value
+sleep 5
+echo 1 > /sys/class/gpio/gpio420/value
+echo 420 > /sys/class/gpio/unexport

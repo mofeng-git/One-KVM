@@ -1,0 +1,69 @@
+####################################################################
+#                                                                  #
+# Override Pi-KVM system settings. This file uses the YAML syntax. #
+#                                                                  #
+#    https://github.com/pikvm/pikvm/blob/master/pages/config.md    #
+#                                                                  #
+# All overridden parameters will be applied AFTER other configs    #
+# and "!include" directives and BEFORE validation.                 #
+# Not: Sections should be combined under shared keys.              #
+#                                                                  #
+####################################################################
+#
+#########
+# Wrong #
+#########
+#kvmd:
+#    gpio:
+#        drivers: ...
+#kvmd:
+#    gpio:
+#        scheme: ...
+#
+###########
+# Correct #
+###########
+#kvmd:
+#    gpio:
+#        drivers: ...
+#        scheme: ...
+#
+###########
+# Example #
+###########
+vnc:
+    # See https://github.com/pikvm/pikvm/blob/master/pages/vnc.md
+    keymap: /usr/share/kvmd/keymaps/ru # Set russian keymap
+    auth:
+        vncauth:
+            enabled: true # Enable auth via /etc/kvmd/vncpasswd
+kvmd:
+    msd:
+        type: disabled
+    gpio:
+        drivers:
+            short_press:
+                type: cmd
+                cmd: [/usr/bin/sudo, short_press_gpio420]
+            long_press:
+                type: cmd
+                cmd: [/usr/bin/sudo, long_press_gpio420]
+        scheme:
+            short_button:
+                driver: short_press
+                pin: 0
+                mode: output
+                switch: false
+            long_button:
+                driver: long_press
+                pin: 0
+                mode: output
+                switch: false
+        view:
+            header:
+                title: ATX
+            table:
+                - ["#电源管理"]
+                - []
+                - ["#短按（开/关机）:", short_button|按下]
+                - ["#长按（强制关机）:", long_button|按下]
