@@ -5,7 +5,7 @@ echo $PYVER
 echo $ARCH
 
 if [[ "$PYVER" != *"3.10"* && $(which python3.10) != *"python"* ]]; then
-  echo "你似乎没有安装 Python 3.10！" 
+  echo "您似乎没有安装 Python 3.10！" 
 fi
 
 cp ./patch/meson8b-onecloud.dtb /boot/dtb/meson8b-onecloud.dtb && echo "设备树文件覆盖成功！"
