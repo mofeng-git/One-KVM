@@ -9,8 +9,14 @@ if [[ "$PYVER" != *"3.10"* && $(which python3.10) != *"python"* ]]; then
 fi
 
 cp ./patch/meson8b-onecloud.dtb /boot/dtb/meson8b-onecloud.dtb && echo "设备树文件覆盖成功！"
-#此为危险操作，同时会覆盖MBR分区，请在没有自行分区前执行，否则会丢失分区数据导致挂载了EMMC其他分区的系统无法启动！
-gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 && echo "覆盖引导成功！"
+
+#此为危险操作，会覆盖MBR分区，请在没有自行分区前执行，否则会丢失分区数据导致挂载了EMMC其他分区的系统无法启动！
+if [ -f "./installed.txt" ]; then
+    gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
+else
+    echo "已跳过覆盖引导！"
+fi
+
 
 bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http && echo "换源成功！"
 echo "正在安装依赖软件nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim......"  
