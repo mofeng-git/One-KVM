@@ -19,4 +19,4 @@ One-KVM是基于玩客云硬件和PiKVM软件的远控设备。通过移植PiKVM
 git clone https://github.com/mofeng-git/One-KVM.git
 cd One-KVM && chmod +x install.sh && ./install.sh
 ```
-详细教程请参照飞书文档：[One-KVM使用手册](ttps://p1b237lu9xm.feishu.cn/drive/folder/IsOifWmMKlzYpRdWfcocI7jdnQA?from=from_copylink)
+详细教程请参照飞书文档：[One-KVM使用手册](https://p1b237lu9xm.feishu.cn/drive/folder/IsOifWmMKlzYpRdWfcocI7jdnQA?from=from_copylink)
