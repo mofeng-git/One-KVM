@@ -46,7 +46,7 @@ echo "正在安装依赖软件nginx tesseract-ocr tesseract-ocr-eng janus libeve
 apt install -y nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  >> ./log.txt
 echo "正在安装PiKVM......"  
 dpkg -i ./fruity-pikvm_0.2_armhf.deb && echo "PiKVM安装成功！" && systemctl enable kvmd-vnc
-
+cd $CURRENTWD
 cp ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/ && patch -s -p0 < chinese.patch
 cd $CURRENTWD
 cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch
