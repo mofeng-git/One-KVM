@@ -1,0 +1,1509 @@
+Only in ./: chinese.patch
+diff -ur /usr/share/kvmd/web/index.html ./index.html
+--- /usr/share/kvmd/web/index.html	2023-11-05 07:33:58.411778109 +0000
++++ ./index.html	2023-11-05 02:14:31.204114651 +0000
+@@ -25,7 +25,7 @@
+ <html lang="en">
+   <head>
+     <meta charset="utf-8">
+-    <title>PiKVM Index</title>
++    <title>PiKVM 首页</title>
+     <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
+     <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
+     <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
+@@ -53,7 +53,7 @@
+             <td>
+               <table>
+                 <tr>
+-                  <td class="title" colspan="2">The Open Source IP-KVM</td>
++                  <td class="title" colspan="2">IP-KVM</td>
+                 </tr>
+                 <tr>
+                   <td class="copyright" colspan="2">Copyright &copy; 2018-2022 <a target="_blank" href="mailto:mdevaev@gmail.com">Maxim Devaev</a></td>
+@@ -76,16 +76,16 @@
+         <div id="app-keyboard-warning">
+           <hr>
+           <p class="text">
+-            Please note that when you are working with a KVM session or another application that captures the keyboard,
+-            you can't use some keyboard shortcuts such as Ctrl+Alt+Del (which will be caught by your OS) or Ctrl+W (caught by your browser).
++            请注意，在使用KVM会话或另一个捕获键盘的应用程序时，您不能使用一些键盘快捷键，
++            例如Ctrl+Alt+Del（这将被您的操作系统捕获）或Ctrl+W（将被您的浏览器捕获）。
+           </p>
+-          <p class="text">To override this limitation you can use <a target="_blank" href="https://google.com/chrome">Google Chrome</a>
+-            or <a target="_blank" href="https://chromium.org/Home">Chromium</a> in application mode.
++          <p class="text">如果您想解除这个限制，您可以在应用程序模式下使用<a target="_blank" href="https://google.com/chrome">Google Chrome</a>
++            或 <a target="_blank" href="https://chromium.org/Home">Chromium</a>。
+           </p>
+           <div class="code" id="app-text"></div>
+         </div>
+         <hr>
+-        <p class="text credits"><a target="_blank" href="https://pikvm.org">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">Support</a></p>
++        <p class="text credits"><a target="_blank" href="https://pikvm.org">PiKVM 项目</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">文档</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">支持</a></p>
+       </div>
+     </div>
+   </body>
+diff -ur /usr/share/kvmd/web/ipmi/index.html ./ipmi/index.html
+--- /usr/share/kvmd/web/ipmi/index.html	2023-11-05 07:33:58.421778307 +0000
++++ ./ipmi/index.html	2023-11-03 13:46:31.562013637 +0000
+@@ -43,18 +43,17 @@
+   </head>
+   <body>
+     <div class="start-box">
+-      <div class="start"><a style="display:inline-block; margin-top:4px; color:#5c90bc; text-decoration:none" href="/">&nbsp;&nbsp;&larr;&nbsp;&nbsp; [ PiKVM Index ]</a>
++      <div class="start"><a style="display:inline-block; margin-top:4px; color:#5c90bc; text-decoration:none" href="/">&nbsp;&nbsp;&larr;&nbsp;&nbsp; [ PiKVM 首页 ]</a>
+         <hr>
+-        <p class="text">This PiKVM device has running <b>kvmd-ipmi</b> daemon and provides IPMI 2.0 interface for some basic
+-          BMC operations like on/off/reset the server.
++        <p class="text">这是一个运行<b>kvmd-ipmi</b>守护程序的PiKVM设备，并提供IPMI 2.0接口进行基本服务器管理操作，如开关机/重置。
+         </p>
+-        <p class="text"><b>WARNING!</b> We strongly don't recommend you to use IPMI in untrusted networks because
+-          this protocol is completely unsafe by design. In short, the authentication process for IPMI mandates
+-          that the server send a salted SHA1 or MD5 hash of the requested user's password to the client,
+-          prior to the client authenticating.
++        <p class="text"><b>警告!</b> 我们不建议在不受信任的网络中使用IPMI，
++          因为这种协议的设计目的是完全不可信的设计。
++          总之，IPMI的认证过程要求服务器将请求用户的密码的SHA1或MD5散列发送给客户端，
++          以便客户端进行身份验证。
+         </p>
+-        <p class="text"><b>NEVER</b> use the same passwords for KVMD and IPMI users. And even better not to use IPMI.
+-          Instead, you can directly use KVMD API via curl. Here some examples:
++        <p class="text"><b>禁忌</b> 请确保KVMD和IPMI用户使用相同的密码。
++          最好是不使用IPMI，而是直接使用KVMD API via curl。这里有一些示例：
+         </p>
+         <div class="code" id="ipmi-text" style="max-height:200px"></div>
+       </div>
+diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
+--- /usr/share/kvmd/web/kvm/index.html	2023-11-05 07:33:58.421778307 +0000
++++ ./kvm/index.html	2023-11-05 02:32:19.506363158 +0000
+@@ -25,7 +25,7 @@
+ <html lang="en">
+   <head>
+     <meta charset="utf-8">
+-    <title>PiKVM Session</title>
++    <title>PiKVM 会话</title>
+     <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
+     <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
+     <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
+@@ -66,11 +66,11 @@
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+-                      <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
++                      <td style="line-height:1.5"><b>树莓派处于危险状态</b></td>
+                     </tr>
+                     <tr>
+-                      <td><sup style="line-height:1">This is not a drill! A red icon indicates a current issue,<br>
+-                          a yellow one that was observed since the device booted up</sup></td>
++                      <td><sup style="line-height:1">不要忽视！红色图标表示当前存在问题，<br>
++                        黄色图标表示自设备启动以来观察到的问题。</sup></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -80,11 +80,10 @@
+                     <table>
+                       <tr>
+                         <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-undervoltage.svg"></td>
+-                        <td style="line-height:1.5"><b>Undervoltage detected</b></td>
++                        <td style="line-height:1.5"><b>检测到低电压</b></td>
+                       </tr>
+                       <tr>
+-                        <td><sup style="line-height:1">Make sure your power supply and cabling are providing<br>
+-                            enough power to the Raspberry Pi (3A minimum)</sup></td>
++                        <td><sup style="line-height:1">确保电源和电缆能为 Raspberry Pi 提供<br>足够的电力（至少3A）</sup></td>
+                       </tr>
+                     </table>
+                   </div>
+@@ -95,11 +94,10 @@
+                     <table>
+                       <tr>
+                         <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-overheating.svg"></td>
+-                        <td style="line-height:1.5"><b>Overheating detected</b></td>
++                        <td style="line-height:1.5"><b>检测到过热</b></td>
+                       </tr>
+                       <tr>
+-                        <td><sup style="line-height:1">Frequency capping due to overheating,<br>
+-                            improve cooling of the Raspberry Pi</sup></td>
++                        <td><sup style="line-height:1">过热导致的频率上限，<br>请改善 Raspberry Pi 的散热</sup></td>
+                       </tr>
+                     </table>
+                   </div>
+@@ -114,11 +112,11 @@
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+-                      <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
++                      <td style="line-height:1.5"><b>树莓派处于危险状态</b></td>
+                     </tr>
+                     <tr>
+-                      <td><sup style="line-height:1">This is not a drill! A red icon indicates a current issue,<br>
+-                          a yellow one that was observed in the past</sup></td>
++                      <td><sup style="line-height:1">不要忽视！ 红色图标表示当前问题，<br>
++                        黄色图标表示过去发现的问题</sup></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -128,10 +126,10 @@
+                     <table>
+                       <tr>
+                         <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-fan.svg"></td>
+-                        <td style="line-height:1.5"><b>Fan failed</b></td>
++                        <td style="line-height:1.5"><b>风扇故障</b></td>
+                       </tr>
+                       <tr>
+-                        <td><sup style="line-height:1">A fan error occured, please check the log</sup></td>
++                        <td><sup style="line-height:1">出现风扇错误，请查看日志</sup></td>
+                       </tr>
+                     </table>
+                   </div>
+@@ -139,22 +137,22 @@
+           </div>
+         </li>
+       </div>
+-      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg"><span>System</span></a>
++      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg"><span>系统</span></a>
+         <div class="menu" id="system-menu">
+           <table class="kv">
+             <tr>
+-              <td class="value">Runtime settings &amp; tools</td>
++              <td class="value">运行设置 &amp; 工具</td>
+               <td class="feature-disabled" id="system-tool-webterm">
+-                <button class="small" data-force-hide-menu data-show-window="webterm-window">&bull; Term</button>
++                <button class="small" data-force-hide-menu data-show-window="webterm-window">&bull; 终端</button>
+               </td>
+               <td id="system-tool-about">
+-                <button class="small" data-force-hide-menu data-show-window="about-window">&bull; About</button>
++                <button class="small" data-force-hide-menu data-show-window="about-window">&bull; 关于</button>
+               </td>
+               <td id="system-tool-log">
+-                <button class="small" data-force-hide-menu id="open-log-button">&bull; Log</button>
++                <button class="small" data-force-hide-menu id="open-log-button">&bull; 日志</button>
+               </td>
+               <td class="feature-disabled" id="system-tool-wol">
+-                <button class="gpio-button small" data-force-hide-menu id="gpio-button-__wol__" data-channel="__wol__" data-confirm="Are you sure to send Wake-on-LAN packet to the server?">&bull; WoL</button>
++                <button class="gpio-button small" data-force-hide-menu id="gpio-button-__wol__" data-channel="__wol__" data-confirm="您确定要向服务器发送网络唤醒数据包吗？">&bull; WoL</button>
+               </td>
+             </tr>
+           </table>
+@@ -164,7 +162,7 @@
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+-                      <td style="line-height:1.5"><b>WebRTC is not supported by this browser</b></td>
++                      <td style="line-height:1.5"><b>此浏览器不支持 WebRTC</b></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -175,7 +173,7 @@
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+-                      <td style="line-height:1.5"><b>H.264 is not supported by this browser</b></td>
++                      <td style="line-height:1.5"><b>此浏览器不支持 H.264</b></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -183,20 +181,20 @@
+           </div>
+           <table class="kv">
+             <tr class="feature-disabled" id="stream-resolution">
+-              <td>Resolution:</td>
++              <td>分辨率:</td>
+               <td>
+                 <select disabled id="stream-resolution-selector"></select>
+               </td>
+             </tr>
+             <tr class="feature-disabled" id="stream-quality">
+-              <td>JPEG quality:</td>
++              <td>JPEG 质量:</td>
+               <td class="value-slider">
+                 <input class="slider" disabled type="range" id="stream-quality-slider">
+               </td>
+               <td class="value-number" id="stream-quality-value"></td>
+             </tr>
+             <tr class="feature-disabled" id="stream-h264-bitrate">
+-              <td>H.264 kbps:</td>
++              <td>H.264 码率（kbps）:</td>
+               <td class="value-slider">
+                 <input class="slider" disabled type="range" id="stream-h264-bitrate-slider">
+               </td>
+@@ -210,14 +208,14 @@
+               <td class="value-number" id="stream-h264-gop-value"></td>
+             </tr>
+             <tr>
+-              <td>Max FPS:</td>
++              <td>最大帧率：</td>
+               <td class="value-slider">
+                 <input class="slider" disabled type="range" id="stream-desired-fps-slider">
+               </td>
+               <td class="value-number" id="stream-desired-fps-value"></td>
+             </tr>
+             <tr class="feature-disabled" id="stream-mode">
+-              <td>Video <a target="_blank" href="https://docs.pikvm.org/webrtc">mode</a>:</td>
++              <td>视频 <a target="_blank" href="https://docs.pikvm.org/webrtc">模式</a>:</td>
+               <td>
+                 <div class="radio-box">
+                   <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
+@@ -228,7 +226,7 @@
+               </td>
+             </tr>
+             <tr class="feature-disabled" id="stream-audio">
+-              <td>Audio volume:</td>
++              <td>音频音量：</td>
+               <td class="value-slider">
+                 <input class="slider" type="range" id="stream-audio-volume-slider">
+               </td>
+@@ -237,21 +235,21 @@
+           </table>
+           <hr>
+           <div class="buttons buttons-row">
+-            <button class="row33" data-force-hide-menu data-show-window="stream-window">&bull; Show stream</button>
+-            <button class="row33" disabled data-force-hide-menu id="stream-screenshot-button">&bull; Screenshot</button>
+-            <button class="row33" disabled id="stream-reset-button">Reset stream</button>
++            <button class="row33" data-force-hide-menu data-show-window="stream-window">&bull; 显示视频流</button>
++            <button class="row33" disabled data-force-hide-menu id="stream-screenshot-button">&bull; 截屏</button>
++            <button class="row33" disabled id="stream-reset-button">重置视频流</button>
+           </div>
+           <div class="feature-disabled" id="hid-outputs">
+             <hr>
+             <table class="kv">
+               <tr class="feature-disabled" id="hid-outputs-keyboard">
+-                <td>Keyboard mode:</td>
++                <td>键盘样式:</td>
+                 <td>
+                   <div class="radio-box" id="hid-outputs-keyboard-box"></div>
+                 </td>
+               </tr>
+               <tr class="feature-disabled" id="hid-outputs-mouse">
+-                <td>Mouse <a target="_blank" href="https://docs.pikvm.org/mouse">mode</a>:</td>
++                <td>鼠标 <a target="_blank" href="https://docs.pikvm.org/mouse">模式</a>:</td>
+                 <td>
+                   <div class="radio-box" id="hid-outputs-mouse-box"></div>
+                 </td>
+@@ -259,25 +257,25 @@
+             </table>
+           </div>
+           <details>
+-            <summary>Mouse settings</summary>
++            <summary>鼠标设置</summary>
+             <div class="spoiler">
+               <table class="kv">
+                 <tr>
+-                  <td>Polling interval:</td>
++                  <td>轮询间隔：</td>
+                   <td class="value-slider">
+                     <input class="slider" type="range" id="hid-mouse-rate-slider">
+                   </td>
+                   <td class="value-number" id="hid-mouse-rate-value"></td>
+                 </tr>
+                 <tr class="feature-disabled" id="hid-mouse-sens">
+-                  <td>Relative sensitivity:</td>
++                  <td>相对灵敏度：</td>
+                   <td class="value-slider">
+                     <input class="slider" disabled type="range" id="hid-mouse-sens-slider">
+                   </td>
+                   <td class="value-number" id="hid-mouse-sens-value"></td>
+                 </tr>
+                 <tr class="feature-disabled" id="hid-mouse-squash">
+-                      <td>Squash relative moves:</td>
++                      <td>压扁相对移动：</td>
+                       <td align="right">
+                         <div class="switch-box">
+                           <input checked type="checkbox" id="hid-mouse-squash-switch">
+@@ -286,7 +284,7 @@
+                       </td>
+                 </tr>
+                 <tr>
+-                      <td>Reverse scrolling:</td>
++                      <td>反向滚动：</td>
+                       <td align="right">
+                         <div class="switch-box">
+                           <input type="checkbox" id="hid-mouse-reverse-scrolling-switch">
+@@ -299,7 +297,7 @@
+           </details>
+           <table class="kv">
+             <tr class="feature-disabled" id="hid-connect">
+-                  <td>Connect HID to Server:</td>
++                  <td>将 HID 连接到主机：</td>
+                   <td align="right">
+                     <div class="switch-box">
+                       <input checked type="checkbox" id="hid-connect-switch">
+@@ -308,7 +306,7 @@
+                   </td>
+             </tr>
+             <tr>
+-                  <td>Mute HID input events:</td>
++                  <td>忽略 HID 输入事件：</td>
+                   <td align="right">
+                     <div class="switch-box">
+                       <input type="checkbox" id="hid-mute-switch">
+@@ -317,16 +315,16 @@
+                   </td>
+             </tr>
+             <tr class="feature-disabled" id="v3-usb-breaker">
+-              <td>Connect main USB to Server:</td>
++              <td>将主 USB 连接到主机：</td>
+               <td align="right">
+                 <div class="switch-box">
+-                  <input class="gpio-switch" disabled type="checkbox" id="gpio-switch-__v3_usb_breaker__" data-channel="__v3_usb_breaker__" data-confirm-off="Turning off this switch will disconnect the main USB&lt;br&gt;from the server. Are you sure you want to continue?">
++                  <input class="gpio-switch" disabled type="checkbox" id="gpio-switch-__v3_usb_breaker__" data-channel="__v3_usb_breaker__" data-confirm-off="关闭此开关将断开主 USB&lt;br&gt;与服务器的连接。您确定要继续吗？">
+                   <label for="gpio-switch-__v3_usb_breaker__"><span class="switch-inner"></span><span class="switch"></span></label>
+                 </div>
+               </td>
+             </tr>
+             <tr class="feature-disabled" id="v4-locator">
+-              <td>Enable locator LED:</td>
++              <td>启用定位 LED：</td>
+               <td align="right">
+                 <div class="switch-box">
+                   <input class="gpio-switch" disabled type="checkbox" id="gpio-switch-__v4_locator__" data-channel="__v4_locator__">
+@@ -335,7 +333,7 @@
+               </td>
+             </tr>
+             <tr>
+-                  <td>Ask page close confirmation:</td>
++                  <td>页面关闭确认：</td>
+                   <td align="right">
+                     <div class="switch-box">
+                       <input checked type="checkbox" id="page-close-ask-switch">
+@@ -346,18 +344,18 @@
+           </table>
+           <hr>
+           <div class="buttons buttons-row">
+-            <button class="row50" data-force-hide-menu data-show-window="keyboard-window">&bull; Show keyboard</button>
+-            <button class="row50" disabled id="hid-reset-button">Reset HID</button>
++            <button class="row50" data-force-hide-menu data-show-window="keyboard-window">&bull; 显示键盘</button>
++            <button class="row50" disabled id="hid-reset-button">重置 HID</button>
+           </div>
+         </div>
+       </li>
+       <li class="right feature-disabled" id="atx-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" id="atx-hdd-led" src="/share/svg/led-atx-hdd.svg"><span>ATX</span></a>
+         <div class="menu">
+-          <div class="text"><b>Control the server's power<br></b><sub>Use the short click for ACPI shutdown</sub></div>
++          <div class="text"><b>控制服务器电源<br></b><sub>使用短按键关闭 ACPI</sub></div>
+           <hr>
+               <table class="kv">
+                 <tr>
+-                      <td>Ask click confirmation:</td>
++                      <td>点击确认：</td>
+                       <td align="right">
+                         <div class="switch-box">
+                           <input checked type="checkbox" id="atx-ask-switch">
+@@ -368,23 +366,23 @@
+               </table>
+           <hr>
+           <div class="buttons">
+-            <button disabled data-force-hide-menu id="atx-power-button">&bull; Click Power <sup><i>short</i></sup></button>
+-            <button disabled data-force-hide-menu id="atx-power-button-long">&bull; Click Power <sup><i>long</i></sup></button>
++            <button disabled data-force-hide-menu id="atx-power-button">&bull;按下电源键 <sup><i>短按</i></sup></button>
++            <button disabled data-force-hide-menu id="atx-power-button-long">&bull; 按下电源键 <sup><i>长按</i></sup></button>
+             <hr>
+-            <button disabled data-force-hide-menu id="atx-reset-button">&bull; Click Reset</button>
++            <button disabled data-force-hide-menu id="atx-reset-button">&bull; 按键重置</button>
+           </div>
+         </div>
+       </li>
+-      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="/share/svg/led-msd.svg"><span>Drive</span></a>
++      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="/share/svg/led-msd.svg"><span>外设</span></a>
+         <div class="menu" id="msd-menu">
+-          <div class="text"><b>Mass Storage Drive: </b><span id="msd-status"></span><br></div>
++          <div class="text"><b>大容量存储驱动器： </b><span id="msd-status"></span><br></div>
+           <hr>
+           <div class="hidden" id="msd-message-offline">
+                 <div class="text">
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+-                      <td style="line-height:1.5"><b>Mass Storage Drive is offline</b></td>
++                      <td style="line-height:1.5"><b>大容量存储驱动器已脱机</b></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -395,10 +393,10 @@
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+-                      <td style="line-height:1.5"><b>Current image is broken!</b></td>
++                      <td style="line-height:1.5"><b>当前镜像已损坏！</b></td>
+                     </tr>
+                     <tr>
+-                      <td><sup style="line-height:1">Perhaps uploading was interrupted<br></sup></td>
++                      <td><sup style="line-height:1">可能上传被中断了<br></sup></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -409,10 +407,10 @@
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+-                      <td style="line-height:1.5"><b>Current image is too big for CD-ROM!</b></td>
++                      <td style="line-height:1.5"><b>当前镜像对于 CD-ROM 格式来说太大了！</b></td>
+                     </tr>
+                     <tr>
+-                      <td><sup style="line-height:1">The device filesystem will be truncated to 2.2GiB</sup></td>
++                      <td><sup style="line-height:1">设备文件将被截断为 2.2GiB</sup></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -423,10 +421,10 @@
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+-                      <td style="line-height:1.5"><b>Current image is out of storage</b></td>
++                      <td style="line-height:1.5"><b>当前镜像已超出存储空间</b></td>
+                     </tr>
+                     <tr>
+-                      <td><sup style="line-height:1">This image was connected manually using <b>kvmd-otgmsd</b></sup></td>
++                      <td><sup style="line-height:1">该镜像是<b>kvmd-otgmsd</b>通过手动连接的</sup></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -437,12 +435,12 @@
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+-                      <td style="line-height:1.5"><b>Read-write mode is enabled</b></td>
++                      <td style="line-height:1.5"><b>读写模式已启用</b></td>
+                     </tr>
+                     <tr>
+-                      <td><sup style="line-height:1">Do not turn off PiKVM while this is active to prevent<br>
+-                          filesystem corruption. Use read-only mode where possible,<br>
+-                          as writing to SD card often can reduce its lifespan.</sup></td>
++                      <td><sup style="line-height:1">为防止文件系统损坏，请勿关闭 PiKVM。</br>
++                        尽可能使用只读模式，</br>
++                        因为经常写入 SD 卡会缩短其使用寿命。</sup></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -453,10 +451,10 @@
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+-                      <td style="line-height:1.5"><b>The image is being downloaded from PiKVM</b></td>
++                      <td style="line-height:1.5"><b>镜像正在从 PiKVM 下载</b></td>
+                     </tr>
+                     <tr>
+-                      <td><sup style="line-height:1">Please wait</sup></td>
++                      <td><sup style="line-height:1">请稍等</sup></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -464,7 +462,7 @@
+           </div>
+           <table class="kv">
+             <tr>
+-              <td>Image:</td>
++              <td>镜像:</td>
+               <td width="100%">
+                 <select disabled id="msd-image-selector"></select>
+               </td>
+@@ -478,7 +476,7 @@
+           </table>
+           <table class="kv msd-cdrom-emulation feature-disabled">
+             <tr>
+-              <td>Drive <a target="_blank" href="https://docs.pikvm.org/msd">mode</a>:</td>
++              <td>Drive <a target="_blank" href="https://docs.pikvm.org/msd">格式</a>:</td>
+               <td>
+                 <div class="radio-box">
+                   <input checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1">
+@@ -488,7 +486,7 @@
+                 </div>
+               </td>
+               <td>&nbsp;</td>
+-                  <td class="msd-rw feature-disabled">Writable:</td>
++                  <td class="msd-rw feature-disabled">可写:</td>
+                   <td class="msd-rw feature-disabled" align="right">
+                     <div class="switch-box">
+                       <input disabled type="checkbox" id="msd-rw-switch">
+@@ -503,9 +501,9 @@
+           </div>
+           <hr>
+           <div class="buttons buttons-row">
+-            <button class="row50" disabled id="msd-select-new-button">Select image to upload</button>
+-            <button class="row25" disabled id="msd-upload-new-button">Upload</button>
+-            <button class="row25" disabled id="msd-abort-new-button">Abort</button>
++            <button class="row50" disabled id="msd-select-new-button">选择要上传的镜像</button>
++            <button class="row25" disabled id="msd-upload-new-button">上传</button>
++            <button class="row25" disabled id="msd-abort-new-button">放弃</button>
+           </div>
+           <div class="hidden" id="msd-message-another-user-uploads">
+             <hr>
+@@ -513,7 +511,7 @@
+                   <table>
+                     <tr>
+                       <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+-                      <td style="line-height:1.5"><b>Another user uploads an image</b></td>
++                      <td style="line-height:1.5"><b>另一位用户上传了一个镜像</b></td>
+                     </tr>
+                   </table>
+                 </div>
+@@ -522,13 +520,13 @@
+             <hr>
+             <table class="kv">
+               <tr>
+-                <td>Specify a local file:</td>
++                <td>指定本地文件:</td>
+                 <td>
+                   <input type="file" id="msd-new-file">
+                 </td>
+               </tr>
+               <tr>
+-                <td><b>Or</b> paste a URL:</td>
++                <td><b>Or</b> 粘贴一条 URL:</td>
+                 <td>
+                   <input type="text" id="msd-new-url" style="width: 100%">
+                 </td>
+@@ -537,12 +535,12 @@
+             <hr>
+             <table class="kv">
+               <tr>
+-                <td class="value">Note:</td>
+-                <td>&bull; Don't close the browser page until the upload is complete.</td>
++                <td class="value">注意:</td>
++                <td>&bull; 上传完成前不要关闭浏览器页面。</td>
+               </tr>
+               <tr>
+                 <td></td>
+-                <td>&bull; To speed up the upload, close the stream window.</td>
++                <td>&bull; 要加快上传速度，请关闭视频流窗口。</td>
+               </tr>
+             </table>
+           </div>
+@@ -550,11 +548,11 @@
+             <hr>
+             <table class="kv">
+               <tr>
+-                <td>New image:</td>
++                <td>新的镜像:</td>
+                 <td class="value" id="msd-uploading-name"></td>
+               </tr>
+               <tr>
+-                <td>Upload size:</td>
++                <td>上传大小:</td>
+                 <td class="value" id="msd-uploading-size"></td>
+               </tr>
+             </table>
+@@ -564,38 +562,38 @@
+           </div>
+           <hr>
+           <div class="buttons buttons-row">
+-            <button class="row50" disabled id="msd-connect-button">Connect drive to Server</button>
+-            <button class="row25" disabled id="msd-disconnect-button">Disconnect</button>
+-            <button class="row25" disabled id="msd-reset-button">Reset</button>
++            <button class="row50" disabled id="msd-connect-button">连接设备到主机</button>
++            <button class="row25" disabled id="msd-disconnect-button">断开连接</button>
++            <button class="row25" disabled id="msd-reset-button">重置</button>
+           </div>
+         </div>
+       </li>
+-      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="/share/svg/led-gear.svg"><span>Macro</span></a>
++      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="/share/svg/led-gear.svg"><span>宏</span></a>
+         <div class="menu">
+-          <div class="text"><b>Record and play HID/ATX/GPIO actions<br></b><sub>For security reasons, the record will not be saved on the PiKVM</sub></div>
++          <div class="text"><b>记录和重放 HID/ATX/GPIO 操作<br></b><sub>出于安全考虑，记录将不会保存在 PiKVM 上。</sub></div>
+           <hr>
+           <div class="buttons buttons-row">
+-            <button class="row25" disabled data-force-hide-menu id="hid-recorder-record">&bull; Rec</button>
+-            <button class="row25" disabled id="hid-recorder-stop">Stop</button>
+-            <button class="row25" disabled id="hid-recorder-play">Play</button>
+-            <button class="row25" disabled id="hid-recorder-clear">Clear</button>
++            <button class="row25" disabled data-force-hide-menu id="hid-recorder-record">&bull; 记录</button>
++            <button class="row25" disabled id="hid-recorder-stop">停止</button>
++            <button class="row25" disabled id="hid-recorder-play">重复</button>
++            <button class="row25" disabled id="hid-recorder-clear">清除</button>
+           </div>
+           <hr>
+           <table class="kv">
+             <tr>
+-              <td>Script time:</td>
++              <td>脚本时间：</td>
+               <td class="value" colspan="2" id="hid-recorder-time">00:00:00.0</td>
+             </tr>
+             <tr>
+-              <td>Scripted events:</td>
++              <td>脚本事件：</td>
+               <td class="value" id="hid-recorder-events-count">0</td>
+-              <td><sup><i>include delays</i></sup></td>
++              <td><sup><i>包括延误</i></sup></td>
+             </tr>
+           </table>
+           <hr>
+               <table class="kv">
+                 <tr>
+-                      <td>Infinite loop playback:</td>
++                      <td>无限循环播放：</td>
+                       <td align="right">
+                         <div class="switch-box">
+                           <input disabled type="checkbox" id="hid-recorder-loop-switch">
+@@ -607,14 +605,14 @@
+           <hr>
+           <input type="file" id="hid-recorder-new-script-file">
+           <div class="buttons buttons-row">
+-            <button class="row50" disabled id="hid-recorder-upload">Upload script</button>
+-            <button class="row50" disabled id="hid-recorder-download">Download script</button>
++            <button class="row50" disabled id="hid-recorder-upload">上传脚本</button>
++            <button class="row50" disabled id="hid-recorder-download">下载脚本</button>
+           </div>
+         </div>
+       </li>
+-      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="/share/svg/led-gear.svg"><span>Text</span></a>
++      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="/share/svg/led-gear.svg"><span>文本</span></a>
+         <div class="menu" id="text-menu">
+-          <div class="text"><b>Paste text as keypress sequence<br></b><sub>Please note that PiKVM cannot switch the keyboard layout</sub></div>
++          <div class="text"><b>以按键顺序粘贴文本<br></b><sub>请注意，PiKVM 无法切换键盘布局</sub></div>
+           <hr>
+           <div class="text" style="margin-right: 20px">
+             <textarea id="hid-pak-text" placeholder="Enter your text here"></textarea>
+@@ -622,9 +620,9 @@
+           <table class="kv">
+             <tr>
+               <td>
+-                <button disabled data-force-hide-menu id="hid-pak-button">&bull; Paste</button>
++                <button disabled data-force-hide-menu id="hid-pak-button">&bull; 粘贴</button>
+               </td>
+-              <td>using host keymap</td>
++              <td>使用键盘映射：</td>
+               <td>
+                 <select id="hid-pak-keymap-selector"></select>
+               </td>
+@@ -632,7 +630,7 @@
+           </table>
+           <table class="kv">
+             <tr>
+-                  <td>Ask paste confirmation:</td>
++                  <td>粘贴确认：</td>
+                   <td align="right">
+                     <div class="switch-box">
+                       <input checked type="checkbox" id="hid-pak-ask-switch">
+@@ -641,7 +639,7 @@
+                   </td>
+             </tr>
+             <tr class="feature-disabled" id="hid-pak-secure">
+-                  <td>Hide input text:</td>
++                  <td>隐藏输入文本：</td>
+                   <td align="right">
+                     <div class="switch-box">
+                       <input type="checkbox" id="hid-pak-secure-switch">
+@@ -653,12 +651,12 @@
+           <div class="feature-disabled" id="stream-ocr">
+             <hr><br>
+             <hr>
+-            <div class="text"><b>Text recognition <sup><i>&beta;</i></sup><br></b><sub><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> works locally on PiKVM</sub></div>
++            <div class="text"><b>文本识别 <sup><i>&beta;</i></sup><br></b><sub><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> 可在 PiKVM 上本地运行</sub></div>
+             <hr>
+             <table class="kv">
+               <tr>
+                 <td>
+-                  <button data-force-hide-menu id="stream-ocr-button">&bull; Select area</button>
++                  <button data-force-hide-menu id="stream-ocr-button">&bull; 请选择区域</button>
+                 </td>
+                 <td>for</td>
+                 <td>
+@@ -669,10 +667,10 @@
+             </table>
+             <table class="kv">
+               <tr>
+-                <td colspan="4">&bull; Press <b>Enter</b> to recognize and copy text to clipboard</td>
++                <td colspan="4">&bull; 按下 <b>Enter</b> 键识别文本并将其复制到剪贴板</td>
+               </tr>
+               <tr>
+-                <td colspan="4">&bull; Press <b>Esc</b> to cancel selection</td>
++                <td colspan="4">&bull; 按下 <b>Esc</b> 键取消选择</td>
+               </tr>
+               <tr>
+                 <td></td>
+@@ -681,9 +679,9 @@
+           </div>
+         </div>
+       </li>
+-      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#">Shortcuts</a>
++      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#">快捷键</a>
+         <div class="menu">
+-          <div class="text"><b>Quick keyboard shortcuts<br></b><sub>Also see <i>System &rarr; Show keyboard</i></sub></div>
++          <div class="text"><b>快速键盘快捷键<br></b><sub>Also see <i>系统 &rarr; 显示键盘</i></sub></div>
+           <hr>
+           <div class="buttons">
+             <div class="buttons-row">
+@@ -718,7 +716,7 @@
+           <hr>
+           <div class="text">
+             &darr; &bull; Alt+SysRq+... <sup><i>linux magic
+-            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">help</a></i></sup>
++            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">帮助</a></i></sup>
+           </div>
+           <hr>
+           <div class="buttons">
+@@ -741,7 +739,7 @@
+           <hr>
+               <table class="kv">
+                 <tr>
+-                      <td>Ask the magic confirmation:</td>
++                      <td>magic确认：</td>
+                       <td align="right">
+                         <div class="switch-box">
+                           <input checked type="checkbox" id="hid-sysrq-ask-switch">
+@@ -810,7 +808,7 @@
+     </div>
+     <div class="window" id="keyboard-window">
+       <div class="window-header" id="keyboard-window-header">
+-        <div class="window-grab">Virtual Keyboard</div>
++        <div class="window-grab">虚拟键盘</div>
+         <button class="window-button-close"><b>&times;</b></button>
+       </div>
+       <div class="keypad" id="keyboard-desktop" align="center">
+@@ -1889,7 +1887,7 @@
+     </div>
+     <div class="window" id="about-window">
+       <div class="window-header">
+-        <div class="window-grab">About</div>
++        <div class="window-grab">关于</div>
+         <button class="window-button-close"><b>&times;</b></button>
+       </div>
+       <div id="about">
+@@ -1899,7 +1897,7 @@
+             <td>
+               <table>
+                 <tr>
+-                  <td class="title" colspan="2">The Open Source IP-KVM</td>
++                  <td class="title" colspan="2">开源项目IP-KVM</td>
+                 </tr>
+                 <tr>
+                   <td class="copyright" colspan="2">Copyright &copy; 2018-2022 <a target="_blank" href="mailto:mdevaev@gmail.com">Maxim Devaev</a></td>
+@@ -1910,33 +1908,30 @@
+         </table><br>
+         <div class="tabs-box">
+               <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
+-              <label for="about-tab-meta-button">Meta</label>
++              <label for="about-tab-meta-button">基本</label>
+               <div class="tab">
+-                <div class="code" id="about-meta"><span class="code-comment">No data</span>
++                <div class="code" id="about-meta"><span class="code-comment">无数据</span>
+                 </div>
+               </div>
+               <input type="radio" name="about-tab-button" id="about-tab-hardware-button">
+-              <label for="about-tab-hardware-button">Hardware</label>
++              <label for="about-tab-hardware-button">硬件</label>
+               <div class="tab">
+-                <div class="code" id="about-hardware"><span class="code-comment">No data</span>
++                <div class="code" id="about-hardware"><span class="code-comment">无数据</span>
+                 </div>
+               </div>
+               <input type="radio" name="about-tab-button" id="about-tab-version-button">
+-              <label for="about-tab-version-button">Version</label>
++              <label for="about-tab-version-button">版本</label>
+               <div class="tab">
+-                <div class="code" id="about-version"><span class="code-comment">No data</span>
++                <div class="code" id="about-version"><span class="code-comment">无数据</span>
+                 </div>
+               </div>
+               <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
+-              <label for="about-tab-thanks-button">Thanks</label>
++              <label for="about-tab-thanks-button">感谢名单</label>
+               <div class="tab">
+-                <div class="code" id="about-thanks"><span class="code-comment">// These kind people donated money to the PiKVM project<br>
+-                    // and supported the work on it. We are very grateful<br>
+-                    // for their help, and memorializing their names<br>
+-                    // is the least we can do in gratitude.<br>
+-                    // If you also want to support this project,<br>
+-                    // you can donate on <a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
+-                    or <a target="_blank" href="https://paypal.me/pikvm">Paypal</a>.</span>
++                <div class="code" id="about-thanks"><span class="code-comment">//这些好心人为 PiKVM 项目捐了款，支持了项目的工作。<br>
++                  //我们非常感谢他们的帮助，纪念他们的名字是我们最起码的感谢。<br>
++                  //如果您也想支持这个项目，可以通过<a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
++                  和 <a target="_blank" href="https://paypal.me/pikvm">Paypal</a>.</span>捐款。 <br>
+                   <ul>
+                     <li>A. Isenring</li>
+                     <li>Aaron Graubert</li>
+@@ -2502,12 +2497,12 @@
+                 </div>
+               </div>
+         </div><br>
+-        <p class="text credits"><a target="_blank" href="https://pikvm.org">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">Support</a></p>
++        <p class="text credits"><a target="_blank" href="https://pikvm.org">PiKVM 项目</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">文档</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">支持</a></p>
+       </div>
+     </div>
+     <div class="window window-resizable" id="webterm-window" style="width: 640px; height: 480px">
+       <div class="window-header">
+-        <div class="window-grab">Terminal</div>
++        <div class="window-grab">终端</div>
+         <button class="window-button-close"><b>&times;</b></button>
+         <button class="window-button-maximize">&#9744;</button>
+         <!-- Терминал глючит из-за зажимаемой клавиши ESC для выхода-->
+@@ -2517,7 +2512,7 @@
+     </div>
+     <ul class="footer">
+       <li class="footer-left" id="kvmd-meta-server-host"></li>
+-      <li class="footer-right"><a target="_blank" href="https://pikvm.org">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">Support</a></li>
++      <li class="footer-right"><a target="_blank" href="https://pikvm.org">PiKVM 项目</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">文档</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">支持</a></li>
+     </ul>
+   </body>
+ </html>
+\ No newline at end of file
+diff -ur /usr/share/kvmd/web/login/index.html ./login/index.html
+--- /usr/share/kvmd/web/login/index.html	2023-11-05 07:33:58.431778505 +0000
++++ ./login/index.html	2023-11-03 13:47:13.633011312 +0000
+@@ -25,7 +25,7 @@
+ <html lang="en">
+   <head>
+     <meta charset="utf-8">
+-    <title>PiKVM Login</title>
++    <title>PiKVM 登录</title>
+     <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
+     <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
+     <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
+@@ -49,21 +49,21 @@
+         <div id="login">
+           <table>
+             <tr>
+-              <td>Username:&nbsp;</td>
++              <td>账号：&nbsp;</td>
+               <td>
+                 <input type="text" id="user-input">
+               </td>
+             </tr>
+             <tr>
+-              <td>Password:&nbsp;</td>
++              <td>密码：&nbsp;</td>
+               <td>
+                 <input type="password" id="passwd-input">
+               </td>
+             </tr>
+             <tr>
+-              <td>2FA code:&nbsp;</td>
++              <td>2FA验证：&nbsp;</td>
+               <td>
+-                <input type="text" id="code-input" placeholder="if enabled">
++                <input type="text" id="code-input" placeholder="如果有">
+               </td>
+             </tr>
+             <tr>
+@@ -74,7 +74,7 @@
+             <tr>
+               <td></td>
+               <td>
+-                <button class="key" id="login-button">Login</button>
++                <button class="key" id="login-button">登录</button>
+               </td>
+             </tr>
+           </table>
+@@ -82,9 +82,10 @@
+       </div>
+     </form>
+     <ul class="footer">
+-      <li class="footer-left">This site is actively using JavaScript.<br>
+-        It doesn't contain ads, but is blocked by some ad filters.<br>
+-        Please turn it off to continue and reload the page.
++      <li class="footer-left">
++        本网站正在使用 JavaScript。<br>
++        本网站不包含广告，但会被某些广告过滤器阻止。<br>
++        请关闭 JavaScript 以继续浏览并重新加载页面
+       </li>
+     </ul>
+   </body>
+diff -ur /usr/share/kvmd/web/share/js/index/main.js ./share/js/index/main.js
+--- /usr/share/kvmd/web/share/js/index/main.js	2023-11-05 07:33:58.451778901 +0000
++++ ./share/js/index/main.js	2023-11-05 02:44:11.842200903 +0000
+@@ -39,13 +39,13 @@
+ 
+ function __setAppText() {
+ 	$("app-text").innerHTML = `
+-		<span class="code-comment"># On Linux using Chromium/Chrome via any terminal:<br>
++		<span class="code-comment"># 在 Linux 上使用 Chromium/Chrome，可通过任何终端进行操作：<br>
+ 		$</span> \`which chromium 2>/dev/null || which chrome 2>/dev/null || which google-chrome\` --app="${window.location.href}"<br>
+ 		<br>
+-		<span class="code-comment"># On MacOS using Terminal application:<br>
++		<span class="code-comment"># 在 MacOS 上使用终端应用程序：<br>
+ 		$</span> /Applications/Google&bsol; Chrome.app/Contents/MacOS/Google&bsol; Chrome --app="${window.location.href}"<br>
+ 		<br>
+-		<span class="code-comment"># On Windows via cmd.exe:<br>
++		<span class="code-comment"># 在 Windows 上通过 cmd.exe：<br>
+ 		C:&bsol;&gt;</span> start chrome --app="${window.location.href}"
+ 	`;
+ }
+@@ -58,7 +58,7 @@
+ 
+ 				let apps = [];
+ 				if (info.extras === null) {
+-					wm.error("Not all applications in the menu can be displayed<br>due an error. See KVMD logs for details.");
++					wm.error("由于错误，无法显示菜单中的所有应用程序<br>。详情请查看 KVMD 日志。");
+ 				} else {
+ 					apps = Object.values(info.extras).sort(function(a, b) {
+ 						if (a.place < b.place) {
+@@ -95,10 +95,10 @@
+ 
+ 				if (info.meta !== null && info.meta.server && info.meta.server.host) {
+ 					$("kvmd-meta-server-host").innerHTML = info.meta.server.host;
+-					document.title = `PiKVM Index: ${info.meta.server.host}`;
++					document.title = `PiKVM 首页: ${info.meta.server.host}`;
+ 				} else {
+ 					$("kvmd-meta-server-host").innerHTML = "";
+-					document.title = "PiKVM Index";
++					document.title = "PiKVM 首页";
+ 				}
+ 			} else if (http.status === 401 || http.status === 403) {
+ 				document.location.href = "/login";
+@@ -128,7 +128,7 @@
+ 			if (http.status === 200 || http.status === 401 || http.status === 403) {
+ 				document.location.href = "/login";
+ 			} else {
+-				wm.error("Logout error:<br>", http.responseText);
++				wm.error("登出错误：<br>", http.responseText);
+ 			}
+ 		}
+ 	});
+diff -ur /usr/share/kvmd/web/share/js/kvm/hid.js ./share/js/kvm/hid.js
+--- /usr/share/kvmd/web/share/js/kvm/hid.js	2023-11-05 07:33:58.461779099 +0000
++++ ./share/js/kvm/hid.js	2023-11-05 02:52:04.112372011 +0000
+@@ -98,7 +98,7 @@
+ 				}
+ 				let codes = el_shortcut.getAttribute("data-shortcut").split(" ");
+ 				if (ask) {
+-					let confirm_msg = `Do you want to press <b>${codes.join(" + ")}</b>?`;
++					let confirm_msg = `您想按下<b>${codes.join(" + ")}</b>?`;
+ 					wm.confirm(confirm_msg).then(function(ok) {
+ 						if (ok) {
+ 							__emitShortcut(codes);
+@@ -155,11 +155,11 @@
+ 				if ($("hid-outputs-mouse-box").outputs !== mouse_outputs) {
+ 					let html = "";
+ 					for (let args of [
+-						["Absolute", "usb", false],
++						["绝对", "usb", false],
+ 						["Abs-Win98", "usb_win98", false],
+-						["Relative", "usb_rel", true],
++						["相对", "usb_rel", true],
+ 						["PS/2", "ps2", true],
+-						["Off", "disabled"],
++						["关闭", "disabled"],
+ 					]) {
+ 						if (mouse_outputs.includes(args[1])) {
+ 							html += tools.radio.makeItem("hid-outputs-mouse-radio", args[0], args[1]);
+@@ -256,9 +256,9 @@
+ 						tools.el.setEnabled($("hid-pak-keymap-selector"), true);
+ 						$("hid-pak-text").value = "";
+ 						if (http.status === 413) {
+-							wm.error("Too many text for paste!");
++							wm.error("文字太多，无法粘贴！");
+ 						} else if (http.status !== 200) {
+-							wm.error("HID paste error:<br>", http.responseText);
++							wm.error("HID 粘贴错误：<br>", http.responseText);
+ 						} else if (http.status === 200) {
+ 							__recorder.recordPrintEvent(text);
+ 						}
+@@ -267,8 +267,8 @@
+ 			};
+ 
+ 			if ($("hid-pak-ask-switch").checked) {
+-				let confirm_msg = `You're going to paste ${text.length} character${text.length ? "s" : ""}.<br>`;
+-				confirm_msg += "Are you sure you want to continue?";
++				let confirm_msg = `您将粘贴 ${text.length} character${text.length ? "s" : ""}.<br>`;
++				confirm_msg += "你确定要继续吗？";
+ 				wm.confirm(confirm_msg).then(function(ok) {
+ 					if (ok) {
+ 						paste_as_keys();
+@@ -287,7 +287,7 @@
+ 		let http = tools.makeRequest("POST", `/api/hid/set_params?${hid}_output=${output}`, function() {
+ 			if (http.readyState === 4) {
+ 				if (http.status !== 200) {
+-					wm.error("Can't configure HID:<br>", http.responseText);
++					wm.error("无法配置 HID：<br>", http.responseText);
+ 				}
+ 			}
+ 		});
+@@ -298,14 +298,14 @@
+ 		let http = tools.makeRequest("POST", `/api/hid/set_connected?connected=${connected}`, function() {
+ 			if (http.readyState === 4) {
+ 				if (http.status !== 200) {
+-					wm.error(`Can't ${connected ? "connect" : "disconnect"} HID:<br>`, http.responseText);
++					wm.error(`无法${connected ? "连接" : "断开连接"} HID:<br>`, http.responseText);
+ 				}
+ 			}
+ 		});
+ 	};
+ 
+ 	var __clickResetButton = function() {
+-		wm.confirm("Are you sure you want to reset HID (keyboard & mouse)?").then(function(ok) {
++		wm.confirm("您确定要重置 HID（键盘和鼠标）吗？").then(function(ok) {
+ 			if (ok) {
+ 				let http = tools.makeRequest("POST", "/api/hid/reset", function() {
+ 					if (http.readyState === 4) {
+diff -ur /usr/share/kvmd/web/share/js/kvm/keyboard.js ./share/js/kvm/keyboard.js
+--- /usr/share/kvmd/web/share/js/kvm/keyboard.js	2023-11-05 07:33:58.461779099 +0000
++++ ./share/js/kvm/keyboard.js	2023-11-05 02:55:05.606347219 +0000
+@@ -103,7 +103,7 @@
+ 		if (__ws) {
+ 			if (__online === null) {
+ 				led = "led-red";
+-				title = (is_captured ? "Keyboard captured, HID offline" : "Keyboard free, HID offline");
++				title = (is_captured ? "键盘捕获，HID 脱机" : "键盘空闲，脱机 HID");
+ 			} else if (__online) {
+ 				if (is_captured) {
+ 					led = "led-green";
+@@ -111,11 +111,11 @@
+ 				}
+ 			} else {
+ 				led = "led-yellow";
+-				title = (is_captured ? "Keyboard captured, inactive/busy" : "Keyboard free, inactive/busy");
++				title = (is_captured ? "键盘捕获，未激活/繁忙" : "键盘空闲，未激活/繁忙");
+ 			}
+ 		} else {
+ 			if (is_captured) {
+-				title = "Keyboard captured, PiKVM offline";
++				title = "键盘捕获，PiKVM 脱机";
+ 			}
+ 		}
+ 		$("hid-keyboard-led").className = led;
+diff -ur /usr/share/kvmd/web/share/js/kvm/msd.js ./share/js/kvm/msd.js
+--- /usr/share/kvmd/web/share/js/kvm/msd.js	2023-11-05 07:33:58.461779099 +0000
++++ ./share/js/kvm/msd.js	2023-11-05 03:13:08.109729702 +0000
+@@ -36,7 +36,7 @@
+ 	var __http = null;
+ 
+ 	var __init__ = function() {
+-		$("msd-led").title = "Unknown state";
++		$("msd-led").title = "未知状态";
+ 
+ 		$("msd-image-selector").onchange = __selectImage;
+ 		tools.el.setOnClick($("msd-download-button"), __clickDownloadButton);
+@@ -80,7 +80,7 @@
+ 
+ 	var __clickRemoveButton = function() {
+ 		let name = $("msd-image-selector").value;
+-		wm.confirm(`Are you sure you want to remove the image<br><b>${name}</b> from PiKVM?`).then(function(ok) {
++		wm.confirm(`您确定要从 PiKVM 中删除<br><b>${name}</b>镜像吗？`).then(function(ok) {
+ 			if (ok) {
+ 				let http = tools.makeRequest("POST", `/api/msd/remove?image=${name}`, function() {
+ 					if (http.readyState === 4) {
+@@ -105,7 +105,7 @@
+ 		let http = tools.makeRequest("POST", `/api/msd/set_params?${name}=${encodeURIComponent(value)}`, function() {
+ 			if (http.readyState === 4) {
+ 				if (http.status !== 200) {
+-					wm.error("Can't configure MSD:<br>", http.responseText);
++					wm.error("无法配置 MSD：<br>", http.responseText);
+ 				}
+ 			}
+ 		});
+@@ -129,7 +129,7 @@
+ 	var __httpStateChange = function() {
+ 		if (__http.readyState === 4) {
+ 			if (__http.status !== 200) {
+-				wm.error("Can't upload image to the Mass Storage Drive:<br>", __http.responseText);
++				wm.error("无法将镜像上传到大容量存储驱动器：<br>", __http.responseText);
+ 			} else if ($("msd-new-url").value.length > 0) {
+ 				let msg = "";
+ 				try {
+@@ -145,10 +145,10 @@
+ 					let result_str = __http.responseText.slice(begin, end);
+ 					let result = JSON.parse(result_str);
+ 					if (!result.ok) {
+-						msg = `Can't upload image to the Mass Storage Drive:<br>${result_str}`;
++						msg = `无法将镜像上传到大容量存储驱动器：<<br>${result_str}`;
+ 					}
+ 				} catch (err) {
+-					msg = `Can't parse upload result:<br>${err}`;
++					msg = `无法解析上传结果：<br>${err}`;
+ 				}
+ 				if (msg.length > 0) {
+ 					wm.error(msg);
+@@ -179,11 +179,11 @@
+ 			__applyState();
+ 		});
+ 		__applyState();
+-		tools.el.setEnabled($(`msd-${connected ? "connect" : "disconnect"}-button`), false);
++		tools.el.setEnabled($(`msd-${connected ? "连接" : "断开连接"}-button`), false);
+ 	};
+ 
+ 	var __clickResetButton = function() {
+-		wm.confirm("Are you sure you want to reset Mass Storage Drive?").then(function(ok) {
++		wm.confirm("您确定要重置大容量存储驱动器吗？").then(function(ok) {
+ 			if (ok) {
+ 				let http = tools.makeRequest("POST", "/api/msd/reset", function() {
+ 					if (http.readyState === 4) {
+@@ -215,7 +215,7 @@
+ 		if (file) {
+ 			$("msd-new-url").value = "";
+ 			if (file.size > __state.storage.size) {
+-				wm.error("New image is too big for your Mass Storage Drive.<br>Maximum:", tools.formatSize(__state.storage.size));
++				wm.error("新镜像对于大容量存储驱动器来说太大。<br>最大值：", tools.formatSize(__state.storage.size));
+ 				el_input.value = "";
+ 			}
+ 		}
+@@ -241,9 +241,9 @@
+ 			let used = s.storage.size - s.storage.free;
+ 			let used_str = tools.formatSize(used);
+ 			let percent = used / s.storage.size * 100;
+-			tools.progress.setValue($("msd-storage-progress"), `Storage: ${used_str} of ${size_str}`, percent);
++			tools.progress.setValue($("msd-storage-progress"), `存储: ${used_str} of ${size_str}`, percent);
+ 		} else {
+-			tools.progress.setValue($("msd-storage-progress"), "Storage: unavailable", 0);
++			tools.progress.setValue($("msd-storage-progress"), "存储： 不可用", 0);
+ 		}
+ 
+ 		tools.el.setEnabled($("msd-image-selector"), (online && !s.drive.connected && !s.busy));
+@@ -278,7 +278,7 @@
+ 				let percent = Math.round(s.storage.uploading.written * 100 / s.storage.uploading.size);
+ 				tools.progress.setValue($("msd-uploading-progress"), `${percent}%`, percent);
+ 			} else if (!__http) {
+-				tools.progress.setValue($("msd-uploading-progress"), "Waiting for upload (press UPLOAD button) ...", 0);
++				tools.progress.setValue($("msd-uploading-progress"), "等待上传（按 UPLOAD 按钮） ...", 0);
+ 			}
+ 		} else {
+ 			$("msd-new-file").value = "";
+diff -ur /usr/share/kvmd/web/share/js/kvm/session.js ./share/js/kvm/session.js
+--- /usr/share/kvmd/web/share/js/kvm/session.js	2023-11-05 07:33:58.461779099 +0000
++++ ./share/js/kvm/session.js	2023-11-05 03:23:12.832716561 +0000
+@@ -23,16 +23,16 @@
+ "use strict";
+ 
+ 
+-import {tools, $} from "../tools.js";
+-import {wm} from "../wm.js";
++import { tools, $ } from "../tools.js";
++import { wm } from "../wm.js";
+ 
+-import {Recorder} from "./recorder.js";
+-import {Hid} from "./hid.js";
+-import {Atx} from "./atx.js";
+-import {Msd} from "./msd.js";
+-import {Streamer} from "./stream.js";
+-import {Gpio} from "./gpio.js";
+-import {Ocr} from "./ocr.js";
++import { Recorder } from "./recorder.js";
++import { Hid } from "./hid.js";
++import { Atx } from "./atx.js";
++import { Msd } from "./msd.js";
++import { Streamer } from "./stream.js";
++import { Gpio } from "./gpio.js";
++import { Ocr } from "./ocr.js";
+ 
+ 
+ export function Session() {
+@@ -56,29 +56,28 @@
+ 	var __info_hw_state = null;
+ 	var __info_fan_state = null;
+ 
+-	var __init__ = function() {
++	var __init__ = function () {
+ 		__startSession();
+ 	};
+ 
+ 	/************************************************************************/
+ 
+-	var __setAboutInfoMeta = function(state) {
++	var __setAboutInfoMeta = function (state) {
+ 		if (state !== null) {
+ 			let text = JSON.stringify(state, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
+ 			$("about-meta").innerHTML = `
+-				<span class="code-comment">// The PiKVM metadata.<br>
+-				// You can get this JSON using handle <a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a>.<br>
+-				// In the standard configuration this data<br>
+-				// is specified in the file /etc/kvmd/meta.yaml.</span><br>
++				<span class="code-comment">//PiKVM的基本配置<br>
++				// 您可以使用<a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a>获取该 JSON。 <br>
++				// 在标准配置中，这些数据在文件 /etc/kvmd/meta.yaml 中指定。</span><br>
+ 				<br>
+ 				${text}
+ 			`;
+ 			if (state.server && state.server.host) {
+ 				$("kvmd-meta-server-host").innerHTML = `Server: ${state.server.host}`;
+-				document.title = `PiKVM Session: ${state.server.host}`;
++				document.title = `PiKVM 会话： ${state.server.host}`;
+ 			} else {
+ 				$("kvmd-meta-server-host").innerHTML = "";
+-				document.title = "PiKVM Session";
++				document.title = "PiKVM 会话"
+ 			}
+ 
+ 			// Don't use this option, it may be removed in any time
+@@ -88,7 +87,7 @@
+ 		}
+ 	};
+ 
+-	var __setAboutInfoHw = function(state) {
++	var __setAboutInfoHw = function (state) {
+ 		if (state.health.throttling !== null) {
+ 			let flags = state.health.throttling.parsed_flags;
+ 			let undervoltage = (flags.undervoltage.now || flags.undervoltage.past);
+@@ -104,7 +103,7 @@
+ 		__renderAboutInfoHardware();
+ 	};
+ 
+-	var __setAboutInfoFan = function(state) {
++	var __setAboutInfoFan = function (state) {
+ 		let failed = false;
+ 		let failed_past = false;
+ 		if (state.monitored) {
+@@ -126,7 +125,7 @@
+ 		__renderAboutInfoHardware();
+ 	};
+ 
+-	var __renderAboutInfoHardware = function() {
++	var __renderAboutInfoHardware = function () {
+ 		let html = "";
+ 		if (__info_hw_state !== null) {
+ 			html += `
+@@ -152,19 +151,19 @@
+ 		$("about-hardware").innerHTML = html;
+ 	};
+ 
+-	var __formatPlatform = function(state) {
+-		return __formatUl([["Base", state.base], ["Serial", state.serial]]);
++	var __formatPlatform = function (state) {
++		return __formatUl([["基于", state.base], ["序列号", state.serial]]);
+ 	};
+ 
+-	var __formatFan = function(state) {
++	var __formatFan = function (state) {
+ 		if (!state.monitored) {
+-			return __formatUl([["Status", "Not monitored"]]);
++			return __formatUl([["状态", "未监控"]]);
+ 		} else if (state.state === null) {
+-			return __formatUl([["Status", __colored("red", "Not available")]]);
++			return __formatUl([["状态", __colored("red", "不可用")]]);
+ 		} else {
+ 			state = state.state;
+ 			let pairs = [
+-				["Status", (state.fan.ok ? __colored("green", "Ok") : __colored("red", "Failed"))],
++				["Status", (state.fan.ok ? __colored("green", "Ok") : __colored("red", ""))],
+ 				["Desired speed", `${state.fan.speed}%`],
+ 				["PWM", `${state.fan.pwm}`],
+ 			];
+@@ -175,7 +174,7 @@
+ 		}
+ 	};
+ 
+-	var __formatTemp = function(temp) {
++	var __formatTemp = function (temp) {
+ 		let pairs = [];
+ 		for (let field of Object.keys(temp).sort()) {
+ 			pairs.push([field.toUpperCase(), `${temp[field]}&deg;C`]);
+@@ -183,7 +182,7 @@
+ 		return __formatUl(pairs);
+ 	};
+ 
+-	var __formatThrottling = function(throttling) {
++	var __formatThrottling = function (throttling) {
+ 		if (throttling !== null) {
+ 			let pairs = [];
+ 			for (let field of Object.keys(throttling.parsed_flags).sort()) {
+@@ -201,11 +200,11 @@
+ 		}
+ 	};
+ 
+-	var __colored = function(color, text) {
++	var __colored = function (color, text) {
+ 		return `<font color="${color}">${text}</font>`;
+ 	};
+ 
+-	var __setAboutInfoSystem = function(state) {
++	var __setAboutInfoSystem = function (state) {
+ 		$("about-version").innerHTML = `
+ 			KVMD: <span class="code-comment">${state.kvmd.version}</span><br>
+ 			<hr>
+@@ -217,7 +216,7 @@
+ 		`;
+ 	};
+ 
+-	var __formatStreamerFeatures = function(features) {
++	var __formatStreamerFeatures = function (features) {
+ 		let pairs = [];
+ 		for (let field of Object.keys(features).sort()) {
+ 			pairs.push([field, (features[field] ? "Yes" : "No")]);
+@@ -225,7 +224,7 @@
+ 		return __formatUl(pairs);
+ 	};
+ 
+-	var __formatUname = function(kernel) {
++	var __formatUname = function (kernel) {
+ 		let pairs = [];
+ 		for (let field of Object.keys(kernel).sort()) {
+ 			if (field !== "system") {
+@@ -235,7 +234,7 @@
+ 		return __formatUl(pairs);
+ 	};
+ 
+-	var __formatUl = function(pairs) {
++	var __formatUl = function (pairs) {
+ 		let text = "<ul>";
+ 		for (let pair of pairs) {
+ 			text += `<li>${pair[0]}: <span class="code-comment">${pair[1]}</span></li>`;
+@@ -243,18 +242,18 @@
+ 		return text + "</ul>";
+ 	};
+ 
+-	var __setExtras = function(state) {
++	var __setExtras = function (state) {
+ 		let show_hook = null;
+ 		let close_hook = null;
+ 		let has_webterm = (state.webterm && (state.webterm.enabled || state.webterm.started));
+ 		if (has_webterm) {
+ 			let path = "/" + state.webterm.path;
+-			show_hook = function() {
+-				tools.info("Terminal opened: ", path);
++			show_hook = function () {
++				tools.info("终端已打开 ", path);
+ 				$("webterm-iframe").src = path;
+ 			};
+-			close_hook = function() {
+-				tools.info("Terminal closed");
++			close_hook = function () {
++				tools.info("终端已关闭");
+ 				$("webterm-iframe").src = "";
+ 			};
+ 		}
+@@ -268,11 +267,11 @@
+ 		);
+ 	};
+ 
+-	var __startSession = function() {
++	var __startSession = function () {
+ 		$("link-led").className = "led-yellow";
+ 		$("link-led").title = "Connecting...";
+ 
+-		let http = tools.makeRequest("GET", "/api/auth/check", function() {
++		let http = tools.makeRequest("GET", "/api/auth/check", function () {
+ 			if (http.readyState === 4) {
+ 				if (http.status === 200) {
+ 					__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws`);
+@@ -282,7 +281,7 @@
+ 					__ws.onclose = __wsCloseHandler;
+ 				} else if (http.status === 401 || http.status === 403) {
+ 					window.onbeforeunload = () => null;
+-					wm.error("Unexpected logout occured, please login again").then(function() {
++					wm.error("发生意外登出，请重新登录").then(function () {
+ 						document.location.href = "/login";
+ 					});
+ 				} else {
+@@ -292,8 +291,8 @@
+ 		});
+ 	};
+ 
+-	var __wsOpenHandler = function(event) {
+-		tools.debug("Session: socket opened:", event);
++	var __wsOpenHandler = function (event) {
++		tools.debug("会话：已打开套接字：", event);
+ 		$("link-led").className = "led-green";
+ 		$("link-led").title = "Connected";
+ 		__recorder.setSocket(__ws);
+@@ -302,7 +301,7 @@
+ 		__ping_timer = setInterval(__pingServer, 1000);
+ 	};
+ 
+-	var __wsMessageHandler = function(event) {
++	var __wsMessageHandler = function (event) {
+ 		// tools.debug("Session: received socket data:", event.data);
+ 		let data = JSON.parse(event.data);
+ 		switch (data.event_type) {
+@@ -323,8 +322,8 @@
+ 		}
+ 	};
+ 
+-	var __wsErrorHandler = function(event) {
+-		tools.error("Session: socket error:", event);
++	var __wsErrorHandler = function (event) {
++		tools.error("会话：套接字错误：", event);
+ 		if (__ws) {
+ 			__ws.onclose = null;
+ 			__ws.close();
+@@ -332,8 +331,8 @@
+ 		}
+ 	};
+ 
+-	var __wsCloseHandler = function(event) {
+-		tools.debug("Session: socket closed:", event);
++	var __wsCloseHandler = function (event) {
++		tools.debug("会话：套接字已关闭：", event);
+ 
+ 		$("link-led").className = "led-gray";
+ 
+@@ -351,21 +350,21 @@
+ 		__streamer.setState(null);
+ 		__ws = null;
+ 
+-		setTimeout(function() {
++		setTimeout(function () {
+ 			$("link-led").className = "led-yellow";
+ 			setTimeout(__startSession, 500);
+ 		}, 500);
+ 	};
+ 
+-	var __pingServer = function() {
++	var __pingServer = function () {
+ 		try {
+ 			__missed_heartbeats += 1;
+ 			if (__missed_heartbeats >= 15) {
+-				throw new Error("Too many missed heartbeats");
++				throw new Error("太多错过的心跳");
+ 			}
+-			__ws.send(JSON.stringify({"event_type": "ping", "event": {}}));
++			__ws.send(JSON.stringify({ "event_type": "ping", "event": {} }));
+ 		} catch (err) {
+-			tools.error("Session: ping error:", err.message);
++			tools.error("会话： ping 错误：", err.message);
+ 			if (__ws) {
+ 				__ws.onclose = null;
+ 				__ws.close();
+diff -ur /usr/share/kvmd/web/share/js/kvm/stream.js ./share/js/kvm/stream.js
+--- /usr/share/kvmd/web/share/js/kvm/stream.js	2023-11-05 07:33:58.461779099 +0000
++++ ./share/js/kvm/stream.js	2023-11-05 03:16:31.654117367 +0000
+@@ -284,13 +284,13 @@
+ 	};
+ 
+ 	var __clickResetButton = function() {
+-		wm.confirm("Are you sure you want to reset stream?").then(function (ok) {
++		wm.confirm("您确定要重置视频流吗？").then(function (ok) {
+ 			if (ok) {
+ 				__resetStream();
+ 				let http = tools.makeRequest("POST", "/api/streamer/reset", function() {
+ 					if (http.readyState === 4) {
+ 						if (http.status !== 200) {
+-							wm.error("Can't reset stream:<br>", http.responseText);
++							wm.error("无法重置视频流：<br>", http.responseText);
+ 						}
+ 					}
+ 				});
+@@ -302,7 +302,7 @@
+ 		let http = tools.makeRequest("POST", `/api/streamer/set_params?${name}=${value}`, function() {
+ 			if (http.readyState === 4) {
+ 				if (http.status !== 200) {
+-					wm.error("Can't configure stream:<br>", http.responseText);
++					wm.error("无法配置视频流：<br>", http.responseText);
+ 				}
+ 			}
+ 		});
+diff -ur /usr/share/kvmd/web/vnc/index.html ./vnc/index.html
+--- /usr/share/kvmd/web/vnc/index.html	2023-11-05 07:33:58.511780089 +0000
++++ ./vnc/index.html	2023-11-03 04:07:44.571158422 +0000
+@@ -25,7 +25,7 @@
+ <html lang="en">
+   <head>
+     <meta charset="utf-8">
+-    <title>PiKVM VNC Info</title>
++    <title>PiKVM VNC 信息</title>
+     <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
+     <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
+     <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
+@@ -45,16 +45,16 @@
+     <div class="start-box">
+       <div class="start"><a style="display:inline-block; margin-top:4px; color:#5c90bc; text-decoration:none" href="/">&nbsp;&nbsp;&larr;&nbsp;&nbsp; [ PiKVM Index ]</a>
+         <hr>
+-        <p class="text">This PiKVM device has running <b>kvmd-vnc</b> daemon and provides VNC access to the server.</p>
+-        <p class="text"><b>WARNING!</b> We strongly don't recommend you to use VNC in untrusted networks without
+-          enabled X.509 or TLS encryption. Otherwise your passwords are transmitted in a plain text
+-          over the network.
++        <p class="text">该 PiKVM 设备运行着 <b>kvmd-vnc</b> 守护进程，可提供对服务器的 VNC 访问。</p>
++        <p class="text"><b>警告!</b> 我们强烈建议您在未启用 X.509 或 TLS 加密的不信任网络中使用 VNC。
++          启用 X.509 或 TLS 加密的不信任网络中使用 VNC。
++          否则，您的密码将以纯文本形式在网络上传输。在网络上传输。
+         </p>
+         <p class="text">
+-          Your VNC client must support Tight JPEG compression and password authentication.
+-          <a href="https://tigervnc.org">TigerVNC</a> is a good choice.
+-          On Linux, this client will most likely be available for installation from the repository.
+-          It can also be called vncviewer.
++          您的 VNC 客户端必须支持 Tight JPEG 压缩和密码验证。
++          <a href="https://tigervnc.org">TigerVNC</a> 是一个不错的选择。
++          在 Linux 上，该客户端很可能可以从软件源中安装。
++          它也叫做 vncviewer。
+         </p>
+         <div class="code" id="vnc-text" style="max-height:200px"></div>
+       </div>
