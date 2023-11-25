@@ -17,8 +17,7 @@ echo "正在安装PiKVM......"
 dgkg -i ./fruity-pikvm_0.2_armhf.deb && echo "PiKVM安装成功！" && systemctl enable kvmd-vnc
 
 mv ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/ && patch -p0 < chinese.patch
-mv ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch
-echo "补丁应用成功！"
+mv ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch && echo "补丁应用成功！"
 
 cd $CURRENTWD && mv ./patch/long_press_gpio420 /usr/bin && mv ./patch/short_press_gpio420 /usr/bin && echo "GPIO-420脚本移动成功！"
 mv ./config/main.yaml /etc/kvmd/ && mv ./config/override.yaml /etc/kvmd/ && echo "配置文件修改成功！"

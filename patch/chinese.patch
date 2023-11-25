@@ -427,7 +427,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
                      </tr>
                      <tr>
 -                      <td><sup style="line-height:1">Perhaps uploading was interrupted<br></sup></td>
-+                      <td><sup style="line-height:1">可能上传被中断了<br></sup></td>
++                      <td><sup style="line-height:1">可能上传被中断了！<br></sup></td>
                      </tr>
                    </table>
                  </div>
