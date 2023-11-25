@@ -17,9 +17,10 @@ apt install -y nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod
 echo "正在安装PiKVM......"  
 dpkg -i ./fruity-pikvm_0.2_armhf.deb && echo "PiKVM安装成功！" && systemctl enable kvmd-vnc
 
-cp ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/ && patch -p0 < chinese.patch
+cp ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/ && patch -s -p0 < chinese.patch
 cd $CURRENTWD
-cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch && echo "补丁应用成功！"
+cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch
+echo "补丁应用成功！"
 
 cd $CURRENTWD && cp ./patch/long_press_gpio420 /usr/bin && cp ./patch/short_press_gpio420 /usr/bin && echo "GPIO-420脚本移动成功！"
 cp ./config/main.yaml /etc/kvmd/ && cp ./config/override.yaml /etc/kvmd/ && echo "配置文件修改成功！"
