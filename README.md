@@ -12,7 +12,7 @@ One-KVM是基于玩客云硬件和PiKVM软件的远控设备。通过移植PiKVM
 ![image](https://github.com/mofeng-git/One-KVM/assets/62919083/1e9305ee-fd9e-4e4c-ba25-141a924fef29)
 
 ### 安装教程
-该脚本在玩客云（新旧版，Armbian 22.11.0-trunk Jammy Linux onecloud 5.10.149-meson系统）上运行，请确保你的设备已安装好Armbian系统。
+该脚本在玩客云（新旧版，[Armbian 22.11.0-trunk Jammy Linux onecloud 5.10.149-meson]( https://github.com/hzyitc/armbian-onecloud/releases/download/ci-20221026-074131-UTC/Armbian_22.11.0-trunk_Onecloud_jammy_legacy_5.10.149.burn.img.xz)系统）上运行，请确保你的设备已安装好Armbian系统。
 
 #### 快速开始
 ```bash
