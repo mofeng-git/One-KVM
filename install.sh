@@ -12,9 +12,10 @@ cp ./patch/meson8b-onecloud.dtb /boot/dtb/meson8b-onecloud.dtb && echo "设备�
 
 #此为危险操作，会覆盖MBR分区，请在没有自行分区前执行，否则会丢失分区数据导致挂载了EMMC其他分区的系统无法启动！
 if [ -f "./installed.txt" ]; then
-    gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
+    echo "跳过覆盖引导！"
 else
-    echo "已跳过覆盖引导！"
+    gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
+    
 fi
 
 
