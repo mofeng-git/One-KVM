@@ -4,12 +4,31 @@ CURRENTWD=$PWD
 echo $PYVER
 echo $ARCH
 
+update-alternative(){
+  counter=2
+  for i in {1..9}
+  do
+    bindir=$(which python3.$i)
+    if [[ $bindir == *"bin"* ]]; then
+      echo $i $bindir
+      update-alternatives --install /usr/bin/python3 python3 $bindir $counter
+      let counter++
+    fi
+  done
+  update-alternatives --install /usr/bin/python3 python3 $(which python3.10) 1
+  update-alternatives --set python3 $(which python3.10)
+ 
+}
+
+
 if [[ "$PYVER" != *"3.10"* && $(which python3.10) != *"python"* ]]; then
   echo "您似乎没有安装 Python 3.10！" 
 fi
+if [[ "$PYVER" != *"3.10"*  &&  $(which python3.10) == *"python"* ]]; then
+  update-alternative
+fi
 
 cp ./patch/meson8b-onecloud.dtb /boot/dtb/meson8b-onecloud.dtb && echo "设备树文件覆盖成功！"
-
 #此为危险操作，会覆盖MBR分区，请在没有自行分区前执行，否则会丢失分区数据导致挂载了EMMC其他分区的系统无法启动！
 if [ -f "./installed.txt" ]; then
     echo "跳过覆盖引导！"
