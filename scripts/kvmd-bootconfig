@@ -128,12 +128,11 @@ fi
 
 # ========== Ethernet ==========
 
-# If the ETH_DHCP is defined, configure eth0 for DHCP
-if [ -n "$ETH_DHCP" ]; then
-	ETH_IFACE="${ETH_IFACE:-eth0}"
-	cat <<end_of_file > "/etc/systemd/network/$ETH_IFACE.network"
+make_dhcp_iface() {
+	local _iface="$1"
+	cat <<end_of_file > "/etc/systemd/network/$_iface.network"
 [Match]
-Name=$ETH_IFACE
+Name=$_iface
 
 [Network]
 DHCP=yes
@@ -145,23 +144,37 @@ ClientIdentifier=mac
 # https://github.com/pikvm/pikvm/issues/583
 RouteMetric=10
 end_of_file
+}
+
+make_static_iface() {
+	local _iface="$1"
+	local _addr="$2"
+	local _gw="$3"
+	local _dns="$4"
+	cat <<end_of_file > "/etc/systemd/network/$_iface.network"
+[Match]
+Name=$_iface
+
+[Network]
+Address=$_addr
+DNS=$_dns
+DNSSEC=no
+
+[Route]
+Gateway=$_gw
+end_of_file
+}
+
+# If the ETH_DHCP is defined, configure eth0 for DHCP
+if [ -n "$ETH_DHCP" ]; then
+	ETH_IFACE="${ETH_IFACE:-eth0}"
+	make_dhcp_iface "$ETH_IFACE"
 fi
 
 # If the ETH_ADDR is defined, configure a static address on eth0
 if [ -n "$ETH_ADDR" ]; then
 	ETH_IFACE="${ETH_IFACE:-eth0}"
-	cat <<end_of_file > "/etc/systemd/network/$ETH_IFACE.network"
-[Match]
-Name=$ETH_IFACE
-
-[Network]
-Address=$ETH_ADDR
-DNS=$ETH_DNS
-DNSSEC=no
-
-[Route]
-Gateway=$ETH_GW
-end_of_file
+	make_static_iface "$ETH_IFACE" "$ETH_ADDR" "$ETH_GW" "$ETH_DNS"
 fi
 
 
@@ -178,18 +191,11 @@ fi
 # If the WIFI_ESSID is defined, configure wlan0
 if [ -n "$WIFI_ESSID" ]; then
 	WIFI_IFACE="${WIFI_IFACE:-wlan0}"
-	cat <<end_of_file > "/etc/systemd/network/$WIFI_IFACE.network"
-[Match]
-Name=$WIFI_IFACE
-
-[Network]
-DHCP=yes
-DNSSEC=no
-
-# Use same IP by forcing to use MAC address for clientID
-[DHCP]
-ClientIdentifier=mac
-end_of_file
+	if [ -n "$WIFI_ADDR" ]; then
+		make_static_iface "$WIFI_IFACE" "$WIFI_ADDR" "$WIFI_GW" "$WIFI_DNS"
+	else
+		make_dhcp_iface "$WIFI_IFACE"
+	fi
 	wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 	chmod 640 "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
