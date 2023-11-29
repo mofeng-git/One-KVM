@@ -56,5 +56,5 @@ cd $CURRENTWD && cp ./patch/long_press_gpio420 /usr/bin && cp ./patch/short_pres
 cp ./config/main.yaml /etc/kvmd/ && cp ./config/override.yaml /etc/kvmd/ && echo "配置文件修改成功！"
 
 kvmd -m >> ./log.txt && echo "请给玩客云重新上电，然后就可以开始使用One-KVM了！"
-
+reboot
 

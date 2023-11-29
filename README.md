@@ -19,4 +19,18 @@ One-KVM是基于玩客云硬件和PiKVM软件的远控设备。通过移植PiKVM
 git clone https://github.com/mofeng-git/One-KVM.git
 cd One-KVM  && ./install.sh
 ```
+
+对于国内网络环境，可以以下命令
+```bash
+wget https://ghproxy.net/https://github.com/mofeng-git/One-KVM/archive/refs/heads/main.zip -o One-KVM-main.zip
+unzip One-KVM-main.zip
+cd One-KVM-main  && ./install.sh
+```
 详细教程请参照飞书文档：[One-KVM使用手册](https://p1b237lu9xm.feishu.cn/drive/folder/IsOifWmMKlzYpRdWfcocI7jdnQA?from=from_copylink)
+### 感谢
+H_xiaoming测试适配OTG正常可用镜像、0蓝蓝0提供开机卡线刷检测解决办法、fairybl关于MSD和线刷检测的其他解决方案、浩龙的电子嵌入式之路的充电，各位网友的讨论交流和下列开源项目。
+1. [pikvm/pikvm: Open and inexpensive DIY IP-KVM based on Raspberry Pi (github.com)](https://github.com/pikvm/pikvm)
+2. [hzyitc/armbian-onecloud: Armbian for onecloud. 玩客云用armbian (github.com)](https://github.com/hzyitc/armbian-onecloud/)
+3. [jacobbar/fruity-pikvm: Install Pi-KVM on debian SBCs such as Orange Pi, Banana Pi, Mango Pi, etc (github.com)](https://github.com/jacobbar/fruity-pikvm)
+
+   
