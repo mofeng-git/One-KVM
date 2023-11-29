@@ -34,9 +34,10 @@ if [ -f "./installed.txt" ]; then
 #防止新证书覆盖失败
     rm /etc/kvmd/nginx/ssl/server.crt
     rm /etc/kvmd/nginx/ssl/server.key
+    echo kvmd ALL=\(ALL\) NOPASSWD: /usr/bin/long_press_gpio420,/usr/bin/short_press_gpio420 >>  /etc/sudoers
     echo "跳过覆盖引导！"
 else
-    gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1  && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
+    gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 bs=512 seek=1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
     
 fi
 
@@ -51,8 +52,8 @@ cp ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/ && patc
 cd $CURRENTWD
 cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch
 echo "补丁应用成功！"
-
 cd $CURRENTWD && cp -f ./patch/long_press_gpio420 /usr/bin && cp -f ./patch/short_press_gpio420 /usr/bin && echo "GPIO-420脚本移动成功！"
+
 cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ && echo "配置文件修改成功！"
 
 kvmd -m >> ./log.txt
