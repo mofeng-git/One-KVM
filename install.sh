@@ -55,6 +55,12 @@ echo "补丁应用成功！"
 cd $CURRENTWD && cp -f ./patch/long_press_gpio420 /usr/bin && cp -f ./patch/short_press_gpio420 /usr/bin && echo "GPIO-420脚本移动成功！"
 cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ && echo "配置文件修改成功！"
 
-kvmd -m >> ./log.txt && echo "请给玩客云重新上电，然后就可以开始使用One-KVM了！"
+kvmd -m >> ./log.txt
+if [ -f "./installed.txt" ]; then
+    echo "机器已执行重启命令，重启成功后就可以开始使用One-KVM了！"
+    echo "如果已经挂载了MSD分区，请手动编辑/etc/kvmd/override.yaml修改msd选项为otg。"
+else
+    echo "机器已执行重启命令，请手动给玩客云重新上电（拔插电源），然后就可以开始使用One-KVM了！"
+fi
 reboot
 
