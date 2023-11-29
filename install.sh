@@ -52,8 +52,8 @@ cd $CURRENTWD
 cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch
 echo "补丁应用成功！"
 
-cd $CURRENTWD && cp ./patch/long_press_gpio420 /usr/bin && cp ./patch/short_press_gpio420 /usr/bin && echo "GPIO-420脚本移动成功！"
-cp ./config/main.yaml /etc/kvmd/ && cp ./config/override.yaml /etc/kvmd/ && echo "配置文件修改成功！"
+cd $CURRENTWD && cp -f ./patch/long_press_gpio420 /usr/bin && cp -f ./patch/short_press_gpio420 /usr/bin && echo "GPIO-420脚本移动成功！"
+cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ && echo "配置文件修改成功！"
 
 kvmd -m >> ./log.txt && echo "请给玩客云重新上电，然后就可以开始使用One-KVM了！"
 reboot
