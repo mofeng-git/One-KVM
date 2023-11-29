@@ -36,7 +36,7 @@ if [ -f "./installed.txt" ]; then
     rm /etc/kvmd/nginx/ssl/server.key
     echo "跳过覆盖引导！"
 else
-    gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
+    gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 bs=512 seek=1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
     
 fi
 
