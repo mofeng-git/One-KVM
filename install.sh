@@ -35,12 +35,9 @@ if [ -f "./installed.txt" ]; then
     rm /etc/kvmd/nginx/ssl/server.crt
     rm /etc/kvmd/nginx/ssl/server.key
     echo kvmd ALL=\(ALL\) NOPASSWD: /usr/bin/long_press_gpio420,/usr/bin/short_press_gpio420 >>  /etc/sudoers
-    echo "跳过覆盖引导！"
 else
-    gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 bs=512 seek=1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
     
-fi
-
+gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
 
 bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http && echo "换源成功！"
 echo "正在安装依赖软件nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim......"  
