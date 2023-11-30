@@ -29,14 +29,13 @@ if [[ "$PYVER" != *"3.10"*  &&  $(which python3.10) == *"python"* ]]; then
 fi
 
 cp ./patch/meson8b-onecloud.dtb /boot/dtb/meson8b-onecloud.dtb && echo "设备树文件覆盖成功！"
-#此为危险操作，会覆盖MBR分区，请在没有自行分区前执行，否则会丢失分区数据导致挂载了EMMC其他分区的系统无法启动！
 if [ -f "./installed.txt" ]; then
-#防止新证书覆盖失败
-    rm /etc/kvmd/nginx/ssl/server.crt
-    rm /etc/kvmd/nginx/ssl/server.key
-    echo kvmd ALL=\(ALL\) NOPASSWD: /usr/bin/long_press_gpio420,/usr/bin/short_press_gpio420 >>  /etc/sudoers
-else
-    
+  rm /etc/kvmd/nginx/ssl/server.crt
+  rm /etc/kvmd/nginx/ssl/server.key
+  echo kvmd ALL=\(ALL\) NOPASSWD: /usr/bin/long_press_gpio420,/usr/bin/short_press_gpio420 >>  /etc/sudoers
+fi
+
+#此为危险操作，会覆盖MBR分区，请在没有自行分区前执行，否则会丢失分区数据系统无法启动！  
 gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
 
 bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http && echo "换源成功！"
@@ -54,10 +53,5 @@ cd $CURRENTWD && cp -f ./patch/long_press_gpio420 /usr/bin && cp -f ./patch/shor
 cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ && echo "配置文件修改成功！"
 
 kvmd -m >> ./log.txt
-if [ -f "./installed.txt" ]; then
-    echo "机器已执行重启命令，重启成功后就可以开始使用One-KVM了！"
-    echo "如果已经挂载了MSD分区，请手动编辑/etc/kvmd/override.yaml修改msd选项为otg。"
-else
-    echo "机器已执行重启命令，请手动给玩客云重新上电（拔插电源），然后就可以开始使用One-KVM了！"
-fi
+echo "机器已执行重启命令，请手动给玩客云重新上电（拔插电源），然后就可以开始使用One-KVM了！"
 reboot
