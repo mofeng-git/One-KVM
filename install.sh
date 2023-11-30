@@ -32,6 +32,7 @@ cp ./patch/meson8b-onecloud.dtb /boot/dtb/meson8b-onecloud.dtb && echo "设备�
 if [ -f "./installed.txt" ]; then
   rm /etc/kvmd/nginx/ssl/server.crt
   rm /etc/kvmd/nginx/ssl/server.key
+else
   echo kvmd ALL=\(ALL\) NOPASSWD: /usr/bin/long_press_gpio420,/usr/bin/short_press_gpio420 >>  /etc/sudoers
 fi
 
