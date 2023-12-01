@@ -50,7 +50,7 @@ cd $CURRENTWD
 cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch
 echo "补丁应用成功！"
 cd $CURRENTWD && cp -f ./patch/long_press_gpio420 /usr/bin && cp -f ./patch/short_press_gpio420 /usr/bin && echo "GPIO-420脚本移动成功！"
-
+chmod +x /usr/bin/long_press_gpio420 && chmod +x /usr/bin/short_press_gpio420
 cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ && echo "配置文件修改成功！"
 
 kvmd -m >> ./log.txt
