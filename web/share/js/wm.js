@@ -144,11 +144,49 @@ function __WindowManager() {
 
 	/************************************************************************/
 
-	self.info = (...args) => __modalDialog("Info", args.join(" "), true, false, null);
-	self.error = (...args) => __modalDialog("Error", args.join(" "), true, false, null);
-	self.confirm = (...args) => __modalDialog("Question", args.join(" "), true, true, null);
+	self.copyTextToClipboard = function(text) {
+		navigator.clipboard.writeText(text).then(function() {
+			wm.info("The text has been copied to the clipboard");
+		}, function(err) {
+			// https://stackoverflow.com/questions/60317969/document-execcommandcopy-not-working-even-though-the-dom-element-is-created
+			let callback = function() {
+				tools.error("copyTextToClipboard(): navigator.clipboard.writeText() is not working:", err);
+				tools.info("copyTextToClipboard(): Trying a workaround...");
 
-	var __modalDialog = function(header, text, ok, cancel, parent) {
+				let el = document.createElement("textarea");
+				el.readonly = true;
+				el.contentEditable = true;
+				el.style.position = "absolute";
+				el.style.top = "-1000px";
+				el.value = text;
+				document.body.appendChild(el);
+
+				// Select the content of the textarea
+				el.select(); // Ordinary browsers
+				el.setSelectionRange(0, el.value.length); // iOS
+
+				try {
+					err = (document.execCommand("copy") ? null : "Unknown error");
+				} catch (err) { // eslint-disable-line no-empty
+				}
+
+				// Remove the added textarea again:
+				document.body.removeChild(el);
+
+				if (err) {
+					tools.error("copyTextToClipboard(): Workaround failed:", err);
+					wm.error("Can't copy text to the clipboard:<br>", err);
+				}
+			};
+			__modalDialog("Info", "Press OK to copy the text to the clipboard", true, false, callback);
+		});
+	};
+
+	self.info = (...args) => __modalDialog("Info", args.join(" "), true, false);
+	self.error = (...args) => __modalDialog("Error", args.join(" "), true, false);
+	self.confirm = (...args) => __modalDialog("Question", args.join(" "), true, true);
+
+	var __modalDialog = function(header, text, ok, cancel, callback=null, parent=null) {
 		let el_active_menu = (document.activeElement && document.activeElement.closest(".menu"));
 
 		let el_modal = document.createElement("div");
@@ -178,6 +216,9 @@ function __WindowManager() {
 				el_window.appendChild(el_buttons);
 
 				function close(retval) {
+					if (callback) {
+						callback(retval);
+					}
 					__closeWindow(el_window);
 					el_modal.outerHTML = "";
 					let index = __windows.indexOf(el_modal);
@@ -577,7 +618,7 @@ function __WindowManager() {
 				+ "In Chrome use HTTPS and enable <i>system-keyboard-lock</i><br>"
 				+ "by putting at URL <i>chrome://flags/#system-keyboard-lock</i>"
 			);
-			__modalDialog("Keyboard lock is unsupported", msg, true, false, el_window);
+			__modalDialog("Keyboard lock is unsupported", msg, true, false, null, el_window);
 		}
 	};
 

@@ -170,15 +170,10 @@ export function Ocr(__getGeometry) {
 		let http = tools.makeRequest("GET", url, function() {
 			if (http.readyState === 4) {
 				if (http.status === 200) {
-					navigator.clipboard.writeText(http.responseText).then(function() {
-						wm.info("The text is copied to the clipboard");
-					}, function(err) {
-						wm.error("Can't copy text to the clipboard:<br>", err);
-					});
+					wm.copyTextToClipboard(http.responseText);
 				} else {
 					wm.error("OCR error:<br>", http.responseText);
 				}
-
 				tools.el.setEnabled($("stream-ocr-button"), true);
 				tools.el.setEnabled($("stream-ocr-lang-selector"), true);
 				$("stream-ocr-led").className = "led-gray";
