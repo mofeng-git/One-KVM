@@ -130,6 +130,7 @@ fi
 
 make_dhcp_iface() {
 	local _iface="$1"
+	local _metric="$2"
 	cat <<end_of_file > "/etc/systemd/network/$_iface.network"
 [Match]
 Name=$_iface
@@ -142,7 +143,7 @@ DNSSEC=no
 # Use same IP by forcing to use MAC address for clientID
 ClientIdentifier=mac
 # https://github.com/pikvm/pikvm/issues/583
-RouteMetric=10
+RouteMetric=$_metric
 end_of_file
 }
 
@@ -151,6 +152,7 @@ make_static_iface() {
 	local _addr="$2"
 	local _gw="$3"
 	local _dns="$4"
+	local _metric="$5"
 	cat <<end_of_file > "/etc/systemd/network/$_iface.network"
 [Match]
 Name=$_iface
@@ -162,19 +164,21 @@ DNSSEC=no
 
 [Route]
 Gateway=$_gw
+# https://github.com/pikvm/pikvm/issues/583
+Metric=$_metric
 end_of_file
 }
 
 # If the ETH_DHCP is defined, configure eth0 for DHCP
 if [ -n "$ETH_DHCP" ]; then
 	ETH_IFACE="${ETH_IFACE:-eth0}"
-	make_dhcp_iface "$ETH_IFACE"
+	make_dhcp_iface "$ETH_IFACE" 10
 fi
 
 # If the ETH_ADDR is defined, configure a static address on eth0
 if [ -n "$ETH_ADDR" ]; then
 	ETH_IFACE="${ETH_IFACE:-eth0}"
-	make_static_iface "$ETH_IFACE" "$ETH_ADDR" "$ETH_GW" "$ETH_DNS"
+	make_static_iface "$ETH_IFACE" "$ETH_ADDR" "$ETH_GW" "$ETH_DNS" 10
 fi
 
 
@@ -192,9 +196,9 @@ fi
 if [ -n "$WIFI_ESSID" ]; then
 	WIFI_IFACE="${WIFI_IFACE:-wlan0}"
 	if [ -n "$WIFI_ADDR" ]; then
-		make_static_iface "$WIFI_IFACE" "$WIFI_ADDR" "$WIFI_GW" "$WIFI_DNS"
+		make_static_iface "$WIFI_IFACE" "$WIFI_ADDR" "$WIFI_GW" "$WIFI_DNS" 50
 	else
-		make_dhcp_iface "$WIFI_IFACE"
+		make_dhcp_iface "$WIFI_IFACE" 50
 	fi
 	wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 	chmod 640 "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
