@@ -473,9 +473,17 @@ def _get_config_scheme() -> dict:
 
                 "process_name_prefix": Option("kvmd/streamer"),
 
+                "pre_start_cmd":        Option(["/bin/true", "pre-start"], type=valid_command),
+                "pre_start_cmd_remove": Option([], type=valid_options),
+                "pre_start_cmd_append": Option([], type=valid_options),
+
                 "cmd":        Option(["/bin/true"], type=valid_command),
                 "cmd_remove": Option([], type=valid_options),
                 "cmd_append": Option([], type=valid_options),
+
+                "post_stop_cmd":        Option(["/bin/true", "post-stop"], type=valid_command),
+                "post_stop_cmd_remove": Option([], type=valid_options),
+                "post_stop_cmd_append": Option([], type=valid_options),
             },
 
             "ocr": {

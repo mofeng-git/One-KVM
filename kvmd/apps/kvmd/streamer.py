@@ -182,9 +182,17 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         process_name_prefix: str,
 
+        pre_start_cmd: list[str],
+        pre_start_cmd_remove: list[str],
+        pre_start_cmd_append: list[str],
+
         cmd: list[str],
         cmd_remove: list[str],
         cmd_append: list[str],
+
+        post_stop_cmd: list[str],
+        post_stop_cmd_remove: list[str],
+        post_stop_cmd_append: list[str],
 
         **params_kwargs: Any,
     ) -> None:
@@ -198,7 +206,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__process_name_prefix = process_name_prefix
 
+        self.__pre_start_cmd = tools.build_cmd(pre_start_cmd, pre_start_cmd_remove, pre_start_cmd_append)
         self.__cmd = tools.build_cmd(cmd, cmd_remove, cmd_append)
+        self.__post_stop_cmd = tools.build_cmd(post_stop_cmd, post_stop_cmd_remove, post_stop_cmd_append)
 
         self.__params = _StreamerParams(**params_kwargs)
 
@@ -409,6 +419,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     @aiotools.atomic_fg
     async def __inner_start(self) -> None:
         assert not self.__streamer_task
+        await self.__run_hook("PRE-START-CMD", self.__pre_start_cmd)
         self.__streamer_task = asyncio.create_task(self.__streamer_task_loop())
 
     @aiotools.atomic_fg
@@ -417,6 +428,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__streamer_task.cancel()
         await asyncio.gather(self.__streamer_task, return_exceptions=True)
         await self.__kill_streamer_proc()
+        await self.__run_hook("POST-STOP-CMD", self.__post_stop_cmd)
         self.__streamer_task = None
 
     # =====
@@ -439,16 +451,28 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 await self.__kill_streamer_proc()
                 await asyncio.sleep(1)
 
-    async def __start_streamer_proc(self) -> None:
-        assert self.__streamer_proc is None
-        cmd = [
+    def __make_cmd(self, cmd: list[str]) -> list[str]:
+        return [
             part.format(
                 unix=self.__unix_path,
                 process_name_prefix=self.__process_name_prefix,
                 **self.__params.get_params(),
             )
-            for part in self.__cmd
+            for part in cmd
         ]
+
+    async def __run_hook(self, name: str, cmd: list[str]) -> None:
+        logger = get_logger()
+        cmd = self.__make_cmd(cmd)
+        logger.info("%s: %s", name, tools.cmdfmt(cmd))
+        try:
+            await aioproc.log_process(cmd, logger, prefix=name)
+        except Exception as err:
+            logger.exception("Can't execute command: %s", err)
+
+    async def __start_streamer_proc(self) -> None:
+        assert self.__streamer_proc is None
+        cmd = self.__make_cmd(self.__cmd)
         self.__streamer_proc = await aioproc.run_process(cmd)
         get_logger(0).info("Started streamer pid=%d: %s", self.__streamer_proc.pid, tools.cmdfmt(cmd))
 
