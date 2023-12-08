@@ -251,7 +251,7 @@ export function Session() {
 		let close_hook = null;
 		let has_webterm = (state.webterm && (state.webterm.enabled || state.webterm.started));
 		if (has_webterm) {
-			let path = "/" + state.webterm.path.split("?")[0]; // Remove all params like disableLeaveAlert=true
+			let path = "/" + state.webterm.path.split("?")[0] + "?disableLeaveAlert=true";
 			show_hook = function() {
 				tools.info("Terminal opened: ", path);
 				$("webterm-iframe").src = path;
