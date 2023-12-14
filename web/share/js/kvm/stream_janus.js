@@ -220,6 +220,15 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __allow_aud
 			},
 
 			"onremotestream": function(stream) {
+				if (stream === null) {
+					// https://github.com/pikvm/pikvm/issues/1084
+					// Этого вообще не должно происходить, но почему-то янусу в unmute
+					// может прилететь null-эвент. Костыляем, наблюдаем.
+					__logError("Got invalid onremotestream(null). Restarting Janus...");
+					__destroyJanus();
+					return;
+				}
+
 				let tracks = stream.getTracks();
 				__logInfo("Got a remote stream changes:", stream, tracks);
 
