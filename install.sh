@@ -31,8 +31,7 @@ fi
 cp ./patch/meson8b-onecloud.dtb /boot/dtb/meson8b-onecloud.dtb && echo "设备树文件覆盖成功！"
 
 if [ -f "./installed.txt" ]; then
-  rm /etc/kvmd/nginx/ssl/server.crt
-  rm /etc/kvmd/nginx/ssl/server.key
+  echo "检测到存在安装One-KVM记录！"
 else
   #此为危险操作，会覆盖MBR分区，请在没有自行分区前执行，否则会丢失分区数据系统无法启动！  
   gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
@@ -42,15 +41,21 @@ fi
 
 
 if [ -f "./installed.txt" ]; then
-  echo "您似乎已经安装fruity-pikvm_0.2_armhf.deb，是否覆盖安装,取消此操作不会影响后续文件修改操作（Y/N）？"
+  echo "您似乎已经安装fruity-pikvm_0.2_armhf.deb，是否覆盖安装,此操作不会影响后续文件修改操作（Y/N）？"
   read USERYN
   case $USERYN in 
     N | n)
       echo "跳过安装fruity-pikvm_0.2_armhf.deb！"
     ;;
     *)
+      rm /etc/kvmd/nginx/ssl/server.crt
+      rm /etc/kvmd/nginx/ssl/server.key
       echo "正在安装PiKVM......"  
-      dpkg -i ./fruity-pikvm_0.2_armhf.deb >> ./log.txt &&  systemctl enable kvmd-vnc && echo "PiKVM安装成功！" 
+      dpkg -i ./fruity-pikvm_0.2_armhf.deb >> ./log.txt &&  systemctl enable kvmd-vnc && echo "PiKVM安装成功！"
+      cp ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/ && patch -s -p0 < chinese.patch
+      cd $CURRENTWD
+      cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch
+      echo "补丁应用成功！" 
     ;;
   esac
 else
@@ -70,14 +75,10 @@ cd $CURRENTWD && cp -f ./patch/long_press_gpio420 /usr/bin && cp -f ./patch/shor
 cp -f ./patch/hw.py /usr/local/lib/python3.10/kvmd-packages/kvmd/apps/kvmd/info/ && chmod +x /usr/local/lib/python3.10/kvmd-packages/kvmd/apps/kvmd/info/hw.py
 cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ && echo "文件修改成功！"
 
-if [ -f "./installed.txt" ]; then
-  kvmd -m >> ./log.txt
-  echo "机器已执行重启命令，稍作等待就可以开始使用One-KVM了！"
-else
-  kvmd -m >> ./log.txt
-  echo "机器已执行重启命令，请手动给玩客云重新上电（拔插电源），然后就可以开始使用One-KVM了！"
-fi
 
+kvmd -m >> ./log.txt
 ipaddr=`ip addr | grep "scope global" | awk '{print $2}' |awk -F/ '{print $1}'`
 echo -e "内网访问地址为：\nhttp://$ipaddr\nhttps://$ipaddr"
+echo "机器已执行重启命令，请手动给玩客云重新上电（拔插电源），然后就可以开始使用One-KVM了！"
+
 reboot
