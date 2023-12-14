@@ -23,12 +23,13 @@ update-alternative(){
 
 if [[ "$PYVER" != *"3.10"* && $(which python3.10) != *"python"* ]]; then
   echo "您似乎没有安装 Python 3.10！" 
-fi
-if [[ "$PYVER" != *"3.10"*  &&  $(which python3.10) == *"python"* ]]; then
+  exit
+else
   update-alternative
 fi
 
 cp ./patch/meson8b-onecloud.dtb /boot/dtb/meson8b-onecloud.dtb && echo "设备树文件覆盖成功！"
+
 if [ -f "./installed.txt" ]; then
   rm /etc/kvmd/nginx/ssl/server.crt
   rm /etc/kvmd/nginx/ssl/server.key
@@ -40,13 +41,12 @@ fi
 
 
 
-if [-f "./installed.txt"]; then
-  echo "您似乎已经安装One-KVM，是否覆盖安装激活（Y/N）？"
+if [ -f "./installed.txt" ]; then
+  echo "您似乎已经安装fruity-pikvm_0.2_armhf.deb，是否覆盖安装,取消此操作不会影响后续文件修改操作（Y/N）？"
   read USERYN
   case $USERYN in 
     N | n)
       echo "跳过安装fruity-pikvm_0.2_armhf.deb！"
-      exit
     ;;
     *)
       echo "正在安装PiKVM......"  
@@ -59,22 +59,18 @@ else
   apt install -y nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  >> ./log.txt
   echo "正在安装PiKVM......"  
   dpkg -i ./fruity-pikvm_0.2_armhf.deb >> ./log.txt &&  systemctl enable kvmd-vnc && echo "PiKVM安装成功！" 
+  cd $CURRENTWD
+  cp ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/ && patch -s -p0 < chinese.patch
+  cd $CURRENTWD
+  cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch
+  echo "补丁应用成功！"
 fi
 
-
-
-cd $CURRENTWD
-cp ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/ && patch -s -p0 < chinese.patch
-cd $CURRENTWD
-cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch
+cd $CURRENTWD && cp -f ./patch/long_press_gpio420 /usr/bin && cp -f ./patch/short_press_gpio420 /usr/bin && chmod +x /usr/bin/long_press_gpio420 && chmod +x /usr/bin/short_press_gpio420 && echo "GPIO-420脚本移动成功！"
 cp -f ./patch/hw.py /usr/local/lib/python3.10/kvmd-packages/kvmd/apps/kvmd/info/ && chmod +x /usr/local/lib/python3.10/kvmd-packages/kvmd/apps/kvmd/info/hw.py
-echo "补丁应用成功！"
-cd $CURRENTWD && cp -f ./patch/long_press_gpio420 /usr/bin && cp -f ./patch/short_press_gpio420 /usr/bin && echo "GPIO-420脚本移动成功！"
-chmod +x /usr/bin/long_press_gpio420 && chmod +x /usr/bin/short_press_gpio420
-cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ && echo "配置文件修改成功！"
+cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ && echo "文件修改成功！"
 
-
-if [-f "./installed.txt"]; then
+if [ -f "./installed.txt" ]; then
   kvmd -m >> ./log.txt
   echo "机器已执行重启命令，稍作等待就可以开始使用One-KVM了！"
 else
