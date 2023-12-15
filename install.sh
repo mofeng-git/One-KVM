@@ -34,7 +34,7 @@ if [ -f "./installed.txt" ]; then
   echo "检测到存在安装One-KVM记录！"
 else
   #此为危险操作，会覆盖MBR分区，请在没有自行分区前执行，否则会丢失分区数据系统无法启动！  
-  gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 && echo "One-KVM V0.4" >> installed.txt && echo "覆盖引导成功！"
+  gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1  && echo "覆盖引导成功！"
   echo kvmd ALL=\(ALL\) NOPASSWD: /usr/bin/long_press_gpio420,/usr/bin/short_press_gpio420 >>  /etc/sudoers
 fi
 
@@ -77,6 +77,7 @@ cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ &
 
 
 kvmd -m >> ./log.txt
+echo "One-KVM V0.4" >> installed.txt 
 ipaddr=`ip addr | grep "scope global" | awk '{print $2}' |awk -F/ '{print $1}'`
 echo -e "内网访问地址为：\nhttp://$ipaddr\nhttps://$ipaddr"
 echo "机器已执行重启命令，请手动给玩客云重新上电（拔插电源），然后就可以开始使用One-KVM了！"
