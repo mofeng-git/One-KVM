@@ -100,7 +100,6 @@ class HwInfoSubmanager(BaseInfoSubmanager):
         try:
             return int((await aiofs.read(temp_path)).strip()) / 1000
         except Exception as err:
-            get_logger(0).error("Can't read CPU temp from %s: %s", temp_path, err)
             return None
 
     async def __get_throttling(self) -> (dict | None):
