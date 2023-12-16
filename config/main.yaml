@@ -39,8 +39,7 @@ kvmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
             - "--persistent"
-            - "--format=yuyv"
-            - "--encoder=cpu"
+            - "--format=mjpeg"
             - "--resolution={resolution}"
             - "--desired-fps={desired_fps}"
             - "--drop-same-frames=30"
@@ -52,11 +51,9 @@ kvmd:
             - "--process-name-prefix={process_name_prefix}"
             - "--notify-parent"
             - "--no-log-colors"
-            - "--sink=kvmd::ustreamer::yuyv"
-            - "--sink-mode=0660"
 
 
 vnc:
     memsink:
         jpeg:
-            sink: "kvmd::ustreamer::yuyv"
+            sink: "kvmd::ustreamer::jpeg"

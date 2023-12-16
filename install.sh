@@ -10,13 +10,13 @@ FIND_STR="short_press_gpio420"
 
 #检查架构和Python版本
 check-environment(){
-  echo -e "\e[0;32m设备名称：$MACHINE\nPython版本：$PYVER\e[0;37m"
-  if [ARCH!="armv7l"];then
-    echo -e "\e[0;31m暂不支持$MACHINE架构以外的设备！\n退出脚本！\e[0;37m" 
+  echo -e "\e[0;32m设备名称：$MACHINE\nPython版本：$PYVER"
+  if [ ! $ARCH = "armv7l" ]; then
+    echo -e "\e[0;31m暂不支持$MACHINE架构以外的设备！\n退出脚本！" 
     exit
   fi
   if [[ "$PYVER" != *"3.10"* && $(which python3.10) != *"python"* ]]; then
-    echo -e "\e[0;31m您似乎没有安装 Python 3.10！\n退出脚本！\e[0;37m" 
+    echo -e "您似乎没有安装 Python 3.10！\n退出脚本！\e[0;37m" 
     exit
   else
     update-alternative
@@ -42,7 +42,7 @@ update-alternative(){
 #删除SSL证书
 delete-ssl(){
   if [ -f "/etc/kvmd/nginx/ssl/server.crt" ] || [ -f "/etc/kvmd/nginx/ssl/server.key" ]; then
-    echo -e "\e[0;30m正在删除SSL证书！\e[0;37m"
+    echo -e "正在删除SSL证书！\e[0;37m"
     rm /etc/kvmd/nginx/ssl/server.crt
     rm /etc/kvmd/nginx/ssl/server.key
   fi  
@@ -56,7 +56,7 @@ change-device-tree(){
 
 #覆盖引导分区
 override-uboot(){
-  echo -e "\e[0;31m是否选择跳过按下重置键时的玩客云USB线刷检测？（\e[1;31mY/\e[1;32mN\e[0;31m）\e[0;37m"
+  echo -e "\e[0;31m是否选择跳过按下重置键时的玩客云USB线刷检测？（\e[1;31mY/\e[1;32mN\e[0;31m）"
   read USERYN
   case $USERYN in 
     N | n)
@@ -72,7 +72,7 @@ override-uboot(){
 #安装依赖软件
 install-dependencies(){
   bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http && echo "换源成功！"
-  echo "正在安装依赖软件nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim......"  
+  echo "\e[0;32m正在安装依赖软件nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim......"  
   apt install -y nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  >> ./log.txt
 }
 
@@ -87,7 +87,6 @@ install-pikvm(){
   cp -f ./patch/long_press_gpio420 /usr/bin && cp -f ./patch/short_press_gpio420 /usr/bin
   chmod +x /usr/bin/long_press_gpio420 && chmod +x /usr/bin/short_press_gpio420
   echo "GPIO-420脚本移动成功！"
-  #此处还要屏蔽hw.py温度获取报错
   cp -f ./patch/hw.py /usr/local/lib/python3.10/kvmd-packages/kvmd/apps/kvmd/info/
   chmod +x /usr/local/lib/python3.10/kvmd-packages/kvmd/apps/kvmd/info/hw.py
   cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ 
