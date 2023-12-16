@@ -27,8 +27,15 @@ unzip One-KVM-main.zip
 cd One-KVM-main  && ./install.sh
 ```
 详细教程请参照飞书文档：[One-KVM使用手册](https://p1b237lu9xm.feishu.cn/drive/folder/IsOifWmMKlzYpRdWfcocI7jdnQA?from=from_copylink)
+
+### 更新日志
+V0.5：通过锁定CPU频率修复ustreamer mjpeg视频流异常的问题；屏蔽主程序找不到温度传感器的报错；优化中文翻译；替换部分网页图片素材；优化安装流程。
+V0.4：利用玩客云自动GPIO实现ATX开关机物理控制功能；初步建立飞书使用文档；制作一键安装脚本，优化安装流程。
+V0.3：添加简体中文补丁；实现MSD功能在EMMC和TF卡上的使用；添加WOL和中文OCR功能；优化了安装流程。
+V0.2：通过替换系统解决OTG拔插死机问题；初步实现MSD功能；修改启动分区解决开机卡线刷检测；优化安装流程。
+V0.1：PiKVM在玩客云上初步运行。
 ### 感谢
-H_xiaoming测试适配OTG正常可用镜像、0蓝蓝0提供开机卡线刷检测解决办法、fairybl关于MSD和线刷检测的其他解决方案、浩龙的电子嵌入式之路的充电，各位网友的讨论交流和下列开源项目。
+H_xiaoming测试适配OTG正常可用镜像、0蓝蓝0提供开机卡线刷检测解决办法、fairybl关于MSD和线刷检测的其他解决方案、Will的PiKVM测试、浩龙的电子嵌入式之路的充电，各位网友的讨论交流和下列开源项目。
 1. [pikvm/pikvm: Open and inexpensive DIY IP-KVM based on Raspberry Pi (github.com)](https://github.com/pikvm/pikvm)
 2. [hzyitc/armbian-onecloud: Armbian for onecloud. 玩客云用armbian (github.com)](https://github.com/hzyitc/armbian-onecloud/)
 3. [jacobbar/fruity-pikvm: Install Pi-KVM on debian SBCs such as Orange Pi, Banana Pi, Mango Pi, etc (github.com)](https://github.com/jacobbar/fruity-pikvm)
