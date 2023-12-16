@@ -101,15 +101,23 @@ add-patches(){
   fi
   if[ ! -f /usr/local/lib/python3.10/kvmd-packages/3.198msd.patch ];then
     cd $CURRENTWD
-    cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/ && patch -s -p0 < 3.198msd.patch
+    cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/
+    patch -s -p0 < 3.198msd.patch
     echo "MSD补丁应用成功！"
   fi
   if[ ! -f /usr/local/lib/python3.10/kvmd-packages/chinese.patch ];then
     cd $CURRENTWD
-    cp./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/ && patch -s -p0 < chinese.patch
+    cp./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/
+    patch -s -p0 < chinese.patch
     echo "中文补丁应用成功！"
   else
-    #此处还要先恢复中文补丁再应用新补丁
+    cd $CURRENTWD
+    cp./patch/chinese.patch /usr/share/kvmd/web/ 
+    cd /usr/share/kvmd/web/
+    patch -s -p0 -R < chinese.patch
+    cd $CURRENTWD
+    cp./patch/chinese.patch /usr/share/kvmd/web/
+    patch -s -p0  < chinese.patch
     echo "中文补丁应用成功！"
   fi
   echo -e "ENABLE=true\nMIN_SPEED=1536000\nMAX_SPEED=1536000\nGOVERNOR=performance" > /etc/default/cpufrequtils
