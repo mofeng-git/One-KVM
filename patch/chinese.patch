@@ -67,8 +67,8 @@ diff -ur /usr/share/kvmd/web/ipmi/index.html ./ipmi/index.html
          </p>
 -        <p class="text"><b>NEVER</b> use the same passwords for KVMD and IPMI users. And even better not to use IPMI.
 -          Instead, you can directly use KVMD API via curl. Here some examples:
-+        <p class="text"><b>禁忌</b> 请确保KVMD和IPMI用户使用相同的密码。
-+          最好是不使用IPMI，而是直接使用KVMD API via curl。这里有一些示例：
++        <p class="text"><b>静止</b> 请确保KVMD和IPMI用户使用相同的密码。
++          最好不使用IPMI，而是直接通过curl使用KVMD API。示例：
          </p>
          <div class="code" id="ipmi-text" style="max-height:200px"></div>
        </div>
@@ -89,7 +89,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
                      <tr>
                        <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
 -                      <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
-+                      <td style="line-height:1.5"><b>树莓派处于危险状态</b></td>
++                      <td style="line-height:1.5"><b>机器处于危险状态</b></td>
                      </tr>
                      <tr>
 -                      <td><sup style="line-height:1">This is not a drill! A red icon indicates a current issue,<br>
@@ -123,7 +123,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
                        <tr>
 -                        <td><sup style="line-height:1">Frequency capping due to overheating,<br>
 -                            improve cooling of the Raspberry Pi</sup></td>
-+                        <td><sup style="line-height:1">过热导致的频率上限，<br>请改善 Raspberry Pi 的散热</sup></td>
++                        <td><sup style="line-height:1">过热导致的频率上限，<br>请改善机器的散热</sup></td>
                        </tr>
                      </table>
                    </div>
@@ -132,7 +132,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
                      <tr>
                        <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
 -                      <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
-+                      <td style="line-height:1.5"><b>树莓派处于危险状态</b></td>
++                      <td style="line-height:1.5"><b>机器处于危险状态</b></td>
                      </tr>
                      <tr>
 -                      <td><sup style="line-height:1">This is not a drill! A red icon indicates a current issue,<br>
@@ -259,9 +259,9 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
 -            <button class="row33" data-force-hide-menu data-show-window="stream-window">&bull; Show stream</button>
 -            <button class="row33" disabled data-force-hide-menu id="stream-screenshot-button">&bull; Screenshot</button>
 -            <button class="row33" disabled id="stream-reset-button">Reset stream</button>
-+            <button class="row33" data-force-hide-menu data-show-window="stream-window">&bull; 显示视频流</button>
++            <button class="row33" data-force-hide-menu data-show-window="stream-window">&bull; 显示视频</button>
 +            <button class="row33" disabled data-force-hide-menu id="stream-screenshot-button">&bull; 截屏</button>
-+            <button class="row33" disabled id="stream-reset-button">重置视频流</button>
++            <button class="row33" disabled id="stream-reset-button">重置视频</button>
            </div>
            <div class="feature-disabled" id="hid-outputs">
              <hr>
@@ -305,7 +305,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
                  </tr>
                  <tr class="feature-disabled" id="hid-mouse-squash">
 -                      <td>Squash relative moves:</td>
-+                      <td>压扁相对移动：</td>
++                      <td>壁球相对动作：</td>
                        <td align="right">
                          <div class="switch-box">
                            <input checked type="checkbox" id="hid-mouse-squash-switch">
@@ -427,7 +427,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
                      </tr>
                      <tr>
 -                      <td><sup style="line-height:1">Perhaps uploading was interrupted<br></sup></td>
-+                      <td><sup style="line-height:1">可能上传被中断了！<br></sup></td>
++                      <td><sup style="line-height:1">上传被中断了！<br></sup></td>
                      </tr>
                    </table>
                  </div>
@@ -436,11 +436,11 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
                      <tr>
                        <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
 -                      <td style="line-height:1.5"><b>Current image is too big for CD-ROM!</b></td>
-+                      <td style="line-height:1.5"><b>当前镜像对于 CD-ROM 格式来说太大了！</b></td>
++                      <td style="line-height:1.5"><b>对于 CD-ROM 格式来说当前镜像太大了！</b></td>
                      </tr>
                      <tr>
 -                      <td><sup style="line-height:1">The device filesystem will be truncated to 2.2GiB</sup></td>
-+                      <td><sup style="line-height:1">设备文件将被截断为 2.2GiB</sup></td>
++                      <td><sup style="line-height:1">镜像文件将被截断为 2.2GiB</sup></td>
                      </tr>
                    </table>
                  </div>
@@ -564,7 +564,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
                <tr>
                  <td></td>
 -                <td>&bull; To speed up the upload, close the stream window.</td>
-+                <td>&bull; 要加快上传速度，请关闭视频流窗口。</td>
++                <td>&bull; 如果要加快上传速度，请关闭视频窗口。</td>
                </tr>
              </table>
            </div>
@@ -599,7 +599,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
 +      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="/share/svg/led-gear.svg"><span>宏</span></a>
          <div class="menu">
 -          <div class="text"><b>Record and play HID/ATX/GPIO actions<br></b><sub>For security reasons, the record will not be saved on the PiKVM</sub></div>
-+          <div class="text"><b>记录和重放 HID/ATX/GPIO 操作<br></b><sub>出于安全考虑，记录将不会保存在 PiKVM 上。</sub></div>
++          <div class="text"><b>记录和重放 HID/ATX/GPIO 操作<br></b><sub>出于安全考虑，记录将不会在 PiKVM 上保存。</sub></div>
            <hr>
            <div class="buttons buttons-row">
 -            <button class="row25" disabled data-force-hide-menu id="hid-recorder-record">&bull; Rec</button>
@@ -623,7 +623,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
 +              <td>脚本事件：</td>
                <td class="value" id="hid-recorder-events-count">0</td>
 -              <td><sup><i>include delays</i></sup></td>
-+              <td><sup><i>包括延误</i></sup></td>
++              <td><sup><i>包括延迟</i></sup></td>
              </tr>
            </table>
            <hr>
@@ -649,7 +649,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
 +      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="/share/svg/led-gear.svg"><span>文本</span></a>
          <div class="menu" id="text-menu">
 -          <div class="text"><b>Paste text as keypress sequence<br></b><sub>Please note that PiKVM cannot switch the keyboard layout</sub></div>
-+          <div class="text"><b>以按键顺序粘贴文本<br></b><sub>请注意，PiKVM 无法切换键盘布局</sub></div>
++          <div class="text"><b>以按键顺序粘贴文本<br></b><sub>请注意，PiKVM 无法自动切换键盘布局</sub></div>
            <hr>
            <div class="text" style="margin-right: 20px">
              <textarea id="hid-pak-text" placeholder="Enter your text here"></textarea>
@@ -688,7 +688,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
              <hr><br>
              <hr>
 -            <div class="text"><b>Text recognition <sup><i>&beta;</i></sup><br></b><sub><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> works locally on PiKVM</sub></div>
-+            <div class="text"><b>文本识别 <sup><i>&beta;</i></sup><br></b><sub><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> 可在 PiKVM 上本地运行</sub></div>
++            <div class="text"><b>文本识别 <sup><i>&beta;</i></sup><br></b><sub><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> 仅在 PiKVM 上本地运行</sub></div>
              <hr>
              <table class="kv">
                <tr>
@@ -719,14 +719,14 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
 +      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#">快捷键</a>
          <div class="menu">
 -          <div class="text"><b>Quick keyboard shortcuts<br></b><sub>Also see <i>System &rarr; Show keyboard</i></sub></div>
-+          <div class="text"><b>快速键盘快捷键<br></b><sub>Also see <i>系统 &rarr; 显示键盘</i></sub></div>
++          <div class="text"><b>键盘快捷键<br></b><sub>也可以再<i>系统 &rarr; 显示键盘</i>找到</sub></div>
            <hr>
            <div class="buttons">
              <div class="buttons-row">
 @@ -718,7 +716,7 @@
            <hr>
            <div class="text">
-             &darr; &bull; Alt+SysRq+... <sup><i>linux magic
+             &darr; &bull; Alt+SysRq+... <sup><i>Linux魔法键
 -            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">help</a></i></sup>
 +            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">帮助</a></i></sup>
            </div>
@@ -737,7 +737,7 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
                <table class="kv">
                  <tr>
 -                      <td>Ask the magic confirmation:</td>
-+                      <td>magic确认：</td>
++                      <td>Linux魔法键确认：</td>
                        <td align="right">
                          <div class="switch-box">
                            <input checked type="checkbox" id="hid-sysrq-ask-switch">
@@ -869,7 +869,7 @@ diff -ur /usr/share/kvmd/web/login/index.html ./login/index.html
              </tr>
              <tr>
 -              <td>2FA code:&nbsp;</td>
-+              <td>2FA验证：&nbsp;</td>
++              <td>双因素身份验证：&nbsp;</td>
                <td>
 -                <input type="text" id="code-input" placeholder="if enabled">
 +                <input type="text" id="code-input" placeholder="如果有">
@@ -894,8 +894,8 @@ diff -ur /usr/share/kvmd/web/login/index.html ./login/index.html
 -        Please turn it off to continue and reload the page.
 +      <li class="footer-left">
 +        本网站正在使用 JavaScript。<br>
-+        本网站不包含广告，但会被某些广告过滤器阻止。<br>
-+        请关闭 JavaScript 以继续浏览并重新加载页面
++        本网站不包含广告，但可能会被某些广告过滤器阻止。<br>
++        请关闭广告过滤器以继续浏览并重新加载页面
        </li>
      </ul>
    </body>
@@ -1034,7 +1034,7 @@ diff -ur /usr/share/kvmd/web/share/js/kvm/keyboard.js ./share/js/kvm/keyboard.js
  			if (__online === null) {
  				led = "led-red";
 -				title = (is_captured ? "Keyboard captured, HID offline" : "Keyboard free, HID offline");
-+				title = (is_captured ? "键盘捕获，HID 脱机" : "键盘空闲，脱机 HID");
++				title = (is_captured ? "键盘捕获，HID 脱机" : "键盘空闲，HID脱机");
  			} else if (__online) {
  				if (is_captured) {
  					led = "led-green";
@@ -1144,7 +1144,7 @@ diff -ur /usr/share/kvmd/web/share/js/kvm/msd.js ./share/js/kvm/msd.js
  				tools.progress.setValue($("msd-uploading-progress"), `${percent}%`, percent);
  			} else if (!__http) {
 -				tools.progress.setValue($("msd-uploading-progress"), "Waiting for upload (press UPLOAD button) ...", 0);
-+				tools.progress.setValue($("msd-uploading-progress"), "等待上传（按 UPLOAD 按钮） ...", 0);
++				tools.progress.setValue($("msd-uploading-progress"), "等待上传（按下 UPLOAD 按钮） ...", 0);
  			}
  		} else {
  			$("msd-new-file").value = "";
@@ -1432,7 +1432,7 @@ diff -ur /usr/share/kvmd/web/share/js/kvm/session.js ./share/js/kvm/session.js
  			__missed_heartbeats += 1;
  			if (__missed_heartbeats >= 15) {
 -				throw new Error("Too many missed heartbeats");
-+				throw new Error("太多错过的心跳");
++				throw new Error("太多失败的断连");
  			}
 -			__ws.send(JSON.stringify({"event_type": "ping", "event": {}}));
 +			__ws.send(JSON.stringify({ "event_type": "ping", "event": {} }));
@@ -1450,14 +1450,14 @@ diff -ur /usr/share/kvmd/web/share/js/kvm/stream.js ./share/js/kvm/stream.js
  
  	var __clickResetButton = function() {
 -		wm.confirm("Are you sure you want to reset stream?").then(function (ok) {
-+		wm.confirm("您确定要重置视频流吗？").then(function (ok) {
++		wm.confirm("您确定要重置视频吗？").then(function (ok) {
  			if (ok) {
  				__resetStream();
  				let http = tools.makeRequest("POST", "/api/streamer/reset", function() {
  					if (http.readyState === 4) {
  						if (http.status !== 200) {
 -							wm.error("Can't reset stream:<br>", http.responseText);
-+							wm.error("无法重置视频流：<br>", http.responseText);
++							wm.error("无法重置视频：<br>", http.responseText);
  						}
  					}
  				});
@@ -1466,7 +1466,7 @@ diff -ur /usr/share/kvmd/web/share/js/kvm/stream.js ./share/js/kvm/stream.js
  			if (http.readyState === 4) {
  				if (http.status !== 200) {
 -					wm.error("Can't configure stream:<br>", http.responseText);
-+					wm.error("无法配置视频流：<br>", http.responseText);
++					wm.error("无法修改视频配置：<br>", http.responseText);
  				}
  			}
  		});
