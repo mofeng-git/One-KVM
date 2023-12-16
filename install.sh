@@ -15,6 +15,7 @@ check-environment(){
     echo -e "\e[0;31m暂不支持$MACHINE架构以外的设备！\n退出脚本！" 
     exit
   fi
+
   if [[ "$PYVER" != *"3.10"* && $(which python3.10) != *"python"* ]]; then
     echo -e "您似乎没有安装 Python 3.10！\n退出脚本！\e[0;37m" 
     exit
@@ -39,18 +40,11 @@ update-alternative(){
   update-alternatives --set python3 $(which python3.10)
 }
 
-#删除SSL证书
-delete-ssl(){
-  if [ -f "/etc/kvmd/nginx/ssl/server.crt" ] || [ -f "/etc/kvmd/nginx/ssl/server.key" ]; then
-    echo -e "正在删除SSL证书！\e[0;37m"
-    rm /etc/kvmd/nginx/ssl/server.crt
-    rm /etc/kvmd/nginx/ssl/server.key
-  fi  
-}
+
 
 #修改设备树文件
 change-device-tree(){
-  cp -f./patch/meson8b-onecloud.dtb /boot/dtb/meson8b-onecloud.dtb
+  cp -f ./patch/meson8b-onecloud.dtb /boot/dtb/meson8b-onecloud.dtb
   echo "设备树文件覆盖成功！"
 }
 
@@ -72,13 +66,12 @@ override-uboot(){
 #安装依赖软件
 install-dependencies(){
   bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http && echo "换源成功！"
-  echo "\e[0;32m正在安装依赖软件nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim......"  
+  echo -e "\e[0;32m正在安装依赖软件nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim......"  
   apt install -y nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  >> ./log.txt
 }
 
 #安装PiKVM
 install-pikvm(){
-  delete-ssl
   echo "正在安装PiKVM......"  
   dpkg -i ./fruity-pikvm_0.2_armhf.deb >> ./log.txt
   systemctl enable kvmd-vnc
@@ -96,46 +89,31 @@ install-pikvm(){
 
 #应用补丁
 add-patches(){
-  if [ -f `grep -c "$FIND_STR" $FIND_FILE` -ne '1' ]; then
+  if [ ! -f `grep -c "$FIND_STR" $FIND_FILE`  ]; then
     echo kvmd ALL=\(ALL\) NOPASSWD: /usr/bin/long_press_gpio420,/usr/bin/short_press_gpio420 >>  /etc/sudoers
   fi
-  if[ ! -f /usr/local/lib/python3.10/kvmd-packages/3.198msd.patch ];then
+
+  if [ ! -f "/usr/local/lib/python3.10/kvmd-packages/3.198msd.patch"  ]; then
     cd $CURRENTWD
     cp ./patch/3.198msd.patch /usr/local/lib/python3.10/kvmd-packages/ && cd /usr/local/lib/python3.10/kvmd-packages/
     patch -s -p0 < 3.198msd.patch
     echo "MSD补丁应用成功！"
   fi
-  if[ ! -f /usr/local/lib/python3.10/kvmd-packages/chinese.patch ];then
-    cd $CURRENTWD
-    cp./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/
-    patch -s -p0 < chinese.patch
-    echo "中文补丁应用成功！"
-  else
-    cd $CURRENTWD
-    cp./patch/chinese.patch /usr/share/kvmd/web/ 
-    cd /usr/share/kvmd/web/
-    patch -s -p0 -R < chinese.patch
-    cd $CURRENTWD
-    cp./patch/chinese.patch /usr/share/kvmd/web/
-    patch -s -p0  < chinese.patch
-    echo "中文补丁应用成功！"
-  fi
+
+  cd $CURRENTWD
+  cp -f ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/
+  patch -s -p0 < chinese.patch
+  echo  -e "\e[0;32m中文补丁应用成功！"
+
 }
 
 
 show-info(){
   echo "One-KVM V0.5" >> installed.txt 
   ipaddr=`ip addr | grep "scope global" | awk '{print $2}' |awk -F/ '{print $1}'`
-  echo -e "内网访问地址为：\nhttp://$ipaddr\nhttps://$ipaddr"
+  echo  -e "\e[0;32m内网访问地址为：\nhttp://$ipaddr\nhttps://$ipaddr"
   echo "机器已重启，等待10秒然后拔插电源，One-KVM就安装完成了！"
 }
-
-if [ -f "./installed.txt" ]; then
-  echo "\e[0;31m检测到安装One-KVM记录！"
-  
-fi
-
-
 
 
 check-environment
