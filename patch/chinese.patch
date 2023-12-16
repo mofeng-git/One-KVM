@@ -719,14 +719,14 @@ diff -ur /usr/share/kvmd/web/kvm/index.html ./kvm/index.html
 +      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#">快捷键</a>
          <div class="menu">
 -          <div class="text"><b>Quick keyboard shortcuts<br></b><sub>Also see <i>System &rarr; Show keyboard</i></sub></div>
-+          <div class="text"><b>键盘快捷键<br></b><sub>也可以再<i>系统 &rarr; 显示键盘</i>找到</sub></div>
++          <div class="text"><b>键盘快捷键<br></b><sub>也可以在<i>系统 &rarr; 显示键盘</i>找到</sub></div>
            <hr>
            <div class="buttons">
              <div class="buttons-row">
 @@ -718,7 +716,7 @@
            <hr>
            <div class="text">
-             &darr; &bull; Alt+SysRq+... <sup><i>Linux魔法键
+             &darr; &bull; Alt+SysRq+... <sup><i>linux magic
 -            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">help</a></i></sup>
 +            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">帮助</a></i></sup>
            </div>
@@ -869,7 +869,7 @@ diff -ur /usr/share/kvmd/web/login/index.html ./login/index.html
              </tr>
              <tr>
 -              <td>2FA code:&nbsp;</td>
-+              <td>双因素身份验证：&nbsp;</td>
++              <td>2FA验证：&nbsp;</td>
                <td>
 -                <input type="text" id="code-input" placeholder="if enabled">
 +                <input type="text" id="code-input" placeholder="如果有">
