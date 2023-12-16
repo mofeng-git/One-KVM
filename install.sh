@@ -56,7 +56,7 @@ change-device-tree(){
 
 #覆盖引导分区
 override-uboot(){
-  echo -e "\e[0;31m是否选择跳过按下重置键时的玩客云USB线刷检测？（\e[1;31mY/\e[1;32mN\e[0;31m）"
+  echo -e "\e[0;31m是否跳过玩客云重置键时的USB线刷检测？（\e[1;31mY/\e[1;32mN\e[0;31m）"
   read USERYN
   case $USERYN in 
     N | n)
@@ -120,8 +120,6 @@ add-patches(){
     patch -s -p0  < chinese.patch
     echo "中文补丁应用成功！"
   fi
-  echo -e "ENABLE=true\nMIN_SPEED=1536000\nMAX_SPEED=1536000\nGOVERNOR=performance" > /etc/default/cpufrequtils
-  service cpufrequtils restart
 }
 
 
@@ -133,10 +131,7 @@ show-info(){
 }
 
 if [ -f "./installed.txt" ]; then
-  echo "\e[0;31m检测到存在安装One-KVM记录！"
-else
-  #此为危险操作，会覆盖MBR分区，请在没有自行分区前执行，否则会丢失分区数据系统无法启动！  
-  
+  echo "\e[0;31m检测到安装One-KVM记录！"
   
 fi
 
