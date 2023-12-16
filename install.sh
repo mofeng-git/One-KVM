@@ -7,7 +7,6 @@ CURRENTWD=$PWD
 FIND_FILE="/etc/sudoers"
 FIND_STR="short_press_gpio420"
 
-
 #检查架构和Python版本
 check-environment(){
   echo -e "\e[0;32m设备名称：$MACHINE\nPython版本：$PYVER"
@@ -39,8 +38,6 @@ update-alternative(){
   update-alternatives --install /usr/bin/python3 python3 $(which python3.10) 1
   update-alternatives --set python3 $(which python3.10)
 }
-
-
 
 #修改设备树文件
 change-device-tree(){
@@ -107,14 +104,12 @@ add-patches(){
 
 }
 
-
 show-info(){
   echo "One-KVM V0.5" >> installed.txt 
   ipaddr=`ip addr | grep "scope global" | awk '{print $2}' |awk -F/ '{print $1}'`
   echo  -e "\e[0;32m内网访问地址为：\nhttp://$ipaddr\nhttps://$ipaddr"
   echo "机器已重启，等待10秒然后拔插电源，One-KVM就安装完成了！"
 }
-
 
 check-environment
 override-uboot
