@@ -50,7 +50,7 @@ change-device-tree(){
 
 #覆盖引导分区
 override-uboot(){
-  echo -e "\e[0;31m是否跳过玩客云重置键时的USB线刷检测？（\e[1;31mY/\e[1;32mN\e[0;31m）"
+  echo -e "\e[0;31m是否跳过玩客云重置键时的USB线刷检测？（\e[1;32mY/\e[1;31mN）"
   read USERYN
   case $USERYN in 
     N | n)
