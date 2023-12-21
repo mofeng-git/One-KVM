@@ -35,6 +35,7 @@ kvmd:
                 - 800x600
                 - 720x576
                 - 720x480
+                - 640x480
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
@@ -51,6 +52,8 @@ kvmd:
             - "--process-name-prefix={process_name_prefix}"
             - "--notify-parent"
             - "--no-log-colors"
+            - "--sink=kvmd::ustreamer::jpeg"
+            - "--sink-mode=0660"
 
 
 vnc:

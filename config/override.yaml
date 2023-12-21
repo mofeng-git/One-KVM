@@ -20,6 +20,9 @@ kvmd:
         type: disabled
     gpio:
         drivers:
+            wol_server1:
+                type: wol
+                mac: 2c:56:dc:db:7c:1e
             short_press:
                 type: cmd
                 cmd: [/usr/bin/sudo, short_press_gpio420]
@@ -27,6 +30,11 @@ kvmd:
                 type: cmd
                 cmd: [/usr/bin/sudo, long_press_gpio420]
         scheme:
+            wol_server1:
+                driver: wol_server1
+                pin: 0
+                mode: output
+                switch: false
             short_button:
                 driver: short_press
                 pin: 0
@@ -45,3 +53,6 @@ kvmd:
                 - []
                 - ["#短按（开/关机）:", short_button|按下]
                 - ["#长按（强制关机）:", long_button|按下]
+                - []
+                - ["#网络唤醒"]
+                - ["#被控机设备", wol_server1|网络唤醒]
