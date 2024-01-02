@@ -101,6 +101,8 @@ add-patches(){
   cp -f ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/
   patch -s -p0 < chinese.patch
   echo  -e "\e[0;32m中文补丁应用成功！"
+  apt install libjpeg-dev libfreetype6-dev python3-dev python3-pip
+  pip3 install -U Pillow
 
 }
 
