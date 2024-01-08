@@ -100,19 +100,30 @@ async def test_ok__internal(tmpdir) -> None:  # type: ignore
         assert (await manager.login("admin", "foo")) is None
         assert (await manager.login("user", "pass")) is None
 
-        token = await manager.login("admin", "pass")
-        assert isinstance(token, str)
-        assert len(token) == 64
+        token1 = await manager.login("admin", "pass")
+        assert isinstance(token1, str)
+        assert len(token1) == 64
 
-        again = await manager.login("admin", "pass")
-        assert token == again
+        token2 = await manager.login("admin", "pass")
+        assert isinstance(token2, str)
+        assert len(token2) == 64
+        assert token1 != token2
 
-        assert manager.check(token) == "admin"
-        manager.logout(token)
-        assert manager.check(token) is None
+        assert manager.check(token1) == "admin"
+        assert manager.check(token2) == "admin"
+        assert manager.check("foobar") is None
 
-        again = await manager.login("admin", "pass")
-        assert token != again
+        manager.logout(token1)
+
+        assert manager.check(token1) is None
+        assert manager.check(token2) is None
+        assert manager.check("foobar") is None
+
+        token3 = await manager.login("admin", "pass")
+        assert isinstance(token3, str)
+        assert len(token3) == 64
+        assert token1 != token3
+        assert token2 != token3
 
 
 @pytest.mark.asyncio
