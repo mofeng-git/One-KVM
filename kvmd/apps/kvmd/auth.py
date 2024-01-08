@@ -120,12 +120,19 @@ class AuthManager:
             for (token, token_user) in self.__tokens.items():
                 if user == token_user:
                     return token
-            token = secrets.token_hex(32)
+            token = self.__make_new_token()
             self.__tokens[token] = user
             get_logger().info("Logged in user %r", user)
             return token
         else:
             return None
+
+    def __make_new_token(self) -> str:
+        for _ in range(10):
+            token = secrets.token_hex(32)
+            if token not in self.__tokens:
+                return token
+        raise AssertionError("Can't generate new unique token")
 
     def logout(self, token: str) -> None:
         assert self.__enabled
