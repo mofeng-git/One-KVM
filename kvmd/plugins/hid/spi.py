@@ -121,7 +121,7 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
 
     @contextlib.contextmanager
     def connected(self) -> Generator[_SpiPhyConnection, None, None]:  # type: ignore
-        with self.__sw_cs_connected() as sw_cs_line:
+        with self.__sw_cs_connected() as switch_cs:
             with contextlib.closing(spidev.SpiDev(self.__bus, self.__chip)) as spi:
                 spi.mode = 0
                 spi.no_cs = (not self.__hw_cs)
@@ -129,12 +129,12 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
 
                 def inner_xfer(data: bytes) -> bytes:
                     try:
-                        if sw_cs_line is not None:
-                            sw_cs_line.set_value(0)
+                        if switch_cs is not None:
+                            switch_cs(False)
                         return spi.xfer(data, self.__max_freq, self.__block_usec)
                     finally:
-                        if sw_cs_line is not None:
-                            sw_cs_line.set_value(1)
+                        if switch_cs is not None:
+                            switch_cs(True)
 
                 if self.__sw_cs_per_byte:
                     # Режим для Pico, когда CS должен взводиться для отдельных байтов
@@ -153,12 +153,19 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
                 )
 
     @contextlib.contextmanager
-    def __sw_cs_connected(self) -> Generator[(gpiod.Line | None), None, None]:
+    def __sw_cs_connected(self) -> Generator[(Callable[[bool], bool] | None), None, None]:
         if self.__sw_cs_pin > 0:
-            with contextlib.closing(gpiod.Chip(self.__gpio_device_path)) as chip:
-                line = chip.get_line(self.__sw_cs_pin)
-                line.request("kvmd::hid::sw_cs", gpiod.LINE_REQ_DIR_OUT, default_vals=[1])
-                yield line
+            with gpiod.request_lines(
+                self.__gpio_device_path,
+                consumer="kvmd::hid",
+                config={
+                    self.__sw_cs_pin: gpiod.LineSettings(
+                        direction=gpiod.line.Direction.OUTPUT,
+                        output_value=gpiod.line.Value(True),
+                    ),
+                },
+            ) as line_request:
+                yield (lambda state: line_request.set_value(self.__sw_cs_pin, gpiod.line.Value(state)))
         else:
             yield None
 

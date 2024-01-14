@@ -47,30 +47,29 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
         self.__reset_inverted = reset_inverted
         self.__reset_delay = reset_delay
 
-        self.__chip: (gpiod.Chip | None) = None
-        self.__power_detect_line: (gpiod.Line | None) = None
-        self.__reset_line: (gpiod.Line | None) = None
-
+        self.__line_request: (gpiod.LineRequest | None) = None
         self.__last_power: (bool | None) = None
 
     def __enter__(self) -> None:
         if self.__power_detect_pin >= 0 or self.__reset_pin >= 0:
-            assert self.__chip is None
-            self.__chip = gpiod.Chip(self.__device_path)
+            assert self.__line_request is None
+            config: dict[int, gpiod.LineSettings] = {}
             if self.__power_detect_pin >= 0:
-                assert self.__power_detect_line is None
-                self.__power_detect_line = self.__chip.get_line(self.__power_detect_pin)
-                self.__power_detect_line.request(
-                    "kvmd::hid::power_detect", gpiod.LINE_REQ_DIR_IN,
-                    flags=(gpiod.LINE_REQ_FLAG_BIAS_PULL_DOWN if self.__power_detect_pull_down else 0),
+                config[self.__power_detect_pin] = gpiod.LineSettings(
+                    direction=gpiod.line.Direction.INPUT,
+                    bias=(gpiod.line.Bias.PULL_DOWN if self.__power_detect_pull_down else gpiod.line.Bias.AS_IS),
                 )
             if self.__reset_pin >= 0:
-                assert self.__reset_line is None
-                self.__reset_line = self.__chip.get_line(self.__reset_pin)
-                self.__reset_line.request(
-                    "kvmd::hid::reset", gpiod.LINE_REQ_DIR_OUT,
-                    default_vals=[int(self.__reset_inverted)],
+                config[self.__reset_pin] = gpiod.LineSettings(
+                    direction=gpiod.line.Direction.OUTPUT,
+                    output_value=gpiod.line.Value(self.__reset_inverted),
                 )
+            assert len(config) > 0
+            self.__line_request = gpiod.request_lines(
+                self.__device_path,
+                consumer="kvmd::hid",
+                config=config,
+            )
 
     def __exit__(
         self,
@@ -79,19 +78,18 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
         _tb: types.TracebackType,
     ) -> None:
 
-        if self.__chip:
+        if self.__line_request:
             try:
-                self.__chip.close()
+                self.__line_request.release()
             except Exception:
                 pass
             self.__last_power = None
-            self.__power_detect_line = None
-            self.__reset_line = None
-            self.__chip = None
+            self.__line_request = None
 
     def is_powered(self) -> bool:
-        if self.__power_detect_line is not None:
-            power = bool(self.__power_detect_line.get_value())
+        if self.__power_detect_pin >= 0:
+            assert self.__line_request
+            power = bool(self.__line_request.get_value(self.__power_detect_pin).value)
             if power != self.__last_power:
                 get_logger(0).info("HID power state changed: %s -> %s", self.__last_power, power)
                 self.__last_power = power
@@ -100,11 +98,11 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
 
     def reset(self) -> None:
         if self.__reset_pin >= 0:
-            assert self.__reset_line
+            assert self.__line_request
             try:
-                self.__reset_line.set_value(int(not self.__reset_inverted))
+                self.__line_request.set_value(self.__reset_pin, gpiod.line.Value(not self.__reset_inverted))
                 time.sleep(self.__reset_delay)
             finally:
-                self.__reset_line.set_value(int(self.__reset_inverted))
+                self.__line_request.set_value(self.__reset_pin, gpiod.line.Value(self.__reset_inverted))
                 time.sleep(1)
             get_logger(0).info("Reset HID performed")
