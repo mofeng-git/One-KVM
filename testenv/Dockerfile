@@ -95,19 +95,6 @@ RUN git clone https://github.com/pikvm/ustreamer \
 	&& cd - \
 	&& rm -rf ustreamer
 
-# FIXME: workaroung for legacy libgpiod 2.1
-RUN pacman --noconfirm --ask=4 -R libgpiod
-ENV LIBGPIOD_PKG libgpiod-2.1
-RUN curl \
-		-o $LIBGPIOD_PKG.tar.gz \
-		https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/snapshot/$LIBGPIOD_PKG.tar.gz \
-	&& tar -xzvf $LIBGPIOD_PKG.tar.gz \
-	&& cd $LIBGPIOD_PKG \
-	&& ./autogen.sh --prefix=/usr --enable-tools=yes --enable-bindings-python \
-	&& make PREFIX=/usr install \
-	&& cd - \
-	&& rm -rf $LIBGPIOD_PKG{,.tar.gz}
-
 RUN mkdir -p \
 		/etc/kvmd/{nginx,vnc} \
 		/var/lib/kvmd/msd \

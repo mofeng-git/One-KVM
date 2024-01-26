@@ -76,7 +76,7 @@ depends=(
 	python-pyrad
 	python-ldap
 	python-zstandard
-	"libgpiod1>=2.0"
+	"libgpiod>=2.1"
 	freetype2
 	"v4l-utils>=1.22.1-1"
 	"nginx-mainline>=1.25.1"
