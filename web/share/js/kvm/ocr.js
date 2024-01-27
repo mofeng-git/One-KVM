@@ -71,7 +71,7 @@ export function Ocr(__getGeometry) {
 	/************************************************************************/
 
 	self.setState = function(state) {
-		let enabled = (state && state.ocr.enabled && navigator.clipboard && !tools.browser.is_mobile);
+		let enabled = (state && state.ocr.enabled && !tools.browser.is_mobile);
 		if (enabled) {
 			let el = $("stream-ocr-lang-selector");
 			tools.selector.setValues(el, state.ocr.langs.available);
