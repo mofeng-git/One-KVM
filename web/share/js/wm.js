@@ -145,9 +145,7 @@ function __WindowManager() {
 	/************************************************************************/
 
 	self.copyTextToClipboard = function(text) {
-		navigator.clipboard.writeText(text).then(function() {
-			wm.info("The text has been copied to the clipboard");
-		}, function(err) {
+		let workaround = function(err) {
 			// https://stackoverflow.com/questions/60317969/document-execcommandcopy-not-working-even-though-the-dom-element-is-created
 			let callback = function() {
 				tools.error("copyTextToClipboard(): navigator.clipboard.writeText() is not working:", err);
@@ -179,7 +177,16 @@ function __WindowManager() {
 				}
 			};
 			__modalDialog("Info", "Press OK to copy the text to the clipboard", true, false, callback);
-		});
+		};
+		if (navigator.clipboard) {
+			navigator.clipboard.writeText(text).then(function() {
+				wm.info("The text has been copied to the clipboard");
+			}, function(err) {
+				workaround(err);
+			});
+		} else {
+			workaround("navigator.clipboard is not available");
+		}
 	};
 
 	self.info = (...args) => __modalDialog("Info", args.join(" "), true, false);
