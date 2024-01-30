@@ -13,34 +13,60 @@ One-KVM是基于玩客云硬件和PiKVM软件的远控设备。通过移植PiKVM
 ![image](https://github.com/mofeng-git/One-KVM/assets/62919083/1e9305ee-fd9e-4e4c-ba25-141a924fef29)
 
 ### 快速开始
-该脚本在玩客云（新旧版，[Armbian 22.11.0-trunk Jammy Linux onecloud 5.10.149-meson]( https://github.com/hzyitc/armbian-onecloud/releases/download/ci-20221026-074131-UTC/Armbian_22.11.0-trunk_Onecloud_jammy_legacy_5.10.149.burn.img.xz)系统）上运行，请确保你的设备已安装好Armbian系统。
+
+**方式一：直刷One-KVM镜像**
+
+Releases带One-KVM前缀、burn后缀的为线刷镜像，可使用USB_Burning_Tool线刷至玩客云。镜像为开箱即用，刷好后启动设备就可以开始用One-KVM了。
+
+**方式二：One-KVM脚本安装**
+
+一键脚本适用于玩客云Armbian 22.11.0-trunk Jammy Linux onecloud 5.10.xxx(如5.10.149 5.10.158)镜像、作者发布地基础镜像。
 
 ```bash
 git clone https://github.com/mofeng-git/One-KVM.git
 cd One-KVM  && ./install.sh
-```
 
-对于国内网络环境，可以使用下命令
-```bash
-wget https://mirror.ghproxy.com/https://github.com/mofeng-git/One-KVM/archive/refs/heads/main.zip -o One-KVM-main.zip
-unzip One-KVM-main.zip
+#对于大陆网络环境，可以尝试使用下命令
+wget https://mirror.ghproxy.com/https://github.com/mofeng-git/One-KVM/archive/refs/heads/main.zip -o One-KVM-main.zip && unzip One-KVM-main.zip
 cd One-KVM-main  && ./install.sh
 ```
-详细教程和扩展内容请参照飞书文档：[One-KVM使用手册](https://p1b237lu9xm.feishu.cn/drive/folder/IsOifWmMKlzYpRdWfcocI7jdnQA?from=from_copylink)
+**方式三：docker镜像部署**
+
+目前仅有pikvm-ch9329_amd64，后续将支持更多控制方式和处理器架构。
+```bash
+#使用示例：
+docker run -itd -p443:443 -p80:80 --name pikvm-docker --device=/dev/ttyUSB0:/dev/kvmd-hid --device=/dev/video0:/dev/kvmd-video pikvm-ch9329:0.61
+```
+
+详细内容可以参照飞书文档：[One-KVM使用文档](https://p1b237lu9xm.feishu.cn/drive/folder/IsOifWmMKlzYpRdWfcocI7jdnQA?from=from_copylink)
 
 ### 其他
 
-**更新日志**
-- V0.5：通过锁定CPU频率修复ustreamer mjpeg视频流异常的问题；屏蔽主程序找不到温度传感器的报错；优化中文翻译；更新VNC依赖；优化安装流程。
-- V0.4：利用玩客云自动GPIO实现ATX开关机物理控制功能；初步建立飞书使用文档；制作一键安装脚本，优化安装流程。
-- V0.3：添加简体中文补丁；实现MSD功能在EMMC和TF卡上的使用；添加WOL和中文OCR功能；优化了安装流程。
-- V0.2：通过替换系统解决OTG拔插死机问题；初步实现MSD功能；修改启动分区解决开机卡线刷检测；优化安装流程。
-- V0.1：PiKVM在玩客云上初步运行。
+**感谢名单**
 
-**感谢**
-H_xiaoming测试适配OTG正常可用镜像、0蓝蓝0提供开机卡线刷检测解决办法、fairybl关于MSD和线刷检测的其他解决方案、Will的PiKVM测试、浩龙的电子嵌入式之路的充电，各位网友的讨论交流和下列开源项目。
+<details>
+
+H_xiaoming
+
+0蓝蓝0
+
+fairybl
+
+Will
+
+浩龙
+
+自.知
+
+观棋不语٩ ི۶
+
+以及各位讨论交流的网友
+</details>
+
+本项目间接或直接使用了下下列开源项目：
 1. [pikvm/pikvm: Open and inexpensive DIY IP-KVM based on Raspberry Pi (github.com)](https://github.com/pikvm/pikvm)
 2. [hzyitc/armbian-onecloud: Armbian for onecloud. 玩客云用armbian (github.com)](https://github.com/hzyitc/armbian-onecloud/)
 3. [jacobbar/fruity-pikvm: Install Pi-KVM on debian SBCs such as Orange Pi, Banana Pi, Mango Pi, etc (github.com)](https://github.com/jacobbar/fruity-pikvm)
 
    
+

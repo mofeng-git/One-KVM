@@ -63,8 +63,8 @@ override-uboot(){
 #安装依赖软件
 install-dependencies(){
   bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http && echo "换源成功！"
-  echo -e "\e[0;32m正在安装依赖软件nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim libjpeg-dev libfreetype6-dev......"  
-  apt install -y nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  libjpeg-dev libfreetype6-dev
+  echo -e "\e[0;32m正在安装依赖软件iptables nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim libjpeg-dev libfreetype6-dev......"  
+  apt install -y iptables nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  libjpeg-dev libfreetype6-dev
 }
 
 #安装PiKVM
