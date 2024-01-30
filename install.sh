@@ -63,8 +63,8 @@ override-uboot(){
 #安装依赖软件
 install-dependencies(){
   bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http && echo "换源成功！"
-  echo -e "\e[0;32m正在安装依赖软件iptables nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim libjpeg-dev libfreetype6-dev......"  
-  apt install -y iptables nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  libjpeg-dev libfreetype6-dev
+  echo -e "\e[0;32m正在安装依赖软件patch iptables nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim libjpeg-dev libfreetype6-dev......"  
+  apt install -y patch iptables nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  libjpeg-dev libfreetype6-dev
 }
 
 #安装PiKVM
@@ -113,6 +113,7 @@ show-info(){
 #配置H.264功能
 kvmd-ffmpeg-h-264(){
   echo "正在配置H.264功能..."
+  cd $CURRENTWD
   apt install -y ffmpeg
   #写入ffmpeg转码推流文件和janus streaming配置文件
   cp -r /etc/kvmd/janus /etc/kvmd/janus2
