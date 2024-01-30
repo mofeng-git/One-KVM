@@ -47,7 +47,7 @@ change-device-tree(){
 
 #覆盖引导分区
 override-uboot(){
-  echo -e "\e[0;31m是否跳过玩客云重置键时的USB线刷检测？（\e[1;32mY/\e[1;31mN）"
+  echo -e "\e[0;31m玩客云默认启用USB线刷检测，是否保存原样？（\e[1;32mY保持原样/N关闭此功能）"
   read USERYN
   case $USERYN in 
     N | n)
@@ -63,8 +63,8 @@ override-uboot(){
 #安装依赖软件
 install-dependencies(){
   bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http && echo "换源成功！"
-  echo -e "\e[0;32m正在安装依赖软件nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim......"  
-  apt install -y nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  >> ./log.txt
+  echo -e "\e[0;32m正在安装依赖软件nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim libjpeg-dev libfreetype6-dev......"  
+  apt install -y nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  libjpeg-dev libfreetype6-dev
 }
 
 #安装PiKVM
@@ -81,7 +81,7 @@ install-pikvm(){
   chmod +x /usr/local/lib/python3.10/kvmd-packages/kvmd/apps/kvmd/info/hw.py
   cp -f ./config/main.yaml /etc/kvmd/ && cp -f ./config/override.yaml /etc/kvmd/ 
   echo "配置文件替换成功！"
-  kvmd -m >> ./log.txt
+  kvmd -m 
 }
 
 #应用补丁
@@ -101,18 +101,71 @@ add-patches(){
   cp -f ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/
   patch -s -p0 < chinese.patch
   echo  -e "\e[0;32m中文补丁应用成功！"
-  apt install -y libjpeg-dev libfreetype6-dev python3-dev python3-pip
-  pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
-  pip3 install -U Pillow
 
 }
 
 show-info(){
-  echo "One-KVM V0.5" >> installed.txt 
   ipaddr=`ip addr | grep "scope global" | awk '{print $2}' |awk -F/ '{print $1}'`
   echo  -e "\e[0;32m内网访问地址为：\nhttp://$ipaddr\nhttps://$ipaddr"
   echo "机器已重启，等待10秒然后拔插电源，One-KVM就安装完成了！"
 }
+
+#配置H.264功能
+kvmd-ffmpeg-h-264(){
+  echo "正在配置H.264功能..."
+  apt install -y ffmpeg
+  #写入ffmpeg转码推流文件和janus streaming配置文件
+  cp -r /etc/kvmd/janus /etc/kvmd/janus2
+  rm /etc/kvmd/janus2/janus.plugin.ustreamer.jcfg
+  cat > /etc/kvmd/janus_2/janus.plugin.streaming.jcfg << EOF
+kvmd-ffmpeg: {
+        type = "rtp"
+        id = 1
+        description = "H.264 live stream coming from ustreamer"
+        audio = false
+        video = true
+        videoport = 5004
+        videopt = 96
+        videocodec = "h264"
+        videofmtp = "profile-level-id=42e01f;packetization-mode=1"
+        videortpmap = "H264/90000"
+}
+EOF
+
+  cat > /lib/systemd/system/kvmd-ffmpeg.service << EOF
+[Unit]
+Description=PiKVM - Transcode (Static Config)
+After=network.target network-online.target nss-lookup.target kvmd.service
+
+[Service]
+User=kvmd
+Group=kvmd
+Type=simple
+Restart=on-failure
+RestartSec=3
+AmbientCapabilities=CAP_NET_RAW
+LimitNOFILE=65536
+UMask=0117
+ExecStart=/usr/share/kvmd/stream_when_ustream_exists.sh
+TimeoutStopSec=10
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  #修改原有kvmd代码和配置文件
+  sed -i '17s/.*/ExecStart=\/usr\/bin\/janus --disable-colors --configs-folder=\/etc\/kvmd\/janus2/' /lib/systemd/system/kvmd-janus-static.service
+  sed -i 's/janus.plugin.ustreamer/janus.plugin.streaming/' /usr/share/kvmd/web/share/js/kvm/stream_janus.js
+  sed -i '293c \/\/' /usr/share/kvmd/web/share/js/kvm/stream_janus.js
+  sed -i 's/request\": \"watch\", \"p/request\": \"watch\", \"id\" : 1, \"p/' /usr/share/kvmd/web/share/js/kvm/stream_janus.js
+  #补全网页JS文件并添加相应脚本
+  mkdir /usr/share/janus/javascript/ && cp -f ./web/adapter.js /usr/share/janus/javascript/ && cp -f ./web/janus.js /usr/share/janus/javascript/
+  cp -f ./patch/stream.sh /usr/share/kvmd/ && cp -f ./patch/stream_when_ustream_exists.sh /usr/share/kvmd/ && chmod +x /usr/share/kvmd/stream.sh /usr/share/kvmd/stream_when_ustream_exists.sh
+  #启动服务
+  systemctl enable kvmd-ffmpeg && systemctl enable kvmd-janus-static
+  systemctl start kvmd-ffmpeg && systemctl start kvmd-janus-static
+}
+
 
 check-environment
 override-uboot
@@ -120,5 +173,6 @@ change-device-tree
 install-dependencies
 install-pikvm
 add-patches
+kvmd-ffmpeg-h-264
 show-info
 reboot
