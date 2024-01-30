@@ -118,7 +118,7 @@ kvmd-ffmpeg-h-264(){
   #写入ffmpeg转码推流文件和janus streaming配置文件
   cp -r /etc/kvmd/janus /etc/kvmd/janus2
   rm /etc/kvmd/janus2/janus.plugin.ustreamer.jcfg
-  cat > /etc/kvmd/janus_2/janus.plugin.streaming.jcfg << EOF
+  cat > /etc/kvmd/janus2/janus.plugin.streaming.jcfg << EOF
 kvmd-ffmpeg: {
         type = "rtp"
         id = 1
@@ -164,7 +164,7 @@ EOF
   cp -f ./patch/stream.sh /usr/share/kvmd/ && cp -f ./patch/stream_when_ustream_exists.sh /usr/share/kvmd/ && chmod +x /usr/share/kvmd/stream.sh /usr/share/kvmd/stream_when_ustream_exists.sh
   #启动服务
   systemctl enable kvmd-ffmpeg && systemctl enable kvmd-janus-static
-  systemctl start kvmd-ffmpeg && systemctl start kvmd-janus-static
+  #systemctl start kvmd-ffmpeg && systemctl start kvmd-janus-static
 }
 
 

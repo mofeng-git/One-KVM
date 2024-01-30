@@ -20,7 +20,7 @@ Releases带One-KVM前缀、burn后缀的为线刷镜像，可使用USB_Burning_T
 
 **方式二：One-KVM脚本安装**
 
-一键脚本适用于玩客云Armbian 22.11.0-trunk Jammy Linux onecloud 5.10.xxx(如5.10.149 5.10.158)镜像、作者发布地基础镜像。
+一键脚本适用于玩客云Armbian 22.11.0-trunk Jammy Linux onecloud 5.10.xxx(如5.10.149 5.10.158)镜像.如若使用此项目发布的Armbian基础镜像，需注释掉脚本尾部的两个函数`override-uboot` `change-device-tree`。
 
 ```bash
 git clone https://github.com/mofeng-git/One-KVM.git
