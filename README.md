@@ -1,26 +1,31 @@
+<h3 align=center><img src="https://github.com/mofeng-git/Build-Armbian/assets/62919083/add9743a-0987-4e8a-b2cb-62121f236582" alt="logo" width="300"><br></h3>
+<h3 align=center><a href="https://github.com/mofeng-git/One-KVM/blob/master/README.md">简体中文</a> </h3>
+<p align=right>&nbsp;</p>
+
 ### 介绍
 
 One-KVM是基于玩客云硬件和PiKVM软件的远控设备。通过移植PiKVM该软件至玩客云设备上，实现了极高的性价比，不到百元功能即可接近甚至超越部分昂贵的商业设备。
 
-该设备在于帮助用户通过得到控制设备的HDMI 画面和鼠标键盘，去远程管理服务器、工作站或个人PC等。 和基于软件的远程管理方式不同，你无需在被控电脑安装任何软件，做到无侵入式控制。
+该软件可以帮助用户通过得到控制设备的HDMI 画面和鼠标键盘，去远程管理服务器、工作站或个人PC等。 和基于软件的远程管理方式不同，无需在被控电脑安装任何软件，实现无侵入式控制。
 
-该项目基于PiKVM和Fruity PiKVM，提供了玩客云兼容PiKVM操作的自动处理脚本。我不是PiKVM和Fruity PiKVM项目的开发者，所以不会对PiKVM软件本身和PiKVM deb包进行功能开发，请勿向此项目提交此类需求。
+该项目基于PiKVM和Fruity PiKVM，提供了玩客云兼容PiKVM操作的自动处理脚本。
 
 ![image](https://github.com/mofeng-git/One-KVM/assets/62919083/ec7e049f-ca6c-426f-bfa4-314536965db0)
 
 **功能特性**
 
-![image](https://github.com/mofeng-git/One-KVM/assets/62919083/1e9305ee-fd9e-4e4c-ba25-141a924fef29)
+![image](https://github.com/mofeng-git/One-KVM/assets/62919083/b160c03b-31c5-465b-b9f8-acf421a35f79)
+
 
 ### 快速开始
 
 **方式一：直刷One-KVM镜像**
 
-Releases带One-KVM前缀、burn后缀的为线刷镜像，可使用USB_Burning_Tool线刷至玩客云。镜像为开箱即用，刷好后启动设备就可以开始用One-KVM了。
+本项目Releases页可以找到包含PiKVM的预编译镜像，内核版本为5.9.0-rc7。镜像名称带One-KVM前缀、burn后缀的为线刷镜像，可使用USB_Burning_Tool软件线刷至玩客云。预编译线刷镜像为开箱即用，刷好后启动设备就可以开始使用One-KVM。
 
 **方式二：One-KVM脚本安装**
 
-一键脚本适用于玩客云Armbian 22.11.0-trunk Jammy Linux onecloud 5.10.xxx(如5.10.149 5.10.158)镜像.如若使用此项目发布的Armbian基础镜像，需注释掉脚本尾部的两个函数`override-uboot` `change-device-tree`。
+一键脚本适用于玩客云Armbian 22.11.0-trunk Jammy Linux onecloud 5.10.xxx(如5.10.149 5.10.158)镜像。如若使用此项目发布的Armbian基础镜像，需注释掉脚本尾部的两个函数`override-uboot` `change-device-tree`。
 
 ```bash
 git clone https://github.com/mofeng-git/One-KVM.git
@@ -54,7 +59,7 @@ fairybl
 
 Will
 
-浩龙
+浩龙的电子嵌入式之路
 
 自.知
 
