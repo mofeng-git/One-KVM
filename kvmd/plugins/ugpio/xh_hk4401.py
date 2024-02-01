@@ -59,6 +59,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         device_path: str,
         speed: int,
         read_timeout: float,
+        protocol: int,
     ) -> None:
 
         super().__init__(instance_name, notifier)
@@ -66,6 +67,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         self.__device_path = device_path
         self.__speed = speed
         self.__read_timeout = read_timeout
+        self.__protocol = protocol  # https://github.com/pikvm/kvmd/pull/158
 
         self.__ctl_queue: "multiprocessing.Queue[int]" = multiprocessing.Queue()
         self.__channel_queue: "multiprocessing.Queue[int | None]" = multiprocessing.Queue()
@@ -80,6 +82,7 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             "device":       Option("",    type=valid_abs_path, unpack_as="device_path"),
             "speed":        Option(19200, type=valid_tty_speed),
             "read_timeout": Option(2.0,   type=valid_float_f01),
+            "protocol":     Option(1,     type=functools.partial(valid_number, min=1, max=2)),
         }
 
     @classmethod
@@ -134,8 +137,9 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                     data = b""
                     self.__channel_queue.put_nowait(-1)
 
-                    # Wait for first port heartbeat to set correct channel (~2 sec max)
-                    while True:
+                    # Wait for first port heartbeat to set correct channel (~2 sec max).
+                    # Only for the classic switch with protocol version 1.
+                    while self.__protocol == 1:
                         (channel, data) = self.__recv_channel(tty, data)
                         if channel is not None:
                             self.__channel_queue.put_nowait(channel)
@@ -150,6 +154,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                         if got:
                             assert channel is not None
                             self.__send_channel(tty, channel)
+                            if self.__protocol == 2:
+                                self.__channel_queue.put_nowait(channel)
 
             except Exception as err:
                 self.__channel_queue.put_nowait(None)
@@ -166,10 +172,10 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         channel: (int | None) = None
         if tty.in_waiting:
             data += tty.read_all()
-            found = re.findall(b"AG0[1-4]gA", data)
+            found = re.findall((b"AG0[1-4]gA" if self.__protocol == 1 else b"G0[1-4]gA\x00"), data)
             if found:
                 try:
-                    channel = int(found[-1][2:4]) - 1
+                    channel = int(found[-1][2:4] if self.__protocol == 1 else found[-1][1:3]) - 1
                 except Exception:
                     channel = None
             data = data[-12:]
@@ -177,8 +183,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     def __send_channel(self, tty: serial.Serial, channel: int) -> None:
         assert 0 <= channel <= 3
-        cmd = "SW{port}\r\nAG{port:02d}gA".format(port=(channel + 1)).encode()
-        tty.write(cmd)
+        cmd = ("SW{port}\r\nAG{port:02d}gA" if self.__protocol == 1 else "G{port:02d}gA\x00")
+        tty.write(cmd.format(port=(channel + 1)).encode())
         tty.flush()
 
     def __str__(self) -> str:
