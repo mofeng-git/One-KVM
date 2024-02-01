@@ -656,7 +656,7 @@ def _get_config_scheme() -> dict:
 
         "ipmi": {
             "server": {
-                "host":    Option("::", type=valid_ip_or_host),
+                "host":    Option("",   type=valid_ip_or_host, if_empty=""),
                 "port":    Option(623,  type=valid_port),
                 "timeout": Option(10.0, type=valid_float_f01),
             },
@@ -684,7 +684,7 @@ def _get_config_scheme() -> dict:
             "keymap":       Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
 
             "server": {
-                "host":        Option("::", type=valid_ip_or_host),
+                "host":        Option("",   type=valid_ip_or_host, if_empty=""),
                 "port":        Option(5900, type=valid_port),
                 "max_clients": Option(10,   type=valid_int_f1),
 

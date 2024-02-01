@@ -41,6 +41,7 @@ from ...logging import get_logger
 from ...clients.kvmd import KvmdClient
 
 from ... import aiotools
+from ... import network
 
 from .auth import IpmiAuthManager
 
@@ -64,6 +65,8 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
         sol_select_timeout: float,
         sol_proxy_port: int,
     ) -> None:
+
+        host = network.get_listen_host(host)
 
         super().__init__(authdata=auth_manager, address=host, port=port)
 

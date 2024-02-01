@@ -47,6 +47,7 @@ from ...clients.streamer import BaseStreamerClient
 
 from ... import tools
 from ... import aiotools
+from ... import network
 
 from .rfb import RfbClient
 from .rfb.stream import rfb_format_remote
@@ -444,7 +445,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         vnc_auth_manager: VncAuthManager,
     ) -> None:
 
-        self.__host = host
+        self.__host = network.get_listen_host(host)
         self.__port = port
         self.__max_clients = max_clients
 
