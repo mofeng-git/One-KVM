@@ -56,6 +56,12 @@ otgnet:
         pre_stop_cmd:
             - "/bin/true"
 
+nginx:
+    http:
+        port: 8080
+    https:
+        port: 4430
+
 janus:
     cmd:
         - "/bin/true"

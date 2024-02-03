@@ -76,6 +76,7 @@ depends=(
 	python-pyrad
 	python-ldap
 	python-zstandard
+	python-mako
 	"libgpiod>=2.1"
 	freetype2
 	"v4l-utils>=1.22.1-1"
@@ -136,9 +137,9 @@ backup=(
 	etc/kvmd/{ht,ipmi,vnc}passwd
 	etc/kvmd/totp.secret
 	etc/kvmd/nginx/{kvmd.ctx-{http,server},certbot.ctx-server}.conf
-	etc/kvmd/nginx/listen-http{,s}.conf
 	etc/kvmd/nginx/loc-{login,nocache,proxy,websocket,nobuffering,bigpost}.conf
-	etc/kvmd/nginx/{mime-types,ssl,redirect-to-https,nginx}.conf
+	etc/kvmd/nginx/{mime-types,ssl}.conf
+	etc/kvmd/nginx/nginx.conf.mako
 	etc/kvmd/janus/janus{,.plugin.ustreamer,.transport.websockets}.jcfg
 	etc/kvmd/web.css
 )
@@ -173,8 +174,8 @@ package_kvmd() {
 
 	mkdir -p "$pkgdir/etc/kvmd/"{nginx,vnc}"/ssl"
 	chmod 755 "$pkgdir/etc/kvmd/"{nginx,vnc}"/ssl"
-	install -Dm444 -t "$pkgdir/etc/kvmd/nginx" "$_cfg_default/nginx"/*.conf
-	chmod 644 "$pkgdir/etc/kvmd/nginx/"{nginx,redirect-to-https,ssl,listen-http{,s}}.conf
+	install -Dm444 -t "$pkgdir/etc/kvmd/nginx" "$_cfg_default/nginx"/*.conf*
+	chmod 644 "$pkgdir/etc/kvmd/nginx/"{nginx,ssl}.conf*
 
 	mkdir -p "$pkgdir/etc/kvmd/janus"
 	chmod 755 "$pkgdir/etc/kvmd/janus"

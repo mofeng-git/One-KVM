@@ -57,6 +57,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-pam \
 		python-pillow \
 		python-xlib \
+		python-mako \
 		libxkbcommon \
 		python-hidapi \
 		python-ldap \

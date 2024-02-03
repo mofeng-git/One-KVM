@@ -36,16 +36,45 @@ http {
 	include /etc/kvmd/nginx/kvmd.ctx-http.conf;
 	include /usr/share/kvmd/extras/*/nginx.ctx-http.conf;
 
+	% if https_enabled:
+
 	server {
-		include /etc/kvmd/nginx/listen-http.conf;
+		listen ${http_port};
+		% if ipv6_enabled:
+		listen [::]:${http_port};
+		% endif
 		include /etc/kvmd/nginx/certbot.ctx-server.conf;
-		include /etc/kvmd/nginx/redirect-to-https.conf;
+		location / {
+			% if https_port == 443:
+			return 301 https://$host$request_uri;
+			% else:
+			return 301 https://$host:${https_port}$request_uri;
+			% endif
+		}
 	}
 
 	server {
-		include /etc/kvmd/nginx/listen-https.conf;
+		listen ${https_port} ssl;
+		% if ipv6_enabled:
+		listen [::]:${https_port} ssl;
+		% endif
+		http2 on;
 		include /etc/kvmd/nginx/ssl.conf;
 		include /etc/kvmd/nginx/kvmd.ctx-server.conf;
 		include /usr/share/kvmd/extras/*/nginx.ctx-server.conf;
 	}
+
+	% else:
+
+	server {
+		listen ${http_port};
+		% if ipv6_enabled:
+		listen [::]:${http_port};
+		% endif
+		include /etc/kvmd/nginx/certbot.ctx-server.conf;
+		include /etc/kvmd/nginx/kvmd.ctx-server.conf;
+		include /usr/share/kvmd/extras/*/nginx.ctx-server.conf;
+	}
+
+	% endif
 }

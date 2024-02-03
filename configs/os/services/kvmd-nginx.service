@@ -10,8 +10,9 @@ SyslogLevel=err
 Restart=always
 RestartSec=3
 
-ExecStart=/usr/sbin/nginx -p /etc/kvmd/nginx -c /etc/kvmd/nginx/nginx.conf -g 'pid /run/kvmd/nginx.pid; user kvmd-nginx; error_log stderr;'
-ExecReload=/usr/sbin/nginx -s reload -p /etc/kvmd/nginx -c /etc/kvmd/nginx/nginx.conf -g 'pid /run/kvmd/nginx.pid; user kvmd-nginx; error_log stderr;'
+ExecStartPre=/usr/bin/kvmd-nginx-mkconf /etc/kvmd/nginx/nginx.conf.mako /run/kvmd/nginx.conf
+ExecStart=/usr/sbin/nginx -p /etc/kvmd/nginx -c /run/kvmd/nginx.conf -g 'pid /run/kvmd/nginx.pid; user kvmd-nginx; error_log stderr;'
+ExecReload=/usr/sbin/nginx -s reload -p /etc/kvmd/nginx -c /run/kvmd/nginx.conf -g 'pid /run/kvmd/nginx.pid; user kvmd-nginx; error_log stderr;'
 KillSignal=SIGQUIT
 KillMode=mixed
 TimeoutStopSec=3

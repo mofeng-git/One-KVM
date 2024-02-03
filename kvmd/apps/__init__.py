@@ -742,6 +742,16 @@ def _get_config_scheme() -> dict:
             },
         },
 
+        "nginx": {
+            "http": {
+                "port": Option(80, type=valid_port),
+            },
+            "https": {
+                "enabled": Option(True, type=valid_bool),
+                "port":    Option(443,  type=valid_port),
+            },
+        },
+
         "janus": {
             "stun": {
                 "host":          Option("stun.l.google.com", type=valid_ip_or_host, unpack_as="stun_host"),

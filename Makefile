@@ -113,15 +113,14 @@ run: testenv $(TESTENV_GPIO)
 			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
 			--device $(TESTENV_GPIO):$(TESTENV_GPIO) \
 			$(if $(TESTENV_RELAY),--device $(TESTENV_RELAY):$(TESTENV_RELAY),) \
-			--publish 8080:80/tcp \
-			--publish 4430:443/tcp \
+			--publish 8080:8080/tcp \
+			--publish 4430:4430/tcp \
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
 			mkdir -p /tmp/kvmd-nginx \
 			&& mount -t debugfs none /sys/kernel/debug \
 			&& test -d /sys/kernel/debug/gpio-mockup/`basename $(TESTENV_GPIO)`/ || (echo \"Missing GPIO mockup\" && exit 1) \
 			&& (socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
 			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/kvmd/nginx \
-			&& cp testenv/redirect-to-https.conf /etc/kvmd/nginx \
 			&& cp -a /testenv/.ssl/nginx /etc/kvmd/nginx/ssl \
 			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
@@ -131,6 +130,7 @@ run: testenv $(TESTENV_GPIO)
 			&& ln -s /testenv/web.css /etc/kvmd/web.css \
 			&& mkdir -p /etc/kvmd/override.d \
 			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
+			&& python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf \
 			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
 			&& ln -s $(TESTENV_VIDEO) /dev/kvmd-video \
 			&& ln -s $(TESTENV_GPIO) /dev/kvmd-gpio \
