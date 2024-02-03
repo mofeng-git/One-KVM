@@ -126,7 +126,7 @@ def main() -> None:
                 "kvmd-cleanup = kvmd.apps.cleanup:main",
                 "kvmd-ipmi = kvmd.apps.ipmi:main",
                 "kvmd-vnc = kvmd.apps.vnc:main",
-                "kvmd-nginx-mkconf = kvmd.apps.ngxmkconf",
+                "kvmd-nginx-mkconf = kvmd.apps.ngxmkconf:main",
                 "kvmd-janus = kvmd.apps.janus:main",
                 "kvmd-watchdog = kvmd.apps.watchdog:main",
                 "kvmd-helper-pst-remount = kvmd.helpers.remount:main",
