@@ -216,6 +216,7 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
                         help="The video device", metavar="<device>")
     options = parser.parse_args(argv[1:])
 
+    orig_edid_path = options.edid_path
     if options.imp:
         options.export_hex = options.edid_path
         options.edid_path = options.imp
@@ -259,7 +260,7 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
             subprocess.run([
                 "/usr/bin/v4l2-ctl",
                 f"--device={options.device_path}",
-                f"--set-edid=file={options.edid_path}",
+                f"--set-edid=file={orig_edid_path}",
                 "--fix-edid-checksums",
                 "--info-edid",
             ], stdout=sys.stderr, check=True)
