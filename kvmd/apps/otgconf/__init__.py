@@ -57,31 +57,51 @@ class _GadgetControl:
         try:
             yield
         finally:
+            self.__recreate_profile()
             time.sleep(self.__init_delay)
             with open(udc_path, "w") as file:
                 file.write(udc)
+
+    def __recreate_profile(self) -> None:
+        # XXX: See pikvm/pikvm#1235
+        # After unbind and bind, the gadgets stop working,
+        # unless we recreate their links in the profile.
+        # Some kind of kernel bug.
+        for func in os.listdir(self.__get_fdest_path()):
+            path = self.__get_fdest_path(func)
+            if os.path.islink(path):
+                try:
+                    os.unlink(path)
+                    os.symlink(self.__get_fsrc_path(func), path)
+                except (FileNotFoundError, FileExistsError):
+                    pass
 
     def __read_metas(self) -> Generator[dict, None, None]:
         for meta_name in sorted(os.listdir(self.__meta_path)):
             with open(os.path.join(self.__meta_path, meta_name)) as file:
                 yield json.loads(file.read())
 
+    def __get_fsrc_path(self, func: str) -> str:
+        return usb.get_gadget_path(self.__gadget, usb.G_FUNCTIONS, func)
+
+    def __get_fdest_path(self, func: (str | None)=None) -> str:
+        if func is None:
+            return usb.get_gadget_path(self.__gadget, usb.G_PROFILE)
+        return usb.get_gadget_path(self.__gadget, usb.G_PROFILE, func)
+
     def enable_functions(self, funcs: list[str]) -> None:
         with self.__udc_stopped():
             for func in funcs:
-                os.symlink(
-                    usb.get_gadget_path(self.__gadget, usb.G_FUNCTIONS, func),
-                    usb.get_gadget_path(self.__gadget, usb.G_PROFILE, func),
-                )
+                os.symlink(self.__get_fsrc_path(func), self.__get_fdest_path(func))
 
     def disable_functions(self, funcs: list[str]) -> None:
         with self.__udc_stopped():
             for func in funcs:
-                os.unlink(usb.get_gadget_path(self.__gadget, usb.G_PROFILE, func))
+                os.unlink(self.__get_fdest_path(func))
 
     def list_functions(self) -> None:
         for meta in self.__read_metas():
-            enabled = os.path.exists(usb.get_gadget_path(self.__gadget, usb.G_PROFILE, meta["func"]))
+            enabled = os.path.exists(self.__get_fdest_path(meta["func"]))
             print(f"{'+' if enabled else '-'} {meta['func']}  # {meta['name']}")
 
     def make_gpio_config(self) -> None:

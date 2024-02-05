@@ -105,28 +105,52 @@ class Plugin(BaseUserGpioDriver):
     async def read(self, pin: str) -> bool:
         if pin == "udc":
             return self.__is_udc_enabled()
-        return os.path.exists(os.path.join(self.__profile_path, pin))
+        return os.path.exists(self.__get_fdest_path(pin))
 
     async def write(self, pin: str, state: bool) -> None:
         async with self.__lock:
+            if self.read(pin) == state:
+                return
             if pin == "udc":
+                if state:
+                    self.__recreate_profile()
                 self.__set_udc_enabled(state)
             else:
                 if self.__is_udc_enabled():
                     self.__set_udc_enabled(False)
                 try:
                     if state:
-                        os.symlink(
-                            os.path.join(self.__functions_path, pin),
-                            os.path.join(self.__profile_path, pin),
-                        )
+                        os.symlink(self.__get_fsrc_path(pin), self.__get_fdest_path(pin))
                     else:
-                        os.unlink(os.path.join(self.__profile_path, pin))
+                        os.unlink(self.__get_fdest_path(pin))
+                except (FileNotFoundError, FileExistsError):
+                    pass
                 finally:
+                    self.__recreate_profile()
                     try:
                         await asyncio.sleep(self.__init_delay)
                     finally:
                         self.__set_udc_enabled(True)
+
+    def __recreate_profile(self) -> None:
+        # XXX: See pikvm/pikvm#1235
+        # After unbind and bind, the gadgets stop working,
+        # unless we recreate their links in the profile.
+        # Some kind of kernel bug.
+        for func in os.listdir(self.__profile_path):
+            path = self.__get_fdest_path(func)
+            if os.path.islink(path):
+                try:
+                    os.unlink(path)
+                    os.symlink(self.__get_fsrc_path(func), path)
+                except (FileNotFoundError, FileNotFoundError):
+                    pass
+
+    def __get_fsrc_path(self, func: str) -> str:
+        return os.path.join(self.__functions_path, func)
+
+    def __get_fdest_path(self, func: str) -> str:
+        return os.path.join(self.__profile_path, func)
 
     def __set_udc_enabled(self, enabled: bool) -> None:
         with open(self.__udc_path, "w") as file:
