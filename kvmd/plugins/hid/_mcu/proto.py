@@ -28,6 +28,7 @@ from ....keyboard.mappings import KEYMAP
 from ....mouse import MouseRange
 
 from .... import tools
+from .... import bitbang
 
 
 # =====
@@ -185,32 +186,19 @@ class MouseWheelEvent(BaseEvent):
 # =====
 def check_response(response: bytes) -> bool:
     assert len(response) in (4, 8), response
-    return (_make_crc16(response[:-2]) == struct.unpack(">H", response[-2:])[0])
+    return (bitbang.make_crc16(response[:-2]) == struct.unpack(">H", response[-2:])[0])
 
 
 def _make_request(command: bytes) -> bytes:
     assert len(command) == 5, command
     request = b"\x33" + command
-    request += struct.pack(">H", _make_crc16(request))
+    request += struct.pack(">H", bitbang.make_crc16(request))
     assert len(request) == 8, request
     return request
-
-
-def _make_crc16(data: bytes) -> int:
-    crc = 0xFFFF
-    for byte in data:
-        crc = crc ^ byte
-        for _ in range(8):
-            if crc & 0x0001 == 0:
-                crc = crc >> 1
-            else:
-                crc = crc >> 1
-                crc = crc ^ 0xA001
-    return crc
 
 
 # =====
 REQUEST_PING = _make_request(b"\x01\x00\x00\x00\x00")
 REQUEST_REPEAT = _make_request(b"\x02\x00\x00\x00\x00")
 
-RESPONSE_LEGACY_OK = b"\x33\x20" + struct.pack(">H", _make_crc16(b"\x33\x20"))
+RESPONSE_LEGACY_OK = b"\x33\x20" + struct.pack(">H", bitbang.make_crc16(b"\x33\x20"))
