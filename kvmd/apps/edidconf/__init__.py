@@ -39,6 +39,10 @@ from ...validators.basic import valid_int_f0
 
 
 # =====
+class NoBlockError(Exception):
+    pass
+
+
 @contextlib.contextmanager
 def _smart_open(path: str, mode: str) -> Generator[IO, None, None]:
     fd = (0 if "r" in mode else 1)
@@ -142,20 +146,32 @@ class _Edid:
     # =====
 
     def get_monitor_name(self) -> str:
-        index = self.__find_mnd_text()
+        return self.__get_dtd_text(0xFC, "Monitor Name")
+
+    def set_monitor_name(self, text: str) -> None:
+        self.__set_dtd_text(0xFC, "Monitor Name", text)
+
+    def get_monitor_serial(self) -> str:
+        return self.__get_dtd_text(0xFF, "Monitor Serial")
+
+    def set_monitor_serial(self, text: str) -> None:
+        self.__set_dtd_text(0xFF, "Monitor Serial", text)
+
+    def __get_dtd_text(self, d_type: int, name: str) -> str:
+        index = self.__find_dtd_text(d_type, name)
         return bytes(self.__data[index:index + 13]).decode("cp437").strip()
 
-    def set_monitor_name(self, name: str) -> None:
-        index = self.__find_mnd_text()
-        encoded = (name[:13] + "\n" + " " * 12)[:13].encode("cp437")
+    def __set_dtd_text(self, d_type: int, name: str, text: str) -> None:
+        index = self.__find_dtd_text(d_type, name)
+        encoded = (text[:13] + "\n" + " " * 12)[:13].encode("cp437")
         for (offset, byte) in enumerate(encoded):
             self.__data[index + offset] = byte
 
-    def __find_mnd_text(self) -> int:
+    def __find_dtd_text(self, d_type: int, name: str) -> int:
         for index in [54, 72, 90, 108]:
-            if self.__data[index + 3] == 0xFC:
+            if self.__data[index + 3] == d_type:
                 return index + 5
-        raise AssertionError("Can't find DTD Monitor name")
+        raise NoBlockError(f"Can't find DTD {name}")
 
     # =====
 
@@ -207,7 +223,9 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
     parser.add_argument("--set-serial", type=valid_int_f0,
                         help="Set serial number (decimal)", metavar="<uint>")
     parser.add_argument("--set-monitor-name",
-                        help="Set monitor name in DTD/MND (ASCII, max 13 characters)", metavar="<str>")
+                        help="Set monitor name in DTD block (ASCII, max 13 characters)", metavar="<str>")
+    parser.add_argument("--set-monitor-serial",
+                        help="Set monitor serial in DTD block if exists (ASCII, max 13 characters)", metavar="<str>")
     parser.add_argument("--clear", action="store_true",
                         help="Clear the EDID in the [--device]")
     parser.add_argument("--apply", action="store_true",
@@ -239,13 +257,17 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
         edid.write_hex(options.edid_path)
 
     for (key, get, fmt) in [
-        ("Manufacturer ID:", edid.get_mfc_id,       str),
-        ("Product ID:     ", edid.get_product_id,   _make_format_hex(2)),
-        ("Serial number:  ", edid.get_serial,       _make_format_hex(4)),
-        ("Monitor name:   ", edid.get_monitor_name, str),
-        ("Basic audio:    ", edid.get_audio,        _format_bool),
+        ("Manufacturer ID:", edid.get_mfc_id,         str),
+        ("Product ID:     ", edid.get_product_id,     _make_format_hex(2)),
+        ("Serial number:  ", edid.get_serial,         _make_format_hex(4)),
+        ("Monitor name:   ", edid.get_monitor_name,   str),
+        ("Monitor serial: ", edid.get_monitor_serial, str),
+        ("Basic audio:    ", edid.get_audio,          _format_bool),
     ]:
-        print(key, fmt(get()), file=sys.stderr)  # type: ignore
+        try:
+            print(key, fmt(get()), file=sys.stderr)  # type: ignore
+        except NoBlockError:
+            pass
 
     try:
         if options.clear:

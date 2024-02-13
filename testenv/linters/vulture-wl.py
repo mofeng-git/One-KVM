@@ -50,6 +50,7 @@ _Edid.set_mfc_id
 _Edid.set_product_id
 _Edid.set_serial
 _Edid.set_monitor_name
+_Edid.set_monitor_serial
 _Edid.set_audio
 
 Dumper.ignore_aliases
