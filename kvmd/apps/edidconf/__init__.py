@@ -23,8 +23,9 @@
 import sys
 import os
 import re
-import subprocess
+import dataclasses
 import contextlib
+import subprocess
 import argparse
 import time
 
@@ -52,6 +53,37 @@ def _smart_open(path: str, mode: str) -> Generator[IO, None, None]:
             file.flush()
 
 
+@dataclasses.dataclass(frozen=True)
+class _CeaBlock:
+    tag:  int
+    data: bytes
+
+    def __post_init__(self) -> None:
+        assert 0 < self.tag <= 0b111
+        assert 0 < len(self.data) <= 0b11111
+
+    @property
+    def size(self) -> int:
+        return len(self.data) + 1
+
+    def pack(self) -> bytes:
+        header = (self.tag << 5) | len(self.data)
+        return header.to_bytes() + self.data
+
+    @classmethod
+    def first_from_raw(cls, raw: (bytes | list[int])) -> "_CeaBlock":
+        assert 0 < raw[0] <= 0xFF
+        tag = (raw[0] & 0b11100000) >> 5
+        data_size = (raw[0] & 0b00011111)
+        data = bytes(raw[1:data_size + 1])
+        return _CeaBlock(tag, data)
+
+
+_CEA = 128
+_CEA_AUDIO = 1
+_CEA_SPEAKERS = 4
+
+
 class _Edid:
     # https://en.wikipedia.org/wiki/Extended_Display_Identification_Data
 
@@ -68,9 +100,7 @@ class _Edid:
                 ]
             assert len(self.__data) == 256, f"Invalid EDID length: {len(self.__data)}, should be 256 bytes"
             assert self.__data[126] == 1, "Zero extensions number"
-            assert (self.__data[128], self.__data[129]) == (0x02, 0x03), "Can't find CEA-861"
-
-    # =====
+            assert (self.__data[_CEA + 0], self.__data[_CEA + 1]) == (0x02, 0x03), "Can't find CEA extension"
 
     def write_hex(self, path: str) -> None:
         self.__update_checksums()
@@ -106,8 +136,8 @@ class _Edid:
     def set_mfc_id(self, mfc_id: str) -> None:
         assert len(mfc_id) == 3, "Mfc ID must be 3 characters long"
         data = mfc_id.upper().encode("ascii")
-        for byte in data:
-            assert 0x41 <= byte <= 0x5A, "Mfc ID must contain only A-Z characters"
+        for ch in data:
+            assert 0x41 <= ch <= 0x5A, "Mfc ID must contain only A-Z characters"
         raw = (
             (data[2] - 0x40)
             | ((data[1] - 0x40) << 5)
@@ -164,8 +194,8 @@ class _Edid:
     def __set_dtd_text(self, d_type: int, name: str, text: str) -> None:
         index = self.__find_dtd_text(d_type, name)
         encoded = (text[:13] + "\n" + " " * 12)[:13].encode("cp437")
-        for (offset, byte) in enumerate(encoded):
-            self.__data[index + offset] = byte
+        for (offset, ch) in enumerate(encoded):
+            self.__data[index + offset] = ch
 
     def __find_dtd_text(self, d_type: int, name: str) -> int:
         for index in [54, 72, 90, 108]:
@@ -173,16 +203,76 @@ class _Edid:
                 return index + 5
         raise NoBlockError(f"Can't find DTD {name}")
 
-    # =====
+    # ===== CEA =====
 
     def get_audio(self) -> bool:
-        return bool(self.__data[131] & 0b01000000)
+        (cbs, _) = self.__parse_cea()
+        return (
+            _CEA_AUDIO in cbs
+            and _CEA_SPEAKERS in cbs
+            and self.__get_basic_audio()
+        )
 
     def set_audio(self, enabled: bool) -> None:
+        (cbs, dtds) = self.__parse_cea()
         if enabled:
-            self.__data[131] |= 0b01000000
+            cbs[_CEA_AUDIO] = _CeaBlock(_CEA_AUDIO, b"\x09\x7f\x07")
+            cbs[_CEA_SPEAKERS] = _CeaBlock(_CEA_SPEAKERS, b"\x01\x00\x00")
         else:
-            self.__data[131] &= (0xFF - 0b01000000)  # ~X
+            cbs.pop(_CEA_AUDIO, None)
+            cbs.pop(_CEA_SPEAKERS, None)
+        self.__replace_cea(cbs, dtds)
+        self.__set_basic_audio(enabled)
+
+    def __get_basic_audio(self) -> bool:
+        return bool(self.__data[_CEA + 3] & 0b01000000)
+
+    def __set_basic_audio(self, enabled: bool) -> None:
+        if enabled:
+            self.__data[_CEA + 3] |= 0b01000000
+        else:
+            self.__data[_CEA + 3] &= (0xFF - 0b01000000)  # ~X
+
+    def __parse_cea(self) -> tuple[dict[int, _CeaBlock], bytes]:
+        cea = self.__data[_CEA:]
+        dtd_begin = cea[2]
+        if dtd_begin == 0:
+            return ({}, b"")
+
+        cbs: dict[int, _CeaBlock] = {}
+        if dtd_begin > 4:
+            raw = cea[4:dtd_begin]
+            while len(raw) != 0:
+                cb = _CeaBlock.first_from_raw(raw)
+                assert cb.tag not in cbs, f"Duplicating CEA block: {cb.tag}"
+                cbs[cb.tag] = cb
+                raw = raw[cb.size:]
+
+        dtds = b""
+        assert dtd_begin >= 4
+        raw = cea[dtd_begin:]
+        while len(raw) > (18 + 1) and raw[0] != 0:
+            dtds += bytes(raw[:18])
+            raw = raw[18:]
+
+        return (cbs, dtds)
+
+    def __replace_cea(self, cbs: dict[int, _CeaBlock], dtds: bytes) -> None:
+        cbs_packed = b""
+        for cb in cbs.values():
+            cbs_packed += cb.pack()
+
+        raw = cbs_packed + dtds
+        assert len(raw) <= (128 - 4 - 1), "Too many CEA blocks or DTDs"
+
+        self.__data[_CEA + 2] = (0 if len(raw) == 0 else (len(cbs_packed) + 4))
+
+        for index in range(4, 127):
+            try:
+                ch = raw[index - 4]
+            except IndexError:
+                ch = 0
+            self.__data[_CEA + index] = ch
 
 
 def _format_bool(value: bool) -> str:
@@ -215,7 +305,7 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
     parser.add_argument("--import", dest="imp",
                         help="Import the specified bin/hex EDID to the [--edid] file as a hex text", metavar="<file>")
     parser.add_argument("--set-audio", type=valid_bool,
-                        help="Enable or disable basic audio", metavar="<yes|no>")
+                        help="Enable or disable audio", metavar="<yes|no>")
     parser.add_argument("--set-mfc-id",
                         help="Set manufacturer ID (https://uefi.org/pnp_id_list)", metavar="<ABC>")
     parser.add_argument("--set-product-id", type=valid_int_f0,
@@ -262,7 +352,7 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
         ("Serial number:  ", edid.get_serial,         _make_format_hex(4)),
         ("Monitor name:   ", edid.get_monitor_name,   str),
         ("Monitor serial: ", edid.get_monitor_serial, str),
-        ("Basic audio:    ", edid.get_audio,          _format_bool),
+        ("Audio:          ", edid.get_audio,          _format_bool),
     ]:
         try:
             print(key, fmt(get()), file=sys.stderr)  # type: ignore
