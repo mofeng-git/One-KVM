@@ -284,7 +284,7 @@ def _make_format_hex(size: int) -> Callable[[int], str]:
 
 
 # =====
-def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-branches
+def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-branches,too-many-statements
     # (parent_parser, argv, _) = init(
     #     add_help=False,
     #     argv=argv,
@@ -304,6 +304,8 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
                         help="Export [--edid] file to the new file as a bin data", metavar="<file>")
     parser.add_argument("--import", dest="imp",
                         help="Import the specified bin/hex EDID to the [--edid] file as a hex text", metavar="<file>")
+    parser.add_argument("--restore-default", choices=["v0", "v1", "v2", "v3", "v4mini", "v4plus"],
+                        help="Restore default edid for the given PiKVM build")
     parser.add_argument("--set-audio", type=valid_bool,
                         help="Enable or disable audio", metavar="<yes|no>")
     parser.add_argument("--set-mfc-id",
@@ -323,6 +325,9 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
     parser.add_argument("--device", dest="device_path", default="/dev/kvmd-video",
                         help="The video device", metavar="<device>")
     options = parser.parse_args(argv[1:])
+
+    if options.restore_default:
+        options.imp = f"/usr/share/kvmd/configs.default/kvmd/edid/{options.restore_default}-hdmi.hex"
 
     orig_edid_path = options.edid_path
     if options.imp:
