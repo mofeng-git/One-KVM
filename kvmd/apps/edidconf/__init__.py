@@ -207,20 +207,21 @@ class _Edid:
 
     def get_audio(self) -> bool:
         (cbs, _) = self.__parse_cea()
-        return (
-            _CEA_AUDIO in cbs
-            and _CEA_SPEAKERS in cbs
-            and self.__get_basic_audio()
-        )
+        audio = False
+        speakers = False
+        for cb in cbs:
+            if cb.tag == _CEA_AUDIO:
+                audio = True
+            elif cb.tag == _CEA_SPEAKERS:
+                speakers = True
+        return (audio and speakers and self.__get_basic_audio())
 
     def set_audio(self, enabled: bool) -> None:
         (cbs, dtds) = self.__parse_cea()
+        cbs = [cb for cb in cbs if cb.tag not in [_CEA_AUDIO, _CEA_SPEAKERS]]
         if enabled:
-            cbs[_CEA_AUDIO] = _CeaBlock(_CEA_AUDIO, b"\x09\x7f\x07")
-            cbs[_CEA_SPEAKERS] = _CeaBlock(_CEA_SPEAKERS, b"\x01\x00\x00")
-        else:
-            cbs.pop(_CEA_AUDIO, None)
-            cbs.pop(_CEA_SPEAKERS, None)
+            cbs.append(_CeaBlock(_CEA_AUDIO, b"\x09\x7f\x07"))
+            cbs.append(_CeaBlock(_CEA_SPEAKERS, b"\x01\x00\x00"))
         self.__replace_cea(cbs, dtds)
         self.__set_basic_audio(enabled)
 
@@ -233,19 +234,18 @@ class _Edid:
         else:
             self.__data[_CEA + 3] &= (0xFF - 0b01000000)  # ~X
 
-    def __parse_cea(self) -> tuple[dict[int, _CeaBlock], bytes]:
+    def __parse_cea(self) -> tuple[list[_CeaBlock], bytes]:
         cea = self.__data[_CEA:]
         dtd_begin = cea[2]
         if dtd_begin == 0:
-            return ({}, b"")
+            return ([], b"")
 
-        cbs: dict[int, _CeaBlock] = {}
+        cbs: list[_CeaBlock] = []
         if dtd_begin > 4:
             raw = cea[4:dtd_begin]
             while len(raw) != 0:
                 cb = _CeaBlock.first_from_raw(raw)
-                assert cb.tag not in cbs, f"Duplicating CEA block: {cb.tag}"
-                cbs[cb.tag] = cb
+                cbs.append(cb)
                 raw = raw[cb.size:]
 
         dtds = b""
@@ -257,9 +257,9 @@ class _Edid:
 
         return (cbs, dtds)
 
-    def __replace_cea(self, cbs: dict[int, _CeaBlock], dtds: bytes) -> None:
+    def __replace_cea(self, cbs: list[_CeaBlock], dtds: bytes) -> None:
         cbs_packed = b""
-        for cb in cbs.values():
+        for cb in cbs:
             cbs_packed += cb.pack()
 
         raw = cbs_packed + dtds
