@@ -76,13 +76,14 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		let cumulative_scrolling = !(tools.browser.is_firefox && !tools.browser.is_mac);
 		tools.storage.bindSimpleSwitch($("hid-mouse-cumulative-scrolling-switch"), "hid.mouse.cumulative_scrolling", cumulative_scrolling);
 		tools.slider.setParams($("hid-mouse-scroll-slider"), 1, 25, 1, tools.storage.get("hid.mouse.scroll_rate", 5), __updateScrollRate);
+
+		tools.storage.bindSimpleSwitch($("hid-mouse-dot-switch"), "hid.mouse.dot", true, __updateOnlineLeds);
 	};
 
 	/************************************************************************/
 
 	self.setSocket = function(ws) {
 		__ws = ws;
-		$("stream-box").classList.toggle("stream-box-mouse-enabled", ws);
 		if (!__absolute && __isRelativeCaptured()) {
 			document.exitPointerLock();
 		}
@@ -168,6 +169,15 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 		$("hid-mouse-led").className = led;
 		$("hid-mouse-led").title = title;
+
+		if (__absolute && is_captured) {
+			let dot = $("hid-mouse-dot-switch").checked;
+			$("stream-box").classList.toggle("stream-box-mouse-dot", (dot && __ws));
+			$("stream-box").classList.toggle("stream-box-mouse-none", (!dot && __ws));
+		} else {
+			$("stream-box").classList.toggle("stream-box-mouse-dot", false);
+			$("stream-box").classList.toggle("stream-box-mouse-none", false);
+		}
 	};
 
 	var __isRelativeCaptured = function() {

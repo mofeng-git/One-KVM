@@ -77,8 +77,11 @@ div.stream-box-offline::after {
 	display: inline-block;
 	background: radial-gradient(transparent 20%, black);
 }
-div.stream-box-mouse-enabled {
+div.stream-box-mouse-dot {
 	cursor: url("../../svg/stream-mouse-cursor.svg") 5 5, pointer;
+}
+div.stream-box-mouse-none {
+	cursor: none;
 }
 
 img#stream-image,

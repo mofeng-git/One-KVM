@@ -100,6 +100,8 @@ li(id="system-dropdown" class="right")
 						td Scroll rate:
 						td(class="value-slider") #[input(type="range" id="hid-mouse-scroll-slider" class="slider")]
 						td(id="hid-mouse-scroll-value" class="value-number")
+					tr
+						+menu_switch_notable("hid-mouse-dot-switch", "Show the blue dot", true, true)
 		table(class="kv")
 			tr(id="hid-connect" class="feature-disabled")
 				+menu_switch_notable("hid-connect-switch", "Connect HID to Server", true, true)
