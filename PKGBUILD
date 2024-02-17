@@ -210,6 +210,8 @@ for _variant in "${_variants[@]}"; do
 
 		if [[ $_base == v0 ]]; then
 			depends=(\"\${depends[@]}\" platformio-core avrdude make patch)
+		elif [[ $_base == v4plus ]]; then
+			depends=(\"\${depends[@]}\" flashrom-pikvm)
 		fi
 
 		if [[ $_platform =~ ^.*-hdmiusb$ ]]; then
