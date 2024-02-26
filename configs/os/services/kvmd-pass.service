@@ -1,0 +1,15 @@
+[Unit]
+Description=PiKVM - Video Passthrough on V4 Plus
+Wants=dev-kvmd\x2dvideo.device
+After=dev-kvmd\x2dvideo.device systemd-modules-load.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+
+ExecStart=/usr/bin/ustreamer-v4p --unix-follow /run/kvmd/ustreamer.sock
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
