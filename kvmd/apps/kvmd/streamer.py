@@ -179,6 +179,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         unix_path: str,
         timeout: float,
+        snapshot_timeout: float,
 
         process_name_prefix: str,
 
@@ -203,6 +204,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__unix_path = unix_path
         self.__timeout = timeout
+        self.__snapshot_timeout = snapshot_timeout
 
         self.__process_name_prefix = process_name_prefix
 
@@ -350,41 +352,45 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     async def take_snapshot(self, save: bool, load: bool, allow_offline: bool) -> (StreamerSnapshot | None):
         if load:
             return self.__snapshot
-        else:
-            logger = get_logger()
-            session = self.__ensure_http_session()
-            try:
-                async with session.get(self.__make_url("snapshot")) as response:
-                    htclient.raise_not_200(response)
-                    online = (response.headers["X-UStreamer-Online"] == "true")
-                    if online or allow_offline:
-                        snapshot = StreamerSnapshot(
-                            online=online,
-                            width=int(response.headers["X-UStreamer-Width"]),
-                            height=int(response.headers["X-UStreamer-Height"]),
-                            headers=tuple(
-                                (key, value)
-                                for (key, value) in tools.sorted_kvs(dict(response.headers))
-                                if key.lower().startswith("x-ustreamer-") or key.lower() in [
-                                    "x-timestamp",
-                                    "access-control-allow-origin",
-                                    "cache-control",
-                                    "pragma",
-                                    "expires",
-                                ]
-                            ),
-                            data=bytes(await response.read()),
-                        )
-                        if save:
-                            self.__snapshot = snapshot
-                            self.__notifier.notify()
-                        return snapshot
-                    logger.error("Stream is offline, no signal or so")
-            except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as err:
-                logger.error("Can't connect to streamer: %s", tools.efmt(err))
-            except Exception:
-                logger.exception("Invalid streamer response from /snapshot")
-            return None
+        logger = get_logger()
+        session = self.__ensure_http_session()
+        try:
+            async with session.get(
+                self.__make_url("snapshot"),
+                timeout=self.__snapshot_timeout,
+            ) as response:
+
+                htclient.raise_not_200(response)
+                online = (response.headers["X-UStreamer-Online"] == "true")
+                if online or allow_offline:
+                    snapshot = StreamerSnapshot(
+                        online=online,
+                        width=int(response.headers["X-UStreamer-Width"]),
+                        height=int(response.headers["X-UStreamer-Height"]),
+                        headers=tuple(
+                            (key, value)
+                            for (key, value) in tools.sorted_kvs(dict(response.headers))
+                            if key.lower().startswith("x-ustreamer-") or key.lower() in [
+                                "x-timestamp",
+                                "access-control-allow-origin",
+                                "cache-control",
+                                "pragma",
+                                "expires",
+                            ]
+                        ),
+                        data=bytes(await response.read()),
+                    )
+                    if save:
+                        self.__snapshot = snapshot
+                        self.__notifier.notify()
+                    return snapshot
+                logger.error("Stream is offline, no signal or so")
+
+        except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as err:
+            logger.error("Can't connect to streamer: %s", tools.efmt(err))
+        except Exception:
+            logger.exception("Invalid streamer response from /snapshot")
+        return None
 
     def remove_snapshot(self) -> None:
         self.__snapshot = None
