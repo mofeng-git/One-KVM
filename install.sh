@@ -63,15 +63,18 @@ override-uboot(){
 #安装依赖软件
 install-dependencies(){
   bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http && echo "换源成功！"
-  echo -e "\e[0;32m正在安装依赖软件patch iptables nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim libjpeg-dev libfreetype6-dev......"  
-  apt install -y patch iptables nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  libjpeg-dev libfreetype6-dev
+  echo -e "\e[0;32m正在安装依赖软件python3.10 patch iptables nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim libjpeg-dev libfreetype6-dev......"  
+  apt install -y python3.10 python3-pip python3-dev patch iptables nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev tesseract-ocr-chi-sim  libjpeg-dev libfreetype6-dev armbian-config
 }
 
 #安装PiKVM
 install-pikvm(){
   echo "正在安装PiKVM......"  
-  dpkg -i ./fruity-pikvm_0.2_armhf.deb >> ./log.txt
+  dpkg -i ./fruity-pikvm_0.2_armhf.deb 
   systemctl enable kvmd-vnc
+  systemctl disable nginx kvmd-janus
+  #rm -f /lib/systemd/system/nginx.service 
+  #rm -f /lib/systemd/system/kvmd-janus.service &&  systemctl daemon-reload
   echo "PiKVM安装成功！"
   cd $CURRENTWD
   cp -f ./patch/long_press_gpio420 /usr/bin && cp -f ./patch/short_press_gpio420 /usr/bin
@@ -101,7 +104,36 @@ add-patches(){
   cp -f ./patch/chinese.patch /usr/share/kvmd/web/ && cd /usr/share/kvmd/web/
   patch -s -p0 < chinese.patch
   echo  -e "\e[0;32m中文补丁应用成功！"
+  pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
+  pip3 install -U Pillow
 
+}
+
+fix-motd() {
+	#cd $CURRENTWD
+  if [ -e /etc/motd ]; then rm /etc/motd; fi
+  cat > /usr/bin/armbian-motd << EOF
+#!/bin/sh
+if [ -e /etc/update-motd.d/10-armbian-header ]; then /etc/update-motd.d/10-armbian-header; fi
+if [ -e /etc/update-motd.d/30-armbian-sysinfo ]; then /etc/update-motd.d/30-armbian-sysinfo; fi
+
+printf "    Welcome to One-KVM - Open Source IP-KVM installed on onecloud board
+    ____________________________________________________________________________
+
+    To prevent kernel messages from printing to the terminal use \"dmesg -n 1\".
+
+    To change KVM password use command \"kvmd-htpasswd set admin\".
+
+    Useful links:
+      * https://pikvm.org
+      * https://docs.pikvm.org
+      * https://github.com/mofeng-git/One-KVM
+
+"
+EOF
+	chmod +x /usr/bin/armbian-motd  /etc/update-motd.d/10-armbian-header /etc/update-motd.d/30-armbian-sysinfo
+  sed -i 's/cat \/etc\/motd/armbian-motd/g' /lib/systemd/system/kvmd-webterm.service
+	echo "fixed motd"
 }
 
 show-info(){
@@ -163,17 +195,23 @@ EOF
   mkdir /usr/share/janus/javascript/ && cp -f ./web/adapter.js /usr/share/janus/javascript/ && cp -f ./web/janus.js /usr/share/janus/javascript/
   cp -f ./patch/stream.sh /usr/share/kvmd/ && cp -f ./patch/stream_when_ustream_exists.sh /usr/share/kvmd/ && chmod +x /usr/share/kvmd/stream.sh /usr/share/kvmd/stream_when_ustream_exists.sh
   #启动服务
-  systemctl enable kvmd-ffmpeg && systemctl enable kvmd-janus-static
+  #systemctl enable kvmd-ffmpeg && systemctl enable kvmd-janus-static
   #systemctl start kvmd-ffmpeg && systemctl start kvmd-janus-static
 }
 
 
 check-environment
-override-uboot
-change-device-tree
+
+#Only for onecloud Armbian with kernel 5.10,now this these two steps is deprecated!
+#override-uboot
+#change-device-tree
+
 install-dependencies
 install-pikvm
 add-patches
-kvmd-ffmpeg-h-264
+fix-motd
+
+#H.264 soft encoded video, default off, uncomment if needed
+#kvmd-ffmpeg-h-264
 show-info
 reboot

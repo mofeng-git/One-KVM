@@ -8,7 +8,7 @@ One-KVM是基于玩客云硬件和PiKVM软件的远控设备。通过移植PiKVM
 
 该软件可以帮助用户通过得到控制设备的HDMI 画面和鼠标键盘，去远程管理服务器、工作站或个人PC等。 和基于软件的远程管理方式不同，无需在被控电脑安装任何软件，实现无侵入式控制。
 
-该项目基于PiKVM和Fruity PiKVM，提供了玩客云兼容PiKVM操作的自动处理脚本。
+该项目基于PiKVM，提供了玩客云兼容PiKVM操作的自动处理脚本。
 
 ![image](https://github.com/mofeng-git/One-KVM/assets/62919083/ec7e049f-ca6c-426f-bfa4-314536965db0)
 
@@ -25,7 +25,7 @@ One-KVM是基于玩客云硬件和PiKVM软件的远控设备。通过移植PiKVM
 
 **方式二：One-KVM脚本安装**
 
-一键脚本适用于玩客云Armbian 22.11.0-trunk Jammy Linux onecloud 5.10.xxx(如5.10.149 5.10.158)镜像。如若使用此项目发布的Armbian基础镜像，需注释掉脚本尾部的两个函数`override-uboot` `change-device-tree`。
+一键脚本，对于非玩客云设备安装未作测试，适用于玩客云Armbian Jammy系统。
 
 ```bash
 git clone https://github.com/mofeng-git/One-KVM.git
@@ -51,6 +51,10 @@ docker run -itd -p443:443 -p80:80 --name pikvm-docker --device=/dev/ttyUSB0:/dev
 
 <details>
 
+浩龙的电子嵌入式之路（赞助）
+
+Tsuki（赞助）
+
 H_xiaoming
 
 0蓝蓝0
@@ -68,10 +72,11 @@ Will
 以及各位讨论交流的网友
 </details>
 
+**更新日志**
+
+[One-KVM/ChangeLogs.txt](https://github.com/mofeng-git/One-KVM/blob/main/ChangeLogs.txt)
+
 本项目间接或直接使用了下下列开源项目：
 1. [pikvm/pikvm: Open and inexpensive DIY IP-KVM based on Raspberry Pi (github.com)](https://github.com/pikvm/pikvm)
 2. [hzyitc/armbian-onecloud: Armbian for onecloud. 玩客云用armbian (github.com)](https://github.com/hzyitc/armbian-onecloud/)
 3. [jacobbar/fruity-pikvm: Install Pi-KVM on debian SBCs such as Orange Pi, Banana Pi, Mango Pi, etc (github.com)](https://github.com/jacobbar/fruity-pikvm)
-
-   
-
