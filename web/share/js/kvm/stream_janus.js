@@ -109,7 +109,11 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __allow_aud
 		}
 		__stopRetryEmsgInterval();
 		__stopInfoInterval();
-		__handle = null;
+		if (__handle) {
+			__logInfo("uStreamer detaching ...:", __handle.getPlugin(), __handle.getId());
+			__handle.detach();
+			__handle = null;
+		}
 		__janus = null;
 		__setInactive();
 		if (__stop) {
