@@ -47,6 +47,10 @@ docker run -itd -p443:443 -p80:80 --name pikvm-docker --device=/dev/ttyUSB0:/dev
 
 ### 其他
 
+**Star历史**
+
+[![Star历史](https://api.star-history.com/svg?repos=mofeng-git/One-KVM&type=Date)](https://star-history.com/#mofeng-git/One-KVM&Date)
+
 **感谢名单**
 
 <details>
