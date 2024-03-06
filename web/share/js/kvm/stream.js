@@ -254,7 +254,7 @@ export function Streamer() {
 			tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
 		}
 		if (wm.isWindowVisible($("stream-window"))) {
-			__streamer.ensureStream(__state);
+			__streamer.ensureStream(__state ? __state.streamer : null);
 		}
 	};
 
