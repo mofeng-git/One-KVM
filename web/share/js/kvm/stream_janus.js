@@ -156,6 +156,13 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __allow_aud
 				__destroyJanus();
 			},
 
+			"peerConnectionState": function(state) {
+				__logInfo("Peer connection state changed to", state);
+				if (state === "failed") {
+					__destroyJanus();
+				}
+			},
+
 			"iceState": function(state) {
 				__logInfo("ICE state changed to", state);
 				// Если раскомментировать, то он начнет дрючить соединение,
@@ -245,12 +252,10 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __allow_aud
 				}
 
 				if (!has_video && __isOnline()) {
-					// Найдено в Windows 11 и Chrome/Edge.
-					// При перезагрузке целевого хоста браузер мьютит трек,
-					// приходит стрим без видеотрека и всё умирает.
-					// Связь должна как-то сама восстанавливаться,
-					// но этого почему-то не происходит. Костыль решает проблему.
-					__destroyJanus();
+					// Chrome sends `muted` notifiation for tracks in `disconnected` ICE state
+					// and Janus.js just removes muted track from list of available tracks.
+					// But track still exists actually so it's safe to just ignore that case.
+					return;
 				}
 
 				_Janus.attachMediaStream($("stream-video"), stream);
