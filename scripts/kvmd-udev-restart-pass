@@ -35,7 +35,7 @@ test -n "$conn_id"
 card_n="${card/card/}"
 test -n "$card_n"
 
-port=$(grep "^connector\[$conn_id\]:" "/sys/kernel/debug/dri/$card_n/state" | awk '{print $1}')
+port=$(grep "^connector\[$conn_id\]:" "/sys/kernel/debug/dri/$card_n/state" | awk '{print $2}')
 test -n "$port"
 
 
