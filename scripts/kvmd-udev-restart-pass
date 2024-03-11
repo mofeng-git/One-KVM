@@ -1,0 +1,49 @@
+#!/bin/bash
+# ========================================================================== #
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2023  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+# ========================================================================== #
+
+
+set -eE
+set -x
+
+# https://forums.raspberrypi.com/viewtopic.php?p=2202017
+
+card="$1"
+conn_id="$2"
+
+test -n "$card"
+test -n "$conn_id"
+
+card_n="${card/card/}"
+test -n "$card_n"
+
+port=$(grep "^connector\[$conn_id\]:" "/sys/kernel/debug/dri/$card_n/state" | awk '{print $1}')
+test -n "$port"
+
+
+if [ "$port" = "HDMI-A-1" ]; then
+	if systemctl is-enabled -q kvmd-pass; then
+		status=$(head -n 1 "/sys/class/drm/$card-$port/status")
+		if [ "$status" = "connected" ]; then
+			systemctl restart kvmd-pass || true
+		fi
+	fi
+fi

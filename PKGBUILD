@@ -217,6 +217,9 @@ for _variant in "${_variants[@]}"; do
 		if [[ $_platform =~ ^.*-hdmiusb$ ]]; then
 			install -Dm755 -t \"\$pkgdir/usr/bin\" scripts/kvmd-udev-hdmiusb-check
 		fi
+		if [[ $_base == v4plus ]]; then
+			install -Dm755 -t \"\$pkgdir/usr/bin\" scripts/kvmd-udev-restart-pass
+		fi
 
 		install -DTm644 configs/os/sysctl.conf \"\$pkgdir/etc/sysctl.d/99-kvmd.conf\"
 		install -DTm644 configs/os/udev/common.rules \"\$pkgdir/usr/lib/udev/rules.d/99-kvmd-common.rules\"
