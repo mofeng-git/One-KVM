@@ -87,7 +87,7 @@ depends=(
 	iproute2
 	dnsmasq
 	ipmitool
-	"janus-gateway-pikvm>=0.11.2-7"
+	"janus-gateway-pikvm>=0.14.2-2"
 	certbot
 	platform-io-access
 	raspberrypi-utils
