@@ -202,6 +202,9 @@ if [ -n "$WIFI_ESSID" ]; then
 	fi
 	wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 	chmod 640 "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+	if [ -n "$WIFI_HIDDEN" ]; then
+		sed -i -e 's/^}/\tscan_ssid=1\n}/g' "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+	fi
 	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
 	touch /boot/pikvm-reboot.txt
 fi
