@@ -22,4 +22,4 @@ disable_overscan=1
 dtparam=i2c_arm=on
 
 # Clock
-dtoverlay=i2c-rtc,pcf8563
+dtoverlay=i2c-rtc,pcf8563,wakeup-source

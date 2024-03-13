@@ -18,4 +18,4 @@ dtoverlay=tc358743-audio
 dtparam=i2c_arm=on
 
 # Clock
-dtoverlay=i2c-rtc,pcf8563
+dtoverlay=i2c-rtc,pcf8563,wakeup-source

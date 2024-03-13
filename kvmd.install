@@ -56,7 +56,7 @@ post_upgrade() {
 
 	echo "==> Patching configs ..."
 
-	if [[ "$(vercmp "$1" 3.301)" -lt 0 ]]; then
+	if [[ "$(vercmp "$2" 3.301)" -lt 0 ]]; then
 		[ ! -f /etc/fstab ] || (sed -i -e "s|,data=journal||g" /etc/fstab && touch -t 200701011000 /etc/fstab)
 		[ ! -f /etc/fstab ] || (sed -i -e "/tmpfs \/run\s/d" /etc/fstab && touch -t 200701011000 /etc/fstab)
 		[ ! -f /etc/pacman.conf ] || sed -i -e "s|^Server = https://pikvm.org/repos/|Server = https://files.pikvm.org/repos/arch/|g" /etc/pacman.conf
@@ -66,6 +66,9 @@ post_upgrade() {
 		[ ! -f /etc/pam.d/system-login ] || sed -i -e '/\<pam_systemd\.so\>/ s/^#*/#/' /etc/pam.d/system-login
 		[ ! -f /etc/pam.d/system-auth ] || sed -i -e '/\<pam_systemd_home\.so\>/ s/^#*/#/' /etc/pam.d/system-auth
 		[ -e /etc/systemd/network/99-default.link ] || ln -s /dev/null /etc/systemd/network/99-default.link
+	fi
+	if [[ "$(vercmp "$2" 3.317)" -lt 0 ]]; then
+		[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=i2c-rtc,pcf8563$/dtoverlay=i2c-rtc,pcf8563,wakeup-source/g' /boot/config.txt
 	fi
 
 	# Some update deletes /etc/motd, WTF
