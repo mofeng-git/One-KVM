@@ -19,6 +19,7 @@
 #                                                                            #
 # ========================================================================== #
 
+
 import re
 import multiprocessing
 import functools
@@ -77,10 +78,10 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
     @classmethod
     def get_plugin_options(cls) -> dict:
         return {
-            "device":       Option("",     type=valid_abs_path, unpack_as="device_path"),
+            "device":       Option("",   type=valid_abs_path, unpack_as="device_path"),
             "speed":        Option(9600, type=valid_tty_speed),
-            "read_timeout": Option(2.0,    type=valid_float_f01),
-            "protocol":     Option(1,      type=functools.partial(valid_number, min=1, max=2)),
+            "read_timeout": Option(2.0,  type=valid_float_f01),
+            "protocol":     Option(1,    type=functools.partial(valid_number, min=1, max=2)),
         }
 
     @classmethod
@@ -177,10 +178,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
 
     def __send_channel(self, tty: serial.Serial, channel: int) -> None:
         assert 0 <= channel <= 3
-        cmd = b"%d!\n" % (
-            channel + 1,
-        )
-        tty.write(cmd)  # Twice because of ezcoo bugs
+        cmd = b"%d!\n" % (channel + 1)
+        tty.write(cmd)
         tty.flush()
 
     def __str__(self) -> str:
