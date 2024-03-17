@@ -263,7 +263,9 @@ export function Streamer() {
 		if (mode === "janus") {
 			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo,
 				tools.storage.getInt("stream.orient", 0), !$("stream-video").muted);
-			tools.feature.setEnabled($("stream-orient"), true);
+			// Firefox doesn't support RTP orientation:
+			//  - https://bugzilla.mozilla.org/show_bug.cgi?id=1316448
+			tools.feature.setEnabled($("stream-orient"), !tools.browser.is_firefox);
 		} else { // mjpeg
 			__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
 			tools.feature.setEnabled($("stream-orient"), false);
