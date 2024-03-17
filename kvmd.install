@@ -67,8 +67,20 @@ post_upgrade() {
 		[ ! -f /etc/pam.d/system-auth ] || sed -i -e '/\<pam_systemd_home\.so\>/ s/^#*/#/' /etc/pam.d/system-auth
 		[ -e /etc/systemd/network/99-default.link ] || ln -s /dev/null /etc/systemd/network/99-default.link
 	fi
+
 	if [[ "$(vercmp "$2" 3.317)" -lt 0 ]]; then
 		[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=i2c-rtc,pcf8563$/dtoverlay=i2c-rtc,pcf8563,wakeup-source/g' /boot/config.txt
+	fi
+
+	if [[ "$(vercmp "$2" 3.320)" -lt 0 ]]; then
+		# https://github.com/pikvm/pikvm/issues/1245
+		systemctl mask \
+			dirmngr@etc-pacman.d-gnupg.socket \
+			gpg-agent-browser@etc-pacman.d-gnupg.socket \
+			gpg-agent-extra@etc-pacman.d-gnupg.socket \
+			gpg-agent-ssh@etc-pacman.d-gnupg.socket \
+			gpg-agent@etc-pacman.d-gnupg.socket \
+			keyboxd@etc-pacman.d-gnupg.socket
 	fi
 
 	# Some update deletes /etc/motd, WTF
