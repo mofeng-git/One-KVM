@@ -70,6 +70,19 @@ export function Streamer() {
 
 		tools.radio.setOnClick("stream-mode-radio", __clickModeRadio, false);
 
+		// Not getInt() because of radio is a string container.
+		// Also don't reset Janus at class init.
+		tools.radio.clickValue("stream-orient-radio", tools.storage.get("stream.orient", 0));
+		tools.radio.setOnClick("stream-orient-radio", function() {
+			if (__streamer.getMode() === "janus") { // Right now it's working only for H.264
+				let orient = parseInt(tools.radio.getValue("stream-orient-radio"));
+				tools.storage.setInt("stream.orient", orient);
+				if (__streamer.getOrientation() != orient) {
+					__resetStream();
+				}
+			}
+		}, false);
+
 		tools.slider.setParams($("stream-audio-volume-slider"), 0, 100, 1, 0, function(value) {
 			$("stream-video").muted = !value;
 			$("stream-video").volume = value / 100;
@@ -248,9 +261,12 @@ export function Streamer() {
 		}
 		__streamer.stopStream();
 		if (mode === "janus") {
-			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo, !$("stream-video").muted);
+			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo,
+				tools.storage.getInt("stream.orient", 0), !$("stream-video").muted);
+			tools.feature.setEnabled($("stream-orient"), true);
 		} else { // mjpeg
 			__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
+			tools.feature.setEnabled($("stream-orient"), false);
 			tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
 		}
 		if (wm.isWindowVisible($("stream-window"))) {

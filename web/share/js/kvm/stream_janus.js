@@ -29,7 +29,7 @@ import {tools, $} from "../tools.js";
 var _Janus = null;
 
 
-export function JanusStreamer(__setActive, __setInactive, __setInfo, __allow_audio) {
+export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, __allow_audio) {
 	var self = this;
 
 	var __stop = false;
@@ -45,6 +45,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __allow_aud
 	var __state = null;
 	var __frames = 0;
 
+	self.getOrientation = () => __orient;
 	self.isAudioAllowed = () => __allow_audio;
 
 	self.getName = () => (__allow_audio ? "H.264 + Audio" : "H.264");
@@ -329,9 +330,12 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __allow_aud
 
 	var __sendWatch = function() {
 		if (__handle) {
-			__logInfo(`Sending WATCH(audio=${__allow_audio}) + FEATURES ...`);
+			__logInfo(`Sending WATCH(orient=${__orient}, audio=${__allow_audio}) + FEATURES ...`);
 			__handle.send({"message": {"request": "features"}});
-			__handle.send({"message": {"request": "watch", "params": {"audio": __allow_audio}}});
+			__handle.send({"message": {"request": "watch", "params": {
+				"orientation": __orient,
+				"audio": __allow_audio,
+			}}});
 		}
 	};
 

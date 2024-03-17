@@ -50,6 +50,18 @@ li(id="system-dropdown" class="right")
 						label(for="stream-mode-radio-mjpeg") MJPEG / HTTP
 						input(type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus")
 						label(for="stream-mode-radio-janus") H.264 / WebRTC
+			tr(id="stream-orient" class="feature-disabled")
+				td Orientation:
+				td
+					div(class="radio-box")
+						input(checked type="radio" id="stream-orient-radio-0" name="stream-orient-radio" value="0")
+						label(for="stream-orient-radio-0") Default
+						input(type="radio" id="stream-orient-radio-90" name="stream-orient-radio" value="90")
+						label(for="stream-orient-radio-90") 90&deg;
+						input(type="radio" id="stream-orient-radio-180" name="stream-orient-radio" value="180")
+						label(for="stream-orient-radio-180") 180&deg;
+						input(type="radio" id="stream-orient-radio-270" name="stream-orient-radio" value="270")
+						label(for="stream-orient-radio-270") 270&deg;
 			tr(id="stream-audio", class="feature-disabled")
 				td Audio volume:
 				td(class="value-slider") #[input(type="range" id="stream-audio-volume-slider" class="slider")]

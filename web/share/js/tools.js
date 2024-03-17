@@ -392,6 +392,9 @@ export var tools = new function() {
 			},
 			"set": (key, value) => window.localStorage.setItem(key, value),
 
+			"getInt": (key, default_value) => parseInt(self.storage.get(key, default_value)),
+			"setInt": (key, value) => self.storage.set(key, value),
+
 			"getBool": (key, default_value) => !!parseInt(self.storage.get(key, (default_value ? "1" : "0"))),
 			"setBool": (key, value) => self.storage.set(key, (value ? "1" : "0")),
 
