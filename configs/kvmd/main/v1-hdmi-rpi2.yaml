@@ -34,7 +34,7 @@ kvmd:
             - "--persistent"
             - "--dv-timings"
             - "--format=uyvy"
-            - "--encoder=omx"
+            - "--encoder=m2m-image"
             - "--workers=3"
             - "--quality={quality}"
             - "--desired-fps={desired_fps}"

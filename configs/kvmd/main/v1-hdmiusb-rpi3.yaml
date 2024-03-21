@@ -59,8 +59,8 @@ kvmd:
             - "--process-name-prefix={process_name_prefix}"
             - "--notify-parent"
             - "--no-log-colors"
-            - "--sink=kvmd::ustreamer::jpeg"
-            - "--sink-mode=0660"
+            - "--jpeg-sink=kvmd::ustreamer::jpeg"
+            - "--jpeg-sink-mode=0660"
 
 
 vnc:
