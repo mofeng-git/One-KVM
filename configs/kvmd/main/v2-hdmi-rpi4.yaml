@@ -27,6 +27,7 @@ kvmd:
             - "--persistent"
             - "--dv-timings"
             - "--format=uyvy"
+            - "--buffers=6"
             - "--encoder=m2m-image"
             - "--workers=3"
             - "--quality={quality}"
