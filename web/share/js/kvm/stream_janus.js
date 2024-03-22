@@ -166,11 +166,6 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 
 			"iceState": function(state) {
 				__logInfo("ICE state changed to", state);
-				// Если раскомментировать, то он начнет дрючить соединение,
-				// так как каллбек вызывает сильно после завершения работы
-				/*if (state === "disconnected") {
-					__destroyJanus();
-				}*/
 			},
 
 			"webrtcState": function(up) {
