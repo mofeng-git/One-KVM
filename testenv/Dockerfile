@@ -35,6 +35,8 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		libbsd \
 		python \
 		python-pip \
+		python-build \
+		python-wheel \
 		python-setuptools \
 		python-tox \
 		python-mako \
