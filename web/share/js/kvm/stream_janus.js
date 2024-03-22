@@ -226,6 +226,31 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 				}
 			},
 
+			// Janus 1.x
+			"onremotetrack": function(changed_track, id, added) {
+				__logInfo("Got onremotetrack:", changed_track, id, added);
+				let el = $("stream-video");
+				if (!el.srcObject) {
+					el.srcObject = new MediaStream();
+				}
+				let stream = el.srcObject;
+				if (added) {
+					for (let track of stream.getTracks()) {
+						if (track.kind === changed_track.kind && track.id !== changed_track.id) {
+							stream.removeTrack(track);
+						}
+					}
+					stream.addTrack(changed_track);
+					if (changed_track.kind == "video") {
+						__sendKeyRequired();
+						__startInfoInterval();
+					}
+				} else {
+					stream.removeTrack(changed_track);
+				}
+			},
+
+			// Janus 0.x
 			"onremotestream": function(stream) {
 				if (stream === null) {
 					// https://github.com/pikvm/pikvm/issues/1084
