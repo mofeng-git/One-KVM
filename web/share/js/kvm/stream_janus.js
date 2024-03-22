@@ -157,7 +157,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 				__destroyJanus();
 			},
 
-			"peerConnectionState": function(state) {
+			"connectionState": function(state) {
 				__logInfo("Peer connection state changed to", state);
 				if (state === "failed") {
 					__destroyJanus();
