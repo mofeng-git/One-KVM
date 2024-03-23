@@ -227,14 +227,18 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 			},
 
 			// Janus 1.x
-			"onremotetrack": function(changed_track, id, added) {
-				__logInfo("Got onremotetrack:", changed_track, id, added);
+			"onremotetrack": function(changed_track, id, added, meta) {
+				__logInfo("Got onremotetrack:", changed_track, id, added, meta);
 				let el = $("stream-video");
 				if (!el.srcObject) {
 					el.srcObject = new MediaStream();
 				}
 				let stream = el.srcObject;
-				if (added) {
+				// Chrome sends `muted` notifiation for tracks in `disconnected` ICE state
+				// and Janus.js just removes muted track from list of available tracks.
+				// But track still exists actually so it's safe to just ignore
+				// reason == "mute" and "unmute".
+				if (added && meta.reason == "created") {
 					for (let track of stream.getTracks()) {
 						if (track.kind === changed_track.kind && track.id !== changed_track.id) {
 							stream.removeTrack(track);
@@ -245,7 +249,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 						__sendKeyRequired();
 						__startInfoInterval();
 					}
-				} else {
+				} else if (!added && meta.reason == "ended") {
 					stream.removeTrack(changed_track);
 				}
 			},
