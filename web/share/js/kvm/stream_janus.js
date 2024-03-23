@@ -123,18 +123,19 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 	};
 
 	var __destroyJanus = function() {
-		if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.remoteStream) {
-			for (let track of __handle.webrtcStuff.remoteStream.getTracks()) {
-				track.stop();
-				__handle.webrtcStuff.remoteStream.removeTrack(track);
-			}
-			__handle.webrtcStuff.remoteStream = null;
-		}
-		$("stream-video").srcObject = null;
 		if (__janus !== null) {
 			__janus.destroy();
 		}
 		__finishJanus();
+		let stream = $("stream-video").srcObject;
+		if (stream) {
+			for (let track of stream.getTracks()) {
+				__logInfo("Removing track after destroying Janus:", track);
+				track.stop();
+				stream.removeTrack(track);
+			}
+			$("stream-video").srcObject = null;
+		}
 	};
 
 	var __attachJanus = function() {
