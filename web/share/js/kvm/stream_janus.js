@@ -229,19 +229,29 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 
 			// Janus 1.x
 			"onremotetrack": function(changed_track, id, added, meta) {
-				__logInfo("Got onremotetrack:", changed_track, id, added, meta);
+				// Chrome sends `muted` notifiation for tracks in `disconnected` ICE state
+				// and Janus.js just removes muted track from list of available tracks.
+				// But track still exists actually so it's safe to just ignore
+				// reason == "mute" and "unmute".
+
+				let reason;
+				try {
+					reason = meta.reason;
+				} catch (err) {
+					reason = "???";
+				}
+				__logInfo("Got onremotetrack:", changed_track, id, added, reason, meta);
+
 				let el = $("stream-video");
 				if (!el.srcObject) {
 					el.srcObject = new MediaStream();
 				}
 				let stream = el.srcObject;
-				// Chrome sends `muted` notifiation for tracks in `disconnected` ICE state
-				// and Janus.js just removes muted track from list of available tracks.
-				// But track still exists actually so it's safe to just ignore
-				// reason == "mute" and "unmute".
-				if (added && meta.reason == "created") {
+
+				if (added && reason == "created") {
 					for (let track of stream.getTracks()) {
 						if (track.kind === changed_track.kind && track.id !== changed_track.id) {
+							track.stop();
 							stream.removeTrack(track);
 						}
 					}
@@ -250,7 +260,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 						__sendKeyRequired();
 						__startInfoInterval();
 					}
-				} else if (!added && meta.reason == "ended") {
+				} else if (!added && reason == "ended") {
 					stream.removeTrack(changed_track);
 				}
 			},
