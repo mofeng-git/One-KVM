@@ -216,15 +216,11 @@ export function Streamer() {
 	var __setActive = function() {
 		$("stream-led").className = "led-green";
 		$("stream-led").title = "Stream is active";
-		tools.el.setEnabled($("stream-screenshot-button"), true);
-		tools.el.setEnabled($("stream-reset-button"), true);
 	};
 
 	var __setInactive = function() {
 		$("stream-led").className = "led-gray";
 		$("stream-led").title = "Stream inactive";
-		tools.el.setEnabled($("stream-screenshot-button"), false);
-		tools.el.setEnabled($("stream-reset-button"), false);
 	};
 
 	var __setInfo = function(is_active, online, text) {
@@ -288,7 +284,7 @@ export function Streamer() {
 
 	var __clickScreenshotButton = function() {
 		let el = document.createElement("a");
-		el.href = "/api/streamer/snapshot?allow_offline=1";
+		el.href = "/api/streamer/snapshot";
 		el.target = "_blank";
 		document.body.appendChild(el);
 		el.click();
