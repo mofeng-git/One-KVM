@@ -88,11 +88,9 @@ export function Msd() {
 		let name = $("msd-image-selector").value;
 		wm.confirm(`Are you sure you want to remove the image<br><b>${name}</b> from PiKVM?`).then(function(ok) {
 			if (ok) {
-				let http = tools.makeRequest("POST", `/api/msd/remove?image=${name}`, function() {
-					if (http.readyState === 4) {
-						if (http.status !== 200) {
-							wm.error("Can't remove image:<br>", http.responseText);
-						}
+				tools.httpPost(`/api/msd/remove?image=${name}`, function(http) {
+					if (http.status !== 200) {
+						wm.error("Can't remove image:<br>", http.responseText);
 					}
 				});
 			}
@@ -100,11 +98,9 @@ export function Msd() {
 	};
 
 	var __sendParam = function(name, value) {
-		let http = tools.makeRequest("POST", `/api/msd/set_params?${name}=${encodeURIComponent(value)}`, function() {
-			if (http.readyState === 4) {
-				if (http.status !== 200) {
-					wm.error("Can't configure MSD:<br>", http.responseText);
-				}
+		tools.httpPost(`/api/msd/set_params?${name}=${encodeURIComponent(value)}`, function(http) {
+			if (http.status !== 200) {
+				wm.error("Can't configure MSD:<br>", http.responseText);
 			}
 		});
 	};
@@ -168,11 +164,9 @@ export function Msd() {
 	};
 
 	var __clickConnectButton = function(connected) {
-		let http = tools.makeRequest("POST", `/api/msd/set_connected?connected=${connected}`, function() {
-			if (http.readyState === 4) {
-				if (http.status !== 200) {
-					wm.error("Switch error:<br>", http.responseText);
-				}
+		tools.httpPost(`/api/msd/set_connected?connected=${connected}`, function(http) {
+			if (http.status !== 200) {
+				wm.error("Switch error:<br>", http.responseText);
 			}
 			__applyState();
 		});
@@ -183,11 +177,9 @@ export function Msd() {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset Mass Storage Drive?").then(function(ok) {
 			if (ok) {
-				let http = tools.makeRequest("POST", "/api/msd/reset", function() {
-					if (http.readyState === 4) {
-						if (http.status !== 200) {
-							wm.error("MSD reset error:<br>", http.responseText);
-						}
+				tools.httpPost("/api/msd/reset", function(http) {
+					if (http.status !== 200) {
+						wm.error("MSD reset error:<br>", http.responseText);
 					}
 					__applyState();
 				});

@@ -51,60 +51,58 @@ function __setAppText() {
 }
 
 function __loadKvmdInfo() {
-	let http = tools.makeRequest("GET", "/api/info?fields=auth,meta,extras", function() {
-		if (http.readyState === 4) {
-			if (http.status === 200) {
-				let info = JSON.parse(http.responseText).result;
+	tools.httpGet("/api/info?fields=auth,meta,extras", function(http) {
+		if (http.status === 200) {
+			let info = JSON.parse(http.responseText).result;
 
-				let apps = [];
-				if (info.extras === null) {
-					wm.error("Not all applications in the menu can be displayed<br>due an error. See KVMD logs for details.");
-				} else {
-					apps = Object.values(info.extras).sort(function(a, b) {
-						if (a.place < b.place) {
-							return -1;
-						} else if (a.place > b.place) {
-							return 1;
-						} else {
-							return 0;
-						}
-					});
-				}
-
-				$("apps-box").innerHTML = "<ul id=\"apps\"></ul>";
-
-				// Don't use this option, it may be removed in any time
-				let hide_kvm_button = (
-					(info.meta !== null && info.meta.web && info.meta.web.hide_kvm_button)
-					|| tools.config.getBool("index--hide-kvm-button", false)
-				);
-				if (!hide_kvm_button) {
-					$("apps").innerHTML += __makeApp(null, "kvm", "share/svg/kvm.svg", "KVM");
-				}
-
-				for (let app of apps) {
-					if (app.place >= 0 && (app.enabled || app.started)) {
-						$("apps").innerHTML += __makeApp(null, app.path, app.icon, app.name);
-					}
-				}
-
-				if (info.auth.enabled) {
-					$("apps").innerHTML += __makeApp("logout-button", "#", "share/svg/logout.svg", "Logout");
-					tools.el.setOnClick($("logout-button"), __logout);
-				}
-
-				if (info.meta !== null && info.meta.server && info.meta.server.host) {
-					$("kvmd-meta-server-host").innerHTML = info.meta.server.host;
-					document.title = `PiKVM Index: ${info.meta.server.host}`;
-				} else {
-					$("kvmd-meta-server-host").innerHTML = "";
-					document.title = "PiKVM Index";
-				}
-			} else if (http.status === 401 || http.status === 403) {
-				document.location.href = "/login";
+			let apps = [];
+			if (info.extras === null) {
+				wm.error("Not all applications in the menu can be displayed<br>due an error. See KVMD logs for details.");
 			} else {
-				setTimeout(__loadKvmdInfo, 1000);
+				apps = Object.values(info.extras).sort(function(a, b) {
+					if (a.place < b.place) {
+						return -1;
+					} else if (a.place > b.place) {
+						return 1;
+					} else {
+						return 0;
+					}
+				});
 			}
+
+			$("apps-box").innerHTML = "<ul id=\"apps\"></ul>";
+
+			// Don't use this option, it may be removed in any time
+			let hide_kvm_button = (
+				(info.meta !== null && info.meta.web && info.meta.web.hide_kvm_button)
+				|| tools.config.getBool("index--hide-kvm-button", false)
+			);
+			if (!hide_kvm_button) {
+				$("apps").innerHTML += __makeApp(null, "kvm", "share/svg/kvm.svg", "KVM");
+			}
+
+			for (let app of apps) {
+				if (app.place >= 0 && (app.enabled || app.started)) {
+					$("apps").innerHTML += __makeApp(null, app.path, app.icon, app.name);
+				}
+			}
+
+			if (info.auth.enabled) {
+				$("apps").innerHTML += __makeApp("logout-button", "#", "share/svg/logout.svg", "Logout");
+				tools.el.setOnClick($("logout-button"), __logout);
+			}
+
+			if (info.meta !== null && info.meta.server && info.meta.server.host) {
+				$("kvmd-meta-server-host").innerHTML = info.meta.server.host;
+				document.title = `PiKVM Index: ${info.meta.server.host}`;
+			} else {
+				$("kvmd-meta-server-host").innerHTML = "";
+				document.title = "PiKVM Index";
+			}
+		} else if (http.status === 401 || http.status === 403) {
+			document.location.href = "/login";
+		} else {
+			setTimeout(__loadKvmdInfo, 1000);
 		}
 	});
 }
@@ -123,13 +121,11 @@ function __makeApp(id, path, icon, name) {
 }
 
 function __logout() {
-	let http = tools.makeRequest("POST", "/api/auth/logout", function() {
-		if (http.readyState === 4) {
-			if (http.status === 200 || http.status === 401 || http.status === 403) {
-				document.location.href = "/login";
-			} else {
-				wm.error("Logout error:<br>", http.responseText);
-			}
+	tools.httpPost("/api/auth/logout", function(http) {
+		if (http.status === 200 || http.status === 401 || http.status === 403) {
+			document.location.href = "/login";
+		} else {
+			wm.error("Logout error:<br>", http.responseText);
 		}
 	});
 }

@@ -253,19 +253,17 @@ export function Hid(__getGeometry, __recorder) {
 
 				tools.debug(`HID: paste-as-keys ${keymap}: ${text}`);
 
-				let http = tools.makeRequest("POST", `/api/hid/print?limit=0&keymap=${keymap}`, function() {
-					if (http.readyState === 4) {
-						tools.el.setEnabled($("hid-pak-text"), true);
-						tools.el.setEnabled($("hid-pak-button"), true);
-						tools.el.setEnabled($("hid-pak-keymap-selector"), true);
-						$("hid-pak-text").value = "";
-						if (http.status === 413) {
-							wm.error("Too many text for paste!");
-						} else if (http.status !== 200) {
-							wm.error("HID paste error:<br>", http.responseText);
-						} else if (http.status === 200) {
-							__recorder.recordPrintEvent(text);
-						}
+				tools.httpPost(`/api/hid/print?limit=0&keymap=${keymap}`, function(http) {
+					tools.el.setEnabled($("hid-pak-text"), true);
+					tools.el.setEnabled($("hid-pak-button"), true);
+					tools.el.setEnabled($("hid-pak-keymap-selector"), true);
+					$("hid-pak-text").value = "";
+					if (http.status === 413) {
+						wm.error("Too many text for paste!");
+					} else if (http.status !== 200) {
+						wm.error("HID paste error:<br>", http.responseText);
+					} else if (http.status === 200) {
+						__recorder.recordPrintEvent(text);
 					}
 				}, text, "text/plain");
 			};
@@ -288,33 +286,27 @@ export function Hid(__getGeometry, __recorder) {
 
 	var __clickOutputsRadio = function(hid) {
 		let output = tools.radio.getValue(`hid-outputs-${hid}-radio`);
-		let http = tools.makeRequest("POST", `/api/hid/set_params?${hid}_output=${output}`, function() {
-			if (http.readyState === 4) {
-				if (http.status !== 200) {
-					wm.error("Can't configure HID:<br>", http.responseText);
-				}
+		tools.httpPost(`/api/hid/set_params?${hid}_output=${output}`, function(http) {
+			if (http.status !== 200) {
+				wm.error("Can't configure HID:<br>", http.responseText);
 			}
 		});
 	};
 
 	var __clickJigglerSwitch = function() {
 		let enabled = $("hid-jiggler-switch").checked;
-		let http = tools.makeRequest("POST", `/api/hid/set_params?jiggler=${enabled}`, function() {
-			if (http.readyState === 4) {
-				if (http.status !== 200) {
-					wm.error(`Can't ${enabled ? "enabled" : "disable"} mouse juggler:<br>`, http.responseText);
-				}
+		tools.httpPost(`/api/hid/set_params?jiggler=${enabled}`, function(http) {
+			if (http.status !== 200) {
+				wm.error(`Can't ${enabled ? "enabled" : "disable"} mouse juggler:<br>`, http.responseText);
 			}
 		});
 	};
 
 	var __clickConnectSwitch = function() {
 		let connected = $("hid-connect-switch").checked;
-		let http = tools.makeRequest("POST", `/api/hid/set_connected?connected=${connected}`, function() {
-			if (http.readyState === 4) {
-				if (http.status !== 200) {
-					wm.error(`Can't ${connected ? "connect" : "disconnect"} HID:<br>`, http.responseText);
-				}
+		tools.httpPost(`/api/hid/set_connected?connected=${connected}`, function(http) {
+			if (http.status !== 200) {
+				wm.error(`Can't ${connected ? "connect" : "disconnect"} HID:<br>`, http.responseText);
 			}
 		});
 	};
@@ -322,11 +314,9 @@ export function Hid(__getGeometry, __recorder) {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset HID (keyboard & mouse)?").then(function(ok) {
 			if (ok) {
-				let http = tools.makeRequest("POST", "/api/hid/reset", function() {
-					if (http.readyState === 4) {
-						if (http.status !== 200) {
-							wm.error("HID reset error:<br>", http.responseText);
-						}
+				tools.httpPost("/api/hid/reset", function(http) {
+					if (http.status !== 200) {
+						wm.error("HID reset error:<br>", http.responseText);
 					}
 				});
 			}

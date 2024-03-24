@@ -167,17 +167,15 @@ export function Ocr(__getGeometry) {
 		url += `&ocr_left=${__selection.left}&ocr_top=${__selection.top}`;
 		url += `&ocr_right=${__selection.right}&ocr_bottom=${__selection.bottom}`;
 
-		let http = tools.makeRequest("GET", url, function() {
-			if (http.readyState === 4) {
-				if (http.status === 200) {
-					wm.copyTextToClipboard(http.responseText);
-				} else {
-					wm.error("OCR error:<br>", http.responseText);
-				}
-				tools.el.setEnabled($("stream-ocr-button"), true);
-				tools.el.setEnabled($("stream-ocr-lang-selector"), true);
-				$("stream-ocr-led").className = "led-gray";
+		tools.httpGet(url, function(http) {
+			if (http.status === 200) {
+				wm.copyTextToClipboard(http.responseText);
+			} else {
+				wm.error("OCR error:<br>", http.responseText);
 			}
+			tools.el.setEnabled($("stream-ocr-button"), true);
+			tools.el.setEnabled($("stream-ocr-lang-selector"), true);
+			$("stream-ocr-led").className = "led-gray";
 		}, null, null, 30000);
 	};
 

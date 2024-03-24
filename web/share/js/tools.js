@@ -39,16 +39,27 @@ export var tools = new function() {
 
 	/************************************************************************/
 
-	self.makeRequest = function(method, url, callback, body=null, content_type=null, timeout=15000) {
+	self.httpRequest = function(method, url, callback, body=null, content_type=null, timeout=15000) {
 		let http = new XMLHttpRequest();
 		http.open(method, url, true);
 		if (content_type) {
 			http.setRequestHeader("Content-Type", content_type);
 		}
-		http.onreadystatechange = callback;
+		http.onreadystatechange = function() {
+			if (http.readyState === 4) {
+				callback(http);
+			}
+		};
 		http.timeout = timeout;
 		http.send(body);
-		return http;
+	};
+
+	self.httpGet = function(url, callback, body=null, content_type=null, timeout=15000) {
+		self.httpRequest("GET", url, callback, body, content_type, timeout);
+	};
+
+	self.httpPost = function(url, callback, body=null, content_type=null, timeout=15000) {
+		self.httpRequest("POST", url, callback, body, content_type, timeout);
 	};
 
 	/************************************************************************/

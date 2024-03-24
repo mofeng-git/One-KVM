@@ -275,23 +275,21 @@ export function Session() {
 		$("link-led").className = "led-yellow";
 		$("link-led").title = "Connecting...";
 
-		let http = tools.makeRequest("GET", "/api/auth/check", function() {
-			if (http.readyState === 4) {
-				if (http.status === 200) {
-					__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws`);
-					__ws.sendHidEvent = (event) => __sendHidEvent(__ws, event.event_type, event.event);
-					__ws.onopen = __wsOpenHandler;
-					__ws.onmessage = __wsMessageHandler;
-					__ws.onerror = __wsErrorHandler;
-					__ws.onclose = __wsCloseHandler;
-				} else if (http.status === 401 || http.status === 403) {
-					window.onbeforeunload = () => null;
-					wm.error("Unexpected logout occured, please login again").then(function() {
-						document.location.href = "/login";
-					});
-				} else {
-					__wsCloseHandler(null);
-				}
+		tools.httpGet("/api/auth/check", function(http) {
+			if (http.status === 200) {
+				__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws`);
+				__ws.sendHidEvent = (event) => __sendHidEvent(__ws, event.event_type, event.event);
+				__ws.onopen = __wsOpenHandler;
+				__ws.onmessage = __wsMessageHandler;
+				__ws.onerror = __wsErrorHandler;
+				__ws.onclose = __wsCloseHandler;
+			} else if (http.status === 401 || http.status === 403) {
+				window.onbeforeunload = () => null;
+				wm.error("Unexpected logout occured, please login again").then(function() {
+					document.location.href = "/login";
+				});
+			} else {
+				__wsCloseHandler(null);
 			}
 		});
 	};

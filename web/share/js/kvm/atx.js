@@ -73,13 +73,11 @@ export function Atx(__recorder) {
 
 	var __clickButton = function(button, confirm_msg) {
 		let click_button = function() {
-			let http = tools.makeRequest("POST", `/api/atx/click?button=${button}`, function() {
-				if (http.readyState === 4) {
-					if (http.status === 409) {
-						wm.error("Performing another ATX operation for other client.<br>Please try again later");
-					} else if (http.status !== 200) {
-						wm.error("Click error:<br>", http.responseText);
-					}
+			tools.httpPost(`/api/atx/click?button=${button}`, function(http) {
+				if (http.status === 409) {
+					wm.error("Performing another ATX operation for other client.<br>Please try again later");
+				} else if (http.status !== 200) {
+					wm.error("Click error:<br>", http.responseText);
 				}
 			});
 			__recorder.recordAtxButtonEvent(button);

@@ -51,22 +51,20 @@ function __login() {
 	} else {
 		let passwd = $("passwd-input").value + $("code-input").value;
 		let body = `user=${encodeURIComponent(user)}&passwd=${encodeURIComponent(passwd)}`;
-		let http = tools.makeRequest("POST", "/api/auth/login", function() {
-			if (http.readyState === 4) {
-				if (http.status === 200) {
-					document.location.href = "/";
-				} else if (http.status === 403) {
-					wm.error("Invalid credentials").then(__tryAgain);
+		tools.httpPost("/api/auth/login", function(http) {
+			if (http.status === 200) {
+				document.location.href = "/";
+			} else if (http.status === 403) {
+				wm.error("Invalid credentials").then(__tryAgain);
+			} else {
+				let error = "";
+				if (http.status === 400) {
+					try { error = JSON.parse(http.responseText)["result"]["error"]; } catch (_) { /* Nah */ }
+				}
+				if (error === "ValidatorError") {
+					wm.error("Invalid characters in credentials").then(__tryAgain);
 				} else {
-					let error = "";
-					if (http.status === 400) {
-						try { error = JSON.parse(http.responseText)["result"]["error"]; } catch (_) { /* Nah */ }
-					}
-					if (error === "ValidatorError") {
-						wm.error("Invalid characters in credentials").then(__tryAgain);
-					} else {
-						wm.error("Login error:<br>", http.responseText).then(__tryAgain);
-					}
+					wm.error("Login error:<br>", http.responseText).then(__tryAgain);
 				}
 			}
 		}, body, "application/x-www-form-urlencoded");

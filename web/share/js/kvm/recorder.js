@@ -280,30 +280,26 @@ export function Recorder() {
 				return;
 
 			} else if (event.event_type === "print") {
-				let http = tools.makeRequest("POST", "/api/hid/print?limit=0", function() {
-					if (http.readyState === 4) {
-						if (http.status === 413) {
-							wm.error("Too many text for paste!");
-							__stopProcess();
-						} else if (http.status !== 200) {
-							wm.error("HID paste error:<br>", http.responseText);
-							__stopProcess();
-						} else if (http.status === 200) {
-							__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);
-						}
+				tools.httpPost("/api/hid/print?limit=0", function(http) {
+					if (http.status === 413) {
+						wm.error("Too many text for paste!");
+						__stopProcess();
+					} else if (http.status !== 200) {
+						wm.error("HID paste error:<br>", http.responseText);
+						__stopProcess();
+					} else if (http.status === 200) {
+						__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);
 					}
 				}, event.event.text, "text/plain");
 				return;
 
 			} else if (event.event_type === "atx_button") {
-				let http = tools.makeRequest("POST", `/api/atx/click?button=${event.event.button}`, function() {
-					if (http.readyState === 4) {
-						if (http.status !== 200) {
-							wm.error("ATX error:<br>", http.responseText);
-							__stopProcess();
-						} else if (http.status === 200) {
-							__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);
-						}
+				tools.httpPost(`/api/atx/click?button=${event.event.button}`, function(http) {
+					if (http.status !== 200) {
+						wm.error("ATX error:<br>", http.responseText);
+						__stopProcess();
+					} else if (http.status === 200) {
+						__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);
 					}
 				});
 				return;
@@ -315,14 +311,12 @@ export function Recorder() {
 				} else { // gpio_pulse
 					path += `/pulse?channel=${event.event.channel}`;
 				}
-				let http = tools.makeRequest("POST", path, function() {
-					if (http.readyState === 4) {
-						if (http.status !== 200) {
-							wm.error("GPIO error:<br>", http.responseText);
-							__stopProcess();
-						} else if (http.status === 200) {
-							__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);
-						}
+				tools.httpPost(path, function(http) {
+					if (http.status !== 200) {
+						wm.error("GPIO error:<br>", http.responseText);
+						__stopProcess();
+					} else if (http.status === 200) {
+						__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);
 					}
 				});
 				return;
