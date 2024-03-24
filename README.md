@@ -47,9 +47,10 @@ docker run -itd -p443:443 -p80:80 --name pikvm-docker --device=/dev/ttyUSB0:/dev
 
 ### 其他
 
-**Star历史**
 
-[![Star历史](https://api.star-history.com/svg?repos=mofeng-git/One-KVM&type=Date)](https://star-history.com/#mofeng-git/One-KVM&Date)
+**赞助**
+
+这个项目基于众多开源项目二次开发，作者为此花费了大量的时间和精力进行测试和维护。若此项目对您有用，您可以考虑通过 [为爱发电](https://afdian.net/a/silentwind) 赞助一笔小钱支持作者。作者将能够购买新的硬件（玩客云和周边设备）来测试和维护 One-KVM 的各种配置，并在项目上投入更多的时间。
 
 **感谢名单**
 
@@ -79,6 +80,10 @@ Will
 **更新日志**
 
 [One-KVM/ChangeLogs.txt](https://github.com/mofeng-git/One-KVM/blob/main/ChangeLogs.txt)
+
+**Star历史**
+
+[![Star历史](https://api.star-history.com/svg?repos=mofeng-git/One-KVM&type=Date)](https://star-history.com/#mofeng-git/One-KVM&Date)
 
 本项目间接或直接使用了下下列开源项目：
 1. [pikvm/pikvm: Open and inexpensive DIY IP-KVM based on Raspberry Pi (github.com)](https://github.com/pikvm/pikvm)
