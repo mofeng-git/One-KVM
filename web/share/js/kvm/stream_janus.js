@@ -130,11 +130,37 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 		let stream = $("stream-video").srcObject;
 		if (stream) {
 			for (let track of stream.getTracks()) {
-				__logInfo("Removing track after destroying Janus:", track);
-				track.stop();
-				stream.removeTrack(track);
+				__removeTrack(track);
 			}
-			$("stream-video").srcObject = null;
+		}
+	};
+
+	var __addTrack = function(track) {
+		let el = $("stream-video");
+		if (el.srcObject) {
+			for (let tr of el.srcObject.getTracks()) {
+				if (tr.kind === track.kind && tr.id !== track.id) {
+					__removeTrack(tr);
+				}
+			}
+		}
+		if (!el.srcObject) {
+			el.srcObject = new MediaStream();
+		}
+		el.srcObject.addTrack(track);
+	};
+
+	var __removeTrack = function(track) {
+		let el = $("stream-video");
+		if (!el.srcObject) {
+			return;
+		}
+		track.stop();
+		el.srcObject.removeTrack(track);
+		if (el.srcObject.getTracks().length === 0) {
+			// MediaStream should be destroyed to prevent old picture freezing
+			// on Janus reconnecting.
+			el.srcObject = null;
 		}
 	};
 
@@ -228,40 +254,21 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 			},
 
 			// Janus 1.x
-			"onremotetrack": function(changed_track, id, added, meta) {
+			"onremotetrack": function(track, id, added, meta) {
 				// Chrome sends `muted` notifiation for tracks in `disconnected` ICE state
 				// and Janus.js just removes muted track from list of available tracks.
 				// But track still exists actually so it's safe to just ignore
 				// reason == "mute" and "unmute".
-
-				let reason;
-				try {
-					reason = meta.reason;
-				} catch (err) {
-					reason = "???";
-				}
-				__logInfo("Got onremotetrack:", changed_track, id, added, reason, meta);
-
-				let el = $("stream-video");
-				if (!el.srcObject) {
-					el.srcObject = new MediaStream();
-				}
-				let stream = el.srcObject;
-
-				if (added && reason == "created") {
-					for (let track of stream.getTracks()) {
-						if (track.kind === changed_track.kind && track.id !== changed_track.id) {
-							track.stop();
-							stream.removeTrack(track);
-						}
-					}
-					stream.addTrack(changed_track);
-					if (changed_track.kind == "video") {
+				let reason = (meta || {}).reason;
+				__logInfo("Got onremotetrack:", id, added, reason, track, meta);
+				if (added && reason === "created") {
+					__addTrack(track);
+					if (track.kind === "video") {
 						__sendKeyRequired();
 						__startInfoInterval();
 					}
-				} else if (!added && reason == "ended") {
-					stream.removeTrack(changed_track);
+				} else if (!added && reason === "ended") {
+					__removeTrack(track);
 				}
 			},
 
