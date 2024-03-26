@@ -44,10 +44,6 @@ if [ "$port" = "HDMI-A-1" ]; then
 	if [ "$status" = "connected" ]; then
 		if systemctl is-enabled -q kvmd-pass; then
 			systemctl restart kvmd-pass || true
-			pid=$(pidof ustreamer || echo 0)
-			if [ "$pid" -ne 0 ]; then
-				kill "$pid" || true
-			fi
 		fi
 		pid=$(pidof ustreamer || echo 0)
 		if [ "$pid" -ne 0 ]; then
