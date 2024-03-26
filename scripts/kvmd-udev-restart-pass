@@ -44,6 +44,10 @@ if [ "$port" = "HDMI-A-1" ]; then
 		status=$(head -n 1 "/sys/class/drm/$card-$port/status")
 		if [ "$status" = "connected" ]; then
 			systemctl restart kvmd-pass || true
+			pid=$(pidof ustreamer || echo 0)
+			if [ "$pid" -ne 0 ]; then
+				kill "$pid" || true
+			fi
 		fi
 	fi
 fi
