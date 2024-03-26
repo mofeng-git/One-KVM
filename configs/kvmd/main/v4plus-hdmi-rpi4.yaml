@@ -39,6 +39,7 @@ kvmd:
             - "--persistent"
             - "--dv-timings"
             - "--format=uyvy"
+            - "--format-swap-rgb"
             - "--buffers=6"
             - "--encoder=m2m-image"
             - "--workers=3"

@@ -91,7 +91,7 @@ depends=(
 	certbot
 	platform-io-access
 	raspberrypi-utils
-	"ustreamer>=6.5"
+	"ustreamer>=6.8"
 
 	# Systemd UDEV bug
 	"systemd>=248.3-2"
