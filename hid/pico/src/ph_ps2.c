@@ -105,34 +105,34 @@ void ph_ps2_mouse_send_button(u8 button, bool state) {
 			ph_ps2_mouse_buttons = ph_ps2_mouse_buttons & ~(1 << button);
 		}
 
-		ms_send_packet(ph_ps2_mouse_buttons, 0, 0, 0, 0);
+		ms_send_movement(ph_ps2_mouse_buttons, 0, 0, 0);
 	}
 }
 
 void ph_ps2_mouse_send_rel(s8 x, s8 y) {
 	if (PH_O_IS_MOUSE_PS2) {
-		ms_send_packet(ph_ps2_mouse_buttons, x, y, 0, 0);
+		ms_send_movement(ph_ps2_mouse_buttons, x, y, 0);
 	}
 }
 
 void ph_ps2_mouse_send_wheel(s8 h, s8 v) {
 	if (PH_O_IS_MOUSE_PS2) {
-		ms_send_packet(ph_ps2_mouse_buttons, 0, 0, h, v);
+		ms_send_movement(ph_ps2_mouse_buttons, 0, 0, v);
 	}
 }
 
 void ph_ps2_send_clear(void) {
 	if (PH_O_IS_KBD_PS2) {
-		for(u8 key = 0xe0; key <= 0xe7; key++) {
-			kb_send_key(key, false, 0);
-		}
+		//for(u8 key = 0xe0; key <= 0xe7; key++) {
+		//	kb_send_key(key, false, 0);
+		//}
 
-		for(u8 key = 4; key <= 116; key++) {
-			kb_send_key(key, false, 0);
-		}
+		//for(u8 key = 4; key <= 116; key++) {
+		//	kb_send_key(key, false, 0);
+		//}
 	}
 
 	if (PH_O_IS_MOUSE_PS2) {
-		ms_send_packet(0, 0, 0, 0, 0);
+		ms_send_movement(0, 0, 0, 0);
 	}
 }

@@ -41,7 +41,7 @@ void ph_ps2_kbd_send_key(u8 key, bool state);
 
 void ms_init(u8 gpio);
 bool ms_task();
-void ms_send_packet(u8 buttons, s8 x, s8 y, s8 h, s8 v);
+void ms_send_movement(u8 buttons, s8 x, s8 y, s8 z);
 void ph_ps2_mouse_send_button(u8 button, bool state);
 void ph_ps2_mouse_send_rel(s8 x, s8 y);
 void ph_ps2_mouse_send_wheel(s8 h, s8 v);
