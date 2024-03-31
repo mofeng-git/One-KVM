@@ -114,6 +114,9 @@ depends=(
 	# fsck for /boot
 	dosfstools
 
+	# pgrep for kvmd-udev-restart-pass
+	procps-ng
+
 	# Misc
 	hostapd
 )
