@@ -42,7 +42,6 @@ kvmd:
             - "--resolution={resolution}"
             - "--desired-fps={desired_fps}"
             - "--drop-same-frames=30"
-            - "--last-as-blank=0"
             - "--unix={unix}"
             - "--unix-rm"
             - "--unix-mode=0660"
