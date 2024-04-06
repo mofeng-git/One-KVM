@@ -23,3 +23,7 @@ dtparam=i2c_arm=on
 
 # Clock
 dtoverlay=i2c-rtc,pcf8563,wakeup-source
+
+# Passthrough
+dtoverlay=vc4-kms-v3d
+disable_overscan=1
