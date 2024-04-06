@@ -283,6 +283,21 @@ def _make_format_hex(size: int) -> Callable[[int], str]:
     return (lambda value: ("0x{:0%dX} ({})" % (size * 2)).format(value, value))
 
 
+def _print_edid(edid: _Edid) -> None:
+    for (key, get, fmt) in [
+        ("Manufacturer ID:", edid.get_mfc_id,         str),
+        ("Product ID:     ", edid.get_product_id,     _make_format_hex(2)),
+        ("Serial number:  ", edid.get_serial,         _make_format_hex(4)),
+        ("Monitor name:   ", edid.get_monitor_name,   str),
+        ("Monitor serial: ", edid.get_monitor_serial, str),
+        ("Audio:          ", edid.get_audio,          _format_bool),
+    ]:
+        try:
+            print(key, fmt(get()), file=sys.stderr)  # type: ignore
+        except NoBlockError:
+            pass
+
+
 # =====
 def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-branches,too-many-statements
     # (parent_parser, argv, _) = init(
@@ -296,6 +311,11 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
         description="A simple and primitive KVMD EDID editor",
         # parents=[parent_parser],
     )
+
+    lane2 = ["v0", "v1", "v2", "v3"]
+    lane4 = ["v4mini", "v4plus"]
+    presets = lane2 + lane4 + [f"{name}.1080p-by-default" for name in lane2] + [f"{name}.no-1920x1200" for name in lane4]
+
     parser.add_argument("-f", "--edid", dest="edid_path", default="/etc/kvmd/tc358743-edid.hex",
                         help="The hex/bin EDID file path", metavar="<file>")
     parser.add_argument("--export-hex",
@@ -304,8 +324,8 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
                         help="Export [--edid] file to the new file as a bin data", metavar="<file>")
     parser.add_argument("--import", dest="imp",
                         help="Import the specified bin/hex EDID to the [--edid] file as a hex text", metavar="<file>")
-    parser.add_argument("--restore-default", choices=["v0", "v1", "v2", "v3", "v4mini", "v4plus"],
-                        help="Restore default edid for the given PiKVM build")
+    parser.add_argument("--import-preset", choices=presets,
+                        help="Restore default EDID or choose the preset", metavar=f"{{ {' | '.join(presets)} }}",)
     parser.add_argument("--set-audio", type=valid_bool,
                         help="Enable or disable audio", metavar="<yes|no>")
     parser.add_argument("--set-mfc-id",
@@ -324,10 +344,18 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
                         help="Apply [--edid] on the [--device]")
     parser.add_argument("--device", dest="device_path", default="/dev/kvmd-video",
                         help="The video device", metavar="<device>")
+    parser.add_argument("--presets", dest="presets_path", default="/usr/share/kvmd/configs.default/kvmd/edid",
+                        help="Presets directory", metavar="<dir>")
     options = parser.parse_args(argv[1:])
 
-    if options.restore_default:
-        options.imp = f"/usr/share/kvmd/configs.default/kvmd/edid/{options.restore_default}-hdmi.hex"
+    base: (_Edid | None) = None
+    if options.import_preset:
+        imp = options.import_preset
+        if "." in imp:
+            (base_name, imp) = imp.split(".", 1)  # v3.1080p-by-default
+            base = _Edid(os.path.join(options.presets_path, f"{base_name}.hex"))
+            imp = f"_{imp}"
+        options.imp = os.path.join(options.presets_path, f"{imp}.hex")
 
     orig_edid_path = options.edid_path
     if options.imp:
@@ -340,6 +368,11 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
     for cmd in dir(_Edid):
         if cmd.startswith("set_"):
             value = getattr(options, cmd)
+            if value is None and base is not None:
+                try:
+                    value = getattr(base, cmd.replace("set_", "get_"))()
+                except NoBlockError:
+                    pass
             if value is not None:
                 getattr(edid, cmd)(value)
                 changed = True
@@ -351,18 +384,7 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
     elif changed:
         edid.write_hex(options.edid_path)
 
-    for (key, get, fmt) in [
-        ("Manufacturer ID:", edid.get_mfc_id,         str),
-        ("Product ID:     ", edid.get_product_id,     _make_format_hex(2)),
-        ("Serial number:  ", edid.get_serial,         _make_format_hex(4)),
-        ("Monitor name:   ", edid.get_monitor_name,   str),
-        ("Monitor serial: ", edid.get_monitor_serial, str),
-        ("Audio:          ", edid.get_audio,          _format_bool),
-    ]:
-        try:
-            print(key, fmt(get()), file=sys.stderr)  # type: ignore
-        except NoBlockError:
-            pass
+    _print_edid(edid)
 
     try:
         if options.clear:
