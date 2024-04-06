@@ -40,7 +40,7 @@ kvmd:
             - "--dv-timings"
             - "--format=uyvy"
             - "--format-swap-rgb"
-            - "--buffers=6"
+            - "--buffers=8"
             - "--encoder=m2m-image"
             - "--workers=3"
             - "--quality={quality}"
