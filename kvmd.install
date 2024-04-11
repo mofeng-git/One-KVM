@@ -83,7 +83,7 @@ post_upgrade() {
 			keyboxd@etc-pacman.d-gnupg.socket
 	fi
 
-	if [[ "$(varcmp "$2" 3.331)" -lt 0 ]]; then
+	if [[ "$(vercmp "$2" 3.332)" -lt 0 ]]; then
 		grep -q "^dtoverlay=vc4-kms-v3d" /boot/config.txt || cat << EOF >> /boot/config.txt
 
 # Passthrough
