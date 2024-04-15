@@ -41,17 +41,17 @@ class BaseHid(BasePlugin):
     def __init__(self, jiggler_enabled: bool, jiggler_active: bool, jiggler_interval: int) -> None:
         self.__jiggler_enabled = jiggler_enabled
         self.__jiggler_active = jiggler_active
+        self.__jiggler_interval = jiggler_interval
         self.__jiggler_absolute = True
         self.__activity_ts = 0
-        self.__jiggler_interval = jiggler_interval
 
     @classmethod
     def _get_jiggler_options(cls) -> dict[str, Any]:
         return {
             "jiggler": {
-                "enabled": Option(False, type=valid_bool, unpack_as="jiggler_enabled"),
-                "active":  Option(False, type=valid_bool, unpack_as="jiggler_active"),
-                "interval": Option(60, type=valid_int_f1, unpack_as="jiggler_interval")
+                "enabled":  Option(False, type=valid_bool, unpack_as="jiggler_enabled"),
+                "active":   Option(False, type=valid_bool, unpack_as="jiggler_active"),
+                "interval": Option(60,    type=valid_int_f1, unpack_as="jiggler_interval"),
             },
         }
 
@@ -135,8 +135,8 @@ class BaseHid(BasePlugin):
     def _get_jiggler_state(self) -> dict:
         return {
             "jiggler": {
-                "enabled": self.__jiggler_enabled,
-                "active":  self.__jiggler_active,
+                "enabled":  self.__jiggler_enabled,
+                "active":   self.__jiggler_active,
                 "interval": self.__jiggler_interval,
             },
         }
