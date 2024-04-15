@@ -30,6 +30,7 @@ from typing import Any
 from ...yamlconf import Option
 
 from ...validators.basic import valid_bool
+from ...validators.basic import valid_int_f1
 
 from .. import BasePlugin
 from .. import get_plugin_class
@@ -37,11 +38,12 @@ from .. import get_plugin_class
 
 # =====
 class BaseHid(BasePlugin):
-    def __init__(self, jiggler_enabled: bool, jiggler_active: bool) -> None:
+    def __init__(self, jiggler_enabled: bool, jiggler_active: bool, jiggler_interval: int) -> None:
         self.__jiggler_enabled = jiggler_enabled
         self.__jiggler_active = jiggler_active
         self.__jiggler_absolute = True
         self.__activity_ts = 0
+        self.__jiggler_interval = jiggler_interval
 
     @classmethod
     def _get_jiggler_options(cls) -> dict[str, Any]:
@@ -49,6 +51,7 @@ class BaseHid(BasePlugin):
             "jiggler": {
                 "enabled": Option(False, type=valid_bool, unpack_as="jiggler_enabled"),
                 "active":  Option(False, type=valid_bool, unpack_as="jiggler_active"),
+                "interval": Option(60, type=valid_int_f1, unpack_as="jiggler_interval")
             },
         }
 
@@ -109,7 +112,7 @@ class BaseHid(BasePlugin):
     async def systask(self) -> None:
         factor = 1
         while True:
-            if self.__jiggler_active and (self.__activity_ts + 60 < int(time.monotonic())):
+            if self.__jiggler_active and (self.__activity_ts + self.__jiggler_interval < int(time.monotonic())):
                 for _ in range(5):
                     if self.__jiggler_absolute:
                         self.send_mouse_move_event(100 * factor, 100 * factor)
@@ -134,6 +137,7 @@ class BaseHid(BasePlugin):
             "jiggler": {
                 "enabled": self.__jiggler_enabled,
                 "active":  self.__jiggler_active,
+                "interval": self.__jiggler_interval,
             },
         }
 
