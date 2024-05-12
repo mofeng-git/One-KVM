@@ -150,7 +150,10 @@ export function Gpio(__recorder) {
 			if (item.scheme.pulse.delay) {
 				controls.push(`
 					<td><button disabled id="gpio-button-${item.channel}" class="gpio-button"
-					data-channel="${item.channel}" data-confirm="${confirm}">${item.text}</button></td>
+					${item.hide ? "data-force-hide-menu" : ""}
+					data-channel="${item.channel}" data-confirm="${confirm}">
+					${(item.hide ? "&bull; " : "") + item.text}
+					</button></td>
 				`);
 			}
 			return `<table><tr>${controls.join("<td>&nbsp;&nbsp;&nbsp;</td>")}</tr></table>`;

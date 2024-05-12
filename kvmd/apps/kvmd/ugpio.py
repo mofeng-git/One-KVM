@@ -383,15 +383,19 @@ class UserGpio:
     def __make_item_output(self, parts: list[str]) -> dict:
         assert len(parts) >= 1
         confirm = False
+        hide = False
         text = "Click"
         if len(parts) == 2:
             text = parts[1]
         elif len(parts) == 3:
-            confirm = (parts[1] == "confirm")
+            opts = parts[1].split(",")
+            confirm = ("confirm" in opts)
+            hide = ("hide" in opts)
             text = parts[2]
         return {
             "type": UserGpioModes.OUTPUT,
             "channel": parts[0],
             "confirm": confirm,
+            "hide": hide,
             "text": text,
         }
