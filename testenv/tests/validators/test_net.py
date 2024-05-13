@@ -147,7 +147,7 @@ def test_fail__valid_rfc_host(arg: Any) -> None:
 @pytest.mark.parametrize("arg", ["0 ", 0, "22", 443, 65535])
 def test_ok__valid_port(arg: Any) -> None:
     value = valid_port(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 

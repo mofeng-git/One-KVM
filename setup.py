@@ -138,7 +138,7 @@ def main() -> None:
         classifiers=[
             "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
             "Development Status :: 5 - Production/Stable",
-            "Programming Language :: Python :: 3.11",
+            "Programming Language :: Python :: 3.12",
             "Topic :: System :: Systems Administration",
             "Operating System :: POSIX :: Linux",
             "Intended Audience :: System Administrators",

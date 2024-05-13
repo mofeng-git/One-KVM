@@ -86,7 +86,7 @@ def test_fail__valid_number__min_max(arg: Any) -> None:  # pylint: disable=inval
 @pytest.mark.parametrize("arg", [0, 1, 5, "5 "])
 def test_ok__valid_int_f0(arg: Any) -> None:
     value = valid_int_f0(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
@@ -100,7 +100,7 @@ def test_fail__valid_int_f0(arg: Any) -> None:
 @pytest.mark.parametrize("arg", [1, 5, "5 "])
 def test_ok__valid_int_f1(arg: Any) -> None:
     value = valid_int_f1(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
@@ -114,7 +114,7 @@ def test_fail__valid_int_f1(arg: Any) -> None:
 @pytest.mark.parametrize("arg", [0, 1, 5, "5 ", "5.0 "])
 def test_ok__valid_float_f0(arg: Any) -> None:
     value = valid_float_f0(arg)
-    assert type(value) == float  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is float  # pylint: disable=unidiomatic-typecheck
     assert value == float(str(arg).strip())
 
 
@@ -128,7 +128,7 @@ def test_fail__valid_float_f0(arg: Any) -> None:
 @pytest.mark.parametrize("arg", [0.1, 1, 5, "5 ", "5.0 "])
 def test_ok__valid_float_f01(arg: Any) -> None:
     value = valid_float_f01(arg)
-    assert type(value) == float  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is float  # pylint: disable=unidiomatic-typecheck
     assert value == float(str(arg).strip())
 
 

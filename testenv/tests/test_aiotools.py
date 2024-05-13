@@ -111,7 +111,7 @@ async def test_fail__region__access_two() -> None:
 
     results = await asyncio.gather(func1(), func2(), return_exceptions=True)
     assert results[0] is None
-    assert type(results[1]) == RegionIsBusyError  # pylint: disable=unidiomatic-typecheck
+    assert type(results[1]) is RegionIsBusyError  # pylint: disable=unidiomatic-typecheck
 
     assert not region.is_busy()
     await region.exit()
