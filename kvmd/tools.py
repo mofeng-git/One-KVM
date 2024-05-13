@@ -26,7 +26,6 @@ import multiprocessing.queues
 import queue
 import shlex
 
-from typing import Hashable
 from typing import TypeVar
 
 
@@ -45,7 +44,7 @@ def efmt(err: Exception) -> str:
 
 
 # =====
-def rget(dct: dict, *keys: Hashable) -> dict:
+def rget(dct: dict, *keys: str) -> dict:
     result = functools.reduce((lambda nxt, key: nxt.get(key, {})), keys, dct)
     if not isinstance(result, dict):
         raise TypeError(f"Not a dict as result: {result!r} from {dct!r} at {list(keys)}")

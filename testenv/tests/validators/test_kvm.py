@@ -116,7 +116,7 @@ def test_fail__valid_msd_image_name(arg: Any) -> None:
 @pytest.mark.parametrize("arg", [" foo ", "bar", "foo, ,bar,", " ", " , ", ""])
 def test_ok__valid_info_fields(arg: Any) -> None:
     value = valid_info_fields(arg, set(["foo", "bar"]))
-    assert type(value) == set  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is set  # pylint: disable=unidiomatic-typecheck
     assert value == set(filter(None, map(str.strip, str(arg).split(","))))
 
 
@@ -130,7 +130,7 @@ def test_fail__valid_info_fields(arg: Any) -> None:
 @pytest.mark.parametrize("arg", ["0 ", 0, 1, 13])
 def test_ok__valid_log_seek(arg: Any) -> None:
     value = valid_log_seek(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
@@ -144,7 +144,7 @@ def test_fail__valid_log_seek(arg: Any) -> None:
 @pytest.mark.parametrize("arg", ["1 ", 20, 100])
 def test_ok__valid_stream_quality(arg: Any) -> None:
     value = valid_stream_quality(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
@@ -158,7 +158,7 @@ def test_fail__valid_stream_quality(arg: Any) -> None:
 @pytest.mark.parametrize("arg", ["1 ", 120])
 def test_ok__valid_stream_fps(arg: Any) -> None:
     value = valid_stream_fps(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
@@ -172,7 +172,7 @@ def test_fail__valid_stream_fps(arg: Any) -> None:
 @pytest.mark.parametrize("arg", ["1280x720 ", "1x1"])
 def test_ok__valid_stream_resolution(arg: Any) -> None:
     value = valid_stream_resolution(arg)
-    assert type(value) == str  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is str  # pylint: disable=unidiomatic-typecheck
     assert value == str(arg).strip()
 
 
@@ -186,7 +186,7 @@ def test_fail__valid_stream_resolution(arg: Any) -> None:
 @pytest.mark.parametrize("arg", ["25", " 20000 ", 5000])
 def test_ok__valid_stream_h264_bitrate(arg: Any) -> None:
     value = valid_stream_h264_bitrate(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
@@ -200,7 +200,7 @@ def test_fail__valid_stream_h264_bitrate(arg: Any) -> None:
 @pytest.mark.parametrize("arg", ["1 ", 0, 60])
 def test_ok__valid_stream_h264_gop(arg: Any) -> None:
     value = valid_stream_h264_gop(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 

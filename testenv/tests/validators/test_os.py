@@ -124,7 +124,7 @@ def test_fail__valid_printable_filename(arg: Any) -> None:
 @pytest.mark.parametrize("arg", [0, 5, "1000"])
 def test_ok__valid_unix_mode(arg: Any) -> None:
     value = valid_unix_mode(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(value).strip())
 
 

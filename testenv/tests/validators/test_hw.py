@@ -37,7 +37,7 @@ from kvmd.validators.hw import valid_otg_ethernet
 @pytest.mark.parametrize("arg", ["1200 ", 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200])
 def test_ok__valid_tty_speed(arg: Any) -> None:
     value = valid_tty_speed(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
@@ -51,7 +51,7 @@ def test_fail__valid_tty_speed(arg: Any) -> None:
 @pytest.mark.parametrize("arg", ["0 ", 0, 1, 13])
 def test_ok__valid_gpio_pin(arg: Any) -> None:
     value = valid_gpio_pin(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
@@ -65,7 +65,7 @@ def test_fail__valid_gpio_pin(arg: Any) -> None:
 @pytest.mark.parametrize("arg", ["0 ", -1, 0, 1, 13])
 def test_ok__valid_gpio_pin_optional(arg: Any) -> None:
     value = valid_gpio_pin_optional(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
@@ -110,7 +110,7 @@ def test_fail__valid_otg_gadget(arg: Any) -> None:
 @pytest.mark.parametrize("arg", ["0 ", 0, 1, 13, 65535])
 def test_ok__valid_otg_id(arg: Any) -> None:
     value = valid_otg_id(arg)
-    assert type(value) == int  # pylint: disable=unidiomatic-typecheck
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
     assert value == int(str(arg).strip())
 
 
