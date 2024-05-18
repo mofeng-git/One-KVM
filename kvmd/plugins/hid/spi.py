@@ -120,7 +120,7 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
         return os.path.exists(f"/dev/spidev{self.__bus}.{self.__chip}")
 
     @contextlib.contextmanager
-    def connected(self) -> Generator[_SpiPhyConnection, None, None]:  # type: ignore
+    def connected(self) -> Generator[_SpiPhyConnection, None, None]:  # pylint: disable=contextmanager-generator-missing-cleanup  # type: ignore
         with self.__sw_cs_connected() as switch_cs:
             with contextlib.closing(spidev.SpiDev(self.__bus, self.__chip)) as spi:
                 spi.mode = 0
