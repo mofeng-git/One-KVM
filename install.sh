@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ARCH=$(uname -m)
+ARCH=$(uname -s)
 MACHINE=$(uname -o -s -r -m)
 PYVER=$(python3 -V)
 CURRENTWD=$PWD
@@ -8,9 +8,9 @@ FIND_FILE="/etc/sudoers"
 FIND_STR="short_press_gpio420"
 
 #检查架构和Python版本
-check-environment(){
+check_environment(){
   echo -e "\e[0;32m设备名称：$MACHINE\nPython版本：$PYVER"
-  if [ ! $ARCH = "armv7l" ]; then
+  if [ ! $ARCH = "onecloud" ]; then
     echo -e "\e[0;31m此脚本暂不支持armv7l架构以外的设备！\n退出脚本！" 
     exit
   fi
@@ -22,7 +22,7 @@ check-environment(){
 }
 
 #安装依赖软件
-install-dependencies(){
+install_dependencies(){
   bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http && echo "换源成功！"
   echo -e "\e[0;32m正在安装依赖软件p......"  
   apt install -y python3.10 python3-pip python3-dev patch iptables nginx \
@@ -31,7 +31,7 @@ install-dependencies(){
 }
 
 #安装PiKVM
-install-pikvm(){
+install_pikvm(){
   echo "正在安装PiKVM......"  
   dpkg -i ./fruity-pikvm_0.2_armhf.deb 
   systemctl enable kvmd-vnc
@@ -51,7 +51,7 @@ install-pikvm(){
 }
 
 #应用补丁
-add-patches(){
+add_patches(){
   if [ ! -f `grep -c "$FIND_STR" $FIND_FILE`  ]; then
     echo kvmd ALL=\(ALL\) NOPASSWD: /usr/bin/onecloud_gpio.sh >>  /etc/sudoers
   fi
@@ -72,7 +72,8 @@ add-patches(){
 
 }
 
-fix-motd() {
+#设置网页终端欢迎语
+fix_motd(){
 	#cd $CURRENTWD
   if [ -e /etc/motd ]; then rm /etc/motd; fi
   cat > /usr/bin/armbian-motd << EOF
@@ -96,14 +97,35 @@ EOF
 	echo "fixed motd"
 }
 
-show-info(){
+#玩客云特定配置
+onecloud_conf（）{
+  if [ ! $ARCH = "cloud" ]; then
+    exit
+  else
+    cat <<EOF >/etc/rc.local
+#!/bin/sh -e
+echo "default-on" >/sys/class/leds/onecloud\:green\:alive/trigger
+echo "none" >/sys/class/leds/onecloud\:red\:alive/trigger
+echo "none" >/sys/class/leds/onecloud\:blue\:alive/trigger
+cpufreq-set -d 1200MHz -u 1200MHz
+echo device > /sys/class/usb_role/c9040000.usb-role-switch/role
+systemctl disabled kvmd
+systemctl start kvmd
+exit 0
+EOF
+  fi
+}
+
+#打印完成信息
+show_info(){
   ipaddr=`ip addr | grep "scope global" | awk '{print $2}' |awk -F/ '{print $1}'`
   echo  -e "\e[0;32m内网访问地址为：\nhttp://$ipaddr\nhttps://$ipaddr"
 }
 
-check-environment
-install-dependencies
-install-pikvm
-add-patches
-fix-motd
-show-info
+check_environment
+install_dependencies
+install_pikvm
+add_patches
+fix_motd
+onecloud_conf
+show_info

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #配置H.264功能
-kvmd-ffmpeg-h-264(){
+kvmd_ffmpeg_h-264(){
   echo "正在配置H.264功能..."
   cd $CURRENTWD
   apt install -y ffmpeg
@@ -57,4 +57,4 @@ EOF
   systemctl start kvmd-ffmpeg && systemctl start kvmd-janus-static
 }
 
-kvmd-ffmpeg-h-264
+kvmd_ffmpeg_h-264
