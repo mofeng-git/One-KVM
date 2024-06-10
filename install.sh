@@ -114,6 +114,8 @@ systemctl disable kvmd
 systemctl start kvmd
 exit 0
 EOF
+    #如果在CHROOT环境需设置NOTCHROOT=false
+    ! $NOTCHROOT || gzip -dc ./patch/Boot_SkipUSBBurning.gz | dd of=/dev/mmcblk1 bs=512 seek=1 count=32767
     echo -e "\n"
   fi
 }
