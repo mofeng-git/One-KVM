@@ -5,7 +5,7 @@ MACHINE=$(uname -o -s -r -m)
 PYVER=$(python3 -V)
 CURRENTWD=$PWD
 FIND_FILE="/etc/sudoers"
-FIND_STR="short_press_gpio420"
+FIND_STR="onecloud_gpio.sh"
 
 #检查架构和Python版本
 check_environment(){
