@@ -4,12 +4,12 @@
 
 ### 介绍
 
-One-KVM是基于经济计算机硬件（目前为玩客云和X64兼容机）和PiKVM软件的硬件级远程控制项目。KVM over IP可以远程管理服务器或工作站，实现无侵入式控制，无论被控机为什么操作系统或是否安装了操作系统，具有更广泛的适用性。此项目基于 [PiKVM](https://github.com/pikvm/pikvm)，和基于远控软件的远程管理方式不同，无需在被控电脑安装任何软件，实现无侵入式控制。
+One-KVM 是基于经济计算机硬件（目前为玩客云和 X64 兼容机）和PiKVM软件的硬件级远程控制项目。KVM over IP 可以远程管理服务器或工作站，实现无侵入式控制，无论被控机为什么操作系统或是否安装了操作系统，具有更广泛的适用性。此项目基于 [PiKVM](https://github.com/pikvm/pikvm)，和基于远控软件的远程管理方式不同，无需在被控电脑安装任何软件，实现无侵入式控制。
 
 
 **功能特性**
 
-主要功能比较，TinyPilot 社区版本、PiKVMv3版本出现在这里仅做比较目的。
+主要功能比较，TinyPilot 社区版本、PiKVMv3 版本出现在这里仅做比较目的。
 |      功能      |         One-KVM         | TinyPilot 社区版本 | PiKVMv3版本  |
 | :------------: | :---------------------: | :----------------: | :----------: |
 | HTML5界面语言  |        简体中文         |        英文        |     英文     |
@@ -31,27 +31,31 @@ One-KVM是基于经济计算机硬件（目前为玩客云和X64兼容机）和P
 
 ### 快速开始
 
-**方式一：直刷One-KVM镜像**
+**方式一：直刷 One-KVM 镜像**
 
-对于玩客云设备，本项目Releases页可以找到适配玩客云的One-KVM预编译镜像。镜像名称带One-KVM前缀、burn后缀的为线刷镜像，可使用USB_Burning_Tool软件线刷至玩客云。预编译线刷镜像为开箱即用，刷好后启动设备就可以开始使用One-KVM。
+对于玩客云设备，本项目 Releases 页可以找到适配玩客云的 One-KVM 预编译镜像。镜像名称带 One-KVM 前缀、burn 后缀的为线刷镜像，可使用 USB_Burning_Tool 软件线刷至玩客云。预编译线刷镜像为开箱即用，刷好后启动设备就可以开始使用 One-KVM。
 
-**方式二：One-KVM脚本安装**
+**方式二：One-KVM 脚本安装**
 
-一键脚本，适用于玩客云Armbian Jammy系统。更多系统正在适配中。
+一键脚本，适用于玩客云 Armbian Jammy 系统。更多系统正在适配中。
 
 ```bash
 git clone https://github.com/mofeng-git/One-KVM.git
-cd One-KVM  && ./install.sh
-```
-**方式三：docker镜像部署**
+cd One-KVM
+bash install.sh
 
-目前仅有pikvm-ch9329_amd64，后续将支持更多控制方式和处理器架构。
+#可选功能：H.264 视频编码
+bash kvmd_h264_install.sh
+```
+**方式三：Docker 镜像部署**
+
+目前仅有 pikvm-ch9329_amd64，后续将支持更多控制方式和处理器架构。
 ```bash
 #使用示例：
 docker run -itd -p443:443 -p80:80 --name pikvm-docker --device=/dev/ttyUSB0:/dev/kvmd-hid --device=/dev/video0:/dev/kvmd-video pikvm-ch9329:0.61
 ```
 
-详细内容可以参照[One-KVM文档](https://one-kvm.mofeng.run/)。
+详细内容可以参照 [One-KVM文档](https://one-kvm.mofeng.run/)。
 
 ### 其他
 
@@ -91,7 +95,7 @@ Will
 
 **Star历史**
 
-[![Star历史](https://api.star-history.com/svg?repos=mofeng-git/One-KVM&type=Date)](https://star-history.com/#mofeng-git/One-KVM&Date)
+[![Star 历史](https://api.star-history.com/svg?repos=mofeng-git/One-KVM&type=Date)](https://star-history.com/#mofeng-git/One-KVM&Date)
 
 本项目间接或直接使用了下下列开源项目：
 1. [pikvm/pikvm: Open and inexpensive DIY IP-KVM based on Raspberry Pi (github.com)](https://github.com/pikvm/pikvm)
