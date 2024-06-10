@@ -98,7 +98,7 @@ EOF
 }
 
 #玩客云特定配置
-onecloud_conf（）{
+onecloud_conf(){
   if [ ! $ARCH = "cloud" ]; then
     exit
   else
