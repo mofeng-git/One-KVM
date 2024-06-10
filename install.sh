@@ -27,7 +27,7 @@ install_dependencies(){
   echo -e "正在安装依赖软件......"  
   apt install -y python3.10 python3-pip python3-dev patch iptables nginx \
     tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev \
-    tesseract-ocr-chi-sim  libjpeg-dev libfreetype6-dev
+    tesseract-ocr-chi-sim  libjpeg-dev libfreetype6-dev gcc
 }
 
 #安装PiKVM
@@ -104,13 +104,13 @@ onecloud_conf(){
   else
     echo "为玩客云配置开机脚本"
     cat <<EOF >/etc/rc.local
-#!/bin/sh -e
+#!/bin/bash
 echo "default-on" >/sys/class/leds/onecloud\:green\:alive/trigger
 echo "none" >/sys/class/leds/onecloud\:red\:alive/trigger
 echo "none" >/sys/class/leds/onecloud\:blue\:alive/trigger
 cpufreq-set -d 1200MHz -u 1200MHz
 echo device > /sys/class/usb_role/c9040000.usb-role-switch/role
-systemctl disabled kvmd
+systemctl disable kvmd
 systemctl start kvmd
 exit 0
 EOF
@@ -120,7 +120,7 @@ EOF
 
 #打印完成信息
 show_info(){
-  echo  -e "安装结束"
+  echo  -e "安装结束，重启之后即可开始使用One-KVM"
   /usr/bin/armbian-motd
 }
 
