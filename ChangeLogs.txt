@@ -1,5 +1,6 @@
 更新日志
-- V0.56：[Build-Armbian]：回退5.9内核版本（V0.52），目前运行最稳定的内核版本；支持docker;此前高内核的累积更新
+- V0.57: [build]mac固定，第一次启动时随机生成；解决armbain源因密钥无法使用；解决sd启动配置问题
+- V0.56：[Build-Armbian]回退5.9内核版本（V0.52），目前运行最稳定的内核版本；支持docker;此前高内核的累积更新
 - V0.55: [build]使用lanlan Uboot，通电按重置键可进入线刷模式；HDM可用，WIFI模块已编译；预装armbian-config实用工具；Webterm和VNC修复（tighervnc存在兼容问题，可尝试使用uvnc viewer），添加状态信息显示
 - V0.54: [build]内核切换至xdarklight/linux/tree/meson-mx-integration-6.7-20231221，系统运行更加稳定；包含armbian-config等实用工具
 - V0.53: [build]修复高内核OTG拔插内核崩溃问题；切换至更新的Linux内核（6.6.15-current-meson）；去除线刷镜像分区校验
