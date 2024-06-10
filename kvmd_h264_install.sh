@@ -1,5 +1,7 @@
 #!/bin/bash
 
+CURRENTWD=$PWD
+
 #配置H.264功能
 kvmd_ffmpeg_h-264(){
   echo "正在配置H.264功能..."
@@ -50,7 +52,8 @@ EOF
   sed -i '293c \/\/' /usr/share/kvmd/web/share/js/kvm/stream_janus.js
   sed -i 's/request\": \"watch\", \"p/request\": \"watch\", \"id\" : 1, \"p/' /usr/share/kvmd/web/share/js/kvm/stream_janus.js
   #补全网页JS文件并添加相应脚本
-  mkdir /usr/share/janus/javascript/ && cp -f ./web/adapter.js /usr/share/janus/javascript/ && cp -f ./web/janus.js /usr/share/janus/javascript/
+  mkdir /usr/share/janus/javascript/
+  cp -f ./web/adapter.js /usr/share/janus/javascript/ && cp -f ./web/janus.js /usr/share/janus/javascript/
   cp -f ./patch/stream.sh /usr/share/kvmd/ && cp -f ./patch/stream_when_ustream_exists.sh /usr/share/kvmd/ && chmod +x /usr/share/kvmd/stream.sh /usr/share/kvmd/stream_when_ustream_exists.sh
   #启动服务
   systemctl enable kvmd-ffmpeg && systemctl enable kvmd-janus-static
