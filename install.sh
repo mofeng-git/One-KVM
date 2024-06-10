@@ -120,8 +120,8 @@ EOF
 
 #打印完成信息
 show_info(){
-  ipaddr=`ip addr | grep "scope global" | awk '{print $2}' |awk -F/ '{print $1}'`
-  echo  -e "默认访问地址为：\nhttps://$ipaddr"
+  echo  -e "安装结束"
+  /usr/bin/armbian-motd
 }
 
 check_environment

@@ -25,10 +25,10 @@ kvmd:
                 mac: 2c:56:dc:db:7c:1e
             short_press:
                 type: cmd
-                cmd: [/usr/bin/sudo, short_press_gpio420]
+                cmd: [/usr/bin/sudo, onecloud_gpio.sh, short]
             long_press:
                 type: cmd
-                cmd: [/usr/bin/sudo, long_press_gpio420]
+                cmd: [/usr/bin/sudo, onecloud_gpio.sh, long]
         scheme:
             wol_server1:
                 driver: wol_server1
