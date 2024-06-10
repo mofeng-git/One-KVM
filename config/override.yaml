@@ -56,3 +56,10 @@ kvmd:
                 - []
                 - ["#网络唤醒"]
                 - ["#被控机设备", wol_server1|网络唤醒]
+    streamer:
+        forever: true
+        cmd_append: [--slowdown]
+        desired_fps:
+            default: 30
+            max: 60
+            min: 0
