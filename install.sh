@@ -265,8 +265,8 @@ install-dependencies() {
   echo
   echo "-> Installing dependencies for pikvm" | tee -a $LOGFILE
 
-  echo "apt install -y make nginx python3 gcc unzip net-tools bc expect v4l-utils iptables vim dos2unix screen tmate nfs-common gpiod ffmpeg dialog iptables dnsmasq git python3-pip tesseract-ocr tesseract-ocr-eng libasound2-dev libsndfile-dev libspeexdsp-dev  build-essential libssl-dev libffi-dev libevent libevent-core libevent-pthreads" | tee -a $LOGFILE
-  apt install -y make nginx python3 gcc unzip net-tools bc expect v4l-utils iptables vim dos2unix screen tmate nfs-common gpiod ffmpeg dialog iptables dnsmasq git python3-pip tesseract-ocr tesseract-ocr-eng libasound2-dev libsndfile-dev libspeexdsp-dev build-essential libssl-dev libffi-dev libevent libevent-core libevent-pthreads >> $LOGFILE
+  echo "apt install -y make nginx python3 gcc unzip net-tools bc expect v4l-utils iptables vim dos2unix screen tmate nfs-common gpiod ffmpeg dialog iptables dnsmasq git python3-pip tesseract-ocr tesseract-ocr-eng libasound2-dev libsndfile-dev libspeexdsp-dev  build-essential libssl-dev libffi-dev" | tee -a $LOGFILE
+  apt install -y make nginx python3 gcc unzip net-tools bc expect v4l-utils iptables vim dos2unix screen tmate nfs-common gpiod ffmpeg dialog iptables dnsmasq git python3-pip tesseract-ocr tesseract-ocr-eng libasound2-dev libsndfile-dev libspeexdsp-dev build-essential libssl-dev libffi-dev >> $LOGFILE
 
   sed -i -e 's/#port=5353/port=5353/g' /etc/dnsmasq.conf
 
