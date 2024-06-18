@@ -804,12 +804,13 @@ else
     pip3 install dbus_next zstandard
   fi
   ### additional python pip dependencies for kvmd 3.238 and higher
+  pip3 install gpiod
   case $PYTHONVER in
     3.10*|3.[987]*)
       pip3 install async-lru 2> /dev/null
       ### Fix for kvmd 3.291 -- only applies to python 3.10 ###
-      sed -i -e 's|gpiod.EdgeEvent|gpiod.LineEvent|g' /usr/lib/python3/dist-packages/kvmd/aiogp.py
-      sed -i -e 's|gpiod.line,|gpiod.Line,|g'         /usr/lib/python3/dist-packages/kvmd/aiogp.py
+      #sed -i -e 's|gpiod.EdgeEvent|gpiod.LineEvent|g' /usr/lib/python3/dist-packages/kvmd/aiogp.py
+      #sed -i -e 's|gpiod.line,|gpiod.Line,|g'         /usr/lib/python3/dist-packages/kvmd/aiogp.py
       ;;
     3.11*)
       pip3 install async-lru --break-system-packages 2> /dev/null
