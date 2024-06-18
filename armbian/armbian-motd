@@ -1,0 +1,24 @@
+#!/bin/sh
+if [ -e /etc/update-motd.d/10-armbian-header ]; then /etc/update-motd.d/10-armbian-header; fi
+if [ -e /etc/update-motd.d/30-armbian-sysinfo ]; then /etc/update-motd.d/30-armbian-sysinfo; fi
+if [ -e /etc/update-motd.d/41-armbian-config ]; then /etc/update-motd.d/41-armbian-config; fi
+
+printf "    欢迎使用 One-KVM，基于开源程序 PiKVM 的 IP-KVM 应用
+    ____________________________________________________________________________
+
+    要阻止内核消息输出到终端，可以使用命令\"dmesg -n 1\"
+
+    要修改默认账户 admin 的密码可使用命令 \"kvmd-htpasswd set admin\"
+
+    项目链接：
+      * https://pikvm.org
+      * https://github.com/srepac/kvmd-armbian
+      * https://github.com/mofeng-git/One-KVM
+
+    文档链接：
+      * https://docs.pikvm.org
+      * https://one-kvm.mofeng.run
+
+"
+
+if [ -e /etc/motd.custom ]; then cat /etc/motd.custom; fi

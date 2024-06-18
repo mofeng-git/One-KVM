@@ -6,29 +6,6 @@
 
 One-KVM 是基于经济计算机硬件（目前为玩客云和 X64 兼容机）和PiKVM软件的硬件级远程控制项目。KVM over IP 可以远程管理服务器或工作站，实现无侵入式控制，无论被控机为什么操作系统或是否安装了操作系统，具有更广泛的适用性。此项目基于 [PiKVM](https://github.com/pikvm/pikvm)，和基于远控软件的远程管理方式不同，无需在被控电脑安装任何软件，实现无侵入式控制。
 
-
-**功能特性**
-
-主要功能比较，TinyPilot 社区版本、PiKVMv3 版本出现在这里仅做比较目的。
-|      功能      |         One-KVM         | TinyPilot 社区版本 | PiKVMv3版本  |
-| :------------: | :---------------------: | :----------------: | :----------: |
-| HTML5界面语言  |        简体中文         |        英文        |     英文     |
-|    BIOS控制    |            √            |         √          |      √       |
-|    视频捕捉    |            √            |         √          |      √       |
-|    音频捕捉    |            ×            |         √          |      √       |
-|  鼠键捕获类型  |       OTG CH9329        |        OTG         |  OTG CH9329  |
-|  从剪贴板粘贴  |            √            |         √          |      √       |
-|    OCR识别     |            √            |         ×          |      √       |
-|    LAN唤醒     |            √            |         ×          |      √       |
-|    VNC支持     |            √            |         ×          |      √       |
-|    HDMI环出    | √（含HDMI设备初步支持） |         ×          |      ×       |
-| 虚拟存储驱动器 |  √（仅含OTG设备支持）   |         ×          |      √       |
-|   ATX开关机    |  √（仅含GPIO设备支持）  |         ×          |      √       |
-|    板载WiFi    |            ×            |         √          |      √       |
-|   视频流格式   | MJPEG  H.264（软编码）  |    MJPEG, H.264    | MJPEG, H.264 |
-| 最大视频分辨率 |        1920x1080        |     1920x1080      |  1920x1080   |
-
-
 ### 快速开始
 
 **方式一：直刷 One-KVM 镜像**
@@ -56,6 +33,27 @@ docker run -itd -p443:443 -p80:80 --name pikvm-docker --device=/dev/ttyUSB0:/dev
 ```
 
 详细内容可以参照 [One-KVM文档](https://one-kvm.mofeng.run/)。
+
+### 功能特性
+
+主要功能比较，TinyPilot 社区版本、PiKVMv3 版本出现在这里仅做比较目的。
+|      功能      |         One-KVM         | TinyPilot 社区版本 | PiKVMv3版本  |
+| :------------: | :---------------------: | :----------------: | :----------: |
+| HTML5界面语言  |        简体中文         |        英文        |     英文     |
+|    BIOS控制    |            √            |         √          |      √       |
+|    视频捕捉    |            √            |         √          |      √       |
+|    音频捕捉    |            ×            |         √          |      √       |
+|  鼠键捕获类型  |       OTG CH9329        |        OTG         |  OTG CH9329  |
+|  从剪贴板粘贴  |            √            |         √          |      √       |
+|    OCR识别     |            √            |         ×          |      √       |
+|    LAN唤醒     |            √            |         ×          |      √       |
+|    VNC支持     |            √            |         ×          |      √       |
+|    HDMI环出    | √（含HDMI设备初步支持） |         ×          |      ×       |
+| 虚拟存储驱动器 |  √（仅含OTG设备支持）   |         ×          |      √       |
+|   ATX开关机    |  √（仅含GPIO设备支持）  |         ×          |      √       |
+|    板载WiFi    |            ×            |         √          |      √       |
+|   视频流格式   | MJPEG  H.264（软编码）  |    MJPEG, H.264    | MJPEG, H.264 |
+| 最大视频分辨率 |        1920x1080        |     1920x1080      |  1920x1080   |
 
 ### 其他
 
@@ -101,3 +99,4 @@ Will
 1. [pikvm/pikvm: Open and inexpensive DIY IP-KVM based on Raspberry Pi (github.com)](https://github.com/pikvm/pikvm)
 2. [hzyitc/armbian-onecloud: Armbian for onecloud. 玩客云用armbian (github.com)](https://github.com/hzyitc/armbian-onecloud/)
 3. [jacobbar/fruity-pikvm: Install Pi-KVM on debian SBCs such as Orange Pi, Banana Pi, Mango Pi, etc (github.com)](https://github.com/jacobbar/fruity-pikvm)
+4. [kvmd-armbian/install.sh at master · srepac/kvmd-armbian (github.com)](https://github.com/srepac/kvmd-armbian/blob/master/install.sh)

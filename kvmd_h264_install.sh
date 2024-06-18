@@ -49,15 +49,19 @@ EOF
   #修改原有kvmd代码和配置文件
   sed -i '17s/.*/ExecStart=\/usr\/bin\/janus --disable-colors --configs-folder=\/etc\/kvmd\/janus2/' /lib/systemd/system/kvmd-janus-static.service
   sed -i 's/janus.plugin.ustreamer/janus.plugin.streaming/' /usr/share/kvmd/web/share/js/kvm/stream_janus.js
-  sed -i '293c \/\/' /usr/share/kvmd/web/share/js/kvm/stream_janus.js
+  sed -i '324c \/\/' /usr/share/kvmd/web/share/js/kvm/stream_janus.js
   sed -i 's/request\": \"watch\", \"p/request\": \"watch\", \"id\" : 1, \"p/' /usr/share/kvmd/web/share/js/kvm/stream_janus.js
   #补全网页JS文件并添加相应脚本
-  mkdir /usr/share/janus/javascript/
-  cp -f ./web/adapter.js /usr/share/janus/javascript/ && cp -f ./web/janus.js /usr/share/janus/javascript/
-  cp -f ./patch/stream.sh /usr/share/kvmd/ && cp -f ./patch/stream_when_ustream_exists.sh /usr/share/kvmd/ && chmod +x /usr/share/kvmd/stream.sh /usr/share/kvmd/stream_when_ustream_exists.sh
+  if [ ! -e /usr/share/janus/javascript/adapter.js ]; then 
+    mkdir /usr/share/janus/javascript/
+    cp -f ./patches/adapter.js /usr/share/janus/javascript/ && cp -f ./patches/janus.js /usr/share/janus/javascript/
+  fi
+  cp -f ./patches/stream.sh /usr/share/kvmd/ && cp -f ./patches/stream_when_ustream_exists.sh /usr/share/kvmd/ && chmod +x /usr/share/kvmd/stream.sh /usr/share/kvmd/stream_when_ustream_exists.sh
   #启动服务
-  systemctl enable kvmd-ffmpeg && systemctl enable kvmd-janus-static
-  systemctl start kvmd-ffmpeg && systemctl start kvmd-janus-static
+  systemctl daemon-reload
+  ! $NOTCHROOT || systemctl enable kvmd-ffmpeg && systemctl enable kvmd-janus-static
+  ! $NOTCHROOT || systemctl start kvmd-ffmpeg && systemctl start kvmd-janus-static
+  echo "配置完成"
 }
 
 kvmd_ffmpeg_h-264

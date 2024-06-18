@@ -21,16 +21,19 @@ RestartSec=3
 AmbientCapabilities=CAP_NET_RAW
 LimitNOFILE=65536
 UMask=0117
-ExecStart=/usr/share/kvmd/display_when_ustream_exists.sh
+ExecStart=/usr/share/kvmd/display.sh
 TimeoutStopSec=10
 KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target
 EOF
-  cp -f ./patch/stream.sh /usr/share/kvmd/ && cp -f ./patch/stream_when_ustream_exists.sh /usr/share/kvmd/ && chmod +x /usr/share/kvmd/stream.sh /usr/share/kvmd/stream_when_ustream_exists.sh
+  cp -f ./patches/display.sh /usr/share/kvmd/ && chmod +x /usr/share/kvmd/display.sh
   #启动服务
-  systemctl enable kvmd-display && systemctl start kvmd-display
+  systemctl daemon-reload
+  ! $NOTCHROOT || systemctl enable kvmd-display
+  ! $NOTCHROOT || systemctl start kvmd-display
+  echo "配置完成"
 }
 
 kvmd_display
