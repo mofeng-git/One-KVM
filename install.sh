@@ -218,7 +218,7 @@ install-kvmd-pkgs() {
       apt-get install janus janus-dev -y >> $LOGFILE
     fi
   fi
-
+  cp -f ${APP_PATH}/patches/main.yaml /etc/kvmd/
   cd ${APP_PATH}
 } # end install-kvmd-pkgs
 
