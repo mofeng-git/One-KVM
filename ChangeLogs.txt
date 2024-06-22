@@ -1,4 +1,6 @@
 更新日志
+- V0.61：对于用户：KVMD主程序从3.198升级至3.291，Ustreamer升级至6.12，Linux内核升级至6.6.34-current-meson；支持CH9329键鼠驱动；网页界面和翻译的优化；实装h.264视频转码服务，可手动开启：systemctl start kvmd-ffmpeg；对于开发者：基于srepac/kvmd-armbian项目重构安装脚本，主程序和依赖软件版本升级；资源本地化，减小网络原因的影响；添加kvmd-ffmpeg和kvmd-display服务及服务安装脚本；内核去除2.2G CD-ROM镜像文件限制（暂未做软件适配）
+- V0.58: 增强通用性，取消内核和设备树修改，系统配置操作放在/etc/rc.local，修改便捷；更新内核至 6.6.32-current-meson
 - V0.57: [build]mac固定，第一次启动时随机生成；解决armbain源因密钥无法使用；解决sd启动配置问题
 - V0.56：[Build-Armbian]回退5.9内核版本（V0.52），目前运行最稳定的内核版本；支持docker;此前高内核的累积更新
 - V0.55: [build]使用lanlan Uboot，通电按重置键可进入线刷模式；HDM可用，WIFI模块已编译；预装armbian-config实用工具；Webterm和VNC修复（tighervnc存在兼容问题，可尝试使用uvnc viewer），添加状态信息显示

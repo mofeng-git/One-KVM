@@ -4,7 +4,7 @@
 
 ### 介绍
 
-One-KVM 是基于经济计算机硬件（目前为玩客云和 X64 兼容机）和PiKVM软件的硬件级远程控制项目。KVM over IP 可以远程管理服务器或工作站，实现无侵入式控制，无论被控机为什么操作系统或是否安装了操作系统，具有更广泛的适用性。此项目基于 [PiKVM](https://github.com/pikvm/pikvm)，和基于远控软件的远程管理方式不同，无需在被控电脑安装任何软件，实现无侵入式控制。
+One-KVM 是基于廉价计算机硬件（目前为玩客云和 X64 兼容机）和PiKVM软件的硬件级远程控制项目。KVM over IP 可以远程管理服务器或工作站，实现无侵入式控制，无论被控机为什么操作系统或是否安装了操作系统，具有更广泛的适用性。此项目基于 [PiKVM](https://github.com/pikvm/pikvm)，和基于远控软件的远程管理方式不同，无需在被控电脑安装任何软件，实现无侵入式控制。
 
 ### 快速开始
 
@@ -14,17 +14,29 @@ One-KVM 是基于经济计算机硬件（目前为玩客云和 X64 兼容机）�
 
 **方式二：One-KVM 脚本安装**
 
-
+适用于 arm 设备，在玩客云上经过测试。
 ```bash
-git clone https://github.com/mofeng-git/One-KVM.git
+git clone --depth=1 https://github.com/mofeng-git/One-KVM.git
 cd One-KVM
-bash install.sh
+sudo bash install.sh
 #第一阶段安装完成需要重启，再进行第二阶段安装
-bash install.sh
+sudo bash install.sh
 
 #可选功能：H.264 视频编码
-bash kvmd_h264_install.sh
+sudo bash kvmd_h264_install.sh
 ```
+适用于 X86 设备，在 X64 主机上经过测试。
+```bash
+git clone --depth=1 https://github.com/mofeng-git/One-KVM.git
+cd One-KVM
+sudo bash install-x86.sh
+#第一阶段安装完成需要重启，再进行第二阶段安装
+sudo bash install-x86.sh
+
+#可选功能：H.264 视频编码
+sudo bash kvmd_h264_install.sh
+```
+
 **方式三：Docker 镜像部署**
 
 目前仅有 pikvm-ch9329_amd64，后续将支持更多控制方式和处理器架构。
@@ -58,6 +70,7 @@ docker run -itd -p443:443 -p80:80 --name pikvm-docker --device=/dev/ttyUSB0:/dev
 
 ### 已测试设备
  - 玩客云
+ - X64 主机
 
  此脚本删除了对上游对树莓派设备的支持，如有需要请访问 [srepac/kvmd-armbian](https://github.com/srepac/kvmd-armbian/blob/master/install.sh)。
 
@@ -96,7 +109,11 @@ Will
 
 观棋不语٩ ི۶
 
-以及各位讨论交流的网友
+a57a4
+
+2c769
+
+......
 </details>
 
 **更新日志**
