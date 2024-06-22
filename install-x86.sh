@@ -690,7 +690,7 @@ x86-fix-3.256() {
   #mv hw.py.1 hw.py
   cp -f ${APP_PATH}/patches/hw.py hw.py
 
-  cp -f ${APP_PATH}patches/main.yaml /etc/kvmd/
+  cp -f ${APP_PATH}/patches/main.yaml /etc/kvmd/
 
 } # end x86-fix-3.256
 
