@@ -34,6 +34,9 @@ kvmd:
             long_press:
                 type: cmd
                 cmd: [/usr/bin/sudo, onecloud_gpio.sh, long]
+            reset_press:
+                type: cmd
+                cmd: [/usr/bin/sudo, onecloud_gpio.sh, reset]
         scheme:
             wol_server1:
                 driver: wol_server1
@@ -50,6 +53,11 @@ kvmd:
                 pin: 0
                 mode: output
                 switch: false
+            reset_button:
+                driver: reset_press
+                pin: 0
+                mode: output
+                switch: false
         view:
             header:
                 title: 电源管理
@@ -58,6 +66,7 @@ kvmd:
                 - []
                 - ["#短按（开/关机）:", short_button|按下]
                 - ["#长按（强制关机）:", long_button|按下]
+                - ["#重启:", reset_button|按下]
                 - []
                 - ["#网络唤醒"]
                 - ["#被控机设备", wol_server1|网络唤醒]
