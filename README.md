@@ -42,7 +42,7 @@ sudo bash kvmd_h264_install.sh
 目前仅有 pikvm-ch9329_amd64，后续将支持更多控制方式和处理器架构。
 ```bash
 #使用示例：
-docker run -itd -p443:443 -p80:80 --name pikvm-docker --device=/dev/ttyUSB0:/dev/kvmd-hid --device=/dev/video0:/dev/kvmd-video pikvm-ch9329:0.61
+docker run -itd -p443:443 -p80:80 --name pikvm-docker --device=/dev/ttyUSB0:/dev/kvmd-hid --device=/dev/video0:/dev/kvmd-video silentwind0/pikvm-ch9329:0.61
 ```
 
 详细内容可以参照 [One-KVM文档](https://one-kvm.mofeng.run/)。
