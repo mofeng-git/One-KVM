@@ -253,8 +253,12 @@ for _variant in "${_variants[@]}"; do
 		fi
 
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
-			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex)
+			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex etc/kvmd/switch-edid.hex)
 			install -DTm444 configs/kvmd/edid/$_base.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
+			ln -s tc358743-edid.hex /etc/kvmd/switch-edid.hex
+		else
+			backup=(\"\${backup[@]}\" etc/kvmd/switch-edid.hex)
+			install -DTm444 configs/kvmd/edid/_no-1920x1200.hex \"\$pkgdir/etc/kvmd/switch-edid.hex\"
 		fi
 
 		mkdir -p \"\$pkgdir/usr/share/kvmd\"

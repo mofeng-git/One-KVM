@@ -25,7 +25,8 @@
 button:enabled:hover,
 select:not([size]):enabled:hover,
 input[type=file]:enabled:hover::-webkit-file-selector-button,
-input[type=file]:enabled:hover::file-selector-button {
+input[type=file]:enabled:hover::file-selector-button,
+input[type=color]:enabled:hover {
 	color: var(--cs-control-hovered-fg);
 	background-color: var(--cs-control-hovered-bg);
 }
@@ -33,7 +34,8 @@ input[type=file]:enabled:hover::file-selector-button {
 button:active,
 select:not([size]):active,
 input[type=file]:active::-webkit-file-selector-button,
-input[type=file]:active::file-selector-button {
+input[type=file]:active::file-selector-button,
+input[type=color]:active {
 	color: var(--cs-control-pressed-fg) !important;
 	background-color: var(--cs-control-pressed-bg) !important;
 }
@@ -60,12 +62,12 @@ div.radio-box input[type=radio]:not(:checked):not(:disabled) + label:hover {
 /* ===== slider.css ===== */
 
 /*div.switch-box label span.switch-inner:not(:disabled):hover::before {*/
-input[type=range].slider:not(:disabled):hover::-webkit-slider-runnable-track {
+input[type=range]:not(:disabled):hover::-webkit-slider-runnable-track {
 	background-color: var(--cs-control-hovered-bg);
 }
 
 /*div.switch-box label span.switch-inner:not(:disabled):hover::before {*/
-input[type=range].slider:not(:disabled):hover::-moz-range-track {
+input[type=range]:not(:disabled):hover::-moz-range-track {
 	background-color: var(--cs-control-hovered-bg);
 }
 

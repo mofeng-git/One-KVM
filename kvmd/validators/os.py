@@ -26,6 +26,7 @@ import stat
 from typing import Any
 
 from . import raise_error
+from . import filter_printable
 
 from .basic import valid_number
 from .basic import valid_string_list
@@ -75,9 +76,7 @@ def valid_abs_dir(arg: Any, name: str="") -> str:
 def valid_printable_filename(arg: Any, name: str="") -> str:
     if not name:
         name = "printable filename"
-
     arg = valid_stripped_string_not_empty(arg, name)
-
     if (
         "/" in arg
         or "\0" in arg
@@ -85,12 +84,7 @@ def valid_printable_filename(arg: Any, name: str="") -> str:
         or arg == "lost+found"
     ):
         raise_error(arg, name)
-
-    arg = "".join(
-        (ch if ch.isprintable() else "_")
-        for ch in arg[:255]
-    )
-    return arg
+    return filter_printable(arg, "_", 255)
 
 
 # =====

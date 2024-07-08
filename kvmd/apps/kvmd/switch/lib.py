@@ -1,4 +1,4 @@
-/*****************************************************************************
+# ========================================================================== #
 #                                                                            #
 #    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
@@ -17,62 +17,19 @@
 #    You should have received a copy of the GNU General Public License       #
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
 #                                                                            #
-*****************************************************************************/
+# ========================================================================== #
 
 
-div.modal {
-	visibility: hidden;
-	position: fixed;
-	left: 0;
-	top: 0;
-	width: 100%;
-	height: 100%;
-	background-color: rgb(0, 0, 0);
-	background-color: rgba(0, 0, 0, 0.5);
-	z-index: 2147483647;
-}
+# pylint: disable=unused-import
 
-div.modal div.modal-window {
-	display: table;
-	outline: none;
-	margin: 15% auto;
-	overflow: hidden;
-	border: var(--border-window-default-2px);
-	border-radius: 8px;
-	box-sizing: border-box;
-	box-shadow: var(--shadow-big);
-	background-color: var(--cs-window-default-bg);
-	padding: 0;
-}
-div.modal div.modal-window-active {
-	border: var(--border-window-active-2px) !important;
-}
+from ....logging import get_logger  # noqa: F401
 
-div.modal div.modal-window div.modal-header {
-	text-align: center;
-	font-weight: bold;
-	padding: 3px 9px 3px 9px;
-	border-bottom: var(--border-default-thin);
-}
-
-div.modal div.modal-window div.modal-content {
-	max-width: 500px;
-	max-height: 500px;
-	padding: 16px 9px 16px 9px;
-}
-
-div.modal div.modal-window div.modal-buttons {
-	border-top: var(--border-control-thin);
-	display: flex;
-	margin: 0;
-	padding: 0;
-	font-size: 0;
-	width: 100%;
-}
-
-div.modal div.modal-window div.modal-buttons button {
-	box-shadow: none;
-	border: none;
-	border-radius: 0;
-	height: 40px;
-}
+from .... import tools  # noqa: F401
+from .... import aiotools  # noqa: F401
+from .... import aioproc  # noqa: F401
+from .... import bitbang  # noqa: F401
+from .... import htclient  # noqa: F401
+from ....inotify import Inotify  # noqa: F401
+from ....errors import OperationError  # noqa: F401
+from ....edid import EdidNoBlockError as ParsedEdidNoBlockError  # noqa: F401
+from ....edid import Edid as ParsedEdid  # noqa: F401

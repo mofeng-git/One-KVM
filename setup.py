@@ -83,6 +83,7 @@ def main() -> None:
             "kvmd.clients",
             "kvmd.apps",
             "kvmd.apps.kvmd",
+            "kvmd.apps.kvmd.switch",
             "kvmd.apps.kvmd.info",
             "kvmd.apps.kvmd.api",
             "kvmd.apps.pst",

@@ -35,6 +35,7 @@ from .ugpio import UserGpio
 from .streamer import Streamer
 from .snapshoter import Snapshoter
 from .ocr import Ocr
+from .switch import Switch
 from .server import KvmdServer
 
 
@@ -90,6 +91,10 @@ def main(argv: (list[str] | None)=None) -> None:
         log_reader=(LogReader() if config.log_reader.enabled else None),
         user_gpio=UserGpio(config.gpio, global_config.otg),
         ocr=Ocr(**config.ocr._unpack()),
+        switch=Switch(
+            pst_unix_path=global_config.pst.server.unix,
+            **config.switch._unpack(),
+        ),
 
         hid=hid,
         atx=get_atx_class(config.atx.type)(**config.atx._unpack(ignore=["type"])),

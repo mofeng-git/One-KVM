@@ -78,7 +78,7 @@ export var tools = new function() {
 	};
 
 	self.partial = function(func, ...args) {
-		return () => func(...args);
+		return (...rest) => func(...args, ...rest);
 	};
 
 	self.upperFirst = function(text) {
@@ -102,10 +102,6 @@ export var tools = new function() {
 		min = Math.ceil(min);
 		max = Math.floor(max);
 		return Math.floor(Math.random() * (max - min + 1)) + min;
-	};
-
-	self.formatHex = function(value) {
-		return `0x${value.toString(16).toUpperCase()}`;
 	};
 
 	self.formatSize = function(size) {

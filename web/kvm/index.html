@@ -139,7 +139,7 @@
           </div>
         </li>
       </div>
-      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg"><span>System</span></a>
+      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="/share/svg/led-video.svg"><img class="led-gray" id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg"><span>System</span></a>
         <div class="menu" id="system-menu">
           <table class="kv">
             <tr>
@@ -792,7 +792,7 @@
           <hr>
           <div class="buttons">
             <div class="buttons-row">
-              <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
+              <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
               <button class="row50" data-force-hide-menu data-shortcut="MetaLeft">&bull; Left Win</button>
             </div>
             <hr>
@@ -866,6 +866,36 @@
       </li>
       <li class="right feature-disabled" id="gpio-dropdown"><a class="menu-button" id="gpio-menu-button" href="#"><span>GPIO</span></a>
         <div class="menu" id="gpio-menu"></div>
+      </li>
+      <li class="right feature-disabled" id="switch-dropdown"><a class="menu-button" id="switch-menu-button" href="#"><img class="led-gray" id="switch-atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" id="switch-atx-hdd-led" src="/share/svg/led-atx-hdd.svg"><span>Switch <i><sub id="switch-active-port"></sub></i></span></a>
+        <div class="menu" id="switch-menu">
+          <table style="border-spacing: 0px;">
+            <tr>
+              <td>
+                <div class="text"><b><a target="_blank" href="https://docs.pikvm.org/switch">PiKVM Switch</a> is attached<br></b><sub>Select a port or perform any available action like ATX click</sub></div>
+              </td>
+              <td>
+                <div class="text">
+                  <button class="small" data-force-hide-menu data-show-window="switch-window">&bull; Settings</button>
+                </div>
+              </td>
+            </tr>
+          </table>
+          <hr>
+              <table class="kv">
+                <tr>
+                      <td>Ask ATX click confirmation:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input checked type="checkbox" id="switch-atx-ask-switch">
+                          <label for="switch-atx-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+              </table>
+          <hr>
+          <table class="kv" id="switch-chain"></table>
+        </div>
       </li>
     </ul>
     <div class="window" id="stream-ocr-window">
@@ -1150,7 +1180,7 @@
           </div>
           <div class="keypad-row">
                 <div class="key wide-2 left small" data-code="CapsLock">
-                  <div class="label"><img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
                   </div>
                 </div>
                 <div class="spacer"></div>
@@ -1325,7 +1355,7 @@
                 </div>
                 <div class="spacer-fixed"></div>
                 <div class="key small" data-code="ScrollLock">
-                  <div class="label"><img class="inline-lamp hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
                   </div>
                 </div>
                 <div class="spacer-fixed"></div>
@@ -1421,7 +1451,7 @@
           <hr>
           <div class="keypad-row">
                 <div class="key small" data-code="NumLock">
-                  <div class="label"><img class="inline-lamp hid-keyboard-num-led led-gray" src="/share/svg/led-square.svg"><br> NmLk
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-num-led led-gray" src="/share/svg/led-square.svg"><br> NmLk
                   </div>
                 </div>
                 <div class="spacer-fixed"></div>
@@ -1627,7 +1657,7 @@
                 </div>
                 <div class="spacer"></div>
                 <div class="key small" data-code="ScrollLock">
-                  <div class="label"><img class="inline-lamp hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
                   </div>
                 </div>
                 <div class="spacer"></div>
@@ -1800,7 +1830,7 @@
           </div>
           <div class="keypad-row">
                 <div class="key wide-2 left small" data-code="CapsLock">
-                  <div class="label"><img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
                   </div>
                 </div>
                 <div class="spacer"></div>
@@ -1997,6 +2027,170 @@
                 </div>
           </div>
         </div>
+      </div>
+    </div>
+    <div class="window" id="switch-window" style="width:min-content">
+      <div class="window-header">
+        <div class="window-grab">Switch settings</div>
+        <button class="window-button-close"><b>&times;</b></button>
+      </div>
+      <div class="tabs-box">
+            <input checked type="radio" name="switch-tab-button" id="switch-tab-edid-button">
+            <label for="switch-tab-edid-button">EDIDs collection</label>
+            <div class="tab">
+              <table>
+                <tr>
+                  <td colspan="2">
+                    <select id="switch-edid-selector" size="8"></select>
+                  </td>
+                  <td rowspan="2" style="vertical-align:top">
+                    <table class="kv">
+                      <tr>
+                        <td>Manufacturer:</td>
+                        <td class="value" id="switch-edid-info-mfc-id"></td>
+                      </tr>
+                      <tr>
+                        <td>Product ID:</td>
+                        <td class="value" id="switch-edid-info-product-id"></td>
+                      </tr>
+                      <tr>
+                        <td>Serial:</td>
+                        <td class="value" id="switch-edid-info-serial"></td>
+                      </tr>
+                      <tr>
+                        <td>Monitor name:</td>
+                        <td class="value" id="switch-edid-info-monitor-name"></td>
+                      </tr>
+                      <tr>
+                        <td>Extra serial:</td>
+                        <td class="value" id="switch-edid-info-monitor-serial"></td>
+                      </tr>
+                      <tr>
+                        <td>Audio enabled:</td>
+                        <td class="value" id="switch-edid-info-audio"></td>
+                      </tr>
+                      <tr>
+                        <td>Data:</td>
+                        <td>
+                          <button class="small" disabled id="switch-edid-copy-data-button">Copy</button>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <button id="switch-edid-add-button">Add new</button>
+                  </td>
+                  <td style="float:right">
+                    <button disabled id="switch-edid-remove-button">Remove</button>
+                  </td>
+                </tr>
+              </table>
+            </div>
+            <input type="radio" name="switch-tab-button" id="switch-tab-colors-button">
+            <label for="switch-tab-colors-button">Color scheme</label>
+            <div class="tab">
+              <table>
+                <!--tr
+                td Role
+                td Color
+                td Brightness
+                td
+                td Reset
+                -->
+                <!--trtd 
+                <hr>
+                td 
+                <hr>
+                td 
+                <hr>
+                td
+                td 
+                <hr>
+                -->
+                <tr>
+                  <td style="white-space: nowrap">Selected port:</td>
+                  <td>
+                    <input type="color" id="switch-color-active-input">
+                  </td>
+                  <td>
+                    <input type="range" id="switch-color-active-brightness-slider" style="min-width:150px">
+                  </td>
+                  <td>&nbsp;&nbsp;&nbsp;</td>
+                  <td>
+                    <button class="small" id="switch-color-active-default-button" title="Reset default">&#8635;</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="white-space: nowrap">Inactive port:</td>
+                  <td>
+                    <input type="color" id="switch-color-inactive-input">
+                  </td>
+                  <td>
+                    <input type="range" id="switch-color-inactive-brightness-slider" style="min-width:150px">
+                  </td>
+                  <td>&nbsp;&nbsp;&nbsp;</td>
+                  <td>
+                    <button class="small" id="switch-color-inactive-default-button" title="Reset default">&#8635;</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="white-space: nowrap">Blinking beacon:</td>
+                  <td>
+                    <input type="color" id="switch-color-beacon-input">
+                  </td>
+                  <td>
+                    <input type="range" id="switch-color-beacon-brightness-slider" style="min-width:150px">
+                  </td>
+                  <td>&nbsp;&nbsp;&nbsp;</td>
+                  <td>
+                    <button class="small" id="switch-color-beacon-default-button" title="Reset default">&#8635;</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <hr>
+                  </td>
+                  <td>
+                    <hr>
+                  </td>
+                  <td>
+                    <hr>
+                  </td>
+                  <td></td>
+                  <td>
+                    <hr>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="white-space: nowrap">Flashing downlink:</td>
+                  <td>
+                    <input type="color" id="switch-color-flashing-input">
+                  </td>
+                  <td>
+                    <input type="range" id="switch-color-flashing-brightness-slider" style="min-width:150px">
+                  </td>
+                  <td>&nbsp;&nbsp;&nbsp;</td>
+                  <td>
+                    <button class="small" id="switch-color-flashing-default-button" title="Reset default">&#8635;</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="white-space: nowrap">Bootloader mode:</td>
+                  <td>
+                    <input type="color" id="switch-color-bootloader-input">
+                  </td>
+                  <td>
+                    <input type="range" id="switch-color-bootloader-brightness-slider" style="min-width:150px">
+                  </td>
+                  <td>&nbsp;&nbsp;&nbsp;</td>
+                  <td>
+                    <button class="small" id="switch-color-bootloader-default-button" title="Reset default">&#8635;</button>
+                  </td>
+                </tr>
+              </table>
+            </div>
       </div>
     </div>
     <div class="window" id="about-window">

@@ -66,6 +66,7 @@ from .ugpio import UserGpio
 from .streamer import Streamer
 from .snapshoter import Snapshoter
 from .ocr import Ocr
+from .switch import Switch
 
 from .api.auth import AuthApi
 from .api.auth import check_request_auth
@@ -77,6 +78,7 @@ from .api.hid import HidApi
 from .api.atx import AtxApi
 from .api.msd import MsdApi
 from .api.streamer import StreamerApi
+from .api.switch import SwitchApi
 from .api.export import ExportApi
 from .api.redfish import RedfishApi
 
@@ -125,7 +127,6 @@ class _Subsystem:
             cleanup=getattr(obj, "cleanup", None),
             trigger_state=getattr(obj, "trigger_state", None),
             poll_state=getattr(obj, "poll_state", None),
-
         )
 
 
@@ -137,6 +138,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     __EV_STREAMER_STATE = "streamer_state"
     __EV_OCR_STATE = "ocr_state"
     __EV_INFO_STATE = "info_state"
+    __EV_SWITCH_STATE = "switch_state"
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
@@ -145,6 +147,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         log_reader: (LogReader | None),
         user_gpio: UserGpio,
         ocr: Ocr,
+        switch: Switch,
 
         hid: BaseHid,
         atx: BaseAtx,
@@ -177,6 +180,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             AtxApi(atx),
             MsdApi(msd),
             StreamerApi(streamer, ocr),
+            SwitchApi(switch),
             ExportApi(info_manager, atx, user_gpio),
             RedfishApi(info_manager, atx),
         ]
@@ -189,6 +193,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             _Subsystem.make(streamer,     "Streamer",     self.__EV_STREAMER_STATE),
             _Subsystem.make(ocr,          "OCR",          self.__EV_OCR_STATE),
             _Subsystem.make(info_manager, "Info manager", self.__EV_INFO_STATE),
+            _Subsystem.make(switch,       "Switch",       self.__EV_SWITCH_STATE),
         ]
 
         self.__streamer_notifier = aiotools.AioNotifier()

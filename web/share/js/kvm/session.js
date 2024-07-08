@@ -34,6 +34,7 @@ import {Msd} from "./msd.js";
 import {Streamer} from "./stream.js";
 import {Gpio} from "./gpio.js";
 import {Ocr} from "./ocr.js";
+import {Switch} from "./switch.js";
 
 
 export function Session() {
@@ -54,6 +55,7 @@ export function Session() {
 	var __msd = new Msd();
 	var __gpio = new Gpio(__recorder);
 	var __ocr = new Ocr(__streamer.getGeometry);
+	var __switch = new Switch();
 
 	var __info_hw_state = null;
 	var __info_fan_state = null;
@@ -368,9 +370,24 @@ export function Session() {
 			case "hid_state": __hid.setState(data.event); break;
 			case "hid_keymaps_state": __paste.setState(data.event); break;
 			case "atx_state": __atx.setState(data.event); break;
-			case "msd_state": __msd.setState(data.event); break;
 			case "streamer_state": __streamer.setState(data.event); break;
 			case "ocr_state": __ocr.setState(data.event); break;
+
+			case "msd_state":
+				if (data.event.online === false) {
+					__switch.setMsdConnected(false);
+				} else if (data.event.drive !== undefined) {
+					__switch.setMsdConnected(data.event.drive.connected);
+				}
+				__msd.setState(data.event);
+				break;
+
+			case "switch_state":
+				if (data.event.model) {
+					__atx.setHasSwitch(data.event.model.ports.length > 0);
+				}
+				__switch.setState(data.event);
+				break;
 		}
 	};
 
@@ -401,6 +418,7 @@ export function Session() {
 		__streamer.setState(null);
 		__ocr.setState(null);
 		__recorder.setSocket(null);
+		__switch.setState(null);
 		__ws = null;
 
 		setTimeout(function() {
