@@ -132,7 +132,7 @@ export function Session() {
 		if (__info_hw_state !== null) {
 			html += `
 				Platform:
-				${__formatPlatform(__info_hw_state.platform)}
+				${__formatMisc(__info_hw_state)}
 				<hr>
 				Temperature:
 				${__formatTemp(__info_hw_state.health.temp)}
@@ -153,8 +153,13 @@ export function Session() {
 		$("about-hardware").innerHTML = html;
 	};
 
-	var __formatPlatform = function(state) {
-		return __formatUl([["Base", state.base], ["Serial", state.serial]]);
+	var __formatMisc = function(state) {
+		return __formatUl([
+			["Base", state.platform.base],
+			["Serial", state.platform.serial],
+			["CPU", `${state.health.cpu.percent}%`],
+			["MEM", `${state.health.mem.percent}%`],
+		]);
 	};
 
 	var __formatFan = function(state) {
