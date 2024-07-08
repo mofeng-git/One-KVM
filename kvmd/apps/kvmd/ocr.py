@@ -145,12 +145,12 @@ class Ocr:
                         if left < right and top < bottom:
                             image_cropped = image.crop((left, top, right, bottom))
                             image.close()
-                            image = image_cropped
+                            image = image_cropped  # type: ignore
 
                     ImageOps.grayscale(image)
                     image_resized = image.resize((int(image.size[0] * 2), int(image.size[1] * 2)), PilImage.Resampling.BICUBIC)
                     image.close()
-                    image = image_resized
+                    image = image_resized  # type: ignore
 
                     _libtess.TessBaseAPISetImage(api, image.tobytes("raw", "RGB"), image.width, image.height, 3, image.width * 3)
                     text_ptr = None
