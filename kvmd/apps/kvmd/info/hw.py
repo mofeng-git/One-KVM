@@ -27,6 +27,8 @@ from typing import Callable
 from typing import AsyncGenerator
 from typing import TypeVar
 
+import psutil
+
 from ....logging import get_logger
 
 from .... import env
@@ -57,11 +59,17 @@ class HwInfoSubmanager(BaseInfoSubmanager):
         self.__dt_cache: dict[str, str] = {}
 
     async def get_state(self) -> dict:
-        (model, serial, cpu_temp, throttling) = await asyncio.gather(
+        (
+            model, serial, throttling,
+            cpu_percent, cpu_temp,
+            (mem_percent, mem_total, mem_available),
+        ) = await asyncio.gather(
             self.__read_dt_file("model"),
             self.__read_dt_file("serial-number"),
-            self.__get_cpu_temp(),
             self.__get_throttling(),
+            self.__get_cpu_percent(),
+            self.__get_cpu_temp(),
+            self.__get_mem(),
         )
         return {
             "platform": {
@@ -72,6 +80,14 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             "health": {
                 "temp": {
                     "cpu": cpu_temp,
+                },
+                "cpu": {
+                    "percent": cpu_percent,
+                },
+                "mem": {
+                    "percent": mem_percent,
+                    "total": mem_total,
+                    "available": mem_available,
                 },
                 "throttling": throttling,
             },
@@ -105,6 +121,33 @@ class HwInfoSubmanager(BaseInfoSubmanager):
         except Exception as err:
             get_logger(0).error("Can't read CPU temp from %s: %s", temp_path, err)
             return None
+
+    async def __get_cpu_percent(self) -> (float | None):
+        try:
+            st = psutil.cpu_times_percent()
+            user = st.user - st.guest
+            nice = st.nice - st.guest_nice
+            idle_all = st.idle + st.iowait
+            system_all = st.system + st.irq + st.softirq
+            virtual = st.guest + st.guest_nice
+            total = max(1, user + nice + system_all + idle_all + st.steal + virtual)
+            return int(
+                st.nice / total * 100
+                + st.user / total * 100
+                + system_all / total * 100
+                + (st.steal + st.guest) / total * 100
+            )
+        except Exception as err:
+            get_logger(0).error("Can't get CPU percent: %s", err)
+            return None
+
+    async def __get_mem(self) -> (tuple[float, int, int] | tuple[None, None, None]):
+        try:
+            st = psutil.virtual_memory()
+            return (st.percent, st.total, st.available)
+        except Exception as err:
+            get_logger(0).error("Can't get memory info: %s", err)
+            return (None, None, None)
 
     async def __get_throttling(self) -> (dict | None):
         # https://www.raspberrypi.org/forums/viewtopic.php?f=63&t=147781&start=50#p972790
