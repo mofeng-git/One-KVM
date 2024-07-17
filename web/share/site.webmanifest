@@ -1,6 +1,7 @@
 {
-	"name": "",
-	"short_name": "",
+	"name": "PiKVM",
+	"short_name": "PiKVM",
+	"start_url": "/",
 	"icons": [
 		{
 			"src": "/share/android-chrome-192x192.png",
