@@ -261,11 +261,15 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             await self._write_reason("refusing security type reason", msg)
             raise RfbError(msg)
 
-        await self._write_struct("security types", "B" + "B" * len(sec_types), len(sec_types), *sec_types)  # Keep dict priority
+        if self.__rfb_version > 3:
+            await self._write_struct("security types", "B" + "B" * len(sec_types), len(sec_types), *sec_types)  # Keep dict priority
 
-        sec_type = await self._read_number("selected security type", "B")
-        if sec_type not in sec_types:
-            raise RfbError(f"Invalid security type: {sec_type}")
+            sec_type = await self._read_number("selected security type", "B")
+            if sec_type not in sec_types:
+                raise RfbError(f"Invalid security type: {sec_type}")
+        else:
+            sec_type = min(sec_types.keys())
+            await self._write_struct("selected security type", "L", sec_type)
 
         (sec_name, handler) = sec_types[sec_type]
         get_logger(0).info("%s [main]: Using %s security type", self._remote, sec_name)
