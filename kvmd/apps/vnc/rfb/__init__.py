@@ -255,6 +255,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             sec_types[1] = ("None", self.__handshake_security_none)
         elif self.__vnc_passwds:
             sec_types[2] = ("VNCAuth", self.__handshake_security_vnc_auth)
+
         if not sec_types:
             msg = "The client uses a very old protocol 3.3 and VNCAuth or NoneAuth is disabled"
             await self._write_struct("refusing security type flag", "L", 0, drain=False)
@@ -263,12 +264,11 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
         if self.__rfb_version > 3:
             await self._write_struct("security types", "B" + "B" * len(sec_types), len(sec_types), *sec_types)  # Keep dict priority
-
             sec_type = await self._read_number("selected security type", "B")
             if sec_type not in sec_types:
                 raise RfbError(f"Invalid security type: {sec_type}")
         else:
-            sec_type = min(sec_types.keys())
+            sec_type = list(sec_types.keys())[0]  # First auth type from the list, None or VNCAuth
             await self._write_struct("selected security type", "L", sec_type)
 
         (sec_name, handler) = sec_types[sec_type]
