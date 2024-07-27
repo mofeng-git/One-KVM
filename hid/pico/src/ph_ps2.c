@@ -119,6 +119,7 @@ void ph_ps2_mouse_send_rel(s8 x, s8 y) {
 
 void ph_ps2_mouse_send_wheel(s8 h, s8 v) {
 	if (PH_O_IS_MOUSE_PS2) {
+		(void)h; // as far as I know there is no standard way for horizontal scrolling
 		ms_send_movement(ph_ps2_mouse_buttons, 0, 0, v);
 	}
 }
