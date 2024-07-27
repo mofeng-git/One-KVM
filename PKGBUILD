@@ -108,7 +108,10 @@ depends=(
 	parted
 	e2fsprogs
 	openssh
-	wpa_supplicant
+	# FIXME:
+	#   - https://archlinuxarm.org/forum/viewtopic.php?f=15&t=17007&p=72789
+	#   - https://github.com/pikvm/pikvm/issues/1375
+	wpa_supplicant-pikvm
 	run-parts
 
 	# fsck for /boot
