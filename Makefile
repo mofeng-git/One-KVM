@@ -123,6 +123,7 @@ run: testenv $(TESTENV_GPIO)
 			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/kvmd/nginx \
 			&& cp -a /testenv/.ssl/nginx /etc/kvmd/nginx/ssl \
 			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
+			&& cp /testenv/platform /usr/share/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \
@@ -149,6 +150,7 @@ run-cfg: testenv
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
 			cp -a /testenv/.ssl/nginx /etc/kvmd/nginx/ssl \
 			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
+			&& cp /testenv/platform /usr/share/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \
@@ -171,6 +173,7 @@ run-ipmi: testenv
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
 			cp -a /testenv/.ssl/nginx /etc/kvmd/nginx/ssl \
 			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
+			&& cp /testenv/platform /usr/share/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \
@@ -193,6 +196,7 @@ run-vnc: testenv
 		-it $(TESTENV_IMAGE) /bin/bash -c " \
 			cp -a /testenv/.ssl/nginx /etc/kvmd/nginx/ssl \
 			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
+			&& cp /testenv/platform /usr/share/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \

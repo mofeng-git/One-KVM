@@ -47,11 +47,13 @@ _RetvalT = TypeVar("_RetvalT")
 class HwInfoSubmanager(BaseInfoSubmanager):
     def __init__(
         self,
+        platform_path: str,
         vcgencmd_cmd: list[str],
         ignore_past: bool,
         state_poll: float,
     ) -> None:
 
+        self.__platform_path = platform_path
         self.__vcgencmd_cmd = vcgencmd_cmd
         self.__ignore_past = ignore_past
         self.__state_poll = state_poll
@@ -60,12 +62,16 @@ class HwInfoSubmanager(BaseInfoSubmanager):
 
     async def get_state(self) -> dict:
         (
-            model, serial, throttling,
-            cpu_percent, cpu_temp,
+            base, serial,
+            (model, video, board),
+            throttling,
+            cpu_percent,
+            cpu_temp,
             (mem_percent, mem_total, mem_available),
         ) = await asyncio.gather(
             self.__read_dt_file("model"),
             self.__read_dt_file("serial-number"),
+            self.__read_platform_file(),
             self.__get_throttling(),
             self.__get_cpu_percent(),
             self.__get_cpu_temp(),
@@ -74,8 +80,11 @@ class HwInfoSubmanager(BaseInfoSubmanager):
         return {
             "platform": {
                 "type": "rpi",
-                "base": model,
+                "base": base,
                 "serial": serial,
+                "model": model,
+                "video": video,
+                "board": board,
             },
             "health": {
                 "temp": {
@@ -113,6 +122,20 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 get_logger(0).error("Can't read DT %s from %s: %s", name, path, err)
                 return None
         return self.__dt_cache[name]
+
+    async def __read_platform_file(self) -> tuple[(str | None), (str | None), (str | None)]:
+        try:
+            text = await aiotools.read_file(self.__platform_path)
+            parsed: dict[str, str] = {}
+            for row in text.split("\n"):
+                row = row.strip()
+                if row:
+                    (key, value) = row.split("=", 1)
+                    parsed[key.strip()] = value.strip()
+            return (parsed["PIKVM_MODEL"], parsed["PIKVM_VIDEO"], parsed["PIKVM_BOARD"])
+        except Exception:
+            get_logger(0).exception("Can't read device model")
+            return (None, None, None)
 
     async def __get_cpu_temp(self) -> (float | None):
         temp_path = f"{env.SYSFS_PREFIX}/sys/class/thermal/thermal_zone0/temp"

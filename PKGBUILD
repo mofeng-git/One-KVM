@@ -252,11 +252,11 @@ for _variant in "${_variants[@]}"; do
 		fi
 
 		mkdir -p \"\$pkgdir/usr/share/kvmd\"
-		local _device=\"\$pkgdir/usr/share/kvmd/device\"
-		rm -f \"\$_device\"
-		echo PIKVM_BASE=$_base > \"\$_device\"
-		echo PIKVM_VIDEO=$_video >> \"\$_device\"
-		echo PIKVM_BOARD=$_board >> \"\$_device\"
-		chmod 444 \"\$_device\"
+		local _platform=\"\$pkgdir/usr/share/kvmd/platform\"
+		rm -f \"\$_platform\"
+		echo PIKVM_MODEL=$_base > \"\$_platform\"
+		echo PIKVM_VIDEO=$_video >> \"\$_platform\"
+		echo PIKVM_BOARD=$_board >> \"\$_platform\"
+		chmod 444 \"\$_platform\"
 	}"
 done

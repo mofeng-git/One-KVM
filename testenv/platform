@@ -1,0 +1,3 @@
+PIKVM_MODEL=test_model
+PIKVM_VIDEO=test_video
+PIKVM_BOARD=test_board
