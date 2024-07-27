@@ -32,8 +32,9 @@
 #define _KBD_DATA_PIN	11 // CLK == 12
 #define _MOUSE_DATA_PIN	14 // CLK == 15
 
-#define _KBD_IN_DATA_PIN 26 // passthru, CLK == 27
-#define _MOUSE_IN_DATA_PIN 16 // passthru, CLK == 17
+#define _KBD_IN_DATA_PIN	26 // passthru, CLK == 27
+#define _MOUSE_IN_DATA_PIN	16 // passthru, CLK == 17
+
 
 u8 ph_g_ps2_kbd_leds = 0;
 bool ph_g_ps2_kbd_online = 0;
@@ -41,6 +42,7 @@ bool ph_g_ps2_mouse_online = 0;
 
 u8 ph_ps2_kbd_modifiers = 0;
 u8 ph_ps2_mouse_buttons = 0;
+
 
 void tuh_kb_set_leds(u8 leds) {
 	ph_g_ps2_kbd_leds = leds;
