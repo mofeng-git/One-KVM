@@ -15,15 +15,18 @@ target_sources(${target_name} PRIVATE
 	ph_com_uart.c
 	ph_debug.c
 
-	${PS2_PATH}/ps2phy.c
+	${PS2_PATH}/ps2out.c
+	${PS2_PATH}/ps2in.c
 	${PS2_PATH}/ps2kb.c
 	${PS2_PATH}/ps2ms.c
+	${PS2_PATH}/scancodesets.c
 )
 target_link_options(${target_name} PRIVATE -Xlinker --print-memory-usage)
 target_compile_options(${target_name} PRIVATE -Wall -Wextra)
 target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_LIST_DIR} ${PS2_PATH})
 
-pico_generate_pio_header(${target_name} ${PS2_PATH}/ps2phy.pio)
+pico_generate_pio_header(${target_name} ${PS2_PATH}/ps2out.pio)
+pico_generate_pio_header(${target_name} ${PS2_PATH}/ps2in.pio)
 
 target_link_libraries(${target_name} PRIVATE
 	pico_stdlib
