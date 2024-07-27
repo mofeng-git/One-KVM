@@ -62,12 +62,13 @@ class HwInfoSubmanager(BaseInfoSubmanager):
 
     async def get_state(self) -> dict:
         (
-            base, serial,
-            (model, video, board),
+            base,
+            serial,
+            platform,
             throttling,
             cpu_percent,
             cpu_temp,
-            (mem_percent, mem_total, mem_available),
+            mem,
         ) = await asyncio.gather(
             self.__read_dt_file("model"),
             self.__read_dt_file("serial-number"),
@@ -82,9 +83,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 "type": "rpi",
                 "base": base,
                 "serial": serial,
-                "model": model,
-                "video": video,
-                "board": board,
+                **platform,  # type: ignore
             },
             "health": {
                 "temp": {
@@ -93,11 +92,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 "cpu": {
                     "percent": cpu_percent,
                 },
-                "mem": {
-                    "percent": mem_percent,
-                    "total": mem_total,
-                    "available": mem_available,
-                },
+                "mem": mem,
                 "throttling": throttling,
             },
         }
@@ -123,7 +118,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 return None
         return self.__dt_cache[name]
 
-    async def __read_platform_file(self) -> tuple[(str | None), (str | None), (str | None)]:
+    async def __read_platform_file(self) -> dict:
         try:
             text = await aiotools.read_file(self.__platform_path)
             parsed: dict[str, str] = {}
@@ -132,10 +127,14 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 if row:
                     (key, value) = row.split("=", 1)
                     parsed[key.strip()] = value.strip()
-            return (parsed["PIKVM_MODEL"], parsed["PIKVM_VIDEO"], parsed["PIKVM_BOARD"])
+            return {
+                "model": parsed["PIKVM_MODEL"],
+                "video": parsed["PIKVM_VIDEO"],
+                "board": parsed["PIKVM_BOARD"],
+            }
         except Exception:
             get_logger(0).exception("Can't read device model")
-            return (None, None, None)
+            return {"model": None, "video": None, "board": None}
 
     async def __get_cpu_temp(self) -> (float | None):
         temp_path = f"{env.SYSFS_PREFIX}/sys/class/thermal/thermal_zone0/temp"
@@ -164,13 +163,21 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             get_logger(0).error("Can't get CPU percent: %s", err)
             return None
 
-    async def __get_mem(self) -> (tuple[float, int, int] | tuple[None, None, None]):
+    async def __get_mem(self) -> dict:
         try:
             st = psutil.virtual_memory()
-            return (st.percent, st.total, st.available)
+            return {
+                "percent": st.percent,
+                "total": st.total,
+                "available": st.available,
+            }
         except Exception as err:
             get_logger(0).error("Can't get memory info: %s", err)
-            return (None, None, None)
+            return {
+                "percent": None,
+                "total": None,
+                "available": None,
+            }
 
     async def __get_throttling(self) -> (dict | None):
         # https://www.raspberrypi.org/forums/viewtopic.php?f=63&t=147781&start=50#p972790

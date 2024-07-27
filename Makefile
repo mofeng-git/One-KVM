@@ -82,6 +82,7 @@ tox: testenv
 		-t $(TESTENV_IMAGE) bash -c " \
 			cp -a /src/testenv/.ssl/nginx /etc/kvmd/nginx/ssl \
 			&& cp -a /src/testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
+			&& cp /src/testenv/platform /usr/share/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
 			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \
