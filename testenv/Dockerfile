@@ -79,7 +79,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 	&& rm -rf /var/cache/pacman/pkg/*
 
 COPY testenv/requirements.txt requirements.txt
-RUN pip install --break-system-packages -r requirements.txt
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && pip install --break-system-packages -r requirements.txt
 
 # https://stackoverflow.com/questions/57534295
 WORKDIR /root
