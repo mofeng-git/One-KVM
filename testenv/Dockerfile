@@ -83,7 +83,8 @@ RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && 
 
 # https://stackoverflow.com/questions/57534295
 WORKDIR /root
-RUN npm install htmlhint -g \
+RUN npm config set registry https://registry.npmmirror.com \
+	&& npm install htmlhint -g \
 	&& npm install pug \
 	&& npm install pug-cli -g \
 	&& npm install @babel/eslint-parser -g
