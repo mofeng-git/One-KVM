@@ -41,6 +41,7 @@ from .events import get_led_scroll
 from .events import get_led_num
 from .events import make_keyboard_report
 
+from ....lanuages import Lanuages
 
 # =====
 class KeyboardProcess(BaseDeviceProcess):
@@ -54,10 +55,11 @@ class KeyboardProcess(BaseDeviceProcess):
 
         self.__pressed_modifiers: set[UsbKey] = set()
         self.__pressed_keys: list[UsbKey | None] = [None] * 6
+        self.gettext=Lanuages().gettext
 
     def cleanup(self) -> None:
         self._stop()
-        get_logger().info("Clearing HID-keyboard events ...")
+        get_logger().info(self.gettext("Clearing HID-keyboard events ..."))
         self._cleanup_write(b"\x00" * 8)  # Release all keys and modifiers
 
     def send_clear_event(self) -> None:

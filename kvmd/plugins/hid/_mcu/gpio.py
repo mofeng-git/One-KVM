@@ -27,6 +27,7 @@ import gpiod
 
 from ....logging import get_logger
 
+from ....lanuages import Lanuages
 
 # =====
 class Gpio:  # pylint: disable=too-many-instance-attributes
@@ -49,6 +50,8 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
 
         self.__line_request: (gpiod.LineRequest | None) = None
         self.__last_power: (bool | None) = None
+
+        self.gettext=Lanuages().gettext
 
     def __enter__(self) -> None:
         if self.__power_detect_pin >= 0 or self.__reset_pin >= 0:
@@ -91,7 +94,7 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
             assert self.__line_request
             power = bool(self.__line_request.get_value(self.__power_detect_pin).value)
             if power != self.__last_power:
-                get_logger(0).info("HID power state changed: %s -> %s", self.__last_power, power)
+                get_logger(0).info(self.gettext("HID power state changed: %s -> %s"), self.__last_power, power)
                 self.__last_power = power
             return power
         return True
@@ -105,4 +108,4 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
             finally:
                 self.__line_request.set_value(self.__reset_pin, gpiod.line.Value(self.__reset_inverted))
                 time.sleep(1)
-            get_logger(0).info("Reset HID performed")
+            get_logger(0).info(self.gettext("Reset HID performed"))

@@ -40,6 +40,8 @@ from .... import aiotools
 from .... import aiomulti
 from .... import aioproc
 
+from ....lanuages import Lanuages
+
 from .. import BaseHid
 
 from ..otg.events import ResetEvent
@@ -107,6 +109,8 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             stop_event=self.__stop_event,
         )
 
+        self.gettext=Lanuages().gettext
+
     @classmethod
     def get_plugin_options(cls) -> dict:
         return {
@@ -130,7 +134,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         }
 
     def sysprep(self) -> None:
-        get_logger(0).info("Starting HID daemon ...")
+        get_logger(0).info(self.gettext("Starting HID daemon ..."))
         self.__proc = multiprocessing.Process(target=self.__server_worker, daemon=True)
         self.__proc.start()
 
@@ -175,7 +179,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
     async def cleanup(self) -> None:
         if self.__proc is not None:
             if self.__proc.is_alive():
-                get_logger(0).info("Stopping HID daemon ...")
+                get_logger(0).info(self.gettext("Stopping HID daemon ..."))
                 self.__stop_event.set()
             if self.__proc.is_alive() or self.__proc.exitcode is not None:
                 self.__proc.join()
@@ -224,5 +228,5 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             try:
                 self.__server.run()
             except Exception:
-                logger.exception("Unexpected HID error")
+                logger.exception(self.gettext("Unexpected HID error"))
                 time.sleep(5)

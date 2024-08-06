@@ -36,6 +36,8 @@ from ...logging import get_logger
 
 from ... import aiotools
 
+from ...lanuages import Lanuages
+
 from . import BaseAuthService
 
 
@@ -440,5 +442,5 @@ class Plugin(BaseAuthService):
             response = client.SendPacket(request)
             return (response.code == pyrad.packet.AccessAccept)
         except Exception:
-            get_logger().exception("Failed RADIUS auth request for user %r", user)
+            get_logger().exception(Lanuages().gettext("Failed RADIUS auth request for user %r"), user)
             return False

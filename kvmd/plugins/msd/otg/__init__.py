@@ -28,6 +28,7 @@ import time
 
 from typing import AsyncGenerator
 
+from ....lanuages import Lanuages
 from ....logging import get_logger
 
 from ....inotify import InotifyMask
@@ -43,6 +44,8 @@ from ....validators.kvm import valid_msd_image_name
 from .... import aiotools
 from .... import fstab
 
+from ....lanuages import Lanuages
+
 from .. import MsdIsBusyError
 from .. import MsdOfflineError
 from .. import MsdConnectedError
@@ -57,7 +60,6 @@ from .. import MsdFileWriter
 from .storage import Image
 from .storage import Storage
 from .drive import Drive
-
 
 # =====
 @dataclasses.dataclass(frozen=True)
@@ -140,9 +142,10 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__notifier = aiotools.AioNotifier()
         self.__state = _State(self.__notifier)
+        self.gettext=Lanuages().gettext
 
         logger = get_logger(0)
-        logger.info("Using OTG gadget %r as MSD", gadget)
+        logger.info(self.gettext("Using OTG gadget %r as MSD"), gadget)
         aiotools.run_sync(self.__reload_state(notify=False))
 
     @classmethod
@@ -217,7 +220,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 self.__drive.set_rw_flag(False)
                 await self.__storage.remount_rw(False)
             except Exception:
-                get_logger(0).exception("Can't reset MSD properly")
+                get_logger(0).exception(self.gettext("Can't reset MSD properly"))
 
     @aiotools.atomic_fg
     async def cleanup(self) -> None:
@@ -436,7 +439,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         if need_reload_state:
                             await self.__reload_state()
             except Exception:
-                logger.exception("Unexpected MSD watcher error")
+                logger.exception(self.gettext("Unexpected MSD watcher error"))
                 time.sleep(1)
 
     async def __reload_state(self, notify: bool=True) -> None:
@@ -455,13 +458,13 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 if self.__state.vd is None and drive_state.image is None:
                     # Если только что включились и образ не подключен - попробовать
                     # перемонтировать хранилище (и создать images и meta).
-                    logger.info("Probing to remount storage ...")
+                    logger.info(self.gettext("Probing to remount storage ..."))
                     await self.__storage.remount_rw(True)
                     await self.__storage.remount_rw(False)
                     await self.__setup_initial()
 
             except Exception:
-                logger.exception("Error while reloading MSD state; switching to offline")
+                logger.exception(self.gettext("Error while reloading MSD state; switching to offline"))
                 self.__state.storage = None
                 self.__state.vd = None
 
@@ -489,12 +492,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             logger = get_logger(0)
             image = await self.__storage.make_image_by_name(self.__initial_image)
             if (await image.exists()):
-                logger.info("Setting up initial image %r ...", self.__initial_image)
+                logger.info(self.gettext("Setting up initial image %r ..."), self.__initial_image)
                 try:
                     self.__drive.set_rw_flag(False)
                     self.__drive.set_cdrom_flag(self.__initial_cdrom)
                     self.__drive.set_image_path(image.path)
                 except Exception:
-                    logger.exception("Can't setup initial image: ignored")
+                    logger.exception(self.gettext("Can't setup initial image: ignored"))
             else:
-                logger.error("Can't find initial image %r: ignored", self.__initial_image)
+                logger.error(self.gettext("Can't find initial image %r: ignored"), self.__initial_image)

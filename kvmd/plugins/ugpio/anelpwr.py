@@ -41,6 +41,8 @@ from ...validators.basic import valid_bool
 from ...validators.basic import valid_number
 from ...validators.basic import valid_float_f01
 
+from ...lanuages import Lanuages
+
 from . import BaseUserGpioDriver
 from . import GpioDriverOfflineError
 
@@ -146,7 +148,8 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             ) as response:
                 htclient.raise_not_200(response)
         except Exception as err:
-            get_logger().error("Failed ANELPWR POST request to pin %s: %s", pin, tools.efmt(err))
+
+            get_logger().error(Lanuages().gettext("Failed ANELPWR POST request to pin %s: %s"), pin, tools.efmt(err))
             raise GpioDriverOfflineError(self)
         self.__update_notifier.notify()
 

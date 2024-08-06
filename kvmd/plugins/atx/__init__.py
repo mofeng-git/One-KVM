@@ -25,6 +25,8 @@ from typing import AsyncGenerator
 from ...errors import OperationError
 from ...errors import IsBusyError
 
+from ...lanuages import Lanuages
+
 from .. import BasePlugin
 from .. import get_plugin_class
 
@@ -40,7 +42,7 @@ class AtxOperationError(OperationError, AtxError):
 
 class AtxIsBusyError(IsBusyError, AtxError):
     def __init__(self) -> None:
-        super().__init__("Performing another ATX operation, please try again later")
+        super().__init__(Lanuages().gettext("Performing another ATX operation, please try again later"))
 
 
 # =====

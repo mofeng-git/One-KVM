@@ -36,6 +36,7 @@ from .events import MouseRelativeEvent
 from .events import MouseWheelEvent
 from .events import make_mouse_report
 
+from ....lanuages import Lanuages
 
 # =====
 class MouseProcess(BaseDeviceProcess):
@@ -54,6 +55,7 @@ class MouseProcess(BaseDeviceProcess):
         self.__x = 0  # For absolute
         self.__y = 0
         self.__win98_fix = False
+        self.gettext=Lanuages().gettext
 
     def is_absolute(self) -> bool:
         return self.__absolute
@@ -66,7 +68,7 @@ class MouseProcess(BaseDeviceProcess):
 
     def cleanup(self) -> None:
         self._stop()
-        get_logger().info("Clearing HID-mouse events ...")
+        get_logger().info(self.gettext("Clearing HID-mouse events ..."))
         report = make_mouse_report(
             absolute=self.__absolute,
             buttons=0,

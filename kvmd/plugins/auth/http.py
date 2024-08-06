@@ -32,6 +32,8 @@ from ...logging import get_logger
 
 from ... import htclient
 
+from ...lanuages import Lanuages
+
 from . import BaseAuthService
 
 
@@ -89,7 +91,7 @@ class Plugin(BaseAuthService):
                 htclient.raise_not_200(response)
                 return True
         except Exception:
-            get_logger().exception("Failed HTTP auth request for user %r", user)
+            get_logger().exception(Lanuages().gettext("Failed HTTP auth request for user %r"), user)
             return False
 
     async def cleanup(self) -> None:

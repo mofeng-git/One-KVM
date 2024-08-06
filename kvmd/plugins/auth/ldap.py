@@ -33,6 +33,8 @@ from ...logging import get_logger
 from ... import tools
 from ... import aiotools
 
+from ...lanuages import Lanuages
+
 from . import BaseAuthService
 
 
@@ -101,9 +103,9 @@ class Plugin(BaseAuthService):
         except ldap.INVALID_CREDENTIALS:
             pass
         except ldap.SERVER_DOWN as err:
-            get_logger().error("LDAP server is down: %s", tools.efmt(err))
+            get_logger().error(Lanuages().gettext("LDAP server is down: %s"), tools.efmt(err))
         except Exception as err:
-            get_logger().error("Unexpected LDAP error: %s", tools.efmt(err))
+            get_logger().error(Lanuages().gettext("Unexpected LDAP error: %s"), tools.efmt(err))
         finally:
             if conn is not None:
                 try:
