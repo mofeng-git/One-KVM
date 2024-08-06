@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-08-06 21:17+0800\n"
+"POT-Creation-Date: 2024-08-06 21:57+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -19,6 +19,31 @@ msgstr ""
 
 #: kvmd/htclient.py:63
 msgid "Can't determine filename"
+msgstr ""
+
+#: kvmd/htserver.py:356
+#, python-format
+msgid "Registered new client session: %s; clients now: %d"
+msgstr ""
+
+#: kvmd/htserver.py:371
+#, python-format
+msgid "Can't parse JSON event from websocket: %r"
+msgstr ""
+
+#: kvmd/htserver.py:377
+#, python-format
+msgid "Unknown websocket event: %r"
+msgstr ""
+
+#: kvmd/htserver.py:384
+#, python-format
+msgid "Unknown websocket binary event: %r"
+msgstr ""
+
+#: kvmd/htserver.py:415
+#, python-format
+msgid "Removed client socket: %s; clients now: %d"
 msgstr ""
 
 #: kvmd/inotify.py:199
@@ -63,6 +88,10 @@ msgstr ""
 
 #: kvmd/apps/__init__.py:165
 msgid "Make sure you understand exactly what you are doing!"
+msgstr ""
+
+#: kvmd/apps/kvmd/__init__.py:115
+msgid "Bye-bye"
 msgstr ""
 
 #: kvmd/apps/kvmd/auth.py:57
