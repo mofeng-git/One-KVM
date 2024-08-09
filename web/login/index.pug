@@ -11,20 +11,26 @@ block body
 			div(id="login")
 				table
 					tr
-						td Username:&nbsp;
+						td(i18n="username") Username:&nbsp;
 						td #[input(type="text" id="user-input" autocapitalize="off")]
 					tr
-						td Password:&nbsp;
+						td(i18n="password") Password:&nbsp;
 						td #[input(type="password" id="passwd-input" autocapitalize="off")]
 					tr
-						td 2FA code:&nbsp;
-						td #[input(type="text" id="code-input" placeholder="if enabled")]
+						td(i18n="2fa_code") 2FA code:&nbsp;
+						td #[input(type="text" id="code-input" placeholder="if enabled" i18n="if_enabled")]
 					tr
 						td(colspan=2)
 							hr
 					tr
+						td(i18n="select_language") Select language:&nbsp;
 						td
-						td #[button(id="login-button" class="key") Login]
+							select(id="selectLanguage")
+								option(value='en' class="english" i18n="english") 英语	
+								option(value='ch', selected="selected" class="chinese" i18n="chinese") 简体中文
+					tr
+						td
+						td #[button(id="login-button" class="key" i18n="login") Login]
 
 	ul(class="footer")
 		li(class="footer-left")

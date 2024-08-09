@@ -42,6 +42,9 @@
     <script type="module">import {main} from "/share/js/login/main.js";
       main();
     </script>
+    <script src="/share/js/i18n/jquery-3.7.1.min.js"></script>
+    <script src="/share/js/i18n/jquery.i18n.min.js"></script>
+    <script src="/share/js/i18n/i18n.js"></script>
   </head>
   <body>
     <form action="javascript:void(0)">
@@ -49,21 +52,21 @@
         <div id="login">
           <table>
             <tr>
-              <td>Username:&nbsp;</td>
+              <td i18n="username">Username:&nbsp;</td>
               <td>
                 <input type="text" id="user-input" autocapitalize="off">
               </td>
             </tr>
             <tr>
-              <td>Password:&nbsp;</td>
+              <td i18n="password">Password:&nbsp;</td>
               <td>
                 <input type="password" id="passwd-input" autocapitalize="off">
               </td>
             </tr>
             <tr>
-              <td>2FA code:&nbsp;</td>
+              <td i18n="2fa_code">2FA code:&nbsp;</td>
               <td>
-                <input type="text" id="code-input" placeholder="if enabled">
+                <input type="text" id="code-input" placeholder="if enabled" i18n="if_enabled">
               </td>
             </tr>
             <tr>
@@ -72,9 +75,18 @@
               </td>
             </tr>
             <tr>
+              <td i18n="select_language">Select language:&nbsp;</td>
+              <td>
+                <select id="selectLanguage">
+                  <option class="english" value="en" i18n="english">英语	</option>
+                  <option class="chinese" value="ch" selected="selected" i18n="chinese">简体中文</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
               <td></td>
               <td>
-                <button class="key" id="login-button">Login</button>
+                <button class="key" id="login-button" i18n="login">Login</button>
               </td>
             </tr>
           </table>

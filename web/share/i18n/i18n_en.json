@@ -1,0 +1,10 @@
+{
+    "username": "Username:&nbsp;",
+    "password": "Password:&nbsp;",
+    "2fa_code": "2FA code:&nbsp;",
+    "if_enabled": "if enabled",
+    "login": "Login",
+    "select_language": "Select language:&nbsp;",
+    "chinese": "Simplified Chinese",
+    "english": "English"
+}

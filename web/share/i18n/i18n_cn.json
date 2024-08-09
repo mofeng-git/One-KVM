@@ -1,0 +1,10 @@
+{
+    "username": "用户名：&nbsp;",
+    "password": "密码：&nbsp;",
+    "2fa_code": "2FA 验证码：&nbsp;",
+    "if_enabled": "如果有",
+    "login": "登录",
+    "select_language": "选择语言：&nbsp;",
+    "chinese": "简体中文",
+    "english": "英语"
+}

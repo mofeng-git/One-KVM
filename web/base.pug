@@ -55,6 +55,11 @@ html(lang="en")
 			script(type="module")
 				| import {main} from "#{js_dir}/#{main_js}.js";
 				| main();
+		
+		script(src=`${js_dir}/i18n/jquery-3.7.1.min.js`)
+		script(src=`${js_dir}/i18n/jquery.i18n.min.js`)
+		script(src=`${js_dir}/i18n/i18n.js`)
 
 	body(class=body_class)
 		block body
+	
