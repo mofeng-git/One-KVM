@@ -34,6 +34,8 @@ import aiohttp
 
 from PIL import Image as PilImage
 
+from ...lanuages import Lanuages
+
 from ...logging import get_logger
 
 from ... import tools
@@ -226,6 +228,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__notifier = aiotools.AioNotifier()
 
+        self.gettext=Lanuages().gettext
+
+
     # =====
 
     @aiotools.atomic_fg
@@ -237,15 +242,15 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 if not self.__stop_wip:
                     self.__stop_task.cancel()
                     await asyncio.gather(self.__stop_task, return_exceptions=True)
-                    logger.info("Streamer stop cancelled")
+                    logger.info(self.gettext("Streamer stop cancelled"))
                     return
                 else:
                     await asyncio.gather(self.__stop_task, return_exceptions=True)
 
             if reset and self.__reset_delay > 0:
-                logger.info("Waiting %.2f seconds for reset delay ...", self.__reset_delay)
+                logger.info(self.gettext("Waiting %.2f seconds for reset delay ..."), self.__reset_delay)
                 await asyncio.sleep(self.__reset_delay)
-            logger.info("Starting streamer ...")
+            logger.info(self.gettext("Starting streamer ..."))
             await self.__inner_start()
 
     @aiotools.atomic_fg
@@ -258,12 +263,12 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                     if not self.__stop_wip:
                         self.__stop_task.cancel()
                         await asyncio.gather(self.__stop_task, return_exceptions=True)
-                        logger.info("Stopping streamer immediately ...")
+                        logger.info(self.gettext("Stopping streamer immediately ..."))
                         await self.__inner_stop()
                     else:
                         await asyncio.gather(self.__stop_task, return_exceptions=True)
                 else:
-                    logger.info("Stopping streamer immediately ...")
+                    logger.info(self.gettext("Stopping streamer immediately ..."))
                     await self.__inner_stop()
 
             elif not self.__stop_task:
@@ -272,13 +277,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                     try:
                         await asyncio.sleep(self.__shutdown_delay)
                         self.__stop_wip = True
-                        logger.info("Stopping streamer after delay ...")
+                        logger.info(self.gettext("Stopping streamer after delay ..."))
                         await self.__inner_stop()
                     finally:
                         self.__stop_task = None
                         self.__stop_wip = False
 
-                logger.info("Planning to stop streamer in %.2f seconds ...", self.__shutdown_delay)
+                logger.info(self.gettext("Planning to stop streamer in %.2f seconds ..."), self.__shutdown_delay)
                 self.__stop_task = asyncio.create_task(delayed_stop())
 
     def is_working(self) -> bool:
@@ -307,7 +312,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
                 pass
             except Exception:
-                get_logger().exception("Invalid streamer response from /state")
+                get_logger().exception(self.gettext("Invalid streamer response from /state"))
 
         snapshot: (dict | None) = None
         if self.__snapshot:
@@ -325,10 +330,10 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
         def signal_handler(*_: Any) -> None:
-            get_logger(0).info("Got SIGUSR2, checking the stream state ...")
+            get_logger(0).info(self.gettext("Got SIGUSR2, checking the stream state ..."))
             self.__notifier.notify()
 
-        get_logger(0).info("Installing SIGUSR2 streamer handler ...")
+        get_logger(0).info(self.gettext("Installing SIGUSR2 streamer handler ..."))
         asyncio.get_event_loop().add_signal_handler(signal.SIGUSR2, signal_handler)
 
         waiter_task: (asyncio.Task | None) = None
@@ -384,12 +389,12 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                         self.__snapshot = snapshot
                         self.__notifier.notify()
                     return snapshot
-                logger.error("Stream is offline, no signal or so")
+                logger.error(self.gettext("Stream is offline, no signal or so"))
 
         except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as err:
-            logger.error("Can't connect to streamer: %s", tools.efmt(err))
+            logger.error(self.gettext("Can't connect to streamer: %s"), tools.efmt(err))
         except Exception:
-            logger.exception("Invalid streamer response from /snapshot")
+            logger.exception(self.gettext("Invalid streamer response from /snapshot"))
         return None
 
     def remove_snapshot(self) -> None:
@@ -446,14 +451,14 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 await self.__start_streamer_proc()
                 assert self.__streamer_proc is not None
                 await aioproc.log_stdout_infinite(self.__streamer_proc, logger)
-                raise RuntimeError("Streamer unexpectedly died")
+                raise RuntimeError(self.gettext("Streamer unexpectedly died"))
             except asyncio.CancelledError:
                 break
             except Exception:
                 if self.__streamer_proc:
-                    logger.exception("Unexpected streamer error: pid=%d", self.__streamer_proc.pid)
+                    logger.exception(self.gettext("Unexpected streamer error: pid=%d"), self.__streamer_proc.pid)
                 else:
-                    logger.exception("Can't start streamer")
+                    logger.exception(self.gettext("Can't start streamer"))
                 await self.__kill_streamer_proc()
                 await asyncio.sleep(1)
 
@@ -474,13 +479,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         try:
             await aioproc.log_process(cmd, logger, prefix=name)
         except Exception as err:
-            logger.exception("Can't execute command: %s", err)
+            logger.exception(self.gettext("Can't execute command: %s"), err)
 
     async def __start_streamer_proc(self) -> None:
         assert self.__streamer_proc is None
         cmd = self.__make_cmd(self.__cmd)
         self.__streamer_proc = await aioproc.run_process(cmd)
-        get_logger(0).info("Started streamer pid=%d: %s", self.__streamer_proc.pid, tools.cmdfmt(cmd))
+        get_logger(0).info(self.gettext("Started streamer pid=%d: %s"), self.__streamer_proc.pid, tools.cmdfmt(cmd))
 
     async def __kill_streamer_proc(self) -> None:
         if self.__streamer_proc:

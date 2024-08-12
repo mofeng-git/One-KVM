@@ -26,6 +26,8 @@ from typing import AsyncGenerator
 from typing import Callable
 from typing import Any
 
+from ...lanuages import Lanuages
+
 from ...logging import get_logger
 
 from ...errors import IsBusyError
@@ -46,22 +48,22 @@ from ...yamlconf import Section
 # =====
 class GpioChannelNotFoundError(GpioOperationError):
     def __init__(self) -> None:
-        super().__init__("GPIO channel is not found")
+        super().__init__(Lanuages().gettext("GPIO channel is not found"))
 
 
 class GpioSwitchNotSupported(GpioOperationError):
     def __init__(self) -> None:
-        super().__init__("This GPIO channel does not support switching")
+        super().__init__(Lanuages().gettext("This GPIO channel does not support switching"))
 
 
 class GpioPulseNotSupported(GpioOperationError):
     def __init__(self) -> None:
-        super().__init__("This GPIO channel does not support pulsing")
+        super().__init__(Lanuages().gettext("This GPIO channel does not support pulsing"))
 
 
 class GpioChannelIsBusyError(IsBusyError, GpioError):
     def __init__(self) -> None:
-        super().__init__("Performing another GPIO operation on this channel, please try again later")
+        super().__init__(Lanuages().gettext("Performing another GPIO operation on this channel, please try again later"))
 
 
 # =====
@@ -79,6 +81,8 @@ class _GpioInput:
 
         self.__driver = driver
         self.__driver.register_input(self.__pin, config.debounce)
+
+        self.gettext=Lanuages().gettext
 
     def get_scheme(self) -> dict:
         return {
@@ -188,7 +192,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
                 await func(*args)
         else:
             await aiotools.run_region_task(
-                f"Can't perform {name} of {self} or operation was not completed",
+                self.gettext(f"Can't perform {name} of {self} or operation was not completed"),
                 self.__region, self.__action_task_wrapper, name, func, *args,
             )
 
@@ -197,12 +201,12 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         try:
             return (await func(*args))
         except GpioDriverOfflineError:
-            get_logger(0).error("Can't perform %s of %s or operation was not completed: driver offline", name, self)
+            get_logger(0).error(self.gettext("Can't perform %s of %s or operation was not completed: driver offline"), name, self)
 
     @aiotools.atomic_fg
     async def __inner_switch(self, state: bool) -> None:
         await self.__write(state)
-        get_logger(0).info("Ensured switch %s to state=%d", self, state)
+        get_logger(0).info(self.gettext("Ensured switch %s to state=%d"), self, state)
         await asyncio.sleep(self.__busy_delay)
 
     @aiotools.atomic_fg
@@ -213,7 +217,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         finally:
             await self.__write(False)
             await asyncio.sleep(self.__busy_delay)
-        get_logger(0).info("Pulsed %s with delay=%.2f", self, delay)
+        get_logger(0).info(self.gettext("Pulsed %s with delay=%.2f"), self, delay)
 
     # =====
 
@@ -224,7 +228,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
         await self.__driver.write(self.__pin, (state ^ self.__inverted))
 
     def __str__(self) -> str:
-        return f"Output({self.__channel}, driver={self.__driver}, pin={self.__pin})"
+        return self.gettext(f"Output({self.__channel}, driver={self.__driver}, pin={self.__pin})")
 
     __repr__ = __str__
 
@@ -248,6 +252,8 @@ class UserGpio:
 
         self.__inputs: dict[str, _GpioInput] = {}
         self.__outputs: dict[str, _GpioOutput] = {}
+
+        self.gettext=Lanuages().gettext
 
         for (channel, ch_config) in tools.sorted_kvs(config.scheme):
             driver = self.__drivers[ch_config.driver]
@@ -289,12 +295,12 @@ class UserGpio:
             await self.__notifier.wait()
 
     def sysprep(self) -> None:
-        get_logger(0).info("Preparing User-GPIO drivers ...")
+        get_logger(0).info(self.gettext("Preparing User-GPIO drivers ..."))
         for (_, driver) in tools.sorted_kvs(self.__drivers):
             driver.prepare()
 
     async def systask(self) -> None:
-        get_logger(0).info("Running User-GPIO drivers ...")
+        get_logger(0).info(self.gettext("Running User-GPIO drivers ..."))
         await asyncio.gather(*[
             driver.run()
             for (_, driver) in tools.sorted_kvs(self.__drivers)
@@ -305,7 +311,7 @@ class UserGpio:
             try:
                 await driver.cleanup()
             except Exception:
-                get_logger().exception("Can't cleanup driver %s", driver)
+                get_logger().exception(self.gettext("Can't cleanup driver %s"), driver)
 
     async def switch(self, channel: str, state: bool, wait: bool) -> None:
         gout = self.__outputs.get(channel)
