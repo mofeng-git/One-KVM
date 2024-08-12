@@ -13,35 +13,36 @@ block start
 					img(class="svg-gray" src=`${svg_dir}/logo.svg` alt="PiKVM" height="40")
 			td
 				table
-					tr #[td(colspan="2" class="title") The Open Source KVM over IP]
+					tr #[td(colspan="2" class="title" i18n="index_title") The Open Source KVM over IP]
 					tr
-						td(colspan="2" class="copyright")
-							| Copyright &copy; 2018-2024 #[a(target="_blank" href="mailto:mdevaev@gmail.com") Maxim Devaev]
+						td(colspan="2" class="copyright" i18n="copyright")
+							| Copyright &copy; 2018-2024 Maxim Devaev | Modified by SilentWind
 
+	hr
+
+	div(id="apps-box")
+		h4 Loading ...
+	
 	hr
 	table
 		td(class="server")
-			td Server:
+			td(i18n="serve_name") Server:
 			td #[a(id="kvmd-meta-server-host" target="_blank" href="/api/info")]
 
-	hr
-	div(id="apps-box")
-		h4 Loading ...
-
 	div(id="app-keyboard-warning")
-		hr
-		p(class="text")
+		p(class="text" i18n="index_text_1")
 			| Please note that when you are working with a KVM session or another application that captures the keyboard,
 			| you can't use some keyboard shortcuts such as Ctrl+Alt+Del (which will be caught by your OS) or Ctrl+W (caught by your browser).
-		p(class="text")
+		p(class="text" i18n="index_text_2")
 			| To override this limitation you can use #[a(target="_blank" href="https://google.com/chrome") Google Chrome]
 			| or #[a(target="_blank" href="https://chromium.org/Home") Chromium] in application mode.
-		div(id="app-text" class="code")
 
 	hr
 	p(class="text credits")
-		a(target="_blank" href="https://pikvm.org") PiKVM Project
+		a(target="_blank" href="https://pikvm.org" i18n="index_text_10") PiKVM Project
 		| &nbsp; | &nbsp;
-		a(target="_blank" href="https://docs.pikvm.org") Documentation
+		a(target="_blank" href="https://docs.pikvm.org" i18n="index_text_11") PiKVM Documentation
 		| &nbsp; | &nbsp;
-		a(target="_blank" href="https://pikvm.org/support") Support
+		a(target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12") One-KVM Project
+		| &nbsp; | &nbsp;
+		a(target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13") One-KVM Documentation

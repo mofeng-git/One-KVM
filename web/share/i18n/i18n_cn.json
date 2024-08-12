@@ -1,10 +1,21 @@
 {
     "username": "用户名：&nbsp;",
     "password": "密码：&nbsp;",
-    "2fa_code": "2FA 验证码：&nbsp;",
+    "2fa_code": "2FA 验证：&nbsp;",
     "if_enabled": "如果有",
     "login": "登录",
     "select_language": "选择语言：&nbsp;",
     "chinese": "简体中文",
-    "english": "英语"
+    "english": "英语",
+    "footer-left": "本网站需要使用 JavaScript 功能。<br>本网站不含广告，但仍有可能会被某些广告过滤器屏蔽。<br>如果网页响应异常请关闭它并重新加载页面以继续浏览。",
+    "index": " One-KVM 导航 ",
+    "copyright": "版权所有 &copy; 2018-2024 Maxim Devaev | 由 SilentWind 二次开发",
+    "index_text_1": "请注意，在使用 KVM 会话或其他可捕获键盘的应用程序时，您无法使用某些快捷键，如 Ctrl+Alt+Del（这会被操作系统捕获）或 Ctrl+W（这会被浏览器捕获）。",
+    "index_text_2": "要突破这一限制，您可以在应用程序模式下使用 Google Chrome 浏览器。",
+    "serve_name": "主机名：",
+    "index_text_10":"PiKVM 项目",
+    "index_text_11":"PiKVM 文档",
+    "index_text_12":"One-KVM 项目",
+    "index_text_13":"One-KVM 文档",
+    "index_title":"开源 KVM over IP"
 }

@@ -39,12 +39,12 @@
     <link rel="stylesheet" href="/share/css/modal.css">
     <link rel="stylesheet" href="/share/css/login/login.css">
     <link rel="stylesheet" href="/share/css/user.css">
-    <script type="module">import {main} from "/share/js/login/main.js";
-      main();
-    </script>
     <script src="/share/js/i18n/jquery-3.7.1.min.js"></script>
     <script src="/share/js/i18n/jquery.i18n.min.js"></script>
     <script src="/share/js/i18n/i18n.js"></script>
+    <script type="module">import {main} from "/share/js/login/main.js";
+      main();
+    </script>
   </head>
   <body>
     <form action="javascript:void(0)">
@@ -78,8 +78,8 @@
               <td i18n="select_language">Select language:&nbsp;</td>
               <td>
                 <select id="selectLanguage">
-                  <option class="english" value="en" i18n="english">英语	</option>
-                  <option class="chinese" value="ch" selected="selected" i18n="chinese">简体中文</option>
+                  <option class="chinese" value="ch" selected="selected" i18n="chinese">Simplified Chinese</option>
+                  <option class="english" value="en" i18n="english">English</option>
                 </select>
               </td>
             </tr>
@@ -94,7 +94,7 @@
       </div>
     </form>
     <ul class="footer">
-      <li class="footer-left">This site is actively using JavaScript.<br>
+      <li class="footer-left" i18n="footer-left">This site is actively using JavaScript.<br>
         It doesn't contain ads, but is blocked by some ad filters.<br>
         Please turn it off to continue and reload the page.
       </li>
