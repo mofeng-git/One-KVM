@@ -34,7 +34,7 @@ import aiohttp
 
 from PIL import Image as PilImage
 
-from ...lanuages import Lanuages
+from ...languages import Languages
 
 from ...logging import get_logger
 
@@ -228,7 +228,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__notifier = aiotools.AioNotifier()
 
-        self.gettext=Lanuages().gettext
+        self.gettext=Languages().gettext
 
 
     # =====

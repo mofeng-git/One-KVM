@@ -34,7 +34,7 @@ from ...plugins.auth import get_auth_service_class
 
 from ...htserver import HttpExposed
 
-from ...lanuages import Lanuages
+from ...languages import Languages
 
 # =====
 class AuthManager:
@@ -52,7 +52,7 @@ class AuthManager:
 
         totp_secret_path: str,
     ) -> None:
-        self.gettext=Lanuages().gettext
+        self.gettext=Languages().gettext
         self.__enabled = enabled
         if not enabled:
             get_logger().warning(self.gettext("AUTHORIZATION IS DISABLED"))

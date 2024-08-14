@@ -33,6 +33,8 @@ from aiohttp.web import Request
 from aiohttp.web import Response
 from aiohttp.web import WebSocketResponse
 
+from ...languages import Languages
+
 from ...logging import get_logger
 
 from ...errors import OperationError
@@ -84,17 +86,17 @@ from .api.redfish import RedfishApi
 # =====
 class StreamerQualityNotSupported(OperationError):
     def __init__(self) -> None:
-        super().__init__("This streamer does not support quality settings")
+        super().__init__(Languages().gettext("This streamer does not support quality settings"))
 
 
 class StreamerResolutionNotSupported(OperationError):
     def __init__(self) -> None:
-        super().__init__("This streamer does not support resolution settings")
+        super().__init__(Languages().gettext("This streamer does not support resolution settings"))
 
 
 class StreamerH264NotSupported(OperationError):
     def __init__(self) -> None:
-        super().__init__("This streamer does not support H264")
+        super().__init__(Languages().gettext("This streamer does not support H264"))
 
 
 # =====
@@ -210,6 +212,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self.__reset_streamer = False
         self.__new_streamer_params: dict = {}
 
+        self.gettext=Languages().gettext
+
     # ===== STREAMER CONTROLLER
 
     @exposed_http("POST", "/streamer/set_params")
@@ -291,24 +295,24 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
     async def _on_shutdown(self) -> None:
         logger = get_logger(0)
-        logger.info("Waiting short tasks ...")
+        logger.info(self.gettext("Waiting short tasks ..."))
         await aiotools.wait_all_short_tasks()
-        logger.info("Stopping system tasks ...")
+        logger.info(self.gettext("Stopping system tasks ..."))
         await aiotools.stop_all_deadly_tasks()
-        logger.info("Disconnecting clients ...")
+        logger.info(self.gettext("Disconnecting clients ..."))
         await self._close_all_wss()
-        logger.info("On-Shutdown complete")
+        logger.info(self.gettext("On-Shutdown complete"))
 
     async def _on_cleanup(self) -> None:
         logger = get_logger(0)
         for sub in self.__subsystems:
             if sub.cleanup:
-                logger.info("Cleaning up %s ...", sub.name)
+                logger.info(self.gettext("Cleaning up %s ..."), sub.name)
                 try:
                     await sub.cleanup()  # type: ignore
                 except Exception:
-                    logger.exception("Cleanup error on %s", sub.name)
-        logger.info("On-Cleanup complete")
+                    logger.exception(self.gettext("Cleanup error on %s"), sub.name)
+        logger.info(self.gettext("On-Cleanup complete"))
 
     async def _on_ws_opened(self) -> None:
         self.__streamer_notifier.notify()

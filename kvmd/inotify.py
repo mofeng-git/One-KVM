@@ -34,7 +34,7 @@ from typing import Generator
 
 from .logging import get_logger
 
-from .lanuages import Lanuages
+from .languages import Languages
 
 from . import aiotools
 from . import libc
@@ -196,7 +196,7 @@ class Inotify:
         for path in paths:
             path = os.path.normpath(path)
             assert path not in self.__wd_by_path, path
-            get_logger().info(Lanuages().gettext("Watching for %s"), path)
+            get_logger().info(Languages().gettext("Watching for %s"), path)
             # Асинхронно, чтобы не висло на NFS
             wd = _inotify_check(await aiotools.run_async(libc.inotify_add_watch, self.__fd, _fs_encode(path), mask))
             self.__wd_by_path[path] = wd
@@ -255,7 +255,7 @@ class Inotify:
             if event.mask & InotifyMask.IGNORED:
                 ignored_path = self.__path_by_wd[event.wd]
                 if self.__wd_by_path[ignored_path] == event.wd:
-                    logger.info(Lanuages().gettext("Unwatching %s because IGNORED was received"), ignored_path)
+                    logger.info(Languages().gettext("Unwatching %s because IGNORED was received"), ignored_path)
                     del self.__wd_by_path[ignored_path]
                 continue
 

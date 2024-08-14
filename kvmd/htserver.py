@@ -52,7 +52,7 @@ from .errors import IsBusyError
 
 from .validators import ValidatorError
 
-from .lanuages import Lanuages
+from .languages import Languages
 
 from . import aiotools
 
@@ -282,7 +282,7 @@ class HttpServer:
         self.__ws_bin_handlers: dict[int, Callable] = {}
         self.__ws_sessions: list[WsSession] = []
         self.__ws_sessions_lock = asyncio.Lock()
-        self.gettext=Lanuages().gettext
+        self.gettext=Languages().gettext
 
     def run(
         self,

@@ -40,7 +40,7 @@ from ... import aiotools
 from .. import BasePlugin
 from .. import get_plugin_class
 
-from ...lanuages import Lanuages
+from ...languages import Languages
 
 # =====
 class MsdError(Exception):
@@ -53,43 +53,43 @@ class MsdOperationError(OperationError, MsdError):
 
 class MsdIsBusyError(IsBusyError, MsdError):
     def __init__(self) -> None:
-        gettext=Lanuages().gettext
+        gettext=Languages().gettext
         super().__init__(gettext("Performing another MSD operation, please try again later"))
 
 
 class MsdOfflineError(MsdOperationError):
     def __init__(self) -> None:
-        gettext=Lanuages().gettext
+        gettext=Languages().gettext
         super().__init__(gettext("MSD is not found"))
 
 
 class MsdConnectedError(MsdOperationError):
     def __init__(self) -> None:
-        gettext=Lanuages().gettext
+        gettext=Languages().gettext
         super().__init__(gettext("MSD is connected to Server, but shouldn't for this operation"))
 
 
 class MsdDisconnectedError(MsdOperationError):
     def __init__(self) -> None:
-        gettext=Lanuages().gettext
+        gettext=Languages().gettext
         super().__init__(gettext("MSD is disconnected from Server, but should be for this operation"))
 
 
 class MsdImageNotSelected(MsdOperationError):
     def __init__(self) -> None:
-        gettext=Lanuages().gettext
+        gettext=Languages().gettext
         super().__init__(gettext("The image is not selected"))
 
 
 class MsdUnknownImageError(MsdOperationError):
     def __init__(self) -> None:
-        gettext=Lanuages().gettext
+        gettext=Languages().gettext
         super().__init__(gettext("The image is not found in the storage"))
 
 
 class MsdImageExistsError(MsdOperationError):
     def __init__(self) -> None:
-        gettext=Lanuages().gettext
+        gettext=Languages().gettext
         super().__init__(gettext("This image is already exists"))
 
 

@@ -26,7 +26,7 @@ from typing import AsyncGenerator
 from typing import Callable
 from typing import Any
 
-from ...lanuages import Lanuages
+from ...languages import Languages
 
 from ...logging import get_logger
 
@@ -48,22 +48,22 @@ from ...yamlconf import Section
 # =====
 class GpioChannelNotFoundError(GpioOperationError):
     def __init__(self) -> None:
-        super().__init__(Lanuages().gettext("GPIO channel is not found"))
+        super().__init__(Languages().gettext("GPIO channel is not found"))
 
 
 class GpioSwitchNotSupported(GpioOperationError):
     def __init__(self) -> None:
-        super().__init__(Lanuages().gettext("This GPIO channel does not support switching"))
+        super().__init__(Languages().gettext("This GPIO channel does not support switching"))
 
 
 class GpioPulseNotSupported(GpioOperationError):
     def __init__(self) -> None:
-        super().__init__(Lanuages().gettext("This GPIO channel does not support pulsing"))
+        super().__init__(Languages().gettext("This GPIO channel does not support pulsing"))
 
 
 class GpioChannelIsBusyError(IsBusyError, GpioError):
     def __init__(self) -> None:
-        super().__init__(Lanuages().gettext("Performing another GPIO operation on this channel, please try again later"))
+        super().__init__(Languages().gettext("Performing another GPIO operation on this channel, please try again later"))
 
 
 # =====
@@ -82,7 +82,7 @@ class _GpioInput:
         self.__driver = driver
         self.__driver.register_input(self.__pin, config.debounce)
 
-        self.gettext=Lanuages().gettext
+        self.gettext=Languages().gettext
 
     def get_scheme(self) -> dict:
         return {
@@ -253,7 +253,7 @@ class UserGpio:
         self.__inputs: dict[str, _GpioInput] = {}
         self.__outputs: dict[str, _GpioOutput] = {}
 
-        self.gettext=Lanuages().gettext
+        self.gettext=Languages().gettext
 
         for (channel, ch_config) in tools.sorted_kvs(config.scheme):
             driver = self.__drivers[ch_config.driver]

@@ -27,7 +27,7 @@ import gpiod
 
 from ....logging import get_logger
 
-from ....lanuages import Lanuages
+from ....languages import Languages
 
 # =====
 class Gpio:  # pylint: disable=too-many-instance-attributes
@@ -51,7 +51,7 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
         self.__line_request: (gpiod.LineRequest | None) = None
         self.__last_power: (bool | None) = None
 
-        self.gettext=Lanuages().gettext
+        self.gettext=Languages().gettext
 
     def __enter__(self) -> None:
         if self.__power_detect_pin >= 0 or self.__reset_pin >= 0:

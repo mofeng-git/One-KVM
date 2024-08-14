@@ -65,3 +65,7 @@ nginx:
 janus:
     cmd:
         - "/bin/true"
+
+languages:
+    console: zh
+    web: zh

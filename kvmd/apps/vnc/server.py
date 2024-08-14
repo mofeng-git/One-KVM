@@ -28,6 +28,8 @@ import contextlib
 
 import aiohttp
 
+from ...languages import Languages
+
 from ...logging import get_logger
 
 from ...keyboard.keysym import SymmapModifiers
@@ -133,6 +135,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         self.__modifiers = 0
 
+        self.gettext=Languages().gettext
+
     # =====
 
     async def run(self) -> None:
@@ -156,13 +160,13 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         logger = get_logger(0)
         await self.__stage1_authorized.wait_passed()
 
-        logger.info("%s [kvmd]: Waiting for the SetEncodings message ...", self._remote)
+        logger.info(self.gettext("%s [kvmd]: Waiting for the SetEncodings message ..."), self._remote)
         if not (await self.__stage2_encodings_accepted.wait_passed(timeout=5)):
-            raise RfbError("No SetEncodings message recieved from the client in 5 secs")
+            raise RfbError(self.gettext("No SetEncodings message recieved from the client in 5 secs"))
 
         assert self.__kvmd_session
         try:
-            logger.info("%s [kvmd]: Applying HID params: mouse_output=%s ...", self._remote, self.__mouse_output)
+            logger.info(self.gettext("%s [kvmd]: Applying HID params: mouse_output=%s ..."), self._remote, self.__mouse_output)
             await self.__kvmd_session.hid.set_params(mouse_output=self.__mouse_output)
 
             async with self.__kvmd_session.ws() as self.__kvmd_ws:
@@ -170,7 +174,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 self.__stage3_ws_connected.set_passed()
                 async for (event_type, event) in self.__kvmd_ws.communicate():
                     await self.__process_ws_event(event_type, event)
-                raise RfbError("KVMD closed the websocket (the server may have been stopped)")
+                raise RfbError(self.gettext("KVMD closed the websocket (the server may have been stopped)"))
         finally:
             self.__kvmd_ws = None
 
@@ -204,19 +208,19 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                     while True:
                         frame = await read_frame(not self.__fb_has_key)
                         if not streaming:
-                            logger.info("%s [streamer]: Streaming ...", self._remote)
+                            logger.info(self.gettext("%s [streamer]: Streaming ..."), self._remote)
                             streaming = True
                         if frame["online"]:
                             await self.__queue_frame(frame)
                         else:
-                            await self.__queue_frame("No signal")
+                            await self.__queue_frame(self.gettext("No signal"))
             except StreamerError as err:
                 if isinstance(err, StreamerPermError):
                     streamer = self.__get_default_streamer()
-                    logger.info("%s [streamer]: Permanent error: %s; switching to %s ...", self._remote, err, streamer)
+                    logger.info(self.gettext("%s [streamer]: Permanent error: %s; switching to %s ..."), self._remote, err, streamer)
                 else:
-                    logger.info("%s [streamer]: Waiting for stream: %s", self._remote, err)
-                await self.__queue_frame("Waiting for stream ...")
+                    logger.info(self.gettext("%s [streamer]: Waiting for stream: %s"), self._remote, err)
+                await self.__queue_frame(self.gettext("Waiting for stream ..."))
                 await asyncio.sleep(1)
 
     def __get_preferred_streamer(self) -> BaseStreamerClient:
@@ -227,13 +231,13 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         streamer: (BaseStreamerClient | None) = None
         for streamer in self.__streamers:
             if getattr(self._encodings, formats[streamer.get_format()]):
-                get_logger(0).info("%s [streamer]: Using preferred %s", self._remote, streamer)
+                get_logger(0).info(self.gettext("%s [streamer]: Using preferred %s"), self._remote, streamer)
                 return streamer
         raise RuntimeError("No streamers found")
 
     def __get_default_streamer(self) -> BaseStreamerClient:
         streamer = self.__streamers[-1]
-        get_logger(0).info("%s [streamer]: Using default %s", self._remote, streamer)
+        get_logger(0).info(self.gettext("%s [streamer]: Using default %s"), self._remote, streamer)
         return streamer
 
     async def __queue_frame(self, frame: (dict | str)) -> None:
@@ -298,13 +302,13 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 await self._send_fb_jpeg(last["data"])
             elif last["format"] == StreamFormats.H264:
                 if not self._encodings.has_h264:
-                    raise RfbError("The client doesn't want to accept H264 anymore")
+                    raise RfbError(self.gettext("The client doesn't want to accept H264 anymore"))
                 if self.__fb_has_key:
                     await self._send_fb_h264(last["data"])
                 else:
                     await self._send_fb_allow_again()
             else:
-                raise RuntimeError(f"Unknown format: {last['format']}")
+                raise RuntimeError(self.gettext(f"Unknown format: {last['format']}"))
             last["data"] = b""
 
     # =====
@@ -410,7 +414,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         has_quality = (await self.__kvmd_session.streamer.get_state())["features"]["quality"]
         quality = (self._encodings.tight_jpeg_quality if has_quality else None)
-        get_logger(0).info("%s [main]: Applying streamer params: jpeg_quality=%s; desired_fps=%d ...",
+        get_logger(0).info(self.gettext("%s [main]: Applying streamer params: jpeg_quality=%s; desired_fps=%d ..."),
                            self._remote, quality, self.__desired_fps)
         await self.__kvmd_session.streamer.set_params(quality, self.__desired_fps)
 
@@ -456,14 +460,16 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
 
         shared_params = _SharedParams()
 
+        self.gettext=Languages().gettext
+
         async def cleanup_client(writer: asyncio.StreamWriter) -> None:
             if (await aiotools.close_writer(writer)):
-                get_logger(0).info("%s [entry]: Connection is closed in an emergency", rfb_format_remote(writer))
+                get_logger(0).info(self.gettext("%s [entry]: Connection is closed in an emergency"), rfb_format_remote(writer))
 
         async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             logger = get_logger(0)
             remote = rfb_format_remote(writer)
-            logger.info("%s [entry]: Connected client", remote)
+            logger.info(self.gettext("%s [entry]: Connected client"), remote)
             try:
                 sock = writer.get_extra_info("socket")
                 if no_delay:
@@ -482,7 +488,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     async with kvmd.make_session("", "") as kvmd_session:
                         none_auth_only = await kvmd_session.auth.check()
                 except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                    logger.error("%s [entry]: Can't check KVMD auth mode: %s", remote, tools.efmt(err))
+                    logger.error(self.gettext("%s [entry]: Can't check KVMD auth mode: %s"), remote, tools.efmt(err))
                     return
 
                 await _Client(
@@ -504,7 +510,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     shared_params=shared_params,
                 ).run()
             except Exception:
-                logger.exception("%s [entry]: Unhandled exception in client task", remote)
+                logger.exception(self.gettext("%s [entry]: Unhandled exception in client task"), remote)
             finally:
                 await aiotools.shield_fg(cleanup_client(writer))
 
@@ -514,7 +520,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         if not (await self.__vnc_auth_manager.read_credentials())[1]:
             raise SystemExit(1)
 
-        get_logger(0).info("Listening VNC on TCP [%s]:%d ...", self.__host, self.__port)
+        get_logger(0).info(self.gettext("Listening VNC on TCP [%s]:%d ..."), self.__host, self.__port)
         (family, _, _, _, addr) = socket.getaddrinfo(self.__host, self.__port, type=socket.SOCK_STREAM)[0]
         with contextlib.closing(socket.socket(family, socket.SOCK_STREAM)) as sock:
             if family == socket.AF_INET6:
@@ -532,4 +538,4 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
 
     def run(self) -> None:
         aiotools.run(self.__inner_run())
-        get_logger().info("Bye-bye")
+        get_logger().info(self.gettext("Bye-bye"))

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-08-12 22:07+0800\n"
+"POT-Creation-Date: 2024-08-14 22:40+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -89,37 +89,34 @@ msgstr ""
 msgid "Can't find any UDC"
 msgstr ""
 
-#: kvmd/apps/__init__.py:132
-msgid "Set config file path"
-msgstr ""
-
-#: kvmd/apps/__init__.py:134
-msgid "Override config options list (like sec/sub/opt=value)"
-msgstr ""
-
-#: kvmd/apps/__init__.py:136
-msgid "View current configuration (include all overrides)"
-msgstr ""
-
-#: kvmd/apps/__init__.py:139
-msgid "Run the service"
+#: kvmd/apps/__init__.py:164
+msgid "INFO"
 msgstr ""
 
 #: kvmd/apps/__init__.py:165
+msgid "WARNING"
+msgstr ""
+
+#: kvmd/apps/__init__.py:166
+msgid "ERROR"
+msgstr ""
+
+#: kvmd/apps/__init__.py:176
 msgid ""
 "To prevent accidental startup, you must specify the --run option to "
 "start.\n"
 msgstr ""
 
-#: kvmd/apps/__init__.py:165
+#: kvmd/apps/__init__.py:176
 msgid "Try the --help option to find out what this service does.\n"
 msgstr ""
 
-#: kvmd/apps/__init__.py:165
+#: kvmd/apps/__init__.py:176
 msgid "Make sure you understand exactly what you are doing!"
 msgstr ""
 
 #: kvmd/apps/kvmd/__init__.py:115 kvmd/apps/otgnet/__init__.py:132
+#: kvmd/apps/vnc/server.py:541
 msgid "Bye-bye"
 msgstr ""
 
@@ -169,6 +166,48 @@ msgstr ""
 #: kvmd/apps/kvmd/auth.py:147
 #, python-format
 msgid "Logged out user %r (%d)"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:89
+msgid "This streamer does not support quality settings"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:94
+msgid "This streamer does not support resolution settings"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:99
+msgid "This streamer does not support H264"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:298
+msgid "Waiting short tasks ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:300
+msgid "Stopping system tasks ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:302
+msgid "Disconnecting clients ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:304
+msgid "On-Shutdown complete"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:310
+#, python-format
+msgid "Cleaning up %s ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:314
+#, python-format
+msgid "Cleanup error on %s"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:315
+msgid "On-Cleanup complete"
 msgstr ""
 
 #: kvmd/apps/kvmd/streamer.py:245
@@ -372,6 +411,115 @@ msgstr ""
 #: kvmd/apps/otgnet/__init__.py:185
 #, python-format
 msgid "Using OTG Ethernet interface %r ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:163
+#, python-format
+msgid "%s [kvmd]: Waiting for the SetEncodings message ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:165
+msgid "No SetEncodings message recieved from the client in 5 secs"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:169
+#, python-format
+msgid "%s [kvmd]: Applying HID params: mouse_output=%s ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:177
+msgid "KVMD closed the websocket (the server may have been stopped)"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:211
+#, python-format
+msgid "%s [streamer]: Streaming ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:216
+msgid "No signal"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:220
+#, python-format
+msgid "%s [streamer]: Permanent error: %s; switching to %s ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:222
+#, python-format
+msgid "%s [streamer]: Waiting for stream: %s"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:223
+msgid "Waiting for stream ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:234
+#, python-format
+msgid "%s [streamer]: Using preferred %s"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:240
+#, python-format
+msgid "%s [streamer]: Using default %s"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:305
+msgid "The client doesn't want to accept H264 anymore"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:311
+msgid "format"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:417
+#, python-format
+msgid "%s [main]: Applying streamer params: jpeg_quality=%s; desired_fps=%d ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:467
+#, python-format
+msgid "%s [entry]: Connection is closed in an emergency"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:472
+#, python-format
+msgid "%s [entry]: Connected client"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:491
+#, python-format
+msgid "%s [entry]: Can't check KVMD auth mode: %s"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:513
+#, python-format
+msgid "%s [entry]: Unhandled exception in client task"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:523
+#, python-format
+msgid "Listening VNC on TCP [%s]:%d ..."
+msgstr ""
+
+#: kvmd/apps/vnc/vncauth.py:63
+msgid "Unhandled exception while reading VNCAuth passwd file"
+msgstr ""
+
+#: kvmd/apps/vnc/vncauth.py:74
+msgid "Missing ' -> ' operator"
+msgstr ""
+
+#: kvmd/apps/vnc/vncauth.py:78
+msgid "Missing ':' operator in KVMD credentials (right part)"
+msgstr ""
+
+#: kvmd/apps/vnc/vncauth.py:83
+msgid "Empty KVMD user (right part)"
+msgstr ""
+
+#: kvmd/apps/vnc/vncauth.py:86
+msgid "Duplicating VNC password (left part)"
 msgstr ""
 
 #: kvmd/keyboard/keysym.py:69

@@ -31,7 +31,7 @@ from typing import Optional
 import aiofiles
 import aiofiles.os
 
-from ....lanuages import Lanuages
+from ....languages import Languages
 
 from .... import aiotools
 from .... import aiohelpers
@@ -294,4 +294,4 @@ class Storage(_StorageDc):
     async def remount_rw(self, rw: bool, fatal: bool=True) -> None:
         if not (await aiohelpers.remount("MSD", self.__remount_cmd, rw)):
             if fatal:
-                raise MsdError(Lanuages().gettext("Can't execute remount helper"))
+                raise MsdError(Languages().gettext("Can't execute remount helper"))

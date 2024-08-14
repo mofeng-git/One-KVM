@@ -41,7 +41,7 @@ from .events import get_led_scroll
 from .events import get_led_num
 from .events import make_keyboard_report
 
-from ....lanuages import Lanuages
+from ....languages import Languages
 
 # =====
 class KeyboardProcess(BaseDeviceProcess):
@@ -55,7 +55,7 @@ class KeyboardProcess(BaseDeviceProcess):
 
         self.__pressed_modifiers: set[UsbKey] = set()
         self.__pressed_keys: list[UsbKey | None] = [None] * 6
-        self.gettext=Lanuages().gettext
+        self.gettext=Languages().gettext
 
     def cleanup(self) -> None:
         self._stop()

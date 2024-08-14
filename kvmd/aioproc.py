@@ -26,7 +26,7 @@ import asyncio
 import asyncio.subprocess
 import logging
 
-from .lanuages import Lanuages
+from .languages import Languages
 import setproctitle
 
 from .logging import get_logger
@@ -86,7 +86,7 @@ async def log_stdout_infinite(proc: asyncio.subprocess.Process, logger: logging.
         else:
             empty += 1
             if empty == 100:  # asyncio bug
-                raise RuntimeError(Lanuages().gettext("Asyncio process: too many empty lines"))
+                raise RuntimeError(Languages().gettext("Asyncio process: too many empty lines"))
 
 
 async def kill_process(proc: asyncio.subprocess.Process, wait: float, logger: logging.Logger) -> None:  # pylint: disable=no-member
@@ -101,14 +101,14 @@ async def kill_process(proc: asyncio.subprocess.Process, wait: float, logger: lo
                     if proc.returncode is not None:
                         raise
             await proc.wait()
-            logger.info(Lanuages().gettext("Process killed: retcode=%d"), proc.returncode)
+            logger.info(Languages().gettext("Process killed: retcode=%d"), proc.returncode)
         except asyncio.CancelledError:
             pass
         except Exception:
             if proc.returncode is None:
-                logger.exception(Lanuages().gettext("Can't kill process pid=%d"), proc.pid)
+                logger.exception(Languages().gettext("Can't kill process pid=%d"), proc.pid)
             else:
-                logger.info(Lanuages().gettext("Process killed: retcode=%d"), proc.returncode)
+                logger.info(Languages().gettext("Process killed: retcode=%d"), proc.returncode)
 
 
 def rename_process(suffix: str, prefix: str="kvmd") -> None:
@@ -117,7 +117,7 @@ def rename_process(suffix: str, prefix: str="kvmd") -> None:
 
 def settle(name: str, suffix: str, prefix: str="kvmd") -> logging.Logger:
     logger = get_logger(1)
-    logger.info(Lanuages().gettext("Started %s pid=%d"), name, os.getpid())
+    logger.info(Languages().gettext("Started %s pid=%d"), name, os.getpid())
     os.setpgrp()
     rename_process(suffix, prefix)
     return logger

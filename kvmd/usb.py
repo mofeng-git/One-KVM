@@ -22,7 +22,7 @@
 
 import os
 
-from .lanuages import Lanuages
+from .languages import Languages
 
 from . import env
 
@@ -33,10 +33,10 @@ def find_udc(udc: str) -> str:
     candidates = sorted(os.listdir(path))
     if not udc:
         if len(candidates) == 0:
-            raise RuntimeError(Lanuages().gettext("Can't find any UDC"))
+            raise RuntimeError(Languages().gettext("Can't find any UDC"))
         udc = candidates[0]
     elif udc not in candidates:
-        raise RuntimeError(Lanuages().gettext(f"Can't find selected UDC: {udc}"))
+        raise RuntimeError(Languages().gettext(f"Can't find selected UDC: {udc}"))
     return udc  # fe980000.usb
 
 

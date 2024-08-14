@@ -29,7 +29,7 @@ import argparse
 
 from os.path import join
 
-from ...lanuages import Lanuages
+from ...languages import Languages
 
 from ...logging import get_logger
 
@@ -203,7 +203,7 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
     # https://www.isticktoit.net/?p=1383
 
     logger = get_logger()
-    gettext=Lanuages().gettext
+    gettext=Languages().gettext
 
     _check_config(config)
 
@@ -296,7 +296,7 @@ def _cmd_stop(config: Section) -> None:
 
     gadget_path = usb.get_gadget_path(config.otg.gadget)
 
-    logger.info(Lanuages().gettext("Disabling gadget %r ..."), config.otg.gadget)
+    logger.info(Languages().gettext("Disabling gadget %r ..."), config.otg.gadget)
     _write(join(gadget_path, "UDC"), "\n")
 
     _unlink(join(gadget_path, "os_desc", usb.G_PROFILE_NAME), optional=True)

@@ -28,7 +28,7 @@ from typing import AsyncGenerator
 import aiohttp
 import aiohttp.multipart
 
-from .lanuages import Lanuages
+from .languages import Languages
 
 from . import __version__
 
@@ -60,7 +60,7 @@ def get_filename(response: aiohttp.ClientResponse) -> str:
         try:
             return os.path.basename(response.url.path)
         except Exception:
-            raise aiohttp.ClientError(Lanuages().gettext("Can't determine filename"))
+            raise aiohttp.ClientError(Languages().gettext("Can't determine filename"))
 
 
 @contextlib.asynccontextmanager

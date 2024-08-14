@@ -20,31 +20,15 @@
 # ========================================================================== #
 
 
-import subprocess
+from typing import Any
 
-from .languages import Languages
+from . import check_string_in_list
 
-from .logging import get_logger
-
-from . import tools
-from . import aioproc
+from .basic import valid_number
 
 
 # =====
-async def remount(name: str, base_cmd: list[str], rw: bool) -> bool:
-    logger = get_logger(1)
-    mode = ("rw" if rw else "ro")
-    cmd = [
-        part.format(mode=mode)
-        for part in base_cmd
-    ]
-    logger.info(Languages().gettext("Remounting %s storage to %s: %s ..."), name, mode.upper(), tools.cmdfmt(cmd))
-    try:
-        proc = await aioproc.log_process(cmd, logger)
-        if proc.returncode != 0:
-            assert proc.returncode is not None
-            raise subprocess.CalledProcessError(proc.returncode, cmd)
-    except Exception as err:
-        logger.error(Languages().gettext("Can't remount %s storage: %s"), name, tools.efmt(err))
-        return False
-    return True
+def valid_languages(arg: Any) -> str:
+    return check_string_in_list(arg, "Languages", ["zh", "en", "default"])
+
+

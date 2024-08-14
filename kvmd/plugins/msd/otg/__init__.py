@@ -28,7 +28,7 @@ import time
 
 from typing import AsyncGenerator
 
-from ....lanuages import Lanuages
+from ....languages import Languages
 from ....logging import get_logger
 
 from ....inotify import InotifyMask
@@ -44,7 +44,7 @@ from ....validators.kvm import valid_msd_image_name
 from .... import aiotools
 from .... import fstab
 
-from ....lanuages import Lanuages
+from ....languages import Languages
 
 from .. import MsdIsBusyError
 from .. import MsdOfflineError
@@ -142,7 +142,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__notifier = aiotools.AioNotifier()
         self.__state = _State(self.__notifier)
-        self.gettext=Lanuages().gettext
+        self.gettext=Languages().gettext
 
         logger = get_logger(0)
         logger.info(self.gettext("Using OTG gadget %r as MSD"), gadget)

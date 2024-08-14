@@ -38,7 +38,7 @@ from .... import aiomulti
 
 from ....keyboard.mappings import UsbKey
 
-from ....lanuages import Lanuages
+from ....languages import Languages
 
 from ..otg.events import BaseEvent
 from ..otg.events import ClearEvent
@@ -117,7 +117,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
         self.__keys: list[UsbKey | None] = [None] * 6
         self.__mouse_buttons = 0
 
-        self.gettext=Lanuages().gettext
+        self.gettext=Languages().gettext
 
     def run(self) -> None:
         with self.__iface:

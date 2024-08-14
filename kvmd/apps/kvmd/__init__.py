@@ -26,7 +26,7 @@ from ...plugins.hid import get_hid_class
 from ...plugins.atx import get_atx_class
 from ...plugins.msd import get_msd_class
 
-from ...lanuages import Lanuages
+from ...languages import Languages
 
 from .. import init
 
@@ -112,4 +112,4 @@ def main(argv: (list[str] | None)=None) -> None:
         stream_forever=config.streamer.forever,
     ).run(**config.server._unpack())
 
-    get_logger(0).info(Lanuages().gettext("Bye-bye"))
+    get_logger(0).info(Languages().gettext("Bye-bye"))

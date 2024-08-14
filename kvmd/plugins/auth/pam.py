@@ -34,7 +34,7 @@ from ...logging import get_logger
 
 from ... import aiotools
 
-from ...lanuages import Lanuages
+from ...languages import Languages
 
 from . import BaseAuthService
 
@@ -88,13 +88,13 @@ class Plugin(BaseAuthService):
                 return False
             else:
                 if uid < self.__allow_uids_at:
-                    get_logger().error(Lanuages().gettext("Unallowed UID of user %r: uid=%d < allow_uids_at=%d"),
+                    get_logger().error(Languages().gettext("Unallowed UID of user %r: uid=%d < allow_uids_at=%d"),
                                        user, uid, self.__allow_uids_at)
                     return False
 
         pam_obj = pam.pam()
         if not pam_obj.authenticate(user, passwd, service=self.__service):
-            get_logger().error(Lanuages().gettext("Can't authorize user %r using PAM: code=%d; reason=%s"),
+            get_logger().error(Languages().gettext("Can't authorize user %r using PAM: code=%d; reason=%s"),
                                user, pam_obj.code, pam_obj.reason)
             return False
         return True

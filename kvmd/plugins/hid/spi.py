@@ -41,7 +41,7 @@ from ...validators.basic import valid_int_f1
 from ...validators.basic import valid_float_f01
 from ...validators.hw import valid_gpio_pin_optional
 
-from ...lanuages import Lanuages
+from ...languages import Lanuages
 
 from ._mcu import BasePhyConnection
 from ._mcu import BasePhy
