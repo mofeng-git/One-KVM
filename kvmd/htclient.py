@@ -79,6 +79,6 @@ async def download(
         ),
     }
     async with aiohttp.ClientSession(**kwargs) as session:
-        async with session.get(url, verify_ssl=verify) as response:
+        async with session.get(url, verify_ssl=verify) as response:  # type: ignore
             raise_not_200(response)
             yield response

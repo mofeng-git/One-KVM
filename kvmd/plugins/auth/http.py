@@ -75,7 +75,7 @@ class Plugin(BaseAuthService):
             async with session.request(
                 method="POST",
                 url=self.__url,
-                timeout=self.__timeout,
+                timeout=aiohttp.ClientTimeout(total=self.__timeout),
                 json={
                     "user": user,
                     "passwd": passwd,

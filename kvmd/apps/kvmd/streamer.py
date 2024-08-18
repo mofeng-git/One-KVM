@@ -357,7 +357,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         try:
             async with session.get(
                 self.__make_url("snapshot"),
-                timeout=self.__snapshot_timeout,
+                timeout=aiohttp.ClientTimeout(total=self.__snapshot_timeout),
             ) as response:
 
                 htclient.raise_not_200(response)
