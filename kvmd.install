@@ -92,6 +92,10 @@ disable_overscan=1
 EOF
 	fi
 
+	if [[ "$(vercmp "$2" 4.4)" -lt 0 ]]; then
+		systemctl disable kvmd-pass || true
+	fi
+
 	# Some update deletes /etc/motd, WTF
 	# shellcheck disable=SC2015,SC2166
 	[ ! -f /etc/motd -a -f /etc/motd.pacsave ] && mv /etc/motd.pacsave /etc/motd || true

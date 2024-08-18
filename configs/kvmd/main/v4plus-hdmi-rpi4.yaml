@@ -31,6 +31,7 @@ kvmd:
         type: otg
 
     streamer:
+        forever: true
         h264_bitrate:
             default: 5000
         cmd:
@@ -38,10 +39,10 @@ kvmd:
             - "--device=/dev/kvmd-video"
             - "--persistent"
             - "--dv-timings"
-            - "--format=uyvy"
+            - "--format=rgb24"
             - "--format-swap-rgb"
             - "--buffers=8"
-            - "--encoder=m2m-image"
+            - "--encoder=cpu"
             - "--workers=3"
             - "--quality={quality}"
             - "--desired-fps={desired_fps}"
@@ -59,6 +60,7 @@ kvmd:
             - "--h264-sink-mode=0660"
             - "--h264-bitrate={h264_bitrate}"
             - "--h264-gop={h264_gop}"
+            - "--v4p"
 
     gpio:
         drivers:
