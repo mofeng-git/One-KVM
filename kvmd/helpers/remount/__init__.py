@@ -22,6 +22,7 @@
 
 import sys
 import os
+import stat
 import pwd
 import grp
 import shutil
@@ -103,11 +104,12 @@ def _chgrp(path: str, group: str) -> None:
 
 
 def _chmod(path: str, mode: int) -> None:
-    _log(f"CHMOD --- 0o{mode:o} - {path}")
-    try:
-        os.chmod(path, mode)
-    except Exception as err:
-        raise SystemExit(f"Can't change permissions: {err}")
+    if stat.S_IMODE(os.stat(path).st_mode) != mode:
+        _log(f"CHMOD --- 0o{mode:o} - {path}")
+        try:
+            os.chmod(path, mode)
+        except Exception as err:
+            raise SystemExit(f"Can't change permissions: {err}")
 
 
 # =====
@@ -141,7 +143,7 @@ def _fix_pst(part: Partition) -> None:
         _chown(part.root_path, part.user)
         _chown(path, part.user)
     if part.group:
-        _chown(part.root_path, part.group)
+        _chgrp(part.root_path, part.group)
         _chgrp(path, part.group)
     if part.user and part.group:
         _chmod(part.root_path, 0o1775)
