@@ -27,7 +27,8 @@ post_upgrade() {
 	done
 
 	chown kvmd /var/lib/kvmd/msd 2>/dev/null || true
-	chown kvmd-pst /var/lib/kvmd/pst 2>/dev/null || true
+	chown kvmd-pst:kvmd-pst /var/lib/kvmd/pst 2>/dev/null || true
+	chmod 1775 /var/lib/kvmd/pst 2>/dev/null || true
 
 	if [ ! -e /etc/kvmd/nginx/ssl/server.crt ]; then
 		echo "==> Generating KVMD-Nginx certificate ..."
@@ -94,6 +95,11 @@ EOF
 
 	if [[ "$(vercmp "$2" 4.4)" -lt 0 ]]; then
 		systemctl disable kvmd-pass || true
+	fi
+
+	if [[ "$(vercmp "$2" 4.5)" -lt 0 ]]; then
+		sed -i 's/X-kvmd\.pst-user=kvmd-pst/X-kvmd.pst-user=kvmd-pst,X-kvmd.pst-group=kvmd-pst/g' /etc/fstab
+		touch -t 200701011000 /etc/fstab
 	fi
 
 	# Some update deletes /etc/motd, WTF

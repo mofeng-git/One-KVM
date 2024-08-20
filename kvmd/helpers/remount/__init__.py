@@ -23,6 +23,7 @@
 import sys
 import os
 import pwd
+import grp
 import shutil
 import subprocess
 
@@ -87,9 +88,26 @@ def _chown(path: str, user: str) -> None:
     if pwd.getpwuid(os.stat(path).st_uid).pw_name != user:
         _log(f"CHOWN --- {user} - {path}")
         try:
-            shutil.chown(path, user)
+            shutil.chown(path, user=user)
         except Exception as err:
             raise SystemExit(f"Can't change ownership: {err}")
+
+
+def _chgrp(path: str, group: str) -> None:
+    if grp.getgrgid(os.stat(path).st_gid).gr_name != group:
+        _log(f"CHGRP --- {group} - {path}")
+        try:
+            shutil.chown(path, group=group)
+        except Exception as err:
+            raise SystemExit(f"Can't change group: {err}")
+
+
+def _chmod(path: str, mode: int) -> None:
+    _log(f"CHMOD --- 0o{mode:o} - {path}")
+    try:
+        os.chmod(path, mode)
+    except Exception as err:
+        raise SystemExit(f"Can't change permissions: {err}")
 
 
 # =====
@@ -112,13 +130,21 @@ def _fix_msd(part: Partition) -> None:
 
     if part.user:
         _chown(part.root_path, part.user)
+    if part.group:
+        _chgrp(part.root_path, part.group)
 
 
 def _fix_pst(part: Partition) -> None:
     path = os.path.join(part.root_path, "data")
     _mkdir(path)
     if part.user:
+        _chown(part.root_path, part.user)
         _chown(path, part.user)
+    if part.group:
+        _chown(part.root_path, part.group)
+        _chgrp(path, part.group)
+    if part.user and part.group:
+        _chmod(part.root_path, 0o1775)
 
 
 # =====
