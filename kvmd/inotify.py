@@ -142,6 +142,14 @@ class InotifyMask:
         | MOVED_TO
     )
 
+    # Helper for typicals events when we need to restart watcher
+    ALL_RESTART_EVENTS = (
+        DELETE_SELF
+        | MOVE_SELF
+        | UNMOUNT
+        | ISDIR
+    )
+
     # Special flags for watch()
 #    DONT_FOLLOW = 0x02000000  # Don't follow a symbolic link
 #    EXCL_UNLINK = 0x04000000  # Exclude events on unlinked objects
@@ -172,6 +180,10 @@ class InotifyEvent:
     name: str
     path: str
 
+    @property
+    def restart(self) -> bool:
+        return bool(self.mask & InotifyMask.ALL_RESTART_EVENTS)
+
     def __repr__(self) -> str:
         return (
             f"<InotifyEvent: wd={self.wd}, mask={InotifyMask.to_string(self.mask)},"
@@ -189,6 +201,9 @@ class Inotify:
         self.__moved: dict[int, str] = {}
 
         self.__events_queue: "asyncio.Queue[InotifyEvent]" = asyncio.Queue()
+
+    async def watch_all_modify(self, *paths: str) -> None:
+        await self.watch(InotifyMask.ALL_MODIFY_EVENTS, *paths)
 
     async def watch(self, mask: int, *paths: str) -> None:
         for path in paths:

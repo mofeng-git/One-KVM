@@ -30,7 +30,6 @@ from typing import AsyncGenerator
 
 from ....logging import get_logger
 
-from ....inotify import InotifyMask
 from ....inotify import Inotify
 
 from ....yamlconf import Option
@@ -415,8 +414,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await asyncio.sleep(5)
 
                 with Inotify() as inotify:
-                    await inotify.watch(InotifyMask.ALL_MODIFY_EVENTS, *self.__storage.get_watchable_paths())
-                    await inotify.watch(InotifyMask.ALL_MODIFY_EVENTS, *self.__drive.get_watchable_paths())
+                    await inotify.watch_all_modify(*self.__storage.get_watchable_paths())
+                    await inotify.watch_all_modify(*self.__drive.get_watchable_paths())
 
                     # После установки вотчеров еще раз проверяем стейт, чтобы ничего не потерять
                     await self.__reload_state()
@@ -426,8 +425,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                         need_reload_state = False
                         for event in (await inotify.get_series(timeout=1)):
                             need_reload_state = True
-                            if event.mask & (InotifyMask.DELETE_SELF | InotifyMask.MOVE_SELF | InotifyMask.UNMOUNT | InotifyMask.ISDIR):
-                                # Если выгрузили OTG, изменили каталоги, что-то отмонтировали или делают еще какую-то странную фигню
+                            if event.restart:
+                                # Если выгрузили OTG, изменили каталоги, что-то отмонтировали или делают еще какую-то странную фигню.
+                                # Проверяется маска InotifyMask.ALL_RESTART_EVENTS
                                 logger.info("Got a big inotify event: %s; reinitializing MSD ...", event)
                                 need_restart = True
                                 break
