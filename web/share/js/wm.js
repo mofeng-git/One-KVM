@@ -165,7 +165,7 @@ function __WindowManager() {
 
 				try {
 					err = (document.execCommand("copy") ? null : "Unknown error");
-				} catch (err) { // eslint-disable-line no-empty
+				} catch (err) { // eslint-disable-line no-unused-vars
 				}
 
 				// Remove the added textarea again:

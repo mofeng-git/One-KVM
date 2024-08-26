@@ -59,7 +59,7 @@ function __login() {
 			} else {
 				let error = "";
 				if (http.status === 400) {
-					try { error = JSON.parse(http.responseText)["result"]["error"]; } catch (_) { /* Nah */ }
+					try { error = JSON.parse(http.responseText)["result"]["error"]; } catch { /* Nah */ }
 				}
 				if (error === "ValidatorError") {
 					wm.error("Invalid characters in credentials").then(__tryAgain);
