@@ -50,7 +50,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
 
         super().__init__()
 
-        self.__data_path = os.path.join(fstab.find_pst().root_path, "data")
+        self.__data_path = fstab.find_pst().root_path
         self.__ro_retries_delay = ro_retries_delay
         self.__ro_cleanup_delay = ro_cleanup_delay
         self.__remount_cmd = remount_cmd
