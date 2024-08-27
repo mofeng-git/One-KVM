@@ -400,7 +400,6 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
                 "/usr/bin/v4l2-ctl",
                 f"--device={options.device_path}",
                 f"--set-edid=file={orig_edid_path}",
-                "--fix-edid-checksums",
                 "--info-edid",
             ], stdout=sys.stderr, check=True)
     except subprocess.CalledProcessError as err:
