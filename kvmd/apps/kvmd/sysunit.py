@@ -35,6 +35,7 @@ class SystemdUnitInfo:
         self.__bus: (dbus_next.aio.MessageBus | None) = None
         self.__intr: (dbus_next.introspection.Node | None) = None
         self.__manager: (dbus_next.aio.proxy_object.ProxyInterface | None) = None
+        self.__requested = False
 
     async def get_status(self, name: str) -> tuple[bool, bool]:
         assert self.__bus is not None
@@ -49,6 +50,7 @@ class SystemdUnitInfo:
             unit = self.__bus.get_proxy_object("org.freedesktop.systemd1", unit_p, self.__intr)
             unit_props = unit.get_interface("org.freedesktop.DBus.Properties")
             started = ((await unit_props.call_get("org.freedesktop.systemd1.Unit", "ActiveState")).value == "active")  # type: ignore
+            self.__requested = True
         except dbus_next.errors.DBusError as err:
             if err.type != "org.freedesktop.systemd1.NoSuchUnit":
                 raise
@@ -76,11 +78,12 @@ class SystemdUnitInfo:
         try:
             if self.__bus is not None:
                 try:
-                    await self.__manager.call_get_default_target()
-                except:
-                    pass
-                self.__bus.disconnect()
-                await self.__bus.wait_for_disconnect()
+                    # XXX: Workaround for dbus_next bug: https://github.com/pikvm/kvmd/pull/182
+                    if not self.__requested:
+                        await self.__manager.call_get_default_target()  # type: ignore
+                finally:
+                    self.__bus.disconnect()
+                    await self.__bus.wait_for_disconnect()
         except Exception:
             pass
         self.__manager = None
