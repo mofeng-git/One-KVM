@@ -75,6 +75,10 @@ class SystemdUnitInfo:
     async def close(self) -> None:
         try:
             if self.__bus is not None:
+                try:
+                    await self.__manager.call_get_default_target()
+                except:
+                    pass
                 self.__bus.disconnect()
                 await self.__bus.wait_for_disconnect()
         except Exception:
