@@ -3,7 +3,7 @@ kvmd:
         unix_mode: 0666
 
     atx:
-        device: /dev/kvmd-gpio
+        type: disabled
 
     hid:
         keyboard:
@@ -13,7 +13,7 @@ kvmd:
         noop: true
 
     msd:
-        remount_cmd: /bin/true
+        type: disabled
 
     streamer:
         cmd:
