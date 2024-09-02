@@ -1,4 +1,4 @@
-FROM hub.atomgit.com/amd64/python:3.12.0rc2-slim-bookworm as builder
+FROM python:3.12.0rc2-slim-bookworm as builder
 
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
@@ -23,7 +23,7 @@ RUN mkdir /tmp/lib \
         /lib/*-linux-gnu/libevent-*.so.7 /lib/*-linux-gnu/libjpeg.so.62 /tmp/lib/ \
     && cp /tmp/ustreamer/python/dist/*.whl /tmp/wheel/
 
-FROM hub.atomgit.com/amd64/python:3.12.0rc2-slim-bookworm
+FROM python:3.12.0rc2-slim-bookworm
 
 LABEL maintainer="mofeng654321@hotmail.com"
 
