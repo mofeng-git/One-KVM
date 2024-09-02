@@ -111,10 +111,12 @@ class HwInfoSubmanager(BaseInfoSubmanager):
     async def __read_dt_file(self, name: str) -> (str | None):
         if name not in self.__dt_cache:
             path = os.path.join(f"{env.PROCFS_PREFIX}/proc/device-tree", name)
+            if not os.path.exists(path):
+                path = os.path.join(f"{env.PROCFS_PREFIX}/usr/share/kvmd/extras/hw_info/", name)
             try:
                 self.__dt_cache[name] = (await aiotools.read_file(path)).strip(" \t\r\n\0")
             except Exception as err:
-                get_logger(0).error("Can't read DT %s from %s: %s", name, path, err)
+                get_logger(0).warn("Can't read DT %s from %s: %s", name, path, err)
                 return None
         return self.__dt_cache[name]
 
@@ -141,7 +143,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
         try:
             return int((await aiotools.read_file(temp_path)).strip()) / 1000
         except Exception as err:
-            get_logger(0).error("Can't read CPU temp from %s: %s", temp_path, err)
+            get_logger(0).warn("Can't read CPU temp from %s: %s", temp_path, err)
             return None
 
     async def __get_cpu_percent(self) -> (float | None):

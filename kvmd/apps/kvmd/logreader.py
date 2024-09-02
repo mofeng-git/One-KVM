@@ -25,39 +25,51 @@ import asyncio
 import time
 
 from typing import AsyncGenerator
+from xmlrpc.client import ServerProxy
 
-import systemd.journal
+from ...logging import get_logger
 
+try:
+    module_name = "systemd.journal"
+    module = __import__(module_name)
+except ImportError:
+    us_systemd_journal = False
+    get_logger(0).error("Failed to import module: %s", module_name)
 
 # =====
 class LogReader:
     async def poll_log(self, seek: int, follow: bool) -> AsyncGenerator[dict, None]:
-        reader = systemd.journal.Reader()
-        reader.this_boot()
-        # XXX: Из-за смены ID машины в bootconfig это не работает при первой загрузке.
-        # reader.this_machine()
-        reader.log_level(systemd.journal.LOG_DEBUG)
+        if us_systemd_journal:
+            reader = systemd.journal.Reader() # type: ignore
+            reader.this_boot()
+            # XXX: Из-за смены ID машины в bootconfig это не работает при первой загрузке.
+            # reader.this_machine()
+            reader.log_level(systemd.journal.LOG_DEBUG) # type: ignore
+            services = set(
+                service
+                for service in systemd.journal.Reader().query_unique("_SYSTEMD_UNIT") # type: ignore
+                if re.match(r"kvmd(-\w+)*\.service", service)
+            ).union(["kvmd.service"])
 
-        services = set(
-            service
-            for service in systemd.journal.Reader().query_unique("_SYSTEMD_UNIT")
-            if re.match(r"kvmd(-\w+)*\.service", service)
-        ).union(["kvmd.service"])
+            for service in services:
+                reader.add_match(_SYSTEMD_UNIT=service)
+            if seek > 0:
+                reader.seek_realtime(float(time.time() - seek))
 
-        for service in services:
-            reader.add_match(_SYSTEMD_UNIT=service)
-        if seek > 0:
-            reader.seek_realtime(float(time.time() - seek))
-
-        for entry in reader:
-            yield self.__entry_to_record(entry)
-
-        while follow:
-            entry = reader.get_next()
-            if entry:
+            for entry in reader:
                 yield self.__entry_to_record(entry)
-            else:
-                await asyncio.sleep(1)
+
+            while follow:
+                entry = reader.get_next()
+                if entry:
+                    yield self.__entry_to_record(entry)
+                else:
+                    await asyncio.sleep(1)
+        else:
+            server = ServerProxy('http://127.0.0.1:9001/RPC2')
+            log_entries = server.supervisor.readLog(0,0)
+            yield log_entries
+            
 
     def __entry_to_record(self, entry: dict) -> dict[str, dict]:
         return {

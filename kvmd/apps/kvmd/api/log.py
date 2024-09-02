@@ -53,10 +53,14 @@ class LogApi:
         seek = valid_log_seek(request.query.get("seek", 0))
         follow = valid_bool(request.query.get("follow", False))
         response = await start_streaming(request, "text/plain")
-        async for record in self.__log_reader.poll_log(seek, follow):
-            await response.write(("[%s %s] --- %s" % (
-                record["dt"].strftime("%Y-%m-%d %H:%M:%S"),
-                record["service"],
-                record["msg"],
-            )).encode("utf-8") + b"\r\n")
+        try:
+            async for record in self.__log_reader.poll_log(seek, follow):
+                await response.write(("[%s %s] --- %s" % (
+                    record["dt"].strftime("%Y-%m-%d %H:%M:%S"),
+                    record["service"],
+                    record["msg"],
+                )).encode("utf-8") + b"\r\n")
+        except Exception as e:
+            await response.write(f"Module systemd.journal unavailable, switch to supervisord.\n{record}".encode("utf-8"))
+            return response
         return response
