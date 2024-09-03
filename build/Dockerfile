@@ -1,17 +1,34 @@
-FROM python:3.12.0rc2-slim-bookworm as builder
+# syntax = docker/dockerfile:experimental
+FROM python:3.12.0rc2-slim-bookworm AS builder
+
+ARG TARGETARCH
 
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends build-essential libevent-dev libjpeg-dev libbsd-dev git pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends build-essential libssl-dev libffi-dev python3-dev libevent-dev libjpeg-dev libbsd-dev git pkg-config wget curl
 
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
-    && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check build \
-    && pip wheel --wheel-dir=/tmp/wheel/ aiofiles aiohttp appdirs asn1crypto async_lru async-timeout bottle cffi chardet click colorama cryptography \
+COPY build/cargo_config /tmp/config
+
+RUN --security=insecure pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    && if [ "${TARGETARCH}" = "arm" ]; then \
+        mkdir -p /root/.cargo \
+        && chmod 777 /root/.cargo && mount -t tmpfs none /root/.cargo \
+        && export RUSTUP_DIST_SERVER="https://mirrors.tuna.tsinghua.edu.cn/rustup" \
+        && export RUSTUP_UPDATE_ROOT="https://mirrors.ustc.edu.cn/rust-static/rustup" \
+        && wget  https://sh.rustup.rs -O /root/rustup-init.sh \
+        && sh /root/rustup-init.sh -y \
+        && export PATH=$PATH:/root/.cargo/bin \
+        && cp /tmp/config /root/.cargo/config.toml \
+        && pip wheel --wheel-dir=/tmp/wheel/ cryptography; \
+    else \
+        pip wheel --wheel-dir=/tmp/wheel/ cryptography; \
+    fi;
+
+RUN pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check build \
+    && pip wheel --wheel-dir=/tmp/wheel/ aiofiles aiohttp appdirs asn1crypto async_lru async-timeout bottle cffi chardet click colorama \
         dbus_next gpiod hidapi idna mako marshmallow more-itertools multidict netifaces packaging passlib pillow ply psutil pycparser \
         pyelftools pyghmi pygments pyparsing pyotp qrcode requests semantic-version setproctitle setuptools six spidev  \
-        tabulate urllib3 wrapt xlib yarl pyserial pyyaml zstandard supervisor \
-    && pip cache purge
+        tabulate urllib3 wrapt xlib yarl pyserial pyyaml zstandard supervisor
 
 RUN git clone --depth=1 https://gh.xmly.dev/https://github.com/pikvm/ustreamer /tmp/ustreamer \
     #&& git clone --depth=1 https://github.com/pikvm/ustreamer /tmp/ustreamer \
