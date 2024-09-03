@@ -10,7 +10,7 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
 COPY build/cargo_config /tmp/config
 
 RUN --security=insecure pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
-    && if [ "${TARGETARCH}" = "arm" ]; then \
+    && if [ ${TARGETARCH} = arm ]; then \
         mkdir -p /root/.cargo \
         && chmod 777 /root/.cargo && mount -t tmpfs none /root/.cargo \
         && export RUSTUP_DIST_SERVER="https://mirrors.tuna.tsinghua.edu.cn/rustup" \
@@ -18,11 +18,9 @@ RUN --security=insecure pip config set global.index-url https://pypi.tuna.tsingh
         && wget  https://sh.rustup.rs -O /root/rustup-init.sh \
         && sh /root/rustup-init.sh -y \
         && export PATH=$PATH:/root/.cargo/bin \
-        && cp /tmp/config /root/.cargo/config.toml \
-        && pip wheel --wheel-dir=/tmp/wheel/ cryptography; \
-    else \
-        pip wheel --wheel-dir=/tmp/wheel/ cryptography; \
-    fi;
+        && cp /tmp/config /root/.cargo/config.toml; \
+    fi \
+    && pip wheel --wheel-dir=/tmp/wheel/ cryptography
 
 RUN pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check build \
     && pip wheel --wheel-dir=/tmp/wheel/ aiofiles aiohttp appdirs asn1crypto async_lru async-timeout bottle cffi chardet click colorama \
@@ -36,8 +34,8 @@ RUN git clone --depth=1 https://gh.xmly.dev/https://github.com/pikvm/ustreamer /
     && /tmp/ustreamer/ustreamer -v
 
 RUN mkdir /tmp/lib \
-    && cp  /lib/*-linux-gnu/libevent_core-*.so.7 /lib/*-linux-gnu/libbsd.so.0 /lib/*-linux-gnu/libevent_pthreads-*.so.7 \
-        /lib/*-linux-gnu/libevent-*.so.7 /lib/*-linux-gnu/libjpeg.so.62 /tmp/lib/ \
+    && cp  /lib/*-linux-*/libevent_core-*.so.7 /lib/*-linux-*/libbsd.so.0 /lib/*-linux-*/libevent_pthreads-*.so.7 \
+        /lib/*-linux-*/libevent-*.so.7 /lib/*-linux-*/libjpeg.so.62 /tmp/lib/ \
     && cp /tmp/ustreamer/python/dist/*.whl /tmp/wheel/
 
 FROM python:3.12.0rc2-slim-bookworm
@@ -52,7 +50,7 @@ ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
 
-RUN cp /tmp/lib/* /lib/*-linux-gnu/ \
+RUN cp /tmp/lib/* /lib/*-linux-*/ \
     && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check /tmp/wheel/*.whl \
     && rm -rf /tmp/lib /tmp/wheel
 
@@ -88,6 +86,8 @@ RUN touch /run/kvmd/ustreamer.sock \
     && /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc \
     && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
     && python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf
+
+RUN supervisord -c /etc/kvmd/supervisord.conf
 
 EXPOSE 4430
 CMD ["supervisord", "-c", "/etc/kvmd/supervisord.conf"]
