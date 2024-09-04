@@ -131,6 +131,14 @@ if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
 fi
 
 
+# ========== Avahi ==========
+
+if [ -n "$ENABLE_AVAHI" ]; then
+	systemctl enable avahi-daemon || true
+	touch /boot/pikvm-reboot.txt
+fi
+
+
 # ========== OTG serial ==========
 
 if [ -n "$ENABLE_OTG_SERIAL" ]; then
