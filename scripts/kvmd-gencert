@@ -55,7 +55,7 @@ cd "$path"
 #   - https://msol.io/blog/tech/create-a-self-signed-ecc-certificate
 openssl ecparam -out server.key -name prime256v1 -genkey
 openssl req -new -x509 -sha256 -nodes -key server.key -out server.crt -days 3650 \
-	-subj "/C=RU/ST=Moscow/L=Moscow/O=PiKVM/OU=PiKVM/CN=localhost"
+	-subj "/C=US/O=PiKVM/OU=PiKVM/CN=localhost"
 
 chown "root:kvmd-$target" "$path"/*
 chmod 440 "$path/server.key"
