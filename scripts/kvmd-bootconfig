@@ -55,6 +55,39 @@ rw
 
 # ========== First boot configuration ==========
 
+make_avahi_service() {
+	local _serial
+	_serial=$(tr -d '\0' < /proc/device-tree/serial-number || echo "0000000000000000")
+	local _model
+	_model=$(tr -d '\0' < /proc/device-tree/model || echo "Unknown model")
+	mkdir -p /etc/avahi/services
+	cat <<end_of_file > /etc/avahi/services/pikvm.service
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">pikvm-$_serial.local</name>
+  <service>
+    <type>_pikvm._tcp</type>
+    <port>443</port>
+    <txt-record>path=/</txt-record>
+    <txt-record>protocol=https</txt-record>
+    <txt-record>description=PiKVM Web Server</txt-record>
+    <txt-record>serial=$_serial</txt-record>
+    <txt-record>model=$_model</txt-record>
+  </service>
+  <service>
+    <type>_https._tcp</type>
+    <port>443</port>
+    <txt-record>path=/</txt-record>
+    <txt-record>protocol=https</txt-record>
+    <txt-record>description=PiKVM Web Server</txt-record>
+    <txt-record>serial=$_serial</txt-record>
+    <txt-record>model=$_model</txt-record>
+  </service>
+</service-group>
+end_of_file
+}
+
 if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
 	( \
 		(umount /etc/machine-id || true) \
@@ -89,6 +122,8 @@ if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
 		mount "$part"
 		unset disk part npart label
 	fi
+
+	make_avahi_service
 
 	# fc-cache is required for installed X server
 	# shellcheck disable=SC2015
