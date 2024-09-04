@@ -53,7 +53,7 @@ source <(dos2unix < /boot/pikvm.txt)
 rw
 
 
-# ========== First boot configuration ==========
+# ========== First boot and/or Avahi configuration ==========
 
 make_avahi_service() {
 	local _serial
@@ -130,10 +130,10 @@ if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
 	which fc-cache && fc-cache || true
 fi
 
-
-# ========== Avahi ==========
-
 if [ -n "$ENABLE_AVAHI" ]; then
+	if [ ! -f /etc/avahi/services/pikvm.service ]; then
+		make_avahi_service
+	fi
 	systemctl enable avahi-daemon || true
 	touch /boot/pikvm-reboot.txt
 fi
