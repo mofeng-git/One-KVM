@@ -120,6 +120,9 @@ depends=(
 	# pgrep for kvmd-udev-restart-pass
 	procps-ng
 
+	# Avahi for the service discovery, disabled by default, see kvmd-bootconfig
+	avahi
+
 	# Misc
 	hostapd
 )
