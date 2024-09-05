@@ -29,7 +29,7 @@ function getCookie(name)
 /**
  * 设置语言类型： 默认为中文
  */
-var i18nLanguage = "cn";
+var i18nLanguage = "zh";
 
 $(document).ready(function() {
      /* 首先获取用户选择过的语言 */ 
@@ -47,21 +47,16 @@ $(document).ready(function() {
             
         }
     });
-    /*切换为中文 - 按钮*/
-    $(".chinese").click(function() {
+
+    $("#selectLanguage").change(function() {
+        var selectOptionId = $(this).children("option:selected").attr("id");
+        console.log(selectOptionId);
         $("[i18n]").i18n({
-            defaultLang: "cn",
+            defaultLang: selectOptionId,
             filePath: "/share/i18n/"
         });
         setCookie('userLanguage', "cn")
     });
-    /*切换为英文 - 按钮*/
-    $(".english").click(function() {
-        $("[i18n]").i18n({
-            defaultLang: "en",
-            filePath: "/share/i18n/"
-        });
-        setCookie('userLanguage', "en")
-    });
+
 
 });

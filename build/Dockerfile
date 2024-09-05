@@ -5,7 +5,7 @@ ARG TARGETARCH
 
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends build-essential libssl-dev libffi-dev python3-dev libevent-dev libjpeg-dev libbsd-dev git pkg-config wget curl
+    && apt-get install -y --no-install-recommends build-essential libssl-dev libffi-dev python3-dev libevent-dev libjpeg-dev libbsd-dev libudev-dev git pkg-config wget curl
 
 COPY build/cargo_config /tmp/config
 
@@ -63,6 +63,7 @@ RUN mkdir -p \
     /etc/kvmd/nginx \
     /etc/kvmd/vnc \
     /etc/kvmd/override.d\
+    /etc/kvmd/hw_info/ \
     /var/lib/kvmd/msd \
     /var/lib/kvmd/pst/data \
     /opt/vc/bin \
@@ -72,11 +73,13 @@ RUN mkdir -p \
 COPY testenv/fakes/vcgencmd /usr/bin/
 COPY extras/ /usr/share/kvmd/extras/
 COPY web/ /usr/share/kvmd/web/
+COPY testenv/web.css /usr/share/kvmd/web/
 COPY testenv/platform/ scripts/kvmd-gencert /usr/share/kvmd/
 COPY contrib/keymaps /usr/share/kvmd/keymaps
 COPY kvmd/ /kvmd
 COPY configs/kvmd/*.yaml configs/kvmd/*passwd build/supervisord.conf /etc/kvmd/
 COPY configs/nginx/* /etc/kvmd/nginx/
+COPY configs/hw_info/* /etc/kvmd/hw_info/
 COPY build/v2-hdmiusb-rpi4.override.yaml /etc/kvmd/override.yaml
 COPY configs/kvmd/main/v2-hdmiusb-rpi4.yaml /etc/kvmd/main.yaml
 
@@ -87,7 +90,7 @@ RUN touch /run/kvmd/ustreamer.sock \
     && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
     && python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf
 
-RUN supervisord -c /etc/kvmd/supervisord.conf
+#RUN supervisord -c /etc/kvmd/supervisord.conf
 
 EXPOSE 4430
 CMD ["supervisord", "-c", "/etc/kvmd/supervisord.conf"]
