@@ -269,3 +269,46 @@ clean-all: testenv clean
 
 
 .PHONY: testenv
+
+run-build:
+	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd:dev \
+		--allow security.insecure --progress plain \
+		--platform linux/amd64,linux/arm64,linux/arm/v7  \
+		-f build/Dockerfile . \
+		--push
+
+run-nogpio: testenv
+	- $(DOCKER) run --rm --name kvmd \
+			--privileged \
+			--volume `pwd`/testenv/run:/run/kvmd:rw \
+			--volume `pwd`/testenv:/testenv:ro \
+			--volume `pwd`/kvmd:/kvmd:ro \
+			--volume `pwd`/testenv/env.py:/kvmd/env.py:ro \
+			--volume `pwd`/web:/usr/share/kvmd/web:ro \
+			--volume `pwd`/extras:/usr/share/kvmd/extras:ro \
+			--volume `pwd`/configs:/usr/share/kvmd/configs.default:ro \
+			--volume `pwd`/contrib/keymaps:/usr/share/kvmd/keymaps:ro \
+			--device $(TESTENV_VIDEO):$(TESTENV_VIDEO) \
+			$(if $(TESTENV_RELAY),--device $(TESTENV_RELAY):$(TESTENV_RELAY),) \
+			--publish 8080:8080/tcp \
+			--publish 4430:4430/tcp \
+		-it $(TESTENV_IMAGE) /bin/bash -c " \
+			mkdir -p /tmp/kvmd-nginx \
+			&& mount -t debugfs none /sys/kernel/debug \
+			&& (socat PTY,link=$(TESTENV_HID) PTY,link=/dev/ttyS11 &) \
+			&& cp -r /usr/share/kvmd/configs.default/nginx/* /etc/kvmd/nginx \
+			&& cp -a /testenv/.ssl/nginx /etc/kvmd/nginx/ssl \
+			&& cp -a /testenv/.ssl/vnc /etc/kvmd/vnc/ssl \
+			&& touch /etc/kvmd/.docker_flag \
+			&& cp /testenv/platform /usr/share/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*.yaml /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*passwd /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/*.secret /etc/kvmd \
+			&& cp /usr/share/kvmd/configs.default/kvmd/main/$(if $(P),$(P),$(DEFAULT_PLATFORM)).yaml /etc/kvmd/main.yaml \
+			&& ln -s /testenv/web.css /etc/kvmd/web.css \
+			&& mkdir -p /etc/kvmd/override.d \
+			&& cp /testenv/$(if $(P),$(P),$(DEFAULT_PLATFORM)).override.yaml /etc/kvmd/override.yaml \
+			&& python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf \
+			&& nginx -c /etc/kvmd/nginx/nginx.conf -g 'user http; error_log stderr;' \
+			&& $(if $(CMD),$(CMD),python -m kvmd.apps.kvmd --run) \
+		"

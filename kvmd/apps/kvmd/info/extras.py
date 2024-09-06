@@ -31,6 +31,7 @@ from ....yamlconf.loader import load_yaml_file
 
 from .... import tools
 from .... import aiotools
+from .... import env
 
 from .. import sysunit
 
@@ -87,6 +88,8 @@ class ExtrasInfoSubmanager(BaseInfoSubmanager):
                     (extra["enabled"], extra["started"]) = await sui.get_status(daemon)
                 except Exception as err:
                     get_logger(0).error("Can't get info about the service %r: %s", daemon, tools.efmt(err))
+            if os.path.exists("/etc/kvmd/.docker_flag"):
+                extra["enabled"] = extra["started"] = True
 
     def __rewrite_app_port(self, extra: dict) -> None:
         port_path = extra.get("port", "")

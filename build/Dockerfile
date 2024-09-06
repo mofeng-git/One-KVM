@@ -73,8 +73,8 @@ RUN mkdir -p \
 COPY testenv/fakes/vcgencmd /usr/bin/
 COPY extras/ /usr/share/kvmd/extras/
 COPY web/ /usr/share/kvmd/web/
-COPY testenv/web.css /usr/share/kvmd/web/
-COPY testenv/platform/ scripts/kvmd-gencert /usr/share/kvmd/
+COPY testenv/web.css /etc/kvmd/
+COPY build/platform scripts/kvmd-gencert /usr/share/kvmd/
 COPY contrib/keymaps /usr/share/kvmd/keymaps
 COPY kvmd/ /kvmd
 COPY configs/kvmd/*.yaml configs/kvmd/*passwd build/supervisord.conf /etc/kvmd/
@@ -83,7 +83,7 @@ COPY configs/hw_info/* /etc/kvmd/hw_info/
 COPY build/v2-hdmiusb-rpi4.override.yaml /etc/kvmd/override.yaml
 COPY configs/kvmd/main/v2-hdmiusb-rpi4.yaml /etc/kvmd/main.yaml
 
-RUN touch /run/kvmd/ustreamer.sock \
+RUN touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag \
     && touch /etc/kvmd/totp.secret \
     && /usr/share/kvmd/kvmd-gencert --do-the-thing \
     && /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc \

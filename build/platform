@@ -1,0 +1,3 @@
+PIKVM_MODEL=docker_model
+PIKVM_VIDEO=docker_video
+PIKVM_BOARD=docker_board

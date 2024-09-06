@@ -55,7 +55,7 @@ $(document).ready(function() {
             defaultLang: selectOptionId,
             filePath: "/share/i18n/"
         });
-        setCookie('userLanguage', "cn")
+        setCookie('userLanguage', selectOptionId)
     });
 
 
