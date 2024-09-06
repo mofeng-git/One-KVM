@@ -1,0 +1,17 @@
+[Unit]
+Description=PiKVM - IPMI to KVMD proxy
+After=kvmd.service
+
+[Service]
+User=kvmd-ipmi
+Group=kvmd-ipmi
+Type=simple
+Restart=always
+RestartSec=3
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+ExecStart=/usr/bin/kvmd-ipmi --run
+TimeoutStopSec=3
+
+[Install]
+WantedBy=multi-user.target

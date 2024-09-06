@@ -1,0 +1,817 @@
+# Translations template for PROJECT.
+# Copyright (C) 2024 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2024.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2024-08-14 22:40+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.15.0\n"
+
+#: kvmd/aiohelpers.py:41
+#, python-format
+msgid "Remounting %s storage to %s: %s ..."
+msgstr ""
+
+#: kvmd/aiohelpers.py:48
+#, python-format
+msgid "Can't remount %s storage: %s"
+msgstr ""
+
+#: kvmd/aioproc.py:89
+msgid "Asyncio process: too many empty lines"
+msgstr ""
+
+#: kvmd/aioproc.py:104 kvmd/aioproc.py:111
+#, python-format
+msgid "Process killed: retcode=%d"
+msgstr ""
+
+#: kvmd/aioproc.py:109
+#, python-format
+msgid "Can't kill process pid=%d"
+msgstr ""
+
+#: kvmd/aioproc.py:120
+#, python-format
+msgid "Started %s pid=%d"
+msgstr ""
+
+#: kvmd/htclient.py:63
+msgid "Can't determine filename"
+msgstr ""
+
+#: kvmd/htserver.py:356
+#, python-format
+msgid "Registered new client session: %s; clients now: %d"
+msgstr ""
+
+#: kvmd/htserver.py:371
+#, python-format
+msgid "Can't parse JSON event from websocket: %r"
+msgstr ""
+
+#: kvmd/htserver.py:377
+#, python-format
+msgid "Unknown websocket event: %r"
+msgstr ""
+
+#: kvmd/htserver.py:384
+#, python-format
+msgid "Unknown websocket binary event: %r"
+msgstr ""
+
+#: kvmd/htserver.py:415
+#, python-format
+msgid "Removed client socket: %s; clients now: %d"
+msgstr ""
+
+#: kvmd/inotify.py:199
+#, python-format
+msgid "Watching for %s"
+msgstr ""
+
+#: kvmd/inotify.py:258
+#, python-format
+msgid "Unwatching %s because IGNORED was received"
+msgstr ""
+
+#: kvmd/usb.py:36
+msgid "Can't find any UDC"
+msgstr ""
+
+#: kvmd/apps/__init__.py:164
+msgid "INFO"
+msgstr ""
+
+#: kvmd/apps/__init__.py:165
+msgid "WARNING"
+msgstr ""
+
+#: kvmd/apps/__init__.py:166
+msgid "ERROR"
+msgstr ""
+
+#: kvmd/apps/__init__.py:176
+msgid ""
+"To prevent accidental startup, you must specify the --run option to "
+"start.\n"
+msgstr ""
+
+#: kvmd/apps/__init__.py:176
+msgid "Try the --help option to find out what this service does.\n"
+msgstr ""
+
+#: kvmd/apps/__init__.py:176
+msgid "Make sure you understand exactly what you are doing!"
+msgstr ""
+
+#: kvmd/apps/kvmd/__init__.py:115 kvmd/apps/otgnet/__init__.py:132
+#: kvmd/apps/vnc/server.py:541
+msgid "Bye-bye"
+msgstr ""
+
+#: kvmd/apps/kvmd/auth.py:58
+msgid "AUTHORIZATION IS DISABLED"
+msgstr ""
+
+#: kvmd/apps/kvmd/auth.py:62
+#, python-format
+msgid "Authorization is disabled for API %r"
+msgstr ""
+
+#: kvmd/apps/kvmd/auth.py:67
+#, python-format
+msgid "Using internal auth service %r"
+msgstr ""
+
+#: kvmd/apps/kvmd/auth.py:74
+#, python-format
+msgid "Using external auth service %r"
+msgstr ""
+
+#: kvmd/apps/kvmd/auth.py:103
+#, python-format
+msgid "Got access denied for user %r by TOTP"
+msgstr ""
+
+#: kvmd/apps/kvmd/auth.py:114
+#, python-format
+msgid "Authorized user %r via auth service %r"
+msgstr ""
+
+#: kvmd/apps/kvmd/auth.py:116
+#, python-format
+msgid "Got access denied for user %r from auth service %r"
+msgstr ""
+
+#: kvmd/apps/kvmd/auth.py:126
+#, python-format
+msgid "Logged in user %r"
+msgstr ""
+
+#: kvmd/apps/kvmd/auth.py:136
+msgid "Can't generate new unique token"
+msgstr ""
+
+#: kvmd/apps/kvmd/auth.py:147
+#, python-format
+msgid "Logged out user %r (%d)"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:89
+msgid "This streamer does not support quality settings"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:94
+msgid "This streamer does not support resolution settings"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:99
+msgid "This streamer does not support H264"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:298
+msgid "Waiting short tasks ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:300
+msgid "Stopping system tasks ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:302
+msgid "Disconnecting clients ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:304
+msgid "On-Shutdown complete"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:310
+#, python-format
+msgid "Cleaning up %s ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:314
+#, python-format
+msgid "Cleanup error on %s"
+msgstr ""
+
+#: kvmd/apps/kvmd/server.py:315
+msgid "On-Cleanup complete"
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:245
+msgid "Streamer stop cancelled"
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:251
+#, python-format
+msgid "Waiting %.2f seconds for reset delay ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:253
+msgid "Starting streamer ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:266 kvmd/apps/kvmd/streamer.py:271
+msgid "Stopping streamer immediately ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:280
+msgid "Stopping streamer after delay ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:286
+#, python-format
+msgid "Planning to stop streamer in %.2f seconds ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:315
+msgid "Invalid streamer response from /state"
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:333
+msgid "Got SIGUSR2, checking the stream state ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:336
+msgid "Installing SIGUSR2 streamer handler ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:392
+msgid "Stream is offline, no signal or so"
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:395
+#, python-format
+msgid "Can't connect to streamer: %s"
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:397
+msgid "Invalid streamer response from /snapshot"
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:454
+msgid "Streamer unexpectedly died"
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:459
+#, python-format
+msgid "Unexpected streamer error: pid=%d"
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:461
+msgid "Can't start streamer"
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:482 kvmd/apps/otgnet/__init__.py:141
+#, python-format
+msgid "Can't execute command: %s"
+msgstr ""
+
+#: kvmd/apps/kvmd/streamer.py:488
+#, python-format
+msgid "Started streamer pid=%d: %s"
+msgstr ""
+
+#: kvmd/apps/kvmd/ugpio.py:51
+msgid "GPIO channel is not found"
+msgstr ""
+
+#: kvmd/apps/kvmd/ugpio.py:56
+msgid "This GPIO channel does not support switching"
+msgstr ""
+
+#: kvmd/apps/kvmd/ugpio.py:61
+msgid "This GPIO channel does not support pulsing"
+msgstr ""
+
+#: kvmd/apps/kvmd/ugpio.py:66
+msgid "Performing another GPIO operation on this channel, please try again later"
+msgstr ""
+
+#: kvmd/apps/kvmd/ugpio.py:204
+#, python-format
+msgid "Can't perform %s of %s or operation was not completed: driver offline"
+msgstr ""
+
+#: kvmd/apps/kvmd/ugpio.py:209
+#, python-format
+msgid "Ensured switch %s to state=%d"
+msgstr ""
+
+#: kvmd/apps/kvmd/ugpio.py:220
+#, python-format
+msgid "Pulsed %s with delay=%.2f"
+msgstr ""
+
+#: kvmd/apps/kvmd/ugpio.py:298
+msgid "Preparing User-GPIO drivers ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/ugpio.py:303
+msgid "Running User-GPIO drivers ..."
+msgstr ""
+
+#: kvmd/apps/kvmd/ugpio.py:314
+#, python-format
+msgid "Can't cleanup driver %s"
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:211 kvmd/plugins/hid/otg/__init__.py:123
+#, python-format
+msgid "Using UDC %s"
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:213
+#, python-format
+msgid "Creating gadget %r ..."
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:254
+msgid "===== Serial ====="
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:258
+msgid "===== Ethernet ====="
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:262
+msgid "===== HID-Keyboard ====="
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:264
+msgid "===== HID-Mouse ====="
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:267
+msgid "===== HID-Mouse-Alt ====="
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:271
+msgid "===== MSD ====="
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:275
+#, python-format
+msgid "===== MSD Extra: %d ====="
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:278
+msgid "===== Preparing complete ====="
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:280
+msgid "Enabling the gadget ..."
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:286 kvmd/apps/otgnet/__init__.py:128
+msgid "Ready to work"
+msgstr ""
+
+#: kvmd/apps/otg/__init__.py:299
+#, python-format
+msgid "Disabling gadget %r ..."
+msgstr ""
+
+#: kvmd/apps/otgnet/__init__.py:137
+#, python-format
+msgid "CMD: %s"
+msgstr ""
+
+#: kvmd/apps/otgnet/__init__.py:150
+#, python-format
+msgid "Using IPv4 network %s ..."
+msgstr ""
+
+#: kvmd/apps/otgnet/__init__.py:153
+msgid "Too small network, required at least /31"
+msgstr ""
+
+#: kvmd/apps/otgnet/__init__.py:173
+#, python-format
+msgid "Calculated %r address is %s/%d"
+msgstr ""
+
+#: kvmd/apps/otgnet/__init__.py:182
+#, python-format
+msgid "Using OTG gadget %r ..."
+msgstr ""
+
+#: kvmd/apps/otgnet/__init__.py:185
+#, python-format
+msgid "Using OTG Ethernet interface %r ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:163
+#, python-format
+msgid "%s [kvmd]: Waiting for the SetEncodings message ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:165
+msgid "No SetEncodings message recieved from the client in 5 secs"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:169
+#, python-format
+msgid "%s [kvmd]: Applying HID params: mouse_output=%s ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:177
+msgid "KVMD closed the websocket (the server may have been stopped)"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:211
+#, python-format
+msgid "%s [streamer]: Streaming ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:216
+msgid "No signal"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:220
+#, python-format
+msgid "%s [streamer]: Permanent error: %s; switching to %s ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:222
+#, python-format
+msgid "%s [streamer]: Waiting for stream: %s"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:223
+msgid "Waiting for stream ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:234
+#, python-format
+msgid "%s [streamer]: Using preferred %s"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:240
+#, python-format
+msgid "%s [streamer]: Using default %s"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:305
+msgid "The client doesn't want to accept H264 anymore"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:311
+msgid "format"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:417
+#, python-format
+msgid "%s [main]: Applying streamer params: jpeg_quality=%s; desired_fps=%d ..."
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:467
+#, python-format
+msgid "%s [entry]: Connection is closed in an emergency"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:472
+#, python-format
+msgid "%s [entry]: Connected client"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:491
+#, python-format
+msgid "%s [entry]: Can't check KVMD auth mode: %s"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:513
+#, python-format
+msgid "%s [entry]: Unhandled exception in client task"
+msgstr ""
+
+#: kvmd/apps/vnc/server.py:523
+#, python-format
+msgid "Listening VNC on TCP [%s]:%d ..."
+msgstr ""
+
+#: kvmd/apps/vnc/vncauth.py:63
+msgid "Unhandled exception while reading VNCAuth passwd file"
+msgstr ""
+
+#: kvmd/apps/vnc/vncauth.py:74
+msgid "Missing ' -> ' operator"
+msgstr ""
+
+#: kvmd/apps/vnc/vncauth.py:78
+msgid "Missing ':' operator in KVMD credentials (right part)"
+msgstr ""
+
+#: kvmd/apps/vnc/vncauth.py:83
+msgid "Empty KVMD user (right part)"
+msgstr ""
+
+#: kvmd/apps/vnc/vncauth.py:86
+msgid "Duplicating VNC password (left part)"
+msgstr ""
+
+#: kvmd/keyboard/keysym.py:69
+#, python-format
+msgid "Invalid modifier key at mapping %s: %s / %s"
+msgstr ""
+
+#: kvmd/keyboard/keysym.py:122
+#, python-format
+msgid "Reading keyboard layout %s ..."
+msgstr ""
+
+#: kvmd/plugins/atx/__init__.py:45
+msgid "Performing another ATX operation, please try again later"
+msgstr ""
+
+#: kvmd/plugins/atx/gpio.py:209
+#, python-format
+msgid "Clicked ATX button %r"
+msgstr ""
+
+#: kvmd/plugins/auth/http.py:94
+#, python-format
+msgid "Failed HTTP auth request for user %r"
+msgstr ""
+
+#: kvmd/plugins/auth/ldap.py:106
+#, python-format
+msgid "LDAP server is down: %s"
+msgstr ""
+
+#: kvmd/plugins/auth/ldap.py:108
+#, python-format
+msgid "Unexpected LDAP error: %s"
+msgstr ""
+
+#: kvmd/plugins/auth/pam.py:91
+#, python-format
+msgid "Unallowed UID of user %r: uid=%d < allow_uids_at=%d"
+msgstr ""
+
+#: kvmd/plugins/auth/pam.py:97
+#, python-format
+msgid "Can't authorize user %r using PAM: code=%d; reason=%s"
+msgstr ""
+
+#: kvmd/plugins/auth/radius.py:445
+#, python-format
+msgid "Failed RADIUS auth request for user %r"
+msgstr ""
+
+#: kvmd/plugins/hid/bt/__init__.py:137 kvmd/plugins/hid/ch9329/__init__.py:99
+msgid "Starting HID daemon ..."
+msgstr ""
+
+#: kvmd/plugins/hid/bt/__init__.py:182 kvmd/plugins/hid/ch9329/__init__.py:141
+msgid "Stopping HID daemon ..."
+msgstr ""
+
+#: kvmd/plugins/hid/bt/__init__.py:231
+msgid "Unexpected HID error"
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:153
+#, python-format
+msgid "Listening [%s]:%d for %s ..."
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:190
+#, python-format
+msgid "CTL socket error on %s: %s"
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:204
+#, python-format
+msgid "INT socket error on %s: %s"
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:287
+#, python-format
+msgid "Can't send %s report to %s: %s"
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:314
+#, python-format
+msgid "Can't accept %s client"
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:319
+#, python-format
+msgid "Refused %s client: %s: max clients reached"
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:328
+#, python-format
+msgid "Accepted %s client: %s"
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:340
+#, python-format
+msgid "Closed %s client %s"
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:375
+msgid "Publishing ..."
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:375
+msgid "Unpublishing ..."
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:379
+#, python-format
+msgid "Can't change public mode: %s"
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:383
+#, python-format
+msgid "Unpairing %s ..."
+msgstr ""
+
+#: kvmd/plugins/hid/bt/server.py:387
+#, python-format
+msgid "Can't unpair %s: %s"
+msgstr ""
+
+#: kvmd/plugins/hid/ch9329/__init__.py:178
+#, python-format
+msgid "HID : mouse output = %s"
+msgstr ""
+
+#: kvmd/plugins/hid/ch9329/__init__.py:208
+msgid "Unexpected error in the run loop"
+msgstr ""
+
+#: kvmd/plugins/hid/ch9329/__init__.py:231
+msgid "Unexpected error in the HID loop"
+msgstr ""
+
+#: kvmd/plugins/hid/ch9329/chip.py:58
+msgid "Too short response, HID might be disconnected"
+msgstr ""
+
+#: kvmd/plugins/hid/ch9329/chip.py:64
+msgid "Invalid response checksum"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:125
+#, python-format
+msgid "Unexpected HID-%s error"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:152
+#, python-format
+msgid "Stopping HID-%s daemon ..."
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:197
+#, python-format
+msgid "HID-%s write() error: written (%s) != report length (%d)"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:205
+#, python-format
+msgid "HID-%s busy/unplugged (write): %s"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:207
+#, python-format
+msgid "Can't write report to HID-%s"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:224
+#, python-format
+msgid "Can't select() for read HID-%s: %s"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:232
+#, python-format
+msgid "HID-%s busy/unplugged (read): %s"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:234
+#, python-format
+msgid "Can't read report from HID-%s"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:251
+#, python-format
+msgid "Missing HID-%s device: %s"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:263
+#, python-format
+msgid "Can't open HID-%s device %s: %s"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:274
+#, python-format
+msgid "HID-%s is busy/unplugged (write select)"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/device.py:276
+#, python-format
+msgid "Can't select() for write HID-%s: %s"
+msgstr ""
+
+#: kvmd/plugins/hid/otg/keyboard.py:62
+msgid "Clearing HID-keyboard events ..."
+msgstr ""
+
+#: kvmd/plugins/hid/otg/mouse.py:71
+msgid "Clearing HID-mouse events ..."
+msgstr ""
+
+#: kvmd/plugins/msd/__init__.py:57
+msgid "Performing another MSD operation, please try again later"
+msgstr ""
+
+#: kvmd/plugins/msd/__init__.py:63
+msgid "MSD is not found"
+msgstr ""
+
+#: kvmd/plugins/msd/__init__.py:69
+msgid "MSD is connected to Server, but shouldn't for this operation"
+msgstr ""
+
+#: kvmd/plugins/msd/__init__.py:75
+msgid "MSD is disconnected from Server, but should be for this operation"
+msgstr ""
+
+#: kvmd/plugins/msd/__init__.py:81
+msgid "The image is not selected"
+msgstr ""
+
+#: kvmd/plugins/msd/__init__.py:87
+msgid "The image is not found in the storage"
+msgstr ""
+
+#: kvmd/plugins/msd/__init__.py:93
+msgid "This image is already exists"
+msgstr ""
+
+#: kvmd/plugins/msd/disabled.py:40
+msgid "MSD is disabled"
+msgstr ""
+
+#: kvmd/plugins/msd/otg/__init__.py:148
+#, python-format
+msgid "Using OTG gadget %r as MSD"
+msgstr ""
+
+#: kvmd/plugins/msd/otg/__init__.py:223
+msgid "Can't reset MSD properly"
+msgstr ""
+
+#: kvmd/plugins/msd/otg/__init__.py:442
+msgid "Unexpected MSD watcher error"
+msgstr ""
+
+#: kvmd/plugins/msd/otg/__init__.py:461
+msgid "Probing to remount storage ..."
+msgstr ""
+
+#: kvmd/plugins/msd/otg/__init__.py:467
+msgid "Error while reloading MSD state; switching to offline"
+msgstr ""
+
+#: kvmd/plugins/msd/otg/__init__.py:495
+#, python-format
+msgid "Setting up initial image %r ..."
+msgstr ""
+
+#: kvmd/plugins/msd/otg/__init__.py:501
+msgid "Can't setup initial image: ignored"
+msgstr ""
+
+#: kvmd/plugins/msd/otg/__init__.py:503
+#, python-format
+msgid "Can't find initial image %r: ignored"
+msgstr ""
+
+#: kvmd/plugins/msd/otg/drive.py:36
+msgid "MSD drive is locked on IO operation"
+msgstr ""
+
+#: kvmd/plugins/msd/otg/storage.py:297
+msgid "Can't execute remount helper"
+msgstr ""
+
+#: kvmd/plugins/ugpio/anelpwr.py:152
+#, python-format
+msgid "Failed ANELPWR POST request to pin %s: %s"
+msgstr ""
+

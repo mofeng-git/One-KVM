@@ -1,0 +1,6 @@
+pyserial-asyncio
+pyghmi
+spidev
+pyrad
+types-PyYAML
+types-aiofiles

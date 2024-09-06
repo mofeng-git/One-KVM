@@ -1,0 +1,11 @@
+--- a/cores/arduino/PluggableUSB.h	2019-05-16 15:52:01.000000000 +0300
++++ b/cores/arduino/PluggableUSB.h	2020-11-14 20:57:30.942432544 +0300
+@@ -31,6 +31,8 @@
+     numEndpoints(numEps), numInterfaces(numIfs), endpointType(epType)
+   { }
+
++  uint8_t getPluggedEndpoint() { return pluggedEndpoint; }
++
+ protected:
+   virtual bool setup(USBSetup& setup) = 0;
+   virtual int getInterface(uint8_t* interfaceCount) = 0;

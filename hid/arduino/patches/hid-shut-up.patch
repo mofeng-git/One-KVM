@@ -1,0 +1,16 @@
+diff --git a/src/KeyboardLayouts/ImprovedKeylayouts.h b/src/KeyboardLayouts/ImprovedKeylayouts.h
+index 03b92a0..ee0bab4 100644
+--- a/src/KeyboardLayouts/ImprovedKeylayouts.h
++++ b/src/KeyboardLayouts/ImprovedKeylayouts.h
+@@ -51,9 +51,9 @@ enum KeyboardLeds : uint8_t {
+ #ifndef HID_CUSTOM_LAYOUT
+     #define HID_CUSTOM_LAYOUT
+     #define LAYOUT_US_ENGLISH
+-    #pragma message "Using default ASCII layout for keyboard modules"
++    //#pragma message "Using default ASCII layout for keyboard modules"
+ #else
+-    #pragma message "Using custom layout for keyboard modules"
++    //#pragma message "Using custom layout for keyboard modules"
+ #endif
+ 
+ // Hut1_12v2.pdf

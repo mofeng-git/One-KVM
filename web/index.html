@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<!--
+==============================================================================
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+==============================================================================
+
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>PiKVM Index</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
+    <link rel="manifest" href="/share/site.webmanifest">
+    <link rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="msapplication-TileColor" content="#2b5797">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="stylesheet" href="/share/css/vars.css">
+    <link rel="stylesheet" href="/share/css/main.css">
+    <link rel="stylesheet" href="/share/css/start.css">
+    <link rel="stylesheet" href="/share/css/window.css">
+    <link rel="stylesheet" href="/share/css/modal.css">
+    <link rel="stylesheet" href="/share/css/index/index.css">
+    <link rel="stylesheet" href="/share/css/user.css">
+    <script src="/share/js/i18n/jquery-3.7.1.min.js"></script>
+    <script src="/share/js/i18n/jquery.i18n.min.js"></script>
+    <script src="/share/js/i18n/i18n.js"></script>
+    <script type="module">import {main} from "/share/js/index/main.js";
+      main();
+    </script>
+  </head>
+  <body>
+    <div class="start-box">
+      <div class="start">
+        <table>
+          <tr>
+            <td class="logo"><a href="https://pikvm.org" target="_blank"><img class="svg-gray" src="/share/svg/logo.svg" alt="PiKVM" height="40"></a></td>
+            <td>
+              <table>
+                <tr>
+                  <td class="title" colspan="2" i18n="index_title">The Open Source KVM over IP</td>
+                </tr>
+                <tr>
+                  <td class="copyright" colspan="2" i18n="copyright">Copyright &copy; 2018-2024 Maxim Devaev | Modified by SilentWind</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+        <hr>
+        <div id="apps-box">
+          <h4>Loading ...</h4>
+        </div>
+        <hr>
+        <table>
+          <td class="server">
+            <td i18n="serve_name">Server:</td>
+            <td><a id="kvmd-meta-server-host" target="_blank" href="/api/info"></a></td>
+          </td>
+        </table>
+        <div id="app-keyboard-warning">
+          <p class="text" i18n="index_text_1">
+            Please note that when you are working with a KVM session or another application that captures the keyboard,
+            you can't use some keyboard shortcuts such as Ctrl+Alt+Del (which will be caught by your OS) or Ctrl+W (caught by your browser).
+          </p>
+          <p class="text" i18n="index_text_2">To override this limitation you can use <a target="_blank" href="https://google.com/chrome">Google Chrome</a>
+            or <a target="_blank" href="https://chromium.org/Home">Chromium</a> in application mode.
+          </p>
+        </div>
+        <hr>
+        <p class="text credits"><a target="_blank" href="https://pikvm.org" i18n="index_text_10">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org" i18n="index_text_11">PiKVM Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13">One-KVM Documentation</a></p>
+      </div>
+    </div>
+  </body>
+</html>

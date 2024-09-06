@@ -1,0 +1,6 @@
+/.platformio/
+/.pio/
+/.current
+/.vscode/
+/.config
+/platformio.ini

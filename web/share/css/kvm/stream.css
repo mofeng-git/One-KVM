@@ -1,0 +1,111 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+div#stream-window {
+	min-width: 400px;
+	min-height: 200px;
+	/*padding-top: 23px;
+	padding-bottom: 2px;
+	padding-left: 2px;
+	padding-right: 2px;*/
+}
+
+div#stream-info {
+	display: none;
+}
+
+div#stream-ocr-window {
+	cursor: crosshair;
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	top: 0;
+	left: 0;
+	z-index: 1;
+	background-color: unset !important;
+	border-radius: unset !important;
+	border: unset !important;
+	padding: 0px !important;
+	background: radial-gradient(transparent 15%, black);
+}
+div#stream-ocr-selection {
+	position: relative;
+	background-color: #5b90bb50;
+	box-shadow: inset 0 0 0px 1px #e8e8e8cd;
+}
+
+div#stream-box {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	position: relative;
+	display: inline-block;
+	border: var(--border-window-default-thin);
+	margin: -1px -1px -1px -1px; /* See pikvm/kvm#86, pikvm/pikvm#599 */
+}
+div.stream-box-offline {
+	-webkit-filter: grayscale(100%) brightness(75%) sepia(75%);
+	filter: grayscale(100%) brightness(75%) sepia(75%);
+}
+div.stream-box-offline::after {
+	cursor: wait;
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	display: inline-block;
+	background: radial-gradient(transparent 20%, black);
+}
+div.stream-box-mouse-dot {
+	cursor: url("../../svg/stream-mouse-cursor.svg") 5 5, pointer;
+}
+div.stream-box-mouse-none {
+	cursor: none;
+}
+
+img#stream-image,
+video#stream-video {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	display: block;
+	background-color: black;
+}
+div#stream-window.window-active:fullscreen {
+	border: 0px !important;
+	border-radius: 0px !important;
+}
+div#stream-window.window-active:fullscreen div#stream-box div#stream-fullscreen-active {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	top: 0;
+	left: 0;
+	border: 0;
+	box-shadow: var(--shadow-window-fullscreen-active);
+}
+
+div#stream-mouse-buttons {
+	display: none;
+}

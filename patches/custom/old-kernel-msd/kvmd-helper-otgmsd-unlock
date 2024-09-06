@@ -1,7 +1,0 @@
-#!/usr/sbin/python
-# KVMD-ARMBIAN
-
-from kvmd.helpers.unlock import main
-
-if __name__ == "__main__":
-    main()

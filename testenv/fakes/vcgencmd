@@ -1,0 +1,4 @@
+#!/bin/sh
+case $1 in
+	get_throttled) echo "throttled=0x0";;
+esac

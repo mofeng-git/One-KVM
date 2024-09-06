@@ -1,0 +1,22 @@
+[Unit]
+Description=PiKVM - Janus WebRTC Gateway (Static Config)
+After=network.target network-online.target nss-lookup.target kvmd.service
+
+[Service]
+User=kvmd-janus
+Group=kvmd-janus
+Type=simple
+Restart=always
+RestartSec=3
+AmbientCapabilities=CAP_NET_RAW
+LimitNOFILE=65536
+
+# Crutch for UNIX socket perms
+UMask=0117
+
+ExecStart=/usr/bin/janus --disable-colors --plugins-folder=/usr/lib/ustreamer/janus --configs-folder=/etc/kvmd/janus
+TimeoutStopSec=10
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

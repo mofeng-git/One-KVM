@@ -1,0 +1,141 @@
+From 8e823d276f939d79b2d323fad675fb8442a718c2 Mon Sep 17 00:00:00 2001
+From: Daniel Gibson <metalcaedes@gmail.com>
+Date: Tue, 5 Jan 2021 13:48:43 +0100
+Subject: [PATCH] Allow disabling CDC with -DCDC_DISABLED
+
+https://github.com/arduino/ArduinoCore-avr/pull/383
+
+Sometimes Arduino-based USB devices don't work because some hardware
+(like KVM switches) gets confused by the CDC sub-devices.
+This change makes it relatively easy to disable CDC at compiletime.
+Disabling it of course means that the serial console won't work anymore,
+so you need to use the reset button when flashing.
+
+CDC_DISABLED is also used in ArduinoCore-samd for the same purpose.
+
+based on
+https://github.com/gdsports/usb-metamorph/tree/master/USBSerPassThruLine
+
+See also https://github.com/NicoHood/HID/issues/225 and
+https://github.com/arduino/Arduino/issues/6387 and
+https://forum.arduino.cc/index.php?topic=545288.msg3717028#msg3717028
+---
+ cores/arduino/CDC.cpp     |  8 ++++++++
+ cores/arduino/USBCore.cpp | 18 +++++++++++++++++-
+ cores/arduino/USBDesc.h   | 17 +++++++++++++++++
+ 3 files changed, 42 insertions(+), 1 deletion(-)
+
+diff --git a/cores/arduino/CDC.cpp b/cores/arduino/CDC.cpp
+index 4ff6b9b4..7d5afaab 100644
+--- a/cores/arduino/CDC.cpp
++++ b/cores/arduino/CDC.cpp
+@@ -22,6 +22,13 @@
+ 
+ #if defined(USBCON)
+ 
++#ifndef CDC_ENABLED
++
++#warning "! Disabled serial console via USB (CDC)!"
++#warning "! With this change you'll have to use the Arduino's reset button/pin to flash (upload)!"
++
++#else // CDC not disabled
++
+ typedef struct
+ {
+ 	u32	dwDTERate;
+@@ -299,4 +306,5 @@ int32_t Serial_::readBreak() {
+ 
+ Serial_ Serial;
+ 
++#endif /* if defined(CDC_ENABLED) */
+ #endif /* if defined(USBCON) */
+diff --git a/cores/arduino/USBCore.cpp b/cores/arduino/USBCore.cpp
+index dc6bc387..93352387 100644
+--- a/cores/arduino/USBCore.cpp
++++ b/cores/arduino/USBCore.cpp
+@@ -69,8 +69,18 @@ const u8 STRING_MANUFACTURER[] PROGMEM = USB_MANUFACTURER;
+ #define DEVICE_CLASS 0x02
+ 
+ //	DEVICE DESCRIPTOR
++
++#ifdef CDC_ENABLED
+ const DeviceDescriptor USB_DeviceDescriptorIAD =
+ 	D_DEVICE(0xEF,0x02,0x01,64,USB_VID,USB_PID,0x100,IMANUFACTURER,IPRODUCT,ISERIAL,1);
++#else // CDC_DISABLED
++// The default descriptor uses USB class OxEF, subclass 0x02 with protocol 1
++// which means "Interface Association Descriptor" - that's needed for the CDC,
++// but doesn't make much sense as a default for custom devices when CDC is disabled.
++// (0x00 means "Use class information in the Interface Descriptors" which should be generally ok)
++const DeviceDescriptor USB_DeviceDescriptorIAD =
++	D_DEVICE(0x00,0x00,0x00,64,USB_VID,USB_PID,0x100,IMANUFACTURER,IPRODUCT,ISERIAL,1);
++#endif
+ 
+ //==================================================================
+ //==================================================================
+@@ -328,10 +338,12 @@ int USB_Send(u8 ep, const void* d, int len)
+ u8 _initEndpoints[USB_ENDPOINTS] =
+ {
+ 	0,                      // Control Endpoint
+-	
++
++#ifdef CDC_ENABLED
+ 	EP_TYPE_INTERRUPT_IN,   // CDC_ENDPOINT_ACM
+ 	EP_TYPE_BULK_OUT,       // CDC_ENDPOINT_OUT
+ 	EP_TYPE_BULK_IN,        // CDC_ENDPOINT_IN
++#endif
+ 
+ 	// Following endpoints are automatically initialized to 0
+ };
+@@ -373,10 +385,12 @@ void InitEndpoints()
+ static
+ bool ClassInterfaceRequest(USBSetup& setup)
+ {
++#ifdef CDC_ENABLED
+ 	u8 i = setup.wIndex;
+ 
+ 	if (CDC_ACM_INTERFACE == i)
+ 		return CDC_Setup(setup);
++#endif
+ 
+ #ifdef PLUGGABLE_USB_ENABLED
+ 	return PluggableUSB().setup(setup);
+@@ -466,7 +480,9 @@ static u8 SendInterfaces()
+ {
+ 	u8 interfaces = 0;
+ 
++#ifdef CDC_ENABLED
+ 	CDC_GetInterface(&interfaces);
++#endif
+ 
+ #ifdef PLUGGABLE_USB_ENABLED
+ 	PluggableUSB().getInterface(&interfaces);
+diff --git a/cores/arduino/USBDesc.h b/cores/arduino/USBDesc.h
+index c0dce079..b55ac20b 100644
+--- a/cores/arduino/USBDesc.h
++++ b/cores/arduino/USBDesc.h
+@@ -26,8 +26,25 @@
+ 
+ #define ISERIAL_MAX_LEN     20
+ 
++// Uncomment the following line or pass -DCDC_DISABLED to the compiler
++// to disable CDC (serial console via USB).
++// That's useful if you want to create an USB device (like an USB Boot Keyboard)
++// that works even with problematic devices (like KVM switches).
++// Keep in mind that with this change you'll have to use the Arduino's
++// reset button to be able to flash it.
++//#define CDC_DISABLED
++
++#ifndef CDC_DISABLED
++#define CDC_ENABLED
++#endif
++
++#ifdef CDC_ENABLED
+ #define CDC_INTERFACE_COUNT	2
+ #define CDC_ENPOINT_COUNT	3
++#else // CDC_DISABLED
++#define CDC_INTERFACE_COUNT	0
++#define CDC_ENPOINT_COUNT	0
++#endif
+ 
+ #define CDC_ACM_INTERFACE	0	// CDC ACM
+ #define CDC_DATA_INTERFACE	1	// CDC Data

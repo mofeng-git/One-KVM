@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="16.933332mm"
+   height="16.933332mm"
+   viewBox="0 0 16.933332 16.933332"
+   version="1.1"
+   id="svg8"
+   sodipodi:docname="power.svg"
+   inkscape:version="0.92.2 2405546, 2018-03-11">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="5.6"
+     inkscape:cx="13.28418"
+     inkscape:cy="14.886884"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0"
+     inkscape:window-width="1920"
+     inkscape:window-height="1020"
+     inkscape:window-x="0"
+     inkscape:window-y="30"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-107.87666,-24.618942)">
+    <g
+       aria-label="⏻"
+       transform="matrix(1.9608076,0,0,1.9608076,269.69365,18.4972)"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:10px;line-height:125%;font-family:'Adobe Garamond Pro';-inkscape-font-specification:'Adobe Garamond Pro Bold';text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.21589744;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="flowRoot4958">
+      <path
+         d="M -78.747734,7.26 V 3.23 h 1.04 v 4.03 z m 0.54,4.39 q -0.87,0 -1.6,-0.3 -0.73,-0.29 -1.27,-0.82 -0.54,-0.53 -0.84,-1.24 -0.3,-0.72 -0.3,-1.57 0,-0.96 0.4,-1.84 0.4,-0.89 1.18,-1.45 l 0.54,0.7 q -0.43,0.29 -0.71,0.72 -0.27,0.43 -0.41,0.92 -0.13,0.49 -0.13,0.95 0,0.64 0.23,1.2 0.23,0.56 0.65,0.98 0.43,0.42 1,0.66 0.57,0.23 1.25,0.23 0.69,0 1.26,-0.23 0.58,-0.24 1,-0.66 0.42,-0.42 0.65,-0.98 0.24,-0.56 0.24,-1.2 0,-0.46 -0.14,-0.95 -0.13,-0.49 -0.41,-0.92 -0.27,-0.43 -0.7,-0.72 l 0.54,-0.7 q 0.78,0.56 1.18,1.45 0.4,0.88 0.4,1.84 0,0.85 -0.3,1.57 -0.3,0.71 -0.84,1.24 -0.54,0.53 -1.28,0.82 -0.73,0.3 -1.59,0.3 z"
+         style="stroke:#000000;stroke-width:0.21589744;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="path4998" />
+    </g>
+  </g>
+</svg>

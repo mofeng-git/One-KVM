@@ -1,0 +1,39 @@
+extends ../base.pug
+
+append vars
+	- title = "PiKVM Login"
+	- main_js = "login/main"
+	- css_list = css_list.concat(["window", "modal", "login/login"])
+
+block body
+	form(action="javascript:void(0)")
+		div(id="login-box")
+			div(id="login")
+				table
+					tr
+						td(i18n="username") Username:&nbsp;
+						td #[input(type="text" id="user-input" autocapitalize="off")]
+					tr
+						td(i18n="password") Password:&nbsp;
+						td #[input(type="password" id="passwd-input" autocapitalize="off")]
+					tr
+						td(i18n="2fa_code") 2FA code:&nbsp;
+						td #[input(type="text" id="code-input" placeholder="if enabled" i18n="if_enabled")]
+					tr
+						td(colspan=2)
+							hr
+					tr
+						td(i18n="select_language") Select language:&nbsp;
+						td
+							select(id="selectLanguage")
+								option(id='zh', selected="selected" i18n="chinese") Simplified Chinese
+								option(id='en' i18n="english") English
+					tr
+						td
+						td #[button(id="login-button" class="key" i18n="login") Login]
+
+	ul(class="footer")
+		li(class="footer-left" i18n="footer-left")
+			| This site is actively using JavaScript.#[br]
+			| It doesn't contain ads, but is blocked by some ad filters.#[br]
+			| Please turn it off to continue and reload the page.

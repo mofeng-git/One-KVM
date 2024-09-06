@@ -1,0 +1,2679 @@
+<!DOCTYPE html>
+<!--
+==============================================================================
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+==============================================================================
+
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>PiKVM Session</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
+    <link rel="manifest" href="/share/site.webmanifest">
+    <link rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="msapplication-TileColor" content="#2b5797">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="stylesheet" href="/share/css/vars.css">
+    <link rel="stylesheet" href="/share/css/main.css">
+    <link rel="stylesheet" href="/share/css/navbar.css">
+    <link rel="stylesheet" href="/share/css/window.css">
+    <link rel="stylesheet" href="/share/css/modal.css">
+    <link rel="stylesheet" href="/share/css/led.css">
+    <link rel="stylesheet" href="/share/css/slider.css">
+    <link rel="stylesheet" href="/share/css/switch.css">
+    <link rel="stylesheet" href="/share/css/radio.css">
+    <link rel="stylesheet" href="/share/css/progress.css">
+    <link rel="stylesheet" href="/share/css/keypad.css">
+    <link rel="stylesheet" href="/share/css/tabs.css">
+    <link rel="stylesheet" href="/share/css/kvm/stream.css">
+    <link rel="stylesheet" href="/share/css/kvm/hid.css">
+    <link rel="stylesheet" href="/share/css/kvm/msd.css">
+    <link rel="stylesheet" href="/share/css/kvm/system.css">
+    <link rel="stylesheet" href="/share/css/kvm/keyboard.css">
+    <link rel="stylesheet" href="/share/css/kvm/about.css">
+    <link rel="stylesheet" href="/share/css/user.css">
+    <script src="/share/js/i18n/jquery-3.7.1.min.js"></script>
+    <script src="/share/js/i18n/jquery.i18n.min.js"></script>
+    <script src="/share/js/i18n/i18n.js"></script>
+    <script type="module">import {main} from "/share/js/kvm/main.js";
+      main();
+    </script>
+  </head>
+  <body class="body-no-select">
+    <ul id="navbar">
+      <li class="left"><a id="logo" href="/">&larr;&nbsp;&nbsp;<img class="svg-gray" src="/share/svg/logo.svg" alt="&amp;pi;-kvm"></a></li>
+      <div class="hidden" id="hw-health-dropdown">
+        <li class="left"><a class="menu-button" href="#"><img class="hidden" id="hw-health-undervoltage-led" src="/share/svg/led-undervoltage.svg"><img class="hidden" id="hw-health-overheating-led" src="/share/svg/led-overheating.svg"></a>
+          <div class="menu">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
+                    </tr>
+                    <tr>
+                      <td><sup style="line-height:1">This is not a drill! A red icon indicates a current issue,<br>
+                          a yellow one that was observed since the device booted up</sup></td>
+                    </tr>
+                  </table>
+                </div>
+            <div class="hidden" id="hw-health-message-undervoltage">
+              <hr>
+                  <div class="text">
+                    <table>
+                      <tr>
+                        <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-undervoltage.svg"></td>
+                        <td style="line-height:1.5"><b>Undervoltage detected</b></td>
+                      </tr>
+                      <tr>
+                        <td><sup style="line-height:1">Make sure your power supply and cabling are providing<br>
+                            enough power to the Raspberry Pi (3A minimum)</sup></td>
+                      </tr>
+                    </table>
+                  </div>
+            </div>
+            <div class="hidden" id="hw-health-message-overheating">
+              <hr>
+                  <div class="text">
+                    <table>
+                      <tr>
+                        <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-overheating.svg"></td>
+                        <td style="line-height:1.5"><b>Overheating detected</b></td>
+                      </tr>
+                      <tr>
+                        <td><sup style="line-height:1">Frequency capping due to overheating,<br>
+                            please improve cooling of the Raspberry Pi</sup></td>
+                      </tr>
+                    </table>
+                  </div>
+            </div>
+          </div>
+        </li>
+      </div>
+      <div class="hidden" id="fan-health-dropdown">
+        <li class="left"><a class="menu-button" href="#"><img class="hidden" id="fan-health-led" src="/share/svg/led-fan.svg"></a>
+          <div class="menu">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
+                    </tr>
+                    <tr>
+                      <td><sup style="line-height:1">This is not a drill! A red icon indicates a current issue,<br>
+                          a yellow one that was observed in the past</sup></td>
+                    </tr>
+                  </table>
+                </div>
+            <div id="fan-health-message-fail">
+              <hr>
+                  <div class="text">
+                    <table>
+                      <tr>
+                        <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-fan.svg"></td>
+                        <td style="line-height:1.5"><b>Fan failed</b></td>
+                      </tr>
+                      <tr>
+                        <td><sup style="line-height:1">A fan error occured, please <a href="/api/log?seek=3600&amp;follow=1" target="_blank">check the log</a></sup></td>
+                      </tr>
+                    </table>
+                  </div>
+            </div>
+          </div>
+        </li>
+      </div>
+      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="/share/svg/led-stream.svg"><img class="led-gray" id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg"><span>System</span></a>
+        <div class="menu" id="system-menu">
+          <table class="kv">
+            <tr>
+              <td class="value">Runtime settings &amp; tools</td>
+              <td class="feature-disabled" id="system-tool-webterm">
+                <button class="small" data-force-hide-menu data-show-window="webterm-window">&bull; Term</button>
+              </td>
+              <td id="system-tool-about">
+                <button class="small" data-force-hide-menu data-show-window="about-window">&bull; About</button>
+              </td>
+              <td id="system-tool-log">
+                <button class="small" data-force-hide-menu id="open-log-button">&bull; Log</button>
+              </td>
+              <td class="feature-disabled" id="system-tool-wol">
+                <button class="gpio-button small" data-force-hide-menu id="gpio-button-__wol__" data-channel="__wol__" data-confirm="Are you sure to send Wake-on-LAN packet to the server?">&bull; WoL</button>
+              </td>
+            </tr>
+          </table>
+          <hr>
+          <div class="hidden" id="stream-message-no-webrtc">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>WebRTC is not supported by this browser</b></td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <div class="hidden" id="stream-message-no-h264">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>H.264 is not supported by this browser</b></td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <table class="kv">
+            <tr class="feature-disabled" id="stream-resolution">
+              <td>Resolution:</td>
+              <td>
+                <select disabled id="stream-resolution-selector"></select>
+              </td>
+            </tr>
+            <tr class="feature-disabled" id="stream-quality">
+              <td>JPEG quality:</td>
+              <td class="value-slider">
+                <input class="slider" disabled type="range" id="stream-quality-slider">
+              </td>
+              <td class="value-number" id="stream-quality-value"></td>
+            </tr>
+            <tr>
+              <td>JPEG max fps:</td>
+              <td class="value-slider">
+                <input class="slider" disabled type="range" id="stream-desired-fps-slider">
+              </td>
+              <td class="value-number" id="stream-desired-fps-value"></td>
+            </tr>
+            <tr class="feature-disabled" id="stream-h264-bitrate">
+              <td>H.264 kbps:</td>
+              <td class="value-slider">
+                <input class="slider" disabled type="range" id="stream-h264-bitrate-slider">
+              </td>
+              <td class="value-number" id="stream-h264-bitrate-value"></td>
+            </tr>
+            <tr class="feature-disabled" id="stream-h264-gop">
+              <td>H.264 <a target="_blank" href="https://docs.pikvm.org/webrtc">gop</a>:</td>
+              <td class="value-slider">
+                <input class="slider" disabled type="range" id="stream-h264-gop-slider">
+              </td>
+              <td class="value-number" id="stream-h264-gop-value"></td>
+            </tr>
+            <tr class="feature-disabled" id="stream-mode">
+              <td>Video <a target="_blank" href="https://docs.pikvm.org/webrtc">mode</a>:</td>
+              <td>
+                <div class="radio-box">
+                  <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
+                  <label for="stream-mode-radio-mjpeg">MJPEG / HTTP</label>
+                  <input type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus">
+                  <label for="stream-mode-radio-janus">H.264 / WebRTC</label>
+                </div>
+              </td>
+            </tr>
+            <tr class="feature-disabled" id="stream-orient">
+              <td>Orientation:</td>
+              <td>
+                <div class="radio-box">
+                  <input checked type="radio" id="stream-orient-radio-0" name="stream-orient-radio" value="0">
+                  <label for="stream-orient-radio-0">Default</label>
+                  <input type="radio" id="stream-orient-radio-90" name="stream-orient-radio" value="90">
+                  <label for="stream-orient-radio-90">90&deg;</label>
+                  <input type="radio" id="stream-orient-radio-180" name="stream-orient-radio" value="180">
+                  <label for="stream-orient-radio-180">180&deg;</label>
+                  <input type="radio" id="stream-orient-radio-270" name="stream-orient-radio" value="270">
+                  <label for="stream-orient-radio-270">270&deg;</label>
+                </div>
+              </td>
+            </tr>
+            <tr class="feature-disabled" id="stream-audio">
+              <td>Audio volume:</td>
+              <td class="value-slider">
+                <input class="slider" type="range" id="stream-audio-volume-slider">
+              </td>
+              <td class="value-number" id="stream-audio-volume-value"></td>
+            </tr>
+          </table>
+          <hr>
+          <div class="buttons buttons-row">
+            <button class="row33" data-force-hide-menu data-show-window="stream-window">&bull; Show stream</button>
+            <button class="row33" data-force-hide-menu id="stream-screenshot-button">&bull; Screenshot</button>
+            <button class="row33" id="stream-reset-button">Reset stream</button>
+          </div>
+          <div class="feature-disabled" id="hid-outputs">
+            <hr>
+            <table class="kv">
+              <tr class="feature-disabled" id="hid-outputs-keyboard">
+                <td>Keyboard mode:</td>
+                <td>
+                  <div class="radio-box" id="hid-outputs-keyboard-box"></div>
+                </td>
+              </tr>
+              <tr class="feature-disabled" id="hid-outputs-mouse">
+                <td>Mouse <a target="_blank" href="https://docs.pikvm.org/mouse">mode</a>:</td>
+                <td>
+                  <div class="radio-box" id="hid-outputs-mouse-box"></div>
+                </td>
+              </tr>
+            </table>
+          </div>
+          <details>
+            <summary>Keyboard &amp; Mouse (HID) settings</summary>
+            <div class="spoiler">
+              <table class="kv">
+                <tr>
+                      <td>Swap Left Ctrl and Caps keys:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input type="checkbox" id="hid-keyboard-swap-cc-switch">
+                          <label for="hid-keyboard-swap-cc-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+              </table>
+              <hr>
+              <table class="kv">
+                <tr>
+                  <td>Mouse polling:</td>
+                  <td class="value-slider">
+                    <input class="slider" type="range" id="hid-mouse-rate-slider">
+                  </td>
+                  <td class="value-number" id="hid-mouse-rate-value"></td>
+                </tr>
+                <tr class="feature-disabled" id="hid-mouse-sens">
+                  <td>Relative sensitivity:</td>
+                  <td class="value-slider">
+                    <input class="slider" disabled type="range" id="hid-mouse-sens-slider">
+                  </td>
+                  <td class="value-number" id="hid-mouse-sens-value"></td>
+                </tr>
+                <tr class="feature-disabled" id="hid-mouse-squash">
+                      <td>Squash relative moves:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input checked type="checkbox" id="hid-mouse-squash-switch">
+                          <label for="hid-mouse-squash-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+                <tr>
+                  <td>Reverse scrolling:</td>
+                  <td>
+                    <table>
+                      <tr>
+                            <td>Y:</td>
+                            <td align="right">
+                              <div class="switch-box">
+                                <input type="checkbox" id="hid-mouse-reverse-scrolling-switch">
+                                <label for="hid-mouse-reverse-scrolling-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                              </div>
+                            </td>
+                        <td>&nbsp;&nbsp;</td>
+                            <td>X:</td>
+                            <td align="right">
+                              <div class="switch-box">
+                                <input type="checkbox" id="hid-mouse-reverse-panning-switch">
+                                <label for="hid-mouse-reverse-panning-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                              </div>
+                            </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                      <td>Cumulative scrolling:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input type="checkbox" id="hid-mouse-cumulative-scrolling-switch">
+                          <label for="hid-mouse-cumulative-scrolling-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+                <tr>
+                  <td>Scroll rate:</td>
+                  <td class="value-slider">
+                    <input class="slider" type="range" id="hid-mouse-scroll-slider">
+                  </td>
+                  <td class="value-number" id="hid-mouse-scroll-value"></td>
+                </tr>
+                <tr>
+                      <td>Show the blue dot:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input checked type="checkbox" id="hid-mouse-dot-switch">
+                          <label for="hid-mouse-dot-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+              </table>
+            </div>
+          </details>
+          <table class="kv">
+            <tr class="feature-disabled" id="hid-connect">
+                  <td>Connect HID to Server:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input checked type="checkbox" id="hid-connect-switch">
+                      <label for="hid-connect-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+            <tr class="feature-disabled" id="hid-jiggler">
+                  <td><a href="https://docs.pikvm.org/mouse_jiggler" target="_blank">Mouse jiggler</a>:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input disabled type="checkbox" id="hid-jiggler-switch">
+                      <label for="hid-jiggler-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+            <tr>
+                  <td>Mute HID input events:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input type="checkbox" id="hid-mute-switch">
+                      <label for="hid-mute-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+            <tr class="feature-disabled" id="v3-usb-breaker">
+                  <td>Connect main USB to Server:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input class="gpio-switch" disabled type="checkbox" id="gpio-switch-__v3_usb_breaker__" data-channel="__v3_usb_breaker__" data-confirm-off="Turning off this switch will disconnect the main USB&lt;br&gt;from the server.  Are you sure you want to continue?">
+                      <label for="gpio-switch-__v3_usb_breaker__"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+            <tr class="feature-disabled" id="v4-locator">
+                  <td>Enable locator LED:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input class="gpio-switch" disabled type="checkbox" id="gpio-switch-__v4_locator__" data-channel="__v4_locator__" data-confirm-off="">
+                      <label for="gpio-switch-__v4_locator__"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+            <tr>
+                  <td>Ask page close confirmation:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input checked type="checkbox" id="page-close-ask-switch">
+                      <label for="page-close-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+          </table>
+          <hr>
+          <div class="buttons buttons-row">
+            <button class="row50" data-force-hide-menu data-show-window="keyboard-window">&bull; Show keyboard</button>
+            <button class="row50" disabled id="hid-reset-button">Reset HID</button>
+          </div>
+        </div>
+      </li>
+      <li class="right feature-disabled" id="atx-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" id="atx-hdd-led" src="/share/svg/led-atx-hdd.svg"><span>ATX</span></a>
+        <div class="menu">
+          <div class="text"><b>Control the server's power<br></b><sub>Use the short click for ACPI shutdown</sub></div>
+          <hr>
+              <table class="kv">
+                <tr>
+                      <td>Ask click confirmation:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input checked type="checkbox" id="atx-ask-switch">
+                          <label for="atx-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+              </table>
+          <hr>
+          <div class="buttons">
+            <button disabled data-force-hide-menu id="atx-power-button">&bull; Click Power <sup><i>short</i></sup></button>
+            <button disabled data-force-hide-menu id="atx-power-button-long">&bull; Click Power <sup><i>long</i></sup></button>
+            <hr>
+            <button disabled data-force-hide-menu id="atx-reset-button">&bull; Click Reset</button>
+          </div>
+        </div>
+      </li>
+      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="/share/svg/led-msd.svg"><span>Drive</span></a>
+        <div class="menu" id="msd-menu">
+          <div class="text"><b>Mass Storage Drive: </b><span id="msd-status"></span><br></div>
+          <hr>
+          <div class="hidden" id="msd-message-offline">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>Mass Storage Drive is offline</b></td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <div class="hidden" id="msd-message-image-broken">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>Current image is broken!</b></td>
+                    </tr>
+                    <tr>
+                      <td><sup style="line-height:1">Perhaps uploading was interrupted<br></sup></td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <div class="hidden" id="msd-message-too-big-for-cdrom">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>Current image is too big for CD-ROM!</b></td>
+                    </tr>
+                    <tr>
+                      <td><sup style="line-height:1">The device filesystem will be truncated to 2.2GiB</sup></td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <div class="hidden" id="msd-message-out-of-storage">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>Current image is out of storage</b></td>
+                    </tr>
+                    <tr>
+                      <td><sup style="line-height:1">This image was connected manually using <b>kvmd-otgmsd</b></sup></td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <div class="hidden" id="msd-message-rw-enabled">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>Read-write mode is enabled</b></td>
+                    </tr>
+                    <tr>
+                      <td><sup style="line-height:1">Do not turn off PiKVM while this is active to prevent<br>
+                          filesystem corruption. Use read-only mode where possible,<br>
+                          as writing to SD card often can reduce its lifespan.</sup></td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <div class="hidden" id="msd-message-downloads">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+                      <td style="line-height:1.5"><b>The image is being downloaded from PiKVM</b></td>
+                    </tr>
+                    <tr>
+                      <td><sup style="line-height:1">Please wait</sup></td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+          <table class="kv">
+            <tr>
+              <td>Image:</td>
+              <td width="100%">
+                <select disabled id="msd-image-selector"></select>
+              </td>
+              <td>
+                <button disabled id="msd-download-button" title="Download image"><b>&nbsp;&nbsp;&#x21E9;&nbsp;&nbsp;</b></button>
+              </td>
+              <td>
+                <button disabled id="msd-remove-button" title="Remove image"><b>&nbsp;&nbsp;&times;&nbsp;&nbsp;</b></button>
+              </td>
+            </tr>
+          </table>
+          <table class="kv">
+            <tr>
+              <td>Drive <a target="_blank" href="https://docs.pikvm.org/msd">mode</a>:</td>
+              <td>
+                <div class="radio-box">
+                  <input checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1">
+                  <label for="msd-mode-radio-cdrom">CD-ROM</label>
+                  <input type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0">
+                  <label for="msd-mode-radio-flash">Flash</label>
+                </div>
+              </td>
+              <td>&nbsp;</td>
+                  <td>Writable:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input disabled type="checkbox" id="msd-rw-switch">
+                      <label for="msd-rw-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+          </table>
+          <hr>
+          <div id="msd-storages"></div>
+          <hr>
+          <div class="buttons buttons-row">
+            <button class="row50" disabled id="msd-select-new-button">Select image to upload</button>
+            <button class="row25" disabled id="msd-upload-new-button">Upload</button>
+            <button class="row25" disabled id="msd-abort-new-button">Abort</button>
+          </div>
+          <div class="hidden" id="msd-message-another-user-uploads">
+            <hr>
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+                      <td style="line-height:1.5"><b>Another user uploads an image</b></td>
+                    </tr>
+                  </table>
+                </div>
+          </div>
+          <div class="hidden" id="msd-new-sub">
+            <hr>
+            <table class="kv">
+              <tr>
+                <td>Specify a local file:</td>
+                <td>
+                  <input type="file" id="msd-new-file">
+                </td>
+              </tr>
+              <tr>
+                <td><b>Or</b> paste a URL:</td>
+                <td>
+                  <input type="text" id="msd-new-url" style="width: 100%">
+                </td>
+              </tr>
+              <tr class="hidden" id="msd-new-part">
+                <td>Upload partition:</td>
+                <td width="100%">
+                  <select id="msd-new-part-selector"></select>
+                </td>
+              </tr>
+            </table>
+            <hr>
+            <table class="kv">
+              <tr>
+                <td class="value">Note:</td>
+                <td>&bull; Don't close the browser page until the upload is complete.</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td>&bull; To speed up the upload, close the stream window.</td>
+              </tr>
+            </table>
+          </div>
+          <div class="hidden" id="msd-uploading-sub">
+            <hr>
+            <table class="kv">
+              <tr>
+                <td>New image:</td>
+                <td class="value" id="msd-uploading-name"></td>
+              </tr>
+              <tr>
+                <td>Upload size:</td>
+                <td class="value" id="msd-uploading-size"></td>
+              </tr>
+            </table>
+            <div class="text">
+              <div class="progress" id="msd-uploading-progress"><span class="progress-value" id="msd-uploading-progress-value"></span></div>
+            </div>
+          </div>
+          <hr>
+          <div class="buttons buttons-row">
+            <button class="row50" disabled id="msd-connect-button">Connect drive to Server</button>
+            <button class="row25" disabled id="msd-disconnect-button">Disconnect</button>
+            <button class="row25" disabled id="msd-reset-button">Reset</button>
+          </div>
+        </div>
+      </li>
+      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="/share/svg/led-gear.svg"><span>Macro</span></a>
+        <div class="menu">
+          <div class="text"><b>Record and play HID/ATX/GPIO actions<br></b><sub>For security reasons, the record will not be saved on the PiKVM</sub></div>
+          <hr>
+          <div class="buttons buttons-row">
+            <button class="row25" disabled data-force-hide-menu id="hid-recorder-record">&bull; Rec</button>
+            <button class="row25" disabled id="hid-recorder-stop">Stop</button>
+            <button class="row25" disabled id="hid-recorder-play">Play</button>
+            <button class="row25" disabled id="hid-recorder-clear">Clear</button>
+          </div>
+          <hr>
+          <table class="kv">
+            <tr>
+              <td>Script time:</td>
+              <td class="value" colspan="2" id="hid-recorder-time">00:00:00.0</td>
+            </tr>
+            <tr>
+              <td>Scripted events:</td>
+              <td class="value" id="hid-recorder-events-count">0</td>
+              <td><sup><i>include delays</i></sup></td>
+            </tr>
+          </table>
+          <hr>
+              <table class="kv">
+                <tr>
+                      <td>Infinite loop playback:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input disabled type="checkbox" id="hid-recorder-loop-switch">
+                          <label for="hid-recorder-loop-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+              </table>
+          <hr>
+          <input type="file" id="hid-recorder-new-script-file">
+          <div class="buttons buttons-row">
+            <button class="row50" disabled id="hid-recorder-upload">Upload script</button>
+            <button class="row50" disabled id="hid-recorder-download">Download script</button>
+          </div>
+        </div>
+      </li>
+      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="/share/svg/led-gear.svg"><span>Text</span></a>
+        <div class="menu" id="text-menu">
+          <div class="text"><b>Paste text as keypress sequence<br></b><sub>Please note that PiKVM cannot switch the keyboard layout</sub></div>
+          <hr>
+          <div class="text" style="margin-right: 20px">
+            <textarea id="hid-pak-text" data-focus placeholder="Enter your text here"></textarea>
+          </div>
+          <table class="kv">
+            <tr>
+              <td>
+                <button disabled data-force-hide-menu id="hid-pak-button">&bull; Paste</button>
+              </td>
+              <td>using host keymap</td>
+              <td>
+                <select id="hid-pak-keymap-selector"></select>
+              </td>
+            </tr>
+          </table>
+          <table class="kv">
+            <tr>
+                  <td>Ask paste confirmation:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input checked type="checkbox" id="hid-pak-ask-switch">
+                      <label for="hid-pak-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+            <tr class="feature-disabled" id="hid-pak-secure">
+                  <td>Hide input text:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input type="checkbox" id="hid-pak-secure-switch">
+                      <label for="hid-pak-secure-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+          </table>
+          <div class="feature-disabled" id="stream-ocr">
+            <hr><br>
+            <hr>
+            <div class="text"><b>Text recognition <sup><i>&beta;</i></sup><br></b><sub><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> works locally on PiKVM</sub></div>
+            <hr>
+            <table class="kv">
+              <tr>
+                <td>
+                  <button data-force-hide-menu id="stream-ocr-button">&bull; Select area</button>
+                </td>
+                <td>for</td>
+                <td>
+                  <select id="stream-ocr-lang-selector"></select>
+                </td>
+                <td>text recognition</td>
+              </tr>
+            </table>
+            <table class="kv">
+              <tr>
+                <td colspan="4">&bull; Press <b>Enter</b> to recognize and copy text to clipboard</td>
+              </tr>
+              <tr>
+                <td colspan="4">&bull; Press <b>Esc</b> to cancel selection</td>
+              </tr>
+              <tr>
+                <td></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </li>
+      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#">Shortcuts</a>
+        <div class="menu" id="shortcuts-menu">
+          <div class="text"><b>Quick keyboard shortcuts<br></b><sub>Also see <i>System &rarr; Show keyboard</i></sub></div>
+          <hr>
+          <div class="buttons">
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
+              <button class="row50" data-force-hide-menu data-shortcut="MetaLeft">&bull; Left Win</button>
+            </div>
+            <hr>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="AltLeft ShiftLeft">&bull; Alt+Shift</button>
+              <button class="row50" data-force-hide-menu data-shortcut="ControlLeft KeyW">&bull; Ctrl+W</button>
+            </div>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="ControlLeft ShiftLeft">&bull; Ctrl+Shift</button>
+              <button class="row50" data-force-hide-menu data-shortcut="AltLeft Tab">&bull; Alt+Tab</button>
+            </div>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="ShiftLeft ShiftRight">&bull; Shift+Shift</button>
+              <button class="row50" data-force-hide-menu data-shortcut="AltLeft Enter">&bull; Alt+Enter</button>
+            </div>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="MetaLeft Space">&bull; Win+Space</button>
+              <button class="row50" data-force-hide-menu data-shortcut="AltLeft F4">&bull; Alt+F4</button>
+            </div>
+            <hr>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="ControlLeft AltLeft F1">&bull; Ctrl+Alt+F1</button>
+              <button class="row50" data-force-hide-menu data-shortcut="MetaLeft KeyL">&bull; Win+L</button>
+            </div>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="ControlLeft AltLeft F2">&bull; Ctrl+Alt+F2</button>
+              <button class="row50" data-force-hide-menu data-shortcut="PrintScreen">&bull; Print Screen</button>
+            </div>
+            <hr>
+            <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete">&bull; Ctrl+Alt+Del</button>
+              <button class="row50" data-force-hide-menu data-shortcut="Power">&bull; Power</button>
+            </div>
+          </div>
+          <hr>
+          <div class="text">
+            &darr; &bull; Alt+SysRq+... <sup><i>linux magic
+            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">help</a></i></sup>
+          </div>
+          <hr>
+          <div class="buttons">
+            <div class="buttons-row">
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyF" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Call the OOM killer to kill a memory hog process">F</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyM" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Dump current memory info to the console">M</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyD" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Show all locks that are held">D</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyT" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Dump a list of current tasks and their information to the console">T</button>
+            </div>
+            <hr>
+            <div class="buttons-row">
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyR" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Turn off keyboard raw mode, set it to XLATE">R</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyE" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Send a SIGTERM to all processes, except for init">E</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyI" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Send a SIGKILL to all processes, except for init">I</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyS" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Attempt to sync all mounted filesystems">S</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyU" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Attempt to remount all mounted filesystems read-only">U</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyB" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Immediately reboot the system without syncing or unmounting disks">B</button>
+            </div>
+          </div>
+          <hr>
+              <table class="kv">
+                <tr>
+                      <td>Ask the magic confirmation:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input checked type="checkbox" id="hid-sysrq-ask-switch">
+                          <label for="hid-sysrq-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+              </table>
+        </div>
+      </li>
+      <li class="right feature-disabled" id="gpio-dropdown"><a class="menu-button" id="gpio-menu-button" href="#"><span>GPIO</span></a>
+        <div class="menu" id="gpio-menu"></div>
+      </li>
+    </ul>
+    <div class="window" id="stream-ocr-window">
+      <div class="hidden" id="stream-ocr-selection"></div>
+    </div>
+    <div class="window window-resizable" id="stream-window">
+      <div class="window-header" id="stream-window-header">
+        <div class="window-grab">MJPEG</div>
+        <button class="window-button-close"><b>&times;</b></button>
+        <button class="window-button-maximize">&#9744;</button>
+        <button class="window-button-original">&bull;</button>
+        <button class="window-button-enter-full-tab">&#9650;</button>
+        <button class="window-button-full-screen">&#10530;</button>
+      </div>
+      <div id="stream-info"></div>
+      <button class="window-button-exit-full-tab">&#9660;</button>
+      <div class="stream-box-offline" id="stream-box"><img id="stream-image" src="/share/png/blank-stream.png">
+        <video class="hidden" id="stream-video" autoplay playsinline muted></video>
+        <div id="stream-fullscreen-active"></div>
+      </div>
+      <div class="keypad" id="stream-mouse-buttons" align="center">
+        <div class="keypad-block">
+          <div class="keypad-row">
+            <div class="key wide-3 left rounded-left" data-code="left">
+              <div class="label">Left</div>
+            </div>
+            <div class="modifier left small rounded-right" data-code="left">
+              <div class="label"><b>&bull;</b><br>Hold</div>
+            </div>
+            <div class="empty" style="width:15px"></div>
+            <div class="key wide-1 left rounded-left" data-code="middle">
+              <div class="label">Mid</div>
+            </div>
+            <div class="modifier left small rounded-right" data-code="middle">
+              <div class="label"><b>&bull;</b><br>Hold</div>
+            </div>
+            <div class="empty" style="width:15px"></div>
+            <div class="modifier right small rounded-left" data-code="right">
+              <div class="label"><b>&bull;</b><br>Hold</div>
+            </div>
+            <div class="key wide-3 right rounded-right" data-code="right">
+              <div class="label">Right</div>
+            </div>
+            <div class="empty" style="width:30px"></div>
+            <div class="key small rounded-left" data-code="up">
+              <div class="label">Up</div>
+            </div>
+            <div class="key small rounded-right" data-code="down">
+              <div class="label">Down</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="window" id="keyboard-window">
+      <div class="window-header" id="keyboard-window-header">
+        <div class="window-grab">Virtual Keyboard</div>
+        <button class="window-button-close"><b>&times;</b></button>
+      </div>
+      <div class="keypad" id="keyboard-desktop" align="center">
+        <div class="keypad-block">
+          <div class="keypad-row">
+                <div class="key small" data-code="Escape">
+                  <div class="label">Esc
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="empty " style="width:24px">
+                  <div class="label">&nbsp;</div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F1">
+                  <div class="label">F1
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F2">
+                  <div class="label">F2
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F3">
+                  <div class="label">F3
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F4">
+                  <div class="label">F4
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="empty " style="width:10px">
+                  <div class="label">&nbsp;</div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F5">
+                  <div class="label">F5
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F6">
+                  <div class="label">F6
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F7">
+                  <div class="label">F7
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F8">
+                  <div class="label">F8
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="empty " style="width:10px">
+                  <div class="label">&nbsp;</div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F9">
+                  <div class="label">F9
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F10">
+                  <div class="label">F10
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F11">
+                  <div class="label">F11
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="F12">
+                  <div class="label">F12
+                  </div>
+                </div>
+          </div>
+          <hr>
+          <div class="keypad-row">
+                <div class="key " data-code="Backquote">
+                  <div class="label">~<br>`
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit1">
+                  <div class="label">!<br>1
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit2">
+                  <div class="label">@<br>2
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit3">
+                  <div class="label">#<br>3
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit4">
+                  <div class="label">$<br>4
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit5">
+                  <div class="label">%<br>5
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit6">
+                  <div class="label">^<br>6
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit7">
+                  <div class="label">&amp;<br>7
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit8">
+                  <div class="label">*<br>8
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit9">
+                  <div class="label">(<br>9
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit0">
+                  <div class="label">)<br>0
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Minus">
+                  <div class="label">_<br>-
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Equal">
+                  <div class="label">+<br>=
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key wide-1 right" data-code="Backspace">
+                  <div class="label">&#8612;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key wide-1 left" data-code="Tab">
+                  <div class="label">&#8676;<br>&#8677;
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyQ">
+                  <div class="label">Q
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyW">
+                  <div class="label">W
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyE">
+                  <div class="label">E
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyR">
+                  <div class="label">R
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyT">
+                  <div class="label">T
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyY">
+                  <div class="label">Y
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyU">
+                  <div class="label">U
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyI">
+                  <div class="label">I
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyO">
+                  <div class="label">O
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyP">
+                  <div class="label">P
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="BracketLeft">
+                  <div class="label">{<br>[
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="BracketRight">
+                  <div class="label">}<br>]
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Backslash">
+                  <div class="label">|<br>&bsol;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key wide-2 left small" data-code="CapsLock">
+                  <div class="label"><img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyA">
+                  <div class="label">A
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyS">
+                  <div class="label">S
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyD">
+                  <div class="label">D
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyF">
+                  <div class="label">F
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyG">
+                  <div class="label">G
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyH">
+                  <div class="label">H
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyJ">
+                  <div class="label">J
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyK">
+                  <div class="label">K
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyL">
+                  <div class="label">L
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Semicolon">
+                  <div class="label">:<br>;
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Quote">
+                  <div class="label">"<br>'
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key wide-2 right small" data-code="Enter">
+                  <div class="label">Enter<br>&crarr;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier wide-3 left small" data-code="ShiftLeft">
+                  <div class="label"><b>&bull;</b><br>Shift
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyZ">
+                  <div class="label">Z
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyX">
+                  <div class="label">X
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyC">
+                  <div class="label">C
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyV">
+                  <div class="label">V
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyB">
+                  <div class="label">B
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyN">
+                  <div class="label">N
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyM">
+                  <div class="label">M
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Comma">
+                  <div class="label">&lt;<br>,
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Period">
+                  <div class="label">&gt;<br>.
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Slash">
+                  <div class="label">?<br>/
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="modifier wide-3 right small" data-code="ShiftRight">
+                  <div class="label"><b>&bull;</b><br>Shift
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier wide-1 left small" data-code="ControlLeft">
+                  <div class="label"><b>&bull;</b><br>Ctrl
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="modifier wide-1 left small" data-code="MetaLeft">
+                  <div class="label"><b>&bull;</b><br>Win
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="modifier wide-1 left small" data-code="AltLeft">
+                  <div class="label"><b>&bull;</b><br>Alt
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key wide-4" data-code="Space">
+                  <div class="label">
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="modifier wide-1 right small" data-code="AltRight">
+                  <div class="label"><b>&bull;</b><br>Alt
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="modifier wide-1 right small" data-code="MetaRight">
+                  <div class="label"><b>&bull;</b><br>Win
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="ContextMenu">
+                  <div class="label"><br>Menu
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="modifier wide-1 right small" data-code="ControlRight">
+                  <div class="label"><b>&bull;</b><br>Ctrl
+                  </div>
+                </div>
+          </div>
+        </div>
+        <div class="keypad-block">
+          <div class="keypad-row">
+                <div class="modifier small" data-code="PrintScreen">
+                  <div class="label"><b>&bull;</b><br>Pt/Sq
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="ScrollLock">
+                  <div class="label"><img class="inline-lamp hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="Pause">
+                  <div class="label">P/Brk
+                  </div>
+                </div>
+          </div>
+          <hr>
+          <div class="keypad-row">
+                <div class="key small" data-code="Insert">
+                  <div class="label">Ins
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="Home">
+                  <div class="label">Home
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="PageUp">
+                  <div class="label">PgUp
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="Delete">
+                  <div class="label">Del
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="End">
+                  <div class="label">End
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="PageDown">
+                  <div class="label">PgDn
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row"></div>
+          <div class="keypad-row">
+                <div class="empty ">
+                  <div class="label">&nbsp;</div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="ArrowUp">
+                  <div class="label">&uarr;
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="empty ">
+                  <div class="label">&nbsp;</div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key " data-code="ArrowLeft">
+                  <div class="label">&larr;
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key " data-code="ArrowDown">
+                  <div class="label">&darr;
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key " data-code="ArrowRight">
+                  <div class="label">&rarr;
+                  </div>
+                </div>
+          </div>
+        </div>
+        <div class="keypad-block">
+          <div class="keypad-row">
+                <div class="empty small">
+                  <div class="label">&nbsp;</div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="empty small">
+                  <div class="label">&nbsp;</div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="empty small">
+                  <div class="label">&nbsp;</div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="Power">
+                  <div class="label">PWR
+                  </div>
+                </div>
+          </div>
+          <hr>
+          <div class="keypad-row">
+                <div class="key small" data-code="NumLock">
+                  <div class="label"><img class="inline-lamp hid-keyboard-num-led led-gray" src="/share/svg/led-square.svg"><br> NmLk
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key " data-code="NumpadDivide">
+                  <div class="label">/
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key " data-code="NumpadMultiply">
+                  <div class="label">*
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key " data-code="NumpadSubtract">
+                  <div class="label">-
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="Numpad7">
+                  <div class="label">7<br>Home
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="Numpad8">
+                  <div class="label">8<br>&uarr;
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="Numpad9">
+                  <div class="label">9<br>PgUp
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="empty ">
+                  <div class="label">&nbsp;</div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="Numpad4">
+                  <div class="label">4<br>&larr;
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="Numpad5">
+                  <div class="label">5<br><br>
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="Numpad6">
+                  <div class="label">6<br>&rarr;
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key " data-code="NumpadAdd">
+                  <div class="label">+
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="Numpad1">
+                  <div class="label">1<br>End
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="Numpad2">
+                  <div class="label">2<br>&darr;
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="Numpad3">
+                  <div class="label">3<br>PgDn
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="empty ">
+                  <div class="label">&nbsp;</div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="Numpad0">
+                  <div class="label">0<br>Ins
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="empty ">
+                  <div class="label">&nbsp;</div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="NumpadDecimal">
+                  <div class="label">.<br>Del
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="NumpadEnter">
+                  <div class="label">Ent
+                  </div>
+                </div>
+          </div>
+        </div>
+        <div class="keypad-block">
+          <div class="keypad-row">
+                <div class="key small" data-code="IntlBackslash">
+                  <div class="label">&bsol;<br>|
+                  </div>
+                </div>
+          </div>
+          <hr>
+          <div class="keypad-row">
+                <div class="key small" data-code="IntlYen">
+                  <div class="label">¥<br>_
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key small" data-code="IntlRo">
+                  <div class="label">&bsol;<br>ろ
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier small" data-code="KanaMode">
+                  <div class="label"><b>&bull;</b><br>Kana
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier small" data-code="NonConvert">
+                  <div class="label"><b>&bull;</b><br>N/Cnv
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier small" data-code="Convert">
+                  <div class="label"><b>&bull;</b><br>Cnv
+                  </div>
+                </div>
+          </div>
+        </div>
+      </div>
+      <div class="keypad" id="keyboard-mobile" align="center">
+        <div class="keypad-block">
+          <div class="keypad-row">
+                <div class="key small" data-code="Escape">
+                  <div class="label">Esc
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key wide-0 small rounded-left" data-code="F1">
+                  <div class="label">F1
+                  </div>
+                </div>
+                <div class="key wide-0 small rounded-none" data-code="F2">
+                  <div class="label">F2
+                  </div>
+                </div>
+                <div class="key wide-0 small rounded-none" data-code="F3">
+                  <div class="label">F3
+                  </div>
+                </div>
+                <div class="key wide-0 small rounded-right" data-code="F4">
+                  <div class="label">F4
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key wide-0 small rounded-left" data-code="F5">
+                  <div class="label">F5
+                  </div>
+                </div>
+                <div class="key wide-0 small rounded-none" data-code="F6">
+                  <div class="label">F6
+                  </div>
+                </div>
+                <div class="key wide-0 small rounded-none" data-code="F7">
+                  <div class="label">F7
+                  </div>
+                </div>
+                <div class="key wide-0 small rounded-right" data-code="F8">
+                  <div class="label">F8
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key wide-0 small rounded-left" data-code="F9">
+                  <div class="label">F9
+                  </div>
+                </div>
+                <div class="key wide-0 small rounded-none" data-code="F10">
+                  <div class="label">F10
+                  </div>
+                </div>
+                <div class="key wide-0 small rounded-none" data-code="F11">
+                  <div class="label">F11
+                  </div>
+                </div>
+                <div class="key wide-0 small rounded-right" data-code="F12">
+                  <div class="label">F12
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="modifier small" data-code="PrintScreen">
+                  <div class="label"><b>&bull;</b><br>Pt/Sq
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="ScrollLock">
+                  <div class="label"><img class="inline-lamp hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="Pause">
+                  <div class="label">P/Brk
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="Insert">
+                  <div class="label">Ins
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="Home">
+                  <div class="label">Home
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="End">
+                  <div class="label">End
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="Delete">
+                  <div class="label">Del
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key " data-code="Backquote">
+                  <div class="label">~<br>`
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit1">
+                  <div class="label">!<br>1
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit2">
+                  <div class="label">@<br>2
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit3">
+                  <div class="label">#<br>3
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit4">
+                  <div class="label">$<br>4
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit5">
+                  <div class="label">%<br>5
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit6">
+                  <div class="label">^<br>6
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit7">
+                  <div class="label">&amp;<br>7
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit8">
+                  <div class="label">*<br>8
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit9">
+                  <div class="label">(<br>9
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Digit0">
+                  <div class="label">)<br>0
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Minus">
+                  <div class="label">_<br>-
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Equal">
+                  <div class="label">+<br>=
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key wide-2 right" data-code="Backspace" style="width:101px">
+                  <div class="label">&#8612;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key wide-1 left" data-code="Tab">
+                  <div class="label">&#8676;<br>&#8677;
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyQ">
+                  <div class="label">Q
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyW">
+                  <div class="label">W
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyE">
+                  <div class="label">E
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyR">
+                  <div class="label">R
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyT">
+                  <div class="label">T
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyY">
+                  <div class="label">Y
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyU">
+                  <div class="label">U
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyI">
+                  <div class="label">I
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyO">
+                  <div class="label">O
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyP">
+                  <div class="label">P
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="BracketLeft">
+                  <div class="label">{<br>[
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="BracketRight">
+                  <div class="label">}<br>]
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key wide-1 left" data-code="Backslash" style="width:78px">
+                  <div class="label">|<br>&bsol;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="key wide-2 left small" data-code="CapsLock">
+                  <div class="label"><img class="inline-lamp hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyA">
+                  <div class="label">A
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyS">
+                  <div class="label">S
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyD">
+                  <div class="label">D
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyF">
+                  <div class="label">F
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyG">
+                  <div class="label">G
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyH">
+                  <div class="label">H
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyJ">
+                  <div class="label">J
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyK">
+                  <div class="label">K
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyL">
+                  <div class="label">L
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Semicolon">
+                  <div class="label">:<br>;
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Quote">
+                  <div class="label">`<br>'
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key wide-3 right small" data-code="Enter" style="width:116px">
+                  <div class="label">Enter<br>&crarr;
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier wide-3 left small" data-code="ShiftLeft">
+                  <div class="label"><b>&bull;</b><br>Shift
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyZ">
+                  <div class="label">Z
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyX">
+                  <div class="label">X
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyC">
+                  <div class="label">C
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyV">
+                  <div class="label">V
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyB">
+                  <div class="label">B
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyN">
+                  <div class="label">N
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key single" data-code="KeyM">
+                  <div class="label">M
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Comma">
+                  <div class="label">&lt;<br>,
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Period">
+                  <div class="label">&gt;<br>.
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Slash">
+                  <div class="label">?<br>/
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="PageUp">
+                  <div class="label">PgUp
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key " data-code="ArrowUp">
+                  <div class="label">&uarr;
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key small" data-code="PageDown">
+                  <div class="label">PgDn
+                  </div>
+                </div>
+          </div>
+          <div class="keypad-row">
+                <div class="modifier wide-1 left small" data-code="ControlLeft">
+                  <div class="label"><b>&bull;</b><br>Ctrl
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="modifier wide-1 left small" data-code="MetaLeft">
+                  <div class="label"><b>&bull;</b><br>Win
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="modifier wide-1 left small" data-code="AltLeft">
+                  <div class="label"><b>&bull;</b><br>Alt
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="Space" style="width:190px">
+                  <div class="label">
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="modifier right small" data-code="AltRight">
+                  <div class="label"><b>&bull;</b><br>Alt
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="modifier right small" data-code="MetaRight">
+                  <div class="label"><b>&bull;</b><br>Win
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key small" data-code="ContextMenu">
+                  <div class="label"><br>Menu
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="modifier right small" data-code="ShiftRight">
+                  <div class="label"><b>&bull;</b><br>Shift
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="modifier right small" data-code="ControlRight">
+                  <div class="label"><b>&bull;</b><br>Ctrl
+                  </div>
+                </div>
+                <div class="spacer"></div>
+                <div class="key " data-code="ArrowLeft">
+                  <div class="label">&larr;
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key " data-code="ArrowDown">
+                  <div class="label">&darr;
+                  </div>
+                </div>
+                <div class="spacer-fixed"></div>
+                <div class="key " data-code="ArrowRight">
+                  <div class="label">&rarr;
+                  </div>
+                </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="window" id="about-window">
+      <div class="window-header">
+        <div class="window-grab">About</div>
+        <button class="window-button-close"><b>&times;</b></button>
+      </div>
+      <div id="about">
+        <table>
+          <tr>
+            <td class="logo"><a href="https://pikvm.org" target="_blank"><img class="svg-gray" src="/share/svg/logo.svg" alt="PiKVM" height="40"></a></td>
+            <td>
+              <table>
+                <tr>
+                  <td class="title" colspan="2">The Open Source KVM over IP</td>
+                </tr>
+                <tr>
+                  <td class="copyright" colspan="2">Copyright &copy; 2018-2024 <a target="_blank" href="mailto:mdevaev@gmail.com">Maxim Devaev</a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table><br>
+        <div class="tabs-box">
+              <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
+              <label for="about-tab-meta-button">Meta</label>
+              <div class="tab">
+                <div class="code" id="about-meta"><span class="code-comment">No data</span>
+                </div>
+              </div>
+              <input type="radio" name="about-tab-button" id="about-tab-hardware-button">
+              <label for="about-tab-hardware-button">Hardware</label>
+              <div class="tab">
+                <div class="code" id="about-hardware"><span class="code-comment">No data</span>
+                </div>
+              </div>
+              <input type="radio" name="about-tab-button" id="about-tab-version-button">
+              <label for="about-tab-version-button">Version</label>
+              <div class="tab">
+                <div class="code" id="about-version"><span class="code-comment">No data</span>
+                </div>
+              </div>
+              <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
+              <label for="about-tab-thanks-button">Thanks</label>
+              <div class="tab">
+                <div class="code" id="about-thanks"><span class="code-comment">// These kind people donated money to the PiKVM project<br>
+                    // and supported the work on it. We are very grateful<br>
+                    // for their help, and memorializing their names<br>
+                    // is the least we can do in gratitude.<br>
+                    // If you also want to support this project,<br>
+                    // you can donate on <a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
+                    or <a target="_blank" href="https://paypal.me/pikvm">Paypal</a>.</span>
+                  <ul>
+                    <li>A. Isenring</li>
+                    <li>Aaron Graubert</li>
+                    <li>Aaron Heise</li>
+                    <li>Aaron Stein</li>
+                    <li>Accalia</li>
+                    <li>Adam Goodbar</li>
+                    <li>Adam S</li>
+                    <li>Adam Stuart</li>
+                    <li>AdamBomb</li>
+                    <li>adipisicing</li>
+                    <li>Adrian Basham</li>
+                    <li>Adrian Popescu</li>
+                    <li>Ahmed Syed</li>
+                    <li>Alberto Bassi</li>
+                    <li>alejandro</li>
+                    <li>Aleksei Brusianskii</li>
+                    <li>Alessio Curri</li>
+                    <li>Alex T</li>
+                    <li>Alex Z</li>
+                    <li>Alexander Karmanov</li>
+                    <li>Alexander Lahuerta</li>
+                    <li>Alexander Martin</li>
+                    <li>Alexander Pankov</li>
+                    <li>Alexandre Jablonski</li>
+                    <li>Alexey Kamenskiy</li>
+                    <li>alm0241</li>
+                    <li>Alok Anand</li>
+                    <li>Alucard</li>
+                    <li>Ananthaneshan Elampoornan</li>
+                    <li>Andreas Marufke</li>
+                    <li>Andreas Schmid</li>
+                    <li>Andrew Brant</li>
+                    <li>Andrew Melton</li>
+                    <li>Andrew Reusch</li>
+                    <li>Andrew Ruan</li>
+                    <li>Andrzej V</li>
+                    <li>Andy</li>
+                    <li>Andy Keys</li>
+                    <li>Anish Patel</li>
+                    <li>Anix</li>
+                    <li>Anonymous</li>
+                    <li>Anthony Junk</li>
+                    <li>Anton Kovalenko</li>
+                    <li>Armen</li>
+                    <li>Aron Green</li>
+                    <li>Aron Perelman</li>
+                    <li>Artem Simonov</li>
+                    <li>Arthur Mayer</li>
+                    <li>Arthur Woimbée</li>
+                    <li>Ashlesh Chaudhari</li>
+                    <li>Asim Shakour</li>
+                    <li>Augusto Becciu</li>
+                    <li>AVS Computer</li>
+                    <li>awkspace</li>
+                    <li>Badal Patel</li>
+                    <li>baddog</li>
+                    <li>Bao Tin Hoang</li>
+                    <li>Bean Co.</li>
+                    <li>Bela Bargel</li>
+                    <li>Belf Igor</li>
+                    <li>Ben Gordon</li>
+                    <li>Ben Scott</li>
+                    <li>Benedikt Heine</li>
+                    <li>Benedikt Meier</li>
+                    <li>Benjamin Frewert</li>
+                    <li>Benjamin Melancon</li>
+                    <li>Benjamin Schwartz</li>
+                    <li>Benjamin Stegmann</li>
+                    <li>Benni Stauder</li>
+                    <li>Bernhard Fitzke</li>
+                    <li>Beu</li>
+                    <li>bikmaek</li>
+                    <li>bitjoe</li>
+                    <li>Bits and Bytes Computers LLC</li>
+                    <li>Bjoern Petsch</li>
+                    <li>Blair Hasler</li>
+                    <li>Blindside</li>
+                    <li>Blue Frog LLC</li>
+                    <li>Bootstrapper - Programmierung erklärt</li>
+                    <li>Bosco</li>
+                    <li>Bradford King</li>
+                    <li>Brainspore Networks</li>
+                    <li>Branden Shaulis</li>
+                    <li>Brandon Daniels</li>
+                    <li>Brian</li>
+                    <li>Brian Moses</li>
+                    <li>Brian T Mulcahy</li>
+                    <li>Brian Vecchiarelli</li>
+                    <li>Brian White</li>
+                    <li>Bruno Gomes</li>
+                    <li>Bryan Adams</li>
+                    <li>Bryan Montgomery</li>
+                    <li>Buzzer</li>
+                    <li>C P ELSE</li>
+                    <li>Calanish</li>
+                    <li>Cameron Hatcher</li>
+                    <li>Cameron Tacklind</li>
+                    <li>Carl Mercier</li>
+                    <li>Carl-Fredrik Johansson</li>
+                    <li>Carlos Garcia</li>
+                    <li>Carlos Manuel Torres</li>
+                    <li>cbad536</li>
+                    <li>César Nascimento</li>
+                    <li>CHINATERA LIMITED</li>
+                    <li>Chris Blackmon</li>
+                    <li>Chris Burton</li>
+                    <li>Chris Campbell</li>
+                    <li>Chris Jackson</li>
+                    <li>Chris Lewis</li>
+                    <li>Chris Rizio</li>
+                    <li>Christi King</li>
+                    <li>Christian Schlögl</li>
+                    <li>Christian Svensson</li>
+                    <li>Christof Maluck</li>
+                    <li>Christoph Dette</li>
+                    <li>Christoffer Lund</li>
+                    <li>Christopher Bulla</li>
+                    <li>Christopher Gelatt</li>
+                    <li>Christopher Hearn</li>
+                    <li>Christopher Mandlbaur</li>
+                    <li>Christopher Mendoza</li>
+                    <li>Christopher Simms</li>
+                    <li>Chucktastic</li>
+                    <li>Cihan VURAL</li>
+                    <li>clauskj3r</li>
+                    <li>Clifford Coleman</li>
+                    <li>Clinton Lee Taylor</li>
+                    <li>Cole Imhoff</li>
+                    <li>Colin Goodman</li>
+                    <li>Corey Layton</li>
+                    <li>Corey Lista</li>
+                    <li>Craig Keenan</li>
+                    <li>Crossfactor</li>
+                    <li>Cruzzer</li>
+                    <li>ctag</li>
+                    <li>Curt Sammer</li>
+                    <li>CyB0rgg</li>
+                    <li>DeMentor</li>
+                    <li>Desmond Whitt</li>
+                    <li>Daegara</li>
+                    <li>DailyAneurism</li>
+                    <li>Damon Meledones</li>
+                    <li>Dan Berkowitz</li>
+                    <li>Dan Brakeley</li>
+                    <li>Daniel Bowder</li>
+                    <li>Daniel Cabrera</li>
+                    <li>Daniel Davila</li>
+                    <li>Danilo Saft</li>
+                    <li>Danne</li>
+                    <li>Dariusz Techmański</li>
+                    <li>David</li>
+                    <li>David Brausewetter</li>
+                    <li>David Davis</li>
+                    <li>David Godibadze</li>
+                    <li>David Howell</li>
+                    <li>David Irvine</li>
+                    <li>David Klinkman</li>
+                    <li>David Niemann</li>
+                    <li>David Shay</li>
+                    <li>David Ye</li>
+                    <li>David York</li>
+                    <li>Denis</li>
+                    <li>Denis Andreev</li>
+                    <li>Denis Yatsenko</li>
+                    <li>Dennis Becker</li>
+                    <li>Dennis Joslin</li>
+                    <li>Dennis Lomet</li>
+                    <li>Derek Jarvis</li>
+                    <li>Derek Yap</li>
+                    <li>Didrik</li>
+                    <li>digitalbaconbits</li>
+                    <li>Dimitrij Jedich</li>
+                    <li>dixon wong</li>
+                    <li>dizztrukshin</li>
+                    <li>Dmitry Shilov</li>
+                    <li>DogeLabs</li>
+                    <li>Dominic Phoon</li>
+                    <li>Dominik Klonowski</li>
+                    <li>Donald Hays</li>
+                    <li>Edmon Abdul Nur</li>
+                    <li>Egan Ford</li>
+                    <li>Elani Ferri</li>
+                    <li>Elliot Woo</li>
+                    <li>Entt</li>
+                    <li>Eric Phenix</li>
+                    <li>Ethan Shold</li>
+                    <li>Eugene Sukhodolin</li>
+                    <li>ewook</li>
+                    <li>eye-catcher.com</li>
+                    <li>Fabian Druschke</li>
+                    <li>Fabiano Sidler</li>
+                    <li>Far Pin Solutions, LLC</li>
+                    <li>Felyx Gabryel</li>
+                    <li>Fergus McKay</li>
+                    <li>Finn Ebenritter</li>
+                    <li>floppy</li>
+                    <li>fo0bar</li>
+                    <li>Foad Yousef</li>
+                    <li>Foamy</li>
+                    <li>Foli Ayivoh</li>
+                    <li>Folkert Weistra</li>
+                    <li>Francisco Pavon</li>
+                    <li>Frank</li>
+                    <li>Frank Sander</li>
+                    <li>Frederick Czajka</li>
+                    <li>Fredrik Idréus</li>
+                    <li>Garrett Dangerfield</li>
+                    <li>Ge Men</li>
+                    <li>Geekworm</li>
+                    <li>Genkinger Andreas</li>
+                    <li>Geijer</li>
+                    <li>Geoffrey Wright</li>
+                    <li>George Becker</li>
+                    <li>Georgy Brodsky</li>
+                    <li>Gerald</li>
+                    <li>Gerardus Vernimmen</li>
+                    <li>Gernot Neuschröer</li>
+                    <li>Giovanni Fulco</li>
+                    <li>GK</li>
+                    <li>Glen Dragon</li>
+                    <li>Greg Winterstein</li>
+                    <li>Gregory Smith</li>
+                    <li>Gregory Treantos</li>
+                    <li>grewil</li>
+                    <li>Grey Cynic</li>
+                    <li>Guenter Honisch</li>
+                    <li>Guido Bernacchi</li>
+                    <li>Gustin Johnson</li>
+                    <li>György Tamás Vizi</li>
+                    <li>Haiberg GmbH</li>
+                    <li>Haven Zheng</li>
+                    <li>Heibunny</li>
+                    <li>Heikki Tiittanen</li>
+                    <li>Helio Leonardo Pinheiro e Mota</li>
+                    <li>Henrik Ählström</li>
+                    <li>Henry Hood</li>
+                    <li>HimKo</li>
+                    <li>HouseFPV</li>
+                    <li>Howard Simons</li>
+                    <li>HyunohRyu</li>
+                    <li>Icculus</li>
+                    <li>iks</li>
+                    <li>INFO TRX INC</li>
+                    <li>Invader Monks</li>
+                    <li>Ioannis Karageorgos</li>
+                    <li>Isaac</li>
+                    <li>IT Lifesaver</li>
+                    <li>Ivan Ganev</li>
+                    <li>Ivan Josiah Lapis</li>
+                    <li>Ivan Shapovalov</li>
+                    <li>iwbjhbweriuhf</li>
+                    <li>J</li>
+                    <li>J L</li>
+                    <li>Jaanus</li>
+                    <li>Jackson Wyatt</li>
+                    <li>Jacob Karaffa</li>
+                    <li>Jacob Morgan</li>
+                    <li>James Cadd</li>
+                    <li>James Cobb</li>
+                    <li>James Edwards</li>
+                    <li>James Kocher</li>
+                    <li>James Mayhugh</li>
+                    <li>James Noonan</li>
+                    <li>James Ye</li>
+                    <li>Jamie Murphy</li>
+                    <li>Jamie Scott</li>
+                    <li>Jan Niehusmann</li>
+                    <li>Jannick Oursin</li>
+                    <li>Jari Hiltunen</li>
+                    <li>Jason Crossley</li>
+                    <li>Jason Downey</li>
+                    <li>Jason Toland</li>
+                    <li>Jasper Backer</li>
+                    <li>Jay Davis</li>
+                    <li>Jay Isaacs</li>
+                    <li>Jazereel Goh</li>
+                    <li>Jean-Daniel Croteau</li>
+                    <li>Jean-Philippe Guilbault</li>
+                    <li>Jeff</li>
+                    <li>Jeff Bowman</li>
+                    <li>Jeff Urlwin</li>
+                    <li>Jennifer Herting</li>
+                    <li>Jennifer Rowlett</li>
+                    <li>Jeremy Abel</li>
+                    <li>Jeremy Combs</li>
+                    <li>Jeremy Hines</li>
+                    <li>Jerremy Holland</li>
+                    <li>Jerry Nall</li>
+                    <li>Jerry Y. Chen</li>
+                    <li>Jim Bailey</li>
+                    <li>Jim Harbin</li>
+                    <li>Jimmy Burgett</li>
+                    <li>Jimmy Stanley</li>
+                    <li>Joachim Bruening</li>
+                    <li>Joe Hanson</li>
+                    <li>Joe Hinteregger</li>
+                    <li>Joe Ventura</li>
+                    <li>Joel Jacobs</li>
+                    <li>Johannes Heigermose</li>
+                    <li>John Andersen</li>
+                    <li>John Copeland</li>
+                    <li>John F Glenn</li>
+                    <li>John Holmes</li>
+                    <li>John Kelley</li>
+                    <li>John McGovern</li>
+                    <li>Johnny Henson</li>
+                    <li>Jon Ferguy</li>
+                    <li>Jon-Eric</li>
+                    <li>Joni Ruuskanen</li>
+                    <li>Jonas Fischer</li>
+                    <li>Jonathan Slenders</li>
+                    <li>Jonathan Vaughn</li>
+                    <li>Joost Backer</li>
+                    <li>Jordan Blake</li>
+                    <li>Jordi Pakey-Rodriguez</li>
+                    <li>Joris van Embden</li>
+                    <li>Joseph Swift</li>
+                    <li>Josh Nethery</li>
+                    <li>Josh Ricker</li>
+                    <li>Josh VanDeraa</li>
+                    <li>Joshua Futterer</li>
+                    <li>Jozef Riha</li>
+                    <li>Jörgen Fredriksson</li>
+                    <li>Julian Forero</li>
+                    <li>Julian Schneider</li>
+                    <li>Julien Angelier</li>
+                    <li>Justin</li>
+                    <li>Justin Waters</li>
+                    <li>Kai Hadler</li>
+                    <li>Kamil Chyba</li>
+                    <li>Kari Matti Korpi</li>
+                    <li>Karl Dunne</li>
+                    <li>Karl Moos</li>
+                    <li>Keith Muggleton</li>
+                    <li>Ken Lee</li>
+                    <li>Kenneth Younger III</li>
+                    <li>Kenny Hui</li>
+                    <li>KeonWoo PARK</li>
+                    <li>Kevin Bajohr</li>
+                    <li>Kevin Schwartz</li>
+                    <li>Kevin Sherwood</li>
+                    <li>Kiera Kujisawa</li>
+                    <li>Kiran Schuler</li>
+                    <li>Koloman</li>
+                    <li>Konrad Neitzel</li>
+                    <li>Krzysztof Żelaśkiewicz</li>
+                    <li>Lance Ward</li>
+                    <li>Larry Meaney</li>
+                    <li>Lars</li>
+                    <li>Lars Reinhardt</li>
+                    <li>Lee Wilkinson</li>
+                    <li>LeeNX</li>
+                    <li>Leon Siegl</li>
+                    <li>Leonard Feineis</li>
+                    <li>Liran</li>
+                    <li>Liviu Dimitriu</li>
+                    <li>Lizardo Hernandez</li>
+                    <li>LoCascio</li>
+                    <li>Lordbob75</li>
+                    <li>Lothar Schweikle-Droll</li>
+                    <li>Louis Müller</li>
+                    <li>LSDTripp</li>
+                    <li>Ľubor Slušný</li>
+                    <li>Luca Di Diomede</li>
+                    <li>Lucio De Carli</li>
+                    <li>Luiz Bizzio</li>
+                    <li>Lukas Bischof</li>
+                    <li>Lukas Kammerer</li>
+                    <li>Lukas Söder</li>
+                    <li>Maksim Terehin</li>
+                    <li>Malcolm Cameron</li>
+                    <li>Manfred Radeschnig</li>
+                    <li>Marc Khouri</li>
+                    <li>Marcin Wilk</li>
+                    <li>Marcio Zimbres</li>
+                    <li>Marco Rossi</li>
+                    <li>Marcos Wolf</li>
+                    <li>Marek Marczykowski-Górecki</li>
+                    <li>Marius</li>
+                    <li>Mar. Balske</li>
+                    <li>Mark Farrell</li>
+                    <li>Mark Gilbert</li>
+                    <li>Mark Knam</li>
+                    <li>Mark Robinson</li>
+                    <li>Markrosoft</li>
+                    <li>Markus Halm</li>
+                    <li>Markus Schicker</li>
+                    <li>Markus Sobczack</li>
+                    <li>Marshall Bjerke</li>
+                    <li>Marten Hermans</li>
+                    <li>Martin Gasser</li>
+                    <li>Martin Hofbauer</li>
+                    <li>Martin Raine</li>
+                    <li>Martin Suelmann</li>
+                    <li>Martin Wilhelmi</li>
+                    <li>Marvin Honderboom</li>
+                    <li>Mateusz Grabowski</li>
+                    <li>Mathias Uhl</li>
+                    <li>Matt Kane</li>
+                    <li>Matthew Cameron</li>
+                    <li>Mauricio Allende</li>
+                    <li>Max Evans</li>
+                    <li>Mecky</li>
+                    <li>Mehmet Aydoğdu</li>
+                    <li>Michael Bartholomew</li>
+                    <li>Michael Bell</li>
+                    <li>Michael Bombe</li>
+                    <li>Michael Collins</li>
+                    <li>Michael Copeland</li>
+                    <li>Michael Ho</li>
+                    <li>Michael Kovacs</li>
+                    <li>Michael Lynch</li>
+                    <li>Michael Pennington</li>
+                    <li>Michael Sage</li>
+                    <li>Michael Stella</li>
+                    <li>Michael Thalmann</li>
+                    <li>Michael Wu</li>
+                    <li>MichaelZ</li>
+                    <li>Michel Bissonnette</li>
+                    <li>Mikael Wikström</li>
+                    <li>Mike Mason</li>
+                    <li>Mikhael Mariano</li>
+                    <li>Milan Múčka</li>
+                    <li>Miles Davis</li>
+                    <li>Minh Tang</li>
+                    <li>Moez Tharani</li>
+                    <li>Morgan Helton</li>
+                    <li>Myron Weber</li>
+                    <li>Murad Khasawneh</li>
+                    <li>N Patel</li>
+                    <li>Nathaniel Griswold</li>
+                    <li>Nelson Lee</li>
+                    <li>nezu</li>
+                    <li>Nicholas Jeppson</li>
+                    <li>Nicholas Kopas</li>
+                    <li>Nicholas Walczak</li>
+                    <li>Nick Leffler</li>
+                    <li>Nick Roethemeier</li>
+                    <li>Nico Baumgartner</li>
+                    <li>Nicolai Kragh-Hansen</li>
+                    <li>Nigel Smith</li>
+                    <li>Nihal Fernando</li>
+                    <li>Nils Orbat</li>
+                    <li>Nis Wechselberg</li>
+                    <li>Nithin Philips</li>
+                    <li>Nod Swal</li>
+                    <li>Nolan Haynes</li>
+                    <li>nubbn</li>
+                    <li>nybble</li>
+                    <li>Oh Be</li>
+                    <li>Oliver Schwarz</li>
+                    <li>Oliver Zimmer</li>
+                    <li>Omar El-Domeiri</li>
+                    <li>Omar Siam</li>
+                    <li>Oscar</li>
+                    <li>Patrick</li>
+                    <li>Patrick Fortin-Ducharme</li>
+                    <li>Patrick McDowell</li>
+                    <li>Patrick Wagstrom</li>
+                    <li>Paul Bishop</li>
+                    <li>Paul De La Rosa</li>
+                    <li>Paul Pietkiewicz</li>
+                    <li>Paul Tan</li>
+                    <li>Pawel Trofimiuk</li>
+                    <li>Peder Madsen</li>
+                    <li>Peter</li>
+                    <li>Peter Drayton</li>
+                    <li>Peter Farrelly</li>
+                    <li>Peter Okelmann</li>
+                    <li>Petra Lohmann</li>
+                    <li>Petri Heiskanen</li>
+                    <li>Phil Wu</li>
+                    <li>Philip Edwards</li>
+                    <li>Philip Merricks</li>
+                    <li>Pierre Brassart</li>
+                    <li>Pierre Peine</li>
+                    <li>posicat</li>
+                    <li>pozitron03</li>
+                    <li>Przemysław Szypowicz</li>
+                    <li>P_Dmitrij</li>
+                    <li>Qteal</li>
+                    <li>Quattro Uno</li>
+                    <li>Quentin Peten</li>
+                    <li>Ralph Borchers</li>
+                    <li>Ranc1d</li>
+                    <li>Randall D Bilbrey</li>
+                    <li>RandomJerk</li>
+                    <li>Raphael Schitz</li>
+                    <li>Ref Chowdhury</li>
+                    <li>René Rathenau</li>
+                    <li>ReysDad</li>
+                    <li>Ricardo Marques</li>
+                    <li>Richard</li>
+                    <li>Richard Bernarts</li>
+                    <li>Richard Fancher</li>
+                    <li>Richard Freemantle</li>
+                    <li>Richard Michael</li>
+                    <li>Rico Cantrell</li>
+                    <li>Rob</li>
+                    <li>Rob Holden</li>
+                    <li>Rob Tongue</li>
+                    <li>Robert Klauco</li>
+                    <li>Robert Weemhoff</li>
+                    <li>Robin Gfatter</li>
+                    <li>Rodion DENISYUK</li>
+                    <li>Rohit Priyadarshi</li>
+                    <li>Rolfs 3D UG</li>
+                    <li>Ronald LeBaron</li>
+                    <li>Ronald Wells</li>
+                    <li>Ronny Haldorsen</li>
+                    <li>rotx</li>
+                    <li>Rufo Sanchez</li>
+                    <li>Russell Scott</li>
+                    <li>Ryan</li>
+                    <li>Ryan Peacock</li>
+                    <li>Samed Ozoglu</li>
+                    <li>Sameul Davies</li>
+                    <li>Samuel Cote</li>
+                    <li>Samuel Vetsch</li>
+                    <li>Samuel Walker</li>
+                    <li>Sarah Foster</li>
+                    <li>Sarten X</li>
+                    <li>Satish Alwani</li>
+                    <li>Scott</li>
+                    <li>Scott Gagon</li>
+                    <li>Scott Spicola</li>
+                    <li>Scott Tusing</li>
+                    <li>Scott Worthington</li>
+                    <li>Scuba</li>
+                    <li>Sean</li>
+                    <li>Sean Akers</li>
+                    <li>SEAT</li>
+                    <li>Sebastian</li>
+                    <li>Seonwoo Lee</li>
+                    <li>Sergey Lukjanov</li>
+                    <li>Seth Jennings</li>
+                    <li>Shane Selling</li>
+                    <li>Shawn Butts</li>
+                    <li>Sheran Gunasekera</li>
+                    <li>Shichun Chen</li>
+                    <li>Shin Guey Wong</li>
+                    <li>Simon Evans</li>
+                    <li>Simon Sundgaard</li>
+                    <li>Simplistic Realities</li>
+                    <li>Sirmo</li>
+                    <li>Snowy Maslov</li>
+                    <li>Solve Technology</li>
+                    <li>srepac</li>
+                    <li>Stefan Bautz</li>
+                    <li>Stefan Müller</li>
+                    <li>Stefan Stemmer</li>
+                    <li>Stefan Vaillant</li>
+                    <li>Stephan Schmidt</li>
+                    <li>Stephen</li>
+                    <li>Stephen Hocking</li>
+                    <li>Steve Jones</li>
+                    <li>Steve Kerr</li>
+                    <li>Steve Ovens</li>
+                    <li>Steve Stringham</li>
+                    <li>Steven Richter</li>
+                    <li>Stratagem Solutions Ltd</li>
+                    <li>Sven Breckler</li>
+                    <li>sudo34</li>
+                    <li>SuperHiTech</li>
+                    <li>Tango_Echo_Alpha</li>
+                    <li>Tarlak Desaydrone</li>
+                    <li>TechBear</li>
+                    <li>Ted</li>
+                    <li>Tejun Heo</li>
+                    <li>TheSnowedOne</li>
+                    <li>TheTechGiant</li>
+                    <li>Thomas Charisoulis</li>
+                    <li>Thomas Gitlin</li>
+                    <li>Thomas Hagenmaier</li>
+                    <li>Thomas Hedberg Jensen</li>
+                    <li>Thomas Price</li>
+                    <li>Thomas Søfteland</li>
+                    <li>Tim Lenz</li>
+                    <li>Tim Wilkinson</li>
+                    <li>Timo Brinkmann</li>
+                    <li>Timothee Besset</li>
+                    <li>TitomusPrime</li>
+                    <li>Tobias Schafferhans</li>
+                    <li>Tom Lawson</li>
+                    <li>Tom York</li>
+                    <li>Tomas Kuchta</li>
+                    <li>Tomáš hrubý</li>
+                    <li>Torsten Droste</li>
+                    <li>Tracy Fitch</li>
+                    <li>Tristan Schoening</li>
+                    <li>Truman Kilen</li>
+                    <li>turbochris</li>
+                    <li>tutanak</li>
+                    <li>Tyler</li>
+                    <li>Udo Schroeter</li>
+                    <li>Uli Fahrer</li>
+                    <li>Vasily Lazarev</li>
+                    <li>Vidru Eduard</li>
+                    <li>Vicente Salvador Cubedo</li>
+                    <li>Viktor Aschenbrenner</li>
+                    <li>Viktor Ekmark</li>
+                    <li>Vincent Chov</li>
+                    <li>Vlad Sterescu</li>
+                    <li>Volker Gropp</li>
+                    <li>Walli</li>
+                    <li>Walter_Ego</li>
+                    <li>William Wenzel</li>
+                    <li>Will Froning</li>
+                    <li>William Hooper</li>
+                    <li>William Perrin</li>
+                    <li>William Stearns</li>
+                    <li>Woojin Son</li>
+                    <li>xMdb</li>
+                    <li>Yanko Kaneti</li>
+                    <li>Yaroslav Kulikovskikh</li>
+                    <li>Yethal</li>
+                    <li>Yevgeniy Kuksenko</li>
+                    <li>Yew Kay Yan</li>
+                    <li>Yigal Dar</li>
+                    <li>Yogi</li>
+                    <li>YURI LEE</li>
+                    <li>Yurii Ostapchuk</li>
+                    <li>Zeljko</li>
+                    <li>zgen</li>
+                    <li>Zoltan Magyari</li>
+                    <li>Zsombor Vari</li>
+                  </ul>
+                </div>
+              </div>
+        </div><br>
+        <p class="text credits"><a target="_blank" href="https://pikvm.org">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">Support</a></p>
+      </div>
+    </div>
+    <div class="window window-resizable" id="webterm-window" style="width: 640px; height: 480px">
+      <div class="window-header">
+        <div class="window-grab">Terminal</div>
+        <button class="window-button-close"><b>&times;</b></button>
+        <button class="window-button-maximize">&#9744;</button>
+        <!-- Терминал глючит из-за зажимаемой клавиши ESC для выхода-->
+        <!-- button(class="window-button-full-screen") &#10530;-->
+      </div>
+      <iframe id="webterm-iframe" src="" style="width: 100%; height: 100%"></iframe>
+    </div>
+    <ul class="footer">
+      <li class="footer-left"><span id="kvmd-meta-server-host" title="Server name (see System/About)"></span>&nbsp; | &nbsp;<span id="kvmd-version-kvmd" title="KVMD version"></span>&nbsp; | &nbsp;<span id="kvmd-version-streamer" title="Streamer version"></span></li>
+      <li class="footer-right"><a target="_blank" href="https://pikvm.org">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">Support</a></li>
+    </ul>
+  </body>
+</html>

@@ -1,0 +1,50 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+div#login-box {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+	min-height: 100vh;
+}
+
+div#login {
+	text-align: left;
+	outline: none;
+	word-wrap: break-word;
+	max-width: 400px;
+	border: var(--border-window-default-thin);
+	border-radius: 8px;
+	box-sizing: border-box;
+	box-shadow: var(--shadow-big);
+	background-color: var(--cs-window-default-bg);
+	padding: 15px;
+}
+
+input[type="text"]#user-input,
+input[type="password"]#passwd-input,
+input[type="text"]#code-input {
+	text-align: center;
+	border: thin;
+}

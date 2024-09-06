@@ -1,0 +1,82 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+@-webkit-keyframes spin {
+	100% {
+		-webkit-transform: rotate(360deg);
+	}
+}
+@keyframes spin {
+	100% {
+		-webkit-transform: rotate(360deg);
+		transform: rotate(360deg);
+	}
+}
+
+:root {
+	--led-filter-gray: invert(0.5);
+	--led-filter-green: invert(0.5) sepia(1) saturate(5) hue-rotate(100deg);
+	--led-filter-red: invert(0.5) sepia(1) saturate(15) hue-rotate(320deg);
+	--led-filter-yellow: invert(0.5) sepia(1) saturate(5) hue-rotate(0deg);
+
+	--led-spin-slow: spin 6s linear infinite;
+	--led-spin-medium: spin 3s linear infinite;
+	--led-spin-fast: spin 2s linear infinite;
+}
+
+img.led-gray {
+	-webkit-transform: translateZ(0); /* Без этого новый сафари не переключает иконки */
+	-webkit-filter: var(--led-filter-gray);
+	filter: var(--led-filter-gray);
+}
+
+img.led-green {
+	-webkit-transform: translateZ(0);
+	-webkit-filter: var(--led-filter-green);
+	filter: var(--led-filter-green);
+}
+
+img.led-red {
+	-webkit-transform: translateZ(0);
+	-webkit-filter: var(--led-filter-red);
+	filter: var(--led-filter-red);
+}
+
+img.led-yellow {
+	-webkit-transform: translateZ(0);
+	-webkit-filter: var(--led-filter-yellow);
+	filter: var(--led-filter-yellow);
+}
+
+img.led-red-rotating-fast {
+	-webkit-filter: var(--led-filter-red);
+	filter: var(--led-filter-red);
+	-webkit-animation: var(--led-spin-fast);
+	animation: var(--led-spin-fast);
+}
+
+img.led-yellow-rotating-fast {
+	-webkit-filter: var(--led-filter-yellow);
+	filter: var(--led-filter-yellow);
+	-webkit-animation: var(--led-spin-fast);
+	animation: var(--led-spin-fast);
+}

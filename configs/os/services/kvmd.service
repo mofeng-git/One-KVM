@@ -1,0 +1,18 @@
+[Unit]
+Description=PiKVM - The main daemon
+After=network.target network-online.target nss-lookup.target
+
+[Service]
+User=kvmd
+Group=kvmd
+Type=simple
+Restart=always
+RestartSec=3
+AmbientCapabilities=CAP_NET_RAW
+
+ExecStart=/usr/bin/kvmd --run
+TimeoutStopSec=10
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

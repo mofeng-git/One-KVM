@@ -1,0 +1,144 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+div.keypad {
+	zoom: 0.8;
+}
+
+div.keypad div.keypad-block {
+	display: table-cell;
+	padding-right: 0;
+}
+div.keypad div.keypad-block:not(:first-child) {
+	padding-left: 15px;
+}
+
+div.keypad div.keypad-row {
+	display: flex;
+	flex-wrap: wrap;
+	white-space: nowrap;
+	height: 40px;
+	margin-bottom: 5px;
+}
+div.keypad div.keypad-row:last-child {
+	margin-bottom: 0;
+}
+
+div.keypad div.keypad-row div.spacer {
+	margin: 2px;
+	flex-grow: 1;
+}
+div.keypad div.keypad-row div.spacer-fixed {
+	margin: 3px;
+}
+
+div.keypad div.key,
+div.keypad div.modifier,
+div.keypad div.empty {
+	vertical-align: top;
+	font-size: 0.9em;
+	text-align: center;
+	box-sizing: border-box;
+	padding: 0;
+	width: 40px;
+	height: 40px;
+}
+div.keypad div.empty {
+	border: thin solid transparent;
+}
+div.keypad div.key,
+div.keypad div.modifier {
+	box-shadow: var(--shadow-micro);
+	border: var(--border-key-thin);
+	border-radius: 6px;
+	color: var(--cs-key-default-fg);
+	background-color: var(--cs-key-default-bg);
+	cursor: pointer;
+}
+div.keypad div.key:hover,
+div.keypad div.modifier:hover {
+	color: var(--cs-key-hovered-fg);
+	background-color: var(--cs-key-hovered-bg);
+}
+div.keypad div.rounded-left {
+	border-radius: 6px 0px 0px 6px !important;
+}
+div.keypad div.rounded-right {
+	border-radius: 0px 6px 6px 0px !important;
+}
+div.keypad div.rounded-none {
+	border-radius: 0px !important;
+}
+div.keypad div.pressed {
+	box-shadow: none;
+	color: var(--cs-key-pressed-fg) !important;
+	background-color: var(--cs-key-pressed-bg) !important;
+}
+div.keypad div.holded {
+	box-shadow: none;
+	color: var(--cs-key-default-fg) !important;
+	background-color: var(--cs-key-holded-bg) !important;
+}
+div.keypad div.key:last-child,
+div.keypad div.empty:last-child,
+div.keypad div.modifier:last-child {
+	margin-right: 0;
+}
+div.keypad div.wide-0 {
+	width: 28px;
+}
+div.keypad div.wide-1 {
+	width: 61px;
+}
+div.keypad div.wide-2 {
+	width: 77px;
+}
+div.keypad div.wide-3 {
+	width: 102px;
+}
+div.keypad div.wide-4 {
+	flex-grow: 1;
+	width: 288px;
+}
+div.keypad div.left {
+	text-align: left !important;
+	padding-left: 6px !important;
+}
+div.keypad div.right {
+	text-align: right !important;
+	padding-right: 6px !important;
+}
+div.keypad div.small {
+	font-size: 0.7em;
+}
+
+div.keypad div.label {
+	margin: 0;
+	position: relative;
+	top: 50%;
+	-webkit-transform: translateY(-50%);
+	transform: translateY(-50%);
+}
+
+div.keypad b {
+	color: var(--cs-key-holded-bg);
+}

@@ -1,0 +1,9 @@
+# You can write down any information and it will be available
+# at the address /api/info (if you use default nginx config).
+# If server.host (str) will be defined then this value
+# will be displayed in the web interface.
+
+server:
+    host: localhost.localdomain
+
+kvm: {}

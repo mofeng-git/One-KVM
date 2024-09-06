@@ -1,0 +1,71 @@
+kvmd:
+    server:
+        unix_mode: 0666
+
+    atx:
+        type: disabled
+
+    hid:
+        keyboard:
+            device: /dev/null
+        mouse:
+            device: /dev/null
+        noop: true
+
+    msd:
+        type: disabled
+
+    streamer:
+        cmd:
+            - "/usr/bin/ustreamer"
+            - "--device=/dev/kvmd-video"
+            - "--persistent"
+            - "--format=mjpeg"
+            - "--resolution={resolution}"
+            - "--desired-fps={desired_fps}"
+            - "--drop-same-frames=30"
+            - "--last-as-blank=0"
+            - "--unix={unix}"
+            - "--unix-rm"
+            - "--unix-mode=0666"
+            - "--exit-on-parent-death"
+            - "--process-name-prefix={process_name_prefix}"
+            - "--notify-parent"
+            - "--no-log-colors"
+
+pst:
+    remount_cmd: /bin/true
+
+vnc:
+    keymap: /usr/share/kvmd/keymaps/ru
+
+    auth:
+        vncauth:
+            enabled: true
+
+    memsink:
+        jpeg:
+            sink: ""
+        h264:
+            sink: ""
+
+otgnet:
+    commands:
+        post_start_cmd:
+            - "/bin/true"
+        pre_stop_cmd:
+            - "/bin/true"
+
+nginx:
+    http:
+        port: 8080
+    https:
+        port: 4430
+
+janus:
+    cmd:
+        - "/bin/true"
+
+languages:
+    console: zh
+    web: zh

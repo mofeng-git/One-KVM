@@ -1,0 +1,20 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+    console:
+        (): logging.Formatter
+        style: "{"
+        format: "{name:30.30} {levelname:>7} --- {message}"
+
+handlers:
+    console:
+        level: DEBUG
+        class: logging.StreamHandler
+        stream: ext://sys.stderr
+        formatter: console
+
+root:
+    level: INFO
+    handlers:
+        - console

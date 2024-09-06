@@ -1,0 +1,63 @@
+#!/bin/bash
+# ========================================================================== #
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+# ========================================================================== #
+
+
+set -e
+export LC_ALL=C
+
+if [ "$(whoami)" != root ]; then
+	echo "Only root can do that"
+	exit 1
+fi
+
+if [ "$1" != --do-the-thing ]; then
+	echo "This script will generate new self-signed SSL certificates for KVMD Nginx"
+	echo "and put them to /etc/kvmd/nginx/ssl. If you're sure of what you're doing,"
+	echo "append the option '--do-the-thing' to execute. You can also append --vnc"
+	echo "to generate a certificate for VNC not for Nginx."
+	exit 1
+fi
+
+target=nginx
+if [ "$2" == --vnc ]; then
+	target=vnc
+fi
+path="/etc/kvmd/$target/ssl"
+
+set -x
+
+mkdir -p "$path"
+rm -f "$path"/*
+cd "$path"
+
+# XXX: Why ECC?
+#   - https://www.leaderssl.com/articles/345-what-is-ecc-and-why-you-should-use-it
+#   - https://www.digitalocean.com/community/tutorials/how-to-create-an-ecc-certificate-on-nginx-for-debian-8
+#   - https://msol.io/blog/tech/create-a-self-signed-ecc-certificate
+openssl ecparam -out server.key -name prime256v1 -genkey
+openssl req -new -x509 -sha256 -nodes -key server.key -out server.crt -days 3650 \
+	-subj "/C=RU/ST=Moscow/L=Moscow/O=PiKVM/OU=PiKVM/CN=localhost"
+
+#chown "root:kvmd-$target" "$path"/*
+chmod 440 "$path/server.key"
+chmod 444 "$path/server.crt"
+chmod 755 "$path"

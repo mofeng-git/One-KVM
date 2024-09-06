@@ -1,0 +1,94 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+:root {
+	--cs-page-default-bg: #36393f;
+	--cs-page-default-fg: #c3c3c3;
+	--cs-page-obscure-fg: #6c7481;
+
+	--cs-control-default-bg: #36393f;
+	--cs-control-default-fg: #c3c3c3;
+	--cs-control-intensive-fg: white;
+	--cs-control-hovered-bg: #2a2d31;
+	--cs-control-hovered-fg: white;
+	--cs-control-pressed-bg: #17191d;
+	--cs-control-pressed-fg: #6c7481;
+	--cs-control-disabled-fg: #6c7481;
+
+	--cs-navbar-default-bg: #202225;
+	--cs-navbar-default-fg: #c3c3c3;
+	--cs-navbar-item-hovered-bg: #1a1c1f;
+	--cs-navbar-item-pressed-bg: #171717;
+
+	--cs-window-default-bg: #484b51;
+	--cs-window-default-fg: #c3c3c3;
+	--cs-window-header-default-fg: #aaaaaa;
+	--cs-window-header-grabbed-bg: #436a8a;
+	--cs-window-header-grabbed-fg: white;
+	--cs-window-closer-default-fg: #6c7481;
+
+	--cs-code-default-bg: #17191d;
+	--cs-code-default-fg: #aaaaaa;
+	--cs-code-comment-fg: #6c7481;
+
+	--cs-scroll-default-bg: #6c7481;
+	--cs-thumb-default-bg: #436a8a;
+	--cs-thumb-disabled-bg: #202225;
+
+	--cs-progress-default-bg: #171717;
+	--cs-progress-default-fg: white;
+	--cs-progress-bar-bg: #436a8a;
+
+	--cs-key-default-bg: #3b3e43;
+	--cs-key-default-fg: #c3c3c3;
+	--cs-key-hovered-bg: #2a2d31;
+	--cs-key-hovered-fg: white;
+	--cs-key-pressed-bg: #17191d;
+	--cs-key-pressed-fg: #6c7481;
+	--cs-key-holded-bg: #436a8a;
+
+	--cs-marker-fg: #5b90bb;
+	--cs-corner-bg: #5b90bb;
+
+	--shadow-micro: 1px 2px 4px 0 rgba(0, 0, 0, 0.4);
+	--shadow-small: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+	--shadow-big: 0 8px 16px 0 rgba(0, 0, 0, 0.4);
+	--shadow-navbar-item-pressed: 0 5px 0 #5b90bb inset;
+	--shadow-window-fullscreen-active: 0 0 0 2px #5b90bb inset;
+
+	--border-default-thin: thin solid #36393f;
+	--border-default-2px: 2px solid #36393f;
+	--border-hovered-2px: 2px solid #2a2d31;
+	--border-navbar-item-thin: thin solid black;
+	--border-control-thin: thin solid #17191d;
+	--border-key-thin: thin solid #202225;
+	--border-intensive-2px: 2px solid #5b90bb;
+	--border-intensive-thin: thin solid #5b90bb;
+
+	--border-window-default-2px: 2px solid #282a2e;
+	--border-window-active-2px: 2px solid #5b90bb;
+	--border-window-default-thin: thin solid #17191d;
+
+	--border-navbar-menu-default-2px: 2px solid black;
+	--border-navbar-menu-active-2px: 2px solid #5b90bb;
+	--border-menu-item-content-top-thin: thin solid #17191d;
+}

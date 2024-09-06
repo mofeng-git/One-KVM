@@ -1,0 +1,99 @@
+li(id="msd-dropdown" class="right feature-disabled")
+	a(class="menu-button" href="#")
+		+navbar_led("msd-led", "led-msd")
+		span Drive
+	div(id="msd-menu" class="menu")
+		div(class="text")
+			b Mass Storage Drive: 
+			span(id="msd-status")
+			br
+		hr
+		div(id="msd-message-offline" class="hidden")
+			+menu_message("warning", "Mass Storage Drive is offline")
+			hr
+		div(id="msd-message-image-broken" class="hidden")
+			+menu_message("warning", "Current image is broken!")
+				| Perhaps uploading was interrupted#[br]
+			hr
+		div(id="msd-message-too-big-for-cdrom" class="hidden")
+			+menu_message("warning", "Current image is too big for CD-ROM!")
+				| The device filesystem will be truncated to 2.2GiB
+			hr
+		div(id="msd-message-out-of-storage" class="hidden")
+			+menu_message("warning", "Current image is out of storage")
+				| This image was connected manually using #[b kvmd-otgmsd]
+			hr
+		div(id="msd-message-rw-enabled" class="hidden")
+			+menu_message("warning", "Read-write mode is enabled")
+				| Do not turn off PiKVM while this is active to prevent#[br]
+				| filesystem corruption. Use read-only mode where possible,#[br]
+				| as writing to SD card often can reduce its lifespan.
+			hr
+		div(id="msd-message-downloads" class="hidden")
+			+menu_message("info", "The image is being downloaded from PiKVM")
+				| Please wait
+			hr
+		table(class="kv")
+			tr
+				td Image:
+				td(width="100%") #[select(disabled id="msd-image-selector")]
+				td #[button(disabled id="msd-download-button" title="Download image") #[b &nbsp;&nbsp;&#x21E9;&nbsp;&nbsp;]]
+				td #[button(disabled id="msd-remove-button" title="Remove image") #[b &nbsp;&nbsp;&times;&nbsp;&nbsp;]]
+		table(class="kv")
+			tr
+				td Drive #[a(target="_blank" href="https://docs.pikvm.org/msd") mode]:
+				td
+					div(class="radio-box")
+						input(checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1")
+						label(for="msd-mode-radio-cdrom") CD-ROM
+						input(type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0")
+						label(for="msd-mode-radio-flash") Flash
+				td &nbsp;
+				+menu_switch_notable("msd-rw-switch", "Writable", false, false)
+		hr
+		div(id="msd-storages")
+		hr
+		div(class="buttons buttons-row")
+			button(disabled id="msd-select-new-button" class="row50") Select image to upload
+			button(disabled id="msd-upload-new-button" class="row25") Upload
+			button(disabled id="msd-abort-new-button" class="row25") Abort
+		div(id="msd-message-another-user-uploads" class="hidden")
+			hr
+			+menu_message("info", "Another user uploads an image")
+		div(id="msd-new-sub" class="hidden")
+			hr
+			table(class="kv")
+				tr
+					td Specify a local file:
+					td #[input(type="file" id="msd-new-file")]
+				tr
+					td #[b Or] paste a URL:
+					td #[input(type="text" id="msd-new-url" style="width: 100%")]
+				tr(id="msd-new-part" class="hidden")
+					td Upload partition:
+					td(width="100%") #[select(id="msd-new-part-selector")]
+			hr
+			table(class="kv")
+				tr
+					td(class="value") Note:
+					td &bull; Don't close the browser page until the upload is complete.
+				tr
+					td
+					td &bull; To speed up the upload, close the stream window.
+		div(id="msd-uploading-sub" class="hidden")
+			hr
+			table(class="kv")
+				tr
+					td New image:
+					td(id="msd-uploading-name" class="value")
+				tr
+					td Upload size:
+					td(id="msd-uploading-size" class="value")
+			div(class="text")
+				div(id="msd-uploading-progress" class="progress")
+					span(id="msd-uploading-progress-value" class="progress-value")
+		hr
+		div(class="buttons buttons-row")
+			button(disabled id="msd-connect-button" class="row50") Connect drive to Server
+			button(disabled id="msd-disconnect-button" class="row25") Disconnect
+			button(disabled id="msd-reset-button" class="row25") Reset

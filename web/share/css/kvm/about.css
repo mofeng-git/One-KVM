@@ -1,0 +1,46 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+div#about {
+	max-width: 600px;
+	white-space: normal;
+	padding: 5px 5px 5px 5px;
+}
+
+div#about td.logo {
+	padding-right: 25px;
+}
+
+div#about td.title {
+	font-size: 1.2em;
+}
+
+div#about td.copyright {
+	font-size: 0.8em;
+}
+
+div#about div.tabs-box div.tab div.code {
+	-webkit-user-select: text;
+	-moz-user-select: text;
+	user-select: text;
+	height: 250px;
+}

@@ -1,0 +1,53 @@
+mixin navbar_led(id, icon, cls="led-gray")
+	img(id=id, class=cls src=`${svg_dir}/${icon}.svg`)
+
+mixin menu_message(icon, short, classes="")
+	div(class="text")
+		table
+			tr
+				td(rowspan="2") #[img(class=`sign ${classes}` src=`${svg_dir}/${icon}.svg`)]
+				td(style="line-height:1.5") #[b #{short}]
+			if block
+				tr
+					td
+						sup(style="line-height:1")
+							block
+
+mixin menu_switch_notable_gpio(channel, title, confirm_off="")
+	td !{title}:
+	td(align="right")
+		div(class="switch-box")
+			input(disabled type="checkbox" id=`gpio-switch-${channel}` class="gpio-switch"
+				data-channel=channel data-confirm-off=confirm_off)
+			label(for=`gpio-switch-${channel}`)
+				span(class="switch-inner")
+				span(class="switch")
+
+mixin menu_switch_notable(id, title, enabled, checked)
+	td !{title}:
+	td(align="right")
+		div(class="switch-box")
+			input(checked=checked disabled=!enabled type="checkbox" id=id)
+			label(for=id)
+				span(class="switch-inner")
+				span(class="switch")
+
+mixin menu_switch(id, title, enabled, checked)
+	table(class="kv")
+		tr
+			+menu_switch_notable(id, title, enabled, checked)
+
+ul(id="navbar")
+	li(class="left")
+		a(id="logo" href="/") &larr;&nbsp;&nbsp;
+			img(class="svg-gray" src=`${svg_dir}/logo.svg` alt="&pi;-kvm")
+
+	include navbar-health.pug
+
+	include navbar-system.pug
+	include navbar-atx.pug
+	include navbar-msd.pug
+	include navbar-macro.pug
+	include navbar-text.pug
+	include navbar-shortcuts.pug
+	include navbar-gpio.pug

@@ -1,0 +1,16 @@
+[Unit]
+Description=PiKVM - VNC to KVMD/Streamer proxy
+After=kvmd.service
+
+[Service]
+User=kvmd-vnc
+Group=kvmd-vnc
+Type=simple
+Restart=always
+RestartSec=3
+
+ExecStart=/usr/bin/kvmd-vnc --run
+TimeoutStopSec=3
+
+[Install]
+WantedBy=multi-user.target

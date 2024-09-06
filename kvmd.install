@@ -1,0 +1,98 @@
+# shellcheck disable=SC2148
+
+# arg 1: the new package version
+post_install() {
+	post_upgrade "$1" ""
+}
+
+# arg 1: the new package version
+# arg 2: the old package version
+post_upgrade() {
+	echo "==> Ensuring KVMD users and groups ..."
+	systemd-sysusers /usr/lib/sysusers.d/kvmd.conf
+
+	# https://github.com/systemd/systemd/issues/13522
+	# shellcheck disable=SC2013
+	for user in $(grep '^u ' /usr/lib/sysusers.d/kvmd.conf | awk '{print $2}'); do
+		usermod --expiredate= "$user" >/dev/null
+	done
+
+	chown kvmd:kvmd /etc/kvmd/htpasswd || true
+	chown kvmd:kvmd /etc/kvmd/totp.secret || true
+	chown kvmd-ipmi:kvmd-ipmi /etc/kvmd/ipmipasswd || true
+	chown kvmd-vnc:kvmd-vnc /etc/kvmd/vncpasswd || true
+	chmod 600 /etc/kvmd/*passwd || true
+	for target in nginx.conf.mako ssl.conf; do
+		chmod 644 "/etc/kvmd/nginx/$target" || true
+	done
+
+	chown kvmd /var/lib/kvmd/msd 2>/dev/null || true
+	chown kvmd-pst /var/lib/kvmd/pst 2>/dev/null || true
+
+	if [ ! -e /etc/kvmd/nginx/ssl/server.crt ]; then
+		echo "==> Generating KVMD-Nginx certificate ..."
+		kvmd-gencert --do-the-thing
+	fi
+
+	if [ ! -e /etc/kvmd/vnc/ssl/server.crt ]; then
+		echo "==> Generating KVMD-VNC certificate ..."
+		kvmd-gencert --do-the-thing --vnc
+	fi
+
+	for target in nginx vnc; do
+		chown root:root /etc/kvmd/$target/ssl || true
+		owner="root:kvmd-$target"
+		path="/etc/kvmd/$target/ssl/server.key"
+		if [ ! -L "$path" ]; then
+			chown "$owner" "$path" || true
+			chmod 440 "$path" || true
+		fi
+		path="/etc/kvmd/$target/ssl/server.crt"
+		if [ ! -L "$path" ]; then
+			chown "$owner" "$path" || true
+			chmod 444 "$path" || true
+		fi
+	done
+
+	echo "==> Patching configs ..."
+
+	if [[ "$(vercmp "$2" 3.301)" -lt 0 ]]; then
+		[ ! -f /etc/fstab ] || (sed -i -e "s|,data=journal||g" /etc/fstab && touch -t 200701011000 /etc/fstab)
+		[ ! -f /etc/fstab ] || (sed -i -e "/tmpfs \/run\s/d" /etc/fstab && touch -t 200701011000 /etc/fstab)
+		[ ! -f /etc/pacman.conf ] || sed -i -e "s|^Server = https://pikvm.org/repos/|Server = https://files.pikvm.org/repos/arch/|g" /etc/pacman.conf
+		[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=pi3-disable-bt$/dtoverlay=disable-bt/g' /boot/config.txt
+		[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=dwc2$/dtoverlay=dwc2,dr_mode=peripheral/g' /boot/config.txt
+		[ ! -f /etc/conf.d/rngd ] || (echo 'RNGD_OPTS="-o /dev/random -r /dev/hwrng -x jitter -x pkcs11 -x rtlsdr"' > /etc/conf.d/rngd)
+		[ ! -f /etc/pam.d/system-login ] || sed -i -e '/\<pam_systemd\.so\>/ s/^#*/#/' /etc/pam.d/system-login
+		[ ! -f /etc/pam.d/system-auth ] || sed -i -e '/\<pam_systemd_home\.so\>/ s/^#*/#/' /etc/pam.d/system-auth
+		[ -e /etc/systemd/network/99-default.link ] || ln -s /dev/null /etc/systemd/network/99-default.link
+	fi
+
+	if [[ "$(vercmp "$2" 3.317)" -lt 0 ]]; then
+		[ ! -f /boot/config.txt ] || sed -i -e 's/^dtoverlay=i2c-rtc,pcf8563$/dtoverlay=i2c-rtc,pcf8563,wakeup-source/g' /boot/config.txt
+	fi
+
+	if [[ "$(vercmp "$2" 3.320)" -lt 0 ]]; then
+		# https://github.com/pikvm/pikvm/issues/1245
+		systemctl mask \
+			dirmngr@etc-pacman.d-gnupg.socket \
+			gpg-agent-browser@etc-pacman.d-gnupg.socket \
+			gpg-agent-extra@etc-pacman.d-gnupg.socket \
+			gpg-agent-ssh@etc-pacman.d-gnupg.socket \
+			gpg-agent@etc-pacman.d-gnupg.socket \
+			keyboxd@etc-pacman.d-gnupg.socket
+	fi
+
+	if [[ "$(vercmp "$2" 3.332)" -lt 0 ]]; then
+		grep -q "^dtoverlay=vc4-kms-v3d" /boot/config.txt || cat << EOF >> /boot/config.txt
+
+# Passthrough
+dtoverlay=vc4-kms-v3d
+disable_overscan=1
+EOF
+	fi
+
+	# Some update deletes /etc/motd, WTF
+	# shellcheck disable=SC2015,SC2166
+	[ ! -f /etc/motd -a -f /etc/motd.pacsave ] && mv /etc/motd.pacsave /etc/motd || true
+}

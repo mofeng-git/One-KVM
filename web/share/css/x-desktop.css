@@ -1,0 +1,88 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+/* ===== main.css ===== */
+
+button:enabled:hover,
+select:enabled:hover,
+input[type=file]:enabled:hover::-webkit-file-selector-button,
+input[type=file]:enabled:hover::file-selector-button {
+	color: var(--cs-control-hovered-fg);
+	background-color: var(--cs-control-hovered-bg);
+}
+
+button:active,
+select:active,
+input[type=file]:active::-webkit-file-selector-button,
+input[type=file]:active::file-selector-button {
+	color: var(--cs-control-pressed-fg) !important;
+	background-color: var(--cs-control-pressed-bg) !important;
+}
+
+button.key:active,
+select.key:active {
+	box-shadow: none;
+}
+select:enabled:hover {
+	background-image: url("../svg/select-arrow-intensive.svg") !important;
+}
+
+
+/* ===== radio.css ===== */
+
+/* If we have a mouse cursor */
+div.radio-box input[type=radio]:not(:checked):not(:disabled) + label:hover {
+	border: var(--border-hovered-2px);
+	color: var(--cs-control-hovered-fg) !important;
+	background-color: var(--cs-control-hovered-bg) !important;
+}
+
+
+/* ===== slider.css ===== */
+
+/*div.switch-box label span.switch-inner:not(:disabled):hover::before {*/
+input[type=range].slider:not(:disabled):hover::-webkit-slider-runnable-track {
+	background-color: var(--cs-control-hovered-bg);
+}
+
+/*div.switch-box label span.switch-inner:not(:disabled):hover::before {*/
+input[type=range].slider:not(:disabled):hover::-moz-range-track {
+	background-color: var(--cs-control-hovered-bg);
+}
+
+
+/* ===== switch.css ===== */
+
+div.switch-box label span.switch-inner:not(:disabled):hover::before {
+	background-color: var(--cs-control-hovered-bg);
+}
+
+div.switch-box label span.switch-inner:not(:disabled):hover::after {
+	background-color: var(--cs-control-hovered-bg);
+}
+
+
+/* ===== tabs.css ===== */
+
+div.tabs-box input[type="radio"]:not(:checked):hover + label {
+	color: var(--cs-control-hovered-fg);
+}

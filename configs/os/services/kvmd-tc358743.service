@@ -1,0 +1,14 @@
+[Unit]
+Description=PiKVM - EDID loader for TC358743
+Wants=dev-kvmd\x2dvideo.device
+After=dev-kvmd\x2dvideo.device systemd-modules-load.service
+Before=kvmd.service kvmd-pass.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/v4l2-ctl --device=/dev/kvmd-video --set-edid=file=/etc/kvmd/tc358743-edid.hex --fix-edid-checksums --info-edid
+ExecStop=/usr/bin/v4l2-ctl --device=/dev/kvmd-video --clear-edid
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,4 @@
+# https://unix.stackexchange.com/questions/66901/how-to-bind-usb-device-under-a-static-name
+# https://wiki.archlinux.org/index.php/Udev#Setting_static_device_names
+KERNEL=="video[0-9]*", SUBSYSTEM=="video4linux", PROGRAM="/usr/bin/kvmd-udev-hdmiusb-check rpi3 %b", ATTR{index}=="0", GROUP="kvmd", SYMLINK+="kvmd-video"
+KERNEL=="ttyAMA0", SYMLINK+="kvmd-hid"

@@ -1,0 +1,59 @@
+# Don't touch this file otherwise your device may stop working.
+# Use override.yaml to modify required settings.
+# You can find a working configuration in /usr/share/kvmd/configs.default/kvmd.
+
+override: !include [override.d, override.yaml]
+
+logging: !include logging.yaml
+
+kvmd:
+    auth: !include auth.yaml
+
+    hid:
+        type: otg
+
+    atx:
+        type: gpio
+
+    msd:
+        type: otg
+
+    streamer:
+        quality: 0
+        resolution:
+            default: 1920x1080
+            available:
+                - 1920x1080
+                - 1600x1200
+                - 1360x768
+                - 1280x1024
+                - 1280x960
+                - 1280x720
+                - 1024x768
+                - 800x600
+                - 720x576
+                - 720x480
+                - 640x480
+        cmd:
+            - "/usr/bin/ustreamer"
+            - "--device=/dev/kvmd-video"
+            - "--persistent"
+            - "--format=mjpeg"
+            - "--resolution={resolution}"
+            - "--desired-fps={desired_fps}"
+            - "--drop-same-frames=30"
+            - "--unix={unix}"
+            - "--unix-rm"
+            - "--unix-mode=0660"
+            - "--exit-on-parent-death"
+            - "--process-name-prefix={process_name_prefix}"
+            - "--notify-parent"
+            - "--no-log-colors"
+            - "--jpeg-sink=kvmd::ustreamer::jpeg"
+            - "--jpeg-sink-mode=0660"
+
+
+vnc:
+    memsink:
+        jpeg:
+            sink: "kvmd::ustreamer::jpeg"

@@ -1,0 +1,20 @@
+extends ../start.pug
+
+append vars
+	- title = "PiKVM IPMI Info"
+	- main_js = "ipmi/main"
+	- index_link = true
+
+block start
+	p(class="text")
+		| This PiKVM device has running #[b kvmd-ipmi] daemon and provides IPMI 2.0 interface for some basic
+		| BMC operations like on/off/reset the server.
+	p(class="text")
+		| #[b WARNING!] We strongly don't recommend you to use IPMI in untrusted networks because
+		| this protocol is completely unsafe by design. In short, the authentication process for IPMI mandates
+		| that the server send a salted SHA1 or MD5 hash of the requested user's password to the client,
+		| prior to the client authenticating.
+	p(class="text")
+		| #[b NEVER] use the same passwords for KVMD and IPMI users. And even better not to use IPMI.
+		| Instead, you can directly use KVMD API via curl. Here some examples:
+	div(id="ipmi-text" class="code" style="max-height:200px")

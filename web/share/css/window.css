@@ -1,0 +1,176 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+div.window {
+	visibility: hidden;
+	outline: none;
+	overflow: hidden;
+	position: fixed;
+	border: var(--border-window-default-2px);
+	border-radius: 8px;
+	box-sizing: border-box;
+	box-shadow: var(--shadow-big);
+	white-space: nowrap;
+	color: var(--cs-window-default-fg);
+	background-color: var(--cs-window-default-bg);
+	padding: 30px 9px 9px 9px;
+}
+div.window-resizable {
+	resize: both;
+}
+div.window-active {
+	border: var(--border-window-active-2px) !important;
+}
+div.window-resizable.window-active::after {
+	content: "";
+	width: 0;
+	height: 0;
+	border-style: solid;
+	border-width: 0 0 15px 15px;
+	border-color: transparent transparent var(--cs-corner-bg) transparent;
+	right: 0;
+	bottom: 0;
+	position: absolute;
+}
+div.window:fullscreen {
+	border: 0px;
+	border-radius: 0px;
+	resize: none !important;
+	position: absolute !important;
+	top: 0px !important;
+	left: 0px !important;
+	width: 100% !important;
+	height: 100% !important;
+	padding: 0px !important;
+}
+div.window:fullscreen::after {
+	display: none;
+}
+div.window:-webkit-full-screen {
+	border: 0px;
+	border-radius: 0px;
+	resize: none !important;
+	position: absolute !important;
+	top: 0px !important;
+	left: 0px !important;
+	width: 100% !important;
+	height: 100% !important;
+	padding: 0px !important;
+}
+div.window:-webkit-full-screen::after {
+	display: none;
+}
+div.window.window-full-tab {
+	border: 0px;
+	border-radius: 0px;
+	resize: none !important;
+	top: 0px !important;
+	left: 0px !important;
+	width: 100% !important;
+	height: 100% !important;
+	padding: 0px !important;
+}
+
+div.window div.window-header {
+	overflow: hidden;
+	top: 0;
+	left: 0;
+	position: absolute;
+	width: 100%;
+	padding: 0;
+	height: 20px;
+	font-size: 0.8em;
+	color: var(--cs-window-header-default-fg);
+	border-bottom: var(--border-default-thin);
+}
+div.window:fullscreen div.window-header {
+	display: none !important;
+}
+div.window:-webkit-full-screen div.window-header {
+	display: none !important;
+}
+
+div.window div.window-header div.window-grab {
+	overflow: hidden;
+	top: 0;
+	left: 0;
+	position: absolute;
+	width: 100%;
+	height: 20px;
+	cursor: move;
+	padding: 3px 0 2px 20px;
+}
+
+div.window div.window-header-grabbed {
+	color: var(--cs-window-header-grabbed-fg);
+	background-color: var(--cs-window-header-grabbed-bg);
+	border-bottom: var(--border-intensive-thin);
+}
+
+div.window div.window-header button.window-button-full-screen,
+div.window div.window-header button.window-button-enter-full-tab,
+div.window div.window-header button.window-button-original,
+div.window div.window-header button.window-button-maximize,
+div.window div.window-header button.window-button-close {
+	border: none;
+	position: absolute;
+	top: -2px;
+	width: 44px;
+	height: 24px;
+	padding-left: 0;
+	padding-right: 0;
+	color: var(--cs-window-closer-default-fg);
+	display: inline-block;
+}
+div.window div.window-header button.window-button-full-screen {
+	right: 180px;
+}
+div.window div.window-header button.window-button-enter-full-tab {
+	right: 135px;
+}
+div.window div.window-header button.window-button-original {
+	right: 90px;
+}
+div.window div.window-header button.window-button-maximize {
+	right: 45px;
+}
+div.window div.window-header button.window-button-close {
+	right: 0px;
+}
+
+div.window button.window-button-exit-full-tab {
+	width: 50px;
+	height: 10px;
+	left: calc(50% - 25px);
+	font-size: 8px;
+	position: absolute;
+	opacity: 0.5;
+	border-radius: 0px;
+	visibility: hidden;
+	z-index: 1;
+}
+div.window button.window-button-exit-full-tab:hover {
+	opacity: 1;
+}
+div.window.window-full-tab button.window-button-exit-full-tab {
+	visibility: visible !important;
+}

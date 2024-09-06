@@ -1,0 +1,14 @@
+[Unit]
+Description=PiKVM - OTG network service
+After=kvmd-otg.service
+Wants=network-pre.target
+After=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/kvmd-otgnet start
+ExecStop=/usr/bin/kvmd-otgnet stop
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,121 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+/* ===== main.css ===== */
+
+button:active,
+select:active,
+input[type=file]:active::-webkit-file-selector-button,
+input[type=file]:active::file-selector-button {
+	color: var(--cs-control-hovered-fg);
+	background-color: var(--cs-control-hovered-bg);
+}
+
+@media only screen and (orientation: portrait) {
+	button,
+	select,
+	input[type=text],
+	input[type=password],
+	input[type=file]::-webkit-file-selector-button,
+	input[type=file]::file-selector-button {
+		height: 45px !important;
+	}
+}
+
+
+/* ===== window.css ===== */
+
+div.window {
+	padding-top: 45px !important;
+}
+div.window div.window-header {
+	height: 35px !important;
+}
+div.window div.window-header div.window-grab {
+	height: 35px !important;
+}
+div.window div.window-header button.window-button-full-screen,
+div.window div.window-header button.window-button-enter-full-tab,
+div.window div.window-header button.window-button-original,
+div.window div.window-header button.window-button-maximize,
+div.window div.window-header button.window-button-close {
+	height: 40px !important;
+}
+
+
+/* ===== modal.css ===== */
+
+@media only screen and (orientation: portrait) {
+	div.modal-buttons button {
+		height: 50px !important;
+	}
+}
+
+
+/* ===== navbar.css ===== */
+
+ul#navbar li a#logo:hover:not(.active),
+ul#navbar li a.menu-button:hover:not(.active) {
+	background-color: var(--cs-navbar-default-bg);
+}
+
+
+/* ===== radio.css ===== */
+
+/*@media only screen and (orientation: portrait) {
+	div.radio-box input[type=radio] + label {
+		height: 30px !important;
+	}
+}*/
+
+
+/* ===== slider.css ===== */
+
+/*@media only screen and (orientation: portrait) {
+	@supports (-webkit-appearance: none) {
+		input[type=range].slider {
+			margin: 20px 0 20px 0 !important;
+		}
+	}
+}*/
+
+
+/* ===== tabs.css ===== */
+
+@media only screen and (orientation: portrait) {
+	div.tabs-box label {
+		height: 30px !important;
+	}
+}
+
+
+/* ===== keypad.css ===== */
+
+div.keypad {
+	zoom: 1.28 !important;
+}
+
+div.keypad div.key:hover,
+div.keypad div.modifier:hover {
+	color: var(--cs-key-default-fg);
+	background-color: var(--cs-key-default-bg);
+}

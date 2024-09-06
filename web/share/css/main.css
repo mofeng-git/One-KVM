@@ -1,0 +1,254 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+body {
+	margin: 0;
+	overflow: hidden;
+	color: var(--cs-page-default-fg);
+	background-color: var(--cs-page-default-bg);
+	font-family: arial, sans-serif !important;
+}
+body.body-no-select {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
+	touch-action: manipulation;
+}
+
+a {
+	color: var(--cs-page-default-fg);
+}
+
+hr {
+	border: none;
+	border-top: var(--border-default-thin);
+}
+
+p.text {
+	text-align: justify;
+}
+p:not(:first-child).text {
+	margin-top: 0;
+}
+p:last-child.text {
+	margin-bottom: 0;
+}
+
+div.code {
+	white-space: nowrap;
+	overflow-x: auto;
+	font-family: monospace;
+	border-radius: 4px;
+	color: var(--cs-code-default-fg);
+	background-color: var(--cs-code-default-bg);
+	padding: 10px;
+}
+div.code::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+div.code::-webkit-scrollbar-thumb {
+	border-radius: 4px;
+	background: var(--cs-scroll-default-bg);
+}
+@-moz-document url-prefix() {
+	div.code {
+		scrollbar-width: 8px;
+		scrollbar-color: var(--cs-scroll-default-bg) var(--cs-code-default-bg);
+	}
+}
+
+div.code span.code-comment {
+	color: var(--cs-code-comment-fg);
+}
+
+img.svg-gray {
+	-webkit-filter: invert(0.7);
+	filter: invert(0.7);
+	vertical-align: middle;
+}
+
+img.inline-lamp {
+	vertical-align: middle;
+	height: 8px;
+	margin-left: 2px;
+	margin-right: 2px;
+}
+
+img.inline-lamp-big {
+	vertical-align: middle;
+	height: 20px;
+	margin-left: 2px;
+	margin-right: 2px;
+}
+
+button,
+select,
+input[type=file]::-webkit-file-selector-button,
+input[type=file]::file-selector-button {
+	border: none;
+	border-radius: 4px;
+	color: var(--cs-control-default-fg);
+	background-color: var(--cs-control-default-bg);
+	height: 30px;
+	font-family: inherit;
+	font-size: 16px;
+	outline: none;
+	cursor: pointer;
+}
+button {
+	display: block;
+	width: 100%;
+}
+select {
+	display: block;
+	width: 100%;
+	padding-left: 5px;
+	padding-right: 25px;
+}
+button.small {
+	font-size: 12px;
+	height: 20px;
+}
+button.key,
+select.key {
+	border: var(--border-key-thin);
+	box-shadow: var(--shadow-micro);
+}
+button:disabled,
+select:disabled,
+input[type=file]:disabled::-webkit-file-selector-button,
+input[type=file]:disabled::file-selector-button {
+	color: var(--cs-control-disabled-fg);
+	cursor: default;
+}
+
+select {
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
+	background-image: url("../svg/select-arrow-normal.svg");
+	background-position: center right;
+	background-repeat: no-repeat;
+}
+select:disabled {
+	background-image: url("../svg/select-arrow-inactive.svg") !important;
+}
+select:active {
+	color: var(--cs-control-intensive-fg) !important;
+	background-image: url("../svg/select-arrow-intensive.svg") !important;
+}
+select option {
+	color: var(--cs-control-default-fg);
+	background-color: var(--cs-control-default-bg);
+}
+select option.comment {
+	color: var(--cs-control-disabled-fg);
+	font-style: italic;
+}
+
+input[type=text], input[type=password] {
+	overflow-x: auto;
+	font-family: monospace;
+	border-radius: 4px;
+	border: var(--border-default-thin);
+	color: var(--cs-code-default-fg);
+	background-color: var(--cs-code-default-bg);
+	padding: 2px;
+	height: 30px;
+}
+
+div.buttons-row {
+	margin: 0;
+	padding: 0;
+	font-size: 0;
+}
+
+.row50 {
+	display: inline-block;
+	width: 50%;
+}
+.row33 {
+	display: inline-block;
+	width: 33.33%;
+}
+.row25 {
+	display: inline-block;
+	width: 25%;
+}
+.row16 {
+	display: inline-block;
+	width: 16.66%;
+}
+.row50:not(:first-child),
+.row33:not(:first-child),
+.row25:not(:first-child),
+.row16:not(:first-child) {
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
+	border-left: var(--border-control-thin) !important;
+}
+.row50:not(:last-child),
+.row33:not(:last-child),
+.row25:not(:last-child),
+.row16:not(:last-child) {
+	border-top-right-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
+ul.footer {
+	list-style-type: none;
+	bottom: 0;
+	position: fixed;
+	width: 100%;
+	padding: 0;
+	font-size: 0.7em;
+	color: var(--cs-page-obscure-fg);
+	z-index: -10;
+}
+ul.footer li {
+	padding: 0 10px;
+}
+ul.footer li.footer-left {
+	float: left;
+}
+ul.footer li.footer-right {
+	float: right;
+}
+ul.footer li a {
+	color: var(--cs-page-obscure-fg);
+}
+
+.credits {
+	font-size: 0.8em;
+}
+
+.feature-disabled {
+	display: none !important;
+}
+
+.hidden {
+	display: none !important;
+}

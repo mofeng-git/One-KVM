@@ -1,0 +1,51 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+div#text-menu {
+	width: 340px;
+}
+
+textarea#hid-pak-text {
+	display: block;
+	resize: none;
+	height: 120px;
+	width: 100%;
+	border: var(--border-default-thin);
+	border-radius: 4px;
+	color: var(--cs-code-default-fg);
+	background-color: var(--cs-code-default-bg);
+	-webkit-appearance:none;
+}
+
+textarea#hid-pak-text::-moz-placeholder {
+	line-height: 60px;
+	text-align: center;
+}
+
+textarea#hid-pak-text::-webkit-input-placeholder {
+	line-height: 60px;
+	text-align: center;
+}
+
+input#hid-recorder-new-script-file {
+	display: none;
+}

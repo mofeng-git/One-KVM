@@ -1,0 +1,21 @@
+# PiKVM
+# See /boot/overlays/README for all available options
+initramfs initramfs-linux.img followkernel
+
+hdmi_force_hotplug=1
+gpu_mem=128
+enable_uart=1
+dtoverlay=disable-bt
+
+# USB emulation
+dtoverlay=dwc2,dr_mode=peripheral
+
+# Video and audio
+dtoverlay=tc358743,4lane=1
+dtoverlay=tc358743-audio
+
+# I2C (display)
+dtparam=i2c_arm=on
+
+# Clock
+dtoverlay=i2c-rtc,pcf8563,wakeup-source

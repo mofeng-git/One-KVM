@@ -1,0 +1,29 @@
+[Unit]
+Description=PiKVM - Boot configuration
+After=systemd-modules-load.service kvmd-oled.service
+Before=\
+	kvmd-webterm.service \
+	kvmd-certbot.service \
+	kvmd-ipmi.service \
+	kvmd-janus-static.service \
+	kvmd-janus.service \
+	kvmd-nginx.service \
+	kvmd-otg.service \
+	kvmd-otgnet.service \
+	kvmd-pst.service \
+	kvmd-tc358743.service \
+	kvmd-vnc.service \
+	kvmd-watchdog.service \
+	kvmd.service \
+	pikvm-bootconfig.service \
+	sshd.service \
+	network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/kvmd-bootconfig --do-the-thing
+ExecStop=/bin/true
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

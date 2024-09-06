@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="210.00002mm"
+   height="210.00003mm"
+   viewBox="0 0 210.00002 210.00003"
+   version="1.1"
+   id="svg1125"
+   inkscape:version="1.0 (4035a4fb49, 2020-05-01)"
+   sodipodi:docname="led-undervoltage.svg">
+  <defs
+     id="defs1119" />
+  <sodipodi:namedview
+     fit-margin-bottom="0"
+     fit-margin-right="0"
+     fit-margin-left="0"
+     fit-margin-top="0"
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.35"
+     inkscape:cx="396.85043"
+     inkscape:cy="396.85043"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     inkscape:document-rotation="0"
+     showgrid="false"
+     inkscape:window-width="1366"
+     inkscape:window-height="714"
+     inkscape:window-x="0"
+     inkscape:window-y="28"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata1122">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     transform="translate(-0.83332333,-43.166657)"
+     inkscape:label="Слой 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <path
+       class="fil0"
+       d="M 189.50524,43.166657 H 22.161425 c -11.779701,0 -21.32810167,9.548401 -21.32810167,21.328102 V 231.83858 c 0,11.7797 9.54840067,21.3281 21.32810167,21.3281 H 189.50524 c 11.7797,0 21.3281,-9.5484 21.3281,-21.3281 V 64.494759 c 0,-11.779701 -9.5484,-21.328102 -21.3281,-21.328102 z M 107.06143,171.34288 H 93.483834 l 15.439696,-27.88171 -0.002,-7.9e-4 c 0.3571,-0.64061 0.5569,-1.38041 0.5477,-2.16641 -0.0283,-2.4032 -1.9995,-4.3285 -4.4027,-4.3003 l -27.970085,0.3681 35.023205,-67.467905 h 42.9255 l -36.1879,46.843805 0.003,0.002 c -0.5688,0.7355 -0.9075,1.6581 -0.9075,2.6597 0,2.4032 1.9483,4.3515 4.3515,4.3515 l 27.69881,2e-4 z m 2.2069,28.5437 -49.211999,35.5281 c -1.0414,0.8874 -2.482901,1.2732 -3.909902,0.9107 -2.3373,-0.5937 -3.750799,-2.9699 -3.157101,-5.3073 l 15.073604,-59.16701 0.01209,0.003 c 0.2851,-1.1211 1.013299,-2.1269 2.103999,-2.7335 2.101702,-1.1686 4.752901,-0.4123 5.921401,1.6894 l 3.876101,6.9487 17.700101,-31.9636 -27.499601,0.3619 c -0.768501,0.0536 -1.561002,-0.0959 -2.2958,-0.4746 -2.139402,-1.1026 -2.979801,-3.73081 -1.8772,-5.87021 L 105.46343,63.798659 c 0.6693,-1.554 2.2145,-2.6421 4.0139,-2.6421 h 54.44631 v 0.0133 c 0.9306,-6.88e-4 1.8686,0.2954 2.6622,0.9082 1.9038,1.4701 2.2551,4.205501 0.7849,6.109201 l -36.2011,46.861 28.3356,2e-4 c 1.1372,-0.0781 2.3035,0.2865 3.2177,1.1092 1.7905,1.6117 1.9357,4.3698 0.3242,6.1604 l -62.13701,68.86522 6.3787,0.8534 -2.6e-4,0.002 c 1.1504,0.1503 2.2384,0.7571 2.9696,1.7729 1.4041,1.9508 0.961,4.6709 -0.9898,6.0751 z"
+       id="path978"
+       style="clip-rule:evenodd;fill:#000000;fill-rule:evenodd;stroke-width:0.01;image-rendering:optimizeQuality;shape-rendering:geometricPrecision;text-rendering:geometricPrecision" />
+  </g>
+</svg>

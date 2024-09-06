@@ -1,0 +1,5 @@
+name: Janus
+description: Janus WebRTC Gateway
+path: janus
+daemon: kvmd-janus
+place: -1

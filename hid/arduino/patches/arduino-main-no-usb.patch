@@ -1,0 +1,24 @@
+diff --git a/cores/arduino/main.cpp b/cores/arduino/main.cpp
+index 434cd40..7aba76f 100644
+--- a/cores/arduino/main.cpp
++++ b/cores/arduino/main.cpp
+@@ -36,15 +36,15 @@ int main(void)
+ 
+ 	initVariant();
+ 
+-#if defined(USBCON)
+-	USBDevice.attach();
+-#endif
++// #if defined(USBCON)
++// 	USBDevice.attach();
++// #endif
+ 	
+ 	setup();
+     
+ 	for (;;) {
+ 		loop();
+-		if (serialEventRun) serialEventRun();
++		// if (serialEventRun) serialEventRun();
+ 	}
+         
+ 	return 0;

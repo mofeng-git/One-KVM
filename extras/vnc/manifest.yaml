@@ -1,0 +1,7 @@
+name: VNC
+description: Show VNC information
+icon: share/svg/vnc.svg
+path: vnc
+daemon: kvmd-vnc
+port: vnc/server/port
+place: 20

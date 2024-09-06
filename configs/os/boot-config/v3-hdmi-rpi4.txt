@@ -1,0 +1,22 @@
+# See /boot/overlays/README for all available options
+initramfs initramfs-linux.img followkernel
+
+hdmi_force_hotplug=1
+gpu_mem=128
+enable_uart=1
+dtoverlay=tc358743
+dtoverlay=disable-bt
+dtoverlay=dwc2,dr_mode=peripheral
+dtparam=act_led_gpio=13
+
+# HDMI audio capture
+dtoverlay=tc358743-audio
+
+# SPI (AUM)
+dtoverlay=spi0-1cs
+
+# I2C (display)
+dtparam=i2c_arm=on
+
+# Clock
+dtoverlay=i2c-rtc,pcf8563,wakeup-source

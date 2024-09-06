@@ -1,0 +1,224 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+ul#navbar {
+	box-shadow: var(--shadow-small);
+	list-style-type: none;
+	margin: 0;
+	padding: 0;
+	background-color: var(--cs-navbar-default-bg);
+	position: fixed;
+	top: 0;
+	width: 100%;
+	height: 50px;
+	z-index: 2147483646;
+}
+
+ul#navbar li.right {
+	border-left: var(--border-navbar-item-thin);
+	float: right;
+}
+
+ul#navbar li.left {
+	border-right: var(--border-navbar-item-thin);
+	float: left;
+}
+
+ul#navbar li a#logo {
+	height: 50px; /* Чтобы вертикальные разделители не вылезали за пределы навбара */
+	line-height: 50px;
+	outline: none;
+	cursor: pointer;
+	display: inline-block;
+	color: var(--cs-navbar-default-fg);
+	padding-left: 16px;
+	padding-right: 16px;
+	text-decoration: none;
+}
+
+ul#navbar li a.menu-button {
+	height: 50px; /* То же самое */
+	line-height: 50px;
+	outline: none;
+	cursor: pointer;
+	display: inline-block;
+	color: var(--cs-navbar-default-fg);
+	padding-left: 16px;
+	padding-right: 16px;
+	text-decoration: none;
+	position: relative;
+}
+
+/*ul#navbar li a.menu-button:before {
+	content: "";
+	position: absolute;
+	top: calc(100% - 10px);
+	right: 0;
+	width: 0;
+	border-bottom: 10px solid var(--cs-navbar-item-pressed-bg);
+	border-left: 10px solid transparent;
+}*/
+
+ul#navbar li a#logo:hover:not(.active),
+ul#navbar li a.menu-button:hover:not(.active) {
+	background-color: var(--cs-navbar-item-hovered-bg);
+}
+
+ul#navbar li a#logo img {
+	margin-top: -2px;
+	height: 24px;
+}
+
+ul#navbar li a.menu-button span,
+ul#navbar li a.menu-button img {
+	vertical-align: middle;
+	height: 20px;
+}
+ul#navbar li a.menu-button span:not(:last-child),
+ul#navbar li a.menu-button img:not(:last-child) {
+	margin-right: 10px;
+}
+
+ul#navbar li a.menu-button-pressed {
+	box-shadow: var(--shadow-navbar-item-pressed);
+	background-color: var(--cs-navbar-item-pressed-bg) !important;
+}
+
+ul#navbar li div.menu {
+	visibility: hidden;
+	outline: none;
+	overflow-x: hidden;
+	overflow-y: auto;
+	max-height: calc(100vh - 55px);
+	white-space: nowrap;
+	border: var(--border-navbar-menu-default-2px);
+	border-top: var(--border-navbar-menu-top-thin);
+	border-radius: 0 0 8px 8px;
+	position: absolute;
+	background-color: var(--cs-navbar-default-bg);
+	box-shadow: var(--shadow-big);
+	z-index: 2147483645;
+}
+ul#navbar li div.menu-active {
+	border: var(--border-navbar-menu-active-2px) !important;
+	border-top: var(--border-navbar-menu-top-thin) !important;
+}
+
+ul#navbar li div.menu::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+ul#navbar li div.menu::-webkit-scrollbar-thumb {
+	border-radius: 4px;
+	background: var(--cs-scroll-default-bg);
+}
+@-moz-document url-prefix() {
+	ul#navbar li div.menu {
+		scrollbar-width: 8px;
+		scrollbar-color: var(--cs-scroll-default-bg) var(--cs-code-default-bg);
+	}
+}
+
+ul#navbar li div.menu details summary {
+	cursor: pointer;
+	outline: none;
+	text-decoration: underline;
+	margin: 8px 15px 8px 15px;
+	font-size: 12px;
+}
+ul#navbar li div.menu details div.spoiler {
+	margin-left: 20px !important;
+	border-left: var(--border-default-thin);
+	border-bottom: var(--border-default-thin);
+}
+ul#navbar li div.menu details div.spoiler hr {
+	border: none;
+	border-top: var(--border-default-thin);
+}
+ul#navbar li div.menu details summary::marker {
+	color: var(--cs-marker-fg);
+}
+
+ul#navbar li div.menu div.buttons {
+	background-color: var(--cs-control-default-bg);
+}
+
+ul#navbar li div.menu div.text {
+	margin: 10px 15px 10px 15px;
+	font-size: 14px;
+}
+
+ul#navbar li div.menu table.kv {
+	border-spacing: 5px;
+	margin: 0 10px 0 10px;
+	font-size: 12px;
+}
+ul#navbar li div.menu table.kv td {
+	text-align: left;
+}
+ul#navbar li div.menu table.kv td.value {
+	font-weight: bold;
+	max-width: 310px;
+	overflow: hidden;
+}
+ul#navbar li div.menu table.kv td.value-slider {
+	width: 100%;
+}
+ul#navbar li div.menu table.kv td.value-number {
+	font-weight: bold;
+	max-width: 310px;
+	overflow: hidden;
+	min-width: 40px;
+	max-width: 40px;
+}
+
+ul#navbar li div.menu div.buttons button,
+ul#navbar li div.menu div.buttons select {
+	border-radius: 0;
+	text-align: left;
+	padding: 0 16px;
+}
+
+ul#navbar li div.menu input[type=text] {
+	height: 1.5em;
+}
+ul#navbar li div.menu input[type=text]::-moz-placeholder {
+	text-align: center;
+}
+ul#navbar li div.menu input[type=text]::-webkit-input-placeholder {
+	text-align: center;
+}
+
+ul#navbar li div.menu hr {
+	margin: 0;
+	display: block;
+	height: 0px;
+	padding: 0;
+	border: none;
+	border-top: var(--border-control-thin);
+}
+
+ul#navbar li div.menu img.sign {
+	vertical-align: middle;
+	margin-right: 10px;
+	height: 20px;
+}

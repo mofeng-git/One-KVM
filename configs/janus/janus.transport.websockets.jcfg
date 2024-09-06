@@ -1,0 +1,4 @@
+general: {
+	ws = true
+	ws_unix = "/run/kvmd/janus-ws.sock"
+}

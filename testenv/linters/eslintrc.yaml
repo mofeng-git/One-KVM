@@ -1,0 +1,36 @@
+env:
+    browser: true
+    es6: true
+
+extends: "eslint:recommended"
+
+parser: "/usr/lib/node_modules/@babel/eslint-parser"
+parserOptions:
+    ecmaVersion: 6
+    sourceType: module
+    allowImportExportEverywhere: true
+    requireConfigFile: false
+
+rules:
+    indent:
+        - error
+        - tab
+        - SwitchCase: 1
+    linebreak-style:
+        - error
+        - unix
+    quotes:
+        - error
+        - double
+    quote-props:
+        - error
+        - always
+    semi:
+        - error
+        - always
+    comma-dangle:
+        - error
+        - always-multiline
+    no-unused-vars:
+        - error
+        - {vars: local, args: after-used}

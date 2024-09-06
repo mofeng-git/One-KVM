@@ -1,0 +1,11 @@
+--- aaa/tools/platformio-build-stm32f1.py	2022-07-16 18:54:42.536695468 +0200
++++ bbb/tools/platformio-build-stm32f1.py	2022-07-16 19:03:10.988056751 +0200
+@@ -121,7 +121,7 @@
+         env.Append(
+             CPPDEFINES=[
+                 ("CONFIG_MAPLE_MINI_NO_DISABLE_DEBUG", 1),
+-                "SERIAL_USB"
++                # "SERIAL_USB"
+             ])
+ 
+     is_generic = board.startswith("generic") or board == "hytiny_stm32f103t"

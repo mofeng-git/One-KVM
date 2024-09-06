@@ -1,0 +1,9 @@
+[Unit]
+Description=PiKVM - Certbot-Renew for KVMD-Nginx
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/conf.d/kvmd-certbot
+ExecStart=/usr/bin/kvmd-certbot renew --quiet
+# Should we?..
+# PrivateTmp=true

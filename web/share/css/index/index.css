@@ -1,0 +1,97 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+div#apps-box {
+	display: table;
+	margin: 0 auto;
+}
+
+div#apps-box ul#apps {
+	list-style-type: none;
+	padding: 0;
+	margin: 0;
+}
+
+div#apps-box ul#apps li {
+	float: left;
+	margin-left: 5px;
+	margin-right: 5px;
+}
+
+div#apps-box ul#apps li div.app {
+	height: 100px;
+	width: 100px;
+	text-align: center;
+	background-color: var(--cs-control-default-bg);
+	box-shadow: var(--shadow-micro);
+	border: var(--border-key-thin);
+	border-radius: 8px;
+}
+
+div#apps-box ul#apps li div:hover.app {
+	border: var(--border-intensive-thin);
+	box-shadow: none;
+}
+
+div#apps-box ul#apps li div:active.app {
+	color: var(--cs-control-pressed-fg) !important;
+	background-color: var(--cs-control-pressed-bg) !important;
+	border: var(--border-key-thin);
+	box-shadow: none;
+}
+
+div#apps-box ul#apps li div.app img {
+	display: block;
+	margin: auto;
+	height: 50px;
+	padding-bottom: 5px;
+}
+
+div#apps-box ul#apps li div.app a {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	height: 100%;
+	text-decoration: none;
+	font-weight: bold;
+}
+
+td.logo {
+	padding-right: 25px;
+}
+td.title {
+	font-size: 1.2em;
+}
+td.copyright {
+	font-size: 0.8em;
+}
+tr.server {
+	font-size: 1.4em;
+	font-weight: bold;
+	font-family: monospace;
+}
+
+@media only screen and (display-mode: standalone) {
+	div#app-keyboard-warning {
+		display: none;
+	}
+}

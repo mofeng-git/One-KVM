@@ -1,0 +1,67 @@
+/*****************************************************************************
+#                                                                            #
+#    KVMD - The main PiKVM daemon.                                           #
+#                                                                            #
+#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#                                                                            #
+#    This program is free software: you can redistribute it and/or modify    #
+#    it under the terms of the GNU General Public License as published by    #
+#    the Free Software Foundation, either version 3 of the License, or       #
+#    (at your option) any later version.                                     #
+#                                                                            #
+#    This program is distributed in the hope that it will be useful,         #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
+#    GNU General Public License for more details.                            #
+#                                                                            #
+#    You should have received a copy of the GNU General Public License       #
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
+#                                                                            #
+*****************************************************************************/
+
+
+div.tabs-box {
+	display: flex;
+	flex-wrap: wrap;
+}
+
+div.tabs-box input[type="radio"] {
+	display: none;
+}
+
+div.tabs-box div.tab {
+	order: 99;
+	display: none;
+	border: var(--border-default-thin);
+	padding: 10px 10px;
+	width: 100%;
+}
+
+div.tabs-box label {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
+	order: 1;
+	display: flex;
+	align-items: center;
+	text-align: center;
+	vertical-align: middle;
+	border-top: var(--border-default-thin);
+	border-left: var(--border-default-thin);
+	padding: 4px 8px;
+	cursor: pointer;
+	position: relative;
+	top: 1px;
+}
+
+div.tabs-box label:last-of-type {
+	border-right: var(--border-default-thin);
+}
+
+div.tabs-box input[type="radio"]:checked + label {
+	background-color: var(--cs-control-default-bg);
+}
+
+div.tabs-box input[type="radio"]:checked + label + .tab {
+	display: block;
+}

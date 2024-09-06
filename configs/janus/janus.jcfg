@@ -1,0 +1,18 @@
+general: {
+	debug_level = 4
+}
+nat: {
+	nice_debug = false
+	ignore_mdns = true
+}
+media: {
+	ipv6 = true
+	ipv6_linklocal = true
+	min_nack_queue = 2000
+	rtp_port_range = "20000-40000"
+	no_media_timer = 0
+	slowlink_threshold = 10
+	twcc_period = 100
+	dtls_timeout = 1000
+	nack_optimizations = true
+}
