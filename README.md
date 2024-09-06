@@ -23,7 +23,7 @@ sudo docker run --name kvmd -itd \
     registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd:dev
 ```
 
-部署完成访问 http://IP:8080 即可开始使用，默认密码：admin/admin。如无法访问可以使用sudo docker logs kvmd 查看日志尝试修复、提交 issue 或在 QQ 群内寻求帮助。
+部署完成访问 http://IP:8080 即可开始使用，默认密码：admin/admin。如无法访问可以使用 `sudo docker logs kvmd` 命令查看日志尝试修复、提交 issue 或在 QQ 群内寻求帮助。
 
 如果暂时相关没有 USB 设备或只想要查看新版特性，可以使用以下命令启动一个无 USB 硬件的应用（演示模式）：
 ```bash
@@ -41,31 +41,9 @@ sudo docker run --name kvmd -itd \
 
 **方式三：One-KVM 脚本安装**（暂停维护）
 
-**作者目前只是个人业余开发者，能力有限，难以覆盖和测试多种多样硬件设备和系统，故此一键脚本暂时停止维护。已将开发中心转移至 Docker 容器，推荐使用 Docker 方式部署。**
+**作者目前只是个人业余开发者，能力有限，难以覆盖和测试多种多样硬件设备和系统，故此一键脚本暂时停止维护。**
 
-适用于 arm 设备，在玩客云上经过测试。
-```bash
-git clone --depth=1 https://github.com/mofeng-git/One-KVM.git
-cd One-KVM
-sudo bash install.sh
-#第一阶段安装完成需要重启，再进行第二阶段安装
-sudo bash install.sh
-
-#可选功能：H.264 视频编码
-sudo bash kvmd_h264_install.sh
-```
-适用于 X86 设备，在 X64 主机上经过测试。
-```bash
-git clone --depth=1 https://github.com/mofeng-git/One-KVM.git
-cd One-KVM
-sudo bash install-x86.sh
-#第一阶段安装完成需要重启，再进行第二阶段安装
-sudo bash install-x86.sh
-
-#可选功能：H.264 视频编码
-sudo bash kvmd_h264_install.sh
-```
-
+目前已将开发中心转移至 Docker 平台，推荐使用 Docker 方式部署。若仍有需要可通过  Releases 页找到项目历史存档。
 
 ### 功能特性
 
