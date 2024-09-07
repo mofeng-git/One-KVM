@@ -73,18 +73,16 @@ RUN mkdir -p \
 COPY testenv/fakes/vcgencmd /usr/bin/
 COPY extras/ /usr/share/kvmd/extras/
 COPY web/ /usr/share/kvmd/web/
-COPY testenv/web.css /etc/kvmd/
 COPY build/platform scripts/kvmd-gencert /usr/share/kvmd/
 COPY contrib/keymaps /usr/share/kvmd/keymaps
 COPY kvmd/ /kvmd
-COPY configs/kvmd/*.yaml configs/kvmd/*passwd build/supervisord.conf /etc/kvmd/
+COPY configs/kvmd/* /etc/kvmd/
 COPY configs/nginx/* /etc/kvmd/nginx/
 COPY configs/hw_info/* /etc/kvmd/hw_info/
 COPY build/v2-hdmiusb-rpi4.override.yaml /etc/kvmd/override.yaml
 COPY configs/kvmd/main/v2-hdmiusb-rpi4.yaml /etc/kvmd/main.yaml
 
 RUN touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag \
-    && touch /etc/kvmd/totp.secret \
     && /usr/share/kvmd/kvmd-gencert --do-the-thing \
     && /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc \
     && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
@@ -93,4 +91,4 @@ RUN touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag \
 #RUN supervisord -c /etc/kvmd/supervisord.conf
 
 EXPOSE 4430
-CMD ["supervisord", "-c", "/etc/kvmd/supervisord.conf"]
+CMD ["/bin/bash", "/etc/kvmd/init.sh", "&&", "supervisord", "-c", "/etc/kvmd/supervisord.conf"]
