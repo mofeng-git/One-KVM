@@ -50,16 +50,21 @@ fi
 # shellcheck disable=SC1090
 source <(dos2unix < /boot/pikvm.txt)
 
+# shellcheck disable=SC1091
+source /usr/share/kvmd/platform || true
+
 rw
 
 
 # ========== First boot and/or Avahi configuration ==========
 
 make_avahi_service() {
+	local _base
 	local _serial
-	_serial=$(tr -d '\0' < /proc/device-tree/serial-number || echo "0000000000000000")
-	local _model
-	_model=$(tr -d '\0' < /proc/device-tree/model || echo "Unknown model")
+	local _platform
+	_base=$(tr -d '\0' < /proc/device-tree/model || echo "Unknown base")
+	_serial=$( (cat /proc/device-tree/serial-number || echo "0000000000000000") | tr -d '\0' | tr '[:lower:]' '[:upper:]')
+	_platform="$PIKVM_MODEL-$PIKVM_VIDEO-$PIKVM_BOARD"
 	mkdir -p /etc/avahi/services
 	cat <<end_of_file > /etc/avahi/services/pikvm.service
 <?xml version="1.0" standalone='no'?>
@@ -72,8 +77,12 @@ make_avahi_service() {
     <txt-record>path=/</txt-record>
     <txt-record>protocol=https</txt-record>
     <txt-record>description=PiKVM Web Server</txt-record>
+    <txt-record>model=$PIKVM_MODEL</txt-record>
+    <txt-record>video=$PIKVM_VIDEO</txt-record>
+    <txt-record>board=$PIKVM_BOARD</txt-record>
+    <txt-record>base=$_base</txt-record>
     <txt-record>serial=$_serial</txt-record>
-    <txt-record>model=$_model</txt-record>
+    <txt-record>platform=$_platform</txt-record>
   </service>
   <service>
     <type>_https._tcp</type>
@@ -81,8 +90,12 @@ make_avahi_service() {
     <txt-record>path=/</txt-record>
     <txt-record>protocol=https</txt-record>
     <txt-record>description=PiKVM Web Server</txt-record>
+    <txt-record>model=$PIKVM_MODEL</txt-record>
+    <txt-record>video=$PIKVM_VIDEO</txt-record>
+    <txt-record>board=$PIKVM_BOARD</txt-record>
+    <txt-record>base=$_base</txt-record>
     <txt-record>serial=$_serial</txt-record>
-    <txt-record>model=$_model</txt-record>
+    <txt-record>model=$_platform</txt-record>
   </service>
 </service-group>
 end_of_file

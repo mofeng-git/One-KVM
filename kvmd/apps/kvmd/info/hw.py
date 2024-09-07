@@ -70,8 +70,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             cpu_temp,
             mem,
         ) = await asyncio.gather(
-            self.__read_dt_file("model"),
-            self.__read_dt_file("serial-number"),
+            self.__read_dt_file("model", upper=False),
+            self.__read_dt_file("serial-number", upper=True),
             self.__read_platform_file(),
             self.__get_throttling(),
             self.__get_cpu_percent(),
@@ -108,11 +108,12 @@ class HwInfoSubmanager(BaseInfoSubmanager):
 
     # =====
 
-    async def __read_dt_file(self, name: str) -> (str | None):
+    async def __read_dt_file(self, name: str, upper: bool) -> (str | None):
         if name not in self.__dt_cache:
             path = os.path.join(f"{env.PROCFS_PREFIX}/proc/device-tree", name)
             try:
-                self.__dt_cache[name] = (await aiotools.read_file(path)).strip(" \t\r\n\0")
+                value = (await aiotools.read_file(path)).strip(" \t\r\n\0")
+                self.__dt_cache[name] = (value.upper() if upper else value)
             except Exception as err:
                 get_logger(0).error("Can't read DT %s from %s: %s", name, path, err)
                 return None
