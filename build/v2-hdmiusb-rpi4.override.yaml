@@ -7,7 +7,7 @@ kvmd:
 
     hid:
         type: ch9329
-        device: /dev/ttyUSB0
+        device: /dev/kvmd-hid
 
     msd:
         type: disabled
@@ -15,7 +15,7 @@ kvmd:
     streamer:
         cmd:
             - "/usr/local/bin/ustreamer"
-            - "--device=/dev/video0"
+            - "--device=/dev/kvmd-video"
             - "--persistent"
             - "--format=mjpeg"
             - "--resolution={resolution}"

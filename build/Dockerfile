@@ -83,6 +83,7 @@ COPY build/v2-hdmiusb-rpi4.override.yaml /etc/kvmd/override.yaml
 COPY configs/kvmd/main/v2-hdmiusb-rpi4.yaml /etc/kvmd/main.yaml
 
 RUN touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag \
+    && adduser kvmd --gecos "" --disabled-password \
     && /usr/share/kvmd/kvmd-gencert --do-the-thing \
     && /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc \
     && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
@@ -91,4 +92,4 @@ RUN touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag \
 #RUN supervisord -c /etc/kvmd/supervisord.conf
 
 EXPOSE 4430
-CMD ["/bin/bash", "/etc/kvmd/init.sh", "&&", "supervisord", "-c", "/etc/kvmd/supervisord.conf"]
+CMD ["/etc/kvmd/init.sh"]

@@ -25,7 +25,10 @@ redirect_stderr=true
 EOF
     fi
     if [ -d /sys/kernel/config/usb_gadget/kvmd ]; then
-        echo "Usb_gadget kvmd exists,delete it."
-        python -m kvmd.apps.otg stop
+        echo "Usb_gadget kvmd exists,please reboot your host system."
+    elif [ ! -d /sys/kernel/config/usb_gadget ]; then
+        mount -t configfs none /sys/kernel/config
     fi
+    
 fi
+supervisord -c /etc/kvmd/supervisord.conf
