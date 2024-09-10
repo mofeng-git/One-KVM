@@ -18,3 +18,4 @@
 *.pyc
 *.swp
 /venv/
+.vscode/settings.json

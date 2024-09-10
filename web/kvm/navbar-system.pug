@@ -4,17 +4,17 @@ li(id="system-dropdown" class="right")
 		+navbar_led("stream-led", "led-stream")
 		+navbar_led("hid-keyboard-led", "led-hid-keyboard")
 		+navbar_led("hid-mouse-led", "led-hid-mouse")
-		span System
+		span(i18n="kvm_text3") System
 	div(id="system-menu" class="menu")
 		table(class="kv")
 			tr
-				td(class="value") Runtime settings &amp; tools
-				td(id="system-tool-webterm" class="feature-disabled") #[button(data-force-hide-menu data-show-window="webterm-window" class="small") &bull; Term]
-				td(id="system-tool-about") #[button(data-force-hide-menu data-show-window="about-window" class="small") &bull; About]
-				td(id="system-tool-log") #[button(data-force-hide-menu id="open-log-button" class="small") &bull; Log]
+				td(class="value" i18n="kvm_text4") Runtime settings &amp; tools
+				td(id="system-tool-webterm" class="feature-disabled") #[button(data-force-hide-menu data-show-window="webterm-window" class="small" i18n="kvm_text5") &bull; Term]
+				td(id="system-tool-about") #[button(data-force-hide-menu data-show-window="about-window" class="small" i18n="kvm_text6") &bull; About]
+				td(id="system-tool-log") #[button(data-force-hide-menu id="open-log-button" class="small" i18n="kvm_text7") &bull; Log]
 				td(id="system-tool-wol" class="feature-disabled")
 					button(data-force-hide-menu id="gpio-button-__wol__" class="gpio-button small" data-channel="__wol__"
-						data-confirm="Are you sure to send Wake-on-LAN packet to the server?") &bull; WoL
+						data-confirm="Are you sure to send Wake-on-LAN packet to the server?" i18n="kvm_text8") &bull; WoL
 		hr
 		div(id="stream-message-no-webrtc" class="hidden")
 			+menu_message("warning", "WebRTC is not supported by this browser")
@@ -24,26 +24,26 @@ li(id="system-dropdown" class="right")
 			hr
 		table(class="kv")
 			tr(id="stream-resolution" class="feature-disabled")
-				td Resolution:
+				td(i18n="kvm_text9") Resolution:
 				td #[select(disabled id="stream-resolution-selector")]
 			tr(id="stream-quality" class="feature-disabled")
-				td JPEG quality:
+				td(i18n="kvm_text10") JPEG quality:
 				td(class="value-slider") #[input(disabled type="range" id="stream-quality-slider" class="slider")]
 				td(id="stream-quality-value" class="value-number")
 			tr
-				td JPEG max fps:
+				td(i18n="kvm_text11") JPEG max fps:
 				td(class="value-slider") #[input(disabled type="range" id="stream-desired-fps-slider" class="slider")]
 				td(id="stream-desired-fps-value" class="value-number")
 			tr(id="stream-h264-bitrate" class="feature-disabled")
-				td H.264 kbps:
+				td(i18n="kvm_text12") H.264 kbps:
 				td(class="value-slider") #[input(disabled type="range" id="stream-h264-bitrate-slider" class="slider")]
 				td(id="stream-h264-bitrate-value" class="value-number")
 			tr(id="stream-h264-gop" class="feature-disabled")
-				td H.264 #[a(target="_blank" href="https://docs.pikvm.org/webrtc") gop]:
+				td(i18n="kvm_text13") H.264 #[a(target="_blank" href="https://docs.pikvm.org/webrtc") gop]:
 				td(class="value-slider") #[input(disabled type="range" id="stream-h264-gop-slider" class="slider")]
 				td(id="stream-h264-gop-value" class="value-number")
 			tr(id="stream-mode" class="feature-disabled")
-				td Video #[a(target="_blank" href="https://docs.pikvm.org/webrtc") mode]:
+				td(i18n="kvm_text14") Video #[a(target="_blank" href="https://docs.pikvm.org/webrtc") mode]:
 				td
 					div(class="radio-box")
 						input(checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg")
@@ -51,11 +51,11 @@ li(id="system-dropdown" class="right")
 						input(type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus")
 						label(for="stream-mode-radio-janus") H.264 / WebRTC
 			tr(id="stream-orient" class="feature-disabled")
-				td Orientation:
+				td(i18n="kvm_text17") Orientation:
 				td
 					div(class="radio-box")
 						input(checked type="radio" id="stream-orient-radio-0" name="stream-orient-radio" value="0")
-						label(for="stream-orient-radio-0") Default
+						label(for="stream-orient-radio-0" i18n="kvm_text18") Default
 						input(type="radio" id="stream-orient-radio-90" name="stream-orient-radio" value="90")
 						label(for="stream-orient-radio-90") 90&deg;
 						input(type="radio" id="stream-orient-radio-180" name="stream-orient-radio" value="180")
@@ -63,25 +63,25 @@ li(id="system-dropdown" class="right")
 						input(type="radio" id="stream-orient-radio-270" name="stream-orient-radio" value="270")
 						label(for="stream-orient-radio-270") 270&deg;
 			tr(id="stream-audio", class="feature-disabled")
-				td Audio volume:
+				td(i18n="kvm_text19") Audio volume:
 				td(class="value-slider") #[input(type="range" id="stream-audio-volume-slider" class="slider")]
 				td(id="stream-audio-volume-value" class="value-number")
 		hr
 		div(class="buttons buttons-row")
-			button(data-force-hide-menu data-show-window="stream-window" class="row33") &bull; Show stream
-			button(data-force-hide-menu id="stream-screenshot-button" class="row33") &bull; Screenshot
-			button(id="stream-reset-button" class="row33") Reset stream
+			button(data-force-hide-menu data-show-window="stream-window" class="row33" i18n="kvm_text20") &bull; Show stream
+			button(data-force-hide-menu id="stream-screenshot-button" class="row33" i18n="kvm_text21") &bull; Screenshot
+			button(id="stream-reset-button" class="row33" i18n="kvm_text22") Reset stream
 		div(id="hid-outputs" class="feature-disabled")
 			hr
 			table(class="kv")
 				tr(id="hid-outputs-keyboard", class="feature-disabled")
-					td Keyboard mode:
+					td(i18n="kvm_text23") Keyboard mode:
 					td #[div(id="hid-outputs-keyboard-box" class="radio-box")]
 				tr(id="hid-outputs-mouse", class="feature-disabled")
-					td Mouse #[a(target="_blank" href="https://docs.pikvm.org/mouse") mode]:
+					td(i18n="kvm_text24") Mouse #[a(target="_blank" href="https://docs.pikvm.org/mouse") mode]:
 					td #[div(id="hid-outputs-mouse-box" class="radio-box")]
 		details
-			summary Keyboard &amp; Mouse (HID) settings
+			summary(i18n="kvm_text25") Keyboard &amp; Mouse (HID) settings
 			div(class="spoiler")
 				table(class="kv")
 					tr
@@ -89,17 +89,17 @@ li(id="system-dropdown" class="right")
 				hr
 				table(class="kv")
 					tr
-						td Mouse polling:
+						td(i18n="kvm_text26") Mouse polling:
 						td(class="value-slider") #[input(type="range" id="hid-mouse-rate-slider" class="slider")]
 						td(id="hid-mouse-rate-value" class="value-number")
 					tr(id="hid-mouse-sens" class="feature-disabled")
-						td Relative sensitivity:
+						td(i18n="kvm_text27") Relative sensitivity:
 						td(class="value-slider") #[input(disabled type="range" id="hid-mouse-sens-slider" class="slider")]
 						td(id="hid-mouse-sens-value" class="value-number")
 					tr(id="hid-mouse-squash" class="feature-disabled")
 						+menu_switch_notable("hid-mouse-squash-switch", "Squash relative moves", true, true)
 					tr
-						td Reverse scrolling:
+						td(i18n="kvm_text28") Reverse scrolling:
 						td
 							table
 								tr
@@ -109,7 +109,7 @@ li(id="system-dropdown" class="right")
 					tr
 						+menu_switch_notable("hid-mouse-cumulative-scrolling-switch", "Cumulative scrolling", true, false)
 					tr
-						td Scroll rate:
+						td(i18n="kvm_text29") Scroll rate:
 						td(class="value-slider") #[input(type="range" id="hid-mouse-scroll-slider" class="slider")]
 						td(id="hid-mouse-scroll-value" class="value-number")
 					tr
@@ -130,5 +130,5 @@ li(id="system-dropdown" class="right")
 				+menu_switch_notable("page-close-ask-switch", "Ask page close confirmation", true, true)
 		hr
 		div(class="buttons buttons-row")
-			button(data-force-hide-menu data-show-window="keyboard-window" class="row50") &bull; Show keyboard
-			button(disabled id="hid-reset-button" class="row50") Reset HID
+			button(data-force-hide-menu data-show-window="keyboard-window" class="row50" i18n="kvm_text30") &bull; Show keyboard
+			button(disabled id="hid-reset-button" class="row50" i18n="kvm_text31") Reset HID

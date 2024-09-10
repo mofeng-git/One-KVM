@@ -1,18 +1,18 @@
 extends ../start.pug
 
 append vars
-	- title = "PiKVM VNC Info"
+	- title = "PiKVM VNC info"
 	- main_js = "vnc/main"
 	- index_link = true
 
 block start
-	p(class="text")
+	p(class="text" i18n="vnc_text1")
 		| This PiKVM device has running #[b kvmd-vnc] daemon and provides VNC access to the server.
-	p(class="text")
+	p(class="text" i18n="vnc_text2")
 		| #[b WARNING!] We strongly don't recommend you to use VNC in untrusted networks without
 		| enabled X.509 or TLS encryption. Otherwise your passwords are transmitted in a plain text
 		| over the network.
-	p(class="text")
+	p(class="text" i18n="vnc_text3")
 		| Your VNC client must support Tight JPEG compression and password authentication.
 		| #[a(href="https://tigervnc.org") TigerVNC] is a good choice.
 		| On Linux, this client will most likely be available for installation from the repository.
