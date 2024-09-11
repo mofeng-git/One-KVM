@@ -77,6 +77,8 @@ depends=(
 	python-ldap
 	python-zstandard
 	python-mako
+	python-luma-oled
+	python-pyusb
 	"libgpiod>=2.1"
 	freetype2
 	"v4l-utils>=1.22.1-1"
@@ -131,6 +133,7 @@ conflicts=(
 	python-aiohttp-pikvm
 	platformio
 	avrdude-pikvm
+	kvmd-oled
 )
 makedepends=(
 	python-setuptools

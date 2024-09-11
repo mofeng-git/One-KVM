@@ -1,0 +1,14 @@
+[Unit]
+Description=PiKVM - Display shutdown message on the OLED
+Conflicts=reboot.target
+Before=shutdown.target poweroff.target halt.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c "kill -USR2 `systemctl show -P MainPID kvmd-oled`"
+ExecStop=/bin/true
+RemainAfterExit=yes
+
+[Install]
+WantedBy=shutdown.target

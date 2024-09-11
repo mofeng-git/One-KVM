@@ -101,6 +101,7 @@ def main() -> None:
             "kvmd.apps.ngxmkconf",
             "kvmd.apps.janus",
             "kvmd.apps.watchdog",
+            "kvmd.apps.oled",
             "kvmd.helpers",
             "kvmd.helpers.remount",
             "kvmd.helpers.swapfiles",
@@ -108,6 +109,7 @@ def main() -> None:
 
         package_data={
             "kvmd.apps.vnc": ["fonts/*.ttf"],
+            "kvmd.apps.oled": ["fonts/*.ttf", "pics/*.ppm"],
         },
 
         entry_points={
@@ -127,6 +129,7 @@ def main() -> None:
                 "kvmd-nginx-mkconf = kvmd.apps.ngxmkconf:main",
                 "kvmd-janus = kvmd.apps.janus:main",
                 "kvmd-watchdog = kvmd.apps.watchdog:main",
+                "kvmd-oled = kvmd.apps.oled:main",
                 "kvmd-helper-pst-remount = kvmd.helpers.remount:main",
                 "kvmd-helper-otgmsd-remount = kvmd.helpers.remount:main",
                 "kvmd-helper-swapfiles = kvmd.helpers.swapfiles:main",

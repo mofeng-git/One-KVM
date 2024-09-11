@@ -4,3 +4,4 @@ spidev
 pyrad
 types-PyYAML
 types-aiofiles
+luma.oled
