@@ -13,6 +13,9 @@ kvmd:
         type: disabled
 
     streamer:
+        resolution:
+            default: 1280x720
+        forever: true
         cmd:
             - "/usr/local/bin/ustreamer"
             - "--device=/dev/kvmd-video"
@@ -34,6 +37,7 @@ kvmd:
             - "--h264-sink-mode=0660"
             - "--jpeg-sink=kvmd::ustreamer::jpeg"
             - "--jpeg-sink-mode=0660"
+            - "--slowdown"
 
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
