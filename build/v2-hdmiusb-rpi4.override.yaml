@@ -18,6 +18,7 @@ kvmd:
             - "--device=/dev/kvmd-video"
             - "--persistent"
             - "--format=mjpeg"
+            - "--encoder=LIBX264-VIDEO"
             - "--resolution={resolution}"
             - "--desired-fps={desired_fps}"
             - "--drop-same-frames=30"
@@ -29,6 +30,10 @@ kvmd:
             - "--process-name-prefix={process_name_prefix}"
             - "--notify-parent"
             - "--no-log-colors"
+            - "--h264-sink=kvmd::ustreamer::h264"
+            - "--h264-sink-mode=0660"
+            - "--jpeg-sink=kvmd::ustreamer::jpeg"
+            - "--jpeg-sink-mode=0660"
 
 vnc:
     keymap: /usr/share/kvmd/keymaps/ru
@@ -39,9 +44,9 @@ vnc:
 
     memsink:
         jpeg:
-            sink: ""
+            sink: "kvmd::ustreamer::jpeg"
         h264:
-            sink: ""
+            sink: "kvmd::ustreamer::h264"
 
 otgnet:
     commands:
@@ -56,9 +61,6 @@ nginx:
     https:
         port: 4430
 
-janus:
-    cmd:
-        - "/bin/true"
 
 languages:
     console: zh

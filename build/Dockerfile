@@ -28,14 +28,15 @@ RUN pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-c
         pyelftools pyghmi pygments pyparsing pyotp qrcode requests semantic-version setproctitle setuptools six spidev  \
         tabulate urllib3 wrapt xlib yarl pyserial pyyaml zstandard supervisor
 
-RUN git clone --depth=1 https://gh.xmly.dev/https://github.com/pikvm/ustreamer /tmp/ustreamer \
-    #&& git clone --depth=1 https://github.com/pikvm/ustreamer /tmp/ustreamer \
-    && make -j WITH_PYTHON=1 -C /tmp/ustreamer \
+RUN apt-get install -y libx264-dev libyuv-dev janus-dev libasound2-dev  libspeex-dev libspeexdsp-dev libopus-dev \
+    && sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
+    && git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
+    && make -j WITH_PYTHON=1 WITH_JANUS=1 WITH_LIBX264=1 -C /tmp/ustreamer \
     && /tmp/ustreamer/ustreamer -v
 
 RUN mkdir /tmp/lib \
-    && cp  /lib/*-linux-*/libevent_core-*.so.7 /lib/*-linux-*/libbsd.so.0 /lib/*-linux-*/libevent_pthreads-*.so.7 \
-        /lib/*-linux-*/libevent-*.so.7 /lib/*-linux-*/libjpeg.so.62 /tmp/lib/ \
+    && cp  /lib/*-linux-*/libevent_core-*.so.7 /lib/*-linux-*/libbsd.so.0 /lib/*-linux-*/libevent_pthreads-*.so.7 /lib/*-linux-*/libspeexdsp.so.1 \
+        /lib/*-linux-*/libevent-*.so.7 /lib/*-linux-*/libjpeg.so.62 /lib/*-linux-*/libx264.so.164 /lib/*-linux-*/libyuv.so.0 /lib/*-linux-*/libasound.so.2 /tmp/lib/ \
     && cp /tmp/ustreamer/python/dist/*.whl /tmp/wheel/
 
 FROM python:3.12.0rc2-slim-bookworm
@@ -45,6 +46,8 @@ LABEL maintainer="mofeng654321@hotmail.com"
 COPY --from=builder /tmp/lib/* /tmp/lib/
 COPY --from=builder /tmp/ustreamer/ustreamer /tmp/ustreamer/ustreamer-dump /usr/local/bin/
 COPY --from=builder /tmp/wheel/*.whl /tmp/wheel/
+COPY --from=builder /tmp/ustreamer/libjanus_ustreamer.so /usr/lib/ustreamer/janus/
+
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
@@ -56,7 +59,7 @@ RUN cp /tmp/lib/* /lib/*-linux-*/ \
 
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim iptables sudo \
+    && apt-get install -y --no-install-recommends libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim iptables sudo janus \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p \
@@ -78,9 +81,11 @@ COPY contrib/keymaps /usr/share/kvmd/keymaps
 COPY kvmd/ /kvmd
 COPY configs/kvmd/* /etc/kvmd/
 COPY configs/nginx/* /etc/kvmd/nginx/
+COPY configs/janus/* /etc/kvmd/janus/
 COPY configs/hw_info/* /etc/kvmd/hw_info/
 COPY build/v2-hdmiusb-rpi4.override.yaml /etc/kvmd/override.yaml
 COPY configs/kvmd/main/v2-hdmiusb-rpi4.yaml /etc/kvmd/main.yaml
+COPY testenv/js/* /usr/share/janus/javascript/
 
 RUN touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag \
     && adduser kvmd --gecos "" --disabled-password \
