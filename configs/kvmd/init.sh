@@ -24,8 +24,12 @@ stdout_logfile_maxbytes = 0
 redirect_stderr=true
 EOF
     fi
+    if [ -f /dev/video0 ]; then
+        sed -i "s/\/dev\/kvmd-video/\/dev\/video0/g" /etc/kvmd/override.yaml
+    fi
     if [ -d /sys/kernel/config/usb_gadget/kvmd ]; then
-        echo "Usb_gadget kvmd exists,please reboot your host system."
+        echo -e "\033[31m Usb_gadget kvmd exists, please reboot your host system. \033[0m"
+        exit -1
     elif [ ! -d /sys/kernel/config/usb_gadget ]; then
         mount -t configfs none /sys/kernel/config
     fi
