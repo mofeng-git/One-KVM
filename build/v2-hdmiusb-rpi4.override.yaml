@@ -16,6 +16,8 @@ kvmd:
         resolution:
             default: 1280x720
         forever: true
+        h264_bitrate:
+            default: 2000
         cmd:
             - "/usr/local/bin/ustreamer"
             - "--device=/dev/kvmd-video"
@@ -37,6 +39,8 @@ kvmd:
             - "--h264-sink-mode=0660"
             - "--jpeg-sink=kvmd::ustreamer::jpeg"
             - "--jpeg-sink-mode=0660"
+            - "--h264-bitrate={h264_bitrate}"
+            - "--h264-gop={h264_gop}"
             - "--slowdown"
 
 vnc:
