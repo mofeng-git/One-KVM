@@ -29,7 +29,7 @@
     "ipmi_text3":"<b>不建议</b>为 KVMD 和 IPMI 用户使用相同的密码，或者直接关闭 IPMI。如有需要可以通过 curl 直接使用 KVMD API。下面是一些示例：",
 
     "kvm_text1":"关于",
-    "kvm_text2":"//这些<a href=\"https://github.com/pikvm/pikvm?tab=readme-ov-file#special-thanks\">好心人</a>向 PiKVM 项目捐款并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 PiKVM ，您可以在 <a target=\"_blank\" href=\"https://www.patreon.com/pikvm\"> Patreon</a> 或 <a target=\"_blank\" href=\"https://paypal.me/pikvm\"> PayPal 上捐款</a>。<br><br>//这些<a href=\"https://one-kvm.mofeng.run/thanks/#_2\">好心人</a>向 One-KVM 项目捐款并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 One-KVM ，您可以在 <a target=\"_blank\" href=\"https://afdian.com/a/silentwind\"> 为爱发电 </a>上捐款</a>。",
+    "kvm_text2":"//<a href=\"https://github.com/pikvm/pikvm?tab=readme-ov-file#special-thanks\">这些人</a>向 PiKVM 项目捐款并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 PiKVM ，可以在 <a target=\"_blank\" href=\"https://www.patreon.com/pikvm\"> Patreon</a> 或 <a target=\"_blank\" href=\"https://paypal.me/pikvm\"> PayPal 上捐款</a>。<br><br>//<a href=\"https://one-kvm.mofeng.run/thanks/#_2\">这些人</a>向 One-KVM 项目捐款并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 One-KVM ，可以在 <a target=\"_blank\" href=\"https://afdian.com/a/silentwind\"> 为爱发电 </a>上捐款</a>。",
     "kvm_text3":"系统",
     "kvm_text4":"运行设置 &amp; 工具",
     "kvm_text5":"终端",
@@ -58,5 +58,36 @@
     "kvm_text28":"反向滚动：",
     "kvm_text29":"滚动速率：",
     "kvm_text30":"显示虚拟键盘",
-    "kvm_text31":"重置 HID"
+    "kvm_text31":"重置 HID",
+
+    "kvm_text32":"宏",
+    "kvm_text33":"录制或重放 HID/ATX/GPIO 操作<br>",
+    "kvm_text34":"出于安全原因，录制的脚本默认不会保存到 One-KVM 主机上",
+    "kvm_text35":"录制",
+    "kvm_text36":"停止",
+    "kvm_text37":"重放",
+    "kvm_text38":"清除",
+    "kvm_text39":"脚本时间：",
+    "kvm_text40":"脚本事件：",
+    "kvm_text41":"包括延迟",
+    "kvm_text42":"上传脚本文件",
+    "kvm_text43":"下载脚本文件",
+
+    "kvm_text44":"文本",
+    "kvm_text45":"以按键序列方式粘贴文本<br>",
+    "kvm_text46":"请注意 One-KVM 无法自动切换被控机键盘布局",
+    "kvm_text47":"&bull; 粘贴",
+    "kvm_text48":"使用的键盘布局",
+    "kvm_text49":"文本识别<br>",
+    "kvm_text50":"文本识别仅在 One-KVM 主机上本地运行",
+    "kvm_text51":"&bull; 框选识别区域",
+    "kvm_text52":"进行",
+    "kvm_text53":"文本识别",
+    "kvm_text54":"按下 <b>Enter</b> 确认所选区域并将识别结果复制到粘贴板",
+    "kvm_text55":"按下 <b>Esc</b> 取消框选",
+    
+    "kvm_text56":"快捷键",
+    "kvm_text57":"键盘快捷键<br>",
+    "kvm_text58":"也可以查看 <i>系统 &rarr; 显示键盘<i>",
+    "kvm_text59":"帮助"
 }

@@ -58,5 +58,36 @@
     "kvm_text28":"Reverse scrolling:",
     "kvm_text29":"Scroll rate:",
     "kvm_text30":"&bull; Show keyboard",
-    "kvm_text31":"Reset HID"
+    "kvm_text31":"Reset HID",
+
+    "kvm_text32":"Macro",
+    "kvm_text33":"Record and play HID/ATX/GPIO actions<br>",
+    "kvm_text34":"For security reasons, the record will not be saved on the PiKVM",
+    "kvm_text35":"Rec",
+    "kvm_text36":"Stop",
+    "kvm_text37":"Play",
+    "kvm_text38":"Clear",
+    "kvm_text39":"Script time:",
+    "kvm_text40":"Scripted events:",
+    "kvm_text41":"include delays",
+    "kvm_text42":"Upload script",
+    "kvm_text43":"Download script",
+
+    "kvm_text44":"Text",
+    "kvm_text45":"Paste text as keypress sequence<br>",
+    "kvm_text46":"Please note that One-KVM cannot switch the keyboard layout",
+    "kvm_text47":"&bull; Paste",
+    "kvm_text48":"using host keymap",
+    "kvm_text49":"Text recognition <sup><i>&beta;</i></sup><br>",
+    "kvm_text50":"OCR works locally on One-KVM",
+    "kvm_text51":"&bull; Select area",
+    "kvm_text52":"for",
+    "kvm_text53":"text recognition",
+    "kvm_text54":"Press <b>Enter</b> to recognize and copy text to clipboard",
+    "kvm_text55":"Press <b>Esc</b> to cancel selection",
+
+    "kvm_text56":"Shortcuts",
+    "kvm_text57":"Quick keyboard shortcuts<br>",
+    "kvm_text58":"Also see <i>System &rarr; Show keyboard<i>",
+    "kvm_text59":"help"
 }

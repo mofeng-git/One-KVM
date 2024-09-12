@@ -1,19 +1,19 @@
 li(id="text-dropdown" class="right")
 	a(class="menu-button" href="#")
 		+navbar_led("stream-ocr-led", "led-gear", "feature-disabled")
-		span Text
+		span(i18n="kvm_text44") Text
 	div(id="text-menu" class="menu")
 		div(class="text")
-			b Paste text as keypress sequence#[br]
-			sub Please note that PiKVM cannot switch the keyboard layout
+			b(i18n="kvm_text45") Paste text as keypress sequence#[br]
+			sub(i18n="kvm_text46") Please note that PiKVM cannot switch the keyboard layout
 		hr
 		div(class="text" style="margin-right: 20px")
 			textarea(id="hid-pak-text" data-focus placeholder="Enter your text here")
 		table(class="kv")
 			tr
 				td
-					button(disabled data-force-hide-menu id="hid-pak-button") &bull; Paste
-				td using host keymap
+					button(disabled data-force-hide-menu id="hid-pak-button" i18n="kvm_text47") &bull; Paste
+				td(i18n="kvm_text48") using host keymap
 				td
 					select(id="hid-pak-keymap-selector")
 		table(class="kv")
@@ -26,21 +26,21 @@ li(id="text-dropdown" class="right")
 			br
 			hr
 			div(class="text")
-				b Text recognition <sup><i>&beta;</i></sup>#[br]
-				sub #[a(target="_blank" href="https://docs.pikvm.org/ocr") OCR] works locally on PiKVM
+				b(i18n="kvm_text49") Text recognition <sup><i>&beta;</i></sup>#[br]
+				sub(i18n="kvm_text50") #[a(target="_blank" href="https://docs.pikvm.org/ocr") OCR] works locally on PiKVM
 			hr
 			table(class="kv")
 				tr
 					td
-						button(data-force-hide-menu id="stream-ocr-button") &bull; Select area
-					td for
+						button(data-force-hide-menu id="stream-ocr-button" i18n="kvm_text51") &bull; Select area
+					td(i18n="kvm_text52") for
 					td
 						select(id="stream-ocr-lang-selector")
-					td text recognition
+					td(i18n="kvm_text53") text recognition
 			table(class="kv")
 				tr
-					td(colspan="4") &bull; Press #[b Enter] to recognize and copy text to clipboard
+					td(colspan="4" i18n="kvm_text54") &bull; Press #[b Enter] to recognize and copy text to clipboard
 				tr
-					td(colspan="4") &bull; Press #[b Esc] to cancel selection
+					td(colspan="4" i18n="kvm_text55") &bull; Press #[b Esc] to cancel selection
 				tr
 					td

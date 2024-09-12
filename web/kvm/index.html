@@ -653,26 +653,26 @@
           </div>
         </div>
       </li>
-      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="/share/svg/led-gear.svg"><span>Macro</span></a>
+      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="/share/svg/led-gear.svg"><span i18n="kvm_text32">Macro</span></a>
         <div class="menu">
-          <div class="text"><b>Record and play HID/ATX/GPIO actions<br></b><sub>For security reasons, the record will not be saved on the PiKVM</sub></div>
+          <div class="text"><b i18n="kvm_text33">Record and play HID/ATX/GPIO actions<br></b><sub i18n="kvm_text34">For security reasons, the record will not be saved on the PiKVM</sub></div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row25" disabled data-force-hide-menu id="hid-recorder-record">&bull; Rec</button>
-            <button class="row25" disabled id="hid-recorder-stop">Stop</button>
-            <button class="row25" disabled id="hid-recorder-play">Play</button>
-            <button class="row25" disabled id="hid-recorder-clear">Clear</button>
+            <button class="row25" disabled data-force-hide-menu id="hid-recorder-record" i18n="kvm_text35">&bull; Rec</button>
+            <button class="row25" disabled id="hid-recorder-stop" i18n="kvm_text36">Stop</button>
+            <button class="row25" disabled id="hid-recorder-play" i18n="kvm_text37">Play</button>
+            <button class="row25" disabled id="hid-recorder-clear" i18n="kvm_text38">Clear</button>
           </div>
           <hr>
           <table class="kv">
             <tr>
-              <td>Script time:</td>
+              <td i18n="kvm_text39">Script time:</td>
               <td class="value" colspan="2" id="hid-recorder-time">00:00:00.0</td>
             </tr>
             <tr>
-              <td>Scripted events:</td>
+              <td i18n="kvm_text40">Scripted events:</td>
               <td class="value" id="hid-recorder-events-count">0</td>
-              <td><sup><i>include delays</i></sup></td>
+              <td><sup><i i18n="kvm_text41">include delays</i></sup></td>
             </tr>
           </table>
           <hr>
@@ -690,14 +690,14 @@
           <hr>
           <input type="file" id="hid-recorder-new-script-file">
           <div class="buttons buttons-row">
-            <button class="row50" disabled id="hid-recorder-upload">Upload script</button>
-            <button class="row50" disabled id="hid-recorder-download">Download script</button>
+            <button class="row50" disabled id="hid-recorder-upload" i18n="kvm_text42">Upload script</button>
+            <button class="row50" disabled id="hid-recorder-download" i18n="kvm_text43">Download script</button>
           </div>
         </div>
       </li>
-      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="/share/svg/led-gear.svg"><span>Text</span></a>
+      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="/share/svg/led-gear.svg"><span i18n="kvm_text44">Text</span></a>
         <div class="menu" id="text-menu">
-          <div class="text"><b>Paste text as keypress sequence<br></b><sub>Please note that PiKVM cannot switch the keyboard layout</sub></div>
+          <div class="text"><b i18n="kvm_text45">Paste text as keypress sequence<br></b><sub i18n="kvm_text46">Please note that PiKVM cannot switch the keyboard layout</sub></div>
           <hr>
           <div class="text" style="margin-right: 20px">
             <textarea id="hid-pak-text" data-focus placeholder="Enter your text here"></textarea>
@@ -705,9 +705,9 @@
           <table class="kv">
             <tr>
               <td>
-                <button disabled data-force-hide-menu id="hid-pak-button">&bull; Paste</button>
+                <button disabled data-force-hide-menu id="hid-pak-button" i18n="kvm_text47">&bull; Paste</button>
               </td>
-              <td>using host keymap</td>
+              <td i18n="kvm_text48">using host keymap</td>
               <td>
                 <select id="hid-pak-keymap-selector"></select>
               </td>
@@ -736,26 +736,26 @@
           <div class="feature-disabled" id="stream-ocr">
             <hr><br>
             <hr>
-            <div class="text"><b>Text recognition <sup><i>&beta;</i></sup><br></b><sub><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> works locally on PiKVM</sub></div>
+            <div class="text"><b i18n="kvm_text49">Text recognition <sup><i>&beta;</i></sup><br></b><sub i18n="kvm_text50"><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> works locally on PiKVM</sub></div>
             <hr>
             <table class="kv">
               <tr>
                 <td>
-                  <button data-force-hide-menu id="stream-ocr-button">&bull; Select area</button>
+                  <button data-force-hide-menu id="stream-ocr-button" i18n="kvm_text51">&bull; Select area</button>
                 </td>
-                <td>for</td>
+                <td i18n="kvm_text52">for</td>
                 <td>
                   <select id="stream-ocr-lang-selector"></select>
                 </td>
-                <td>text recognition</td>
+                <td i18n="kvm_text53">text recognition</td>
               </tr>
             </table>
             <table class="kv">
               <tr>
-                <td colspan="4">&bull; Press <b>Enter</b> to recognize and copy text to clipboard</td>
+                <td colspan="4" i18n="kvm_text54">&bull; Press <b>Enter</b> to recognize and copy text to clipboard</td>
               </tr>
               <tr>
-                <td colspan="4">&bull; Press <b>Esc</b> to cancel selection</td>
+                <td colspan="4" i18n="kvm_text55">&bull; Press <b>Esc</b> to cancel selection</td>
               </tr>
               <tr>
                 <td></td>
@@ -764,9 +764,9 @@
           </div>
         </div>
       </li>
-      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#">Shortcuts</a>
+      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#" i18n="kvm_text56">Shortcuts</a>
         <div class="menu" id="shortcuts-menu">
-          <div class="text"><b>Quick keyboard shortcuts<br></b><sub>Also see <i>System &rarr; Show keyboard</i></sub></div>
+          <div class="text"><b i18n="kvm_text57">Quick keyboard shortcuts<br></b><sub i18n="kvm_text58">Also see <i>System &rarr; Show keyboard</i></sub></div>
           <hr>
           <div class="buttons">
             <div class="buttons-row">
@@ -808,7 +808,7 @@
           <hr>
           <div class="text">
             &darr; &bull; Alt+SysRq+... <sup><i>linux magic
-            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html">help</a></i></sup>
+            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html" i18n="kvm_text59">help</a></i></sup>
           </div>
           <hr>
           <div class="buttons">
