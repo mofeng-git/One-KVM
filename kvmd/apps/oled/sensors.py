@@ -53,11 +53,9 @@ class Sensors:
     # =====
 
     def __get_iface(self) -> str:
-        print("get_iface")
         return self.__get_netconf(round(time.monotonic() / 0.3))[0]
 
     def __get_ip(self) -> str:
-        print("get_ip")
         return self.__get_netconf(round(time.monotonic() / 0.3))[1]
 
     @functools.lru_cache(maxsize=1)
