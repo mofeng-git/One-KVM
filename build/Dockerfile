@@ -89,12 +89,9 @@ COPY testenv/js/* /usr/share/janus/javascript/
 
 RUN touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag \
     && adduser kvmd --gecos "" --disabled-password \
-    && /usr/share/kvmd/kvmd-gencert --do-the-thing \
-    && /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc \
-    && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
-    && python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf
+    && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata
 
-#RUN supervisord -c /etc/kvmd/supervisord.conf
+#RUN bash /etc/kvmd/init.sh
 
 EXPOSE 4430
 CMD ["/etc/kvmd/init.sh"]
