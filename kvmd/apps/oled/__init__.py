@@ -31,12 +31,10 @@ import time
 import usb.core
 
 from luma.core import cmdline as luma_cmdline
-from luma.core.device import device as luma_device
-from luma.core.render import canvas as luma_canvas
 
-from PIL import Image
 from PIL import ImageFont
 
+from .screen import Screen
 from .sensors import Sensors
 
 
@@ -45,31 +43,6 @@ _logger = logging.getLogger("oled")
 
 
 # =====
-class Screen:
-    def __init__(
-        self,
-        device: luma_device,
-        font: ImageFont.FreeTypeFont,
-        font_spacing: int,
-        offset: tuple[int, int],
-    ) -> None:
-
-        self.__device = device
-        self.__font = font
-        self.__font_spacing = font_spacing
-        self.__offset = offset
-
-    def draw_text(self, text: str, offset_x: int=0) -> None:
-        with luma_canvas(self.__device) as draw:
-            offset = list(self.__offset)
-            offset[0] += offset_x
-            draw.multiline_text(offset, text, font=self.__font, spacing=self.__font_spacing, fill="white")
-
-    def draw_image(self, image_path: str) -> None:
-        with luma_canvas(self.__device) as draw:
-            draw.bitmap(self.__offset, Image.open(image_path).convert("1"), fill="white")
-
-
 def _detect_geometry() -> dict:
     with open("/proc/device-tree/model") as file:
         is_cm4 = ("Compute Module 4" in file.read())
