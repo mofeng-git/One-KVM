@@ -5,7 +5,11 @@ ARG TARGETARCH
 
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends build-essential libssl-dev libffi-dev python3-dev libevent-dev libjpeg-dev libbsd-dev libudev-dev git pkg-config wget curl
+    && apt-get install -y --no-install-recommends build-essential libssl-dev libffi-dev python3-dev libevent-dev libjpeg-dev \
+        libbsd-dev libudev-dev git pkg-config wget curl libmicrohttpd-dev libjansson-dev libssl-dev libsofia-sip-ua-dev libglib2.0-dev \
+        libopus-dev libogg-dev libcurl4-openssl-dev liblua5.3-dev libconfig-dev libopus-dev libtool automake autoconf meson cmake \
+        libx264-dev libyuv-dev libasound2-dev  libspeex-dev libspeexdsp-dev libopus-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY build/cargo_config /tmp/config
 
@@ -28,15 +32,41 @@ RUN pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-c
         pyelftools pyghmi pygments pyparsing pyotp qrcode requests semantic-version setproctitle setuptools six spidev  \
         tabulate urllib3 wrapt xlib yarl pyserial pyyaml zstandard supervisor
 
-RUN apt-get install -y libx264-dev libyuv-dev janus-dev libasound2-dev  libspeex-dev libspeexdsp-dev libopus-dev \
-    && sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
+RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libnice \
+    && cd /tmp/libnice \
+    && meson --prefix=/usr build && ninja -C build && ninja -C build install
+
+RUN curl https://github.com/cisco/libsrtp/archive/v2.2.0.tar.gz -L -o /tmp/libsrtp-2.2.0.tar.gz \
+    && cd /tmp \
+    && tar xfv libsrtp-2.2.0.tar.gz \
+    && cd libsrtp-2.2.0 \
+    && ./configure --prefix=/usr --enable-openssl \
+    && make shared_library && make install
+
+RUN git clone --depth=1 https://libwebsockets.org/repo/libwebsockets /tmp/libwebsockets \
+    && cd /tmp/libwebsockets \
+    && mkdir build && cd build \
+    && cmake -DLWS_MAX_SMP=1 -DLWS_WITHOUT_EXTENSIONS=0 -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_C_FLAGS="-fpic" .. \
+    && make && make install
+
+RUN git clone --depth=1 https://github.com/meetecho/janus-gateway.git /tmp/janus-gateway \
+    && cd /tmp/janus-gateway \
+    && sh autogen.sh \
+    && ./configure --enable-static --enable-websockets  --enable-plugin-audiobridge \
+        --disable-data-channels --disable-rabbitmq --disable-mqtt --disable-all-plugins --disable-all-loggers \
+        --prefix=/usr \
+    && make && make install
+
+RUN sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
     && git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
     && make -j WITH_PYTHON=1 WITH_JANUS=1 WITH_LIBX264=1 -C /tmp/ustreamer \
     && /tmp/ustreamer/ustreamer -v
 
 RUN mkdir /tmp/lib \
-    && cp  /lib/*-linux-*/libevent_core-*.so.7 /lib/*-linux-*/libbsd.so.0 /lib/*-linux-*/libevent_pthreads-*.so.7 /lib/*-linux-*/libspeexdsp.so.1 \
-        /lib/*-linux-*/libevent-*.so.7 /lib/*-linux-*/libjpeg.so.62 /lib/*-linux-*/libx264.so.164 /lib/*-linux-*/libyuv.so.0 /lib/*-linux-*/libasound.so.2 /tmp/lib/ \
+    && cd /lib/*-linux-*/ \
+    && cp libevent_core-*.so.7 libbsd.so.0 libevent_pthreads-*.so.7 libspeexdsp.so.1 libevent-*.so.7 libjpeg.so.62 libx264.so.164 libyuv.so.0 \
+        libnice.so.10 /usr/lib/libsrtp2.so.1 /usr/lib/libwebsockets.so.19 \
+        /tmp/lib/ \
     && cp /tmp/ustreamer/python/dist/*.whl /tmp/wheel/
 
 FROM python:3.12.0rc2-slim-bookworm
@@ -44,15 +74,15 @@ FROM python:3.12.0rc2-slim-bookworm
 LABEL maintainer="mofeng654321@hotmail.com"
 
 COPY --from=builder /tmp/lib/* /tmp/lib/
-COPY --from=builder /tmp/ustreamer/ustreamer /tmp/ustreamer/ustreamer-dump /usr/local/bin/
+COPY --from=builder /tmp/ustreamer/ustreamer /tmp/ustreamer/ustreamer-dump /usr/bin/janus /usr/bin/
 COPY --from=builder /tmp/wheel/*.whl /tmp/wheel/
 COPY --from=builder /tmp/ustreamer/libjanus_ustreamer.so /usr/lib/ustreamer/janus/
+COPY --from=builder /usr/lib/janus/transports/* /usr/lib/janus/transports/
 
 ARG TARGETARCH
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
-
 
 RUN cp /tmp/lib/* /lib/*-linux-*/ \
     && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check /tmp/wheel/*.whl \
@@ -60,7 +90,8 @@ RUN cp /tmp/lib/* /lib/*-linux-*/ \
 
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim iptables sudo janus curl\
+    && apt-get install -y --no-install-recommends libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim iptables sudo  curl \
+        libmicrohttpd12 libjansson4 libssl3 libsofia-sip-ua0 libglib2.0-0 libopus0 libogg0 libcurl4 libconfig9 libusrsctp2 libwebsockets17 libnss3 libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN if [ ${TARGETARCH} = arm ]; then ARCH=armhf; elif [ ${TARGETARCH} = arm64 ]; then ARCH=aarch64; elif [ ${TARGETARCH} = amd64 ]; then ARCH=x86_64; fi \

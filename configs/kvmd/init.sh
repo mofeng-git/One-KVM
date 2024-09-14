@@ -23,18 +23,12 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
         python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf
     fi
 
-    #生成 supervisord 配置文件是否添加扩展服务
-
+    
     if [ "$NOAUTH" == "1" ]; then
         sed -i "s/enabled: true/enabled: false/g" /etc/kvmd/override.yaml
     fi
 
-    if [ "$NOWEBTERMWRITE" == "1" ]; then
-        WEBTERMWRITE == ""
-    else
-        WEBTERMWRITE == "-W"
-    fi
-
+    #生成 supervisord 配置文件是否添加扩展服务
     if [ "$NOWEBTERM" == "1" ]; then
         echo -e "${GREEN}One-KVM webterm is disabled.${NC}"
         rm -r /usr/share/kvmd/extras/webterm
@@ -42,7 +36,7 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
         cat >> /etc/kvmd/supervisord.conf  << EOF
 
 [program:kvmd-webterm]
-command=/usr/local/bin/ttyd --interface=/run/kvmd/ttyd.sock --port=0 $WEBTERMWRITE /bin/bash -c '/etc/kvmd/armbain-motd; bash'
+command=/usr/local/bin/ttyd --interface=/run/kvmd/ttyd.sock --port=0 --writable /bin/bash -c '/etc/kvmd/armbain-motd; bash'
 directory=/
 autostart=true
 autorestart=true
@@ -54,7 +48,11 @@ redirect_stderr=true
 EOF
     fi
 
-    if [  "&NOVNC" == "1" ]; then
+    if [ "$NOWEBTERMWRITE" == "1" ]; then
+        sed -i "s/--writable//g" /etc/kvmd/supervisord.conf
+    fi
+
+    if [  "$NOVNC" == "1" ]; then
         echo -e "${GREEN}One-KVM VNC is disabled.${NC}"
         rm -r /usr/share/kvmd/extras/vnc
     else

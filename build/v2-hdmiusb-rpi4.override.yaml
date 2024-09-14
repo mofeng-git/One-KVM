@@ -22,7 +22,7 @@ kvmd:
         h264_bitrate:
             default: 2000
         cmd:
-            - "/usr/local/bin/ustreamer"
+            - "/usr/bin/ustreamer"
             - "--device=/dev/kvmd-video"
             - "--persistent"
             - "--format=mjpeg"

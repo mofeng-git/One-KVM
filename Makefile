@@ -276,6 +276,23 @@ run-build:
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		-f build/Dockerfile . \
 		--push
+	$(DOCKER) buildx build -t silentwind0/kvmd:dev \
+		--allow security.insecure --progress plain \
+		--platform linux/amd64,linux/arm64,linux/arm/v7  \
+		-f build/Dockerfile . \
+		--push
+
+run-release:
+	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd \
+		--allow security.insecure --progress plain \
+		--platform linux/amd64,linux/arm64,linux/arm/v7  \
+		-f build/Dockerfile . \
+		--push
+	$(DOCKER) buildx build -t silentwind0/kvmd \
+		--allow security.insecure --progress plain \
+		--platform linux/amd64,linux/arm64,linux/arm/v7  \
+		-f build/Dockerfile . \
+		--push
 
 run-nogpio: testenv
 	- $(DOCKER) run --rm --name kvmd \
