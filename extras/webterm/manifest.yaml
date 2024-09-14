@@ -1,0 +1,6 @@
+name: Terminal
+description: Open terminal in a web browser
+icon: extras/webterm/terminal.svg
+path: extras/webterm/ttyd
+daemon: kvmd-webterm
+place: 10

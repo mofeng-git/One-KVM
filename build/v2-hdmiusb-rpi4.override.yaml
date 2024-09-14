@@ -1,4 +1,7 @@
 kvmd:
+    auth:
+        enabled: true
+
     server:
         unix_mode: 0666
 

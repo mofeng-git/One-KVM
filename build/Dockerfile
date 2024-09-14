@@ -48,6 +48,7 @@ COPY --from=builder /tmp/ustreamer/ustreamer /tmp/ustreamer/ustreamer-dump /usr/
 COPY --from=builder /tmp/wheel/*.whl /tmp/wheel/
 COPY --from=builder /tmp/ustreamer/libjanus_ustreamer.so /usr/lib/ustreamer/janus/
 
+ARG TARGETARCH
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
@@ -59,10 +60,15 @@ RUN cp /tmp/lib/* /lib/*-linux-*/ \
 
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim iptables sudo janus \
+    && apt-get install -y --no-install-recommends libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim iptables sudo janus curl\
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p \
+RUN if [ ${TARGETARCH} = arm ]; then ARCH=armhf; elif [ ${TARGETARCH} = arm64 ]; then ARCH=aarch64; elif [ ${TARGETARCH} = amd64 ]; then ARCH=x86_64; fi \
+    && curl https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.$ARCH -L -o /usr/local/bin/ttyd \
+    && chmod +x /usr/local/bin/ttyd \
+    && adduser kvmd --gecos "" --disabled-password \
+    && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
+    && mkdir -p \
     /etc/kvmd/nginx \
     /etc/kvmd/vnc \
     /etc/kvmd/override.d\
@@ -71,7 +77,9 @@ RUN mkdir -p \
     /var/lib/kvmd/pst/data \
     /opt/vc/bin \
     /run/kvmd \
-    /tmp/kvmd-nginx
+    /tmp/kvmd-nginx \
+    && touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag
+
 
 COPY testenv/fakes/vcgencmd /usr/bin/
 COPY extras/ /usr/share/kvmd/extras/
@@ -87,11 +95,4 @@ COPY build/v2-hdmiusb-rpi4.override.yaml /etc/kvmd/override.yaml
 COPY configs/kvmd/main/v2-hdmiusb-rpi4.yaml /etc/kvmd/main.yaml
 COPY testenv/js/* /usr/share/janus/javascript/
 
-RUN touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag \
-    && adduser kvmd --gecos "" --disabled-password \
-    && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata
-
-#RUN bash /etc/kvmd/init.sh
-
-EXPOSE 4430
 CMD ["/etc/kvmd/init.sh"]
