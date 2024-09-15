@@ -110,10 +110,14 @@ redirect_stderr=true
 EOF
     fi
 
-    #/dev/video0 设备优先级高于 /dev/kvmd-video
-    if [ -f /dev/video0 ]; then
-        echo -e "${GREEN}Found /dev/video0, use it as kvmd video device.${NC}"
-        sed -i "s/\/dev\/kvmd-video/\/dev\/video0/g" /etc/kvmd/override.yaml
+    #/dev/kvmd-video 设备优先级高于 /dev/video0,/dev/kvmd-hid 设备优先级高于 /dev/ttyUSB0
+    if [ -f /dev/kvmd-video ]; then
+        echo -e "${GREEN}Found dev/kvmd-video, use it as kvmd video device.${NC}"
+        sed -i "s/\/dev\/video0/\/dev\/kvmd-video/g" /etc/kvmd/override.yaml
+    fi
+    if [ -f /dev/kvmd-hid ]; then
+        echo -e "${GREEN}Found /dev/kvmd-hid, use it as kvmd video device.${NC}"
+        sed -i "s/\/dev\/ttyUSB0/\/dev\/kvmd-hid/g" /etc/kvmd/override.yaml
     fi
 
     #设置用户账号密码
