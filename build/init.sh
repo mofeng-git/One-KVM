@@ -12,6 +12,7 @@ echo -e "${GREEN}One-KVM pre-starting...${NC}"
 if [ ! -f /etc/kvmd/.init_flag ]; then
 
     cp -r /etc/kvmd_backup/* /etc/kvmd/
+    touch /etc/kvmd/.docker_flag
 
     #生成 ssl 证书 和 vnc 证书
     /usr/share/kvmd/kvmd-gencert --do-the-thing

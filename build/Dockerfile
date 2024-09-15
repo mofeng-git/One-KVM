@@ -83,6 +83,7 @@ ARG TARGETARCH
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+ENV TZ=Asia/Shanghai
 
 RUN cp /tmp/lib/* /lib/*-linux-*/ \
     && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check /tmp/wheel/*.whl \
@@ -99,8 +100,8 @@ RUN if [ ${TARGETARCH} = arm ]; then ARCH=armhf; elif [ ${TARGETARCH} = arm64 ];
     && chmod +x /usr/local/bin/ttyd \
     && adduser kvmd --gecos "" --disabled-password \
     && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
-    && mkdir -p /etc/kvmd/override.d /var/lib/kvmd/msd /var/lib/kvmd/pst/data /opt/vc/bin /run/kvmd /tmp/kvmd-nginx \
-    && touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag
+    && mkdir -p /etc/kvmd_backup/override.d /var/lib/kvmd/msd /var/lib/kvmd/pst/data /opt/vc/bin /run/kvmd /tmp/kvmd-nginx \
+    && touch /run/kvmd/ustreamer.sock
 
 
 COPY testenv/fakes/vcgencmd /usr/bin/
