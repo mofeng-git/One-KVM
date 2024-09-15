@@ -11,6 +11,8 @@ echo -e "${GREEN}One-KVM pre-starting...${NC}"
 #仅首次运行，用于初始化配置文件
 if [ ! -f /etc/kvmd/.init_flag ]; then
 
+    cp -r /etc/kvmd_backup/* /etc/kvmd/
+
     #生成 ssl 证书 和 vnc 证书
     /usr/share/kvmd/kvmd-gencert --do-the-thing
     /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc

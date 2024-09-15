@@ -99,16 +99,7 @@ RUN if [ ${TARGETARCH} = arm ]; then ARCH=armhf; elif [ ${TARGETARCH} = arm64 ];
     && chmod +x /usr/local/bin/ttyd \
     && adduser kvmd --gecos "" --disabled-password \
     && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
-    && mkdir -p \
-    /etc/kvmd/nginx \
-    /etc/kvmd/vnc \
-    /etc/kvmd/override.d\
-    /etc/kvmd/hw_info/ \
-    /var/lib/kvmd/msd \
-    /var/lib/kvmd/pst/data \
-    /opt/vc/bin \
-    /run/kvmd \
-    /tmp/kvmd-nginx \
+    && mkdir -p /etc/kvmd/override.d /var/lib/kvmd/msd /var/lib/kvmd/pst/data /opt/vc/bin /run/kvmd /tmp/kvmd-nginx \
     && touch /run/kvmd/ustreamer.sock /etc/kvmd/.docker_flag
 
 
@@ -117,13 +108,11 @@ COPY extras/ /usr/share/kvmd/extras/
 COPY web/ /usr/share/kvmd/web/
 COPY build/platform scripts/kvmd-gencert /usr/share/kvmd/
 COPY contrib/keymaps /usr/share/kvmd/keymaps
-COPY kvmd/ /kvmd
-COPY configs/kvmd/* /etc/kvmd/
-COPY configs/nginx/* /etc/kvmd/nginx/
-COPY configs/janus/* /etc/kvmd/janus/
-COPY configs/hw_info/* /etc/kvmd/hw_info/
-COPY build/v2-hdmiusb-rpi4.override.yaml /etc/kvmd/override.yaml
-COPY configs/kvmd/main/v2-hdmiusb-rpi4.yaml /etc/kvmd/main.yaml
+COPY kvmd/ build/init.sh /kvmd/
+COPY configs/kvmd/* /etc/kvmd_backup/
+COPY configs/nginx/* /etc/kvmd_backup/nginx/
+COPY configs/janus/* /etc/kvmd_backup/janus/
+COPY configs/hw_info/* /etc/kvmd_backup/hw_info/
 COPY testenv/js/* /usr/share/janus/javascript/
 
-CMD ["/etc/kvmd/init.sh"]
+ENTRYPOINT ["/kvmd/init.sh"]

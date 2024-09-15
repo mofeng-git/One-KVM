@@ -18,4 +18,5 @@
 *.pyc
 *.swp
 /venv/
-.vscode/settings.json
+.vscode/settings.j/son
+kvmd_config/

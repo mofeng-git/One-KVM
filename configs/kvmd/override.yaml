@@ -1,39 +1,78 @@
-###############################################################################
-#                                                                             #
-#  Override KVMD settings.                                                    #
-#                                                                             #
-#    * https://docs.pikvm.org/first_steps/#structure-of-configuration-files   #
-#                                                                             #
-#  This file uses YAML syntax. All overridden parameters will be applied      #
-#  AFTER other configs and "!include" directives, and BEFORE validation.      #
-#  Values should be combined under common sections.                           #
-#                                                                             #
-###############################################################################
-#
-#########
-# Wrong #
-#########
-#kvmd:
-#    gpio:
-#        drivers: ...
-#kvmd:
-#    gpio:
-#        scheme: ...
-#
-###########
-# Correct #
-###########
-#kvmd:
-#    gpio:
-#        drivers: ...
-#        scheme: ...
-#
-###########
-# Example #
-###########
-#vnc:
-#    # See https://docs.pikvm.org/vnc
-#    keymap: /usr/share/kvmd/keymaps/ru # Set russian keymap
-#    auth:
-#        vncauth:
-#            enabled: true # Enable auth via /etc/kvmd/vncpasswd
+kvmd:
+    auth:
+        enabled: true
+
+    server:
+        unix_mode: 0666
+
+    atx:
+        type: disabled
+
+    hid:
+        type: ch9329
+        device: /dev/ttyUSB0
+
+    msd:
+        type: disabled
+
+    streamer:
+        resolution:
+            default: 1280x720
+        forever: true
+        h264_bitrate:
+            default: 2000
+        cmd:
+            - "/usr/bin/ustreamer"
+            - "--device=/dev/video0"
+            - "--persistent"
+            - "--format=mjpeg"
+            - "--encoder=LIBX264-VIDEO"
+            - "--resolution={resolution}"
+            - "--desired-fps={desired_fps}"
+            - "--drop-same-frames=30"
+            - "--last-as-blank=0"
+            - "--unix={unix}"
+            - "--unix-rm"
+            - "--unix-mode=0666"
+            - "--exit-on-parent-death"
+            - "--process-name-prefix={process_name_prefix}"
+            - "--notify-parent"
+            - "--no-log-colors"
+            - "--h264-sink=kvmd::ustreamer::h264"
+            - "--h264-sink-mode=0660"
+            - "--jpeg-sink=kvmd::ustreamer::jpeg"
+            - "--jpeg-sink-mode=0660"
+            - "--h264-bitrate={h264_bitrate}"
+            - "--h264-gop={h264_gop}"
+            - "--slowdown"
+
+vnc:
+    keymap: /usr/share/kvmd/keymaps/ru
+
+    auth:
+        vncauth:
+            enabled: true
+
+    memsink:
+        jpeg:
+            sink: "kvmd::ustreamer::jpeg"
+        h264:
+            sink: "kvmd::ustreamer::h264"
+
+otgnet:
+    commands:
+        post_start_cmd:
+            - "/bin/true"
+        pre_stop_cmd:
+            - "/bin/true"
+
+nginx:
+    http:
+        port: 8080
+    https:
+        port: 4430
+
+
+languages:
+    console: zh
+    web: zh
