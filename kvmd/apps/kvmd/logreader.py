@@ -24,8 +24,10 @@ import re
 import asyncio
 import time
 
+
 from typing import AsyncGenerator
 from xmlrpc.client import ServerProxy
+from supervisor.xmlrpc import SupervisorTransport
 
 from ...logging import get_logger
 
@@ -66,7 +68,7 @@ class LogReader:
                 else:
                     await asyncio.sleep(1)
         else:
-            server = ServerProxy('http://127.0.0.1:9001/RPC2')
+            server = ServerProxy('http://127.0.0.1',transport=SupervisorTransport(None, None, serverurl='unix:///tmp/supervisor.sock'))
             log_entries = server.supervisor.readLog(0,0)
             yield log_entries
             
