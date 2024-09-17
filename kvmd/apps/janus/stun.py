@@ -91,8 +91,8 @@ class Stun:
                 self.__sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 self.__sock.settimeout(self.__timeout)
                 self.__sock.bind(src_addr)
-                (nat_type, response) = await self.__get_nat_type(src_ip)
-                ext_ip = (response.ext.ip if response.ext is not None else "")
+                (nat_type, resp) = await self.__get_nat_type(src_ip)
+                ext_ip = (resp.ext.ip if resp.ext is not None else "")
         except Exception as err:
             get_logger(0).error("Can't get STUN info: %s", tools.efmt(err))
         finally:
@@ -122,33 +122,33 @@ class Stun:
         if not first.ok:
             return (StunNatType.BLOCKED, first)
 
-        request = struct.pack(">HHI", 0x0003, 0x0004, 0x00000006)  # Change-Request
-        response = await self.__make_request("Change request [ext_ip == src_ip]", self.__stun_ip, request)
+        req = struct.pack(">HHI", 0x0003, 0x0004, 0x00000006)  # Change-Request
+        resp = await self.__make_request("Change request [ext_ip == src_ip]", self.__stun_ip, req)
 
         if first.ext is not None and first.ext.ip == src_ip:
-            if response.ok:
-                return (StunNatType.OPEN_INTERNET, response)
-            return (StunNatType.SYMMETRIC_UDP_FW, response)
+            if resp.ok:
+                return (StunNatType.OPEN_INTERNET, resp)
+            return (StunNatType.SYMMETRIC_UDP_FW, resp)
 
-        if response.ok:
-            return (StunNatType.FULL_CONE_NAT, response)
+        if resp.ok:
+            return (StunNatType.FULL_CONE_NAT, resp)
 
         if first.changed is None:
             raise RuntimeError(f"Changed addr is None: {first}")
-        response = await self.__make_request("Change request [ext_ip != src_ip]", first.changed, b"")
-        if not response.ok:
-            return (StunNatType.CHANGED_ADDR_ERROR, response)
+        resp = await self.__make_request("Change request [ext_ip != src_ip]", first.changed, b"")
+        if not resp.ok:
+            return (StunNatType.CHANGED_ADDR_ERROR, resp)
 
-        if response.ext == first.ext:
-            request = struct.pack(">HHI", 0x0003, 0x0004, 0x00000002)
-            response = await self.__make_request("Change port", first.changed.ip, request)
-            if response.ok:
-                return (StunNatType.RESTRICTED_NAT, response)
-            return (StunNatType.RESTRICTED_PORT_NAT, response)
+        if resp.ext == first.ext:
+            req = struct.pack(">HHI", 0x0003, 0x0004, 0x00000002)
+            resp = await self.__make_request("Change port", first.changed.ip, req)
+            if resp.ok:
+                return (StunNatType.RESTRICTED_NAT, resp)
+            return (StunNatType.RESTRICTED_PORT_NAT, resp)
 
-        return (StunNatType.SYMMETRIC_NAT, response)
+        return (StunNatType.SYMMETRIC_NAT, resp)
 
-    async def __make_request(self, ctx: str, addr: (_StunAddress | str), request: bytes) -> _StunResponse:
+    async def __make_request(self, ctx: str, addr: (_StunAddress | str), req: bytes) -> _StunResponse:
         # TODO: Support IPv6 and RFC 5389
         # The first 4 bytes of the response are the Type (2) and Length (2)
         # The 5th byte is Reserved
@@ -165,9 +165,9 @@ class Stun:
 
         # https://datatracker.ietf.org/doc/html/rfc5389#section-6
         trans_id = b"\x21\x12\xA4\x42" + secrets.token_bytes(12)
-        (response, error) = (b"", "")
+        (resp, error) = (b"", "")
         for _ in range(self.__retries):
-            (response, error) = await self.__inner_make_request(trans_id, request, addr_t)
+            (resp, error) = await self.__inner_make_request(trans_id, req, addr_t)
             if not error:
                 break
             await asyncio.sleep(self.__retries_delay)
@@ -178,9 +178,9 @@ class Stun:
 
         parsed: dict[str, _StunAddress] = {}
         offset = 0
-        remaining = len(response)
+        remaining = len(resp)
         while remaining > 0:
-            (attr_type, attr_len) = struct.unpack(">HH", response[offset : offset + 4])  # noqa: E203
+            (attr_type, attr_len) = struct.unpack(">HH", resp[offset : offset + 4])  # noqa: E203
             offset += 4
             field = {
                 0x0001: "ext",      # MAPPED-ADDRESS
@@ -189,32 +189,32 @@ class Stun:
                 0x0005: "changed",  # CHANGED-ADDRESS
             }.get(attr_type)
             if field is not None:
-                parsed[field] = self.__parse_address(response[offset:], (trans_id if attr_type == 0x0020 else b""))
+                parsed[field] = self.__parse_address(resp[offset:], (trans_id if attr_type == 0x0020 else b""))
             offset += attr_len
             remaining -= (4 + attr_len)
         return _StunResponse(ok=True, **parsed)
 
-    async def __inner_make_request(self, trans_id: bytes, request: bytes, addr: tuple[str, int]) -> tuple[bytes, str]:
+    async def __inner_make_request(self, trans_id: bytes, req: bytes, addr: tuple[str, int]) -> tuple[bytes, str]:
         assert self.__sock is not None
 
-        request = struct.pack(">HH", 0x0001, len(request)) + trans_id + request  # Bind Request
+        req = struct.pack(">HH", 0x0001, len(req)) + trans_id + req  # Bind Request
 
         try:
-            await aiotools.run_async(self.__sock.sendto, request, addr)
+            await aiotools.run_async(self.__sock.sendto, req, addr)
         except Exception as err:
             return (b"", f"Send error: {tools.efmt(err)}")
         try:
-            response = (await aiotools.run_async(self.__sock.recvfrom, 2048))[0]
+            resp = (await aiotools.run_async(self.__sock.recvfrom, 2048))[0]
         except Exception as err:
             return (b"", f"Recv error: {tools.efmt(err)}")
 
-        (response_type, payload_len) = struct.unpack(">HH", response[:4])
+        (response_type, payload_len) = struct.unpack(">HH", resp[:4])
         if response_type != 0x0101:
             return (b"", f"Invalid response type: {response_type:#06x}")
-        if trans_id != response[4:20]:
+        if trans_id != resp[4:20]:
             return (b"", "Transaction ID mismatch")
 
-        return (response[20 : 20 + payload_len], "")  # noqa: E203
+        return (resp[20 : 20 + payload_len], "")  # noqa: E203
 
     def __parse_address(self, data: bytes, trans_id: bytes) -> _StunAddress:
         family = data[1]
