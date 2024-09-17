@@ -30,7 +30,7 @@ class StunInfo:
     nat_type:  StunNatType
     src_ip:    str
     ext_ip:    str
-    stun_host: str
+    stun_ip:   str
     stun_port: int
 
 
@@ -67,38 +67,63 @@ class Stun:
         self.__retries = retries
         self.__retries_delay = retries_delay
 
+        self.__stun_ip = ""
         self.__sock: (socket.socket | None) = None
 
     async def get_info(self, src_ip: str, src_port: int) -> StunInfo:
-        (family, _, _, _, addr) = socket.getaddrinfo(src_ip, src_port, type=socket.SOCK_DGRAM)[0]
         nat_type = StunNatType.ERROR
         ext_ip = ""
         try:
-            with socket.socket(family, socket.SOCK_DGRAM) as self.__sock:
+            (src_fam, _, _, _, src_addr) = (await self.__retried_getaddrinfo_udp(src_ip, src_port))[0]
+
+            stun_ips = [
+                stun_addr[0]
+                for (stun_fam, _, _, _, stun_addr) in (await self.__retried_getaddrinfo_udp(self.__host, self.__port))
+                if stun_fam == src_fam
+            ]
+            if not stun_ips:
+                raise RuntimeError(f"Can't resolve {src_fam.name} address for STUN")
+            if not self.__stun_ip or self.__stun_ip not in stun_ips:
+                # On new IP, changed family, etc.
+                self.__stun_ip = stun_ips[0]
+
+            with socket.socket(src_fam, socket.SOCK_DGRAM) as self.__sock:
                 self.__sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 self.__sock.settimeout(self.__timeout)
-                self.__sock.bind(addr)
+                self.__sock.bind(src_addr)
                 (nat_type, response) = await self.__get_nat_type(src_ip)
                 ext_ip = (response.ext.ip if response.ext is not None else "")
         except Exception as err:
             get_logger(0).error("Can't get STUN info: %s", tools.efmt(err))
         finally:
             self.__sock = None
+
         return StunInfo(
             nat_type=nat_type,
             src_ip=src_ip,
             ext_ip=ext_ip,
-            stun_host=self.__host,
+            stun_ip=self.__stun_ip,
             stun_port=self.__port,
         )
 
+    async def __retried_getaddrinfo_udp(self, host: str, port: int) -> list:
+        retries = self.__retries
+        while True:
+            try:
+                return socket.getaddrinfo(host, port, type=socket.SOCK_DGRAM)
+            except Exception:
+                retries -= 1
+                if retries == 0:
+                    raise
+            await asyncio.sleep(self.__retries_delay)
+
     async def __get_nat_type(self, src_ip: str) -> tuple[StunNatType, _StunResponse]:  # pylint: disable=too-many-return-statements
-        first = await self.__make_request("First probe", self.__host, b"")
+        first = await self.__make_request("First probe", self.__stun_ip, b"")
         if not first.ok:
             return (StunNatType.BLOCKED, first)
 
         request = struct.pack(">HHI", 0x0003, 0x0004, 0x00000006)  # Change-Request
-        response = await self.__make_request("Change request [ext_ip == src_ip]", self.__host, request)
+        response = await self.__make_request("Change request [ext_ip == src_ip]", self.__stun_ip, request)
 
         if first.ext is not None and first.ext.ip == src_ip:
             if response.ok:

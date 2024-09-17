@@ -21,7 +21,7 @@ class _Netcfg:
     nat_type:  StunNatType = dataclasses.field(default=StunNatType.ERROR)
     src_ip:    str = dataclasses.field(default="")
     ext_ip:    str = dataclasses.field(default="")
-    stun_host: str = dataclasses.field(default="")
+    stun_ip:   str = dataclasses.field(default="")
     stun_port: int = dataclasses.field(default=0)
 
 
@@ -157,7 +157,7 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
     async def __start_janus_proc(self, netcfg: _Netcfg) -> None:
         assert self.__janus_proc is None
         placeholders = {
-            "o_stun_server": f"--stun-server={netcfg.stun_host}:{netcfg.stun_port}",
+            "o_stun_server": f"--stun-server={netcfg.stun_ip}:{netcfg.stun_port}",
             **{
                 key: str(value)
                 for (key, value) in dataclasses.asdict(netcfg).items()
