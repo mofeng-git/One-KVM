@@ -111,13 +111,13 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         while True:
             session = self.__ensure_http_session()
             try:
-                async with session.get(f"{self.__url}/api/{self.__token}/lights") as response:
-                    results = await response.json()
+                async with session.get(f"{self.__url}/api/{self.__token}/lights") as resp:
+                    results = await resp.json()
                     for pin in self.__state:
                         if pin in results:
                             self.__state[pin] = bool(results[pin]["state"]["on"])
-            except Exception as err:
-                get_logger().error("Failed Hue bulk GET request: %s", tools.efmt(err))
+            except Exception as ex:
+                get_logger().error("Failed Hue bulk GET request: %s", tools.efmt(ex))
                 self.__state = dict.fromkeys(self.__state, None)
             if self.__state != prev_state:
                 self._notifier.notify()
@@ -140,10 +140,10 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             async with session.put(
                 url=f"{self.__url}/api/{self.__token}/lights/{pin}/state",
                 json={"on": state},
-            ) as response:
-                htclient.raise_not_200(response)
-        except Exception as err:
-            get_logger().error("Failed Hue PUT request to pin %s: %s", pin, tools.efmt(err))
+            ) as resp:
+                htclient.raise_not_200(resp)
+        except Exception as ex:
+            get_logger().error("Failed Hue PUT request to pin %s: %s", pin, tools.efmt(ex))
             raise GpioDriverOfflineError(self)
         self.__update_notifier.notify()
 

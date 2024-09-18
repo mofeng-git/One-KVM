@@ -114,8 +114,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             try:
                 value = (await aiotools.read_file(path)).strip(" \t\r\n\0")
                 self.__dt_cache[name] = (value.upper() if upper else value)
-            except Exception as err:
-                get_logger(0).error("Can't read DT %s from %s: %s", name, path, err)
+            except Exception as ex:
+                get_logger(0).error("Can't read DT %s from %s: %s", name, path, ex)
                 return None
         return self.__dt_cache[name]
 
@@ -141,8 +141,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
         temp_path = f"{env.SYSFS_PREFIX}/sys/class/thermal/thermal_zone0/temp"
         try:
             return int((await aiotools.read_file(temp_path)).strip()) / 1000
-        except Exception as err:
-            get_logger(0).error("Can't read CPU temp from %s: %s", temp_path, err)
+        except Exception as ex:
+            get_logger(0).error("Can't read CPU temp from %s: %s", temp_path, ex)
             return None
 
     async def __get_cpu_percent(self) -> (float | None):
@@ -160,8 +160,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 + system_all / total * 100
                 + (st.steal + st.guest) / total * 100
             )
-        except Exception as err:
-            get_logger(0).error("Can't get CPU percent: %s", err)
+        except Exception as ex:
+            get_logger(0).error("Can't get CPU percent: %s", ex)
             return None
 
     async def __get_mem(self) -> dict:
@@ -172,8 +172,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 "total": st.total,
                 "available": st.available,
             }
-        except Exception as err:
-            get_logger(0).error("Can't get memory info: %s", err)
+        except Exception as ex:
+            get_logger(0).error("Can't get memory info: %s", ex)
             return {
                 "percent": None,
                 "total": None,
@@ -216,6 +216,6 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             return None
         try:
             return parser(text)
-        except Exception as err:
-            get_logger(0).error("Can't parse [ %s ] output: %r: %s", tools.cmdfmt(cmd), text, tools.efmt(err))
+        except Exception as ex:
+            get_logger(0).error("Can't parse [ %s ] output: %r: %s", tools.cmdfmt(cmd), text, tools.efmt(ex))
             return None

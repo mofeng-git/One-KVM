@@ -192,13 +192,13 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
             else:
                 logger.error("HID-%s write() error: written (%s) != report length (%d)",
                              self.__name, written, len(report))
-        except Exception as err:
-            if isinstance(err, OSError) and (
+        except Exception as ex:
+            if isinstance(ex, OSError) and (
                 # https://github.com/raspberrypi/linux/commit/61b7f805dc2fd364e0df682de89227e94ce88e25
-                err.errno == errno.EAGAIN  # pylint: disable=no-member
-                or err.errno == errno.ESHUTDOWN  # pylint: disable=no-member
+                ex.errno == errno.EAGAIN  # pylint: disable=no-member
+                or ex.errno == errno.ESHUTDOWN  # pylint: disable=no-member
             ):
-                logger.debug("HID-%s busy/unplugged (write): %s", self.__name, tools.efmt(err))
+                logger.debug("HID-%s busy/unplugged (write): %s", self.__name, tools.efmt(ex))
             else:
                 logger.exception("Can't write report to HID-%s", self.__name)
 
@@ -216,16 +216,16 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
         while read:
             try:
                 read = bool(select.select([self.__fd], [], [], 0)[0])
-            except Exception as err:
-                logger.error("Can't select() for read HID-%s: %s", self.__name, tools.efmt(err))
+            except Exception as ex:
+                logger.error("Can't select() for read HID-%s: %s", self.__name, tools.efmt(ex))
                 break
 
             if read:
                 try:
                     report = os.read(self.__fd, self.__read_size)
-                except Exception as err:
-                    if isinstance(err, OSError) and err.errno == errno.EAGAIN:  # pylint: disable=no-member
-                        logger.debug("HID-%s busy/unplugged (read): %s", self.__name, tools.efmt(err))
+                except Exception as ex:
+                    if isinstance(ex, OSError) and ex.errno == errno.EAGAIN:  # pylint: disable=no-member
+                        logger.debug("HID-%s busy/unplugged (read): %s", self.__name, tools.efmt(ex))
                     else:
                         logger.exception("Can't read report from HID-%s", self.__name)
                 else:
@@ -255,9 +255,9 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                     flags = os.O_NONBLOCK
                     flags |= (os.O_RDWR if self.__read_size else os.O_WRONLY)
                     self.__fd = os.open(self.__device_path, flags)
-                except Exception as err:
+                except Exception as ex:
                     logger.error("Can't open HID-%s device %s: %s",
-                                 self.__name, self.__device_path, tools.efmt(err))
+                                 self.__name, self.__device_path, tools.efmt(ex))
 
         if self.__fd >= 0:
             try:
@@ -268,8 +268,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                 else:
                     # Если запись недоступна, то скорее всего устройство отключено
                     logger.debug("HID-%s is busy/unplugged (write select)", self.__name)
-            except Exception as err:
-                logger.error("Can't select() for write HID-%s: %s", self.__name, tools.efmt(err))
+            except Exception as ex:
+                logger.error("Can't select() for write HID-%s: %s", self.__name, tools.efmt(ex))
 
         self.__state_flags.update(online=False)
         return False

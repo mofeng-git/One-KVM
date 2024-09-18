@@ -46,8 +46,8 @@ def _preexec() -> None:
     if os.isatty(0):
         try:
             os.tcsetpgrp(0, os.getpgid(0))
-        except Exception as err:
-            get_logger(0).info("Can't perform tcsetpgrp(0): %s", tools.efmt(err))
+        except Exception as ex:
+            get_logger(0).info("Can't perform tcsetpgrp(0): %s", tools.efmt(ex))
 
 
 async def _run_process(cmd: list[str], data_path: str) -> asyncio.subprocess.Process:  # pylint: disable=no-member

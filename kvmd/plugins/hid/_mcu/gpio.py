@@ -47,12 +47,12 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
         self.__reset_inverted = reset_inverted
         self.__reset_delay = reset_delay
 
-        self.__line_request: (gpiod.LineRequest | None) = None
+        self.__line_req: (gpiod.LineRequest | None) = None
         self.__last_power: (bool | None) = None
 
     def __enter__(self) -> None:
         if self.__power_detect_pin >= 0 or self.__reset_pin >= 0:
-            assert self.__line_request is None
+            assert self.__line_req is None
             config: dict[int, gpiod.LineSettings] = {}
             if self.__power_detect_pin >= 0:
                 config[self.__power_detect_pin] = gpiod.LineSettings(
@@ -65,7 +65,7 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
                     output_value=gpiod.line.Value(self.__reset_inverted),
                 )
             assert len(config) > 0
-            self.__line_request = gpiod.request_lines(
+            self.__line_req = gpiod.request_lines(
                 self.__device_path,
                 consumer="kvmd::hid",
                 config=config,
@@ -78,18 +78,18 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
         _tb: types.TracebackType,
     ) -> None:
 
-        if self.__line_request:
+        if self.__line_req:
             try:
-                self.__line_request.release()
+                self.__line_req.release()
             except Exception:
                 pass
             self.__last_power = None
-            self.__line_request = None
+            self.__line_req = None
 
     def is_powered(self) -> bool:
         if self.__power_detect_pin >= 0:
-            assert self.__line_request
-            power = bool(self.__line_request.get_value(self.__power_detect_pin).value)
+            assert self.__line_req
+            power = bool(self.__line_req.get_value(self.__power_detect_pin).value)
             if power != self.__last_power:
                 get_logger(0).info("HID power state changed: %s -> %s", self.__last_power, power)
                 self.__last_power = power
@@ -98,11 +98,11 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
 
     def reset(self) -> None:
         if self.__reset_pin >= 0:
-            assert self.__line_request
+            assert self.__line_req
             try:
-                self.__line_request.set_value(self.__reset_pin, gpiod.line.Value(not self.__reset_inverted))
+                self.__line_req.set_value(self.__reset_pin, gpiod.line.Value(not self.__reset_inverted))
                 time.sleep(self.__reset_delay)
             finally:
-                self.__line_request.set_value(self.__reset_pin, gpiod.line.Value(self.__reset_inverted))
+                self.__line_req.set_value(self.__reset_pin, gpiod.line.Value(self.__reset_inverted))
                 time.sleep(1)
             get_logger(0).info("Reset HID performed")

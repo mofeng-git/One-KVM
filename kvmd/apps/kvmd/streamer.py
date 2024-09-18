@@ -386,8 +386,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                     return snapshot
                 logger.error("Stream is offline, no signal or so")
 
-        except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as err:
-            logger.error("Can't connect to streamer: %s", tools.efmt(err))
+        except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as ex:
+            logger.error("Can't connect to streamer: %s", tools.efmt(ex))
         except Exception:
             logger.exception("Invalid streamer response from /snapshot")
         return None
@@ -473,8 +473,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         logger.info("%s: %s", name, tools.cmdfmt(cmd))
         try:
             await aioproc.log_process(cmd, logger, prefix=name)
-        except Exception as err:
-            logger.exception("Can't execute command: %s", err)
+        except Exception as ex:
+            logger.exception("Can't execute command: %s", ex)
 
     async def __start_streamer_proc(self) -> None:
         assert self.__streamer_proc is None

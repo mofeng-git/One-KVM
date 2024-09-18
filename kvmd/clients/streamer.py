@@ -72,10 +72,10 @@ class BaseStreamerClient:
 def _http_handle_errors() -> Generator[None, None, None]:
     try:
         yield
-    except Exception as err:  # Тут бывают и ассерты, и KeyError, и прочая херня
-        if isinstance(err, StreamerTempError):
+    except Exception as ex:  # Тут бывают и ассерты, и KeyError, и прочая херня
+        if isinstance(ex, StreamerTempError):
             raise
-        raise StreamerTempError(tools.efmt(err))
+        raise StreamerTempError(tools.efmt(ex))
 
 
 class HttpStreamerClient(BaseStreamerClient):
@@ -167,10 +167,10 @@ def _memsink_handle_errors() -> Generator[None, None, None]:
         yield
     except StreamerPermError:
         raise
-    except FileNotFoundError as err:
-        raise StreamerTempError(tools.efmt(err))
-    except Exception as err:
-        raise StreamerPermError(tools.efmt(err))
+    except FileNotFoundError as ex:
+        raise StreamerTempError(tools.efmt(ex))
+    except Exception as ex:
+        raise StreamerPermError(tools.efmt(ex))
 
 
 class MemsinkStreamerClient(BaseStreamerClient):

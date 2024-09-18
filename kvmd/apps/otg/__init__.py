@@ -346,5 +346,5 @@ def main(argv: (list[str] | None)=None) -> None:
     options = parser.parse_args(argv[1:])
     try:
         options.cmd(config)
-    except ValidatorError as err:
-        raise SystemExit(str(err))
+    except ValidatorError as ex:
+        raise SystemExit(str(ex))

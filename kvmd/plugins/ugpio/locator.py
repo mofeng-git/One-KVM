@@ -53,7 +53,7 @@ class Plugin(BaseUserGpioDriver):
         self.__device_path = device_path
 
         self.__tasks: dict[int, (asyncio.Task | None)] = {}
-        self.__line_request: (gpiod.LineRequest | None) = None
+        self.__line_req: (gpiod.LineRequest | None) = None
 
     @classmethod
     def get_plugin_options(cls) -> dict:
@@ -74,7 +74,7 @@ class Plugin(BaseUserGpioDriver):
         self.__tasks[int(pin)] = None
 
     def prepare(self) -> None:
-        self.__line_request = gpiod.request_lines(
+        self.__line_req = gpiod.request_lines(
             self.__device_path,
             consumer="kvmd::locator",
             config={
@@ -94,9 +94,9 @@ class Plugin(BaseUserGpioDriver):
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        if self.__line_request:
+        if self.__line_req:
             try:
-                self.__line_request.release()
+                self.__line_req.release()
             except Exception:
                 pass
 
@@ -115,17 +115,17 @@ class Plugin(BaseUserGpioDriver):
 
     async def __blink(self, pin: int) -> None:
         assert pin in self.__tasks
-        assert self.__line_request
+        assert self.__line_req
         try:
             state = True
             while True:
-                self.__line_request.set_value(pin, gpiod.line.Value(state))
+                self.__line_req.set_value(pin, gpiod.line.Value(state))
                 state = (not state)
                 await asyncio.sleep(0.1)
         except asyncio.CancelledError:
             pass
         finally:
-            self.__line_request.set_value(pin, gpiod.line.Value(False))
+            self.__line_req.set_value(pin, gpiod.line.Value(False))
 
     def __str__(self) -> str:
         return f"Locator({self._instance_name})"

@@ -286,8 +286,8 @@ class Inotify:
         while True:
             try:
                 return os.read(self.__fd, _EVENTS_BUFFER_LENGTH)
-            except OSError as err:
-                if err.errno == errno.EINTR:
+            except OSError as ex:
+                if ex.errno == errno.EINTR:
                     pass
 
     def __enter__(self) -> "Inotify":

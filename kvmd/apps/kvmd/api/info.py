@@ -41,17 +41,17 @@ class InfoApi:
     # =====
 
     @exposed_http("GET", "/info")
-    async def __common_state_handler(self, request: Request) -> Response:
-        fields = self.__valid_info_fields(request)
+    async def __common_state_handler(self, req: Request) -> Response:
+        fields = self.__valid_info_fields(req)
         results = dict(zip(fields, await asyncio.gather(*[
             self.__info_manager.get_submanager(field).get_state()
             for field in fields
         ])))
         return make_json_response(results)
 
-    def __valid_info_fields(self, request: Request) -> list[str]:
+    def __valid_info_fields(self, req: Request) -> list[str]:
         subs = self.__info_manager.get_subs()
         return sorted(valid_info_fields(
-            arg=request.query.get("fields", ",".join(subs)),
+            arg=req.query.get("fields", ",".join(subs)),
             variants=subs,
         ) or subs)

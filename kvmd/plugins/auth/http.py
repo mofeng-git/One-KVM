@@ -85,8 +85,8 @@ class Plugin(BaseAuthService):
                     "User-Agent": htclient.make_user_agent("KVMD"),
                     "X-KVMD-User": user,
                 },
-            ) as response:
-                htclient.raise_not_200(response)
+            ) as resp:
+                htclient.raise_not_200(resp)
                 return True
         except Exception:
             get_logger().exception("Failed HTTP auth request for user %r", user)

@@ -51,22 +51,22 @@ class RfbClientStream:
             else:
                 fmt = f">{fmt}"
                 return struct.unpack(fmt, await self.__reader.readexactly(struct.calcsize(fmt)))[0]
-        except (ConnectionError, asyncio.IncompleteReadError) as err:
-            raise RfbConnectionError(f"Can't read {msg}", err)
+        except (ConnectionError, asyncio.IncompleteReadError) as ex:
+            raise RfbConnectionError(f"Can't read {msg}", ex)
 
     async def _read_struct(self, msg: str, fmt: str) -> tuple[int, ...]:
         assert len(fmt) > 1
         try:
             fmt = f">{fmt}"
             return struct.unpack(fmt, (await self.__reader.readexactly(struct.calcsize(fmt))))
-        except (ConnectionError, asyncio.IncompleteReadError) as err:
-            raise RfbConnectionError(f"Can't read {msg}", err)
+        except (ConnectionError, asyncio.IncompleteReadError) as ex:
+            raise RfbConnectionError(f"Can't read {msg}", ex)
 
     async def _read_text(self, msg: str, length: int) -> str:
         try:
             return (await self.__reader.readexactly(length)).decode("utf-8", errors="ignore")
-        except (ConnectionError, asyncio.IncompleteReadError) as err:
-            raise RfbConnectionError(f"Can't read {msg}", err)
+        except (ConnectionError, asyncio.IncompleteReadError) as ex:
+            raise RfbConnectionError(f"Can't read {msg}", ex)
 
     # =====
 
@@ -84,8 +84,8 @@ class RfbClientStream:
                 self.__writer.write(struct.pack(f">{fmt}", *values))
             if drain:
                 await self.__writer.drain()
-        except ConnectionError as err:
-            raise RfbConnectionError(f"Can't write {msg}", err)
+        except ConnectionError as ex:
+            raise RfbConnectionError(f"Can't write {msg}", ex)
 
     async def _write_reason(self, msg: str, text: str, drain: bool=True) -> None:
         encoded = text.encode("utf-8", errors="ignore")
@@ -94,8 +94,8 @@ class RfbClientStream:
             self.__writer.write(encoded)
             if drain:
                 await self.__writer.drain()
-        except ConnectionError as err:
-            raise RfbConnectionError(f"Can't write {msg}", err)
+        except ConnectionError as ex:
+            raise RfbConnectionError(f"Can't write {msg}", ex)
 
     async def _write_fb_update(self, msg: str, width: int, height: int, encoding: int, drain: bool=True) -> None:
         await self._write_struct(
@@ -123,8 +123,8 @@ class RfbClientStream:
                 server_side=True,
                 ssl_handshake_timeout=ssl_timeout,
             )
-        except ConnectionError as err:
-            raise RfbConnectionError("Can't start TLS", err)
+        except ConnectionError as ex:
+            raise RfbConnectionError("Can't start TLS", ex)
 
         ssl_reader.set_transport(transport)  # type: ignore
         ssl_writer = asyncio.StreamWriter(

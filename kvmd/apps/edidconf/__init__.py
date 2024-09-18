@@ -402,5 +402,5 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
                 f"--set-edid=file={orig_edid_path}",
                 "--info-edid",
             ], stdout=sys.stderr, check=True)
-    except subprocess.CalledProcessError as err:
-        raise SystemExit(str(err))
+    except subprocess.CalledProcessError as ex:
+        raise SystemExit(str(ex))

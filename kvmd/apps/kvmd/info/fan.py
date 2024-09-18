@@ -87,8 +87,8 @@ class FanInfoSubmanager(BaseInfoSubmanager):
                 async with sysunit.SystemdUnitInfo() as sui:
                     status = await sui.get_status(self.__daemon)
                     return (status[0] or status[1])
-            except Exception as err:
-                get_logger(0).error("Can't get info about the service %r: %s", self.__daemon, tools.efmt(err))
+            except Exception as ex:
+                get_logger(0).error("Can't get info about the service %r: %s", self.__daemon, tools.efmt(ex))
         return False
 
     async def __get_fan_state(self) -> (dict | None):
@@ -97,8 +97,8 @@ class FanInfoSubmanager(BaseInfoSubmanager):
                 async with session.get("http://localhost/state") as response:
                     htclient.raise_not_200(response)
                     return (await response.json())["result"]
-        except Exception as err:
-            get_logger(0).error("Can't read fan state: %s", err)
+        except Exception as ex:
+            get_logger(0).error("Can't read fan state: %s", ex)
             return None
 
     def __make_http_session(self) -> aiohttp.ClientSession:

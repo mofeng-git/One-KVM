@@ -214,8 +214,8 @@ export function Recorder() {
 
 					__events = events;
 					__events_time = events_time;
-				} catch (err) {
-					wm.error(`Invalid script: ${err}`);
+				} catch (ex) {
+					wm.error(`Invalid script: ${ex}`);
 				}
 
 				el_input.value = "";

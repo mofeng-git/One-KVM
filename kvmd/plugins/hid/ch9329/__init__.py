@@ -230,9 +230,9 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
     def __process_cmd(self, conn: ChipConnection, cmd: bytes) -> bool:  # pylint: disable=too-many-branches
         try:
             led_byte = conn.xfer(cmd)
-        except ChipResponseError as err:
+        except ChipResponseError as ex:
             self.__set_state_online(False)
-            get_logger(0).info(err)
+            get_logger(0).error("Invalid chip response: %s", tools.efmt(ex))
             time.sleep(2)
         else:
             if led_byte >= 0:

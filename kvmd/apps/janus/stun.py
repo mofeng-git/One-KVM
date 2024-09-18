@@ -93,8 +93,8 @@ class Stun:
                 self.__sock.bind(src_addr)
                 (nat_type, resp) = await self.__get_nat_type(src_ip)
                 ext_ip = (resp.ext.ip if resp.ext is not None else "")
-        except Exception as err:
-            get_logger(0).error("Can't get STUN info: %s", tools.efmt(err))
+        except Exception as ex:
+            get_logger(0).error("Can't get STUN info: %s", tools.efmt(ex))
         finally:
             self.__sock = None
 
@@ -201,16 +201,16 @@ class Stun:
 
         try:
             await aiotools.run_async(self.__sock.sendto, req, addr)
-        except Exception as err:
-            return (b"", f"Send error: {tools.efmt(err)}")
+        except Exception as ex:
+            return (b"", f"Send error: {tools.efmt(ex)}")
         try:
             resp = (await aiotools.run_async(self.__sock.recvfrom, 2048))[0]
-        except Exception as err:
-            return (b"", f"Recv error: {tools.efmt(err)}")
+        except Exception as ex:
+            return (b"", f"Recv error: {tools.efmt(ex)}")
 
-        (response_type, payload_len) = struct.unpack(">HH", resp[:4])
-        if response_type != 0x0101:
-            return (b"", f"Invalid response type: {response_type:#06x}")
+        (resp_type, payload_len) = struct.unpack(">HH", resp[:4])
+        if resp_type != 0x0101:
+            return (b"", f"Invalid response type: {resp_type:#06x}")
         if trans_id != resp[4:20]:
             return (b"", "Transaction ID mismatch")
 

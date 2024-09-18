@@ -91,7 +91,7 @@ class _TempRequestError(_RequestError):
 
 # =====
 class BasePhyConnection:
-    def send(self, request: bytes) -> bytes:
+    def send(self, req: bytes) -> bytes:
         raise NotImplementedError
 
 
@@ -374,7 +374,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         self.__set_state_online(False)
         return False
 
-    def __process_request(self, conn: BasePhyConnection, request: bytes) -> bool:  # pylint: disable=too-many-branches
+    def __process_request(self, conn: BasePhyConnection, req: bytes) -> bool:  # pylint: disable=too-many-branches
         logger = get_logger()
         error_messages: list[str] = []
         live_log_errors = False
@@ -384,47 +384,47 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         error_retval = False
 
         while self.__gpio.is_powered() and common_retries and read_retries:
-            response = (RESPONSE_LEGACY_OK if self.__noop else conn.send(request))
+            resp = (RESPONSE_LEGACY_OK if self.__noop else conn.send(req))
             try:
-                if len(response) < 4:
+                if len(resp) < 4:
                     read_retries -= 1
-                    raise _TempRequestError(f"No response from HID: request={request!r}")
+                    raise _TempRequestError(f"No response from HID: request={req!r}")
 
-                if not check_response(response):
-                    request = REQUEST_REPEAT
+                if not check_response(resp):
+                    req = REQUEST_REPEAT
                     raise _TempRequestError("Invalid response CRC; requesting response again ...")
 
-                code = response[1]
+                code = resp[1]
                 if code == 0x48:  # Request timeout  # pylint: disable=no-else-raise
-                    raise _TempRequestError(f"Got request timeout from HID: request={request!r}")
+                    raise _TempRequestError(f"Got request timeout from HID: request={req!r}")
                 elif code == 0x40:  # CRC Error
-                    raise _TempRequestError(f"Got CRC error of request from HID: request={request!r}")
+                    raise _TempRequestError(f"Got CRC error of request from HID: request={req!r}")
                 elif code == 0x45:  # Unknown command
-                    raise _PermRequestError(f"HID did not recognize the request={request!r}")
+                    raise _PermRequestError(f"HID did not recognize the request={req!r}")
                 elif code == 0x24:  # Rebooted?
                     raise _PermRequestError("No previous command state inside HID, seems it was rebooted")
                 elif code == 0x20:  # Legacy done
                     self.__set_state_online(True)
                     return True
                 elif code & 0x80:  # Pong/Done with state
-                    self.__set_state_pong(response)
+                    self.__set_state_pong(resp)
                     return True
-                raise _TempRequestError(f"Invalid response from HID: request={request!r}, response=0x{response!r}")
+                raise _TempRequestError(f"Invalid response from HID: request={req!r}, response=0x{resp!r}")
 
-            except _RequestError as err:
+            except _RequestError as ex:
                 common_retries -= 1
 
                 if live_log_errors:
-                    logger.error(err.msg)
+                    logger.error(ex.msg)
                 else:
-                    error_messages.append(err.msg)
+                    error_messages.append(ex.msg)
                     if len(error_messages) > self.__errors_threshold:
                         for msg in error_messages:
                             logger.error(msg)
                         error_messages = []
                         live_log_errors = True
 
-                if isinstance(err, _PermRequestError):
+                if isinstance(ex, _PermRequestError):
                     error_retval = True
                     break
 
@@ -440,7 +440,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         for msg in error_messages:
             logger.error(msg)
         if not (common_retries and read_retries):
-            logger.error("Can't process HID request due many errors: %r", request)
+            logger.error("Can't process HID request due many errors: %r", req)
         return error_retval
 
     def __set_state_online(self, online: bool) -> None:
@@ -449,11 +449,11 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def __set_state_busy(self, busy: bool) -> None:
         self.__state_flags.update(busy=int(busy))
 
-    def __set_state_pong(self, response: bytes) -> None:
-        status = response[1] << 16
-        if len(response) > 4:
-            status |= (response[2] << 8) | response[3]
-        reset_required = (1 if response[1] & 0b01000000 else 0)
+    def __set_state_pong(self, resp: bytes) -> None:
+        status = resp[1] << 16
+        if len(resp) > 4:
+            status |= (resp[2] << 8) | resp[3]
+        reset_required = (1 if resp[1] & 0b01000000 else 0)
         self.__state_flags.update(online=1, busy=reset_required, status=status)
         if reset_required:
             if self.__reset_self:

@@ -145,10 +145,10 @@ function __WindowManager() {
 	/************************************************************************/
 
 	self.copyTextToClipboard = function(text) {
-		let workaround = function(err) {
+		let workaround = function(ex) {
 			// https://stackoverflow.com/questions/60317969/document-execcommandcopy-not-working-even-though-the-dom-element-is-created
 			let callback = function() {
-				tools.error("copyTextToClipboard(): navigator.clipboard.writeText() is not working:", err);
+				tools.error("copyTextToClipboard(): navigator.clipboard.writeText() is not working:", ex);
 				tools.info("copyTextToClipboard(): Trying a workaround...");
 
 				let el = document.createElement("textarea");
@@ -164,16 +164,16 @@ function __WindowManager() {
 				el.setSelectionRange(0, el.value.length); // iOS
 
 				try {
-					err = (document.execCommand("copy") ? null : "Unknown error");
-				} catch (err) { // eslint-disable-line no-unused-vars
+					ex = (document.execCommand("copy") ? null : "Unknown error");
+				} catch (ex) { // eslint-disable-line no-unused-vars
 				}
 
 				// Remove the added textarea again:
 				document.body.removeChild(el);
 
-				if (err) {
-					tools.error("copyTextToClipboard(): Workaround failed:", err);
-					wm.error("Can't copy text to the clipboard:<br>", err);
+				if (ex) {
+					tools.error("copyTextToClipboard(): Workaround failed:", ex);
+					wm.error("Can't copy text to the clipboard:<br>", ex);
 				}
 			};
 			__modalDialog("Info", "Press OK to copy the text to the clipboard", true, false, callback);
@@ -181,8 +181,8 @@ function __WindowManager() {
 		if (navigator.clipboard) {
 			navigator.clipboard.writeText(text).then(function() {
 				wm.info("The text has been copied to the clipboard");
-			}, function(err) {
-				workaround(err);
+			}, function(ex) {
+				workaround(ex);
 			});
 		} else {
 			workaround("navigator.clipboard is not available");

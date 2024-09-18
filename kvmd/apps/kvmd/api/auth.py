@@ -43,34 +43,34 @@ from ..auth import AuthManager
 _COOKIE_AUTH_TOKEN = "auth_token"
 
 
-async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, request: Request) -> None:
+async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, req: Request) -> None:
     if auth_manager.is_auth_required(exposed):
-        user = request.headers.get("X-KVMD-User", "")
+        user = req.headers.get("X-KVMD-User", "")
         if user:
             user = valid_user(user)
-            passwd = request.headers.get("X-KVMD-Passwd", "")
-            set_request_auth_info(request, f"{user} (xhdr)")
+            passwd = req.headers.get("X-KVMD-Passwd", "")
+            set_request_auth_info(req, f"{user} (xhdr)")
             if not (await auth_manager.authorize(user, valid_passwd(passwd))):
                 raise ForbiddenError()
             return
 
-        token = request.cookies.get(_COOKIE_AUTH_TOKEN, "")
+        token = req.cookies.get(_COOKIE_AUTH_TOKEN, "")
         if token:
             user = auth_manager.check(valid_auth_token(token))  # type: ignore
             if not user:
-                set_request_auth_info(request, "- (token)")
+                set_request_auth_info(req, "- (token)")
                 raise ForbiddenError()
-            set_request_auth_info(request, f"{user} (token)")
+            set_request_auth_info(req, f"{user} (token)")
             return
 
-        basic_auth = request.headers.get("Authorization", "")
+        basic_auth = req.headers.get("Authorization", "")
         if basic_auth and basic_auth[:6].lower() == "basic ":
             try:
                 (user, passwd) = base64.b64decode(basic_auth[6:]).decode("utf-8").split(":")
             except Exception:
                 raise UnauthorizedError()
             user = valid_user(user)
-            set_request_auth_info(request, f"{user} (basic)")
+            set_request_auth_info(req, f"{user} (basic)")
             if not (await auth_manager.authorize(user, valid_passwd(passwd))):
                 raise ForbiddenError()
             return
@@ -85,9 +85,9 @@ class AuthApi:
     # =====
 
     @exposed_http("POST", "/auth/login", auth_required=False)
-    async def __login_handler(self, request: Request) -> Response:
+    async def __login_handler(self, req: Request) -> Response:
         if self.__auth_manager.is_auth_enabled():
-            credentials = await request.post()
+            credentials = await req.post()
             token = await self.__auth_manager.login(
                 user=valid_user(credentials.get("user", "")),
                 passwd=valid_passwd(credentials.get("passwd", "")),
@@ -98,9 +98,9 @@ class AuthApi:
         return make_json_response()
 
     @exposed_http("POST", "/auth/logout")
-    async def __logout_handler(self, request: Request) -> Response:
+    async def __logout_handler(self, req: Request) -> Response:
         if self.__auth_manager.is_auth_enabled():
-            token = valid_auth_token(request.cookies.get(_COOKIE_AUTH_TOKEN, ""))
+            token = valid_auth_token(req.cookies.get(_COOKIE_AUTH_TOKEN, ""))
             self.__auth_manager.logout(token)
         return make_json_response()
 

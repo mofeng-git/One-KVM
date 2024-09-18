@@ -141,8 +141,8 @@ export function Msd() {
 					if (!result.ok) {
 						msg = `Can't upload image to the Mass Storage Drive:<br>${result_str}`;
 					}
-				} catch (err) {
-					msg = `Can't parse upload result:<br>${err}`;
+				} catch (ex) {
+					msg = `Can't parse upload result:<br>${ex}`;
 				}
 				if (msg.length > 0) {
 					wm.error(msg);

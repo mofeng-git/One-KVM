@@ -91,9 +91,9 @@ class Plugin(BaseUserGpioDriver):
         try:
             with self.__ensure_device("probing"):
                 pass
-        except Exception as err:
+        except Exception as ex:
             logger.error("Can't probe %s on %s: %s",
-                         self, self.__device_path, tools.efmt(err))
+                         self, self.__device_path, tools.efmt(ex))
         self.__reset_pins()
 
     async def cleanup(self) -> None:
@@ -119,9 +119,9 @@ class Plugin(BaseUserGpioDriver):
                         pin, state, self, self.__device_path)
             try:
                 self.__inner_write(pin, state)
-            except Exception as err:
+            except Exception as ex:
                 logger.error("Can't reset pin=%d of %s on %s: %s",
-                             pin, self, self.__device_path, tools.efmt(err))
+                             pin, self, self.__device_path, tools.efmt(ex))
 
     def __inner_write(self, pin: int, state: bool) -> None:
         assert 0 <= pin <= 7
@@ -144,9 +144,9 @@ class Plugin(BaseUserGpioDriver):
             get_logger(0).info("Opened %s on %s while %s", self, self.__device_path, context)
         try:
             yield self.__device
-        except Exception as err:
+        except Exception as ex:
             get_logger(0).error("Error occured on %s on %s while %s: %s",
-                                self, self.__device_path, context, tools.efmt(err))
+                                self, self.__device_path, context, tools.efmt(ex))
             self.__close_device()
             raise
 

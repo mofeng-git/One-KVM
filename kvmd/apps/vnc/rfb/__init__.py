@@ -120,10 +120,10 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         except asyncio.CancelledError:
             logger.info("%s [%s]: Cancelling subtask ...", self._remote, name)
             raise
-        except RfbConnectionError as err:
-            logger.info("%s [%s]: Gone: %s", self._remote, name, err)
-        except (RfbError, ssl.SSLError) as err:
-            logger.error("%s [%s]: Error: %s", self._remote, name, err)
+        except RfbConnectionError as ex:
+            logger.info("%s [%s]: Gone: %s", self._remote, name, ex)
+        except (RfbError, ssl.SSLError) as ex:
+            logger.error("%s [%s]: Error: %s", self._remote, name, ex)
         except Exception:
             logger.exception("%s [%s]: Unhandled exception", self._remote, name)
 

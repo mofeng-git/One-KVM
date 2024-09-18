@@ -213,7 +213,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     # ===== STREAMER CONTROLLER
 
     @exposed_http("POST", "/streamer/set_params")
-    async def __streamer_set_params_handler(self, request: Request) -> Response:
+    async def __streamer_set_params_handler(self, req: Request) -> Response:
         current_params = self.__streamer.get_params()
         for (name, validator, exc_cls) in [
             ("quality", valid_stream_quality, StreamerQualityNotSupported),
@@ -222,7 +222,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             ("h264_bitrate", valid_stream_h264_bitrate, StreamerH264NotSupported),
             ("h264_gop", valid_stream_h264_gop, StreamerH264NotSupported),
         ]:
-            value = request.query.get(name)
+            value = req.query.get(name)
             if value:
                 if name not in current_params:
                     assert exc_cls is not None, name
@@ -242,9 +242,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     # ===== WEBSOCKET
 
     @exposed_http("GET", "/ws")
-    async def __ws_handler(self, request: Request) -> WebSocketResponse:
-        stream = valid_bool(request.query.get("stream", True))
-        async with self._ws_session(request, stream=stream) as ws:
+    async def __ws_handler(self, req: Request) -> WebSocketResponse:
+        stream = valid_bool(req.query.get("stream", True))
+        async with self._ws_session(req, stream=stream) as ws:
             states = [
                 (event_type, src.get_state())
                 for sub in self.__subsystems
@@ -275,8 +275,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         aioproc.rename_process("main")
         super().run(**kwargs)
 
-    async def _check_request_auth(self, exposed: HttpExposed, request: Request) -> None:
-        await check_request_auth(self.__auth_manager, exposed, request)
+    async def _check_request_auth(self, exposed: HttpExposed, req: Request) -> None:
+        await check_request_auth(self.__auth_manager, exposed, req)
 
     async def _init_app(self) -> None:
         aiotools.create_deadly_task("Stream controller", self.__stream_controller())

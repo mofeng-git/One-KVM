@@ -51,8 +51,8 @@ class SystemdUnitInfo:
             unit_props = unit.get_interface("org.freedesktop.DBus.Properties")
             started = ((await unit_props.call_get("org.freedesktop.systemd1.Unit", "ActiveState")).value == "active")  # type: ignore
             self.__requested = True
-        except dbus_next.errors.DBusError as err:
-            if err.type != "org.freedesktop.systemd1.NoSuchUnit":
+        except dbus_next.errors.DBusError as ex:
+            if ex.type != "org.freedesktop.systemd1.NoSuchUnit":
                 raise
             started = False
         enabled = ((await self.__manager.call_get_unit_file_state(name)) in [  # type: ignore

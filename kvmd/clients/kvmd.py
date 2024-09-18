@@ -66,8 +66,8 @@ class _AuthApiPart(_BaseApiPart):
             async with session.get(self._make_url("auth/check")) as response:
                 htclient.raise_not_200(response)
                 return True
-        except aiohttp.ClientResponseError as err:
-            if err.status in [400, 401, 403]:
+        except aiohttp.ClientResponseError as ex:
+            if ex.status in [400, 401, 403]:
                 return False
             raise
 
@@ -128,8 +128,8 @@ class _AtxApiPart(_BaseApiPart):
             ) as response:
                 htclient.raise_not_200(response)
                 return True
-        except aiohttp.ClientResponseError as err:
-            if err.status == 409:
+        except aiohttp.ClientResponseError as ex:
+            if ex.status == 409:
                 return False
             raise
 

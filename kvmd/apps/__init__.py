@@ -171,8 +171,8 @@ def _init_config(config_path: str, override_options: list[str], **load_flags: bo
     config_path = os.path.expanduser(config_path)
     try:
         raw_config: dict = load_yaml_file(config_path)
-    except Exception as err:
-        raise SystemExit(f"ConfigError: Can't read config file {config_path!r}:\n{tools.efmt(err)}")
+    except Exception as ex:
+        raise SystemExit(f"ConfigError: Can't read config file {config_path!r}:\n{tools.efmt(ex)}")
     if not isinstance(raw_config, dict):
         raise SystemExit(f"ConfigError: Top-level of the file {config_path!r} must be a dictionary")
 
@@ -187,8 +187,8 @@ def _init_config(config_path: str, override_options: list[str], **load_flags: bo
             config = make_config(raw_config, scheme)
 
         return config
-    except (ConfigError, UnknownPluginError) as err:
-        raise SystemExit(f"ConfigError: {err}")
+    except (ConfigError, UnknownPluginError) as ex:
+        raise SystemExit(f"ConfigError: {ex}")
 
 
 def _patch_raw(raw_config: dict) -> None:  # pylint: disable=too-many-branches

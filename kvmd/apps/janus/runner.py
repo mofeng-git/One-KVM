@@ -113,8 +113,8 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
                     for proto in [socket.AF_INET, socket.AF_INET6]:
                         if proto in addrs:
                             return addrs[proto][0]["addr"]
-        except Exception as err:
-            get_logger().error("Can't get default IP: %s", tools.efmt(err))
+        except Exception as ex:
+            get_logger().error("Can't get default IP: %s", tools.efmt(ex))
         return ""
 
     # =====

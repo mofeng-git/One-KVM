@@ -56,8 +56,8 @@ def _write_int(rtc: int, key: str, value: int) -> None:
 def _reset_alarm(rtc: int, timeout: int) -> None:
     try:
         now = _read_int(rtc, "since_epoch")
-    except OSError as err:
-        if err.errno != errno.EINVAL:
+    except OSError as ex:
+        if ex.errno != errno.EINVAL:
             raise
         raise RtcIsNotAvailableError("Can't read since_epoch right now")
     if now == 0:
@@ -65,8 +65,8 @@ def _reset_alarm(rtc: int, timeout: int) -> None:
     try:
         for wake in [0, now + timeout]:
             _write_int(rtc, "wakealarm", wake)
-    except OSError as err:
-        if err.errno != errno.EIO:
+    except OSError as ex:
+        if ex.errno != errno.EIO:
             raise
         raise RtcIsNotAvailableError("IO error, probably the supercapacitor is not charged")
 
@@ -80,9 +80,9 @@ def _cmd_run(config: Section) -> None:
         while True:
             try:
                 _reset_alarm(config.rtc, config.timeout)
-            except RtcIsNotAvailableError as err:
+            except RtcIsNotAvailableError as ex:
                 if not fail:
-                    logger.error("RTC%d is not available now: %s; waiting ...", config.rtc, err)
+                    logger.error("RTC%d is not available now: %s; waiting ...", config.rtc, ex)
                     fail = True
             else:
                 if fail:

@@ -46,8 +46,8 @@ def _remount(path: str, rw: bool) -> None:
     _log(f"Remounting {path} to {mode.upper()}-mode ...")
     try:
         subprocess.check_call(["/bin/mount", "--options", f"remount,{mode}", path])
-    except subprocess.CalledProcessError as err:
-        raise SystemExit(f"Can't remount: {err}")
+    except subprocess.CalledProcessError as ex:
+        raise SystemExit(f"Can't remount: {ex}")
 
 
 def _mkdir(path: str) -> None:
@@ -55,8 +55,8 @@ def _mkdir(path: str) -> None:
         _log(f"MKDIR --- {path}")
         try:
             os.mkdir(path)
-        except Exception as err:
-            raise SystemExit(f"Can't create directory: {err}")
+        except Exception as ex:
+            raise SystemExit(f"Can't create directory: {ex}")
 
 
 def _rmtree(path: str) -> None:
@@ -64,8 +64,8 @@ def _rmtree(path: str) -> None:
         _log(f"RMALL --- {path}")
         try:
             shutil.rmtree(path)
-        except Exception as err:
-            raise SystemExit(f"Can't remove directory: {err}")
+        except Exception as ex:
+            raise SystemExit(f"Can't remove directory: {ex}")
 
 
 def _rm(path: str) -> None:
@@ -73,16 +73,16 @@ def _rm(path: str) -> None:
         _log(f"RM    --- {path}")
         try:
             os.remove(path)
-        except Exception as err:
-            raise SystemExit(f"Can't remove file: {err}")
+        except Exception as ex:
+            raise SystemExit(f"Can't remove file: {ex}")
 
 
 def _move(src: str, dest: str) -> None:
     _log(f"MOVE  --- {src} --> {dest}")
     try:
         os.rename(src, dest)
-    except Exception as err:
-        raise SystemExit(f"Can't move file: {err}")
+    except Exception as ex:
+        raise SystemExit(f"Can't move file: {ex}")
 
 
 def _chown(path: str, user: str) -> None:
@@ -90,8 +90,8 @@ def _chown(path: str, user: str) -> None:
         _log(f"CHOWN --- {user} - {path}")
         try:
             shutil.chown(path, user=user)
-        except Exception as err:
-            raise SystemExit(f"Can't change ownership: {err}")
+        except Exception as ex:
+            raise SystemExit(f"Can't change ownership: {ex}")
 
 
 def _chgrp(path: str, group: str) -> None:
@@ -99,8 +99,8 @@ def _chgrp(path: str, group: str) -> None:
         _log(f"CHGRP --- {group} - {path}")
         try:
             shutil.chown(path, group=group)
-        except Exception as err:
-            raise SystemExit(f"Can't change group: {err}")
+        except Exception as ex:
+            raise SystemExit(f"Can't change group: {ex}")
 
 
 def _chmod(path: str, mode: int) -> None:
@@ -108,8 +108,8 @@ def _chmod(path: str, mode: int) -> None:
         _log(f"CHMOD --- 0o{mode:o} - {path}")
         try:
             os.chmod(path, mode)
-        except Exception as err:
-            raise SystemExit(f"Can't change permissions: {err}")
+        except Exception as ex:
+            raise SystemExit(f"Can't change permissions: {ex}")
 
 
 # =====

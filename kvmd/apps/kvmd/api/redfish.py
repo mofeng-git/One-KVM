@@ -111,10 +111,10 @@ class RedfishApi:
         }, wrap_result=False)
 
     @exposed_http("POST", "/redfish/v1/Systems/0/Actions/ComputerSystem.Reset")
-    async def __power_handler(self, request: Request) -> Response:
+    async def __power_handler(self, req: Request) -> Response:
         try:
             action = check_string_in_list(
-                arg=(await request.json())["ResetType"],
+                arg=(await req.json()).get("ResetType"),
                 name="Redfish ResetType",
                 variants=set(self.__actions),
                 lower=False,

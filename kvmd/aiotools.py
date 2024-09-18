@@ -112,9 +112,9 @@ def shield_fg(aw: Awaitable):  # type: ignore
         if inner.cancelled():
             outer.forced_cancel()
         else:
-            err = inner.exception()
-            if err is not None:
-                outer.set_exception(err)
+            ex = inner.exception()
+            if ex is not None:
+                outer.set_exception(ex)
             else:
                 outer.set_result(inner.result())
 

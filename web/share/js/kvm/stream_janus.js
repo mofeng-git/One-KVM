@@ -435,8 +435,8 @@ JanusStreamer.ensure_janus = function(callback) {
 					callback(true);
 				},
 			});
-		}).catch((err) => {
-			tools.error("Stream: Can't import Janus module:", err);
+		}).catch((ex) => {
+			tools.error("Stream: Can't import Janus module:", ex);
 			callback(false);
 		});
 	} else {

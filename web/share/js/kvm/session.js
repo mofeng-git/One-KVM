@@ -411,8 +411,8 @@ export function Session() {
 				throw new Error("Too many missed heartbeats");
 			}
 			__ws.send("{\"event_type\": \"ping\", \"event\": {}}");
-		} catch (err) {
-			__wsErrorHandler(err.message);
+		} catch (ex) {
+			__wsErrorHandler(ex.message);
 		}
 	};
 

@@ -76,7 +76,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__notifier = aiotools.AioNotifier()
         self.__region = aiotools.AioExclusiveRegion(AtxIsBusyError, self.__notifier)
 
-        self.__line_request: (gpiod.LineRequest | None) = None
+        self.__line_req: (gpiod.LineRequest | None) = None
 
         self.__reader = aiogp.AioReader(
             path=self.__device_path,
@@ -108,8 +108,8 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         }
 
     def sysprep(self) -> None:
-        assert self.__line_request is None
-        self.__line_request = gpiod.request_lines(
+        assert self.__line_req is None
+        self.__line_req = gpiod.request_lines(
             self.__device_path,
             consumer="kvmd::atx",
             config={
@@ -143,9 +143,9 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         await self.__reader.poll()
 
     async def cleanup(self) -> None:
-        if self.__line_request:
+        if self.__line_req:
             try:
-                self.__line_request.release()
+                self.__line_req.release()
             except Exception:
                 pass
 
@@ -196,11 +196,11 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic_fg
     async def __inner_click(self, name: str, pin: int, delay: float) -> None:
-        assert self.__line_request
+        assert self.__line_req
         try:
-            self.__line_request.set_value(pin, gpiod.line.Value(True))
+            self.__line_req.set_value(pin, gpiod.line.Value(True))
             await asyncio.sleep(delay)
         finally:
-            self.__line_request.set_value(pin, gpiod.line.Value(False))
+            self.__line_req.set_value(pin, gpiod.line.Value(False))
             await asyncio.sleep(1)
         get_logger(0).info("Clicked ATX button %r", name)

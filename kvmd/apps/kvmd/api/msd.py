@@ -66,29 +66,29 @@ class MsdApi:
         return make_json_response(await self.__msd.get_state())
 
     @exposed_http("POST", "/msd/set_params")
-    async def __set_params_handler(self, request: Request) -> Response:
+    async def __set_params_handler(self, req: Request) -> Response:
         params = {
-            key: validator(request.query.get(param))
+            key: validator(req.query.get(param))
             for (param, key, validator) in [
                 ("image", "name", (lambda arg: str(arg).strip() and valid_msd_image_name(arg))),
                 ("cdrom", "cdrom", valid_bool),
                 ("rw", "rw", valid_bool),
             ]
-            if request.query.get(param) is not None
+            if req.query.get(param) is not None
         }
         await self.__msd.set_params(**params)  # type: ignore
         return make_json_response()
 
     @exposed_http("POST", "/msd/set_connected")
-    async def __set_connected_handler(self, request: Request) -> Response:
-        await self.__msd.set_connected(valid_bool(request.query.get("connected")))
+    async def __set_connected_handler(self, req: Request) -> Response:
+        await self.__msd.set_connected(valid_bool(req.query.get("connected")))
         return make_json_response()
 
     # =====
 
     @exposed_http("GET", "/msd/read")
-    async def __read_handler(self, request: Request) -> StreamResponse:
-        name = valid_msd_image_name(request.query.get("image"))
+    async def __read_handler(self, req: Request) -> StreamResponse:
+        name = valid_msd_image_name(req.query.get("image"))
         compressors = {
             "": ("", None),
             "none": ("", None),
@@ -96,7 +96,7 @@ class MsdApi:
             "zstd": (".zst", (lambda: zstandard.ZstdCompressor().compressobj())),  # pylint: disable=unnecessary-lambda
         }
         (suffix, make_compressor) = compressors[check_string_in_list(
-            arg=request.query.get("compress", ""),
+            arg=req.query.get("compress", ""),
             name="Compression mode",
             variants=set(compressors),
         )]
@@ -127,7 +127,7 @@ class MsdApi:
                 src = compressed()
                 size = -1
 
-            response = await start_streaming(request, "application/octet-stream", size, name + suffix)
+            response = await start_streaming(req, "application/octet-stream", size, name + suffix)
             async for chunk in src:
                 await response.write(chunk)
             return response
@@ -135,28 +135,28 @@ class MsdApi:
     # =====
 
     @exposed_http("POST", "/msd/write")
-    async def __write_handler(self, request: Request) -> Response:
-        unsafe_prefix = request.query.get("prefix", "") + "/"
-        name = valid_msd_image_name(unsafe_prefix + request.query.get("image", ""))
-        size = valid_int_f0(request.content_length)
-        remove_incomplete = self.__get_remove_incomplete(request)
+    async def __write_handler(self, req: Request) -> Response:
+        unsafe_prefix = req.query.get("prefix", "") + "/"
+        name = valid_msd_image_name(unsafe_prefix + req.query.get("image", ""))
+        size = valid_int_f0(req.content_length)
+        remove_incomplete = self.__get_remove_incomplete(req)
         written = 0
         async with self.__msd.write_image(name, size, remove_incomplete) as writer:
             chunk_size = writer.get_chunk_size()
             while True:
-                chunk = await request.content.read(chunk_size)
+                chunk = await req.content.read(chunk_size)
                 if not chunk:
                     break
                 written = await writer.write_chunk(chunk)
         return make_json_response(self.__make_write_info(name, size, written))
 
     @exposed_http("POST", "/msd/write_remote")
-    async def __write_remote_handler(self, request: Request) -> (Response | StreamResponse):  # pylint: disable=too-many-locals
-        unsafe_prefix = request.query.get("prefix", "") + "/"
-        url = valid_url(request.query.get("url"))
-        insecure = valid_bool(request.query.get("insecure", False))
-        timeout = valid_float_f01(request.query.get("timeout", 10.0))
-        remove_incomplete = self.__get_remove_incomplete(request)
+    async def __write_remote_handler(self, req: Request) -> (Response | StreamResponse):  # pylint: disable=too-many-locals
+        unsafe_prefix = req.query.get("prefix", "") + "/"
+        url = valid_url(req.query.get("url"))
+        insecure = valid_bool(req.query.get("insecure", False))
+        timeout = valid_float_f01(req.query.get("timeout", 10.0))
+        remove_incomplete = self.__get_remove_incomplete(req)
 
         name = ""
         size = written = 0
@@ -174,7 +174,7 @@ class MsdApi:
                 read_timeout=(7 * 24 * 3600),
             ) as remote:
 
-                name = str(request.query.get("image", "")).strip()
+                name = str(req.query.get("image", "")).strip()
                 if len(name) == 0:
                     name = htclient.get_filename(remote)
                 name = valid_msd_image_name(unsafe_prefix + name)
@@ -184,7 +184,7 @@ class MsdApi:
                 get_logger(0).info("Downloading image %r as %r to MSD ...", url, name)
                 async with self.__msd.write_image(name, size, remove_incomplete) as writer:
                     chunk_size = writer.get_chunk_size()
-                    response = await start_streaming(request, "application/x-ndjson")
+                    response = await start_streaming(req, "application/x-ndjson")
                     await stream_write_info()
                     last_report_ts = 0
                     async for chunk in remote.content.iter_chunked(chunk_size):
@@ -197,16 +197,16 @@ class MsdApi:
                 await stream_write_info()
                 return response
 
-        except Exception as err:
+        except Exception as ex:
             if response is not None:
                 await stream_write_info()
-                await stream_json_exception(response, err)
-            elif isinstance(err, aiohttp.ClientError):
-                return make_json_exception(err, 400)
+                await stream_json_exception(response, ex)
+            elif isinstance(ex, aiohttp.ClientError):
+                return make_json_exception(ex, 400)
             raise
 
-    def __get_remove_incomplete(self, request: Request) -> (bool | None):
-        flag: (str | None) = request.query.get("remove_incomplete")
+    def __get_remove_incomplete(self, req: Request) -> (bool | None):
+        flag: (str | None) = req.query.get("remove_incomplete")
         return (valid_bool(flag) if flag is not None else None)
 
     def __make_write_info(self, name: str, size: int, written: int) -> dict:
@@ -215,8 +215,8 @@ class MsdApi:
     # =====
 
     @exposed_http("POST", "/msd/remove")
-    async def __remove_handler(self, request: Request) -> Response:
-        await self.__msd.remove(valid_msd_image_name(request.query.get("image")))
+    async def __remove_handler(self, req: Request) -> Response:
+        await self.__msd.remove(valid_msd_image_name(req.query.get("image")))
         return make_json_response()
 
     @exposed_http("POST", "/msd/reset")
