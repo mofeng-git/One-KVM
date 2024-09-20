@@ -134,7 +134,7 @@ fi
 if [ "$OTG" == "1" ]; then
     echo "Trying OTG Port..."
     python -m kvmd.apps.otg start
-    if [ -f /dev/hidg0 ] && [  -f /dev/hidg1 ]; then
+    if [ -e /dev/hidg0 ] && [  -e /dev/hidg1 ]; then
         ln -s /dev/hidg1 /dev/kvmd-hid-mouse && ln -s /dev/hidg0 /dev/kvmd-hid-keyboard
     fi
 fi
