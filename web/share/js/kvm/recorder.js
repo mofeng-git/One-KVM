@@ -215,7 +215,7 @@ export function Recorder() {
 					__events = events;
 					__events_time = events_time;
 				} catch (ex) {
-					wm.error(`Invalid script: ${ex}`);
+					wm.error("Invalid script", `${ex}`);
 				}
 
 				el_input.value = "";
@@ -285,7 +285,7 @@ export function Recorder() {
 						wm.error("Too many text for paste!");
 						__stopProcess();
 					} else if (http.status !== 200) {
-						wm.error("HID paste error:<br>", http.responseText);
+						wm.error("HID paste error", http.responseText);
 						__stopProcess();
 					} else if (http.status === 200) {
 						__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);
@@ -296,7 +296,7 @@ export function Recorder() {
 			} else if (event.event_type === "atx_button") {
 				tools.httpPost("/api/atx/click", {"button": event.event.button}, function(http) {
 					if (http.status !== 200) {
-						wm.error("ATX error:<br>", http.responseText);
+						wm.error("ATX error", http.responseText);
 						__stopProcess();
 					} else if (http.status === 200) {
 						__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);
@@ -315,7 +315,7 @@ export function Recorder() {
 				}
 				tools.httpPost(path, params, function(http) {
 					if (http.status !== 200) {
-						wm.error("GPIO error:<br>", http.responseText);
+						wm.error("GPIO error", http.responseText);
 						__stopProcess();
 					} else if (http.status === 200) {
 						__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);

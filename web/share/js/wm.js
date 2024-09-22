@@ -173,13 +173,13 @@ function __WindowManager() {
 
 				if (ex) {
 					tools.error("copyTextToClipboard(): Workaround failed:", ex);
-					wm.error("Can't copy text to the clipboard:<br>", ex);
+					self.error("Can't copy text to the clipboard", `${ex}`);
 				}
 			});
 		};
 		if (navigator.clipboard) {
 			navigator.clipboard.writeText(text).then(function() {
-				wm.info("The text has been copied to the clipboard");
+				self.info("The text has been copied to the clipboard");
 			}, function(ex) {
 				workaround(ex);
 			});
@@ -188,12 +188,22 @@ function __WindowManager() {
 		}
 	};
 
-	self.info = (...args) => __modalDialog("Info", args.join(" "), true, false);
-	self.error = (...args) => __modalDialog("Error", args.join(" "), true, false);
-	self.confirm = (...args) => __modalDialog("Question", args.join(" "), true, true);
-	self.modal = (header, text, ok, cancel) => __modalDialog(header, text, ok, cancel);
+	self.info = (html, ...args) => __modalCodeDialog("Info", html, args.join("\n"), true, false);
+	self.error = (html, ...args) => __modalCodeDialog("Error", html, args.join("\n"), true, false);
+	self.confirm = (html, ...args) => __modalCodeDialog("Question", html, args.join("\n"), true, true);
+	self.modal = (header, html, ok, cancel) => __modalDialog(header, html, ok, cancel);
 
-	var __modalDialog = function(header, text, ok, cancel, parent=null) {
+	var __modalCodeDialog = function(header, html, code, ok, cancel) {
+		let create_content = function(el_content) {
+			if (code) {
+				html += `<br><br><div class="code"><pre style="margin:0px">${tools.escape(code)}</pre></div>`;
+			}
+			el_content.innerHTML = html;
+		};
+		return __modalDialog(header, create_content, ok, cancel);
+	};
+
+	var __modalDialog = function(header, html, ok, cancel, parent=null) {
 		let el_active_menu = (document.activeElement && document.activeElement.closest(".menu"));
 
 		let el_modal = document.createElement("div");
@@ -207,7 +217,7 @@ function __WindowManager() {
 
 		let el_header = document.createElement("div");
 		el_header.className = "modal-header";
-		el_header.innerHTML = header;
+		el_header.innerText = header;
 		el_window.appendChild(el_header);
 
 		let el_content = document.createElement("div");
@@ -223,13 +233,13 @@ function __WindowManager() {
 		if (cancel) {
 			el_cancel_button = document.createElement("button");
 			el_cancel_button.className = "row100";
-			el_cancel_button.innerHTML = "Cancel";
+			el_cancel_button.innerText = "Cancel";
 			el_buttons.appendChild(el_cancel_button);
 		}
 		if (ok) {
 			el_ok_button = document.createElement("button");
 			el_ok_button.className = "row100";
-			el_ok_button.innerHTML = "OK";
+			el_ok_button.innerText = "OK";
 			el_buttons.appendChild(el_ok_button);
 		}
 		if (ok && cancel) {
@@ -276,11 +286,11 @@ function __WindowManager() {
 
 		__windows.push(el_modal);
 		(parent || document.fullscreenElement || document.body).appendChild(el_modal);
-		if (typeof text === "function") {
+		if (typeof html === "function") {
 			// Это должно быть здесь, потому что элемент должен иметь родителя чтобы существовать
-			text(el_content, el_ok_button);
+			html(el_content, el_ok_button);
 		} else {
-			el_content.innerHTML = text;
+			el_content.innerHTML = html;
 		}
 		__activateWindow(el_modal);
 

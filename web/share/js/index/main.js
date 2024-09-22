@@ -57,7 +57,7 @@ function __loadKvmdInfo() {
 
 			let apps = [];
 			if (info.extras === null) {
-				wm.error("Not all applications in the menu can be displayed<br>due an error. See KVMD logs for details.");
+				wm.error("Not all applications in the menu can be displayed due an error.<br>See KVMD logs for details.");
 			} else {
 				apps = Object.values(info.extras).sort(function(a, b) {
 					if (a.place < b.place) {
@@ -113,7 +113,7 @@ function __makeApp(id, path, icon, name) {
 			<a href="${path}">
 				<div>
 					<img class="svg-gray" src="${icon}">
-					${name}
+					${tools.escape(name)}
 				</div>
 			</a>
 		</div>
@@ -125,7 +125,7 @@ function __logout() {
 		if (http.status === 200 || http.status === 401 || http.status === 403) {
 			document.location.href = "/login";
 		} else {
-			wm.error("Logout error:<br>", http.responseText);
+			wm.error("Logout error", http.responseText);
 		}
 	});
 }

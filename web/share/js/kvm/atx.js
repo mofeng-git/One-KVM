@@ -38,19 +38,9 @@ export function Atx(__recorder) {
 
 		tools.storage.bindSimpleSwitch($("atx-ask-switch"), "atx.ask", true);
 
-		for (let args of [
-			["atx-power-button", "power", "Are you sure you want to press the power button?"],
-			["atx-power-button-long", "power_long", `
-				Are you sure you want to long press the power button?<br>
-				Warning! This could cause data loss on the server.
-			`],
-			["atx-reset-button", "reset", `
-				Are you sure you want to press the reset button?<br>
-				Warning! This could case data loss on the server.
-			`],
-		]) {
-			tools.el.setOnClick($(args[0]), () => __clickButton(args[1], args[2]));
-		}
+		tools.el.setOnClick($("atx-power-button"), () => __clickAtx("power"));
+		tools.el.setOnClick($("atx-power-button-long"), () => __clickAtx("power_long"));
+		tools.el.setOnClick($("atx-reset-button"), () => __clickAtx("reset"));
 	};
 
 	/************************************************************************/
@@ -71,20 +61,23 @@ export function Atx(__recorder) {
 		}
 	};
 
-	var __clickButton = function(button, confirm_msg) {
+	var __clickAtx = function(button) {
 		let click_button = function() {
 			tools.httpPost("/api/atx/click", {"button": button}, function(http) {
 				if (http.status === 409) {
-					wm.error("Performing another ATX operation for other client.<br>Please try again later");
+					wm.error("Performing another ATX operation for other client.<br>Please try again later.");
 				} else if (http.status !== 200) {
-					wm.error("Click error:<br>", http.responseText);
+					wm.error("Click error", http.responseText);
 				}
 			});
 			__recorder.recordAtxButtonEvent(button);
 		};
 
 		if ($("atx-ask-switch").checked) {
-			wm.confirm(confirm_msg).then(function(ok) {
+			wm.confirm(`
+				Are you sure you want to press the <b>${button}</b> button?<br>
+				Warning! This could case data loss on the server.
+			`).then(function(ok) {
 				if (ok) {
 					click_button();
 				}

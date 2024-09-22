@@ -64,7 +64,7 @@ function __login() {
 				if (error === "ValidatorError") {
 					wm.error("Invalid characters in credentials").then(__tryAgain);
 				} else {
-					wm.error("Login error:<br>", http.responseText).then(__tryAgain);
+					wm.error("Login error", http.responseText).then(__tryAgain);
 				}
 			}
 		}, body, "application/x-www-form-urlencoded");

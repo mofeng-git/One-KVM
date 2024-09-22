@@ -185,7 +185,7 @@ export function Gpio(__recorder) {
 			__recorder.recordGpioSwitchEvent(channel, to);
 		};
 		if (confirm) {
-			wm.confirm(confirm).then(function(ok) {
+			wm.confirm(tools.escape(confirm)).then(function(ok) {
 				if (ok) {
 					act();
 				} else {
@@ -205,7 +205,7 @@ export function Gpio(__recorder) {
 			__recorder.recordGpioPulseEvent(channel);
 		};
 		if (confirm) {
-			wm.confirm(confirm).then(function(ok) { if (ok) act(); });
+			wm.confirm(tools.escape(confirm)).then(function(ok) { if (ok) act(); });
 		} else {
 			act();
 		}
@@ -216,7 +216,7 @@ export function Gpio(__recorder) {
 			if (http.status === 409) {
 				wm.error("Performing another operation for this GPIO channel.<br>Please try again later");
 			} else if (http.status !== 200) {
-				wm.error("GPIO error:<br>", http.responseText);
+				wm.error("GPIO error", http.responseText);
 			}
 		});
 	};

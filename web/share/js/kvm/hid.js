@@ -98,8 +98,7 @@ export function Hid(__getGeometry, __recorder) {
 				}
 				let codes = el_shortcut.getAttribute("data-shortcut").split(" ");
 				if (ask) {
-					let confirm_msg = `Do you want to press <b>${codes.join(" + ")}</b>?`;
-					wm.confirm(confirm_msg).then(function(ok) {
+					wm.confirm("Do you want to press this hotkey?", codes.join(" + ")).then(function(ok) {
 						if (ok) {
 							__emitShortcut(codes);
 						}
@@ -261,7 +260,7 @@ export function Hid(__getGeometry, __recorder) {
 					if (http.status === 413) {
 						wm.error("Too many text for paste!");
 					} else if (http.status !== 200) {
-						wm.error("HID paste error:<br>", http.responseText);
+						wm.error("HID paste error", http.responseText);
 					} else if (http.status === 200) {
 						__recorder.recordPrintEvent(text);
 					}
@@ -269,9 +268,10 @@ export function Hid(__getGeometry, __recorder) {
 			};
 
 			if ($("hid-pak-ask-switch").checked) {
-				let confirm_msg = `You're going to paste ${text.length} character${text.length ? "s" : ""}.<br>`;
-				confirm_msg += "Are you sure you want to continue?";
-				wm.confirm(confirm_msg).then(function(ok) {
+				wm.confirm(`
+					You're going to paste ${text.length} character${text.length ? "s" : ""}.<br>
+					Are you sure you want to continue?
+				`).then(function(ok) {
 					if (ok) {
 						paste_as_keys();
 					} else {
@@ -288,7 +288,7 @@ export function Hid(__getGeometry, __recorder) {
 		let output = tools.radio.getValue(`hid-outputs-${hid}-radio`);
 		tools.httpPost("/api/hid/set_params", {[`${hid}_output`]: output}, function(http) {
 			if (http.status !== 200) {
-				wm.error("Can't configure HID:<br>", http.responseText);
+				wm.error("Can't configure HID", http.responseText);
 			}
 		});
 	};
@@ -297,7 +297,7 @@ export function Hid(__getGeometry, __recorder) {
 		let enabled = $("hid-jiggler-switch").checked;
 		tools.httpPost("/api/hid/set_params", {"jiggler": enabled}, function(http) {
 			if (http.status !== 200) {
-				wm.error(`Can't ${enabled ? "enabled" : "disable"} mouse juggler:<br>`, http.responseText);
+				wm.error(`Can't ${enabled ? "enabled" : "disable"} mouse jiggler`, http.responseText);
 			}
 		});
 	};
@@ -306,7 +306,7 @@ export function Hid(__getGeometry, __recorder) {
 		let connected = $("hid-connect-switch").checked;
 		tools.httpPost("/api/hid/set_connected", {"connected": connected}, function(http) {
 			if (http.status !== 200) {
-				wm.error(`Can't ${connected ? "connect" : "disconnect"} HID:<br>`, http.responseText);
+				wm.error(`Can't ${connected ? "connect" : "disconnect"} HID`, http.responseText);
 			}
 		});
 	};
@@ -316,7 +316,7 @@ export function Hid(__getGeometry, __recorder) {
 			if (ok) {
 				tools.httpPost("/api/hid/reset", null, function(http) {
 					if (http.status !== 200) {
-						wm.error("HID reset error:<br>", http.responseText);
+						wm.error("HID reset error", http.responseText);
 					}
 				});
 			}
