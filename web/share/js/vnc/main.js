@@ -31,7 +31,7 @@ export function main() {
 }
 
 function __loadKvmdInfo() {
-	tools.httpGet("/api/info", function(http) {
+	tools.httpGet("/api/info", null, function(http) {
 		if (http.status === 200) {
 			let vnc_port = JSON.parse(http.responseText).result.extras.vnc.port;
 			$("vnc-text").innerHTML = `

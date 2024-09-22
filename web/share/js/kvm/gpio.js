@@ -181,7 +181,7 @@ export function Gpio(__recorder) {
 			confirm = el.getAttribute("data-confirm-off");
 		}
 		let act = () => {
-			__sendPost(`/api/gpio/switch?channel=${channel}&state=${to}`);
+			__sendPost("/api/gpio/switch", {"channel": channel, "state": to});
 			__recorder.recordGpioSwitchEvent(channel, to);
 		};
 		if (confirm) {
@@ -201,7 +201,7 @@ export function Gpio(__recorder) {
 		let channel = el.getAttribute("data-channel");
 		let confirm = el.getAttribute("data-confirm");
 		let act = () => {
-			__sendPost(`/api/gpio/pulse?channel=${channel}`);
+			__sendPost("/api/gpio/pulse", {"channel": channel});
 			__recorder.recordGpioPulseEvent(channel);
 		};
 		if (confirm) {

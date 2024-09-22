@@ -253,7 +253,7 @@ export function Hid(__getGeometry, __recorder) {
 
 				tools.debug(`HID: paste-as-keys ${keymap}: ${text}`);
 
-				tools.httpPost(`/api/hid/print?limit=0&keymap=${keymap}`, function(http) {
+				tools.httpPost("/api/hid/print", {"limit": 0, "keymap": keymap}, function(http) {
 					tools.el.setEnabled($("hid-pak-text"), true);
 					tools.el.setEnabled($("hid-pak-button"), true);
 					tools.el.setEnabled($("hid-pak-keymap-selector"), true);
@@ -286,7 +286,7 @@ export function Hid(__getGeometry, __recorder) {
 
 	var __clickOutputsRadio = function(hid) {
 		let output = tools.radio.getValue(`hid-outputs-${hid}-radio`);
-		tools.httpPost(`/api/hid/set_params?${hid}_output=${output}`, function(http) {
+		tools.httpPost("/api/hid/set_params", {[`${hid}_output`]: output}, function(http) {
 			if (http.status !== 200) {
 				wm.error("Can't configure HID:<br>", http.responseText);
 			}
@@ -295,7 +295,7 @@ export function Hid(__getGeometry, __recorder) {
 
 	var __clickJigglerSwitch = function() {
 		let enabled = $("hid-jiggler-switch").checked;
-		tools.httpPost(`/api/hid/set_params?jiggler=${enabled}`, function(http) {
+		tools.httpPost("/api/hid/set_params", {"jiggler": enabled}, function(http) {
 			if (http.status !== 200) {
 				wm.error(`Can't ${enabled ? "enabled" : "disable"} mouse juggler:<br>`, http.responseText);
 			}
@@ -304,7 +304,7 @@ export function Hid(__getGeometry, __recorder) {
 
 	var __clickConnectSwitch = function() {
 		let connected = $("hid-connect-switch").checked;
-		tools.httpPost(`/api/hid/set_connected?connected=${connected}`, function(http) {
+		tools.httpPost("/api/hid/set_connected", {"connected": connected}, function(http) {
 			if (http.status !== 200) {
 				wm.error(`Can't ${connected ? "connect" : "disconnect"} HID:<br>`, http.responseText);
 			}
@@ -314,7 +314,7 @@ export function Hid(__getGeometry, __recorder) {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset HID (keyboard & mouse)?").then(function(ok) {
 			if (ok) {
-				tools.httpPost("/api/hid/reset", function(http) {
+				tools.httpPost("/api/hid/reset", null, function(http) {
 					if (http.status !== 200) {
 						wm.error("HID reset error:<br>", http.responseText);
 					}

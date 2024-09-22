@@ -51,7 +51,7 @@ function __login() {
 	} else {
 		let passwd = $("passwd-input").value + $("code-input").value;
 		let body = `user=${encodeURIComponent(user)}&passwd=${encodeURIComponent(passwd)}`;
-		tools.httpPost("/api/auth/login", function(http) {
+		tools.httpPost("/api/auth/login", null, function(http) {
 			if (http.status === 200) {
 				document.location.href = "/";
 			} else if (http.status === 403) {

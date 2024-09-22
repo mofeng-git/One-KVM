@@ -280,7 +280,7 @@ export function Recorder() {
 				return;
 
 			} else if (event.event_type === "print") {
-				tools.httpPost("/api/hid/print?limit=0", function(http) {
+				tools.httpPost("/api/hid/print", {"limit": 0}, function(http) {
 					if (http.status === 413) {
 						wm.error("Too many text for paste!");
 						__stopProcess();
@@ -294,7 +294,7 @@ export function Recorder() {
 				return;
 
 			} else if (event.event_type === "atx_button") {
-				tools.httpPost(`/api/atx/click?button=${event.event.button}`, function(http) {
+				tools.httpPost("/api/atx/click", {"button": event.event.button}, function(http) {
 					if (http.status !== 200) {
 						wm.error("ATX error:<br>", http.responseText);
 						__stopProcess();
@@ -306,12 +306,14 @@ export function Recorder() {
 
 			} else if (["gpio_switch", "gpio_pulse"].includes(event.event_type)) {
 				let path = "/api/gpio";
+				let params = {"channel": event.event.channel};
 				if (event.event_type === "gpio_switch") {
-					path += `/switch?channel=${event.event.channel}&state=${event.event.to}`;
+					path += "/switch";
+					params["state"] = event.event.to;
 				} else { // gpio_pulse
-					path += `/pulse?channel=${event.event.channel}`;
+					path += "/pulse";
 				}
-				tools.httpPost(path, function(http) {
+				tools.httpPost(path, params, function(http) {
 					if (http.status !== 200) {
 						wm.error("GPIO error:<br>", http.responseText);
 						__stopProcess();

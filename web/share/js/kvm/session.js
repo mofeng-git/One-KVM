@@ -280,7 +280,7 @@ export function Session() {
 		$("link-led").className = "led-yellow";
 		$("link-led").title = "Connecting...";
 
-		tools.httpGet("/api/auth/check", function(http) {
+		tools.httpGet("/api/auth/check", null, function(http) {
 			if (http.status === 200) {
 				__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws`);
 				__ws.sendHidEvent = (event) => __sendHidEvent(__ws, event.event_type, event.event);

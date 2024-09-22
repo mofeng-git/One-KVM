@@ -31,7 +31,7 @@ export function main() {
 }
 
 function __loadKvmdInfo() {
-	tools.httpGet("/api/info", function(http) {
+	tools.httpGet("/api/info", null, function(http) {
 		if (http.status === 200) {
 			let ipmi_port = JSON.parse(http.responseText).result.extras.ipmi.port;
 			let make_item = (comment, ipmi, api) => `

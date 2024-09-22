@@ -39,7 +39,13 @@ export var tools = new function() {
 
 	/************************************************************************/
 
-	self.httpRequest = function(method, url, callback, body=null, content_type=null, timeout=15000) {
+	self.httpRequest = function(method, url, params, callback, body=null, content_type=null, timeout=15000) {
+		if (params) {
+			params = new URLSearchParams(params);
+			if (params) {
+				url += "?" + params;
+			}
+		}
 		let http = new XMLHttpRequest();
 		http.open(method, url, true);
 		if (content_type) {
@@ -54,12 +60,12 @@ export var tools = new function() {
 		http.send(body);
 	};
 
-	self.httpGet = function(url, callback, body=null, content_type=null, timeout=15000) {
-		self.httpRequest("GET", url, callback, body, content_type, timeout);
+	self.httpGet = function(url, params, callback, body=null, content_type=null, timeout=15000) {
+		self.httpRequest("GET", url, params, callback, body, content_type, timeout);
 	};
 
-	self.httpPost = function(url, callback, body=null, content_type=null, timeout=15000) {
-		self.httpRequest("POST", url, callback, body, content_type, timeout);
+	self.httpPost = function(url, params, callback, body=null, content_type=null, timeout=15000) {
+		self.httpRequest("POST", url, params, callback, body, content_type, timeout);
 	};
 
 	/************************************************************************/

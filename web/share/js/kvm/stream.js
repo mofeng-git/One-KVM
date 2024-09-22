@@ -295,7 +295,7 @@ export function Streamer() {
 		wm.confirm("Are you sure you want to reset stream?").then(function (ok) {
 			if (ok) {
 				__resetStream();
-				tools.httpPost("/api/streamer/reset", function(http) {
+				tools.httpPost("/api/streamer/reset", null, function(http) {
 					if (http.status !== 200) {
 						wm.error("Can't reset stream:<br>", http.responseText);
 					}
@@ -305,7 +305,7 @@ export function Streamer() {
 	};
 
 	var __sendParam = function(name, value) {
-		tools.httpPost(`/api/streamer/set_params?${name}=${value}`, function(http) {
+		tools.httpPost("/api/streamer/set_params", {[name]: value}, function(http) {
 			if (http.status !== 200) {
 				wm.error("Can't configure stream:<br>", http.responseText);
 			}

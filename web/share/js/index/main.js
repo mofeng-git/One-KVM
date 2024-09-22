@@ -51,7 +51,7 @@ function __setAppText() {
 }
 
 function __loadKvmdInfo() {
-	tools.httpGet("/api/info?fields=auth,meta,extras", function(http) {
+	tools.httpGet("/api/info", {"fields": "auth,meta,extras"}, function(http) {
 		if (http.status === 200) {
 			let info = JSON.parse(http.responseText).result;
 
@@ -121,7 +121,7 @@ function __makeApp(id, path, icon, name) {
 }
 
 function __logout() {
-	tools.httpPost("/api/auth/logout", function(http) {
+	tools.httpPost("/api/auth/logout", null, function(http) {
 		if (http.status === 200 || http.status === 401 || http.status === 403) {
 			document.location.href = "/login";
 		} else {

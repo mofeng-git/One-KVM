@@ -161,13 +161,15 @@ export function Ocr(__getGeometry) {
 		tools.el.setEnabled($("stream-ocr-button"), false);
 		tools.el.setEnabled($("stream-ocr-lang-selector"), false);
 		$("stream-ocr-led").className = "led-yellow-rotating-fast";
-
-		let lang = $("stream-ocr-lang-selector").value;
-		let url = `/api/streamer/snapshot?ocr=1&ocr_langs=${lang}`;
-		url += `&ocr_left=${__selection.left}&ocr_top=${__selection.top}`;
-		url += `&ocr_right=${__selection.right}&ocr_bottom=${__selection.bottom}`;
-
-		tools.httpGet(url, function(http) {
+		let params = {
+			"ocr": 1,
+			"ocr_langs": $("stream-ocr-lang-selector").value,
+			"ocr_left": __selection.left,
+			"ocr_top": __selection.top,
+			"ocr_right": __selection.right,
+			"orc_bottom": __selection.bottom,
+		};
+		tools.httpGet("/api/streamer/snapshot", params, function(http) {
 			if (http.status === 200) {
 				wm.copyTextToClipboard(http.responseText);
 			} else {

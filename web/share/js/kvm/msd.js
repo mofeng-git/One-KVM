@@ -86,9 +86,9 @@ export function Msd() {
 
 	var __clickRemoveButton = function() {
 		let name = $("msd-image-selector").value;
-		wm.confirm(`Are you sure you want to remove the image<br><b>${name}</b> from PiKVM?`).then(function(ok) {
+		wm.confirm(`Are you sure you want to remove the image<br><b>${tools.escape(name)}</b> from PiKVM?`).then(function(ok) {
 			if (ok) {
-				tools.httpPost(`/api/msd/remove?image=${name}`, function(http) {
+				tools.httpPost("/api/msd/remove", {"image": name}, function(http) {
 					if (http.status !== 200) {
 						wm.error("Can't remove image:<br>", http.responseText);
 					}
@@ -98,7 +98,7 @@ export function Msd() {
 	};
 
 	var __sendParam = function(name, value) {
-		tools.httpPost(`/api/msd/set_params?${name}=${encodeURIComponent(value)}`, function(http) {
+		tools.httpPost("/api/msd/set_params", {[name]: value}, function(http) {
 			if (http.status !== 200) {
 				wm.error("Can't configure MSD:<br>", http.responseText);
 			}
@@ -164,7 +164,7 @@ export function Msd() {
 	};
 
 	var __clickConnectButton = function(connected) {
-		tools.httpPost(`/api/msd/set_connected?connected=${connected}`, function(http) {
+		tools.httpPost("/api/msd/set_connected", {"connected": connected}, function(http) {
 			if (http.status !== 200) {
 				wm.error("Switch error:<br>", http.responseText);
 			}
@@ -177,7 +177,7 @@ export function Msd() {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset Mass Storage Drive?").then(function(ok) {
 			if (ok) {
-				tools.httpPost("/api/msd/reset", function(http) {
+				tools.httpPost("/api/msd/reset", null, function(http) {
 					if (http.status !== 200) {
 						wm.error("MSD reset error:<br>", http.responseText);
 					}
