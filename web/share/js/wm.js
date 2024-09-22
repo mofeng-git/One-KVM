@@ -147,7 +147,7 @@ function __WindowManager() {
 	self.copyTextToClipboard = function(text) {
 		let workaround = function(ex) {
 			// https://stackoverflow.com/questions/60317969/document-execcommandcopy-not-working-even-though-the-dom-element-is-created
-			let callback = function() {
+			__modalDialog("Info", "Press OK to copy the text to the clipboard", true, false).then(function() {
 				tools.error("copyTextToClipboard(): navigator.clipboard.writeText() is not working:", ex);
 				tools.info("copyTextToClipboard(): Trying a workaround...");
 
@@ -175,8 +175,7 @@ function __WindowManager() {
 					tools.error("copyTextToClipboard(): Workaround failed:", ex);
 					wm.error("Can't copy text to the clipboard:<br>", ex);
 				}
-			};
-			__modalDialog("Info", "Press OK to copy the text to the clipboard", true, false, callback);
+			});
 		};
 		if (navigator.clipboard) {
 			navigator.clipboard.writeText(text).then(function() {
@@ -192,8 +191,9 @@ function __WindowManager() {
 	self.info = (...args) => __modalDialog("Info", args.join(" "), true, false);
 	self.error = (...args) => __modalDialog("Error", args.join(" "), true, false);
 	self.confirm = (...args) => __modalDialog("Question", args.join(" "), true, true);
+	self.modal = (header, text, ok, cancel) => __modalDialog(header, text, ok, cancel);
 
-	var __modalDialog = function(header, text, ok, cancel, callback=null, parent=null) {
+	var __modalDialog = function(header, text, ok, cancel, parent=null) {
 		let el_active_menu = (document.activeElement && document.activeElement.closest(".menu"));
 
 		let el_modal = document.createElement("div");
@@ -212,22 +212,45 @@ function __WindowManager() {
 
 		let el_content = document.createElement("div");
 		el_content.className = "modal-content";
-		el_content.innerHTML = text;
 		el_window.appendChild(el_content);
+
+		let el_buttons = document.createElement("div");
+		el_buttons.classList.add("modal-buttons", "buttons-row");
+		el_window.appendChild(el_buttons);
+
+		let el_cancel_button = null;
+		let el_ok_button = null;
+		if (cancel) {
+			el_cancel_button = document.createElement("button");
+			el_cancel_button.className = "row100";
+			el_cancel_button.innerHTML = "Cancel";
+			el_buttons.appendChild(el_cancel_button);
+		}
+		if (ok) {
+			el_ok_button = document.createElement("button");
+			el_ok_button.className = "row100";
+			el_ok_button.innerHTML = "OK";
+			el_buttons.appendChild(el_ok_button);
+		}
+		if (ok && cancel) {
+			el_ok_button.className = "row50";
+			el_cancel_button.className = "row50";
+		}
+
+		el_window.onkeyup = function(event) {
+			event.preventDefault();
+			if (ok && event.code === "Enter") {
+				el_ok_button.click();
+			} else if (cancel && event.code === "Escape") {
+				el_cancel_button.click();
+			}
+		};
 
 		let promise = null;
 		if (ok || cancel) {
 			promise = new Promise(function(resolve) {
-				let el_buttons = document.createElement("div");
-				el_buttons.className = "modal-buttons";
-				el_window.appendChild(el_buttons);
-
 				function close(retval) {
-					if (callback) {
-						callback(retval);
-					}
 					__closeWindow(el_window);
-					el_modal.outerHTML = "";
 					let index = __windows.indexOf(el_modal);
 					if (index !== -1) {
 						__windows.splice(index, 1);
@@ -238,38 +261,27 @@ function __WindowManager() {
 						__activateLastWindow(el_modal);
 					}
 					resolve(retval);
+					// Так как resolve() асинхронный, надо выполнить в эвентлупе после него
+					setTimeout(function() { el_modal.outerHTML = ""; }, 0);
 				}
 
 				if (cancel) {
-					var el_cancel_button = document.createElement("button");
-					el_cancel_button.innerHTML = "Cancel";
 					tools.el.setOnClick(el_cancel_button, () => close(false));
-					el_buttons.appendChild(el_cancel_button);
 				}
 				if (ok) {
-					var el_ok_button = document.createElement("button");
-					el_ok_button.innerHTML = "OK";
 					tools.el.setOnClick(el_ok_button, () => close(true));
-					el_buttons.appendChild(el_ok_button);
 				}
-				if (ok && cancel) {
-					el_ok_button.className = "row50";
-					el_cancel_button.className = "row50";
-				}
-
-				el_window.onkeyup = function(event) {
-					event.preventDefault();
-					if (ok && event.code === "Enter") {
-						el_ok_button.click();
-					} else if (cancel && event.code === "Escape") {
-						el_cancel_button.click();
-					}
-				};
 			});
 		}
 
 		__windows.push(el_modal);
 		(parent || document.fullscreenElement || document.body).appendChild(el_modal);
+		if (typeof text === "function") {
+			// Это должно быть здесь, потому что элемент должен иметь родителя чтобы существовать
+			text(el_content, el_ok_button);
+		} else {
+			el_content.innerHTML = text;
+		}
 		__activateWindow(el_modal);
 
 		return promise;
@@ -625,7 +637,7 @@ function __WindowManager() {
 				+ "In Chrome use HTTPS and enable <i>system-keyboard-lock</i><br>"
 				+ "by putting at URL <i>chrome://flags/#system-keyboard-lock</i>"
 			);
-			__modalDialog("Keyboard lock is unsupported", msg, true, false, null, el_window);
+			__modalDialog("Keyboard lock is unsupported", msg, true, false, el_window);
 		}
 	};
 

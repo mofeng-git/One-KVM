@@ -24,28 +24,6 @@ div#text-menu {
 	width: 340px;
 }
 
-textarea#hid-pak-text {
-	display: block;
-	resize: none;
-	height: 120px;
-	width: 100%;
-	border: var(--border-default-thin);
-	border-radius: 4px;
-	color: var(--cs-code-default-fg);
-	background-color: var(--cs-code-default-bg);
-	-webkit-appearance:none;
-}
-
-textarea#hid-pak-text::-moz-placeholder {
-	line-height: 60px;
-	text-align: center;
-}
-
-textarea#hid-pak-text::-webkit-input-placeholder {
-	line-height: 60px;
-	text-align: center;
-}
-
 input#hid-recorder-new-script-file {
 	display: none;
 }

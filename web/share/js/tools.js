@@ -64,6 +64,17 @@ export var tools = new function() {
 
 	/************************************************************************/
 
+	self.escape = function(text) {
+		return text.replace(
+			/[^0-9A-Za-z ]/g,
+			ch => "&#" + ch.charCodeAt(0) + ";"
+		);
+	};
+
+	self.makeClosure = function(func, ...args) {
+		return () => func(...args);
+	};
+
 	self.upperFirst = function(text) {
 		return text[0].toUpperCase() + text.slice(1);
 	};
@@ -85,6 +96,10 @@ export var tools = new function() {
 		min = Math.ceil(min);
 		max = Math.floor(max);
 		return Math.floor(Math.random() * (max - min + 1)) + min;
+	};
+
+	self.formatHex = function(value) {
+		return `0x${value.toString(16).toUpperCase()}`;
 	};
 
 	self.formatSize = function(size) {
@@ -283,9 +298,9 @@ export var tools = new function() {
 				option.className = "comment";
 				el.add(option);
 			},
-			"addSeparator": function(el) {
+			"addSeparator": function(el, repeat=30) {
 				if (!self.browser.is_mobile) {
-					self.selector.addComment(el, "\u2500".repeat(30));
+					self.selector.addComment(el, "\u2500".repeat(repeat));
 				}
 			},
 
