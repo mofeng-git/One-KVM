@@ -8,31 +8,31 @@ NC='\033[0m'
 
 echo -e "${GREEN}One-KVM pre-starting...${NC}"
 
-#仅首次运行，用于初始化配置文件
 if [ ! -f /etc/kvmd/.init_flag ]; then
-
-    mkdir -p /etc/kvmd/
-    mv /etc/kvmd_backup/* /etc/kvmd/
-    touch /etc/kvmd/.docker_flag
-
-    #生成 ssl 证书 和 vnc 证书
-    /usr/share/kvmd/kvmd-gencert --do-the-thing
-    /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc
-
-    #生成 nginx 配置文件
+    echo -e "${GREEN}One-KVM is initializing first...${NC}" \
+        && mkdir -p /etc/kvmd/ \
+        &&  mv /etc/kvmd_backup/* /etc/kvmd/ \
+        && touch /etc/kvmd/.docker_flag \
+        && /usr/share/kvmd/kvmd-gencert --do-the-thing \
+        && /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc \
+        || echo -e "${RED}One-KVM config moving and self-signed SSL certificates init failed.${NC}"
+   
     if [ "$NOSSL" = 1 ]; then
-         echo -e "${GREEN}One-KVM SSL is disabled.${NC}"
-        python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf  -o nginx/https/enabled=false
+        echo -e "${GREEN}One-KVM self-signed SSL is disabled.${NC}" \
+        && python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf  -o nginx/https/enabled=false \
+        || echo -e "${RED}One-KVM nginx config init failed.${NC}"
     else
-        python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf
+        python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf \
+        || echo -e "${RED}One-KVM nginx config init failed.${NC}"
     fi
 
     
     if [ "$NOAUTH" == "1" ]; then
-        sed -i "s/enabled: true/enabled: false/g" /etc/kvmd/override.yaml
+        sed -i "s/enabled: true/enabled: false/g" /etc/kvmd/override.yaml \
+        && echo -e "${GREEN}One-KVM auth is disabled.${NC}"
     fi
 
-    #生成 supervisord 配置文件是否添加扩展服务
+    #add supervisord conf
     if [ "$NOWEBTERM" == "1" ]; then
         echo -e "${GREEN}One-KVM webterm is disabled.${NC}"
         rm -r /usr/share/kvmd/extras/webterm
@@ -94,7 +94,7 @@ redirect_stderr=true
 EOF
     fi
 
-    #OTG 初始化修改默认配置文件
+    #switch OTG config
     if [ "$OTG" == "1" ]; then
         echo -e "${GREEN}One-KVM OTG is enabled.${NC}"
         sed -i "s/ch9329/otg/g" /etc/kvmd/override.yaml
@@ -103,43 +103,33 @@ EOF
 
     #if [ ! -z "$SHUTDOWNPIN"  ! -z "$REBOOTPIN" ]; then
 
-    #/dev/kvmd-video 设备优先级高于 /dev/video0,/dev/kvmd-hid 设备优先级高于 /dev/ttyUSB0
-    if [ -f /dev/kvmd-video ] && [ -z "$VIDEONUM" ]; then
-        echo -e "${GREEN}Found dev/kvmd-video, use it as kvmd video device.${NC}"
-        sed -i "s/\/dev\/video0/\/dev\/kvmd-video/g" /etc/kvmd/override.yaml
-    fi
     if [ ! -z "$VIDEONUM" ]; then
-        sed -i "s/\/dev\/video0/\/dev\/video$VIDEONUM/g" /etc/kvmd/override.yaml
-    fi
-    if [ -f /dev/kvmd-hid ]; then
-        echo -e "${GREEN}Found /dev/kvmd-hid, use it as kvmd video device.${NC}"
-        sed -i "s/\/dev\/ttyUSB0/\/dev\/kvmd-hid/g" /etc/kvmd/override.yaml
+        sed -i "s/\/dev\/video0/\/dev\/video$VIDEONUM/g" /etc/kvmd/override.yaml \
+            && echo -e "${GREEN}One-KVM video device is set to /dev/video$VIDEONUM.${NC}"
     fi
 
-    #设置用户账号密码
+    #set htpasswd
     if [ ! -z "$USERNAME" ] && [ ! -z "$PASSWORD" ]; then
-        python -m kvmd.apps.htpasswd del admin
-        echo $PASSWORD | python -m kvmd.apps.htpasswd set -i  "$USERNAME"
-        echo "$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/vncpasswd
-        echo "$USERNAME:$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/ipmipasswd
+        python -m kvmd.apps.htpasswd del admin \
+            && echo $PASSWORD | python -m kvmd.apps.htpasswd set -i  "$USERNAME" \
+            && echo "$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/vncpasswd \
+            && echo "$USERNAME:$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/ipmipasswd \
+            || echo -e "${RED}One-KVM htpasswd init failed.${NC}"
     else
         echo -e "${YELLOW} USERNAME and PASSWORD environment variables is not set, using defalut(admin/admin).${NC}"
     fi
 
-    #新建 flag 标记文件
     touch /etc/kvmd/.init_flag
 fi
 
-#尝试挂载 usb_gadget
+#Trying usb_gadget
 if [ "$OTG" == "1" ]; then
-    echo "Trying OTG Port..."
-    python -m kvmd.apps.otg start
-    if [ -e /dev/hidg0 ] && [  -e /dev/hidg1 ]; then
-        ln -s /dev/hidg1 /dev/kvmd-hid-mouse && ln -s /dev/hidg0 /dev/kvmd-hid-keyboard
-    fi
+    echo "Trying OTG Port..." \
+        && python -m kvmd.apps.otg start \
+        && ln -s /dev/hidg1 /dev/kvmd-hid-mouse \
+        && ln -s /dev/hidg0 /dev/kvmd-hid-keyboard \
+        || echo -e "${RED}OTG Port mount failed.${NC}"
 fi
-
-
 
 echo -e "${GREEN}One-KVM starting...${NC}"
 exec supervisord -c /etc/kvmd/supervisord.conf
