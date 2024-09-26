@@ -21,7 +21,8 @@ Docker 版本可以使用 OTG 或 CH9329 作为虚拟 HID ，支持 amd64、arm6
 如果使用 OTG 作为虚拟 HID，可以使用如下部署命令：
 ```bash
 sudo docker run --name kvmd -itd --privileged=true \
-    -v /dev:/dev -v /sys/kernel/config:/sys/kernel/config -e OTG=1 \
+    -v /lib/modules:/lib/modules:ro -v /dev:/dev \
+    -v /sys/kernel/config:/sys/kernel/config -e OTG=1 \
     -p 8080:8080 -p 4430:4430 -p 5900:5900 -p 623:623 \
     silentwind0/kvmd
 ```
