@@ -124,8 +124,9 @@ fi
 
 #Trying usb_gadget
 if [ "$OTG" == "1" ]; then
-    echo "Trying OTG Port..." \
-        && python -m kvmd.apps.otg start \
+    echo "Trying OTG Port..."
+    modprobe libcomposite || echo -e "${RED}Linux libcomposite module modprobe failed.${NC}"
+    python -m kvmd.apps.otg start \
         && ln -s /dev/hidg1 /dev/kvmd-hid-mouse \
         && ln -s /dev/hidg0 /dev/kvmd-hid-keyboard \
         || echo -e "${RED}OTG Port mount failed.${NC}"
