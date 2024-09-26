@@ -8,6 +8,8 @@ One-KVM 是基于廉价计算机硬件和 [PiKVM]((https://github.com/pikvm/pikv
 
 演示网站：[https://kvmd-demo.mofeng.run](https://kvmd-demo.mofeng.run)
 
+![image-20240926220156381](https://github.com/user-attachments/assets/a7848bca-e43c-434e-b812-27a45fad7910)
+
 
 ### 快速开始
 
