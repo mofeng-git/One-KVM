@@ -270,26 +270,38 @@ clean-all: testenv clean
 
 .PHONY: testenv
 
-run-build:
-	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd:dev \
+run-stage-0:
+	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd-stage-0 \
 		--allow security.insecure --progress plain \
+		--platform linux/amd64,linux/arm64,linux/arm/v7  \
+		-f build/Dockerfile-stage-0 . \
+		--push
+	$(DOCKER) buildx build -t silentwind0/kvmd-stage-0 \
+		--allow security.insecure --progress plain \
+		--platform linux/amd64,linux/arm64,linux/arm/v7  \
+		-f build/Dockerfile-stage-0 . \
+		--push
+
+run-build-dev:
+	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd:dev \
+		--progress plain \
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		-f build/Dockerfile . \
 		--push
 	$(DOCKER) buildx build -t silentwind0/kvmd:dev \
-		--allow security.insecure --progress plain \
+		--progress plain \
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		-f build/Dockerfile . \
 		--push
 
-run-release:
+run-build-release:
 	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd \
-		--allow security.insecure --progress plain \
+		--progress plain \
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		-f build/Dockerfile . \
 		--push
 	$(DOCKER) buildx build -t silentwind0/kvmd \
-		--allow security.insecure --progress plain \
+		--progress plain \
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		-f build/Dockerfile . \
 		--push
