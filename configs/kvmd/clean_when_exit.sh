@@ -10,8 +10,8 @@ cleanup() {
     if [ "$OTG" == "1" ]; then
         echo "Trying exit OTG Port..." \
             && python -m kvmd.apps.otg stop \
-            && rm -r /run/kvmd/otg \
             || echo -e "${RED}Failed to exit OTG Port${NC}"
+        rm -r /run/kvmd/otg
     fi
     exit 0
 }

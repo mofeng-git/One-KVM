@@ -125,6 +125,7 @@ fi
 #Trying usb_gadget
 if [ "$OTG" == "1" ]; then
     echo "Trying OTG Port..."
+    rm -r /run/kvmd/otg
     modprobe libcomposite || echo -e "${RED}Linux libcomposite module modprobe failed.${NC}"
     python -m kvmd.apps.otg start \
         && ln -s /dev/hidg1 /dev/kvmd-hid-mouse \
