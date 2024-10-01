@@ -67,8 +67,8 @@ export function Recorder() {
 		__recordEvent(event);
 	};
 
-	self.recordPrintEvent = function(text) {
-		__recordEvent({"event_type": "print", "event": {"text": text}});
+	self.recordPrintEvent = function(text, keymap) {
+		__recordEvent({"event_type": "print", "event": {"text": text, "keymap": keymap}});
 	};
 
 	self.recordAtxButtonEvent = function(button) {
@@ -159,6 +159,9 @@ export function Recorder() {
 
 						} else if (event.event_type === "print") {
 							__checkType(event.event.text, "string", "Non-string print text");
+							if (event.event.keymap) {
+								__checkType(event.event.keymap, "string", "Non-string keymap");
+							}
 
 						} else if (event.event_type === "key") {
 							__checkType(event.event.key, "string", "Non-string key code");
@@ -280,7 +283,11 @@ export function Recorder() {
 				return;
 
 			} else if (event.event_type === "print") {
-				tools.httpPost("/api/hid/print", {"limit": 0}, function(http) {
+				let params = {"limit": 0};
+				if (event.event.keymap) {
+					params["keymap"] = event.event.keymap;
+				}
+				tools.httpPost("/api/hid/print", params, function(http) {
 					if (http.status === 413) {
 						wm.error("Too many text for paste!");
 						__stopProcess();

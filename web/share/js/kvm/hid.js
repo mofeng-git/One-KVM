@@ -262,7 +262,7 @@ export function Hid(__getGeometry, __recorder) {
 					} else if (http.status !== 200) {
 						wm.error("HID paste error", http.responseText);
 					} else if (http.status === 200) {
-						__recorder.recordPrintEvent(text);
+						__recorder.recordPrintEvent(text, keymap);
 					}
 				}, text, "text/plain");
 			};
