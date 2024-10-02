@@ -93,7 +93,7 @@ class Edid:
                 ])
             assert len(data) == 256, f"Invalid EDID length: {len(data)}, should be 256 bytes"
             assert data[126] == 1, "Zero extensions number"
-            assert (data[_CEA + 0], [_CEA + 1]) == (0x02, 0x03), "Can't find CEA extension"
+            assert (data[_CEA + 0], data[_CEA + 1]) == (0x02, 0x03), "Can't find CEA extension"
         return Edid(data)
 
     def write_hex(self, path: str) -> None:
