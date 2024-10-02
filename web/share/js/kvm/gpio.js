@@ -211,8 +211,8 @@ export function Gpio(__recorder) {
 		}
 	};
 
-	var __sendPost = function(url) {
-		tools.httpPost(url, function(http) {
+	var __sendPost = function(url, params) {
+		tools.httpPost(url, params, function(http) {
 			if (http.status === 409) {
 				wm.error("Performing another operation for this GPIO channel.<br>Please try again later");
 			} else if (http.status !== 200) {
