@@ -284,12 +284,10 @@ run-stage-0:
 
 run-build-dev:
 	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd:dev \
-		--progress plain \
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		-f build/Dockerfile . \
 		--push
 	$(DOCKER) buildx build -t silentwind0/kvmd:dev \
-		--progress plain \
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		-f build/Dockerfile . \
 		--push

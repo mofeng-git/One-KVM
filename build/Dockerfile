@@ -41,10 +41,10 @@ COPY web/ /usr/share/kvmd/web/
 COPY build/platform scripts/kvmd-gencert /usr/share/kvmd/
 COPY contrib/keymaps /usr/share/kvmd/keymaps
 COPY kvmd/ build/init.sh /kvmd/
-COPY configs/kvmd/* /etc/kvmd_backup/
-COPY configs/nginx/* /etc/kvmd_backup/nginx/
-COPY configs/janus/* /etc/kvmd_backup/janus/
-COPY configs/hw_info/* /etc/kvmd_backup/hw_info/
-COPY testenv/js/* /usr/share/janus/javascript/
+COPY configs/kvmd/ /etc/kvmd_backup/
+COPY configs/nginx/ /etc/kvmd_backup/nginx/
+COPY configs/janus/ /etc/kvmd_backup/janus/
+COPY configs/hw_info/ /etc/kvmd_backup/hw_info/
+COPY testenv/js/ /usr/share/janus/javascript/
 
 ENTRYPOINT ["/kvmd/init.sh"]

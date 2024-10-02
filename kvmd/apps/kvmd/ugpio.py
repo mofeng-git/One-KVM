@@ -140,6 +140,8 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
 
         self.__region = aiotools.AioExclusiveRegion(GpioChannelIsBusyError, notifier)
 
+        self.gettext=Languages().gettext
+
     def is_const(self) -> bool:
         return (not self.__switch and not self.__pulse_delay)
 
