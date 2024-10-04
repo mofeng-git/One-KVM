@@ -27,9 +27,10 @@ import time
 
 from typing import AsyncGenerator
 from xmlrpc.client import ServerProxy
-from supervisor.xmlrpc import SupervisorTransport
 
 from ...logging import get_logger
+
+us_systemd_journal = True
 
 try:
     module_name = "systemd.journal"
@@ -37,6 +38,12 @@ try:
 except ImportError:
     us_systemd_journal = False
     get_logger(0).error("Failed to import module: %s", module_name)
+
+try:
+    module_name = "supervisor.xmlrpc"
+    module = __import__(module_name)
+except ImportError:
+    us_systemd_journal = True
 
 # =====
 class LogReader:
@@ -68,7 +75,7 @@ class LogReader:
                 else:
                     await asyncio.sleep(1)
         else:
-            server = ServerProxy('http://127.0.0.1',transport=SupervisorTransport(None, None, serverurl='unix:///tmp/supervisor.sock'))
+            server = ServerProxy('http://127.0.0.1',transport=supervisor.xmlrpc.SupervisorTransport(None, None, serverurl='unix:///tmp/supervisor.sock'))
             log_entries = server.supervisor.readLog(0,0)
             yield log_entries
             

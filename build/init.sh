@@ -11,8 +11,9 @@ echo -e "${GREEN}One-KVM pre-starting...${NC}"
 if [ ! -f /etc/kvmd/.init_flag ]; then
     echo -e "${GREEN}One-KVM is initializing first...${NC}" \
         && mkdir -p /etc/kvmd/ \
-        &&  mv /etc/kvmd_backup/* /etc/kvmd/ \
+        && mv /etc/kvmd_backup/* /etc/kvmd/ \
         && touch /etc/kvmd/.docker_flag \
+        && sed -i 's/localhost.localdomain/docker/g' /etc/kvmd/meta.yaml \
         && /usr/share/kvmd/kvmd-gencert --do-the-thing \
         && /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc \
         || echo -e "${RED}One-KVM config moving and self-signed SSL certificates init failed.${NC}"

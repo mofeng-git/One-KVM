@@ -116,7 +116,7 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             try:
                 self.__dt_cache[name] = (await aiotools.read_file(path)).strip(" \t\r\n\0")
             except Exception as err:
-                get_logger(0).warn("Can't read DT %s from %s: %s", name, path, err)
+                #get_logger(0).warn("Can't read DT %s from %s: %s", name, path, err)
                 return None
         return self.__dt_cache[name]
 

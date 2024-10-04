@@ -24,7 +24,7 @@
 import textwrap
 
 import setuptools.command.easy_install
-from setuptools import setup
+from setuptools import setup, find_packages
 
 
 # =====
@@ -108,6 +108,7 @@ def main() -> None:
 
         package_data={
             "kvmd.apps.vnc": ["fonts/*.ttf"],
+            "kvmd": ["i18n/zh/LC_MESSAGES/*.mo"],
         },
 
         entry_points={

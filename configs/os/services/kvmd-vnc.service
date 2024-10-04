@@ -1,5 +1,5 @@
 [Unit]
-Description=PiKVM - VNC to KVMD/Streamer proxy
+Description=One-KVM - VNC to KVMD/Streamer proxy
 After=kvmd.service
 
 [Service]

@@ -1,5 +1,5 @@
 [Unit]
-Description=PiKVM - OTG setup
+Description=One-KVM- OTG setup
 After=systemd-modules-load.service
 Before=kvmd.service
 

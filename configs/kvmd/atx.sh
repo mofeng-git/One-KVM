@@ -3,15 +3,12 @@
 echo $ATX
 case $ATX in
     GPIO)
-    CUSTOMATX=gpio
+    sudo /etc/kvmd/custom_atx/gpio.sh $1
     ;;
     USBRELAY_HID)
-    CUSTOMATX=usbrelay_hid
+    sudo /etc/kvmd/custom_atx/usbrelay_hid.sh $1
     ;;
     *)
     echo "No thing."
     exit -1
 esac
-
-#$1 option: short long reset
-exec /etc/kvmd/custom_atx/$CUSTOMATX.sh $1

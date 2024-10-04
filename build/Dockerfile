@@ -38,7 +38,8 @@ RUN if [ ${TARGETARCH} = arm ]; then ARCH=armhf; elif [ ${TARGETARCH} = arm64 ];
 COPY testenv/fakes/vcgencmd /usr/bin/
 COPY extras/ /usr/share/kvmd/extras/
 COPY web/ /usr/share/kvmd/web/
-COPY build/platform scripts/kvmd-gencert /usr/share/kvmd/
+COPY scripts/kvmd-gencert /usr/share/kvmd/
+COPY build/platform/docker /usr/share/kvmd/platform
 COPY contrib/keymaps /usr/share/kvmd/keymaps
 COPY kvmd/ build/init.sh /kvmd/
 COPY configs/kvmd/ /etc/kvmd_backup/
