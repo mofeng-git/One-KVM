@@ -89,6 +89,7 @@ sudo chroot --userspec "root:root" $ROOTFS bash -c " \
 #服务自启
 sudo chroot --userspec "root:root" $ROOTFS bash -c " \
     cat /One-KVM/configs/os/sudoers/v2-hdmiusb >> /etc/sudoers \
+    && cat /One-KVM/configs/os/udev/v2-hdmiusb-generic.rules > /etc/udev/rules.d/99-kvmd.rules \
     && echo 'libcomposite' >> /etc/modules \
     && mv /usr/local/bin/kvmd* /usr/bin \
     && cp /One-KVM/configs/os/services/* /etc/systemd/system/ \

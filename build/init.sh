@@ -14,6 +14,7 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
         && mv /etc/kvmd_backup/* /etc/kvmd/ \
         && touch /etc/kvmd/.docker_flag \
         && sed -i 's/localhost.localdomain/docker/g' /etc/kvmd/meta.yaml \
+        && sed -i 's/localhost/localhost:4430/g' /etc/kvmd/kvm_input.sh \
         && /usr/share/kvmd/kvmd-gencert --do-the-thing \
         && /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc \
         || echo -e "${RED}One-KVM config moving and self-signed SSL certificates init failed.${NC}"
