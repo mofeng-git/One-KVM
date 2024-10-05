@@ -95,8 +95,8 @@ sudo chroot --userspec "root:root" $ROOTFS bash -c " \
     && cp /One-KVM/configs/os/services/* /etc/systemd/system/ \
     && cp /One-KVM/configs/os/tmpfiles.conf /usr/lib/tmpfiles.d/ \
     && chmod +x /etc/update-motd.d/* \
-    && echo 'kvmd ALL=\(ALL\) NOPASSWD: /etc/kvmd/custom_atx/gpio.sh' >>  /etc/sudoers \
-    && echo 'kvmd ALL=\(ALL\) NOPASSWD: /etc/kvmd/custom_atx/usbrelay_hid.sh' >>  /etc/sudoers \
+    && echo 'kvmd ALL=(ALL) NOPASSWD: /etc/kvmd/custom_atx/gpio.sh' >>  /etc/sudoers \
+    && echo 'kvmd ALL=(ALL) NOPASSWD: /etc/kvmd/custom_atx/usbrelay_hid.sh' >>  /etc/sudoers \
     && systemd-sysusers /One-KVM/configs/os/sysusers.conf \
     && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
     && sed -i 's/ch9329/otg/g' /etc/kvmd/override.yaml \

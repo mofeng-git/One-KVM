@@ -4,6 +4,7 @@ kvmd:
 
     server:
         unix_mode: 0666
+        access_log_format: '[%P / %{X-Real-IP}i] ''%r'' => 响应：%s；大小：%b；来源：''%{Referer}i''；用户代理：''%{User-Agent}i'''
 
     atx:
         type: disabled
@@ -12,15 +13,34 @@ kvmd:
         type: ch9329
         device: /dev/ttyUSB0
 
+        jiggler:
+            active: false
+            enabled: true
+
+        mouse_alt:
+            device: /dev/kvmd-hid-mouse-alt
+
     msd:
         type: disabled
+
+    ocr:
+        langs:
+            - eng
+            - chi_sim
 
     streamer:
         resolution:
             default: 1280x720
+
         forever: true
+
+        desired_fps:
+            default: 30
+            max: 60
+
         h264_bitrate:
             default: 2000
+
         cmd:
             - "/usr/bin/ustreamer"
             - "--device=/dev/video0"
@@ -114,7 +134,8 @@ kvmd:
 
 
 vnc:
-    keymap: /usr/share/kvmd/keymaps/ru
+    keymap: /usr/share/kvmd/keymaps/en-us
+    mouse_output: usb
 
     auth:
         vncauth:
