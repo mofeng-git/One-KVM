@@ -19,7 +19,7 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
         && /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc \
         || echo -e "${RED}One-KVM config moving and self-signed SSL certificates init failed.${NC}"
    
-    if [ "$NOSSL" = 1 ]; then
+    if [ "$NOSSL" == 1 ]; then
         echo -e "${GREEN}One-KVM self-signed SSL is disabled.${NC}" \
         && python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf  -o nginx/https/enabled=false \
         || echo -e "${RED}One-KVM nginx config init failed.${NC}"
@@ -27,8 +27,7 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
         python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf \
         || echo -e "${RED}One-KVM nginx config init failed.${NC}"
     fi
-
-    
+   
     if [ "$NOAUTH" == "1" ]; then
         sed -i "s/enabled: true/enabled: false/g" /etc/kvmd/override.yaml \
         && echo -e "${GREEN}One-KVM auth is disabled.${NC}"
@@ -121,6 +120,12 @@ EOF
         echo -e "${YELLOW} USERNAME and PASSWORD environment variables is not set, using defalut(admin/admin).${NC}"
     fi
 
+    if [ "$NOMSD" == 1 ]; then
+        echo -e "${GREEN}One-KVM MSD is disabled.${NC}"
+    else
+        sed -i "s/#type: otg/type: otg/g" /etc/kvmd/override.yaml
+    fi
+    
     touch /etc/kvmd/.init_flag
 fi
 

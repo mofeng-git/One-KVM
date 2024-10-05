@@ -15,7 +15,7 @@ SRCPATH=../src
 ROOTFS=/tmp/rootfs
 $SRCPATH/image/onecloud/AmlImg_v0.3.1_linux_amd64 unpack $SRCPATH/image/onecloud/Armbian_by-SilentWind_24.5.0-trunk_Onecloud_bookworm_legacy_5.9.0-rc7_minimal.burn.img $SRCPATH/tmp
 simg2img $SRCPATH/tmp/7.rootfs.PARTITION.sparse $SRCPATH/tmp/rootfs.img
-dd if=/dev/zero of=/tmp/add.img bs=1M count=1024 && cat /tmp/add.img >> $SRCPATH/tmp/rootfs.img && rm /tmp/add.img
+dd if=/dev/zero of=/tmp/add.img bs=1M count=800 && cat /tmp/add.img >> $SRCPATH/tmp/rootfs.img && rm /tmp/add.img
 e2fsck -f $SRCPATH/tmp/rootfs.img && resize2fs $SRCPATH/tmp/rootfs.img
 
 #挂载镜像文件
@@ -27,7 +27,7 @@ sudo mount -o bind /dev $ROOTFS/dev || exit -1
 
 #准备文件
 sudo mkdir -p $ROOTFS/etc/kvmd/override.d $ROOTFS/etc/kvmd/vnc $ROOTFS/var/lib/kvmd/msd $ROOTFS/opt/vc/bin $ROOTFS/usr/share/kvmd \
-    $ROOTFS/usr/share/janus/javascript $ROOTFS/usr/lib/ustreamer/janus $ROOTFS/run/kvmd
+    $ROOTFS/usr/share/janus/javascript $ROOTFS/usr/lib/ustreamer/janus $ROOTFS/run/kvmd $ROOTFS/var/lib/kvmd/msd/images $ROOTFS/var/lib/kvmd/msd/meta
 sudo cp -r ../One-KVM $ROOTFS/
 sudo cp $SRCPATH/image/onecloud/rc.local $ROOTFS/etc/
 sudo cp -r $ROOTFS/One-KVM/configs/kvmd/* $ROOTFS/One-KVM/configs/nginx $ROOTFS/One-KVM/configs/janus \
@@ -103,6 +103,8 @@ sudo chroot --userspec "root:root" $ROOTFS bash -c " \
     && sed -i 's/device: \/dev\/ttyUSB0//g' /etc/kvmd/override.yaml \
     && sed -i 's/8080/80/g' /etc/kvmd/override.yaml \
     && sed -i 's/4430/443/g' /etc/kvmd/override.yaml \
+    && sed -i 's/#type: otg/type: otg/g' /etc/kvmd/override.yaml \
+    && chown kvmd -R /var/lib/kvmd/msd/ \
 	&& sed -i 's/localhost.localdomain/onecloud/g' /etc/kvmd/meta.yaml \
     && systemctl enable kvmd kvmd-otg kvmd-nginx kvmd-vnc kvmd-ipmi kvmd-webterm kvmd-janus \
     && systemctl disable nginx janus \

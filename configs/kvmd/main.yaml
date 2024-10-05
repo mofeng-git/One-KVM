@@ -16,7 +16,7 @@ kvmd:
         type: gpio
 
     msd:
-        type: otg
+        type: disabled
 
     streamer:
         quality: 0

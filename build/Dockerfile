@@ -31,7 +31,7 @@ RUN if [ ${TARGETARCH} = arm ]; then ARCH=armhf; elif [ ${TARGETARCH} = arm64 ];
     && chmod +x /usr/local/bin/ttyd \
     && adduser kvmd --gecos "" --disabled-password \
     && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
-    && mkdir -p /etc/kvmd_backup/override.d /var/lib/kvmd/msd /var/lib/kvmd/pst/data /opt/vc/bin /run/kvmd /tmp/kvmd-nginx \
+    && mkdir -p /etc/kvmd_backup/override.d /var/lib/kvmd/msd/images /var/lib/kvmd/msd/meta /var/lib/kvmd/pst/data /opt/vc/bin /run/kvmd /tmp/kvmd-nginx \
     && touch /run/kvmd/ustreamer.sock
 
 

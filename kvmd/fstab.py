@@ -48,7 +48,11 @@ def find_pst() -> Partition:
 def _find_single(part_type: str) -> Partition:
     parts = _find_partitions(part_type, True)
     if len(parts) == 0:
-        raise RuntimeError(f"Can't find {part_type!r} mountpoint")
+        if os.path.exists('/var/lib/kvmd/msd'):
+            #set default value
+            parts = [Partition(mount_path='/var/lib/kvmd/msd', root_path='/var/lib/kvmd/msd', user='kvmd')]
+        else:
+            raise RuntimeError(f"Can't find {part_type!r} mountpoint")
     return parts[0]
 
 

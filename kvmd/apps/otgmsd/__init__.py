@@ -34,6 +34,9 @@ from .. import init
 
 
 # =====
+def _has_param(gadget: str, instance: int, param: str) -> bool:
+    return os.access(_get_param_path(gadget, instance, param), os.F_OK)
+
 def _get_param_path(gadget: str, instance: int, param: str) -> str:
     return usb.get_gadget_path(gadget, usb.G_FUNCTIONS, f"mass_storage.usb{instance}/lun.0", param)
 
@@ -83,12 +86,15 @@ def main(argv: (list[str] | None)=None) -> None:
     if config.kvmd.msd.type != "otg":
         raise SystemExit(f"Error: KVMD MSD not using 'otg'"
                          f" (now configured {config.kvmd.msd.type!r})")
-
+    has_param = (lambda param: _has_param(config.otg.gadget, options.instance, param))
     set_param = (lambda param, value: _set_param(config.otg.gadget, options.instance, param, value))
     get_param = (lambda param: _get_param(config.otg.gadget, options.instance, param))
 
     if options.eject:
-        set_param("forced_eject", "")
+        if has_param("forced_eject"):
+            set_param("forced_eject", "")
+        else:
+            set_param("file", "")
 
     if options.set_cdrom is not None:
         set_param("cdrom", str(int(options.set_cdrom)))
