@@ -65,4 +65,4 @@ li(id="shortcuts-dropdown" class="right")
 				each title, key in sysrq
 					button(data-shortcut=`AltLeft PrintScreen Key${key}` data-shortcut-confirm="hid-sysrq-ask-switch" class="row16" style="text-align: center;" title=`${title}`) #{key}
 		hr
-		+menu_switch("hid-sysrq-ask-switch", "Ask the magic confirmation", true, true)
+		+menu_switch("hid-sysrq-ask-switch", "Ask the magic confirmation", true, true,"hid-sysrq-ask-switch")

@@ -1,7 +1,7 @@
-mixin about_tab(name, title, checked=false)
+mixin about_tab(name, title, checked=false, i18nid)
 	- let button_id = `about-tab-${name}-button`
 	input(checked=checked type="radio" name="about-tab-button", id=button_id)
-	label(for=button_id) #{title}
+	label(for=button_id i18n=i18nid) #{title}
 	div(class="tab")
 		div(id=`about-${name}` class="code")
 			if block
@@ -28,11 +28,11 @@ div(id="about-window" class="window")
 								| Copyright &copy; 2018-2024 #[a(target="_blank" href="mailto:mdevaev@gmail.com") Maxim Devaev]
 		br
 		div(class="tabs-box")
-			+about_tab("meta", "Meta", true)
-			+about_tab("hardware", "Hardware")
-			+about_tab("version", "Version")
+			+about_tab("meta", "Meta", true, "meta")
+			+about_tab("hardware", "Hardware", "hardware")
+			+about_tab("version", "Version", "version")
 
-			+about_tab("thanks", "Thanks")
+			+about_tab("thanks", "Thanks", "thanks")
 				span(class="code-comment" i18n="kvm_text2")
 					| // These kind people donated money to the PiKVM project#[br]
 					| // and supported the work on it. We are very grateful#[br]

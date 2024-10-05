@@ -1,12 +1,12 @@
 mixin navbar_led(id, icon, cls="led-gray")
 	img(id=id, class=cls src=`${svg_dir}/${icon}.svg`)
 
-mixin menu_message(icon, short, classes="")
+mixin menu_message(icon, short, classes="", i18nid)
 	div(class="text")
 		table
 			tr
 				td(rowspan="2") #[img(class=`sign ${classes}` src=`${svg_dir}/${icon}.svg`)]
-				td(style="line-height:1.5") #[b #{short}]
+				td(style="line-height:1.5") #[b(i18n=i18nid) #{short}]
 			if block
 				tr
 					td
@@ -23,8 +23,8 @@ mixin menu_switch_notable_gpio(channel, title, confirm_off="")
 				span(class="switch-inner")
 				span(class="switch")
 
-mixin menu_switch_notable(id, title, enabled, checked)
-	td !{title}:
+mixin menu_switch_notable(id, title, enabled, checked, i18nid)
+	td(i18n=i18nid) !{title}:
 	td(align="right")
 		div(class="switch-box")
 			input(checked=checked disabled=!enabled type="checkbox" id=id)
@@ -32,10 +32,10 @@ mixin menu_switch_notable(id, title, enabled, checked)
 				span(class="switch-inner")
 				span(class="switch")
 
-mixin menu_switch(id, title, enabled, checked)
+mixin menu_switch(id, title, enabled, checked, i18nid)
 	table(class="kv")
 		tr
-			+menu_switch_notable(id, title, enabled, checked)
+			+menu_switch_notable(id, title, enabled, checked, i18nid)
 
 ul(id="navbar")
 	li(class="left")

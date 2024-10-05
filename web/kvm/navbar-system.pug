@@ -17,10 +17,10 @@ li(id="system-dropdown" class="right")
 						data-confirm="Are you sure to send Wake-on-LAN packet to the server?" i18n="kvm_text8") &bull; WoL
 		hr
 		div(id="stream-message-no-webrtc" class="hidden")
-			+menu_message("warning", "WebRTC is not supported by this browser")
+			+menu_message("warning", "WebRTC is not supported by this browser", "stream-message-no-webrtc")
 			hr
 		div(id="stream-message-no-h264" class="hidden")
-			+menu_message("warning", "H.264 is not supported by this browser")
+			+menu_message("warning", "H.264 is not supported by this browser", "stream-message-no-h264")
 			hr
 		table(class="kv")
 			tr(id="stream-resolution" class="feature-disabled")
@@ -85,7 +85,7 @@ li(id="system-dropdown" class="right")
 			div(class="spoiler")
 				table(class="kv")
 					tr
-						+menu_switch_notable("hid-keyboard-swap-cc-switch", "Swap Left Ctrl and Caps keys", true, false)
+						+menu_switch_notable("hid-keyboard-swap-cc-switch", "Swap Left Ctrl and Caps keys", true, false, "hid-keyboard-swap-cc-switch")
 				hr
 				table(class="kv")
 					tr
@@ -97,7 +97,7 @@ li(id="system-dropdown" class="right")
 						td(class="value-slider") #[input(disabled type="range" id="hid-mouse-sens-slider" class="slider")]
 						td(id="hid-mouse-sens-value" class="value-number")
 					tr(id="hid-mouse-squash" class="feature-disabled")
-						+menu_switch_notable("hid-mouse-squash-switch", "Squash relative moves", true, true)
+						+menu_switch_notable("hid-mouse-squash-switch", "Squash relative moves", true, true, "hid-mouse-squash-switch")
 					tr
 						td(i18n="kvm_text28") Reverse scrolling:
 						td
@@ -107,27 +107,27 @@ li(id="system-dropdown" class="right")
 									td &nbsp;&nbsp;
 									+menu_switch_notable("hid-mouse-reverse-panning-switch", "X", true, false)
 					tr
-						+menu_switch_notable("hid-mouse-cumulative-scrolling-switch", "Cumulative scrolling", true, false)
+						+menu_switch_notable("hid-mouse-cumulative-scrolling-switch", "Cumulative scrolling", true, false,"hid-mouse-cumulative-scrolling-switch")
 					tr
 						td(i18n="kvm_text29") Scroll rate:
 						td(class="value-slider") #[input(type="range" id="hid-mouse-scroll-slider" class="slider")]
 						td(id="hid-mouse-scroll-value" class="value-number")
 					tr
-						+menu_switch_notable("hid-mouse-dot-switch", "Show the blue dot", true, true)
+						+menu_switch_notable("hid-mouse-dot-switch", "Show the blue dot", true, true,  "hid-mouse-dot-switch")
 		table(class="kv")
 			tr(id="hid-connect" class="feature-disabled")
-				+menu_switch_notable("hid-connect-switch", "Connect HID to Server", true, true)
+				+menu_switch_notable("hid-connect-switch", "Connect HID to Server", true, true, "hid-connect-switch")
 			tr(id="hid-jiggler" class="feature-disabled")
-				+menu_switch_notable("hid-jiggler-switch", "<a href=\"https://docs.pikvm.org/mouse_jiggler\" target=\"_blank\">Mouse jiggler</a>", false, false)
+				+menu_switch_notable("hid-jiggler-switch", "<a href=\"https://docs.pikvm.org/mouse_jiggler\" target=\"_blank\">Mouse jiggler</a>", false, false,"hid-jiggler-switch")
 			tr
-				+menu_switch_notable("hid-mute-switch", "Mute HID input events", true, false)
+				+menu_switch_notable("hid-mute-switch", "Mute HID input events", true, false, "hid-mute-switch")
 			tr(id="v3-usb-breaker" class="feature-disabled")
 				+menu_switch_notable_gpio("__v3_usb_breaker__", "Connect main USB to Server",
 					"Turning off this switch will disconnect the main USB<br>from the server.  Are you sure you want to continue?")
 			tr(id="v4-locator" class="feature-disabled")
 				+menu_switch_notable_gpio("__v4_locator__", "Enable locator LED")
 			tr
-				+menu_switch_notable("page-close-ask-switch", "Ask page close confirmation", true, true)
+				+menu_switch_notable("page-close-ask-switch", "Ask page close confirmation", true, true, "page-close-ask-switch")
 		hr
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu data-show-window="keyboard-window" class="row50" i18n="kvm_text30") &bull; Show keyboard

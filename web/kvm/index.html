@@ -166,7 +166,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign stream-message-no-webrtc" src="/share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>WebRTC is not supported by this browser</b></td>
                     </tr>
                   </table>
@@ -177,7 +177,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign stream-message-no-h264" src="/share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>H.264 is not supported by this browser</b></td>
                     </tr>
                   </table>
@@ -281,7 +281,7 @@
             <div class="spoiler">
               <table class="kv">
                 <tr>
-                      <td>Swap Left Ctrl and Caps keys:</td>
+                      <td i18n="hid-keyboard-swap-cc-switch">Swap Left Ctrl and Caps keys:</td>
                       <td align="right">
                         <div class="switch-box">
                           <input type="checkbox" id="hid-keyboard-swap-cc-switch">
@@ -307,7 +307,7 @@
                   <td class="value-number" id="hid-mouse-sens-value"></td>
                 </tr>
                 <tr class="feature-disabled" id="hid-mouse-squash">
-                      <td>Squash relative moves:</td>
+                      <td i18n="hid-mouse-squash-switch">Squash relative moves:</td>
                       <td align="right">
                         <div class="switch-box">
                           <input checked type="checkbox" id="hid-mouse-squash-switch">
@@ -340,7 +340,7 @@
                   </td>
                 </tr>
                 <tr>
-                      <td>Cumulative scrolling:</td>
+                      <td i18n="hid-mouse-cumulative-scrolling-switch">Cumulative scrolling:</td>
                       <td align="right">
                         <div class="switch-box">
                           <input type="checkbox" id="hid-mouse-cumulative-scrolling-switch">
@@ -356,7 +356,7 @@
                   <td class="value-number" id="hid-mouse-scroll-value"></td>
                 </tr>
                 <tr>
-                      <td>Show the blue dot:</td>
+                      <td i18n="hid-mouse-dot-switch">Show the blue dot:</td>
                       <td align="right">
                         <div class="switch-box">
                           <input checked type="checkbox" id="hid-mouse-dot-switch">
@@ -369,7 +369,7 @@
           </details>
           <table class="kv">
             <tr class="feature-disabled" id="hid-connect">
-                  <td>Connect HID to Server:</td>
+                  <td i18n="hid-connect-switch">Connect HID to Server:</td>
                   <td align="right">
                     <div class="switch-box">
                       <input checked type="checkbox" id="hid-connect-switch">
@@ -378,7 +378,7 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="hid-jiggler">
-                  <td><a href="https://docs.pikvm.org/mouse_jiggler" target="_blank">Mouse jiggler</a>:</td>
+                  <td i18n="hid-jiggler-switch"><a href="https://docs.pikvm.org/mouse_jiggler" target="_blank">Mouse jiggler</a>:</td>
                   <td align="right">
                     <div class="switch-box">
                       <input disabled type="checkbox" id="hid-jiggler-switch">
@@ -387,7 +387,7 @@
                   </td>
             </tr>
             <tr>
-                  <td>Mute HID input events:</td>
+                  <td i18n="hid-mute-switch">Mute HID input events:</td>
                   <td align="right">
                     <div class="switch-box">
                       <input type="checkbox" id="hid-mute-switch">
@@ -414,7 +414,7 @@
                   </td>
             </tr>
             <tr>
-                  <td>Ask page close confirmation:</td>
+                  <td i18n="page-close-ask-switch">Ask page close confirmation:</td>
                   <td align="right">
                     <div class="switch-box">
                       <input checked type="checkbox" id="page-close-ask-switch">
@@ -436,7 +436,7 @@
           <hr>
               <table class="kv">
                 <tr>
-                      <td>Ask click confirmation:</td>
+                      <td i18n="atx-ask-switch">Ask click confirmation:</td>
                       <td align="right">
                         <div class="switch-box">
                           <input checked type="checkbox" id="atx-ask-switch">
@@ -454,15 +454,15 @@
           </div>
         </div>
       </li>
-      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="/share/svg/led-msd.svg"><span>Drive</span></a>
+      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="/share/svg/led-msd.svg"><span i18n="kvm_text60">Drive</span></a>
         <div class="menu" id="msd-menu">
-          <div class="text"><b>Mass Storage Drive: </b><span id="msd-status"></span><br></div>
+          <div class="text"><b i18n="kvm_text61">Mass Storage Drive: </b><span id="msd-status"></span><br></div>
           <hr>
           <div class="hidden" id="msd-message-offline">
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-offline" src="/share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Mass Storage Drive is offline</b></td>
                     </tr>
                   </table>
@@ -473,7 +473,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-image-broken" src="/share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Current image is broken!</b></td>
                     </tr>
                     <tr>
@@ -487,7 +487,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-too-big-for-cdrom" src="/share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Current image is too big for CD-ROM!</b></td>
                     </tr>
                     <tr>
@@ -501,7 +501,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-out-of-storage" src="/share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Current image is out of storage</b></td>
                     </tr>
                     <tr>
@@ -515,7 +515,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-rw-enabled" src="/share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Read-write mode is enabled</b></td>
                     </tr>
                     <tr>
@@ -531,7 +531,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-downloads" src="/share/svg/info.svg"></td>
                       <td style="line-height:1.5"><b>The image is being downloaded from PiKVM</b></td>
                     </tr>
                     <tr>
@@ -543,7 +543,7 @@
           </div>
           <table class="kv">
             <tr>
-              <td>Image:</td>
+              <td i18n="kvm_text62">Image:</td>
               <td width="100%">
                 <select disabled id="msd-image-selector"></select>
               </td>
@@ -557,7 +557,7 @@
           </table>
           <table class="kv">
             <tr>
-              <td>Drive <a target="_blank" href="https://docs.pikvm.org/msd">mode</a>:</td>
+              <td i18n="kvm_text63">Drive <a target="_blank" href="https://docs.pikvm.org/msd">mode</a>:</td>
               <td>
                 <div class="radio-box">
                   <input checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1">
@@ -567,7 +567,7 @@
                 </div>
               </td>
               <td>&nbsp;</td>
-                  <td>Writable:</td>
+                  <td i18n="msd-rw-switch">Writable:</td>
                   <td align="right">
                     <div class="switch-box">
                       <input disabled type="checkbox" id="msd-rw-switch">
@@ -580,16 +580,16 @@
           <div id="msd-storages"></div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" disabled id="msd-select-new-button">Select image to upload</button>
-            <button class="row25" disabled id="msd-upload-new-button">Upload</button>
-            <button class="row25" disabled id="msd-abort-new-button">Abort</button>
+            <button class="row50" disabled id="msd-select-new-button" i18n="kvm_text64">Select image to upload</button>
+            <button class="row25" disabled id="msd-upload-new-button" i18n="kvm_text65">Upload</button>
+            <button class="row25" disabled id="msd-abort-new-button" i18n="kvm_text66">Abort</button>
           </div>
           <div class="hidden" id="msd-message-another-user-uploads">
             <hr>
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-another-user-uploads" src="/share/svg/info.svg"></td>
                       <td style="line-height:1.5"><b>Another user uploads an image</b></td>
                     </tr>
                   </table>
@@ -599,19 +599,19 @@
             <hr>
             <table class="kv">
               <tr>
-                <td>Specify a local file:</td>
+                <td i18n="kvm_text68">Specify a local file:</td>
                 <td>
                   <input type="file" id="msd-new-file">
                 </td>
               </tr>
               <tr>
-                <td><b>Or</b> paste a URL:</td>
+                <td i18n="kvm_text69"><b>Or</b> paste a URL:</td>
                 <td>
                   <input type="text" id="msd-new-url" style="width: 100%">
                 </td>
               </tr>
               <tr class="hidden" id="msd-new-part">
-                <td>Upload partition:</td>
+                <td i18n="kvm_text70">Upload partition:</td>
                 <td width="100%">
                   <select id="msd-new-part-selector"></select>
                 </td>
@@ -620,12 +620,12 @@
             <hr>
             <table class="kv">
               <tr>
-                <td class="value">Note:</td>
-                <td>&bull; Don't close the browser page until the upload is complete.</td>
+                <td class="value" i18n="kvm_text71">Note:</td>
+                <td i18n="kvm_text72">&bull; Don't close the browser page until the upload is complete.</td>
               </tr>
               <tr>
                 <td></td>
-                <td>&bull; To speed up the upload, close the stream window.</td>
+                <td i18n="kvm_text73">&bull; To speed up the upload, close the stream window.</td>
               </tr>
             </table>
           </div>
@@ -633,11 +633,11 @@
             <hr>
             <table class="kv">
               <tr>
-                <td>New image:</td>
+                <td i18n="kvm_text74">New image:</td>
                 <td class="value" id="msd-uploading-name"></td>
               </tr>
               <tr>
-                <td>Upload size:</td>
+                <td i18n="kvm_text75">Upload size:</td>
                 <td class="value" id="msd-uploading-size"></td>
               </tr>
             </table>
@@ -647,9 +647,9 @@
           </div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" disabled id="msd-connect-button">Connect drive to Server</button>
-            <button class="row25" disabled id="msd-disconnect-button">Disconnect</button>
-            <button class="row25" disabled id="msd-reset-button">Reset</button>
+            <button class="row50" disabled id="msd-connect-button" i18n="kvm_text76">Connect drive to Server</button>
+            <button class="row25" disabled id="msd-disconnect-button" i18n="kvm_text77">Disconnect</button>
+            <button class="row25" disabled id="msd-reset-button" i18n="kvm_text78">Reset</button>
           </div>
         </div>
       </li>
@@ -678,7 +678,7 @@
           <hr>
               <table class="kv">
                 <tr>
-                      <td>Infinite loop playback:</td>
+                      <td i18n="hid-recorder-loop-switch">Infinite loop playback:</td>
                       <td align="right">
                         <div class="switch-box">
                           <input disabled type="checkbox" id="hid-recorder-loop-switch">
@@ -715,7 +715,7 @@
           </table>
           <table class="kv">
             <tr>
-                  <td>Ask paste confirmation:</td>
+                  <td i18n="hid-pak-ask-switch">Ask paste confirmation:</td>
                   <td align="right">
                     <div class="switch-box">
                       <input checked type="checkbox" id="hid-pak-ask-switch">
@@ -724,7 +724,7 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="hid-pak-secure">
-                  <td>Hide input text:</td>
+                  <td i18n="hid-pak-secure-switch">Hide input text:</td>
                   <td align="right">
                     <div class="switch-box">
                       <input type="checkbox" id="hid-pak-secure-switch">
@@ -831,7 +831,7 @@
           <hr>
               <table class="kv">
                 <tr>
-                      <td>Ask the magic confirmation:</td>
+                      <td i18n="hid-sysrq-ask-switch">Ask the magic confirmation:</td>
                       <td align="right">
                         <div class="switch-box">
                           <input checked type="checkbox" id="hid-sysrq-ask-switch">
@@ -2000,24 +2000,24 @@
         </table><br>
         <div class="tabs-box">
               <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
-              <label for="about-tab-meta-button">Meta</label>
+              <label for="about-tab-meta-button" i18n="meta">Meta</label>
               <div class="tab">
                 <div class="code" id="about-meta"><span class="code-comment">No data</span>
                 </div>
               </div>
-              <input type="radio" name="about-tab-button" id="about-tab-hardware-button">
+              <input checked="hardware" type="radio" name="about-tab-button" id="about-tab-hardware-button">
               <label for="about-tab-hardware-button">Hardware</label>
               <div class="tab">
                 <div class="code" id="about-hardware"><span class="code-comment">No data</span>
                 </div>
               </div>
-              <input type="radio" name="about-tab-button" id="about-tab-version-button">
+              <input checked="version" type="radio" name="about-tab-button" id="about-tab-version-button">
               <label for="about-tab-version-button">Version</label>
               <div class="tab">
                 <div class="code" id="about-version"><span class="code-comment">No data</span>
                 </div>
               </div>
-              <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
+              <input checked="thanks" type="radio" name="about-tab-button" id="about-tab-thanks-button">
               <label for="about-tab-thanks-button">Thanks</label>
               <div class="tab">
                 <div class="code" id="about-thanks"><span class="code-comment" i18n="kvm_text2">// These kind people donated money to the PiKVM project<br>
