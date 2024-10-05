@@ -30,20 +30,18 @@ from xmlrpc.client import ServerProxy
 
 from ...logging import get_logger
 
-us_systemd_journal = True
-
 try:
-    module_name = "systemd.journal"
-    module = __import__(module_name)
-except ImportError:
+    import systemd.journal
+except ImportError as e:
+    get_logger(0).error("Failed to import module: %s", "systemd.journal")
     us_systemd_journal = False
-    get_logger(0).error("Failed to import module: %s", module_name)
 
 try:
-    module_name = "supervisor.xmlrpc"
-    module = __import__(module_name)
-except ImportError:
+    import supervisor.xmlrpc
+except ImportError as e:
+    get_logger(0).info("Failed to import module: %s", "supervisor.xmlrpc")
     us_systemd_journal = True
+
 
 # =====
 class LogReader:

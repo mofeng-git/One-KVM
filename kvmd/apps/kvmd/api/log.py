@@ -61,6 +61,8 @@ class LogApi:
                     record["msg"],
                 )).encode("utf-8") + b"\r\n")
         except Exception as e:
-            await response.write(f"Module systemd.journal unavailable, switch to supervisord.\n{record}".encode("utf-8"))
+            if record is None:
+                record = e 
+            await response.write(f"Module systemd.journal is unavailable.\n{record}".encode("utf-8"))
             return response
         return response
