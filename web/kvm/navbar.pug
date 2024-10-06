@@ -17,7 +17,7 @@ mixin menu_switch_notable_gpio(channel, title, confirm_off="")
 	td !{title}:
 	td(align="right")
 		div(class="switch-box")
-			input(disabled type="checkbox" class="gpio-switch-${channel} gpio-switch"
+			input(disabled type="checkbox" id=`gpio-switch-${channel}` class=`gpio-switch-${channel} gpio-switch`
 				data-channel=channel data-confirm-off=confirm_off)
 			label(for=`gpio-switch-${channel}`)
 				span(class="switch-inner")
