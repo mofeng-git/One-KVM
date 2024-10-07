@@ -1,0 +1,3 @@
+PIKVM_MODEL=v2_model
+PIKVM_VIDEO=usb_video
+PIKVM_BOARD=cumebox2
