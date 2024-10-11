@@ -79,7 +79,7 @@ instal_one-kvm() {
     apt update \
     && apt install -y python3-aiofiles python3-aiohttp python3-appdirs python3-asn1crypto python3-async-timeout \
         python3-bottle python3-cffi python3-chardet python3-click python3-colorama python3-cryptography python3-dateutil \
-        python3-dbus python3-dev python3-hidapi python3-idna python3-libgpiod python3-mako python3-marshmallow python3-more-itertools \
+        python3-dbus python3-dev python3-hidapi python3-hid python3-idna python3-libgpiod python3-mako python3-marshmallow python3-more-itertools \
         python3-multidict python3-netifaces python3-packaging python3-passlib python3-pillow python3-ply python3-psutil \
         python3-pycparser python3-pyelftools python3-pyghmi python3-pygments python3-pyparsing python3-requests \
         python3-semantic-version python3-setproctitle python3-setuptools python3-six python3-spidev python3-systemd \
@@ -223,10 +223,3 @@ case $1 in
         echo "Do no thing." 
         ;;  
 esac
-
-
-#开发计划
-#深度适配私家云二代
-#修改dtb 修复玩客云/sys/class/usb_role不存在
-#x86 禁用MSD ：通过docker环境变量判断替换配置文件
-#添加msd文件夹配置选项

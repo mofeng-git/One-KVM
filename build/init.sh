@@ -100,6 +100,11 @@ EOF
         echo -e "${GREEN}One-KVM OTG is enabled.${NC}"
         sed -i "s/ch9329/otg/g" /etc/kvmd/override.yaml
 	    sed -i "s/device: \/dev\/ttyUSB0//g" /etc/kvmd/override.yaml
+        if [ "$NOMSD" == 1 ]; then
+            echo -e "${GREEN}One-KVM MSD is disabled.${NC}"
+        else
+            sed -i "s/#type: otg/type: otg/g" /etc/kvmd/override.yaml
+        fi
     fi
 
     #if [ ! -z "$SHUTDOWNPIN"  ! -z "$REBOOTPIN" ]; then
@@ -119,15 +124,10 @@ EOF
     else
         echo -e "${YELLOW} USERNAME and PASSWORD environment variables is not set, using defalut(admin/admin).${NC}"
     fi
-
-    if [ "$NOMSD" == 1 ]; then
-        echo -e "${GREEN}One-KVM MSD is disabled.${NC}"
-    else
-        sed -i "s/#type: otg/type: otg/g" /etc/kvmd/override.yaml
-    fi
     
     touch /etc/kvmd/.init_flag
 fi
+
 
 #Trying usb_gadget
 if [ "$OTG" == "1" ]; then
