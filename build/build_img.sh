@@ -1,17 +1,6 @@
 #!/bin/bash
 
-#File List
-#src
-#└── image
-#    ├── cumebox2
-#    │   └── Armbian_24.8.1_Khadas-vim1_bookworm_current_6.6.47_minimal.img
-#    └── onecloud
-#        ├── AmlImg_v0.3.1_linux_amd64
-#        ├── Armbian_by-SilentWind_24.5.0-trunk_Onecloud_bookworm_legacy_5.9.0-rc7_minimal.burn.img
-#        └── rc.local
-
-
-SRCPATH=../src
+SRCPATH=./src
 ROOTFS=/tmp/rootfs
 LOOPDEV=/dev/loop10
 DATE=241004
@@ -32,7 +21,7 @@ mount_onecloud_rootfs() {
 
 mount_cumebox2_rootfs() {
     cp $SRCPATH/image/cumebox2/Armbian_24.8.1_Khadas-vim1_bookworm_current_6.6.47_minimal.img $SRCPATH/tmp/rootfs.img
-    dd if=/dev/zero of=/tmp/add.img bs=1M count=1280 && cat /tmp/add.img >> $SRCPATH/tmp/rootfs.img && rm /tmp/add.img
+    dd if=/dev/zero of=/tmp/add.img bs=1M count=1500&& cat /tmp/add.img >> $SRCPATH/tmp/rootfs.img && rm /tmp/add.img
     sudo parted -s $SRCPATH/tmp/rootfs.img resizepart 1 100% || exit -1
     sudo losetup --offset 4194304 $LOOPDEV $SRCPATH/tmp/rootfs.img  || exit -1
     #sudo mount -o loop,offset=$((8192*512))  $SRCPATH/tmp/rootfs.img $ROOTFS
@@ -61,23 +50,27 @@ umount_cumebox2_rootfs() {
 }
 
 config_file() {
-    sudo mkdir -p $ROOTFS/etc/kvmd/override.d $ROOTFS/etc/kvmd/vnc $ROOTFS/var/lib/kvmd/msd $ROOTFS/opt/vc/bin $ROOTFS/usr/share/kvmd \
+    sudo mkdir -p $ROOTFS/etc/kvmd/override.d $ROOTFS/etc/kvmd/vnc $ROOTFS/var/lib/kvmd/msd $ROOTFS/opt/vc/bin $ROOTFS/usr/share/kvmd $ROOTFS/One-KVM \
         $ROOTFS/usr/share/janus/javascript $ROOTFS/usr/lib/ustreamer/janus $ROOTFS/run/kvmd $ROOTFS/var/lib/kvmd/msd/images $ROOTFS/var/lib/kvmd/msd/meta
-    sudo cp -r ../One-KVM $ROOTFS/
-    sudo cp -r $ROOTFS/One-KVM/configs/kvmd/* $ROOTFS/One-KVM/configs/nginx $ROOTFS/One-KVM/configs/janus \
-        $ROOTFS/etc/kvmd
-    sudo cp -r $ROOTFS/One-KVM/web $ROOTFS/One-KVM/extras $ROOTFS/One-KVM/contrib/keymaps $ROOTFS/usr/share/kvmd
-    sudo cp $ROOTFS/One-KVM/testenv/fakes/vcgencmd $ROOTFS/usr/bin/
-    sudo cp -r $ROOTFS/One-KVM/testenv/js/* $ROOTFS/usr/share/janus/javascript/
+    sudo rsync -a  --exclude={src,.github} . $ROOTFS/One-KVM
+    sudo cp -r configs/kvmd/* configs/nginx configs/janus $ROOTFS/etc/kvmd
+    sudo cp -r web extras contrib/keymaps $ROOTFS/usr/share/kvmd
+    sudo cp testenv/fakes/vcgencmd $ROOTFS/usr/bin/
+    sudo cp -r testenv/js/* $ROOTFS/usr/share/janus/javascript/
 }
 
 config_onecloud_file() {
     sudo cp $SRCPATH/image/onecloud/rc.local $ROOTFS/etc/
-    sudo cp $ROOTFS/One-KVM/build/platform/onecloud $ROOTFS/usr/share/kvmd/platform
+    sudo cp build/platform/onecloud $ROOTFS/usr/share/kvmd/platform
 }
 
 config_cumebox2_file() {
-    sudo cp $ROOTFS/One-KVM/build/platform/cumebox2 $ROOTFS/usr/share/kvmd/platform
+    sudo mkdir $ROOTFS/etc/oled
+    sudo cp build/platform/cumebox2 $ROOTFS/usr/share/kvmd/platform
+    sudo cp $SRCPATH/image/cumebox2/v-fix.dtb $ROOTFS/boot/dtb/amlogic/meson-gxl-s905x-khadas-vim.dtb
+    sudo cp $SRCPATH/image/cumebox2/rc.local $ROOTFS/etc/
+    sudo cp $SRCPATH/image/cumebox2/ssd $ROOTFS/usr/bin/
+    sudo cp $SRCPATH/image/cumebox2/config.json $ROOTFS/etc/oled/config.json
 }
 
 
@@ -94,7 +87,7 @@ instal_one-kvm() {
         python3-serial python3-zstandard python3-dbus-next \
     && apt install -y nginx python3-pip python3-dev python3-build net-tools tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
         git gpiod libxkbcommon0 build-essential janus-dev libssl-dev libffi-dev libevent-dev libjpeg-dev libbsd-dev libudev-dev \
-        pkg-config libx264-dev libyuv-dev libasound2-dev libsndfile-dev libspeexdsp-dev cpufrequtils iptables\
+        pkg-config libx264-dev libyuv-dev libasound2-dev libsndfile-dev libspeexdsp-dev cpufrequtils iptables network-manager \
     && apt clean "
 
 sudo chroot --userspec "root:root" $ROOTFS bash -c " \
@@ -232,3 +225,8 @@ case $1 in
 esac
 
 
+#开发计划
+#深度适配私家云二代
+#修改dtb 修复玩客云/sys/class/usb_role不存在
+#x86 禁用MSD ：通过docker环境变量判断替换配置文件
+#添加msd文件夹配置选项
