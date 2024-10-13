@@ -1,4 +1,0 @@
-#!/bin/bash
-green_on
-echo device > /sys/class/usb_role/c9040000.usb-role-switch/role
-exit 0

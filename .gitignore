@@ -1,5 +1,6 @@
 /pkg/
 /src/**/*.img
+/src/tmp
 /site/
 /dist/
 /kvmd.egg-info/

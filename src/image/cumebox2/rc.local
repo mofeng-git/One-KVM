@@ -1,8 +1,0 @@
-#!/bin/bash
-echo 4500 > /sys/class/hwmon/hwmon0/fan1_target
-echo 0 > /sys/class/leds/red/brightness
-echo 0 > /sys/class/leds/blue/brightness
-echo 1 > /sys/class/leds/green/brightness
-#https://github.com/bearcatl/SSD1306_OLED_json
-nohup /usr/bin/ssd > /var/log/ssd.log 2>&1 &
-exit 0
