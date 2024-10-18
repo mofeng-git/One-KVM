@@ -38,26 +38,26 @@ export function Gpio(__recorder) {
 
 	self.setState = function(state) {
 		if (state) {
-			for (let channel in state.inputs) {
-				for (let el of $$(`gpio-led-${channel}`)) {
-					__setLedState(el, state.inputs[channel].state);
+			for (let ch in state.inputs) {
+				for (let el of $$(`__gpio-led-${ch}`)) {
+					__setLedState(el, state.inputs[ch].state);
 				}
 			}
-			for (let channel in state.outputs) {
+			for (let ch in state.outputs) {
 				for (let type of ["switch", "button"]) {
-					for (let el of $$(`gpio-${type}-${channel}`)) {
-						tools.el.setEnabled(el, state.outputs[channel].online && !state.outputs[channel].busy);
+					for (let el of $$(`__gpio-${type}-${ch}`)) {
+						tools.el.setEnabled(el, state.outputs[ch].online && !state.outputs[ch].busy);
 					}
 				}
-				for (let el of $$(`gpio-switch-${channel}`)) {
-					el.checked = state.outputs[channel].state;
+				for (let el of $$(`__gpio-switch-${ch}`)) {
+					el.checked = state.outputs[ch].state;
 				}
 			}
 		} else {
-			for (let el of $$("gpio-led")) {
+			for (let el of $$("__gpio-led")) {
 				__setLedState(el, false);
 			}
-			for (let selector of ["gpio-switch", "gpio-button"]) {
+			for (let selector of ["__gpio-switch", "__gpio-button"]) {
 				for (let el of $$(selector)) {
 					tools.el.setEnabled(el, false);
 				}
@@ -99,12 +99,12 @@ export function Gpio(__recorder) {
 		content += "</table>";
 		$("gpio-menu").innerHTML = content;
 
-		for (let channel in model.scheme.outputs) {
-			for (let el of $$(`gpio-switch-${channel}`)) {
-				tools.el.setOnClick(el, tools.makeClosure(__switchChannel, el));
+		for (let ch in model.scheme.outputs) {
+			for (let el of $$(`__gpio-switch-${ch}`)) {
+				tools.el.setOnClick(el, tools.partial(__switchChannel, el));
 			}
-			for (let el of $$(`gpio-button-${channel}`)) {
-				tools.el.setOnClick(el, tools.makeClosure(__pulseChannel, el));
+			for (let el of $$(`__gpio-button-${ch}`)) {
+				tools.el.setOnClick(el, tools.partial(__pulseChannel, el));
 			}
 		}
 
@@ -121,7 +121,7 @@ export function Gpio(__recorder) {
 		} else if (item.type === "input") {
 			return `
 				<img
-					class="gpio-led gpio-led-${item.channel} inline-lamp-big led-gray"
+					class="__gpio-led __gpio-led-${item.channel} inline-lamp-big led-gray"
 					src="/share/svg/led-circle.svg"
 					data-color="${item.color}"
 				/>
@@ -136,12 +136,12 @@ export function Gpio(__recorder) {
 						<input
 							disabled
 							type="checkbox"
-							id="gpio-switch-${id}"
-							class="gpio-switch gpio-switch-${item.channel}"
+							id="__gpio-switch-${id}"
+							class="__gpio-switch __gpio-switch-${item.channel}"
 							data-channel="${item.channel}"
 							data-confirm="${confirm}"
 						/>
-						<label for="gpio-switch-${id}">
+						<label for="__gpio-switch-${id}">
 							<span class="switch-inner"></span>
 							<span class="switch"></span>
 						</label>
@@ -152,7 +152,7 @@ export function Gpio(__recorder) {
 				controls.push(`
 					<td><button
 						disabled
-						class="gpio-button gpio-button-${item.channel}"
+						class="__gpio-button __gpio-button-${item.channel}"
 						${item.hide ? "data-force-hide-menu" : ""}
 						data-channel="${item.channel}"
 						data-confirm="${confirm}"
@@ -179,22 +179,20 @@ export function Gpio(__recorder) {
 	};
 
 	var __switchChannel = function(el) {
-		let channel = el.getAttribute("data-channel");
+		let ch = el.getAttribute("data-channel");
 		let confirm = el.getAttribute("data-confirm");
 		let to = (el.checked ? "1" : "0");
 		if (to === "0" && el.hasAttribute("data-confirm-off")) {
 			confirm = el.getAttribute("data-confirm-off");
 		}
 		let act = () => {
-			__sendPost("/api/gpio/switch", {"channel": channel, "state": to});
-			__recorder.recordGpioSwitchEvent(channel, to);
+			__sendPost("/api/gpio/switch", {"channel": ch, "state": to});
+			__recorder.recordGpioSwitchEvent(ch, to);
 		};
 		if (confirm) {
 			wm.confirm(tools.escape(confirm)).then(function(ok) {
 				if (ok) {
 					act();
-				} else {
-					self.setState(__state); // Switch back
 				}
 			});
 		} else {
@@ -203,14 +201,18 @@ export function Gpio(__recorder) {
 	};
 
 	var __pulseChannel = function(el) {
-		let channel = el.getAttribute("data-channel");
+		let ch = el.getAttribute("data-channel");
 		let confirm = el.getAttribute("data-confirm");
 		let act = () => {
-			__sendPost("/api/gpio/pulse", {"channel": channel});
-			__recorder.recordGpioPulseEvent(channel);
+			__sendPost("/api/gpio/pulse", {"channel": ch});
+			__recorder.recordGpioPulseEvent(ch);
 		};
 		if (confirm) {
-			wm.confirm(tools.escape(confirm)).then(function(ok) { if (ok) act(); });
+			wm.confirm(tools.escape(confirm)).then(function(ok) {
+				if (ok) {
+					act();
+				}
+			});
 		} else {
 			act();
 		}

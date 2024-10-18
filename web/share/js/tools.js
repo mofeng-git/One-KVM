@@ -77,7 +77,7 @@ export var tools = new function() {
 		);
 	};
 
-	self.makeClosure = function(func, ...args) {
+	self.partial = function(func, ...args) {
 		return () => func(...args);
 	};
 
