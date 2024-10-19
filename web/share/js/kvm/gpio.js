@@ -32,26 +32,18 @@ export function Gpio(__recorder) {
 
 	/************************************************************************/
 
-	var __state = null;
+	var __has_model = false;
 
 	/************************************************************************/
 
 	self.setState = function(state) {
 		if (state) {
-			for (let ch in state.inputs) {
-				for (let el of $$(`__gpio-led-${ch}`)) {
-					__setLedState(el, state.inputs[ch].state);
-				}
+			if (state.model) {
+				__applyModel(state.model);
+				__has_model = true;
 			}
-			for (let ch in state.outputs) {
-				for (let type of ["switch", "button"]) {
-					for (let el of $$(`__gpio-${type}-${ch}`)) {
-						tools.el.setEnabled(el, state.outputs[ch].online && !state.outputs[ch].busy);
-					}
-				}
-				for (let el of $$(`__gpio-switch-${ch}`)) {
-					el.checked = state.outputs[ch].state;
-				}
+			if (__has_model && state.state) {
+				__applyState(state.state);
 			}
 		} else {
 			for (let el of $$("__gpio-led")) {
@@ -62,11 +54,33 @@ export function Gpio(__recorder) {
 					tools.el.setEnabled(el, false);
 				}
 			}
+			__has_model = false;
 		}
-		__state = state;
 	};
 
-	self.setModel = function(model) {
+	var __applyState = function(state) {
+		if (state.inputs) {
+			for (let ch in state.inputs) {
+				for (let el of $$(`__gpio-led-${ch}`)) {
+					__setLedState(el, state.inputs[ch].state);
+				}
+			}
+		}
+		if (state.outputs) {
+			for (let ch in state.outputs) {
+				for (let type of ["switch", "button"]) {
+					for (let el of $$(`__gpio-${type}-${ch}`)) {
+						tools.el.setEnabled(el, state.outputs[ch].online && !state.outputs[ch].busy);
+					}
+				}
+				for (let el of $$(`__gpio-switch-${ch}`)) {
+					el.checked = state.outputs[ch].state;
+				}
+			}
+		}
+	};
+
+	var __applyModel = function(model) {
 		tools.feature.setEnabled($("gpio-dropdown"), model.view.table.length);
 		if (model.view.table.length) {
 			let title = [];
@@ -81,23 +95,23 @@ export function Gpio(__recorder) {
 			$("gpio-menu-button").innerHTML = title.join(" ");
 		}
 
-		let content = "<table class=\"kv\">";
+		let html = "<table class=\"kv\">";
 		for (let row of model.view.table) {
 			if (row === null) {
-				content += "</table><hr><table class=\"kv\">";
+				html += "</table><hr><table class=\"kv\">";
 			} else {
-				content += "<tr>";
+				html += "<tr>";
 				for (let item of row) {
 					if (item.type === "output") {
 						item.scheme = model.scheme.outputs[item.channel];
 					}
-					content += `<td align="center">${__createItem(item)}</td>`;
+					html += `<td align="center">${__createItem(item)}</td>`;
 				}
-				content += "</tr>";
+				html += "</tr>";
 			}
 		}
-		content += "</table>";
-		$("gpio-menu").innerHTML = content;
+		html += "</table>";
+		$("gpio-menu").innerHTML = html;
 
 		for (let ch in model.scheme.outputs) {
 			for (let el of $$(`__gpio-switch-${ch}`)) {
@@ -111,8 +125,6 @@ export function Gpio(__recorder) {
 		tools.feature.setEnabled($("v3-usb-breaker"), ("__v3_usb_breaker__" in model.scheme.outputs));
 		tools.feature.setEnabled($("v4-locator"), ("__v4_locator__" in model.scheme.outputs));
 		tools.feature.setEnabled($("system-tool-wol"), ("__wol__" in model.scheme.outputs));
-
-		self.setState(__state);
 	};
 
 	var __createItem = function(item) {
@@ -167,9 +179,9 @@ export function Gpio(__recorder) {
 		}
 	};
 
-	var __setLedState = function(el, state) {
+	var __setLedState = function(el, on) {
 		let color = el.getAttribute("data-color");
-		if (state) {
+		if (on) {
 			el.classList.add(`led-${color}`);
 			el.classList.remove("led-gray");
 		} else {
@@ -221,7 +233,7 @@ export function Gpio(__recorder) {
 	var __sendPost = function(url, params) {
 		tools.httpPost(url, params, function(http) {
 			if (http.status === 409) {
-				wm.error("Performing another operation for this GPIO channel.<br>Please try again later");
+				wm.error("Performing another operation for this GPIO channel.<br>Please try again later.");
 			} else if (http.status !== 200) {
 				wm.error("GPIO error", http.responseText);
 			}

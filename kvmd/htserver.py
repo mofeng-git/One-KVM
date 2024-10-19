@@ -384,7 +384,7 @@ class HttpServer:
                 break
         return ws.wsr
 
-    async def _broadcast_ws_event(self, event_type: str, event: (dict | None)) -> None:
+    async def _broadcast_ws_event(self, event_type: str, event: (dict | None), legacy: (bool | None)=None) -> None:
         if self.__ws_sessions:
             await asyncio.gather(*[
                 ws.send_event(event_type, event)
@@ -393,6 +393,7 @@ class HttpServer:
                     not ws.wsr.closed
                     and ws.wsr._req is not None  # pylint: disable=protected-access
                     and ws.wsr._req.transport is not None  # pylint: disable=protected-access
+                    and (legacy is None or ws.kwargs.get("legacy") == legacy)
                 )
             ], return_exceptions=True)
 

@@ -42,10 +42,7 @@ class UserGpioApi:
 
     @exposed_http("GET", "/gpio")
     async def __state_handler(self, _: Request) -> Response:
-        return make_json_response({
-            "model": (await self.__user_gpio.get_model()),
-            "state": (await self.__user_gpio.get_state()),
-        })
+        return make_json_response(await self.__user_gpio.get_state())
 
     @exposed_http("POST", "/gpio/switch")
     async def __switch_handler(self, req: Request) -> Response:

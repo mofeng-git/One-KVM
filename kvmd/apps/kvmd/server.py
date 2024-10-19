@@ -100,8 +100,9 @@ class StreamerH264NotSupported(OperationError):
 # =====
 @dataclasses.dataclass(frozen=True)
 class _SubsystemEventSource:
-    get_state:  (Callable[[], Coroutine[Any, Any, dict]] | None) = None
-    poll_state: (Callable[[], AsyncGenerator[dict, None]] | None) = None
+    get_state:     (Callable[[], Coroutine[Any, Any, dict]] | None) = None
+    trigger_state: (Callable[[], Coroutine[Any, Any, None]] | None) = None
+    poll_state:    (Callable[[], AsyncGenerator[dict, None]] | None) = None
 
 
 @dataclasses.dataclass
@@ -127,6 +128,7 @@ class _Subsystem:
             sub.add_source(
                 event_type=event_type,
                 get_state=getattr(obj, "get_state", None),
+                trigger_state=getattr(obj, "trigger_state", None),
                 poll_state=getattr(obj, "poll_state", None),
             )
         return sub
@@ -135,17 +137,20 @@ class _Subsystem:
         self,
         event_type: str,
         get_state: (Callable[[], Coroutine[Any, Any, dict]] | None),
+        trigger_state: (Callable[[], Coroutine[Any, Any, None]] | None),
         poll_state: (Callable[[], AsyncGenerator[dict, None]] | None),
     ) -> "_Subsystem":
 
         assert event_type
         assert event_type not in self.sources, (self, event_type)
         assert get_state or poll_state, (self, event_type)
-        self.sources[event_type] = _SubsystemEventSource(get_state, poll_state)
+        self.sources[event_type] = _SubsystemEventSource(get_state, trigger_state, poll_state)
         return self
 
 
 class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
+    __EV_GPIO_STATE = "gpio_state"
+
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
         auth_manager: AuthManager,
@@ -195,11 +200,11 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         self.__subsystems = [
             _Subsystem.make(auth_manager, "Auth manager"),
-            _Subsystem.make(user_gpio,    "User-GPIO", "gpio_state").add_source("gpio_model_state", user_gpio.get_model, None),
-            _Subsystem.make(hid,          "HID",       "hid_state").add_source("hid_keymaps_state", self.__hid_api.get_keymaps, None),
+            _Subsystem.make(user_gpio,    "User-GPIO", self.__EV_GPIO_STATE),
+            _Subsystem.make(hid,          "HID",       "hid_state").add_source("hid_keymaps_state", self.__hid_api.get_keymaps, None, None),
             _Subsystem.make(atx,          "ATX",       "atx_state"),
             _Subsystem.make(msd,          "MSD",       "msd_state"),
-            _Subsystem.make(streamer,     "Streamer",  "streamer_state").add_source("streamer_ocr_state", self.__streamer_api.get_ocr, None),
+            _Subsystem.make(streamer,     "Streamer",  "streamer_state").add_source("streamer_ocr_state", self.__streamer_api.get_ocr, None, None),
             *[
                 _Subsystem.make(info_manager.get_submanager(sub), f"Info manager ({sub})", f"info_{sub}_state",)
                 for sub in sorted(info_manager.get_subs())
@@ -244,12 +249,13 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     @exposed_http("GET", "/ws")
     async def __ws_handler(self, req: Request) -> WebSocketResponse:
         stream = valid_bool(req.query.get("stream", True))
-        async with self._ws_session(req, stream=stream) as ws:
+        legacy = valid_bool(req.query.get("legacy", True))
+        async with self._ws_session(req, stream=stream, legacy=legacy) as ws:
             states = [
                 (event_type, src.get_state())
                 for sub in self.__subsystems
                 for (event_type, src) in sub.sources.items()
-                if src.get_state
+                if src.get_state and not src.trigger_state
             ]
             events = dict(zip(
                 map(operator.itemgetter(0), states),
@@ -259,6 +265,10 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 ws.send_event(event_type, events.pop(event_type))
                 for (event_type, _) in states
             ])
+            for sub in self.__subsystems:
+                for src in sub.sources.values():
+                    if src.trigger_state:
+                        await src.trigger_state()
             await ws.send_event("loop", {})
             return (await self._ws_loop(ws))
 
@@ -347,12 +357,27 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             prev = cur
             await self.__streamer_notifier.wait()
 
-    async def __poll_state(self, event_type: str, poller: AsyncGenerator[dict, None]) -> None:
-        async for state in poller:
-            await self._broadcast_ws_event(event_type, state)
-
     async def __stream_snapshoter(self) -> None:
         await self.__snapshoter.run(
             is_live=self.__has_stream_clients,
             notifier=self.__streamer_notifier,
         )
+
+    async def __poll_state(self, event_type: str, poller: AsyncGenerator[dict, None]) -> None:
+        if event_type == self.__EV_GPIO_STATE:
+            await self.__poll_gpio_state(poller)
+        else:
+            async for state in poller:
+                await self._broadcast_ws_event(event_type, state)
+
+    async def __poll_gpio_state(self, poller: AsyncGenerator[dict, None]) -> None:
+        prev: dict = {"state": {"inputs": {}, "outputs": {}}}
+        async for state in poller:
+            await self._broadcast_ws_event(self.__EV_GPIO_STATE, state, legacy=False)
+            if "model" in state:  # We have only "model"+"state" or "model" event
+                prev = state
+                await self._broadcast_ws_event("gpio_model_state", prev["model"], legacy=True)
+            else:
+                prev["state"]["inputs"].update(state["state"].get("inputs", {}))
+                prev["state"]["outputs"].update(state["state"].get("outputs", {}))
+            await self._broadcast_ws_event(self.__EV_GPIO_STATE, prev["state"], legacy=True)

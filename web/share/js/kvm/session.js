@@ -282,7 +282,7 @@ export function Session() {
 
 		tools.httpGet("/api/auth/check", null, function(http) {
 			if (http.status === 200) {
-				__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws`);
+				__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws?legacy=0`);
 				__ws.sendHidEvent = (event) => __sendHidEvent(__ws, event.event_type, event.event);
 				__ws.onopen = __wsOpenHandler;
 				__ws.onmessage = __wsMessageHandler;
@@ -359,7 +359,6 @@ export function Session() {
 			case "info_fan_state": __setAboutInfoFan(data.event); break;
 			case "info_system_state": __setAboutInfoSystem(data.event); break;
 			case "info_extras_state": __setExtras(data.event); break;
-			case "gpio_model_state": __gpio.setModel(data.event); break;
 			case "gpio_state": __gpio.setState(data.event); break;
 			case "hid_keymaps_state": __hid.setKeymaps(data.event); break;
 			case "hid_state": __hid.setState(data.event); break;
