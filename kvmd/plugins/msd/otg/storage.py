@@ -198,12 +198,12 @@ class Storage(_StorageDc):
     @property
     def images(self) -> dict[str, Image]:
         assert self.__images is not None
-        return self.__images
+        return dict(self.__images)
 
     @property
     def parts(self) -> dict[str, _Part]:
         assert self.__parts is not None
-        return self.__parts
+        return dict(self.__parts)
 
     async def reload(self) -> None:
         self.__watchable_paths = None
