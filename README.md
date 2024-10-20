@@ -27,7 +27,7 @@ sudo docker run --name kvmd -itd --privileged=true \
     silentwind0/kvmd
 ```
 
-如果使用 CH9329，可以使用如下部署命令：
+如果使用 CH9329 作为虚拟 HID，可以使用如下部署命令：
 ```bash
 sudo docker run --name kvmd -itd \
     --device /dev/video0:/dev/video0 \
@@ -44,8 +44,18 @@ sudo docker run --name kvmd -itd \
 
 **方式二：直刷 One-KVM 镜像**
 
-对于玩客云设备，本项目 Releases 页可以找到适配玩客云的 One-KVM 预编译镜像。镜像名称带 One-KVM 前缀、burn 后缀的为线刷镜像，可使用 USB_Burning_Tool 软件线刷至玩客云。预编译线刷镜像为开箱即用，刷好后启动设备就可以开始使用 One-KVM。
+对于一些平台硬件（如玩客云），本项目制作了深度适配的 One-KVM 打包镜像，开箱即用，刷好后启动设备就可以开始使用 One-KVM。免费 One-KVM 整合包也可以在本项目 Releases 页可以找到。
 
+| 固件型号 | 是否免费 | 固件代号 | 硬件情况 |
+| :-------------: | :------------: | :-------------: | :-------------: |
+| 玩客云 | 免费 | Onecloud | USB 采集卡、OTG |
+| s905l3a  通用包 | 免费 | E900v22c | USB 采集卡、OTG |
+| 私家云二代 | 付费 | Cumebox2 | USB 采集卡、OTG |
+| 我家云 | 付费 | Chainedbox | USB 采集卡、OTG |
+| Vmare | 付费 | Vmare-uefi | USB 采集卡、CH9329+CH340 |
+| Virtualbox | 付费 | Virtualbox-uefi | USB 采集卡、CH9329+CH340 |
+
+详见 [One-KVM文档 —— 写在前面](https://one-kvm.mofeng.run/prepare/) 。
 
 **赞助**
 
@@ -84,6 +94,14 @@ Will
 爱发电用户_399fc
 
 [斐斐の](https://www.mmuaa.com/)
+
+爱发电用户_09451
+
+超高校级的錆鱼
+
+爱发电用户_08cff
+
+guoke
 
 ......
 </details>
