@@ -5,7 +5,7 @@ BOOTFS=/tmp/bootfs
 ROOTFS=/tmp/rootfs
 OUTPUTDIR=/mnt/sda1/output
 LOOPDEV=/dev/loop10
-DATE=241004
+DATE=241018
 export LC_ALL=C
 
 write_meta() {
@@ -108,7 +108,7 @@ config_cumebox2_file() {
 }
 
 instal_one-kvm() {
-    #$1 arch;$2 "gpio" or "video1"
+    #$1 arch; $2 deivce: "gpio" or "video1"; $3 network: "systemd-networkd",default is network-manager
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
         df -h \
         && apt update \
@@ -122,14 +122,15 @@ instal_one-kvm() {
             python3-serial python3-zstandard python3-dbus-next \
         && apt install -y nginx python3-pip python3-dev python3-build net-tools tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
             git gpiod libxkbcommon0 build-essential janus-dev libssl-dev libffi-dev libevent-dev libjpeg-dev libbsd-dev libudev-dev \
-            pkg-config libx264-dev libyuv-dev libasound2-dev libsndfile-dev libspeexdsp-dev cpufrequtils iptables "
+            pkg-config libx264-dev libyuv-dev libasound2-dev libsndfile-dev libspeexdsp-dev cpufrequtils iptables network-manager \
+        && rm -rf /var/lib/apt/lists/* "
 
-    if [ "$1" = "armhf" ]; then 
+    if [ "$3" = "systemd-networkd" ]; then 
         sudo chroot --userspec "root:root" $ROOTFS bash -c " \
-            rm -rf /var/lib/apt/lists/* "
-    else
-        sudo chroot --userspec "root:root" $ROOTFS bash -c " \
-            apt install -y network-manager && rm -rf /var/lib/apt/lists/* "       
+            echo -e '[Match]\nName=eth0\n\n[Network]\nDHCP=yes\n\n[Link]\nMACAddress=B6:AE:B3:21:42:0C' > /etc/systemd/network/99-eth0.network \
+            && systemctl mask NetworkManager \
+            && systemctl unmask systemd-networkd \
+            && systemctl enable systemd-networkd systemd-resolved "        
     fi
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
         pip3 config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple \
@@ -218,7 +219,7 @@ case $1 in
         onecloud_rootfs
         mount_rootfs
         config_file $1
-        instal_one-kvm armhf gpio
+        instal_one-kvm armhf gpio systemd-networkd
         write_meta $1
         umount_rootfs
         pack_img_onecloud
