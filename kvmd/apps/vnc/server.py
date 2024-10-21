@@ -42,7 +42,7 @@ from ...clients.kvmd import KvmdClient
 
 from ...clients.streamer import StreamerError
 from ...clients.streamer import StreamerPermError
-from ...clients.streamer import StreamFormats
+from ...clients.streamer import StreamerFormats
 from ...clients.streamer import BaseStreamerClient
 
 from ... import tools
@@ -222,8 +222,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     def __get_preferred_streamer(self) -> BaseStreamerClient:
         formats = {
-            StreamFormats.JPEG: "has_tight",
-            StreamFormats.H264: "has_h264",
+            StreamerFormats.JPEG: "has_tight",
+            StreamerFormats.H264: "has_h264",
         }
         streamer: (BaseStreamerClient | None) = None
         for streamer in self.__streamers:
@@ -249,7 +249,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             "data": (await make_text_jpeg(self._width, self._height, self._encodings.tight_jpeg_quality, text)),
             "width": self._width,
             "height": self._height,
-            "format": StreamFormats.JPEG,
+            "format": StreamerFormats.JPEG,
         }
 
     async def __fb_sender_task_loop(self) -> None:  # pylint: disable=too-many-branches
@@ -259,21 +259,21 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 frame = await self.__fb_queue.get()
                 if (
                     last is None  # pylint: disable=too-many-boolean-expressions
-                    or frame["format"] == StreamFormats.JPEG
+                    or frame["format"] == StreamerFormats.JPEG
                     or last["format"] != frame["format"]
-                    or (frame["format"] == StreamFormats.H264 and (
+                    or (frame["format"] == StreamerFormats.H264 and (
                         frame["key"]
                         or last["width"] != frame["width"]
                         or last["height"] != frame["height"]
                         or len(last["data"]) + len(frame["data"]) > 4194304
                     ))
                 ):
-                    self.__fb_has_key = (frame["format"] == StreamFormats.H264 and frame["key"])
+                    self.__fb_has_key = (frame["format"] == StreamerFormats.H264 and frame["key"])
                     last = frame
                     if self.__fb_queue.qsize() == 0:
                         break
                     continue
-                assert frame["format"] == StreamFormats.H264
+                assert frame["format"] == StreamerFormats.H264
                 last["data"] += frame["data"]
                 if self.__fb_queue.qsize() == 0:
                     break
@@ -295,9 +295,9 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 await self._send_fb_allow_again()
                 continue
 
-            if last["format"] == StreamFormats.JPEG:
+            if last["format"] == StreamerFormats.JPEG:
                 await self._send_fb_jpeg(last["data"])
-            elif last["format"] == StreamFormats.H264:
+            elif last["format"] == StreamerFormats.H264:
                 if not self._encodings.has_h264:
                     raise RfbError("The client doesn't want to accept H264 anymore")
                 if self.__fb_has_key:

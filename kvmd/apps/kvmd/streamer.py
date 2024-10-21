@@ -20,12 +20,10 @@
 # ========================================================================== #
 
 
-import io
 import signal
 import asyncio
 import asyncio.subprocess
 import dataclasses
-import functools
 import copy
 
 from typing import AsyncGenerator
@@ -33,9 +31,11 @@ from typing import Any
 
 import aiohttp
 
-from PIL import Image as PilImage
-
 from ...logging import get_logger
+
+from ...clients.streamer import StreamerSnapshot
+from ...clients.streamer import HttpStreamerClient
+from ...clients.streamer import HttpStreamerClientSession
 
 from ... import tools
 from ... import aiotools
@@ -44,40 +44,6 @@ from ... import htclient
 
 
 # =====
-@dataclasses.dataclass(frozen=True)
-class StreamerSnapshot:
-    online: bool
-    width: int
-    height: int
-    headers: tuple[tuple[str, str], ...]
-    data: bytes
-
-    async def make_preview(self, max_width: int, max_height: int, quality: int) -> bytes:
-        assert max_width >= 0
-        assert max_height >= 0
-        assert quality > 0
-
-        if max_width == 0 and max_height == 0:
-            max_width = self.width // 5
-            max_height = self.height // 5
-        else:
-            max_width = min((max_width or self.width), self.width)
-            max_height = min((max_height or self.height), self.height)
-
-        if (max_width, max_height) == (self.width, self.height):
-            return self.data
-        return (await aiotools.run_async(self.__inner_make_preview, max_width, max_height, quality))
-
-    @functools.lru_cache(maxsize=1)
-    def __inner_make_preview(self, max_width: int, max_height: int, quality: int) -> bytes:
-        with io.BytesIO(self.data) as snapshot_bio:
-            with io.BytesIO() as preview_bio:
-                with PilImage.open(snapshot_bio) as image:
-                    image.thumbnail((max_width, max_height), PilImage.Resampling.LANCZOS)
-                    image.save(preview_bio, format="jpeg", quality=quality)
-                    return preview_bio.getvalue()
-
-
 class _StreamerParams:
     __DESIRED_FPS = "desired_fps"
 
@@ -204,7 +170,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__state_poll = state_poll
 
         self.__unix_path = unix_path
-        self.__timeout = timeout
         self.__snapshot_timeout = snapshot_timeout
 
         self.__process_name_prefix = process_name_prefix
@@ -221,7 +186,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__streamer_task: (asyncio.Task | None) = None
         self.__streamer_proc: (asyncio.subprocess.Process | None) = None  # pylint: disable=no-member
 
-        self.__http_session: (aiohttp.ClientSession | None) = None
+        self.__client = HttpStreamerClient(
+            name="jpeg",
+            unix_path=self.__unix_path,
+            timeout=timeout,
+            user_agent=htclient.make_user_agent("KVMD"),
+        )
+        self.__client_session: (HttpStreamerClientSession | None) = None
 
         self.__snapshot: (StreamerSnapshot | None) = None
 
@@ -300,11 +271,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     async def get_state(self) -> dict:
         streamer_state = None
         if self.__streamer_task:
-            session = self.__ensure_http_session()
+            session = self.__ensure_client_session()
             try:
-                async with session.get(self.__make_url("state")) as response:
-                    htclient.raise_not_200(response)
-                    streamer_state = (await response.json())["result"]
+                streamer_state = await session.get_state()
             except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
                 pass
             except Exception:
@@ -350,39 +319,15 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         if load:
             return self.__snapshot
         logger = get_logger()
-        session = self.__ensure_http_session()
+        session = self.__ensure_client_session()
         try:
-            async with session.get(
-                self.__make_url("snapshot"),
-                timeout=aiohttp.ClientTimeout(total=self.__snapshot_timeout),
-            ) as response:
-
-                htclient.raise_not_200(response)
-                online = (response.headers["X-UStreamer-Online"] == "true")
-                if online or allow_offline:
-                    snapshot = StreamerSnapshot(
-                        online=online,
-                        width=int(response.headers["X-UStreamer-Width"]),
-                        height=int(response.headers["X-UStreamer-Height"]),
-                        headers=tuple(
-                            (key, value)
-                            for (key, value) in tools.sorted_kvs(dict(response.headers))
-                            if key.lower().startswith("x-ustreamer-") or key.lower() in [
-                                "x-timestamp",
-                                "access-control-allow-origin",
-                                "cache-control",
-                                "pragma",
-                                "expires",
-                            ]
-                        ),
-                        data=bytes(await response.read()),
-                    )
-                    if save:
-                        self.__snapshot = snapshot
-                        self.__notifier.notify()
-                    return snapshot
-                logger.error("Stream is offline, no signal or so")
-
+            snapshot = await session.take_snapshot(self.__snapshot_timeout)
+            if snapshot.online or allow_offline:
+                if save:
+                    self.__snapshot = snapshot
+                    self.__notifier.notify()
+                return snapshot
+            logger.error("Stream is offline, no signal or so")
         except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as ex:
             logger.error("Can't connect to streamer: %s", tools.efmt(ex))
         except Exception:
@@ -397,25 +342,14 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     @aiotools.atomic_fg
     async def cleanup(self) -> None:
         await self.ensure_stop(immediately=True)
-        if self.__http_session:
-            await self.__http_session.close()
-            self.__http_session = None
+        if self.__client_session:
+            await self.__client_session.close()
+            self.__client_session = None
 
-    # =====
-
-    def __ensure_http_session(self) -> aiohttp.ClientSession:
-        if not self.__http_session:
-            kwargs: dict = {
-                "headers": {"User-Agent": htclient.make_user_agent("KVMD")},
-                "connector": aiohttp.UnixConnector(path=self.__unix_path),
-                "timeout": aiohttp.ClientTimeout(total=self.__timeout),
-            }
-            self.__http_session = aiohttp.ClientSession(**kwargs)
-        return self.__http_session
-
-    def __make_url(self, handle: str) -> str:
-        assert not handle.startswith("/"), handle
-        return f"http://localhost:0/{handle}"
+    def __ensure_client_session(self) -> HttpStreamerClientSession:
+        if not self.__client_session:
+            self.__client_session = self.__client.make_session()
+        return self.__client_session
 
     # =====
 

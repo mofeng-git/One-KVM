@@ -21,7 +21,7 @@
 
 
 from ...clients.kvmd import KvmdClient
-from ...clients.streamer import StreamFormats
+from ...clients.streamer import StreamerFormats
 from ...clients.streamer import BaseStreamerClient
 from ...clients.streamer import HttpStreamerClient
 from ...clients.streamer import MemsinkStreamerClient
@@ -51,8 +51,8 @@ def main(argv: (list[str] | None)=None) -> None:
         return None
 
     streamers: list[BaseStreamerClient] = list(filter(None, [
-        make_memsink_streamer("h264", StreamFormats.H264),
-        make_memsink_streamer("jpeg", StreamFormats.JPEG),
+        make_memsink_streamer("h264", StreamerFormats.H264),
+        make_memsink_streamer("jpeg", StreamerFormats.JPEG),
         HttpStreamerClient(name="JPEG", user_agent=user_agent, **config.streamer._unpack()),
     ]))
 
