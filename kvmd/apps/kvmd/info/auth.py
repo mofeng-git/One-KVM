@@ -20,6 +20,10 @@
 # ========================================================================== #
 
 
+from typing import AsyncGenerator
+
+from .... import aiotools
+
 from .base import BaseInfoSubmanager
 
 
@@ -27,6 +31,15 @@ from .base import BaseInfoSubmanager
 class AuthInfoSubmanager(BaseInfoSubmanager):
     def __init__(self, enabled: bool) -> None:
         self.__enabled = enabled
+        self.__notifier = aiotools.AioNotifier()
 
     async def get_state(self) -> dict:
         return {"enabled": self.__enabled}
+
+    async def trigger_state(self) -> None:
+        self.__notifier.notify()
+
+    async def poll_state(self) -> AsyncGenerator[(dict | None), None]:
+        while True:
+            await self.__notifier.wait()
+            yield (await self.get_state())

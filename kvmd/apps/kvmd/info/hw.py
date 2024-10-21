@@ -22,6 +22,7 @@
 
 import os
 import asyncio
+import copy
 
 from typing import Callable
 from typing import AsyncGenerator
@@ -60,6 +61,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
 
         self.__dt_cache: dict[str, str] = {}
 
+        self.__notifier = aiotools.AioNotifier()
+
     async def get_state(self) -> dict:
         (
             base,
@@ -97,14 +100,18 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             },
         }
 
+    async def trigger_state(self) -> None:
+        self.__notifier.notify(1)
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
-        prev_state: dict = {}
+        prev: dict = {}
         while True:
-            state = await self.get_state()
-            if state != prev_state:
-                yield state
-                prev_state = state
-            await asyncio.sleep(self.__state_poll)
+            if (await self.__notifier.wait(timeout=self.__state_poll)) > 0:
+                prev = {}
+            new = await self.get_state()
+            if new != prev:
+                prev = copy.deepcopy(new)
+                yield new
 
     # =====
 

@@ -24,6 +24,7 @@ import asyncio
 import contextlib
 import dataclasses
 import functools
+import copy
 import time
 
 from typing import AsyncGenerator
@@ -195,14 +196,18 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 "drive": vd,
             }
 
+    async def trigger_state(self) -> None:
+        self.__notifier.notify(1)
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
-        prev_state: dict = {}
+        prev: dict = {}
         while True:
-            state = await self.get_state()
-            if state != prev_state:
-                yield state
-                prev_state = state
-            await self.__notifier.wait()
+            if (await self.__notifier.wait()) > 0:
+                prev = {}
+            new = await self.get_state()
+            if new != prev:
+                prev = copy.deepcopy(new)
+                yield new
 
     async def systask(self) -> None:
         await self.__watch_inotify()

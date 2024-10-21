@@ -22,6 +22,7 @@
 
 import multiprocessing
 import queue
+import copy
 import time
 
 from typing import Iterable
@@ -119,14 +120,18 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             **self._get_jiggler_state(),
         }
 
+    async def trigger_state(self) -> None:
+        self.__notifier.notify(1)
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
-        prev_state: dict = {}
+        prev: dict = {}
         while True:
-            state = await self.get_state()
-            if state != prev_state:
-                yield state
-                prev_state = state
-            await self.__notifier.wait()
+            if (await self.__notifier.wait()) > 0:
+                prev = {}
+            new = await self.get_state()
+            if new != prev:
+                prev = copy.deepcopy(new)
+                yield new
 
     async def reset(self) -> None:
         self.__reset_required_event.set()

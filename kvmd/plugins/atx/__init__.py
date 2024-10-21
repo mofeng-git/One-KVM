@@ -48,6 +48,9 @@ class BaseAtx(BasePlugin):
     async def get_state(self) -> dict:
         raise NotImplementedError
 
+    async def trigger_state(self) -> None:
+        raise NotImplementedError
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
         yield {}
         raise NotImplementedError

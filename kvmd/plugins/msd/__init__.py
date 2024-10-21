@@ -117,6 +117,9 @@ class BaseMsd(BasePlugin):
     async def get_state(self) -> dict:
         raise NotImplementedError()
 
+    async def trigger_state(self) -> None:
+        raise NotImplementedError()
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()

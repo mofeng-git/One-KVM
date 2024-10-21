@@ -232,25 +232,26 @@ async def close_writer(writer: asyncio.StreamWriter) -> bool:
 # =====
 class AioNotifier:
     def __init__(self) -> None:
-        self.__queue: "asyncio.Queue[None]" = asyncio.Queue()
+        self.__queue: "asyncio.Queue[int]" = asyncio.Queue()
 
-    def notify(self) -> None:
-        self.__queue.put_nowait(None)
+    def notify(self, mask: int=0) -> None:
+        self.__queue.put_nowait(mask)
 
-    async def wait(self, timeout: (float | None)=None) -> None:
+    async def wait(self, timeout: (float | None)=None) -> int:
+        mask = 0
         if timeout is None:
-            await self.__queue.get()
+            mask = await self.__queue.get()
         else:
             try:
-                await asyncio.wait_for(
+                mask = await asyncio.wait_for(
                     asyncio.ensure_future(self.__queue.get()),
                     timeout=timeout,
                 )
             except asyncio.TimeoutError:
-                return  # False
+                return -1
         while not self.__queue.empty():
-            await self.__queue.get()
-        # return True
+            mask |= await self.__queue.get()
+        return mask
 
 
 # =====

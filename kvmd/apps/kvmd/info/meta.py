@@ -20,6 +20,8 @@
 # ========================================================================== #
 
 
+from typing import AsyncGenerator
+
 from ....logging import get_logger
 
 from ....yamlconf.loader import load_yaml_file
@@ -33,6 +35,7 @@ from .base import BaseInfoSubmanager
 class MetaInfoSubmanager(BaseInfoSubmanager):
     def __init__(self, meta_path: str) -> None:
         self.__meta_path = meta_path
+        self.__notifier = aiotools.AioNotifier()
 
     async def get_state(self) -> (dict | None):
         try:
@@ -40,3 +43,11 @@ class MetaInfoSubmanager(BaseInfoSubmanager):
         except Exception:
             get_logger(0).exception("Can't parse meta")
         return None
+
+    async def trigger_state(self) -> None:
+        self.__notifier.notify()
+
+    async def poll_state(self) -> AsyncGenerator[(dict | None), None]:
+        while True:
+            await self.__notifier.wait()
+            yield (await self.get_state())

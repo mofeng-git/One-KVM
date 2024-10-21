@@ -234,7 +234,6 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
 class UserGpio:
     def __init__(self, config: Section, otg_config: Section) -> None:
         self.__notifier = aiotools.AioNotifier()
-        self.__full_state_requested = True
 
         self.__drivers = {
             driver: get_ugpio_driver_class(drv_config.type)(
@@ -269,14 +268,12 @@ class UserGpio:
         }
 
     async def trigger_state(self) -> None:
-        self.__full_state_requested = True
-        self.__notifier.notify()
+        self.__notifier.notify(1)
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
         prev: dict = {"inputs": {}, "outputs": {}}
         while True:  # pylint: disable=too-many-nested-blocks
-            if self.__full_state_requested:
-                self.__full_state_requested = False
+            if (await self.__notifier.wait()) > 0:
                 full = await self.get_state()
                 prev = copy.deepcopy(full["state"])
                 yield full
@@ -285,14 +282,13 @@ class UserGpio:
                 diff: dict = {}
                 for sub in ["inputs", "outputs"]:
                     for ch in new[sub]:
-                        if new[sub][ch] != prev[sub][ch]:
+                        if new[sub][ch] != prev[sub].get(ch):
                             if sub not in diff:
                                 diff[sub] = {}
                             diff[sub][ch] = new[sub][ch]
                 if diff:
                     prev = copy.deepcopy(new)
                     yield {"state": diff}
-            await self.__notifier.wait()
 
     async def __get_io_state(self) -> dict:
         return {

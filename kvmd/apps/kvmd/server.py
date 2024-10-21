@@ -150,6 +150,7 @@ class _Subsystem:
 
 class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
     __EV_GPIO_STATE = "gpio_state"
+    __EV_INFO_STATE = "info_state"
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
@@ -200,15 +201,12 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         self.__subsystems = [
             _Subsystem.make(auth_manager, "Auth manager"),
-            _Subsystem.make(user_gpio,    "User-GPIO", self.__EV_GPIO_STATE),
-            _Subsystem.make(hid,          "HID",       "hid_state").add_source("hid_keymaps_state", self.__hid_api.get_keymaps, None, None),
-            _Subsystem.make(atx,          "ATX",       "atx_state"),
-            _Subsystem.make(msd,          "MSD",       "msd_state"),
-            _Subsystem.make(streamer,     "Streamer",  "streamer_state").add_source("streamer_ocr_state", self.__streamer_api.get_ocr, None, None),
-            *[
-                _Subsystem.make(info_manager.get_submanager(sub), f"Info manager ({sub})", f"info_{sub}_state",)
-                for sub in sorted(info_manager.get_subs())
-            ],
+            _Subsystem.make(user_gpio,    "User-GPIO",    self.__EV_GPIO_STATE),
+            _Subsystem.make(hid,          "HID",          "hid_state").add_source("hid_keymaps_state", self.__hid_api.get_keymaps, None, None),
+            _Subsystem.make(atx,          "ATX",          "atx_state"),
+            _Subsystem.make(msd,          "MSD",          "msd_state"),
+            _Subsystem.make(streamer,     "Streamer",     "streamer_state").add_source("streamer_ocr_state", self.__streamer_api.get_ocr, None, None),
+            _Subsystem.make(info_manager, "Info manager", self.__EV_INFO_STATE),
         ]
 
         self.__streamer_notifier = aiotools.AioNotifier()
@@ -251,6 +249,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         stream = valid_bool(req.query.get("stream", True))
         legacy = valid_bool(req.query.get("legacy", True))
         async with self._ws_session(req, stream=stream, legacy=legacy) as ws:
+            await ws.send_event("loop", {})
             states = [
                 (event_type, src.get_state())
                 for sub in self.__subsystems
@@ -269,7 +268,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 for src in sub.sources.values():
                     if src.trigger_state:
                         await src.trigger_state()
-            await ws.send_event("loop", {})
             return (await self._ws_loop(ws))
 
     @exposed_ws("ping")
@@ -366,6 +364,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     async def __poll_state(self, event_type: str, poller: AsyncGenerator[dict, None]) -> None:
         if event_type == self.__EV_GPIO_STATE:
             await self.__poll_gpio_state(poller)
+        elif event_type == self.__EV_INFO_STATE:
+            await self.__poll_info_state(poller)
         else:
             async for state in poller:
                 await self._broadcast_ws_event(event_type, state)
@@ -381,3 +381,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 prev["state"]["inputs"].update(state["state"].get("inputs", {}))
                 prev["state"]["outputs"].update(state["state"].get("outputs", {}))
             await self._broadcast_ws_event(self.__EV_GPIO_STATE, prev["state"], legacy=True)
+
+    async def __poll_info_state(self, poller: AsyncGenerator[dict, None]) -> None:
+        async for state in poller:
+            await self._broadcast_ws_event(self.__EV_INFO_STATE, state, legacy=False)
+            for (key, value) in state.items():
+                await self._broadcast_ws_event(f"info_{key}_state", value, legacy=True)

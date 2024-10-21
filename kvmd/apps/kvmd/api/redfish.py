@@ -88,12 +88,12 @@ class RedfishApi:
 
     @exposed_http("GET", "/redfish/v1/Systems/0")
     async def __server_handler(self, _: Request) -> Response:
-        (atx_state, meta_state) = await asyncio.gather(*[
+        (atx_state, info_state) = await asyncio.gather(*[
             self.__atx.get_state(),
-            self.__info_manager.get_submanager("meta").get_state(),
+            self.__info_manager.get_state(["meta"]),
         ])
         try:
-            host = str(meta_state.get("server", {})["host"])  # type: ignore
+            host = str(info_state["meta"].get("server", {})["host"])  # type: ignore
         except Exception:
             host = ""
         return make_json_response({

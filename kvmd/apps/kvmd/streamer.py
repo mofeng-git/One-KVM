@@ -26,6 +26,7 @@ import asyncio
 import asyncio.subprocess
 import dataclasses
 import functools
+import copy
 
 from typing import AsyncGenerator
 from typing import Any
@@ -136,7 +137,7 @@ class _StreamerParams:
         }
 
     def get_limits(self) -> dict:
-        limits = dict(self.__limits)
+        limits = copy.deepcopy(self.__limits)
         if self.__has_resolution:
             limits[self.__AVAILABLE_RESOLUTIONS] = list(limits[self.__AVAILABLE_RESOLUTIONS])
         return limits
@@ -323,6 +324,9 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             "features": self.__params.get_features(),
         }
 
+    async def trigger_state(self) -> None:
+        self.__notifier.notify(1)
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
         def signal_handler(*_: Any) -> None:
             get_logger(0).info("Got SIGUSR2, checking the stream state ...")
@@ -331,21 +335,14 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         get_logger(0).info("Installing SIGUSR2 streamer handler ...")
         asyncio.get_event_loop().add_signal_handler(signal.SIGUSR2, signal_handler)
 
-        waiter_task: (asyncio.Task | None) = None
-        prev_state: dict = {}
+        prev: dict = {}
         while True:
-            state = await self.get_state()
-            if state != prev_state:
-                yield state
-                prev_state = state
-
-            if waiter_task is None:
-                waiter_task = asyncio.create_task(self.__notifier.wait())
-            if waiter_task in (await aiotools.wait_first(
-                asyncio.ensure_future(asyncio.sleep(self.__state_poll)),
-                waiter_task,
-            ))[0]:
-                waiter_task = None
+            if (await self.__notifier.wait(timeout=self.__state_poll)) > 0:
+                prev = {}
+            new = await self.get_state()
+            if new != prev:
+                prev = copy.deepcopy(new)
+                yield new
 
     # =====
 

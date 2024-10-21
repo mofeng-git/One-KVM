@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-import asyncio
-
 from aiohttp.web import Request
 from aiohttp.web import Response
 
@@ -43,15 +41,11 @@ class InfoApi:
     @exposed_http("GET", "/info")
     async def __common_state_handler(self, req: Request) -> Response:
         fields = self.__valid_info_fields(req)
-        results = dict(zip(fields, await asyncio.gather(*[
-            self.__info_manager.get_submanager(field).get_state()
-            for field in fields
-        ])))
-        return make_json_response(results)
+        return make_json_response(await self.__info_manager.get_state(fields))
 
     def __valid_info_fields(self, req: Request) -> list[str]:
-        subs = self.__info_manager.get_subs()
+        available = self.__info_manager.get_subs()
         return sorted(valid_info_fields(
-            arg=req.query.get("fields", ",".join(subs)),
-            variants=subs,
-        ) or subs)
+            arg=req.query.get("fields", ",".join(available)),
+            variants=available,
+        ) or available)

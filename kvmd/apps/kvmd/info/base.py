@@ -20,7 +20,17 @@
 # ========================================================================== #
 
 
+from typing import AsyncGenerator
+
+
 # =====
 class BaseInfoSubmanager:
     async def get_state(self) -> (dict | None):
+        raise NotImplementedError
+
+    async def trigger_state(self) -> None:
+        raise NotImplementedError
+
+    async def poll_state(self) -> AsyncGenerator[(dict | None), None]:
+        yield None
         raise NotImplementedError

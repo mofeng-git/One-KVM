@@ -222,7 +222,7 @@ class KvmdClientSession:
     @contextlib.asynccontextmanager
     async def ws(self) -> AsyncGenerator[KvmdClientWs, None]:
         session = self.__ensure_http_session()
-        async with session.ws_connect(self.__make_url("ws")) as ws:
+        async with session.ws_connect(self.__make_url("ws"), params={"legacy": 0}) as ws:
             yield KvmdClientWs(ws)
 
     def __ensure_http_session(self) -> aiohttp.ClientSession:
@@ -267,16 +267,15 @@ class KvmdClient:
         )
 
     def __make_http_session(self, user: str, passwd: str) -> aiohttp.ClientSession:
-        kwargs: dict = {
-            "headers": {
+        return aiohttp.ClientSession(
+            headers={
                 "X-KVMD-User": user,
                 "X-KVMD-Passwd": passwd,
                 "User-Agent": self.__user_agent,
             },
-            "connector": aiohttp.UnixConnector(path=self.__unix_path),
-            "timeout": aiohttp.ClientTimeout(total=self.__timeout),
-        }
-        return aiohttp.ClientSession(**kwargs)
+            connector=aiohttp.UnixConnector(path=self.__unix_path),
+            timeout=aiohttp.ClientTimeout(total=self.__timeout),
+        )
 
     def __make_url(self, handle: str) -> str:
         assert not handle.startswith("/"), handle

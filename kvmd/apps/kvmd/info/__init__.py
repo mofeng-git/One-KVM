@@ -20,6 +20,10 @@
 # ========================================================================== #
 
 
+import asyncio
+
+from typing import AsyncGenerator
+
 from ....yamlconf import Section
 
 from .base import BaseInfoSubmanager
@@ -34,17 +38,50 @@ from .fan import FanInfoSubmanager
 # =====
 class InfoManager:
     def __init__(self, config: Section) -> None:
-        self.__subs = {
+        self.__subs: dict[str, BaseInfoSubmanager] = {
             "system": SystemInfoSubmanager(config.kvmd.streamer.cmd),
-            "auth": AuthInfoSubmanager(config.kvmd.auth.enabled),
-            "meta": MetaInfoSubmanager(config.kvmd.info.meta),
+            "auth":   AuthInfoSubmanager(config.kvmd.auth.enabled),
+            "meta":   MetaInfoSubmanager(config.kvmd.info.meta),
             "extras": ExtrasInfoSubmanager(config),
-            "hw": HwInfoSubmanager(**config.kvmd.info.hw._unpack()),
-            "fan": FanInfoSubmanager(**config.kvmd.info.fan._unpack()),
+            "hw":     HwInfoSubmanager(**config.kvmd.info.hw._unpack()),
+            "fan":    FanInfoSubmanager(**config.kvmd.info.fan._unpack()),
         }
+        self.__queue: "asyncio.Queue[tuple[str, (dict | None)]]" = asyncio.Queue()
 
     def get_subs(self) -> set[str]:
         return set(self.__subs)
 
-    def get_submanager(self, name: str) -> BaseInfoSubmanager:
-        return self.__subs[name]
+    async def get_state(self, fields: (list[str] | None)=None) -> dict:
+        fields = (fields or list(self.__subs))
+        return dict(zip(fields, await asyncio.gather(*[
+            self.__subs[field].get_state()
+            for field in fields
+        ])))
+
+    async def trigger_state(self) -> None:
+        await asyncio.gather(*[
+            sub.trigger_state()
+            for sub in self.__subs.values()
+        ])
+
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
+        while True:
+            (field, value) = await self.__queue.get()
+            yield {field: value}
+
+    async def systask(self) -> None:
+        tasks = [
+            asyncio.create_task(self.__poller(field))
+            for field in self.__subs
+        ]
+        try:
+            await asyncio.gather(*tasks)
+        except Exception:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+
+    async def __poller(self, field: str) -> None:
+        async for state in self.__subs[field].poll_state():
+            self.__queue.put_nowait((field, state))
