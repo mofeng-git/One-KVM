@@ -33,6 +33,8 @@ from aiohttp.web import Request
 from aiohttp.web import Response
 from aiohttp.web import WebSocketResponse
 
+from ... import __version__
+
 from ...logging import get_logger
 
 from ...errors import OperationError
@@ -251,7 +253,13 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         stream = valid_bool(req.query.get("stream", True))
         legacy = valid_bool(req.query.get("legacy", True))
         async with self._ws_session(req, stream=stream, legacy=legacy) as ws:
-            await ws.send_event("loop", {})
+            (major, minor) = __version__.split(".")
+            await ws.send_event("loop", {
+                "version": {
+                    "major": int(major),
+                    "minor": int(minor),
+                },
+            })
             states = [
                 (event_type, src.get_state())
                 for sub in self.__subsystems
