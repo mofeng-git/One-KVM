@@ -57,7 +57,7 @@ export function Session() {
 	var __info_fan_state = null;
 
 	var __init__ = function() {
-		__startSession();
+		__streamer.ensureDeps(() => __startSession());
 	};
 
 	/************************************************************************/
@@ -281,11 +281,6 @@ export function Session() {
 		tools.feature.setEnabled($("system-tool-webterm"), has_webterm);
 		$("webterm-window").show_hook = show_hook;
 		$("webterm-window").close_hook = close_hook;
-
-		__streamer.setJanusEnabled(
-			(state.janus && (state.janus.enabled || state.janus.started))
-			|| (state.janus_static && (state.janus_static.enabled || state.janus_static.started))
-		);
 	};
 
 	var __startSession = function() {

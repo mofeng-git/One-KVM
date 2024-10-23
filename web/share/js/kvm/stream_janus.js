@@ -383,7 +383,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 	};
 
 	var __isOnline = function() {
-		return !!(__state && __state.source && __state.source.online);
+		return !!(__state && __state.source.online);
 	};
 
 	var __sendWatch = function() {

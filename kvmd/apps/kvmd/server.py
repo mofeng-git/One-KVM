@@ -151,6 +151,7 @@ class _Subsystem:
 class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
     __EV_GPIO_STATE = "gpio_state"
     __EV_INFO_STATE = "info_state"
+    __EV_STREAMER_STATE = "streamer_state"
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
@@ -362,13 +363,16 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         )
 
     async def __poll_state(self, event_type: str, poller: AsyncGenerator[dict, None]) -> None:
-        if event_type == self.__EV_GPIO_STATE:
-            await self.__poll_gpio_state(poller)
-        elif event_type == self.__EV_INFO_STATE:
-            await self.__poll_info_state(poller)
-        else:
-            async for state in poller:
-                await self._broadcast_ws_event(event_type, state)
+        match event_type:
+            case self.__EV_GPIO_STATE:
+                await self.__poll_gpio_state(poller)
+            case self.__EV_INFO_STATE:
+                await self.__poll_info_state(poller)
+            case self.__EV_STREAMER_STATE:
+                await self.__poll_streamer_state(poller)
+            case _:
+                async for state in poller:
+                    await self._broadcast_ws_event(event_type, state)
 
     async def __poll_gpio_state(self, poller: AsyncGenerator[dict, None]) -> None:
         prev: dict = {"state": {"inputs": {}, "outputs": {}}}
@@ -387,3 +391,11 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             await self._broadcast_ws_event(self.__EV_INFO_STATE, state, legacy=False)
             for (key, value) in state.items():
                 await self._broadcast_ws_event(f"info_{key}_state", value, legacy=True)
+
+    async def __poll_streamer_state(self, poller: AsyncGenerator[dict, None]) -> None:
+        prev: dict = {}
+        async for state in poller:
+            await self._broadcast_ws_event(self.__EV_STREAMER_STATE, state, legacy=False)
+            prev.update(state)
+            if "features" in prev:  # Complete/Full
+                await self._broadcast_ws_event(self.__EV_STREAMER_STATE, prev, legacy=True)

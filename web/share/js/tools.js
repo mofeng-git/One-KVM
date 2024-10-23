@@ -309,6 +309,14 @@ export var tools = new function() {
 					self.selector.addComment(el, "\u2500".repeat(repeat));
 				}
 			},
+			"hasValue": function(el, value) {
+				for (let el_op of el.options) {
+					if (el_op.value === value) {
+						return true;
+					}
+				}
+				return false;
+			},
 
 			"setValues": function(el, values, empty_title=null) {
 				if (values.constructor == Object) {
