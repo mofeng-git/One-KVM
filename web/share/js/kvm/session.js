@@ -368,7 +368,7 @@ export function Session() {
 			case "atx_state": __atx.setState(data.event); break;
 			case "msd_state": __msd.setState(data.event); break;
 			case "streamer_state": __streamer.setState(data.event); break;
-			case "streamer_ocr_state": __ocr.setState(data.event); break;
+			case "ocr_state": __ocr.setState(data.event); break;
 		}
 	};
 

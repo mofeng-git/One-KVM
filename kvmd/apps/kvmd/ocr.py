@@ -37,6 +37,7 @@ from ctypes import c_void_p
 from ctypes import c_char
 
 from typing import Generator
+from typing import AsyncGenerator
 
 from PIL import ImageOps
 from PIL import Image as PilImage
@@ -107,9 +108,32 @@ class Ocr:
     def __init__(self, data_dir_path: str, default_langs: list[str]) -> None:
         self.__data_dir_path = data_dir_path
         self.__default_langs = default_langs
+        self.__notifier = aiotools.AioNotifier()
 
-    def is_available(self) -> bool:
-        return bool(_libtess)
+    async def get_state(self) -> dict:
+        enabled = bool(_libtess)
+        default: list[str] = []
+        available: list[str] = []
+        if enabled:
+            default = self.get_default_langs()
+            available = self.get_available_langs()
+        return {
+            "enabled": enabled,
+            "langs": {
+                "default": default,
+                "available": available,
+            },
+        }
+
+    async def trigger_state(self) -> None:
+        self.__notifier.notify()
+
+    async def poll_state(self) -> AsyncGenerator[dict, None]:
+        while True:
+            await self.__notifier.wait()
+            yield (await self.get_state())
+
+    # =====
 
     def get_default_langs(self) -> list[str]:
         return list(self.__default_langs)

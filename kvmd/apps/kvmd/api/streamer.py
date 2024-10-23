@@ -97,25 +97,6 @@ class StreamerApi:
         self.__streamer.remove_snapshot()
         return make_json_response()
 
-    # =====
-
-    async def get_ocr(self) -> dict:  # XXX: Ugly hack
-        enabled = self.__ocr.is_available()
-        default: list[str] = []
-        available: list[str] = []
-        if enabled:
-            default = self.__ocr.get_default_langs()
-            available = self.__ocr.get_available_langs()
-        return {
-            "ocr": {
-                "enabled": enabled,
-                "langs": {
-                    "default": default,
-                    "available": available,
-                },
-            },
-        }
-
     @exposed_http("GET", "/streamer/ocr")
     async def __ocr_handler(self, _: Request) -> Response:
-        return make_json_response(await self.get_ocr())
+        return make_json_response({"ocr": (await self.__ocr.get_state())})

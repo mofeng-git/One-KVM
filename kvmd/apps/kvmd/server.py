@@ -152,6 +152,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     __EV_GPIO_STATE = "gpio_state"
     __EV_INFO_STATE = "info_state"
     __EV_STREAMER_STATE = "streamer_state"
+    __EV_OCR_STATE = "ocr_state"
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
@@ -185,7 +186,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         self.__stream_forever = stream_forever
 
         self.__hid_api = HidApi(hid, keymap_path, ignore_keys, mouse_x_range, mouse_y_range)  # Ugly hack to get keymaps state
-        self.__streamer_api = StreamerApi(streamer, ocr)  # Same hack to get ocr langs state
         self.__apis: list[object] = [
             self,
             AuthApi(auth_manager),
@@ -195,7 +195,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             self.__hid_api,
             AtxApi(atx),
             MsdApi(msd),
-            self.__streamer_api,
+            StreamerApi(streamer, ocr),
             ExportApi(info_manager, atx, user_gpio),
             RedfishApi(info_manager, atx),
         ]
@@ -206,7 +206,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             _Subsystem.make(hid,          "HID",          "hid_state").add_source("hid_keymaps_state", self.__hid_api.get_keymaps, None, None),
             _Subsystem.make(atx,          "ATX",          "atx_state"),
             _Subsystem.make(msd,          "MSD",          "msd_state"),
-            _Subsystem.make(streamer,     "Streamer",     "streamer_state").add_source("streamer_ocr_state", self.__streamer_api.get_ocr, None, None),
+            _Subsystem.make(streamer,     "Streamer",     self.__EV_STREAMER_STATE),
+            _Subsystem.make(ocr,          "OCR",          self.__EV_OCR_STATE),
             _Subsystem.make(info_manager, "Info manager", self.__EV_INFO_STATE),
         ]
 
@@ -370,6 +371,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 await self.__poll_info_state(poller)
             case self.__EV_STREAMER_STATE:
                 await self.__poll_streamer_state(poller)
+            case self.__EV_OCR_STATE:
+                await self.__poll_ocr_state(poller)
             case _:
                 async for state in poller:
                     await self._broadcast_ws_event(event_type, state)
@@ -399,3 +402,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             prev.update(state)
             if "features" in prev:  # Complete/Full
                 await self._broadcast_ws_event(self.__EV_STREAMER_STATE, prev, legacy=True)
+
+    async def __poll_ocr_state(self, poller: AsyncGenerator[dict, None]) -> None:
+        async for state in poller:
+            await self._broadcast_ws_event(self.__EV_OCR_STATE, state, legacy=False)
+            await self._broadcast_ws_event("streamer_ocr_state", {"ocr": state}, legacy=True)
