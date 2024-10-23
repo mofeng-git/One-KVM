@@ -152,9 +152,10 @@ class _Subsystem:
 
 class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
     __EV_GPIO_STATE = "gpio_state"
-    __EV_INFO_STATE = "info_state"
+    __EV_ATX_STATE = "atx_state"
     __EV_STREAMER_STATE = "streamer_state"
     __EV_OCR_STATE = "ocr_state"
+    __EV_INFO_STATE = "info_state"
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
@@ -206,7 +207,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             _Subsystem.make(auth_manager, "Auth manager"),
             _Subsystem.make(user_gpio,    "User-GPIO",    self.__EV_GPIO_STATE),
             _Subsystem.make(hid,          "HID",          "hid_state").add_source("hid_keymaps_state", self.__hid_api.get_keymaps, None, None),
-            _Subsystem.make(atx,          "ATX",          "atx_state"),
+            _Subsystem.make(atx,          "ATX",          self.__EV_ATX_STATE),
             _Subsystem.make(msd,          "MSD",          "msd_state"),
             _Subsystem.make(streamer,     "Streamer",     self.__EV_STREAMER_STATE),
             _Subsystem.make(ocr,          "OCR",          self.__EV_OCR_STATE),
@@ -223,11 +224,11 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     async def __streamer_set_params_handler(self, req: Request) -> Response:
         current_params = self.__streamer.get_params()
         for (name, validator, exc_cls) in [
-            ("quality", valid_stream_quality, StreamerQualityNotSupported),
-            ("desired_fps", valid_stream_fps, None),
-            ("resolution", valid_stream_resolution, StreamerResolutionNotSupported),
+            ("quality",      valid_stream_quality,      StreamerQualityNotSupported),
+            ("desired_fps",  valid_stream_fps,          None),
+            ("resolution",   valid_stream_resolution,   StreamerResolutionNotSupported),
             ("h264_bitrate", valid_stream_h264_bitrate, StreamerH264NotSupported),
-            ("h264_gop", valid_stream_h264_gop, StreamerH264NotSupported),
+            ("h264_gop",     valid_stream_h264_gop,     StreamerH264NotSupported),
         ]:
             value = req.query.get(name)
             if value:
