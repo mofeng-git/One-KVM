@@ -179,6 +179,9 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 for name in list(storage["parts"]):
                     del storage["parts"][name]["name"]
 
+                storage["size"] = storage["parts"][""]["size"]  # Legacy API
+                storage["free"] = storage["parts"][""]["free"]  # Legacy API
+
                 storage["downloading"] = (self.__reader.get_state() if self.__reader else None)
                 storage["uploading"] = (self.__writer.get_state() if self.__writer else None)
 

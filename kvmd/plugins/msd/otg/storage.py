@@ -169,8 +169,6 @@ class _Part(_PartDc):
 # =====
 @dataclasses.dataclass(frozen=True, eq=False)
 class _StorageDc:
-    size: int = dataclasses.field(init=False)
-    free: int = dataclasses.field(init=False)
     images: dict[str, Image] = dataclasses.field(init=False)
     parts: dict[str, _Part] = dataclasses.field(init=False)
 
@@ -184,16 +182,6 @@ class Storage(_StorageDc):
         self.__watchable_paths: (list[str] | None) = None
         self.__images: (dict[str, Image] | None) = None
         self.__parts: (dict[str, _Part] | None) = None
-
-    @property
-    def size(self) -> int:  # API Legacy
-        assert self.__parts is not None
-        return self.__parts[""].size
-
-    @property
-    def free(self) -> int:  # API Legacy
-        assert self.__parts is not None
-        return self.__parts[""].free
 
     @property
     def images(self) -> dict[str, Image]:
@@ -222,6 +210,7 @@ class Storage(_StorageDc):
                 part = _Part(name, root_path)
                 await part._reload()  # pylint: disable=protected-access
                 parts[name] = part
+        assert "" in parts, parts
 
         self.__watchable_paths = watchable_paths
         self.__images = images
