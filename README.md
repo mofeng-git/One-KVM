@@ -6,9 +6,12 @@
 
 One-KVM 是基于廉价计算机硬件和 [PiKVM]((https://github.com/pikvm/pikvm)) 软件二次开发的 BIOS 级远程控制项目。可以实现远程管理服务器或工作站，无需在被控机安装软件调整设置，实现无侵入式控制，适用范围广泛。
 
+详细文档：[https://one-kvm.mofeng.run](https://one-kvm.mofeng.run)
+
 演示网站：[https://kvmd-demo.mofeng.run](https://kvmd-demo.mofeng.run)
 
 ![image-20240926220156381](https://github.com/user-attachments/assets/a7848bca-e43c-434e-b812-27a45fad7910)
+
 
 
 ### 快速开始
@@ -46,16 +49,15 @@ sudo docker run --name kvmd -itd \
 
 对于一些平台硬件（如玩客云），本项目制作了深度适配的 One-KVM 打包镜像，开箱即用，刷好后启动设备就可以开始使用 One-KVM。免费 One-KVM 整合包也可以在本项目 Releases 页可以找到。
 
-| 固件型号 | 是否免费 | 固件代号 | 硬件情况 |
-| :-------------: | :------------: | :-------------: | :-------------: |
-| 玩客云 | 免费 | Onecloud | USB 采集卡、OTG |
-| s905l3a  通用包 | 免费 | E900v22c | USB 采集卡、OTG |
-| 私家云二代 | 付费 | Cumebox2 | USB 采集卡、OTG |
-| 我家云 | 付费 | Chainedbox | USB 采集卡、OTG |
-| Vmare | 付费 | Vmare-uefi | USB 采集卡、CH9329+CH340 |
-| Virtualbox | 付费 | Virtualbox-uefi | USB 采集卡、CH9329+CH340 |
+| 固件型号 | 固件代号 | 硬件情况 |
+| :-------------: | :-------------: | :-------------: |
+| 玩客云 | Onecloud | USB 采集卡、OTG |
+| s905l3a  通用包 | E900v22c | USB 采集卡、OTG |
+| 私家云二代 | Cumebox2 | USB 采集卡、OTG |
+| 我家云 | Chainedbox | USB 采集卡、OTG |
+| Vmare | Vmare-uefi | USB 采集卡、CH9329+CH340 |
+| Virtualbox | Virtualbox-uefi | USB 采集卡、CH9329+CH340 |
 
-详见 [One-KVM文档 —— 写在前面](https://one-kvm.mofeng.run/prepare/) 。
 
 **赞助**
 
