@@ -297,7 +297,7 @@ class AioExclusiveRegion:
     def is_busy(self) -> bool:
         return self.__busy
 
-    async def enter(self) -> None:
+    def enter(self) -> None:
         if not self.__busy:
             self.__busy = True
             try:
@@ -309,22 +309,22 @@ class AioExclusiveRegion:
             return
         raise self.__exc_type()
 
-    async def exit(self) -> None:
+    def exit(self) -> None:
         self.__busy = False
         if self.__notifier:
             self.__notifier.notify()
 
-    async def __aenter__(self) -> None:
-        await self.enter()
+    def __enter__(self) -> None:
+        self.enter()
 
-    async def __aexit__(
+    def __exit__(
         self,
         _exc_type: type[BaseException],
         _exc: BaseException,
         _tb: types.TracebackType,
     ) -> None:
 
-        await self.exit()
+        self.exit()
 
 
 async def run_region_task(
@@ -339,7 +339,7 @@ async def run_region_task(
 
     async def wrapper() -> None:
         try:
-            async with region:
+            with region:
                 entered.set_result(None)
                 await func(*args, **kwargs)
         except region.get_exc_type():

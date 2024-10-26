@@ -185,7 +185,7 @@ class _GpioOutput:  # pylint: disable=too-many-instance-attributes
     @aiotools.atomic_fg
     async def __run_action(self, wait: bool, name: str, func: Callable, *args: Any) -> None:
         if wait:
-            async with self.__region:
+            with self.__region:
                 await func(*args)
         else:
             await aiotools.run_region_task(

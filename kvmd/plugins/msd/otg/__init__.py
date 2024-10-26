@@ -96,7 +96,7 @@ class _State:
 
     @contextlib.asynccontextmanager
     async def busy(self, check_online: bool=True) -> AsyncGenerator[None, None]:
-        async with self._region:
+        with self._region:
             async with self._lock:
                 self.__notifier.notify()
                 if check_online:
@@ -292,7 +292,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @contextlib.asynccontextmanager
     async def read_image(self, name: str) -> AsyncGenerator[MsdFileReader, None]:
         try:
-            async with self.__state._region:  # pylint: disable=protected-access
+            with self.__state._region:  # pylint: disable=protected-access
                 try:
                     async with self.__state._lock:  # pylint: disable=protected-access
                         self.__notifier.notify()
@@ -313,7 +313,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     @contextlib.asynccontextmanager
     async def write_image(self, name: str, size: int, remove_incomplete: (bool | None)) -> AsyncGenerator[MsdFileWriter, None]:
         try:
-            async with self.__state._region:  # pylint: disable=protected-access
+            with self.__state._region:  # pylint: disable=protected-access
                 image: (Image | None) = None
                 try:
                     async with self.__state._lock:  # pylint: disable=protected-access

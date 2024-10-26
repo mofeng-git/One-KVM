@@ -191,7 +191,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
     @aiotools.atomic_fg
     async def __click(self, name: str, pin: int, delay: float, wait: bool) -> None:
         if wait:
-            async with self.__region:
+            with self.__region:
                 await self.__inner_click(name, pin, delay)
         else:
             await aiotools.run_region_task(
