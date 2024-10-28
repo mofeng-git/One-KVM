@@ -130,13 +130,12 @@ class InotifyMask:
 #        | OPEN
 #    )
 
-    # Helper for all modify events
-    ALL_MODIFY_EVENTS = (
+    # Helper for all changes events except MODIFY, because it fires on each write()
+    ALL_CHANGES_EVENTS = (
         CLOSE_WRITE
         | CREATE
         | DELETE
         | DELETE_SELF
-        | MODIFY
         | MOVE_SELF
         | MOVED_FROM
         | MOVED_TO
@@ -202,8 +201,8 @@ class Inotify:
 
         self.__events_queue: "asyncio.Queue[InotifyEvent]" = asyncio.Queue()
 
-    async def watch_all_modify(self, *paths: str) -> None:
-        await self.watch(InotifyMask.ALL_MODIFY_EVENTS, *paths)
+    async def watch_all_changes(self, *paths: str) -> None:
+        await self.watch(InotifyMask.ALL_CHANGES_EVENTS, *paths)
 
     async def watch(self, mask: int, *paths: str) -> None:
         for path in paths:
@@ -237,7 +236,7 @@ class Inotify:
         except asyncio.TimeoutError:
             return None
 
-    async def get_series(self, timeout: float) -> list[InotifyEvent]:
+    async def get_series(self, timeout: float, max_series: int=64) -> list[InotifyEvent]:
         series: list[InotifyEvent] = []
         event = await self.get_event(timeout)
         if event:
@@ -246,6 +245,8 @@ class Inotify:
                 event = await self.get_event(timeout)
                 if event:
                     series.append(event)
+                if len(series) >= max_series:
+                    break
         return series
 
     def __read_and_queue_events(self) -> None:
