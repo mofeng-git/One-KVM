@@ -141,6 +141,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
         self.__notifier = aiotools.AioNotifier()
         self.__state = _State(self.__notifier)
+        self.__reset = False
 
         logger = get_logger(0)
         logger.info("Using OTG gadget %r as MSD", gadget)
@@ -219,6 +220,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     async def reset(self) -> None:
         async with self.__state.busy(check_online=False):
             try:
+                self.__reset = True
                 self.__drive.set_image_path("")
                 self.__drive.set_cdrom_flag(False)
                 self.__drive.set_rw_flag(False)
@@ -450,7 +452,8 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await self.__reload_state()
 
                     while self.__state.vd:  # Если живы после предыдущей проверки
-                        need_restart = False
+                        need_restart = self.__reset
+                        self.__reset = False
                         need_reload_state = False
                         for event in (await inotify.get_series(timeout=1)):
                             need_reload_state = True
