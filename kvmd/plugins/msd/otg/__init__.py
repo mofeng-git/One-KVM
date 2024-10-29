@@ -171,10 +171,6 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         async with self.__state._lock:  # pylint: disable=protected-access
             storage: (dict | None) = None
             if self.__state.storage:
-                if self.__writer:
-                    # При загрузке файла показываем актуальную статистику вручную
-                    await aiotools.shield_fg(self.__storage.reload_parts_info())
-
                 storage = dataclasses.asdict(self.__state.storage)
                 for name in list(storage["images"]):
                     del storage["images"][name]["name"]
@@ -321,18 +317,21 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             # до того, как мы не закончим все процедуры.
             async with self.__state._lock:  # pylint: disable=protected-access
                 try:
-                    if image:
-                        await image.set_complete(complete)
+                    self.__notifier.notify()
                 finally:
                     try:
-                        if image and remove_incomplete and not complete:
-                            await image.remove(fatal=False)
+                        if image:
+                            await image.set_complete(complete)
                     finally:
                         try:
-                            await self.__close_writer()
+                            if image and remove_incomplete and not complete:
+                                await image.remove(fatal=False)
                         finally:
-                            if image:
-                                await image.remount_rw(False, fatal=False)
+                            try:
+                                await self.__close_writer()
+                            finally:
+                                if image:
+                                    await image.remount_rw(False, fatal=False)
 
         try:
             with self.__state._region:  # pylint: disable=protected-access
@@ -441,14 +440,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     await asyncio.sleep(5)
 
                 with Inotify() as inotify:
+                    # Из-за гонки между первым релоадом и установкой вотчеров,
+                    # мы можем потерять какие-то каталоги стораджа, но это допустимо,
+                    # так как всегда есть ручной перезапуск.
                     await inotify.watch_all_changes(*self.__storage.get_watchable_paths())
                     await inotify.watch_all_changes(*self.__drive.get_watchable_paths())
 
                     # После установки вотчеров еще раз проверяем стейт,
                     # чтобы не потерять состояние привода.
-                    # Из-за гонки между первым релоадом и установкой вотчеров,
-                    # мы можем потерять какие-то каталоги стораджа, но это допустимо,
-                    # так как всегда есть ручной перезапуск.
                     await self.__reload_state()
 
                     while self.__state.vd:  # Если живы после предыдущей проверки
@@ -467,6 +466,11 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                             break
                         if need_reload_state:
                             await self.__reload_state()
+                        elif self.__writer:
+                            # При загрузке файла обновляем статистику раз в секунду (по таймауту).
+                            # Это не нужно при обычном релоаде, потому что там и так проверяются все разделы.
+                            await self.__reload_parts_info()
+
             except Exception:
                 logger.exception("Unexpected MSD watcher error")
                 await asyncio.sleep(1)
@@ -474,6 +478,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
     async def __reload_state(self) -> None:
         async with self.__state._lock:  # pylint: disable=protected-access
             await self.__unsafe_reload_state()
+        self.__notifier.notify()
+
+    async def __reload_parts_info(self) -> None:
+        assert self.__writer  # Использовать только при записи образа
+        async with self.__state._lock:  # pylint: disable=protected-access
+            await self.__storage.reload_parts_info()
         self.__notifier.notify()
 
     # ===== Don't call this directly ====
