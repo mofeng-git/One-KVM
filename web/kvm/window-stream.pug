@@ -15,7 +15,7 @@ div(id="stream-window" class="window window-resizable")
 	button(class="window-button-exit-full-tab") &#9660;
 	div(id="stream-box" class="stream-box-offline")
 		img(id="stream-image" src=`${png_dir}/blank-stream.png`)
-		video(id="stream-video" class="hidden" autoplay playsinline muted)
+		video(id="stream-video" class="hidden" disablePictureInPicture="true" autoplay playsinline muted)
 		div(id="stream-fullscreen-active")
 
 	div(id="stream-mouse-buttons" class="keypad" align="center")
