@@ -25,7 +25,6 @@ import queue
 import copy
 import time
 
-from typing import Iterable
 from typing import AsyncGenerator
 from typing import Any
 
@@ -55,13 +54,17 @@ from .keyboard import Keyboard
 class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments,super-init-not-called
         self,
+        ignore_keys: list[str],
+        mouse_x_range: dict[str, Any],
+        mouse_y_range: dict[str, Any],
+        jiggler: dict[str, Any],
+
         device_path: str,
         speed: int,
         read_timeout: float,
-        jiggler: dict[str, Any],
     ) -> None:
 
-        BaseHid.__init__(self, **jiggler)
+        BaseHid.__init__(self, ignore_keys=ignore_keys, **mouse_x_range, **mouse_y_range, **jiggler)
         multiprocessing.Process.__init__(self, daemon=True)
 
         self.__device_path = device_path
@@ -89,7 +92,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             "device":       Option("/dev/kvmd-hid", type=valid_abs_path, unpack_as="device_path"),
             "speed":        Option(9600, type=valid_tty_speed),
             "read_timeout": Option(0.3,  type=valid_float_f01),
-            **cls._get_jiggler_options(),
+            **cls._get_base_options(),
         }
 
     def sysprep(self) -> None:
@@ -146,27 +149,6 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
     # =====
 
-    def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
-        for (key, state) in keys:
-            self.__queue_cmd(self.__keyboard.process_key(key, state))
-            self._bump_activity()
-
-    def send_mouse_button_event(self, button: str, state: bool) -> None:
-        self.__queue_cmd(self.__mouse.process_button(button, state))
-        self._bump_activity()
-
-    def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        self.__queue_cmd(self.__mouse.process_move(to_x, to_y))
-        self._bump_activity()
-
-    def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
-        self.__queue_cmd(self.__mouse.process_wheel(delta_x, delta_y))
-        self._bump_activity()
-
-    def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
-        self.__queue_cmd(self.__mouse.process_relative(delta_x, delta_y))
-        self._bump_activity()
-
     def set_params(
         self,
         keyboard_output: (str | None)=None,
@@ -185,10 +167,22 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             self._set_jiggler_active(jiggler)
             self.__notifier.notify()
 
-    def set_connected(self, connected: bool) -> None:
-        pass
+    def _send_key_event(self, key: str, state: bool) -> None:
+        self.__queue_cmd(self.__keyboard.process_key(key, state))
 
-    def clear_events(self) -> None:
+    def _send_mouse_button_event(self, button: str, state: bool) -> None:
+        self.__queue_cmd(self.__mouse.process_button(button, state))
+
+    def _send_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        self.__queue_cmd(self.__mouse.process_move(to_x, to_y))
+
+    def _send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        self.__queue_cmd(self.__mouse.process_wheel(delta_x, delta_y))
+
+    def _send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
+        self.__queue_cmd(self.__mouse.process_relative(delta_x, delta_y))
+
+    def _clear_events(self) -> None:
         tools.clear_queue(self.__cmd_queue)
 
     def __queue_cmd(self, cmd: bytes, clear: bool=False) -> None:

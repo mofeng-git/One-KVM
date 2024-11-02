@@ -26,7 +26,6 @@ import queue
 import copy
 import time
 
-from typing import Iterable
 from typing import Generator
 from typing import AsyncGenerator
 from typing import Any
@@ -109,17 +108,22 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def __init__(  # pylint: disable=too-many-arguments,super-init-not-called
         self,
         phy: BasePhy,
+
+        ignore_keys: list[str],
+        mouse_x_range: dict[str, Any],
+        mouse_y_range: dict[str, Any],
+        jiggler: dict[str, Any],
+
         reset_self: bool,
         read_retries: int,
         common_retries: int,
         retries_delay: float,
         errors_threshold: int,
         noop: bool,
-        jiggler: dict[str, Any],
         **gpio_kwargs: Any,
     ) -> None:
 
-        BaseHid.__init__(self, **jiggler)
+        BaseHid.__init__(self, ignore_keys=ignore_keys, **mouse_x_range, **mouse_y_range, **jiggler)
         multiprocessing.Process.__init__(self, daemon=True)
 
         self.__read_retries = read_retries
@@ -164,7 +168,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
             "errors_threshold": Option(5,     type=valid_int_f0),
             "noop":             Option(False, type=valid_bool),
 
-            **cls._get_jiggler_options(),
+            **cls._get_base_options(),
         }
 
     def sysprep(self) -> None:
@@ -259,27 +263,6 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
     # =====
 
-    def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
-        for (key, state) in keys:
-            self.__queue_event(KeyEvent(key, state))
-            self._bump_activity()
-
-    def send_mouse_button_event(self, button: str, state: bool) -> None:
-        self.__queue_event(MouseButtonEvent(button, state))
-        self._bump_activity()
-
-    def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        self.__queue_event(MouseMoveEvent(to_x, to_y))
-        self._bump_activity()
-
-    def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
-        self.__queue_event(MouseRelativeEvent(delta_x, delta_y))
-        self._bump_activity()
-
-    def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
-        self.__queue_event(MouseWheelEvent(delta_x, delta_y))
-        self._bump_activity()
-
     def set_params(
         self,
         keyboard_output: (str | None)=None,
@@ -301,9 +284,23 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def set_connected(self, connected: bool) -> None:
         self.__queue_event(SetConnectedEvent(connected), clear=True)
 
-    def clear_events(self) -> None:
+    def _send_key_event(self, key: str, state: bool) -> None:
+        self.__queue_event(KeyEvent(key, state))
+
+    def _send_mouse_button_event(self, button: str, state: bool) -> None:
+        self.__queue_event(MouseButtonEvent(button, state))
+
+    def _send_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        self.__queue_event(MouseMoveEvent(to_x, to_y))
+
+    def _send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
+        self.__queue_event(MouseRelativeEvent(delta_x, delta_y))
+
+    def _send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        self.__queue_event(MouseWheelEvent(delta_x, delta_y))
+
+    def _clear_events(self) -> None:
         self.__queue_event(ClearEvent(), clear=True)
-        self._bump_activity()
 
     def __queue_event(self, event: BaseEvent, clear: bool=False) -> None:
         if not self.__stop_event.is_set():

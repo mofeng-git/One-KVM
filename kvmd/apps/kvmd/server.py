@@ -173,9 +173,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         snapshoter: Snapshoter,
 
         keymap_path: str,
-        ignore_keys: list[str],
-        mouse_x_range: tuple[int, int],
-        mouse_y_range: tuple[int, int],
 
         stream_forever: bool,
     ) -> None:
@@ -189,7 +186,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         self.__stream_forever = stream_forever
 
-        self.__hid_api = HidApi(hid, keymap_path, ignore_keys, mouse_x_range, mouse_y_range)  # Ugly hack to get keymaps state
+        self.__hid_api = HidApi(hid, keymap_path)  # Ugly hack to get keymaps state
         self.__apis: list[object] = [
             self,
             AuthApi(auth_manager),
