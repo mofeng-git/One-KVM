@@ -138,6 +138,7 @@ if [ "$OTG" == "1" ]; then
         && ln -s /dev/hidg1 /dev/kvmd-hid-mouse \
         && ln -s /dev/hidg0 /dev/kvmd-hid-keyboard \
         || echo -e "${RED}OTG Port mount failed.${NC}"
+    ln -s /dev/hidg2 kvmd-hid-mouse-alt
 fi
 
 echo -e "${GREEN}One-KVM starting...${NC}"
