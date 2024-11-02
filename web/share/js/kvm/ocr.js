@@ -73,8 +73,12 @@ export function Ocr(__getGeometry) {
 	/************************************************************************/
 
 	self.setState = function(state) {
-		if (state.enabled !== undefined) {
-			__enabled = (state.enabled && !tools.browser.is_mobile);
+		if (state) {
+			if (state.enabled !== undefined) {
+				__enabled = (state.enabled && !tools.browser.is_mobile);
+			}
+		} else {
+			__enabled = false;
 		}
 		if (__enabled) {
 			let el = $("stream-ocr-lang-selector");
