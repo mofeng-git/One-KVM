@@ -143,10 +143,11 @@ export function Streamer() {
 				__state.limits = state.limits; // Following together with features
 			}
 			if (__state.features && state.streamer !== undefined) {
+				__setControlsEnabled(!!state.streamer);
 				__state.streamer = state.streamer;
 			}
-			__setControlsEnabled(!!state.streamer);
 		} else {
+			__setControlsEnabled(false);
 			__state = null;
 		}
 		let visible = wm.isWindowVisible($("stream-window"));
@@ -207,32 +208,28 @@ export function Streamer() {
 			tools.radio.clickValue("stream-mode-radio", mode);
 		}
 
-		if (state.streamer !== undefined) {
-			let ok = (state.streamer !== null);
-			if (ok) {
-				let s = state.streamer;
-				__res = s.source.resolution;
+		if (state.streamer) {
+			let s = state.streamer;
+			__res = s.source.resolution;
 
-				{
-					let res = `${__res.width}x${__res.height}`;
-					let el = $("stream-resolution-selector");
-					if (!tools.selector.hasValue(el, res)) {
-						tools.selector.addOption(el, res, res);
-					}
-					el.value = res;
+			{
+				let res = `${__res.width}x${__res.height}`;
+				let el = $("stream-resolution-selector");
+				if (!tools.selector.hasValue(el, res)) {
+					tools.selector.addOption(el, res, res);
 				}
-				tools.slider.setValue($("stream-quality-slider"), Math.max(s.encoder.quality, 1));
-				tools.slider.setValue($("stream-desired-fps-slider"), s.source.desired_fps);
-				if (s.h264 && s.h264.bitrate) {
-					tools.slider.setValue($("stream-h264-bitrate-slider"), s.h264.bitrate);
-					tools.slider.setValue($("stream-h264-gop-slider"), s.h264.gop); // Following together with gop
-				}
-
-				tools.feature.setEnabled($("stream-quality"), (s.encoder.quality > 0));
-
-				__streamer.ensureStream(s);
+				el.value = res;
 			}
-			__setControlsEnabled(ok);
+			tools.slider.setValue($("stream-quality-slider"), Math.max(s.encoder.quality, 1));
+			tools.slider.setValue($("stream-desired-fps-slider"), s.source.desired_fps);
+			if (s.h264 && s.h264.bitrate) {
+				tools.slider.setValue($("stream-h264-bitrate-slider"), s.h264.bitrate);
+				tools.slider.setValue($("stream-h264-gop-slider"), s.h264.gop); // Following together with gop
+			}
+
+			tools.feature.setEnabled($("stream-quality"), (s.encoder.quality > 0));
+
+			__streamer.ensureStream(s);
 		}
 	};
 
@@ -318,7 +315,7 @@ export function Streamer() {
 	};
 
 	var __clickResetButton = function() {
-		wm.confirm("Are you sure you want to reset stream?").then(function (ok) {
+		wm.confirm("Are you sure you want to reset stream?").then(function(ok) {
 			if (ok) {
 				__resetStream();
 				tools.httpPost("/api/streamer/reset", null, function(http) {
@@ -331,12 +328,6 @@ export function Streamer() {
 	};
 
 	var __sendParam = function(name, value) {
-		tools.el.setEnabled($("stream-quality-slider"), false);
-		tools.el.setEnabled($("stream-desired-fps-slider"), false);
-		tools.el.setEnabled($("stream-resolution-selector"), false);
-		tools.el.setEnabled($("stream-h264-bitrate-slider"), false);
-		tools.el.setEnabled($("stream-h264-gop-slider"), false);
-
 		tools.httpPost("/api/streamer/set_params", {[name]: value}, function(http) {
 			if (http.status !== 200) {
 				wm.error("Can't configure stream", http.responseText);
