@@ -1,3 +1,4 @@
+python-periphery
 pyserial-asyncio
 pyghmi
 spidev
