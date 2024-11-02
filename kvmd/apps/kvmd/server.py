@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-import asyncio
-import operator
 import dataclasses
 
 from typing import Callable
@@ -100,58 +98,40 @@ class StreamerH264NotSupported(OperationError):
 
 
 # =====
-@dataclasses.dataclass(frozen=True)
-class _SubsystemEventSource:
-    get_state:     (Callable[[], Coroutine[Any, Any, dict]] | None) = None
+@dataclasses.dataclass
+class _Subsystem:
+    name:          str
+    event_type:    str
+    sysprep:       (Callable[[], None] | None)
+    systask:       (Callable[[], Coroutine[Any, Any, None]] | None)
+    cleanup:       (Callable[[], Coroutine[Any, Any, dict]] | None)
     trigger_state: (Callable[[], Coroutine[Any, Any, None]] | None) = None
     poll_state:    (Callable[[], AsyncGenerator[dict, None]] | None) = None
 
-
-@dataclasses.dataclass
-class _Subsystem:
-    name:    str
-    sysprep: (Callable[[], None] | None)
-    systask: (Callable[[], Coroutine[Any, Any, None]] | None)
-    cleanup: (Callable[[], Coroutine[Any, Any, dict]] | None)
-    sources: dict[str, _SubsystemEventSource]
+    def __post_init__(self) -> None:
+        if self.event_type:
+            assert self.trigger_state
+            assert self.poll_state
 
     @classmethod
     def make(cls, obj: object, name: str, event_type: str="") -> "_Subsystem":
         if isinstance(obj, BasePlugin):
             name = f"{name} ({obj.get_plugin_name()})"
-        sub = _Subsystem(
+        return _Subsystem(
             name=name,
+            event_type=event_type,
             sysprep=getattr(obj, "sysprep", None),
             systask=getattr(obj, "systask", None),
             cleanup=getattr(obj, "cleanup", None),
-            sources={},
+            trigger_state=getattr(obj, "trigger_state", None),
+            poll_state=getattr(obj, "poll_state", None),
+
         )
-        if event_type:
-            sub.add_source(
-                event_type=event_type,
-                get_state=getattr(obj, "get_state", None),
-                trigger_state=getattr(obj, "trigger_state", None),
-                poll_state=getattr(obj, "poll_state", None),
-            )
-        return sub
-
-    def add_source(
-        self,
-        event_type: str,
-        get_state: (Callable[[], Coroutine[Any, Any, dict]] | None),
-        trigger_state: (Callable[[], Coroutine[Any, Any, None]] | None),
-        poll_state: (Callable[[], AsyncGenerator[dict, None]] | None),
-    ) -> "_Subsystem":
-
-        assert event_type
-        assert event_type not in self.sources, (self, event_type)
-        assert get_state or poll_state, (self, event_type)
-        self.sources[event_type] = _SubsystemEventSource(get_state, trigger_state, poll_state)
-        return self
 
 
 class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
     __EV_GPIO_STATE = "gpio_state"
+    __EV_HID_STATE = "hid_state"
     __EV_ATX_STATE = "atx_state"
     __EV_MSD_STATE = "msd_state"
     __EV_STREAMER_STATE = "streamer_state"
@@ -200,11 +180,10 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             ExportApi(info_manager, atx, user_gpio),
             RedfishApi(info_manager, atx),
         ]
-
         self.__subsystems = [
             _Subsystem.make(auth_manager, "Auth manager"),
             _Subsystem.make(user_gpio,    "User-GPIO",    self.__EV_GPIO_STATE),
-            _Subsystem.make(hid,          "HID",          "hid_state").add_source("hid_keymaps_state", self.__hid_api.get_keymaps, None, None),
+            _Subsystem.make(hid,          "HID",          self.__EV_HID_STATE),
             _Subsystem.make(atx,          "ATX",          self.__EV_ATX_STATE),
             _Subsystem.make(msd,          "MSD",          self.__EV_MSD_STATE),
             _Subsystem.make(streamer,     "Streamer",     self.__EV_STREAMER_STATE),
@@ -259,24 +238,11 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                     "minor": int(minor),
                 },
             })
-            states = [
-                (event_type, src.get_state())
-                for sub in self.__subsystems
-                for (event_type, src) in sub.sources.items()
-                if src.get_state and not src.trigger_state
-            ]
-            events = dict(zip(
-                map(operator.itemgetter(0), states),
-                await asyncio.gather(*map(operator.itemgetter(1), states)),
-            ))
-            await asyncio.gather(*[
-                ws.send_event(event_type, events.pop(event_type))
-                for (event_type, _) in states
-            ])
             for sub in self.__subsystems:
-                for src in sub.sources.values():
-                    if src.trigger_state:
-                        await src.trigger_state()
+                if sub.event_type:
+                    assert sub.trigger_state
+                    await sub.trigger_state()
+            await self._broadcast_ws_event("hid_keymaps_state", await self.__hid_api.get_keymaps())  # FIXME
             return (await self._ws_loop(ws))
 
     @exposed_ws("ping")
@@ -300,9 +266,9 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         for sub in self.__subsystems:
             if sub.systask:
                 aiotools.create_deadly_task(sub.name, sub.systask())
-            for (event_type, src) in sub.sources.items():
-                if src.poll_state:
-                    aiotools.create_deadly_task(f"{sub.name} [poller]", self.__poll_state(event_type, src.poll_state()))
+            if sub.event_type:
+                assert sub.poll_state
+                aiotools.create_deadly_task(f"{sub.name} [poller]", self.__poll_state(sub.event_type, sub.poll_state()))
         aiotools.create_deadly_task("Stream snapshoter", self.__stream_snapshoter())
         self._add_exposed(*self.__apis)
 
