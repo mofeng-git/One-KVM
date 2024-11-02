@@ -65,6 +65,15 @@ class InfoManager:
         ])
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
+        # ==== Granularity table ====
+        #   - system -- Partial
+        #   - auth   -- Partial
+        #   - meta   -- Partial, nullable
+        #   - extras -- Partial, nullable
+        #   - hw     -- Partial
+        #   - fan    -- Partial
+        # ===========================
+
         while True:
             (field, value) = await self.__queue.get()
             yield {field: value}

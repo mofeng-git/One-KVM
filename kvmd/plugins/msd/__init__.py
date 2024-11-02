@@ -121,6 +121,18 @@ class BaseMsd(BasePlugin):
         raise NotImplementedError()
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
+        # ==== Granularity table ====
+        #   - enabled -- Full
+        #   - online  -- Partial
+        #   - busy    -- Partial
+        #   - drive   -- Partial, nullable
+        #   - storage -- Partial, nullable
+        #   - storage.parts       -- Partial
+        #   - storage.images      -- Partial
+        #   - storage.downloading -- Partial, nullable
+        #   - storage.uploading   -- Partial, nullable
+        # ===========================
+
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield

@@ -287,6 +287,14 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__notifier.notify(self.__ST_FULL)
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
+        # ==== Granularity table ====
+        #   - features -- Full
+        #   - limits   -- Partial, paired with params
+        #   - params   -- Partial, paired with limits
+        #   - streamer -- Partial, nullable
+        #   - snapshot -- Partial
+        # ===========================
+
         def signal_handler(*_: Any) -> None:
             get_logger(0).info("Got SIGUSR2, checking the stream state ...")
             self.__notifier.notify(self.__ST_STREAMER)

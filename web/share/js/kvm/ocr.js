@@ -32,6 +32,8 @@ export function Ocr(__getGeometry) {
 
 	/************************************************************************/
 
+	var __enabled = null;
+
 	var __start_pos = null;
 	var __end_pos = null;
 	var __sel = null;
@@ -71,8 +73,10 @@ export function Ocr(__getGeometry) {
 	/************************************************************************/
 
 	self.setState = function(state) {
-		let enabled = (state && state.enabled && !tools.browser.is_mobile);
-		if (enabled) {
+		if (state.enabled !== undefined) {
+			__enabled = (state.enabled && !tools.browser.is_mobile);
+		}
+		if (__enabled) {
 			let el = $("stream-ocr-lang-selector");
 			el.options.length = 0;
 			for (let lang of state.langs.available) {
@@ -80,8 +84,8 @@ export function Ocr(__getGeometry) {
 			}
 			el.value = tools.storage.get("stream.ocr.lang", state.langs["default"]);
 		}
-		tools.feature.setEnabled($("stream-ocr"), enabled);
-		$("stream-ocr-led").className = (enabled ? "led-gray" : "hidden");
+		tools.feature.setEnabled($("stream-ocr"), __enabled);
+		$("stream-ocr-led").className = (__enabled ? "led-gray" : "hidden");
 	};
 
 	var __startSelection = function(event) {

@@ -32,6 +32,8 @@ export function Atx(__recorder) {
 
 	/************************************************************************/
 
+	var __state = null;
+
 	var __init__ = function() {
 		$("atx-power-led").title = "Power Led";
 		$("atx-hdd-led").title = "Disk Activity Led";
@@ -46,18 +48,38 @@ export function Atx(__recorder) {
 	/************************************************************************/
 
 	self.setState = function(state) {
-		let buttons_enabled = false;
 		if (state) {
-			tools.feature.setEnabled($("atx-dropdown"), state.enabled);
-			$("atx-power-led").className = (state.busy ? "led-yellow" : (state.leds.power ? "led-green" : "led-gray"));
-			$("atx-hdd-led").className = (state.leds.hdd ? "led-red" : "led-gray");
-			buttons_enabled = !state.busy;
+			if (!__state) {
+				__state = {"leds": {}};
+			}
+			if (state.enabled !== undefined) {
+				tools.feature.setEnabled($("atx-dropdown"), state.enabled);
+				__state.enabled = state.enabled;
+			}
+			if (__state.enabled !== undefined) {
+				if (state.busy !== undefined) {
+					__updateButtons(!state.busy);
+					__state.busy = state.busy;
+				}
+				if (state.leds !== undefined) {
+					__state.leds = state.leds;
+				}
+				if (state.busy !== undefined || state.leds !== undefined) {
+					let busy = __state.busy;
+					let leds = __state.leds;
+					$("atx-power-led").className = (busy ? "led-yellow" : (leds.power ? "led-green" : "led-gray"));
+					$("atx-hdd-led").className = (leds.hdd ? "led-red" : "led-gray");
+				}
+			}
 		} else {
-			$("atx-power-led").className = "led-gray";
-			$("atx-hdd-led").className = "led-gray";
+			__state = null;
+			__updateButtons(false);
 		}
+	};
+
+	var __updateButtons = function(enabled) {
 		for (let id of ["atx-power-button", "atx-power-button-long", "atx-reset-button"]) {
-			tools.el.setEnabled($(id), buttons_enabled);
+			tools.el.setEnabled($(id), enabled);
 		}
 	};
 
