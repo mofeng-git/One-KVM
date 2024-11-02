@@ -153,6 +153,7 @@ class _Subsystem:
 class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
     __EV_GPIO_STATE = "gpio_state"
     __EV_ATX_STATE = "atx_state"
+    __EV_MSD_STATE = "msd_state"
     __EV_STREAMER_STATE = "streamer_state"
     __EV_OCR_STATE = "ocr_state"
     __EV_INFO_STATE = "info_state"
@@ -208,7 +209,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             _Subsystem.make(user_gpio,    "User-GPIO",    self.__EV_GPIO_STATE),
             _Subsystem.make(hid,          "HID",          "hid_state").add_source("hid_keymaps_state", self.__hid_api.get_keymaps, None, None),
             _Subsystem.make(atx,          "ATX",          self.__EV_ATX_STATE),
-            _Subsystem.make(msd,          "MSD",          "msd_state"),
+            _Subsystem.make(msd,          "MSD",          self.__EV_MSD_STATE),
             _Subsystem.make(streamer,     "Streamer",     self.__EV_STREAMER_STATE),
             _Subsystem.make(ocr,          "OCR",          self.__EV_OCR_STATE),
             _Subsystem.make(info_manager, "Info manager", self.__EV_INFO_STATE),
@@ -378,6 +379,8 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                 await self.__poll_gpio_state(poller)
             case self.__EV_INFO_STATE:
                 await self.__poll_info_state(poller)
+            case self.__EV_MSD_STATE:
+                await self.__poll_msd_state(poller)
             case self.__EV_STREAMER_STATE:
                 await self.__poll_streamer_state(poller)
             case self.__EV_OCR_STATE:
@@ -403,6 +406,18 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             await self._broadcast_ws_event(self.__EV_INFO_STATE, state, legacy=False)
             for (key, value) in state.items():
                 await self._broadcast_ws_event(f"info_{key}_state", value, legacy=True)
+
+    async def __poll_msd_state(self, poller: AsyncGenerator[dict, None]) -> None:
+        prev: dict = {"storage": None}
+        async for state in poller:
+            await self._broadcast_ws_event(self.__EV_MSD_STATE, state, legacy=False)
+            prev_storage = prev["storage"]
+            prev.update(state)
+            if prev["storage"] is not None and prev_storage is not None:
+                prev_storage.update(prev["storage"])
+                prev["storage"] = prev_storage
+            if "online" in prev:  # Complete/Full
+                await self._broadcast_ws_event(self.__EV_MSD_STATE, prev, legacy=True)
 
     async def __poll_streamer_state(self, poller: AsyncGenerator[dict, None]) -> None:
         prev: dict = {}

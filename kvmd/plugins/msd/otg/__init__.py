@@ -171,6 +171,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         async with self.__state._lock:  # pylint: disable=protected-access
             storage: (dict | None) = None
             if self.__state.storage:
+                assert self.__state.vd
                 storage = dataclasses.asdict(self.__state.storage)
                 for name in list(storage["images"]):
                     del storage["images"][name]["name"]
@@ -179,21 +180,19 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 for name in list(storage["parts"]):
                     del storage["parts"][name]["name"]
 
-                storage["size"] = storage["parts"][""]["size"]  # Legacy API
-                storage["free"] = storage["parts"][""]["free"]  # Legacy API
-
                 storage["downloading"] = (self.__reader.get_state() if self.__reader else None)
                 storage["uploading"] = (self.__writer.get_state() if self.__writer else None)
 
             vd: (dict | None) = None
             if self.__state.vd:
+                assert self.__state.storage
                 vd = dataclasses.asdict(self.__state.vd)
                 if vd["image"]:
                     del vd["image"]["path"]
 
             return {
                 "enabled": True,
-                "online": (bool(self.__state.vd) and self.__drive.is_enabled()),
+                "online": (bool(vd) and self.__drive.is_enabled()),
                 "busy": self.__state.is_busy(),
                 "storage": storage,
                 "drive": vd,
@@ -208,9 +207,22 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
             if (await self.__notifier.wait()) > 0:
                 prev = {}
             new = await self.get_state()
-            if new != prev:
+            if not prev or (prev.get("online") != new["online"]):
                 prev = copy.deepcopy(new)
                 yield new
+            else:
+                diff: dict = {}
+                for sub in ["busy", "drive"]:
+                    if prev.get(sub) != new[sub]:
+                        diff[sub] = new[sub]
+                for sub in ["images", "parts", "downloading", "uploading"]:
+                    if (prev.get("storage") or {}).get(sub) != (new["storage"] or {}).get(sub):
+                        if "storage" not in diff:
+                            diff["storage"] = {}
+                        diff["storage"][sub] = new["storage"][sub]
+                if diff:
+                    prev = copy.deepcopy(new)
+                    yield diff
 
     @aiotools.atomic_fg
     async def reset(self) -> None:

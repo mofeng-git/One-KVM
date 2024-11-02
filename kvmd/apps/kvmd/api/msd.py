@@ -63,7 +63,11 @@ class MsdApi:
 
     @exposed_http("GET", "/msd")
     async def __state_handler(self, _: Request) -> Response:
-        return make_json_response(await self.__msd.get_state())
+        state = await self.__msd.get_state()
+        if state["storage"] and state["storage"]["parts"]:
+            state["storage"]["size"] = state["storage"]["parts"][""]["size"]  # Legacy API
+            state["storage"]["free"] = state["storage"]["parts"][""]["free"]  # Legacy API
+        return make_json_response(state)
 
     @exposed_http("POST", "/msd/set_params")
     async def __set_params_handler(self, req: Request) -> Response:
