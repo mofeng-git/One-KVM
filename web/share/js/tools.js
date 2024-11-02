@@ -317,30 +317,6 @@ export var tools = new function() {
 				}
 				return false;
 			},
-
-			"setValues": function(el, values, empty_title=null) {
-				if (values.constructor == Object) {
-					values = Object.keys(values).sort();
-				}
-				let values_json = JSON.stringify(values);
-				if (el.__values_json !== values_json) {
-					el.options.length = 0;
-					for (let value of values) {
-						let title = value;
-						if (title.length === 0 && empty_title !== null) {
-							title = empty_title;
-						}
-						self.selector.addOption(el, title, value);
-					}
-					el.__values_json = values_json;
-					el.__values = values;
-				}
-			},
-			"setSelectedValue": function(el, value) {
-				if (el.__values && el.__values.includes(value)) {
-					el.value = value;
-				}
-			},
 		};
 	};
 

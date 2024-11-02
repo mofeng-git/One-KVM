@@ -71,21 +71,6 @@ export function Hid(__getGeometry, __recorder) {
 		window.addEventListener("pagehide", __releaseAll);
 		window.addEventListener("blur", __releaseAll);
 
-		tools.storage.bindSimpleSwitch($("hid-pak-ask-switch"), "hid.pak.ask", true);
-		tools.storage.bindSimpleSwitch($("hid-pak-secure-switch"), "hid.pak.secure", false, function(value) {
-			$("hid-pak-text").style.setProperty("-webkit-text-security", (value ? "disc" : "none"));
-		});
-		tools.feature.setEnabled($("hid-pak-secure"), (
-			tools.browser.is_chrome
-			|| tools.browser.is_safari
-			|| tools.browser.is_opera
-		));
-
-		$("hid-pak-keymap-selector").addEventListener("change", function() {
-			tools.storage.set("hid.pak.keymap", $("hid-pak-keymap-selector").value);
-		});
-
-		tools.el.setOnClick($("hid-pak-button"), __clickPasteAsKeysButton);
 		tools.el.setOnClick($("hid-connect-switch"), __clickConnectSwitch);
 		tools.el.setOnClick($("hid-reset-button"), __clickResetButton);
 
@@ -117,8 +102,6 @@ export function Hid(__getGeometry, __recorder) {
 	/************************************************************************/
 
 	self.setSocket = function(ws) {
-		tools.el.setEnabled($("hid-pak-text"), ws);
-		tools.el.setEnabled($("hid-pak-button"), ws);
 		tools.el.setEnabled($("hid-reset-button"), ws);
 		tools.el.setEnabled($("hid-jiggler-switch"), ws);
 		if (!ws) {
@@ -198,15 +181,9 @@ export function Hid(__getGeometry, __recorder) {
 		tools.el.setEnabled($("hid-connect-switch"), (state && state.online && !state.busy));
 
 		if (state) {
-			__keyboard.setState(state.keyboard, state.online, state.busy);
-			__mouse.setState(state.mouse, state.online, state.busy);
+			__keyboard.setState(state.keyboard.online, state.keyboard.leds, state.online, state.busy);
+			__mouse.setState(state.mouse.online, state.mouse.absolute, state.online, state.busy);
 		}
-	};
-
-	self.setKeymaps = function(state) {
-		let el = $("hid-pak-keymap-selector");
-		tools.selector.setValues(el, state.keymaps.available);
-		tools.selector.setSelectedValue(el, tools.storage.get("hid.pak.keymap", state.keymaps["default"]));
 	};
 
 	var __releaseAll = function() {
@@ -238,50 +215,6 @@ export function Hid(__getGeometry, __recorder) {
 			}, 100);
 			iterate();
 		});
-	};
-
-	var __clickPasteAsKeysButton = function() {
-		let text = $("hid-pak-text").value;
-		if (text) {
-			let paste_as_keys = function() {
-				tools.el.setEnabled($("hid-pak-text"), false);
-				tools.el.setEnabled($("hid-pak-button"), false);
-				tools.el.setEnabled($("hid-pak-keymap-selector"), false);
-
-				let keymap = $("hid-pak-keymap-selector").value;
-
-				tools.debug(`HID: paste-as-keys ${keymap}: ${text}`);
-
-				tools.httpPost("/api/hid/print", {"limit": 0, "keymap": keymap}, function(http) {
-					tools.el.setEnabled($("hid-pak-text"), true);
-					tools.el.setEnabled($("hid-pak-button"), true);
-					tools.el.setEnabled($("hid-pak-keymap-selector"), true);
-					$("hid-pak-text").value = "";
-					if (http.status === 413) {
-						wm.error("Too many text for paste!");
-					} else if (http.status !== 200) {
-						wm.error("HID paste error", http.responseText);
-					} else if (http.status === 200) {
-						__recorder.recordPrintEvent(text, keymap);
-					}
-				}, text, "text/plain");
-			};
-
-			if ($("hid-pak-ask-switch").checked) {
-				wm.confirm(`
-					You're going to paste ${text.length} character${text.length ? "s" : ""}.<br>
-					Are you sure you want to continue?
-				`).then(function(ok) {
-					if (ok) {
-						paste_as_keys();
-					} else {
-						$("hid-pak-text").value = "";
-					}
-				});
-			} else {
-				paste_as_keys();
-			}
-		}
 	};
 
 	var __clickOutputsRadio = function(hid) {

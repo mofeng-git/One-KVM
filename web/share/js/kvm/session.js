@@ -28,6 +28,7 @@ import {wm} from "../wm.js";
 
 import {Recorder} from "./recorder.js";
 import {Hid} from "./hid.js";
+import {Paste} from "./paste.js";
 import {Atx} from "./atx.js";
 import {Msd} from "./msd.js";
 import {Streamer} from "./stream.js";
@@ -48,6 +49,7 @@ export function Session() {
 	var __streamer = new Streamer();
 	var __recorder = new Recorder();
 	var __hid = new Hid(__streamer.getGeometry, __recorder);
+	var __paste = new Paste(__recorder);
 	var __atx = new Atx(__recorder);
 	var __msd = new Msd();
 	var __gpio = new Gpio(__recorder);
@@ -363,8 +365,8 @@ export function Session() {
 			case "pong": __missed_heartbeats = 0; break;
 			case "info_state": __setInfoState(data.event); break;
 			case "gpio_state": __gpio.setState(data.event); break;
-			case "hid_keymaps_state": __hid.setKeymaps(data.event); break;
 			case "hid_state": __hid.setState(data.event); break;
+			case "hid_keymaps_state": __paste.setState(data.event); break;
 			case "atx_state": __atx.setState(data.event); break;
 			case "msd_state": __msd.setState(data.event); break;
 			case "streamer_state": __streamer.setState(data.event); break;
@@ -395,6 +397,8 @@ export function Session() {
 		__gpio.setState(null);
 		__hid.setSocket(null);
 		__recorder.setSocket(null);
+
+		__paste.setState(null);
 		__atx.setState(null);
 		__msd.setState(null);
 		__streamer.setState(null);

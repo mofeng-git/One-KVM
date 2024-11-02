@@ -65,17 +65,17 @@ export function Keyboard(__recordWsEvent) {
 		__updateOnlineLeds();
 	};
 
-	self.setState = function(state, hid_online, hid_busy) {
+	self.setState = function(online, leds, hid_online, hid_busy) {
 		if (!hid_online) {
 			__online = null;
 		} else {
-			__online = (state.online && !hid_busy);
+			__online = (online && !hid_busy);
 		}
 		__updateOnlineLeds();
 
 		for (let led of ["caps", "scroll", "num"]) {
 			for (let el of $$$(`.hid-keyboard-${led}-led`)) {
-				if (state.leds[led]) {
+				if (leds[led]) {
 					el.classList.add("led-green");
 					el.classList.remove("led-gray");
 				} else {
