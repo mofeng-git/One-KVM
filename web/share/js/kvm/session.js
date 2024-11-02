@@ -393,15 +393,14 @@ export function Session() {
 			__ping_timer = null;
 		}
 
-		__ocr.setState(null);
 		__gpio.setState(null);
-		__hid.setSocket(null);
-		__recorder.setSocket(null);
-
+		__hid.setSocket(null); // auto setState(null);
 		__paste.setState(null);
 		__atx.setState(null);
 		__msd.setState(null);
 		__streamer.setState(null);
+		__ocr.setState(null);
+		__recorder.setSocket(null);
 		__ws = null;
 
 		setTimeout(function() {
