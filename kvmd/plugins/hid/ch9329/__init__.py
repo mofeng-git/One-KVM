@@ -104,6 +104,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         absolute = self.__mouse.is_absolute()
         leds = await self.__keyboard.get_leds()
         return {
+            "enabled": True,
             "online": state["online"],
             "busy": False,
             "connected": None,

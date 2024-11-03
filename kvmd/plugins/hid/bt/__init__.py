@@ -141,6 +141,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         state = await self.__server.get_state()
         outputs: dict = {"available": [], "active": ""}
         return {
+            "enabled": True,
             "online": True,
             "busy": False,
             "connected": None,

@@ -217,6 +217,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 mouse_outputs["active"] = active_mouse
 
         return {
+            "enabled": True,
             "online": online,
             "busy": bool(state["busy"]),
             "connected": (bool(outputs2 & 0b01000000) if outputs2 & 0b10000000 else None),

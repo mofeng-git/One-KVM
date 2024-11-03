@@ -189,7 +189,11 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         self.__shared_params.name = name
 
         elif event_type == "hid_state":
-            if self._encodings.has_leds_state:
+            if (
+                self._encodings.has_leds_state
+                and ("keyboard" in event)
+                and ("leds" in event["keyboard"])
+            ):
                 await self._send_leds_state(**event["keyboard"]["leds"])
 
     # =====

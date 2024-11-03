@@ -101,6 +101,19 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
         raise NotImplementedError
 
     async def poll_state(self) -> AsyncGenerator[dict, None]:
+        # ==== Granularity table ====
+        #   - enabled   -- Full
+        #   - online    -- Partial
+        #   - busy      -- Partial
+        #   - connected -- Partial, nullable
+        #   - keyboard.online  -- Partial
+        #   - keyboard.outputs -- Partial
+        #   - keyboard.leds    -- Partial
+        #   - mouse.online     -- Partial
+        #   - mouse.outputs    -- Partial, follows with absolute
+        #   - mouse.absolute   -- Partial, follows with outputs
+        # ===========================
+
         yield {}
         raise NotImplementedError
 

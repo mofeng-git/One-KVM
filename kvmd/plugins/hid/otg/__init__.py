@@ -134,6 +134,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         keyboard_state = await self.__keyboard_proc.get_state()
         mouse_state = await self.__mouse_current.get_state()
         return {
+            "enabled": True,
             "online": True,
             "busy": False,
             "connected": None,

@@ -35,6 +35,7 @@ export function Hid(__getGeometry, __recorder) {
 
 	/************************************************************************/
 
+	var __state = null;
 	var __keyboard = null;
 	var __mouse = null;
 
@@ -102,8 +103,6 @@ export function Hid(__getGeometry, __recorder) {
 	/************************************************************************/
 
 	self.setSocket = function(ws) {
-		tools.el.setEnabled($("hid-reset-button"), ws);
-		tools.el.setEnabled($("hid-jiggler-switch"), ws);
 		if (!ws) {
 			self.setState(null);
 		}
@@ -112,78 +111,135 @@ export function Hid(__getGeometry, __recorder) {
 	};
 
 	self.setState = function(state) {
-		let has_relative_squash = false;
-
 		if (state) {
-			tools.feature.setEnabled($("hid-jiggler"), state.jiggler.enabled);
-			$("hid-jiggler-switch").checked = state.jiggler.active;
+			if (!__state) {
+				__state = {"keyboard": {}, "mouse": {}};
+			}
+			if (state.enabled !== undefined) {
+				__state.enabled = state.enabled; // Currently unused, always true
+			}
+			if (__state.enabled !== undefined) {
+				for (let key of ["online", "busy", "connected", "jiggler"]) {
+					if (state[key] !== undefined) {
+						__state[key] = state[key];
+					}
+				}
+				for (let hid of ["keyboard", "mouse"]) {
+					if (state[hid] === undefined) {
+						state[hid] = {}; // Add some stubs for processing
+					}
+					for (let key of ["online", "outputs", (hid === "keyboard" ? "leds" : "absolute")]) {
+						__state[hid][key] = state[hid][key];
+					}
+				}
+				if (state.connected !== undefined) {
+					tools.feature.setEnabled($("hid-connect"), (__state.connected !== null));
+					$("hid-connect-switch").checked = !!__state.connected;
+				}
+				if (state.jiggler !== undefined) {
+					tools.feature.setEnabled($("hid-jiggler"), __state.jiggler.enabled);
+					$("hid-jiggler-switch").checked = __state.jiggler.active;
+				}
+				if (state.keyboard.outputs !== undefined) {
+					__updateKeyboardOutputs(__state.keyboard.outputs);
+				}
+				if (state.mouse.outputs !== undefined) {
+					__updateMouseOutputs(__state.mouse.outputs, __state.mouse.absolute); // Follows together
+				}
+				if (
+					state.keyboard.online !== undefined || state.keyboard.leds !== undefined
+					|| state.online !== undefined || state.busy !== undefined
+				) {
+					__keyboard.setState(__state.keyboard.online, __state.keyboard.leds, __state.online, __state.busy);
+				}
+				if (
+					state.mouse.online !== undefined || state.mouse.absolute !== undefined
+					|| state.online !== undefined || state.busy !== undefined
+				) {
+					__mouse.setState(__state.mouse.online, __state.mouse.absolute, __state.online, __state.busy);
+				}
+				if (state.online !== undefined || state.busy !== undefined) {
+					tools.radio.setEnabled("hid-outputs-keyboard-radio", (__state.online && !__state.busy));
+					tools.radio.setEnabled("hid-outputs-mouse-radio", (__state.online && !__state.busy));
+					tools.el.setEnabled($("hid-connect-switch"), (__state.online && !__state.busy));
+				}
+			}
+		} else {
+			__state = null;
+			tools.radio.setEnabled("hid-outputs-keyboard-radio", false);
+			tools.radio.setEnabled("hid-outputs-mouse-radio", false);
+			tools.el.setEnabled($("hid-connect-switch"), false);
+			tools.el.setEnabled($("hid-mouse-squash-switch"), false);
+			tools.el.setEnabled($("hid-mouse-sens-slider"), false);
 		}
-		if (state && state.online) {
-			let keyboard_outputs = state.keyboard.outputs.available;
-			let mouse_outputs = state.mouse.outputs.available;
-			if (keyboard_outputs.length) {
-				if ($("hid-outputs-keyboard-box").outputs !== keyboard_outputs) {
-					let html = "";
-					for (let args of [
-						["USB", "usb"],
-						["PS/2", "ps2"],
-						["Off", "disabled"],
-					]) {
-						if (keyboard_outputs.includes(args[1])) {
-							html += tools.radio.makeItem("hid-outputs-keyboard-radio", args[0], args[1]);
-						}
+		tools.el.setEnabled($("hid-reset-button"), __state);
+		tools.el.setEnabled($("hid-jiggler-switch"), __state);
+	};
+
+	var __updateKeyboardOutputs = function(outputs) {
+		let avail = outputs.available;
+		if (avail.length > 0) {
+			let el = $("hid-outputs-keyboard-box");
+			let avail_json = JSON.stringify(avail);
+			if (el.__avail_json !== avail_json) {
+				let html = "";
+				for (let pair of [
+					["USB",  "usb"],
+					["PS/2", "ps2"],
+					["Off",  "disabled"],
+				]) {
+					if (avail.includes(pair[1])) {
+						html += tools.radio.makeItem("hid-outputs-keyboard-radio", pair[0], pair[1]);
 					}
-					$("hid-outputs-keyboard-box").innerHTML = html;
-					$("hid-outputs-keyboard-box").outputs = keyboard_outputs;
-					tools.radio.setOnClick("hid-outputs-keyboard-radio", () => __clickOutputsRadio("keyboard"));
 				}
-				tools.radio.setValue("hid-outputs-keyboard-radio", state.keyboard.outputs.active);
+				el.innerHTML = html;
+				tools.radio.setOnClick("hid-outputs-keyboard-radio", () => __clickOutputsRadio("keyboard"));
+				el.__avail_json = avail_json;
 			}
-			let has_relative = false;
-			if (mouse_outputs.length) {
-				if ($("hid-outputs-mouse-box").outputs !== mouse_outputs) {
-					let html = "";
-					for (let args of [
-						["Absolute", "usb", false],
-						["Abs-Win98", "usb_win98", false],
-						["Relative", "usb_rel", true],
-						["PS/2", "ps2", true],
-						["Off", "disabled"],
-					]) {
-						if (mouse_outputs.includes(args[1])) {
-							html += tools.radio.makeItem("hid-outputs-mouse-radio", args[0], args[1]);
-							has_relative = (has_relative || args[2]);
-						}
+			tools.radio.setValue("hid-outputs-keyboard-radio", outputs.active);
+		}
+		tools.feature.setEnabled($("hid-outputs-keyboard"), (avail.length > 0));
+	};
+
+	var __updateMouseOutputs = function(outputs, absolute) {
+		let has_relative = null;
+		let has_relative_squash = null;
+		let avail = outputs.available;
+		if (avail.length > 0) {
+			let el = $("hid-outputs-mouse-box");
+			let avail_json = JSON.stringify(avail);
+			if (el.__avail_json !== avail_json) {
+				has_relative = false;
+				let html = "";
+				for (let pair of [
+					["Absolute",  "usb",       false],
+					["Abs-Win98", "usb_win98", false],
+					["Relative",  "usb_rel",   true],
+					["PS/2",      "ps2",       true],
+					["Off",       "disabled",  false],
+				]) {
+					if (avail.includes(pair[1])) {
+						html += tools.radio.makeItem("hid-outputs-mouse-radio", pair[0], pair[1]);
+						has_relative = (has_relative || pair[2]);
 					}
-					$("hid-outputs-mouse-box").innerHTML = html;
-					$("hid-outputs-mouse-box").outputs = mouse_outputs;
-					tools.radio.setOnClick("hid-outputs-mouse-radio", () => __clickOutputsRadio("mouse"));
 				}
-				tools.radio.setValue("hid-outputs-mouse-radio", state.mouse.outputs.active);
-				has_relative_squash = ["usb_rel", "ps2"].includes(state.mouse.outputs.active);
-			} else {
-				has_relative = !state.mouse.absolute;
-				has_relative_squash = has_relative;
+				el.innerHTML = html;
+				tools.radio.setOnClick("hid-outputs-mouse-radio", () => __clickOutputsRadio("mouse"));
+				el.__avail_json = avail_json;
 			}
-			tools.feature.setEnabled($("hid-outputs"), (keyboard_outputs.length || mouse_outputs.length));
-			tools.feature.setEnabled($("hid-outputs-keyboard"), keyboard_outputs.length);
-			tools.feature.setEnabled($("hid-outputs-mouse"), mouse_outputs.length);
+			tools.radio.setValue("hid-outputs-mouse-radio", outputs.active);
+			has_relative_squash = (["usb_rel", "ps2"].includes(outputs.active));
+		} else {
+			has_relative = !absolute;
+			has_relative_squash = has_relative;
+		}
+		if (has_relative !== null) {
 			tools.feature.setEnabled($("hid-mouse-squash"), has_relative);
 			tools.feature.setEnabled($("hid-mouse-sens"), has_relative);
-			tools.feature.setEnabled($("hid-connect"), (state.connected !== null));
-			$("hid-connect-switch").checked = !!state.connected;
 		}
-
-		tools.radio.setEnabled("hid-outputs-keyboard-radio", (state && state.online && !state.busy));
-		tools.radio.setEnabled("hid-outputs-mouse-radio", (state && state.online && !state.busy));
-		tools.el.setEnabled($("hid-mouse-squash-switch"), (has_relative_squash && !state.busy));
-		tools.el.setEnabled($("hid-mouse-sens-slider"), (has_relative_squash && !state.busy));
-		tools.el.setEnabled($("hid-connect-switch"), (state && state.online && !state.busy));
-
-		if (state) {
-			__keyboard.setState(state.keyboard.online, state.keyboard.leds, state.online, state.busy);
-			__mouse.setState(state.mouse.online, state.mouse.absolute, state.online, state.busy);
-		}
+		tools.feature.setEnabled($("hid-outputs-mouse"), (avail.length > 0));
+		tools.el.setEnabled($("hid-mouse-squash-switch"), has_relative_squash);
+		tools.el.setEnabled($("hid-mouse-sens-slider"), has_relative_squash);
 	};
 
 	var __releaseAll = function() {

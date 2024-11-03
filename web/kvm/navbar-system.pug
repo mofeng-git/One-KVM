@@ -71,15 +71,14 @@ li(id="system-dropdown" class="right")
 			button(data-force-hide-menu data-show-window="stream-window" class="row33") &bull; Show stream
 			button(data-force-hide-menu id="stream-screenshot-button" class="row33") &bull; Screenshot
 			button(id="stream-reset-button" class="row33") Reset stream
-		div(id="hid-outputs" class="feature-disabled")
-			hr
-			table(class="kv")
-				tr(id="hid-outputs-keyboard", class="feature-disabled")
-					td Keyboard mode:
-					td #[div(id="hid-outputs-keyboard-box" class="radio-box")]
-				tr(id="hid-outputs-mouse", class="feature-disabled")
-					td Mouse #[a(target="_blank" href="https://docs.pikvm.org/mouse") mode]:
-					td #[div(id="hid-outputs-mouse-box" class="radio-box")]
+		hr
+		table(class="kv")
+			tr(id="hid-outputs-keyboard", class="feature-disabled")
+				td Keyboard mode:
+				td #[div(id="hid-outputs-keyboard-box" class="radio-box")]
+			tr(id="hid-outputs-mouse", class="feature-disabled")
+				td Mouse #[a(target="_blank" href="https://docs.pikvm.org/mouse") mode]:
+				td #[div(id="hid-outputs-mouse-box" class="radio-box")]
 		details
 			summary Keyboard &amp; Mouse (HID) settings
 			div(class="spoiler")
