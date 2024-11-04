@@ -81,6 +81,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         mouse_output: str,
         keymap_name: str,
         symmap: dict[int, dict[int, str]],
+        allow_cut_after: float,
 
         kvmd: KvmdClient,
         streamers: list[BaseStreamerClient],
@@ -100,6 +101,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             tls_timeout=tls_timeout,
             x509_cert_path=x509_cert_path,
             x509_key_path=x509_key_path,
+            allow_cut_after=allow_cut_after,
             vnc_passwds=list(vnc_credentials),
             vencrypt=vencrypt,
             none_auth_only=none_auth_only,
@@ -444,6 +446,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         desired_fps: int,
         mouse_output: str,
         keymap_path: str,
+        allow_cut_after: float,
 
         kvmd: KvmdClient,
         streamers: list[BaseStreamerClient],
@@ -501,6 +504,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     mouse_output=mouse_output,
                     keymap_name=keymap_name,
                     symmap=symmap,
+                    allow_cut_after=allow_cut_after,
                     kvmd=kvmd,
                     streamers=streamers,
                     vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],

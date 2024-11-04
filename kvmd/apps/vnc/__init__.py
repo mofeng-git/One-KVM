@@ -71,6 +71,7 @@ def main(argv: (list[str] | None)=None) -> None:
         desired_fps=config.desired_fps,
         mouse_output=config.mouse_output,
         keymap_path=config.keymap,
+        allow_cut_after=config.allow_cut_after,
 
         kvmd=KvmdClient(user_agent=user_agent, **config.kvmd._unpack()),
         streamers=streamers,

@@ -667,9 +667,10 @@ def _get_config_scheme() -> dict:
         },
 
         "vnc": {
-            "desired_fps":  Option(30, type=valid_stream_fps),
-            "mouse_output": Option("usb", type=valid_hid_mouse_output),
-            "keymap":       Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
+            "desired_fps":     Option(30, type=valid_stream_fps),
+            "mouse_output":    Option("usb", type=valid_hid_mouse_output),
+            "keymap":          Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
+            "allow_cut_after": Option(3.0, type=valid_float_f0),
 
             "server": {
                 "host":        Option("",   type=valid_ip_or_host, if_empty=""),
