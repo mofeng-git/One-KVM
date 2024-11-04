@@ -53,28 +53,31 @@ export function Atx(__recorder) {
 				__state = {"leds": {}};
 			}
 			if (state.enabled !== undefined) {
-				tools.feature.setEnabled($("atx-dropdown"), state.enabled);
 				__state.enabled = state.enabled;
+				tools.feature.setEnabled($("atx-dropdown"), __state.enabled);
 			}
 			if (__state.enabled !== undefined) {
 				if (state.busy !== undefined) {
-					__updateButtons(!state.busy);
 					__state.busy = state.busy;
+					__updateButtons(!__state.busy);
 				}
 				if (state.leds !== undefined) {
 					__state.leds = state.leds;
 				}
 				if (state.busy !== undefined || state.leds !== undefined) {
-					let busy = __state.busy;
-					let leds = __state.leds;
-					$("atx-power-led").className = (busy ? "led-yellow" : (leds.power ? "led-green" : "led-gray"));
-					$("atx-hdd-led").className = (leds.hdd ? "led-red" : "led-gray");
+					__updateLeds(__state.leds.power, __state.leds.hdd, __state.busy);
 				}
 			}
 		} else {
 			__state = null;
+			__updateLeds(false, false, false);
 			__updateButtons(false);
 		}
+	};
+
+	var __updateLeds = function(power, hdd, busy) {
+		$("atx-power-led").className = (busy ? "led-yellow" : (power ? "led-green" : "led-gray"));
+		$("atx-hdd-led").className = (hdd ? "led-red" : "led-gray");
 	};
 
 	var __updateButtons = function(enabled) {

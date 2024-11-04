@@ -76,20 +76,26 @@ export function Ocr(__getGeometry) {
 		if (state) {
 			if (state.enabled !== undefined) {
 				__enabled = (state.enabled && !tools.browser.is_mobile);
+				tools.feature.setEnabled($("stream-ocr"), __enabled);
+				$("stream-ocr-led").className = (__enabled ? "led-gray" : "hidden");
+			}
+			if (__enabled && state.langs !== undefined) {
+				__updateLangs(state.langs);
 			}
 		} else {
 			__enabled = false;
+			tools.feature.setEnabled($("stream-ocr"), false);
+			$("stream-ocr-led").className = "hidden";
 		}
-		if (__enabled) {
-			let el = $("stream-ocr-lang-selector");
-			el.options.length = 0;
-			for (let lang of state.langs.available) {
-				tools.selector.addOption(el, lang, lang);
-			}
-			el.value = tools.storage.get("stream.ocr.lang", state.langs["default"]);
+	};
+
+	var __updateLangs = function(langs) {
+		let el = $("stream-ocr-lang-selector");
+		el.options.length = 0;
+		for (let lang of langs.available) {
+			tools.selector.addOption(el, lang, lang);
 		}
-		tools.feature.setEnabled($("stream-ocr"), __enabled);
-		$("stream-ocr-led").className = (__enabled ? "led-gray" : "hidden");
+		el.value = tools.storage.get("stream.ocr.lang", langs["default"]);
 	};
 
 	var __startSelection = function(event) {

@@ -138,17 +138,17 @@ export function Streamer() {
 			if (!__state) {
 				__state = {};
 			}
-			if (state.features) {
+			if (state.features !== undefined) {
 				__state.features = state.features;
 				__state.limits = state.limits; // Following together with features
 			}
-			if (__state.features && state.streamer !== undefined) {
-				__setControlsEnabled(!!state.streamer);
+			if (__state.features !== undefined && state.streamer !== undefined) {
 				__state.streamer = state.streamer;
+				__setControlsEnabled(!!state.streamer);
 			}
 		} else {
-			__setControlsEnabled(false);
 			__state = null;
+			__setControlsEnabled(false);
 		}
 		let visible = wm.isWindowVisible($("stream-window"));
 		__applyState((visible && __state && __state.features) ? state : null);

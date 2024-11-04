@@ -66,12 +66,11 @@ export function Msd() {
 	self.setState = function(state) {
 		if (state) {
 			if (!__state) {
-				__state = {};
-				__state.storage = {};
+				__state = {"storage": {}};
 			}
 			if (state.enabled !== undefined) {
-				tools.feature.setEnabled($("msd-dropdown"), state.enabled);
 				__state.enabled = state.enabled;
+				tools.feature.setEnabled($("msd-dropdown"), __state.enabled);
 			}
 			if (__state.enabled !== undefined) {
 				if (state.online !== undefined) {
@@ -80,31 +79,27 @@ export function Msd() {
 				if (state.busy !== undefined) {
 					__state.busy = state.busy;
 				}
-				if (state.drive !== undefined || (state.storage && state.storage.images !== undefined)) {
-					let drive = (state.drive !== undefined ? state.drive : __state.drive);
-					let images = (
-						state.storage && state.storage.images !== undefined
-							? state.storage.images
-							: __state.storage && __state.storage.images !== undefined
-								? __state.storage.images
-								: null
-					);
-					if (drive && images) {
-						__updateImageSelector(drive, images);
+				if (state.drive) { // Null on offline, ignore
+					__state.drive = state.drive;
+				}
+				if (state.storage) { // Null on offline, ignore
+					if (state.storage.parts !== undefined) {
+						__state.storage.parts = state.storage.parts;
+						__updateParts(__state.storage.parts);
 					}
-					__state.drive = drive;
-					__state.storage.images = images;
+					if (state.storage.uploading !== undefined) {
+						__state.storage.uploading = state.storage.uploading;
+						__updateUploading(__state.storage.uploading);
+					}
+					if (state.storage.downloading !== undefined) {
+						__state.storage.downloading = state.storage.downloading;
+					}
+					if (state.storage.images !== undefined) {
+						__state.storage.images = state.storage.images;
+					}
 				}
-				if (state.storage && state.storage.parts !== undefined) {
-					__updateParts(state.storage.parts);
-					__state.storage.parts = state.storage.parts;
-				}
-				if (state.storage && state.storage.uploading !== undefined) {
-					__updateUploading(state.storage.uploading);
-					__state.storage.uploading = state.storage.uploading;
-				}
-				if (state.storage && state.storage.downloading !== undefined) {
-					__state.storage.downloading = state.storage.downloading;
+				if (state.drive || (state.storage && state.storage.images !== undefined)) {
+					__updateImageSelector(__state.drive, __state.storage.images);
 				}
 			}
 		} else {
@@ -403,10 +398,12 @@ export function Msd() {
 		let file = tools.input.getFile(el);
 		if (file) {
 			$("msd-new-url").value = "";
-			let part = __state.storage.parts[$("msd-new-part-selector").value];
-			if (file.size > part.size) {
-				wm.error(`The new image is too big for the Mass Storage partition.<br>Maximum: ${tools.formatSize(part.size)}`);
-				el.value = "";
+			if (__state && __state.storage && __state.storage.parts) {
+				let part = __state.storage.parts[$("msd-new-part-selector").value];
+				if (part && (file.size > part.size)) {
+					wm.error(`The new image is too big for the Mass Storage partition.<br>Maximum: ${tools.formatSize(part.size)}`);
+					el.value = "";
+				}
 			}
 		}
 		__refreshControls();

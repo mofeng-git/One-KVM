@@ -38,14 +38,20 @@ export function Gpio(__recorder) {
 
 	self.setState = function(state) {
 		if (state) {
-			if (state.model) {
-				__applyModel(state.model);
+			if (state.model !== undefined) {
 				__has_model = true;
+				__updateModel(state.model);
 			}
-			if (__has_model && state.state) {
-				__applyState(state.state);
+			if (__has_model && state.state !== undefined) {
+				if (state.state.inputs !== undefined) {
+					__updateInputs(state.state.inputs);
+				}
+				if (state.state.outputs !== undefined) {
+					__updateOutputs(state.state.outputs);
+				}
 			}
 		} else {
+			__has_model = false;
 			for (let el of $$("__gpio-led")) {
 				__setLedState(el, false);
 			}
@@ -54,33 +60,31 @@ export function Gpio(__recorder) {
 					tools.el.setEnabled(el, false);
 				}
 			}
-			__has_model = false;
 		}
 	};
 
-	var __applyState = function(state) {
-		if (state.inputs) {
-			for (let ch in state.inputs) {
-				for (let el of $$(`__gpio-led-${ch}`)) {
-					__setLedState(el, state.inputs[ch].state);
-				}
-			}
-		}
-		if (state.outputs) {
-			for (let ch in state.outputs) {
-				for (let type of ["switch", "button"]) {
-					for (let el of $$(`__gpio-${type}-${ch}`)) {
-						tools.el.setEnabled(el, state.outputs[ch].online && !state.outputs[ch].busy);
-					}
-				}
-				for (let el of $$(`__gpio-switch-${ch}`)) {
-					el.checked = state.outputs[ch].state;
-				}
+	var __updateInputs = function(inputs) {
+		for (let ch in inputs) {
+			for (let el of $$(`__gpio-led-${ch}`)) {
+				__setLedState(el, inputs[ch].state);
 			}
 		}
 	};
 
-	var __applyModel = function(model) {
+	var __updateOutputs = function(outputs) {
+		for (let ch in outputs) {
+			for (let type of ["switch", "button"]) {
+				for (let el of $$(`__gpio-${type}-${ch}`)) {
+					tools.el.setEnabled(el, (outputs[ch].online && !outputs[ch].busy));
+				}
+			}
+			for (let el of $$(`__gpio-switch-${ch}`)) {
+				el.checked = outputs[ch].state;
+			}
+		}
+	};
+
+	var __updateModel = function(model) {
 		tools.feature.setEnabled($("gpio-dropdown"), model.view.table.length);
 		if (model.view.table.length) {
 			let title = [];
