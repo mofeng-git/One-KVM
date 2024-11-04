@@ -109,6 +109,10 @@
     "kvm_text76":"Connect drive to Server",
     "kvm_text77":"Disconnect",
     "kvm_text78":"Reset",
+    "kvm_text79":"Video Record<br>",
+    "kvm_text80":"Record video using the browser API, and will be downloaded automatically",
+    "kvm_text81":"Start recording",
+    "kvm_text82":"End recording",
 
     "atx-ask-switch":"Ask click confirmation",
     "hid-recorder-loop-switch":"Infinite loop playback",

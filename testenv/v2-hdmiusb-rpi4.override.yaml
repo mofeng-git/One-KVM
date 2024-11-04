@@ -18,7 +18,7 @@ kvmd:
     streamer:
         cmd:
             - "/usr/bin/ustreamer"
-            - "--device=/dev/kvmd-video"
+            - "--device=/dev/video0"
             - "--persistent"
             - "--format=mjpeg"
             - "--resolution={resolution}"

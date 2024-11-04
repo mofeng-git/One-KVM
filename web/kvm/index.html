@@ -259,6 +259,11 @@
             <button class="row33" data-force-hide-menu id="stream-screenshot-button" i18n="kvm_text21">&bull; Screenshot</button>
             <button class="row33" id="stream-reset-button" i18n="kvm_text22">Reset stream</button>
           </div>
+          <div class="text"><b i18n="kvm_text79">Video Record<br></b><sub i18n="kvm_text80">Record video using the browser API, and will be downloaded automatically</sub></div>
+          <div class="buttons buttons-row">
+            <button class="row50" data-force-hide-menu id="stream-record-start-button" i18n="kvm_text81">&bull; Start recording</button>
+            <button class="row50" data-force-hide-menu id="stream-record-stop-button" i18n="kvm_text82">&bull; End recording</button>
+          </div>
           <div class="feature-disabled" id="hid-outputs">
             <hr>
             <table class="kv">
@@ -897,6 +902,7 @@
           </div>
         </div>
       </div>
+      <canvas class="hidden" id="stream-mjpeg-canvas"></canvas>
     </div>
     <div class="window" id="keyboard-window">
       <div class="window-header" id="keyboard-window-header">

@@ -97,9 +97,15 @@ export function Streamer() {
 
 		tools.el.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
 		tools.el.setOnClick($("stream-reset-button"), __clickResetButton);
+		tools.el.setOnClick($("stream-record-start-button"), __clickRecordStartButton);
+		tools.el.setOnClick($("stream-record-stop-button"), __clickRecordStopButton);
+
 
 		$("stream-window").show_hook = () => __applyState(__state);
 		$("stream-window").close_hook = () => __applyState(null);
+
+		//hidden stream-record-stop-button
+		document.getElementById('stream-record-stop-button').disabled = true;
 	};
 
 	/************************************************************************/
@@ -302,6 +308,77 @@ export function Streamer() {
 				});
 			}
 		});
+	};
+
+	
+	var stream_mjpeg_refresh_img;
+	var stream_now_fps
+	let mediaRecorder;
+	var __clickRecordStartButton = function() {
+		wm.confirm("Are you sure you want to record stream?").then(function (ok) {
+			if (ok) {
+				stream_now_fps = tools.slider.getValue($("stream-desired-fps-slider"));
+				let recordedBlobs = [];
+				//"mjpeg" or "janus"
+				let stream_type = document.querySelector('input[name="stream-mode-radio"]:checked').value;
+				if ( stream_type == "mjpeg"){
+					
+					var stream_mjpeg_img = document.getElementById('stream-image');
+					var stream_mjpeg_canvas = document.getElementById('stream-mjpeg-canvas');
+					var ctx = stream_mjpeg_canvas.getContext('2d');
+					stream_mjpeg_canvas.width = stream_mjpeg_img.width;
+					stream_mjpeg_canvas.height = stream_mjpeg_img.height;
+					const stream = stream_mjpeg_canvas.captureStream(stream_now_fps); // Capture FPS
+					mediaRecorder = new MediaRecorder(stream);
+				}else{
+					const stream = document.getElementById("stream-video")
+					stream.captureStream = stream.captureStream || stream.mozCaptureStream;
+					mediaRecorder = new MediaRecorder(stream.captureStream());
+				}
+				
+			  
+				mediaRecorder.ondataavailable = function(event) {
+					if (event.data && event.data.size > 0) {
+						recordedBlobs.push(event.data);
+					}
+				};
+			  
+				mediaRecorder.onstop = function() {
+					const blob = new Blob(recordedBlobs, {type: 'video/webm'});
+					var url = URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					document.body.appendChild(a);
+					const now = new Date();
+					const year = now.getFullYear();
+					const month = ('0' + (now.getMonth() + 1)).slice(-2);
+					const day = ('0' + now.getDate()).slice(-2);
+					const hours = ('0' + now.getHours()).slice(-2);
+					const minutes = ('0' + now.getMinutes()).slice(-2);
+					const seconds = ('0' + now.getSeconds()).slice(-2);//Get now time
+					a.style = "display: none";
+					a.href = url;
+					a.download = stream_type +"_"+ year + month + day + hours + minutes + seconds + ".webm";
+					a.click();
+					window.URL.revokeObjectURL(url);
+				};
+			  
+				mediaRecorder.start();
+				document.getElementById('stream-record-start-button').disabled = true;
+				document.getElementById('stream-record-stop-button').disabled = false;
+				if (stream_type == "mjpeg"){
+					stream_mjpeg_refresh_img = setInterval(function() {
+						ctx.drawImage(stream_mjpeg_img, 0, 0, stream_mjpeg_img.width, stream_mjpeg_img.height);
+					}, 1000 / stream_now_fps);
+				}
+			}
+		});
+	};
+
+	var __clickRecordStopButton = function() {
+		mediaRecorder.stop();
+		clearInterval(stream_mjpeg_refresh_img);
+		document.getElementById('stream-record-start-button').disabled = false;
+		document.getElementById('stream-record-stop-button').disabled = true;
 	};
 
 	var __sendParam = function(name, value) {
