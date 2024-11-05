@@ -25,6 +25,7 @@ import contextlib
 import dataclasses
 import functools
 import time
+import os
 
 from typing import AsyncGenerator
 
@@ -259,6 +260,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic_fg
     async def set_connected(self, connected: bool) -> None:
+        print(self.__drive)
         async with self.__state.busy():
             assert self.__state.vd
             if connected:
@@ -274,6 +276,15 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                 self.__drive.set_rw_flag(self.__state.vd.rw)
                 self.__drive.set_cdrom_flag(self.__state.vd.cdrom)
+                #reboot UDC to fix otg cd-rom and flash switch
+                udc_path = self.__drive.get_udc_path()
+                with open(udc_path) as file:
+                    enabled = bool(file.read().strip())
+                if enabled:
+                    with open(udc_path, "w") as file:
+                        file.write("\n")
+                with open(udc_path, "w") as file:
+                    file.write(sorted(os.listdir("/sys/class/udc"))[0])
                 if self.__state.vd.rw:
                     await self.__state.vd.image.remount_rw(True)
                 self.__drive.set_image_path(self.__state.vd.image.path)

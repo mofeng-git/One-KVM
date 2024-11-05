@@ -40,6 +40,7 @@ class MsdDriveLockedError(MsdOperationError):
 class Drive:
     def __init__(self, gadget: str, instance: int, lun: int) -> None:
         func = f"mass_storage.usb{instance}"
+        self.__udc_path = os.path.join(f"/sys/kernel/config/usb_gadget", gadget, usb.G_UDC)
         self.__profile_func_path = usb.get_gadget_path(gadget, usb.G_PROFILE, func)
         self.__profile_path = usb.get_gadget_path(gadget, usb.G_PROFILE)
         self.__lun_path = usb.get_gadget_path(gadget, usb.G_FUNCTIONS, func, f"lun.{lun}")
@@ -49,6 +50,9 @@ class Drive:
 
     def get_watchable_paths(self) -> list[str]:
         return [self.__lun_path, self.__profile_path]
+    
+    def get_udc_path(self) -> str:
+        return self.__udc_path
 
     # =====
 

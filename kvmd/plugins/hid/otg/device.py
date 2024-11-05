@@ -260,8 +260,8 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
                     flags |= (os.O_RDWR if self.__read_size else os.O_WRONLY)
                     self.__fd = os.open(self.__device_path, flags)
                 except Exception as err:
-                    logger.error(self.gettext("Can't open HID-%s device %s: %s"),
-                                 self.__name, self.__device_path, tools.efmt(err))
+                    #logger.error(self.gettext("Can't open HID-%s device %s: %s"),self.__name, self.__device_path, tools.efmt(err))
+                    pass
 
         if self.__fd >= 0:
             try:
