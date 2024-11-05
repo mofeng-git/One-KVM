@@ -297,10 +297,10 @@ ul.footer {
 ul.footer li {
 	padding: 0 10px;
 }
-ul.footer li.footer-left {
+ul.footer li.left {
 	float: left;
 }
-ul.footer li.footer-right {
+ul.footer li.right {
 	float: right;
 }
 ul.footer li a {

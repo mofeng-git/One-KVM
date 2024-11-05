@@ -78,21 +78,21 @@ export function Session() {
 
 	var __setInfoStateMeta = function(state) {
 		if (state !== null) {
-			let text = tools.escape(JSON.stringify(state, undefined, 4)).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
-			$("about-meta").innerHTML = `
-				<span class="code-comment">// The PiKVM metadata.<br>
-				// You can get this JSON using handle <a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a>.<br>
-				// In the standard configuration this data<br>
-				// is specified in the file /etc/kvmd/meta.yaml.</span><br>
-				<br>
-				${text}
-			`;
+			$("kvmd-meta-json").innerText = JSON.stringify(state, undefined, 4);
+
 			if (state.server && state.server.host) {
 				$("kvmd-meta-server-host").innerText = `Server: ${state.server.host}`;
 				document.title = `PiKVM Session: ${state.server.host}`;
 			} else {
 				$("kvmd-meta-server-host").innerText = "";
 				document.title = "PiKVM Session";
+			}
+
+			if (state.tips && state.tips.left) {
+				$("kvmd-meta-tips-left").innerText = `${state.tips.left}`;
+			}
+			if (state.tips && state.tips.right) {
+				$("kvmd-meta-tips-right").innerText = `${state.tips.right}`;
 			}
 
 			// Don't use this option, it may be removed in any time

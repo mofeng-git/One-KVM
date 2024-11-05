@@ -11,14 +11,20 @@ block body
 	include navbar.pug
 	include windows.pug
 
+	ul(class="navbar-bg-tips")
+		li(class="left")
+			pre(id="kvmd-meta-tips-left")
+		li(class="right")
+			pre(id="kvmd-meta-tips-right")
+
 	ul(class="footer")
-		li(class="footer-left")
+		li(class="left")
 			span(id="kvmd-meta-server-host" title="Server name (see System/About)")
 			| &nbsp; | &nbsp;
 			span(id="kvmd-version-kvmd" title="KVMD version")
 			| &nbsp; | &nbsp;
 			span(id="kvmd-version-streamer" title="Streamer version")
-		li(class="footer-right")
+		li(class="right")
 			a(target="_blank" href="https://pikvm.org") PiKVM Project
 			| &nbsp; | &nbsp;
 			a(target="_blank" href="https://docs.pikvm.org") Documentation

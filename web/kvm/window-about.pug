@@ -29,6 +29,15 @@ div(id="about-window" class="window")
 		br
 		div(class="tabs-box")
 			+about_tab("meta", "Meta", true)
+				div
+					span(class="code-comment")
+						| // You can get this JSON using handle #[a(target="_blank" href="/api/info?fields=meta") /api/info?fields=meta]#[br]
+						| // In the standard configuration this data#[br]
+						| // is specified in the file /etc/kvmd/meta.yaml
+					br
+					pre(id="kvmd-meta-json")
+						| No data
+
 			+about_tab("hardware", "Hardware")
 			+about_tab("version", "Version")
 

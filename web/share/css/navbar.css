@@ -198,3 +198,33 @@ ul#navbar li div.menu img.sign {
 	margin-right: 10px;
 	height: 20px;
 }
+
+ul.navbar-bg-tips {
+	list-style-type: none;
+	top: 50px;
+	position: fixed;
+	width: 100%;
+	padding: 0;
+	font-size: 0.7em;
+	line-height: 1.5em;
+	color: var(--cs-page-obscure-fg);
+	z-index: -10;
+}
+ul.navbar-bg-tips li {
+	padding: 0 10px;
+	max-width: 20%;
+}
+ul.navbar-bg-tips li pre {
+	word-break: break-word;
+	white-space: break-spaces;
+	text-align: justify;
+}
+ul.navbar-bg-tips li.left {
+	float: left;
+}
+ul.navbar-bg-tips li.right {
+	float: right;
+}
+ul.navbar-bg-tips li a {
+	color: var(--cs-page-obscure-fg);
+}

@@ -1999,7 +1999,12 @@
               <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
               <label for="about-tab-meta-button">Meta</label>
               <div class="tab">
-                <div class="code" id="about-meta"><span class="code-comment">No data</span>
+                <div class="code" id="about-meta">
+                  <div><span class="code-comment">// You can get this JSON using handle <a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a><br>
+                      // In the standard configuration this data<br>
+                      // is specified in the file /etc/kvmd/meta.yaml</span><br>
+                    <pre id="kvmd-meta-json">No data</pre>
+                  </div>
                 </div>
               </div>
               <input type="radio" name="about-tab-button" id="about-tab-hardware-button">
@@ -2673,9 +2678,17 @@
       </div>
       <iframe id="webterm-iframe" src="" style="width: 100%; height: 100%"></iframe>
     </div>
+    <ul class="navbar-bg-tips">
+      <li class="left">
+        <pre id="kvmd-meta-tips-left"></pre>
+      </li>
+      <li class="right">
+        <pre id="kvmd-meta-tips-right"></pre>
+      </li>
+    </ul>
     <ul class="footer">
-      <li class="footer-left"><span id="kvmd-meta-server-host" title="Server name (see System/About)"></span>&nbsp; | &nbsp;<span id="kvmd-version-kvmd" title="KVMD version"></span>&nbsp; | &nbsp;<span id="kvmd-version-streamer" title="Streamer version"></span></li>
-      <li class="footer-right"><a target="_blank" href="https://pikvm.org">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">Support</a></li>
+      <li class="left"><span id="kvmd-meta-server-host" title="Server name (see System/About)"></span>&nbsp; | &nbsp;<span id="kvmd-version-kvmd" title="KVMD version"></span>&nbsp; | &nbsp;<span id="kvmd-version-streamer" title="Streamer version"></span></li>
+      <li class="right"><a target="_blank" href="https://pikvm.org">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">Support</a></li>
     </ul>
   </body>
 </html>
