@@ -111,7 +111,13 @@ EOF
 
     if [ ! -z "$VIDEONUM" ]; then
         sed -i "s/\/dev\/video0/\/dev\/video$VIDEONUM/g" /etc/kvmd/override.yaml \
+            && sed -i "s/\/dev\/video0/\/dev\/video$VIDEONUM/g" /etc/kvmd/janus/janus.plugin.ustreamer.jcfg \
             && echo -e "${GREEN}One-KVM video device is set to /dev/video$VIDEONUM.${NC}"
+    fi
+
+    if [ ! -z "$AUDIONUM" ]; then
+        sed -i "s/hw:0/hw:$AUDIONUM/g" /etc/kvmd/janus/janus.plugin.ustreamer.jcfg \
+            && echo -e "${GREEN}One-KVM audio device is set to hw:$VIDEONUM.${NC}"
     fi
 
     #set htpasswd
