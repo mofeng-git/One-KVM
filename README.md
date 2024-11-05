@@ -35,6 +35,7 @@ sudo docker run --name kvmd -itd --privileged=true \
 sudo docker run --name kvmd -itd \
     --device /dev/video0:/dev/video0 \
     --device /dev/ttyUSB0:/dev/ttyUSB0 \
+    --device /dev/snd:/dev/snd \
     -p 8080:8080 -p 4430:4430 -p 5900:5900 -p 623:623 \
     silentwind0/kvmd
 ```
@@ -47,7 +48,7 @@ sudo docker run --name kvmd -itd \
 
 **方式二：直刷 One-KVM 镜像**
 
-对于一些平台硬件（如玩客云），本项目制作了深度适配的 One-KVM 打包镜像，开箱即用，刷好后启动设备就可以开始使用 One-KVM。免费 One-KVM 整合包也可以在本项目 Releases 页可以找到。
+对于部分平台硬件，本项目制作了深度适配的 One-KVM 打包镜像，开箱即用，刷好后启动设备就可以开始使用 One-KVM。免费 One-KVM 整合包也可以在本项目 Releases 页可以找到。
 
 | 固件型号 | 固件代号 | 硬件情况 |
 | :-------------: | :-------------: | :-------------: |
@@ -91,7 +92,7 @@ Will
 
 霜序
 
-[远方](https://runyf.cn/)
+[远方](https://runyf.cn/)（闲鱼用户名：小远技术店铺）
 
 爱发电用户_399fc
 
