@@ -50,9 +50,14 @@ export function main() {
 
 		tools.el.setOnClick($("open-log-button"), () => window.open("/api/log?seek=3600&follow=1", "_blank"));
 
-		if (tools.config.getBool("kvm--full-tab-stream", false)) {
-			wm.toggleFullTabWindow($("stream-window"), true);
+		tools.storage.bindSimpleSwitch(
+			$("page-full-tab-stream-switch"),
+			"page.full_tab_stream",
+			tools.config.getBool("kvm--full-tab-stream", false));
+		if ($("page-full-tab-stream-switch").checked) {
+			wm.setFullTabWindow($("stream-window"), true);
 		}
+
 		wm.showWindow($("stream-window"));
 
 		new Session();

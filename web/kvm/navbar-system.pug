@@ -113,6 +113,14 @@ li(id="system-dropdown" class="right")
 						td(id="hid-mouse-scroll-value" class="value-number")
 					tr
 						+menu_switch_notable("hid-mouse-dot-switch", "Show the blue dot", true, true)
+		details
+			summary Web UI settings
+			div(class="spoiler")
+				table(class="kv")
+					tr
+						+menu_switch_notable("page-close-ask-switch", "Ask page close confirmation", true, true)
+					tr
+						+menu_switch_notable("page-full-tab-stream-switch", "Expand for the entire tab by default", true, false)
 		table(class="kv")
 			tr(id="hid-connect" class="feature-disabled")
 				+menu_switch_notable("hid-connect-switch", "Connect HID to Server", true, true)
@@ -125,8 +133,6 @@ li(id="system-dropdown" class="right")
 					"Turning off this switch will disconnect the main USB from the server.  Are you sure you want to continue?")
 			tr(id="v4-locator" class="feature-disabled")
 				+menu_switch_notable_gpio("__v4_locator__", "Enable locator LED")
-			tr
-				+menu_switch_notable("page-close-ask-switch", "Ask page close confirmation", true, true)
 		hr
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu data-show-window="keyboard-window" class="row50") &bull; Show keyboard
