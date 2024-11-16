@@ -120,6 +120,16 @@ EOF
             && echo -e "${GREEN}One-KVM audio device is set to hw:$VIDEONUM.${NC}"
     fi
 
+    if [ ! -z "$CH9329SPEED" ]; then
+        sed -i "s/speed: 9600/speed: $CH9329SPEED/g" /etc/kvmd/override.yaml \
+            && echo -e "${GREEN}One-KVM CH9329 serial speed is set to $CH9329SPEED.${NC}"
+    fi
+
+    if [ ! -z "$CH9329TIMEOUT" ]; then
+        sed -i "s/read_timeout: 0.3/read_timeout: $CH9329TIMEOUT/g" /etc/kvmd/override.yaml \
+            && echo -e "${GREEN}One-KVM CH9329 timeout is set to $CH9329TIMEOUT s.${NC}"
+    fi
+
     #set htpasswd
     if [ ! -z "$USERNAME" ] && [ ! -z "$PASSWORD" ]; then
         python -m kvmd.apps.htpasswd del admin \
@@ -128,7 +138,12 @@ EOF
             && echo "$USERNAME:$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/ipmipasswd \
             || echo -e "${RED}One-KVM htpasswd init failed.${NC}"
     else
-        echo -e "${YELLOW} USERNAME and PASSWORD environment variables is not set, using defalut(admin/admin).${NC}"
+        echo -e "${YELLOW} USERNAME and PASSWORD environment variables are not set, using defalut(admin/admin).${NC}"
+    fi
+
+    if [ ! -z "$VIDEOFORMAT" ]; then
+        sed -i "s/format=mjpeg/format=$VIDFORMAT/g" /etc/kvmd/override.yaml \
+            && echo -e "${GREEN}One-KVM input video format is set to $VIDFORMAT.${NC}"
     fi
     
     touch /etc/kvmd/.init_flag

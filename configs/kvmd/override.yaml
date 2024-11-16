@@ -12,6 +12,8 @@ kvmd:
     hid:
         type: ch9329
         device: /dev/ttyUSB0
+        speed: 9600
+        read_timeout: 0.3
 
         jiggler:
             active: false
