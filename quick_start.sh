@@ -115,13 +115,21 @@ function show_main_menu() {
     echo -e "${BLUE}==============================${NC}"
     echo -e "${BLUE}     One-KVM Docker 版管理     ${NC}"
     echo -e "${BLUE}==============================${NC}"
+
     echo " 1. 安装 One-KVM Docker 版"
+    echo ""
     echo " 2. 卸载 One-KVM Docker 版"
+    echo ""
     echo " 3. 拉取 One-KVM 最新镜像"
+    echo ""
     echo " 4. 更多信息"
+
     echo -e "${BLUE}==============================${NC}"
     read -p "请输入数字（1-4）: " choice
-
+    while [[ "$choice" != "1" && "$choice" != "2" && "$choice" != "3" && "$choice" != "4" ]]; do
+        echo -e "${RED}无效的选择，请输入1-4${NC}"
+        read -p "请输入数字（1-4）: " choice
+    done
     case $choice in
         1)
             check_repeat_install
@@ -141,8 +149,9 @@ function show_main_menu() {
             $sudo_command docker pull $DOCKER_IMAGE_PATH
             ;;
         4)
-            echo -e "One-KVM 文档：https://one-kvm.mofeng.run/"
-            echo -e "Github：https://github.com/mofeng-git/One-KVM"
+            echo -e "${BLUE}作者：${NC}\t\t默风SilentWind"
+            echo -e "${BLUE}文档：${NC}\t\thttps://one-kvm.mofeng.run/"
+            echo -e "${BLUE}Github：${NC}\thttps://github.com/mofeng-git/One-KVM"
             ;;
         *)
             echo -e "${RED}无效的选择，请输入1-4之间的数字，退出程序${NC}"
@@ -234,16 +243,15 @@ function get_userenv() {
 
 function show_install_info() {
     echo -e "\n\n${BLUE}==============================${NC}"
-    echo -e "${BLUE}安装信息如下：${NC}"
-    echo -e "HID 硬件类型: ${GREEN}$use_hid${NC}"
+    echo -e "${BLUE}安装信息总览：${NC}"
     if [[ "$use_hid" == "CH9329" ]]; then
-        echo -e "CH9329 地址: \t${GREEN}$ch9329_address${NC} \tCH9329 波特率: \t${GREEN}$ch9329_serial_rate${NC}"
+        echo -e "CH9329 设备: \t${GREEN}$ch9329_address${NC} \tCH9329 波特率: \t${GREEN}$ch9329_serial_rate${NC}"
     fi
     if [[ "$use_hid" == "OTG" ]]; then
         echo -e "OTG端口：\t${GREEN}$otg_devices${NC} \tOTG 状态：\t${GREEN}$otg_status${NC}"
     fi
     echo -e "视频设备: \t${GREEN}$video_device${NC} \t音频设备: \t${GREEN}$audio_device${NC}"
-    echo -e "用户名: \t${GREEN}$username${NC} \t密码: \t${GREEN}$password${NC}"
+    echo -e "用户名: \t${GREEN}$username${NC} \t\t密码: \t${GREEN}$password${NC}"
 }
 
 function get_install_command(){
@@ -272,6 +280,7 @@ function get_install_command(){
 }
 
 function execute_command(){
+    echo -e "${BLUE}One-KVM 部署中......${NC}"
     eval "$docker_command"
     local exit_status=$?
     if [[ $exit_status -eq 0 ]]; then
