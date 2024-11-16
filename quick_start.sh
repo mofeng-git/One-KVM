@@ -228,7 +228,8 @@ function get_userinfo() {
 }
 
 function get_userenv() {
-    read -p "\n额外用户环境变量（回车则留空）: " userenv
+    echo -e "\n"
+    read -p "额外用户环境变量（回车则留空）: " userenv
 }
 
 function show_install_info() {
@@ -267,7 +268,7 @@ function get_install_command(){
         docker_command="$sudo_command $docker_init_command $append_command $DOCKER_PORT $append_env $userenv $DOCKER_IMAGE_PATH"
     fi
     echo -e "\n${BLUE}Docker 部署命令：${NC}\n$docker_command"
-    echo -e "${BLUE}==============================${NC}"
+    echo -e "${BLUE}==============================${NC}\n"
 }
 
 function execute_command(){

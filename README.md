@@ -47,6 +47,13 @@ One-KVM 是基于廉价计算机硬件和 [PiKVM]((https://github.com/pikvm/pikv
 
 Docker 版本可以使用 OTG 或 CH9329 作为虚拟 HID ，支持 amd64、arm64、armv7 架构的 Linux 系统安装。
 
+**脚本部署**
+
+```bash
+curl -sSL https://one-kvm.mofeng.run/quick_start.sh -o quick_start.sh && bash quick_start.sh
+```
+
+**手动部署**
 
 如果使用 OTG 作为虚拟 HID，可以使用如下部署命令：
 ```bash
