@@ -33,7 +33,7 @@ kvmd:
 
     streamer:
         resolution:
-            default: 1280x720
+            default: 1920x1080
 
         forever: true
 
@@ -42,7 +42,7 @@ kvmd:
             max: 60
 
         h264_bitrate:
-            default: 2000
+            default: 8000
 
         cmd:
             - "/usr/bin/ustreamer"
