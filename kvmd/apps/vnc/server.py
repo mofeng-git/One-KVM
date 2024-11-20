@@ -130,7 +130,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
         # Все это нужно только чтобы не посылать лишние жсоны в сокет KVMD
-        self.__mouse_buttons: dict[str, (bool | None)] = dict.fromkeys(["left", "right", "middle"], None)
+        self.__mouse_buttons: dict[str, (bool | None)] = dict.fromkeys(["left", "right", "middle", "up", "down"], None)
         self.__mouse_move = {"x": -1, "y": -1}
 
         self.__modifiers = 0
