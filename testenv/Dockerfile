@@ -44,7 +44,6 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-aiohttp \
 		python-aiofiles \
 		python-async-lru \
-		python-periphery \
 		python-passlib \
 		python-pyotp \
 		python-qrcode \
