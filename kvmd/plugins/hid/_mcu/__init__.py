@@ -46,7 +46,7 @@ from ....validators.basic import valid_float_f01
 from ....validators.os import valid_abs_path
 from ....validators.hw import valid_gpio_pin_optional
 
-from ....languages import Languages
+from ....lanuages import Lanuages
 
 from .. import BaseHid
 
@@ -146,7 +146,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
 
         self.__stop_event = multiprocessing.Event()
 
-        self.gettext=Languages().gettext
+        self.gettext=Lanuages().gettext
 
     @classmethod
     def get_plugin_options(cls) -> dict:

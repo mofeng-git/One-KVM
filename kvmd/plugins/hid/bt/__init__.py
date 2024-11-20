@@ -40,7 +40,7 @@ from .... import aiotools
 from .... import aiomulti
 from .... import aioproc
 
-from ....languages import Languages
+from ....lanuages import Lanuages
 
 from .. import BaseHid
 
@@ -109,7 +109,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             stop_event=self.__stop_event,
         )
 
-        self.gettext=Languages().gettext
+        self.gettext=Lanuages().gettext
 
     @classmethod
     def get_plugin_options(cls) -> dict:

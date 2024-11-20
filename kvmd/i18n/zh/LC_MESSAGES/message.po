@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-08-14 22:40+0800\n"
-"PO-Revision-Date: 2024-08-14 22:40+0800\n"
+"POT-Creation-Date: 2024-08-12 22:07+0800\n"
+"PO-Revision-Date: 2024-08-12 22:07+0800\n"
 "Last-Translator: \n"
 "Language: zh\n"
 "Language-Team: zh <LL@li.org>\n"
@@ -90,34 +90,37 @@ msgstr "因收到忽略标识而取消监视 %s"
 msgid "Can't find any UDC"
 msgstr "未找到任何 UDC"
 
-#: kvmd/apps/__init__.py:164
-msgid "INFO"
-msgstr "消息"
+#: kvmd/apps/__init__.py:132
+msgid "Set config file path"
+msgstr "设置配置文件路径"
+
+#: kvmd/apps/__init__.py:134
+msgid "Override config options list (like sec/sub/opt=value)"
+msgstr "覆盖配置文件选项列表（如 sec/sub/opt=value）"
+
+#: kvmd/apps/__init__.py:136
+msgid "View current configuration (include all overrides)"
+msgstr "查看当前配置（包括所有覆盖配置文件）"
+
+#: kvmd/apps/__init__.py:139
+msgid "Run the service"
+msgstr "启动此服务"
 
 #: kvmd/apps/__init__.py:165
-msgid "WARNING"
-msgstr "警告"
-
-#: kvmd/apps/__init__.py:166
-msgid "ERROR"
-msgstr "错误"
-
-#: kvmd/apps/__init__.py:176
 msgid ""
 "To prevent accidental startup, you must specify the --run option to "
 "start.\n"
 msgstr "为了防止意外启动，必须在启动时指定 --run 选项。\n"
 
-#: kvmd/apps/__init__.py:176
+#: kvmd/apps/__init__.py:165
 msgid "Try the --help option to find out what this service does.\n"
 msgstr "尝试使用 --help 选项来了解某项服务的功能。\n"
 
-#: kvmd/apps/__init__.py:176
+#: kvmd/apps/__init__.py:165
 msgid "Make sure you understand exactly what you are doing!"
 msgstr "请确定你自己在做什么！"
 
 #: kvmd/apps/kvmd/__init__.py:115 kvmd/apps/otgnet/__init__.py:132
-#: kvmd/apps/vnc/server.py:541
 msgid "Bye-bye"
 msgstr "再见"
 
@@ -168,48 +171,6 @@ msgstr "无法生成新的唯一令牌"
 #, python-format
 msgid "Logged out user %r (%d)"
 msgstr "已注销用户 %r (%d)"
-
-#: kvmd/apps/kvmd/server.py:89
-msgid "This streamer does not support quality settings"
-msgstr "该 streamer 不支持质量设置"
-
-#: kvmd/apps/kvmd/server.py:94
-msgid "This streamer does not support resolution settings"
-msgstr "该 streamer 不支持分辨率设置"
-
-#: kvmd/apps/kvmd/server.py:99
-msgid "This streamer does not support H264"
-msgstr "该 streamer 不支持 H264 设置"
-
-#: kvmd/apps/kvmd/server.py:298
-msgid "Waiting short tasks ..."
-msgstr "正在等待短时任务结束......"
-
-#: kvmd/apps/kvmd/server.py:300
-msgid "Stopping system tasks ..."
-msgstr "正在停止系统任务 ......"
-
-#: kvmd/apps/kvmd/server.py:302
-msgid "Disconnecting clients ..."
-msgstr "断开客户端连接 ......"
-
-#: kvmd/apps/kvmd/server.py:304
-msgid "On-Shutdown complete"
-msgstr "全部服务关闭完成"
-
-#: kvmd/apps/kvmd/server.py:310
-#, python-format
-msgid "Cleaning up %s ..."
-msgstr "正在清理 %s ......"
-
-#: kvmd/apps/kvmd/server.py:314
-#, python-format
-msgid "Cleanup error on %s"
-msgstr "在 %s 上发生清理错误"
-
-#: kvmd/apps/kvmd/server.py:315
-msgid "On-Cleanup complete"
-msgstr "全部清理完毕"
 
 #: kvmd/apps/kvmd/streamer.py:245
 msgid "Streamer stop cancelled"
@@ -413,115 +374,6 @@ msgstr "使用 OTG gadget %r ......"
 #, python-format
 msgid "Using OTG Ethernet interface %r ..."
 msgstr "使用 OTG 以太网接口 %r ......"
-
-#: kvmd/apps/vnc/server.py:163
-#, python-format
-msgid "%s [kvmd]: Waiting for the SetEncodings message ..."
-msgstr "%s [kvmd]： 等待 SetEncodings 信息 ......"
-
-#: kvmd/apps/vnc/server.py:165
-msgid "No SetEncodings message recieved from the client in 5 secs"
-msgstr "5 秒内未收到客户端的 SetEncodings 信息"
-
-#: kvmd/apps/vnc/server.py:169
-#, python-format
-msgid "%s [kvmd]: Applying HID params: mouse_output=%s ..."
-msgstr "%s [kvmd]： 应用 HID 参数：mouse_output=%s ......"
-
-#: kvmd/apps/vnc/server.py:177
-msgid "KVMD closed the websocket (the server may have been stopped)"
-msgstr "KVMD 关闭了 websocket（服务器可能已停止运行）"
-
-#: kvmd/apps/vnc/server.py:211
-#, python-format
-msgid "%s [streamer]: Streaming ..."
-msgstr "%s [streamer]：获取视频流中 ......"
-
-#: kvmd/apps/vnc/server.py:216
-msgid "No signal"
-msgstr "无信号"
-
-#: kvmd/apps/vnc/server.py:220
-#, python-format
-msgid "%s [streamer]: Permanent error: %s; switching to %s ..."
-msgstr "%s [streamer]： 持续错误： %s; 切换到 %s ......"
-
-#: kvmd/apps/vnc/server.py:222
-#, python-format
-msgid "%s [streamer]: Waiting for stream: %s"
-msgstr "%s [streamer]： 正在等待数据流：%s"
-
-#: kvmd/apps/vnc/server.py:223
-msgid "Waiting for stream ..."
-msgstr "正在启动 streamer ......"
-
-#: kvmd/apps/vnc/server.py:234
-#, python-format
-msgid "%s [streamer]: Using preferred %s"
-msgstr "%s [streamer]： 使用首选 %s"
-
-#: kvmd/apps/vnc/server.py:240
-#, python-format
-msgid "%s [streamer]: Using default %s"
-msgstr "%s [streamer]： 使用默认 %s"
-
-#: kvmd/apps/vnc/server.py:305
-msgid "The client doesn't want to accept H264 anymore"
-msgstr "客户端不接受 H264 视频"
-
-#: kvmd/apps/vnc/server.py:311
-msgid "format"
-msgstr "格式"
-
-#: kvmd/apps/vnc/server.py:417
-#, python-format
-msgid "%s [main]: Applying streamer params: jpeg_quality=%s; desired_fps=%d ..."
-msgstr "%s [main]： 应用流媒体参数： jpeg_quality=%s; desired_fps=%d ..."
-
-#: kvmd/apps/vnc/server.py:467
-#, python-format
-msgid "%s [entry]: Connection is closed in an emergency"
-msgstr "%s [entry]： 连接因紧急情况关闭"
-
-#: kvmd/apps/vnc/server.py:472
-#, python-format
-msgid "%s [entry]: Connected client"
-msgstr "%s [entry]： 已连接客户端"
-
-#: kvmd/apps/vnc/server.py:491
-#, python-format
-msgid "%s [entry]: Can't check KVMD auth mode: %s"
-msgstr "%s [entry]： 无法检查 KVMD 身份验证模式： %s"
-
-#: kvmd/apps/vnc/server.py:513
-#, python-format
-msgid "%s [entry]: Unhandled exception in client task"
-msgstr "%s [entry]： 客户端任务中出现无法处理的异常"
-
-#: kvmd/apps/vnc/server.py:523
-#, python-format
-msgid "Listening VNC on TCP [%s]:%d ..."
-msgstr "正在监听 TCP [%s]:%d 上的 VNC 服务 ......"
-
-#: kvmd/apps/vnc/vncauth.py:63
-msgid "Unhandled exception while reading VNCAuth passwd file"
-msgstr "读取 VNCAuth 密码文件时出现无法处理的异常"
-
-#: kvmd/apps/vnc/vncauth.py:74
-msgid "Missing ' -> ' operator"
-msgstr "缺少\"->\"运算符"
-
-#: kvmd/apps/vnc/vncauth.py:78
-msgid "Missing ':' operator in KVMD credentials (right part)"
-msgstr "KVMD 证书中缺少\": \"运算符（右侧部分）"
-
-#: kvmd/apps/vnc/vncauth.py:83
-msgid "Empty KVMD user (right part)"
-msgstr "空的 KVMD 用户（右侧部分）"
-
-#: kvmd/apps/vnc/vncauth.py:86
-msgid "Duplicating VNC password (left part)"
-msgstr "复制 VNC 密码（左侧部分）"
 
 #: kvmd/keyboard/keysym.py:69
 #, python-format
@@ -815,16 +667,4 @@ msgstr "无法执行重新挂载辅助程序"
 #, python-format
 msgid "Failed ANELPWR POST request to pin %s: %s"
 msgstr "向引脚 %s 发送 ANELPWR POST 请求失败：%s"
-
-#~ msgid "Set config file path"
-#~ msgstr "设置配置文件路径"
-
-#~ msgid "Override config options list (like sec/sub/opt=value)"
-#~ msgstr "覆盖配置文件选项列表（如 sec/sub/opt=value）"
-
-#~ msgid "View current configuration (include all overrides)"
-#~ msgstr "查看当前配置（包括所有覆盖配置文件）"
-
-#~ msgid "Run the service"
-#~ msgstr "启动此服务"
 

@@ -36,7 +36,7 @@ from .events import MouseRelativeEvent
 from .events import MouseWheelEvent
 from .events import make_mouse_report
 
-from ....languages import Languages
+from ....lanuages import Lanuages
 
 # =====
 class MouseProcess(BaseDeviceProcess):
@@ -55,7 +55,7 @@ class MouseProcess(BaseDeviceProcess):
         self.__x = 0  # For absolute
         self.__y = 0
         self.__win98_fix = False
-        self.gettext=Languages().gettext
+        self.gettext=Lanuages().gettext
 
     def is_absolute(self) -> bool:
         return self.__absolute

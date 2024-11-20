@@ -37,7 +37,7 @@ from .... import aiomulti
 from .... import aioproc
 from .... import usb
 
-from ....languages import Languages
+from ....lanuages import Lanuages
 
 from .events import BaseEvent
 
@@ -78,7 +78,7 @@ class BaseDeviceProcess(multiprocessing.Process):  # pylint: disable=too-many-in
 
         self.__logger: (logging.Logger | None) = None
         
-        self.gettext=Languages().gettext
+        self.gettext=Lanuages().gettext
 
     def start(self, udc: str) -> None:  # type: ignore  # pylint: disable=arguments-differ
         self.__udc_state_path = usb.get_udc_path(udc, usb.U_STATE)

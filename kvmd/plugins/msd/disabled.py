@@ -31,7 +31,7 @@ from . import BaseMsdReader
 from . import BaseMsdWriter
 from . import BaseMsd
 
-from ...languages import Languages
+from ...lanuages import Lanuages
 
 # =====
 class MsdDisabledError(MsdOperationError):

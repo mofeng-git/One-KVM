@@ -26,7 +26,7 @@ import dataclasses
 import itertools
 import argparse
 
-from ...languages import Languages
+from ...lanuages import Lanuages
 
 from ...logging import get_logger
 
@@ -89,7 +89,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         self.__gadget: str = config.otg.gadget
         self.__driver: str = config.otg.devices.ethernet.driver
 
-        self.gettext=Languages().gettext
+        self.gettext=Lanuages().gettext
 
     def start(self) -> None:
         asyncio.run(self.__run(True))

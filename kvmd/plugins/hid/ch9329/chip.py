@@ -25,7 +25,7 @@ import contextlib
 
 from typing import Generator
 
-from ....languages import Languages
+from ....lanuages import Lanuages
 
 
 # =====
@@ -37,7 +37,7 @@ class ChipResponseError(Exception):
 class ChipConnection:
     def __init__(self, tty: serial.Serial) -> None:
         self.__tty = tty
-        self.gettext=Languages().gettext
+        self.gettext=Lanuages().gettext
 
     def xfer(self, cmd: bytes) -> int:
         self.__send(cmd)

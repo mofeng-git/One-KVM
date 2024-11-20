@@ -22,8 +22,6 @@
 
 import dataclasses
 
-from ...languages import Languages
-
 from ...logging import get_logger
 
 from ... import aiotools
@@ -32,7 +30,7 @@ from ... import aiotools
 # =====
 class VncAuthError(Exception):
     def __init__(self, path: str, lineno: int, msg: str) -> None:
-        super().__init__(Languages().gettext(f"Syntax error at {path}:{lineno}: {msg}"))
+        super().__init__(f"Syntax error at {path}:{lineno}: {msg}")
 
 
 # =====
@@ -51,7 +49,6 @@ class VncAuthManager:
 
         self.__path = path
         self.__enabled = enabled
-        self.gettext=Languages().gettext
 
     async def read_credentials(self) -> tuple[dict[str, VncAuthKvmdCredentials], bool]:
         if self.__enabled:
@@ -60,7 +57,7 @@ class VncAuthManager:
             except VncAuthError as err:
                 get_logger(0).error(str(err))
             except Exception:
-                get_logger(0).exception(self.gettext("Unhandled exception while reading VNCAuth passwd file"))
+                get_logger(0).exception("Unhandled exception while reading VNCAuth passwd file")
         return ({}, (not self.__enabled))
 
     async def __inner_read_credentials(self) -> dict[str, VncAuthKvmdCredentials]:
@@ -71,19 +68,19 @@ class VncAuthManager:
                 continue
 
             if " -> " not in line:
-                raise VncAuthError(self.__path, lineno, self.gettext("Missing ' -> ' operator"))
+                raise VncAuthError(self.__path, lineno, "Missing ' -> ' operator")
 
             (vnc_passwd, kvmd_userpass) = map(str.lstrip, line.split(" -> ", 1))
             if ":" not in kvmd_userpass:
-                raise VncAuthError(self.__path, lineno, self.gettext("Missing ':' operator in KVMD credentials (right part)"))
+                raise VncAuthError(self.__path, lineno, "Missing ':' operator in KVMD credentials (right part)")
 
             (kvmd_user, kvmd_passwd) = kvmd_userpass.split(":")
             kvmd_user = kvmd_user.strip()
             if len(kvmd_user) == 0:
-                raise VncAuthError(self.__path, lineno, self.gettext("Empty KVMD user (right part)"))
+                raise VncAuthError(self.__path, lineno, "Empty KVMD user (right part)")
 
             if vnc_passwd in credentials:
-                raise VncAuthError(self.__path, lineno, self.gettext("Duplicating VNC password (left part)"))
+                raise VncAuthError(self.__path, lineno, "Duplicating VNC password (left part)")
 
             credentials[vnc_passwd] = VncAuthKvmdCredentials(kvmd_user, kvmd_passwd)
         return credentials

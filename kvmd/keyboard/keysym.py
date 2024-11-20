@@ -27,7 +27,7 @@ import importlib.machinery
 
 import Xlib.keysymdef
 
-from ..languages import Languages
+from ..lanuages import Lanuages
 
 from ..logging import get_logger
 
@@ -66,7 +66,7 @@ def build_symmap(path: str) -> dict[int, dict[int, str]]:  # x11 keysym -> [(mod
                         or (web_name in WebModifiers.ALTS and key.altgr)
                         or (web_name in WebModifiers.CTRLS and key.ctrl)
                     ):
-                        logger.error(Languages().gettext("Invalid modifier key at mapping %s: %s / %s"), src, web_name, key)
+                        logger.error(Lanuages().gettext("Invalid modifier key at mapping %s: %s / %s"), src, web_name, key)
                         continue
 
                     modifiers = (
@@ -119,7 +119,7 @@ def _resolve_keysym(name: str) -> int:
 
 def _read_keyboard_layout(path: str) -> dict[int, list[At1Key]]:  # Keysym to evdev (at1)
     logger = get_logger(0)
-    logger.info(Languages().gettext("Reading keyboard layout %s ..."), path)
+    logger.info(Lanuages().gettext("Reading keyboard layout %s ..."), path)
 
     with open(path) as file:
         lines = list(map(str.strip, file.read().split("\n")))

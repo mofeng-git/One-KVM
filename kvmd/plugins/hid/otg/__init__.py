@@ -24,7 +24,7 @@ from typing import Iterable
 from typing import AsyncGenerator
 from typing import Any
 
-from ....languages import Languages
+from ....lanuages import Lanuages
 
 from ....logging import get_logger
 
@@ -120,7 +120,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     def sysprep(self) -> None:
         udc = usb.find_udc(self.__udc)
-        get_logger(0).info(Languages().gettext("Using UDC %s"), udc)
+        get_logger(0).info(Lanuages().gettext("Using UDC %s"), udc)
         self.__keyboard_proc.start(udc)
         self.__mouse_proc.start(udc)
         if self.__mouse_alt_proc:

@@ -105,9 +105,7 @@ from ..validators.hw import valid_otg_gadget
 from ..validators.hw import valid_otg_id
 from ..validators.hw import valid_otg_ethernet
 
-from ..validators.languages import valid_languages
-
-from ..languages import Languages
+from ..lanuages import Lanuages
 
 # =====
 def init(
@@ -129,16 +127,16 @@ def init(
         add_help=add_help,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    
+    _ = translation(domain="message",localedir="/kvmd/i18n",languages=["zh"]).gettext
     parser.add_argument("-c", "--config", default="/etc/kvmd/main.yaml", type=valid_abs_file,
-                        help="Set config file path", metavar="<file>")
+                        help=_("Set config file path"), metavar="<file>")
     parser.add_argument("-o", "--set-options", default=[], nargs="+",
-                        help="Override config options list (like sec/sub/opt=value)", metavar="<k=v>",)
+                        help=_("Override config options list (like sec/sub/opt=value)"), metavar="<k=v>",)
     parser.add_argument("-m", "--dump-config", action="store_true",
-                        help="View current configuration (include all overrides)")
+                        help=_("View current configuration (include all overrides)"))
     if check_run:
         parser.add_argument("--run", dest="run", action="store_true",
-                            help="Run the service")
+                            help=_("Run the service"))
     (options, remaining) = parser.parse_known_args(argv)
 
     if options.dump_config:
@@ -153,18 +151,9 @@ def init(
         ))
         raise SystemExit()
     config = _init_config(options.config, options.set_options, **load)
+
     logging.captureWarnings(True)
     logging.config.dictConfig(config.logging)
-
-    if isinstance(config.get("languages"), dict) and isinstance(config["languages"].get("console"), str):
-        i18n_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))+"/i18n"
-        Languages.init("message", i18n_path, config["languages"]["console"])
-        gettext = Languages().gettext
-
-        logging.addLevelName(20, gettext("INFO"))
-        logging.addLevelName(30, gettext("WARNING"))
-        logging.addLevelName(40, gettext("ERROR"))
-
     if cli_logging:
         logging.getLogger().handlers[0].setFormatter(logging.Formatter(
             "-- {levelname:>7} -- {message}",
@@ -173,7 +162,7 @@ def init(
 
     if check_run and not options.run:
         raise SystemExit(
-            gettext("To prevent accidental startup, you must specify the --run option to start.\n")+gettext("Try the --help option to find out what this service does.\n")+gettext("Make sure you understand exactly what you are doing!"))
+            _("To prevent accidental startup, you must specify the --run option to start.\n")+_("Try the --help option to find out what this service does.\n")+_("Make sure you understand exactly what you are doing!"))
 
     return (parser, remaining, config)
 
@@ -797,10 +786,5 @@ def _get_config_scheme() -> dict:
             "rtc":      Option(0,   type=valid_int_f0),
             "timeout":  Option(300, type=valid_int_f1),
             "interval": Option(30,  type=valid_int_f1),
-        },
-
-        "languages": {
-            "console": Option("default",   type=valid_languages),
-            "web":     Option("default", type=valid_languages),
         },
     }

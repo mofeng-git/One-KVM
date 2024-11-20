@@ -41,7 +41,7 @@ from ....validators.basic import valid_float_f01
 from ....validators.os import valid_abs_path
 from ....validators.hw import valid_tty_speed
 
-from ....languages import Languages
+from ....lanuages import Lanuages
 
 from .. import BaseHid
 
@@ -84,7 +84,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__keyboard = Keyboard()
         self.__mouse = Mouse()
 
-        self.gettext=Languages().gettext
+        self.gettext=Lanuages().gettext
 
     @classmethod
     def get_plugin_options(cls) -> dict:
