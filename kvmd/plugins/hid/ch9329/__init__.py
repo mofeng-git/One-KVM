@@ -41,8 +41,6 @@ from ....validators.basic import valid_float_f01
 from ....validators.os import valid_abs_path
 from ....validators.hw import valid_tty_speed
 
-from ....lanuages import Lanuages
-
 from .. import BaseHid
 
 from .chip import ChipResponseError
@@ -84,8 +82,6 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         self.__keyboard = Keyboard()
         self.__mouse = Mouse()
 
-        self.gettext=Lanuages().gettext
-
     @classmethod
     def get_plugin_options(cls) -> dict:
         return {
@@ -96,7 +92,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
         }
 
     def sysprep(self) -> None:
-        get_logger(0).info(self.gettext("Starting HID daemon ..."))
+        get_logger(0).info("Starting HID daemon ...")
         self.start()
 
     async def get_state(self) -> dict:
@@ -138,7 +134,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
     @aiotools.atomic_fg
     async def cleanup(self) -> None:
         if self.is_alive():
-            get_logger(0).info(self.gettext("Stopping HID daemon ..."))
+            get_logger(0).info("Stopping HID daemon ...")
             self.__stop_event.set()
         if self.is_alive() or self.exitcode is not None:
             self.join()
@@ -175,7 +171,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
 
         _ = keyboard_output
         if mouse_output is not None:
-            get_logger(0).info(self.gettext("HID : mouse output = %s"), mouse_output)
+            get_logger(0).info("HID : mouse output = %s", mouse_output)
             absolute = (mouse_output == "usb")
             self.__mouse.set_absolute(absolute)
             self._set_jiggler_absolute(absolute)
@@ -205,7 +201,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             try:
                 self.__hid_loop()
             except Exception:
-                logger.exception(self.gettext("Unexpected error in the run loop"))
+                logger.exception("Unexpected error in the run loop")
                 time.sleep(1)
 
     def __hid_loop(self) -> None:
@@ -228,7 +224,7 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
                             self.__process_cmd(conn, cmd)
             except Exception:
                 self.clear_events()
-                get_logger(0).exception(self.gettext("Unexpected error in the HID loop"))
+                get_logger(0).exception("Unexpected error in the HID loop")
                 time.sleep(2)
 
     def __process_cmd(self, conn: ChipConnection, cmd: bytes) -> bool:  # pylint: disable=too-many-branches

@@ -39,8 +39,6 @@ from ...validators.basic import valid_float_f01
 from ...validators.os import valid_abs_path
 from ...validators.hw import valid_gpio_pin
 
-from ...lanuages import Lanuages
-
 from . import AtxIsBusyError
 from . import BaseAtx
 
@@ -89,7 +87,6 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
             },
             notifier=self.__notifier,
         )
-
 
     @classmethod
     def get_plugin_options(cls) -> dict:
@@ -193,7 +190,7 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
                 await self.__inner_click(name, pin, delay)
         else:
             await aiotools.run_region_task(
-                Lanuages().gettext(f"Can't perform ATX {name} click or operation was not completed"),
+                f"Can't perform ATX {name} click or operation was not completed",
                 self.__region, self.__inner_click, name, pin, delay,
             )
 
@@ -206,4 +203,4 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         finally:
             self.__line_request.set_value(pin, gpiod.line.Value(False))
             await asyncio.sleep(1)
-        get_logger(0).info(Lanuages().gettext("Clicked ATX button %r"), name)
+        get_logger(0).info("Clicked ATX button %r", name)

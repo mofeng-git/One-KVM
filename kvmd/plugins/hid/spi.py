@@ -41,8 +41,6 @@ from ...validators.basic import valid_int_f1
 from ...validators.basic import valid_float_f01
 from ...validators.hw import valid_gpio_pin_optional
 
-from ...lanuages import Lanuages
-
 from ._mcu import BasePhyConnection
 from ._mcu import BasePhy
 from ._mcu import BaseMcuHid
@@ -58,7 +56,6 @@ class _SpiPhyConnection(BasePhyConnection):
 
         self.__xfer = xfer
         self.__read_timeout = read_timeout
-        self.gettext=Lanuages().gettext
 
     def send(self, request: bytes) -> bytes:
         assert len(request) == 8

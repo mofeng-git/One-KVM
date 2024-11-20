@@ -27,13 +27,11 @@ from .... import usb
 
 from .. import MsdOperationError
 
-from ....lanuages import Lanuages
-
 
 # =====
 class MsdDriveLockedError(MsdOperationError):
     def __init__(self) -> None:
-        super().__init__(Lanuages().gettext("MSD drive is locked on IO operation"))
+        super().__init__("MSD drive is locked on IO operation")
 
 
 # =====

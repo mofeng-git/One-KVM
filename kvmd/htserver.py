@@ -52,8 +52,6 @@ from .errors import IsBusyError
 
 from .validators import ValidatorError
 
-from .lanuages import Lanuages
-
 from . import aiotools
 
 
@@ -282,7 +280,6 @@ class HttpServer:
         self.__ws_bin_handlers: dict[int, Callable] = {}
         self.__ws_sessions: list[WsSession] = []
         self.__ws_sessions_lock = asyncio.Lock()
-        self.gettext=Lanuages().gettext
 
     def run(
         self,
@@ -353,7 +350,7 @@ class HttpServer:
 
         async with self.__ws_sessions_lock:
             self.__ws_sessions.append(ws)
-            get_logger(2).info(self.gettext("Registered new client session: %s; clients now: %d"), ws, len(self.__ws_sessions))
+            get_logger(2).info("Registered new client session: %s; clients now: %d", ws, len(self.__ws_sessions))
 
         try:
             await self._on_ws_opened()
@@ -368,20 +365,20 @@ class HttpServer:
                 try:
                     (event_type, event) = parse_ws_event(msg.data)
                 except Exception as err:
-                    logger.error(self.gettext("Can't parse JSON event from websocket: %r"), err)
+                    logger.error("Can't parse JSON event from websocket: %r", err)
                 else:
                     handler = self.__ws_handlers.get(event_type)
                     if handler:
                         await handler(ws, event)
                     else:
-                        logger.error(self.gettext("Unknown websocket event: %r"), msg.data)
+                        logger.error("Unknown websocket event: %r", msg.data)
 
             elif msg.type == WSMsgType.BINARY and len(msg.data) >= 1:
                 handler = self.__ws_bin_handlers.get(msg.data[0])
                 if handler:
                     await handler(ws, msg.data[1:])
                 else:
-                    logger.error(self.gettext("Unknown websocket binary event: %r"), msg.data)
+                    logger.error("Unknown websocket binary event: %r", msg.data)
 
             else:
                 break
@@ -412,7 +409,7 @@ class HttpServer:
         async with self.__ws_sessions_lock:
             try:
                 self.__ws_sessions.remove(ws)
-                get_logger(3).info(self.gettext("Removed client socket: %s; clients now: %d"), ws, len(self.__ws_sessions))
+                get_logger(3).info("Removed client socket: %s; clients now: %d", ws, len(self.__ws_sessions))
                 await ws.wsr.close()
             except Exception:
                 pass

@@ -25,8 +25,6 @@ import contextlib
 
 from typing import Generator
 
-from ....lanuages import Lanuages
-
 
 # =====
 class ChipResponseError(Exception):
@@ -37,7 +35,6 @@ class ChipResponseError(Exception):
 class ChipConnection:
     def __init__(self, tty: serial.Serial) -> None:
         self.__tty = tty
-        self.gettext=Lanuages().gettext
 
     def xfer(self, cmd: bytes) -> int:
         self.__send(cmd)
@@ -55,16 +52,16 @@ class ChipConnection:
     def __recv(self) -> int:
         data = self.__tty.read(5)
         if len(data) < 5:
-            raise ChipResponseError(self.gettext("Too short response, HID might be disconnected"))
+            raise ChipResponseError("Too short response, HID might be disconnected")
 
         if data and data[4]:
             data += self.__tty.read(data[4] + 1)
 
         if self.__make_checksum(data[:-1]) != data[-1]:
-            raise ChipResponseError(self.gettext("Invalid response checksum"))
+            raise ChipResponseError("Invalid response checksum")
 
         if data[4] == 1 and data[5] != 0:
-            raise ChipResponseError(self.gettext(f"Response error code = {data[5]!r}"))
+            raise ChipResponseError(f"Response error code = {data[5]!r}")
 
         # led_byte (info) response
         return (data[7] if data[3] == 0x81 else -1)

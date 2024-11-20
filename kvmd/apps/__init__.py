@@ -31,8 +31,6 @@ import pygments
 import pygments.lexers.data
 import pygments.formatters
 
-from gettext import translation
-
 from .. import tools
 
 from ..mouse import MouseRange
@@ -105,7 +103,6 @@ from ..validators.hw import valid_otg_gadget
 from ..validators.hw import valid_otg_id
 from ..validators.hw import valid_otg_ethernet
 
-from ..lanuages import Lanuages
 
 # =====
 def init(
@@ -127,16 +124,15 @@ def init(
         add_help=add_help,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    _ = translation(domain="message",localedir="/kvmd/i18n",languages=["zh"]).gettext
     parser.add_argument("-c", "--config", default="/etc/kvmd/main.yaml", type=valid_abs_file,
-                        help=_("Set config file path"), metavar="<file>")
+                        help="Set config file path", metavar="<file>")
     parser.add_argument("-o", "--set-options", default=[], nargs="+",
-                        help=_("Override config options list (like sec/sub/opt=value)"), metavar="<k=v>",)
+                        help="Override config options list (like sec/sub/opt=value)", metavar="<k=v>",)
     parser.add_argument("-m", "--dump-config", action="store_true",
-                        help=_("View current configuration (include all overrides)"))
+                        help="View current configuration (include all overrides)")
     if check_run:
         parser.add_argument("--run", dest="run", action="store_true",
-                            help=_("Run the service"))
+                            help="Run the service")
     (options, remaining) = parser.parse_known_args(argv)
 
     if options.dump_config:
@@ -162,7 +158,10 @@ def init(
 
     if check_run and not options.run:
         raise SystemExit(
-            _("To prevent accidental startup, you must specify the --run option to start.\n")+_("Try the --help option to find out what this service does.\n")+_("Make sure you understand exactly what you are doing!"))
+            "To prevent accidental startup, you must specify the --run option to start.\n"
+            "Try the --help option to find out what this service does.\n"
+            "Make sure you understand exactly what you are doing!"
+        )
 
     return (parser, remaining, config)
 

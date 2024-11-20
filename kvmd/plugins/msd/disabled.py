@@ -31,13 +31,11 @@ from . import BaseMsdReader
 from . import BaseMsdWriter
 from . import BaseMsd
 
-from ...lanuages import Lanuages
 
 # =====
 class MsdDisabledError(MsdOperationError):
     def __init__(self) -> None:
-        gettext=Lanuages().gettext
-        super().__init__(gettext("MSD is disabled"))
+        super().__init__("MSD is disabled")
 
 
 # =====

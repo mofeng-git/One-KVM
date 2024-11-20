@@ -38,8 +38,6 @@ from .... import aiomulti
 
 from ....keyboard.mappings import UsbKey
 
-from ....lanuages import Lanuages
-
 from ..otg.events import BaseEvent
 from ..otg.events import ClearEvent
 from ..otg.events import ResetEvent
@@ -117,8 +115,6 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
         self.__keys: list[UsbKey | None] = [None] * 6
         self.__mouse_buttons = 0
 
-        self.gettext=Lanuages().gettext
-
     def run(self) -> None:
         with self.__iface:
             self.__iface.configure()
@@ -150,7 +146,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
 
     @contextlib.contextmanager
     def __listen(self, role: _RoleT, addr: str, port: int) -> Generator[socket.socket, None, None]:
-        get_logger(0).info(self.gettext("Listening [%s]:%d for %s ..."), addr, port, role)
+        get_logger(0).info("Listening [%s]:%d for %s ...", addr, port, role)
         with socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP) as sock:  # type: ignore
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.settimeout(self.__socket_timeout)
@@ -187,7 +183,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
                         elif data == b"\x71":
                             sock.send(b"\x00")
                     except Exception as err:
-                        get_logger(0).exception(self.gettext("CTL socket error on %s: %s"), client.addr, tools.efmt(err))
+                        get_logger(0).exception("CTL socket error on %s: %s", client.addr, tools.efmt(err))
                         self.__close_client("CTL", client, "ctl_sock")
                         continue
 
@@ -201,7 +197,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
                         elif data[:2] == b"\xA2\x01":
                             self.__process_leds(data[2])
                     except Exception as err:
-                        get_logger(0).exception(self.gettext("INT socket error on %s: %s"), client.addr, tools.efmt(err))
+                        get_logger(0).exception("INT socket error on %s: %s", client.addr, tools.efmt(err))
                         self.__close_client("INT", client, "ctl_sock")
 
             if qr in ready_read:
@@ -284,7 +280,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
         try:
             client.int_sock.send(report)
         except Exception as err:
-            get_logger(0).info(self.gettext("Can't send %s report to %s: %s"), name, client.addr, tools.efmt(err))
+            get_logger(0).info("Can't send %s report to %s: %s", name, client.addr, tools.efmt(err))
             self.__close_client_pair(client)
 
     def __clear_modifiers(self) -> None:
@@ -311,12 +307,12 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
             (sock, peer) = server_sock.accept()
             sock.setblocking(True)
         except Exception:
-            get_logger(0).exception(self.gettext("Can't accept %s client"), role)
+            get_logger(0).exception("Can't accept %s client", role)
         else:
             if peer[0] not in self.__clients:
                 if len(self.__clients) >= self.__max_clients:
                     self.__close_sock(sock)
-                    get_logger(0).info(self.gettext("Refused %s client: %s: max clients reached"), role, peer[0])
+                    get_logger(0).info("Refused %s client: %s: max clients reached", role, peer[0])
                     return
                 self.__clients[peer[0]] = _BtClient(peer[0])
             client = self.__clients[peer[0]]
@@ -325,7 +321,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
             setattr(client, sock_attr, sock)
             self.__to_read.add(sock)
 
-            get_logger(0).info(self.gettext("Accepted %s client: %s"), role, peer[0])
+            get_logger(0).info("Accepted %s client: %s", role, peer[0])
             self.__state_flags.update(online=True)
 
             self.__set_public(len(self.__clients) < self.__max_clients)
@@ -337,7 +333,7 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
             setattr(client, sock_attr, None)
             self.__to_read.remove(sock)
 
-        get_logger(0).info(self.gettext("Closed %s client %s"), role, client.addr)
+        get_logger(0).info("Closed %s client %s", role, client.addr)
 
         if client.ctl_sock is None and client.int_sock is None:
             self.__clients.pop(client.addr)
@@ -372,16 +368,16 @@ class BtServer:  # pylint: disable=too-many-instance-attributes
     def __set_public(self, public: bool) -> None:
         logger = get_logger(0)
         if self.__control_public:
-            logger.info(self.gettext("Publishing ...") if public else self.gettext("Unpublishing ..."))
+            logger.info("Publishing ..." if public else "Unpublishing ...")
             try:
                 self.__iface.set_public(public)
             except Exception as err:
-                logger.error(self.gettext("Can't change public mode: %s"), tools.efmt(err))
+                logger.error("Can't change public mode: %s", tools.efmt(err))
 
     def __unpair_client(self, client: _BtClient) -> None:
         logger = get_logger(0)
-        logger.info(self.gettext("Unpairing %s ..."), client.addr)
+        logger.info("Unpairing %s ...", client.addr)
         try:
             self.__iface.unpair(client.addr)
         except Exception as err:
-            logger.error(self.gettext("Can't unpair %s: %s"), client.addr, tools.efmt(err))
+            logger.error("Can't unpair %s: %s", client.addr, tools.efmt(err))
