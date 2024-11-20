@@ -24,8 +24,11 @@ import os
 import asyncio
 import platform
 
+from typing import AsyncGenerator
+
 from ....logging import get_logger
 
+from .... import aiotools
 from .... import aioproc
 
 from .... import __version__
@@ -37,6 +40,7 @@ from .base import BaseInfoSubmanager
 class SystemInfoSubmanager(BaseInfoSubmanager):
     def __init__(self, streamer_cmd: list[str]) -> None:
         self.__streamer_cmd = streamer_cmd
+        self.__notifier = aiotools.AioNotifier()
 
     async def get_state(self) -> dict:
         streamer_info = await self.__get_streamer_info()
@@ -49,6 +53,14 @@ class SystemInfoSubmanager(BaseInfoSubmanager):
                 for field in ["system", "release", "version", "machine"]
             },
         }
+
+    async def trigger_state(self) -> None:
+        self.__notifier.notify()
+
+    async def poll_state(self) -> AsyncGenerator[(dict | None), None]:
+        while True:
+            await self.__notifier.wait()
+            yield (await self.get_state())
 
     # =====
 

@@ -22,6 +22,7 @@
 
 import asyncio
 import ssl
+import time
 
 from typing import Callable
 from typing import Coroutine
@@ -64,6 +65,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         width: int,
         height: int,
         name: str,
+        allow_cut_after: float,
         vnc_passwds: list[str],
         vencrypt: bool,
         none_auth_only: bool,
@@ -79,6 +81,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self._width = width
         self._height = height
         self.__name = name
+        self.__allow_cut_after = allow_cut_after
         self.__vnc_passwds = vnc_passwds
         self.__vencrypt = vencrypt
         self.__none_auth_only = none_auth_only
@@ -89,6 +92,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self.__fb_notifier = aiotools.AioNotifier()
         self.__fb_cont_updates = False
         self.__fb_reset_h264 = False
+
+        self.__allow_cut_since_ts = 0.0
 
         self.__lock = asyncio.Lock()
 
@@ -120,10 +125,10 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         except asyncio.CancelledError:
             logger.info("%s [%s]: Cancelling subtask ...", self._remote, name)
             raise
-        except RfbConnectionError as err:
-            logger.info("%s [%s]: Gone: %s", self._remote, name, err)
-        except (RfbError, ssl.SSLError) as err:
-            logger.error("%s [%s]: Error: %s", self._remote, name, err)
+        except RfbConnectionError as ex:
+            logger.info("%s [%s]: Gone: %s", self._remote, name, ex)
+        except (RfbError, ssl.SSLError) as ex:
+            logger.error("%s [%s]: Error: %s", self._remote, name, ex)
         except Exception:
             logger.exception("%s [%s]: Unhandled exception", self._remote, name)
 
@@ -414,6 +419,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     # =====
 
     async def __main_loop(self) -> None:
+        self.__allow_cut_since_ts = time.monotonic() + self.__allow_cut_after
         handlers = {
             0: self.__handle_set_pixel_format,
             2: self.__handle_set_encodings,
@@ -499,7 +505,12 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def __handle_client_cut_text(self) -> None:
         length = (await self._read_struct("cut text length", "xxx L"))[0]
         text = await self._read_text("cut text data", length)
-        await self._on_cut_event(text)
+        if self.__allow_cut_since_ts > 0 and time.monotonic() >= self.__allow_cut_since_ts:
+            # We should ignore cut event a few seconds after handshake
+            # because bVNC, AVNC and maybe some other clients perform
+            # it right after the connection automatically.
+            #   - https://github.com/pikvm/pikvm/issues/1420
+            await self._on_cut_event(text)
 
     async def __handle_enable_cont_updates(self) -> None:
         enabled = bool((await self._read_struct("enabled ContUpdates", "B HH HH"))[0])

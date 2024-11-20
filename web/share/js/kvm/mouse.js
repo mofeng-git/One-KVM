@@ -90,20 +90,20 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		__updateOnlineLeds();
 	};
 
-	self.setState = function(state, hid_online, hid_busy) {
+	self.setState = function(online, absolute, hid_online, hid_busy) {
 		if (!hid_online) {
 			__online = null;
 		} else {
-			__online = (state.online && !hid_busy);
+			__online = (online && !hid_busy);
 		}
-		if (!__absolute && state.absolute && __isRelativeCaptured()) {
+		if (!__absolute && absolute && __isRelativeCaptured()) {
 			document.exitPointerLock();
 		}
-		if (__absolute && !state.absolute) {
+		if (__absolute && !absolute) {
 			__relative_deltas = [];
 			__relative_touch_pos = null;
 		}
-		__absolute = state.absolute;
+		__absolute = absolute;
 		__updateOnlineLeds();
 	};
 

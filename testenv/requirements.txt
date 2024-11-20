@@ -1,6 +1,8 @@
+python-periphery
 pyserial-asyncio
 pyghmi
 spidev
 pyrad
 types-PyYAML
 types-aiofiles
+luma.oled

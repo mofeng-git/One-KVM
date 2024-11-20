@@ -123,6 +123,26 @@ select {
 	display: block;
 	width: 100%;
 	padding-left: 5px;
+}
+select[size] {
+	height: auto;
+	padding: 5px;
+}
+select[size]::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+select[size]::-webkit-scrollbar-thumb {
+	border-radius: 4px;
+	background: var(--cs-scroll-default-bg);
+}
+@-moz-document url-prefix() {
+	select[size] {
+		scrollbar-width: 8px;
+		scrollbar-color: var(--cs-scroll-default-bg) var(--cs-code-default-bg);
+	}
+}
+select:not([size]) {
 	padding-right: 25px;
 }
 button.small {
@@ -149,22 +169,24 @@ select {
 	-webkit-user-select: none;
 	-moz-user-select: none;
 	user-select: none;
+}
+select:not([size]) {
 	background-image: url("../svg/select-arrow-normal.svg");
 	background-position: center right;
 	background-repeat: no-repeat;
 }
-select:disabled {
+select:not([size]):disabled {
 	background-image: url("../svg/select-arrow-inactive.svg") !important;
 }
-select:active {
+select:not([size]):active {
 	color: var(--cs-control-intensive-fg) !important;
 	background-image: url("../svg/select-arrow-intensive.svg") !important;
 }
-select option {
+select:not([size]) option {
 	color: var(--cs-control-default-fg);
 	background-color: var(--cs-control-default-bg);
 }
-select option.comment {
+select:not([size]) option.comment {
 	color: var(--cs-control-disabled-fg);
 	font-style: italic;
 }
@@ -178,6 +200,26 @@ input[type=text], input[type=password] {
 	background-color: var(--cs-code-default-bg);
 	padding: 2px;
 	height: 30px;
+}
+
+textarea {
+	display: block;
+	resize: none;
+	height: 120px;
+	width: 100%;
+	border: var(--border-default-thin);
+	border-radius: 4px;
+	color: var(--cs-code-default-fg);
+	background-color: var(--cs-code-default-bg);
+	-webkit-appearance:none;
+}
+textarea::-moz-placeholder {
+	line-height: 60px;
+	text-align: center;
+}
+textarea::-webkit-input-placeholder {
+	line-height: 60px;
+	text-align: center;
 }
 
 div.buttons-row {
@@ -218,6 +260,30 @@ div.buttons-row {
 	border-bottom-right-radius: 0;
 }
 
+table.kv {
+	border-spacing: 5px;
+	margin: 0 10px 0 10px;
+	font-size: 12px;
+}
+table.kv td {
+	text-align: left;
+}
+table.kv td.value {
+	font-weight: bold;
+	max-width: 310px;
+	overflow: hidden;
+}
+table.kv td.value-slider {
+	width: 100%;
+}
+table.kv td.value-number {
+	font-weight: bold;
+	max-width: 310px;
+	overflow: hidden;
+	min-width: 40px;
+	max-width: 40px;
+}
+
 ul.footer {
 	list-style-type: none;
 	bottom: 0;
@@ -231,10 +297,10 @@ ul.footer {
 ul.footer li {
 	padding: 0 10px;
 }
-ul.footer li.footer-left {
+ul.footer li.left {
 	float: left;
 }
-ul.footer li.footer-right {
+ul.footer li.right {
 	float: right;
 }
 ul.footer li a {

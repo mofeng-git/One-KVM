@@ -22,6 +22,7 @@
 
 import os
 import asyncio
+import copy
 
 from typing import Callable
 from typing import AsyncGenerator
@@ -60,6 +61,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
 
         self.__dt_cache: dict[str, str] = {}
 
+        self.__notifier = aiotools.AioNotifier()
+
     async def get_state(self) -> dict:
         (
             base,
@@ -70,8 +73,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             cpu_temp,
             mem,
         ) = await asyncio.gather(
-            self.__read_dt_file("model"),
-            self.__read_dt_file("serial-number"),
+            self.__read_dt_file("model", upper=False),
+            self.__read_dt_file("serial-number", upper=True),
             self.__read_platform_file(),
             self.__get_throttling(),
             self.__get_cpu_percent(),
@@ -97,18 +100,22 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             },
         }
 
+    async def trigger_state(self) -> None:
+        self.__notifier.notify(1)
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
-        prev_state: dict = {}
+        prev: dict = {}
         while True:
-            state = await self.get_state()
-            if state != prev_state:
-                yield state
-                prev_state = state
-            await asyncio.sleep(self.__state_poll)
+            if (await self.__notifier.wait(timeout=self.__state_poll)) > 0:
+                prev = {}
+            new = await self.get_state()
+            if new != prev:
+                prev = copy.deepcopy(new)
+                yield new
 
     # =====
 
-    async def __read_dt_file(self, name: str) -> (str | None):
+    async def __read_dt_file(self, name: str, upper: bool) -> (str | None):
         if name not in self.__dt_cache:
             path = os.path.join(f"{env.PROCFS_PREFIX}/proc/device-tree", name)
             if not os.path.exists(path):
@@ -161,8 +168,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 + system_all / total * 100
                 + (st.steal + st.guest) / total * 100
             )
-        except Exception as err:
-            get_logger(0).error("Can't get CPU percent: %s", err)
+        except Exception as ex:
+            get_logger(0).error("Can't get CPU percent: %s", ex)
             return None
 
     async def __get_mem(self) -> dict:
@@ -173,8 +180,8 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 "total": st.total,
                 "available": st.available,
             }
-        except Exception as err:
-            get_logger(0).error("Can't get memory info: %s", err)
+        except Exception as ex:
+            get_logger(0).error("Can't get memory info: %s", ex)
             return {
                 "percent": None,
                 "total": None,
@@ -217,6 +224,6 @@ class HwInfoSubmanager(BaseInfoSubmanager):
             return None
         try:
             return parser(text)
-        except Exception as err:
-            get_logger(0).error("Can't parse [ %s ] output: %r: %s", tools.cmdfmt(cmd), text, tools.efmt(err))
+        except Exception as ex:
+            get_logger(0).error("Can't parse [ %s ] output: %r: %s", tools.cmdfmt(cmd), text, tools.efmt(ex))
             return None

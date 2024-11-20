@@ -56,7 +56,7 @@ def main(argv: (list[str] | None)=None) -> None:
     if config.kvmd.msd.type == "otg":
         msd_kwargs["gadget"] = config.otg.gadget  # XXX: Small crutch to pass gadget name to the plugin
 
-    hid_kwargs = config.kvmd.hid._unpack(ignore=["type", "keymap", "ignore_keys", "mouse_x_range", "mouse_y_range"])
+    hid_kwargs = config.kvmd.hid._unpack(ignore=["type", "keymap"])
     if config.kvmd.hid.type == "otg":
         hid_kwargs["udc"] = config.otg.udc  # XXX: Small crutch to pass UDC to the plugin
 
@@ -103,9 +103,6 @@ def main(argv: (list[str] | None)=None) -> None:
         ),
 
         keymap_path=config.hid.keymap,
-        ignore_keys=config.hid.ignore_keys,
-        mouse_x_range=(config.hid.mouse_x_range.min, config.hid.mouse_x_range.max),
-        mouse_y_range=(config.hid.mouse_y_range.min, config.hid.mouse_y_range.max),
 
         stream_forever=config.streamer.forever,
     ).run(**config.server._unpack())

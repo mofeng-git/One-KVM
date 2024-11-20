@@ -111,8 +111,8 @@ function __WindowManager() {
 			let el_exit_full_tab_button = el_window.querySelector(".window-button-exit-full-tab");
 			if (el_enter_full_tab_button && el_exit_full_tab_button) {
 				el_enter_full_tab_button.title = "Stretch to the entire tab";
-				tools.el.setOnClick(el_enter_full_tab_button, () => self.toggleFullTabWindow(el_window, true));
-				tools.el.setOnClick(el_exit_full_tab_button, () => self.toggleFullTabWindow(el_window, false));
+				tools.el.setOnClick(el_enter_full_tab_button, () => self.setFullTabWindow(el_window, true));
+				tools.el.setOnClick(el_exit_full_tab_button, () => self.setFullTabWindow(el_window, false));
 			}
 
 			let el_full_screen_button = el_window.querySelector(".window-header .window-button-full-screen");
@@ -145,10 +145,10 @@ function __WindowManager() {
 	/************************************************************************/
 
 	self.copyTextToClipboard = function(text) {
-		let workaround = function(err) {
+		let workaround = function(ex) {
 			// https://stackoverflow.com/questions/60317969/document-execcommandcopy-not-working-even-though-the-dom-element-is-created
-			let callback = function() {
-				tools.error("copyTextToClipboard(): navigator.clipboard.writeText() is not working:", err);
+			__modalDialog("Info", "Press OK to copy the text to the clipboard", true, false).then(function() {
+				tools.error("copyTextToClipboard(): navigator.clipboard.writeText() is not working:", ex);
 				tools.info("copyTextToClipboard(): Trying a workaround...");
 
 				let el = document.createElement("textarea");
@@ -164,36 +164,46 @@ function __WindowManager() {
 				el.setSelectionRange(0, el.value.length); // iOS
 
 				try {
-					err = (document.execCommand("copy") ? null : "Unknown error");
-				} catch (err) { // eslint-disable-line no-empty
+					ex = (document.execCommand("copy") ? null : "Unknown error");
+				} catch (ex) { // eslint-disable-line no-unused-vars
 				}
 
 				// Remove the added textarea again:
 				document.body.removeChild(el);
 
-				if (err) {
-					tools.error("copyTextToClipboard(): Workaround failed:", err);
-					wm.error("Can't copy text to the clipboard:<br>", err);
+				if (ex) {
+					tools.error("copyTextToClipboard(): Workaround failed:", ex);
+					self.error("Can't copy text to the clipboard", `${ex}`);
 				}
-			};
-			__modalDialog("Info", "Press OK to copy the text to the clipboard", true, false, callback);
+			});
 		};
 		if (navigator.clipboard) {
 			navigator.clipboard.writeText(text).then(function() {
-				wm.info("The text has been copied to the clipboard");
-			}, function(err) {
-				workaround(err);
+				self.info("The text has been copied to the clipboard");
+			}, function(ex) {
+				workaround(ex);
 			});
 		} else {
 			workaround("navigator.clipboard is not available");
 		}
 	};
 
-	self.info = (...args) => __modalDialog("Info", args.join(" "), true, false);
-	self.error = (...args) => __modalDialog("Error", args.join(" "), true, false);
-	self.confirm = (...args) => __modalDialog("Question", args.join(" "), true, true);
+	self.info = (html, ...args) => __modalCodeDialog("Info", html, args.join("\n"), true, false);
+	self.error = (html, ...args) => __modalCodeDialog("Error", html, args.join("\n"), true, false);
+	self.confirm = (html, ...args) => __modalCodeDialog("Question", html, args.join("\n"), true, true);
+	self.modal = (header, html, ok, cancel) => __modalDialog(header, html, ok, cancel);
 
-	var __modalDialog = function(header, text, ok, cancel, callback=null, parent=null) {
+	var __modalCodeDialog = function(header, html, code, ok, cancel) {
+		let create_content = function(el_content) {
+			if (code) {
+				html += `<br><br><div class="code"><pre style="margin:0px">${tools.escape(code)}</pre></div>`;
+			}
+			el_content.innerHTML = html;
+		};
+		return __modalDialog(header, create_content, ok, cancel);
+	};
+
+	var __modalDialog = function(header, html, ok, cancel, parent=null) {
 		let el_active_menu = (document.activeElement && document.activeElement.closest(".menu"));
 
 		let el_modal = document.createElement("div");
@@ -207,27 +217,50 @@ function __WindowManager() {
 
 		let el_header = document.createElement("div");
 		el_header.className = "modal-header";
-		el_header.innerHTML = header;
+		el_header.innerText = header;
 		el_window.appendChild(el_header);
 
 		let el_content = document.createElement("div");
 		el_content.className = "modal-content";
-		el_content.innerHTML = text;
 		el_window.appendChild(el_content);
+
+		let el_buttons = document.createElement("div");
+		el_buttons.classList.add("modal-buttons", "buttons-row");
+		el_window.appendChild(el_buttons);
+
+		let el_cancel_button = null;
+		let el_ok_button = null;
+		if (cancel) {
+			el_cancel_button = document.createElement("button");
+			el_cancel_button.className = "row100";
+			el_cancel_button.innerText = "Cancel";
+			el_buttons.appendChild(el_cancel_button);
+		}
+		if (ok) {
+			el_ok_button = document.createElement("button");
+			el_ok_button.className = "row100";
+			el_ok_button.innerText = "OK";
+			el_buttons.appendChild(el_ok_button);
+		}
+		if (ok && cancel) {
+			el_ok_button.className = "row50";
+			el_cancel_button.className = "row50";
+		}
+
+		el_window.onkeyup = function(event) {
+			event.preventDefault();
+			if (ok && event.code === "Enter") {
+				el_ok_button.click();
+			} else if (cancel && event.code === "Escape") {
+				el_cancel_button.click();
+			}
+		};
 
 		let promise = null;
 		if (ok || cancel) {
 			promise = new Promise(function(resolve) {
-				let el_buttons = document.createElement("div");
-				el_buttons.className = "modal-buttons";
-				el_window.appendChild(el_buttons);
-
 				function close(retval) {
-					if (callback) {
-						callback(retval);
-					}
 					__closeWindow(el_window);
-					el_modal.outerHTML = "";
 					let index = __windows.indexOf(el_modal);
 					if (index !== -1) {
 						__windows.splice(index, 1);
@@ -238,38 +271,27 @@ function __WindowManager() {
 						__activateLastWindow(el_modal);
 					}
 					resolve(retval);
+					// Так как resolve() асинхронный, надо выполнить в эвентлупе после него
+					setTimeout(function() { el_modal.outerHTML = ""; }, 0);
 				}
 
 				if (cancel) {
-					var el_cancel_button = document.createElement("button");
-					el_cancel_button.innerHTML = "Cancel";
 					tools.el.setOnClick(el_cancel_button, () => close(false));
-					el_buttons.appendChild(el_cancel_button);
 				}
 				if (ok) {
-					var el_ok_button = document.createElement("button");
-					el_ok_button.innerHTML = "OK";
 					tools.el.setOnClick(el_ok_button, () => close(true));
-					el_buttons.appendChild(el_ok_button);
 				}
-				if (ok && cancel) {
-					el_ok_button.className = "row50";
-					el_cancel_button.className = "row50";
-				}
-
-				el_window.onkeyup = function(event) {
-					event.preventDefault();
-					if (ok && event.code === "Enter") {
-						el_ok_button.click();
-					} else if (cancel && event.code === "Escape") {
-						el_cancel_button.click();
-					}
-				};
 			});
 		}
 
 		__windows.push(el_modal);
 		(parent || document.fullscreenElement || document.body).appendChild(el_modal);
+		if (typeof html === "function") {
+			// Это должно быть здесь, потому что элемент должен иметь родителя чтобы существовать
+			html(el_content, el_ok_button);
+		} else {
+			el_content.innerHTML = html;
+		}
 		__activateWindow(el_modal);
 
 		return promise;
@@ -312,7 +334,7 @@ function __WindowManager() {
 		__activateLastWindow(el_window);
 	};
 
-	self.toggleFullTabWindow = function(el_window, enabled) {
+	self.setFullTabWindow = function(el_window, enabled) {
 		el_window.classList.toggle("window-full-tab", enabled);
 		__activateLastWindow(el_window);
 		let el_navbar = $("navbar");
@@ -625,7 +647,7 @@ function __WindowManager() {
 				+ "In Chrome use HTTPS and enable <i>system-keyboard-lock</i><br>"
 				+ "by putting at URL <i>chrome://flags/#system-keyboard-lock</i>"
 			);
-			__modalDialog("Keyboard lock is unsupported", msg, true, false, null, el_window);
+			__modalDialog("Keyboard lock is unsupported", msg, true, false, el_window);
 		}
 	};
 

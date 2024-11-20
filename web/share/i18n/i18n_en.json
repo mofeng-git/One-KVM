@@ -113,6 +113,7 @@
     "kvm_text80":"Record video using the browser API, and will be downloaded automatically",
     "kvm_text81":"Start recording",
     "kvm_text82":"End recording",
+    "kvm_text83":"Web UI settings",
 
     "atx-ask-switch":"Ask click confirmation",
     "hid-recorder-loop-switch":"Infinite loop playback",
@@ -140,5 +141,6 @@
     "msd-message-out-of-storage":"Current image is out of storage",
     "msd-message-rw-enabled":"Read-write mode is enabled",
     "msd-message-downloads":"The image is being downloaded from One-KVM",
-    "msd-message-another-user-uploads":"Another user uploads an image"
+    "msd-message-another-user-uploads":"Another user uploads an image",
+    "page-full-tab-stream-switch":"Expand for the entire tab by default"
 }

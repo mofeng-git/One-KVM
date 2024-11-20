@@ -153,9 +153,9 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
             proc = await aioproc.log_process(**self.__make_ipmitool_kwargs(action), logger=get_logger(0), prefix=str(self))
             if proc.returncode != 0:
                 raise RuntimeError(f"Ipmitool error: retcode={proc.returncode}")
-        except Exception as err:
+        except Exception as ex:
             get_logger(0).error("Can't send IPMI power-%s request to %s:%d: %s",
-                                action, self.__host, self.__port, tools.efmt(err))
+                                action, self.__host, self.__port, tools.efmt(ex))
             raise GpioDriverOfflineError(self)
 
     # =====
@@ -171,9 +171,9 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 self.__online = True
                 return
             raise RuntimeError(f"Invalid ipmitool response: {text}")
-        except Exception as err:
+        except Exception as ex:
             get_logger(0).error("Can't fetch IPMI power status from %s:%d: %s",
-                                self.__host, self.__port, tools.efmt(err))
+                                self.__host, self.__port, tools.efmt(ex))
             self.__power = False
             self.__online = False
 

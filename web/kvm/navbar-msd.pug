@@ -72,14 +72,6 @@ li(id="msd-dropdown" class="right feature-disabled")
 				tr(id="msd-new-part" class="hidden")
 					td(i18n="kvm_text70") Upload partition:
 					td(width="100%") #[select(id="msd-new-part-selector")]
-			hr
-			table(class="kv")
-				tr
-					td(class="value" i18n="kvm_text71") Note:
-					td(i18n="kvm_text72") &bull; Don't close the browser page until the upload is complete.
-				tr
-					td
-					td(i18n="kvm_text73") &bull; To speed up the upload, close the stream window.
 		div(id="msd-uploading-sub" class="hidden")
 			hr
 			table(class="kv")
@@ -92,6 +84,15 @@ li(id="msd-dropdown" class="right feature-disabled")
 			div(class="text")
 				div(id="msd-uploading-progress" class="progress")
 					span(id="msd-uploading-progress-value" class="progress-value")
+		div(id="msd-new-tips" class="hidden")
+			hr
+			table(class="kv")
+				tr
+					td(class="value" i18n="kvm_text71") Note:
+					td(i18n="kvm_text72") &bull; Don't close the browser page until the upload is complete.
+				tr
+					td
+					td(i18n="kvm_text73") &bull; To speed up the upload, close the stream window.
 		hr
 		div(class="buttons buttons-row")
 			button(disabled id="msd-connect-button" class="row50" i18n="kvm_text76") Connect drive to Server

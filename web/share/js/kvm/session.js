@@ -28,6 +28,7 @@ import {wm} from "../wm.js";
 
 import {Recorder} from "./recorder.js";
 import {Hid} from "./hid.js";
+import {Paste} from "./paste.js";
 import {Atx} from "./atx.js";
 import {Msd} from "./msd.js";
 import {Streamer} from "./stream.js";
@@ -48,6 +49,7 @@ export function Session() {
 	var __streamer = new Streamer();
 	var __recorder = new Recorder();
 	var __hid = new Hid(__streamer.getGeometry, __recorder);
+	var __paste = new Paste(__recorder);
 	var __atx = new Atx(__recorder);
 	var __msd = new Msd();
 	var __gpio = new Gpio(__recorder);
@@ -57,28 +59,40 @@ export function Session() {
 	var __info_fan_state = null;
 
 	var __init__ = function() {
-		__startSession();
+		__streamer.ensureDeps(() => __startSession());
 	};
 
 	/************************************************************************/
 
-	var __setAboutInfoMeta = function(state) {
+	var __setInfoState = function(state) {
+		for (let key of Object.keys(state)) {
+			switch (key) {
+				case "meta": __setInfoStateMeta(state.meta); break;
+				case "hw": __setInfoStateHw(state.hw); break;
+				case "fan": __setInfoStateFan(state.fan); break;
+				case "system": __setInfoStateSystem(state.system); break;
+				case "extras": __setInfoStateExtras(state.extras); break;
+			}
+		}
+	};
+
+	var __setInfoStateMeta = function(state) {
 		if (state !== null) {
-			let text = JSON.stringify(state, undefined, 4).replace(/ /g, "&nbsp;").replace(/\n/g, "<br>");
-			$("about-meta").innerHTML = `
-				<span class="code-comment">// The PiKVM metadata.<br>
-				// You can get this JSON using handle <a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a>.<br>
-				// In the standard configuration this data<br>
-				// is specified in the file /etc/kvmd/meta.yaml.</span><br>
-				<br>
-				${text}
-			`;
+			$("kvmd-meta-json").innerText = JSON.stringify(state, undefined, 4);
+
 			if (state.server && state.server.host) {
-				$("kvmd-meta-server-host").innerHTML = `Server: ${state.server.host}`;
+				$("kvmd-meta-server-host").innerText = `Server: ${state.server.host}`;
 				document.title = `PiKVM Session: ${state.server.host}`;
 			} else {
-				$("kvmd-meta-server-host").innerHTML = "";
+				$("kvmd-meta-server-host").innerText = "";
 				document.title = "PiKVM Session";
+			}
+
+			if (state.tips && state.tips.left) {
+				$("kvmd-meta-tips-left").innerText = `${state.tips.left}`;
+			}
+			if (state.tips && state.tips.right) {
+				$("kvmd-meta-tips-right").innerText = `${state.tips.right}`;
 			}
 
 			// Don't use this option, it may be removed in any time
@@ -88,7 +102,7 @@ export function Session() {
 		}
 	};
 
-	var __setAboutInfoHw = function(state) {
+	var __setInfoStateHw = function(state) {
 		if (state.health.throttling !== null) {
 			let flags = state.health.throttling.parsed_flags;
 			let ignore_past = state.health.throttling.ignore_past;
@@ -105,7 +119,7 @@ export function Session() {
 		__renderAboutInfoHardware();
 	};
 
-	var __setAboutInfoFan = function(state) {
+	var __setInfoStateFan = function(state) {
 		let failed = false;
 		let failed_past = false;
 		if (state.monitored) {
@@ -207,11 +221,11 @@ export function Session() {
 		}
 	};
 
-	var __colored = function(color, text) {
-		return `<font color="${color}">${text}</font>`;
+	var __colored = function(color, html) {
+		return `<font color="${color}">${html}</font>`;
 	};
 
-	var __setAboutInfoSystem = function(state) {
+	var __setInfoStateSystem = function(state) {
 		$("about-version").innerHTML = `
 			KVMD: <span class="code-comment">${state.kvmd.version}</span><br>
 			<hr>
@@ -221,8 +235,8 @@ export function Session() {
 			${state.kernel.system} kernel:
 			${__formatUname(state.kernel)}
 		`;
-		$("kvmd-version-kvmd").innerHTML = state.kvmd.version;
-		$("kvmd-version-streamer").innerHTML = state.streamer.version;
+		$("kvmd-version-kvmd").innerText = state.kvmd.version;
+		$("kvmd-version-streamer").innerText = state.streamer.version;
 	};
 
 	var __formatStreamerFeatures = function(features) {
@@ -244,14 +258,14 @@ export function Session() {
 	};
 
 	var __formatUl = function(pairs) {
-		let text = "<ul>";
+		let html = "";
 		for (let pair of pairs) {
-			text += `<li>${pair[0]}: <span class="code-comment">${pair[1]}</span></li>`;
+			html += `<li>${pair[0]}: <span class="code-comment">${pair[1]}</span></li>`;
 		}
-		return text + "</ul>";
+		return `<ul>${html}</ul>`;
 	};
 
-	var __setExtras = function(state) {
+	var __setInfoStateExtras = function(state) {
 		let show_hook = null;
 		let close_hook = null;
 		let has_webterm = (state.webterm && (state.webterm.enabled || state.webterm.started));
@@ -269,20 +283,15 @@ export function Session() {
 		tools.feature.setEnabled($("system-tool-webterm"), has_webterm);
 		$("webterm-window").show_hook = show_hook;
 		$("webterm-window").close_hook = close_hook;
-
-		__streamer.setJanusEnabled(
-			(state.janus && (state.janus.enabled || state.janus.started))
-			|| (state.janus_static && (state.janus_static.enabled || state.janus_static.started))
-		);
 	};
 
 	var __startSession = function() {
 		$("link-led").className = "led-yellow";
 		$("link-led").title = "Connecting...";
 
-		tools.httpGet("/api/auth/check", function(http) {
+		tools.httpGet("/api/auth/check", null, function(http) {
 			if (http.status === 200) {
-				__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws`);
+				__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws?legacy=0`);
 				__ws.sendHidEvent = (event) => __sendHidEvent(__ws, event.event_type, event.event);
 				__ws.onopen = __wsOpenHandler;
 				__ws.onmessage = __wsMessageHandler;
@@ -354,19 +363,14 @@ export function Session() {
 		let data = JSON.parse(event.data);
 		switch (data.event_type) {
 			case "pong": __missed_heartbeats = 0; break;
-			case "info_meta_state": __setAboutInfoMeta(data.event); break;
-			case "info_hw_state": __setAboutInfoHw(data.event); break;
-			case "info_fan_state": __setAboutInfoFan(data.event); break;
-			case "info_system_state": __setAboutInfoSystem(data.event); break;
-			case "info_extras_state": __setExtras(data.event); break;
-			case "gpio_model_state": __gpio.setModel(data.event); break;
+			case "info_state": __setInfoState(data.event); break;
 			case "gpio_state": __gpio.setState(data.event); break;
-			case "hid_keymaps_state": __hid.setKeymaps(data.event); break;
 			case "hid_state": __hid.setState(data.event); break;
+			case "hid_keymaps_state": __paste.setState(data.event); break;
 			case "atx_state": __atx.setState(data.event); break;
 			case "msd_state": __msd.setState(data.event); break;
 			case "streamer_state": __streamer.setState(data.event); break;
-			case "streamer_ocr_state": __ocr.setState(data.event); break;
+			case "ocr_state": __ocr.setState(data.event); break;
 		}
 	};
 
@@ -389,13 +393,14 @@ export function Session() {
 			__ping_timer = null;
 		}
 
-		__ocr.setState(null);
 		__gpio.setState(null);
-		__hid.setSocket(null);
-		__recorder.setSocket(null);
+		__hid.setSocket(null); // auto setState(null);
+		__paste.setState(null);
 		__atx.setState(null);
 		__msd.setState(null);
 		__streamer.setState(null);
+		__ocr.setState(null);
+		__recorder.setSocket(null);
 		__ws = null;
 
 		setTimeout(function() {
@@ -411,8 +416,8 @@ export function Session() {
 				throw new Error("Too many missed heartbeats");
 			}
 			__ws.send("{\"event_type\": \"ping\", \"event\": {}}");
-		} catch (err) {
-			__wsErrorHandler(err.message);
+		} catch (ex) {
+			__wsErrorHandler(ex.message);
 		}
 	};
 

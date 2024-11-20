@@ -39,8 +39,8 @@ def cmdfmt(cmd: list[str]) -> str:
     return " ".join(map(shlex.quote, cmd))
 
 
-def efmt(err: Exception) -> str:
-    return f"{type(err).__name__}: {err}"
+def efmt(ex: Exception) -> str:
+    return f"{type(ex).__name__}: {ex}"
 
 
 # =====

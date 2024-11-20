@@ -36,27 +36,27 @@ def make_user_agent(app: str) -> str:
     return f"{app}/{__version__}"
 
 
-def raise_not_200(response: aiohttp.ClientResponse) -> None:
-    if response.status != 200:
-        assert response.reason is not None
-        response.release()
+def raise_not_200(resp: aiohttp.ClientResponse) -> None:
+    if resp.status != 200:
+        assert resp.reason is not None
+        resp.release()
         raise aiohttp.ClientResponseError(
-            response.request_info,
-            response.history,
-            status=response.status,
-            message=response.reason,
-            headers=response.headers,
+            resp.request_info,
+            resp.history,
+            status=resp.status,
+            message=resp.reason,
+            headers=resp.headers,
         )
 
 
-def get_filename(response: aiohttp.ClientResponse) -> str:
+def get_filename(resp: aiohttp.ClientResponse) -> str:
     try:
-        disp = response.headers["Content-Disposition"]
+        disp = resp.headers["Content-Disposition"]
         parsed = aiohttp.multipart.parse_content_disposition(disp)
         return str(parsed[1]["filename"])
     except Exception:
         try:
-            return os.path.basename(response.url.path)
+            return os.path.basename(resp.url.path)
         except Exception:
             raise aiohttp.ClientError("Can't determine filename")
 
@@ -79,6 +79,6 @@ async def download(
         ),
     }
     async with aiohttp.ClientSession(**kwargs) as session:
-        async with session.get(url, verify_ssl=verify) as response:
-            raise_not_200(response)
-            yield response
+        async with session.get(url, verify_ssl=verify) as resp:  # type: ignore
+            raise_not_200(resp)
+            yield resp

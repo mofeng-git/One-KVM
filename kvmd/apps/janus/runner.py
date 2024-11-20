@@ -11,16 +11,17 @@ from ... import aioproc
 
 from ...logging import get_logger
 
+from .stun import StunNatType
 from .stun import Stun
 
 
 # =====
 @dataclasses.dataclass(frozen=True)
 class _Netcfg:
-    nat_type: str = dataclasses.field(default="")
-    src_ip: str = dataclasses.field(default="")
-    ext_ip: str = dataclasses.field(default="")
-    stun_host: str = dataclasses.field(default="")
+    nat_type:  StunNatType = dataclasses.field(default=StunNatType.ERROR)
+    src_ip:    str = dataclasses.field(default="")
+    ext_ip:    str = dataclasses.field(default="")
+    stun_ip:   str = dataclasses.field(default="")
     stun_port: int = dataclasses.field(default=0)
 
 
@@ -92,8 +93,9 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
 
     async def __get_netcfg(self) -> _Netcfg:
         src_ip = (self.__get_default_ip() or "0.0.0.0")
-        (stun, (nat_type, ext_ip)) = await self.__get_stun_info(src_ip)
-        return _Netcfg(nat_type, src_ip, ext_ip, stun.host, stun.port)
+        info = await self.__stun.get_info(src_ip, 0)
+        # В текущей реализации _Netcfg() это копия StunInfo()
+        return _Netcfg(**dataclasses.asdict(info))
 
     def __get_default_ip(self) -> str:
         try:
@@ -111,16 +113,9 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
                     for proto in [socket.AF_INET, socket.AF_INET6]:
                         if proto in addrs:
                             return addrs[proto][0]["addr"]
-        except Exception as err:
-            get_logger().error("Can't get default IP: %s", tools.efmt(err))
+        except Exception as ex:
+            get_logger().error("Can't get default IP: %s", tools.efmt(ex))
         return ""
-
-    async def __get_stun_info(self, src_ip: str) -> tuple[Stun, tuple[str, str]]:
-        try:
-            return (self.__stun, (await self.__stun.get_info(src_ip, 0)))
-        except Exception as err:
-            get_logger().error("Can't get STUN info: %s", tools.efmt(err))
-            return (self.__stun, ("", ""))
 
     # =====
 
@@ -162,7 +157,7 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
     async def __start_janus_proc(self, netcfg: _Netcfg) -> None:
         assert self.__janus_proc is None
         placeholders = {
-            "o_stun_server": f"--stun-server={netcfg.stun_host}:{netcfg.stun_port}",
+            "o_stun_server": f"--stun-server={netcfg.stun_ip}:{netcfg.stun_port}",
             **{
                 key: str(value)
                 for (key, value) in dataclasses.asdict(netcfg).items()

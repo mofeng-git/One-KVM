@@ -29,5 +29,5 @@ class RfbError(Exception):
 
 
 class RfbConnectionError(RfbError):
-    def __init__(self, msg: str, err: Exception) -> None:
-        super().__init__(f"{msg}: {tools.efmt(err)}")
+    def __init__(self, msg: str, ex: Exception) -> None:
+        super().__init__(f"{msg}: {tools.efmt(ex)}")

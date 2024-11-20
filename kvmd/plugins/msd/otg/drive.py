@@ -88,7 +88,7 @@ class Drive:
         try:
             with open(os.path.join(self.__lun_path, param), "w") as file:
                 file.write(value + "\n")
-        except OSError as err:
-            if err.errno == errno.EBUSY:
+        except OSError as ex:
+            if ex.errno == errno.EBUSY:
                 raise MsdDriveLockedError()
             raise

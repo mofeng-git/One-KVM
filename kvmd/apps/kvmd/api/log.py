@@ -47,12 +47,12 @@ class LogApi:
     # =====
 
     @exposed_http("GET", "/log")
-    async def __log_handler(self, request: Request) -> StreamResponse:
+    async def __log_handler(self, req: Request) -> StreamResponse:
         if self.__log_reader is None:
             raise LogReaderDisabledError()
-        seek = valid_log_seek(request.query.get("seek", 0))
-        follow = valid_bool(request.query.get("follow", False))
-        response = await start_streaming(request, "text/plain")
+        seek = valid_log_seek(req.query.get("seek", 0))
+        follow = valid_bool(req.query.get("follow", False))
+        response = await start_streaming(req, "text/plain")
         try:
             async for record in self.__log_reader.poll_log(seek, follow):
                 await response.write(("[%s %s] --- %s" % (

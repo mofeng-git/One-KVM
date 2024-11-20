@@ -50,10 +50,56 @@ fi
 # shellcheck disable=SC1090
 source <(dos2unix < /boot/pikvm.txt)
 
+# shellcheck disable=SC1091
+source /usr/share/kvmd/platform || true
+
 rw
 
 
-# ========== First boot configuration ==========
+# ========== First boot and/or Avahi configuration ==========
+
+make_avahi_service() {
+	local _base
+	local _serial
+	local _platform
+	_base=$(tr -d '\0' < /proc/device-tree/model || echo "Unknown base")
+	_serial=$( (cat /proc/device-tree/serial-number || echo "0000000000000000") | tr -d '\0' | tr '[:lower:]' '[:upper:]')
+	_platform="$PIKVM_MODEL-$PIKVM_VIDEO-$PIKVM_BOARD"
+	mkdir -p /etc/avahi/services
+	cat <<end_of_file > /etc/avahi/services/pikvm.service
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">pikvm-$_serial.local</name>
+  <service>
+    <type>_pikvm._tcp</type>
+    <port>443</port>
+    <txt-record>path=/</txt-record>
+    <txt-record>protocol=https</txt-record>
+    <txt-record>description=PiKVM Web Server</txt-record>
+    <txt-record>model=$PIKVM_MODEL</txt-record>
+    <txt-record>video=$PIKVM_VIDEO</txt-record>
+    <txt-record>board=$PIKVM_BOARD</txt-record>
+    <txt-record>base=$_base</txt-record>
+    <txt-record>serial=$_serial</txt-record>
+    <txt-record>platform=$_platform</txt-record>
+  </service>
+  <service>
+    <type>_https._tcp</type>
+    <port>443</port>
+    <txt-record>path=/</txt-record>
+    <txt-record>protocol=https</txt-record>
+    <txt-record>description=PiKVM Web Server</txt-record>
+    <txt-record>model=$PIKVM_MODEL</txt-record>
+    <txt-record>video=$PIKVM_VIDEO</txt-record>
+    <txt-record>board=$PIKVM_BOARD</txt-record>
+    <txt-record>base=$_base</txt-record>
+    <txt-record>serial=$_serial</txt-record>
+    <txt-record>model=$_platform</txt-record>
+  </service>
+</service-group>
+end_of_file
+}
 
 if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
 	( \
@@ -90,9 +136,19 @@ if [ -n "$FIRSTBOOT$FIRST_BOOT" ]; then
 		unset disk part npart label
 	fi
 
+	make_avahi_service
+
 	# fc-cache is required for installed X server
 	# shellcheck disable=SC2015
 	which fc-cache && fc-cache || true
+fi
+
+if [ -n "$ENABLE_AVAHI" ]; then
+	if [ ! -f /etc/avahi/services/pikvm.service ]; then
+		make_avahi_service
+	fi
+	systemctl enable avahi-daemon || true
+	touch /boot/pikvm-reboot.txt
 fi
 
 

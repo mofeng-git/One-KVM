@@ -54,8 +54,8 @@ class VncAuthManager:
         if self.__enabled:
             try:
                 return (await self.__inner_read_credentials(), True)
-            except VncAuthError as err:
-                get_logger(0).error(str(err))
+            except VncAuthError as ex:
+                get_logger(0).error(str(ex))
             except Exception:
                 get_logger(0).exception("Unhandled exception while reading VNCAuth passwd file")
         return ({}, (not self.__enabled))

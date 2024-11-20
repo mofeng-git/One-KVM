@@ -21,9 +21,9 @@
 
 
 import multiprocessing
+import copy
 import time
 
-from typing import Iterable
 from typing import AsyncGenerator
 from typing import Any
 
@@ -63,6 +63,11 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
 
+        ignore_keys: list[str],
+        mouse_x_range: dict[str, Any],
+        mouse_y_range: dict[str, Any],
+        jiggler: dict[str, Any],
+
         manufacturer: str,
         product: str,
         description: str,
@@ -78,11 +83,9 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         max_clients: int,
         socket_timeout: float,
         select_timeout: float,
-
-        jiggler: dict[str, Any],
     ) -> None:
 
-        super().__init__(**jiggler)
+        super().__init__(ignore_keys=ignore_keys, **mouse_x_range, **mouse_y_range, **jiggler)
         self._set_jiggler_absolute(False)
 
         self.__proc: (multiprocessing.Process | None) = None
@@ -126,7 +129,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             "socket_timeout": Option(5.0, type=valid_float_f01),
             "select_timeout": Option(1.0, type=valid_float_f01),
 
-            **cls._get_jiggler_options(),
+            **cls._get_base_options(),
         }
 
     def sysprep(self) -> None:
@@ -138,6 +141,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         state = await self.__server.get_state()
         outputs: dict = {"available": [], "active": ""}
         return {
+            "enabled": True,
             "online": True,
             "busy": False,
             "connected": None,
@@ -158,14 +162,18 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             **self._get_jiggler_state(),
         }
 
+    async def trigger_state(self) -> None:
+        self.__notifier.notify(1)
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
-        prev_state: dict = {}
+        prev: dict = {}
         while True:
-            state = await self.get_state()
-            if state != prev_state:
-                yield state
-                prev_state = state
-            await self.__notifier.wait()
+            if (await self.__notifier.wait()) > 0:
+                prev = {}
+            new = await self.get_state()
+            if new != prev:
+                prev = copy.deepcopy(new)
+                yield new
 
     async def reset(self) -> None:
         self.clear_events()
@@ -182,27 +190,6 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
-        for (key, state) in keys:
-            self.__server.queue_event(make_keyboard_event(key, state))
-            self._bump_activity()
-
-    def send_mouse_button_event(self, button: str, state: bool) -> None:
-        self.__server.queue_event(MouseButtonEvent(button, state))
-        self._bump_activity()
-
-    def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
-        self.__server.queue_event(MouseRelativeEvent(delta_x, delta_y))
-        self._bump_activity()
-
-    def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
-        self.__server.queue_event(MouseWheelEvent(delta_x, delta_y))
-        self._bump_activity()
-
-    def clear_events(self) -> None:
-        self.__server.clear_events()
-        self._bump_activity()
-
     def set_params(
         self,
         keyboard_output: (str | None)=None,
@@ -215,6 +202,21 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         if jiggler is not None:
             self._set_jiggler_active(jiggler)
             self.__notifier.notify()
+
+    def _send_key_event(self, key: str, state: bool) -> None:
+        self.__server.queue_event(make_keyboard_event(key, state))
+
+    def _send_mouse_button_event(self, button: str, state: bool) -> None:
+        self.__server.queue_event(MouseButtonEvent(button, state))
+
+    def _send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
+        self.__server.queue_event(MouseRelativeEvent(delta_x, delta_y))
+
+    def _send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        self.__server.queue_event(MouseWheelEvent(delta_x, delta_y))
+
+    def _clear_events(self) -> None:
+        self.__server.clear_events()
 
     # =====
 

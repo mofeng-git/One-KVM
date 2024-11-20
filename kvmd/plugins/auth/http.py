@@ -75,7 +75,7 @@ class Plugin(BaseAuthService):
             async with session.request(
                 method="POST",
                 url=self.__url,
-                timeout=self.__timeout,
+                timeout=aiohttp.ClientTimeout(total=self.__timeout),
                 json={
                     "user": user,
                     "passwd": passwd,
@@ -85,8 +85,8 @@ class Plugin(BaseAuthService):
                     "User-Agent": htclient.make_user_agent("KVMD"),
                     "X-KVMD-User": user,
                 },
-            ) as response:
-                htclient.raise_not_200(response)
+            ) as resp:
+                htclient.raise_not_200(resp)
                 return True
         except Exception:
             get_logger().exception("Failed HTTP auth request for user %r", user)

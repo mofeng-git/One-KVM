@@ -157,7 +157,7 @@ def make_json_response(
     wrap_result: bool=True,
 ) -> Response:
 
-    response = Response(
+    resp = Response(
         text=json.dumps(({
             "ok": (status == 200),
             "result": (result or {}),
@@ -167,18 +167,18 @@ def make_json_response(
     )
     if set_cookies:
         for (key, value) in set_cookies.items():
-            response.set_cookie(key, value, httponly=True, samesite="Strict")
-    return response
+            resp.set_cookie(key, value, httponly=True, samesite="Strict")
+    return resp
 
 
-def make_json_exception(err: Exception, status: (int | None)=None) -> Response:
-    name = type(err).__name__
-    msg = str(err)
-    if isinstance(err, HttpError):
-        status = err.status
+def make_json_exception(ex: Exception, status: (int | None)=None) -> Response:
+    name = type(ex).__name__
+    msg = str(ex)
+    if isinstance(ex, HttpError):
+        status = ex.status
     else:
         get_logger().error("API error: %s: %s", name, msg)
-    assert status is not None, err
+    assert status is not None, ex
     return make_json_response({
         "error": name,
         "error_msg": msg,
@@ -186,35 +186,35 @@ def make_json_exception(err: Exception, status: (int | None)=None) -> Response:
 
 
 async def start_streaming(
-    request: Request,
+    req: Request,
     content_type: str,
     content_length: int=-1,
     file_name: str="",
 ) -> StreamResponse:
 
-    response = StreamResponse(status=200, reason="OK")
-    response.content_type = content_type
+    resp = StreamResponse(status=200, reason="OK")
+    resp.content_type = content_type
     if content_length >= 0:  # pylint: disable=consider-using-min-builtin
-        response.content_length = content_length
+        resp.content_length = content_length
     if file_name:
         file_name = urllib.parse.quote(file_name, safe="")
-        response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{file_name}"
-    await response.prepare(request)
-    return response
+        resp.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{file_name}"
+    await resp.prepare(req)
+    return resp
 
 
-async def stream_json(response: StreamResponse, result: dict, ok: bool=True) -> None:
-    await response.write(json.dumps({
+async def stream_json(resp: StreamResponse, result: dict, ok: bool=True) -> None:
+    await resp.write(json.dumps({
         "ok": ok,
         "result": result,
     }).encode("utf-8") + b"\r\n")
 
 
-async def stream_json_exception(response: StreamResponse, err: Exception) -> None:
-    name = type(err).__name__
-    msg = str(err)
+async def stream_json_exception(resp: StreamResponse, ex: Exception) -> None:
+    name = type(ex).__name__
+    msg = str(ex)
     get_logger().error("API error: %s: %s", name, msg)
-    await stream_json(response, {
+    await stream_json(resp, {
         "error": name,
         "error_msg": msg,
     }, False)
@@ -249,15 +249,15 @@ def parse_ws_event(msg: str) -> tuple[str, dict]:
 _REQUEST_AUTH_INFO = "_kvmd_auth_info"
 
 
-def _format_P(request: BaseRequest, *_, **__) -> str:  # type: ignore  # pylint: disable=invalid-name
-    return (getattr(request, _REQUEST_AUTH_INFO, None) or "-")
+def _format_P(req: BaseRequest, *_, **__) -> str:  # type: ignore  # pylint: disable=invalid-name
+    return (getattr(req, _REQUEST_AUTH_INFO, None) or "-")
 
 
 AccessLogger._format_P = staticmethod(_format_P)  # type: ignore  # pylint: disable=protected-access
 
 
-def set_request_auth_info(request: BaseRequest, info: str) -> None:
-    setattr(request, _REQUEST_AUTH_INFO, info)
+def set_request_auth_info(req: BaseRequest, info: str) -> None:
+    setattr(req, _REQUEST_AUTH_INFO, info)
 
 
 # =====
@@ -318,16 +318,16 @@ class HttpServer:
                 self.__add_exposed_ws(ws_exposed)
 
     def __add_exposed_http(self, exposed: HttpExposed) -> None:
-        async def wrapper(request: Request) -> Response:
+        async def wrapper(req: Request) -> Response:
             try:
-                await self._check_request_auth(exposed, request)
-                return (await exposed.handler(request))
-            except IsBusyError as err:
-                return make_json_exception(err, 409)
-            except (ValidatorError, OperationError) as err:
-                return make_json_exception(err, 400)
-            except HttpError as err:
-                return make_json_exception(err)
+                await self._check_request_auth(exposed, req)
+                return (await exposed.handler(req))
+            except IsBusyError as ex:
+                return make_json_exception(ex, 409)
+            except (ValidatorError, OperationError) as ex:
+                return make_json_exception(ex, 400)
+            except HttpError as ex:
+                return make_json_exception(ex)
         self.__app.router.add_route(exposed.method, exposed.path, wrapper)
 
     def __add_exposed_ws(self, exposed: WsExposed) -> None:
@@ -342,10 +342,10 @@ class HttpServer:
     # =====
 
     @contextlib.asynccontextmanager
-    async def _ws_session(self, request: Request, **kwargs: Any) -> AsyncGenerator[WsSession, None]:
+    async def _ws_session(self, req: Request, **kwargs: Any) -> AsyncGenerator[WsSession, None]:
         assert self.__ws_heartbeat is not None
         wsr = WebSocketResponse(heartbeat=self.__ws_heartbeat)
-        await wsr.prepare(request)
+        await wsr.prepare(req)
         ws = WsSession(wsr, kwargs)
 
         async with self.__ws_sessions_lock:
@@ -364,8 +364,8 @@ class HttpServer:
             if msg.type == WSMsgType.TEXT:
                 try:
                     (event_type, event) = parse_ws_event(msg.data)
-                except Exception as err:
-                    logger.error("Can't parse JSON event from websocket: %r", err)
+                except Exception as ex:
+                    logger.error("Can't parse JSON event from websocket: %r", ex)
                 else:
                     handler = self.__ws_handlers.get(event_type)
                     if handler:
@@ -384,7 +384,7 @@ class HttpServer:
                 break
         return ws.wsr
 
-    async def _broadcast_ws_event(self, event_type: str, event: (dict | None)) -> None:
+    async def _broadcast_ws_event(self, event_type: str, event: (dict | None), legacy: (bool | None)=None) -> None:
         if self.__ws_sessions:
             await asyncio.gather(*[
                 ws.send_event(event_type, event)
@@ -393,6 +393,7 @@ class HttpServer:
                     not ws.wsr.closed
                     and ws.wsr._req is not None  # pylint: disable=protected-access
                     and ws.wsr._req.transport is not None  # pylint: disable=protected-access
+                    and (legacy is None or ws.kwargs.get("legacy") == legacy)
                 )
             ], return_exceptions=True)
 
@@ -417,7 +418,7 @@ class HttpServer:
 
     # =====
 
-    async def _check_request_auth(self, exposed: HttpExposed, request: Request) -> None:
+    async def _check_request_auth(self, exposed: HttpExposed, req: Request) -> None:
         pass
 
     async def _init_app(self) -> None:

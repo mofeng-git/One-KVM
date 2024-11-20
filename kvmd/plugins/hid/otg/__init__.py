@@ -20,7 +20,8 @@
 # ========================================================================== #
 
 
-from typing import Iterable
+import copy
+
 from typing import AsyncGenerator
 from typing import Any
 
@@ -46,15 +47,20 @@ from .mouse import MouseProcess
 class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
+        ignore_keys: list[str],
+        mouse_x_range: dict[str, Any],
+        mouse_y_range: dict[str, Any],
+        jiggler: dict[str, Any],
+
         keyboard: dict[str, Any],
         mouse: dict[str, Any],
         mouse_alt: dict[str, Any],
-        jiggler: dict[str, Any],
         noop: bool,
+
         udc: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
 
-        super().__init__(**jiggler)
+        super().__init__(ignore_keys=ignore_keys, **mouse_x_range, **mouse_y_range, **jiggler)
 
         self.__udc = udc
 
@@ -113,7 +119,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 "horizontal_wheel": Option(True, type=valid_bool),
             },
             "noop": Option(False, type=valid_bool),
-            **cls._get_jiggler_options(),
+            **cls._get_base_options(),
         }
 
     def sysprep(self) -> None:
@@ -128,6 +134,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
         keyboard_state = await self.__keyboard_proc.get_state()
         mouse_state = await self.__mouse_current.get_state()
         return {
+            "enabled": True,
             "online": True,
             "busy": False,
             "connected": None,
@@ -150,14 +157,18 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             **self._get_jiggler_state(),
         }
 
+    async def trigger_state(self) -> None:
+        self.__notifier.notify(1)
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
-        prev_state: dict = {}
+        prev: dict = {}
         while True:
-            state = await self.get_state()
-            if state != prev_state:
-                yield state
-                prev_state = state
-            await self.__notifier.wait()
+            if (await self.__notifier.wait()) > 0:
+                prev = {}
+            new = await self.get_state()
+            if new != prev:
+                prev = copy.deepcopy(new)
+                yield new
 
     async def reset(self) -> None:
         self.__keyboard_proc.send_reset_event()
@@ -177,26 +188,6 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
-        self.__keyboard_proc.send_key_events(keys)
-        self._bump_activity()
-
-    def send_mouse_button_event(self, button: str, state: bool) -> None:
-        self.__mouse_current.send_button_event(button, state)
-        self._bump_activity()
-
-    def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        self.__mouse_current.send_move_event(to_x, to_y)
-        self._bump_activity()
-
-    def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
-        self.__mouse_current.send_relative_event(delta_x, delta_y)
-        self._bump_activity()
-
-    def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
-        self.__mouse_current.send_wheel_event(delta_x, delta_y)
-        self._bump_activity()
-
     def set_params(
         self,
         keyboard_output: (str | None)=None,
@@ -215,12 +206,26 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             self._set_jiggler_active(jiggler)
             self.__notifier.notify()
 
-    def clear_events(self) -> None:
+    def _send_key_event(self, key: str, state: bool) -> None:
+        self.__keyboard_proc.send_key_event(key, state)
+
+    def _send_mouse_button_event(self, button: str, state: bool) -> None:
+        self.__mouse_current.send_button_event(button, state)
+
+    def _send_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        self.__mouse_current.send_move_event(to_x, to_y)
+
+    def _send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
+        self.__mouse_current.send_relative_event(delta_x, delta_y)
+
+    def _send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        self.__mouse_current.send_wheel_event(delta_x, delta_y)
+
+    def _clear_events(self) -> None:
         self.__keyboard_proc.send_clear_event()
         self.__mouse_proc.send_clear_event()
         if self.__mouse_alt_proc:
             self.__mouse_alt_proc.send_clear_event()
-        self._bump_activity()
 
     # =====
 

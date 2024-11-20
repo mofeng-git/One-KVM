@@ -48,7 +48,16 @@ class BaseAtx(BasePlugin):
     async def get_state(self) -> dict:
         raise NotImplementedError
 
+    async def trigger_state(self) -> None:
+        raise NotImplementedError
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
+        # ==== Granularity table ====
+        #   - enabled -- Full
+        #   - busy    -- Partial
+        #   - leds    -- Partial
+        # ===========================
+
         yield {}
         raise NotImplementedError
 

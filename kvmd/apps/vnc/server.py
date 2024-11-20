@@ -42,7 +42,7 @@ from ...clients.kvmd import KvmdClient
 
 from ...clients.streamer import StreamerError
 from ...clients.streamer import StreamerPermError
-from ...clients.streamer import StreamFormats
+from ...clients.streamer import StreamerFormats
 from ...clients.streamer import BaseStreamerClient
 
 from ... import tools
@@ -81,6 +81,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         mouse_output: str,
         keymap_name: str,
         symmap: dict[int, dict[int, str]],
+        allow_cut_after: float,
 
         kvmd: KvmdClient,
         streamers: list[BaseStreamerClient],
@@ -100,6 +101,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             tls_timeout=tls_timeout,
             x509_cert_path=x509_cert_path,
             x509_key_path=x509_key_path,
+            allow_cut_after=allow_cut_after,
             vnc_passwds=list(vnc_credentials),
             vencrypt=vencrypt,
             none_auth_only=none_auth_only,
@@ -175,20 +177,25 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             self.__kvmd_ws = None
 
     async def __process_ws_event(self, event_type: str, event: dict) -> None:
-        if event_type == "info_meta_state":
-            try:
-                host = event["server"]["host"]
-            except Exception:
-                host = None
-            else:
-                if isinstance(host, str):
-                    name = f"PiKVM: {host}"
-                    if self._encodings.has_rename:
-                        await self._send_rename(name)
-                    self.__shared_params.name = name
+        if event_type == "info_state":
+            if "meta" in event:
+                try:
+                    host = event["meta"]["server"]["host"]
+                except Exception:
+                    host = None
+                else:
+                    if isinstance(host, str):
+                        name = f"PiKVM: {host}"
+                        if self._encodings.has_rename:
+                            await self._send_rename(name)
+                        self.__shared_params.name = name
 
         elif event_type == "hid_state":
-            if self._encodings.has_leds_state:
+            if (
+                self._encodings.has_leds_state
+                and ("keyboard" in event)
+                and ("leds" in event["keyboard"])
+            ):
                 await self._send_leds_state(**event["keyboard"]["leds"])
 
     # =====
@@ -210,19 +217,19 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                             await self.__queue_frame(frame)
                         else:
                             await self.__queue_frame("No signal")
-            except StreamerError as err:
-                if isinstance(err, StreamerPermError):
+            except StreamerError as ex:
+                if isinstance(ex, StreamerPermError):
                     streamer = self.__get_default_streamer()
-                    logger.info("%s [streamer]: Permanent error: %s; switching to %s ...", self._remote, err, streamer)
+                    logger.info("%s [streamer]: Permanent error: %s; switching to %s ...", self._remote, ex, streamer)
                 else:
-                    logger.info("%s [streamer]: Waiting for stream: %s", self._remote, err)
+                    logger.info("%s [streamer]: Waiting for stream: %s", self._remote, ex)
                 await self.__queue_frame("Waiting for stream ...")
                 await asyncio.sleep(1)
 
     def __get_preferred_streamer(self) -> BaseStreamerClient:
         formats = {
-            StreamFormats.JPEG: "has_tight",
-            StreamFormats.H264: "has_h264",
+            StreamerFormats.JPEG: "has_tight",
+            StreamerFormats.H264: "has_h264",
         }
         streamer: (BaseStreamerClient | None) = None
         for streamer in self.__streamers:
@@ -248,7 +255,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             "data": (await make_text_jpeg(self._width, self._height, self._encodings.tight_jpeg_quality, text)),
             "width": self._width,
             "height": self._height,
-            "format": StreamFormats.JPEG,
+            "format": StreamerFormats.JPEG,
         }
 
     async def __fb_sender_task_loop(self) -> None:  # pylint: disable=too-many-branches
@@ -258,21 +265,21 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 frame = await self.__fb_queue.get()
                 if (
                     last is None  # pylint: disable=too-many-boolean-expressions
-                    or frame["format"] == StreamFormats.JPEG
+                    or frame["format"] == StreamerFormats.JPEG
                     or last["format"] != frame["format"]
-                    or (frame["format"] == StreamFormats.H264 and (
+                    or (frame["format"] == StreamerFormats.H264 and (
                         frame["key"]
                         or last["width"] != frame["width"]
                         or last["height"] != frame["height"]
                         or len(last["data"]) + len(frame["data"]) > 4194304
                     ))
                 ):
-                    self.__fb_has_key = (frame["format"] == StreamFormats.H264 and frame["key"])
+                    self.__fb_has_key = (frame["format"] == StreamerFormats.H264 and frame["key"])
                     last = frame
                     if self.__fb_queue.qsize() == 0:
                         break
                     continue
-                assert frame["format"] == StreamFormats.H264
+                assert frame["format"] == StreamerFormats.H264
                 last["data"] += frame["data"]
                 if self.__fb_queue.qsize() == 0:
                     break
@@ -294,9 +301,9 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 await self._send_fb_allow_again()
                 continue
 
-            if last["format"] == StreamFormats.JPEG:
+            if last["format"] == StreamerFormats.JPEG:
                 await self._send_fb_jpeg(last["data"])
-            elif last["format"] == StreamFormats.H264:
+            elif last["format"] == StreamerFormats.H264:
                 if not self._encodings.has_h264:
                     raise RfbError("The client doesn't want to accept H264 anymore")
                 if self.__fb_has_key:
@@ -439,6 +446,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         desired_fps: int,
         mouse_output: str,
         keymap_path: str,
+        allow_cut_after: float,
 
         kvmd: KvmdClient,
         streamers: list[BaseStreamerClient],
@@ -481,8 +489,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                 try:
                     async with kvmd.make_session("", "") as kvmd_session:
                         none_auth_only = await kvmd_session.auth.check()
-                except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-                    logger.error("%s [entry]: Can't check KVMD auth mode: %s", remote, tools.efmt(err))
+                except (aiohttp.ClientError, asyncio.TimeoutError) as ex:
+                    logger.error("%s [entry]: Can't check KVMD auth mode: %s", remote, tools.efmt(ex))
                     return
 
                 await _Client(
@@ -496,6 +504,7 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     mouse_output=mouse_output,
                     keymap_name=keymap_name,
                     symmap=symmap,
+                    allow_cut_after=allow_cut_after,
                     kvmd=kvmd,
                     streamers=streamers,
                     vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],

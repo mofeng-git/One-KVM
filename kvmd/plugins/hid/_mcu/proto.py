@@ -184,17 +184,17 @@ class MouseWheelEvent(BaseEvent):
 
 
 # =====
-def check_response(response: bytes) -> bool:
-    assert len(response) in (4, 8), response
-    return (bitbang.make_crc16(response[:-2]) == struct.unpack(">H", response[-2:])[0])
+def check_response(resp: bytes) -> bool:
+    assert len(resp) in (4, 8), resp
+    return (bitbang.make_crc16(resp[:-2]) == struct.unpack(">H", resp[-2:])[0])
 
 
-def _make_request(command: bytes) -> bytes:
-    assert len(command) == 5, command
-    request = b"\x33" + command
-    request += struct.pack(">H", bitbang.make_crc16(request))
-    assert len(request) == 8, request
-    return request
+def _make_request(cmd: bytes) -> bytes:
+    assert len(cmd) == 5, cmd
+    req = b"\x33" + cmd
+    req += struct.pack(">H", bitbang.make_crc16(req))
+    assert len(req) == 8, req
+    return req
 
 
 # =====

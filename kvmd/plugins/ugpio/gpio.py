@@ -54,7 +54,7 @@ class Plugin(BaseUserGpioDriver):
         self.__output_pins: dict[int, (bool | None)] = {}
 
         self.__reader: (aiogp.AioReader | None) = None
-        self.__outputs_request: (gpiod.LineRequest | None) = None
+        self.__outputs_req: (gpiod.LineRequest | None) = None
 
     @classmethod
     def get_plugin_options(cls) -> dict:
@@ -74,7 +74,7 @@ class Plugin(BaseUserGpioDriver):
 
     def prepare(self) -> None:
         assert self.__reader is None
-        assert self.__outputs_request is None
+        assert self.__outputs_req is None
         self.__reader = aiogp.AioReader(
             path=self.__device_path,
             consumer="kvmd::gpio::inputs",
@@ -82,7 +82,7 @@ class Plugin(BaseUserGpioDriver):
             notifier=self._notifier,
         )
         if self.__output_pins:
-            self.__outputs_request = gpiod.request_lines(
+            self.__outputs_req = gpiod.request_lines(
                 self.__device_path,
                 consumer="kvmd::gpiod::outputs",
                 config={
@@ -99,9 +99,9 @@ class Plugin(BaseUserGpioDriver):
         await self.__reader.poll()
 
     async def cleanup(self) -> None:
-        if self.__outputs_request:
+        if self.__outputs_req:
             try:
-                self.__outputs_request.release()
+                self.__outputs_req.release()
             except Exception:
                 pass
 
@@ -110,15 +110,15 @@ class Plugin(BaseUserGpioDriver):
         pin_int = int(pin)
         if pin_int in self.__input_pins:
             return self.__reader.get(pin_int)
-        assert self.__outputs_request
+        assert self.__outputs_req
         assert pin_int in self.__output_pins
-        return bool(self.__outputs_request.get_value(pin_int).value)
+        return bool(self.__outputs_req.get_value(pin_int).value)
 
     async def write(self, pin: str, state: bool) -> None:
-        assert self.__outputs_request
+        assert self.__outputs_req
         pin_int = int(pin)
         assert pin_int in self.__output_pins
-        self.__outputs_request.set_value(pin_int, gpiod.line.Value(state))
+        self.__outputs_req.set_value(pin_int, gpiod.line.Value(state))
 
     def __str__(self) -> str:
         return f"GPIO({self._instance_name})"

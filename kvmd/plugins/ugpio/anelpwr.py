@@ -113,13 +113,13 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
         while True:
             session = self.__ensure_http_session()
             try:
-                async with session.get(f"{self.__url}/strg.cfg") as response:
-                    htclient.raise_not_200(response)
-                    parts = (await response.text()).split(";")
+                async with session.get(f"{self.__url}/strg.cfg") as resp:
+                    htclient.raise_not_200(resp)
+                    parts = (await resp.text()).split(";")
                     for pin in self.__state:
                         self.__state[pin] = (parts[1 + int(pin) * 5] == "1")
-            except Exception as err:
-                get_logger().error("Failed ANELPWR bulk GET request: %s", tools.efmt(err))
+            except Exception as ex:
+                get_logger().error("Failed ANELPWR bulk GET request: %s", tools.efmt(ex))
                 self.__state = dict.fromkeys(self.__state, None)
             if self.__state != prev_state:
                 self._notifier.notify()
@@ -143,10 +143,10 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 url=f"{self.__url}/ctrl.htm",
                 data=f"F{pin}={int(state)}",
                 headers={"Content-Type": "text/plain"},
-            ) as response:
-                htclient.raise_not_200(response)
-        except Exception as err:
-            get_logger().error("Failed ANELPWR POST request to pin %s: %s", pin, tools.efmt(err))
+            ) as resp:
+                htclient.raise_not_200(resp)
+        except Exception as ex:
+            get_logger().error("Failed ANELPWR POST request to pin %s: %s", pin, tools.efmt(ex))
             raise GpioDriverOfflineError(self)
         self.__update_notifier.notify()
 

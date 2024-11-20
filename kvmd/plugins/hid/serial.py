@@ -44,12 +44,12 @@ class _SerialPhyConnection(BasePhyConnection):
     def __init__(self, tty: serial.Serial) -> None:
         self.__tty = tty
 
-    def send(self, request: bytes) -> bytes:
-        assert len(request) == 8
-        assert request[0] == 0x33
+    def send(self, req: bytes) -> bytes:
+        assert len(req) == 8
+        assert req[0] == 0x33
         if self.__tty.in_waiting:
             self.__tty.read_all()
-        assert self.__tty.write(request) == 8
+        assert self.__tty.write(req) == 8
         data = self.__tty.read(4)
         if len(data) == 4:
             if data[0] == 0x34:  # New response protocol

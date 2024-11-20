@@ -33,6 +33,7 @@ class Partition:
     mount_path: str
     root_path: str
     user: str
+    group: str
 
 
 # =====
@@ -50,7 +51,7 @@ def _find_single(part_type: str) -> Partition:
     if len(parts) == 0:
         if os.path.exists('/var/lib/kvmd/msd'):
             #set default value
-            parts = [Partition(mount_path='/var/lib/kvmd/msd', root_path='/var/lib/kvmd/msd', user='kvmd')]
+            parts = [Partition(mount_path='/var/lib/kvmd/msd', root_path='/var/lib/kvmd/msd',group='kvmd', user='kvmd')]
         else:
             raise RuntimeError(f"Can't find {part_type!r} mountpoint")
     return parts[0]
@@ -64,12 +65,13 @@ def _find_partitions(part_type: str, single: bool) -> list[Partition]:
             if line and not line.startswith("#"):
                 fields = line.split()
                 if len(fields) == 6:
-                    options = dict(re.findall(r"X-kvmd\.%s-(root|user)(?:=([^,]+))?" % (part_type), fields[3]))
+                    options = dict(re.findall(r"X-kvmd\.%s-(root|user|group)(?:=([^,]+))?" % (part_type), fields[3]))
                     if options:
                         parts.append(Partition(
                             mount_path=os.path.normpath(fields[1]),
                             root_path=os.path.normpath(options.get("root", "") or fields[1]),
                             user=options.get("user", ""),
+                            group=options.get("group", ""),
                         ))
                         if single:
                             break

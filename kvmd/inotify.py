@@ -130,16 +130,23 @@ class InotifyMask:
 #        | OPEN
 #    )
 
-    # Helper for all modify events
-    ALL_MODIFY_EVENTS = (
+    # Helper for all changes events except MODIFY, because it fires on each write()
+    ALL_CHANGES_EVENTS = (
         CLOSE_WRITE
         | CREATE
         | DELETE
         | DELETE_SELF
-        | MODIFY
         | MOVE_SELF
         | MOVED_FROM
         | MOVED_TO
+    )
+
+    # Helper for typicals events when we need to restart watcher
+    ALL_RESTART_EVENTS = (
+        DELETE_SELF
+        | MOVE_SELF
+        | UNMOUNT
+        | ISDIR
     )
 
     # Special flags for watch()
@@ -172,6 +179,10 @@ class InotifyEvent:
     name: str
     path: str
 
+    @property
+    def restart(self) -> bool:
+        return bool(self.mask & InotifyMask.ALL_RESTART_EVENTS)
+
     def __repr__(self) -> str:
         return (
             f"<InotifyEvent: wd={self.wd}, mask={InotifyMask.to_string(self.mask)},"
@@ -189,6 +200,9 @@ class Inotify:
         self.__moved: dict[int, str] = {}
 
         self.__events_queue: "asyncio.Queue[InotifyEvent]" = asyncio.Queue()
+
+    async def watch_all_changes(self, *paths: str) -> None:
+        await self.watch(InotifyMask.ALL_CHANGES_EVENTS, *paths)
 
     async def watch(self, mask: int, *paths: str) -> None:
         for path in paths:
@@ -222,7 +236,7 @@ class Inotify:
         except asyncio.TimeoutError:
             return None
 
-    async def get_series(self, timeout: float) -> list[InotifyEvent]:
+    async def get_series(self, timeout: float, max_series: int=64) -> list[InotifyEvent]:
         series: list[InotifyEvent] = []
         event = await self.get_event(timeout)
         if event:
@@ -231,6 +245,8 @@ class Inotify:
                 event = await self.get_event(timeout)
                 if event:
                     series.append(event)
+                if len(series) >= max_series:
+                    break
         return series
 
     def __read_and_queue_events(self) -> None:
@@ -271,8 +287,8 @@ class Inotify:
         while True:
             try:
                 return os.read(self.__fd, _EVENTS_BUFFER_LENGTH)
-            except OSError as err:
-                if err.errno == errno.EINTR:
+            except OSError as ex:
+                if ex.errno == errno.EINTR:
                     pass
 
     def __enter__(self) -> "Inotify":

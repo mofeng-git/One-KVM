@@ -23,7 +23,7 @@
 /* ===== main.css ===== */
 
 button:enabled:hover,
-select:enabled:hover,
+select:not([size]):enabled:hover,
 input[type=file]:enabled:hover::-webkit-file-selector-button,
 input[type=file]:enabled:hover::file-selector-button {
 	color: var(--cs-control-hovered-fg);
@@ -31,7 +31,7 @@ input[type=file]:enabled:hover::file-selector-button {
 }
 
 button:active,
-select:active,
+select:not([size]):active,
 input[type=file]:active::-webkit-file-selector-button,
 input[type=file]:active::file-selector-button {
 	color: var(--cs-control-pressed-fg) !important;
@@ -42,7 +42,7 @@ button.key:active,
 select.key:active {
 	box-shadow: none;
 }
-select:enabled:hover {
+select:not([size]):enabled:hover {
 	background-image: url("../svg/select-arrow-intensive.svg") !important;
 }
 

@@ -135,8 +135,8 @@ def _read_keyboard_layout(path: str) -> dict[int, list[At1Key]]:  # Keysym to ev
 
             try:
                 at1_code = int(parts[1], 16)
-            except ValueError as err:
-                logger.error("Syntax error at %s:%d: %s", path, lineno, err)
+            except ValueError as ex:
+                logger.error("Syntax error at %s:%d: %s", path, lineno, ex)
                 continue
             rest = parts[2:]
 

@@ -55,8 +55,8 @@ def valid_abs_path(arg: Any, type: str="", name: str="") -> str:  # pylint: disa
     if type:
         try:
             st = os.stat(arg)
-        except Exception as err:
-            raise_error(arg, f"{name}: {err}")
+        except Exception as ex:
+            raise_error(arg, f"{name}: {ex}")
         else:
             if not getattr(stat, f"S_IS{type.upper()}")(st.st_mode):
                 raise_error(arg, name)

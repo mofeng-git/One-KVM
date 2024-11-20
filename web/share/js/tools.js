@@ -39,7 +39,13 @@ export var tools = new function() {
 
 	/************************************************************************/
 
-	self.httpRequest = function(method, url, callback, body=null, content_type=null, timeout=15000) {
+	self.httpRequest = function(method, url, params, callback, body=null, content_type=null, timeout=15000) {
+		if (params) {
+			params = new URLSearchParams(params);
+			if (params) {
+				url += "?" + params;
+			}
+		}
 		let http = new XMLHttpRequest();
 		http.open(method, url, true);
 		if (content_type) {
@@ -54,15 +60,26 @@ export var tools = new function() {
 		http.send(body);
 	};
 
-	self.httpGet = function(url, callback, body=null, content_type=null, timeout=15000) {
-		self.httpRequest("GET", url, callback, body, content_type, timeout);
+	self.httpGet = function(url, params, callback, body=null, content_type=null, timeout=15000) {
+		self.httpRequest("GET", url, params, callback, body, content_type, timeout);
 	};
 
-	self.httpPost = function(url, callback, body=null, content_type=null, timeout=15000) {
-		self.httpRequest("POST", url, callback, body, content_type, timeout);
+	self.httpPost = function(url, params, callback, body=null, content_type=null, timeout=15000) {
+		self.httpRequest("POST", url, params, callback, body, content_type, timeout);
 	};
 
 	/************************************************************************/
+
+	self.escape = function(text) {
+		return text.replace(
+			/[^0-9A-Za-z ]/g,
+			ch => "&#" + ch.charCodeAt(0) + ";"
+		);
+	};
+
+	self.partial = function(func, ...args) {
+		return () => func(...args);
+	};
 
 	self.upperFirst = function(text) {
 		return text[0].toUpperCase() + text.slice(1);
@@ -85,6 +102,10 @@ export var tools = new function() {
 		min = Math.ceil(min);
 		max = Math.floor(max);
 		return Math.floor(Math.random() * (max - min + 1)) + min;
+	};
+
+	self.formatHex = function(value) {
+		return `0x${value.toString(16).toUpperCase()}`;
 	};
 
 	self.formatSize = function(size) {
@@ -283,34 +304,18 @@ export var tools = new function() {
 				option.className = "comment";
 				el.add(option);
 			},
-			"addSeparator": function(el) {
+			"addSeparator": function(el, repeat=30) {
 				if (!self.browser.is_mobile) {
-					self.selector.addComment(el, "\u2500".repeat(30));
+					self.selector.addComment(el, "\u2500".repeat(repeat));
 				}
 			},
-
-			"setValues": function(el, values, empty_title=null) {
-				if (values.constructor == Object) {
-					values = Object.keys(values).sort();
-				}
-				let values_json = JSON.stringify(values);
-				if (el.__values_json !== values_json) {
-					el.options.length = 0;
-					for (let value of values) {
-						let title = value;
-						if (title.length === 0 && empty_title !== null) {
-							title = empty_title;
-						}
-						self.selector.addOption(el, title, value);
+			"hasValue": function(el, value) {
+				for (let el_op of el.options) {
+					if (el_op.value === value) {
+						return true;
 					}
-					el.__values_json = values_json;
-					el.__values = values;
 				}
-			},
-			"setSelectedValue": function(el, value) {
-				if (el.__values && el.__values.includes(value)) {
-					el.value = value;
-				}
+				return false;
 			},
 		};
 	};

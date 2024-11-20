@@ -113,6 +113,7 @@
     "kvm_text80":"使用浏览器 API 录制视频，结束录制后视频文件会自动下载",
     "kvm_text81":"开始录制",
     "kvm_text82":"结束录制",
+    "kvm_text83":"网页界面设置",
 
     "atx-ask-switch":"点击二次确认",
     "hid-recorder-loop-switch":"无限循环重放",
@@ -140,5 +141,6 @@
     "msd-message-out-of-storage":"当前镜像大小超出存储空间",
     "msd-message-rw-enabled":"读写模式以启用",
     "msd-message-downloads":"正在从 One-KVM 下载镜像",
-    "msd-message-another-user-uploads":"另一个用户正在上传镜像"
+    "msd-message-another-user-uploads":"另一个用户正在上传镜像",
+    "page-full-tab-stream-switch":"自动全屏视频窗口"
 }

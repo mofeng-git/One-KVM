@@ -50,7 +50,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
 
         super().__init__()
 
-        self.__data_path = os.path.join(fstab.find_pst().root_path, "data")
+        self.__data_path = fstab.find_pst().root_path
         self.__ro_retries_delay = ro_retries_delay
         self.__ro_cleanup_delay = ro_cleanup_delay
         self.__remount_cmd = remount_cmd
@@ -60,8 +60,8 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
     # ===== WEBSOCKET
 
     @exposed_http("GET", "/ws")
-    async def __ws_handler(self, request: Request) -> WebSocketResponse:
-        async with self._ws_session(request) as ws:
+    async def __ws_handler(self, req: Request) -> WebSocketResponse:
+        async with self._ws_session(req) as ws:
             await ws.send_event("loop", {})
             return (await self._ws_loop(ws))
 
@@ -128,9 +128,9 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
     def __is_write_available(self) -> bool:
         try:
             return (not (os.statvfs(self.__data_path).f_flag & os.ST_RDONLY))
-        except Exception as err:
+        except Exception as ex:
             get_logger(0).info("Can't get filesystem state of PST (%s): %s",
-                               self.__data_path, tools.efmt(err))
+                               self.__data_path, tools.efmt(ex))
             return False
 
     async def __remount_storage(self, rw: bool) -> bool:

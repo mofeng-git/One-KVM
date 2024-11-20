@@ -167,30 +167,6 @@ ul#navbar li div.menu div.text {
 	font-size: 14px;
 }
 
-ul#navbar li div.menu table.kv {
-	border-spacing: 5px;
-	margin: 0 10px 0 10px;
-	font-size: 12px;
-}
-ul#navbar li div.menu table.kv td {
-	text-align: left;
-}
-ul#navbar li div.menu table.kv td.value {
-	font-weight: bold;
-	max-width: 310px;
-	overflow: hidden;
-}
-ul#navbar li div.menu table.kv td.value-slider {
-	width: 100%;
-}
-ul#navbar li div.menu table.kv td.value-number {
-	font-weight: bold;
-	max-width: 310px;
-	overflow: hidden;
-	min-width: 40px;
-	max-width: 40px;
-}
-
 ul#navbar li div.menu div.buttons button,
 ul#navbar li div.menu div.buttons select {
 	border-radius: 0;
@@ -221,4 +197,34 @@ ul#navbar li div.menu img.sign {
 	vertical-align: middle;
 	margin-right: 10px;
 	height: 20px;
+}
+
+ul.navbar-bg-tips {
+	list-style-type: none;
+	top: 50px;
+	position: fixed;
+	width: 100%;
+	padding: 0;
+	font-size: 0.7em;
+	line-height: 1.5em;
+	color: var(--cs-page-obscure-fg);
+	z-index: -10;
+}
+ul.navbar-bg-tips li {
+	padding: 0 10px;
+	max-width: 20%;
+}
+ul.navbar-bg-tips li pre {
+	word-break: break-word;
+	white-space: break-spaces;
+	text-align: justify;
+}
+ul.navbar-bg-tips li.left {
+	float: left;
+}
+ul.navbar-bg-tips li.right {
+	float: right;
+}
+ul.navbar-bg-tips li a {
+	color: var(--cs-page-obscure-fg);
 }

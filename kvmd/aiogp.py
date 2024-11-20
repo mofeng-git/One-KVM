@@ -83,9 +83,9 @@ class AioReader:  # pylint: disable=too-many-instance-attributes
             self.__path,
             consumer=self.__consumer,
             config={tuple(pins): gpiod.LineSettings(edge_detection=gpiod.line.Edge.BOTH)},
-        ) as line_request:
+        ) as line_req:
 
-            line_request.wait_edge_events(0.1)
+            line_req.wait_edge_events(0.1)
             self.__values = {
                 pin: _DebouncedValue(
                     initial=bool(value.value),
@@ -93,14 +93,14 @@ class AioReader:  # pylint: disable=too-many-instance-attributes
                     notifier=self.__notifier,
                     loop=self.__loop,
                 )
-                for (pin, value) in zip(pins, line_request.get_values(pins))
+                for (pin, value) in zip(pins, line_req.get_values(pins))
             }
             self.__loop.call_soon_threadsafe(self.__notifier.notify)
 
             while not self.__stop_event.is_set():
-                if line_request.wait_edge_events(1):
+                if line_req.wait_edge_events(1):
                     new: dict[int, bool] = {}
-                    for event in line_request.read_edge_events():
+                    for event in line_req.read_edge_events():
                         (pin, value) = self.__parse_event(event)
                         new[pin] = value
                     for (pin, value) in new.items():
@@ -110,7 +110,7 @@ class AioReader:  # pylint: disable=too-many-instance-attributes
                     # Размер буфера ядра - 16 эвентов на линии. При превышении этого числа,
                     # новые эвенты потеряются. Это не баг, это фича, как мне объяснили в LKML.
                     # Штош. Будем с этим жить и синхронизировать состояния при таймауте.
-                    for (pin, value) in zip(pins, line_request.get_values(pins)):
+                    for (pin, value) in zip(pins, line_req.get_values(pins)):
                         self.__values[pin].set(bool(value.value))  # type: ignore
 
     def __parse_event(self, event: gpiod.EdgeEvent) -> tuple[int, bool]:

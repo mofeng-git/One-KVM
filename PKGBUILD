@@ -39,7 +39,7 @@ for _variant in "${_variants[@]}"; do
 	pkgname+=(kvmd-platform-$_platform-$_board)
 done
 pkgbase=kvmd
-pkgver=4.3
+pkgver=4.20
 pkgrel=1
 pkgdesc="The main PiKVM daemon"
 url="https://github.com/pikvm/kvmd"
@@ -77,6 +77,8 @@ depends=(
 	python-ldap
 	python-zstandard
 	python-mako
+	python-luma-oled
+	python-pyusb
 	"libgpiod>=2.1"
 	freetype2
 	"v4l-utils>=1.22.1-1"
@@ -91,7 +93,7 @@ depends=(
 	certbot
 	platform-io-access
 	raspberrypi-utils
-	"ustreamer>=6.11"
+	"ustreamer>=6.16"
 
 	# Systemd UDEV bug
 	"systemd>=248.3-2"
@@ -131,6 +133,7 @@ conflicts=(
 	python-aiohttp-pikvm
 	platformio
 	avrdude-pikvm
+	kvmd-oled
 )
 makedepends=(
 	python-setuptools
@@ -206,7 +209,7 @@ for _variant in "${_variants[@]}"; do
 		cd \"kvmd-\$pkgver\"
 
 		pkgdesc=\"PiKVM platform configs - $_platform for $_board\"
-		depends=(kvmd=$pkgver-$pkgrel \"linux-rpi-pikvm>=6.6.21-3\")
+		depends=(kvmd=$pkgver-$pkgrel \"linux-rpi-pikvm>=6.6.45-1\" \"raspberrypi-bootloader-pikvm>=20240818-1\")
 
 		backup=(
 			etc/sysctl.d/99-kvmd.conf

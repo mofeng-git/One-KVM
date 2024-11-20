@@ -33,8 +33,6 @@ import pygments.formatters
 
 from .. import tools
 
-from ..mouse import MouseRange
-
 from ..plugins import UnknownPluginError
 from ..plugins.auth import get_auth_service_class
 from ..plugins.hid import get_hid_class
@@ -171,8 +169,8 @@ def _init_config(config_path: str, override_options: list[str], **load_flags: bo
     config_path = os.path.expanduser(config_path)
     try:
         raw_config: dict = load_yaml_file(config_path)
-    except Exception as err:
-        raise SystemExit(f"ConfigError: Can't read config file {config_path!r}:\n{tools.efmt(err)}")
+    except Exception as ex:
+        raise SystemExit(f"ConfigError: Can't read config file {config_path!r}:\n{tools.efmt(ex)}")
     if not isinstance(raw_config, dict):
         raise SystemExit(f"ConfigError: Top-level of the file {config_path!r} must be a dictionary")
 
@@ -187,8 +185,8 @@ def _init_config(config_path: str, override_options: list[str], **load_flags: bo
             config = make_config(raw_config, scheme)
 
         return config
-    except (ConfigError, UnknownPluginError) as err:
-        raise SystemExit(f"ConfigError: {err}")
+    except (ConfigError, UnknownPluginError) as ex:
+        raise SystemExit(f"ConfigError: {ex}")
 
 
 def _patch_raw(raw_config: dict) -> None:  # pylint: disable=too-many-branches
@@ -407,19 +405,7 @@ def _get_config_scheme() -> dict:
 
             "hid": {
                 "type": Option("", type=valid_stripped_string_not_empty),
-
-                "keymap":      Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
-                "ignore_keys": Option([], type=functools.partial(valid_string_list, subval=valid_hid_key)),
-
-                "mouse_x_range": {
-                    "min": Option(MouseRange.MIN, type=valid_hid_mouse_move),
-                    "max": Option(MouseRange.MAX, type=valid_hid_mouse_move),
-                },
-                "mouse_y_range": {
-                    "min": Option(MouseRange.MIN, type=valid_hid_mouse_move),
-                    "max": Option(MouseRange.MAX, type=valid_hid_mouse_move),
-                },
-
+                "keymap": Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
                 # Dynamic content
             },
 
@@ -681,9 +667,10 @@ def _get_config_scheme() -> dict:
         },
 
         "vnc": {
-            "desired_fps":  Option(30, type=valid_stream_fps),
-            "mouse_output": Option("usb", type=valid_hid_mouse_output),
-            "keymap":       Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
+            "desired_fps":     Option(30, type=valid_stream_fps),
+            "mouse_output":    Option("usb", type=valid_hid_mouse_output),
+            "keymap":          Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
+            "allow_cut_after": Option(3.0, type=valid_float_f0),
 
             "server": {
                 "host":        Option("",   type=valid_ip_or_host, if_empty=""),

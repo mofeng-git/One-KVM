@@ -112,8 +112,8 @@ def valid_ssl_ciphers(arg: Any) -> str:
     arg = valid_stripped_string_not_empty(arg, name)
     try:
         ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).set_ciphers(arg)
-    except Exception as err:
-        raise ValidatorError(f"The argument {arg!r} is not a valid {name}: {err}")
+    except Exception as ex:
+        raise ValidatorError(f"The argument {arg!r} is not a valid {name}: {ex}")
     return arg
 
 

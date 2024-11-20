@@ -435,10 +435,10 @@ class Plugin(BaseAuthService):
                 timeout=self.__timeout,
                 dict=dct,
             )
-            request = client.CreateAuthPacket(code=pyrad.packet.AccessRequest, User_Name=user)
-            request["User-Password"] = request.PwCrypt(passwd)
-            response = client.SendPacket(request)
-            return (response.code == pyrad.packet.AccessAccept)
+            req = client.CreateAuthPacket(code=pyrad.packet.AccessRequest, User_Name=user)
+            req["User-Password"] = req.PwCrypt(passwd)
+            resp = client.SendPacket(req)
+            return (resp.code == pyrad.packet.AccessAccept)
         except Exception:
             get_logger().exception("Failed RADIUS auth request for user %r", user)
             return False

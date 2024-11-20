@@ -248,6 +248,13 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 						// Janus 0.x
 						"media": {"audioSend": false, "videoSend": false, "data": false},
 
+						// Chrome is playing OPUS as mono without this hack
+						//   - https://issues.webrtc.org/issues/41481053 - IT'S NOT FIXED!
+						//   - https://github.com/ossrs/srs/pull/2683/files
+						"customizeSdp": function(jsep) {
+							jsep.sdp = jsep.sdp.replace("useinbandfec=1", "useinbandfec=1;stereo=1");
+						},
+
 						"success": function(jsep) {
 							__logInfo("Got SDP:", jsep);
 							__sendStart(jsep);
@@ -376,7 +383,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 	};
 
 	var __isOnline = function() {
-		return !!(__state && __state.source && __state.source.online);
+		return !!(__state && __state.source.online);
 	};
 
 	var __sendWatch = function() {
@@ -428,8 +435,8 @@ JanusStreamer.ensure_janus = function(callback) {
 					callback(true);
 				},
 			});
-		}).catch((err) => {
-			tools.error("Stream: Can't import Janus module:", err);
+		}).catch((ex) => {
+			tools.error("Stream: Can't import Janus module:", ex);
 			callback(false);
 		});
 	} else {

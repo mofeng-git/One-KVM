@@ -1,0 +1,15 @@
+[Unit]
+Description=PiKVM - A small OLED daemon
+After=systemd-modules-load.service
+ConditionPathExists=/dev/i2c-1
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+ExecStartPre=/usr/bin/kvmd-oled --interval=3 --clear-on-exit --image=@hello.ppm
+ExecStart=/usr/bin/kvmd-oled
+TimeoutStopSec=3
+
+[Install]
+WantedBy=multi-user.target

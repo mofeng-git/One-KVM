@@ -117,7 +117,22 @@ class BaseMsd(BasePlugin):
     async def get_state(self) -> dict:
         raise NotImplementedError()
 
+    async def trigger_state(self) -> None:
+        raise NotImplementedError()
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
+        # ==== Granularity table ====
+        #   - enabled -- Full
+        #   - online  -- Partial
+        #   - busy    -- Partial
+        #   - drive   -- Partial, nullable
+        #   - storage -- Partial, nullable
+        #   - storage.parts       -- Partial
+        #   - storage.images      -- Partial
+        #   - storage.downloading -- Partial, nullable
+        #   - storage.uploading   -- Partial, nullable
+        # ===========================
+
         if self is not None:  # XXX: Vulture and pylint hack
             raise NotImplementedError()
         yield
@@ -263,15 +278,17 @@ class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attribu
 
         return self.__written
 
-    def is_complete(self) -> bool:
-        return (self.__written >= self.__file_size)
-
     async def open(self) -> "MsdFileWriter":
         assert self.__file is None
         get_logger(1).info("Writing %r image (%d bytes) to MSD ...", self.__name, self.__file_size)
         await aiofiles.os.makedirs(os.path.dirname(self.__path), exist_ok=True)
         self.__file = await aiofiles.open(self.__path, mode="w+b", buffering=0)  # type: ignore
+        await aiotools.run_async(os.ftruncate, self.__file.fileno(), self.__file_size)  # type: ignore
         return self
+
+    async def finish(self) -> bool:
+        await self.__sync()
+        return (self.__written >= self.__file_size)
 
     async def close(self) -> None:
         assert self.__file is not None
@@ -285,10 +302,7 @@ class MsdFileWriter(BaseMsdWriter):  # pylint: disable=too-many-instance-attribu
             else:  # written > size
                 (log, result) = (logger.warning, "OVERFLOW")
             log("Written %d of %d bytes to MSD image %r: %s", self.__written, self.__file_size, self.__name, result)
-            try:
-                await self.__sync()
-            finally:
-                await self.__file.close()  # type: ignore
+            await self.__file.close()  # type: ignore
         except Exception:
             logger.exception("Can't close image writer")
 

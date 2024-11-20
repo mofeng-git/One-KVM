@@ -100,10 +100,10 @@ class Plugin(BaseAuthService):
                     return True
         except ldap.INVALID_CREDENTIALS:
             pass
-        except ldap.SERVER_DOWN as err:
-            get_logger().error("LDAP server is down: %s", tools.efmt(err))
-        except Exception as err:
-            get_logger().error("Unexpected LDAP error: %s", tools.efmt(err))
+        except ldap.SERVER_DOWN as ex:
+            get_logger().error("LDAP server is down: %s", tools.efmt(ex))
+        except Exception as ex:
+            get_logger().error("Unexpected LDAP error: %s", tools.efmt(ex))
         finally:
             if conn is not None:
                 try:

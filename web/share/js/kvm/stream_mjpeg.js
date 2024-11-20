@@ -117,10 +117,10 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo) {
 	};
 
 	var __findId = function() {
-		let stream_client = tools.cookies.get("stream_client");
-		if (__id.length === 0 && stream_client && stream_client.startsWith(__key + "/")) {
-			__logInfo("Found acceptable stream_client cookie:", stream_client);
-			__id = stream_client.slice(stream_client.indexOf("/") + 1);
+		let sc = tools.cookies.get("stream_client");
+		if (__id.length === 0 && sc && sc.startsWith(__key + "/")) {
+			__logInfo("Found acceptable stream_client cookie:", sc);
+			__id = sc.slice(sc.indexOf("/") + 1);
 		}
 	};
 

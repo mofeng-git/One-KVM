@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-from typing import Iterable
 from typing import Generator
 from typing import Any
 
@@ -68,9 +67,8 @@ class KeyboardProcess(BaseDeviceProcess):
         self._clear_queue()
         self._queue_event(ResetEvent())
 
-    def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
-        for (key, state) in keys:
-            self._queue_event(make_keyboard_event(key, state))
+    def send_key_event(self, key: str, state: bool) -> None:
+        self._queue_event(make_keyboard_event(key, state))
 
     # =====
 

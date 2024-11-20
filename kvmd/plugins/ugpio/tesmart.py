@@ -146,9 +146,9 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 asyncio.ensure_future(self.__reader.readexactly(6)),
                 timeout=self.__timeout,
             ))[4]
-        except Exception as err:
+        except Exception as ex:
             get_logger(0).error("Can't send command to TESmart KVM [%s]:%d: %s",
-                                self.__host, self.__port, tools.efmt(err))
+                                self.__host, self.__port, tools.efmt(ex))
             await self.__close_device()
             self.__active = -1
             raise GpioDriverOfflineError(self)
@@ -168,9 +168,9 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 asyncio.ensure_future(asyncio.open_connection(self.__host, self.__port)),
                 timeout=self.__timeout,
             )
-        except Exception as err:
+        except Exception as ex:
             get_logger(0).error("Can't connect to TESmart KVM [%s]:%d: %s",
-                                self.__host, self.__port, tools.efmt(err))
+                                self.__host, self.__port, tools.efmt(ex))
             raise GpioDriverOfflineError(self)
 
     async def __ensure_device_serial(self) -> None:
@@ -179,9 +179,9 @@ class Plugin(BaseUserGpioDriver):  # pylint: disable=too-many-instance-attribute
                 serial_asyncio.open_serial_connection(url=self.__device_path, baudrate=self.__speed),
                 timeout=self.__timeout,
             )
-        except Exception as err:
+        except Exception as ex:
             get_logger(0).error("Can't connect to TESmart KVM [%s]:%d: %s",
-                                self.__device_path, self.__speed, tools.efmt(err))
+                                self.__device_path, self.__speed, tools.efmt(ex))
             raise GpioDriverOfflineError(self)
 
     async def __close_device(self) -> None:

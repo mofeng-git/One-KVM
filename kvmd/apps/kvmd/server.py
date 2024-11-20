@@ -20,8 +20,6 @@
 # ========================================================================== #
 
 
-import asyncio
-import operator
 import dataclasses
 
 from typing import Callable
@@ -32,6 +30,8 @@ from typing import Any
 from aiohttp.web import Request
 from aiohttp.web import Response
 from aiohttp.web import WebSocketResponse
+
+from ... import __version__
 
 from ...logging import get_logger
 
@@ -98,54 +98,46 @@ class StreamerH264NotSupported(OperationError):
 
 
 # =====
-@dataclasses.dataclass(frozen=True)
-class _SubsystemEventSource:
-    get_state:  (Callable[[], Coroutine[Any, Any, dict]] | None) = None
-    poll_state: (Callable[[], AsyncGenerator[dict, None]] | None) = None
-
-
 @dataclasses.dataclass
 class _Subsystem:
-    name:    str
-    sysprep: (Callable[[], None] | None)
-    systask: (Callable[[], Coroutine[Any, Any, None]] | None)
-    cleanup: (Callable[[], Coroutine[Any, Any, dict]] | None)
-    sources: dict[str, _SubsystemEventSource]
+    name:          str
+    event_type:    str
+    sysprep:       (Callable[[], None] | None)
+    systask:       (Callable[[], Coroutine[Any, Any, None]] | None)
+    cleanup:       (Callable[[], Coroutine[Any, Any, dict]] | None)
+    trigger_state: (Callable[[], Coroutine[Any, Any, None]] | None) = None
+    poll_state:    (Callable[[], AsyncGenerator[dict, None]] | None) = None
+
+    def __post_init__(self) -> None:
+        if self.event_type:
+            assert self.trigger_state
+            assert self.poll_state
 
     @classmethod
     def make(cls, obj: object, name: str, event_type: str="") -> "_Subsystem":
         if isinstance(obj, BasePlugin):
             name = f"{name} ({obj.get_plugin_name()})"
-        sub = _Subsystem(
+        return _Subsystem(
             name=name,
+            event_type=event_type,
             sysprep=getattr(obj, "sysprep", None),
             systask=getattr(obj, "systask", None),
             cleanup=getattr(obj, "cleanup", None),
-            sources={},
+            trigger_state=getattr(obj, "trigger_state", None),
+            poll_state=getattr(obj, "poll_state", None),
+
         )
-        if event_type:
-            sub.add_source(
-                event_type=event_type,
-                get_state=getattr(obj, "get_state", None),
-                poll_state=getattr(obj, "poll_state", None),
-            )
-        return sub
-
-    def add_source(
-        self,
-        event_type: str,
-        get_state: (Callable[[], Coroutine[Any, Any, dict]] | None),
-        poll_state: (Callable[[], AsyncGenerator[dict, None]] | None),
-    ) -> "_Subsystem":
-
-        assert event_type
-        assert event_type not in self.sources, (self, event_type)
-        assert get_state or poll_state, (self, event_type)
-        self.sources[event_type] = _SubsystemEventSource(get_state, poll_state)
-        return self
 
 
 class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
+    __EV_GPIO_STATE = "gpio_state"
+    __EV_HID_STATE = "hid_state"
+    __EV_ATX_STATE = "atx_state"
+    __EV_MSD_STATE = "msd_state"
+    __EV_STREAMER_STATE = "streamer_state"
+    __EV_OCR_STATE = "ocr_state"
+    __EV_INFO_STATE = "info_state"
+
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
         auth_manager: AuthManager,
@@ -161,9 +153,6 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         snapshoter: Snapshoter,
 
         keymap_path: str,
-        ignore_keys: list[str],
-        mouse_x_range: tuple[int, int],
-        mouse_y_range: tuple[int, int],
 
         stream_forever: bool,
     ) -> None:
@@ -177,8 +166,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
 
         self.__stream_forever = stream_forever
 
-        self.__hid_api = HidApi(hid, keymap_path, ignore_keys, mouse_x_range, mouse_y_range)  # Ugly hack to get keymaps state
-        self.__streamer_api = StreamerApi(streamer, ocr)  # Same hack to get ocr langs state
+        self.__hid_api = HidApi(hid, keymap_path)  # Ugly hack to get keymaps state
         self.__apis: list[object] = [
             self,
             AuthApi(auth_manager),
@@ -188,22 +176,19 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             self.__hid_api,
             AtxApi(atx),
             MsdApi(msd),
-            self.__streamer_api,
+            StreamerApi(streamer, ocr),
             ExportApi(info_manager, atx, user_gpio),
             RedfishApi(info_manager, atx),
         ]
-
         self.__subsystems = [
             _Subsystem.make(auth_manager, "Auth manager"),
-            _Subsystem.make(user_gpio,    "User-GPIO", "gpio_state").add_source("gpio_model_state", user_gpio.get_model, None),
-            _Subsystem.make(hid,          "HID",       "hid_state").add_source("hid_keymaps_state", self.__hid_api.get_keymaps, None),
-            _Subsystem.make(atx,          "ATX",       "atx_state"),
-            _Subsystem.make(msd,          "MSD",       "msd_state"),
-            _Subsystem.make(streamer,     "Streamer",  "streamer_state").add_source("streamer_ocr_state", self.__streamer_api.get_ocr, None),
-            *[
-                _Subsystem.make(info_manager.get_submanager(sub), f"Info manager ({sub})", f"info_{sub}_state",)
-                for sub in sorted(info_manager.get_subs())
-            ],
+            _Subsystem.make(user_gpio,    "User-GPIO",    self.__EV_GPIO_STATE),
+            _Subsystem.make(hid,          "HID",          self.__EV_HID_STATE),
+            _Subsystem.make(atx,          "ATX",          self.__EV_ATX_STATE),
+            _Subsystem.make(msd,          "MSD",          self.__EV_MSD_STATE),
+            _Subsystem.make(streamer,     "Streamer",     self.__EV_STREAMER_STATE),
+            _Subsystem.make(ocr,          "OCR",          self.__EV_OCR_STATE),
+            _Subsystem.make(info_manager, "Info manager", self.__EV_INFO_STATE),
         ]
 
         self.__streamer_notifier = aiotools.AioNotifier()
@@ -213,16 +198,16 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     # ===== STREAMER CONTROLLER
 
     @exposed_http("POST", "/streamer/set_params")
-    async def __streamer_set_params_handler(self, request: Request) -> Response:
+    async def __streamer_set_params_handler(self, req: Request) -> Response:
         current_params = self.__streamer.get_params()
         for (name, validator, exc_cls) in [
-            ("quality", valid_stream_quality, StreamerQualityNotSupported),
-            ("desired_fps", valid_stream_fps, None),
-            ("resolution", valid_stream_resolution, StreamerResolutionNotSupported),
+            ("quality",      valid_stream_quality,      StreamerQualityNotSupported),
+            ("desired_fps",  valid_stream_fps,          None),
+            ("resolution",   valid_stream_resolution,   StreamerResolutionNotSupported),
             ("h264_bitrate", valid_stream_h264_bitrate, StreamerH264NotSupported),
-            ("h264_gop", valid_stream_h264_gop, StreamerH264NotSupported),
+            ("h264_gop",     valid_stream_h264_gop,     StreamerH264NotSupported),
         ]:
-            value = request.query.get(name)
+            value = req.query.get(name)
             if value:
                 if name not in current_params:
                     assert exc_cls is not None, name
@@ -242,24 +227,22 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     # ===== WEBSOCKET
 
     @exposed_http("GET", "/ws")
-    async def __ws_handler(self, request: Request) -> WebSocketResponse:
-        stream = valid_bool(request.query.get("stream", True))
-        async with self._ws_session(request, stream=stream) as ws:
-            states = [
-                (event_type, src.get_state())
-                for sub in self.__subsystems
-                for (event_type, src) in sub.sources.items()
-                if src.get_state
-            ]
-            events = dict(zip(
-                map(operator.itemgetter(0), states),
-                await asyncio.gather(*map(operator.itemgetter(1), states)),
-            ))
-            await asyncio.gather(*[
-                ws.send_event(event_type, events.pop(event_type))
-                for (event_type, _) in states
-            ])
-            await ws.send_event("loop", {})
+    async def __ws_handler(self, req: Request) -> WebSocketResponse:
+        stream = valid_bool(req.query.get("stream", True))
+        legacy = valid_bool(req.query.get("legacy", True))
+        async with self._ws_session(req, stream=stream, legacy=legacy) as ws:
+            (major, minor) = __version__.split(".")
+            await ws.send_event("loop", {
+                "version": {
+                    "major": int(major),
+                    "minor": int(minor),
+                },
+            })
+            for sub in self.__subsystems:
+                if sub.event_type:
+                    assert sub.trigger_state
+                    await sub.trigger_state()
+            await self._broadcast_ws_event("hid_keymaps_state", await self.__hid_api.get_keymaps())  # FIXME
             return (await self._ws_loop(ws))
 
     @exposed_ws("ping")
@@ -275,17 +258,17 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         aioproc.rename_process("main")
         super().run(**kwargs)
 
-    async def _check_request_auth(self, exposed: HttpExposed, request: Request) -> None:
-        await check_request_auth(self.__auth_manager, exposed, request)
+    async def _check_request_auth(self, exposed: HttpExposed, req: Request) -> None:
+        await check_request_auth(self.__auth_manager, exposed, req)
 
     async def _init_app(self) -> None:
         aiotools.create_deadly_task("Stream controller", self.__stream_controller())
         for sub in self.__subsystems:
             if sub.systask:
                 aiotools.create_deadly_task(sub.name, sub.systask())
-            for (event_type, src) in sub.sources.items():
-                if src.poll_state:
-                    aiotools.create_deadly_task(f"{sub.name} [poller]", self.__poll_state(event_type, src.poll_state()))
+            if sub.event_type:
+                assert sub.poll_state
+                aiotools.create_deadly_task(f"{sub.name} [poller]", self.__poll_state(sub.event_type, sub.poll_state()))
         aiotools.create_deadly_task("Stream snapshoter", self.__stream_snapshoter())
         self._add_exposed(*self.__apis)
 
@@ -347,12 +330,67 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
             prev = cur
             await self.__streamer_notifier.wait()
 
-    async def __poll_state(self, event_type: str, poller: AsyncGenerator[dict, None]) -> None:
-        async for state in poller:
-            await self._broadcast_ws_event(event_type, state)
-
     async def __stream_snapshoter(self) -> None:
         await self.__snapshoter.run(
             is_live=self.__has_stream_clients,
             notifier=self.__streamer_notifier,
         )
+
+    async def __poll_state(self, event_type: str, poller: AsyncGenerator[dict, None]) -> None:
+        match event_type:
+            case self.__EV_GPIO_STATE:
+                await self.__poll_gpio_state(poller)
+            case self.__EV_INFO_STATE:
+                await self.__poll_info_state(poller)
+            case self.__EV_MSD_STATE:
+                await self.__poll_msd_state(poller)
+            case self.__EV_STREAMER_STATE:
+                await self.__poll_streamer_state(poller)
+            case self.__EV_OCR_STATE:
+                await self.__poll_ocr_state(poller)
+            case _:
+                async for state in poller:
+                    await self._broadcast_ws_event(event_type, state)
+
+    async def __poll_gpio_state(self, poller: AsyncGenerator[dict, None]) -> None:
+        prev: dict = {"state": {"inputs": {}, "outputs": {}}}
+        async for state in poller:
+            await self._broadcast_ws_event(self.__EV_GPIO_STATE, state, legacy=False)
+            if "model" in state:  # We have only "model"+"state" or "model" event
+                prev = state
+                await self._broadcast_ws_event("gpio_model_state", prev["model"], legacy=True)
+            else:
+                prev["state"]["inputs"].update(state["state"].get("inputs", {}))
+                prev["state"]["outputs"].update(state["state"].get("outputs", {}))
+            await self._broadcast_ws_event(self.__EV_GPIO_STATE, prev["state"], legacy=True)
+
+    async def __poll_info_state(self, poller: AsyncGenerator[dict, None]) -> None:
+        async for state in poller:
+            await self._broadcast_ws_event(self.__EV_INFO_STATE, state, legacy=False)
+            for (key, value) in state.items():
+                await self._broadcast_ws_event(f"info_{key}_state", value, legacy=True)
+
+    async def __poll_msd_state(self, poller: AsyncGenerator[dict, None]) -> None:
+        prev: dict = {"storage": None}
+        async for state in poller:
+            await self._broadcast_ws_event(self.__EV_MSD_STATE, state, legacy=False)
+            prev_storage = prev["storage"]
+            prev.update(state)
+            if prev["storage"] is not None and prev_storage is not None:
+                prev_storage.update(prev["storage"])
+                prev["storage"] = prev_storage
+            if "online" in prev:  # Complete/Full
+                await self._broadcast_ws_event(self.__EV_MSD_STATE, prev, legacy=True)
+
+    async def __poll_streamer_state(self, poller: AsyncGenerator[dict, None]) -> None:
+        prev: dict = {}
+        async for state in poller:
+            await self._broadcast_ws_event(self.__EV_STREAMER_STATE, state, legacy=False)
+            prev.update(state)
+            if "features" in prev:  # Complete/Full
+                await self._broadcast_ws_event(self.__EV_STREAMER_STATE, prev, legacy=True)
+
+    async def __poll_ocr_state(self, poller: AsyncGenerator[dict, None]) -> None:
+        async for state in poller:
+            await self._broadcast_ws_event(self.__EV_OCR_STATE, state, legacy=False)
+            await self._broadcast_ws_event("streamer_ocr_state", {"ocr": state}, legacy=True)

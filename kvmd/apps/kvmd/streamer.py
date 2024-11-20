@@ -20,21 +20,22 @@
 # ========================================================================== #
 
 
-import io
 import signal
 import asyncio
 import asyncio.subprocess
 import dataclasses
-import functools
+import copy
 
 from typing import AsyncGenerator
 from typing import Any
 
 import aiohttp
 
-from PIL import Image as PilImage
-
 from ...logging import get_logger
+
+from ...clients.streamer import StreamerSnapshot
+from ...clients.streamer import HttpStreamerClient
+from ...clients.streamer import HttpStreamerClientSession
 
 from ... import tools
 from ... import aiotools
@@ -43,40 +44,6 @@ from ... import htclient
 
 
 # =====
-@dataclasses.dataclass(frozen=True)
-class StreamerSnapshot:
-    online: bool
-    width: int
-    height: int
-    headers: tuple[tuple[str, str], ...]
-    data: bytes
-
-    async def make_preview(self, max_width: int, max_height: int, quality: int) -> bytes:
-        assert max_width >= 0
-        assert max_height >= 0
-        assert quality > 0
-
-        if max_width == 0 and max_height == 0:
-            max_width = self.width // 5
-            max_height = self.height // 5
-        else:
-            max_width = min((max_width or self.width), self.width)
-            max_height = min((max_height or self.height), self.height)
-
-        if (max_width, max_height) == (self.width, self.height):
-            return self.data
-        return (await aiotools.run_async(self.__inner_make_preview, max_width, max_height, quality))
-
-    @functools.lru_cache(maxsize=1)
-    def __inner_make_preview(self, max_width: int, max_height: int, quality: int) -> bytes:
-        with io.BytesIO(self.data) as snapshot_bio:
-            with io.BytesIO() as preview_bio:
-                with PilImage.open(snapshot_bio) as image:
-                    image.thumbnail((max_width, max_height), PilImage.Resampling.LANCZOS)
-                    image.save(preview_bio, format="jpeg", quality=quality)
-                    return preview_bio.getvalue()
-
-
 class _StreamerParams:
     __DESIRED_FPS = "desired_fps"
 
@@ -136,7 +103,7 @@ class _StreamerParams:
         }
 
     def get_limits(self) -> dict:
-        limits = dict(self.__limits)
+        limits = copy.deepcopy(self.__limits)
         if self.__has_resolution:
             limits[self.__AVAILABLE_RESOLUTIONS] = list(limits[self.__AVAILABLE_RESOLUTIONS])
         return limits
@@ -170,6 +137,11 @@ class _StreamerParams:
 
 
 class Streamer:  # pylint: disable=too-many-instance-attributes
+    __ST_FULL     = 0xFF
+    __ST_PARAMS   = 0x01
+    __ST_STREAMER = 0x02
+    __ST_SNAPSHOT = 0x04
+
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
 
@@ -203,7 +175,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__state_poll = state_poll
 
         self.__unix_path = unix_path
-        self.__timeout = timeout
         self.__snapshot_timeout = snapshot_timeout
 
         self.__process_name_prefix = process_name_prefix
@@ -220,7 +191,13 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         self.__streamer_task: (asyncio.Task | None) = None
         self.__streamer_proc: (asyncio.subprocess.Process | None) = None  # pylint: disable=no-member
 
-        self.__http_session: (aiohttp.ClientSession | None) = None
+        self.__client = HttpStreamerClient(
+            name="jpeg",
+            unix_path=self.__unix_path,
+            timeout=timeout,
+            user_agent=htclient.make_user_agent("KVMD"),
+        )
+        self.__client_session: (HttpStreamerClientSession | None) = None
 
         self.__snapshot: (StreamerSnapshot | None) = None
 
@@ -289,6 +266,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
     def set_params(self, params: dict) -> None:
         assert not self.__streamer_task
+        self.__notifier.notify(self.__ST_PARAMS)
         return self.__params.set_params(params)
 
     def get_params(self) -> dict:
@@ -297,55 +275,80 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def get_state(self) -> dict:
-        streamer_state = None
-        if self.__streamer_task:
-            session = self.__ensure_http_session()
-            try:
-                async with session.get(self.__make_url("state")) as response:
-                    htclient.raise_not_200(response)
-                    streamer_state = (await response.json())["result"]
-            except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
-                pass
-            except Exception:
-                get_logger().exception("Invalid streamer response from /state")
-
-        snapshot: (dict | None) = None
-        if self.__snapshot:
-            snapshot = dataclasses.asdict(self.__snapshot)
-            del snapshot["headers"]
-            del snapshot["data"]
-
         return {
+            "features": self.__params.get_features(),
             "limits": self.__params.get_limits(),
             "params": self.__params.get_params(),
-            "snapshot": {"saved": snapshot},
-            "streamer": streamer_state,
-            "features": self.__params.get_features(),
+            "streamer": (await self.__get_streamer_state()),
+            "snapshot": self.__get_snapshot_state(),
         }
 
+    async def trigger_state(self) -> None:
+        self.__notifier.notify(self.__ST_FULL)
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
+        # ==== Granularity table ====
+        #   - features -- Full
+        #   - limits   -- Partial, paired with params
+        #   - params   -- Partial, paired with limits
+        #   - streamer -- Partial, nullable
+        #   - snapshot -- Partial
+        # ===========================
+
         def signal_handler(*_: Any) -> None:
             get_logger(0).info("Got SIGUSR2, checking the stream state ...")
-            self.__notifier.notify()
+            self.__notifier.notify(self.__ST_STREAMER)
 
         get_logger(0).info("Installing SIGUSR2 streamer handler ...")
         asyncio.get_event_loop().add_signal_handler(signal.SIGUSR2, signal_handler)
 
-        waiter_task: (asyncio.Task | None) = None
-        prev_state: dict = {}
+        prev: dict = {}
         while True:
-            state = await self.get_state()
-            if state != prev_state:
-                yield state
-                prev_state = state
+            new: dict = {}
 
-            if waiter_task is None:
-                waiter_task = asyncio.create_task(self.__notifier.wait())
-            if waiter_task in (await aiotools.wait_first(
-                asyncio.ensure_future(asyncio.sleep(self.__state_poll)),
-                waiter_task,
-            ))[0]:
-                waiter_task = None
+            mask = await self.__notifier.wait(timeout=self.__state_poll)
+            if mask == self.__ST_FULL:
+                new = await self.get_state()
+                prev = copy.deepcopy(new)
+                yield new
+                continue
+
+            if mask < 0:
+                mask = self.__ST_STREAMER
+
+            def check_update(key: str, value: (dict | None)) -> None:
+                if prev.get(key) != value:
+                    new[key] = value
+
+            if mask & self.__ST_PARAMS:
+                check_update("params", self.__params.get_params())
+            if mask & self.__ST_STREAMER:
+                check_update("streamer", await self.__get_streamer_state())
+            if mask & self.__ST_SNAPSHOT:
+                check_update("snapshot", self.__get_snapshot_state())
+
+            if new and prev != new:
+                prev.update(copy.deepcopy(new))
+                yield new
+
+    async def __get_streamer_state(self) -> (dict | None):
+        if self.__streamer_task:
+            session = self.__ensure_client_session()
+            try:
+                return (await session.get_state())
+            except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError):
+                pass
+            except Exception:
+                get_logger().exception("Invalid streamer response from /state")
+        return None
+
+    def __get_snapshot_state(self) -> dict:
+        if self.__snapshot:
+            snapshot = dataclasses.asdict(self.__snapshot)
+            del snapshot["headers"]
+            del snapshot["data"]
+            return {"saved": snapshot}
+        return {"saved": None}
 
     # =====
 
@@ -353,41 +356,17 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         if load:
             return self.__snapshot
         logger = get_logger()
-        session = self.__ensure_http_session()
+        session = self.__ensure_client_session()
         try:
-            async with session.get(
-                self.__make_url("snapshot"),
-                timeout=self.__snapshot_timeout,
-            ) as response:
-
-                htclient.raise_not_200(response)
-                online = (response.headers["X-UStreamer-Online"] == "true")
-                if online or allow_offline:
-                    snapshot = StreamerSnapshot(
-                        online=online,
-                        width=int(response.headers["X-UStreamer-Width"]),
-                        height=int(response.headers["X-UStreamer-Height"]),
-                        headers=tuple(
-                            (key, value)
-                            for (key, value) in tools.sorted_kvs(dict(response.headers))
-                            if key.lower().startswith("x-ustreamer-") or key.lower() in [
-                                "x-timestamp",
-                                "access-control-allow-origin",
-                                "cache-control",
-                                "pragma",
-                                "expires",
-                            ]
-                        ),
-                        data=bytes(await response.read()),
-                    )
-                    if save:
-                        self.__snapshot = snapshot
-                        self.__notifier.notify()
-                    return snapshot
-                logger.error("Stream is offline, no signal or so")
-
-        except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as err:
-            logger.error("Can't connect to streamer: %s", tools.efmt(err))
+            snapshot = await session.take_snapshot(self.__snapshot_timeout)
+            if snapshot.online or allow_offline:
+                if save:
+                    self.__snapshot = snapshot
+                    self.__notifier.notify(self.__ST_SNAPSHOT)
+                return snapshot
+            logger.error("Stream is offline, no signal or so")
+        except (aiohttp.ClientConnectionError, aiohttp.ServerConnectionError) as ex:
+            logger.error("Can't connect to streamer: %s", tools.efmt(ex))
         except Exception:
             logger.exception("Invalid streamer response from /snapshot")
         return None
@@ -400,25 +379,14 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     @aiotools.atomic_fg
     async def cleanup(self) -> None:
         await self.ensure_stop(immediately=True)
-        if self.__http_session:
-            await self.__http_session.close()
-            self.__http_session = None
+        if self.__client_session:
+            await self.__client_session.close()
+            self.__client_session = None
 
-    # =====
-
-    def __ensure_http_session(self) -> aiohttp.ClientSession:
-        if not self.__http_session:
-            kwargs: dict = {
-                "headers": {"User-Agent": htclient.make_user_agent("KVMD")},
-                "connector": aiohttp.UnixConnector(path=self.__unix_path),
-                "timeout": aiohttp.ClientTimeout(total=self.__timeout),
-            }
-            self.__http_session = aiohttp.ClientSession(**kwargs)
-        return self.__http_session
-
-    def __make_url(self, handle: str) -> str:
-        assert not handle.startswith("/"), handle
-        return f"http://localhost:0/{handle}"
+    def __ensure_client_session(self) -> HttpStreamerClientSession:
+        if not self.__client_session:
+            self.__client_session = self.__client.make_session()
+        return self.__client_session
 
     # =====
 
@@ -473,8 +441,8 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
         logger.info("%s: %s", name, tools.cmdfmt(cmd))
         try:
             await aioproc.log_process(cmd, logger, prefix=name)
-        except Exception as err:
-            logger.exception("Can't execute command: %s", err)
+        except Exception as ex:
+            logger.exception("Can't execute command: %s", ex)
 
     async def __start_streamer_proc(self) -> None:
         assert self.__streamer_proc is None

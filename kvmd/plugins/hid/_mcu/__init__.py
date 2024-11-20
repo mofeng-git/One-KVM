@@ -23,9 +23,9 @@
 import multiprocessing
 import contextlib
 import queue
+import copy
 import time
 
-from typing import Iterable
 from typing import Generator
 from typing import AsyncGenerator
 from typing import Any
@@ -91,7 +91,7 @@ class _TempRequestError(_RequestError):
 
 # =====
 class BasePhyConnection:
-    def send(self, request: bytes) -> bytes:
+    def send(self, req: bytes) -> bytes:
         raise NotImplementedError
 
 
@@ -108,17 +108,22 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def __init__(  # pylint: disable=too-many-arguments,super-init-not-called
         self,
         phy: BasePhy,
+
+        ignore_keys: list[str],
+        mouse_x_range: dict[str, Any],
+        mouse_y_range: dict[str, Any],
+        jiggler: dict[str, Any],
+
         reset_self: bool,
         read_retries: int,
         common_retries: int,
         retries_delay: float,
         errors_threshold: int,
         noop: bool,
-        jiggler: dict[str, Any],
         **gpio_kwargs: Any,
     ) -> None:
 
-        BaseHid.__init__(self, **jiggler)
+        BaseHid.__init__(self, ignore_keys=ignore_keys, **mouse_x_range, **mouse_y_range, **jiggler)
         multiprocessing.Process.__init__(self, daemon=True)
 
         self.__read_retries = read_retries
@@ -163,7 +168,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
             "errors_threshold": Option(5,     type=valid_int_f0),
             "noop":             Option(False, type=valid_bool),
 
-            **cls._get_jiggler_options(),
+            **cls._get_base_options(),
         }
 
     def sysprep(self) -> None:
@@ -212,6 +217,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
                 mouse_outputs["active"] = active_mouse
 
         return {
+            "enabled": True,
             "online": online,
             "busy": bool(state["busy"]),
             "connected": (bool(outputs2 & 0b01000000) if outputs2 & 0b10000000 else None),
@@ -232,14 +238,18 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
             **self._get_jiggler_state(),
         }
 
+    async def trigger_state(self) -> None:
+        self.__notifier.notify(1)
+
     async def poll_state(self) -> AsyncGenerator[dict, None]:
-        prev_state: dict = {}
+        prev: dict = {}
         while True:
-            state = await self.get_state()
-            if state != prev_state:
-                yield state
-                prev_state = state
-            await self.__notifier.wait()
+            if (await self.__notifier.wait()) > 0:
+                prev = {}
+            new = await self.get_state()
+            if new != prev:
+                prev = copy.deepcopy(new)
+                yield new
 
     async def reset(self) -> None:
         self.__reset_required_event.set()
@@ -253,27 +263,6 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
             self.join()
 
     # =====
-
-    def send_key_events(self, keys: Iterable[tuple[str, bool]]) -> None:
-        for (key, state) in keys:
-            self.__queue_event(KeyEvent(key, state))
-            self._bump_activity()
-
-    def send_mouse_button_event(self, button: str, state: bool) -> None:
-        self.__queue_event(MouseButtonEvent(button, state))
-        self._bump_activity()
-
-    def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        self.__queue_event(MouseMoveEvent(to_x, to_y))
-        self._bump_activity()
-
-    def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
-        self.__queue_event(MouseRelativeEvent(delta_x, delta_y))
-        self._bump_activity()
-
-    def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
-        self.__queue_event(MouseWheelEvent(delta_x, delta_y))
-        self._bump_activity()
 
     def set_params(
         self,
@@ -296,9 +285,23 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def set_connected(self, connected: bool) -> None:
         self.__queue_event(SetConnectedEvent(connected), clear=True)
 
-    def clear_events(self) -> None:
+    def _send_key_event(self, key: str, state: bool) -> None:
+        self.__queue_event(KeyEvent(key, state))
+
+    def _send_mouse_button_event(self, button: str, state: bool) -> None:
+        self.__queue_event(MouseButtonEvent(button, state))
+
+    def _send_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        self.__queue_event(MouseMoveEvent(to_x, to_y))
+
+    def _send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
+        self.__queue_event(MouseRelativeEvent(delta_x, delta_y))
+
+    def _send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        self.__queue_event(MouseWheelEvent(delta_x, delta_y))
+
+    def _clear_events(self) -> None:
         self.__queue_event(ClearEvent(), clear=True)
-        self._bump_activity()
 
     def __queue_event(self, event: BaseEvent, clear: bool=False) -> None:
         if not self.__stop_event.is_set():
@@ -374,7 +377,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         self.__set_state_online(False)
         return False
 
-    def __process_request(self, conn: BasePhyConnection, request: bytes) -> bool:  # pylint: disable=too-many-branches
+    def __process_request(self, conn: BasePhyConnection, req: bytes) -> bool:  # pylint: disable=too-many-branches
         logger = get_logger()
         error_messages: list[str] = []
         live_log_errors = False
@@ -384,47 +387,47 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         error_retval = False
 
         while self.__gpio.is_powered() and common_retries and read_retries:
-            response = (RESPONSE_LEGACY_OK if self.__noop else conn.send(request))
+            resp = (RESPONSE_LEGACY_OK if self.__noop else conn.send(req))
             try:
-                if len(response) < 4:
+                if len(resp) < 4:
                     read_retries -= 1
-                    raise _TempRequestError(f"No response from HID: request={request!r}")
+                    raise _TempRequestError(f"No response from HID: request={req!r}")
 
-                if not check_response(response):
-                    request = REQUEST_REPEAT
+                if not check_response(resp):
+                    req = REQUEST_REPEAT
                     raise _TempRequestError("Invalid response CRC; requesting response again ...")
 
-                code = response[1]
+                code = resp[1]
                 if code == 0x48:  # Request timeout  # pylint: disable=no-else-raise
-                    raise _TempRequestError(f"Got request timeout from HID: request={request!r}")
+                    raise _TempRequestError(f"Got request timeout from HID: request={req!r}")
                 elif code == 0x40:  # CRC Error
-                    raise _TempRequestError(f"Got CRC error of request from HID: request={request!r}")
+                    raise _TempRequestError(f"Got CRC error of request from HID: request={req!r}")
                 elif code == 0x45:  # Unknown command
-                    raise _PermRequestError(f"HID did not recognize the request={request!r}")
+                    raise _PermRequestError(f"HID did not recognize the request={req!r}")
                 elif code == 0x24:  # Rebooted?
                     raise _PermRequestError("No previous command state inside HID, seems it was rebooted")
                 elif code == 0x20:  # Legacy done
                     self.__set_state_online(True)
                     return True
                 elif code & 0x80:  # Pong/Done with state
-                    self.__set_state_pong(response)
+                    self.__set_state_pong(resp)
                     return True
-                raise _TempRequestError(f"Invalid response from HID: request={request!r}, response=0x{response!r}")
+                raise _TempRequestError(f"Invalid response from HID: request={req!r}, response=0x{resp!r}")
 
-            except _RequestError as err:
+            except _RequestError as ex:
                 common_retries -= 1
 
                 if live_log_errors:
-                    logger.error(err.msg)
+                    logger.error(ex.msg)
                 else:
-                    error_messages.append(err.msg)
+                    error_messages.append(ex.msg)
                     if len(error_messages) > self.__errors_threshold:
                         for msg in error_messages:
                             logger.error(msg)
                         error_messages = []
                         live_log_errors = True
 
-                if isinstance(err, _PermRequestError):
+                if isinstance(ex, _PermRequestError):
                     error_retval = True
                     break
 
@@ -440,7 +443,7 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
         for msg in error_messages:
             logger.error(msg)
         if not (common_retries and read_retries):
-            logger.error("Can't process HID request due many errors: %r", request)
+            logger.error("Can't process HID request due many errors: %r", req)
         return error_retval
 
     def __set_state_online(self, online: bool) -> None:
@@ -449,11 +452,11 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def __set_state_busy(self, busy: bool) -> None:
         self.__state_flags.update(busy=int(busy))
 
-    def __set_state_pong(self, response: bytes) -> None:
-        status = response[1] << 16
-        if len(response) > 4:
-            status |= (response[2] << 8) | response[3]
-        reset_required = (1 if response[1] & 0b01000000 else 0)
+    def __set_state_pong(self, resp: bytes) -> None:
+        status = resp[1] << 16
+        if len(resp) > 4:
+            status |= (resp[2] << 8) | resp[3]
+        reset_required = (1 if resp[1] & 0b01000000 else 0)
         self.__state_flags.update(online=1, busy=reset_required, status=status)
         if reset_required:
             if self.__reset_self:

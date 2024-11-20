@@ -32,9 +32,11 @@ export function Ocr(__getGeometry) {
 
 	/************************************************************************/
 
+	var __enabled = null;
+
 	var __start_pos = null;
 	var __end_pos = null;
-	var __selection = null;
+	var __sel = null;
 
 	var __init__ = function() {
 		tools.el.setOnClick($("stream-ocr-button"), function() {
@@ -54,7 +56,7 @@ export function Ocr(__getGeometry) {
 		$("stream-ocr-window").onkeyup = function(event) {
 			event.preventDefault();
 			if (event.code === "Enter") {
-				if (__selection) {
+				if (__sel) {
 					__recognizeSelection();
 					wm.closeWindow($("stream-ocr-window"));
 				}
@@ -71,14 +73,29 @@ export function Ocr(__getGeometry) {
 	/************************************************************************/
 
 	self.setState = function(state) {
-		let enabled = (state && state.ocr.enabled && !tools.browser.is_mobile);
-		if (enabled) {
-			let el = $("stream-ocr-lang-selector");
-			tools.selector.setValues(el, state.ocr.langs.available);
-			tools.selector.setSelectedValue(el, tools.storage.get("stream.ocr.lang", state.ocr.langs["default"]));
+		if (state) {
+			if (state.enabled !== undefined) {
+				__enabled = (state.enabled && !tools.browser.is_mobile);
+				tools.feature.setEnabled($("stream-ocr"), __enabled);
+				$("stream-ocr-led").className = (__enabled ? "led-gray" : "hidden");
+			}
+			if (__enabled && state.langs !== undefined) {
+				__updateLangs(state.langs);
+			}
+		} else {
+			__enabled = false;
+			tools.feature.setEnabled($("stream-ocr"), false);
+			$("stream-ocr-led").className = "hidden";
 		}
-		tools.feature.setEnabled($("stream-ocr"), enabled);
-		$("stream-ocr-led").className = (enabled ? "led-gray" : "hidden");
+	};
+
+	var __updateLangs = function(langs) {
+		let el = $("stream-ocr-lang-selector");
+		el.options.length = 0;
+		for (let lang of langs.available) {
+			tools.selector.addOption(el, lang, lang);
+		}
+		el.value = tools.storage.get("stream.ocr.lang", langs["default"]);
 	};
 
 	var __startSelection = function(event) {
@@ -94,23 +111,23 @@ export function Ocr(__getGeometry) {
 			__end_pos = __getGlobalPosition(event);
 			let width = Math.abs(__start_pos.x - __end_pos.x);
 			let height = Math.abs(__start_pos.y - __end_pos.y);
-			let el_selection = $("stream-ocr-selection");
-			el_selection.style.left = Math.min(__start_pos.x, __end_pos.x) + "px";
-			el_selection.style.top = Math.min(__start_pos.y, __end_pos.y) + "px";
-			el_selection.style.width = width + "px";
-			el_selection.style.height = height + "px";
-			tools.hidden.setVisible(el_selection, (width > 1 || height > 1));
+			let el = $("stream-ocr-selection");
+			el.style.left = Math.min(__start_pos.x, __end_pos.x) + "px";
+			el.style.top = Math.min(__start_pos.y, __end_pos.y) + "px";
+			el.style.width = width + "px";
+			el.style.height = height + "px";
+			tools.hidden.setVisible(el, (width > 1 || height > 1));
 		}
 	};
 
 	var __endSelection = function(event) {
 		__changeSelection(event);
-		let el_selection = $("stream-ocr-selection");
+		let el = $("stream-ocr-selection");
 		let ok = (
-			el_selection.offsetWidth > 1 && el_selection.offsetHeight > 1
+			el.offsetWidth > 1 && el.offsetHeight > 1
 			&& __start_pos !== null && __end_pos !== null
 		);
-		tools.hidden.setVisible(el_selection, ok);
+		tools.hidden.setVisible(el, ok);
 		if (ok) {
 			let rect = $("stream-box").getBoundingClientRect();
 			let rel_left = Math.min(__start_pos.x, __end_pos.x) - rect.left;
@@ -119,14 +136,14 @@ export function Ocr(__getGeometry) {
 			let rel_top = Math.min(__start_pos.y, __end_pos.y) - rect.top + offset;
 			let rel_bottom = Math.max(__start_pos.y, __end_pos.y) - rect.top + offset;
 			let geo = __getGeometry();
-			__selection = {
+			__sel = {
 				"left": tools.remap(rel_left, geo.x, geo.width, 0, geo.real_width),
 				"right": tools.remap(rel_right, geo.x, geo.width, 0, geo.real_width),
 				"top": tools.remap(rel_top, geo.y, geo.height, 0, geo.real_height),
 				"bottom": tools.remap(rel_bottom, geo.y, geo.height, 0, geo.real_height),
 			};
 		} else {
-			__selection = null;
+			__sel = null;
 		}
 		__start_pos = null;
 		__end_pos = null;
@@ -154,20 +171,22 @@ export function Ocr(__getGeometry) {
 		tools.hidden.setVisible($("stream-ocr-selection"), false);
 		__start_pos = null;
 		__end_pos = null;
-		__selection = null;
+		__sel = null;
 	};
 
 	var __recognizeSelection = function() {
 		tools.el.setEnabled($("stream-ocr-button"), false);
 		tools.el.setEnabled($("stream-ocr-lang-selector"), false);
 		$("stream-ocr-led").className = "led-yellow-rotating-fast";
-
-		let lang = $("stream-ocr-lang-selector").value;
-		let url = `/api/streamer/snapshot?ocr=1&ocr_langs=${lang}`;
-		url += `&ocr_left=${__selection.left}&ocr_top=${__selection.top}`;
-		url += `&ocr_right=${__selection.right}&ocr_bottom=${__selection.bottom}`;
-
-		tools.httpGet(url, function(http) {
+		let params = {
+			"ocr": 1,
+			"ocr_langs": $("stream-ocr-lang-selector").value,
+			"ocr_left": __sel.left,
+			"ocr_top": __sel.top,
+			"ocr_right": __sel.right,
+			"orc_bottom": __sel.bottom,
+		};
+		tools.httpGet("/api/streamer/snapshot", params, function(http) {
 			if (http.status === 200) {
 				wm.copyTextToClipboard(http.responseText);
 			} else {
