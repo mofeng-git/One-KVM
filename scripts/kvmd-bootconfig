@@ -261,7 +261,7 @@ if [ -n "$WIFI_ESSID" ]; then
 	else
 		cat <<end_of_file > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 network={
-	ssid=${WIFI_ESSID@Q}
+	ssid=$(printf '"%q"' "$WIFI_ESSID")
 	key_mgmt=NONE
 }
 end_of_file
