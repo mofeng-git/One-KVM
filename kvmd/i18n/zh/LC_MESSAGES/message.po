@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-08-06 21:57+0800\n"
-"PO-Revision-Date: 2024-08-06 21:57+0800\n"
+"POT-Creation-Date: 2024-08-06 21:17+0800\n"
+"PO-Revision-Date: 2024-08-06 21:17+0800\n"
 "Last-Translator: \n"
 "Language: zh\n"
 "Language-Team: zh <LL@li.org>\n"
@@ -21,31 +21,6 @@ msgstr ""
 #: kvmd/htclient.py:63
 msgid "Can't determine filename"
 msgstr "无法确定文件名"
-
-#: kvmd/htserver.py:356
-#, python-format
-msgid "Registered new client session: %s; clients now: %d"
-msgstr "已注册新客户端会话：%s；现在的客户：%d"
-
-#: kvmd/htserver.py:371
-#, python-format
-msgid "Can't parse JSON event from websocket: %r"
-msgstr "无法解析来自 websocket 的 JSON 事件：%r"
-
-#: kvmd/htserver.py:377
-#, python-format
-msgid "Unknown websocket event: %r"
-msgstr "未知 websocket 事件：%r"
-
-#: kvmd/htserver.py:384
-#, python-format
-msgid "Unknown websocket binary event: %r"
-msgstr "未知 websocket 二进制事件：%r"
-
-#: kvmd/htserver.py:415
-#, python-format
-msgid "Removed client socket: %s; clients now: %d"
-msgstr "已移除客户端套接字：%s；现在的客户端：%d"
 
 #: kvmd/inotify.py:199
 #, python-format
@@ -90,10 +65,6 @@ msgstr "尝试使用 --help 选项来了解某项服务的功能。\n"
 #: kvmd/apps/__init__.py:165
 msgid "Make sure you understand exactly what you are doing!"
 msgstr "请确定你自己在做什么！"
-
-#: kvmd/apps/kvmd/__init__.py:115
-msgid "Bye-bye"
-msgstr "再见"
 
 #: kvmd/apps/kvmd/auth.py:57
 msgid "AUTHORIZATION IS DISABLED"

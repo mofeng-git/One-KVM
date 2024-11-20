@@ -34,7 +34,6 @@ from ...plugins.auth import get_auth_service_class
 
 from ...htserver import HttpExposed
 
-from ...lanuages import Lanuages
 
 # =====
 class AuthManager:
@@ -52,31 +51,30 @@ class AuthManager:
 
         totp_secret_path: str,
     ) -> None:
-        self.gettext=Lanuages().gettext
+        _ = translation(domain="message",localedir="/kvmd/i18n",languages=["zh"]).gettext
         self.__enabled = enabled
         if not enabled:
-            get_logger().warning(self.gettext("AUTHORIZATION IS DISABLED"))
+            get_logger().warning(_("AUTHORIZATION IS DISABLED"))
 
         self.__unauth_paths = frozenset(unauth_paths)  # To speed up
         for path in self.__unauth_paths:
-            get_logger().warning(self.gettext("Authorization is disabled for API %r"), path)
+            get_logger().warning(_("Authorization is disabled for API %r"), path)
 
         self.__internal_service: (BaseAuthService | None) = None
         if enabled:
             self.__internal_service = get_auth_service_class(internal_type)(**internal_kwargs)
-            get_logger().info(self.gettext("Using internal auth service %r"), self.__internal_service.get_plugin_name())
+            get_logger().info(_("Using internal auth service %r"), self.__internal_service.get_plugin_name())
 
         self.__force_internal_users = force_internal_users
 
         self.__external_service: (BaseAuthService | None) = None
         if enabled and external_type:
             self.__external_service = get_auth_service_class(external_type)(**external_kwargs)
-            get_logger().info(self.gettext("Using external auth service %r"), self.__external_service.get_plugin_name())
+            get_logger().info(_("Using external auth service %r"), self.__external_service.get_plugin_name())
 
         self.__totp_secret_path = totp_secret_path
 
         self.__tokens: dict[str, str] = {}  # {token: user}
-
 
     def is_auth_enabled(self) -> bool:
         return self.__enabled
@@ -100,7 +98,7 @@ class AuthManager:
             if secret:
                 code = passwd[-6:]
                 if not pyotp.TOTP(secret).verify(code):
-                    get_logger().error(self.gettext("Got access denied for user %r by TOTP"), user)
+                    get_logger().error(_("Got access denied for user %r by TOTP"), user)
                     return False
                 passwd = passwd[:-6]
 
@@ -111,9 +109,9 @@ class AuthManager:
 
         ok = (await service.authorize(user, passwd))
         if ok:
-            get_logger().info(self.gettext("Authorized user %r via auth service %r"), user, service.get_plugin_name())
+            get_logger().info(_("Authorized user %r via auth service %r"), user, service.get_plugin_name())
         else:
-            get_logger().error(self.gettext("Got access denied for user %r from auth service %r"), user, service.get_plugin_name())
+            get_logger().error(_("Got access denied for user %r from auth service %r"), user, service.get_plugin_name())
         return ok
 
     async def login(self, user: str, passwd: str) -> (str | None):
@@ -123,7 +121,7 @@ class AuthManager:
         if (await self.authorize(user, passwd)):
             token = self.__make_new_token()
             self.__tokens[token] = user
-            get_logger().info(self.gettext("Logged in user %r"), user)
+            get_logger().info(_("Logged in user %r"), user)
             return token
         else:
             return None
@@ -133,7 +131,7 @@ class AuthManager:
             token = secrets.token_hex(32)
             if token not in self.__tokens:
                 return token
-        raise AssertionError(self.gettext("Can't generate new unique token"))
+        raise AssertionError(_("Can't generate new unique token"))
 
     def logout(self, token: str) -> None:
         assert self.__enabled
@@ -144,7 +142,7 @@ class AuthManager:
                 if r_user == user:
                     count += 1
                     del self.__tokens[r_token]
-            get_logger().info(self.gettext("Logged out user %r (%d)"), user, count)
+            get_logger().info(_("Logged out user %r (%d)"), user, count)
 
     def check(self, token: str) -> (str | None):
         assert self.__enabled
