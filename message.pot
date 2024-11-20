@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-08-12 22:07+0800\n"
+"POT-Creation-Date: 2024-08-06 21:57+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,35 +16,6 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.15.0\n"
-
-#: kvmd/aiohelpers.py:41
-#, python-format
-msgid "Remounting %s storage to %s: %s ..."
-msgstr ""
-
-#: kvmd/aiohelpers.py:48
-#, python-format
-msgid "Can't remount %s storage: %s"
-msgstr ""
-
-#: kvmd/aioproc.py:89
-msgid "Asyncio process: too many empty lines"
-msgstr ""
-
-#: kvmd/aioproc.py:104 kvmd/aioproc.py:111
-#, python-format
-msgid "Process killed: retcode=%d"
-msgstr ""
-
-#: kvmd/aioproc.py:109
-#, python-format
-msgid "Can't kill process pid=%d"
-msgstr ""
-
-#: kvmd/aioproc.py:120
-#, python-format
-msgid "Started %s pid=%d"
-msgstr ""
 
 #: kvmd/htclient.py:63
 msgid "Can't determine filename"
@@ -119,269 +90,56 @@ msgstr ""
 msgid "Make sure you understand exactly what you are doing!"
 msgstr ""
 
-#: kvmd/apps/kvmd/__init__.py:115 kvmd/apps/otgnet/__init__.py:132
+#: kvmd/apps/kvmd/__init__.py:115
 msgid "Bye-bye"
 msgstr ""
 
-#: kvmd/apps/kvmd/auth.py:58
+#: kvmd/apps/kvmd/auth.py:57
 msgid "AUTHORIZATION IS DISABLED"
 msgstr ""
 
-#: kvmd/apps/kvmd/auth.py:62
+#: kvmd/apps/kvmd/auth.py:61
 #, python-format
 msgid "Authorization is disabled for API %r"
 msgstr ""
 
-#: kvmd/apps/kvmd/auth.py:67
+#: kvmd/apps/kvmd/auth.py:66
 #, python-format
 msgid "Using internal auth service %r"
 msgstr ""
 
-#: kvmd/apps/kvmd/auth.py:74
+#: kvmd/apps/kvmd/auth.py:73
 #, python-format
 msgid "Using external auth service %r"
 msgstr ""
 
-#: kvmd/apps/kvmd/auth.py:103
+#: kvmd/apps/kvmd/auth.py:101
 #, python-format
 msgid "Got access denied for user %r by TOTP"
 msgstr ""
 
-#: kvmd/apps/kvmd/auth.py:114
+#: kvmd/apps/kvmd/auth.py:112
 #, python-format
 msgid "Authorized user %r via auth service %r"
 msgstr ""
 
-#: kvmd/apps/kvmd/auth.py:116
+#: kvmd/apps/kvmd/auth.py:114
 #, python-format
 msgid "Got access denied for user %r from auth service %r"
 msgstr ""
 
-#: kvmd/apps/kvmd/auth.py:126
+#: kvmd/apps/kvmd/auth.py:124
 #, python-format
 msgid "Logged in user %r"
 msgstr ""
 
-#: kvmd/apps/kvmd/auth.py:136
+#: kvmd/apps/kvmd/auth.py:134
 msgid "Can't generate new unique token"
 msgstr ""
 
-#: kvmd/apps/kvmd/auth.py:147
+#: kvmd/apps/kvmd/auth.py:145
 #, python-format
 msgid "Logged out user %r (%d)"
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:245
-msgid "Streamer stop cancelled"
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:251
-#, python-format
-msgid "Waiting %.2f seconds for reset delay ..."
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:253
-msgid "Starting streamer ..."
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:266 kvmd/apps/kvmd/streamer.py:271
-msgid "Stopping streamer immediately ..."
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:280
-msgid "Stopping streamer after delay ..."
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:286
-#, python-format
-msgid "Planning to stop streamer in %.2f seconds ..."
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:315
-msgid "Invalid streamer response from /state"
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:333
-msgid "Got SIGUSR2, checking the stream state ..."
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:336
-msgid "Installing SIGUSR2 streamer handler ..."
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:392
-msgid "Stream is offline, no signal or so"
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:395
-#, python-format
-msgid "Can't connect to streamer: %s"
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:397
-msgid "Invalid streamer response from /snapshot"
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:454
-msgid "Streamer unexpectedly died"
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:459
-#, python-format
-msgid "Unexpected streamer error: pid=%d"
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:461
-msgid "Can't start streamer"
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:482 kvmd/apps/otgnet/__init__.py:141
-#, python-format
-msgid "Can't execute command: %s"
-msgstr ""
-
-#: kvmd/apps/kvmd/streamer.py:488
-#, python-format
-msgid "Started streamer pid=%d: %s"
-msgstr ""
-
-#: kvmd/apps/kvmd/ugpio.py:51
-msgid "GPIO channel is not found"
-msgstr ""
-
-#: kvmd/apps/kvmd/ugpio.py:56
-msgid "This GPIO channel does not support switching"
-msgstr ""
-
-#: kvmd/apps/kvmd/ugpio.py:61
-msgid "This GPIO channel does not support pulsing"
-msgstr ""
-
-#: kvmd/apps/kvmd/ugpio.py:66
-msgid "Performing another GPIO operation on this channel, please try again later"
-msgstr ""
-
-#: kvmd/apps/kvmd/ugpio.py:204
-#, python-format
-msgid "Can't perform %s of %s or operation was not completed: driver offline"
-msgstr ""
-
-#: kvmd/apps/kvmd/ugpio.py:209
-#, python-format
-msgid "Ensured switch %s to state=%d"
-msgstr ""
-
-#: kvmd/apps/kvmd/ugpio.py:220
-#, python-format
-msgid "Pulsed %s with delay=%.2f"
-msgstr ""
-
-#: kvmd/apps/kvmd/ugpio.py:298
-msgid "Preparing User-GPIO drivers ..."
-msgstr ""
-
-#: kvmd/apps/kvmd/ugpio.py:303
-msgid "Running User-GPIO drivers ..."
-msgstr ""
-
-#: kvmd/apps/kvmd/ugpio.py:314
-#, python-format
-msgid "Can't cleanup driver %s"
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:211 kvmd/plugins/hid/otg/__init__.py:123
-#, python-format
-msgid "Using UDC %s"
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:213
-#, python-format
-msgid "Creating gadget %r ..."
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:254
-msgid "===== Serial ====="
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:258
-msgid "===== Ethernet ====="
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:262
-msgid "===== HID-Keyboard ====="
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:264
-msgid "===== HID-Mouse ====="
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:267
-msgid "===== HID-Mouse-Alt ====="
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:271
-msgid "===== MSD ====="
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:275
-#, python-format
-msgid "===== MSD Extra: %d ====="
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:278
-msgid "===== Preparing complete ====="
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:280
-msgid "Enabling the gadget ..."
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:286 kvmd/apps/otgnet/__init__.py:128
-msgid "Ready to work"
-msgstr ""
-
-#: kvmd/apps/otg/__init__.py:299
-#, python-format
-msgid "Disabling gadget %r ..."
-msgstr ""
-
-#: kvmd/apps/otgnet/__init__.py:137
-#, python-format
-msgid "CMD: %s"
-msgstr ""
-
-#: kvmd/apps/otgnet/__init__.py:150
-#, python-format
-msgid "Using IPv4 network %s ..."
-msgstr ""
-
-#: kvmd/apps/otgnet/__init__.py:153
-msgid "Too small network, required at least /31"
-msgstr ""
-
-#: kvmd/apps/otgnet/__init__.py:173
-#, python-format
-msgid "Calculated %r address is %s/%d"
-msgstr ""
-
-#: kvmd/apps/otgnet/__init__.py:182
-#, python-format
-msgid "Using OTG gadget %r ..."
-msgstr ""
-
-#: kvmd/apps/otgnet/__init__.py:185
-#, python-format
-msgid "Using OTG Ethernet interface %r ..."
-msgstr ""
-
-#: kvmd/keyboard/keysym.py:69
-#, python-format
-msgid "Invalid modifier key at mapping %s: %s / %s"
-msgstr ""
-
-#: kvmd/keyboard/keysym.py:122
-#, python-format
-msgid "Reading keyboard layout %s ..."
 msgstr ""
 
 #: kvmd/plugins/atx/__init__.py:45

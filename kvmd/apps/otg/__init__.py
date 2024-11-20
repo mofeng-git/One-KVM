@@ -27,9 +27,7 @@ import json
 import time
 import argparse
 
-from os.path import join
-
-from ...lanuages import Lanuages
+from os.path import join  # pylint: disable=ungrouped-imports
 
 from ...logging import get_logger
 
@@ -207,14 +205,13 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
     # https://www.isticktoit.net/?p=1383
 
     logger = get_logger()
-    gettext=Lanuages().gettext
 
     _check_config(config)
 
     udc = usb.find_udc(config.otg.udc)
-    logger.info(gettext("Using UDC %s"), udc)
+    logger.info("Using UDC %s", udc)
 
-    logger.info(gettext("Creating gadget %r ..."), config.otg.gadget)
+    logger.info("Creating gadget %r ...", config.otg.gadget)
     gadget_path = usb.get_gadget_path(config.otg.gadget)
     _mkdir(gadget_path)
 
@@ -255,39 +252,39 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
     cod = config.otg.devices
 
     if cod.serial.enabled:
-        logger.info(gettext("===== Serial ====="))
+        logger.info("===== Serial =====")
         gc.add_serial(cod.serial.start)
 
     if cod.ethernet.enabled:
-        logger.info(gettext("===== Ethernet ====="))
+        logger.info("===== Ethernet =====")
         gc.add_ethernet(**cod.ethernet._unpack(ignore=["enabled"]))
 
     if config.kvmd.hid.type == "otg":
-        logger.info(gettext("===== HID-Keyboard ====="))
+        logger.info("===== HID-Keyboard =====")
         gc.add_keyboard(cod.hid.keyboard.start, config.otg.remote_wakeup)
-        logger.info(gettext("===== HID-Mouse ====="))
+        logger.info("===== HID-Mouse =====")
         gc.add_mouse(cod.hid.mouse.start, config.otg.remote_wakeup, config.kvmd.hid.mouse.absolute, config.kvmd.hid.mouse.horizontal_wheel)
         if config.kvmd.hid.mouse_alt.device:
-            logger.info(gettext("===== HID-Mouse-Alt ====="))
+            logger.info("===== HID-Mouse-Alt =====")
             gc.add_mouse(cod.hid.mouse.start, config.otg.remote_wakeup, (not config.kvmd.hid.mouse.absolute), config.kvmd.hid.mouse.horizontal_wheel)
 
     if config.kvmd.msd.type == "otg":
-        logger.info(gettext("===== MSD ====="))
+        logger.info("===== MSD =====")
         gc.add_msd(cod.msd.start, config.otg.user, **cod.msd.default._unpack())
         if cod.drives.enabled:
             for count in range(cod.drives.count):
-                logger.info(gettext("===== MSD Extra: %d ====="), count + 1)
+                logger.info("===== MSD Extra: %d =====", count + 1)
                 gc.add_msd(cod.drives.start, "root", **cod.drives.default._unpack())
 
-    logger.info(gettext("===== Preparing complete ====="))
+    logger.info("===== Preparing complete =====")
 
-    logger.info(gettext("Enabling the gadget ..."))
+    logger.info("Enabling the gadget ...")
     _write(join(gadget_path, "UDC"), udc)
     time.sleep(config.otg.init_delay)
     _chown(join(gadget_path, "UDC"), config.otg.user)
     _chown(profile_path, config.otg.user)
 
-    logger.info(gettext("Ready to work"))
+    logger.info("Ready to work")
 
 
 # =====
@@ -300,7 +297,7 @@ def _cmd_stop(config: Section) -> None:
 
     gadget_path = usb.get_gadget_path(config.otg.gadget)
 
-    logger.info(Lanuages().gettext("Disabling gadget %r ..."), config.otg.gadget)
+    logger.info("Disabling gadget %r ...", config.otg.gadget)
     _write(join(gadget_path, "UDC"), "\n")
 
     _unlink(join(gadget_path, "os_desc", usb.G_PROFILE_NAME), optional=True)

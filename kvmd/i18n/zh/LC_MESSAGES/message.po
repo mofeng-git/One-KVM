@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-08-12 22:07+0800\n"
-"PO-Revision-Date: 2024-08-12 22:07+0800\n"
+"POT-Creation-Date: 2024-08-06 21:57+0800\n"
+"PO-Revision-Date: 2024-08-06 21:57+0800\n"
 "Last-Translator: \n"
 "Language: zh\n"
 "Language-Team: zh <LL@li.org>\n"
@@ -17,35 +17,6 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.15.0\n"
-
-#: kvmd/aiohelpers.py:41
-#, python-format
-msgid "Remounting %s storage to %s: %s ..."
-msgstr "重新挂载 %s 存储到 %s: %s ......"
-
-#: kvmd/aiohelpers.py:48
-#, python-format
-msgid "Can't remount %s storage: %s"
-msgstr "无法重新挂载 %s 存储：%s"
-
-#: kvmd/aioproc.py:89
-msgid "Asyncio process: too many empty lines"
-msgstr "Asyncio 进程：空行过多"
-
-#: kvmd/aioproc.py:104 kvmd/aioproc.py:111
-#, python-format
-msgid "Process killed: retcode=%d"
-msgstr "进程被杀死：retcode=%d"
-
-#: kvmd/aioproc.py:109
-#, python-format
-msgid "Can't kill process pid=%d"
-msgstr "无法杀死进程 pid=%d"
-
-#: kvmd/aioproc.py:120
-#, python-format
-msgid "Started %s pid=%d"
-msgstr "已启动 %s pid=%d"
 
 #: kvmd/htclient.py:63
 msgid "Can't determine filename"
@@ -120,270 +91,57 @@ msgstr "尝试使用 --help 选项来了解某项服务的功能。\n"
 msgid "Make sure you understand exactly what you are doing!"
 msgstr "请确定你自己在做什么！"
 
-#: kvmd/apps/kvmd/__init__.py:115 kvmd/apps/otgnet/__init__.py:132
+#: kvmd/apps/kvmd/__init__.py:115
 msgid "Bye-bye"
 msgstr "再见"
 
-#: kvmd/apps/kvmd/auth.py:58
+#: kvmd/apps/kvmd/auth.py:57
 msgid "AUTHORIZATION IS DISABLED"
 msgstr "身份验证服务已被禁用"
 
-#: kvmd/apps/kvmd/auth.py:62
+#: kvmd/apps/kvmd/auth.py:61
 #, python-format
 msgid "Authorization is disabled for API %r"
 msgstr "由于 API %r 身份验证服务已被禁用"
 
-#: kvmd/apps/kvmd/auth.py:67
+#: kvmd/apps/kvmd/auth.py:66
 #, python-format
 msgid "Using internal auth service %r"
 msgstr "使用内部身份验证服务 %r"
 
-#: kvmd/apps/kvmd/auth.py:74
+#: kvmd/apps/kvmd/auth.py:73
 #, python-format
 msgid "Using external auth service %r"
 msgstr "使用外部身份验证服务 %r"
 
-#: kvmd/apps/kvmd/auth.py:103
+#: kvmd/apps/kvmd/auth.py:101
 #, python-format
 msgid "Got access denied for user %r by TOTP"
 msgstr "用户 %r 被 TOTP 拒绝访问"
 
-#: kvmd/apps/kvmd/auth.py:114
+#: kvmd/apps/kvmd/auth.py:112
 #, python-format
 msgid "Authorized user %r via auth service %r"
 msgstr "用户 %r 已通过身份认证服务 %r 授权"
 
-#: kvmd/apps/kvmd/auth.py:116
+#: kvmd/apps/kvmd/auth.py:114
 #, python-format
 msgid "Got access denied for user %r from auth service %r"
 msgstr "身份验证服务 %r 拒绝了用户 %r 的访问请求"
 
-#: kvmd/apps/kvmd/auth.py:126
+#: kvmd/apps/kvmd/auth.py:124
 #, python-format
 msgid "Logged in user %r"
 msgstr "已登录用户 %r"
 
-#: kvmd/apps/kvmd/auth.py:136
+#: kvmd/apps/kvmd/auth.py:134
 msgid "Can't generate new unique token"
 msgstr "无法生成新的唯一令牌"
 
-#: kvmd/apps/kvmd/auth.py:147
+#: kvmd/apps/kvmd/auth.py:145
 #, python-format
 msgid "Logged out user %r (%d)"
 msgstr "已注销用户 %r (%d)"
-
-#: kvmd/apps/kvmd/streamer.py:245
-msgid "Streamer stop cancelled"
-msgstr "Streamer 停止已取消"
-
-#: kvmd/apps/kvmd/streamer.py:251
-#, python-format
-msgid "Waiting %.2f seconds for reset delay ..."
-msgstr "等待 %.2f 秒的重置延迟 ......"
-
-#: kvmd/apps/kvmd/streamer.py:253
-msgid "Starting streamer ..."
-msgstr "正在启动 streamer......"
-
-#: kvmd/apps/kvmd/streamer.py:266 kvmd/apps/kvmd/streamer.py:271
-msgid "Stopping streamer immediately ..."
-msgstr "正在停止 streamer......"
-
-#: kvmd/apps/kvmd/streamer.py:280
-msgid "Stopping streamer after delay ..."
-msgstr "在延迟时间到后停止 streamer......"
-
-#: kvmd/apps/kvmd/streamer.py:286
-#, python-format
-msgid "Planning to stop streamer in %.2f seconds ..."
-msgstr "计划在 %.2f 秒后停止streamer......"
-
-#: kvmd/apps/kvmd/streamer.py:315
-msgid "Invalid streamer response from /state"
-msgstr "来自 /state 的无效 streamer 响应"
-
-#: kvmd/apps/kvmd/streamer.py:333
-msgid "Got SIGUSR2, checking the stream state ..."
-msgstr "收到 SIGUSR2 信号，正在检查数据流状态 ..."
-
-#: kvmd/apps/kvmd/streamer.py:336
-msgid "Installing SIGUSR2 streamer handler ..."
-msgstr "安装 SIGUSR2 streamer 处理程序 ..."
-
-#: kvmd/apps/kvmd/streamer.py:392
-msgid "Stream is offline, no signal or so"
-msgstr "流媒体离线，没有信号或其他原因"
-
-#: kvmd/apps/kvmd/streamer.py:395
-#, python-format
-msgid "Can't connect to streamer: %s"
-msgstr "无法连接 streamer：%s"
-
-#: kvmd/apps/kvmd/streamer.py:397
-msgid "Invalid streamer response from /snapshot"
-msgstr "来自 /snapshot 的无效 streamer 响应"
-
-#: kvmd/apps/kvmd/streamer.py:454
-msgid "Streamer unexpectedly died"
-msgstr "Streamer 意外停止"
-
-#: kvmd/apps/kvmd/streamer.py:459
-#, python-format
-msgid "Unexpected streamer error: pid=%d"
-msgstr "Streamer 意外错误：pid=%d"
-
-#: kvmd/apps/kvmd/streamer.py:461
-msgid "Can't start streamer"
-msgstr "无法启动 streamer"
-
-#: kvmd/apps/kvmd/streamer.py:482 kvmd/apps/otgnet/__init__.py:141
-#, python-format
-msgid "Can't execute command: %s"
-msgstr "无法执行命令： %s"
-
-#: kvmd/apps/kvmd/streamer.py:488
-#, python-format
-msgid "Started streamer pid=%d: %s"
-msgstr "已启动 streamer pid=%d: %s"
-
-#: kvmd/apps/kvmd/ugpio.py:51
-msgid "GPIO channel is not found"
-msgstr "GPIO 未找到"
-
-#: kvmd/apps/kvmd/ugpio.py:56
-msgid "This GPIO channel does not support switching"
-msgstr "该 GPIO 通道不支持切换"
-
-#: kvmd/apps/kvmd/ugpio.py:61
-msgid "This GPIO channel does not support pulsing"
-msgstr "该 GPIO 通道不支持脉冲信号"
-
-#: kvmd/apps/kvmd/ugpio.py:66
-msgid "Performing another GPIO operation on this channel, please try again later"
-msgstr "在此通道上正在执行另一个 GPIO 操作，请稍后再试"
-
-#: kvmd/apps/kvmd/ugpio.py:204
-#, python-format
-msgid "Can't perform %s of %s or operation was not completed: driver offline"
-msgstr "无法执行 %s 的 %s 或操作未完成：驱动程序离线"
-
-#: kvmd/apps/kvmd/ugpio.py:209
-#, python-format
-msgid "Ensured switch %s to state=%d"
-msgstr "确保将 %s 切换到状态=%d"
-
-#: kvmd/apps/kvmd/ugpio.py:220
-#, python-format
-msgid "Pulsed %s with delay=%.2f"
-msgstr "脉冲%s，延迟=%.2f"
-
-#: kvmd/apps/kvmd/ugpio.py:298
-msgid "Preparing User-GPIO drivers ..."
-msgstr "准备 User-GPIO  驱动程序 ......"
-
-#: kvmd/apps/kvmd/ugpio.py:303
-msgid "Running User-GPIO drivers ..."
-msgstr "运行 User-GPIO  驱动程序 ......"
-
-#: kvmd/apps/kvmd/ugpio.py:314
-#, python-format
-msgid "Can't cleanup driver %s"
-msgstr "无法清理驱动程序 %s"
-
-#: kvmd/apps/otg/__init__.py:211 kvmd/plugins/hid/otg/__init__.py:123
-#, python-format
-msgid "Using UDC %s"
-msgstr "使用 UDC %s"
-
-#: kvmd/apps/otg/__init__.py:213
-#, python-format
-msgid "Creating gadget %r ..."
-msgstr "新建 gadget %r ......"
-
-#: kvmd/apps/otg/__init__.py:254
-msgid "===== Serial ====="
-msgstr "===== 串口 ====="
-
-#: kvmd/apps/otg/__init__.py:258
-msgid "===== Ethernet ====="
-msgstr "===== 以太网 ====="
-
-#: kvmd/apps/otg/__init__.py:262
-msgid "===== HID-Keyboard ====="
-msgstr "===== HID-键盘 ====="
-
-#: kvmd/apps/otg/__init__.py:264
-msgid "===== HID-Mouse ====="
-msgstr "===== HID-鼠标 ====="
-
-#: kvmd/apps/otg/__init__.py:267
-msgid "===== HID-Mouse-Alt ====="
-msgstr "===== HID-绝对鼠标 ====="
-
-#: kvmd/apps/otg/__init__.py:271
-msgid "===== MSD ====="
-msgstr "===== MSD ====="
-
-#: kvmd/apps/otg/__init__.py:275
-#, python-format
-msgid "===== MSD Extra: %d ====="
-msgstr "===== MSD 扩展: %d ====="
-
-#: kvmd/apps/otg/__init__.py:278
-msgid "===== Preparing complete ====="
-msgstr "===== 准备完成 ====="
-
-#: kvmd/apps/otg/__init__.py:280
-msgid "Enabling the gadget ..."
-msgstr "启用此 gadget ......"
-
-#: kvmd/apps/otg/__init__.py:286 kvmd/apps/otgnet/__init__.py:128
-msgid "Ready to work"
-msgstr "准备就绪"
-
-#: kvmd/apps/otg/__init__.py:299
-#, python-format
-msgid "Disabling gadget %r ..."
-msgstr "禁用 gadget %r ......"
-
-#: kvmd/apps/otgnet/__init__.py:137
-#, python-format
-msgid "CMD: %s"
-msgstr "命令行： %s"
-
-#: kvmd/apps/otgnet/__init__.py:150
-#, python-format
-msgid "Using IPv4 network %s ..."
-msgstr "使用 IPv4 网络 %s ......"
-
-#: kvmd/apps/otgnet/__init__.py:153
-msgid "Too small network, required at least /31"
-msgstr "网络段太小，至少需要 /31"
-
-#: kvmd/apps/otgnet/__init__.py:173
-#, python-format
-msgid "Calculated %r address is %s/%d"
-msgstr "计算出的 %r 地址为 %s/%d"
-
-#: kvmd/apps/otgnet/__init__.py:182
-#, python-format
-msgid "Using OTG gadget %r ..."
-msgstr "使用 OTG gadget %r ......"
-
-#: kvmd/apps/otgnet/__init__.py:185
-#, python-format
-msgid "Using OTG Ethernet interface %r ..."
-msgstr "使用 OTG 以太网接口 %r ......"
-
-#: kvmd/keyboard/keysym.py:69
-#, python-format
-msgid "Invalid modifier key at mapping %s: %s / %s"
-msgstr "映射 %s 处的修改键无效： %s / %s"
-
-#: kvmd/keyboard/keysym.py:122
-#, python-format
-msgid "Reading keyboard layout %s ..."
-msgstr "读取键盘布局 %s ......"
 
 #: kvmd/plugins/atx/__init__.py:45
 msgid "Performing another ATX operation, please try again later"
@@ -430,7 +188,7 @@ msgstr "正在启动 HID 守护程序......"
 
 #: kvmd/plugins/hid/bt/__init__.py:182 kvmd/plugins/hid/ch9329/__init__.py:141
 msgid "Stopping HID daemon ..."
-msgstr "正在停止 HID 守护程序......"
+msgstr "正在启停止 HID 守护程序......"
 
 #: kvmd/plugins/hid/bt/__init__.py:231
 msgid "Unexpected HID error"
@@ -439,7 +197,7 @@ msgstr "未知 HID 错误"
 #: kvmd/plugins/hid/bt/server.py:153
 #, python-format
 msgid "Listening [%s]:%d for %s ..."
-msgstr "监听 [%s]:%d for %s ......"
+msgstr "监听 [%s]:%d for %s ..."
 
 #: kvmd/plugins/hid/bt/server.py:190
 #, python-format

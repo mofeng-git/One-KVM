@@ -26,8 +26,6 @@ import dataclasses
 import itertools
 import argparse
 
-from ...lanuages import Lanuages
-
 from ...logging import get_logger
 
 from ...yamlconf import Section
@@ -89,8 +87,6 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         self.__gadget: str = config.otg.gadget
         self.__driver: str = config.otg.devices.ethernet.driver
 
-        self.gettext=Lanuages().gettext
-
     def start(self) -> None:
         asyncio.run(self.__run(True))
 
@@ -125,20 +121,20 @@ class _Service:  # pylint: disable=too-many-instance-attributes
             for ctl in ctls:
                 if not (await self.__run_ctl(ctl, True)):
                     raise SystemExit(1)
-            get_logger(0).info(self.gettext("Ready to work"))
+            get_logger(0).info("Ready to work")
         else:
             for ctl in reversed(ctls):
                 await self.__run_ctl(ctl, False)
-            get_logger(0).info(self.gettext("Bye-bye"))
+            get_logger(0).info("Bye-bye")
 
     async def __run_ctl(self, ctl: BaseCtl, direct: bool) -> bool:
         logger = get_logger()
         cmd = ctl.get_command(direct)
-        logger.info(self.gettext("CMD: %s"), tools.cmdfmt(cmd))
+        logger.info("CMD: %s", tools.cmdfmt(cmd))
         try:
             return (not (await aioproc.log_process(cmd, logger)).returncode)
         except Exception as err:
-            logger.exception(self.gettext("Can't execute command: %s"), err)
+            logger.exception("Can't execute command: %s", err)
         return False
 
     # =====
@@ -147,10 +143,10 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         iface = self.__find_iface()
         logger = get_logger()
 
-        logger.info(self.gettext("Using IPv4 network %s ..."), self.__iface_net)
+        logger.info("Using IPv4 network %s ...", self.__iface_net)
         net = ipaddress.IPv4Network(self.__iface_net)
         if net.prefixlen > 31:
-            raise RuntimeError(self.gettext("Too small network, required at least /31"))
+            raise RuntimeError("Too small network, required at least /31")
 
         if net.prefixlen == 31:
             iface_ip = str(net[0])
@@ -170,7 +166,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
             dhcp_ip_end=dhcp_ip_end,
             dhcp_option_3=(f"3,{iface_ip}" if self.__forward_iface else "3"),
         )
-        logger.info(self.gettext("Calculated %r address is %s/%d"), iface, iface_ip, netcfg.net_prefix)
+        logger.info("Calculated %r address is %s/%d", iface, iface_ip, netcfg.net_prefix)
         return netcfg
 
     def __find_iface(self) -> str:
@@ -179,10 +175,10 @@ class _Service:  # pylint: disable=too-many-instance-attributes
         if self.__driver == "rndis5":
             real_driver = "rndis"
         path = usb.get_gadget_path(self.__gadget, usb.G_FUNCTIONS, f"{real_driver}.usb0/ifname")
-        logger.info(self.gettext("Using OTG gadget %r ..."), self.__gadget)
+        logger.info("Using OTG gadget %r ...", self.__gadget)
         with open(path) as file:
             iface = file.read().strip()
-            logger.info(self.gettext("Using OTG Ethernet interface %r ..."), iface)
+            logger.info("Using OTG Ethernet interface %r ...", iface)
             assert iface
             return iface
 
