@@ -2,10 +2,6 @@ kvmd:
     auth:
         enabled: true
 
-    server:
-        unix_mode: 0666
-        access_log_format: '[%P / %{X-Real-IP}i] ''%r'' => 响应：%s；大小：%b；来源：''%{Referer}i''；用户代理：''%{User-Agent}i'''
-
     atx:
         type: disabled
 
@@ -162,8 +158,3 @@ nginx:
         port: 8080
     https:
         port: 4430
-
-
-languages:
-    console: zh
-    web: zh
