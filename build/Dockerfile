@@ -35,7 +35,7 @@ RUN if [ ${TARGETARCH} = arm ]; then ARCH=armhf; elif [ ${TARGETARCH} = arm64 ];
     && touch /run/kvmd/ustreamer.sock
 
 
-COPY testenv/fakes/vcgencmd /usr/bin/
+COPY testenv/fakes/vcgencmd scripts/kvmd* /usr/bin/
 COPY extras/ /usr/share/kvmd/extras/
 COPY web/ /usr/share/kvmd/web/
 COPY scripts/kvmd-gencert /usr/share/kvmd/
