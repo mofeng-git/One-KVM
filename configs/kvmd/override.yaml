@@ -21,6 +21,9 @@ kvmd:
     msd:
         #type: otg
         remount_cmd: /bin/true
+        msd_path: /var/lib/kvmd/msd
+        normalfiles_path: NormalFiles
+        normalfiles_size: 256
 
     ocr:
         langs:

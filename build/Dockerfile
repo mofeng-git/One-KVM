@@ -18,6 +18,7 @@ ENV TZ=Asia/Shanghai
 
 RUN cp /tmp/lib/* /lib/*-linux-*/ \
     && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check /tmp/wheel/*.whl \
+    && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check pyfatfs \
     && rm -rf /tmp/lib /tmp/wheel
 
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list.d/debian.sources \
@@ -31,7 +32,7 @@ RUN if [ ${TARGETARCH} = arm ]; then ARCH=armhf; elif [ ${TARGETARCH} = arm64 ];
     && chmod +x /usr/local/bin/ttyd \
     && adduser kvmd --gecos "" --disabled-password \
     && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
-    && mkdir -p /etc/kvmd_backup/override.d /var/lib/kvmd/msd/images /var/lib/kvmd/msd/meta /var/lib/kvmd/pst/data /opt/vc/bin /run/kvmd /tmp/kvmd-nginx \
+    && mkdir -p /etc/kvmd_backup/override.d /var/lib/kvmd/msd/images /var/lib/kvmd/msd/meta /var/lib/kvmd/pst/data /var/lib/kvmd/msd/NormalFiles /opt/vc/bin /run/kvmd /tmp/kvmd-nginx \
     && touch /run/kvmd/ustreamer.sock
 
 

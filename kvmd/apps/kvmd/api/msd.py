@@ -87,6 +87,11 @@ class MsdApi:
     async def __set_connected_handler(self, req: Request) -> Response:
         await self.__msd.set_connected(valid_bool(req.query.get("connected")))
         return make_json_response()
+    
+    @exposed_http("POST", "/msd/make_image")
+    async def __set_zipped_handler(self, req: Request) -> Response:
+        await self.__msd.make_image(valid_bool(req.query.get("zipped")))
+        return make_json_response()
 
     # =====
 

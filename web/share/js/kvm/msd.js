@@ -46,7 +46,8 @@ export function Msd() {
 
 		tools.radio.setOnClick("msd-mode-radio", () => __sendParam("cdrom", tools.radio.getValue("msd-mode-radio")));
 		tools.el.setOnClick($("msd-rw-switch"), () => __sendParam("rw", $("msd-rw-switch").checked));
-
+		tools.radio.setOnClick("file-mode-radio", __refreshFileMode, false);
+		
 		tools.el.setOnClick($("msd-select-new-button"), __toggleSelectSub);
 		$("msd-new-file").onchange = __selectNewFile;
 		$("msd-new-url").oninput = __selectNewUrl;
@@ -57,6 +58,9 @@ export function Msd() {
 
 		tools.el.setOnClick($("msd-connect-button"), () => __clickConnectButton(true));
 		tools.el.setOnClick($("msd-disconnect-button"), () => __clickConnectButton(false));
+
+		tools.el.setOnClick($("msd-file-image-update-button"), () => __clickMakeImageButton(true));
+		tools.el.setOnClick($("msd-file-image-unzip-button"), () => __clickMakeImageButton(false));
 
 		tools.el.setOnClick($("msd-reset-button"), __clickResetButton);
 	};
@@ -97,9 +101,12 @@ export function Msd() {
 					if (state.storage.images !== undefined) {
 						__state.storage.images = state.storage.images;
 					}
+					if (state.storage.filespath !== undefined) {
+						__state.storage.filespath = state.storage.filespath;
+					}
 				}
 				if (state.drive || (state.storage && state.storage.images !== undefined)) {
-					__updateImageSelector(__state.drive, __state.storage.images);
+					__updateImageSelector(__state.drive, __state.storage.images, __state.storage.filespath);
 				}
 			}
 		} else {
@@ -132,6 +139,7 @@ export function Msd() {
 
 		tools.radio.setEnabled("msd-mode-radio", (o && !d.connected && !busy));
 		tools.radio.setValue("msd-mode-radio", `${Number(o && d.cdrom)}`);
+		tools.radio.setEnabled("file-mode-radio", (o && !d.connected && !busy));
 
 		tools.el.setEnabled($("msd-rw-switch"), (o && !d.connected && !busy));
 		$("msd-rw-switch").checked = (o && d.rw);
@@ -174,6 +182,16 @@ export function Msd() {
 		}
 		$("msd-led").className = led_cls;
 		$("msd-status").innerText = $("msd-led").title = msg;
+
+		if (tools.radio.getValue("file-mode-radio") == "0"){
+			tools.el.setEnabled($("msd-connect-button"), false);
+			tools.el.setEnabled($("msd-file-image-update-button"), false);
+			tools.el.setEnabled($("msd-file-image-unzip-button"), false);
+		} else {
+			tools.el.setEnabled($("msd-connect-button"), (o && d.image && !d.connected && !busy));
+			tools.el.setEnabled($("msd-file-image-update-button"), (o && !d.connected && !busy));
+			tools.el.setEnabled($("msd-file-image-unzip-button"), (o && !d.connected && !busy));
+		}
 	};
 
 	var __updateUploading = function(uploading) {
@@ -227,17 +245,20 @@ export function Msd() {
 		}
 	};
 
-	var __updateImageSelector = function(drive, images) {
+	var __updateImageSelector = function(drive, images, filespath) {
 		let sel = "";
 		let el = $("msd-image-selector");
+		let fm = tools.radio.getValue("file-mode-radio");
 		el.options.length = 1;
 		for (let name of Object.keys(images).sort()) {
-			tools.selector.addSeparator(el);
-			tools.selector.addOption(el, name, name);
-			tools.selector.addComment(el, __makeImageSelectorInfo(images[name]));
-			if (drive.image && drive.image.name === name && drive.image.in_storage) {
-				sel = name;
-			}
+			if ((fm == "0" && name.startsWith(filespath + "/")) || (fm == "1" && !name.startsWith(filespath + "/"))) {
+				tools.selector.addSeparator(el);
+				tools.selector.addOption(el, name, name);
+				tools.selector.addComment(el, __makeImageSelectorInfo(images[name]));
+				if (drive.image && drive.image.name === name && drive.image.in_storage) {
+					sel = name;
+				}
+			}	
 		}
 		if (drive.image && !drive.image.in_storage) {
 			sel = ".__external__"; // Just some magic name
@@ -295,10 +316,23 @@ export function Msd() {
 		});
 	};
 
+	var __refreshFileMode = function() {
+		if (__state.storage.images !== undefined) {
+			__updateImageSelector(__state.drive, __state.storage.images, __state.storage.filespath);
+		}
+		__refreshControls();
+	};
+
 	var __clickUploadNewButton = function() {
 		let file = tools.input.getFile($("msd-new-file"));
 		__http = new XMLHttpRequest();
-		let prefix = encodeURIComponent($("msd-new-part-selector").value);
+		let prefix = ""
+		
+		if (tools.radio.getValue("file-mode-radio") == "1"){
+			prefix = encodeURIComponent($("msd-new-part-selector").value);
+		}else{
+			prefix = "NormalFiles";
+		}
 		if (file) {
 			let image = encodeURIComponent(file.name);
 			__http.open("POST", `/api/msd/write?prefix=${prefix}&image=${image}&remove_incomplete=1`, true);
@@ -368,6 +402,21 @@ export function Msd() {
 		});
 		__refreshControls();
 		tools.el.setEnabled($(`msd-${connected ? "connect" : "disconnect"}-button`), false);
+	};
+
+	var __clickMakeImageButton = function(zipped) {
+		tools.el.setEnabled($("msd-file-image-update-button"), false);
+		tools.el.setEnabled($("msd-file-image-unzip-button"), false);
+		tools.httpPost("/api/msd/make_image", {"zipped": zipped}, function(http) {
+			if (http.status !== 200) {
+				wm.error("Can't make File Image", http.responseText);
+			}
+			__refreshControls();
+		});
+		__refreshControls();
+		if (__state.storage.images !== undefined) {
+			__updateImageSelector(__state.drive, __state.storage.images, __state.storage.filespath);
+		}
 	};
 
 	var __clickResetButton = function() {

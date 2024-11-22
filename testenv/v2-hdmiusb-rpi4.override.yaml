@@ -13,7 +13,11 @@ kvmd:
         noop: true
 
     msd:
-        type: disabled
+        type: otg
+        remount_cmd: /bin/true
+        msd_path: /var/lib/kvmd/msd
+        normalfiles_path: NormalFiles
+        normalfiles_size: 64
 
     streamer:
         cmd:

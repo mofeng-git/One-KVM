@@ -27,6 +27,9 @@ import functools
 import time
 import os
 import copy
+import pyfatfs
+import pyfatfs.PyFat
+import pyfatfs.PyFatFS
 
 from typing import AsyncGenerator
 
@@ -37,8 +40,8 @@ from ....inotify import Inotify
 from ....yamlconf import Option
 
 from ....validators.basic import valid_bool
-from ....validators.basic import valid_number
-from ....validators.os import valid_command
+from ....validators.basic import valid_number, valid_stripped_string_not_empty
+from ....validators.os import valid_command, valid_abs_path
 from ....validators.kvm import valid_msd_image_name
 
 from .... import aiotools
@@ -120,10 +123,14 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         read_chunk_size: int,
         write_chunk_size: int,
         sync_chunk_size: int,
+        normalfiles_size: int,
 
         remount_cmd: list[str],
 
         initial: dict,
+
+        normalfiles_path: str,
+        msd_path: str,
 
         gadget: str,  # XXX: Not from options, see /kvmd/apps/kvmd/__init__.py for details
     ) -> None:
@@ -131,12 +138,15 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
         self.__read_chunk_size = read_chunk_size
         self.__write_chunk_size = write_chunk_size
         self.__sync_chunk_size = sync_chunk_size
+        self.__normalfiles_path = normalfiles_path
+        self.__msd_path = msd_path
+        self.__normalfiles_size = normalfiles_size
 
         self.__initial_image: str = initial["image"]
         self.__initial_cdrom: bool = initial["cdrom"]
 
         self.__drive = Drive(gadget, instance=0, lun=0)
-        self.__storage = Storage(fstab.find_msd().root_path, remount_cmd)
+        self.__storage = Storage(fstab.find_msd(msd_path).root_path, remount_cmd)
 
         self.__reader: (MsdFileReader | None) = None
         self.__writer: (MsdFileWriter | None) = None
@@ -165,7 +175,12 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 "image": Option("",    type=valid_msd_image_name, if_empty=""),
                 "cdrom": Option(False, type=valid_bool),
             },
+            "msd_path": Option("/var/lib/kvmd/msd",    type=valid_abs_path),
+            "normalfiles_path": Option("NormalFiles", type=valid_stripped_string_not_empty),
+            "normalfiles_size":   Option(256,   type=functools.partial(valid_number, min=64)),
         }
+
+    # =====
 
     # =====
 
@@ -184,6 +199,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                 storage["downloading"] = (self.__reader.get_state() if self.__reader else None)
                 storage["uploading"] = (self.__writer.get_state() if self.__writer else None)
+                storage["filespath"] = self.__normalfiles_path
 
             vd: (dict | None) = None
             if self.__state.vd:
@@ -286,15 +302,19 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                 self.__drive.set_rw_flag(self.__state.vd.rw)
                 self.__drive.set_cdrom_flag(self.__state.vd.cdrom)
-                #reboot UDC to fix otg cd-rom and flash switch
-                udc_path = self.__drive.get_udc_path()
-                with open(udc_path) as file:
-                    enabled = bool(file.read().strip())
-                if enabled:
+                #reset UDC to fix otg cd-rom and flash switch
+                try:
+                    udc_path = self.__drive.get_udc_path()
+                    with open(udc_path) as file:
+                        enabled = bool(file.read().strip())
+                    if enabled:
+                        with open(udc_path, "w") as file:
+                            file.write("\n")
                     with open(udc_path, "w") as file:
-                        file.write("\n")
-                with open(udc_path, "w") as file:
-                    file.write(sorted(os.listdir("/sys/class/udc"))[0])
+                        file.write(sorted(os.listdir("/sys/class/udc"))[0])
+                except:
+                    logger = get_logger(0)
+                    logger.error("Can't reset UDC")
                 if self.__state.vd.rw:
                     await self.__state.vd.image.remount_rw(True)
                 self.__drive.set_image_path(self.__state.vd.image.path)
@@ -305,6 +325,86 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                 await self.__storage.remount_rw(False, fatal=False)
 
             self.__state.vd.connected = connected
+
+    @aiotools.atomic_fg
+    async def make_image(self, zipped: bool) -> None:
+        #Note: img size >= 64M
+        def create_fat_image(img_size: int, file_img_path: str, source_dir: str, fat_type: int = 32, label: str = 'One-KVM'):
+            def add_directory_to_fat(fat: str, src_path: str, dst_path: str):
+                for item in os.listdir(src_path):
+                    src_item_path = os.path.join(src_path, item)
+                    dst_item_path = os.path.join(dst_path, item)
+
+                    if os.path.isdir(src_item_path):
+                        fat.makedir(dst_item_path)
+                        add_directory_to_fat(fat, src_item_path, dst_item_path)
+                    elif os.path.isfile(src_item_path):
+                        with open(src_item_path, 'rb') as src_file:
+                            fat.create(dst_item_path)
+                            with fat.open(dst_item_path, 'wb') as dst_file:
+                                dst_file.write(src_file.read())
+            print(file_img_path)
+            with open(file_img_path, 'wb') as f:
+                f.seek(img_size * 1024 *1024 - 1)
+                f.write(b'\0')
+            fat_file =  pyfatfs.PyFat.PyFat()
+            try:
+                fat_file.mkfs(file_img_path, fat_type = fat_type, label = label)
+            except Exception as e:
+                get_logger(0).exception(f"Error making FAT Filesystem: {e}")
+            finally:
+                fat_file.close()
+            fat_handle =  pyfatfs.PyFatFS.PyFatFS(file_img_path)
+            try:
+                add_directory_to_fat(fat_handle, source_dir, '/')
+            except Exception as e:
+                get_logger(0).exception(f"Error adding directory to FAT image: {e}")
+            finally:
+                fat_handle.close()
+
+        def extract_fat_image(file_img_path: str, output_dir: str):
+            try:
+                for root, dirs, files in os.walk(output_dir, topdown=False):
+                    for name in files:
+                        os.remove(os.path.join(root, name))
+                    for name in dirs:
+                        os.rmdir(os.path.join(root, name))
+            except Exception as e:
+                get_logger(0).exception(f"Error removing normal file or directory: {e}")
+            fat_handle =  pyfatfs.PyFatFS.PyFatFS(file_img_path)
+            try:
+                def extract_directory(fat_handle, src_path: str, dst_path: str):
+                    for entry in fat_handle.listdir(src_path):
+                        src_item_path = os.path.join(src_path, entry)
+                        dst_item_path = os.path.join(dst_path, entry)
+
+                        if fat_handle.gettype(src_item_path) is pyfatfs.PyFatFS.ResourceType.directory:
+                            os.makedirs(dst_item_path, exist_ok=True)
+                            extract_directory(fat_handle, src_item_path, dst_item_path)
+                        else:
+                            with fat_handle.open(src_item_path, 'rb') as src_file:
+                                with open(dst_item_path, 'wb') as dst_file:
+                                    dst_file.write(src_file.read())
+                extract_directory(fat_handle, '/', output_dir)
+            except Exception as e:
+                get_logger(0).exception(f"Error extracting FAT image: {e}")
+            finally:
+                fat_handle.close()
+
+        async with self.__state.busy():
+            msd_path = self.__msd_path
+            file_storage_path = os.path.join(msd_path, self.__normalfiles_path)
+            file_img_path = os.path.join(msd_path, self.__normalfiles_path + ".img")
+            img_size = self.__normalfiles_size
+            if zipped:
+                if not os.path.exists(file_storage_path):
+                    os.makedirs(file_storage_path)
+                if os.path.exists(file_img_path):
+                    os.remove(file_img_path)
+                create_fat_image(img_size, file_img_path, file_storage_path)
+            else:
+                if os.path.exists(file_img_path):
+                    extract_fat_image(file_img_path, file_storage_path)
 
     @contextlib.asynccontextmanager
     async def read_image(self, name: str) -> AsyncGenerator[MsdFileReader, None]:

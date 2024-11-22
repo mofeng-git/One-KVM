@@ -50,7 +50,14 @@ li(id="msd-dropdown" class="right feature-disabled")
 						label(for="msd-mode-radio-flash") Flash
 				td &nbsp;
 				+menu_switch_notable("msd-rw-switch", "Writable", false, false, "msd-rw-switch")
-		hr
+			tr
+				td(i18n="kvm_text84") 文件内容：
+				td
+					div(class="radio-box")
+						input(checked type="radio" id="msd-mode-radio-image" name="file-mode-radio" value="1")
+						label(for="msd-mode-radio-image" i18n="kvm_text90") ImageFiles
+						input(type="radio" id="msd-mode-radio-file" name="file-mode-radio" value="0")
+						label(for="msd-mode-radio-file" i18n="kvm_text91") NormalFiles
 		div(id="msd-storages")
 		hr
 		div(class="buttons buttons-row")
@@ -98,3 +105,20 @@ li(id="msd-dropdown" class="right feature-disabled")
 			button(disabled id="msd-connect-button" class="row50" i18n="kvm_text76") Connect drive to Server
 			button(disabled id="msd-disconnect-button" class="row25" i18n="kvm_text77") Disconnect
 			button(disabled id="msd-reset-button" class="row25" i18n="kvm_text78") Reset
+
+
+
+		hr
+		div(class="text")
+			b(i18n="kvm_text85") Quick file transfer:
+			br
+			sub(i18n="kvm_text86") &bull; Select NormalFiles tab to upload, package them and mount image
+			br
+			sub(i18n="kvm_text87") &bull; Disconnect MSD, unpackage it, select tab to download
+			br
+		hr
+		div(class="buttons buttons-row")
+			button(id="msd-file-image-update-button" class="row50" i18n="kvm_text88") Package files into image
+			button(id="msd-file-image-unzip-button" class="row50" i18n="kvm_text89") Unpackage files from image
+		hr
+		

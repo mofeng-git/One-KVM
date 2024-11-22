@@ -596,8 +596,18 @@
                     </div>
                   </td>
             </tr>
+            <tr>
+              <td i18n="kvm_text84">文件内容：</td>
+              <td>
+                <div class="radio-box">
+                  <input checked type="radio" id="msd-mode-radio-image" name="file-mode-radio" value="1">
+                  <label for="msd-mode-radio-image" i18n="kvm_text90">ImageFiles</label>
+                  <input type="radio" id="msd-mode-radio-file" name="file-mode-radio" value="0">
+                  <label for="msd-mode-radio-file" i18n="kvm_text91">NormalFiles</label>
+                </div>
+              </td>
+            </tr>
           </table>
-          <hr>
           <div id="msd-storages"></div>
           <hr>
           <div class="buttons buttons-row">
@@ -674,6 +684,14 @@
             <button class="row25" disabled id="msd-disconnect-button" i18n="kvm_text77">Disconnect</button>
             <button class="row25" disabled id="msd-reset-button" i18n="kvm_text78">Reset</button>
           </div>
+          <hr>
+          <div class="text"><b i18n="kvm_text85">Quick file transfer:</b><br><sub i18n="kvm_text86">&bull; Select NormalFiles tab to upload, package them and mount image</sub><br><sub i18n="kvm_text87">&bull; Disconnect MSD, unpackage it, select tab to download</sub><br></div>
+          <hr>
+          <div class="buttons buttons-row">
+            <button class="row50" id="msd-file-image-update-button" i18n="kvm_text88">Package files into image</button>
+            <button class="row50" id="msd-file-image-unzip-button" i18n="kvm_text89">Unpackage files from image</button>
+          </div>
+          <hr>
         </div>
       </li>
       <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="/share/svg/led-gear.svg"><span i18n="kvm_text32">Macro</span></a>

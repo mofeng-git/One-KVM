@@ -93,9 +93,9 @@
 
     "kvm_text60":"驱动器",
     "kvm_text61":"虚拟存储驱动器",
-    "kvm_text62":"镜像：",
+    "kvm_text62":"文件：",
     "kvm_text63":"驱动<a target=\"_blank\" href=\"https://docs.pikvm.org/msd\">模式</a>:",
-    "kvm_text64":"选择要上传的镜像",
+    "kvm_text64":"选择要上传的文件",
     "kvm_text65":"上传",
     "kvm_text66":"中止",
     "kvm_text68":"指定本地文件：",
@@ -114,6 +114,16 @@
     "kvm_text81":"开始录制",
     "kvm_text82":"结束录制",
     "kvm_text83":"网页界面设置",
+    "kvm_text84":"文件显示：",
+    "kvm_text85":"快速文件互传：",
+    "kvm_text86":"&bull; 切换互传文件上传文件，打包生成镜像文件，挂载 NormalFiles 镜像",
+    "kvm_text87":"&bull; 断开 MSD 连接，选择从镜像文件解压，切换互传文件下载所需文件",
+    "kvm_text88":"从互传文件打包镜像文件",
+    "kvm_text89":"从镜像文件解压互传文件",
+    "kvm_text90":"镜像文件",
+    "kvm_text91":"互传文件",
+
+
 
     "atx-ask-switch":"点击二次确认",
     "hid-recorder-loop-switch":"无限循环重放",
