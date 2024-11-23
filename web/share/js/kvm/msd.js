@@ -331,7 +331,7 @@ export function Msd() {
 		if (tools.radio.getValue("file-mode-radio") == "1"){
 			prefix = encodeURIComponent($("msd-new-part-selector").value);
 		}else{
-			prefix = "NormalFiles";
+			prefix = __state.storage.filespath;
 		}
 		if (file) {
 			let image = encodeURIComponent(file.name);
