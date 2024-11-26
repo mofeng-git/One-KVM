@@ -13,7 +13,6 @@ div(id="about-window" class="window")
 	div(class="window-header")
 		div(class="window-grab" i18n="kvm_text1") About
 		button(class="window-button-close") #[b &times;]
-
 	div(id="about")
 		table
 			tr
@@ -28,7 +27,16 @@ div(id="about-window" class="window")
 								| Copyright &copy; 2018-2024 #[a(target="_blank" href="mailto:mdevaev@gmail.com") Maxim Devaev]
 		br
 		div(class="tabs-box")
-			+about_tab("meta", "Meta", true, "meta")
+			+about_tab("meta", "Meta", true)
+				div
+					span(class="code-comment")
+						| // You can get this JSON using handle #[a(target="_blank" href="/api/info?fields=meta") /api/info?fields=meta]#[br]
+						| // In the standard configuration this data#[br]
+						| // is specified in the file /etc/kvmd/meta.yaml
+					br
+					pre(id="kvmd-meta-json")
+						| No data
+
 			+about_tab("hardware", "Hardware", "hardware")
 			+about_tab("version", "Version", "version")
 

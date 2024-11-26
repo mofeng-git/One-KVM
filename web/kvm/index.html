@@ -157,7 +157,7 @@
                 <button class="small" data-force-hide-menu id="open-log-button" i18n="kvm_text7">&bull; Log</button>
               </td>
               <td class="feature-disabled" id="system-tool-wol">
-                <button class="gpio-button small" data-force-hide-menu id="gpio-button-__wol__" data-channel="__wol__" data-confirm="Are you sure to send Wake-on-LAN packet to the server?" i18n="kvm_text8">&bull; WoL</button>
+                <button class="__gpio-button-__wol__ __gpio-button small" data-force-hide-menu data-channel="__wol__" data-confirm="Are you sure to send Wake-on-LAN packet to the server?" i18n="kvm_text8">&bull; WoL</button>
               </td>
             </tr>
           </table>
@@ -2042,9 +2042,14 @@
         </table><br>
         <div class="tabs-box">
               <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
-              <label for="about-tab-meta-button" i18n="meta">Meta</label>
+              <label for="about-tab-meta-button">Meta</label>
               <div class="tab">
-                <div class="code" id="about-meta"><span class="code-comment">No data</span>
+                <div class="code" id="about-meta">
+                  <div><span class="code-comment">// You can get this JSON using handle <a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a><br>
+                      // In the standard configuration this data<br>
+                      // is specified in the file /etc/kvmd/meta.yaml</span><br>
+                    <pre id="kvmd-meta-json">No data</pre>
+                  </div>
                 </div>
               </div>
               <input checked="hardware" type="radio" name="about-tab-button" id="about-tab-hardware-button">
