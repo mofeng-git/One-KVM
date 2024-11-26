@@ -408,7 +408,7 @@ class UserGpio:
     def __make_item_input(self, parts: list[str]) -> dict:
         assert len(parts) >= 1
         color = (parts[1] if len(parts) > 1 else None)
-        if color not in ["green", "yellow", "red"]:
+        if color not in ["green", "yellow", "red", "blue", "cyan", "magenta", "pink", "white"]:
             color = "green"
         return {
             "type": UserGpioModes.INPUT,

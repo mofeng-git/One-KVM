@@ -41,6 +41,13 @@
 	--led-spin-slow: spin 6s linear infinite;
 	--led-spin-medium: spin 3s linear infinite;
 	--led-spin-fast: spin 2s linear infinite;
+
+	/* Additional colors for GPIO */
+	--led-filter-blue: invert(0.5) sepia(1) saturate(5) hue-rotate(170deg);
+	--led-filter-cyan: invert(0.5) sepia(1) saturate(5) hue-rotate(130deg);
+	--led-filter-magenta: invert(0.5) sepia(1) saturate(5) hue-rotate(200deg);
+	--led-filter-pink: invert(0.5) sepia(1) saturate(5) hue-rotate(300deg);
+	--led-filter-white: invert(1) sepia(1);
 }
 
 img.led-gray {
@@ -48,19 +55,16 @@ img.led-gray {
 	-webkit-filter: var(--led-filter-gray);
 	filter: var(--led-filter-gray);
 }
-
 img.led-green {
 	-webkit-transform: translateZ(0);
 	-webkit-filter: var(--led-filter-green);
 	filter: var(--led-filter-green);
 }
-
 img.led-red {
 	-webkit-transform: translateZ(0);
 	-webkit-filter: var(--led-filter-red);
 	filter: var(--led-filter-red);
 }
-
 img.led-yellow {
 	-webkit-transform: translateZ(0);
 	-webkit-filter: var(--led-filter-yellow);
@@ -73,10 +77,36 @@ img.led-red-rotating-fast {
 	-webkit-animation: var(--led-spin-fast);
 	animation: var(--led-spin-fast);
 }
-
 img.led-yellow-rotating-fast {
 	-webkit-filter: var(--led-filter-yellow);
 	filter: var(--led-filter-yellow);
 	-webkit-animation: var(--led-spin-fast);
 	animation: var(--led-spin-fast);
+}
+
+/* Additional colors for GPIO */
+img.led-blue {
+	-webkit-transform: translateZ(0);
+	-webkit-filter: var(--led-filter-blue);
+	filter: var(--led-filter-blue);
+}
+img.led-cyan {
+	-webkit-transform: translateZ(0);
+	-webkit-filter: var(--led-filter-cyan);
+	filter: var(--led-filter-cyan);
+}
+img.led-magenta {
+	-webkit-transform: translateZ(0);
+	-webkit-filter: var(--led-filter-magenta);
+	filter: var(--led-filter-magenta);
+}
+img.led-pink {
+	-webkit-transform: translateZ(0);
+	-webkit-filter: var(--led-filter-pink);
+	filter: var(--led-filter-pink);
+}
+img.led-white {
+	-webkit-transform: translateZ(0);
+	-webkit-filter: var(--led-filter-white);
+	filter: var(--led-filter-white);
 }
