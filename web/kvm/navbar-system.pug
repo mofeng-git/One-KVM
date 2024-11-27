@@ -77,15 +77,14 @@ li(id="system-dropdown" class="right")
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu id="stream-record-start-button" class="row50" i18n="kvm_text81") &bull; Start recording
 			button(data-force-hide-menu id="stream-record-stop-button" class="row50" i18n="kvm_text82") &bull; End recording
-		div(id="hid-outputs" class="feature-disabled")
-			hr
-			table(class="kv")
-				tr(id="hid-outputs-keyboard", class="feature-disabled")
-					td(i18n="kvm_text23") Keyboard mode:
-					td #[div(id="hid-outputs-keyboard-box" class="radio-box")]
-				tr(id="hid-outputs-mouse", class="feature-disabled")
-					td(i18n="kvm_text24") Mouse #[a(target="_blank" href="https://docs.pikvm.org/mouse") mode]:
-					td #[div(id="hid-outputs-mouse-box" class="radio-box")]
+		hr
+		table(class="kv")
+			tr(id="hid-outputs-keyboard", class="feature-disabled")
+				td(i18n="kvm_text23") Keyboard mode:
+				td #[div(id="hid-outputs-keyboard-box" class="radio-box")]
+			tr(id="hid-outputs-mouse", class="feature-disabled")
+				td(i18n="kvm_text24") Mouse #[a(target="_blank" href="https://docs.pikvm.org/mouse") mode]:
+				td #[div(id="hid-outputs-mouse-box" class="radio-box")]
 		details
 			summary(i18n="kvm_text25") Keyboard &amp; Mouse (HID) settings
 			div(class="spoiler")

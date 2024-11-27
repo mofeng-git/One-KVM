@@ -11,6 +11,10 @@ kvmd:
         mouse:
             device: /dev/null
         noop: true
+
+        mouse_alt:
+            device: /dev/null
+
     
     wol:
         mac: 00:00:00:00:00:00
