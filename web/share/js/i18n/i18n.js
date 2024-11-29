@@ -1,15 +1,10 @@
-/* cookie存储用户选取的值 */
 function setCookie (name, value)
 { 
-    /* 设置名称为name,值为value的Cookie */
     var expdate = new Date();
-    /* 计算时间,30天后过期 */
     expdate.setTime(expdate.getTime() + 30 * 24 * 60 * 60 * 1000);
     document.cookie = name + "=" + value + "; expires=" + expdate.toGMTString() + "; path=/" + ";SameSite=Lax";
-   /* 即document.cookie= name+"="+value+";path=/";   时间可以不要，但路径(path)必须要填写，因为JS的默认路径是当前页，如果不填，此cookie只在当前页面生效！ */
 }
 
-/* 获取cookie */
 function getCookie(name)
 {
     if (document.cookie.length > 0)
@@ -26,15 +21,19 @@ function getCookie(name)
     return ""
 }
 
-/**
- * 设置语言类型： 默认为中文
- */
 var i18nLanguage = "zh";
 
 $(document).ready(function() {
-     /* 首先获取用户选择过的语言 */ 
      if (getCookie('userLanguage')) {
         i18nLanguage = getCookie('userLanguage');
+        if (i18nLanguage == "zh") {
+            no = 0;
+        }else if (i18nLanguage == "en") {
+            no = 1;
+        }
+        $("#selectLanguage").each(function(){
+            $(this).find("option").eq(no).prop("selected",true)
+        });
     }
 
     $("[i18n]").i18n({

@@ -25,7 +25,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>PiKVM Session</title>
+    <title>One-KVM Session</title>
     <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
@@ -2040,7 +2040,7 @@
         </table><br>
         <div class="tabs-box">
               <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
-              <label for="about-tab-meta-button">Meta</label>
+              <label for="about-tab-meta-button" i18n="meta">Meta</label>
               <div class="tab">
                 <div class="code" id="about-meta">
                   <div><span class="code-comment">// You can get this JSON using handle <a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a><br>
@@ -2050,20 +2050,20 @@
                   </div>
                 </div>
               </div>
-              <input checked="hardware" type="radio" name="about-tab-button" id="about-tab-hardware-button">
-              <label for="about-tab-hardware-button">Hardware</label>
+              <input type="radio" name="about-tab-button" id="about-tab-hardware-button">
+              <label for="about-tab-hardware-button" i18n="hardware">Hardware</label>
               <div class="tab">
                 <div class="code" id="about-hardware"><span class="code-comment">No data</span>
                 </div>
               </div>
-              <input checked="version" type="radio" name="about-tab-button" id="about-tab-version-button">
-              <label for="about-tab-version-button">Version</label>
+              <input type="radio" name="about-tab-button" id="about-tab-version-button">
+              <label for="about-tab-version-button" i18n="version">Version</label>
               <div class="tab">
                 <div class="code" id="about-version"><span class="code-comment">No data</span>
                 </div>
               </div>
-              <input checked="thanks" type="radio" name="about-tab-button" id="about-tab-thanks-button">
-              <label for="about-tab-thanks-button">Thanks</label>
+              <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
+              <label for="about-tab-thanks-button" i18n="thanks">Thanks</label>
               <div class="tab">
                 <div class="code" id="about-thanks"><span class="code-comment" i18n="kvm_text2">// These kind people donated money to the PiKVM project<br>
                     // and supported the work on it. We are very grateful<br>
@@ -2708,7 +2708,7 @@
                 </div>
               </div>
         </div><br>
-        <p class="text credits"><a target="_blank" href="https://pikvm.org">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">Support</a></p>
+        <p class="text credits"><a target="_blank" href="https://pikvm.org" i18n="index_text_10">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org" i18n="index_text_11">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13">One-KVM Documentation</a></p>
       </div>
     </div>
     <div class="window window-resizable" id="webterm-window" style="width: 640px; height: 480px">

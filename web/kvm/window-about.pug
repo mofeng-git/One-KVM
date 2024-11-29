@@ -1,4 +1,4 @@
-mixin about_tab(name, title, checked=false, i18nid)
+mixin about_tab(name, title, i18nid, checked=false)
 	- let button_id = `about-tab-${name}-button`
 	input(checked=checked type="radio" name="about-tab-button", id=button_id)
 	label(for=button_id i18n=i18nid) #{title}
@@ -27,7 +27,7 @@ div(id="about-window" class="window")
 								| Copyright &copy; 2018-2024 #[a(target="_blank" href="mailto:mdevaev@gmail.com") Maxim Devaev]
 		br
 		div(class="tabs-box")
-			+about_tab("meta", "Meta", true)
+			+about_tab("meta", "Meta", "meta", true)
 				div
 					span(class="code-comment")
 						| // You can get this JSON using handle #[a(target="_blank" href="/api/info?fields=meta") /api/info?fields=meta]#[br]
@@ -683,8 +683,10 @@ div(id="about-window" class="window")
 					li Zsombor Vari
 		br
 		p(class="text credits")
-			a(target="_blank" href="https://pikvm.org") PiKVM Project
+			a(target="_blank" href="https://pikvm.org" i18n="index_text_10") PiKVM Project
 			| &nbsp; | &nbsp;
-			a(target="_blank" href="https://docs.pikvm.org") Documentation
+			a(target="_blank" href="https://docs.pikvm.org" i18n="index_text_11") Documentation
 			| &nbsp; | &nbsp;
-			a(target="_blank" href="https://pikvm.org/support") Support
+			a(target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12") One-KVM Project
+			| &nbsp; | &nbsp;
+			a(target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13") One-KVM Documentation

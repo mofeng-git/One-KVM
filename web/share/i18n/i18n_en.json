@@ -29,7 +29,7 @@
     "ipmi_text3":"<b>NEVER</b> use the same passwords for KVMD and IPMI users. And even better not to use IPMI. Instead, you can directly use KVMD API via curl. Here some examples:",
 
     "kvm_text1":"About",
-    "kvm_text2":"// These <a href=\"https://github.com/pikvm/pikvm?tab=readme-ov-file#special-thanks\">kind people</a> donated money to the PiKVM project<br>// and supported the work on it. We are very grateful<br>// for their help, and memorializing their names<br>// is the least we can do in gratitude.<br>// If you also want to support this project,<br>// you can donate on <a target=\"_blank\" href=\"https://www.patreon.com/pikvm\"> Patreon</a> or <a target=\"_blank\" href=\"https://paypal.me/pikvm\"> Paypal</a>.",
+    "kvm_text2":"// These <a href=\"https://github.com/pikvm/pikvm?tab=readme-ov-file#special-thanks\">kind people</a> donated money to the PiKVM project and supported the work on it. <br>// If you also want to support this project, you can donate on <a target=\"_blank\" href=\"https://www.patreon.com/pikvm\"> Patreon</a> or <a target=\"_blank\" href=\"https://paypal.me/pikvm\"> Paypal</a>.<br><br>// These <a href=\"https://one-kvm.mofeng.run/thanks/#_2\">kind people</a> donated money to the One-KVM project and supported the work on it. <br>// If you also want to support this project, you can donate on <a target=\"_blank\" href=\"https://afdian.com/a/silentwind\"> afdian </a>.",
     "kvm_text3":"System",
     "kvm_text4":"Runtime settings &amp; tools",
     "kvm_text5":"Term",

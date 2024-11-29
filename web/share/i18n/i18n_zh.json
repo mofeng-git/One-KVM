@@ -11,8 +11,8 @@
 
     "index": " One-KVM 导航 ",
     "copyright": "版权所有 &copy; 2018-2024 Maxim Devaev | 由 SilentWind 二次开发",
-    "index_text_1": "请注意，在使用 KVM 会话或其他可捕获键盘的应用程序时，您无法使用某些快捷键，如 Ctrl+Alt+Del（这会被操作系统捕获）或 Ctrl+W（这会被浏览器捕获）。",
-    "index_text_2": "要突破这一限制，您可以在应用程序模式下使用 Google Chrome 浏览器。",
+    "index_text_1": "请注意，在使用 KVM 会话或其他可捕获键盘的应用程序时，您可能无法使用某些快捷键，如 Ctrl+Alt+Del（这会被操作系统捕获）或 Ctrl+W（这会被浏览器捕获）。",
+    "index_text_2": "要突破这一限制，您可以使用 Google Chrome 浏览器。",
     "serve_name": "主机名：",
     "index_text_10":"PiKVM 项目",
     "index_text_11":"PiKVM 文档",
@@ -29,7 +29,7 @@
     "ipmi_text3":"<b>不建议</b>为 KVMD 和 IPMI 用户使用相同的密码，或者直接关闭 IPMI。如有需要可以通过 curl 直接使用 KVMD API。下面是一些示例：",
 
     "kvm_text1":"关于",
-    "kvm_text2":"//<a href=\"https://github.com/pikvm/pikvm?tab=readme-ov-file#special-thanks\">这些人</a>向 PiKVM 项目捐款并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 PiKVM ，可以在 <a target=\"_blank\" href=\"https://www.patreon.com/pikvm\"> Patreon</a> 或 <a target=\"_blank\" href=\"https://paypal.me/pikvm\"> PayPal 上捐款</a>。<br><br>//<a href=\"https://one-kvm.mofeng.run/thanks/#_2\">这些人</a>向 One-KVM 项目捐款并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 One-KVM ，可以在 <a target=\"_blank\" href=\"https://afdian.com/a/silentwind\"> 为爱发电 </a>上捐款</a>。",
+    "kvm_text2":"//<a href=\"https://github.com/pikvm/pikvm?tab=readme-ov-file#special-thanks\">这些人</a>向 PiKVM 项目捐款并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 PiKVM ，可以在 <a target=\"_blank\" href=\"https://www.patreon.com/pikvm\"> Patreon</a> 或 <a target=\"_blank\" href=\"https://paypal.me/pikvm\"> PayPal 上捐款</a>。<br><br>//<a href=\"https://one-kvm.mofeng.run/thanks/#_2\">这些人</a>向 One-KVM 项目捐款并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 One-KVM ，可以在 <a target=\"_blank\" href=\"https://afdian.com/a/silentwind\"> 爱发电 </a>上捐款</a>。",
     "kvm_text3":"系统",
     "kvm_text4":"运行设置 &amp; 工具",
     "kvm_text5":"终端",
@@ -149,7 +149,7 @@
     "msd-message-image-broken":"当前镜像已损坏！",
     "msd-message-too-big-for-cdrom":"当前 CD-ROM 格式镜像大小超出限制！",
     "msd-message-out-of-storage":"当前镜像大小超出存储空间",
-    "msd-message-rw-enabled":"读写模式以启用",
+    "msd-message-rw-enabled":"读写模式已启用",
     "msd-message-downloads":"正在从 One-KVM 下载镜像",
     "msd-message-another-user-uploads":"另一个用户正在上传镜像",
     "page-full-tab-stream-switch":"自动全屏视频窗口"

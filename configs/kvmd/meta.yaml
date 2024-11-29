@@ -6,4 +6,9 @@
 server:
     host: localhost.localdomain
 
-kvm: {}
+kvm: {
+    base_on: PiKVM,
+    app_name: One-KVM,
+    majaro_version: 241204,
+    author: SilentWind
+}
