@@ -123,7 +123,7 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
 
         if self.__wakeup_key:
             logger.info("Waking up using key %r ...", self.__wakeup_key)
-            await self.__hid.send_key_events(
+            self.__hid.send_key_events(
                 keys=[(self.__wakeup_key, True), (self.__wakeup_key, False)],
                 no_ignore_keys=True,
             )
