@@ -184,7 +184,7 @@ export function Ocr(__getGeometry) {
 			"ocr_left": __sel.left,
 			"ocr_top": __sel.top,
 			"ocr_right": __sel.right,
-			"orc_bottom": __sel.bottom,
+			"ocr_bottom": __sel.bottom,
 		};
 		tools.httpGet("/api/streamer/snapshot", params, function(http) {
 			if (http.status === 200) {
