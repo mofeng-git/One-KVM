@@ -19,7 +19,7 @@ target_sources(${target_name} PRIVATE
 	${PS2_PATH}/ps2in.c
 	${PS2_PATH}/ps2kb.c
 	${PS2_PATH}/ps2ms.c
-	${PS2_PATH}/scancodesets.c
+	${PS2_PATH}/scancodes.c
 )
 target_link_options(${target_name} PRIVATE -Xlinker --print-memory-usage)
 target_compile_options(${target_name} PRIVATE -Wall -Wextra)
