@@ -153,7 +153,6 @@ class MouseProcess(BaseDeviceProcess):
             move_x = self.__x
             move_y = self.__y
         else:
-            assert self.__x == self.__y == 0
             if relative_event is not None:
                 move_x = relative_event.delta_x
                 move_y = relative_event.delta_y
@@ -177,5 +176,3 @@ class MouseProcess(BaseDeviceProcess):
 
     def __clear_state(self) -> None:
         self.__pressed_buttons = 0
-        self.__x = 0
-        self.__y = 0
