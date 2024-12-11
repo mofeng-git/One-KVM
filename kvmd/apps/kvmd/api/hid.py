@@ -123,7 +123,8 @@ class HidApi:
         if limit > 0:
             text = text[:limit]
         symmap = self.__ensure_symmap(req.query.get("keymap", self.__default_keymap_name))
-        self.__hid.send_key_events(text_to_web_keys(text, symmap), no_ignore_keys=True)
+        slow = valid_bool(req.query.get("slow", False))
+        await self.__hid.send_key_events(text_to_web_keys(text, symmap), no_ignore_keys=True, slow=slow)
         return make_json_response()
 
     def __ensure_symmap(self, keymap_name: str) -> dict[int, dict[int, str]]:
@@ -250,7 +251,7 @@ class HidApi:
             state = valid_bool(req.query["state"])
             self.__hid.send_key_event(key, state)
         else:
-            self.__hid.send_key_events([(key, True), (key, False)])
+            await self.__hid.send_key_events([(key, True), (key, False)], slow=True)
         return make_json_response()
 
     @exposed_http("POST", "/hid/events/send_mouse_button")

@@ -137,9 +137,17 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    def send_key_events(self, keys: Iterable[tuple[str, bool]], no_ignore_keys: bool=False) -> None:
+    async def send_key_events(
+        self,
+        keys: Iterable[tuple[str, bool]],
+        no_ignore_keys: bool=False,
+        slow: bool=False,
+    ) -> None:
+
         for (key, state) in keys:
             if no_ignore_keys or key not in self.__ignore_keys:
+                if slow:
+                    await asyncio.sleep(0.02)
                 self.send_key_event(key, state)
 
     def send_key_event(self, key: str, state: bool) -> None:

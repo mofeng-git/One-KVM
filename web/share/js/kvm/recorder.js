@@ -67,8 +67,8 @@ export function Recorder() {
 		__recordEvent(event);
 	};
 
-	self.recordPrintEvent = function(text, keymap) {
-		__recordEvent({"event_type": "print", "event": {"text": text, "keymap": keymap}});
+	self.recordPrintEvent = function(text, keymap, slow) {
+		__recordEvent({"event_type": "print", "event": {"text": text, "keymap": keymap, "slow": slow}});
 	};
 
 	self.recordAtxButtonEvent = function(button) {
@@ -159,8 +159,11 @@ export function Recorder() {
 
 						} else if (event.event_type === "print") {
 							__checkType(event.event.text, "string", "Non-string print text");
-							if (event.event.keymap) {
+							if (event.event.keymap !== undefined) {
 								__checkType(event.event.keymap, "string", "Non-string keymap");
+							}
+							if (event.event.slow !== undefined) {
+								__checkType(event.event.slow, "boolean", "Non-bool slow");
 							}
 
 						} else if (event.event_type === "key") {
@@ -284,8 +287,11 @@ export function Recorder() {
 
 			} else if (event.event_type === "print") {
 				let params = {"limit": 0};
-				if (event.event.keymap) {
+				if (event.event.keymap !== undefined) {
 					params["keymap"] = event.event.keymap;
+				}
+				if (event.event.slow !== undefined) {
+					params["slow"] = event.event.slow;
 				}
 				tools.httpPost("/api/hid/print", params, function(http) {
 					if (http.status === 413) {
