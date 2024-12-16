@@ -102,6 +102,7 @@ $(TESTENV_GPIO):
 
 run: testenv $(TESTENV_GPIO)
 	- $(DOCKER) run --rm --name kvmd \
+			--ipc=shareable \
 			--privileged \
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
@@ -187,6 +188,7 @@ run-ipmi: testenv
 
 run-vnc: testenv
 	- $(DOCKER) run --rm --name kvmd-vnc \
+			--ipc=container:kvmd \
 			--volume `pwd`/testenv/run:/run/kvmd:rw \
 			--volume `pwd`/testenv:/testenv:ro \
 			--volume `pwd`/kvmd:/kvmd:ro \
