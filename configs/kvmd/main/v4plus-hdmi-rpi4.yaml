@@ -88,6 +88,12 @@ kvmd:
                 pulse: false
 
 
+media:
+    memsink:
+        h264:
+            sink: "kvmd::ustreamer::h264"
+
+
 vnc:
     memsink:
         jpeg:

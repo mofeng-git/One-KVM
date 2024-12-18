@@ -298,10 +298,10 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
                     logger.exception("Cleanup error on %s", sub.name)
         logger.info("On-Cleanup complete")
 
-    async def _on_ws_opened(self) -> None:
+    async def _on_ws_opened(self, _: WsSession) -> None:
         self.__streamer_notifier.notify()
 
-    async def _on_ws_closed(self) -> None:
+    async def _on_ws_closed(self, _: WsSession) -> None:
         self.__hid.clear_events()
         self.__streamer_notifier.notify()
 

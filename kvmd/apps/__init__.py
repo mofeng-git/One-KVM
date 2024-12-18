@@ -509,6 +509,32 @@ def _get_config_scheme() -> dict:
             },
         },
 
+        "media": {
+            "server": {
+                "unix":              Option("/run/kvmd/media.sock", type=valid_abs_path, unpack_as="unix_path"),
+                "unix_rm":           Option(True,  type=valid_bool),
+                "unix_mode":         Option(0o660, type=valid_unix_mode),
+                "heartbeat":         Option(15.0,  type=valid_float_f01),
+                "access_log_format": Option("[%P / %{X-Real-IP}i] '%r' => %s; size=%b ---"
+                                            " referer='%{Referer}i'; user_agent='%{User-Agent}i'"),
+            },
+
+            "memsink": {
+                "jpeg": {
+                    "sink":             Option("",  unpack_as="obj"),
+                    "lock_timeout":     Option(1.0, type=valid_float_f01),
+                    "wait_timeout":     Option(1.0, type=valid_float_f01),
+                    "drop_same_frames": Option(0.0, type=valid_float_f0),
+                },
+                "h264": {
+                    "sink":             Option("",  unpack_as="obj"),
+                    "lock_timeout":     Option(1.0, type=valid_float_f01),
+                    "wait_timeout":     Option(1.0, type=valid_float_f01),
+                    "drop_same_frames": Option(0.0, type=valid_float_f0),
+                },
+            },
+        },
+
         "pst": {
             "server": {
                 "unix":              Option("/run/kvmd/pst.sock", type=valid_abs_path, unpack_as="unix_path"),

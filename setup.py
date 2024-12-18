@@ -86,6 +86,7 @@ def main() -> None:
             "kvmd.apps.kvmd.switch",
             "kvmd.apps.kvmd.info",
             "kvmd.apps.kvmd.api",
+            "kvmd.apps.media",
             "kvmd.apps.pst",
             "kvmd.apps.pstrun",
             "kvmd.apps.otg",
@@ -116,6 +117,7 @@ def main() -> None:
         entry_points={
             "console_scripts": [
                 "kvmd = kvmd.apps.kvmd:main",
+                "kvmd-media = kvmd.apps.media:main",
                 "kvmd-pst = kvmd.apps.pst:main",
                 "kvmd-pstrun = kvmd.apps.pstrun:main",
                 "kvmd-otg = kvmd.apps.otg:main",

@@ -48,6 +48,12 @@ kvmd:
             - "--h264-gop={h264_gop}"
 
 
+media:
+    memsink:
+        h264:
+            sink: "kvmd::ustreamer::h264"
+
+
 vnc:
     memsink:
         jpeg:

@@ -104,10 +104,10 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
         await self.__remount_storage(rw=False)
         logger.info("On-Cleanup complete")
 
-    async def _on_ws_opened(self) -> None:
+    async def _on_ws_opened(self, _: WsSession) -> None:
         self.__notifier.notify()
 
-    async def _on_ws_closed(self) -> None:
+    async def _on_ws_closed(self, _: WsSession) -> None:
         self.__notifier.notify()
 
     # ===== SYSTEM TASKS
