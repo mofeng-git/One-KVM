@@ -9,6 +9,6 @@ server:
 kvm: {
     base_on: PiKVM,
     app_name: One-KVM,
-    majaro_version: 241204,
+    main_version: 241204,
     author: SilentWind
 }

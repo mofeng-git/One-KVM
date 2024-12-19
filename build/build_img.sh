@@ -1,11 +1,11 @@
 #!/bin/bash
 
-SRCPATH=/mnt/sda1/src
+SRCPATH=/mnt/nas/src
 BOOTFS=/tmp/bootfs
 ROOTFS=/tmp/rootfs
-OUTPUTDIR=/mnt/sda1/output
+OUTPUTDIR=/mnt/nas/src/output
 LOOPDEV=/dev/loop10
-DATE=241018
+DATE=241204
 export LC_ALL=C
 
 write_meta() {
@@ -37,6 +37,10 @@ parpare_dns() {
         --source mirrors.tuna.tsinghua.edu.cn --updata-software false --web-protocol http "
 }
 
+delete_armbain_verify(){
+    sudo chroot --userspec "root:root" $ROOTFS bash -c "echo 'deb  http://mirrors.ustc.edu.cn/armbian bullseye main bullseye-utils bullseye-desktop' > /etc/apt/sources.list.d/armbian.list "
+}
+
 config_file() {
     sudo mkdir -p $ROOTFS/etc/kvmd/override.d $ROOTFS/etc/kvmd/vnc $ROOTFS/var/lib/kvmd/msd $ROOTFS/opt/vc/bin $ROOTFS/usr/share/kvmd $ROOTFS/One-KVM \
         $ROOTFS/usr/share/janus/javascript $ROOTFS/usr/lib/ustreamer/janus $ROOTFS/run/kvmd $ROOTFS/var/lib/kvmd/msd/images $ROOTFS/var/lib/kvmd/msd/meta
@@ -61,7 +65,14 @@ pack_img() {
 
 onecloud_rootfs() {
     $SRCPATH/image/onecloud/AmlImg_v0.3.1_linux_amd64 unpack $SRCPATH/image/onecloud/Armbian_by-SilentWind_24.5.0-trunk_Onecloud_bookworm_legacy_5.9.0-rc7_minimal.burn.img $SRCPATH/tmp
+    simg2img $SRCPATH/tmp/6.boot.PARTITION.sparse $SRCPATH/tmp/bootfs.img
     simg2img $SRCPATH/tmp/7.rootfs.PARTITION.sparse $SRCPATH/tmp/rootfs.img
+    mkdir $BOOTFS
+    sudo losetup $LOOPDEV $SRCPATH/tmp/bootfs.img  || exit -1
+    sudo mount $LOOPDEV $BOOTFS
+    sudo cp $SRCPATH/image/onecloud/meson8b-onecloud-fix.dtb $BOOTFS/dtb/meson8b-onecloud.dtb
+    sudo umount $BOOTFS
+    sudo losetup -d $LOOPDEV
     dd if=/dev/zero of=/tmp/add.img bs=1M count=1024 && cat /tmp/add.img >> $SRCPATH/tmp/rootfs.img && rm /tmp/add.img
     e2fsck -f $SRCPATH/tmp/rootfs.img && resize2fs $SRCPATH/tmp/rootfs.img
     sudo losetup $LOOPDEV $SRCPATH/tmp/rootfs.img
@@ -100,6 +111,21 @@ e900v22c_rootfs() {
 }
 
 
+octopus-flanet_rootfs() {
+    cp $SRCPATH/image/octopus-flanet/Armbian_24.11.0_amlogic_s912_bookworm_6.1.114_server_2024.11.01.img $SRCPATH/tmp/rootfs.img
+    mkdir $BOOTFS
+    sudo losetup --offset $((8192*512)) $LOOPDEV $SRCPATH/tmp/rootfs.img  || exit -1
+    sudo mount $LOOPDEV $BOOTFS
+    sudo sed -i "s/meson-gxm-octopus-planet.dtb/meson-gxm-khadas-vim2.dtb/g" $BOOTFS/uEnv.txt
+    sudo umount $BOOTFS
+    sudo losetup -d $LOOPDEV
+    dd if=/dev/zero of=/tmp/add.img bs=1M count=400 && cat /tmp/add.img >> $SRCPATH/tmp/rootfs.img && rm /tmp/add.img
+    sudo parted -s $SRCPATH/tmp/rootfs.img resizepart 2 100% || exit -1
+    sudo losetup --offset $((1056768*512)) $LOOPDEV $SRCPATH/tmp/rootfs.img  || exit -1
+    sudo e2fsck -f $LOOPDEV && sudo resize2fs $LOOPDEV
+}
+
+
 config_cumebox2_file() {
     sudo mkdir $ROOTFS/etc/oled
     sudo cp $SRCPATH/image/cumebox2/v-fix.dtb $ROOTFS/boot/dtb/amlogic/meson-gxl-s905x-khadas-vim.dtb
@@ -107,23 +133,38 @@ config_cumebox2_file() {
     sudo cp $SRCPATH/image/cumebox2/config.json $ROOTFS/etc/oled/config.json
 }
 
+config_octopus-flanet_file() {
+    sudo cp $SRCPATH/image/octopus-flanet/model_database.conf $ROOTFS/etc/model_database.conf
+}
+
 instal_one-kvm() {
     #$1 arch; $2 deivce: "gpio" or "video1"; $3 network: "systemd-networkd",default is network-manager
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
         df -h \
-        && apt update \
-        && apt install -y python3-aiofiles python3-aiohttp python3-appdirs python3-asn1crypto python3-async-timeout \
+        && apt-get update \
+        && apt-get install -y python3-aiofiles python3-aiohttp python3-appdirs python3-asn1crypto python3-async-timeout \
             python3-bottle python3-cffi python3-chardet python3-click python3-colorama python3-cryptography python3-dateutil \
             python3-dbus python3-dev python3-hidapi python3-hid python3-idna python3-libgpiod python3-mako python3-marshmallow python3-more-itertools \
             python3-multidict python3-netifaces python3-packaging python3-passlib python3-pillow python3-ply python3-psutil \
             python3-pycparser python3-pyelftools python3-pyghmi python3-pygments python3-pyparsing python3-requests \
             python3-semantic-version python3-setproctitle python3-setuptools python3-six python3-spidev python3-systemd \
             python3-tabulate python3-urllib3 python3-wrapt python3-xlib python3-yaml python3-yarl python3-pyotp python3-qrcode \
-            python3-serial python3-zstandard python3-dbus-next \
-        && apt install -y nginx python3-pip python3-dev python3-build net-tools tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
+            python3-serial python3-zstandard python3-dbus-next python3-pip python3-dev python3-build python3-wheel \
+            nginx net-tools tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim cpufrequtils iptables network-manager \
             git gpiod libxkbcommon0 build-essential janus-dev libssl-dev libffi-dev libevent-dev libjpeg-dev libbsd-dev libudev-dev \
-            pkg-config libx264-dev libyuv-dev libasound2-dev libsndfile-dev libspeexdsp-dev cpufrequtils iptables network-manager \
+            pkg-config libx264-dev libyuv-dev libasound2-dev libsndfile-dev libspeexdsp-dev \
         && rm -rf /var/lib/apt/lists/* "
+
+    sudo chroot --userspec "root:root" $ROOTFS sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h
+
+    sudo chroot --userspec "root:root" $ROOTFS bash -c " \
+        git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
+        && make -j WITH_PYTHON=1 WITH_JANUS=1 WITH_LIBX264=1 -C /tmp/ustreamer \
+        && cp /tmp/ustreamer/src/ustreamer.bin /usr/bin/ustreamer \
+        && cp /tmp/ustreamer/src/ustreamer-dump.bin /usr/bin/ustreamer-dump \
+        && chmod +x /usr/bin/ustreamer /usr/bin/ustreamer-dump \
+        && cp /tmp/ustreamer/janus/libjanus_ustreamer.so /usr/lib/ustreamer/janus \
+        && pip3 install --target=/usr/lib/python3/dist-packages --break-system-packages /tmp/ustreamer/python/dist/*.whl "
 
     if [ "$3" = "systemd-networkd" ]; then 
         sudo chroot --userspec "root:root" $ROOTFS bash -c " \
@@ -134,19 +175,8 @@ instal_one-kvm() {
     fi
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
         pip3 config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple \
-        && pip3 install --target=/usr/lib/python3/dist-packages --break-system-packages async-lru gpiod \
+        && pip3 install --target=/usr/lib/python3/dist-packages --break-system-packages async-lru gpiod pyfatfs \
         && pip3 cache purge "
-
-    sudo chroot --userspec "root:root" $ROOTFS sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h
-
-    sudo chroot --userspec "root:root" $ROOTFS bash -c " \
-        git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
-        && make -j WITH_PYTHON=1 WITH_JANUS=1 WITH_LIBX264=1 -C /tmp/ustreamer \
-        && mv /tmp/ustreamer/src/ustreamer.bin /usr/bin/ustreamer \
-        && mv /tmp/ustreamer/src/ustreamer-dump.bin /usr/bin/ustreamer-dump \
-        && chmod +x /usr/bin/ustreamer /usr/bin/ustreamer-dump \
-        && mv /tmp/ustreamer/janus/libjanus_ustreamer.so /usr/lib/ustreamer/janus \
-        && pip3 install --target=/usr/lib/python3/dist-packages --break-system-packages /tmp/ustreamer/python/dist/*.whl "
 
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
         cd /One-KVM \
@@ -223,7 +253,7 @@ case $1 in
         write_meta $1
         umount_rootfs
         pack_img_onecloud
-        ;;  
+        ;;
     cumebox2)  
         cumebox2_rootfs
         mount_rootfs
@@ -234,7 +264,7 @@ case $1 in
         write_meta $1
         umount_rootfs
         pack_img Cumebox2
-        ;; 
+        ;;
     chainedbox) 
         chainedbox_rootfs_and_fix_dtb
         mount_rootfs
@@ -244,7 +274,7 @@ case $1 in
         write_meta $1
         umount_rootfs
         pack_img Chainedbox
-        ;;  
+        ;;
     vm)  
         vm_rootfs
         mount_rootfs
@@ -263,8 +293,19 @@ case $1 in
         write_meta $1
         umount_rootfs
         pack_img E900v22c
-        ;;    
+        ;;
+    octopus-flanet)  
+        octopus-flanet_rootfs
+        mount_rootfs
+        config_file $1
+        config_octopus-flanet_file
+        parpare_dns
+        instal_one-kvm aarch64 video1
+        write_meta $1
+        umount_rootfs
+        pack_img Octopus-Flanet
+        ;;
     *)  
         echo "Do no thing." 
-        ;;  
+        ;;
 esac

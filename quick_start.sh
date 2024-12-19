@@ -50,10 +50,12 @@ function delete_kvmd_container(){
 
 function check_otg_device(){
     $sudo_command modprobe libcomposite > /dev/null|| echo -e "${YELLOW}libcomposite 内核模块加载失败${NC}"
-    if [[ "$architecture" != "amd64" ]] && [[ -d "/sys/class/udc" ]] && [[ "$(ls -A /sys/class/udc)" ]]; then
-        otg_devices=$(ls -A /sys/class/udc)
-        otg_status=$(cat /sys/class/usb_role/*/role 2>/dev/null | head -n 1)
-        echo -e "${GREEN}当前系统支持 OTG：$otg_devices OTG 状态：$otg_status${NC}"
+    if [[ "$architecture" != "amd64" ]] && [[ -d "/sys/class/udc" ]]; then
+        if [[ "$(ls -A /sys/class/udc)" ]] || [[ "$(ls -A /sys/class/usb_role)" ]]; then
+            otg_devices=$(ls -A /sys/class/udc)
+            otg_status=$(cat /sys/class/usb_role/*/role 2>/dev/null | head -n 1)
+            echo -e "${GREEN}当前系统支持 OTG：$otg_devices OTG 状态：$otg_status${NC}"
+        fi
     else
         echo -e "${RED}当前系统不支持 OTG，退出程序${NC}"
         exit 1
