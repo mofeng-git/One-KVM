@@ -170,6 +170,17 @@
                 </div>
             <hr>
           </div>
+          <div class="hidden" id="stream-message-no-vd">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b>Direct HTTP H.264 streaming is not supported</b></td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
           <div class="hidden" id="stream-message-no-h264">
                 <div class="text">
                   <table>
@@ -220,10 +231,12 @@
               <td>Video <a target="_blank" href="https://docs.pikvm.org/webrtc">mode</a>:</td>
               <td>
                 <div class="radio-box">
-                  <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
-                  <label for="stream-mode-radio-mjpeg">MJPEG / HTTP</label>
                   <input type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus">
-                  <label for="stream-mode-radio-janus">H.264 / WebRTC</label>
+                  <label for="stream-mode-radio-janus">WebRTC</label>
+                  <input type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media">
+                  <label for="stream-mode-radio-media">H.264</label>
+                  <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
+                  <label for="stream-mode-radio-mjpeg">MJPEG</label>
                 </div>
               </td>
             </tr>
@@ -914,6 +927,7 @@
       <button class="window-button-exit-full-tab">&#9660;</button>
       <div class="stream-box-offline" id="stream-box"><img id="stream-image" src="/share/png/blank-stream.png">
         <video class="hidden" id="stream-video" disablePictureInPicture="true" autoplay playsinline muted></video>
+        <canvas class="hidden" id="stream-canvas"></canvas>
         <div id="stream-fullscreen-active"></div>
       </div>
       <div class="keypad" id="stream-mouse-buttons" align="center">

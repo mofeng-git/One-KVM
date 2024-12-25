@@ -32,6 +32,8 @@ var _Janus = null;
 export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, __allow_audio) {
 	var self = this;
 
+	/************************************************************************/
+
 	var __stop = false;
 	var __ensuring = false;
 
@@ -45,10 +47,12 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 	var __state = null;
 	var __frames = 0;
 
+	/************************************************************************/
+
 	self.getOrientation = () => __orient;
 	self.isAudioAllowed = () => __allow_audio;
 
-	self.getName = () => (__allow_audio ? "H.264 + Audio" : "H.264");
+	self.getName = () => (__allow_audio ? "WebRTC H.264 + Audio" : "WebRTC H.264");
 	self.getMode = () => "janus";
 
 	self.getResolution = function() {
@@ -75,9 +79,9 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 
 	var __ensureJanus = function(internal) {
 		if (__janus === null && !__stop && (!__ensuring || internal)) {
+			__ensuring = true;
 			__setInactive();
 			__setInfo(false, false, "");
-			__ensuring = true;
 			__logInfo("Starting Janus ...");
 			__janus = new _Janus({
 				"server": `${tools.is_https ? "wss" : "ws"}://${location.host}/janus/ws`,
@@ -446,12 +450,4 @@ JanusStreamer.ensure_janus = function(callback) {
 
 JanusStreamer.is_webrtc_available = function() {
 	return !!window.RTCPeerConnection;
-};
-
-JanusStreamer.is_h264_available = function() {
-	let ok = true;
-	if ($("stream-video").canPlayType) {
-		ok = $("stream-video").canPlayType("video/mp4; codecs=\"avc1.42E01F\"");
-	}
-	return ok;
 };

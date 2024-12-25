@@ -19,6 +19,9 @@ li(id="system-dropdown" class="right")
 		div(id="stream-message-no-webrtc" class="hidden")
 			+menu_message("warning", "WebRTC is not supported by this browser")
 			hr
+		div(id="stream-message-no-vd" class="hidden")
+			+menu_message("warning", "Direct HTTP H.264 streaming is not supported")
+			hr
 		div(id="stream-message-no-h264" class="hidden")
 			+menu_message("warning", "H.264 is not supported by this browser")
 			hr
@@ -46,10 +49,12 @@ li(id="system-dropdown" class="right")
 				td Video #[a(target="_blank" href="https://docs.pikvm.org/webrtc") mode]:
 				td
 					div(class="radio-box")
-						input(checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg")
-						label(for="stream-mode-radio-mjpeg") MJPEG / HTTP
 						input(type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus")
-						label(for="stream-mode-radio-janus") H.264 / WebRTC
+						label(for="stream-mode-radio-janus") WebRTC
+						input(type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media")
+						label(for="stream-mode-radio-media") H.264
+						input(checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg")
+						label(for="stream-mode-radio-mjpeg") MJPEG
 			tr(id="stream-orient" class="feature-disabled")
 				td Orientation:
 				td
