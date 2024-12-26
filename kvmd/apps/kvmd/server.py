@@ -234,7 +234,7 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     @exposed_http("GET", "/ws")
     async def __ws_handler(self, req: Request) -> WebSocketResponse:
         stream = valid_bool(req.query.get("stream", True))
-        legacy = valid_bool(req.query.get("legacy", True))
+        legacy = valid_bool(req.query.get("legacy", False))
         async with self._ws_session(req, stream=stream, legacy=legacy) as ws:
             (major, minor) = __version__.split(".")
             await ws.send_event("loop", {
