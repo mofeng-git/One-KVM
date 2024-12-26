@@ -39,6 +39,8 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 	var __missed_heartbeats = 0;
 	var __decoder = null;
 	var __codec = "";
+	var __canvas = $("stream-canvas");
+	var __ctx = __canvas.getContext("2d");
 
 	var __state = null;
 	var __frames = 0;
@@ -49,13 +51,12 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 	self.getMode = () => "media";
 
 	self.getResolution = function() {
-		let el = $("stream-canvas");
 		return {
 			// Разрешение видео или элемента
-			"real_width": (el.width || el.offsetWidth),
-			"real_height": (el.height || el.offsetHeight),
-			"view_width": el.offsetWidth,
-			"view_height": el.offsetHeight,
+			"real_width": (__canvas.width || __canvas.offsetWidth),
+			"real_height": (__canvas.height || __canvas.offsetHeight),
+			"view_width": __canvas.offsetWidth,
+			"view_height": __canvas.offsetHeight,
 		};
 	};
 
@@ -203,12 +204,11 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 		__decoder = new VideoDecoder({ // eslint-disable-line no-undef
 			"output": (frame) => {
 				try {
-					let canvas = $("stream-canvas");
-					if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
-						canvas.width = frame.displayWidth;
-						canvas.height = frame.displayHeight;
+					if (__canvas.width !== frame.displayWidth || __canvas.height !== frame.displayHeight) {
+						__canvas.width = frame.displayWidth;
+						__canvas.height = frame.displayHeight;
 					}
-					canvas.getContext("2d").drawImage(frame, 0, 0);
+					__ctx.drawImage(frame, 0, 0);
 					__frames += 1;
 				} finally {
 					frame.close();
