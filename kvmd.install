@@ -102,8 +102,8 @@ EOF
 		touch -t 200701011000 /etc/fstab
 	fi
 
-	if [[ "$(vercmp "$2" 4.29)" -lt 0 ]]; then
-		if [ "$(systemctl is-enabled kvmd-janus || true)" = enabled ]; then
+	if [[ "$(vercmp "$2" 4.31)" -lt 0 ]]; then
+		if [[ "$(systemctl is-enabled kvmd-janus || true)" = enabled || "$(systemctl is-enabled kvmd-janus-static || true)" = enabled ]]; then
 			systemctl enable kvmd-media || true
 		fi
 	fi
