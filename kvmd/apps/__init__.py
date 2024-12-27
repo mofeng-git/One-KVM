@@ -581,6 +581,9 @@ def _get_config_scheme() -> dict:
                     "mouse": {
                         "start": Option(True, type=valid_bool),
                     },
+                    "mouse_alt": {
+                        "start": Option(True, type=valid_bool),
+                    },
                 },
 
                 "msd": {
