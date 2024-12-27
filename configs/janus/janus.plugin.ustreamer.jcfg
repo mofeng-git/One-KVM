@@ -2,6 +2,6 @@ video: {
 	sink = "kvmd::ustreamer::h264"
 }
 audio: {
-	device = "hw:0,0"
+	device = "hw:tc358743,0"
 	tc358743 = "/dev/kvmd-video"
 }
