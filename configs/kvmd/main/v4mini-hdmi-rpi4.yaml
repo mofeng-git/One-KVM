@@ -97,7 +97,3 @@ vnc:
             sink: "kvmd::ustreamer::jpeg"
         h264:
             sink: "kvmd::ustreamer::h264"
-
-
-otg:
-    remote_wakeup: true
