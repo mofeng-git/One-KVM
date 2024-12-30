@@ -336,7 +336,11 @@ export function Recorder() {
 				});
 				return;
 
-			} else if (["key", "mouse_button", "mouse_move", "mouse_wheel", "mouse_relative"].includes(event.event_type)) {
+			} else if (event.event_type === "key") {
+				event.event.finish = $("hid-keyboard-bad-link-switch").checked;
+				__ws.sendHidEvent(event);
+
+			} else if (["mouse_button", "mouse_move", "mouse_wheel", "mouse_relative"].includes(event.event_type)) {
 				__ws.sendHidEvent(event);
 
 			} else if (event.event_type === "mouse_move_random") {

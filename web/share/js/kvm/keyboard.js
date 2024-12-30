@@ -52,6 +52,7 @@ export function Keyboard(__recordWsEvent) {
 		window.addEventListener("focusin", __updateOnlineLeds);
 		window.addEventListener("focusout", __updateOnlineLeds);
 
+		tools.storage.bindSimpleSwitch($("hid-keyboard-bad-link-switch"), "hid.keyboard.bad_link", false);
 		tools.storage.bindSimpleSwitch($("hid-keyboard-swap-cc-switch"), "hid.keyboard.swap_cc", false);
 	};
 
@@ -140,11 +141,16 @@ export function Keyboard(__recordWsEvent) {
 		}
 		let event = {
 			"event_type": "key",
-			"event": {"key": code, "state": state},
+			"event": {
+				"key": code,
+				"state": state,
+				"finish": $("hid-keyboard-bad-link-switch").checked,
+			},
 		};
 		if (__ws && !$("hid-mute-switch").checked) {
 			__ws.sendHidEvent(event);
 		}
+		delete event.event.finish;
 		__recordWsEvent(event);
 	};
 

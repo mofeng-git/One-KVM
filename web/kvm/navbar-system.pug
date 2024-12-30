@@ -85,7 +85,7 @@ li(id="system-dropdown" class="right")
 				td Mouse #[a(target="_blank" href="https://docs.pikvm.org/mouse") mode]:
 				td #[div(id="hid-outputs-mouse-box" class="radio-box")]
 		details
-			summary Keyboard &amp; Mouse (HID) settings
+			summary Keyboard &amp; mouse (HID) settings
 			div(class="spoiler")
 				table(class="kv")
 					tr
@@ -127,12 +127,14 @@ li(id="system-dropdown" class="right")
 					tr
 						+menu_switch_notable("page-full-tab-stream-switch", "Expand for the entire tab by default", true, false)
 		table(class="kv")
+			tr
+				+menu_switch_notable("hid-keyboard-bad-link-switch", "Bad link mode (release keys immediately)", true, false)
 			tr(id="hid-connect" class="feature-disabled")
 				+menu_switch_notable("hid-connect-switch", "Connect HID to Server", true, true)
 			tr(id="hid-jiggler" class="feature-disabled")
 				+menu_switch_notable("hid-jiggler-switch", "<a href=\"https://docs.pikvm.org/mouse_jiggler\" target=\"_blank\">Mouse jiggler</a>", false, false)
 			tr
-				+menu_switch_notable("hid-mute-switch", "Mute HID input events", true, false)
+				+menu_switch_notable("hid-mute-switch", "Mute all input HID events", true, false)
 			tr(id="v3-usb-breaker" class="feature-disabled")
 				+menu_switch_notable_gpio("__v3_usb_breaker__", "Connect main USB to Server",
 					"Turning off this switch will disconnect the main USB from the server.  Are you sure you want to continue?")

@@ -285,7 +285,7 @@
             </tr>
           </table>
           <details>
-            <summary>Keyboard &amp; Mouse (HID) settings</summary>
+            <summary>Keyboard &amp; mouse (HID) settings</summary>
             <div class="spoiler">
               <table class="kv">
                 <tr>
@@ -401,6 +401,15 @@
             </div>
           </details>
           <table class="kv">
+            <tr>
+                  <td>Bad link mode (release keys immediately):</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input type="checkbox" id="hid-keyboard-bad-link-switch">
+                      <label for="hid-keyboard-bad-link-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
             <tr class="feature-disabled" id="hid-connect">
                   <td>Connect HID to Server:</td>
                   <td align="right">
@@ -420,7 +429,7 @@
                   </td>
             </tr>
             <tr>
-                  <td>Mute HID input events:</td>
+                  <td>Mute all input HID events:</td>
                   <td align="right">
                     <div class="switch-box">
                       <input type="checkbox" id="hid-mute-switch">

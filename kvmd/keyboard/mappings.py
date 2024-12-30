@@ -170,6 +170,8 @@ class WebModifiers:
     CTRL_RIGHT = "ControlRight"
     CTRLS = set([CTRL_RIGHT, CTRL_RIGHT])
 
+    ALL = (SHIFTS | ALTS | CTRLS)
+
 
 class X11Modifiers:
     SHIFT_LEFT = 65505

@@ -149,16 +149,17 @@ class HidApi:
     async def __ws_bin_key_handler(self, _: WsSession, data: bytes) -> None:
         try:
             key = valid_hid_key(data[1:].decode("ascii"))
-            state = valid_bool(data[0])
+            state = bool(data[0] & 0b01)
+            finish = bool(data[0] & 0b10)
         except Exception:
             return
-        self.__hid.send_key_event(key, state)
+        self.__hid.send_key_event(key, state, finish)
 
     @exposed_ws(2)
     async def __ws_bin_mouse_button_handler(self, _: WsSession, data: bytes) -> None:
         try:
             button = valid_hid_mouse_button(data[1:].decode("ascii"))
-            state = valid_bool(data[0])
+            state = bool(data[0] & 0b01)
         except Exception:
             return
         self.__hid.send_mouse_button_event(button, state)
@@ -183,7 +184,7 @@ class HidApi:
 
     def __process_ws_bin_delta_request(self, data: bytes, handler: Callable[[Iterable[tuple[int, int]], bool], None]) -> None:
         try:
-            squash = valid_bool(data[0])
+            squash = bool(data[0] & 0b01)
             data = data[1:]
             deltas: list[tuple[int, int]] = []
             for index in range(0, len(data), 2):
@@ -200,9 +201,10 @@ class HidApi:
         try:
             key = valid_hid_key(event["key"])
             state = valid_bool(event["state"])
+            finish = valid_bool(event.get("finish", False))
         except Exception:
             return
-        self.__hid.send_key_event(key, state)
+        self.__hid.send_key_event(key, state, finish)
 
     @exposed_ws("mouse_button")
     async def __ws_mouse_button_handler(self, _: WsSession, event: dict) -> None:
@@ -249,9 +251,10 @@ class HidApi:
         key = valid_hid_key(req.query.get("key"))
         if "state" in req.query:
             state = valid_bool(req.query["state"])
-            self.__hid.send_key_event(key, state)
+            finish = valid_bool(req.query.get("finish", False))
+            self.__hid.send_key_event(key, state, finish)
         else:
-            await self.__hid.send_key_events([(key, True), (key, False)], slow=True)
+            self.__hid.send_key_event(key, True, True)
         return make_json_response()
 
     @exposed_http("POST", "/hid/events/send_mouse_button")

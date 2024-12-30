@@ -37,6 +37,7 @@ from ...validators.basic import valid_string_list
 from ...validators.hid import valid_hid_key
 from ...validators.hid import valid_hid_mouse_move
 
+from ...keyboard.mappings import WebModifiers
 from ...mouse import MouseRange
 
 from .. import BasePlugin
@@ -148,10 +149,14 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
             if no_ignore_keys or key not in self.__ignore_keys:
                 if slow:
                     await asyncio.sleep(0.02)
-                self.send_key_event(key, state)
+                self.send_key_event(key, state, False)
 
-    def send_key_event(self, key: str, state: bool) -> None:
+    def send_key_event(self, key: str, state: bool, finish: bool) -> None:
         self._send_key_event(key, state)
+        if state and finish and (key not in WebModifiers.ALL and key != "PrintScreen"):
+            # Считаем что PrintScreen это модификатор для Alt+SysRq+...
+            # По-хорошему надо учитывать факт нажатия на Alt, но можно и забить.
+            self._send_key_event(key, False)
         self.__bump_activity()
 
     def _send_key_event(self, key: str, state: bool) -> None:

@@ -316,6 +316,9 @@ export function Session() {
 		if (event_type == "key") {
 			let data = __ascii_encoder.encode("\x01\x00" + event.key);
 			data[1] = (event.state ? 1 : 0);
+			if (event.finish === true) { // Optional
+				data[1] |= 0x02;
+			}
 			ws.send(data);
 
 		} else if (event_type == "mouse_button") {
