@@ -60,7 +60,13 @@ class WebModifiers:
 
     CTRL_LEFT = "ControlLeft"
     CTRL_RIGHT = "ControlRight"
-    CTRLS = set([CTRL_RIGHT, CTRL_RIGHT])
+    CTRLS = set([CTRL_LEFT, CTRL_RIGHT])
+
+    META_LEFT = "MetaLeft"
+    META_RIGHT = "MetaRight"
+    METAS = set([META_LEFT, META_RIGHT])
+
+    ALL = (SHIFTS | ALTS | CTRLS | METAS)
 
 
 class X11Modifiers:
