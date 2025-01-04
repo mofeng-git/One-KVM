@@ -568,6 +568,7 @@ def _get_config_scheme() -> dict:
             "gadget":     Option("kvmd", type=valid_otg_gadget),
             "config":     Option("PiKVM device", type=valid_stripped_string_not_empty),
             "udc":        Option("",     type=valid_stripped_string),
+            "endpoints":  Option(8,      type=valid_int_f0),
             "init_delay": Option(3.0,    type=valid_float_f01),
 
             "user": Option("kvmd", type=valid_user),

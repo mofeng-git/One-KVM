@@ -39,10 +39,19 @@ from .. import init
 
 # =====
 class _GadgetControl:
-    def __init__(self, meta_path: str, gadget: str, udc: str, init_delay: float) -> None:
+    def __init__(
+        self,
+        meta_path: str,
+        gadget: str,
+        udc: str,
+        eps: int,
+        init_delay: float,
+    ) -> None:
+
         self.__meta_path = meta_path
         self.__gadget = gadget
         self.__udc = udc
+        self.__eps = eps
         self.__init_delay = init_delay
 
     @contextlib.contextmanager
@@ -77,9 +86,11 @@ class _GadgetControl:
                     pass
 
     def __read_metas(self) -> Generator[dict, None, None]:
-        for meta_name in sorted(os.listdir(self.__meta_path)):
-            with open(os.path.join(self.__meta_path, meta_name)) as file:
-                yield json.loads(file.read())
+        for name in sorted(os.listdir(self.__meta_path)):
+            with open(os.path.join(self.__meta_path, name)) as file:
+                meta = json.loads(file.read())
+                meta["enabled"] = os.path.exists(self.__get_fdest_path(meta["function"]))
+                yield meta
 
     def __get_fsrc_path(self, func: str) -> str:
         return usb.get_gadget_path(self.__gadget, usb.G_FUNCTIONS, func)
@@ -100,9 +111,11 @@ class _GadgetControl:
                 os.unlink(self.__get_fdest_path(func))
 
     def list_functions(self) -> None:
-        for meta in self.__read_metas():
-            enabled = os.path.exists(self.__get_fdest_path(meta["func"]))
-            print(f"{'+' if enabled else '-'} {meta['func']}  # {meta['name']}")
+        metas = list(self.__read_metas())
+        eps_used = sum(meta["endpoints"] for meta in metas if meta["enabled"])
+        print(f"# Endpoints used: {eps_used} of {self.__eps}")
+        for meta in metas:
+            print(f"{'+' if meta['enabled'] else '-'} {meta['function']}  # {meta['name']}; endpoints={meta['endpoints']}")
 
     def make_gpio_config(self) -> None:
         class Dumper(yaml.Dumper):
@@ -128,16 +141,16 @@ class _GadgetControl:
             "view": {"table": []},
         }
         for meta in self.__read_metas():
-            config["scheme"][meta["func"]] = {  # type: ignore
+            config["scheme"][meta["function"]] = {  # type: ignore
                 "driver": "otgconf",
-                "pin": meta["func"],
+                "pin": meta["function"],
                 "mode": "output",
                 "pulse": False,
             }
             config["view"]["table"].append(InlineList([  # type: ignore
                 "#" + meta["name"],
-                "#" + meta["func"],
-                meta["func"],
+                "#" + meta["function"],
+                meta["function"],
             ]))
         print(yaml.dump({"kvmd": {"gpio": config}}, indent=4, Dumper=Dumper))
 
@@ -165,7 +178,7 @@ def main(argv: (list[str] | None)=None) -> None:
     parser.add_argument("--make-gpio-config", action="store_true")
     options = parser.parse_args(argv[1:])
 
-    gc = _GadgetControl(config.otg.meta, config.otg.gadget, config.otg.udc, config.otg.init_delay)
+    gc = _GadgetControl(config.otg.meta, config.otg.gadget, config.otg.udc, config.otg.endpoints, config.otg.init_delay)
 
     if options.list_functions:
         gc.list_functions()

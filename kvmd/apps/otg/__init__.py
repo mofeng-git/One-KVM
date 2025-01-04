@@ -102,31 +102,33 @@ def _check_config(config: Section) -> None:
 
 # =====
 class _GadgetConfig:
-    def __init__(self, gadget_path: str, profile_path: str, meta_path: str) -> None:
+    def __init__(self, gadget_path: str, profile_path: str, meta_path: str, eps: int) -> None:
         self.__gadget_path = gadget_path
         self.__profile_path = profile_path
         self.__meta_path = meta_path
+        self.__eps_max = eps
+        self.__eps_used = 0
         self.__hid_instance = 0
         self.__msd_instance = 0
         _mkdir(meta_path)
 
     def add_serial(self, start: bool) -> None:
+        eps = 3
         func = "acm.usb0"
-        func_path = join(self.__gadget_path, "functions", func)
-        _mkdir(func_path)
+        self.__create_function(func)
         if start:
-            _symlink(func_path, join(self.__profile_path, func))
-        self.__create_meta(func, "Serial Port")
+            self.__start_function(func, eps)
+        self.__create_meta(func, "Serial Port", eps)
 
     def add_ethernet(self, start: bool, driver: str, host_mac: str, kvm_mac: str) -> None:
+        eps = 3
         if host_mac and kvm_mac and host_mac == kvm_mac:
             raise RuntimeError("Ethernet host_mac should not be equal to kvm_mac")
         real_driver = driver
         if driver == "rndis5":
             real_driver = "rndis"
         func = f"{real_driver}.usb0"
-        func_path = join(self.__gadget_path, "functions", func)
-        _mkdir(func_path)
+        func_path = self.__create_function(func)
         if host_mac:
             _write(join(func_path, "host_addr"), host_mac)
         if kvm_mac:
@@ -146,8 +148,8 @@ class _GadgetConfig:
                 _write(join(func_path, "os_desc/interface.rndis/sub_compatible_id"), "5162001")
             _symlink(self.__profile_path, join(self.__gadget_path, "os_desc", usb.G_PROFILE_NAME))
         if start:
-            _symlink(func_path, join(self.__profile_path, func))
-        self.__create_meta(func, "Ethernet")
+            self.__start_function(func, eps)
+        self.__create_meta(func, "Ethernet", eps)
 
     def add_keyboard(self, start: bool, remote_wakeup: bool) -> None:
         self.__add_hid("Keyboard", start, remote_wakeup, make_keyboard_hid())
@@ -157,9 +159,9 @@ class _GadgetConfig:
         self.__add_hid(name, start, remote_wakeup, make_mouse_hid(absolute, horizontal_wheel))
 
     def __add_hid(self, name: str, start: bool, remote_wakeup: bool, hid: Hid) -> None:
+        eps = 1
         func = f"hid.usb{self.__hid_instance}"
-        func_path = join(self.__gadget_path, "functions", func)
-        _mkdir(func_path)
+        func_path = self.__create_function(func)
         _write(join(func_path, "no_out_endpoint"), "1", optional=True)
         if remote_wakeup:
             _write(join(func_path, "wakeup_on_write"), "1", optional=True)
@@ -168,14 +170,17 @@ class _GadgetConfig:
         _write(join(func_path, "report_length"), hid.report_length)
         _write_bytes(join(func_path, "report_desc"), hid.report_descriptor)
         if start:
-            _symlink(func_path, join(self.__profile_path, func))
-        self.__create_meta(func, name)
+            self.__start_function(func, eps)
+        self.__create_meta(func, name, eps)
         self.__hid_instance += 1
 
     def add_msd(self, start: bool, user: str, stall: bool, cdrom: bool, rw: bool, removable: bool, fua: bool) -> None:
+        # Endpoints number depends on transport_type but we can consider that this is 2
+        # because transport_type is always USB_PR_BULK by default if CONFIG_USB_FILE_STORAGE_TEST
+        # is not defined. See drivers/usb/gadget/function/storage_common.c
+        eps = 2
         func = f"mass_storage.usb{self.__msd_instance}"
-        func_path = join(self.__gadget_path, "functions", func)
-        _mkdir(func_path)
+        func_path = self.__create_function(func)
         _write(join(func_path, "stall"), int(stall))
         _write(join(func_path, "lun.0/cdrom"), int(cdrom))
         _write(join(func_path, "lun.0/ro"), int(not rw))
@@ -187,13 +192,30 @@ class _GadgetConfig:
             _chown(join(func_path, "lun.0/file"), user)
             _chown(join(func_path, "lun.0/forced_eject"), user)
         if start:
-            _symlink(func_path, join(self.__profile_path, func))
+            self.__start_function(func, eps)
         name = ("Mass Storage Drive" if self.__msd_instance == 0 else f"Extra Drive #{self.__msd_instance}")
-        self.__create_meta(func, name)
+        self.__create_meta(func, name, eps)
         self.__msd_instance += 1
 
-    def __create_meta(self, func: str, name: str) -> None:
-        _write(join(self.__meta_path, f"{func}@meta.json"), json.dumps({"func": func, "name": name}))
+    def __create_function(self, func: str) -> str:
+        func_path = join(self.__gadget_path, "functions", func)
+        _mkdir(func_path)
+        return func_path
+
+    def __start_function(self, func: str, eps: int) -> None:
+        func_path = join(self.__gadget_path, "functions", func)
+        if self.__eps_max - self.__eps_used >= eps:
+            _symlink(func_path, join(self.__profile_path, func))
+            self.__eps_used += eps
+        else:
+            get_logger().info("Will not be started: No available endpoints")
+
+    def __create_meta(self, func: str, name: str, eps: int) -> None:
+        _write(join(self.__meta_path, f"{func}@meta.json"), json.dumps({
+            "function": func,
+            "name": name,
+            "endpoints": eps,
+        }))
 
 
 def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,too-many-branches
@@ -244,25 +266,18 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
         # XXX: Should we use MaxPower=100 with Remote Wakeup?
         _write(join(profile_path, "bmAttributes"), "0xA0")
 
-    gc = _GadgetConfig(gadget_path, profile_path, config.otg.meta)
+    gc = _GadgetConfig(gadget_path, profile_path, config.otg.meta, config.otg.endpoints)
     cod = config.otg.devices
-
-    if cod.serial.enabled:
-        logger.info("===== Serial =====")
-        gc.add_serial(cod.serial.start)
-
-    if cod.ethernet.enabled:
-        logger.info("===== Ethernet =====")
-        gc.add_ethernet(**cod.ethernet._unpack(ignore=["enabled"]))
 
     if config.kvmd.hid.type == "otg":
         logger.info("===== HID-Keyboard =====")
         gc.add_keyboard(cod.hid.keyboard.start, config.otg.remote_wakeup)
         logger.info("===== HID-Mouse =====")
-        gc.add_mouse(cod.hid.mouse.start, config.otg.remote_wakeup, config.kvmd.hid.mouse.absolute, config.kvmd.hid.mouse.horizontal_wheel)
+        ckhm = config.kvmd.hid.mouse
+        gc.add_mouse(cod.hid.mouse.start, config.otg.remote_wakeup, ckhm.absolute, ckhm.horizontal_wheel)
         if config.kvmd.hid.mouse_alt.device:
             logger.info("===== HID-Mouse-Alt =====")
-            gc.add_mouse(cod.hid.mouse_alt.start, config.otg.remote_wakeup, (not config.kvmd.hid.mouse.absolute), config.kvmd.hid.mouse.horizontal_wheel)
+            gc.add_mouse(cod.hid.mouse_alt.start, config.otg.remote_wakeup, (not ckhm.absolute), ckhm.horizontal_wheel)
 
     if config.kvmd.msd.type == "otg":
         logger.info("===== MSD =====")
@@ -271,6 +286,14 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
             for count in range(cod.drives.count):
                 logger.info("===== MSD Extra: %d =====", count + 1)
                 gc.add_msd(cod.drives.start, "root", **cod.drives.default._unpack())
+
+    if cod.ethernet.enabled:
+        logger.info("===== Ethernet =====")
+        gc.add_ethernet(**cod.ethernet._unpack(ignore=["enabled"]))
+
+    if cod.serial.enabled:
+        logger.info("===== Serial =====")
+        gc.add_serial(cod.serial.start)
 
     logger.info("===== Preparing complete =====")
 
