@@ -155,10 +155,10 @@ class _GadgetConfig:
         self.__add_hid("Keyboard", start, remote_wakeup, make_keyboard_hid())
 
     def add_mouse(self, start: bool, remote_wakeup: bool, absolute: bool, horizontal_wheel: bool) -> None:
-        name = ("Absolute" if absolute else "Relative") + " Mouse"
-        self.__add_hid(name, start, remote_wakeup, make_mouse_hid(absolute, horizontal_wheel))
+        desc = ("Absolute" if absolute else "Relative") + " Mouse"
+        self.__add_hid(desc, start, remote_wakeup, make_mouse_hid(absolute, horizontal_wheel))
 
-    def __add_hid(self, name: str, start: bool, remote_wakeup: bool, hid: Hid) -> None:
+    def __add_hid(self, desc: str, start: bool, remote_wakeup: bool, hid: Hid) -> None:
         eps = 1
         func = f"hid.usb{self.__hid_instance}"
         func_path = self.__create_function(func)
@@ -171,7 +171,7 @@ class _GadgetConfig:
         _write_bytes(join(func_path, "report_desc"), hid.report_descriptor)
         if start:
             self.__start_function(func, eps)
-        self.__create_meta(func, name, eps)
+        self.__create_meta(func, desc, eps)
         self.__hid_instance += 1
 
     def add_msd(self, start: bool, user: str, stall: bool, cdrom: bool, rw: bool, removable: bool, fua: bool) -> None:
@@ -193,8 +193,8 @@ class _GadgetConfig:
             _chown(join(func_path, "lun.0/forced_eject"), user)
         if start:
             self.__start_function(func, eps)
-        name = ("Mass Storage Drive" if self.__msd_instance == 0 else f"Extra Drive #{self.__msd_instance}")
-        self.__create_meta(func, name, eps)
+        desc = ("Mass Storage Drive" if self.__msd_instance == 0 else f"Extra Drive #{self.__msd_instance}")
+        self.__create_meta(func, desc, eps)
         self.__msd_instance += 1
 
     def __create_function(self, func: str) -> str:
@@ -210,10 +210,10 @@ class _GadgetConfig:
         else:
             get_logger().info("Will not be started: No available endpoints")
 
-    def __create_meta(self, func: str, name: str, eps: int) -> None:
+    def __create_meta(self, func: str, desc: str, eps: int) -> None:
         _write(join(self.__meta_path, f"{func}@meta.json"), json.dumps({
             "function": func,
-            "name": name,
+            "description": desc,
             "endpoints": eps,
         }))
 
