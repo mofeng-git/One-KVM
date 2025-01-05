@@ -152,6 +152,16 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 			el.srcObject = new MediaStream();
 		}
 		el.srcObject.addTrack(track);
+		// FIXME: Задержка уменьшается, но начинаются заикания на кейфреймах.
+		// XXX: Этот пример переехал из януса 0.x, перед использованием адаптировать к 1.x.
+		//   - https://github.com/Glimesh/janus-ftl-plugin/issues/101
+		/*if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.pc) {
+			for (let receiver of __handle.webrtcStuff.pc.getReceivers()) {
+				if (receiver.track && receiver.track.kind === "video" && receiver.playoutDelayHint !== undefined) {
+					receiver.playoutDelayHint = 0;
+				}
+			}
+		}*/
 	};
 
 	var __removeTrack = function(track) {
@@ -246,11 +256,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 					__handle.createAnswer({
 						"jsep": jsep,
 
-						// Janus 1.x
 						"tracks": tracks,
-
-						// Janus 0.x
-						"media": {"audioSend": false, "videoSend": false, "data": false},
 
 						// Chrome is playing OPUS as mono without this hack
 						//   - https://issues.webrtc.org/issues/41481053 - IT'S NOT FIXED!
@@ -290,50 +296,6 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 				} else if (!added && reason === "ended") {
 					__removeTrack(track);
 				}
-			},
-
-			// Janus 0.x
-			"onremotestream": function(stream) {
-				if (stream === null) {
-					// https://github.com/pikvm/pikvm/issues/1084
-					// Этого вообще не должно происходить, но почему-то янусу в unmute
-					// может прилететь null-эвент. Костыляем, наблюдаем.
-					__logError("Got invalid onremotestream(null). Restarting Janus...");
-					__destroyJanus();
-					return;
-				}
-
-				let tracks = stream.getTracks();
-				__logInfo("Got a remote stream changes:", stream, tracks);
-
-				let has_video = false;
-				for (let track of tracks) {
-					if (track.kind == "video") {
-						has_video = true;
-						break;
-					}
-				}
-
-				if (!has_video && __isOnline()) {
-					// Chrome sends `muted` notifiation for tracks in `disconnected` ICE state
-					// and Janus.js just removes muted track from list of available tracks.
-					// But track still exists actually so it's safe to just ignore that case.
-					return;
-				}
-
-				_Janus.attachMediaStream($("stream-video"), stream);
-				__sendKeyRequired();
-				__startInfoInterval();
-
-				// FIXME: Задержка уменьшается, но начинаются заикания на кейфреймах.
-				//   - https://github.com/Glimesh/janus-ftl-plugin/issues/101
-				/*if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.pc) {
-					for (let receiver of __handle.webrtcStuff.pc.getReceivers()) {
-						if (receiver.track && receiver.track.kind === "video" && receiver.playoutDelayHint !== undefined) {
-							receiver.playoutDelayHint = 0;
-						}
-					}
-				}*/
 			},
 
 			"oncleanup": function() {

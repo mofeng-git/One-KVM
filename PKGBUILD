@@ -89,11 +89,11 @@ depends=(
 	iproute2
 	dnsmasq
 	ipmitool
-	"janus-gateway-pikvm>=0.14.2-3"
+	"janus-gateway-pikvm>=1.3.0"
 	certbot
 	platform-io-access
 	raspberrypi-utils
-	"ustreamer>=6.16"
+	"ustreamer>=6.21-2"
 
 	# Systemd UDEV bug
 	"systemd>=248.3-2"
