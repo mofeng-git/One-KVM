@@ -103,12 +103,18 @@ class _GadgetControl:
     def enable_functions(self, funcs: list[str]) -> None:
         with self.__udc_stopped():
             for func in funcs:
-                os.symlink(self.__get_fsrc_path(func), self.__get_fdest_path(func))
+                try:
+                    os.symlink(self.__get_fsrc_path(func), self.__get_fdest_path(func))
+                except FileExistsError:
+                    pass
 
     def disable_functions(self, funcs: list[str]) -> None:
         with self.__udc_stopped():
             for func in funcs:
-                os.unlink(self.__get_fdest_path(func))
+                try:
+                    os.unlink(self.__get_fdest_path(func))
+                except FileNotFoundError:
+                    pass
 
     def list_functions(self) -> None:
         metas = list(self.__read_metas())
