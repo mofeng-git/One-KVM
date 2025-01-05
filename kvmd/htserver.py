@@ -404,12 +404,12 @@ class HttpServer:
                 break
         return ws.wsr
 
-    async def _broadcast_ws_event(self, event_type: str, event: (dict | None), legacy: (bool | None)=None) -> None:
+    async def _broadcast_ws_event(self, event_type: str, event: (dict | None)) -> None:
         if self.__ws_sessions:
             await asyncio.gather(*[
                 ws.send_event(event_type, event)
                 for ws in self.__ws_sessions
-                if ws.is_alive() and (legacy is None or ws.kwargs.get("legacy") == legacy)
+                if ws.is_alive()
             ], return_exceptions=True)
 
     async def _close_all_wss(self) -> bool:
