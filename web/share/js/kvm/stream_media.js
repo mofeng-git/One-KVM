@@ -220,7 +220,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 
 		__ws.send(JSON.stringify({
 			"event_type": "start",
-			"event": {"kind": "video", "format": "h264"},
+			"event": {"type": "video", "format": "h264"},
 		}));
 	};
 

@@ -45,7 +45,7 @@ from ...clients.streamer import BaseStreamerClient
 # =====
 @dataclasses.dataclass
 class _Source:
-    kind:         str
+    type:         str
     fmt:          str
     streamer:     BaseStreamerClient
     meta:         dict = dataclasses.field(default_factory=dict)
@@ -90,7 +90,7 @@ class MediaServer(HttpServer):
         async with self._ws_session(req) as ws:
             media: dict = {self.__K_VIDEO: {}}
             for src in self.__srcs:
-                media[src.kind][src.fmt] = src.meta
+                media[src.type][src.fmt] = src.meta
             await ws.send_event("media", media)
             return (await self._ws_loop(ws))
 
@@ -101,15 +101,15 @@ class MediaServer(HttpServer):
     @exposed_ws("start")
     async def __ws_start_handler(self, ws: WsSession, event: dict) -> None:
         try:
-            kind = str(event.get("kind"))
-            fmt = str(event.get("format"))
+            req_type = str(event.get("type"))
+            req_fmt = str(event.get("format"))
         except Exception:
             return
         src: (_Source | None) = None
         for cand in self.__srcs:
             if ws in cand.clients:
                 return  # Don't allow any double streaming
-            if (cand.kind, cand.fmt) == (kind, fmt):
+            if (cand.type, cand.fmt) == (req_type, req_fmt):
                 src = cand
         if src:
             client = _Client(ws, src, asyncio.Queue(self.__Q_SIZE))
