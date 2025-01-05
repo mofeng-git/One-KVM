@@ -129,7 +129,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
             await self.__notifier.wait()
 
     async def __broadcast_storage_state(self, clients: int, write_allowed: bool) -> None:
-        await self._broadcast_ws_event("storage_state", {
+        await self._broadcast_ws_event("storage", {
             "clients": clients,
             "data": {
                 "path": self.__data_path,

@@ -131,15 +131,15 @@ class _Subsystem:
 
 
 class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-instance-attributes
-    __EV_GPIO_STATE = "gpio_state"
-    __EV_HID_STATE = "hid_state"
-    __EV_HID_KEYMAPS_STATE = "hid_keymaps_state"  # FIXME
-    __EV_ATX_STATE = "atx_state"
-    __EV_MSD_STATE = "msd_state"
-    __EV_STREAMER_STATE = "streamer_state"
-    __EV_OCR_STATE = "ocr_state"
-    __EV_INFO_STATE = "info_state"
-    __EV_SWITCH_STATE = "switch_state"
+    __EV_GPIO_STATE = "gpio"
+    __EV_HID_STATE = "hid"
+    __EV_HID_KEYMAPS_STATE = "hid_keymaps"  # FIXME
+    __EV_ATX_STATE = "atx"
+    __EV_MSD_STATE = "msd"
+    __EV_STREAMER_STATE = "streamer"
+    __EV_OCR_STATE = "ocr"
+    __EV_INFO_STATE = "info"
+    __EV_SWITCH_STATE = "switch"
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,

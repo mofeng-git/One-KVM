@@ -84,7 +84,7 @@ async def _run_cmd_ws(cmd: list[str], ws: aiohttp.ClientWebSocketResponse) -> in
                 msg = receive_task.result()
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     (event_type, event) = htserver.parse_ws_event(msg.data)
-                    if event_type == "storage_state":
+                    if event_type == "storage":
                         if event["data"]["write_allowed"] and proc is None:
                             logger.info("PST write is allowed: %s", event["data"]["path"])
                             logger.info("Running the process ...")

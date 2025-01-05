@@ -75,7 +75,7 @@ class PstClient:
                     if msg.type != aiohttp.WSMsgType.TEXT:
                         raise PstError(f"Unexpected message type: {msg!r}")
                     (event_type, event) = htserver.parse_ws_event(msg.data)
-                    if event_type == "storage_state":
+                    if event_type == "storage":
                         if not event["data"]["write_allowed"]:
                             raise PstError("Write is not allowed")
                         path = event["data"]["path"]

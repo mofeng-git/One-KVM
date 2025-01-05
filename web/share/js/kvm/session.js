@@ -368,15 +368,15 @@ export function Session() {
 		let data = JSON.parse(event.data);
 		switch (data.event_type) {
 			case "pong": __missed_heartbeats = 0; break;
-			case "info_state": __setInfoState(data.event); break;
-			case "gpio_state": __gpio.setState(data.event); break;
-			case "hid_state": __hid.setState(data.event); break;
-			case "hid_keymaps_state": __paste.setState(data.event); break;
-			case "atx_state": __atx.setState(data.event); break;
-			case "streamer_state": __streamer.setState(data.event); break;
-			case "ocr_state": __ocr.setState(data.event); break;
+			case "info": __setInfoState(data.event); break;
+			case "gpio": __gpio.setState(data.event); break;
+			case "hid": __hid.setState(data.event); break;
+			case "hid_keymaps": __paste.setState(data.event); break;
+			case "atx": __atx.setState(data.event); break;
+			case "streamer": __streamer.setState(data.event); break;
+			case "ocr": __ocr.setState(data.event); break;
 
-			case "msd_state":
+			case "msd":
 				if (data.event.online === false) {
 					__switch.setMsdConnected(false);
 				} else if (data.event.drive !== undefined) {
@@ -385,7 +385,7 @@ export function Session() {
 				__msd.setState(data.event);
 				break;
 
-			case "switch_state":
+			case "switch":
 				if (data.event.model) {
 					__atx.setHasSwitch(data.event.model.ports.length > 0);
 				}
