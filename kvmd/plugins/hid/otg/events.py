@@ -27,6 +27,7 @@ from ....keyboard.mappings import UsbKey
 from ....keyboard.mappings import KEYMAP
 
 from ....mouse import MouseRange
+from ....mouse import MouseDelta
 
 
 # =====
@@ -144,8 +145,8 @@ class MouseRelativeEvent(BaseEvent):
     delta_y: int
 
     def __post_init__(self) -> None:
-        assert -127 <= self.delta_x <= 127
-        assert -127 <= self.delta_y <= 127
+        assert MouseDelta.MIN <= self.delta_x <= MouseDelta.MAX
+        assert MouseDelta.MIN <= self.delta_y <= MouseDelta.MAX
 
 
 @dataclasses.dataclass(frozen=True)
@@ -154,8 +155,8 @@ class MouseWheelEvent(BaseEvent):
     delta_y: int
 
     def __post_init__(self) -> None:
-        assert -127 <= self.delta_x <= 127
-        assert -127 <= self.delta_y <= 127
+        assert MouseDelta.MIN <= self.delta_x <= MouseDelta.MAX
+        assert MouseDelta.MIN <= self.delta_y <= MouseDelta.MAX
 
 
 def make_mouse_report(

@@ -23,6 +23,7 @@
 import math
 
 from ....mouse import MouseRange
+from ....mouse import MouseDelta
 
 
 # =====
@@ -79,7 +80,7 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
 
     def process_wheel(self, delta_x: int, delta_y: int) -> bytes:
         _ = delta_x
-        assert -127 <= delta_y <= 127
+        assert MouseDelta.MIN <= delta_y <= MouseDelta.MAX
         self.__wheel_y = (1 if delta_y > 0 else 255)
         if not self.__absolute:
             return self.__make_relative_cmd()
@@ -110,6 +111,6 @@ class Mouse:  # pylint: disable=too-many-instance-attributes
         ])
 
     def __fix_relative(self, value: int) -> int:
-        assert -127 <= value <= 127
+        assert MouseDelta.MIN <= value <= MouseDelta.MAX
         value = math.ceil(value / 3)
         return (value if value >= 0 else (255 + value))

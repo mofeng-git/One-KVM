@@ -36,3 +36,13 @@ class MouseRange:
     @classmethod
     def normalize(cls, value: int) -> int:
         return min(max(cls.MIN, value), cls.MAX)
+
+
+class MouseDelta:
+    MIN = -127
+    MAX = 127
+    RANGE = (MIN, MAX)
+
+    @classmethod
+    def normalize(cls, value: int) -> int:
+        return min(max(cls.MIN, value), cls.MAX)
