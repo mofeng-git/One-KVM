@@ -84,7 +84,7 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
                 "max": Option(MouseRange.MAX, type=valid_hid_mouse_move, unpack_as="mouse_y_max"),
             },
             "jiggler": {
-                "enabled":  Option(False, type=valid_bool, unpack_as="jiggler_enabled"),
+                "enabled":  Option(True,  type=valid_bool, unpack_as="jiggler_enabled"),
                 "active":   Option(False, type=valid_bool, unpack_as="jiggler_active"),
                 "interval": Option(60,    type=valid_int_f1, unpack_as="jiggler_interval"),
             },
