@@ -32,3 +32,7 @@ class MouseRange:
     @classmethod
     def remap(cls, value: int, out_min: int, out_max: int) -> int:
         return tools.remap(value, cls.MIN, cls.MAX, out_min, out_max)
+
+    @classmethod
+    def normalize(cls, value: int) -> int:
+        return min(max(cls.MIN, value), cls.MAX)
