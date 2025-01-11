@@ -14,6 +14,10 @@ li(id="switch-dropdown" class="right feature-disabled")
 					div(class="text")
 						button(data-force-hide-menu data-show-window="switch-window" class="small") &bull; Settings
 		hr
+		div(id="switch-message-update" class="hidden")
+			+menu_message("info", "Good news! Your switch is ready to get the firmware update")
+				| Please #[a(target="_blank" href="https://docs.pikvm.org/switch/#firmware-updating") follow the instructions] when you decide to install it.
+			hr
 		+menu_switch("switch-atx-ask-switch", "Ask ATX click confirmation", true, true)
 		hr
 		table(id="switch-chain" class="kv")

@@ -49,6 +49,8 @@ class _UnitInfo:
 
 # =====
 class StateCache:  # pylint: disable=too-many-instance-attributes
+    __FW_VERSION = 5
+
     __FULL    = 0xFFFF
     __SUMMARY = 0x01
     __EDIDS   = 0x02
@@ -139,6 +141,7 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
         state: dict = {}
         if x_model:
             state["model"] = {
+                "firmware": {"version": self.__FW_VERSION},
                 "units": [],
                 "ports": [],
                 "limits": {

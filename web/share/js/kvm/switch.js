@@ -406,6 +406,10 @@ export function Switch() {
 		}
 		$("switch-chain").innerHTML = content;
 
+		if (model.units.length > 0) {
+			tools.hidden.setVisible($("switch-message-update"), (model.firmware.version > model.units[0].firmware.version));
+		}
+
 		for (let unit = 0; unit < model.units.length; ++unit) {
 			tools.el.setOnClick($(`__switch-beacon-button-u${unit}`), tools.partial(__switchUplinkBeacon, unit));
 			tools.el.setOnClick($(`__switch-beacon-button-d${unit}`), tools.partial(__switchDownlinkBeacon, unit));
