@@ -49,6 +49,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-pyotp \
 		python-qrcode \
 		python-pyserial \
+		python-pyudev \
 		python-setproctitle \
 		python-psutil \
 		python-netifaces \

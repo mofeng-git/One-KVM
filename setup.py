@@ -94,6 +94,7 @@ def main() -> None:
             "kvmd.apps.otgnet",
             "kvmd.apps.otgmsd",
             "kvmd.apps.otgconf",
+            "kvmd.apps.swctl",
             "kvmd.apps.htpasswd",
             "kvmd.apps.totp",
             "kvmd.apps.edidconf",

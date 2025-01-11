@@ -79,6 +79,7 @@ depends=(
 	python-mako
 	python-luma-oled
 	python-pyusb
+	python-pyudev
 	"libgpiod>=2.1"
 	freetype2
 	"v4l-utils>=1.22.1-1"
@@ -167,7 +168,7 @@ package_kvmd() {
 	install -DTm644 configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
 	mkdir -p "$pkgdir/usr/share/kvmd"
-	cp -r {hid,web,extras,contrib/keymaps} "$pkgdir/usr/share/kvmd"
+	cp -r {switch,hid,web,extras,contrib/keymaps} "$pkgdir/usr/share/kvmd"
 	find "$pkgdir/usr/share/kvmd/web" -name '*.pug' -exec rm -f '{}' \;
 
 	local _cfg_default="$pkgdir/usr/share/kvmd/configs.default"
