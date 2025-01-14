@@ -34,7 +34,7 @@ from ...htserver import HttpExposed
 
 
 # =====
-class AuthManager:
+class AuthManager:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         enabled: bool,
@@ -47,6 +47,7 @@ class AuthManager:
         external_type: str,
         external_kwargs: dict,
 
+        totp_valid_window: int,
         totp_secret_path: str,
     ) -> None:
 
@@ -70,6 +71,7 @@ class AuthManager:
             self.__external_service = get_auth_service_class(external_type)(**external_kwargs)
             get_logger().info("Using external auth service %r", self.__external_service.get_plugin_name())
 
+        self.__totp_valid_window = totp_valid_window
         self.__totp_secret_path = totp_secret_path
 
         self.__tokens: dict[str, str] = {}  # {token: user}
@@ -95,7 +97,7 @@ class AuthManager:
                 secret = file.read().strip()
             if secret:
                 code = passwd[-6:]
-                if not pyotp.TOTP(secret).verify(code):
+                if not pyotp.TOTP(secret).verify(code, valid_window=self.__totp_valid_window):
                     get_logger().error("Got access denied for user %r by TOTP", user)
                     return False
                 passwd = passwd[:-6]

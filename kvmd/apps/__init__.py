@@ -370,6 +370,7 @@ def _get_config_scheme() -> dict:
                 },
 
                 "totp": {
+                    "valid_window": Option(1, type=functools.partial(valid_number, min=0, max=5)),
                     "secret": {
                         "file": Option("/etc/kvmd/totp.secret", type=valid_abs_path, if_empty=""),
                     },
