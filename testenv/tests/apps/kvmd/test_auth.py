@@ -69,7 +69,6 @@ async def _get_configured_manager(
         external_type=("htpasswd" if external_path else ""),
         external_kwargs=(_make_service_kwargs(external_path) if external_path else {}),
 
-        totp_valid_window=0,
         totp_secret_path="",
     )
 
@@ -201,7 +200,6 @@ async def test_ok__disabled() -> None:
             external_type="",
             external_kwargs={},
 
-            totp_valid_window=0,
             totp_secret_path="",
         )
 
