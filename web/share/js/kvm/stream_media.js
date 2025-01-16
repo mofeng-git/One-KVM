@@ -171,6 +171,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 					return;
 				}
 				await __decoder.configure({"codec": __codec, "optimizeForLatency": true});
+				__setActive();
 			}
 
 			let chunk = new EncodedVideoChunk({ // eslint-disable-line no-undef
