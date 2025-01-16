@@ -95,7 +95,7 @@ class AuthManager:
                 secret = file.read().strip()
             if secret:
                 code = passwd[-6:]
-                if not pyotp.TOTP(secret).verify(code):
+                if not pyotp.TOTP(secret).verify(code, valid_window=1):
                     get_logger().error("Got access denied for user %r by TOTP", user)
                     return False
                 passwd = passwd[:-6]
