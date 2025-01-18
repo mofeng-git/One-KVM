@@ -611,6 +611,11 @@ def _get_config_scheme() -> dict:
                     "kvm_mac":  Option("",    type=valid_mac, if_empty=""),
                 },
 
+                "audio": {
+                    "enabled":  Option(False, type=valid_bool),
+                    "start":    Option(True,  type=valid_bool),
+                },
+
                 "drives": {
                     "enabled": Option(False, type=valid_bool),
                     "start":   Option(True,  type=valid_bool),

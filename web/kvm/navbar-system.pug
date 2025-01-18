@@ -67,10 +67,12 @@ li(id="system-dropdown" class="right")
 						label(for="stream-orient-radio-180") 180&deg;
 						input(type="radio" id="stream-orient-radio-270" name="stream-orient-radio" value="270")
 						label(for="stream-orient-radio-270") 270&deg;
-			tr(id="stream-audio", class="feature-disabled")
+			tr(id="stream-audio" class="feature-disabled")
 				td Audio volume:
 				td(class="value-slider") #[input(type="range" id="stream-audio-volume-slider" class="slider")]
 				td(id="stream-audio-volume-value" class="value-number")
+			tr(id="stream-mic" class="feature-disabled")
+				+menu_switch_notable("stream-mic-switch", "Microphone", false, false)
 		hr
 		div(class="buttons buttons-row")
 			button(data-force-hide-menu data-show-window="stream-window" class="row33") &bull; Show stream

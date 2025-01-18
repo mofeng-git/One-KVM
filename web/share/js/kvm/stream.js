@@ -94,6 +94,15 @@ export function Streamer() {
 					__resetStream();
 				}
 			}
+			tools.el.setEnabled($("stream-mic-switch"), !!value);
+		});
+
+		tools.storage.bindSimpleSwitch($("stream-mic-switch"), "stream.mic", false, function(allow_mic) {
+			if (__streamer.getMode() === "janus") {
+				if (__streamer.isMicAllowed() !== allow_mic) {
+					__resetStream();
+				}
+			}
 		});
 
 		tools.el.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
@@ -206,6 +215,7 @@ export function Streamer() {
 			tools.feature.setEnabled($("stream-mode"), f.h264);
 			if (!f.h264) {
 				tools.feature.setEnabled($("stream-audio"), false);
+				tools.feature.setEnabled($("stream-mic"), false);
 			}
 
 			let mode = tools.storage.get("stream.mode", "janus");
@@ -291,7 +301,7 @@ export function Streamer() {
 		__streamer.stopStream();
 		if (mode === "janus") {
 			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo,
-				tools.storage.getInt("stream.orient", 0), !$("stream-video").muted);
+				tools.storage.getInt("stream.orient", 0), !$("stream-video").muted, $("stream-mic-switch").checked);
 			// Firefox doesn't support RTP orientation:
 			//  - https://bugzilla.mozilla.org/show_bug.cgi?id=1316448
 			tools.feature.setEnabled($("stream-orient"), !tools.browser.is_firefox);
@@ -303,6 +313,7 @@ export function Streamer() {
 			}
 			tools.feature.setEnabled($("stream-orient"), false);
 			tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
+			tools.feature.setEnabled($("stream-mic"), false); // Ditto
 		}
 		if (wm.isWindowVisible($("stream-window"))) {
 			__streamer.ensureStream((__state && __state.streamer !== undefined) ? __state.streamer : null);
