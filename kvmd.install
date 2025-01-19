@@ -108,6 +108,10 @@ EOF
 		fi
 	fi
 
+	if [[ "$(vercmp "$2" 4.45)" -lt 0 ]]; then
+		cp /usr/share/kvmd/configs.default/janus/janus.plugin.ustreamer.jcfg /etc/kvmd/janus || true
+	fi
+
 	# Some update deletes /etc/motd, WTF
 	# shellcheck disable=SC2015,SC2166
 	[ ! -f /etc/motd -a -f /etc/motd.pacsave ] && mv /etc/motd.pacsave /etc/motd || true
