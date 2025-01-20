@@ -134,6 +134,7 @@ class _GadgetControl:
         funcs = list(self.__read_metas())
         eps_used = sum(func.eps for func in funcs if func.enabled)
         print(f"# Endpoints used: {eps_used} of {self.__eps}")
+        print(f"# Endpoints free: {self.__eps - eps_used}")
         for func in funcs:
             print(f"{'+' if func.enabled else '-'} {func.name}  # [{func.eps}] {func.desc}")
 
