@@ -108,7 +108,7 @@ EOF
 		fi
 	fi
 
-	if [[ "$(vercmp "$2" 4.45)" -lt 0 ]]; then
+	if [[ "$(vercmp "$2" 4.47)" -lt 0 ]]; then
 		cp /usr/share/kvmd/configs.default/janus/janus.plugin.ustreamer.jcfg /etc/kvmd/janus || true
 	fi
 

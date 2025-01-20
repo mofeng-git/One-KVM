@@ -5,3 +5,7 @@ acap: {
 	device = "hw:tc358743,0"
 	tc358743 = "/dev/kvmd-video"
 }
+aplay: {
+	device = "plughw:UAC2Gadget,0"
+	check = "/run/kvmd/otg/uac2.usb0@meta.json"
+}
