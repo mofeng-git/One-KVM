@@ -186,7 +186,19 @@ class _GadgetConfig:
         self.__create_meta(func, desc, eps)
         self.__hid_instance += 1
 
-    def add_msd(self, start: bool, user: str, stall: bool, cdrom: bool, rw: bool, removable: bool, fua: bool) -> None:
+    def add_msd(
+        self,
+        start: bool,
+        user: str,
+        stall: bool,
+        cdrom: bool,
+        rw: bool,
+        removable: bool,
+        fua: bool,
+        inquiry_string_cdrom: str,
+        inquiry_string_flash: str,
+    ) -> None:
+
         # Endpoints number depends on transport_type but we can consider that this is 2
         # because transport_type is always USB_PR_BULK by default if CONFIG_USB_FILE_STORAGE_TEST
         # is not defined. See drivers/usb/gadget/function/storage_common.c
@@ -198,6 +210,8 @@ class _GadgetConfig:
         _write(join(func_path, "lun.0/ro"), int(not rw))
         _write(join(func_path, "lun.0/removable"), int(removable))
         _write(join(func_path, "lun.0/nofua"), int(not fua))
+        _write(join(func_path, "lun.0/inquiry_string_cdrom"), inquiry_string_cdrom)
+        _write(join(func_path, "lun.0/inquiry_string"), inquiry_string_flash)
         if user != "root":
             _chown(join(func_path, "lun.0/cdrom"), user)
             _chown(join(func_path, "lun.0/ro"), user)
@@ -293,11 +307,23 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
 
     if config.kvmd.msd.type == "otg":
         logger.info("===== MSD =====")
-        gc.add_msd(cod.msd.start, config.otg.user, **cod.msd.default._unpack())
+        gc.add_msd(
+            start=cod.msd.start,
+            user=config.otg.user,
+            inquiry_string_cdrom=usb.make_inquiry_string(**cod.msd.default.inquiry_string.cdrom._unpack()),
+            inquiry_string_flash=usb.make_inquiry_string(**cod.msd.default.inquiry_string.flash._unpack()),
+            **cod.msd.default._unpack(ignore="inquiry_string"),
+        )
         if cod.drives.enabled:
             for count in range(cod.drives.count):
                 logger.info("===== MSD Extra: %d =====", count + 1)
-                gc.add_msd(cod.drives.start, "root", **cod.drives.default._unpack())
+                gc.add_msd(
+                    start=cod.drives.start,
+                    user="root",
+                    inquiry_string_cdrom=usb.make_inquiry_string(**cod.drives.default.inquiry_string.cdrom._unpack()),
+                    inquiry_string_flash=usb.make_inquiry_string(**cod.drives.default.inquiry_string.flash._unpack()),
+                    **cod.drives.default._unpack(ignore="inquiry_string"),
+                )
 
     if cod.ethernet.enabled:
         logger.info("===== Ethernet =====")

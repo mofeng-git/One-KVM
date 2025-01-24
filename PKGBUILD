@@ -210,7 +210,7 @@ for _variant in "${_variants[@]}"; do
 		cd \"kvmd-\$pkgver\"
 
 		pkgdesc=\"PiKVM platform configs - $_platform for $_board\"
-		depends=(kvmd=$pkgver-$pkgrel \"linux-rpi-pikvm>=6.6.45-1\" \"raspberrypi-bootloader-pikvm>=20240818-1\")
+		depends=(kvmd=$pkgver-$pkgrel \"linux-rpi-pikvm>=6.6.45-10\" \"raspberrypi-bootloader-pikvm>=20240818-1\")
 
 		backup=(
 			etc/sysctl.d/99-kvmd.conf

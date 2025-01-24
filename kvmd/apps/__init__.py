@@ -595,6 +595,18 @@ def _get_config_scheme() -> dict:
                         "rw":        Option(False, type=valid_bool),
                         "removable": Option(True,  type=valid_bool),
                         "fua":       Option(True,  type=valid_bool),
+                        "inquiry_string": {
+                            "cdrom": {
+                                "vendor":   Option("PiKVM", type=valid_stripped_string),
+                                "product":  Option("Optical Drive", type=valid_stripped_string),
+                                "revision": Option("1.00", type=valid_stripped_string),
+                            },
+                            "flash": {
+                                "vendor":   Option("PiKVM", type=valid_stripped_string),
+                                "product":  Option("Flash Drive", type=valid_stripped_string),
+                                "revision": Option("1.00", type=valid_stripped_string),
+                            },
+                        },
                     },
                 },
 
@@ -626,6 +638,18 @@ def _get_config_scheme() -> dict:
                         "rw":        Option(True,  type=valid_bool),
                         "removable": Option(True,  type=valid_bool),
                         "fua":       Option(True,  type=valid_bool),
+                        "inquiry_string": {
+                            "cdrom": {
+                                "vendor":   Option("PiKVM", type=valid_stripped_string),
+                                "product":  Option("Optical Drive", type=valid_stripped_string),
+                                "revision": Option("1.00", type=valid_stripped_string),
+                            },
+                            "flash": {
+                                "vendor":   Option("PiKVM", type=valid_stripped_string),
+                                "product":  Option("Flash Drive", type=valid_stripped_string),
+                                "revision": Option("1.00", type=valid_stripped_string),
+                            },
+                        },
                     },
                 },
             },

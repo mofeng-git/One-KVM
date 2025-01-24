@@ -15,9 +15,9 @@ li(id="msd-dropdown" class="right feature-disabled")
 			+menu_message("warning", "Current image is broken!")
 				| Perhaps uploading was interrupted#[br]
 			hr
-		div(id="msd-message-too-big-for-cdrom" class="hidden")
-			+menu_message("warning", "Current image is too big for CD-ROM!")
-				| The device filesystem will be truncated to 2.2GiB
+		div(id="msd-message-too-big-for-dvd" class="hidden")
+			+menu_message("warning", "Current image is too big for DVD!")
+				| The maximum is 31.6GiB. Please switch to the Flash mode.
 			hr
 		div(id="msd-message-out-of-storage" class="hidden")
 			+menu_message("warning", "Current image is out of storage")
@@ -45,7 +45,7 @@ li(id="msd-dropdown" class="right feature-disabled")
 				td
 					div(class="radio-box")
 						input(checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1")
-						label(for="msd-mode-radio-cdrom") CD-ROM
+						label(for="msd-mode-radio-cdrom") CD/DVD
 						input(type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0")
 						label(for="msd-mode-radio-flash") Flash
 				td &nbsp;

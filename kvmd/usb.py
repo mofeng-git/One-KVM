@@ -55,3 +55,11 @@ G_PROFILE = f"configs/{G_PROFILE_NAME}"
 
 def get_gadget_path(gadget: str, *parts: str) -> str:
     return os.path.join(f"{env.SYSFS_PREFIX}/sys/kernel/config/usb_gadget", gadget, *parts)
+
+
+# =====
+def make_inquiry_string(vendor: str, product: str, revision: str) -> str:
+    # Vendor: 8 ASCII chars
+    # Product: 16
+    # Revision: 4
+    return "%-8.8s%-16.16s%-4.4s" % (vendor, product, revision)

@@ -68,7 +68,7 @@ def main(argv: (list[str] | None)=None) -> None:
     parser.add_argument("-i", "--instance", default=0, type=valid_int_f0,
                         metavar="<N>", help="Drive instance (0 for KVMD drive)")
     parser.add_argument("--set-cdrom", default=None, type=valid_bool,
-                        metavar="<1|0|yes|no>", help="Set CD-ROM flag")
+                        metavar="<1|0|yes|no>", help="Set CD/DVD flag")
     parser.add_argument("--set-rw", default=None, type=valid_bool,
                         metavar="<1|0|yes|no>", help="Set RW flag")
     parser.add_argument("--set-image", default=None, type=valid_abs_path,
@@ -101,5 +101,5 @@ def main(argv: (list[str] | None)=None) -> None:
         set_param("file", options.set_image)
 
     print("Image file: ", (get_param("file") or "<none>"))
-    print("CD-ROM flag:", ("yes" if int(get_param("cdrom")) else "no"))
+    print("CD/DVD flag:", ("yes" if int(get_param("cdrom")) else "no"))
     print("RW flag:    ", ("no" if int(get_param("ro")) else "yes"))
