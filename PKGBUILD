@@ -53,6 +53,8 @@ depends=(
 	python-aiofiles
 	python-async-lru
 	python-passlib
+	# python-bcrypt is needed for passlib
+	python-bcrypt
 	python-pyotp
 	python-qrcode
 	python-periphery
