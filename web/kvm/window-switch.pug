@@ -1,95 +1,68 @@
 mixin switch_tab(name, title, checked=false)
 	- let button_id = `switch-tab-${name}-button`
-	input(checked=checked type="radio" name="switch-tab-button", id=button_id)
+	input(checked=checked type="radio" name="switch-tab-button" id=button_id)
 	label(for=button_id) #{title}
-	div(class="tab")
+	.tab
 		block
 
-div(id="switch-window" class="window" style="width:min-content")
-	div(class="window-header")
-		div(class="window-grab") Switch settings
-		button(class="window-button-close") #[b &times;]
 
-	div(class="tabs-box")
+mixin color_slider_tr(name, title)
+	tr
+		td(style="white-space: nowrap") #{title}:
+		td #[input(type="color" id=`switch-color-${name}-input`)]
+		td #[input(type="range" id=`switch-color-${name}-brightness-slider` style="min-width: 150px")]
+		td &nbsp;&nbsp;&nbsp;
+		td #[button(id=`switch-color-${name}-default-button` class="small" title="Reset default") &#8635;]
+
+
+.window#switch-window(style="width: min-content")
+	.window-header
+		.window-grab Switch settings
+		button.window-button-close #[b &times;]
+
+	.tabs-box
 		+switch_tab("edid", "EDIDs collection", true)
 			table
 				tr
 					td(colspan="2")
-						select(id="switch-edid-selector" size="8")
-					td(rowspan="2" style="vertical-align:top")
-						table(class="kv")
+						select#switch-edid-selector(size="8")
+					td(rowspan="2" style="vertical-align: top")
+						table.kv
 							tr
 								td Manufacturer:
-								td(id="switch-edid-info-mfc-id" class="value")
+								td.value#switch-edid-info-mfc-id
 							tr
 								td Product ID:
-								td(id="switch-edid-info-product-id" class="value")
+								td.value#switch-edid-info-product-id
 							tr
 								td Serial:
-								td(id="switch-edid-info-serial" class="value")
+								td.value#switch-edid-info-serial
 							tr
 								td Monitor name:
-								td(id="switch-edid-info-monitor-name" class="value")
+								td.value#switch-edid-info-monitor-name
 							tr
 								td Extra serial:
-								td(id="switch-edid-info-monitor-serial" class="value")
+								td.value#switch-edid-info-monitor-serial
 							tr
 								td Audio enabled:
-								td(id="switch-edid-info-audio" class="value")
+								td.value#switch-edid-info-audio
 							tr
 								td Data:
-								td #[button(disabled id="switch-edid-copy-data-button" class="small") Copy]
+								td #[button.small#switch-edid-copy-data-button(disabled) Copy]
 				tr
-					td #[button(id="switch-edid-add-button") Add new]
-					td(style="float:right") #[button(disabled id="switch-edid-remove-button") Remove]
+					td #[button#switch-edid-add-button Add new]
+					td(style="float: right") #[button#switch-edid-remove-button(disabled) Remove]
 
 		+switch_tab("colors", "Color scheme")
 			table
-				//tr
-					td Role
-					td Color
-					td Brightness
-					td
-					td Reset
-				//tr
-					td #[hr]
-					td #[hr]
-					td #[hr]
-					td
-					td #[hr]
-				tr
-					td(style="white-space: nowrap") Selected port:
-					td #[input(type="color" id="switch-color-active-input")]
-					td #[input(type="range" id="switch-color-active-brightness-slider" style="min-width:150px")]
-					td &nbsp;&nbsp;&nbsp;
-					td #[button(id="switch-color-active-default-button" class="small" title="Reset default") &#8635;]
-				tr
-					td(style="white-space: nowrap") Inactive port:
-					td #[input(type="color" id="switch-color-inactive-input")]
-					td #[input(type="range" id="switch-color-inactive-brightness-slider" style="min-width:150px")]
-					td &nbsp;&nbsp;&nbsp;
-					td #[button(id="switch-color-inactive-default-button" class="small" title="Reset default") &#8635;]
-				tr
-					td(style="white-space: nowrap") Blinking beacon:
-					td #[input(type="color" id="switch-color-beacon-input")]
-					td #[input(type="range" id="switch-color-beacon-brightness-slider" style="min-width:150px")]
-					td &nbsp;&nbsp;&nbsp;
-					td #[button(id="switch-color-beacon-default-button" class="small" title="Reset default") &#8635;]
+				+color_slider_tr("active", "Selected port")
+				+color_slider_tr("inactive", "Inactive port")
+				+color_slider_tr("beacon", "Blinking beacon")
 				tr
 					td #[hr]
 					td #[hr]
 					td #[hr]
 					td
 					td #[hr]
-				tr
-					td(style="white-space: nowrap") Flashing downlink:
-					td #[input(type="color" id="switch-color-flashing-input")]
-					td #[input(type="range" id="switch-color-flashing-brightness-slider" style="min-width:150px")]
-					td &nbsp;&nbsp;&nbsp;
-					td #[button(id="switch-color-flashing-default-button" class="small" title="Reset default") &#8635;]
-				tr
-					td(style="white-space: nowrap") Bootloader mode:
-					td #[input(type="color" id="switch-color-bootloader-input")]
-					td #[input(type="range" id="switch-color-bootloader-brightness-slider" style="min-width:150px")]
-					td &nbsp;&nbsp;&nbsp;
-					td #[button(id="switch-color-bootloader-default-button" class="small" title="Reset default") &#8635;]
+				+color_slider_tr("flashing", "Flashing downlink")
+				+color_slider_tr("bootloader", "Bootloader mode")

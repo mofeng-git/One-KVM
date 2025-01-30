@@ -1,45 +1,43 @@
-li(id="text-dropdown" class="right")
-	a(class="menu-button" href="#")
+li.right#text-dropdown
+	a.menu-button(href="#")
 		+navbar_led("stream-ocr-led", "led-gear", "feature-disabled")
 		span Text
-	div(id="text-menu" class="menu")
-		div(class="text")
+
+	.menu#text-menu
+		.text
 			b Paste text as keypress sequence#[br]
 			sub Please note that PiKVM cannot switch the keyboard layout
 		hr
-		div(class="text" style="margin-right: 20px")
-			textarea(id="hid-pak-text" data-focus placeholder="Enter your text here")
-		table(class="kv")
+		.text(style="margin-right: 20px")
+			textarea#hid-pak-text(data-focus placeholder="Enter your text here")
+		table.kv
 			tr
-				td
-					button(disabled data-force-hide-menu id="hid-pak-button") &bull; Paste
+				td #[button#hid-pak-button(disabled data-force-hide-menu) &bull; Paste]
 				td using host keymap
-				td
-					select(id="hid-pak-keymap-selector")
-		table(class="kv")
+				td #[select#hid-pak-keymap-selector]
+		table.kv
 			tr
-				+menu_switch_notable("hid-pak-slow-switch", "Slow typing", true, false)
+				+menu_switch_td2("hid-pak-slow-switch", true, false) Slow typing:
 			tr
-				+menu_switch_notable("hid-pak-secure-switch", "Hide input text", true, false)
+				+menu_switch_td2("hid-pak-secure-switch", true, false) Hide input text:
 			tr
-				+menu_switch_notable("hid-pak-ask-switch", "Ask paste confirmation", true, true)
-		div(id="stream-ocr" class="feature-disabled")
+				+menu_switch_td2("hid-pak-ask-switch", true, true) Ask paste confirmation:
+
+		.feature-disabled#stream-ocr
 			hr
 			br
 			hr
-			div(class="text")
+			.text
 				b Text recognition <sup><i>&beta;</i></sup>#[br]
 				sub #[a(target="_blank" href="https://docs.pikvm.org/ocr") OCR] works locally on PiKVM
 			hr
-			table(class="kv")
+			table.kv
 				tr
-					td
-						button(data-force-hide-menu id="stream-ocr-button") &bull; Select area
+					td #[button#stream-ocr-button(data-force-hide-menu) &bull; Select area]
 					td for
-					td
-						select(id="stream-ocr-lang-selector")
+					td #[select#stream-ocr-lang-selector]
 					td text recognition
-			table(class="kv")
+			table.kv
 				tr
 					td(colspan="4") &bull; Press #[b Enter] to recognize and copy text to clipboard
 				tr

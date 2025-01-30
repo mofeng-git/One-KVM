@@ -1,45 +1,48 @@
 extends start.pug
 
+
 append vars
-	- title = "PiKVM Index"
-	- main_js = "index/main"
-	- css_list = css_list.concat(["window", "modal", "index/index"])
+	-
+		title = "PiKVM Index"
+		main_js = "index/main"
+		css_list = css_list.concat(["window", "modal", "index/index"])
+
 
 block start
 	table
 		tr
-			td(class="logo")
+			td.logo
 				a(href="https://pikvm.org" target="_blank")
-					img(class="svg-gray" src=`${svg_dir}/logo.svg` alt="PiKVM" height="40")
+					img.svg-gray(src=`${svg_dir}/logo.svg` alt="PiKVM" height="40")
 			td
 				table
-					tr #[td(colspan="2" class="title") The Open Source KVM over IP]
+					tr #[td.title(colspan="2") The Open Source KVM over IP]
 					tr
-						td(colspan="2" class="copyright")
+						td.copyright(colspan="2")
 							| Copyright &copy; 2018-2024 #[a(target="_blank" href="mailto:mdevaev@gmail.com") Maxim Devaev]
 
 	hr
 	table
 		td(class="server")
 			td Server:
-			td #[a(id="kvmd-meta-server-host" target="_blank" href="/api/info")]
+			td #[a#kvmd-meta-server-host(target="_blank" href="/api/info")]
 
 	hr
-	div(id="apps-box")
+	#apps-box
 		h4 Loading ...
 
-	div(id="app-keyboard-warning")
+	#app-keyboard-warning
 		hr
-		p(class="text")
+		p.text
 			| Please note that when you are working with a KVM session or another application that captures the keyboard,
 			| you can't use some keyboard shortcuts such as Ctrl+Alt+Del (which will be caught by your OS) or Ctrl+W (caught by your browser).
-		p(class="text")
+		p.text
 			| To override this limitation you can use #[a(target="_blank" href="https://google.com/chrome") Google Chrome]
 			| or #[a(target="_blank" href="https://chromium.org/Home") Chromium] in application mode.
-		div(id="app-text" class="code")
+		.code#app-text
 
 	hr
-	p(class="text credits")
+	p.text.credits
 		a(target="_blank" href="https://pikvm.org") PiKVM Project
 		| &nbsp; | &nbsp;
 		a(target="_blank" href="https://docs.pikvm.org") Documentation

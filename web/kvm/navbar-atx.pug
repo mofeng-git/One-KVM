@@ -1,17 +1,18 @@
-li(id="atx-dropdown" class="right feature-disabled")
-	a(class="menu-button" href="#")
+li.right.feature-disabled#atx-dropdown
+	a.menu-button(href="#")
 		+navbar_led("atx-power-led", "led-atx-power")
 		+navbar_led("atx-hdd-led", "led-atx-hdd")
 		span ATX
-	div(class="menu")
-		div(class="text")
+
+	.menu
+		.text
 			b Control the server's power#[br]
 			sub Use the short click for ACPI shutdown
 		hr
-		+menu_switch("atx-ask-switch", "Ask click confirmation", true, true)
+		+menu_switch_table("atx-ask-switch", true, true) Ask click confirmation:
 		hr
-		div(class="buttons")
-			button(disabled data-force-hide-menu id="atx-power-button") &bull; Click Power #[sup #[i short]]
-			button(disabled data-force-hide-menu id="atx-power-button-long") &bull; Click Power #[sup #[i long]]
+		.buttons
+			button#atx-power-button(disabled data-force-hide-menu) &bull; Click Power #[sup #[i short]]
+			button#atx-power-button-long(disabled data-force-hide-menu) &bull; Click Power #[sup #[i long]]
 			hr
-			button(disabled data-force-hide-menu id="atx-reset-button") &bull; Click Reset
+			button#atx-reset-button(disabled data-force-hide-menu) &bull; Click Reset

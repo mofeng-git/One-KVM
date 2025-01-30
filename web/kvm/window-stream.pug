@@ -1,49 +1,50 @@
-div(id="stream-ocr-window" class="window")
-	div(id="stream-ocr-selection" class="hidden")
+.window#stream-ocr-window
+	.hidden#stream-ocr-selection
 
-div(id="stream-window" class="window window-resizable")
-	div(id="stream-window-header" class="window-header")
-		div(class="window-grab") MJPEG
-		button(class="window-button-close") #[b &times;]
-		button(class="window-button-maximize") &#9744;
-		button(class="window-button-original") &bull;
-		button(class="window-button-enter-full-tab") &#9650;
-		button(class="window-button-full-screen") &#10530;
+.window.window-resizable#stream-window
+	.window-header#stream-window-header
+		.window-grab MJPEG
+		button.window-button-close #[b &times;]
+		button.window-button-maximize &#9744;
+		button.window-button-original &bull;
+		button.window-button-enter-full-tab &#9650;
+		button.window-button-full-screen &#10530;
 
-	div(id="stream-info")
+	#stream-info
 
-	button(class="window-button-exit-full-tab") &#9660;
-	div(id="stream-box" class="stream-box-offline")
-		img(id="stream-image" src=`${png_dir}/blank-stream.png`)
-		video(id="stream-video" class="hidden" disablePictureInPicture="true" autoplay playsinline muted)
-		canvas(id="stream-canvas" class="hidden")
-		div(id="stream-fullscreen-active")
+	button.window-button-exit-full-tab &#9660;
 
-	div(id="stream-mouse-buttons" class="keypad" align="center")
-		div(class="keypad-block")
-			div(class="keypad-row")
-				div(data-code="left" class="key wide-3 left rounded-left")
-					div(class="label") Left
-				div(data-code="left" class="modifier left small rounded-right")
-					div(class="label") #[b &bull;]#[br]Hold
+	.stream-box-offline#stream-box
+		img#stream-image(src=`${png_dir}/blank-stream.png`)
+		video.hidden#stream-video(disablePictureInPicture="true" autoplay playsinline muted)
+		canvas.hidden#stream-canvas
+		#stream-fullscreen-active
 
-				div(class="empty" style="width:15px")
+	.keypad#stream-mouse-buttons(align="center")
+		.keypad-block
+			.keypad-row
+				.key.wide-3.left.rounded-left(data-code="left")
+					.label Left
+				.modifier.left.small.rounded-right(data-code="left")
+					.label #[b &bull;]#[br]Hold
 
-				div(data-code="middle" class="key wide-1 left rounded-left")
-					div(class="label") Mid
-				div(data-code="middle" class="modifier left small rounded-right")
-					div(class="label") #[b &bull;]#[br]Hold
+				.empty(style="width: 15px")
 
-				div(class="empty" style="width:15px")
+				.key.wide-1.left.rounded-left(data-code="middle")
+					.label Mid
+				.modifier.left.small.rounded-right(data-code="middle")
+					.label #[b &bull;]#[br]Hold
 
-				div(data-code="right" class="modifier right small rounded-left")
-					div(class="label") #[b &bull;]#[br]Hold
-				div(data-code="right" class="key wide-3 right rounded-right")
-					div(class="label") Right
+				.empty(style="width: 15px")
 
-				div(class="empty" style="width:30px")
+				.modifier.right.small.rounded-left(data-code="right")
+					.label #[b &bull;]#[br]Hold
+				.key.wide-3.right.rounded-right(data-code="right")
+					.label Right
 
-				div(data-code="up" class="key small rounded-left")
-					div(class="label") Up
-				div(data-code="down" class="key small rounded-right")
-					div(class="label") Down
+				.empty(style="width: 30px")
+
+				.key.small.rounded-left(data-code="up")
+					.label Up
+				.key.small.rounded-right(data-code="down")
+					.label Down

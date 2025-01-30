@@ -1,33 +1,36 @@
 extends ../base.pug
 
+
 append vars
-	- title = "PiKVM Login"
-	- main_js = "login/main"
-	- css_list = css_list.concat(["window", "modal", "login/login"])
+	-
+		title = "PiKVM Login"
+		main_js = "login/main"
+		css_list = css_list.concat(["window", "modal", "login/login"])
+
 
 block body
 	form(action="javascript:void(0)")
-		div(id="login-box")
-			div(id="login")
+		#login-box
+			#login
 				table
 					tr
 						td Username:&nbsp;
-						td #[input(type="text" id="user-input" autocapitalize="off")]
+						td #[input#user-input(type="text" autocapitalize="off")]
 					tr
 						td Password:&nbsp;
-						td #[input(type="password" id="passwd-input" autocapitalize="off")]
+						td #[input#passwd-input(type="password" autocapitalize="off")]
 					tr
 						td 2FA code:&nbsp;
-						td #[input(type="text" id="code-input" placeholder="if enabled")]
+						td #[input#code-input(type="text" placeholder="if enabled")]
 					tr
 						td(colspan=2)
 							hr
 					tr
 						td
-						td #[button(id="login-button" class="key" style="width:100%") Login]
+						td #[button.key#login-button(style="width:100%") Login]
 
-	ul(class="footer")
-		li(class="left")
+	ul.footer
+		li.left
 			| This site is actively using JavaScript.#[br]
 			| It doesn't contain ads, but is blocked by some ad filters.#[br]
 			| Please turn it off to continue and reload the page.

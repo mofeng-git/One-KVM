@@ -1,30 +1,33 @@
 extends ../base.pug
 
+
 append vars
-	- title = "PiKVM Session"
-	- main_js = "kvm/main"
-	- body_class = "body-no-select"
-	- css_list = css_list.concat(["navbar", "window", "modal", "led", "slider", "switch", "radio", "progress", "keypad", "tabs"])
-	- css_list = css_list.concat(["kvm/stream", "kvm/hid", "kvm/msd", "kvm/system", "kvm/keyboard", "kvm/about"])
+	-
+		title = "PiKVM Session"
+		main_js = "kvm/main"
+		body_class = "body-no-select"
+		css_list = css_list.concat(["navbar", "window", "modal", "led", "slider", "switch", "radio", "progress", "keypad", "tabs"])
+		css_list = css_list.concat(["kvm/stream", "kvm/hid", "kvm/msd", "kvm/system", "kvm/keyboard", "kvm/about"])
+
 
 block body
 	include navbar.pug
 	include windows.pug
 
-	ul(class="navbar-bg-tips")
-		li(class="left")
-			pre(id="kvmd-meta-tips-left")
-		li(class="right")
-			pre(id="kvmd-meta-tips-right")
+	ul.navbar-bg-tips
+		li.left
+			pre#kvmd-meta-tips-left
+		li.right
+			pre#kvmd-meta-tips-right
 
-	ul(class="footer")
-		li(class="left")
-			span(id="kvmd-meta-server-host" title="Server name (see System/About)")
+	ul.footer
+		li.left
+			span#kvmd-meta-server-host(title="Server name (see System/About)")
 			| &nbsp; | &nbsp;
-			span(id="kvmd-version-kvmd" title="KVMD version")
+			span#kvmd-version-kvmd(title="KVMD version")
 			| &nbsp; | &nbsp;
-			span(id="kvmd-version-streamer" title="Streamer version")
-		li(class="right")
+			span#kvmd-version-streamer(title="Streamer version")
+		li.right
 			a(target="_blank" href="https://pikvm.org") PiKVM Project
 			| &nbsp; | &nbsp;
 			a(target="_blank" href="https://docs.pikvm.org") Documentation

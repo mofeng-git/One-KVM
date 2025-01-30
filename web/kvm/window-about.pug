@@ -2,47 +2,49 @@ mixin about_tab(name, title, checked=false)
 	- let button_id = `about-tab-${name}-button`
 	input(checked=checked type="radio" name="about-tab-button", id=button_id)
 	label(for=button_id) #{title}
-	div(class="tab")
-		div(id=`about-${name}` class="code")
+	.tab
+		.code(id=`about-${name}`)
 			if block
 				block
 			else
-				span(class="code-comment") No data
+				span.code-comment No data
 
-div(id="about-window" class="window")
-	div(class="window-header")
-		div(class="window-grab") About
-		button(class="window-button-close") #[b &times;]
 
-	div(id="about")
+.window#about-window
+	.window-header
+		.window-grab About
+		button.window-button-close #[b &times;]
+
+	#about
 		table
 			tr
-				td(class="logo")
+				td.logo
 					a(href="https://pikvm.org" target="_blank")
-						img(class="svg-gray" src=`${svg_dir}/logo.svg` alt="PiKVM" height="40")
+						img.svg-gray(src=`${svg_dir}/logo.svg` alt="PiKVM" height="40")
 				td
 					table
-						tr #[td(colspan="2" class="title") The Open Source KVM over IP]
 						tr
-							td(colspan="2" class="copyright")
+							td.title(colspan="2")
+								| The Open Source KVM over IP
+						tr
+							td.copyright(colspan="2")
 								| Copyright &copy; 2018-2024 #[a(target="_blank" href="mailto:mdevaev@gmail.com") Maxim Devaev]
 		br
-		div(class="tabs-box")
+		.tabs-box
 			+about_tab("meta", "Meta", true)
 				div
-					span(class="code-comment")
+					span.code-comment
 						| // You can get this JSON using handle #[a(target="_blank" href="/api/info?fields=meta") /api/info?fields=meta]#[br]
 						| // In the standard configuration this data#[br]
 						| // is specified in the file /etc/kvmd/meta.yaml
 					br
-					pre(id="kvmd-meta-json")
-						| No data
+					pre#kvmd-meta-json No data
 
 			+about_tab("hardware", "Hardware")
 			+about_tab("version", "Version")
 
 			+about_tab("thanks", "Thanks")
-				span(class="code-comment")
+				span.code-comment
 					| // These kind people donated money to the PiKVM project#[br]
 					| // and supported the work on it. We are very grateful#[br]
 					| // for their help, and memorializing their names#[br]
@@ -690,7 +692,7 @@ div(id="about-window" class="window")
 					li Zoltan Magyari
 					li Zsombor Vari
 		br
-		p(class="text credits")
+		p.text.credits
 			a(target="_blank" href="https://pikvm.org") PiKVM Project
 			| &nbsp; | &nbsp;
 			a(target="_blank" href="https://docs.pikvm.org") Documentation

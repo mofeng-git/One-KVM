@@ -1,47 +1,51 @@
-li(id="shortcuts-dropdown" class="right")
-	a(class="menu-button" href="#") Shortcuts
-	div(id="shortcuts-menu" class="menu")
-		div(class="text")
+li.right#shortcuts-dropdown
+	a.menu-button(href="#") Shortcuts
+
+	.menu#shortcuts-menu
+		.text
 			b Quick keyboard shortcuts#[br]
 			sub Also see #[i System &rarr; Show keyboard]
 		hr
-		div(class="buttons")
-			div(class="buttons-row")
-				button(data-force-hide-menu data-shortcut="CapsLock" class="row50")
+
+		.buttons
+			.buttons-row
+				button.row50(data-force-hide-menu data-shortcut="CapsLock")
 					| &bull; Caps Lock &nbsp;
-					img(class="inline-lamp-small hid-keyboard-caps-led led-gray" src=`${svg_dir}/led-square.svg`)
-				button(data-force-hide-menu data-shortcut="MetaLeft" class="row50") &bull; Left Win
+					img.inline-lamp-small.hid-keyboard-caps-led.led-gray(src=`${svg_dir}/led-square.svg`)
+				button.row50(data-force-hide-menu data-shortcut="MetaLeft") &bull; Left Win
 			hr
-			div(class="buttons-row")
-				button(data-force-hide-menu data-shortcut="AltLeft ShiftLeft" class="row50") &bull; Alt+Shift
-				button(data-force-hide-menu data-shortcut="ControlLeft KeyW" class="row50") &bull; Ctrl+W
-			div(class="buttons-row")
-				button(data-force-hide-menu data-shortcut="ControlLeft ShiftLeft" class="row50") &bull; Ctrl+Shift
-				button(data-force-hide-menu data-shortcut="AltLeft Tab" class="row50") &bull; Alt+Tab
-			div(class="buttons-row")
-				button(data-force-hide-menu data-shortcut="ShiftLeft ShiftRight" class="row50") &bull; Shift+Shift
-				button(data-force-hide-menu data-shortcut="AltLeft Enter" class="row50") &bull; Alt+Enter
-			div(class="buttons-row")
-				button(data-force-hide-menu data-shortcut="MetaLeft Space" class="row50") &bull; Win+Space
-				button(data-force-hide-menu data-shortcut="AltLeft F4" class="row50") &bull; Alt+F4
+			.buttons-row
+				button.row50(data-force-hide-menu data-shortcut="AltLeft ShiftLeft") &bull; Alt+Shift
+				button.row50(data-force-hide-menu data-shortcut="ControlLeft KeyW") &bull; Ctrl+W
+			.buttons-row
+				button.row50(data-force-hide-menu data-shortcut="ControlLeft ShiftLeft") &bull; Ctrl+Shift
+				button.row50(data-force-hide-menu data-shortcut="AltLeft Tab") &bull; Alt+Tab
+			.buttons-row
+				button.row50(data-force-hide-menu data-shortcut="ShiftLeft ShiftRight") &bull; Shift+Shift
+				button.row50(data-force-hide-menu data-shortcut="AltLeft Enter") &bull; Alt+Enter
+			.buttons-row
+				button.row50(data-force-hide-menu data-shortcut="MetaLeft Space") &bull; Win+Space
+				button.row50(data-force-hide-menu data-shortcut="AltLeft F4") &bull; Alt+F4
 			hr
-			div(class="buttons-row")
-				button(data-force-hide-menu data-shortcut="ControlLeft AltLeft F1" class="row50") &bull; Ctrl+Alt+F1
-				button(data-force-hide-menu data-shortcut="MetaLeft KeyL" class="row50") &bull; Win+L
-			div(class="buttons-row")
-				button(data-force-hide-menu data-shortcut="ControlLeft AltLeft F2" class="row50") &bull; Ctrl+Alt+F2
-				button(data-force-hide-menu data-shortcut="PrintScreen" class="row50") &bull; Print Screen
+			.buttons-row
+				button.row50(data-force-hide-menu data-shortcut="ControlLeft AltLeft F1") &bull; Ctrl+Alt+F1
+				button.row50(data-force-hide-menu data-shortcut="MetaLeft KeyL") &bull; Win+L
+			.buttons-row
+				button.row50(data-force-hide-menu data-shortcut="ControlLeft AltLeft F2") &bull; Ctrl+Alt+F2
+				button.row50(data-force-hide-menu data-shortcut="PrintScreen") &bull; Print Screen
 			hr
-			div(class="buttons-row")
-				button(data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete" class="row50") &bull; Ctrl+Alt+Del
-				button(data-force-hide-menu data-shortcut="Power" class="row50") &bull; Power
+			.buttons-row
+				button.row50(data-force-hide-menu data-shortcut="ControlLeft AltLeft Delete") &bull; Ctrl+Alt+Del
+				button.row50(data-force-hide-menu data-shortcut="Power") &bull; Power
 		hr
-		div(class="text")
+
+		.text
 			| &darr; &bull; Alt+SysRq+... <sup><i>linux magic
 			| #[a(target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html") help]</i></sup>
 		hr
-		div(class="buttons")
-			div(class="buttons-row")
+
+		.buttons
+			.buttons-row
 				-
 					let sysrq = {
 						"F": "Call the OOM killer to kill a memory hog process",
@@ -50,9 +54,14 @@ li(id="shortcuts-dropdown" class="right")
 						"T": "Dump a list of current tasks and their information to the console",
 					}
 				each title, key in sysrq
-					button(data-shortcut=`AltLeft PrintScreen Key${key}` data-shortcut-confirm="hid-sysrq-ask-switch" class="row25" style="text-align: center;" title=`${title}`) #{key}
+					button.row25(
+						data-shortcut=`AltLeft PrintScreen Key${key}`
+						data-shortcut-confirm="hid-sysrq-ask-switch"
+						style="text-align: center"
+						title=`${title}`
+					) #{key}
 			hr
-			div(class="buttons-row")
+			.buttons-row
 				-
 					sysrq = { 
 						"R": "Turn off keyboard raw mode, set it to XLATE",
@@ -63,6 +72,12 @@ li(id="shortcuts-dropdown" class="right")
 						"B": "Immediately reboot the system without syncing or unmounting disks",
 					}
 				each title, key in sysrq
-					button(data-shortcut=`AltLeft PrintScreen Key${key}` data-shortcut-confirm="hid-sysrq-ask-switch" class="row16" style="text-align: center;" title=`${title}`) #{key}
+					button.row16(
+						data-shortcut=`AltLeft PrintScreen Key${key}`
+						data-shortcut-confirm="hid-sysrq-ask-switch"
+						style="text-align: center"
+						title=`${title}`
+					) #{key}
 		hr
-		+menu_switch("hid-sysrq-ask-switch", "Ask the magic confirmation", true, true)
+
+		+menu_switch_table("hid-sysrq-ask-switch", true, true) Ask the magic confirmation:

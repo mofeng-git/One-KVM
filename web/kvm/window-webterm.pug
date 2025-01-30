@@ -1,8 +1,9 @@
-div(id="webterm-window" class="window window-resizable" style="width: 640px; height: 480px")
-	div(class="window-header")
-		div(class="window-grab") Terminal
-		button(class="window-button-close") #[b &times;]
-		button(class="window-button-maximize") &#9744;
+.window.window-resizable#webterm-window(style="width: 640px; height: 480px")
+	.window-header
+		.window-grab Terminal
+		button.window-button-close #[b &times;]
+		button.window-button-maximize &#9744;
 		// Терминал глючит из-за зажимаемой клавиши ESC для выхода
 		// button(class="window-button-full-screen") &#10530;
-	iframe(id="webterm-iframe" src="" style="width: 100%; height: 100%")
+
+	iframe#webterm-iframe(src="" style="width: 100%; height: 100%")

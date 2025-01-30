@@ -1,41 +1,43 @@
-mixin key(spacer, code, classes="", width=0)
-	div(data-code=code, class=`key ${classes}`, style=(width ? `width:${width}px` : ""))
-		div(class="label")
-			block
-	if spacer == 1
-		div(class="spacer")
-	else if spacer == 2
-		div(class="spacer-fixed")
+mixin spacer(sp)
+	if sp == 1
+		.spacer
+	else if sp == 2
+		.spacer-fixed
 
-mixin modifier(spacer, code, classes="", width=0)
-	div(data-code=code class=`modifier ${classes}` style=(width ? `width:${width}px` : ""))
-		div(class="label")
+
+mixin key(sp, code, classes="", width=0)
+	div(data-code=code, class=`key ${classes}`, style=(width ? `width: ${width}px` : ""))
+		.label
+			block
+	+spacer(sp)
+
+
+mixin modifier(sp, code, classes="", width=0)
+	div(data-code=code class=`modifier ${classes}` style=(width ? `width: ${width}px` : ""))
+		.label
 			| #[b &bull;]#[br]
 			block
-	if spacer == 1
-		div(class="spacer")
-	else if spacer == 2
-		div(class="spacer-fixed")
+	+spacer(sp)
 
-mixin empty(spacer, classes="", width=0)
+
+mixin empty(sp, classes="", width=0)
 	div(class=`empty ${classes}` style=(width ? `width:${width}px` : ""))
-		div(class="label") &nbsp;
-	if spacer == 1
-		div(class="spacer")
-	else if spacer == 2
-		div(class="spacer-fixed")
+		.label &nbsp;
+	+spacer(sp)
+
 
 mixin lamp(cls)
 	img(class=`inline-lamp-small ${cls} led-gray` src=`${svg_dir}/led-square.svg`)
 
-div(id="keyboard-window" class="window")
-	div(id="keyboard-window-header" class="window-header")
-		div(class="window-grab") Virtual Keyboard
-		button(class="window-button-close") #[b &times;]
 
-	div(id="keyboard-desktop" class="keypad" align="center")
-		div(class="keypad-block")
-			div(class="keypad-row")
+.window#keyboard-window
+	.window-header#keyboard-window-header
+		.window-grab Virtual Keyboard
+		button.window-button-close #[b &times;]
+
+	.keypad#keyboard-desktop(align="center")
+		.keypad-block
+			.keypad-row
 				+key(2, "Escape", "small") Esc
 				+empty(1, "", 24)
 				each key in ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
@@ -43,7 +45,7 @@ div(id="keyboard-window" class="window")
 					if key == "F4" || key == "F8"
 						+empty(1, "", 10)
 			hr
-			div(class="keypad-row")
+			.keypad-row
 				+key(1, "Backquote") ~#[br]`
 				each key, index in ["!", "@", "#", "$", "%", "^", "&", "*", "("]
 					+key(1, `Digit${index + 1}`) #{key}#[br]#{index + 1}
@@ -51,14 +53,14 @@ div(id="keyboard-window" class="window")
 				+key(1, "Minus") _#[br]-
 				+key(1, "Equal") +#[br]=
 				+key(0, "Backspace", "wide-1 right") &#8612;
-			div(class="keypad-row")
+			.keypad-row
 				+key(1, "Tab", "wide-1 left") &#8676;#[br]&#8677;
 				each key in ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"]
 					+key(1, `Key${key}`, "single") #{key}
 				+key(1, "BracketLeft") {#[br][
 				+key(1, "BracketRight") }#[br]]
 				+key(0, "Backslash") |#[br]&bsol;
-			div(class="keypad-row")
+			.keypad-row
 				+key(1, "CapsLock", "wide-2 left small")
 					+lamp("hid-keyboard-caps-led")
 					| #[br] Caps Lock
@@ -67,7 +69,7 @@ div(id="keyboard-window" class="window")
 				+key(1, "Semicolon") :#[br];
 				+key(1, "Quote") "#[br]'
 				+key(0, "Enter", "wide-2 right small") Enter#[br]&crarr;
-			div(class="keypad-row")
+			.keypad-row
 				+modifier(1, "ShiftLeft", "wide-3 left small") Shift
 				each key in ["Z", "X", "C", "V", "B", "N", "M"]
 					+key(1, `Key${key}`, "single") #{key}
@@ -75,7 +77,7 @@ div(id="keyboard-window" class="window")
 				+key(1, "Period") &gt;#[br].
 				+key(1, "Slash") ?#[br]/
 				+modifier(0, "ShiftRight", "wide-3 right small") Shift
-			div(class="keypad-row")
+			.keypad-row
 				+modifier(2, "ControlLeft", "wide-1 left small") Ctrl
 				+modifier(2, "MetaLeft", "wide-1 left small") Win
 				+modifier(2, "AltLeft", "wide-1 left small") Alt
@@ -84,83 +86,83 @@ div(id="keyboard-window" class="window")
 				+modifier(2, "MetaRight", "wide-1 right small") Win
 				+key(2, "ContextMenu", "small") #[br]Menu
 				+modifier(0, "ControlRight", "wide-1 right small") Ctrl
-		div(class="keypad-block")
-			div(class="keypad-row")
+		.keypad-block
+			.keypad-row
 				+modifier(2, "PrintScreen", "small") Pt/Sq
 				+key(2, "ScrollLock", "small")
 					+lamp("hid-keyboard-scroll-led")
 					| #[br] ScrLk
 				+key(0, "Pause", "small") P/Brk
 			hr
-			div(class="keypad-row")
+			.keypad-row
 				+key(2, "Insert", "small") Ins
 				+key(2, "Home", "small") Home
 				+key(0, "PageUp", "small") PgUp
-			div(class="keypad-row")
+			.keypad-row
 				+key(2, "Delete", "small") Del
 				+key(2, "End", "small") End
 				+key(0, "PageDown", "small") PgDn
-			div(class="keypad-row")
-			div(class="keypad-row")
+			.keypad-row
+			.keypad-row
 				+empty(1, "")
 				+key(2, "ArrowUp") &uarr;
 				+empty(0, "")
-			div(class="keypad-row")
+			.keypad-row
 				+key(2, "ArrowLeft") &larr;
 				+key(2, "ArrowDown") &darr;
 				+key(0, "ArrowRight") &rarr;
-		div(class="keypad-block")
-			div(class="keypad-row")
+		.keypad-block
+			.keypad-row
 				+empty(2, "small")
 				+empty(2, "small")
 				+empty(2, "small")
 				+key(0, "Power", "small") PWR
 			hr
-			div(class="keypad-row")
+			.keypad-row
 				+key(2, "NumLock", "small")
 					+lamp("hid-keyboard-num-led")
 					| #[br] NmLk
 				+key(2, "NumpadDivide") /
 				+key(2, "NumpadMultiply") *
 				+key(0, "NumpadSubtract") -
-			div(class="keypad-row")
+			.keypad-row
 				+key(2, "Numpad7", "small") 7#[br]Home
 				+key(2, "Numpad8", "small") 8#[br]&uarr;
 				+key(2, "Numpad9", "small") 9#[br]PgUp
 				+empty(0, "")
-			div(class="keypad-row")
+			.keypad-row
 				+key(2, "Numpad4", "small") 4#[br]&larr;
 				+key(2, "Numpad5", "small") 5#[br]#[br]
 				+key(2, "Numpad6", "small") 6#[br]&rarr;
 				+key(0, "NumpadAdd") +
-			div(class="keypad-row")
+			.keypad-row
 				+key(2, "Numpad1", "small") 1#[br]End
 				+key(2, "Numpad2", "small") 2#[br]&darr;
 				+key(2, "Numpad3", "small") 3#[br]PgDn
 				+empty(0, "")
-			div(class="keypad-row")
+			.keypad-row
 				+key(2, "Numpad0", "small") 0#[br]Ins
 				+empty(2, "")
 				+key(2, "NumpadDecimal", "small") .#[br]Del
 				+key(0, "NumpadEnter", "small") Ent
-		div(class="keypad-block")
-			div(class="keypad-row")
+		.keypad-block
+			.keypad-row
 				+key(0, "IntlBackslash", "small") &bsol;#[br]|
 			hr
-			div(class="keypad-row")
+			.keypad-row
 				+key(0, "IntlYen", "small") ¥#[br]_
-			div(class="keypad-row")
+			.keypad-row
 				+key(0, "IntlRo", "small") &bsol;#[br]ろ
-			div(class="keypad-row")
+			.keypad-row
 				+modifier(0, "KanaMode", "small") Kana
-			div(class="keypad-row")
+			.keypad-row
 				+modifier(0, "NonConvert", "small") N/Cnv
-			div(class="keypad-row")
+			.keypad-row
 				+modifier(0, "Convert", "small") Cnv
 
-	div(id="keyboard-mobile" class="keypad" align="center")
-		div(class="keypad-block")
-			div(class="keypad-row")
+	.keypad#keyboard-mobile(align="center")
+		.keypad-block
+			.keypad-row
 				+key(1, "Escape", "small") Esc
 				+key(0, "F1", "wide-0 small rounded-left") F1
 				+key(0, "F2", "wide-0 small rounded-none") F2
@@ -183,7 +185,7 @@ div(id="keyboard-window" class="window")
 				+key(1, "Home", "small") Home
 				+key(1, "End", "small") End
 				+key(0, "Delete", "small") Del
-			div(class="keypad-row")
+			.keypad-row
 				+key(1, "Backquote") ~#[br]`
 				each key, index in ["!", "@", "#", "$", "%", "^", "&", "*", "("]
 					+key(1, `Digit${index + 1}`) #{key}#[br]#{index + 1}
@@ -191,14 +193,14 @@ div(id="keyboard-window" class="window")
 				+key(1, "Minus") _#[br]-
 				+key(1, "Equal") +#[br]=
 				+key(0, "Backspace", "wide-2 right", 101) &#8612;
-			div(class="keypad-row")
+			.keypad-row
 				+key(1, "Tab", "wide-1 left") &#8676;<br>&#8677;
 				each key in ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"]
 					+key(1, `Key${key}`, "single") #{key}
 				+key(1, "BracketLeft") {#[br][
 				+key(1, "BracketRight") }#[br]]
 				+key(0, "Backslash", "wide-1 left", 78) |#[br]&bsol;
-			div(class="keypad-row")
+			.keypad-row
 				+key(1, "CapsLock", "wide-2 left small")
 					+lamp("hid-keyboard-caps-led")
 					| #[br] Caps Lock
@@ -207,7 +209,7 @@ div(id="keyboard-window" class="window")
 				+key(1, "Semicolon") :#[br];
 				+key(1, "Quote") `#[br]'
 				+key(0, "Enter", "wide-3 right small", 116) Enter#[br]&crarr;
-			div(class="keypad-row")
+			.keypad-row
 				+modifier(1, "ShiftLeft", "wide-3 left small") Shift
 				each key in ["Z", "X", "C", "V", "B", "N", "M"]
 					+key(1, `Key${key}`, "single") #{key}
@@ -217,7 +219,7 @@ div(id="keyboard-window" class="window")
 				+key(2, "PageUp", "small") PgUp
 				+key(2, "ArrowUp") &uarr;
 				+key(0, "PageDown", "small") PgDn
-			div(class="keypad-row")
+			.keypad-row
 				+modifier(1, "ControlLeft", "wide-1 left small") Ctrl
 				+modifier(1, "MetaLeft", "wide-1 left small") Win
 				+modifier(1, "AltLeft", "wide-1 left small") Alt
