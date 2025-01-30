@@ -133,7 +133,7 @@ ul#navbar li div.menu::-webkit-scrollbar-thumb {
 }
 @-moz-document url-prefix() {
 	ul#navbar li div.menu {
-		scrollbar-width: 8px;
+		/* scrollbar-width: 8px; px is not supported */
 		scrollbar-color: var(--cs-scroll-default-bg) var(--cs-code-default-bg);
 	}
 }
