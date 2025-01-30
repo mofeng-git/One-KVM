@@ -30,7 +30,7 @@ li.right#system-dropdown
 			+menu_message("warning", "WebRTC is not supported by this browser")
 			hr
 		.hidden#stream-message-no-vd
-			+menu_message("warning", "Direct HTTP H.264 streaming is not supported")
+			+menu_message("warning", "Direct H.264 streaming is not supported")
 			hr
 		.hidden#stream-message-no-h264
 			+menu_message("warning", "H.264 is not supported by this browser")
@@ -51,9 +51,9 @@ li.right#system-dropdown
 					|H.264 #[a(target="_blank" href="https://docs.pikvm.org/webrtc") gop]:
 			tr.feature-disabled#stream-mode
 				+menu_radio_td2("stream-mode-radio", [
-					{title: "WebRTC", value: "janus"},
-					{title: "H.264", value: "media"},
-					{title: "MJPEG", value: "mjpeg", checked: true},
+					{title: "WebRTC<br>H.264", value: "janus"},
+					{title: "Direct<br>H.264", value: "media"},
+					{title: "Legacy<br>MJPEG", value: "mjpeg", checked: true},
 				]) #[a(target="_blank" href="https://docs.pikvm.org/webrtc") Video mode]:
 			tr.feature-disabled#stream-orient
 				+menu_radio_td2("stream-orient-radio", [
@@ -121,7 +121,7 @@ li.right#system-dropdown
 				+menu_switch_td2("hid-connect-switch", true, true) Connect HID to Server:
 			tr.feature-disabled#hid-jiggler
 				+menu_switch_td2("hid-jiggler-switch", false, false)
-					a(target="_blank" href="https://docs.pikvm.org/mouse_jiggler") Mouse jiggler:
+					| #[a(target="_blank" href="https://docs.pikvm.org/mouse_jiggler") Mouse jiggler]:
 			tr
 				+menu_switch_td2("hid-mute-switch", true, false) Mute all input HID events:
 			tr.feature-disabled#v3-usb-breaker

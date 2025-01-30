@@ -175,7 +175,7 @@
                   <table>
                     <tr>
                       <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
-                      <td style="line-height:1.5"><b>Direct HTTP H.264 streaming is not supported</b></td>
+                      <td style="line-height:1.5"><b>Direct H.264 streaming is not supported</b></td>
                     </tr>
                   </table>
                 </div>
@@ -203,7 +203,7 @@
                   <td>JPEG quality:
                   </td>
                   <td class="value-slider">
-                    <input class="slider" type="range" id="stream-quality-slider">
+                    <input type="range" id="stream-quality-slider">
                   </td>
                   <td class="value-number" id="stream-quality-value"></td>
             </tr>
@@ -211,7 +211,7 @@
                   <td>JPEG max fps:
                   </td>
                   <td class="value-slider">
-                    <input class="slider" type="range" id="stream-desired-fps-slider">
+                    <input type="range" id="stream-desired-fps-slider">
                   </td>
                   <td class="value-number" id="stream-desired-fps-value"></td>
             </tr>
@@ -219,7 +219,7 @@
                   <td>H.264 kbps:
                   </td>
                   <td class="value-slider">
-                    <input class="slider" type="range" id="stream-h264-bitrate-slider">
+                    <input type="range" id="stream-h264-bitrate-slider">
                   </td>
                   <td class="value-number" id="stream-h264-bitrate-value"></td>
             </tr>
@@ -227,7 +227,7 @@
                   <td>H.264 <a target="_blank" href="https://docs.pikvm.org/webrtc">gop</a>:
                   </td>
                   <td class="value-slider">
-                    <input class="slider" type="range" id="stream-h264-gop-slider">
+                    <input type="range" id="stream-h264-gop-slider">
                   </td>
                   <td class="value-number" id="stream-h264-gop-value"></td>
             </tr>
@@ -237,11 +237,11 @@
                   <td>
                     <div class="radio-box">
                       <input type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus">
-                      <label for="stream-mode-radio-janus">WebRTC</label>
+                      <label for="stream-mode-radio-janus">WebRTC<br>H.264</label>
                       <input type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media">
-                      <label for="stream-mode-radio-media">H.264</label>
+                      <label for="stream-mode-radio-media">Direct<br>H.264</label>
                       <input type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg" checked>
-                      <label for="stream-mode-radio-mjpeg">MJPEG</label>
+                      <label for="stream-mode-radio-mjpeg">Legacy<br>MJPEG</label>
                     </div>
                   </td>
             </tr>
@@ -265,7 +265,7 @@
                   <td>Audio volume:
                   </td>
                   <td class="value-slider">
-                    <input class="slider" type="range" id="stream-audio-volume-slider">
+                    <input type="range" id="stream-audio-volume-slider">
                   </td>
                   <td class="value-number" id="stream-audio-volume-value"></td>
             </tr>
@@ -322,7 +322,7 @@
                           <td>Mouse polling:
                           </td>
                           <td class="value-slider">
-                            <input class="slider" type="range" id="hid-mouse-rate-slider">
+                            <input type="range" id="hid-mouse-rate-slider">
                           </td>
                           <td class="value-number" id="hid-mouse-rate-value"></td>
                     </tr>
@@ -330,7 +330,7 @@
                           <td>Relative sensitivity:
                           </td>
                           <td class="value-slider">
-                            <input class="slider" type="range" id="hid-mouse-sens-slider">
+                            <input type="range" id="hid-mouse-sens-slider">
                           </td>
                           <td class="value-number" id="hid-mouse-sens-value"></td>
                     </tr>
@@ -384,7 +384,7 @@
                           <td>Scroll rate:
                           </td>
                           <td class="value-slider">
-                            <input class="slider" type="range" id="hid-mouse-scroll-slider">
+                            <input type="range" id="hid-mouse-scroll-slider">
                           </td>
                           <td class="value-number" id="hid-mouse-scroll-value"></td>
                     </tr>
@@ -450,7 +450,7 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="hid-jiggler">
-                  <td><a target="_blank" href="https://docs.pikvm.org/mouse_jiggler">Mouse jiggler:</a>
+                  <td><a target="_blank" href="https://docs.pikvm.org/mouse_jiggler">Mouse jiggler</a>:
                   </td>
                   <td align="right">
                     <div class="switch-box">
