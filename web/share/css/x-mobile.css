@@ -91,7 +91,7 @@ ul#navbar li a.menu-button:hover:not(.active) {
 /* ===== slider.css ===== */
 
 /*@media only screen and (orientation: portrait) {
-	@supports (-webkit-appearance: none) {
+	@supports (-webkit-locale: auto) {
 		input[type=range] {
 			margin: 20px 0 20px 0 !important;
 		}
