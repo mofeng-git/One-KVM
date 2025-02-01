@@ -2,7 +2,6 @@ li(id="system-dropdown" class="right")
 	a(class="menu-button" href="#")
 		+navbar_led("link-led", "led-link")
 		+navbar_led("stream-led", "led-video")
-		+navbar_led("stream-led", "led-video")
 		+navbar_led("hid-keyboard-led", "led-hid-keyboard")
 		+navbar_led("hid-mouse-led", "led-hid-mouse")
 		span(i18n="kvm_text3") System
@@ -50,12 +49,12 @@ li(id="system-dropdown" class="right")
 				td(i18n="kvm_text14") Video #[a(target="_blank" href="https://docs.pikvm.org/webrtc") mode]:
 				td
 					div(class="radio-box")
-						input(type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus")
-						label(for="stream-mode-radio-janus") WebRTC
-						input(type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media")
-						label(for="stream-mode-radio-media") H.264
 						input(checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg")
-						label(for="stream-mode-radio-mjpeg") MJPEG
+						label(for="stream-mode-radio-mjpeg") Legacy<br>MJPEG
+						input(type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media")
+						label(for="stream-mode-radio-media") Direct<br>H.264
+						input(type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus")
+						label(for="stream-mode-radio-janus") WebRTC<br>H.264	
 			tr(id="stream-orient" class="feature-disabled")
 				td(i18n="kvm_text17") Orientation:
 				td
@@ -137,7 +136,7 @@ li(id="system-dropdown" class="right")
 						+menu_switch_notable("page-full-tab-stream-switch", "Expand for the entire tab by default", true, false,"page-full-tab-stream-switch")
 		table(class="kv")
 			tr
-				+menu_switch_notable("hid-keyboard-bad-link-switch", "Bad link mode (release keys immediately)", true, false)
+				+menu_switch_notable("hid-keyboard-bad-link-switch", "Bad link mode (release keys immediately)", true, false,"hid-keyboard-bad-link-switch")
 			tr(id="hid-connect" class="feature-disabled")
 				+menu_switch_notable("hid-connect-switch", "Connect HID to Server", true, true, "hid-connect-switch")
 			tr(id="hid-jiggler" class="feature-disabled")

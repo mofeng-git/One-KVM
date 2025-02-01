@@ -3,6 +3,7 @@
 #    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#    Copyright (C) 2023-2025  SilentWind <mofeng654321@hotmail.com>          #
 #                                                                            #
 #    This program is free software: you can redistribute it and/or modify    #
 #    it under the terms of the GNU General Public License as published by    #
@@ -35,7 +36,7 @@ export function main() {
 		tools.storage.bindSimpleSwitch($("page-close-ask-switch"), "page.close.ask", true, function(value) {
 			if (value) {
 				window.onbeforeunload = function(event) {
-					let text = "Are you sure you want to close PiKVM session?";
+					let text = "Are you sure you want to close One-KVM session?";
 					if (event) {
 						event.returnValue = text;
 					}

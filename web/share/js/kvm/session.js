@@ -3,6 +3,7 @@
 #    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#    Copyright (C) 2023-2025  SilentWind <mofeng654321@hotmail.com>          #
 #                                                                            #
 #    This program is free software: you can redistribute it and/or modify    #
 #    it under the terms of the GNU General Public License as published by    #
@@ -84,10 +85,10 @@ export function Session() {
 
 			if (state.server && state.server.host) {
 				$("kvmd-meta-server-host").innerText = `Server: ${state.server.host}`;
-				document.title = `PiKVM Session: ${state.server.host}`;
+				document.title = `One-KVM Session: ${state.server.host}`;
 			} else {
 				$("kvmd-meta-server-host").innerText = "";
-				document.title = "PiKVM Session";
+				document.title = "One-KVM Session";
 			}
 
 			if (state.tips && state.tips.left) {

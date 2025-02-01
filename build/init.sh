@@ -53,16 +53,19 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
        touch /etc/kvmd/.docker_flag && \
        sed -i 's/localhost.localdomain/docker/g' /etc/kvmd/meta.yaml && \
        sed -i 's/localhost/localhost:4430/g' /etc/kvmd/kvm_input.sh; then
-        log_info "基础配置完成"
+        log_info "移动配置文件完成"
     else
-        log_error "基础配置失败"
+        log_error "移动配置文件失败"
         exit 1
     fi
 
     # SSL证书配置
-    if ! /usr/share/kvmd/kvmd-gencert --do-the-thing && \
-         ! /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc; then
-        log_error "SSL 证书生成失败"
+    if ! /usr/share/kvmd/kvmd-gencert --do-the-thing; then
+        log_error "Nginx SSL 证书生成失败"
+        exit 1
+    fi
+    if ! /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc; then
+        log_error "VNC SSL 证书生成失败"
         exit 1
     fi
 
@@ -185,6 +188,17 @@ EOF
         fi
     fi
 
+    # 设置默认视频模式为 mjpeg
+    if ! grep -q "mjpeg_default:" /etc/kvmd/override.yaml; then
+        cat >> /etc/kvmd/override.yaml << EOF
+
+streamer:
+    mjpeg_default: true  # 首次访问默认使用 MJPEG 模式
+    h264_bitrate: 5000  # 默认码率 5000 Kbps
+EOF
+        log_info "已设置首次访问默认使用 MJPEG 模式"
+    fi
+
     if [ ! -z "$VIDEOFORMAT" ]; then
         if sed -i "s/format=mjpeg/format=$VIDFORMAT/g" /etc/kvmd/override.yaml; then
             log_info "视频输入格式已设置为 $VIDFORMAT"
@@ -216,5 +230,5 @@ if [ "$OTG" == "1" ]; then
     fi
 fi
 
-log_info "One-KVM 启动完成，正在启动服务..."
+log_info "One-KVM 配置文件准备完成，正在启动服务..."
 exec supervisord -c /etc/kvmd/supervisord.conf

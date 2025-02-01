@@ -2,7 +2,7 @@
     "username": "用户名：&nbsp;",
     "password": "密码：&nbsp;",
     "2fa_code": "2FA 验证：&nbsp;",
-    "if_enabled": "如果有",
+    "if_enabled": "如果没有请留空",
     "login": "登录",
     "select_language": "选择语言：&nbsp;",
     "chinese": "简体中文",
@@ -29,7 +29,7 @@
     "ipmi_text3":"<b>不建议</b>为 KVMD 和 IPMI 用户使用相同的密码，或者直接关闭 IPMI。如有需要可以通过 curl 直接使用 KVMD API。下面是一些示例：",
 
     "kvm_text1":"关于",
-    "kvm_text2":"//<a href=\"https://github.com/pikvm/pikvm?tab=readme-ov-file#special-thanks\">这些人</a>向 PiKVM 项目捐款并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 PiKVM ，可以在 <a target=\"_blank\" href=\"https://www.patreon.com/pikvm\"> Patreon</a> 或 <a target=\"_blank\" href=\"https://paypal.me/pikvm\"> PayPal 上捐款</a>。<br><br>//<a href=\"https://one-kvm.mofeng.run/thanks/#_2\">这些人</a>向 One-KVM 项目捐款并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 One-KVM ，可以在 <a target=\"_blank\" href=\"https://afdian.com/a/silentwind\"> 爱发电 </a>上捐款</a>。",
+    "kvm_text2":"//<a href=\"https://one-kvm.mofeng.run/thanks/#_2\">这些人</a>向 One-KVM 项目赞助并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 One-KVM ，可以在 <a target=\"_blank\" href=\"https://afdian.com/a/silentwind\"> 爱发电 </a>上捐款</a>。<br><br>//<a href=\"https://github.com/pikvm/pikvm?tab=readme-ov-file#special-thanks\">这些人</a>向 PiKVM 项目赞助并支持其工作，非常感谢他们的帮助。<br>//如果您也想支持 PiKVM ，可以在 <a target=\"_blank\" href=\"https://www.patreon.com/pikvm\"> Patreon</a> 或 <a target=\"_blank\" href=\"https://paypal.me/pikvm\"> PayPal 上捐款</a>。",
     "kvm_text3":"系统",
     "kvm_text4":"运行设置 &amp; 工具",
     "kvm_text5":"终端",
@@ -152,5 +152,6 @@
     "msd-message-rw-enabled":"读写模式已启用",
     "msd-message-downloads":"正在从 One-KVM 下载镜像",
     "msd-message-another-user-uploads":"另一个用户正在上传镜像",
-    "page-full-tab-stream-switch":"自动全屏视频窗口"
+    "page-full-tab-stream-switch":"自动全屏视频窗口",
+    "hid-keyboard-bad-link-switch":"故障链接模式（立即释放按键）"
 }

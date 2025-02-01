@@ -5,6 +5,7 @@
 #    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#    Copyright (C) 2023-2025  SilentWind <mofeng654321@hotmail.com>          #
 #                                                                            #
 #    This program is free software: you can redistribute it and/or modify    #
 #    it under the terms of the GNU General Public License as published by    #
@@ -166,7 +167,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign stream-message-no-webrtc" src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>WebRTC is not supported by this browser</b></td>
                     </tr>
                   </table>
@@ -234,17 +235,12 @@
               <td i18n="kvm_text14">Video <a target="_blank" href="https://docs.pikvm.org/webrtc">mode</a>:</td>
               <td>
                 <div class="radio-box">
+                  <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
+                  <label for="stream-mode-radio-mjpeg">Legacy<br>MJPEG</label>
+                  <input type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media">
+                  <label for="stream-mode-radio-media">Direct<br>H.264</label>
                   <input type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus">
-                  <label for="stream-mode-radio-janus">WebRTC</label>
-                  <input type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media">
-                  <label for="stream-mode-radio-media">H.264</label>
-                  <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
-                  <label for="stream-mode-radio-mjpeg">MJPEG</label>
-                  <label for="stream-mode-radio-janus">WebRTC</label>
-                  <input type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media">
-                  <label for="stream-mode-radio-media">H.264</label>
-                  <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
-                  <label for="stream-mode-radio-mjpeg">MJPEG</label>
+                  <label for="stream-mode-radio-janus">WebRTC<br>H.264	</label>
                 </div>
               </td>
             </tr>
@@ -264,20 +260,11 @@
               </td>
             </tr>
             <tr class="feature-disabled" id="stream-audio">
-              <td i18n="kvm_text19">Audio volume:</td>
+              <td>Audio volume:</td>
               <td class="value-slider">
                 <input class="slider" type="range" id="stream-audio-volume-slider">
               </td>
               <td class="value-number" id="stream-audio-volume-value"></td>
-            </tr>
-            <tr class="feature-disabled" id="stream-mic">
-                  <td>Microphone:</td>
-                  <td align="right">
-                    <div class="switch-box">
-                      <input disabled type="checkbox" id="stream-mic-switch">
-                      <label for="stream-mic-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                    </div>
-                  </td>
             </tr>
             <tr class="feature-disabled" id="stream-mic">
                   <td>Microphone:</td>
@@ -433,16 +420,7 @@
           </details>
           <table class="kv">
             <tr>
-                  <td>Bad link mode (release keys immediately):</td>
-                  <td align="right">
-                    <div class="switch-box">
-                      <input type="checkbox" id="hid-keyboard-bad-link-switch">
-                      <label for="hid-keyboard-bad-link-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                    </div>
-                  </td>
-            </tr>
-            <tr>
-                  <td>Bad link mode (release keys immediately):</td>
+                  <td i18n="hid-keyboard-bad-link-switch">Bad link mode (release keys immediately):</td>
                   <td align="right">
                     <div class="switch-box">
                       <input type="checkbox" id="hid-keyboard-bad-link-switch">
@@ -557,7 +535,6 @@
             <hr>
           </div>
           <div class="hidden" id="msd-message-too-big-for-dvd">
-          <div class="hidden" id="msd-message-too-big-for-dvd">
                 <div class="text">
                   <table>
                     <tr>
@@ -565,7 +542,6 @@
                       <td style="line-height:1.5"><b>Current image is too big for DVD!</b></td>
                     </tr>
                     <tr>
-                      <td><sup style="line-height:1">The maximum is 31.6GiB. Please switch to the Flash mode.</sup></td>
                       <td><sup style="line-height:1">The maximum is 31.6GiB. Please switch to the Flash mode.</sup></td>
                     </tr>
                   </table>
@@ -636,7 +612,6 @@
               <td>
                 <div class="radio-box">
                   <input checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1">
-                  <label for="msd-mode-radio-cdrom">CD/DVD</label>
                   <label for="msd-mode-radio-cdrom">CD/DVD</label>
                   <input type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0">
                   <label for="msd-mode-radio-flash">Flash</label>
@@ -811,11 +786,27 @@
           </table>
           <table class="kv">
             <tr>
-                  <td i18n="hid-pak-slow-switch">Slow typing:</td>
+                  <td>Slow typing:</td>
                   <td align="right">
                     <div class="switch-box">
                       <input type="checkbox" id="hid-pak-slow-switch">
                       <label for="hid-pak-slow-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+            <tr>
+                  <td>Hide input text:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input type="checkbox" id="hid-pak-secure-switch">
+                      <label for="hid-pak-secure-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+            <tr>
+                  <td i18n="hid-pak-slow-switch">Slow typing:</td>
+                  <td align="right">
+                    <div class="switch-box">
                       <input type="checkbox" id="hid-pak-slow-switch">
                       <label for="hid-pak-slow-switch"><span class="switch-inner"></span><span class="switch"></span></label>
                     </div>
@@ -877,7 +868,6 @@
           <hr>
           <div class="buttons">
             <div class="buttons-row">
-              <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
               <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
               <button class="row50" data-force-hide-menu data-shortcut="MetaLeft">&bull; Left Win</button>
             </div>
@@ -997,50 +987,6 @@
           <table class="kv" id="switch-chain"></table>
         </div>
       </li>
-      <li class="right feature-disabled" id="switch-dropdown"><a class="menu-button" id="switch-menu-button" href="#"><img class="led-gray" id="switch-atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" id="switch-atx-hdd-led" src="/share/svg/led-atx-hdd.svg"><span>Switch <i><sub id="switch-active-port"></sub></i></span></a>
-        <div class="menu" id="switch-menu">
-          <table style="border-spacing: 0px;">
-            <tr>
-              <td>
-                <div class="text"><b><a target="_blank" href="https://docs.pikvm.org/switch">PiKVM Switch</a> is attached<br></b><sub>Select a port or perform any available action like ATX click</sub></div>
-              </td>
-              <td>
-                <div class="text">
-                  <button class="small" data-force-hide-menu data-show-window="switch-window">&bull; Settings</button>
-                </div>
-              </td>
-            </tr>
-          </table>
-          <hr>
-          <div class="hidden" id="switch-message-update">
-                <div class="text">
-                  <table>
-                    <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
-                      <td style="line-height:1.5"><b>Good news! Your switch is ready to get the firmware update</b></td>
-                    </tr>
-                    <tr>
-                      <td><sup style="line-height:1">Please <a target="_blank" href="https://docs.pikvm.org/switch/#firmware-updating">follow the instructions</a> when you decide to install it.</sup></td>
-                    </tr>
-                  </table>
-                </div>
-            <hr>
-          </div>
-              <table class="kv">
-                <tr>
-                      <td>Ask ATX click confirmation:</td>
-                      <td align="right">
-                        <div class="switch-box">
-                          <input checked type="checkbox" id="switch-atx-ask-switch">
-                          <label for="switch-atx-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                        </div>
-                      </td>
-                </tr>
-              </table>
-          <hr>
-          <table class="kv" id="switch-chain"></table>
-        </div>
-      </li>
     </ul>
     <div class="window" id="stream-ocr-window">
       <div class="hidden" id="stream-ocr-selection"></div>
@@ -1058,7 +1004,6 @@
       <button class="window-button-exit-full-tab">&#9660;</button>
       <div class="stream-box-offline" id="stream-box"><img id="stream-image" src="/share/png/blank-stream.png">
         <video class="hidden" id="stream-video" disablePictureInPicture="true" autoplay playsinline muted></video>
-        <canvas class="hidden" id="stream-canvas"></canvas>
         <canvas class="hidden" id="stream-canvas"></canvas>
         <div id="stream-fullscreen-active"></div>
       </div>
@@ -2395,650 +2340,10 @@
                     // If you also want to support this project,<br>
                     // you can donate on <a target="_blank" href="https://www.patreon.com/pikvm">Patreon</a>
                     or <a target="_blank" href="https://paypal.me/pikvm">Paypal</a>.</span>
-                  <ul>
-                    <li>A. Isenring</li>
-                    <li>Aaron Graubert</li>
-                    <li>Aaron Heise</li>
-                    <li>Aaron Stein</li>
-                    <li>Accalia</li>
-                    <li>Adam Goodbar</li>
-                    <li>Adam S</li>
-                    <li>Adam Stuart</li>
-                    <li>AdamBomb</li>
-                    <li>adipisicing</li>
-                    <li>Adrian Basham</li>
-                    <li>Adrian Popescu</li>
-                    <li>Ahmed Syed</li>
-                    <li>Alberto Bassi</li>
-                    <li>alejandro</li>
-                    <li>Aleksei Brusianskii</li>
-                    <li>Alessio Curri</li>
-                    <li>Alex T</li>
-                    <li>Alex Z</li>
-                    <li>Alexander Karmanov</li>
-                    <li>Alexander Lahuerta</li>
-                    <li>Alexander Martin</li>
-                    <li>Alexander Pankov</li>
-                    <li>Alexandre Jablonski</li>
-                    <li>Alexey Kamenskiy</li>
-                    <li>alm0241</li>
-                    <li>Alok Anand</li>
-                    <li>Alucard</li>
-                    <li>Ananthaneshan Elampoornan</li>
-                    <li>Andreas Grundler</li>
-                    <li>Andreas Marufke</li>
-                    <li>Andreas Schmid</li>
-                    <li>Andrew Brant</li>
-                    <li>Andrew Melton</li>
-                    <li>Andrew Reusch</li>
-                    <li>Andrew Ruan</li>
-                    <li>Andrzej V</li>
-                    <li>Andy</li>
-                    <li>Andy Keys</li>
-                    <li>Anish Patel</li>
-                    <li>Anix</li>
-                    <li>Anonymous</li>
-                    <li>Anthony Junk</li>
-                    <li>Anton Kovalenko</li>
-                    <li>Armen</li>
-                    <li>Aron Green</li>
-                    <li>Aron Perelman</li>
-                    <li>Artem Simonov</li>
-                    <li>Arthur Mayer</li>
-                    <li>Arthur Woimbée</li>
-                    <li>Ashlesh Chaudhari</li>
-                    <li>Asim Shakour</li>
-                    <li>Augusto Becciu</li>
-                    <li>AVS Computer</li>
-                    <li>awkspace</li>
-                    <li>Badal Patel</li>
-                    <li>baddog</li>
-                    <li>Bao Tin Hoang</li>
-                    <li>Bean Co.</li>
-                    <li>Bela Bargel</li>
-                    <li>Belf Igor</li>
-                    <li>Ben Gordon</li>
-                    <li>Ben Scott</li>
-                    <li>Benedikt Heine</li>
-                    <li>Benedikt Meier</li>
-                    <li>Benjamin Frewert</li>
-                    <li>Benjamin Melancon</li>
-                    <li>Benjamin Schwartz</li>
-                    <li>Benjamin Stegmann</li>
-                    <li>Benni Stauder</li>
-                    <li>Bernhard Fitzke</li>
-                    <li>Beu</li>
-                    <li>bikmaek</li>
-                    <li>bitjoe</li>
-                    <li>Bits and Bytes Computers LLC</li>
-                    <li>Bjoern Petsch</li>
-                    <li>Blair Hasler</li>
-                    <li>Blindside</li>
-                    <li>Blue Frog LLC</li>
-                    <li>Bootstrapper - Programmierung erklärt</li>
-                    <li>Bosco</li>
-                    <li>Bradford King</li>
-                    <li>Brainspore Networks</li>
-                    <li>Branden Shaulis</li>
-                    <li>Brandon Daniels</li>
-                    <li>Brian</li>
-                    <li>Brian Moses</li>
-                    <li>Brian T Mulcahy</li>
-                    <li>Brian Vecchiarelli</li>
-                    <li>Brian White</li>
-                    <li>brodonalds</li>
-                    <li>Bruno Gomes</li>
-                    <li>Bryan Adams</li>
-                    <li>Bryan Montgomery</li>
-                    <li>Buzzer</li>
-                    <li>C P ELSE</li>
-                    <li>Calanish</li>
-                    <li>Cameron Hatcher</li>
-                    <li>Cameron Tacklind</li>
-                    <li>Carl Mercier</li>
-                    <li>Carl-Fredrik Johansson</li>
-                    <li>Carlos Eduardo Porter Herrera</li>
-                    <li>Carlos Garcia</li>
-                    <li>Carlos Manuel Torres</li>
-                    <li>cbad536</li>
-                    <li>César Nascimento</li>
-                    <li>CHINATERA LIMITED</li>
-                    <li>Chris Blackmon</li>
-                    <li>Chris Burton</li>
-                    <li>Chris Campbell</li>
-                    <li>Chris Jackson</li>
-                    <li>Chris Lewis</li>
-                    <li>Chris Rizio</li>
-                    <li>Christi King</li>
-                    <li>Christian Schlögl</li>
-                    <li>Christian Svensson</li>
-                    <li>Christof Maluck</li>
-                    <li>Christoph Dette</li>
-                    <li>Christoffer Lund</li>
-                    <li>Christopher Bulla</li>
-                    <li>Christopher Gelatt</li>
-                    <li>Christopher Hearn</li>
-                    <li>Christopher Mandlbaur</li>
-                    <li>Christopher Mendoza</li>
-                    <li>Christopher Simms</li>
-                    <li>Chucktastic</li>
-                    <li>Cihan VURAL</li>
-                    <li>clauskj3r</li>
-                    <li>Clifford Coleman</li>
-                    <li>Clinton Lee Taylor</li>
-                    <li>Cole Imhoff</li>
-                    <li>Colin Goodman</li>
-                    <li>Corey Layton</li>
-                    <li>Corey Lista</li>
-                    <li>Craig Keenan</li>
-                    <li>Crossfactor</li>
-                    <li>Cruzzer</li>
-                    <li>ctag</li>
-                    <li>Curt Sammer</li>
-                    <li>CyB0rgg</li>
-                    <li>DeMentor</li>
-                    <li>Desmond Whitt</li>
-                    <li>Daegara</li>
-                    <li>DailyAneurism</li>
-                    <li>Damon Meledones</li>
-                    <li>Dan Berkowitz</li>
-                    <li>Dan Brakeley</li>
-                    <li>Daniel Bowder</li>
-                    <li>Daniel Cabrera</li>
-                    <li>Daniel Davila</li>
-                    <li>Danilo Saft</li>
-                    <li>Danne</li>
-                    <li>Dariusz Techmański</li>
-                    <li>David</li>
-                    <li>David Brausewetter</li>
-                    <li>David Davis</li>
-                    <li>David Godibadze</li>
-                    <li>David Howell</li>
-                    <li>David Irvine</li>
-                    <li>David Klinkman</li>
-                    <li>David Niemann</li>
-                    <li>David Shay</li>
-                    <li>David Ye</li>
-                    <li>David York</li>
-                    <li>Denis</li>
-                    <li>Denis Andreev</li>
-                    <li>Denis Yatsenko</li>
-                    <li>Dennis Becker</li>
-                    <li>Dennis Joslin</li>
-                    <li>Dennis Lomet</li>
-                    <li>Derek Jarvis</li>
-                    <li>Derek Yap</li>
-                    <li>Didrik</li>
-                    <li>digitalbaconbits</li>
-                    <li>Dimitrij Jedich</li>
-                    <li>dixon wong</li>
-                    <li>dizztrukshin</li>
-                    <li>Dmitry Shilov</li>
-                    <li>DogeLabs</li>
-                    <li>Dominic Phoon</li>
-                    <li>Dominik Klonowski</li>
-                    <li>Donald Hays</li>
-                    <li>Edmon Abdul Nur</li>
-                    <li>Edward Wang</li>
-                    <li>Egan Ford</li>
-                    <li>Elani Ferri</li>
-                    <li>Elliot Woo</li>
-                    <li>Entt</li>
-                    <li>Eric Phenix</li>
-                    <li>Ethan Shold</li>
-                    <li>Eugene Sukhodolin</li>
-                    <li>ewook</li>
-                    <li>eye-catcher.com</li>
-                    <li>Fabian Druschke</li>
-                    <li>Fabiano Sidler</li>
-                    <li>Far Pin Solutions, LLC</li>
-                    <li>Felyx Gabryel</li>
-                    <li>Fergus McKay</li>
-                    <li>Finn Ebenritter</li>
-                    <li>floppy</li>
-                    <li>fo0bar</li>
-                    <li>Foad Yousef</li>
-                    <li>Foamy</li>
-                    <li>Foli Ayivoh</li>
-                    <li>Folkert Weistra</li>
-                    <li>Francisco Pavon</li>
-                    <li>Frank</li>
-                    <li>Frank Sander</li>
-                    <li>Frederick Czajka</li>
-                    <li>Fredrik Idréus</li>
-                    <li>Garrett Dangerfield</li>
-                    <li>Ge Men</li>
-                    <li>Geekworm</li>
-                    <li>Genkinger Andreas</li>
-                    <li>Geijer</li>
-                    <li>Geoffrey Wright</li>
-                    <li>George Becker</li>
-                    <li>Georgy Brodsky</li>
-                    <li>Gerald</li>
-                    <li>Gerardus Vernimmen</li>
-                    <li>Gernot Neuschröer</li>
-                    <li>Giovanni Fulco</li>
-                    <li>GK</li>
-                    <li>Glen Dragon</li>
-                    <li>Greg Winterstein</li>
-                    <li>Gregory Smith</li>
-                    <li>Gregory Treantos</li>
-                    <li>grewil</li>
-                    <li>Grey Cynic</li>
-                    <li>Guenter Honisch</li>
-                    <li>Guido Bernacchi</li>
-                    <li>Gustin Johnson</li>
-                    <li>György Tamás Vizi</li>
-                    <li>Haiberg GmbH</li>
-                    <li>Haven Zheng</li>
-                    <li>Heibunny</li>
-                    <li>Heikki Tiittanen</li>
-                    <li>Helio Leonardo Pinheiro e Mota</li>
-                    <li>Henrik Ählström</li>
-                    <li>Henry Hood</li>
-                    <li>HimKo</li>
-                    <li>HouseFPV</li>
-                    <li>Howard Simons</li>
-                    <li>HyunohRyu</li>
-                    <li>Icculus</li>
-                    <li>iks</li>
-                    <li>INFO TRX INC</li>
-                    <li>Invader Monks</li>
-                    <li>Ioannis Karageorgos</li>
-                    <li>Isaac</li>
-                    <li>IT Lifesaver</li>
-                    <li>Ivan Ganev</li>
-                    <li>Ivan Josiah Lapis</li>
-                    <li>Ivan Shapovalov</li>
-                    <li>iwbjhbweriuhf</li>
-                    <li>J</li>
-                    <li>J L</li>
-                    <li>Jaanus</li>
-                    <li>Jackson Wyatt</li>
-                    <li>Jacob Karaffa</li>
-                    <li>Jacob Morgan</li>
-                    <li>James Cadd</li>
-                    <li>James Cobb</li>
-                    <li>James Edwards</li>
-                    <li>James Kocher</li>
-                    <li>James Mayhugh</li>
-                    <li>James Noonan</li>
-                    <li>James Ye</li>
-                    <li>Jamie Murphy</li>
-                    <li>Jamie Scott</li>
-                    <li>Jan Niehusmann</li>
-                    <li>Jannick Oursin</li>
-                    <li>Jari Hiltunen</li>
-                    <li>Jason Crossley</li>
-                    <li>Jason Downey</li>
-                    <li>Jason Toland</li>
-                    <li>Jasper Backer</li>
-                    <li>Jay Davis</li>
-                    <li>Jay Isaacs</li>
-                    <li>Jazereel Goh</li>
-                    <li>Jean-Daniel Croteau</li>
-                    <li>Jean-Philippe Guilbault</li>
-                    <li>Jeff</li>
-                    <li>Jeff Bowman</li>
-                    <li>Jeff Urlwin</li>
-                    <li>Jennifer Herting</li>
-                    <li>Jennifer Rowlett</li>
-                    <li>Jeremy Abel</li>
-                    <li>Jeremy Combs</li>
-                    <li>Jeremy Hines</li>
-                    <li>Jerremy Holland</li>
-                    <li>Jerry Nall</li>
-                    <li>Jerry Y. Chen</li>
-                    <li>Jim Bailey</li>
-                    <li>Jim Harbin</li>
-                    <li>Jimmy Burgett</li>
-                    <li>Jimmy Stanley</li>
-                    <li>Joachim Bruening</li>
-                    <li>Joe Hanson</li>
-                    <li>Joe Hinteregger</li>
-                    <li>Joe Ventura</li>
-                    <li>Joel Jacobs</li>
-                    <li>Johannes Heigermose</li>
-                    <li>John Andersen</li>
-                    <li>John Copeland</li>
-                    <li>John F Glenn</li>
-                    <li>John Holmes</li>
-                    <li>John Kelley</li>
-                    <li>John McGovern</li>
-                    <li>Johnny Henson</li>
-                    <li>Jon Ferguy</li>
-                    <li>Jon-Eric</li>
-                    <li>Joni Ruuskanen</li>
-                    <li>Jonas Fischer</li>
-                    <li>Jonathan Slenders</li>
-                    <li>Jonathan Vaughn</li>
-                    <li>Joost Backer</li>
-                    <li>Jordan Blake</li>
-                    <li>Jordi Pakey-Rodriguez</li>
-                    <li>Joris van Embden</li>
-                    <li>Joseph Swift</li>
-                    <li>Josh Nethery</li>
-                    <li>Josh Ricker</li>
-                    <li>Josh VanDeraa</li>
-                    <li>Joshua Futterer</li>
-                    <li>Jozef Riha</li>
-                    <li>Jörgen Fredriksson</li>
-                    <li>Julian Forero</li>
-                    <li>Julian Schneider</li>
-                    <li>Julien Angelier</li>
-                    <li>Justin</li>
-                    <li>Justin Waters</li>
-                    <li>Kai Hadler</li>
-                    <li>Kamil Chyba</li>
-                    <li>Kari Matti Korpi</li>
-                    <li>Karl Dunne</li>
-                    <li>Karl Moos</li>
-                    <li>Keith Muggleton</li>
-                    <li>Ken Lee</li>
-                    <li>Kenneth Younger III</li>
-                    <li>Kenny Hui</li>
-                    <li>KeonWoo PARK</li>
-                    <li>Kevin Bajohr</li>
-                    <li>Kevin Schwartz</li>
-                    <li>Kevin Sherwood</li>
-                    <li>Kiera Kujisawa</li>
-                    <li>Kiran Schuler</li>
-                    <li>Koloman</li>
-                    <li>Konrad Neitzel</li>
-                    <li>Krzysztof Żelaśkiewicz</li>
-                    <li>Lance Ward</li>
-                    <li>Larry Meaney</li>
-                    <li>Lars</li>
-                    <li>Lars Reinhardt</li>
-                    <li>Lee Wilkinson</li>
-                    <li>LeeNX</li>
-                    <li>Leon Siegl</li>
-                    <li>Leonard Feineis</li>
-                    <li>Lewis Wild</li>
-                    <li>Liran</li>
-                    <li>Liviu Dimitriu</li>
-                    <li>Lizardo Hernandez</li>
-                    <li>LoCascio</li>
-                    <li>Lordbob75</li>
-                    <li>Lothar Schweikle-Droll</li>
-                    <li>Louis Müller</li>
-                    <li>LSDTripp</li>
-                    <li>Ľubor Slušný</li>
-                    <li>Luca Di Diomede</li>
-                    <li>Lucio De Carli</li>
-                    <li>Luiz Bizzio</li>
-                    <li>Lukas Bischof</li>
-                    <li>Lukas Kammerer</li>
-                    <li>Lukas Söder</li>
-                    <li>Maksim Terehin</li>
-                    <li>Malcolm Cameron</li>
-                    <li>Manfred Radeschnig</li>
-                    <li>Marc Khouri</li>
-                    <li>Marcin Wilk</li>
-                    <li>Marcio Zimbres</li>
-                    <li>Marco Rossi</li>
-                    <li>Marcos Wolf</li>
-                    <li>Marek Marczykowski-Górecki</li>
-                    <li>Marius</li>
-                    <li>Mar. Balske</li>
-                    <li>Mark Farrell</li>
-                    <li>Mark Gilbert</li>
-                    <li>Mark Knam</li>
-                    <li>Mark Robinson</li>
-                    <li>Markrosoft</li>
-                    <li>Markus Halm</li>
-                    <li>Markus Schicker</li>
-                    <li>Markus Sobczack</li>
-                    <li>Marshall Bjerke</li>
-                    <li>Marten Hermans</li>
-                    <li>Martin Gasser</li>
-                    <li>Martin Hofbauer</li>
-                    <li>Martin Raine</li>
-                    <li>Martin Suelmann</li>
-                    <li>Martin Wilhelmi</li>
-                    <li>Marvin Honderboom</li>
-                    <li>Mateusz Grabowski</li>
-                    <li>Mathias Uhl</li>
-                    <li>Matt Kane</li>
-                    <li>Matthew Cameron</li>
-                    <li>Mauricio Allende</li>
-                    <li>Max Evans</li>
-                    <li>Mecky</li>
-                    <li>Mehmet Aydoğdu</li>
-                    <li>Michael Bartholomew</li>
-                    <li>Michael Bell</li>
-                    <li>Michael Bombe</li>
-                    <li>Michael Collins</li>
-                    <li>Michael Copeland</li>
-                    <li>Michael Ho</li>
-                    <li>Michael Kovacs</li>
-                    <li>Michael Lynch</li>
-                    <li>Michael Pennington</li>
-                    <li>Michael Sage</li>
-                    <li>Michael Stella</li>
-                    <li>Michael Thalmann</li>
-                    <li>Michael Wu</li>
-                    <li>MichaelZ</li>
-                    <li>Michel Bissonnette</li>
-                    <li>Mikael Wikström</li>
-                    <li>Mike Mason</li>
-                    <li>Mikhael Mariano</li>
-                    <li>Milan Burda</li>
-                    <li>Milan Múčka</li>
-                    <li>Miles Davis</li>
-                    <li>Minh Tang</li>
-                    <li>Moez Tharani</li>
-                    <li>Morgan Helton</li>
-                    <li>Myron Weber</li>
-                    <li>Murad Khasawneh</li>
-                    <li>N Patel</li>
-                    <li>Nathaniel Griswold</li>
-                    <li>Nelson Lee</li>
-                    <li>nezu</li>
-                    <li>Nicholas Jeppson</li>
-                    <li>Nicholas Kopas</li>
-                    <li>Nicholas Walczak</li>
-                    <li>Nick Leffler</li>
-                    <li>Nick Roethemeier</li>
-                    <li>Nico Baumgartner</li>
-                    <li>Nicolai Kragh-Hansen</li>
-                    <li>Nicolas Christener</li>
-                    <li>Nigel Smith</li>
-                    <li>Nihal Fernando</li>
-                    <li>Nils Orbat</li>
-                    <li>Nis Wechselberg</li>
-                    <li>Nithin Philips</li>
-                    <li>Nod Swal</li>
-                    <li>Nolan Haynes</li>
-                    <li>Noxigen LLC</li>
-                    <li>nubbn</li>
-                    <li>nybble</li>
-                    <li>Oh Be</li>
-                    <li>Oliver Schwarz</li>
-                    <li>Oliver Zimmer</li>
-                    <li>Omar El-Domeiri</li>
-                    <li>Omar Siam</li>
-                    <li>Oscar</li>
-                    <li>Patrick</li>
-                    <li>Patrick Fortin-Ducharme</li>
-                    <li>Patrick McDowell</li>
-                    <li>Patrick Wagstrom</li>
-                    <li>Paul Bishop</li>
-                    <li>Paul De La Rosa</li>
-                    <li>Paul Pietkiewicz</li>
-                    <li>Paul Tan</li>
-                    <li>Pawel Trofimiuk</li>
-                    <li>Peder Madsen</li>
-                    <li>Peter</li>
-                    <li>Peter Drayton</li>
-                    <li>Peter Farrelly</li>
-                    <li>Peter Okelmann</li>
-                    <li>Petra Lohmann</li>
-                    <li>Petri Heiskanen</li>
-                    <li>Phil Wu</li>
-                    <li>Philip Edwards</li>
-                    <li>Philip Merricks</li>
-                    <li>Pierre Brassart</li>
-                    <li>Pierre Peine</li>
-                    <li>posicat</li>
-                    <li>pozitron03</li>
-                    <li>Przemysław Szypowicz</li>
-                    <li>P_Dmitrij</li>
-                    <li>Qteal</li>
-                    <li>Quattro Uno</li>
-                    <li>Quentin Peten</li>
-                    <li>Ralph Borchers</li>
-                    <li>Ranc1d</li>
-                    <li>Randall D Bilbrey</li>
-                    <li>RandomJerk</li>
-                    <li>Raphael Schitz</li>
-                    <li>Ref Chowdhury</li>
-                    <li>René Rathenau</li>
-                    <li>ReysDad</li>
-                    <li>Ricardo Marques</li>
-                    <li>Richard</li>
-                    <li>Richard Bernarts</li>
-                    <li>Richard Fancher</li>
-                    <li>Richard Freemantle</li>
-                    <li>Richard Michael</li>
-                    <li>Rico Cantrell</li>
-                    <li>Rob</li>
-                    <li>Rob Holden</li>
-                    <li>Rob Tongue</li>
-                    <li>Robert Klauco</li>
-                    <li>Robert Weemhoff</li>
-                    <li>Robin Gfatter</li>
-                    <li>Rodion DENISYUK</li>
-                    <li>Rohit Priyadarshi</li>
-                    <li>Rolfs 3D UG</li>
-                    <li>Ronald LeBaron</li>
-                    <li>Ronald Wells</li>
-                    <li>Ronny Haldorsen</li>
-                    <li>rotx</li>
-                    <li>Rufo Sanchez</li>
-                    <li>Russell Scott</li>
-                    <li>Ryan</li>
-                    <li>Ryan Peacock</li>
-                    <li>Samed Ozoglu</li>
-                    <li>Sameul Davies</li>
-                    <li>Samuel Cote</li>
-                    <li>Samuel Vetsch</li>
-                    <li>Samuel Walker</li>
-                    <li>Sarah Foster</li>
-                    <li>Sarten X</li>
-                    <li>Satish Alwani</li>
-                    <li>Scott</li>
-                    <li>Scott Gagon</li>
-                    <li>Scott Spicola</li>
-                    <li>Scott Tusing</li>
-                    <li>Scott Worthington</li>
-                    <li>Scuba</li>
-                    <li>Sean</li>
-                    <li>Sean Akers</li>
-                    <li>Sean c Rickard</li>
-                    <li>SEAT</li>
-                    <li>Sebastian</li>
-                    <li>Seonwoo Lee</li>
-                    <li>Sergey Lukjanov</li>
-                    <li>Seth Jennings</li>
-                    <li>Shane Selling</li>
-                    <li>Shawn Butts</li>
-                    <li>Sheran Gunasekera</li>
-                    <li>Shichun Chen</li>
-                    <li>Shin Guey Wong</li>
-                    <li>Simon Evans</li>
-                    <li>Simon Sundgaard</li>
-                    <li>Simplistic Realities</li>
-                    <li>Sirmo</li>
-                    <li>Snowy Maslov</li>
-                    <li>Solve Technology</li>
-                    <li>srepac</li>
-                    <li>Stefan Bautz</li>
-                    <li>Stefan Müller</li>
-                    <li>Stefan Stemmer</li>
-                    <li>Stefan Vaillant</li>
-                    <li>Stephan Schmidt</li>
-                    <li>Stephen</li>
-                    <li>Stephen Hocking</li>
-                    <li>Steve Jones</li>
-                    <li>Steve Kerr</li>
-                    <li>Steve Ovens</li>
-                    <li>Steve Stringham</li>
-                    <li>Steven Richter</li>
-                    <li>Stratagem Solutions Ltd</li>
-                    <li>Sven Breckler</li>
-                    <li>sudo34</li>
-                    <li>SuperHiTech</li>
-                    <li>Tango_Echo_Alpha</li>
-                    <li>Tarlak Desaydrone</li>
-                    <li>TechBear</li>
-                    <li>techlobo</li>
-                    <li>Ted</li>
-                    <li>Tejun Heo</li>
-                    <li>TheSnowedOne</li>
-                    <li>TheTechGiant</li>
-                    <li>Thomas Charisoulis</li>
-                    <li>Thomas Gitlin</li>
-                    <li>Thomas Hagenmaier</li>
-                    <li>Thomas Hedberg Jensen</li>
-                    <li>Thomas Price</li>
-                    <li>Thomas Søfteland</li>
-                    <li>Tim Lenz</li>
-                    <li>Tim Wilkinson</li>
-                    <li>Timo Brinkmann</li>
-                    <li>Timothee Besset</li>
-                    <li>TitomusPrime</li>
-                    <li>Tobias Schafferhans</li>
-                    <li>Tom Lawson</li>
-                    <li>Tom York</li>
-                    <li>Tomas Kuchta</li>
-                    <li>Tomáš hrubý</li>
-                    <li>Torsten Droste</li>
-                    <li>Torsten Knoll</li>
-                    <li>Tracy Fitch</li>
-                    <li>Tristan Schoening</li>
-                    <li>Truman Kilen</li>
-                    <li>turbochris</li>
-                    <li>tutanak</li>
-                    <li>Tyler</li>
-                    <li>Udo Schroeter</li>
-                    <li>Uli Fahrer</li>
-                    <li>Vasily Lazarev</li>
-                    <li>Venmo</li>
-                    <li>Vidru Eduard</li>
-                    <li>Vicente Salvador Cubedo</li>
-                    <li>Viktor Aschenbrenner</li>
-                    <li>Viktor Ekmark</li>
-                    <li>Vincent Chov</li>
-                    <li>Vlad Sterescu</li>
-                    <li>Volker Gropp</li>
-                    <li>Walli</li>
-                    <li>Walter_Ego</li>
-                    <li>William Wenzel</li>
-                    <li>Will Froning</li>
-                    <li>William Hooper</li>
-                    <li>William Perrin</li>
-                    <li>William Stearns</li>
-                    <li>Woojin Son</li>
-                    <li>xMdb</li>
-                    <li>Yanko Kaneti</li>
-                    <li>Yaroslav Kulikovskikh</li>
-                    <li>Yethal</li>
-                    <li>Yevgeniy Kuksenko</li>
-                    <li>Yew Kay Yan</li>
-                    <li>Yigal Dar</li>
-                    <li>Yogi</li>
-                    <li>YURI LEE</li>
-                    <li>Yurii Ostapchuk</li>
-                    <li>Zeljko</li>
-                    <li>zgen</li>
-                    <li>Zoltan Magyari</li>
-                    <li>Zsombor Vari</li>
-                  </ul>
                 </div>
               </div>
         </div><br>
-        <p class="text credits"><a target="_blank" href="https://pikvm.org" i18n="index_text_10">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org" i18n="index_text_11">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13">One-KVM Documentation</a></p>
+        <p class="text credits"><a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13">One-KVM Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org" i18n="index_text_10">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org" i18n="index_text_11">Documentation</a></p>
       </div>
     </div>
     <div class="window window-resizable" id="webterm-window" style="width: 640px; height: 480px">
@@ -3061,7 +2366,7 @@
     </ul>
     <ul class="footer">
       <li class="left"><span id="kvmd-meta-server-host" title="Server name (see System/About)"></span>&nbsp; | &nbsp;<span id="kvmd-version-kvmd" title="KVMD version"></span>&nbsp; | &nbsp;<span id="kvmd-version-streamer" title="Streamer version"></span></li>
-      <li class="right"><a target="_blank" href="https://pikvm.org" i18n="index_text_10">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org" i18n="index_text_11">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13">One-KVM Documentation</a></li>
+      <li class="right"><a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13">One-KVM Documentation</a></li>
     </ul>
   </body>
 </html>

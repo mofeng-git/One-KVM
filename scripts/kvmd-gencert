@@ -4,6 +4,7 @@
 #    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#    Copyright (C) 2023-2025  SilentWind <mofeng654321@hotmail.com>          #
 #                                                                            #
 #    This program is free software: you can redistribute it and/or modify    #
 #    it under the terms of the GNU General Public License as published by    #
@@ -55,7 +56,7 @@ cd "$path"
 #   - https://msol.io/blog/tech/create-a-self-signed-ecc-certificate
 openssl ecparam -out server.key -name prime256v1 -genkey
 openssl req -new -x509 -sha256 -nodes -key server.key -out server.crt -days 3650 \
-	-subj "/C=US/O=PiKVM/OU=PiKVM/CN=localhost"
+	-subj "/C=CN/O=One-KVM/OU=One-KVM/CN=localhost"
 
 #chown "root:kvmd-$target" "$path"/*
 chmod 440 "$path/server.key"

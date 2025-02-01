@@ -150,5 +150,6 @@
     "msd-message-rw-enabled":"Read-write mode is enabled",
     "msd-message-downloads":"The image is being downloaded from One-KVM",
     "msd-message-another-user-uploads":"Another user uploads an image",
-    "page-full-tab-stream-switch":"Expand for the entire tab by default"
+    "page-full-tab-stream-switch":"Expand for the entire tab by default",
+    "hid-keyboard-bad-link-switch":"Bad link mode (release keys immediately)"
 }

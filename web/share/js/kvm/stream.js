@@ -117,6 +117,11 @@ export function Streamer() {
 
 		//hidden stream-record-stop-button
 		document.getElementById('stream-record-stop-button').disabled = true;
+
+		// 修改这里:设置默认模式为 mjpeg
+		let defaultMode = "mjpeg";
+		let mode = tools.storage.get("stream.mode", defaultMode);
+		tools.radio.clickValue("stream-mode-radio", mode);
 	};
 
 	/************************************************************************/
@@ -225,7 +230,7 @@ export function Streamer() {
 				tools.feature.setEnabled($("stream-mic"), false);
 			}
 
-			let mode = tools.storage.get("stream.mode", "janus");
+			let mode = tools.storage.get("stream.mode", "mjpeg"); // 这里也改为默认 mjpeg
 			if (mode === "janus" && !has_janus) {
 				mode = "media";
 			}
@@ -306,21 +311,25 @@ export function Streamer() {
 			mode = __streamer.getMode();
 		}
 		__streamer.stopStream();
-		if (mode === "janus") {
+		if (mode === "mjpeg") {
+			// For mjpeg mode, create an instance of MjpegStreamer
+			__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
+			tools.feature.setEnabled($("stream-orient"), false);
+			tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
+			tools.feature.setEnabled($("stream-mic"), false); // Ditto
+		} else if (mode === "media") {
+			// For media mode, create an instance of MediaStreamer
+			__streamer = new MediaStreamer(__setActive, __setInactive, __setInfo);
+			tools.feature.setEnabled($("stream-orient"), false);
+			tools.feature.setEnabled($("stream-audio"), false); // Assuming this should be disabled for MediaStreamer as well
+			tools.feature.setEnabled($("stream-mic"), false); // Ditto
+		} else { // janus
+			// For janus mode, create an instance of JanusStreamer with specific settings
 			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo,
 				tools.storage.getInt("stream.orient", 0), !$("stream-video").muted, $("stream-mic-switch").checked);
 			// Firefox doesn't support RTP orientation:
 			//  - https://bugzilla.mozilla.org/show_bug.cgi?id=1316448
 			tools.feature.setEnabled($("stream-orient"), !tools.browser.is_firefox);
-		} else {
-			if (mode === "media") {
-				__streamer = new MediaStreamer(__setActive, __setInactive, __setInfo);
-			} else { // mjpeg
-				__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
-			}
-			tools.feature.setEnabled($("stream-orient"), false);
-			tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
-			tools.feature.setEnabled($("stream-mic"), false); // Ditto
 		}
 		if (wm.isWindowVisible($("stream-window"))) {
 			__streamer.ensureStream((__state && __state.streamer !== undefined) ? __state.streamer : null);
@@ -369,7 +378,7 @@ export function Streamer() {
 			if (ok) {
 				stream_now_fps = tools.slider.getValue($("stream-desired-fps-slider"));
 				let recordedBlobs = [];
-				//"mjpeg" or "janus"
+				//"mjpeg" or "janus" or "media"
 				let stream_type = document.querySelector('input[name="stream-mode-radio"]:checked').value;
 				if ( stream_type == "mjpeg"){
 					
@@ -378,9 +387,13 @@ export function Streamer() {
 					var ctx = stream_mjpeg_canvas.getContext('2d');
 					stream_mjpeg_canvas.width = stream_mjpeg_img.width;
 					stream_mjpeg_canvas.height = stream_mjpeg_img.height;
-					const stream = stream_mjpeg_canvas.captureStream(stream_now_fps); // Capture FPS
+					const stream = stream_mjpeg_canvas.captureStream(stream_now_fps);
 					mediaRecorder = new MediaRecorder(stream);
-				}else{
+				}else if(stream_type == "media"){
+					const stream_canvas = document.getElementById("stream-canvas")
+					stream_canvas.captureStream = stream_canvas.captureStream || stream_canvas.mozCaptureStream;
+					mediaRecorder = new MediaRecorder(stream_canvas.captureStream(stream_now_fps));
+				}else if(stream_type == "janus"){
 					const stream = document.getElementById("stream-video")
 					stream.captureStream = stream.captureStream || stream.mozCaptureStream;
 					mediaRecorder = new MediaRecorder(stream.captureStream());
