@@ -26,46 +26,46 @@
   <head>
     <meta charset="utf-8">
     <title>PiKVM Session</title>
-    <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
-    <link rel="manifest" href="/share/site.webmanifest">
-    <link rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5">
+    <link rel="apple-touch-icon" sizes="180x180" href="../share/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../share/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../share/favicon-16x16.png">
+    <link rel="manifest" href="../share/site.webmanifest">
+    <link rel="mask-icon" href="../share/safari-pinned-tab.svg" color="#5bbad5">
     <meta name="msapplication-TileColor" content="#2b5797">
     <meta name="theme-color" content="#ffffff">
-    <link rel="stylesheet" href="/share/css/vars.css">
-    <link rel="stylesheet" href="/share/css/main.css">
-    <link rel="stylesheet" href="/share/css/navbar.css">
-    <link rel="stylesheet" href="/share/css/window.css">
-    <link rel="stylesheet" href="/share/css/modal.css">
-    <link rel="stylesheet" href="/share/css/led.css">
-    <link rel="stylesheet" href="/share/css/slider.css">
-    <link rel="stylesheet" href="/share/css/switch.css">
-    <link rel="stylesheet" href="/share/css/radio.css">
-    <link rel="stylesheet" href="/share/css/progress.css">
-    <link rel="stylesheet" href="/share/css/keypad.css">
-    <link rel="stylesheet" href="/share/css/tabs.css">
-    <link rel="stylesheet" href="/share/css/kvm/stream.css">
-    <link rel="stylesheet" href="/share/css/kvm/hid.css">
-    <link rel="stylesheet" href="/share/css/kvm/msd.css">
-    <link rel="stylesheet" href="/share/css/kvm/system.css">
-    <link rel="stylesheet" href="/share/css/kvm/keyboard.css">
-    <link rel="stylesheet" href="/share/css/kvm/about.css">
-    <link rel="stylesheet" href="/share/css/user.css">
-    <script type="module">import {main} from "/share/js/kvm/main.js";
+    <link rel="stylesheet" href="../share/css/vars.css">
+    <link rel="stylesheet" href="../share/css/main.css">
+    <link rel="stylesheet" href="../share/css/navbar.css">
+    <link rel="stylesheet" href="../share/css/window.css">
+    <link rel="stylesheet" href="../share/css/modal.css">
+    <link rel="stylesheet" href="../share/css/led.css">
+    <link rel="stylesheet" href="../share/css/slider.css">
+    <link rel="stylesheet" href="../share/css/switch.css">
+    <link rel="stylesheet" href="../share/css/radio.css">
+    <link rel="stylesheet" href="../share/css/progress.css">
+    <link rel="stylesheet" href="../share/css/keypad.css">
+    <link rel="stylesheet" href="../share/css/tabs.css">
+    <link rel="stylesheet" href="../share/css/kvm/stream.css">
+    <link rel="stylesheet" href="../share/css/kvm/hid.css">
+    <link rel="stylesheet" href="../share/css/kvm/msd.css">
+    <link rel="stylesheet" href="../share/css/kvm/system.css">
+    <link rel="stylesheet" href="../share/css/kvm/keyboard.css">
+    <link rel="stylesheet" href="../share/css/kvm/about.css">
+    <link rel="stylesheet" href="../share/css/user.css">
+    <script type="module">import {main} from "../share/js/kvm/main.js";
       main();
     </script>
   </head>
   <body class="body-no-select">
     <ul id="navbar">
-      <li class="left"><a id="logo" href="/">&larr;&nbsp;&nbsp;<img class="svg-gray" src="/share/svg/logo.svg" alt="&amp;pi;-kvm"></a></li>
+      <li class="left"><a id="logo" href="/">&larr;&nbsp;&nbsp;<img class="svg-gray" src="../share/svg/logo.svg" alt="&amp;pi;-kvm"></a></li>
       <div class="hidden" id="hw-health-dropdown">
-        <li class="left"><a class="menu-button" href="#"><img class="hidden" id="hw-health-undervoltage-led" src="/share/svg/led-undervoltage.svg"><img class="hidden" id="hw-health-overheating-led" src="/share/svg/led-overheating.svg"></a>
+        <li class="left"><a class="menu-button" href="#"><img class="hidden" id="hw-health-undervoltage-led" src="../share/svg/led-undervoltage.svg"><img class="hidden" id="hw-health-overheating-led" src="../share/svg/led-overheating.svg"></a>
           <div class="menu">
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
                     </tr>
                     <tr>
@@ -79,7 +79,7 @@
                   <div class="text">
                     <table>
                       <tr>
-                        <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-undervoltage.svg"></td>
+                        <td rowspan="2"><img class="sign led-gray" src="../share/svg/led-undervoltage.svg"></td>
                         <td style="line-height:1.5"><b>Undervoltage detected</b></td>
                       </tr>
                       <tr>
@@ -94,7 +94,7 @@
                   <div class="text">
                     <table>
                       <tr>
-                        <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-overheating.svg"></td>
+                        <td rowspan="2"><img class="sign led-gray" src="../share/svg/led-overheating.svg"></td>
                         <td style="line-height:1.5"><b>Overheating detected</b></td>
                       </tr>
                       <tr>
@@ -108,12 +108,12 @@
         </li>
       </div>
       <div class="hidden" id="fan-health-dropdown">
-        <li class="left"><a class="menu-button" href="#"><img class="hidden" id="fan-health-led" src="/share/svg/led-fan.svg"></a>
+        <li class="left"><a class="menu-button" href="#"><img class="hidden" id="fan-health-led" src="../share/svg/led-fan.svg"></a>
           <div class="menu">
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
                     </tr>
                     <tr>
@@ -127,7 +127,7 @@
                   <div class="text">
                     <table>
                       <tr>
-                        <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-fan.svg"></td>
+                        <td rowspan="2"><img class="sign led-gray" src="../share/svg/led-fan.svg"></td>
                         <td style="line-height:1.5"><b>Fan failed</b></td>
                       </tr>
                       <tr>
@@ -139,7 +139,7 @@
           </div>
         </li>
       </div>
-      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="/share/svg/led-video.svg"><img class="led-gray" id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg"><span>System</span></a>
+      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="../share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="../share/svg/led-video.svg"><img class="led-gray" id="hid-keyboard-led" src="../share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="../share/svg/led-hid-mouse.svg"><span>System</span></a>
         <div class="menu" id="system-menu">
           <table class="kv">
             <tr>
@@ -163,7 +163,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>WebRTC is not supported by this browser</b></td>
                     </tr>
                   </table>
@@ -174,7 +174,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Direct H.264 streaming is not supported</b></td>
                     </tr>
                   </table>
@@ -185,7 +185,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>H.264 is not supported by this browser</b></td>
                     </tr>
                   </table>
@@ -497,7 +497,7 @@
           </div>
         </div>
       </li>
-      <li class="right feature-disabled" id="atx-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" id="atx-hdd-led" src="/share/svg/led-atx-hdd.svg"><span>ATX</span></a>
+      <li class="right feature-disabled" id="atx-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="atx-power-led" src="../share/svg/led-atx-power.svg"><img class="led-gray" id="atx-hdd-led" src="../share/svg/led-atx-hdd.svg"><span>ATX</span></a>
         <div class="menu">
           <div class="text"><b>Control the server's power<br></b><sub>Use the short click for ACPI shutdown</sub></div>
           <hr>
@@ -522,7 +522,7 @@
           </div>
         </div>
       </li>
-      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="/share/svg/led-msd.svg"><span>Drive</span></a>
+      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="../share/svg/led-msd.svg"><span>Drive</span></a>
         <div class="menu" id="msd-menu">
           <div class="text"><b>Mass Storage Drive: </b><span id="msd-status"></span><br></div>
           <hr>
@@ -530,7 +530,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Mass Storage Drive is offline</b></td>
                     </tr>
                   </table>
@@ -541,7 +541,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Current image is broken!</b></td>
                     </tr>
                     <tr>
@@ -555,7 +555,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Current image is too big for DVD!</b></td>
                     </tr>
                     <tr>
@@ -569,7 +569,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Current image is out of storage</b></td>
                     </tr>
                     <tr>
@@ -583,7 +583,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Read-write mode is enabled</b></td>
                     </tr>
                     <tr>
@@ -599,7 +599,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/info.svg"></td>
                       <td style="line-height:1.5"><b>The image is being downloaded from PiKVM</b></td>
                     </tr>
                     <tr>
@@ -659,7 +659,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/info.svg"></td>
                       <td style="line-height:1.5"><b>Another user uploads an image</b></td>
                     </tr>
                   </table>
@@ -725,7 +725,7 @@
           </div>
         </div>
       </li>
-      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="/share/svg/led-gear.svg"><span>Macro</span></a>
+      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="../share/svg/led-gear.svg"><span>Macro</span></a>
         <div class="menu">
           <div class="text"><b>Record and play HID/ATX/GPIO actions<br></b><sub>For security reasons, the record will not be saved on the PiKVM</sub></div>
           <hr>
@@ -768,7 +768,7 @@
           </div>
         </div>
       </li>
-      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="/share/svg/led-gear.svg"><span>Text</span></a>
+      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="../share/svg/led-gear.svg"><span>Text</span></a>
         <div class="menu" id="text-menu">
           <div class="text"><b>Paste text as keypress sequence<br></b><sub>Please note that PiKVM cannot switch the keyboard layout</sub></div>
           <hr>
@@ -855,7 +855,7 @@
           <hr>
           <div class="buttons">
             <div class="buttons-row">
-              <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
+              <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="../share/svg/led-square.svg"></button>
               <button class="row50" data-force-hide-menu data-shortcut="MetaLeft">&bull; Left Win</button>
             </div>
             <hr>
@@ -931,7 +931,7 @@
       <li class="right feature-disabled" id="gpio-dropdown"><a class="menu-button" id="gpio-menu-button" href="#"><span>GPIO</span></a>
         <div class="menu" id="gpio-menu"></div>
       </li>
-      <li class="right feature-disabled" id="switch-dropdown"><a class="menu-button" id="switch-menu-button" href="#"><img class="led-gray" id="switch-atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" id="switch-atx-hdd-led" src="/share/svg/led-atx-hdd.svg"><span>Switch <i><sub id="switch-active-port"></sub></i></span></a>
+      <li class="right feature-disabled" id="switch-dropdown"><a class="menu-button" id="switch-menu-button" href="#"><img class="led-gray" id="switch-atx-power-led" src="../share/svg/led-atx-power.svg"><img class="led-gray" id="switch-atx-hdd-led" src="../share/svg/led-atx-hdd.svg"><span>Switch <i><sub id="switch-active-port"></sub></i></span></a>
         <div class="menu" id="switch-menu">
           <table style="border-spacing: 0px">
             <tr>
@@ -950,7 +950,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/info.svg"></td>
                       <td style="line-height:1.5"><b>Good news! Your switch is ready to get the firmware update</b></td>
                     </tr>
                     <tr>
@@ -992,7 +992,7 @@
       </div>
       <div id="stream-info"></div>
       <button class="window-button-exit-full-tab">&#9660;</button>
-      <div class="stream-box-offline" id="stream-box"><img id="stream-image" src="/share/png/blank-stream.png">
+      <div class="stream-box-offline" id="stream-box"><img id="stream-image" src="../share/png/blank-stream.png">
         <video class="hidden" id="stream-video" disablePictureInPicture="true" autoplay playsinline muted></video>
         <canvas class="hidden" id="stream-canvas"></canvas>
         <div id="stream-fullscreen-active"></div>
@@ -1261,7 +1261,7 @@
           </div>
           <div class="keypad-row">
                 <div class="key wide-2 left small" data-code="CapsLock">
-                  <div class="label"><img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="../share/svg/led-square.svg"><br> Caps Lock
                   </div>
                 </div>
                     <div class="spacer"></div>
@@ -1436,7 +1436,7 @@
                 </div>
                     <div class="spacer-fixed"></div>
                 <div class="key small" data-code="ScrollLock">
-                  <div class="label"><img class="inline-lamp-small hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-scroll-led led-gray" src="../share/svg/led-square.svg"><br> ScrLk
                   </div>
                 </div>
                     <div class="spacer-fixed"></div>
@@ -1532,7 +1532,7 @@
           <hr>
           <div class="keypad-row">
                 <div class="key small" data-code="NumLock">
-                  <div class="label"><img class="inline-lamp-small hid-keyboard-num-led led-gray" src="/share/svg/led-square.svg"><br> NmLk
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-num-led led-gray" src="../share/svg/led-square.svg"><br> NmLk
                   </div>
                 </div>
                     <div class="spacer-fixed"></div>
@@ -1738,7 +1738,7 @@
                 </div>
                     <div class="spacer"></div>
                 <div class="key small" data-code="ScrollLock">
-                  <div class="label"><img class="inline-lamp-small hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-scroll-led led-gray" src="../share/svg/led-square.svg"><br> ScrLk
                   </div>
                 </div>
                     <div class="spacer"></div>
@@ -1911,7 +1911,7 @@
           </div>
           <div class="keypad-row">
                 <div class="key wide-2 left small" data-code="CapsLock">
-                  <div class="label"><img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="../share/svg/led-square.svg"><br> Caps Lock
                   </div>
                 </div>
                     <div class="spacer"></div>
@@ -2265,7 +2265,7 @@
       <div id="about">
         <table>
           <tr>
-            <td class="logo"><a href="https://pikvm.org" target="_blank"><img class="svg-gray" src="/share/svg/logo.svg" alt="PiKVM" height="40"></a></td>
+            <td class="logo"><a href="https://pikvm.org" target="_blank"><img class="svg-gray" src="../share/svg/logo.svg" alt="PiKVM" height="40"></a></td>
             <td>
               <table>
                 <tr>
