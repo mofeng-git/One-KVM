@@ -39,15 +39,15 @@ for _variant in "${_variants[@]}"; do
 	pkgname+=(kvmd-platform-$_platform-$_board)
 done
 pkgbase=kvmd
-pkgver=4.20
+pkgver=4.49
 pkgrel=1
 pkgdesc="The main PiKVM daemon"
 url="https://github.com/pikvm/kvmd"
 license=(GPL)
 arch=(any)
 depends=(
-	"python>=3.12"
-	"python<3.13"
+	"python>=3.13"
+	"python<3.14"
 	python-yaml
 	python-aiohttp
 	python-aiofiles
@@ -79,6 +79,7 @@ depends=(
 	python-mako
 	python-luma-oled
 	python-pyusb
+	python-pyudev
 	"libgpiod>=2.1"
 	freetype2
 	"v4l-utils>=1.22.1-1"
@@ -89,11 +90,11 @@ depends=(
 	iproute2
 	dnsmasq
 	ipmitool
-	"janus-gateway-pikvm>=0.14.2-3"
+	"janus-gateway-pikvm>=1.3.0"
 	certbot
 	platform-io-access
 	raspberrypi-utils
-	"ustreamer>=6.16"
+	"ustreamer>=6.26"
 
 	# Systemd UDEV bug
 	"systemd>=248.3-2"
@@ -167,7 +168,7 @@ package_kvmd() {
 	install -DTm644 configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
 	mkdir -p "$pkgdir/usr/share/kvmd"
-	cp -r {hid,web,extras,contrib/keymaps} "$pkgdir/usr/share/kvmd"
+	cp -r {switch,hid,web,extras,contrib/keymaps} "$pkgdir/usr/share/kvmd"
 	find "$pkgdir/usr/share/kvmd/web" -name '*.pug' -exec rm -f '{}' \;
 
 	local _cfg_default="$pkgdir/usr/share/kvmd/configs.default"
@@ -209,7 +210,7 @@ for _variant in "${_variants[@]}"; do
 		cd \"kvmd-\$pkgver\"
 
 		pkgdesc=\"PiKVM platform configs - $_platform for $_board\"
-		depends=(kvmd=$pkgver-$pkgrel \"linux-rpi-pikvm>=6.6.45-1\" \"raspberrypi-bootloader-pikvm>=20240818-1\")
+		depends=(kvmd=$pkgver-$pkgrel \"linux-rpi-pikvm>=6.6.45-10\" \"raspberrypi-bootloader-pikvm>=20240818-1\")
 
 		backup=(
 			etc/sysctl.d/99-kvmd.conf
@@ -253,8 +254,12 @@ for _variant in "${_variants[@]}"; do
 		fi
 
 		if [[ $_platform =~ ^.*-hdmi$ ]]; then
-			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex)
+			backup=(\"\${backup[@]}\" etc/kvmd/tc358743-edid.hex etc/kvmd/switch-edid.hex)
 			install -DTm444 configs/kvmd/edid/$_base.hex \"\$pkgdir/etc/kvmd/tc358743-edid.hex\"
+			ln -s tc358743-edid.hex \"\$pkgdir/etc/kvmd/switch-edid.hex\"
+		else
+			backup=(\"\${backup[@]}\" etc/kvmd/switch-edid.hex)
+			install -DTm444 configs/kvmd/edid/_no-1920x1200.hex \"\$pkgdir/etc/kvmd/switch-edid.hex\"
 		fi
 
 		mkdir -p \"\$pkgdir/usr/share/kvmd\"

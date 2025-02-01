@@ -25,6 +25,7 @@ from typing import Any
 from ..keyboard.mappings import KEYMAP
 
 from ..mouse import MouseRange
+from ..mouse import MouseDelta
 
 from . import check_string_in_list
 
@@ -46,7 +47,7 @@ def valid_hid_key(arg: Any) -> str:
 
 def valid_hid_mouse_move(arg: Any) -> int:
     arg = valid_number(arg, name="Mouse move")
-    return min(max(MouseRange.MIN, arg), MouseRange.MAX)
+    return MouseRange.normalize(arg)
 
 
 def valid_hid_mouse_button(arg: Any) -> str:
@@ -55,4 +56,4 @@ def valid_hid_mouse_button(arg: Any) -> str:
 
 def valid_hid_mouse_delta(arg: Any) -> int:
     arg = valid_number(arg, name="Mouse delta")
-    return min(max(-127, arg), 127)
+    return MouseDelta.normalize(arg)

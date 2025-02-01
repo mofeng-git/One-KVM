@@ -35,6 +35,8 @@ kvmd:
             - "--process-name-prefix={process_name_prefix}"
             - "--notify-parent"
             - "--no-log-colors"
+            - "--jpeg-sink=kvmd::ustreamer::jpeg"
+            - "--jpeg-sink-mode=0660"
 
     gpio:
         drivers:
@@ -148,8 +150,6 @@ vnc:
             enabled: true
 
     memsink:
-        jpeg:
-            sink: ""
         h264:
             sink: ""
 

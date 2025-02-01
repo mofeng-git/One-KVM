@@ -29,8 +29,12 @@ import {tools, $} from "../tools.js";
 var _Janus = null;
 
 
-export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, __allow_audio) {
+export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, __allow_audio, __allow_mic) {
 	var self = this;
+
+	/************************************************************************/
+
+	__allow_mic = (__allow_audio && __allow_mic); // XXX: Mic only with audio
 
 	var __stop = false;
 	var __ensuring = false;
@@ -45,10 +49,22 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 	var __state = null;
 	var __frames = 0;
 
+	/************************************************************************/
+
 	self.getOrientation = () => __orient;
 	self.isAudioAllowed = () => __allow_audio;
+	self.isMicAllowed = () => __allow_mic;
 
-	self.getName = () => (__allow_audio ? "H.264 + Audio" : "H.264");
+	self.getName = function() {
+		let name = "WebRTC H.264";
+		if (__allow_audio) {
+			name += " + Audio";
+			if (__allow_mic) {
+				name += " + Mic";
+			}
+		}
+		return name;
+	};
 	self.getMode = () => "janus";
 
 	self.getResolution = function() {
@@ -75,9 +91,9 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 
 	var __ensureJanus = function(internal) {
 		if (__janus === null && !__stop && (!__ensuring || internal)) {
+			__ensuring = true;
 			__setInactive();
 			__setInfo(false, false, "");
-			__ensuring = true;
 			__logInfo("Starting Janus ...");
 			__janus = new _Janus({
 				"server": `${tools.is_https ? "wss" : "ws"}://${location.host}/janus/ws`,
@@ -148,6 +164,16 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 			el.srcObject = new MediaStream();
 		}
 		el.srcObject.addTrack(track);
+		// FIXME: Задержка уменьшается, но начинаются заикания на кейфреймах.
+		// XXX: Этот пример переехал из януса 0.x, перед использованием адаптировать к 1.x.
+		//   - https://github.com/Glimesh/janus-ftl-plugin/issues/101
+		/*if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.pc) {
+			for (let receiver of __handle.webrtcStuff.pc.getReceivers()) {
+				if (receiver.track && receiver.track.kind === "video" && receiver.playoutDelayHint !== undefined) {
+					receiver.playoutDelayHint = 0;
+				}
+			}
+		}*/
 	};
 
 	var __removeTrack = function(track) {
@@ -215,6 +241,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 						__setInfo(false, false, "");
 					} else if (msg.result.status === "features") {
 						tools.feature.setEnabled($("stream-audio"), msg.result.features.audio);
+						tools.feature.setEnabled($("stream-mic"), msg.result.features.mic);
 					}
 				} else if (msg.error_code || msg.error) {
 					__logError("Got uStreamer error message:", msg.error_code, "-", msg.error);
@@ -237,16 +264,12 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 					__logInfo("Handling SDP:", jsep);
 					let tracks = [{"type": "video", "capture": false, "recv": true, "add": true}];
 					if (__allow_audio) {
-						tracks.push({"type": "audio", "capture": false, "recv": true, "add": true});
+						tracks.push({"type": "audio", "capture": __allow_mic, "recv": true, "add": true});
 					}
 					__handle.createAnswer({
 						"jsep": jsep,
 
-						// Janus 1.x
 						"tracks": tracks,
-
-						// Janus 0.x
-						"media": {"audioSend": false, "videoSend": false, "data": false},
 
 						// Chrome is playing OPUS as mono without this hack
 						//   - https://issues.webrtc.org/issues/41481053 - IT'S NOT FIXED!
@@ -286,50 +309,6 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 				} else if (!added && reason === "ended") {
 					__removeTrack(track);
 				}
-			},
-
-			// Janus 0.x
-			"onremotestream": function(stream) {
-				if (stream === null) {
-					// https://github.com/pikvm/pikvm/issues/1084
-					// Этого вообще не должно происходить, но почему-то янусу в unmute
-					// может прилететь null-эвент. Костыляем, наблюдаем.
-					__logError("Got invalid onremotestream(null). Restarting Janus...");
-					__destroyJanus();
-					return;
-				}
-
-				let tracks = stream.getTracks();
-				__logInfo("Got a remote stream changes:", stream, tracks);
-
-				let has_video = false;
-				for (let track of tracks) {
-					if (track.kind == "video") {
-						has_video = true;
-						break;
-					}
-				}
-
-				if (!has_video && __isOnline()) {
-					// Chrome sends `muted` notifiation for tracks in `disconnected` ICE state
-					// and Janus.js just removes muted track from list of available tracks.
-					// But track still exists actually so it's safe to just ignore that case.
-					return;
-				}
-
-				_Janus.attachMediaStream($("stream-video"), stream);
-				__sendKeyRequired();
-				__startInfoInterval();
-
-				// FIXME: Задержка уменьшается, но начинаются заикания на кейфреймах.
-				//   - https://github.com/Glimesh/janus-ftl-plugin/issues/101
-				/*if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.pc) {
-					for (let receiver of __handle.webrtcStuff.pc.getReceivers()) {
-						if (receiver.track && receiver.track.kind === "video" && receiver.playoutDelayHint !== undefined) {
-							receiver.playoutDelayHint = 0;
-						}
-					}
-				}*/
 			},
 
 			"oncleanup": function() {
@@ -388,11 +367,12 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 
 	var __sendWatch = function() {
 		if (__handle) {
-			__logInfo(`Sending WATCH(orient=${__orient}, audio=${__allow_audio}) + FEATURES ...`);
+			__logInfo(`Sending WATCH(orient=${__orient}, audio=${__allow_audio}, mic=${__allow_mic}) + FEATURES ...`);
 			__handle.send({"message": {"request": "features"}});
 			__handle.send({"message": {"request": "watch", "params": {
 				"orientation": __orient,
 				"audio": __allow_audio,
+				"mic": __allow_mic,
 			}}});
 		}
 	};
@@ -446,12 +426,4 @@ JanusStreamer.ensure_janus = function(callback) {
 
 JanusStreamer.is_webrtc_available = function() {
 	return !!window.RTCPeerConnection;
-};
-
-JanusStreamer.is_h264_available = function() {
-	let ok = true;
-	if ($("stream-video").canPlayType) {
-		ok = $("stream-video").canPlayType("video/mp4; codecs=\"avc1.42E01F\"");
-	}
-	return ok;
 };

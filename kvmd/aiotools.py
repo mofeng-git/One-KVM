@@ -45,6 +45,11 @@ async def read_file(path: str) -> str:
         return (await file.read())
 
 
+async def write_file(path: str, text: str) -> None:
+    async with aiofiles.open(path, "w") as file:
+        await file.write(text)
+
+
 # =====
 def run(coro: Coroutine, final: (Coroutine | None)=None) -> None:
     # https://github.com/aio-libs/aiohttp/blob/a1d4dac1d/aiohttp/web.py#L515
@@ -166,7 +171,7 @@ def create_deadly_task(name: str, coro: Coroutine) -> asyncio.Task:
         except asyncio.CancelledError:
             pass
         except Exception:
-            logger.exception("Unhandled exception in deadly task, killing myself ...")
+            logger.exception("Unhandled exception in deadly task %r, killing myself ...", name)
             pid = os.getpid()
             if pid == 1:
                 os._exit(1)  # Docker workaround  # pylint: disable=protected-access

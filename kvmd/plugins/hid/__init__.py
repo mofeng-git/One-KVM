@@ -37,6 +37,7 @@ from ...validators.basic import valid_string_list
 from ...validators.hid import valid_hid_key
 from ...validators.hid import valid_hid_mouse_move
 
+from ...keyboard.mappings import WebModifiers
 from ...mouse import MouseRange
 
 from .. import BasePlugin
@@ -64,11 +65,13 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
         self.__mouse_x_range = (mouse_x_min, mouse_x_max)
         self.__mouse_y_range = (mouse_y_min, mouse_y_max)
 
-        self.__jiggler_enabled = jiggler_enabled
-        self.__jiggler_active = jiggler_active
-        self.__jiggler_interval = jiggler_interval
-        self.__jiggler_absolute = True
-        self.__activity_ts = 0
+        self.__j_enabled = jiggler_enabled
+        self.__j_active = jiggler_active
+        self.__j_interval = jiggler_interval
+        self.__j_absolute = True
+        self.__j_activity_ts = 0
+        self.__j_last_x = 0
+        self.__j_last_y = 0
 
     @classmethod
     def _get_base_options(cls) -> dict[str, Any]:
@@ -83,7 +86,7 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
                 "max": Option(MouseRange.MAX, type=valid_hid_mouse_move, unpack_as="mouse_y_max"),
             },
             "jiggler": {
-                "enabled":  Option(False, type=valid_bool, unpack_as="jiggler_enabled"),
+                "enabled":  Option(True,  type=valid_bool, unpack_as="jiggler_enabled"),
                 "active":   Option(False, type=valid_bool, unpack_as="jiggler_active"),
                 "interval": Option(60,    type=valid_int_f1, unpack_as="jiggler_interval"),
             },
@@ -137,13 +140,25 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
 
     # =====
 
-    def send_key_events(self, keys: Iterable[tuple[str, bool]], no_ignore_keys: bool=False) -> None:
+    async def send_key_events(
+        self,
+        keys: Iterable[tuple[str, bool]],
+        no_ignore_keys: bool=False,
+        slow: bool=False,
+    ) -> None:
+
         for (key, state) in keys:
             if no_ignore_keys or key not in self.__ignore_keys:
-                self.send_key_event(key, state)
+                if slow:
+                    await asyncio.sleep(0.02)
+                self.send_key_event(key, state, False)
 
-    def send_key_event(self, key: str, state: bool) -> None:
+    def send_key_event(self, key: str, state: bool, finish: bool) -> None:
         self._send_key_event(key, state)
+        if state and finish and (key not in WebModifiers.ALL and key != "PrintScreen"):
+            # Считаем что PrintScreen это модификатор для Alt+SysRq+...
+            # По-хорошему надо учитывать факт нажатия на Alt, но можно и забить.
+            self._send_key_event(key, False)
         self.__bump_activity()
 
     def _send_key_event(self, key: str, state: bool) -> None:
@@ -161,6 +176,8 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
     # =====
 
     def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        self.__j_last_x = to_x
+        self.__j_last_y = to_y
         if self.__mouse_x_range != MouseRange.RANGE:
             to_x = MouseRange.remap(to_x, *self.__mouse_x_range)
         if self.__mouse_y_range != MouseRange.RANGE:
@@ -229,37 +246,38 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
                 handler(*xy)
 
     def __bump_activity(self) -> None:
-        self.__activity_ts = int(time.monotonic())
+        self.__j_activity_ts = int(time.monotonic())
 
     def _set_jiggler_absolute(self, absolute: bool) -> None:
-        self.__jiggler_absolute = absolute
+        self.__j_absolute = absolute
 
     def _set_jiggler_active(self, active: bool) -> None:
-        if self.__jiggler_enabled:
-            self.__jiggler_active = active
+        if self.__j_enabled:
+            self.__j_active = active
 
     def _get_jiggler_state(self) -> dict:
         return {
             "jiggler": {
-                "enabled":  self.__jiggler_enabled,
-                "active":   self.__jiggler_active,
-                "interval": self.__jiggler_interval,
+                "enabled":  self.__j_enabled,
+                "active":   self.__j_active,
+                "interval": self.__j_interval,
             },
         }
 
     # =====
 
     async def systask(self) -> None:
-        factor = 1
         while True:
-            if self.__jiggler_active and (self.__activity_ts + self.__jiggler_interval < int(time.monotonic())):
-                for _ in range(5):
-                    if self.__jiggler_absolute:
-                        self.send_mouse_move_event(100 * factor, 100 * factor)
-                    else:
-                        self.send_mouse_relative_event(10 * factor, 10 * factor)
-                    factor *= -1
-                    await asyncio.sleep(0.1)
+            if self.__j_active and (self.__j_activity_ts + self.__j_interval < int(time.monotonic())):
+                if self.__j_absolute:
+                    (x, y) = (self.__j_last_x, self.__j_last_y)
+                    for move in [100, -100, 100, -100, 0]:
+                        self.send_mouse_move_event(MouseRange.normalize(x + move), MouseRange.normalize(y + move))
+                        await asyncio.sleep(0.1)
+                else:
+                    for move in [10, -10, 10, -10]:
+                        self.send_mouse_relative_event(move, move)
+                        await asyncio.sleep(0.1)
             await asyncio.sleep(1)
 
 

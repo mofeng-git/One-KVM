@@ -9,6 +9,8 @@ RUN echo 'Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch
 
 RUN pacman --noconfirm --ask=4 -Syy \
 	&& pacman --needed --noconfirm --ask=4 -S \
+		archlinux-keyring \
+	&& pacman --needed --noconfirm --ask=4 -S \
 		glibc \
 		pacman \
 		openssl \
@@ -17,7 +19,6 @@ RUN pacman --noconfirm --ask=4 -Syy \
 	&& pacman --noconfirm --ask=4 -Syu \
 	&& pacman --needed --noconfirm --ask=4 -S \
 		p11-kit \
-		archlinux-keyring \
 		ca-certificates \
 		ca-certificates-mozilla \
 		ca-certificates-utils \
@@ -48,6 +49,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-pyotp \
 		python-qrcode \
 		python-pyserial \
+		python-pyudev \
 		python-setproctitle \
 		python-psutil \
 		python-netifaces \

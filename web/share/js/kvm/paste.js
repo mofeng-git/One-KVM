@@ -34,15 +34,10 @@ export function Paste(__recorder) {
 
 	var __init__ = function() {
 		tools.storage.bindSimpleSwitch($("hid-pak-ask-switch"), "hid.pak.ask", true);
+		tools.storage.bindSimpleSwitch($("hid-pak-slow-switch"), "hid.pak.slow", false);
 		tools.storage.bindSimpleSwitch($("hid-pak-secure-switch"), "hid.pak.secure", false, function(value) {
 			$("hid-pak-text").style.setProperty("-webkit-text-security", (value ? "disc" : "none"));
 		});
-		tools.feature.setEnabled($("hid-pak-secure"), (
-			tools.browser.is_chrome
-			|| tools.browser.is_safari
-			|| tools.browser.is_opera
-		));
-
 		$("hid-pak-keymap-selector").addEventListener("change", function() {
 			tools.storage.set("hid.pak.keymap", $("hid-pak-keymap-selector").value);
 		});
@@ -73,10 +68,11 @@ export function Paste(__recorder) {
 				tools.el.setEnabled($("hid-pak-keymap-selector"), false);
 
 				let keymap = $("hid-pak-keymap-selector").value;
+				let slow = $("hid-pak-slow-switch").checked;
 
 				tools.debug(`HID: paste-as-keys ${keymap}: ${text}`);
 
-				tools.httpPost("/api/hid/print", {"limit": 0, "keymap": keymap}, function(http) {
+				tools.httpPost("/api/hid/print", {"limit": 0, "keymap": keymap, "slow": slow}, function(http) {
 					tools.el.setEnabled($("hid-pak-text"), true);
 					tools.el.setEnabled($("hid-pak-button"), true);
 					tools.el.setEnabled($("hid-pak-keymap-selector"), true);
@@ -86,7 +82,7 @@ export function Paste(__recorder) {
 					} else if (http.status !== 200) {
 						wm.error("HID paste error", http.responseText);
 					} else if (http.status === 200) {
-						__recorder.recordPrintEvent(text, keymap);
+						__recorder.recordPrintEvent(text, keymap, slow);
 					}
 				}, text, "text/plain");
 			};

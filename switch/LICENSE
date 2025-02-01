@@ -1,0 +1,15 @@
+The PiKVM Switch Firmware
+Copyright (C) 2024-2025
+
+This software is distributed in binary form and is allowed for run only on original PiKVM Switch hardware.
+
+Modifications are not allowed.
+
+One day we will publish the source code, but not today.
+
+=====
+Includes other software related under other licenses:
+- MIT: TinyUSB      - Copyright (c) 2018, hathach (tinyusb.org).
+- MIT: Pico-PIO-USB - Copyright (c) 2021 sekigon-gonnoc.
+- BSD: Pico-SDK     - Copyright 2020 (c) 2020 Raspberry Pi (Trading) Ltd.
+- BSD: FatFS        - Copyright (C) 20xx, ChaN, all right reserved.

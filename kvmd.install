@@ -102,6 +102,16 @@ EOF
 		touch -t 200701011000 /etc/fstab
 	fi
 
+	if [[ "$(vercmp "$2" 4.31)" -lt 0 ]]; then
+		if [[ "$(systemctl is-enabled kvmd-janus || true)" = enabled || "$(systemctl is-enabled kvmd-janus-static || true)" = enabled ]]; then
+			systemctl enable kvmd-media || true
+		fi
+	fi
+
+	if [[ "$(vercmp "$2" 4.47)" -lt 0 ]]; then
+		cp /usr/share/kvmd/configs.default/janus/janus.plugin.ustreamer.jcfg /etc/kvmd/janus || true
+	fi
+
 	# Some update deletes /etc/motd, WTF
 	# shellcheck disable=SC2015,SC2166
 	[ ! -f /etc/motd -a -f /etc/motd.pacsave ] && mv /etc/motd.pacsave /etc/motd || true

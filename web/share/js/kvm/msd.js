@@ -127,7 +127,7 @@ export function Msd() {
 
 		tools.hidden.setVisible($("msd-message-offline"), (state && !state.online));
 		tools.hidden.setVisible($("msd-message-image-broken"), (o && d.image && !d.image.complete && !s.uploading));
-		tools.hidden.setVisible($("msd-message-too-big-for-cdrom"), (o && d.cdrom && d.image && d.image.size >= 2359296000));
+		tools.hidden.setVisible($("msd-message-too-big-for-dvd"), (o && d.cdrom && d.image && d.image.size >= 33957083136));
 		tools.hidden.setVisible($("msd-message-out-of-storage"), (o && d.image && !d.image.in_storage));
 		tools.hidden.setVisible($("msd-message-rw-enabled"), (o && d.rw));
 		tools.hidden.setVisible($("msd-message-another-user-uploads"), (o && s.uploading && !__http));

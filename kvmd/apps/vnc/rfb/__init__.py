@@ -464,6 +464,10 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
         if self._encodings.has_ext_keys:  # Preferred method
             await self._write_fb_update("ExtKeys FBUR", 0, 0, RfbEncodings.EXT_KEYS, drain=True)
+
+        if self._encodings.has_ext_mouse:  # Preferred too
+            await self._write_fb_update("ExtMouse FBUR", 0, 0, RfbEncodings.EXT_MOUSE, drain=True)
+
         await self._on_set_encodings()
 
     async def __handle_fb_update_request(self) -> None:
@@ -486,11 +490,16 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def __handle_pointer_event(self) -> None:
         (buttons, to_x, to_y) = await self._read_struct("pointer event", "B HH")
+        ext_buttons = 0
+        if self._encodings.has_ext_mouse and (buttons & 0x80):  # Marker bit 7 for ext event
+            ext_buttons = await self._read_number("ext pointer event buttons", "B")
         await self._on_pointer_event(
             buttons={
                 "left": bool(buttons & 0x1),
                 "right": bool(buttons & 0x4),
                 "middle": bool(buttons & 0x2),
+                "up": bool(ext_buttons & 0x2),
+                "down": bool(ext_buttons & 0x1),
             },
             wheel={
                 "x": (-4 if buttons & 0x40 else (4 if buttons & 0x20 else 0)),

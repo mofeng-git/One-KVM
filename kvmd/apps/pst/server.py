@@ -24,6 +24,7 @@ import os
 import asyncio
 
 from aiohttp.web import Request
+from aiohttp.web import Response
 from aiohttp.web import WebSocketResponse
 
 from ...logging import get_logger
@@ -35,6 +36,7 @@ from ... import fstab
 
 from ...htserver import exposed_http
 from ...htserver import exposed_ws
+from ...htserver import make_json_response
 from ...htserver import WsSession
 from ...htserver import HttpServer
 
@@ -65,6 +67,16 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
             await ws.send_event("loop", {})
             return (await self._ws_loop(ws))
 
+    @exposed_http("GET", "/state")
+    async def __state_handler(self, _: Request) -> Response:
+        return make_json_response({
+            "clients": len(self._get_wss()),
+            "data": {
+                "path": self.__data_path,
+                "write_allowed": self.__is_write_available(),
+            },
+        })
+
     @exposed_ws("ping")
     async def __ws_ping_handler(self, ws: WsSession, _: dict) -> None:
         await ws.send_event("pong", {})
@@ -92,10 +104,10 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
         await self.__remount_storage(rw=False)
         logger.info("On-Cleanup complete")
 
-    async def _on_ws_opened(self) -> None:
+    async def _on_ws_opened(self, _: WsSession) -> None:
         self.__notifier.notify()
 
-    async def _on_ws_closed(self) -> None:
+    async def _on_ws_closed(self, _: WsSession) -> None:
         self.__notifier.notify()
 
     # ===== SYSTEM TASKS
@@ -117,7 +129,7 @@ class PstServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-inst
             await self.__notifier.wait()
 
     async def __broadcast_storage_state(self, clients: int, write_allowed: bool) -> None:
-        await self._broadcast_ws_event("storage_state", {
+        await self._broadcast_ws_event("storage", {
             "clients": clients,
             "data": {
                 "path": self.__data_path,

@@ -32,6 +32,7 @@ export function Atx(__recorder) {
 
 	/************************************************************************/
 
+	var __has_switch = null; // Or true/false
 	var __state = null;
 
 	var __init__ = function() {
@@ -54,12 +55,12 @@ export function Atx(__recorder) {
 			}
 			if (state.enabled !== undefined) {
 				__state.enabled = state.enabled;
-				tools.feature.setEnabled($("atx-dropdown"), __state.enabled);
+				tools.feature.setEnabled($("atx-dropdown"), (__state.enabled && !__has_switch));
 			}
 			if (__state.enabled !== undefined) {
 				if (state.busy !== undefined) {
+					__updateButtons(!state.busy);
 					__state.busy = state.busy;
-					__updateButtons(!__state.busy);
 				}
 				if (state.leds !== undefined) {
 					__state.leds = state.leds;
@@ -73,6 +74,11 @@ export function Atx(__recorder) {
 			__updateLeds(false, false, false);
 			__updateButtons(false);
 		}
+	};
+
+	self.setHasSwitch = function(has_switch) {
+		__has_switch = has_switch;
+		self.setState(__state);
 	};
 
 	var __updateLeds = function(power, hdd, busy) {
@@ -101,7 +107,7 @@ export function Atx(__recorder) {
 		if ($("atx-ask-switch").checked) {
 			wm.confirm(`
 				Are you sure you want to press the <b>${button}</b> button?<br>
-				Warning! This could case data loss on the server.
+				Warning! This could cause data loss on the server.
 			`).then(function(ok) {
 				if (ok) {
 					click_button();

@@ -53,7 +53,7 @@ static u8 _kbd_keys[6] = {0};
 static u8 _mouse_buttons = 0;
 static s16 _mouse_abs_x = 0;
 static s16 _mouse_abs_y = 0;
-#define _MOUSE_CLEAR { _mouse_buttons = 0; _mouse_abs_x = 0; _mouse_abs_y = 0; }
+#define _MOUSE_CLEAR { _mouse_buttons = 0; }
 
 
 static void _kbd_sync_report(bool new);
@@ -193,7 +193,7 @@ void ph_usb_send_clear(void) {
 	if (PH_O_IS_MOUSE_USB) {
 		_MOUSE_CLEAR;
 		if (PH_O_IS_MOUSE_USB_ABS) {
-			_mouse_abs_send_report(0, 0);
+			_mouse_abs_send_report(_mouse_abs_x, _mouse_abs_y);
 		} else { // PH_O_IS_MOUSE_USB_REL
 			_mouse_rel_send_report(0, 0, 0, 0);
 		}

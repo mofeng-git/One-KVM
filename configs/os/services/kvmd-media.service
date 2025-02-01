@@ -1,0 +1,16 @@
+[Unit]
+Description=PiKVM - Media proxy server
+After=kvmd.service
+
+[Service]
+User=kvmd-media
+Group=kvmd-media
+Type=simple
+Restart=always
+RestartSec=3
+
+ExecStart=/usr/bin/kvmd-media --run
+TimeoutStopSec=3
+
+[Install]
+WantedBy=multi-user.target

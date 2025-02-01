@@ -34,6 +34,7 @@ import {Msd} from "./msd.js";
 import {Streamer} from "./stream.js";
 import {Gpio} from "./gpio.js";
 import {Ocr} from "./ocr.js";
+import {Switch} from "./switch.js";
 
 
 export function Session() {
@@ -54,6 +55,7 @@ export function Session() {
 	var __msd = new Msd();
 	var __gpio = new Gpio(__recorder);
 	var __ocr = new Ocr(__streamer.getGeometry);
+	var __switch = new Switch();
 
 	var __info_hw_state = null;
 	var __info_fan_state = null;
@@ -291,7 +293,7 @@ export function Session() {
 
 		tools.httpGet("/api/auth/check", null, function(http) {
 			if (http.status === 200) {
-				__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws?legacy=0`);
+				__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/ws`);
 				__ws.sendHidEvent = (event) => __sendHidEvent(__ws, event.event_type, event.event);
 				__ws.onopen = __wsOpenHandler;
 				__ws.onmessage = __wsMessageHandler;
@@ -314,6 +316,9 @@ export function Session() {
 		if (event_type == "key") {
 			let data = __ascii_encoder.encode("\x01\x00" + event.key);
 			data[1] = (event.state ? 1 : 0);
+			if (event.finish === true) { // Optional
+				data[1] |= 0x02;
+			}
 			ws.send(data);
 
 		} else if (event_type == "mouse_button") {
@@ -363,14 +368,29 @@ export function Session() {
 		let data = JSON.parse(event.data);
 		switch (data.event_type) {
 			case "pong": __missed_heartbeats = 0; break;
-			case "info_state": __setInfoState(data.event); break;
-			case "gpio_state": __gpio.setState(data.event); break;
-			case "hid_state": __hid.setState(data.event); break;
-			case "hid_keymaps_state": __paste.setState(data.event); break;
-			case "atx_state": __atx.setState(data.event); break;
-			case "msd_state": __msd.setState(data.event); break;
-			case "streamer_state": __streamer.setState(data.event); break;
-			case "ocr_state": __ocr.setState(data.event); break;
+			case "info": __setInfoState(data.event); break;
+			case "gpio": __gpio.setState(data.event); break;
+			case "hid": __hid.setState(data.event); break;
+			case "hid_keymaps": __paste.setState(data.event); break;
+			case "atx": __atx.setState(data.event); break;
+			case "streamer": __streamer.setState(data.event); break;
+			case "ocr": __ocr.setState(data.event); break;
+
+			case "msd":
+				if (data.event.online === false) {
+					__switch.setMsdConnected(false);
+				} else if (data.event.drive !== undefined) {
+					__switch.setMsdConnected(data.event.drive.connected);
+				}
+				__msd.setState(data.event);
+				break;
+
+			case "switch":
+				if (data.event.model) {
+					__atx.setHasSwitch(data.event.model.ports.length > 0);
+				}
+				__switch.setState(data.event);
+				break;
 		}
 	};
 
@@ -401,6 +421,7 @@ export function Session() {
 		__streamer.setState(null);
 		__ocr.setState(null);
 		__recorder.setSocket(null);
+		__switch.setState(null);
 		__ws = null;
 
 		setTimeout(function() {

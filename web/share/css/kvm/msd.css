@@ -28,3 +28,7 @@ div#msd-menu div.msd-message,
 div#msd-menu input.msd-message {
 	display: none;
 }
+
+div#msd-menu select#msd-image-selector {
+	width: 100%;
+}

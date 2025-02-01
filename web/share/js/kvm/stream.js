@@ -27,6 +27,7 @@ import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
 
 import {JanusStreamer} from "./stream_janus.js";
+import {MediaStreamer} from "./stream_media.js";
 import {MjpegStreamer} from "./stream_mjpeg.js";
 
 
@@ -90,6 +91,15 @@ export function Streamer() {
 			if (__streamer.getMode() === "janus") {
 				let allow_audio = !$("stream-video").muted;
 				if (__streamer.isAudioAllowed() !== allow_audio) {
+					__resetStream();
+				}
+			}
+			tools.el.setEnabled($("stream-mic-switch"), !!value);
+		});
+
+		tools.storage.bindSimpleSwitch($("stream-mic-switch"), "stream.mic", false, function(allow_mic) {
+			if (__streamer.getMode() === "janus") {
+				if (__streamer.isMicAllowed() !== allow_mic) {
 					__resetStream();
 				}
 			}
@@ -174,17 +184,20 @@ export function Streamer() {
 		if (state.features) {
 			let f = state.features;
 			let l = state.limits;
-			let has_webrtc = JanusStreamer.is_webrtc_available();
-			let has_h264 = JanusStreamer.is_h264_available();
-			let has_janus = (__janus_imported && f.h264 && has_webrtc); // Don't check has_h264 for sure
+			let sup_h264 = $("stream-video").canPlayType("video/mp4; codecs=\"avc1.42E01F\"");
+			let sup_vd = MediaStreamer.is_videodecoder_available();
+			let sup_webrtc = JanusStreamer.is_webrtc_available();
+			let has_media = (f.h264 && sup_vd); // Don't check sup_h264 for sure
+			let has_janus = (__janus_imported && f.h264 && sup_webrtc); // Same
 
 			tools.info(
 				`Stream: Janus WebRTC state: features.h264=${f.h264},`
-				+ ` webrtc=${has_webrtc}, h264=${has_h264}, janus_imported=${__janus_imported}`
+				+ ` webrtc=${sup_webrtc}, h264=${sup_h264}, janus_imported=${__janus_imported}`
 			);
 
-			tools.hidden.setVisible($("stream-message-no-webrtc"), __janus_imported && f.h264 && !has_webrtc);
-			tools.hidden.setVisible($("stream-message-no-h264"), __janus_imported && f.h264 && !has_h264);
+			tools.hidden.setVisible($("stream-message-no-webrtc"), __janus_imported && f.h264 && !sup_webrtc);
+			tools.hidden.setVisible($("stream-message-no-vd"), f.h264 && !sup_vd);
+			tools.hidden.setVisible($("stream-message-no-h264"), __janus_imported && f.h264 && !sup_h264);
 
 			tools.slider.setRange($("stream-desired-fps-slider"), l.desired_fps.min, l.desired_fps.max);
 			if (f.resolution) {
@@ -196,21 +209,28 @@ export function Streamer() {
 			} else {
 				$("stream-resolution-selector").options.length = 0;
 			}
-			if (has_janus) {
+			if (f.h264) {
 				tools.slider.setRange($("stream-h264-bitrate-slider"), l.h264_bitrate.min, l.h264_bitrate.max);
 				tools.slider.setRange($("stream-h264-gop-slider"), l.h264_gop.min, l.h264_gop.max);
 			}
 
 			// tools.feature.setEnabled($("stream-quality"), f.quality); // Only on s.encoder.quality
 			tools.feature.setEnabled($("stream-resolution"), f.resolution);
-			tools.feature.setEnabled($("stream-h264-bitrate"), has_janus);
-			tools.feature.setEnabled($("stream-h264-gop"), has_janus);
-			tools.feature.setEnabled($("stream-mode"), has_janus);
-			if (!has_janus) {
+			tools.feature.setEnabled($("stream-h264-bitrate"), f.h264);
+			tools.feature.setEnabled($("stream-h264-gop"), f.h264);
+			tools.feature.setEnabled($("stream-mode"), f.h264);
+			if (!f.h264) {
 				tools.feature.setEnabled($("stream-audio"), false);
+				tools.feature.setEnabled($("stream-mic"), false);
 			}
 
-			let mode = (has_janus ? tools.storage.get("stream.mode", "janus") : "mjpeg");
+			let mode = tools.storage.get("stream.mode", "janus");
+			if (mode === "janus" && !has_janus) {
+				mode = "media";
+			}
+			if (mode === "media" && !has_media) {
+				mode = "mjpeg";
+			}
 			tools.radio.clickValue("stream-mode-radio", mode);
 		}
 
@@ -287,14 +307,19 @@ export function Streamer() {
 		__streamer.stopStream();
 		if (mode === "janus") {
 			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo,
-				tools.storage.getInt("stream.orient", 0), !$("stream-video").muted);
+				tools.storage.getInt("stream.orient", 0), !$("stream-video").muted, $("stream-mic-switch").checked);
 			// Firefox doesn't support RTP orientation:
 			//  - https://bugzilla.mozilla.org/show_bug.cgi?id=1316448
 			tools.feature.setEnabled($("stream-orient"), !tools.browser.is_firefox);
-		} else { // mjpeg
-			__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
+		} else {
+			if (mode === "media") {
+				__streamer = new MediaStreamer(__setActive, __setInactive, __setInfo);
+			} else { // mjpeg
+				__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
+			}
 			tools.feature.setEnabled($("stream-orient"), false);
 			tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
+			tools.feature.setEnabled($("stream-mic"), false); // Ditto
 		}
 		if (wm.isWindowVisible($("stream-window"))) {
 			__streamer.ensureStream((__state && __state.streamer !== undefined) ? __state.streamer : null);
@@ -305,7 +330,8 @@ export function Streamer() {
 		let mode = tools.radio.getValue("stream-mode-radio");
 		tools.storage.set("stream.mode", mode);
 		if (mode !== __streamer.getMode()) {
-			tools.hidden.setVisible($("stream-image"), (mode !== "janus"));
+			tools.hidden.setVisible($("stream-canvas"), (mode === "media"));
+			tools.hidden.setVisible($("stream-image"), (mode === "mjpeg"));
 			tools.hidden.setVisible($("stream-video"), (mode === "janus"));
 			__resetStream(mode);
 		}

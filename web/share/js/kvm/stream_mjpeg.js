@@ -41,7 +41,7 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo) {
 
 	/************************************************************************/
 
-	self.getName = () => "MJPEG";
+	self.getName = () => "HTTP MJPEG";
 	self.getMode = () => "mjpeg";
 
 	self.getResolution = function() {

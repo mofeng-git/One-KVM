@@ -23,6 +23,7 @@
 import os
 import json
 import contextlib
+import dataclasses
 import argparse
 import time
 
@@ -38,11 +39,28 @@ from .. import init
 
 
 # =====
+@dataclasses.dataclass(frozen=True)
+class _Function:
+    name:    str
+    desc:    str
+    eps:     int
+    enabled: bool
+
+
 class _GadgetControl:
-    def __init__(self, meta_path: str, gadget: str, udc: str, init_delay: float) -> None:
+    def __init__(
+        self,
+        meta_path: str,
+        gadget: str,
+        udc: str,
+        eps: int,
+        init_delay: float,
+    ) -> None:
+
         self.__meta_path = meta_path
         self.__gadget = gadget
         self.__udc = udc
+        self.__eps = eps
         self.__init_delay = init_delay
 
     @contextlib.contextmanager
@@ -57,12 +75,12 @@ class _GadgetControl:
         try:
             yield
         finally:
-            self.__recreate_profile()
+            self.__clear_profile(recreate=True)
             time.sleep(self.__init_delay)
             with open(udc_path, "w") as file:
                 file.write(udc)
 
-    def __recreate_profile(self) -> None:
+    def __clear_profile(self, recreate: bool) -> None:
         # XXX: See pikvm/pikvm#1235
         # After unbind and bind, the gadgets stop working,
         # unless we recreate their links in the profile.
@@ -72,14 +90,22 @@ class _GadgetControl:
             if os.path.islink(path):
                 try:
                     os.unlink(path)
-                    os.symlink(self.__get_fsrc_path(func), path)
+                    if recreate:
+                        os.symlink(self.__get_fsrc_path(func), path)
                 except (FileNotFoundError, FileExistsError):
                     pass
 
-    def __read_metas(self) -> Generator[dict, None, None]:
-        for meta_name in sorted(os.listdir(self.__meta_path)):
-            with open(os.path.join(self.__meta_path, meta_name)) as file:
-                yield json.loads(file.read())
+    def __read_metas(self) -> Generator[_Function, None, None]:
+        for name in sorted(os.listdir(self.__meta_path)):
+            with open(os.path.join(self.__meta_path, name)) as file:
+                meta = json.loads(file.read())
+                enabled = os.path.exists(self.__get_fdest_path(meta["function"]))
+                yield _Function(
+                    name=meta["function"],
+                    desc=meta["description"],
+                    eps=meta["endpoints"],
+                    enabled=enabled,
+                )
 
     def __get_fsrc_path(self, func: str) -> str:
         return usb.get_gadget_path(self.__gadget, usb.G_FUNCTIONS, func)
@@ -89,20 +115,28 @@ class _GadgetControl:
             return usb.get_gadget_path(self.__gadget, usb.G_PROFILE)
         return usb.get_gadget_path(self.__gadget, usb.G_PROFILE, func)
 
-    def enable_functions(self, funcs: list[str]) -> None:
+    def change_functions(self, enable: set[str], disable: set[str]) -> None:
+        funcs = list(self.__read_metas())
+        new: set[str] = set(func.name for func in funcs if func.enabled)
+        new = (new - disable) | enable
+        eps_req = sum(func.eps for func in funcs if func.name in new)
+        if eps_req > self.__eps:
+            raise RuntimeError(f"No available endpoints for this config: {eps_req} required, {self.__eps} is maximum")
         with self.__udc_stopped():
-            for func in funcs:
-                os.symlink(self.__get_fsrc_path(func), self.__get_fdest_path(func))
-
-    def disable_functions(self, funcs: list[str]) -> None:
-        with self.__udc_stopped():
-            for func in funcs:
-                os.unlink(self.__get_fdest_path(func))
+            self.__clear_profile(recreate=False)
+            for func in new:
+                try:
+                    os.symlink(self.__get_fsrc_path(func), self.__get_fdest_path(func))
+                except FileExistsError:
+                    pass
 
     def list_functions(self) -> None:
-        for meta in self.__read_metas():
-            enabled = os.path.exists(self.__get_fdest_path(meta["func"]))
-            print(f"{'+' if enabled else '-'} {meta['func']}  # {meta['name']}")
+        funcs = list(self.__read_metas())
+        eps_used = sum(func.eps for func in funcs if func.enabled)
+        print(f"# Endpoints used: {eps_used} of {self.__eps}")
+        print(f"# Endpoints free: {self.__eps - eps_used}")
+        for func in funcs:
+            print(f"{'+' if func.enabled else '-'} {func.name}  # [{func.eps}] {func.desc}")
 
     def make_gpio_config(self) -> None:
         class Dumper(yaml.Dumper):
@@ -127,17 +161,17 @@ class _GadgetControl:
             "scheme": {},
             "view": {"table": []},
         }
-        for meta in self.__read_metas():
-            config["scheme"][meta["func"]] = {  # type: ignore
+        for func in self.__read_metas():
+            config["scheme"][func.name] = {  # type: ignore
                 "driver": "otgconf",
-                "pin": meta["func"],
+                "pin": func.name,
                 "mode": "output",
                 "pulse": False,
             }
             config["view"]["table"].append(InlineList([  # type: ignore
-                "#" + meta["name"],
-                "#" + meta["func"],
-                meta["func"],
+                "#" + func.desc,
+                "#" + func.name,
+                func.name,
             ]))
         print(yaml.dump({"kvmd": {"gpio": config}}, indent=4, Dumper=Dumper))
 
@@ -159,25 +193,21 @@ def main(argv: (list[str] | None)=None) -> None:
         parents=[parent_parser],
     )
     parser.add_argument("-l", "--list-functions", action="store_true", help="List functions")
-    parser.add_argument("-e", "--enable-function", nargs="+", metavar="<name>", help="Enable function(s)")
-    parser.add_argument("-d", "--disable-function", nargs="+", metavar="<name>", help="Disable function(s)")
+    parser.add_argument("-e", "--enable-function", nargs="+", default=[], metavar="<name>", help="Enable function(s)")
+    parser.add_argument("-d", "--disable-function", nargs="+", default=[], metavar="<name>", help="Disable function(s)")
     parser.add_argument("-r", "--reset-gadget", action="store_true", help="Reset gadget")
     parser.add_argument("--make-gpio-config", action="store_true")
     options = parser.parse_args(argv[1:])
 
-    gc = _GadgetControl(config.otg.meta, config.otg.gadget, config.otg.udc, config.otg.init_delay)
+    gc = _GadgetControl(config.otg.meta, config.otg.gadget, config.otg.udc, config.otg.endpoints, config.otg.init_delay)
 
     if options.list_functions:
         gc.list_functions()
 
-    elif options.enable_function:
-        funcs = list(map(valid_stripped_string_not_empty, options.enable_function))
-        gc.enable_functions(funcs)
-        gc.list_functions()
-
-    elif options.disable_function:
-        funcs = list(map(valid_stripped_string_not_empty, options.disable_function))
-        gc.disable_functions(funcs)
+    elif options.enable_function or options.disable_function:
+        enable = set(map(valid_stripped_string_not_empty, options.enable_function))
+        disable = set(map(valid_stripped_string_not_empty, options.disable_function))
+        gc.change_functions(enable, disable)
         gc.list_functions()
 
     elif options.reset_gadget:

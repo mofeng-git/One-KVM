@@ -89,11 +89,16 @@ img.svg-gray {
 
 img.inline-lamp {
 	vertical-align: middle;
+	height: 1em;
+	margin-left: 2px;
+	margin-right: 2px;
+}
+img.inline-lamp-small {
+	vertical-align: middle;
 	height: 8px;
 	margin-left: 2px;
 	margin-right: 2px;
 }
-
 img.inline-lamp-big {
 	vertical-align: middle;
 	height: 20px;
@@ -104,7 +109,8 @@ img.inline-lamp-big {
 button,
 select,
 input[type=file]::-webkit-file-selector-button,
-input[type=file]::file-selector-button {
+input[type=file]::file-selector-button,
+input[type=color] {
 	border: none;
 	border-radius: 4px;
 	color: var(--cs-control-default-fg);
@@ -117,11 +123,9 @@ input[type=file]::file-selector-button {
 }
 button {
 	display: block;
-	width: 100%;
 }
 select {
 	display: block;
-	width: 100%;
 	padding-left: 5px;
 }
 select[size] {
@@ -194,6 +198,7 @@ select:not([size]) option.comment {
 input[type=text], input[type=password] {
 	overflow-x: auto;
 	font-family: monospace;
+	box-sizing: border-box;
 	border-radius: 4px;
 	border: var(--border-default-thin);
 	color: var(--cs-code-default-fg);
@@ -223,41 +228,34 @@ textarea::-webkit-input-placeholder {
 }
 
 div.buttons-row {
+	display: flex;
 	margin: 0;
 	padding: 0;
 	font-size: 0;
 }
-
-.row50 {
-	display: inline-block;
-	width: 50%;
-}
-.row33 {
-	display: inline-block;
-	width: 33.33%;
-}
-.row25 {
-	display: inline-block;
-	width: 25%;
-}
-.row16 {
-	display: inline-block;
-	width: 16.66%;
-}
-.row50:not(:first-child),
-.row33:not(:first-child),
-.row25:not(:first-child),
-.row16:not(:first-child) {
+div.buttons-row button:not(:first-child) {
 	border-top-left-radius: 0;
 	border-bottom-left-radius: 0;
 	border-left: var(--border-control-thin) !important;
 }
-.row50:not(:last-child),
-.row33:not(:last-child),
-.row25:not(:last-child),
-.row16:not(:last-child) {
+div.buttons-row button:not(:last-child) {
 	border-top-right-radius: 0;
 	border-bottom-right-radius: 0;
+}
+button.row100 {
+	width: 100% !important;
+}
+button.row50 {
+	width: 50% !important;
+}
+button.row33 {
+	width: 33.33% !important;
+}
+button.row25 {
+	width: 25% !important;
+}
+button.row16 {
+	width: 16.66% !important;
 }
 
 table.kv {

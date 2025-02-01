@@ -172,6 +172,7 @@ ul#navbar li div.menu div.buttons select {
 	border-radius: 0;
 	text-align: left;
 	padding: 0 16px;
+	width: 100%;
 }
 
 ul#navbar li div.menu input[type=text] {

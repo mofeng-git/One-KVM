@@ -86,13 +86,15 @@ kvmd:
                 pulse: false
 
 
+media:
+    memsink:
+        h264:
+            sink: "kvmd::ustreamer::h264"
+
+
 vnc:
     memsink:
         jpeg:
             sink: "kvmd::ustreamer::jpeg"
         h264:
             sink: "kvmd::ustreamer::h264"
-
-
-otg:
-    remote_wakeup: true

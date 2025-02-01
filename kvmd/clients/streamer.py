@@ -63,6 +63,10 @@ class StreamerFormats:
     H264 = 875967048     # V4L2_PIX_FMT_H264
     _MJPEG = 1196444237  # V4L2_PIX_FMT_MJPEG
 
+    @classmethod
+    def is_diff(cls, fmt: int) -> bool:
+        return (fmt == cls.H264)
+
 
 class BaseStreamerClient:
     def get_format(self) -> int:

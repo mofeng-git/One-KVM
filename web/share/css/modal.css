@@ -63,9 +63,11 @@ div.modal div.modal-window div.modal-content {
 
 div.modal div.modal-window div.modal-buttons {
 	border-top: var(--border-control-thin);
+	display: flex;
 	margin: 0;
 	padding: 0;
 	font-size: 0;
+	width: 100%;
 }
 
 div.modal div.modal-window div.modal-buttons button {

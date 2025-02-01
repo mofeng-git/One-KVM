@@ -85,7 +85,8 @@ div.stream-box-mouse-none {
 }
 
 img#stream-image,
-video#stream-video {
+video#stream-video,
+canvas#stream-canvas {
 	width: 100%;
 	height: 100%;
 	object-fit: contain;

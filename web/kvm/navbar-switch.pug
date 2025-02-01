@@ -1,0 +1,23 @@
+li(id="switch-dropdown" class="right feature-disabled")
+	a(class="menu-button" id="switch-menu-button" href="#")
+		+navbar_led("switch-atx-power-led", "led-atx-power")
+		+navbar_led("switch-atx-hdd-led", "led-atx-hdd")
+		span Switch #[i #[sub(id="switch-active-port") ]]
+	div(id="switch-menu" class="menu")
+		table(style="border-spacing: 0px;")
+			tr
+				td
+					div(class="text")
+						b #[a(target="_blank" href="https://docs.pikvm.org/switch") PiKVM Switch] is attached#[br]
+						sub Select a port or perform any available action like ATX click
+				td
+					div(class="text")
+						button(data-force-hide-menu data-show-window="switch-window" class="small") &bull; Settings
+		hr
+		div(id="switch-message-update" class="hidden")
+			+menu_message("info", "Good news! Your switch is ready to get the firmware update")
+				| Please #[a(target="_blank" href="https://docs.pikvm.org/switch/#firmware-updating") follow the instructions] when you decide to install it.
+			hr
+		+menu_switch("switch-atx-ask-switch", "Ask ATX click confirmation", true, true)
+		hr
+		table(id="switch-chain" class="kv")

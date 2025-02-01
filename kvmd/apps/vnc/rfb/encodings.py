@@ -31,6 +31,7 @@ class RfbEncodings:
     RENAME = -307  # DesktopName Pseudo-encoding
     LEDS_STATE = -261  # QEMU LED State Pseudo-encoding
     EXT_KEYS = -258  # QEMU Extended Key Events Pseudo-encoding
+    EXT_MOUSE = -316  # ExtendedMouseButtons Pseudo-encoding
     CONT_UPDATES = -313  # ContinuousUpdates Pseudo-encoding
 
     TIGHT = 7
@@ -50,16 +51,17 @@ def _make_meta(variants: (int | frozenset[int])) -> dict:
 class RfbClientEncodings:  # pylint: disable=too-many-instance-attributes
     encodings: frozenset[int]
 
-    has_resize: bool =		    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.RESIZE))  # noqa: E224
-    has_rename: bool =		    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.RENAME))  # noqa: E224
-    has_leds_state: bool =	    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.LEDS_STATE))  # noqa: E224
-    has_ext_keys: bool =	    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.EXT_KEYS))  # noqa: E224
-    has_cont_updates: bool =	dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.CONT_UPDATES))  # noqa: E224
+    has_resize: bool        = dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.RESIZE))  # noqa: E224
+    has_rename: bool        = dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.RENAME))  # noqa: E224
+    has_leds_state: bool    = dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.LEDS_STATE))  # noqa: E224
+    has_ext_keys: bool      = dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.EXT_KEYS))  # noqa: E224
+    has_ext_mouse: bool     = dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.EXT_MOUSE))  # noqa: E224
+    has_cont_updates: bool  = dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.CONT_UPDATES))  # noqa: E224
 
-    has_tight: bool =		    dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.TIGHT))  # noqa: E224
-    tight_jpeg_quality: int =	dataclasses.field(default=0,     metadata=_make_meta(frozenset(RfbEncodings.TIGHT_JPEG_QUALITIES)))  # noqa: E224
+    has_tight: bool         = dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.TIGHT))  # noqa: E224
+    tight_jpeg_quality: int = dataclasses.field(default=0,     metadata=_make_meta(frozenset(RfbEncodings.TIGHT_JPEG_QUALITIES)))  # noqa: E224
 
-    has_h264: bool =			dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.H264))  # noqa: E224
+    has_h264: bool          = dataclasses.field(default=False, metadata=_make_meta(RfbEncodings.H264))  # noqa: E224
 
     def get_summary(self) -> list[str]:
         summary: list[str] = [f"encodings -- {sorted(self.encodings)}"]
