@@ -6,8 +6,12 @@ append vars
 		title = "PiKVM Session"
 		main_js = "kvm/main"
 		body_class = "body-no-select"
-		css_list = css_list.concat(["navbar", "window", "modal", "led", "slider", "switch", "radio", "progress", "keypad", "tabs"])
-		css_list = css_list.concat(["kvm/stream", "kvm/hid", "kvm/msd", "kvm/system", "kvm/keyboard", "kvm/about"])
+		css_list.push(
+			"navbar", "window", "modal", "led", "slider",
+			"switch", "radio", "progress", "keypad", "tabs",
+			"kvm/stream", "kvm/hid", "kvm/msd",
+			"kvm/system", "kvm/keyboard", "kvm/about"
+		)
 
 
 block body

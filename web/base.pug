@@ -23,18 +23,24 @@ doctype html
 	==============================================================================
 
 -
-	var css_dir = "/share/css"
-	var js_dir = "/share/js"
-	var svg_dir = "/share/svg"
-	var png_dir = "/share/png"
+	var prefix = "/"
 
 	title = ""
 	main_js = ""
 	body_class = ""
-	css_list = ["vars", "main"]
+	css_list = []
 
 
 block vars
+
+
+block _vars_dynamic
+	-
+		share_dir = `${prefix}share`
+		css_dir = `${share_dir}/css`
+		js_dir = `${share_dir}/js`
+		svg_dir = `${share_dir}/svg`
+		png_dir = `${share_dir}/png`
 
 
 html(lang="en")
@@ -42,17 +48,16 @@ html(lang="en")
 		meta(charset="utf-8")
 		title #{title}
 
-		link(rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png")
-		link(rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png")
-		link(rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png")
-		link(rel="manifest" href="/share/site.webmanifest")
-		link(rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5")
+		link(rel="apple-touch-icon" sizes="180x180" href=`${share_dir}/apple-touch-icon.png`)
+		link(rel="icon" type="image/png" sizes="32x32" href=`${share_dir}/favicon-32x32.png`)
+		link(rel="icon" type="image/png" sizes="16x16" href=`${share_dir}/favicon-16x16.png`)
+		link(rel="manifest" href=`${share_dir}/site.webmanifest`)
+		link(rel="mask-icon" href=`${share_dir}/safari-pinned-tab.svg` color="#5bbad5")
 		meta(name="msapplication-TileColor" content="#2b5797")
 		meta(name="theme-color" content="#ffffff")
 
-		each name in css_list
+		each name in ["vars", "main"].concat(css_list).concat(["user"])
 			link(rel="stylesheet" href=`${css_dir}/${name}.css`)
-		link(rel="stylesheet" href=`${css_dir}/user.css`)
 
 		if main_js
 			script(type="module")
