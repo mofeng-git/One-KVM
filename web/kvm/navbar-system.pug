@@ -47,8 +47,7 @@ li.right#system-dropdown
 			tr.feature-disabled#stream-h264-bitrate
 				+menu_slider_td3("stream-h264-bitrate-slider", "stream-h264-bitrate-value", false) H.264 kbps:
 			tr.feature-disabled#stream-h264-gop
-				+menu_slider_td3("stream-h264-gop-slider", "stream-h264-gop-value", false)
-					|H.264 #[a(target="_blank" href="https://docs.pikvm.org/webrtc") gop]:
+				+menu_slider_td3("stream-h264-gop-slider", "stream-h264-gop-value", false) H.264 gop:
 			tr.feature-disabled#stream-mode
 				+menu_radio_td2("stream-mode-radio", [
 					{title: "WebRTC<br>H.264", value: "janus"},
