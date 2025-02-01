@@ -3,6 +3,7 @@
 #    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
 #    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#    Copyright (C) 2023-2025  SilentWind <mofeng654321@hotmail.com>          #
 #                                                                            #
 #    This program is free software: you can redistribute it and/or modify    #
 #    it under the terms of the GNU General Public License as published by    #
@@ -309,6 +310,50 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 				} else if (!added && reason === "ended") {
 					__removeTrack(track);
 				}
+			},
+
+			// 添加对 Janus 0.x 的支持
+			"onremotestream": function(stream) {
+				if (stream === null) {
+					// https://github.com/pikvm/pikvm/issues/1084
+					// 这种情况不应该发生，但有时 Janus 在 unmute 时可能会收到 null 事件
+					// 作为解决方案，我们重启 Janus
+					__logError("Got invalid onremotestream(null). Restarting Janus...");
+					__destroyJanus();
+					return;
+				}
+
+				let tracks = stream.getTracks();
+				__logInfo("Got a remote stream changes:", stream, tracks);
+
+				let has_video = false;
+				for (let track of tracks) {
+					if (track.kind == "video") {
+						has_video = true;
+						break;
+					}
+				}
+
+				if (!has_video && __isOnline()) {
+					// Chrome 在 ICE 状态为 disconnected 时会发送 muted 通知
+					// Janus.js 会从可用轨道列表中移除已静音的轨道
+					// 但轨道实际上仍然存在，所以可以安全地忽略这种情况
+					return;
+				}
+
+				_Janus.attachMediaStream($("stream-video"), stream);
+				__sendKeyRequired();
+				__startInfoInterval();
+
+				// FIXME: 延迟减少但在关键帧上会出现卡顿
+				//   - https://github.com/Glimesh/janus-ftl-plugin/issues/101
+				/*if (__handle && __handle.webrtcStuff && __handle.webrtcStuff.pc) {
+					for (let receiver of __handle.webrtcStuff.pc.getReceivers()) {
+						if (receiver.track && receiver.track.kind === "video" && receiver.playoutDelayHint !== undefined) {
+							receiver.playoutDelayHint = 0;
+						}
+					}
+				}*/
 			},
 
 			"oncleanup": function() {

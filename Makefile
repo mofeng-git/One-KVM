@@ -294,7 +294,7 @@ run-build-dev:
 		--push
 
 run-build-release:
-	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd	-t silentwind0/kvmd:dev \
+	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd	-t silentwind0/kvmd \
 		--progress plain \
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		--build-arg CACHEBUST=$(date +%s) \

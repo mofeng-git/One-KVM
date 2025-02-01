@@ -5,7 +5,3 @@ audio: {
      device = "hw:0"
      tc358743 = "/dev/video0"
 }
-aplay: {
-	device = "plughw:UAC2Gadget,0"
-	check = "/run/kvmd/otg/uac2.usb0@meta.json"
-}

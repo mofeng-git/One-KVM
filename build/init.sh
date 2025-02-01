@@ -188,15 +188,10 @@ EOF
         fi
     fi
 
-    # 设置默认视频模式为 mjpeg
-    if ! grep -q "mjpeg_default:" /etc/kvmd/override.yaml; then
-        cat >> /etc/kvmd/override.yaml << EOF
-
-streamer:
-    mjpeg_default: true  # 首次访问默认使用 MJPEG 模式
-    h264_bitrate: 5000  # 默认码率 5000 Kbps
-EOF
-        log_info "已设置首次访问默认使用 MJPEG 模式"
+    if [ ! -z "$H264PRESET" ]; then
+        if sed -i "s/ultrafast/$H264PRESET/g" /etc/kvmd/override.yaml; then
+            log_info "H264 预设已设置为 $H264PRESET"
+        fi
     fi
 
     if [ ! -z "$VIDEOFORMAT" ]; then

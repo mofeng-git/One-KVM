@@ -117,11 +117,6 @@ export function Streamer() {
 
 		//hidden stream-record-stop-button
 		document.getElementById('stream-record-stop-button').disabled = true;
-
-		// 修改这里:设置默认模式为 mjpeg
-		let defaultMode = "mjpeg";
-		let mode = tools.storage.get("stream.mode", defaultMode);
-		tools.radio.clickValue("stream-mode-radio", mode);
 	};
 
 	/************************************************************************/
@@ -230,7 +225,7 @@ export function Streamer() {
 				tools.feature.setEnabled($("stream-mic"), false);
 			}
 
-			let mode = tools.storage.get("stream.mode", "mjpeg"); // 这里也改为默认 mjpeg
+			let mode = tools.storage.get("stream.mode", "mjpeg");
 			if (mode === "janus" && !has_janus) {
 				mode = "media";
 			}

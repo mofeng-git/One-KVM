@@ -66,6 +66,7 @@ kvmd:
             - "--jpeg-sink-mode=0660"
             - "--h264-bitrate={h264_bitrate}"
             - "--h264-gop={h264_gop}"
+            - "--h264-preset=ultrafast"
             - "--slowdown"
     gpio:
         drivers:
