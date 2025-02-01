@@ -1,41 +1,74 @@
 #!/bin/bash
 
+# 定义颜色代码
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${GREEN}One-KVM pre-starting...${NC}"
+# 输出日志的函数
+log_info() {
+    echo -e "${GREEN}[INFO] $1${NC}"
+}
 
+log_warn() {
+    echo -e "${YELLOW}[WARN] $1${NC}"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR] $1${NC}"
+}
+
+# 初始化检查
+log_info "One-KVM 正在启动..."
+
+# 首次初始化配置
 if [ ! -f /etc/kvmd/.init_flag ]; then
-    echo -e "${GREEN}One-KVM is initializing first...${NC}" \
-        && mkdir -p /etc/kvmd/ \
-        && mv /etc/kvmd_backup/* /etc/kvmd/ \
-        && touch /etc/kvmd/.docker_flag \
-        && sed -i 's/localhost.localdomain/docker/g' /etc/kvmd/meta.yaml \
-        && sed -i 's/localhost/localhost:4430/g' /etc/kvmd/kvm_input.sh \
-        && /usr/share/kvmd/kvmd-gencert --do-the-thing \
-        && /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc \
-        || echo -e "${RED}One-KVM config moving and self-signed SSL certificates init failed.${NC}"
-   
-    if [ "$NOSSL" == 1 ]; then
-        echo -e "${GREEN}One-KVM self-signed SSL is disabled.${NC}" \
-        && python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf  -o nginx/https/enabled=false \
-        || echo -e "${RED}One-KVM nginx config init failed.${NC}"
+    log_info "首次初始化配置..."
+    
+    # 创建必要目录并移动配置文件
+    if mkdir -p /etc/kvmd/ && \
+       mv /etc/kvmd_backup/* /etc/kvmd/ && \
+       touch /etc/kvmd/.docker_flag && \
+       sed -i 's/localhost.localdomain/docker/g' /etc/kvmd/meta.yaml && \
+       sed -i 's/localhost/localhost:4430/g' /etc/kvmd/kvm_input.sh; then
+        log_info "基础配置完成"
     else
-        python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf \
-        || echo -e "${RED}One-KVM nginx config init failed.${NC}"
+        log_error "基础配置失败"
+        exit 1
     fi
-   
+
+    # SSL证书配置
+    if ! /usr/share/kvmd/kvmd-gencert --do-the-thing && \
+         ! /usr/share/kvmd/kvmd-gencert --do-the-thing --vnc; then
+        log_error "SSL 证书生成失败"
+        exit 1
+    fi
+
+    # SSL开关配置
+    if [ "$NOSSL" == 1 ]; then
+        log_info "已禁用SSL"
+        if ! python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf -o nginx/https/enabled=false; then
+            log_error "Nginx 配置失败"
+            exit 1
+        fi
+    else
+        if ! python -m kvmd.apps.ngxmkconf /etc/kvmd/nginx/nginx.conf.mako /etc/kvmd/nginx/nginx.conf; then
+            log_error "Nginx 配置失败"
+            exit 1
+        fi
+    fi
+
+    # 认证配置
     if [ "$NOAUTH" == "1" ]; then
-        sed -i "s/enabled: true/enabled: false/g" /etc/kvmd/override.yaml \
-        && echo -e "${GREEN}One-KVM auth is disabled.${NC}"
+        sed -i "s/enabled: true/enabled: false/g" /etc/kvmd/override.yaml
+        log_info "已禁用认证"
     fi
 
     #add supervisord conf
     if [ "$NOWEBTERM" == "1" ]; then
-        echo -e "${GREEN}One-KVM webterm is disabled.${NC}"
+        log_info "已禁用 WebTerm 功能"
         rm -r /usr/share/kvmd/extras/webterm
     else
         cat >> /etc/kvmd/supervisord.conf  << EOF
@@ -58,7 +91,7 @@ EOF
     fi
 
     if [  "$NOVNC" == "1" ]; then
-        echo -e "${GREEN}One-KVM VNC is disabled.${NC}"
+        log_info "已禁用 VNC 功能"
         rm -r /usr/share/kvmd/extras/vnc
     else
         cat >> /etc/kvmd/supervisord.conf << EOF
@@ -77,7 +110,7 @@ EOF
     fi
 
     if [  "$NOIPMI" == "1" ]; then
-        echo -e "${GREEN}One-KVM IPMI is disabled.${NC}"
+        log_info "已禁用IPMI功能"
         rm -r /usr/share/kvmd/extras/ipmi
     else
         cat >> /etc/kvmd/supervisord.conf << EOF
@@ -97,70 +130,71 @@ EOF
 
     #switch OTG config
     if [ "$OTG" == "1" ]; then
-        echo -e "${GREEN}One-KVM OTG is enabled.${NC}"
+        log_info "已启用 OTG 功能"
         sed -i "s/ch9329/otg/g" /etc/kvmd/override.yaml
-	    sed -i "s/device: \/dev\/ttyUSB0//g" /etc/kvmd/override.yaml
+        sed -i "s/device: \/dev\/ttyUSB0//g" /etc/kvmd/override.yaml
         if [ "$NOMSD" == 1 ]; then
-            echo -e "${GREEN}One-KVM MSD is disabled.${NC}"
+            log_info "已禁用 MSD 功能"
         else
             sed -i "s/#type: otg/type: otg/g" /etc/kvmd/override.yaml
         fi
     fi
 
-    #if [ ! -z "$SHUTDOWNPIN"  ! -z "$REBOOTPIN" ]; then
-
     if [ ! -z "$VIDEONUM" ]; then
-        sed -i "s/\/dev\/video0/\/dev\/video$VIDEONUM/g" /etc/kvmd/override.yaml \
-            && sed -i "s/\/dev\/video0/\/dev\/video$VIDEONUM/g" /etc/kvmd/janus/janus.plugin.ustreamer.jcfg \
-            && echo -e "${GREEN}One-KVM video device is set to /dev/video$VIDEONUM.${NC}"
+        if sed -i "s/\/dev\/video0/\/dev\/video$VIDEONUM/g" /etc/kvmd/override.yaml && \
+           sed -i "s/\/dev\/video0/\/dev\/video$VIDEONUM/g" /etc/kvmd/janus/janus.plugin.ustreamer.jcfg; then
+            log_info "视频设备已设置为 /dev/video$VIDEONUM"
+        fi
     fi
 
     if [ ! -z "$AUDIONUM" ]; then
-        sed -i "s/hw:0/hw:$AUDIONUM/g" /etc/kvmd/janus/janus.plugin.ustreamer.jcfg \
-            && echo -e "${GREEN}One-KVM audio device is set to hw:$VIDEONUM.${NC}"
+        if sed -i "s/hw:0/hw:$AUDIONUM/g" /etc/kvmd/janus/janus.plugin.ustreamer.jcfg; then
+            log_info "音频设备已设置为 hw:$AUDIONUM"
+        fi
     fi
 
     if [ ! -z "$CH9329SPEED" ]; then
-        sed -i "s/speed: 9600/speed: $CH9329SPEED/g" /etc/kvmd/override.yaml \
-            && echo -e "${GREEN}One-KVM CH9329 serial speed is set to $CH9329SPEED.${NC}"
+        if sed -i "s/speed: 9600/speed: $CH9329SPEED/g" /etc/kvmd/override.yaml; then
+            log_info "CH9329 串口速率已设置为 $CH9329SPEED"
+        fi
     fi
 
     if [ ! -z "$CH9329TIMEOUT" ]; then
-        sed -i "s/read_timeout: 0.3/read_timeout: $CH9329TIMEOUT/g" /etc/kvmd/override.yaml \
-            && echo -e "${GREEN}One-KVM CH9329 timeout is set to $CH9329TIMEOUT s.${NC}"
-    fi
-
-    #set htpasswd
-    if [ ! -z "$USERNAME" ] && [ ! -z "$PASSWORD" ]; then
-        python -m kvmd.apps.htpasswd del admin \
-            && echo $PASSWORD | python -m kvmd.apps.htpasswd set -i  "$USERNAME" \
-            && echo "$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/vncpasswd \
-            && echo "$USERNAME:$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/ipmipasswd \
-            || echo -e "${RED}One-KVM htpasswd init failed.${NC}"
-    else
-        echo -e "${YELLOW} USERNAME and PASSWORD environment variables are not set, using defalut(admin/admin).${NC}"
+        if sed -i "s/read_timeout: 0.3/read_timeout: $CH9329TIMEOUT/g" /etc/kvmd/override.yaml; then
+            log_info "CH9329 超时已设置为 $CH9329TIMEOUT 秒"
+        fi
     fi
 
     if [ ! -z "$VIDEOFORMAT" ]; then
-        sed -i "s/format=mjpeg/format=$VIDFORMAT/g" /etc/kvmd/override.yaml \
-            && echo -e "${GREEN}One-KVM input video format is set to $VIDFORMAT.${NC}"
+        if sed -i "s/format=mjpeg/format=$VIDFORMAT/g" /etc/kvmd/override.yaml; then
+            log_info "视频输入格式已设置为 $VIDFORMAT"
+        fi
     fi
     
     touch /etc/kvmd/.init_flag
+    log_info "初始化配置完成"
 fi
 
-
-#Trying usb_gadget
+# OTG设备配置
 if [ "$OTG" == "1" ]; then
-    echo "Trying OTG Port..."
+    log_info "正在配置 OTG 设备..."
     rm -r /run/kvmd/otg &> /dev/null
-    modprobe libcomposite || echo -e "${RED}Linux libcomposite module modprobe failed.${NC}"
-    python -m kvmd.apps.otg start \
-        && ln -s /dev/hidg1 /dev/kvmd-hid-mouse \
-        && ln -s /dev/hidg0 /dev/kvmd-hid-keyboard \
-        || echo -e "${RED}OTG Port mount failed.${NC}"
-    ln -s /dev/hidg2 /dev/kvmd-hid-mouse-alt
+    
+    if ! modprobe libcomposite; then
+        log_error "加载 libcomposite 模块失败"
+        exit 1
+    fi
+
+    if python -m kvmd.apps.otg start; then
+        ln -s /dev/hidg1 /dev/kvmd-hid-mouse
+        ln -s /dev/hidg0 /dev/kvmd-hid-keyboard
+        ln -s /dev/hidg2 /dev/kvmd-hid-mouse-alt
+        log_info "OTG 设备配置完成"
+    else
+        log_error "OTG 设备挂载失败"
+        exit 1
+    fi
 fi
 
-echo -e "${GREEN}One-KVM starting...${NC}"
+log_info "One-KVM 启动完成，正在启动服务..."
 exec supervisord -c /etc/kvmd/supervisord.conf

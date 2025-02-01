@@ -17,11 +17,12 @@ li(id="text-dropdown" class="right")
 				td
 					select(id="hid-pak-keymap-selector")
 		table(class="kv")
-				+menu_switch_notable("hid-pak-slow-switch", "Slow typing", true, false, "hid-pak-slow-switch")		
+			tr
+				+menu_switch_notable("hid-pak-slow-switch", "Slow typing", true, false, "hid-pak-slow-switch")
+			tr
+				+menu_switch_notable("hid-pak-secure-switch", "Hide input text", true, false, "hid-pak-secure-switch")
 			tr
 				+menu_switch_notable("hid-pak-ask-switch", "Ask paste confirmation", true, true, "hid-pak-ask-switch")
-			tr(id="hid-pak-secure" class="feature-disabled")
-				+menu_switch_notable("hid-pak-secure-switch", "Hide input text", true, false,"hid-pak-secure-switch")
 		div(id="stream-ocr" class="feature-disabled")
 			hr
 			br

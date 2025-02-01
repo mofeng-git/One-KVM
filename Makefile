@@ -280,37 +280,21 @@ clean-all: testenv clean
 .PHONY: testenv
 
 run-stage-0:
-	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd-stage-0 \
-		--allow security.insecure --progress plain \
-		--platform linux/amd64,linux/arm64,linux/arm/v7  \
-		-f build/Dockerfile-stage-0 . \
-		--push
-	$(DOCKER) buildx build -t silentwind0/kvmd-stage-0 \
+	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd-stage-0 -t silentwind0/kvmd-stage-0 \
 		--allow security.insecure --progress plain \
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		-f build/Dockerfile-stage-0 . \
 		--push
 
 run-build-dev:
-	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd:dev \
-		--platform linux/amd64,linux/arm64,linux/arm/v7  \
-		--build-arg CACHEBUST=$(date +%s) \
-		-f build/Dockerfile . \
-		--push
-	$(DOCKER) buildx build -t silentwind0/kvmd:dev \
+	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd:dev -t silentwind0/kvmd:dev \
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		--build-arg CACHEBUST=$(date +%s) \
 		-f build/Dockerfile . \
 		--push
 
 run-build-release:
-	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd \
-		--progress plain \
-		--platform linux/amd64,linux/arm64,linux/arm/v7  \
-		--build-arg CACHEBUST=$(date +%s) \
-		-f build/Dockerfile . \
-		--push
-	$(DOCKER) buildx build -t silentwind0/kvmd \
+	$(DOCKER) buildx build -t registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd	-t silentwind0/kvmd:dev \
 		--progress plain \
 		--platform linux/amd64,linux/arm64,linux/arm/v7  \
 		--build-arg CACHEBUST=$(date +%s) \

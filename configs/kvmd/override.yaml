@@ -149,6 +149,18 @@ vnc:
         h264:
             sink: "kvmd::ustreamer::h264"
 
+media:
+    memsink:
+        h264:
+            sink: 'kvmd::ustreamer::h264'
+
+        jpeg:
+            sink: 'kvmd::ustreamer::jpeg'
+janus:
+    stun:
+        host: stun.cloudflare.com
+        port: 3478
+
 otgnet:
     commands:
         post_start_cmd:
