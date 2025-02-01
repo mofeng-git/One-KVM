@@ -240,6 +240,11 @@
                   <label for="stream-mode-radio-media">H.264</label>
                   <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
                   <label for="stream-mode-radio-mjpeg">MJPEG</label>
+                  <label for="stream-mode-radio-janus">WebRTC</label>
+                  <input type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media">
+                  <label for="stream-mode-radio-media">H.264</label>
+                  <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
+                  <label for="stream-mode-radio-mjpeg">MJPEG</label>
                 </div>
               </td>
             </tr>
@@ -264,6 +269,15 @@
                 <input class="slider" type="range" id="stream-audio-volume-slider">
               </td>
               <td class="value-number" id="stream-audio-volume-value"></td>
+            </tr>
+            <tr class="feature-disabled" id="stream-mic">
+                  <td>Microphone:</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input disabled type="checkbox" id="stream-mic-switch">
+                      <label for="stream-mic-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
             </tr>
             <tr class="feature-disabled" id="stream-mic">
                   <td>Microphone:</td>
@@ -427,6 +441,15 @@
                     </div>
                   </td>
             </tr>
+            <tr>
+                  <td>Bad link mode (release keys immediately):</td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input type="checkbox" id="hid-keyboard-bad-link-switch">
+                      <label for="hid-keyboard-bad-link-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
             <tr class="feature-disabled" id="hid-connect">
                   <td i18n="hid-connect-switch">Connect HID to Server:</td>
                   <td align="right">
@@ -534,6 +557,7 @@
             <hr>
           </div>
           <div class="hidden" id="msd-message-too-big-for-dvd">
+          <div class="hidden" id="msd-message-too-big-for-dvd">
                 <div class="text">
                   <table>
                     <tr>
@@ -541,6 +565,7 @@
                       <td style="line-height:1.5"><b>Current image is too big for DVD!</b></td>
                     </tr>
                     <tr>
+                      <td><sup style="line-height:1">The maximum is 31.6GiB. Please switch to the Flash mode.</sup></td>
                       <td><sup style="line-height:1">The maximum is 31.6GiB. Please switch to the Flash mode.</sup></td>
                     </tr>
                   </table>
@@ -611,6 +636,7 @@
               <td>
                 <div class="radio-box">
                   <input checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1">
+                  <label for="msd-mode-radio-cdrom">CD/DVD</label>
                   <label for="msd-mode-radio-cdrom">CD/DVD</label>
                   <input type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0">
                   <label for="msd-mode-radio-flash">Flash</label>
@@ -790,6 +816,8 @@
                     <div class="switch-box">
                       <input type="checkbox" id="hid-pak-slow-switch">
                       <label for="hid-pak-slow-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                      <input type="checkbox" id="hid-pak-slow-switch">
+                      <label for="hid-pak-slow-switch"><span class="switch-inner"></span><span class="switch"></span></label>
                     </div>
                   </td>
             </tr>
@@ -849,6 +877,7 @@
           <hr>
           <div class="buttons">
             <div class="buttons-row">
+              <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
               <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
               <button class="row50" data-force-hide-menu data-shortcut="MetaLeft">&bull; Left Win</button>
             </div>
@@ -968,6 +997,50 @@
           <table class="kv" id="switch-chain"></table>
         </div>
       </li>
+      <li class="right feature-disabled" id="switch-dropdown"><a class="menu-button" id="switch-menu-button" href="#"><img class="led-gray" id="switch-atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" id="switch-atx-hdd-led" src="/share/svg/led-atx-hdd.svg"><span>Switch <i><sub id="switch-active-port"></sub></i></span></a>
+        <div class="menu" id="switch-menu">
+          <table style="border-spacing: 0px;">
+            <tr>
+              <td>
+                <div class="text"><b><a target="_blank" href="https://docs.pikvm.org/switch">PiKVM Switch</a> is attached<br></b><sub>Select a port or perform any available action like ATX click</sub></div>
+              </td>
+              <td>
+                <div class="text">
+                  <button class="small" data-force-hide-menu data-show-window="switch-window">&bull; Settings</button>
+                </div>
+              </td>
+            </tr>
+          </table>
+          <hr>
+          <div class="hidden" id="switch-message-update">
+                <div class="text">
+                  <table>
+                    <tr>
+                      <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+                      <td style="line-height:1.5"><b>Good news! Your switch is ready to get the firmware update</b></td>
+                    </tr>
+                    <tr>
+                      <td><sup style="line-height:1">Please <a target="_blank" href="https://docs.pikvm.org/switch/#firmware-updating">follow the instructions</a> when you decide to install it.</sup></td>
+                    </tr>
+                  </table>
+                </div>
+            <hr>
+          </div>
+              <table class="kv">
+                <tr>
+                      <td>Ask ATX click confirmation:</td>
+                      <td align="right">
+                        <div class="switch-box">
+                          <input checked type="checkbox" id="switch-atx-ask-switch">
+                          <label for="switch-atx-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                        </div>
+                      </td>
+                </tr>
+              </table>
+          <hr>
+          <table class="kv" id="switch-chain"></table>
+        </div>
+      </li>
     </ul>
     <div class="window" id="stream-ocr-window">
       <div class="hidden" id="stream-ocr-selection"></div>
@@ -985,6 +1058,7 @@
       <button class="window-button-exit-full-tab">&#9660;</button>
       <div class="stream-box-offline" id="stream-box"><img id="stream-image" src="/share/png/blank-stream.png">
         <video class="hidden" id="stream-video" disablePictureInPicture="true" autoplay playsinline muted></video>
+        <canvas class="hidden" id="stream-canvas"></canvas>
         <canvas class="hidden" id="stream-canvas"></canvas>
         <div id="stream-fullscreen-active"></div>
       </div>

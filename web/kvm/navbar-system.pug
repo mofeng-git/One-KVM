@@ -2,6 +2,7 @@ li(id="system-dropdown" class="right")
 	a(class="menu-button" href="#")
 		+navbar_led("link-led", "led-link")
 		+navbar_led("stream-led", "led-video")
+		+navbar_led("stream-led", "led-video")
 		+navbar_led("hid-keyboard-led", "led-hid-keyboard")
 		+navbar_led("hid-mouse-led", "led-hid-mouse")
 		span(i18n="kvm_text3") System
@@ -17,7 +18,7 @@ li(id="system-dropdown" class="right")
 						data-confirm="Are you sure to send Wake-on-LAN packet to the server?" i18n="kvm_text8") &bull; WoL
 		hr
 		div(id="stream-message-no-webrtc" class="hidden")
-			+menu_message("warning", "WebRTC is not supported by this browser", "stream-message-no-webrtc")
+			+menu_message("warning", "WebRTC is not supported by this browser")
 			hr
 		div(id="stream-message-no-vd" class="hidden")
 			+menu_message("warning", "Direct HTTP H.264 streaming is not supported")
@@ -67,8 +68,8 @@ li(id="system-dropdown" class="right")
 						label(for="stream-orient-radio-180") 180&deg;
 						input(type="radio" id="stream-orient-radio-270" name="stream-orient-radio" value="270")
 						label(for="stream-orient-radio-270") 270&deg;
-			tr(id="stream-audio", class="feature-disabled")
-				td(i18n="kvm_text19") Audio volume:
+			tr(id="stream-audio" class="feature-disabled")
+				td Audio volume:
 				td(class="value-slider") #[input(type="range" id="stream-audio-volume-slider" class="slider")]
 				td(id="stream-audio-volume-value" class="value-number")
 			tr(id="stream-mic" class="feature-disabled")
