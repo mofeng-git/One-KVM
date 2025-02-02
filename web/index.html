@@ -40,7 +40,9 @@
     <link rel="stylesheet" href="./share/css/modal.css">
     <link rel="stylesheet" href="./share/css/index/index.css">
     <link rel="stylesheet" href="./share/css/user.css">
-    <script type="module">import {main} from "./share/js/index/main.js";
+    <script type="module">import {setRootPrefix} from "./share/js/vars.js";
+      setRootPrefix("./");
+      import {main} from "./share/js/index/main.js";
       main();
     </script>
   </head>
@@ -66,7 +68,7 @@
         <table>
           <td class="server">
             <td>Server:</td>
-            <td><a id="kvmd-meta-server-host" target="_blank" href="/api/info"></a></td>
+            <td><a id="kvmd-meta-server-host" target="_blank" href="./api/info"></a></td>
           </td>
         </table>
         <hr>

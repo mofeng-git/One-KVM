@@ -186,7 +186,7 @@ export function Ocr(__getGeometry) {
 			"ocr_right": __sel.right,
 			"ocr_bottom": __sel.bottom,
 		};
-		tools.httpGet("/api/streamer/snapshot", params, function(http) {
+		tools.httpGet("api/streamer/snapshot", params, function(http) {
 			if (http.status === 200) {
 				wm.copyTextToClipboard(http.responseText);
 			} else {

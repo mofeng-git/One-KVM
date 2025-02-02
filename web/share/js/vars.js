@@ -23,25 +23,9 @@
 "use strict";
 
 
-import {$, tools} from "../tools.js";
+export var ROOT_PREFIX = "./";
 
 
-export function main() {
-	__loadKvmdInfo();
-}
-
-function __loadKvmdInfo() {
-	tools.httpGet("api/info", null, function(http) {
-		if (http.status === 200) {
-			let vnc_port = JSON.parse(http.responseText).result.extras.vnc.port;
-			$("vnc-text").innerHTML = `
-				<span class="code-comment"># How to connect using the Linux terminal:<br>
-				$</span> vncviewer ${window.location.hostname}::${vnc_port}
-			`;
-		} else if (http.status === 401 || http.status === 403) {
-			tools.currentOpen("login");
-		} else {
-			setTimeout(__loadKvmdInfo, 1000);
-		}
-	});
+export function setRootPrefix(prefix) {
+	ROOT_PREFIX = prefix;
 }

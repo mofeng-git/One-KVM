@@ -72,7 +72,7 @@ export function Paste(__recorder) {
 
 				tools.debug(`HID: paste-as-keys ${keymap}: ${text}`);
 
-				tools.httpPost("/api/hid/print", {"limit": 0, "keymap": keymap, "slow": slow}, function(http) {
+				tools.httpPost("api/hid/print", {"limit": 0, "keymap": keymap, "slow": slow}, function(http) {
 					tools.el.setEnabled($("hid-pak-text"), true);
 					tools.el.setEnabled($("hid-pak-button"), true);
 					tools.el.setEnabled($("hid-pak-keymap-selector"), true);

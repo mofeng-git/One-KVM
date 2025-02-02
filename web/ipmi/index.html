@@ -37,13 +37,15 @@
     <link rel="stylesheet" href="../share/css/main.css">
     <link rel="stylesheet" href="../share/css/start.css">
     <link rel="stylesheet" href="../share/css/user.css">
-    <script type="module">import {main} from "../share/js/ipmi/main.js";
+    <script type="module">import {setRootPrefix} from "../share/js/vars.js";
+      setRootPrefix("../");
+      import {main} from "../share/js/ipmi/main.js";
       main();
     </script>
   </head>
   <body>
     <div class="start-box">
-      <div class="start"><a style="display:inline-block; margin-top:4px; color:#5c90bc; text-decoration:none" href="/">&nbsp;&nbsp;&larr;&nbsp;&nbsp; [ PiKVM Index ]</a>
+      <div class="start"><a style="display:inline-block; margin-top:4px; color:#5c90bc; text-decoration:none" href="../">&nbsp;&nbsp;&larr;&nbsp;&nbsp; [ PiKVM Index ]</a>
         <hr>
         <p class="text">This PiKVM device has running <b>kvmd-ipmi</b> daemon and provides IPMI 2.0 interface for some basic
           BMC operations like on/off/reset the server.

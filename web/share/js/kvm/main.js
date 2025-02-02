@@ -31,7 +31,7 @@ import {Session} from "./session.js";
 
 
 export function main() {
-	if (checkBrowser(null, "/share/css/kvm/x-mobile.css")) {
+	if (checkBrowser(null, "kvm/x-mobile.css")) {
 		tools.storage.bindSimpleSwitch($("page-close-ask-switch"), "page.close.ask", true, function(value) {
 			if (value) {
 				window.onbeforeunload = function(event) {
@@ -48,7 +48,7 @@ export function main() {
 
 		initWindowManager();
 
-		tools.el.setOnClick($("open-log-button"), () => window.open("/api/log?seek=3600&follow=1", "_blank"));
+		tools.el.setOnClick($("open-log-button"), () => tools.windowOpen("api/log?seek=3600&follow=1"));
 
 		tools.storage.bindSimpleSwitch(
 			$("page-full-tab-stream-switch"),

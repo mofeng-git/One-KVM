@@ -23,7 +23,7 @@ doctype html
 	==============================================================================
 
 -
-	var prefix = "./"
+	var root_prefix = "./"
 
 	title = ""
 	main_js = ""
@@ -36,7 +36,7 @@ block vars
 
 block _vars_dynamic
 	-
-		share_dir = `${prefix}share`
+		share_dir = `${root_prefix}share`
 		css_dir = `${share_dir}/css`
 		js_dir = `${share_dir}/js`
 		svg_dir = `${share_dir}/svg`
@@ -61,6 +61,8 @@ html(lang="en")
 
 		if main_js
 			script(type="module")
+				| import {setRootPrefix} from "#{js_dir}/vars.js";
+				| setRootPrefix("#{root_prefix}");
 				| import {main} from "#{js_dir}/#{main_js}.js";
 				| main();
 

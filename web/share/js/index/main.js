@@ -23,6 +23,7 @@
 "use strict";
 
 
+import {ROOT_PREFIX} from "../vars.js";
 import {tools, $} from "../tools.js";
 import {checkBrowser} from "../bb.js";
 import {wm, initWindowManager} from "../wm.js";
@@ -51,7 +52,7 @@ function __setAppText() {
 }
 
 function __loadKvmdInfo() {
-	tools.httpGet("/api/info", {"fields": "auth,meta,extras"}, function(http) {
+	tools.httpGet("api/info", {"fields": "auth,meta,extras"}, function(http) {
 		if (http.status === 200) {
 			let info = JSON.parse(http.responseText).result;
 
@@ -100,7 +101,7 @@ function __loadKvmdInfo() {
 				document.title = "PiKVM Index";
 			}
 		} else if (http.status === 401 || http.status === 403) {
-			document.location.href = "/login";
+			tools.currentOpen("login");
 		} else {
 			setTimeout(__loadKvmdInfo, 1000);
 		}
@@ -108,11 +109,14 @@ function __loadKvmdInfo() {
 }
 
 function __makeApp(id, path, icon, name) {
+	// Tailing slash in href is added to avoid Nginx 301 redirect
+	// when the location doesn't have tailing slash: "foo -> foo/".
+	// Reverse proxy over PiKVM can be misconfigured to handle this.
 	return `<li>
 		<div ${id ? "id=\"" + id + "\"" : ""} class="app">
-			<a href="${path}">
+			<a href="${ROOT_PREFIX}${path}/">
 				<div>
-					<img class="svg-gray" src="${icon}">
+					<img class="svg-gray" src="${ROOT_PREFIX}${icon}">
 					${tools.escape(name)}
 				</div>
 			</a>
@@ -121,9 +125,9 @@ function __makeApp(id, path, icon, name) {
 }
 
 function __logout() {
-	tools.httpPost("/api/auth/logout", null, function(http) {
+	tools.httpPost("api/auth/logout", null, function(http) {
 		if (http.status === 200 || http.status === 401 || http.status === 403) {
-			document.location.href = "/login";
+			tools.currentOpen("login");
 		} else {
 			wm.error("Logout error", http.responseText);
 		}

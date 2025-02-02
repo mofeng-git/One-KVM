@@ -275,7 +275,7 @@ export function Hid(__getGeometry, __recorder) {
 
 	var __clickOutputsRadio = function(hid) {
 		let output = tools.radio.getValue(`hid-outputs-${hid}-radio`);
-		tools.httpPost("/api/hid/set_params", {[`${hid}_output`]: output}, function(http) {
+		tools.httpPost("api/hid/set_params", {[`${hid}_output`]: output}, function(http) {
 			if (http.status !== 200) {
 				wm.error("Can't configure HID", http.responseText);
 			}
@@ -284,7 +284,7 @@ export function Hid(__getGeometry, __recorder) {
 
 	var __clickJigglerSwitch = function() {
 		let enabled = $("hid-jiggler-switch").checked;
-		tools.httpPost("/api/hid/set_params", {"jiggler": enabled}, function(http) {
+		tools.httpPost("api/hid/set_params", {"jiggler": enabled}, function(http) {
 			if (http.status !== 200) {
 				wm.error(`Can't ${enabled ? "enabled" : "disable"} mouse jiggler`, http.responseText);
 			}
@@ -293,7 +293,7 @@ export function Hid(__getGeometry, __recorder) {
 
 	var __clickConnectSwitch = function() {
 		let connected = $("hid-connect-switch").checked;
-		tools.httpPost("/api/hid/set_connected", {"connected": connected}, function(http) {
+		tools.httpPost("api/hid/set_connected", {"connected": connected}, function(http) {
 			if (http.status !== 200) {
 				wm.error(`Can't ${connected ? "connect" : "disconnect"} HID`, http.responseText);
 			}
@@ -303,7 +303,7 @@ export function Hid(__getGeometry, __recorder) {
 	var __clickResetButton = function() {
 		wm.confirm("Are you sure you want to reset HID (keyboard & mouse)?").then(function(ok) {
 			if (ok) {
-				tools.httpPost("/api/hid/reset", null, function(http) {
+				tools.httpPost("api/hid/reset", null, function(http) {
 					if (http.status !== 200) {
 						wm.error("HID reset error", http.responseText);
 					}

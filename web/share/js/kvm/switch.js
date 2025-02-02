@@ -23,6 +23,7 @@
 "use strict";
 
 
+import {ROOT_PREFIX} from "../vars.js";
 import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
 
@@ -125,7 +126,7 @@ export function Switch() {
 			+ ":" + brightness.toString(16).padStart(2, "0")
 			+ ":" + color.blink_ms.toString(16).padStart(4, "0")
 		);
-		__sendPost("/api/switch/set_colors", {[role]: rgbx}, function() {
+		__sendPost("api/switch/set_colors", {[role]: rgbx}, function() {
 			el_color.value = (
 				"#"
 				+ color.red.toString(16).padStart(2, "0")
@@ -137,7 +138,7 @@ export function Switch() {
 	};
 
 	var __clickSetDefaultColorButton = function(role) {
-		__sendPost("/api/switch/set_colors", {[role]: "default"});
+		__sendPost("api/switch/set_colors", {[role]: "default"});
 	};
 
 	var __applyEdids = function(edids) {
@@ -210,7 +211,7 @@ export function Switch() {
 			if (ok) {
 				let name = $("__switch-edid-new-name-input").value;
 				let data = $("__switch-edid-new-data-text").value;
-				__sendPost("/api/switch/edids/create", {"name": name, "data": data});
+				__sendPost("api/switch/edids/create", {"name": name, "data": data});
 			}
 		});
 	};
@@ -222,7 +223,7 @@ export function Switch() {
 			let html = "Are you sure to remove this EDID?<br>Ports that used it will change it to the default.";
 			wm.confirm(html, name).then(function(ok) {
 				if (ok) {
-					__sendPost("/api/switch/edids/remove", {"id": edid_id});
+					__sendPost("api/switch/edids/remove", {"id": edid_id});
 				}
 			});
 		}
@@ -344,11 +345,11 @@ export function Switch() {
 						<td colspan=100>
 							<div class="buttons-row">
 								<button id="__switch-beacon-button-u${unit}" class="small" title="Toggle uplink Beacon Led">
-									<img id="__switch-beacon-led-u${unit}" class="inline-lamp led-gray" src="/share/svg/led-beacon.svg"/>
+									<img id="__switch-beacon-led-u${unit}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-beacon.svg"/>
 									Uplink
 								</button>
 								<button id="__switch-beacon-button-d${unit}" class="small" title="Toggle downlink Beacon Led">
-									<img id="__switch-beacon-led-d${unit}" class="inline-lamp led-gray" src="/share/svg/led-beacon.svg"/>
+									<img id="__switch-beacon-led-d${unit}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-beacon.svg"/>
 									Downlink
 								</button>
 							</div>
@@ -365,10 +366,10 @@ export function Switch() {
 					<td>
 						<div class="buttons-row">
 							<button id="__switch-port-button-p${port}" title="Activate this port">
-								<img id="__switch-port-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-circle.svg"/>
+								<img id="__switch-port-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-circle.svg"/>
 							</button>
 							<button id="__switch-params-button-p${port}" title="Configure this port">
-								<img id="__switch-params-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-gear.svg"/>
+								<img id="__switch-params-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-gear.svg"/>
 							</button>
 						</div>
 					</td>
@@ -385,14 +386,14 @@ export function Switch() {
 					</td>
 					<td style="font-size:1em">
 						<button id="__switch-beacon-button-p${port}" class="small" title="Toggle Beacon Led on this port">
-							<img id="__switch-beacon-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-beacon.svg"/>
+							<img id="__switch-beacon-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-beacon.svg"/>
 						</button>
 					</td>
 					<td>
-						<img id="__switch-video-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-video.svg" title="Video Link"/>
-						<img id="__switch-usb-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-usb.svg" title="USB Link"/>
-						<img id="__switch-atx-power-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-atx-power.svg" title="Power Led"/>
-						<img id="__switch-atx-hdd-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-atx-hdd.svg" title="HDD Led"/>
+						<img id="__switch-video-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-video.svg" title="Video Link"/>
+						<img id="__switch-usb-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-usb.svg" title="USB Link"/>
+						<img id="__switch-atx-power-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-atx-power.svg" title="Power Led"/>
+						<img id="__switch-atx-hdd-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-atx-hdd.svg" title="HDD Led"/>
 					</td>
 					<td>
 						<div class="buttons-row">
@@ -524,7 +525,7 @@ export function Switch() {
 				for (let action of Object.keys(atx_actions)) {
 					params[`atx_click_${action}_delay`] = tools.slider.getValue($(`__switch-port-atx-click-${action}-delay-slider`));
 				};
-				__sendPost("/api/switch/set_port_params", params);
+				__sendPost("api/switch/set_port_params", params);
 			}
 		});
 	};
@@ -555,31 +556,31 @@ export function Switch() {
 				Otherwise, it will break a current USB operation (OS installation, Live CD, or whatever).
 			`);
 		} else {
-			__sendPost("/api/switch/set_active", {"port": port});
+			__sendPost("api/switch/set_active", {"port": port});
 		}
 	};
 
 	var __switchUplinkBeacon = function(unit) {
 		let state = false;
 		try { state = !__state.beacons.uplinks[unit]; } catch {}; // eslint-disable-line no-empty
-		__sendPost("/api/switch/set_beacon", {"uplink": unit, "state": state});
+		__sendPost("api/switch/set_beacon", {"uplink": unit, "state": state});
 	};
 
 	var __switchDownlinkBeacon = function(unit) {
 		let state = false;
 		try { state = !__state.beacons.downlinks[unit]; } catch {}; // eslint-disable-line no-empty
-		__sendPost("/api/switch/set_beacon", {"downlink": unit, "state": state});
+		__sendPost("api/switch/set_beacon", {"downlink": unit, "state": state});
 	};
 
 	var __switchPortBeacon = function(port) {
 		let state = false;
 		try { state = !__state.beacons.ports[port]; } catch {}; // eslint-disable-line no-empty
-		__sendPost("/api/switch/set_beacon", {"port": port, "state": state});
+		__sendPost("api/switch/set_beacon", {"port": port, "state": state});
 	};
 
 	var __atxClick = function(port, button) {
 		let click_button = function() {
-			__sendPost("/api/switch/atx/click", {"port": port, "button": button});
+			__sendPost("api/switch/atx/click", {"port": port, "button": button});
 		};
 		if ($("switch-atx-ask-switch").checked) {
 			wm.confirm(`

@@ -23,6 +23,7 @@
 "use strict";
 
 
+import {ROOT_PREFIX} from "../vars.js";
 import {tools, $, $$} from "../tools.js";
 import {wm} from "../wm.js";
 
@@ -138,7 +139,7 @@ export function Gpio(__recorder) {
 			return `
 				<img
 					class="__gpio-led __gpio-led-${item.channel} inline-lamp-big led-gray"
-					src="/share/svg/led-circle.svg"
+					src="${ROOT_PREFIX}share/svg/led-circle.svg"
 					data-color="${item.color}"
 				/>
 			`;
@@ -202,7 +203,7 @@ export function Gpio(__recorder) {
 			confirm = el.getAttribute("data-confirm-off");
 		}
 		let act = () => {
-			__sendPost("/api/gpio/switch", {"channel": ch, "state": to});
+			__sendPost("api/gpio/switch", {"channel": ch, "state": to});
 			__recorder.recordGpioSwitchEvent(ch, to);
 		};
 		if (confirm) {
@@ -220,7 +221,7 @@ export function Gpio(__recorder) {
 		let ch = el.getAttribute("data-channel");
 		let confirm = el.getAttribute("data-confirm");
 		let act = () => {
-			__sendPost("/api/gpio/pulse", {"channel": ch});
+			__sendPost("api/gpio/pulse", {"channel": ch});
 			__recorder.recordGpioPulseEvent(ch);
 		};
 		if (confirm) {

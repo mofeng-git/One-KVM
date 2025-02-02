@@ -39,7 +39,9 @@
     <link rel="stylesheet" href="../share/css/modal.css">
     <link rel="stylesheet" href="../share/css/login/login.css">
     <link rel="stylesheet" href="../share/css/user.css">
-    <script type="module">import {main} from "../share/js/login/main.js";
+    <script type="module">import {setRootPrefix} from "../share/js/vars.js";
+      setRootPrefix("../");
+      import {main} from "../share/js/login/main.js";
       main();
     </script>
   </head>

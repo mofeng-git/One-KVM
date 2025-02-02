@@ -34,7 +34,8 @@ mixin about_tab(name, title, checked=false)
 			+about_tab("meta", "Meta", true)
 				div
 					span.code-comment
-						| // You can get this JSON using handle #[a(target="_blank" href="/api/info?fields=meta") /api/info?fields=meta]#[br]
+						| // You can get this JSON using handle
+						| #[a(target="_blank" href=`${root_prefix}api/info?fields=meta`) /api/info?fields=meta]#[br]
 						| // In the standard configuration this data#[br]
 						| // is specified in the file /etc/kvmd/meta.yaml
 					br

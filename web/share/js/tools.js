@@ -23,6 +23,7 @@
 "use strict";
 
 
+import {ROOT_PREFIX} from "./vars.js";
 import {browser} from "./bb.js";
 
 
@@ -39,7 +40,16 @@ export var tools = new function() {
 
 	/************************************************************************/
 
+	self.currentOpen = function(url) {
+		window.location.href = ROOT_PREFIX + url;
+	};
+
+	self.windowOpen = function(url) {
+		window.open(ROOT_PREFIX + url, "_blank");
+	};
+
 	self.httpRequest = function(method, url, params, callback, body=null, content_type=null, timeout=15000) {
+		url = ROOT_PREFIX + url;
 		if (params) {
 			params = new URLSearchParams(params);
 			if (params) {
@@ -66,6 +76,11 @@ export var tools = new function() {
 
 	self.httpPost = function(url, params, callback, body=null, content_type=null, timeout=15000) {
 		self.httpRequest("POST", url, params, callback, body, content_type, timeout);
+	};
+
+	self.makeWsUrl = function(url) {
+		let proto = (self.is_https ? "wss://" : "ws://");
+		return proto + window.location.host + window.location.pathname + ROOT_PREFIX + url;
 	};
 
 	/************************************************************************/
@@ -383,7 +398,7 @@ export var tools = new function() {
 
 	/************************************************************************/
 
-	self.is_https = (location.protocol === "https:");
+	self.is_https = (window.location.protocol === "https:");
 
 	self.cookies = new function() {
 		return {

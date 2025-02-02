@@ -52,13 +52,15 @@
     <link rel="stylesheet" href="../share/css/kvm/keyboard.css">
     <link rel="stylesheet" href="../share/css/kvm/about.css">
     <link rel="stylesheet" href="../share/css/user.css">
-    <script type="module">import {main} from "../share/js/kvm/main.js";
+    <script type="module">import {setRootPrefix} from "../share/js/vars.js";
+      setRootPrefix("../");
+      import {main} from "../share/js/kvm/main.js";
       main();
     </script>
   </head>
   <body class="body-no-select">
     <ul id="navbar">
-      <li class="left"><a id="logo" href="/">&larr;&nbsp;&nbsp;<img class="svg-gray" src="../share/svg/logo.svg" alt="&amp;pi;-kvm"></a></li>
+      <li class="left"><a id="logo" href="../">&larr;&nbsp;&nbsp;<img class="svg-gray" src="../share/svg/logo.svg" alt="&amp;pi;-kvm"></a></li>
       <div class="hidden" id="hw-health-dropdown">
         <li class="left"><a class="menu-button" href="#"><img class="hidden" id="hw-health-undervoltage-led" src="../share/svg/led-undervoltage.svg"><img class="hidden" id="hw-health-overheating-led" src="../share/svg/led-overheating.svg"></a>
           <div class="menu">
@@ -131,7 +133,7 @@
                         <td style="line-height:1.5"><b>Fan failed</b></td>
                       </tr>
                       <tr>
-                        <td><sup style="line-height:1">A fan error occured, please <a href="/api/log?seek=3600&amp;follow=1" target="_blank">check the log</a></sup></td>
+                        <td><sup style="line-height:1">A fan error occured, please <a href="../api/log?seek=3600&amp;follow=1" target="_blank">check the log</a></sup></td>
                       </tr>
                     </table>
                   </div>
@@ -2283,7 +2285,9 @@
               <label for="about-tab-meta-button">Meta</label>
               <div class="tab">
                 <div class="code" id="about-meta">
-                  <div><span class="code-comment">// You can get this JSON using handle <a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a><br>
+                  <div><span class="code-comment">
+                      // You can get this JSON using handle
+                      <a target="_blank" href="../api/info?fields=meta">/api/info?fields=meta</a><br>
                       // In the standard configuration this data<br>
                       // is specified in the file /etc/kvmd/meta.yaml</span><br>
                     <pre id="kvmd-meta-json">No data</pre>

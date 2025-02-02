@@ -94,7 +94,7 @@ export function Atx(__recorder) {
 
 	var __clickAtx = function(button) {
 		let click_button = function() {
-			tools.httpPost("/api/atx/click", {"button": button}, function(http) {
+			tools.httpPost("api/atx/click", {"button": button}, function(http) {
 				if (http.status === 409) {
 					wm.error("Performing another ATX operation for other client.<br>Please try again later.");
 				} else if (http.status !== 200) {

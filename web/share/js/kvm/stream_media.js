@@ -79,7 +79,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 			__setInactive();
 			__setInfo(false, false, "");
 			__logInfo("Starting Media ...");
-			__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/media/ws`);
+			__ws = new WebSocket(tools.makeWsUrl("api/media/ws"));
 			__ws.binaryType = "arraybuffer";
 			__ws.onopen = __wsOpenHandler;
 			__ws.onerror = __wsErrorHandler;

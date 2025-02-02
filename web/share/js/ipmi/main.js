@@ -31,7 +31,7 @@ export function main() {
 }
 
 function __loadKvmdInfo() {
-	tools.httpGet("/api/info", null, function(http) {
+	tools.httpGet("api/info", null, function(http) {
 		if (http.status === 200) {
 			let ipmi_port = JSON.parse(http.responseText).result.extras.ipmi.port;
 			let make_item = (comment, ipmi, api) => `
@@ -52,7 +52,7 @@ function __loadKvmdInfo() {
 				${make_item("Check the power status", "power status", "")}
 			`;
 		} else if (http.status === 401 || http.status === 403) {
-			document.location.href = "/login";
+			tools.currentOpen("login");
 		} else {
 			setTimeout(__loadKvmdInfo, 1000);
 		}
