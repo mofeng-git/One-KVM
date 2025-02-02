@@ -319,7 +319,7 @@ export function Session() {
 	var __ascii_encoder = new TextEncoder("ascii");
 
 	var __sendHidEvent = function(ws, event_type, event) {
-		if (event_type == "key") {
+		if (event_type === "key") {
 			let data = __ascii_encoder.encode("\x01\x00" + event.key);
 			data[1] = (event.state ? 1 : 0);
 			if (event.finish === true) { // Optional
@@ -327,12 +327,12 @@ export function Session() {
 			}
 			ws.send(data);
 
-		} else if (event_type == "mouse_button") {
+		} else if (event_type === "mouse_button") {
 			let data = __ascii_encoder.encode("\x02\x00" + event.button);
 			data[1] = (event.state ? 1 : 0);
 			ws.send(data);
 
-		} else if (event_type == "mouse_move") {
+		} else if (event_type === "mouse_move") {
 			let data = new Uint8Array([
 				3,
 				(event.to.x >> 8) & 0xFF, event.to.x & 0xFF,
@@ -340,7 +340,7 @@ export function Session() {
 			]);
 			ws.send(data);
 
-		} else if (event_type == "mouse_relative" || event_type == "mouse_wheel") {
+		} else if (event_type === "mouse_relative" || event_type === "mouse_wheel") {
 			let data;
 			if (Array.isArray(event.delta)) {
 				data = new Int8Array(2 + event.delta.length * 2);
@@ -353,7 +353,7 @@ export function Session() {
 			} else {
 				data = new Int8Array([0, 0, event.delta.x, event.delta.y]);
 			}
-			data[0] = (event_type == "mouse_relative" ? 4 : 5);
+			data[0] = (event_type === "mouse_relative" ? 4 : 5);
 			data[1] = (event.squash ? 1 : 0);
 			ws.send(data);
 		}

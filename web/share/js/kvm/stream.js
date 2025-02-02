@@ -78,7 +78,7 @@ export function Streamer() {
 			if (__streamer.getMode() === "janus") { // Right now it's working only for H.264
 				let orient = parseInt(tools.radio.getValue("stream-orient-radio"));
 				tools.storage.setInt("stream.orient", orient);
-				if (__streamer.getOrientation() != orient) {
+				if (__streamer.getOrientation() !== orient) {
 					__resetStream();
 				}
 			}

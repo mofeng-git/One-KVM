@@ -334,7 +334,7 @@ export function Switch() {
 		let content = "";
 		let unit = -1;
 		for (let port = 0; port < model.ports.length; ++port) {
-			let pa = model.ports[port]; // pa == port attrs
+			let pa = model.ports[port]; // pa === port attrs
 			if (unit !== pa.unit) {
 				unit = pa.unit;
 				content += `${unit > 0 ? "<tr><td colspan=100><hr></td></tr>" : ""}

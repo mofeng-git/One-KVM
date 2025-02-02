@@ -102,9 +102,9 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 		let code = event.code;
 		if (__apply_fixes) {
 			// https://github.com/pikvm/pikvm/issues/819
-			if (code == "IntlBackslash" && ["`", "~"].includes(event.key)) {
+			if (code === "IntlBackslash" && ["`", "~"].includes(event.key)) {
 				code = "Backquote";
-			} else if (code == "Backquote" && ["§", "±"].includes(event.key)) {
+			} else if (code === "Backquote" && ["§", "±"].includes(event.key)) {
 				code = "IntlBackslash";
 			}
 		}
@@ -128,7 +128,7 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 	};
 
 	var __fixMacCmd = function(code, state) {
-		if ((code == "MetaLeft" || code == "MetaRight") && !state) {
+		if ((code === "MetaLeft" || code === "MetaRight") && !state) {
 			for (code in __keys) {
 				if (__isActive(__keys[code][0])) {
 					self.emitByCode(code, false, false);
