@@ -69,6 +69,21 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
         exit 1
     fi
 
+    # 设置用户名和密码
+    if [ ! -z "$USERNAME" ] && [ ! -z "$PASSWORD" ]; then
+        if python -m kvmd.apps.htpasswd del admin \
+            && echo "$PASSWORD" | python -m kvmd.apps.htpasswd set -i "$USERNAME" \
+            && echo "$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/vncpasswd \
+            && echo "$USERNAME:$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/ipmipasswd; then
+            log_info "用户凭据设置成功"
+        else
+            log_error "用户凭据设置失败"
+            exit 1
+        fi
+    else
+        log_warn "未设置 USERNAME 和 PASSWORD 环境变量，使用默认值(admin/admin)"
+    fi
+
     # SSL开关配置
     if [ "$NOSSL" == 1 ]; then
         log_info "已禁用SSL"
@@ -220,8 +235,8 @@ if [ "$OTG" == "1" ]; then
         ln -s /dev/hidg2 /dev/kvmd-hid-mouse-alt
         log_info "OTG 设备配置完成"
     else
-        log_error "OTG 设备挂载失败"
-        exit 1
+        log_warn "OTG 设备挂载失败"
+        #exit 1
     fi
 fi
 

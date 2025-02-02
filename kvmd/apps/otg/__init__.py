@@ -215,8 +215,8 @@ class _GadgetConfig:
         _write(join(func_path, "lun.0/ro"), int(not rw))
         _write(join(func_path, "lun.0/removable"), int(removable))
         _write(join(func_path, "lun.0/nofua"), int(not fua))
-        _write(join(func_path, "lun.0/inquiry_string_cdrom"), inquiry_string_cdrom)
-        _write(join(func_path, "lun.0/inquiry_string"), inquiry_string_flash)
+        #_write(join(func_path, "lun.0/inquiry_string_cdrom"), inquiry_string_cdrom)
+        #_write(join(func_path, "lun.0/inquiry_string"), inquiry_string_flash)
         if user != "root":
             _chown(join(func_path, "lun.0/cdrom"), user)
             _chown(join(func_path, "lun.0/ro"), user)
