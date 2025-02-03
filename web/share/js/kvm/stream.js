@@ -72,10 +72,10 @@ export function Streamer() {
 		tools.radio.setOnClick("stream-mode-radio", __clickModeRadio, false);
 
 		// Not getInt() because of radio is a string container.
-		// Also don't reset Janus at class init.
+		// Also don't reset Streamer at class init.
 		tools.radio.clickValue("stream-orient-radio", tools.storage.get("stream.orient", 0));
 		tools.radio.setOnClick("stream-orient-radio", function() {
-			if (__streamer.getMode() === "janus") { // Right now it's working only for H.264
+			if (["janus", "media"].includes(__streamer.getMode())) {
 				let orient = parseInt(tools.radio.getValue("stream-orient-radio"));
 				tools.storage.setInt("stream.orient", orient);
 				if (__streamer.getOrientation() !== orient) {
@@ -299,19 +299,22 @@ export function Streamer() {
 			mode = __streamer.getMode();
 		}
 		__streamer.stopStream();
+		let orient = tools.storage.getInt("stream.orient", 0);
 		if (mode === "janus") {
-			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo,
-				tools.storage.getInt("stream.orient", 0), !$("stream-video").muted, $("stream-mic-switch").checked);
+			let allow_audio = !$("stream-video").muted;
+			let allow_mic = $("stream-mic-switch").checked;
+			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo, orient, allow_audio, allow_mic);
 			// Firefox doesn't support RTP orientation:
 			//  - https://bugzilla.mozilla.org/show_bug.cgi?id=1316448
 			tools.feature.setEnabled($("stream-orient"), !tools.browser.is_firefox);
 		} else {
 			if (mode === "media") {
-				__streamer = new MediaStreamer(__setActive, __setInactive, __setInfo);
+				__streamer = new MediaStreamer(__setActive, __setInactive, __setInfo, orient);
+				tools.feature.setEnabled($("stream-orient"), true);
 			} else { // mjpeg
 				__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
+				tools.feature.setEnabled($("stream-orient"), false);
 			}
-			tools.feature.setEnabled($("stream-orient"), false);
 			tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
 			tools.feature.setEnabled($("stream-mic"), false); // Ditto
 		}
