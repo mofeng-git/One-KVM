@@ -32,16 +32,26 @@ export function main() {
 
 function __loadKvmdInfo() {
 	tools.httpGet("api/info", null, function(http) {
-		if (http.status === 200) {
-			let vnc_port = JSON.parse(http.responseText).result.extras.vnc.port;
-			$("vnc-text").innerHTML = `
-				<span class="code-comment"># How to connect using the Linux terminal:<br>
-				$</span> vncviewer ${window.location.hostname}::${vnc_port}
-			`;
-		} else if (http.status === 401 || http.status === 403) {
-			tools.currentOpen("login");
-		} else {
-			setTimeout(__loadKvmdInfo, 1000);
+		switch (http.status) {
+			case 200:
+				__showKvmdInfo(JSON.parse(http.responseText).result);
+				break;
+
+			case 401:
+			case 403:
+				tools.currentOpen("login");
+				break;
+
+			default:
+				setTimeout(__loadKvmdInfo, 1000);
+				break;
 		}
 	});
+}
+
+function __showKvmdInfo(info) {
+	$("vnc-text").innerHTML = `
+		<span class="code-comment"># How to connect using the Linux terminal:<br>
+		$</span> vncviewer ${tools.escape(window.location.hostname + "::" + info.extras.vnc.port)}
+	`;
 }

@@ -86,8 +86,11 @@ export var tools = new function() {
 	/************************************************************************/
 
 	self.escape = function(text) {
+		if (typeof text !== "string") {
+			text = "" + text;
+		}
 		return text.replace(
-			/[^0-9A-Za-z ]/g,
+			/[^-_0-9A-Za-z ]/g,
 			ch => "&#" + ch.charCodeAt(0) + ";"
 		);
 	};
@@ -100,7 +103,7 @@ export var tools = new function() {
 		return text[0].toUpperCase() + text.slice(1);
 	};
 
-	self.makeId = function() {
+	self.makeRandomId = function() {
 		let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 		let id = "";
 		for (let count = 0; count < 16; ++count) {
@@ -109,14 +112,8 @@ export var tools = new function() {
 		return id;
 	};
 
-	self.makeIdByText = function(text) {
+	self.makeTextId = function(text) {
 		return btoa(text).replace("=", "_");
-	};
-
-	self.getRandomInt = function(min, max) {
-		min = Math.ceil(min);
-		max = Math.floor(max);
-		return Math.floor(Math.random() * (max - min + 1)) + min;
 	};
 
 	self.formatSize = function(size) {
@@ -147,6 +144,12 @@ export var tools = new function() {
 			return b2;
 		}
 		return remapped;
+	};
+
+	self.getRandomInt = function(min, max) {
+		min = Math.ceil(min);
+		max = Math.floor(max);
+		return Math.floor(Math.random() * (max - min + 1)) + min;
 	};
 
 	/************************************************************************/
@@ -270,26 +273,34 @@ export var tools = new function() {
 	self.radio = new function() {
 		return {
 			"makeItem": function(name, title, value) {
+				let e_id = self.escape(name) + self.makeTextId(value);
 				return `
-					<input type="radio" id="${name}-${value}" name="${name}" value="${value}" />
-					<label for="${name}-${value}">${title}</label>
+					<input
+						type="radio"
+						id="${e_id}"
+						name="${tools.escape(name)}"
+						value="${tools.escape(value)}"
+					/>
+					<label for="${e_id}">
+						${tools.escape(title)}
+					</label>
 				`;
 			},
 			"setOnClick": function(name, callback, prevent_default=true) {
-				for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+				for (let el of $$$(`input[type="radio"][name="${CSS.escape(name)}"]`)) {
 					self.el.setOnClick(el, callback, prevent_default);
 				}
 			},
 			"getValue": function(name) {
-				return document.querySelector(`input[type="radio"][name="${name}"]:checked`).value;
+				return document.querySelector(`input[type="radio"][name="${CSS.escape(name)}"]:checked`).value;
 			},
 			"setValue": function(name, value) {
-				for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+				for (let el of $$$(`input[type="radio"][name="${CSS.escape(name)}"]`)) {
 					el.checked = (el.value === value);
 				}
 			},
 			"clickValue": function(name, value) {
-				for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+				for (let el of $$$(`input[type="radio"][name="${CSS.escape(name)}"]`)) {
 					if (el.value === value) {
 						el.click();
 						return;
@@ -297,7 +308,7 @@ export var tools = new function() {
 				}
 			},
 			"setEnabled": function(name, enabled) {
-				for (let el of $$$(`input[type="radio"][name="${name}"]`)) {
+				for (let el of $$$(`input[type="radio"][name="${CSS.escape(name)}"]`)) {
 					self.el.setEnabled(el, enabled);
 				}
 			},

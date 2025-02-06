@@ -112,7 +112,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	};
 
 	var __updateRate = function(value) {
-		$("hid-mouse-rate-value").innerHTML = value + " ms";
+		$("hid-mouse-rate-value").innerText = value + " ms";
 		tools.storage.set("hid.mouse.rate", value);
 		if (__timer) {
 			clearInterval(__timer);
@@ -121,13 +121,13 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	};
 
 	var __updateScrollRate = function(value) {
-		$("hid-mouse-scroll-value").innerHTML = value;
+		$("hid-mouse-scroll-value").innerText = value;
 		tools.storage.set("hid.mouse.scroll_rate", value);
 		__scroll_rate = value;
 	};
 
 	var __updateRelativeSens = function(value) {
-		$("hid-mouse-sens-value").innerHTML = value.toFixed(1);
+		$("hid-mouse-sens-value").innerText = value.toFixed(1);
 		tools.storage.set("hid.mouse.sens", value);
 		__relative_sens = value;
 	};

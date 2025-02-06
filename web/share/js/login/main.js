@@ -52,20 +52,28 @@ function __login() {
 		let passwd = $("passwd-input").value + $("code-input").value;
 		let body = `user=${encodeURIComponent(user)}&passwd=${encodeURIComponent(passwd)}`;
 		tools.httpPost("api/auth/login", null, function(http) {
-			if (http.status === 200) {
-				tools.currentOpen("");
-			} else if (http.status === 403) {
-				wm.error("Invalid credentials").then(__tryAgain);
-			} else {
-				let error = "";
-				if (http.status === 400) {
-					try { error = JSON.parse(http.responseText)["result"]["error"]; } catch { /* Nah */ }
-				}
-				if (error === "ValidatorError") {
-					wm.error("Invalid characters in credentials").then(__tryAgain);
-				} else {
-					wm.error("Login error", http.responseText).then(__tryAgain);
-				}
+			switch (http.status) {
+				case 200:
+					tools.currentOpen("");
+					break;
+
+				case 403:
+					wm.error("Invalid credentials").then(__tryAgain);
+					break;
+
+				default: {
+					let error = "";
+					if (http.status === 400) {
+						try {
+							error = JSON.parse(http.responseText)["result"]["error"];
+						} catch { /* Nah */ }
+					}
+					if (error === "ValidatorError") {
+						wm.error("Invalid characters in credentials").then(__tryAgain);
+					} else {
+						wm.error("Login error", http.responseText).then(__tryAgain);
+					}
+				} break;
 			}
 		}, body, "application/x-www-form-urlencoded");
 		__setEnabled(false);

@@ -208,7 +208,7 @@ export function Msd() {
 			if (el.__names_json !== names_json) {
 				el.innerHTML = names.map(name => `
 					<div class="text">
-						<div id="__msd-storage-${tools.makeIdByText(name)}-progress" class="progress">
+						<div id="__msd-storage-${tools.makeTextId(name)}-progress" class="progress">
 							<span class="progress-value"></span>
 						</div>
 					</div>
@@ -223,7 +223,7 @@ export function Msd() {
 				? `${names.length === 1 ? "Storage: %s" : "Internal storage: %s"}` // eslint-disable-line
 				: `Storage [${name}${part.writable ? "]" : ", read-only]"}: %s` // eslint-disable-line
 			);
-			let id = `__msd-storage-${tools.makeIdByText(name)}-progress`;
+			let id = `__msd-storage-${tools.makeTextId(name)}-progress`;
 			tools.progress.setSizeOf($(id), title, part.size, part.free);
 		}
 	};
@@ -270,8 +270,8 @@ export function Msd() {
 	};
 
 	var __clickDownloadButton = function() {
-		let image = encodeURIComponent($("msd-image-selector").value);
-		tools.windowOpen(`api/msd/read?image=${image}`);
+		let e_image = encodeURIComponent($("msd-image-selector").value);
+		tools.windowOpen(`api/msd/read?image=${e_image}`);
 	};
 
 	var __clickRemoveButton = function() {
@@ -299,13 +299,13 @@ export function Msd() {
 	var __clickUploadNewButton = function() {
 		let file = tools.input.getFile($("msd-new-file"));
 		__http = new XMLHttpRequest();
-		let prefix = encodeURIComponent($("msd-new-part-selector").value);
+		let e_prefix = encodeURIComponent($("msd-new-part-selector").value);
 		if (file) {
-			let image = encodeURIComponent(file.name);
-			__http.open("POST", `${ROOT_PREFIX}api/msd/write?prefix=${prefix}&image=${image}&remove_incomplete=1`, true);
+			let e_image = encodeURIComponent(file.name);
+			__http.open("POST", `${ROOT_PREFIX}api/msd/write?prefix=${e_prefix}&image=${e_image}&remove_incomplete=1`, true);
 		} else {
-			let url = encodeURIComponent($("msd-new-url").value);
-			__http.open("POST", `${ROOT_PREFIX}api/msd/write_remote?prefix=${prefix}&url=${url}&remove_incomplete=1`, true);
+			let e_url = encodeURIComponent($("msd-new-url").value);
+			__http.open("POST", `${ROOT_PREFIX}api/msd/write_remote?prefix=${e_prefix}&url=${e_url}&remove_incomplete=1`, true);
 		}
 		__http.upload.timeout = 7 * 24 * 3600;
 		__http.onreadystatechange = __uploadStateChange;
@@ -402,7 +402,8 @@ export function Msd() {
 			if (__state && __state.storage && __state.storage.parts) {
 				let part = __state.storage.parts[$("msd-new-part-selector").value];
 				if (part && (file.size > part.size)) {
-					wm.error(`The new image is too big for the Mass Storage partition.<br>Maximum: ${tools.formatSize(part.size)}`);
+					let e_size = tools.escape(tools.formatSize(part.size));
+					wm.error(`The new image is too big for the Mass Storage partition.<br>Maximum: ${e_size}`);
 					el.value = "";
 				}
 			}

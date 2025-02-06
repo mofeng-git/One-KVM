@@ -220,7 +220,8 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 			let width = frame.displayWidth;
 			let height = frame.displayHeight;
 			switch (__orient) {
-				case 90: case 270:
+				case 90:
+				case 270:
 					width = frame.displayHeight;
 					height = frame.displayWidth;
 			}

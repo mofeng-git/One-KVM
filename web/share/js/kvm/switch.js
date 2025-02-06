@@ -178,8 +178,8 @@ export function Switch() {
 	};
 
 	var __clickAddEdidButton = function() {
-		let create_content = function(el_parent, el_ok_button) {
-			tools.el.setEnabled(el_ok_button, false);
+		let create_content = function(el_parent, el_ok_bt) {
+			tools.el.setEnabled(el_ok_bt, false);
 			el_parent.innerHTML = `
 				<table>
 					<tr>
@@ -203,7 +203,7 @@ export function Switch() {
 			el_name.oninput = el_data.oninput = function() {
 				let name = el_name.value.replace(/\s+/g, "");
 				let data = el_data.value.replace(/\s+/g, "");
-				tools.el.setEnabled(el_ok_button, ((name.length > 0) && /[0-9a-fA-F]{512}/.test(data)));
+				tools.el.setEnabled(el_ok_bt, ((name.length > 0) && /[0-9a-fA-F]{512}/.test(data)));
 			};
 		};
 
@@ -584,7 +584,7 @@ export function Switch() {
 		};
 		if ($("switch-atx-ask-switch").checked) {
 			wm.confirm(`
-				Are you sure you want to press the <b>${button}</b> button?<br>
+				Are you sure you want to press the <b>${tools.escape(button)}</b> button?<br>
 				Warning! This could cause data loss on the server.
 			`).then(function(ok) {
 				if (ok) {

@@ -32,7 +32,7 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo) {
 
 	/************************************************************************/
 
-	var __key = tools.makeId();
+	var __key = tools.makeRandomId();
 	var __id = "";
 	var __fps = -1;
 	var __state = null;
@@ -91,7 +91,7 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo) {
 
 	var __setStreamInactive = function() {
 		let old_fps = __fps;
-		__key = tools.makeId();
+		__key = tools.makeRandomId();
 		__id = "";
 		__fps = -1;
 		__state = null;
@@ -139,7 +139,7 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo) {
 			__setStreamInactive();
 			__stopChecking();
 
-			let path = `${ROOT_PREFIX}streamer/stream?key=${__key}`;
+			let path = `${ROOT_PREFIX}streamer/stream?key=${encodeURIComponent(__key)}`;
 			if (tools.browser.is_safari || tools.browser.is_ios) {
 				// uStreamer fix for WebKit
 				__logInfo("Using dual_final_frames=1 to fix WebKit bugs");

@@ -106,7 +106,7 @@ export function Atx(__recorder) {
 
 		if ($("atx-ask-switch").checked) {
 			wm.confirm(`
-				Are you sure you want to press the <b>${button}</b> button?<br>
+				Are you sure you want to press the <b>${tools.escape(button)}</b> button?<br>
 				Warning! This could cause data loss on the server.
 			`).then(function(ok) {
 				if (ok) {
