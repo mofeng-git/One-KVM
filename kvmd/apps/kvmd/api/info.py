@@ -45,7 +45,10 @@ class InfoApi:
 
     def __valid_info_fields(self, req: Request) -> list[str]:
         available = self.__info_manager.get_subs()
+        available.add("hw")
+        default = set(available)
+        default.remove("health")
         return sorted(valid_info_fields(
-            arg=req.query.get("fields", ",".join(available)),
-            variants=available,
+            arg=req.query.get("fields", ",".join(default)),
+            variants=(available),
         ) or available)

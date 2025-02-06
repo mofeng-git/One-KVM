@@ -20,7 +20,6 @@
 # ========================================================================== #
 
 
-import os
 import asyncio
 import copy
 
@@ -45,59 +44,41 @@ _RetvalT = TypeVar("_RetvalT")
 
 
 # =====
-class HwInfoSubmanager(BaseInfoSubmanager):
+class HealthInfoSubmanager(BaseInfoSubmanager):
     def __init__(
         self,
-        platform_path: str,
         vcgencmd_cmd: list[str],
         ignore_past: bool,
         state_poll: float,
     ) -> None:
 
-        self.__platform_path = platform_path
         self.__vcgencmd_cmd = vcgencmd_cmd
         self.__ignore_past = ignore_past
         self.__state_poll = state_poll
-
-        self.__dt_cache: dict[str, str] = {}
 
         self.__notifier = aiotools.AioNotifier()
 
     async def get_state(self) -> dict:
         (
-            base,
-            serial,
-            platform,
             throttling,
             cpu_percent,
             cpu_temp,
             mem,
         ) = await asyncio.gather(
-            self.__read_dt_file("model", upper=False),
-            self.__read_dt_file("serial-number", upper=True),
-            self.__read_platform_file(),
             self.__get_throttling(),
             self.__get_cpu_percent(),
             self.__get_cpu_temp(),
             self.__get_mem(),
         )
         return {
-            "platform": {
-                "type": "rpi",
-                "base": base,
-                "serial": serial,
-                **platform,  # type: ignore
+            "temp": {
+                "cpu": cpu_temp,
             },
-            "health": {
-                "temp": {
-                    "cpu": cpu_temp,
-                },
-                "cpu": {
-                    "percent": cpu_percent,
-                },
-                "mem": mem,
-                "throttling": throttling,
+            "cpu": {
+                "percent": cpu_percent,
             },
+            "mem": mem,
+            "throttling": throttling,
         }
 
     async def trigger_state(self) -> None:
@@ -114,35 +95,6 @@ class HwInfoSubmanager(BaseInfoSubmanager):
                 yield new
 
     # =====
-
-    async def __read_dt_file(self, name: str, upper: bool) -> (str | None):
-        if name not in self.__dt_cache:
-            path = os.path.join(f"{env.PROCFS_PREFIX}/proc/device-tree", name)
-            try:
-                value = (await aiotools.read_file(path)).strip(" \t\r\n\0")
-                self.__dt_cache[name] = (value.upper() if upper else value)
-            except Exception as ex:
-                get_logger(0).error("Can't read DT %s from %s: %s", name, path, ex)
-                return None
-        return self.__dt_cache[name]
-
-    async def __read_platform_file(self) -> dict:
-        try:
-            text = await aiotools.read_file(self.__platform_path)
-            parsed: dict[str, str] = {}
-            for row in text.split("\n"):
-                row = row.strip()
-                if row:
-                    (key, value) = row.split("=", 1)
-                    parsed[key.strip()] = value.strip()
-            return {
-                "model": parsed["PIKVM_MODEL"],
-                "video": parsed["PIKVM_VIDEO"],
-                "board": parsed["PIKVM_BOARD"],
-            }
-        except Exception:
-            get_logger(0).exception("Can't read device model")
-            return {"model": None, "video": None, "board": None}
 
     async def __get_cpu_temp(self) -> (float | None):
         temp_path = f"{env.SYSFS_PREFIX}/sys/class/thermal/thermal_zone0/temp"

@@ -58,7 +58,7 @@ export function Session() {
 	var __ocr = new Ocr(__streamer.getGeometry);
 	var __switch = new Switch();
 
-	var __info_hw_state = null;
+	var __info_health_state = null;
 	var __info_fan_state = null;
 
 	var __init__ = function() {
@@ -71,7 +71,7 @@ export function Session() {
 		for (let key of Object.keys(state)) {
 			switch (key) {
 				case "meta": __setInfoStateMeta(state.meta); break;
-				case "hw": __setInfoStateHw(state.hw); break;
+				case "health": __setInfoStateHealth(state.health); break;
 				case "fan": __setInfoStateFan(state.fan); break;
 				case "system": __setInfoStateSystem(state.system); break;
 				case "extras": __setInfoStateExtras(state.extras); break;
@@ -91,11 +91,10 @@ export function Session() {
 				document.title = "PiKVM Session";
 			}
 
-			if (state.tips && state.tips.left) {
-				$("kvmd-meta-tips-left").innerText = `${state.tips.left}`;
-			}
-			if (state.tips && state.tips.right) {
-				$("kvmd-meta-tips-right").innerText = `${state.tips.right}`;
+			for (let place of ["left", "right"]) {
+				if (state.tips && state.tips[place]) {
+					$(`kvmd-meta-tips-${place}`).innerText = state.tips[place];
+				}
 			}
 
 			// Don't use this option, it may be removed in any time
@@ -105,10 +104,10 @@ export function Session() {
 		}
 	};
 
-	var __setInfoStateHw = function(state) {
-		if (state.health.throttling !== null) {
-			let flags = state.health.throttling.parsed_flags;
-			let ignore_past = state.health.throttling.ignore_past;
+	var __setInfoStateHealth = function(state) {
+		if (state.throttling !== null) {
+			let flags = state.throttling.parsed_flags;
+			let ignore_past = state.throttling.ignore_past;
 			let undervoltage = (flags.undervoltage.now || (flags.undervoltage.past && !ignore_past));
 			let freq_capped = (flags.freq_capped.now || (flags.freq_capped.past && !ignore_past));
 
@@ -118,7 +117,7 @@ export function Session() {
 			tools.hidden.setVisible($("hw-health-message-undervoltage"), undervoltage);
 			tools.hidden.setVisible($("hw-health-message-overheating"), freq_capped);
 		}
-		__info_hw_state = state;
+		__info_health_state = state;
 		__renderAboutInfoHardware();
 	};
 
@@ -145,37 +144,24 @@ export function Session() {
 	};
 
 	var __renderAboutInfoHardware = function() {
-		let html = "";
-		if (__info_hw_state !== null) {
-			html += `
-				Platform:
-				${__formatMisc(__info_hw_state)}
-				<hr>
-				Temperature:
-				${__formatTemp(__info_hw_state.health.temp)}
-				<hr>
-				Throttling:
-				${__formatThrottling(__info_hw_state.health.throttling)}
-			`;
+		let parts = [];
+		if (__info_health_state !== null) {
+			parts = [
+				"Resources:" + __formatMisc(__info_health_state),
+				"Temperature:" + __formatTemp(__info_health_state.temp),
+				"Throttling:" + __formatThrottling(__info_health_state.throttling),
+			];
 		}
 		if (__info_fan_state !== null) {
-			if (html.length > 0) {
-				html += "<hr>";
-			}
-			html += `
-				Fan:
-				${__formatFan(__info_fan_state)}
-			`;
+			parts.push("Fan:" + __formatFan(__info_fan_state));
 		}
-		$("about-hardware").innerHTML = html;
+		$("about-hardware").innerHTML = parts.join("<hr>");
 	};
 
 	var __formatMisc = function(state) {
 		return __formatUl([
-			["Base", state.platform.base],
-			["Serial", state.platform.serial],
-			["CPU", `${state.health.cpu.percent}%`],
-			["MEM", `${state.health.mem.percent}%`],
+			["CPU", `${state.cpu.percent}%`],
+			["MEM", `${state.mem.percent}%`],
 		]);
 	};
 
@@ -183,16 +169,16 @@ export function Session() {
 		if (!state.monitored) {
 			return __formatUl([["Status", "Not monitored"]]);
 		} else if (state.state === null) {
-			return __formatUl([["Status", __colored("red", "Not available")]]);
+			return __formatUl([["Status", __red("Not available")]]);
 		} else {
 			state = state.state;
 			let pairs = [
-				["Status", (state.fan.ok ? __colored("green", "Ok") : __colored("red", "Failed"))],
+				["Status", (state.fan.ok ? __green("Ok") : __red("Failed"))],
 				["Desired speed", `${state.fan.speed}%`],
 				["PWM", `${state.fan.pwm}`],
 			];
 			if (state.hall.available) {
-				pairs.push(["RPM", __colored((state.fan.ok ? "green" : "red"), state.hall.rpm)]);
+				pairs.push(["RPM", __colored(state.fan.ok, state.hall.rpm)]);
 			}
 			return __formatUl(pairs);
 		}
@@ -212,9 +198,9 @@ export function Session() {
 			for (let field of Object.keys(throttling.parsed_flags).sort()) {
 				let flags = throttling.parsed_flags[field];
 				let key = tools.upperFirst(field).replace("_", " ");
-				let value = (flags["now"] ? __colored("red", "RIGHT NOW") : __colored("green", "No"));
+				let value = (flags["now"] ? __red("RIGHT NOW") : __green("No"));
 				if (!throttling.ignore_past) {
-					value += "; " + (flags["past"] ? __colored("red", "In the past") : __colored("green", "Never"));
+					value += "; " + (flags["past"] ? __red("In the past") : __green("Never"));
 				}
 				pairs.push([key, value]);
 			}
@@ -224,18 +210,17 @@ export function Session() {
 		}
 	};
 
-	var __colored = function(color, html) {
-		return `<font color="${color}">${html}</font>`;
-	};
-
 	var __setInfoStateSystem = function(state) {
 		$("about-version").innerHTML = `
-			KVMD: <span class="code-comment">${state.kvmd.version}</span><br>
+			Base: ${__commented(state.platform.base)}<br>
+			Serial: ${__commented(state.platform.serial)}<br>
 			<hr>
-			Streamer: <span class="code-comment">${state.streamer.version} (${state.streamer.app})</span>
-			${__formatStreamerFeatures(state.streamer.features)}
+			KVMD: ${__commented(state.kvmd.version)}<br>
 			<hr>
-			${state.kernel.system} kernel:
+			Streamer: ${__commented(state.streamer.version + " (" + state.streamer.app + ")")}<br>
+			${__formatStreamerFeatures(state.streamer.features)}<br>
+			<hr>
+			${state.kernel.system} kernel:<br>
 			${__formatUname(state.kernel)}
 		`;
 		$("kvmd-version-kvmd").innerText = state.kvmd.version;
@@ -263,10 +248,15 @@ export function Session() {
 	var __formatUl = function(pairs) {
 		let html = "";
 		for (let pair of pairs) {
-			html += `<li>${pair[0]}: <span class="code-comment">${pair[1]}</span></li>`;
+			html += `<li>${pair[0]}: ${__commented(pair[1])}</li>`;
 		}
 		return `<ul>${html}</ul>`;
 	};
+
+	var __green = (html) => __colored(true, html);
+	var __red = (html) => __colored(false, html);
+	var __colored = (ok, html) => `<font color="${ok ? "green" : "red"}">${html}</font>`;
+	var __commented = (html) => `<span class="code-comment">${html}</span>`;
 
 	var __setInfoStateExtras = function(state) {
 		let show_hook = null;
