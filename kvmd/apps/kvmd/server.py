@@ -254,6 +254,10 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
     async def __ws_ping_handler(self, ws: WsSession, _: dict) -> None:
         await ws.send_event("pong", {})
 
+    @exposed_ws(0)
+    async def __ws_bin_ping_handler(self, ws: WsSession, _: bytes) -> None:
+        await ws.send_bin(255, b"")  # Ping-pong
+
     # ===== SYSTEM STUFF
 
     def run(self, **kwargs: Any) -> None:  # type: ignore  # pylint: disable=arguments-differ

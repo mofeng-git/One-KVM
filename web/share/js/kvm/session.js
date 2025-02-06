@@ -301,8 +301,16 @@ export function Session() {
 			if (http.status === 200) {
 				__ws = new WebSocket(tools.makeWsUrl("api/ws"));
 				__ws.sendHidEvent = (event) => __sendHidEvent(__ws, event.event_type, event.event);
+				__ws.binaryType = "arraybuffer";
 				__ws.onopen = __wsOpenHandler;
-				__ws.onmessage = __wsMessageHandler;
+				__ws.onmessage = async (event) => {
+					if (typeof event.data === "string") {
+						event = JSON.parse(event.data);
+						__wsJsonHandler(event.event_type, event.event);
+					} else { // Binary
+						__wsBinHandler(event.data);
+					}
+				};
 				__ws.onerror = __wsErrorHandler;
 				__ws.onclose = __wsCloseHandler;
 			} else if (http.status === 401 || http.status === 403) {
@@ -369,33 +377,37 @@ export function Session() {
 		__ping_timer = setInterval(__pingServer, 1000);
 	};
 
-	var __wsMessageHandler = function(event) {
-		// tools.debug("Session: received socket data:", event.data);
-		let data = JSON.parse(event.data);
-		switch (data.event_type) {
-			case "pong": __missed_heartbeats = 0; break;
-			case "info": __setInfoState(data.event); break;
-			case "gpio": __gpio.setState(data.event); break;
-			case "hid": __hid.setState(data.event); break;
-			case "hid_keymaps": __paste.setState(data.event); break;
-			case "atx": __atx.setState(data.event); break;
-			case "streamer": __streamer.setState(data.event); break;
-			case "ocr": __ocr.setState(data.event); break;
+	var __wsBinHandler = function(data) {
+		data = new Uint8Array(data);
+		if (data[0] === 255) { // Pong
+			__missed_heartbeats = 0;
+		}
+	};
+
+	var __wsJsonHandler = function(event_type, event) {
+		switch (event_type) {
+			case "info": __setInfoState(event); break;
+			case "gpio": __gpio.setState(event); break;
+			case "hid": __hid.setState(event); break;
+			case "hid_keymaps": __paste.setState(event); break;
+			case "atx": __atx.setState(event); break;
+			case "streamer": __streamer.setState(event); break;
+			case "ocr": __ocr.setState(event); break;
 
 			case "msd":
-				if (data.event.online === false) {
+				if (event.online === false) {
 					__switch.setMsdConnected(false);
-				} else if (data.event.drive !== undefined) {
-					__switch.setMsdConnected(data.event.drive.connected);
+				} else if (event.drive !== undefined) {
+					__switch.setMsdConnected(event.drive.connected);
 				}
-				__msd.setState(data.event);
+				__msd.setState(event);
 				break;
 
 			case "switch":
-				if (data.event.model) {
-					__atx.setHasSwitch(data.event.model.ports.length > 0);
+				if (event.model) {
+					__atx.setHasSwitch(event.model.ports.length > 0);
 				}
-				__switch.setState(data.event);
+				__switch.setState(event);
 				break;
 		}
 	};
@@ -442,7 +454,7 @@ export function Session() {
 			if (__missed_heartbeats >= 15) {
 				throw new Error("Too many missed heartbeats");
 			}
-			__ws.send("{\"event_type\": \"ping\", \"event\": {}}");
+			__ws.send(new Uint8Array([0]));
 		} catch (ex) {
 			__wsErrorHandler(ex.message);
 		}

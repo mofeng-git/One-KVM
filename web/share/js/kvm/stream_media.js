@@ -87,7 +87,8 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 			__ws.onclose = __wsCloseHandler;
 			__ws.onmessage = async (event) => {
 				if (typeof event.data === "string") {
-					__wsJsonHandler(JSON.parse(event.data));
+					event = JSON.parse(event.data);
+					__wsJsonHandler(event.event_type, event.event);
 				} else { // Binary
 					await __wsBinHandler(event.data);
 				}
@@ -153,9 +154,9 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 		}
 	};
 
-	var __wsJsonHandler = function(event) {
-		if (event.event_type === "media") {
-			__decoderCreate(event.event.video);
+	var __wsJsonHandler = function(event_type, event) {
+		if (event_type === "media") {
+			__decoderCreate(event.video);
 		}
 	};
 
