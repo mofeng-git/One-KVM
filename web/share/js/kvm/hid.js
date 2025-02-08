@@ -183,13 +183,13 @@ export function Hid(__getGeometry, __recorder) {
 			let avail_json = JSON.stringify(avail);
 			if (el.__avail_json !== avail_json) {
 				let html = "";
-				for (let pair of [
+				for (let kv of [
 					["USB",  "usb"],
 					["PS/2", "ps2"],
 					["Off",  "disabled"],
 				]) {
-					if (avail.includes(pair[1])) {
-						html += tools.radio.makeItem("hid-outputs-keyboard-radio", pair[0], pair[1]);
+					if (avail.includes(kv[1])) {
+						html += tools.radio.makeItem("hid-outputs-keyboard-radio", kv[0], kv[1]);
 					}
 				}
 				el.innerHTML = html;
@@ -211,16 +211,16 @@ export function Hid(__getGeometry, __recorder) {
 			if (el.__avail_json !== avail_json) {
 				has_relative = false;
 				let html = "";
-				for (let pair of [
+				for (let kv of [
 					["Absolute",  "usb",       false],
 					["Abs-Win98", "usb_win98", false],
 					["Relative",  "usb_rel",   true],
 					["PS/2",      "ps2",       true],
 					["Off",       "disabled",  false],
 				]) {
-					if (avail.includes(pair[1])) {
-						html += tools.radio.makeItem("hid-outputs-mouse-radio", pair[0], pair[1]);
-						has_relative = (has_relative || pair[2]);
+					if (avail.includes(kv[1])) {
+						html += tools.radio.makeItem("hid-outputs-mouse-radio", kv[0], kv[1]);
+						has_relative = (has_relative || kv[2]);
 					}
 				}
 				el.innerHTML = html;

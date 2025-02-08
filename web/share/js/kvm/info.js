@@ -145,32 +145,32 @@ export function Info() {
 			return __formatUl([["Status", __red("Not available")]]);
 		} else {
 			state = state.state;
-			let pairs = [
+			let kvs = [
 				["Status",			(state.fan.ok ? __green("Ok") : __red("Failed"))],
 				["Desired speed",	tools.escape(`${state.fan.speed}%`)],
 				["PWM",				tools.escape(`${state.fan.pwm}`)],
 			];
 			if (state.hall.available) {
-				pairs.push(["RPM", __colored(state.fan.ok, tools.escape(`${state.hall.rpm}`))]);
+				kvs.push(["RPM", __colored(state.fan.ok, tools.escape(`${state.hall.rpm}`))]);
 			}
-			return __formatUl(pairs);
+			return __formatUl(kvs);
 		}
 	};
 
 	var __formatTemp = function(temp) {
-		let pairs = [];
+		let kvs = [];
 		for (let field of Object.keys(temp).sort()) {
-			pairs.push([
+			kvs.push([
 				tools.escape(field.toUpperCase()),
 				tools.escape(`${temp[field]}`) + "&deg;C",
 			]);
 		}
-		return __formatUl(pairs);
+		return __formatUl(kvs);
 	};
 
 	var __formatThrottling = function(throttling) {
 		if (throttling !== null) {
-			let pairs = [];
+			let kvs = [];
 			for (let field of Object.keys(throttling.parsed_flags).sort()) {
 				let flags = throttling.parsed_flags[field];
 				let key = tools.upperFirst(field).replace("_", " ");
@@ -178,9 +178,9 @@ export function Info() {
 				if (!throttling.ignore_past) {
 					value += "; " + (flags["past"] ? __red("In the past") : __green("Never"));
 				}
-				pairs.push([tools.escape(key), value]);
+				kvs.push([tools.escape(key), value]);
 			}
-			return __formatUl(pairs);
+			return __formatUl(kvs);
 		} else {
 			return "NO DATA";
 		}
@@ -209,33 +209,33 @@ export function Info() {
 	};
 
 	var __formatStreamerFeatures = function(features) {
-		let pairs = [];
+		let kvs = [];
 		for (let field of Object.keys(features).sort()) {
-			pairs.push([
+			kvs.push([
 				tools.escape(field),
 				(features[field] ? "Yes" : "No"),
 			]);
 		}
-		return __formatUl(pairs);
+		return __formatUl(kvs);
 	};
 
 	var __formatUname = function(kernel) {
-		let pairs = [];
+		let kvs = [];
 		for (let field of Object.keys(kernel).sort()) {
 			if (field !== "system") {
-				pairs.push([
+				kvs.push([
 					tools.escape(tools.upperFirst(field)),
 					tools.escape(kernel[field]),
 				]);
 			}
 		}
-		return __formatUl(pairs);
+		return __formatUl(kvs);
 	};
 
-	var __formatUl = function(pairs) {
+	var __formatUl = function(kvs) {
 		let html = "";
-		for (let pair of pairs) {
-			html += `<li>${pair[0]}: ${__commented(pair[1])}</li>`;
+		for (let kv of kvs) {
+			html += `<li>${kv[0]}: ${__commented(kv[1])}</li>`;
 		}
 		return `<ul>${html}</ul>`;
 	};
