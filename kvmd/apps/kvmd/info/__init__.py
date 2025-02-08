@@ -52,24 +52,24 @@ class InfoManager:
         return set(self.__subs)
 
     async def get_state(self, fields: (list[str] | None)=None) -> dict:
-        fields = set(fields or list(self.__subs))
+        fields_set = set(fields or list(self.__subs))
 
-        hw = ("hw" in fields)  # Old for compatible
-        system = ("system" in fields)
+        hw = ("hw" in fields_set)  # Old for compatible
+        system = ("system" in fields_set)
         if hw:
-            fields.remove("hw")
-            fields.add("health")
-            fields.add("system")
+            fields_set.remove("hw")
+            fields_set.add("health")
+            fields_set.add("system")
 
-        state = dict(zip(fields, await asyncio.gather(*[
+        state = dict(zip(fields_set, await asyncio.gather(*[
             self.__subs[field].get_state()
-            for field in fields
+            for field in fields_set
         ])))
 
         if hw:
             state["hw"] = {
-                "health": state.pop("health"),
-                "platform": state["system"].pop("platform"),
+                "health":   state.pop("health"),
+                "platform": (state["system"] or {}).pop("platform"),  # {} makes mypy happy
             }
             if not system:
                 state.pop("system")
