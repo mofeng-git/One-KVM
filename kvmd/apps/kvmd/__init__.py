@@ -76,6 +76,7 @@ def main(argv: (list[str] | None)=None) -> None:
     KvmdServer(
         auth_manager=AuthManager(
             enabled=config.auth.enabled,
+            expire=config.auth.expire,
             unauth_paths=([] if config.prometheus.auth.enabled else ["/export/prometheus/metrics"]),
 
             internal_type=config.auth.internal.type,

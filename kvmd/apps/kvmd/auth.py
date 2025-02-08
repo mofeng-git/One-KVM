@@ -43,15 +43,16 @@ class _Session:
     expire_ts: int
 
     def __post_init__(self) -> None:
-        assert self.user.strip()
+        assert self.user == self.user.strip()
         assert self.user
         assert self.expire_ts >= 0
 
 
-class AuthManager:
+class AuthManager:  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         enabled: bool,
+        expire: int,
         unauth_paths: list[str],
 
         internal_type: str,
@@ -67,6 +68,11 @@ class AuthManager:
         self.__enabled = enabled
         if not enabled:
             get_logger().warning("AUTHORIZATION IS DISABLED")
+
+        assert expire >= 0
+        self.__expire = expire
+        if expire > 0:
+            get_logger().warning("Maximum user session time is limited: %d seconds", expire)
 
         self.__unauth_paths = frozenset(unauth_paths)  # To speed up
         for path in self.__unauth_paths:
@@ -132,24 +138,46 @@ class AuthManager:
         assert user
         assert expire >= 0
         assert self.__enabled
+
         if (await self.authorize(user, passwd)):
             token = self.__make_new_token()
             session = _Session(
                 user=user,
-                expire_ts=(0 if expire <= 0 else (self.__get_now_ts() + expire)),
+                expire_ts=self.__make_expire_ts(expire),
             )
             self.__sessions[token] = session
             get_logger().info("Logged in user %r (expire_ts=%d)", session.user, session.expire_ts)
             return token
-        else:
-            return None
+
+        return None
 
     def __make_new_token(self) -> str:
         for _ in range(10):
             token = secrets.token_hex(32)
             if token not in self.__sessions:
                 return token
-        raise AssertionError("Can't generate new unique token")
+        raise RuntimeError("Can't generate new unique token")
+
+    def __make_expire_ts(self, expire: int) -> int:
+        assert expire >= 0
+        assert self.__expire >= 0
+
+        if expire == 0:
+            # The user requested infinite session: apply global expire.
+            # It will allow this (0) or set a limit.
+            expire = self.__expire
+        else:
+            # The user wants a limited session
+            if self.__expire > 0:
+                # If we have a global limit, override the user limit
+                assert expire > 0
+                expire = min(expire, self.__expire)
+
+        if expire > 0:
+            return (self.__get_now_ts() + expire)
+
+        assert expire == 0
+        return 0
 
     def __get_now_ts(self) -> int:
         return int(time.monotonic())
@@ -171,12 +199,10 @@ class AuthManager:
         if session is not None:
             if session.expire_ts <= 0:
                 # Infinite session
-                assert session.user
                 return session.user
             else:
                 # Limited session
                 if self.__get_now_ts() < session.expire_ts:
-                    assert session.user
                     return session.user
                 else:
                     del self.__sessions[token]

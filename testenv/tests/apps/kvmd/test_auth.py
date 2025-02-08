@@ -61,6 +61,7 @@ async def _get_configured_manager(
 
     manager = AuthManager(
         enabled=True,
+        expire=0,
         unauth_paths=unauth_paths,
 
         internal_type="htpasswd",
@@ -250,6 +251,7 @@ async def test_ok__disabled() -> None:
     try:
         manager = AuthManager(
             enabled=False,
+            expire=0,
             unauth_paths=[],
 
             internal_type="foobar",

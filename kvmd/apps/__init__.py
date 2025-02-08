@@ -65,6 +65,7 @@ from ..validators.basic import valid_string_list
 
 from ..validators.auth import valid_user
 from ..validators.auth import valid_users_list
+from ..validators.auth import valid_expire
 
 from ..validators.os import valid_abs_path
 from ..validators.os import valid_abs_file
@@ -357,6 +358,7 @@ def _get_config_scheme() -> dict:
 
             "auth": {
                 "enabled": Option(True, type=valid_bool),
+                "expire":  Option(0,    type=valid_expire),
 
                 "internal": {
                     "type":        Option("htpasswd"),
