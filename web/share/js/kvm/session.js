@@ -23,10 +23,10 @@
 "use strict";
 
 
-import {ROOT_PREFIX} from "../vars.js";
 import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
 
+import {Info} from "./info.js";
 import {Recorder} from "./recorder.js";
 import {Hid} from "./hid.js";
 import {Paste} from "./paste.js";
@@ -48,6 +48,7 @@ export function Session() {
 	var __ping_timer = null;
 	var __missed_heartbeats = 0;
 
+	var __info = new Info();
 	var __streamer = new Streamer();
 	var __recorder = new Recorder();
 	var __hid = new Hid(__streamer.getGeometry, __recorder);
@@ -58,230 +59,11 @@ export function Session() {
 	var __ocr = new Ocr(__streamer.getGeometry);
 	var __switch = new Switch();
 
-	var __info_health_state = null;
-	var __info_fan_state = null;
-
 	var __init__ = function() {
 		__streamer.ensureDeps(() => __startSession());
 	};
 
 	/************************************************************************/
-
-	var __setInfoState = function(state) {
-		for (let key of Object.keys(state)) {
-			switch (key) {
-				case "meta": __setInfoStateMeta(state.meta); break;
-				case "health": __setInfoStateHealth(state.health); break;
-				case "fan": __setInfoStateFan(state.fan); break;
-				case "system": __setInfoStateSystem(state.system); break;
-				case "extras": __setInfoStateExtras(state.extras); break;
-			}
-		}
-	};
-
-	var __setInfoStateMeta = function(state) {
-		if (state !== null) {
-			$("kvmd-meta-json").innerText = JSON.stringify(state, undefined, 4);
-
-			if (state.server && state.server.host) {
-				$("kvmd-meta-server-host").innerText = `Server: ${state.server.host}`;
-				document.title = `PiKVM Session: ${state.server.host}`;
-			} else {
-				$("kvmd-meta-server-host").innerText = "";
-				document.title = "PiKVM Session";
-			}
-
-			for (let place of ["left", "right"]) {
-				if (state.tips && state.tips[place]) {
-					$(`kvmd-meta-tips-${place}`).innerText = state.tips[place];
-				}
-			}
-
-			// Don't use this option, it may be removed in any time
-			if (state.web && state.web.confirm_session_exit === false) {
-				window.onbeforeunload = null; // See main.js
-			}
-		}
-	};
-
-	var __setInfoStateHealth = function(state) {
-		if (state.throttling !== null) {
-			let flags = state.throttling.parsed_flags;
-			let ignore_past = state.throttling.ignore_past;
-			let undervoltage = (flags.undervoltage.now || (flags.undervoltage.past && !ignore_past));
-			let freq_capped = (flags.freq_capped.now || (flags.freq_capped.past && !ignore_past));
-
-			tools.hidden.setVisible($("hw-health-dropdown"), (undervoltage || freq_capped));
-			$("hw-health-undervoltage-led").className = (undervoltage ? (flags.undervoltage.now ? "led-red" : "led-yellow") : "hidden");
-			$("hw-health-overheating-led").className = (freq_capped ? (flags.freq_capped.now ? "led-red" : "led-yellow") : "hidden");
-			tools.hidden.setVisible($("hw-health-message-undervoltage"), undervoltage);
-			tools.hidden.setVisible($("hw-health-message-overheating"), freq_capped);
-		}
-		__info_health_state = state;
-		__renderAboutInfoHardware();
-	};
-
-	var __setInfoStateFan = function(state) {
-		let failed = false;
-		let failed_past = false;
-		if (state.monitored) {
-			if (state.state === null) {
-				failed = true;
-			} else {
-				if (!state.state.fan.ok) {
-					failed = true;
-				} else if (state.state.fan.last_fail_ts >= 0) {
-					failed = true;
-					failed_past = true;
-				}
-			}
-		}
-		tools.hidden.setVisible($("fan-health-dropdown"), failed);
-		$("fan-health-led").className = (failed ? (failed_past ? "led-yellow" : "led-red") : "hidden");
-
-		__info_fan_state = state;
-		__renderAboutInfoHardware();
-	};
-
-	var __renderAboutInfoHardware = function() {
-		let parts = [];
-		if (__info_health_state !== null) {
-			parts = [
-				"Resources:" + __formatMisc(__info_health_state),
-				"Temperature:" + __formatTemp(__info_health_state.temp),
-				"Throttling:" + __formatThrottling(__info_health_state.throttling),
-			];
-		}
-		if (__info_fan_state !== null) {
-			parts.push("Fan:" + __formatFan(__info_fan_state));
-		}
-		$("about-hardware").innerHTML = parts.join("<hr>");
-	};
-
-	var __formatMisc = function(state) {
-		return __formatUl([
-			["CPU", `${state.cpu.percent}%`],
-			["MEM", `${state.mem.percent}%`],
-		]);
-	};
-
-	var __formatFan = function(state) {
-		if (!state.monitored) {
-			return __formatUl([["Status", "Not monitored"]]);
-		} else if (state.state === null) {
-			return __formatUl([["Status", __red("Not available")]]);
-		} else {
-			state = state.state;
-			let pairs = [
-				["Status", (state.fan.ok ? __green("Ok") : __red("Failed"))],
-				["Desired speed", `${state.fan.speed}%`],
-				["PWM", `${state.fan.pwm}`],
-			];
-			if (state.hall.available) {
-				pairs.push(["RPM", __colored(state.fan.ok, state.hall.rpm)]);
-			}
-			return __formatUl(pairs);
-		}
-	};
-
-	var __formatTemp = function(temp) {
-		let pairs = [];
-		for (let field of Object.keys(temp).sort()) {
-			pairs.push([field.toUpperCase(), `${temp[field]}&deg;C`]);
-		}
-		return __formatUl(pairs);
-	};
-
-	var __formatThrottling = function(throttling) {
-		if (throttling !== null) {
-			let pairs = [];
-			for (let field of Object.keys(throttling.parsed_flags).sort()) {
-				let flags = throttling.parsed_flags[field];
-				let key = tools.upperFirst(field).replace("_", " ");
-				let value = (flags["now"] ? __red("RIGHT NOW") : __green("No"));
-				if (!throttling.ignore_past) {
-					value += "; " + (flags["past"] ? __red("In the past") : __green("Never"));
-				}
-				pairs.push([key, value]);
-			}
-			return __formatUl(pairs);
-		} else {
-			return "NO DATA";
-		}
-	};
-
-	var __setInfoStateSystem = function(state) {
-		$("about-version").innerHTML = `
-			Base: ${__commented(state.platform.base)}<br>
-			Serial: ${__commented(state.platform.serial)}<br>
-			<hr>
-			KVMD: ${__commented(state.kvmd.version)}<br>
-			<hr>
-			Streamer: ${__commented(state.streamer.version + " (" + state.streamer.app + ")")}<br>
-			${__formatStreamerFeatures(state.streamer.features)}<br>
-			<hr>
-			${state.kernel.system} kernel:<br>
-			${__formatUname(state.kernel)}
-		`;
-		$("kvmd-version-kvmd").innerText = state.kvmd.version;
-		$("kvmd-version-streamer").innerText = state.streamer.version;
-	};
-
-	var __formatStreamerFeatures = function(features) {
-		let pairs = [];
-		for (let field of Object.keys(features).sort()) {
-			pairs.push([field, (features[field] ? "Yes" : "No")]);
-		}
-		return __formatUl(pairs);
-	};
-
-	var __formatUname = function(kernel) {
-		let pairs = [];
-		for (let field of Object.keys(kernel).sort()) {
-			if (field !== "system") {
-				pairs.push([tools.upperFirst(field), kernel[field]]);
-			}
-		}
-		return __formatUl(pairs);
-	};
-
-	var __formatUl = function(pairs) {
-		let html = "";
-		for (let pair of pairs) {
-			html += `<li>${pair[0]}: ${__commented(pair[1])}</li>`;
-		}
-		return `<ul>${html}</ul>`;
-	};
-
-	var __green = (html) => __colored(true, html);
-	var __red = (html) => __colored(false, html);
-	var __colored = (ok, html) => `<font color="${ok ? "green" : "red"}">${html}</font>`;
-	var __commented = (html) => `<span class="code-comment">${html}</span>`;
-
-	var __setInfoStateExtras = function(state) {
-		let show_hook = null;
-		let close_hook = null;
-		let has_webterm = (state.webterm && (state.webterm.enabled || state.webterm.started));
-		if (has_webterm) {
-			let loc = window.location;
-			let base = `${loc.protocol}//${loc.host}${loc.pathname}${ROOT_PREFIX}`;
-			// Tailing slash after state.webterm.path is added to avoid Nginx 301 redirect
-			// when the location doesn't have tailing slash: "foo -> foo/".
-			// Reverse proxy over PiKVM can be misconfigured to handle this.
-			let url = base + state.webterm.path + "/?disableLeaveAlert=true";
-			show_hook = function() {
-				tools.info("Terminal opened: ", url);
-				$("webterm-iframe").src = url;
-			};
-			close_hook = function() {
-				tools.info("Terminal closed");
-				$("webterm-iframe").src = "";
-			};
-		}
-		tools.feature.setEnabled($("system-tool-webterm"), has_webterm);
-		$("webterm-window").show_hook = show_hook;
-		$("webterm-window").close_hook = close_hook;
-	};
 
 	var __startSession = function() {
 		$("link-led").className = "led-yellow";
@@ -312,6 +94,98 @@ export function Session() {
 				__wsCloseHandler(null);
 			}
 		});
+	};
+
+	var __wsOpenHandler = function(event) {
+		tools.debug("Session: socket opened:", event);
+		$("link-led").className = "led-green";
+		$("link-led").title = "Connected";
+		__recorder.setSocket(__ws);
+		__hid.setSocket(__ws);
+		__missed_heartbeats = 0;
+		__ping_timer = setInterval(__pingServer, 1000);
+	};
+
+	var __wsBinHandler = function(data) {
+		data = new Uint8Array(data);
+		if (data[0] === 255) { // Pong
+			__missed_heartbeats = 0;
+		}
+	};
+
+	var __wsJsonHandler = function(event_type, event) {
+		switch (event_type) {
+			case "info": __info.setState(event); break;
+			case "gpio": __gpio.setState(event); break;
+			case "hid": __hid.setState(event); break;
+			case "hid_keymaps": __paste.setState(event); break;
+			case "atx": __atx.setState(event); break;
+			case "streamer": __streamer.setState(event); break;
+			case "ocr": __ocr.setState(event); break;
+
+			case "msd":
+				if (event.online === false) {
+					__switch.setMsdConnected(false);
+				} else if (event.drive !== undefined) {
+					__switch.setMsdConnected(event.drive.connected);
+				}
+				__msd.setState(event);
+				break;
+
+			case "switch":
+				if (event.model) {
+					__atx.setHasSwitch(event.model.ports.length > 0);
+				}
+				__switch.setState(event);
+				break;
+		}
+	};
+
+	var __wsErrorHandler = function(event) {
+		tools.error("Session: socket error:", event);
+		if (__ws) {
+			__ws.onclose = null;
+			__ws.close();
+			__wsCloseHandler(null);
+		}
+	};
+
+	var __wsCloseHandler = function(event) {
+		tools.debug("Session: socket closed:", event);
+		$("link-led").className = "led-gray";
+
+		if (__ping_timer) {
+			clearInterval(__ping_timer);
+			__ping_timer = null;
+		}
+
+		__gpio.setState(null);
+		__hid.setSocket(null); // auto setState(null);
+		__paste.setState(null);
+		__atx.setState(null);
+		__msd.setState(null);
+		__streamer.setState(null);
+		__ocr.setState(null);
+		__recorder.setSocket(null);
+		__switch.setState(null);
+		__ws = null;
+
+		setTimeout(function() {
+			$("link-led").className = "led-yellow";
+			setTimeout(__startSession, 500);
+		}, 500);
+	};
+
+	var __pingServer = function() {
+		try {
+			__missed_heartbeats += 1;
+			if (__missed_heartbeats >= 15) {
+				throw new Error("Too many missed heartbeats");
+			}
+			__ws.send(new Uint8Array([0]));
+		} catch (ex) {
+			__wsErrorHandler(ex.message);
+		}
 	};
 
 	var __ascii_encoder = new TextEncoder("ascii");
@@ -354,99 +228,6 @@ export function Session() {
 			data[0] = (event_type === "mouse_relative" ? 4 : 5);
 			data[1] = (event.squash ? 1 : 0);
 			ws.send(data);
-		}
-	};
-
-	var __wsOpenHandler = function(event) {
-		tools.debug("Session: socket opened:", event);
-		$("link-led").className = "led-green";
-		$("link-led").title = "Connected";
-		__recorder.setSocket(__ws);
-		__hid.setSocket(__ws);
-		__missed_heartbeats = 0;
-		__ping_timer = setInterval(__pingServer, 1000);
-	};
-
-	var __wsBinHandler = function(data) {
-		data = new Uint8Array(data);
-		if (data[0] === 255) { // Pong
-			__missed_heartbeats = 0;
-		}
-	};
-
-	var __wsJsonHandler = function(event_type, event) {
-		switch (event_type) {
-			case "info": __setInfoState(event); break;
-			case "gpio": __gpio.setState(event); break;
-			case "hid": __hid.setState(event); break;
-			case "hid_keymaps": __paste.setState(event); break;
-			case "atx": __atx.setState(event); break;
-			case "streamer": __streamer.setState(event); break;
-			case "ocr": __ocr.setState(event); break;
-
-			case "msd":
-				if (event.online === false) {
-					__switch.setMsdConnected(false);
-				} else if (event.drive !== undefined) {
-					__switch.setMsdConnected(event.drive.connected);
-				}
-				__msd.setState(event);
-				break;
-
-			case "switch":
-				if (event.model) {
-					__atx.setHasSwitch(event.model.ports.length > 0);
-				}
-				__switch.setState(event);
-				break;
-		}
-	};
-
-	var __wsErrorHandler = function(event) {
-		tools.error("Session: socket error:", event);
-		if (__ws) {
-			__ws.onclose = null;
-			__ws.close();
-			__wsCloseHandler(null);
-		}
-	};
-
-	var __wsCloseHandler = function(event) {
-		tools.debug("Session: socket closed:", event);
-
-		$("link-led").className = "led-gray";
-
-		if (__ping_timer) {
-			clearInterval(__ping_timer);
-			__ping_timer = null;
-		}
-
-		__gpio.setState(null);
-		__hid.setSocket(null); // auto setState(null);
-		__paste.setState(null);
-		__atx.setState(null);
-		__msd.setState(null);
-		__streamer.setState(null);
-		__ocr.setState(null);
-		__recorder.setSocket(null);
-		__switch.setState(null);
-		__ws = null;
-
-		setTimeout(function() {
-			$("link-led").className = "led-yellow";
-			setTimeout(__startSession, 500);
-		}, 500);
-	};
-
-	var __pingServer = function() {
-		try {
-			__missed_heartbeats += 1;
-			if (__missed_heartbeats >= 15) {
-				throw new Error("Too many missed heartbeats");
-			}
-			__ws.send(new Uint8Array([0]));
-		} catch (ex) {
-			__wsErrorHandler(ex.message);
 		}
 	};
 
