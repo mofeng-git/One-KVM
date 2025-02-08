@@ -34,6 +34,7 @@ from ....htserver import set_request_auth_info
 
 from ....validators.auth import valid_user
 from ....validators.auth import valid_passwd
+from ....validators.auth import valid_expire
 from ....validators.auth import valid_auth_token
 
 from ..auth import AuthManager
@@ -91,6 +92,7 @@ class AuthApi:
             token = await self.__auth_manager.login(
                 user=valid_user(credentials.get("user", "")),
                 passwd=valid_passwd(credentials.get("passwd", "")),
+                expire=valid_expire(credentials.get("expire", "0")),
             )
             if token:
                 return make_json_response(set_cookies={_COOKIE_AUTH_TOKEN: token})

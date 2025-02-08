@@ -37,6 +37,7 @@
     <link rel="stylesheet" href="../share/css/main.css">
     <link rel="stylesheet" href="../share/css/window.css">
     <link rel="stylesheet" href="../share/css/modal.css">
+    <link rel="stylesheet" href="../share/css/radio.css">
     <link rel="stylesheet" href="../share/css/login/login.css">
     <link rel="stylesheet" href="../share/css/user.css">
     <script type="module">import {setRootPrefix} from "../share/js/vars.js";
@@ -66,6 +67,24 @@
               <td>2FA code:&nbsp;</td>
               <td>
                 <input id="code-input" type="text" placeholder="if enabled">
+              </td>
+            </tr>
+            <tr>
+              <td colspan="2">
+                <hr>
+              </td>
+            </tr>
+            <tr>
+              <td>Remember me:&nbsp;</td>
+              <td>
+                <div class="radio-box">
+                  <input type="radio" id="expire-radio-3600" name="expire-radio" value="3600"/>
+                  <label for="expire-radio-3600">1h</label>
+                  <input type="radio" id="expire-radio-86400" name="expire-radio" value="86400"/>
+                  <label for="expire-radio-86400">24h</label>
+                  <input type="radio" id="expire-radio-0" name="expire-radio" value="0" checked="checked"/>
+                  <label for="expire-radio-0">Forever</label>
+                </div>
               </td>
             </tr>
             <tr>

@@ -1,12 +1,22 @@
 extends ../base.pug
 
 
+mixin radio(name, items)
+	.radio-box
+		each item in items
+			-
+				let id = `${name}-${item["value"]}`
+				let checked = (item["checked"] || false)
+			input(type="radio" id=id name=name value=item["value"] checked=checked)
+			label(for=id) !{item["title"]}
+
+
 append vars
 	-
 		root_prefix = "../"
 		title = "PiKVM Login"
 		main_js = "login/main"
-		css_list.push("window", "modal", "login/login")
+		css_list.push("window", "modal", "radio", "login/login")
 
 
 block body
@@ -23,6 +33,17 @@ block body
 					tr
 						td 2FA code:&nbsp;
 						td #[input#code-input(type="text" placeholder="if enabled")]
+					tr
+						td(colspan=2)
+							hr
+					tr
+						td Remember me:&nbsp;
+						td
+							+radio("expire-radio", [
+								{"title": "1h", "value": "3600"},
+								{"title": "24h", "value": "86400"},
+								{"title": "Forever", "value": "0", "checked": true},
+							])
 					tr
 						td(colspan=2)
 							hr

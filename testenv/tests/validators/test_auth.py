@@ -28,6 +28,7 @@ from kvmd.validators import ValidatorError
 from kvmd.validators.auth import valid_user
 from kvmd.validators.auth import valid_users_list
 from kvmd.validators.auth import valid_passwd
+from kvmd.validators.auth import valid_expire
 from kvmd.validators.auth import valid_auth_token
 
 
@@ -107,6 +108,20 @@ def test_ok__valid_passwd(arg: Any) -> None:
 def test_fail__valid_passwd(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_passwd(arg))
+
+
+# =====
+@pytest.mark.parametrize("arg", ["0 ", 0, 1, 13])
+def test_ok__valid_expire(arg: Any) -> None:
+    value = valid_expire(arg)
+    assert type(value) is int  # pylint: disable=unidiomatic-typecheck
+    assert value == int(str(arg).strip())
+
+
+@pytest.mark.parametrize("arg", ["test", "", None, -1, -13, 1.1])
+def test_fail__valid_expire(arg: Any) -> None:
+    with pytest.raises(ValidatorError):
+        print(valid_expire(arg))
 
 
 # =====
