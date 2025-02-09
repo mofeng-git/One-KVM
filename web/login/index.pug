@@ -25,6 +25,11 @@ block body
 			#login
 				table
 					tr
+						td #[img.svg-gray#login-logo(src=`${svg_dir}/logo.svg` alt="&pi;-kvm")]
+						td
+					tr
+						td(colspan=2) #[hr]
+					tr
 						td Username:&nbsp;
 						td #[input#user-input(type="text" autocapitalize="off")]
 					tr
@@ -34,8 +39,7 @@ block body
 						td 2FA code:&nbsp;
 						td #[input#code-input(type="text" placeholder="if enabled")]
 					tr
-						td(colspan=2)
-							hr
+						td(colspan=2) #[hr]
 					tr
 						td Remember me:&nbsp;
 						td
@@ -45,11 +49,10 @@ block body
 								{"title": "Forever", "value": "0", "checked": true},
 							])
 					tr
-						td(colspan=2)
-							hr
+						td(colspan=2) #[hr]
 					tr
 						td
-						td #[button.key#login-button(style="width:100%") Login]
+						td #[button.key#login-button Login]
 
 	ul.footer
 		li.left

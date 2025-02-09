@@ -42,6 +42,14 @@ div#login {
 	padding: 15px;
 }
 
+img#login-logo {
+	height: 30px;
+}
+
+button#login-button {
+	width: 100%;
+}
+
 input[type="text"]#user-input,
 input[type="password"]#passwd-input,
 input[type="text"]#code-input {
