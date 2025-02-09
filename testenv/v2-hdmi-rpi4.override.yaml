@@ -45,9 +45,9 @@ kvmd:
             __v4_locator__:
                 type: locator
                 device: /dev/kvmd-gpio
-            relay:
-                type: hidrelay
-                device: /dev/hidraw0
+#            relay:
+#                type: hidrelay
+#                device: /dev/hidraw0
             cmd1:
                 type: cmd
                 cmd: [/bin/sleep, 5]
@@ -94,20 +94,20 @@ kvmd:
                 mode: output
                 switch: false
 
-            relay1:
-                pin: 0
-                mode: output
-                initial: null
-                driver: relay
-
-            relay2:
-                pin: 1
-                mode: output
-                initial: null
-                driver: relay
-                pulse:
-                    delay: 2
-                    max_delay: 5
+#            relay1:
+#                pin: 0
+#                mode: output
+#                initial: null
+#                driver: relay
+#
+#            relay2:
+#                pin: 1
+#                mode: output
+#                initial: null
+#                driver: relay
+#                pulse:
+#                    delay: 2
+#                    max_delay: 5
 
             cmd1:
                 pin: 0
