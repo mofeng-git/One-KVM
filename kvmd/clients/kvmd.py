@@ -140,19 +140,19 @@ class KvmdClientWs:
     async def communicate(self) -> AsyncGenerator[tuple[str, dict], None]:  # pylint: disable=too-many-branches
         assert not self.__communicated
         self.__communicated = True
-        receive_task: (asyncio.Task | None) = None
+        recv_task: (asyncio.Task | None) = None
         writer_task: (asyncio.Task | None) = None
         try:
             while True:
-                if receive_task is None:
-                    receive_task = asyncio.create_task(self.__ws.receive())
+                if recv_task is None:
+                    recv_task = asyncio.create_task(self.__ws.receive())
                 if writer_task is None:
                     writer_task = asyncio.create_task(self.__writer_queue.get())
 
-                done = (await aiotools.wait_first(receive_task, writer_task))[0]
+                done = (await aiotools.wait_first(recv_task, writer_task))[0]
 
-                if receive_task in done:
-                    msg = receive_task.result()
+                if recv_task in done:
+                    msg = recv_task.result()
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         yield htserver.parse_ws_event(msg.data)
                     elif msg.type == aiohttp.WSMsgType.CLOSE:
@@ -161,7 +161,7 @@ class KvmdClientWs:
                         break
                     else:
                         raise RuntimeError(f"Unhandled WS message type: {msg!r}")
-                    receive_task = None
+                    recv_task = None
 
                 if writer_task in done:
                     payload = writer_task.result()
@@ -171,8 +171,8 @@ class KvmdClientWs:
                         await htserver.send_ws_event(self.__ws, *payload)
                     writer_task = None
         finally:
-            if receive_task:
-                receive_task.cancel()
+            if recv_task:
+                recv_task.cancel()
             if writer_task:
                 writer_task.cancel()
             try:
