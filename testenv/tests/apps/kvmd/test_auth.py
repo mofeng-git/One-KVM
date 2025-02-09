@@ -127,16 +127,26 @@ async def test_ok__expire(tmpdir) -> None:  # type: ignore
         assert token1 != token3
         assert token2 != token3
 
+        token4 = await manager.login("admin", "pass", 6)
+        assert isinstance(token4, str)
+        assert len(token4) == 64
+        assert token1 != token4
+        assert token2 != token4
+        assert token3 != token4
+
         await asyncio.sleep(4)
 
         assert manager.check(token1) is None
         assert manager.check(token2) is None
         assert manager.check(token3) is None
+        assert manager.check(token4) == "admin"
 
-        # Check for removed token
+        await asyncio.sleep(3)
+
         assert manager.check(token1) is None
         assert manager.check(token2) is None
         assert manager.check(token3) is None
+        assert manager.check(token4) is None
 
 
 @pytest.mark.asyncio
