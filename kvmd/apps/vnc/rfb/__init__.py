@@ -235,18 +235,18 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
         await self._write_struct("handshake server version", "", b"RFB 003.008\n")
 
-        response = await self._read_text("handshake client version", 12)
+        resp = await self._read_text("handshake client version", 12)
         if (
-            not response.startswith("RFB 003.00")
-            or not response.endswith("\n")
-            or response[-2] not in ["3", "5", "7", "8"]
+            not resp.startswith("RFB 003.00")
+            or not resp.endswith("\n")
+            or resp[-2] not in ["3", "5", "7", "8"]
         ):
-            raise RfbError(f"Invalid version response: {response!r}")
+            raise RfbError(f"Invalid version response: {resp!r}")
 
         try:
-            version = int(response[-2])
+            version = int(resp[-2])
         except ValueError:
-            raise RfbError(f"Invalid version response: {response!r}")
+            raise RfbError(f"Invalid version response: {resp!r}")
         self.__rfb_version = (3 if version == 5 else version)
         get_logger(0).info("%s [main]: Using RFB version 3.%d", self._remote, self.__rfb_version)
 

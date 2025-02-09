@@ -52,11 +52,11 @@ class LogApi:
             raise LogReaderDisabledError()
         seek = valid_log_seek(req.query.get("seek", 0))
         follow = valid_bool(req.query.get("follow", False))
-        response = await start_streaming(req, "text/plain")
+        resp = await start_streaming(req, "text/plain")
         async for record in self.__log_reader.poll_log(seek, follow):
-            await response.write(("[%s %s] --- %s" % (
+            await resp.write(("[%s %s] --- %s" % (
                 record["dt"].strftime("%Y-%m-%d %H:%M:%S"),
                 record["service"],
                 record["msg"],
             )).encode("utf-8") + b"\r\n")
-        return response
+        return resp

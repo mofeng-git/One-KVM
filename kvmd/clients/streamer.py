@@ -117,25 +117,25 @@ class StreamerSnapshot:
 class HttpStreamerClientSession(BaseHttpClientSession):
     async def get_state(self) -> dict:
         session = self._ensure_http_session()
-        async with session.get("/state") as response:
-            htclient.raise_not_200(response)
-            return (await response.json())["result"]
+        async with session.get("/state") as resp:
+            htclient.raise_not_200(resp)
+            return (await resp.json())["result"]
 
     async def take_snapshot(self, timeout: float) -> StreamerSnapshot:
         session = self._ensure_http_session()
         async with session.get(
             url="/snapshot",
             timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as response:
+        ) as resp:
 
-            htclient.raise_not_200(response)
+            htclient.raise_not_200(resp)
             return StreamerSnapshot(
-                online=(response.headers["X-UStreamer-Online"] == "true"),
-                width=int(response.headers["X-UStreamer-Width"]),
-                height=int(response.headers["X-UStreamer-Height"]),
+                online=(resp.headers["X-UStreamer-Online"] == "true"),
+                width=int(resp.headers["X-UStreamer-Width"]),
+                height=int(resp.headers["X-UStreamer-Height"]),
                 headers=tuple(
                     (key, value)
-                    for (key, value) in tools.sorted_kvs(dict(response.headers))
+                    for (key, value) in tools.sorted_kvs(dict(resp.headers))
                     if key.lower().startswith("x-ustreamer-") or key.lower() in [
                         "x-timestamp",
                         "access-control-allow-origin",
@@ -144,7 +144,7 @@ class HttpStreamerClientSession(BaseHttpClientSession):
                         "expires",
                     ]
                 ),
-                data=bytes(await response.read()),
+                data=bytes(await resp.read()),
             )
 
 
@@ -187,10 +187,10 @@ class HttpStreamerClient(BaseHttpClient, BaseStreamerClient):
                         connect=session.timeout.total,
                         sock_read=session.timeout.total,
                     ),
-                ) as response:
+                ) as resp:
 
-                    htclient.raise_not_200(response)
-                    reader = aiohttp.MultipartReader.from_response(response)
+                    htclient.raise_not_200(resp)
+                    reader = aiohttp.MultipartReader.from_response(resp)
                     self.__patch_stream_reader(reader.resp.content)
 
                     async def read_frame(key_required: bool) -> dict:

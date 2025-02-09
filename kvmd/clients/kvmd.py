@@ -51,16 +51,16 @@ class _BaseApiPart:
                 for (key, value) in params.items()
                 if value is not None
             },
-        ) as response:
-            htclient.raise_not_200(response)
+        ) as resp:
+            htclient.raise_not_200(resp)
 
 
 class _AuthApiPart(_BaseApiPart):
     async def check(self) -> bool:
         session = self._ensure_http_session()
         try:
-            async with session.get("/auth/check") as response:
-                htclient.raise_not_200(response)
+            async with session.get("/auth/check") as resp:
+                htclient.raise_not_200(resp)
                 return True
         except aiohttp.ClientResponseError as ex:
             if ex.status in [400, 401, 403]:
@@ -71,9 +71,9 @@ class _AuthApiPart(_BaseApiPart):
 class _StreamerApiPart(_BaseApiPart):
     async def get_state(self) -> dict:
         session = self._ensure_http_session()
-        async with session.get("/streamer") as response:
-            htclient.raise_not_200(response)
-            return (await response.json())["result"]
+        async with session.get("/streamer") as resp:
+            htclient.raise_not_200(resp)
+            return (await resp.json())["result"]
 
     async def set_params(self, quality: (int | None)=None, desired_fps: (int | None)=None) -> None:
         await self._set_params(
@@ -86,9 +86,9 @@ class _StreamerApiPart(_BaseApiPart):
 class _HidApiPart(_BaseApiPart):
     async def get_keymaps(self) -> tuple[str, set[str]]:
         session = self._ensure_http_session()
-        async with session.get("/hid/keymaps") as response:
-            htclient.raise_not_200(response)
-            result = (await response.json())["result"]
+        async with session.get("/hid/keymaps") as resp:
+            htclient.raise_not_200(resp)
+            result = (await resp.json())["result"]
             return (result["keymaps"]["default"], set(result["keymaps"]["available"]))
 
     async def print(self, text: str, limit: int, keymap_name: str) -> None:
@@ -97,8 +97,8 @@ class _HidApiPart(_BaseApiPart):
             url="/hid/print",
             params={"limit": limit, "keymap": keymap_name},
             data=text,
-        ) as response:
-            htclient.raise_not_200(response)
+        ) as resp:
+            htclient.raise_not_200(resp)
 
     async def set_params(self, keyboard_output: (str | None)=None, mouse_output: (str | None)=None) -> None:
         await self._set_params(
@@ -111,9 +111,9 @@ class _HidApiPart(_BaseApiPart):
 class _AtxApiPart(_BaseApiPart):
     async def get_state(self) -> dict:
         session = self._ensure_http_session()
-        async with session.get("/atx") as response:
-            htclient.raise_not_200(response)
-            return (await response.json())["result"]
+        async with session.get("/atx") as resp:
+            htclient.raise_not_200(resp)
+            return (await resp.json())["result"]
 
     async def switch_power(self, action: str) -> bool:
         session = self._ensure_http_session()
@@ -121,8 +121,8 @@ class _AtxApiPart(_BaseApiPart):
             async with session.post(
                 url="/atx/power",
                 params={"action": action},
-            ) as response:
-                htclient.raise_not_200(response)
+            ) as resp:
+                htclient.raise_not_200(resp)
                 return True
         except aiohttp.ClientResponseError as ex:
             if ex.status == 409:

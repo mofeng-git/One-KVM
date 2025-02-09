@@ -127,10 +127,10 @@ class MsdApi:
                 src = compressed()
                 size = -1
 
-            response = await start_streaming(req, "application/octet-stream", size, name + suffix)
+            resp = await start_streaming(req, "application/octet-stream", size, name + suffix)
             async for chunk in src:
-                await response.write(chunk)
-            return response
+                await resp.write(chunk)
+            return resp
 
     # =====
 
@@ -160,11 +160,11 @@ class MsdApi:
 
         name = ""
         size = written = 0
-        response: (StreamResponse | None) = None
+        resp: (StreamResponse | None) = None
 
         async def stream_write_info() -> None:
-            assert response is not None
-            await stream_json(response, self.__make_write_info(name, size, written))
+            assert resp is not None
+            await stream_json(resp, self.__make_write_info(name, size, written))
 
         try:
             async with htclient.download(
@@ -184,7 +184,7 @@ class MsdApi:
                 get_logger(0).info("Downloading image %r as %r to MSD ...", url, name)
                 async with self.__msd.write_image(name, size, remove_incomplete) as writer:
                     chunk_size = writer.get_chunk_size()
-                    response = await start_streaming(req, "application/x-ndjson")
+                    resp = await start_streaming(req, "application/x-ndjson")
                     await stream_write_info()
                     last_report_ts = 0
                     async for chunk in remote.content.iter_chunked(chunk_size):
@@ -195,12 +195,12 @@ class MsdApi:
                             last_report_ts = now
 
                 await stream_write_info()
-                return response
+                return resp
 
         except Exception as ex:
-            if response is not None:
+            if resp is not None:
                 await stream_write_info()
-                await stream_json_exception(response, ex)
+                await stream_json_exception(resp, ex)
             elif isinstance(ex, aiohttp.ClientError):
                 return make_json_exception(ex, 400)
             raise
