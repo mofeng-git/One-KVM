@@ -53,10 +53,10 @@ def _htpasswd_fixture(request) -> Generator[passlib.apache.HtpasswdFile, None, N
     os.remove(path)
 
 
-def _run_htpasswd(cmd: list[str], htpasswd_path: str, internal_type: str="htpasswd") -> None:
+def _run_htpasswd(cmd: list[str], htpasswd_path: str, int_type: str="htpasswd") -> None:
     cmd = ["kvmd-htpasswd", *cmd, "--set-options"]
-    if internal_type != "htpasswd":  # By default
-        cmd.append("kvmd/auth/internal/type=" + internal_type)
+    if int_type != "htpasswd":  # By default
+        cmd.append("kvmd/auth/internal/type=" + int_type)
     if htpasswd_path:
         cmd.append("kvmd/auth/internal/file=" + htpasswd_path)
     main(cmd)
@@ -153,12 +153,12 @@ def test_ok__del(htpasswd: passlib.apache.HtpasswdFile) -> None:
 # =====
 def test_fail__not_htpasswd() -> None:
     with pytest.raises(SystemExit, match="Error: KVMD internal auth not using 'htpasswd'"):
-        _run_htpasswd(["list"], "", internal_type="http")
+        _run_htpasswd(["list"], "", int_type="http")
 
 
 def test_fail__unknown_plugin() -> None:
     with pytest.raises(SystemExit, match="ConfigError: Unknown plugin 'auth/foobar'"):
-        _run_htpasswd(["list"], "", internal_type="foobar")
+        _run_htpasswd(["list"], "", int_type="foobar")
 
 
 def test_fail__invalid_passwd(mocker, tmpdir) -> None:  # type: ignore

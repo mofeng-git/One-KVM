@@ -54,9 +54,9 @@ def _make_service_kwargs(path: str) -> dict:
 @contextlib.asynccontextmanager
 async def _get_configured_manager(
     unauth_paths: list[str],
-    internal_path: str,
-    external_path: str="",
-    force_internal_users: (list[str] | None)=None,
+    int_path: str,
+    ext_path: str="",
+    force_int_users: (list[str] | None)=None,
 ) -> AsyncGenerator[AuthManager, None]:
 
     manager = AuthManager(
@@ -64,12 +64,12 @@ async def _get_configured_manager(
         expire=0,
         unauth_paths=unauth_paths,
 
-        internal_type="htpasswd",
-        internal_kwargs=_make_service_kwargs(internal_path),
-        force_internal_users=(force_internal_users or []),
+        int_type="htpasswd",
+        int_kwargs=_make_service_kwargs(int_path),
+        force_int_users=(force_int_users or []),
 
-        external_type=("htpasswd" if external_path else ""),
-        external_kwargs=(_make_service_kwargs(external_path) if external_path else {}),
+        ext_type=("htpasswd" if ext_path else ""),
+        ext_kwargs=(_make_service_kwargs(ext_path) if ext_path else {}),
 
         totp_secret_path="",
     )
@@ -264,12 +264,12 @@ async def test_ok__disabled() -> None:
             expire=0,
             unauth_paths=[],
 
-            internal_type="foobar",
-            internal_kwargs={},
-            force_internal_users=[],
+            int_type="foobar",
+            int_kwargs={},
+            force_int_users=[],
 
-            external_type="",
-            external_kwargs={},
+            ext_type="",
+            ext_kwargs={},
 
             totp_secret_path="",
         )
