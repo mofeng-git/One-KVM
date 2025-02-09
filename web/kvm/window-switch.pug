@@ -25,7 +25,10 @@ mixin color_slider_tr(name, title)
 			table
 				tr
 					td(colspan="2")
-						select#switch-edid-selector(size="8")
+						select#switch-edid-selector(
+							size="8"
+							style="width: -webkit-fill-available; width: -moz-available;"
+						)
 					td(rowspan="2" style="vertical-align: top")
 						table.kv
 							tr
