@@ -29,11 +29,11 @@ import getpass
 from typing import Generator
 from typing import Any
 
-import passlib.apache
-
 import pytest
 
 from kvmd.apps.htpasswd import main
+
+from kvmd.crypto import KvmdHtpasswdFile
 
 
 # =====
@@ -42,10 +42,10 @@ def _make_passwd(user: str) -> str:
 
 
 @pytest.fixture(name="htpasswd", params=[[], ["admin"], ["admin", "user"]])
-def _htpasswd_fixture(request) -> Generator[passlib.apache.HtpasswdFile, None, None]:  # type: ignore
+def _htpasswd_fixture(request) -> Generator[KvmdHtpasswdFile, None, None]:  # type: ignore
     (fd, path) = tempfile.mkstemp()
     os.close(fd)
-    htpasswd = passlib.apache.HtpasswdFile(path)
+    htpasswd = KvmdHtpasswdFile(path)
     for user in request.param:
         htpasswd.set_password(user, _make_passwd(user))
     htpasswd.save()
@@ -63,7 +63,7 @@ def _run_htpasswd(cmd: list[str], htpasswd_path: str, int_type: str="htpasswd") 
 
 
 # =====
-def test_ok__list(htpasswd: passlib.apache.HtpasswdFile, capsys) -> None:  # type: ignore
+def test_ok__list(htpasswd: KvmdHtpasswdFile, capsys) -> None:  # type: ignore
     _run_htpasswd(["list"], htpasswd.path)
     (out, err) = capsys.readouterr()
     assert len(err) == 0
@@ -71,7 +71,7 @@ def test_ok__list(htpasswd: passlib.apache.HtpasswdFile, capsys) -> None:  # typ
 
 
 # =====
-def test_ok__set_change_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__set_change_stdin(htpasswd: KvmdHtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
@@ -84,7 +84,7 @@ def test_ok__set_change_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> 
         assert old_users == set(htpasswd.users())
 
 
-def test_ok__set_add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__set_add_stdin(htpasswd: KvmdHtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         mocker.patch.object(builtins, "input", (lambda: " test "))
@@ -96,7 +96,7 @@ def test_ok__set_add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> Non
 
 
 # =====
-def test_ok__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__set_change_getpass(htpasswd: KvmdHtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
@@ -109,7 +109,7 @@ def test_ok__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -
         assert old_users == set(htpasswd.users())
 
 
-def test_fail__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_fail__set_change_getpass(htpasswd: KvmdHtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
@@ -137,7 +137,7 @@ def test_fail__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker)
 
 
 # =====
-def test_ok__del(htpasswd: passlib.apache.HtpasswdFile) -> None:
+def test_ok__del(htpasswd: KvmdHtpasswdFile) -> None:
     old_users = set(htpasswd.users())
 
     if old_users:

@@ -20,28 +20,39 @@
 # ========================================================================== #
 
 
-from ...yamlconf import Option
-
-from ...validators.os import valid_abs_file
-
-from ...crypto import KvmdHtpasswdFile
-
-from . import BaseAuthService
+from passlib.context import CryptContext
+from passlib.apache import HtpasswdFile as _ApacheHtpasswdFile
+from passlib.apache import htpasswd_context as _apache_htpasswd_ctx
 
 
 # =====
-class Plugin(BaseAuthService):
-    def __init__(self, path: str) -> None:  # pylint: disable=super-init-not-called
-        self.__path = path
+_SHA512 = "ldap_salted_sha512"
+_SHA256 = "ldap_salted_sha256"
 
-    @classmethod
-    def get_plugin_options(cls) -> dict:
-        return {
-            "file": Option("/etc/kvmd/htpasswd", type=valid_abs_file, unpack_as="path"),
-        }
 
-    async def authorize(self, user: str, passwd: str) -> bool:
-        assert user == user.strip()
-        assert user
-        htpasswd = KvmdHtpasswdFile(self.__path)
-        return htpasswd.check_password(user, passwd)
+def _make_kvmd_htpasswd_context() -> CryptContext:
+    schemes = list(_apache_htpasswd_ctx.schemes())
+    for alg in [_SHA256, _SHA512]:
+        if alg in schemes:
+            schemes.remove(alg)
+        schemes.insert(0, alg)
+    assert schemes[0] == _SHA512
+    return CryptContext(
+        schemes=schemes,
+        default=_SHA512,
+        bcrypt__ident="2y",  # See note in the passlib.apache
+    )
+
+
+_kvmd_htpasswd_ctx = _make_kvmd_htpasswd_context()
+
+
+# =====
+class KvmdHtpasswdFile(_ApacheHtpasswdFile):
+    def __init__(self, path: str, new: bool=False) -> None:
+        super().__init__(
+            path=path,
+            default_scheme=_SHA512,
+            context=_kvmd_htpasswd_ctx,
+            new=new,
+        )

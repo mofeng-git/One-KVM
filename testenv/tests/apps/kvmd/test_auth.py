@@ -26,8 +26,6 @@ import contextlib
 
 from typing import AsyncGenerator
 
-import passlib.apache
-
 import pytest
 
 from kvmd.yamlconf import make_config
@@ -37,6 +35,8 @@ from kvmd.apps.kvmd.auth import AuthManager
 from kvmd.plugins.auth import get_auth_service_class
 
 from kvmd.htserver import HttpExposed
+
+from kvmd.crypto import KvmdHtpasswdFile
 
 
 # =====
@@ -85,7 +85,7 @@ async def _get_configured_manager(
 async def test_ok__expire(tmpdir) -> None:  # type: ignore
     path = os.path.abspath(str(tmpdir.join("htpasswd")))
 
-    htpasswd = passlib.apache.HtpasswdFile(path, new=True)
+    htpasswd = KvmdHtpasswdFile(path, new=True)
     htpasswd.set_password("admin", "pass")
     htpasswd.save()
 
@@ -153,7 +153,7 @@ async def test_ok__expire(tmpdir) -> None:  # type: ignore
 async def test_ok__internal(tmpdir) -> None:  # type: ignore
     path = os.path.abspath(str(tmpdir.join("htpasswd")))
 
-    htpasswd = passlib.apache.HtpasswdFile(path, new=True)
+    htpasswd = KvmdHtpasswdFile(path, new=True)
     htpasswd.set_password("admin", "pass")
     htpasswd.save()
 
@@ -201,12 +201,12 @@ async def test_ok__external(tmpdir) -> None:  # type: ignore
     path1 = os.path.abspath(str(tmpdir.join("htpasswd1")))
     path2 = os.path.abspath(str(tmpdir.join("htpasswd2")))
 
-    htpasswd1 = passlib.apache.HtpasswdFile(path1, new=True)
+    htpasswd1 = KvmdHtpasswdFile(path1, new=True)
     htpasswd1.set_password("admin", "pass1")
     htpasswd1.set_password("local", "foobar")
     htpasswd1.save()
 
-    htpasswd2 = passlib.apache.HtpasswdFile(path2, new=True)
+    htpasswd2 = KvmdHtpasswdFile(path2, new=True)
     htpasswd2.set_password("admin", "pass2")
     htpasswd2.set_password("user", "foobar")
     htpasswd2.save()
@@ -239,7 +239,7 @@ async def test_ok__external(tmpdir) -> None:  # type: ignore
 async def test_ok__unauth(tmpdir) -> None:  # type: ignore
     path = os.path.abspath(str(tmpdir.join("htpasswd")))
 
-    htpasswd = passlib.apache.HtpasswdFile(path, new=True)
+    htpasswd = KvmdHtpasswdFile(path, new=True)
     htpasswd.set_password("admin", "pass")
     htpasswd.save()
 

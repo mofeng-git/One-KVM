@@ -30,13 +30,13 @@ import argparse
 
 from typing import Generator
 
-import passlib.apache
-
 from ...yamlconf import Section
 
 from ...validators import ValidatorError
 from ...validators.auth import valid_user
 from ...validators.auth import valid_passwd
+
+from ...crypto import KvmdHtpasswdFile
 
 from .. import init
 
@@ -50,7 +50,7 @@ def _get_htpasswd_path(config: Section) -> str:
 
 
 @contextlib.contextmanager
-def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.HtpasswdFile, None, None]:
+def _get_htpasswd_for_write(config: Section) -> Generator[KvmdHtpasswdFile, None, None]:
     path = _get_htpasswd_path(config)
     (tmp_fd, tmp_path) = tempfile.mkstemp(
         prefix=f".{os.path.basename(path)}.",
@@ -65,7 +65,7 @@ def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.Htpassw
                 os.fchmod(tmp_fd, st.st_mode)
         finally:
             os.close(tmp_fd)
-        htpasswd = passlib.apache.HtpasswdFile(tmp_path)
+        htpasswd = KvmdHtpasswdFile(tmp_path)
         yield htpasswd
         htpasswd.save()
         os.rename(tmp_path, path)
@@ -96,7 +96,7 @@ def _print_invalidate_tip(prepend_nl: bool) -> None:
 
 # ====
 def _cmd_list(config: Section, _: argparse.Namespace) -> None:
-    for user in sorted(passlib.apache.HtpasswdFile(_get_htpasswd_path(config)).users()):
+    for user in sorted(KvmdHtpasswdFile(_get_htpasswd_path(config)).users()):
         print(user)
 
 
