@@ -67,6 +67,7 @@ Nak.BUSY
 Nak.NO_DOWNLINK
 Nak.DOWNLINK_OVERFLOW
 UnitFlags.flashing_busy
+UnitFlags.has_hpd
 StateCache.get_port_names
 StateCache.get_atx_cp_delays
 StateCache.get_atx_cpl_delays

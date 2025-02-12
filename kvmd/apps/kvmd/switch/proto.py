@@ -94,6 +94,7 @@ class UnitFlags:
     changing_busy: bool
     flashing_busy: bool
     has_downlink:  bool
+    has_hpd:       bool
 
 
 @dataclasses.dataclass(frozen=True)
@@ -137,6 +138,7 @@ class UnitState(Unpackable):  # pylint: disable=too-many-instance-attributes
                 changing_busy=bool(flags & 0x80),
                 flashing_busy=bool(flags & 0x40),
                 has_downlink=bool(flags & 0x02),
+                has_hpd=bool(flags & 0x04),
             ),
             ch=ch,
             beacons=cls.__make_flags6(beacons),
