@@ -66,33 +66,35 @@ class AuthManager:  # pylint: disable=too-many-instance-attributes
         totp_secret_path: str,
     ) -> None:
 
+        logger = get_logger(0)
+
         self.__enabled = enabled
         if not enabled:
-            get_logger().warning("AUTHORIZATION IS DISABLED")
+            logger.warning("AUTHORIZATION IS DISABLED")
 
         assert expire >= 0
         self.__expire = expire
         if expire > 0:
-            get_logger().info("Maximum user session time is limited: %s",
-                              self.__format_seconds(expire))
+            logger.info("Maximum user session time is limited: %s",
+                        self.__format_seconds(expire))
 
         self.__unauth_paths = frozenset(unauth_paths)  # To speed up
         for path in self.__unauth_paths:
-            get_logger().warning("Authorization is disabled for API %r", path)
+            logger.warning("Authorization is disabled for API %r", path)
 
         self.__int_service: (BaseAuthService | None) = None
         if enabled:
             self.__int_service = get_auth_service_class(int_type)(**int_kwargs)
-            get_logger().info("Using internal auth service %r",
-                              self.__int_service.get_plugin_name())
+            logger.info("Using internal auth service %r",
+                        self.__int_service.get_plugin_name())
 
         self.__force_int_users = force_int_users
 
         self.__ext_service: (BaseAuthService | None) = None
         if enabled and ext_type:
             self.__ext_service = get_auth_service_class(ext_type)(**ext_kwargs)
-            get_logger().info("Using external auth service %r",
-                              self.__ext_service.get_plugin_name())
+            logger.info("Using external auth service %r",
+                        self.__ext_service.get_plugin_name())
 
         self.__totp_secret_path = totp_secret_path
 
@@ -113,6 +115,7 @@ class AuthManager:  # pylint: disable=too-many-instance-attributes
         assert user
         assert self.__enabled
         assert self.__int_service
+        logger = get_logger(0)
 
         if self.__totp_secret_path:
             with open(self.__totp_secret_path) as file:
@@ -120,7 +123,7 @@ class AuthManager:  # pylint: disable=too-many-instance-attributes
             if secret:
                 code = passwd[-6:]
                 if not pyotp.TOTP(secret).verify(code, valid_window=1):
-                    get_logger().error("Got access denied for user %r by TOTP", user)
+                    logger.error("Got access denied for user %r by TOTP", user)
                     return False
                 passwd = passwd[:-6]
 
@@ -132,9 +135,9 @@ class AuthManager:  # pylint: disable=too-many-instance-attributes
         pname = service.get_plugin_name()
         ok = (await service.authorize(user, passwd))
         if ok:
-            get_logger().info("Authorized user %r via auth service %r", user, pname)
+            logger.info("Authorized user %r via auth service %r", user, pname)
         else:
-            get_logger().error("Got access denied for user %r from auth service %r", user, pname)
+            logger.error("Got access denied for user %r from auth service %r", user, pname)
         return ok
 
     async def login(self, user: str, passwd: str, expire: int) -> (str | None):
@@ -150,10 +153,10 @@ class AuthManager:  # pylint: disable=too-many-instance-attributes
                 expire_ts=self.__make_expire_ts(expire),
             )
             self.__sessions[token] = session
-            get_logger().info("Logged in user %r; expire=%s, sessions_now=%d",
-                              session.user,
-                              self.__format_expire_ts(session.expire_ts),
-                              self.__get_sessions_number(session.user))
+            get_logger(0).info("Logged in user %r; expire=%s, sessions_now=%d",
+                               session.user,
+                               self.__format_expire_ts(session.expire_ts),
+                               self.__get_sessions_number(session.user))
             return token
 
         return None
@@ -214,7 +217,7 @@ class AuthManager:  # pylint: disable=too-many-instance-attributes
                 if session.user == user:
                     count += 1
                     del self.__sessions[key_t]
-            get_logger().info("Logged out user %r; sessions_closed=%d", user, count)
+            get_logger(0).info("Logged out user %r; sessions_closed=%d", user, count)
 
     def check(self, token: str) -> (str | None):
         assert self.__enabled
@@ -229,9 +232,9 @@ class AuthManager:  # pylint: disable=too-many-instance-attributes
                     return session.user
                 else:
                     del self.__sessions[token]
-                    get_logger().info("The session of user %r is expired; sessions_left=%d",
-                                      session.user,
-                                      self.__get_sessions_number(session.user))
+                    get_logger(0).info("The session of user %r is expired; sessions_left=%d",
+                                       session.user,
+                                       self.__get_sessions_number(session.user))
         return None
 
     @aiotools.atomic_fg
