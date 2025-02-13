@@ -138,19 +138,19 @@ def main(argv: (list[str] | None)=None) -> None:
     parser.set_defaults(cmd=(lambda *_: parser.print_help()))
     subparsers = parser.add_subparsers()
 
-    cmd_list_parser = subparsers.add_parser("list", help="List users")
-    cmd_list_parser.set_defaults(cmd=_cmd_list)
+    sub = subparsers.add_parser("list", help="List users")
+    sub.set_defaults(cmd=_cmd_list)
 
-    cmd_set_parser = subparsers.add_parser("set", help="Create user or change password")
-    cmd_set_parser.add_argument("user", type=valid_user)
-    cmd_set_parser.add_argument("-i", "--read-stdin", action="store_true", help="Read password from stdin")
-    cmd_set_parser.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
-    cmd_set_parser.set_defaults(cmd=_cmd_set)
+    sub = subparsers.add_parser("set", help="Create user or change password")
+    sub.add_argument("user", type=valid_user)
+    sub.add_argument("-i", "--read-stdin", action="store_true", help="Read password from stdin")
+    sub.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
+    sub.set_defaults(cmd=_cmd_set)
 
-    cmd_delete_parser = subparsers.add_parser("del", help="Delete user")
-    cmd_delete_parser.add_argument("user", type=valid_user)
-    cmd_delete_parser.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
-    cmd_delete_parser.set_defaults(cmd=_cmd_delete)
+    sub = subparsers.add_parser("del", help="Delete user")
+    sub.add_argument("user", type=valid_user)
+    sub.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
+    sub.set_defaults(cmd=_cmd_delete)
 
     options = parser.parse_args(argv[1:])
     try:
