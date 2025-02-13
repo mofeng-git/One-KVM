@@ -49,8 +49,10 @@ def _htpasswd_fixture(request) -> Generator[KvmdHtpasswdFile, None, None]:  # ty
     for user in request.param:
         htpasswd.set_password(user, _make_passwd(user))
     htpasswd.save()
-    yield htpasswd
-    os.remove(path)
+    try:
+        yield htpasswd
+    finally:
+        os.remove(path)
 
 
 def _run_htpasswd(cmd: list[str], htpasswd_path: str, int_type: str="htpasswd") -> None:
@@ -154,8 +156,10 @@ def test_ok__del(htpasswd: KvmdHtpasswdFile) -> None:
 
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
+        _run_htpasswd(["del", "admin"], htpasswd.path)
 
-    _run_htpasswd(["del", "admin"], htpasswd.path)
+    with pytest.raises(SystemExit, match="The user 'admin' is not exist"):
+        _run_htpasswd(["del", "admin"], htpasswd.path)
 
     htpasswd.load(force=True)
     assert not htpasswd.check_password("admin", _make_passwd("admin"))

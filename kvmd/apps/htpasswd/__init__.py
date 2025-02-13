@@ -136,8 +136,15 @@ def _cmd_set(config: Section, options: argparse.Namespace) -> None:
 
 def _cmd_delete(config: Section, options: argparse.Namespace) -> None:
     with _get_htpasswd_for_write(config) as htpasswd:
+        assert options.user == options.user.strip()
+        assert options.user
+
         has_user = (options.user in htpasswd.users())
+        if not has_user:
+            raise SystemExit(f"The user {options.user!r} is not exist")
+
         htpasswd.delete(options.user)
+
     if has_user and not options.quiet:
         _print_invalidate_tip(False)
 
