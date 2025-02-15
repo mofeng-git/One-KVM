@@ -408,7 +408,8 @@ export function Switch() {
 		$("switch-chain").innerHTML = content;
 
 		if (model.units.length > 0) {
-			tools.hidden.setVisible($("switch-message-update"), (model.firmware.version > model.units[0].firmware.version));
+			let fw = model.units[0].firmware;
+			tools.hidden.setVisible($("switch-message-update"), (fw.devbuild || fw.version < model.firmware.version));
 		}
 
 		for (let unit = 0; unit < model.units.length; ++unit) {

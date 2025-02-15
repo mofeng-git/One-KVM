@@ -177,8 +177,14 @@ class UnitAtxLedsEvent(BaseEvent):
 
 # =====
 class Chain:  # pylint: disable=too-many-instance-attributes
-    def __init__(self, device_path: str) -> None:
+    def __init__(
+        self,
+        device_path: str,
+        ignore_hpd_on_top: bool,
+    ) -> None:
+
         self.__device = Device(device_path)
+        self.__ignore_hpd_on_top = ignore_hpd_on_top
 
         self.__actual = False
 
@@ -293,6 +299,7 @@ class Chain:  # pylint: disable=too-many-instance-attributes
             if self.__select():
                 for resp in self.__device.read_all():
                     self.__update_units(resp)
+                    self.__adjust_quirks()
                     self.__adjust_start_port()
                     self.__finish_changing_request(resp)
                 self.__consume_commands()
@@ -363,6 +370,15 @@ class Chain:  # pylint: disable=too-many-instance-attributes
             case UnitAtxLeds():
                 self.__units[resp.header.unit].atx_leds = resp.body
                 self.__queue_event(UnitAtxLedsEvent(resp.header.unit, resp.body))
+
+    def __adjust_quirks(self) -> None:
+        for (unit, ctx) in enumerate(self.__units):
+            if ctx.state is not None and (ctx.state.version.sw_dev or ctx.state.version.sw >= 7):
+                ignore_hpd = (unit == 0 and self.__ignore_hpd_on_top)
+                if ctx.state.quirks.ignore_hpd != ignore_hpd:
+                    get_logger().info("Applying quirk ignore_hpd=%s to [%d] ...",
+                                      ignore_hpd, unit)
+                    self.__device.request_set_quirks(unit, ignore_hpd)
 
     def __adjust_start_port(self) -> None:
         if self.__active_port < 0:

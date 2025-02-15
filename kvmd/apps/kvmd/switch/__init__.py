@@ -84,11 +84,12 @@ class Switch:  # pylint: disable=too-many-public-methods
         device_path: str,
         default_edid_path: str,
         pst_unix_path: str,
+        ignore_hpd_on_top: bool,
     ) -> None:
 
         self.__default_edid_path = default_edid_path
 
-        self.__chain = Chain(device_path)
+        self.__chain = Chain(device_path, ignore_hpd_on_top)
         self.__cache = StateCache()
         self.__storage = Storage(pst_unix_path)
 

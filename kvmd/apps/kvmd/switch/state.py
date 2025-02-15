@@ -49,7 +49,7 @@ class _UnitInfo:
 
 # =====
 class StateCache:  # pylint: disable=too-many-instance-attributes
-    __FW_VERSION = 6
+    __FW_VERSION = 7
 
     __FULL    = 0xFFFF
     __SUMMARY = 0x01
@@ -195,7 +195,10 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
             assert ui.state is not None
             assert ui.atx_leds is not None
             if x_model:
-                state["model"]["units"].append({"firmware": {"version": ui.state.sw_version}})
+                state["model"]["units"].append({"firmware": {
+                    "version":  ui.state.version.sw,
+                    "devbuild": ui.state.version.sw_dev,
+                }})
             if x_video:
                 state["video"]["links"].extend(ui.state.video_5v_sens[:4])
             if x_usb:

@@ -506,8 +506,9 @@ def _get_config_scheme() -> dict:
             },
 
             "switch": {
-                "device":       Option("/dev/kvmd-switch", type=valid_abs_path, unpack_as="device_path"),
-                "default_edid": Option("/etc/kvmd/switch-edid.hex", type=valid_abs_path, unpack_as="default_edid_path"),
+                "device":            Option("/dev/kvmd-switch", type=valid_abs_path, unpack_as="device_path"),
+                "default_edid":      Option("/etc/kvmd/switch-edid.hex", type=valid_abs_path, unpack_as="default_edid_path"),
+                "ignore_hpd_on_top": Option(False, type=valid_bool),
             },
         },
 

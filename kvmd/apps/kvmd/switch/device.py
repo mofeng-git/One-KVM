@@ -42,6 +42,7 @@ from .proto import BodyAtxClick
 from .proto import BodySetEdid
 from .proto import BodyClearEdid
 from .proto import BodySetColors
+from .proto import BodySetQuirks
 
 
 # =====
@@ -165,6 +166,9 @@ class Device:
 
     def request_set_colors(self, unit: int, ch: int, colors: Colors) -> int:
         return self.__send_request(Header.SET_COLORS, unit, BodySetColors(ch, colors))
+
+    def request_set_quirks(self, unit: int, ignore_hpd: bool) -> int:
+        return self.__send_request(Header.SET_QUIRKS, unit, BodySetQuirks(ignore_hpd))
 
     def __send_request(self, op: int, unit: int, body: (Packable | None)) -> int:
         assert self.__tty is not None
