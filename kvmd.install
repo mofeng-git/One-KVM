@@ -112,10 +112,10 @@ EOF
 		cp /usr/share/kvmd/configs.default/janus/janus.plugin.ustreamer.jcfg /etc/kvmd/janus || true
 	fi
 
-	if [[ "$(vercmp "$2" 4.59)" -lt 0 ]]; then
+	if [[ "$(vercmp "$2" 4.60)" -lt 0 ]]; then
 		if grep -q "^dtoverlay=vc4-kms-v3d" /boot/config.txt; then
-			sed -e "s/cma=128M/cma=192M/g" /boot/cmdline.txt || true
-			sed -e "s/^gpu_mem=128/gpu_mem=192/g" /boot/config.txt || true
+			sed -i -e "s/cma=128M/cma=192M/g" /boot/cmdline.txt || true
+			sed -i -e "s/^gpu_mem=128/gpu_mem=192/g" /boot/config.txt || true
 		fi
 	fi
 
