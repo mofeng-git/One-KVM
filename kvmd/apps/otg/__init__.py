@@ -285,8 +285,9 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
 
     profile_path = join(gadget_path, usb.G_PROFILE)
     _mkdir(profile_path)
-    _mkdir(join(profile_path, "strings/0x409"))
-    _write(join(profile_path, "strings/0x409/configuration"), f"Config 1: {config.otg.config}")
+    if config.otg.config:
+        _mkdir(join(profile_path, "strings/0x409"))
+        _write(join(profile_path, "strings/0x409/configuration"), config.otg.config)
     _write(join(profile_path, "MaxPower"), config.otg.max_power)
     if config.otg.remote_wakeup:
         # XXX: Should we use MaxPower=100 with Remote Wakeup?
