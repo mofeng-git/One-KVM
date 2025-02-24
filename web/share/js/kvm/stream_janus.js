@@ -49,6 +49,8 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 	var __state = null;
 	var __frames = 0;
 
+	var __ice = null;
+
 	/************************************************************************/
 
 	self.getOrientation = () => __orient;
@@ -99,6 +101,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 				"server": tools.makeWsUrl("janus/ws"),
 				"ipv6": true,
 				"destroyOnUnload": false,
+				"iceServers": () => __getIceServers(),
 				"success": __attachJanus,
 				"error": function(error) {
 					__logError(error);
@@ -106,6 +109,15 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 					__finishJanus();
 				},
 			});
+		}
+	};
+
+	var __getIceServers = function() {
+		if (__ice !== null && __ice.url) {
+			__logInfo("Using the custom ICE Server got from uStreamer:", __ice);
+			return [{"urls": __ice.url}];
+		} else {
+			return [];
 		}
 	};
 
@@ -201,7 +213,8 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 			"success": function(handle) {
 				__handle = handle;
 				__logInfo("uStreamer attached:", handle.getPlugin(), handle.getId());
-				__sendWatch();
+				__logInfo("Sending FEATURES ...");
+				__handle.send({"message": {"request": "features"}});
 			},
 
 			"error": function(error) {
@@ -232,7 +245,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 				__stopRetryEmsgInterval();
 
 				if (msg.result) {
-					__logInfo("Got uStreamer result message:", msg.result.status); // starting, started, stopped
+					__logInfo("Got uStreamer result message:", msg.result); // starting, started, stopped
 					if (msg.result.status === "started") {
 						__setActive();
 						__setInfo(false, false, "");
@@ -242,6 +255,8 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 					} else if (msg.result.status === "features") {
 						tools.feature.setEnabled($("stream-audio"), msg.result.features.audio);
 						tools.feature.setEnabled($("stream-mic"), msg.result.features.mic);
+						__ice = msg.result.features.ice;
+						__sendWatch();
 					}
 				} else if (msg.error_code || msg.error) {
 					__logError("Got uStreamer error message:", msg.error_code, "-", msg.error);
@@ -367,8 +382,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 
 	var __sendWatch = function() {
 		if (__handle) {
-			__logInfo(`Sending WATCH(orient=${__orient}, audio=${__allow_audio}, mic=${__allow_mic}) + FEATURES ...`);
-			__handle.send({"message": {"request": "features"}});
+			__logInfo(`Sending WATCH(orient=${__orient}, audio=${__allow_audio}, mic=${__allow_mic}) ...`);
 			__handle.send({"message": {"request": "watch", "params": {
 				"orientation": __orient,
 				"audio": __allow_audio,

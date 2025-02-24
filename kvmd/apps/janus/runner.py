@@ -21,6 +21,7 @@ class _Netcfg:
     nat_type:  StunNatType = dataclasses.field(default=StunNatType.ERROR)
     src_ip:    str = dataclasses.field(default="")
     ext_ip:    str = dataclasses.field(default="")
+    stun_host: str = dataclasses.field(default="")
     stun_ip:   str = dataclasses.field(default="")
     stun_port: int = dataclasses.field(default=0)
 
@@ -172,7 +173,10 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
             part.format(**placeholders)
             for part in cmd
         ]
-        self.__janus_proc = await aioproc.run_process(cmd)
+        self.__janus_proc = await aioproc.run_process(
+            cmd=cmd,
+            env={"JANUS_USTREAMER_WEB_ICE_URL": f"stun:{netcfg.stun_host}:{netcfg.stun_port}"},
+        )
         get_logger(0).info("Started Janus pid=%d: %s", self.__janus_proc.pid, tools.cmdfmt(cmd))
 
     async def __kill_janus_proc(self) -> None:
