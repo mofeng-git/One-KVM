@@ -55,6 +55,10 @@ source /usr/share/kvmd/platform || true
 
 rw
 
+need_reboot() {
+	touch /boot/pikvm-reboot.txt
+}
+
 
 # ========== First boot and/or Avahi configuration ==========
 
@@ -148,7 +152,7 @@ if [ -n "$ENABLE_AVAHI" ]; then
 		make_avahi_service
 	fi
 	systemctl enable avahi-daemon || true
-	touch /boot/pikvm-reboot.txt
+	need_reboot
 fi
 
 
@@ -171,7 +175,7 @@ TTYVHangup=no
 TTYVTDisallocate=no
 end_of_file
 	systemctl enable getty@ttyGS0.service
-	touch /boot/pikvm-reboot.txt
+	need_reboot
 fi
 
 
@@ -271,7 +275,7 @@ end_of_file
 		sed -i -e 's/^}/\tscan_ssid=1\n}/g' "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 	fi
 	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
-	touch /boot/pikvm-reboot.txt
+	need_reboot
 fi
 
 
