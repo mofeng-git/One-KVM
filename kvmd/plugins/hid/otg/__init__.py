@@ -110,7 +110,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 "horizontal_wheel":   Option(True,  type=valid_bool),
             },
             "mouse_alt": {
-                "device":           Option("",   type=valid_abs_path, if_empty="", unpack_as="device_path"),
+                "device":           Option("/dev/kvmd-hid-mouse-alt", type=valid_abs_path, if_empty="", unpack_as="device_path"),
                 "select_timeout":   Option(0.1,  type=valid_float_f01),
                 "queue_timeout":    Option(0.1,  type=valid_float_f01),
                 "write_retries":    Option(150,  type=valid_int_f1),

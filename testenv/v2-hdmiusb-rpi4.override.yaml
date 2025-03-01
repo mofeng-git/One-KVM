@@ -10,6 +10,8 @@ kvmd:
             device: /dev/null
         mouse:
             device: /dev/null
+        mouse_alt:
+            device: /dev/null
         noop: true
 
     msd:
