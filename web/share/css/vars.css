@@ -73,7 +73,7 @@
 	--shadow-small: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
 	--shadow-big: 0 8px 16px 0 rgba(0, 0, 0, 0.4);
 	--shadow-navbar-item-pressed: 0 5px 0 #5b90bb inset;
-	--shadow-window-fullscreen-active: 0 0 0 2px #5b90bb inset;
+	/*--shadow-window-fullscreen-active: 0 0 0 2px #5b90bb inset;*/
 
 	--border-default-thin: thin solid #36393f;
 	--border-default-2px: 2px solid #36393f;
