@@ -260,19 +260,20 @@ if [ -n "$WIFI_ESSID" ]; then
 	else
 		make_dhcp_iface "$WIFI_IFACE" 50
 	fi
+	_wpa="/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 	if [ "${#WIFI_PASSWD}" -ge 8 ];then
-		wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+		wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "$_wpa"
 	else
-		cat <<end_of_file > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+		cat <<end_of_file > "$_wpa"
 network={
 	ssid=$(printf '"%q"' "$WIFI_ESSID")
 	key_mgmt=NONE
 }
 end_of_file
 	fi
-	chmod 640 "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+	chmod 640 "$_wpa"
 	if [ -n "$WIFI_HIDDEN" ]; then
-		sed -i -e 's/^}/\tscan_ssid=1\n}/g' "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+		sed -i -e 's/^}/\tscan_ssid=1\n}/g' "$_wpa"
 	fi
 	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
 	need_reboot
