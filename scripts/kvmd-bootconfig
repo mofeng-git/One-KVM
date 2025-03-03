@@ -275,6 +275,9 @@ end_of_file
 	if [ -n "$WIFI_HIDDEN" ]; then
 		sed -i -e 's/^}/\tscan_ssid=1\n}/g' "$_wpa"
 	fi
+	if [ -n "$WIFI_WPA23" ]; then
+		sed -i -e 's/^}/\tkey_mgmt=WPA-PSK-SHA256 WPA-PSK\n\tieee80211w=1\n}/g' "$_wpa"
+	fi
 	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
 	need_reboot
 fi
