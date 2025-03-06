@@ -25,7 +25,7 @@ BOOTFS=/tmp/bootfs
 ROOTFS=/tmp/rootfs
 OUTPUTDIR=/mnt/nas/src/output
 LOOPDEV=/dev/loop10
-DATE=241204
+DATE=240303
 export LC_ALL=C
 
 write_meta() {
@@ -33,7 +33,7 @@ write_meta() {
 }
 
 mount_rootfs() {
-    mkdir $ROOTFS
+    mkdir $ROOTFS $SRCPATH/tmp/rootfs
     sudo mount $LOOPDEV  $ROOTFS || exit -1
     sudo mount -t proc proc $ROOTFS/proc || exit -1
     sudo mount -t sysfs sys $ROOTFS/sys || exit -1
@@ -45,7 +45,10 @@ umount_rootfs() {
     sudo umount  $ROOTFS/dev
     sudo umount  $ROOTFS/proc
     sudo umount $ROOTFS
-    sudo losetup -d $LOOPDEV  
+	sudo zerofree $LOOPDEV
+    sudo losetup -d $LOOPDEV
+	sudo docker rm to_build_rootfs
+	sudo rm -rf $SRCPATH/tmp/rootfs/*
 }
 
 parpare_dns() {
@@ -62,8 +65,10 @@ delete_armbain_verify(){
 }
 
 config_file() {
+	
     sudo mkdir -p $ROOTFS/etc/kvmd/override.d $ROOTFS/etc/kvmd/vnc $ROOTFS/var/lib/kvmd/msd $ROOTFS/opt/vc/bin $ROOTFS/usr/share/kvmd $ROOTFS/One-KVM \
-        $ROOTFS/usr/share/janus/javascript $ROOTFS/usr/lib/ustreamer/janus $ROOTFS/run/kvmd $ROOTFS/var/lib/kvmd/msd/images $ROOTFS/var/lib/kvmd/msd/meta
+        $ROOTFS/usr/share/janus/javascript $ROOTFS/usr/lib/ustreamer/janus $ROOTFS/run/kvmd $ROOTFS/var/lib/kvmd/msd/images $ROOTFS/var/lib/kvmd/msd/meta \
+		$ROOTFS/tmp/wheel/ $ROOTFS/usr/lib/janus/transports/  $ROOTFS/usr/lib/janus/loggers
     sudo rsync -a  --exclude={src,.github} . $ROOTFS/One-KVM
     sudo cp -r configs/kvmd/* configs/nginx configs/janus $ROOTFS/etc/kvmd
     sudo cp -r web extras contrib/keymaps $ROOTFS/usr/share/kvmd
@@ -73,6 +78,17 @@ config_file() {
     if [ -f "$SRCPATH/image/$1/rc.local" ]; then
         sudo cp $SRCPATH/image/$1/rc.local $ROOTFS/etc/
     fi
+
+	sudo docker pull --platform linux/$2 registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd-stage-0
+	sudo docker create --name to_build_rootfs registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd-stage-0
+	sudo docker export to_build_rootfs  | sudo tar -xvf - -C $SRCPATH/tmp/rootfs
+	sudo cp $SRCPATH/tmp/rootfs/tmp/lib/*  $ROOTFS/lib/*-linux-*/
+	sudo cp $SRCPATH/tmp/rootfs/tmp/ustreamer/ustreamer $SRCPATH/tmp/rootfs/tmp/ustreamer/ustreamer-dump $SRCPATH/tmp/rootfs/usr/bin/janus $ROOTFS/usr/bin/
+	sudo cp $SRCPATH/tmp/rootfs/tmp/ustreamer/janus/libjanus_ustreamer.so $ROOTFS/usr/lib/ustreamer/janus/
+	sudo cp $SRCPATH/tmp/rootfs/tmp/wheel/*.whl $ROOTFS/tmp/wheel/
+	sudo cp $SRCPATH/tmp/rootfs/usr/lib/janus/transports/* $ROOTFS/usr/lib/janus/transports/
+
+	sudo mv $ROOTFS/etc/apt/apt.conf.d/50apt-file.conf{,.disabled}
 }
 
 pack_img() {
@@ -93,7 +109,7 @@ onecloud_rootfs() {
     sudo cp $SRCPATH/image/onecloud/meson8b-onecloud-fix.dtb $BOOTFS/dtb/meson8b-onecloud.dtb
     sudo umount $BOOTFS
     sudo losetup -d $LOOPDEV
-    dd if=/dev/zero of=/tmp/add.img bs=1M count=1024 && cat /tmp/add.img >> $SRCPATH/tmp/rootfs.img && rm /tmp/add.img
+    dd if=/dev/zero of=/tmp/add.img bs=1M count=256 && cat /tmp/add.img >> $SRCPATH/tmp/rootfs.img && rm /tmp/add.img
     e2fsck -f $SRCPATH/tmp/rootfs.img && resize2fs $SRCPATH/tmp/rootfs.img
     sudo losetup $LOOPDEV $SRCPATH/tmp/rootfs.img
 }
@@ -162,29 +178,10 @@ instal_one-kvm() {
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
         df -h \
         && apt-get update \
-        && apt-get install -y python3-aiofiles python3-aiohttp python3-appdirs python3-asn1crypto python3-async-timeout \
-            python3-bottle python3-cffi python3-chardet python3-click python3-colorama python3-cryptography python3-dateutil \
-            python3-dbus python3-dev python3-hidapi python3-hid python3-idna python3-libgpiod python3-mako python3-marshmallow python3-more-itertools \
-            python3-multidict python3-netifaces python3-packaging python3-passlib python3-pillow python3-ply python3-psutil \
-            python3-pycparser python3-pyelftools python3-pyghmi python3-pygments python3-pyparsing python3-requests \
-            python3-semantic-version python3-setproctitle python3-setuptools python3-six python3-spidev python3-systemd \
-            python3-tabulate python3-urllib3 python3-wrapt python3-xlib python3-yaml python3-yarl python3-pyotp python3-qrcode \
-            python3-serial python3-zstandard python3-dbus-next python3-pip python3-dev python3-build python3-wheel \
-            nginx net-tools tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim cpufrequtils iptables network-manager \
-            git gpiod libxkbcommon0 build-essential janus-dev libssl-dev libffi-dev libevent-dev libjpeg-dev libbsd-dev libudev-dev \
-            pkg-config libx264-dev libyuv-dev libasound2-dev libsndfile-dev libspeexdsp-dev \
-        && rm -rf /var/lib/apt/lists/* "
-
-    sudo chroot --userspec "root:root" $ROOTFS sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h
-
-    sudo chroot --userspec "root:root" $ROOTFS bash -c " \
-        git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
-        && make -j WITH_PYTHON=1 WITH_JANUS=1 WITH_LIBX264=1 -C /tmp/ustreamer \
-        && cp /tmp/ustreamer/src/ustreamer.bin /usr/bin/ustreamer \
-        && cp /tmp/ustreamer/src/ustreamer-dump.bin /usr/bin/ustreamer-dump \
-        && chmod +x /usr/bin/ustreamer /usr/bin/ustreamer-dump \
-        && cp /tmp/ustreamer/janus/libjanus_ustreamer.so /usr/lib/ustreamer/janus \
-        && pip3 install --target=/usr/lib/python3/dist-packages --break-system-packages /tmp/ustreamer/python/dist/*.whl "
+        && apt install -y --no-install-recommends libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim iptables \
+        	curl kmod libmicrohttpd12 libjansson4 libssl3 libsofia-sip-ua0 libglib2.0-0 libopus0 libogg0 libcurl4 libconfig9 python3-pip \
+        && apt clean \
+		&& rm -rf /var/lib/apt/lists/* "
 
     if [ "$3" = "systemd-networkd" ]; then 
         sudo chroot --userspec "root:root" $ROOTFS bash -c " \
@@ -194,9 +191,11 @@ instal_one-kvm() {
             && systemctl enable systemd-networkd systemd-resolved "        
     fi
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
-        pip3 config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple \
-        && pip3 install --target=/usr/lib/python3/dist-packages --break-system-packages async-lru gpiod pyfatfs \
-        && pip3 cache purge "
+        pip3 install --no-cache-dir --break-system-packages /tmp/wheel/*.whl \
+        && pip3 cache purge \
+		&& rm -r /tmp/wheel "
+
+#pip3 install --target=/usr/lib/python3/dist-packages --break-system-packages pyfatfs -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
         cd /One-KVM \
@@ -208,7 +207,7 @@ instal_one-kvm() {
 
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
         cat /One-KVM/configs/os/sudoers/v2-hdmiusb >> /etc/sudoers \
-        && cat /One-KVM/configs/os/udev/v2-hdmiusb-generic.rules > /etc/udev/rules.d/99-kvmd.rules \
+        && cat /One-KVM/configs/os/udev/v2-hdmiusb-rpi4.rules > /etc/udev/rules.d/99-kvmd.rules \
         && echo 'libcomposite' >> /etc/modules \
         && mv /usr/local/bin/kvmd* /usr/bin \
         && cp /One-KVM/configs/os/services/* /etc/systemd/system/ \
@@ -222,12 +221,12 @@ instal_one-kvm() {
         && sed -i 's/8080/80/g' /etc/kvmd/override.yaml \
         && sed -i 's/4430/443/g' /etc/kvmd/override.yaml \
         && chown kvmd -R /var/lib/kvmd/msd/ \
-        && systemctl enable kvmd kvmd-otg kvmd-nginx kvmd-vnc kvmd-ipmi kvmd-webterm kvmd-janus \
-        && systemctl disable nginx janus \
+        && systemctl enable kvmd kvmd-otg kvmd-nginx kvmd-vnc kvmd-ipmi kvmd-webterm kvmd-janus kvmd-media \
+        && systemctl disable nginx \
         && rm -r /One-KVM "
 
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
-        curl https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.$1 -L -o /usr/bin/ttyd \
+        curl https://gh.llkk.cc/https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.$1 -L -o /usr/bin/ttyd \
         && chmod +x /usr/bin/ttyd \
         && mkdir -p /home/kvmd-webterm \
         && chown kvmd-webterm /home/kvmd-webterm "
@@ -255,6 +254,8 @@ instal_one-kvm() {
             && sed -i 's/device: \/dev\/ttyUSB0//g' /etc/kvmd/override.yaml \
             && sed -i 's/#type: otg/type: otg/g' /etc/kvmd/override.yaml "
     fi
+
+	sudo chroot --userspec "root:root" $ROOTFS bash -c "df -h"
 }
 
 pack_img_onecloud() {
@@ -264,68 +265,103 @@ pack_img_onecloud() {
     sudo rm $SRCPATH/tmp/*
 }
 
-case $1 in  
-    onecloud)  
-        onecloud_rootfs
-        mount_rootfs
-        config_file $1
-        instal_one-kvm armhf gpio systemd-networkd
-        write_meta $1
-        umount_rootfs
-        pack_img_onecloud
-        ;;
-    cumebox2)  
-        cumebox2_rootfs
-        mount_rootfs
-        config_file $1
-        config_cumebox2_file
-        parpare_dns
-        instal_one-kvm aarch64 video1
-        write_meta $1
-        umount_rootfs
-        pack_img Cumebox2
-        ;;
-    chainedbox) 
-        chainedbox_rootfs_and_fix_dtb
-        mount_rootfs
-        config_file $1
-        parpare_dns
-        instal_one-kvm aarch64 video1
-        write_meta $1
-        umount_rootfs
-        pack_img Chainedbox
-        ;;
-    vm)  
-        vm_rootfs
-        mount_rootfs
-        config_file $1
-        parpare_dns
-        instal_one-kvm x86_64
-        write_meta $1
-        umount_rootfs
-        pack_img Vm
-        ;;
-    e900v22c)  
-        e900v22c_rootfs
-        mount_rootfs
-        config_file $1
-        instal_one-kvm aarch64 video1
-        write_meta $1
-        umount_rootfs
-        pack_img E900v22c
-        ;;
-    octopus-flanet)  
-        octopus-flanet_rootfs
-        mount_rootfs
-        config_file $1
-        config_octopus-flanet_file
-        parpare_dns
-        instal_one-kvm aarch64 video1
-        write_meta $1
-        umount_rootfs
-        pack_img Octopus-Flanet
-        ;;
-    *)  
-        echo "Do no thing." 
-        ;;
-esac
+#build function
+
+onecloud() {
+    onecloud_rootfs
+    mount_rootfs
+    config_file "onecloud" "arm"
+    instal_one-kvm armhf gpio systemd-networkd
+    write_meta "onecloud"
+    umount_rootfs
+    pack_img_onecloud
+}
+
+cumebox2() {
+    cumebox2_rootfs
+    mount_rootfs
+    config_file "cumebox2" "aarch64"
+    config_cumebox2_file
+    parpare_dns
+    instal_one-kvm aarch64 video1
+    write_meta "cumebox2"
+    umount_rootfs
+    pack_img "Cumebox2"
+}
+
+chainedbox() {
+    chainedbox_rootfs_and_fix_dtb
+    mount_rootfs
+    config_file "chainedbox" "aarch64"
+    parpare_dns
+    instal_one-kvm aarch64 video1
+    write_meta "chainedbox"
+    umount_rootfs
+    pack_img "Chainedbox"
+}
+
+vm() {
+    vm_rootfs
+    mount_rootfs
+    config_file "vm" "amd64"
+    parpare_dns
+    instal_one-kvm x86_64
+    write_meta "vm"
+    umount_rootfs
+    pack_img "Vm"
+}
+
+e900v22c() {
+    e900v22c_rootfs
+    mount_rootfs
+    config_file "e900v22c" "aarch64"
+    instal_one-kvm aarch64 video1
+    write_meta "e900v22c"
+    umount_rootfs
+    pack_img "E900v22c"
+}
+
+octopus_flanet() {
+    octopus-flanet_rootfs
+    mount_rootfs
+    config_file "octopus-flanet" "aarch64"
+    config_octopus-flanet_file
+    parpare_dns
+    instal_one-kvm aarch64 video1
+    write_meta "octopus-flanet"
+    umount_rootfs
+    pack_img "Octopus-Flanet"
+}
+
+if [ "$1" = "all" ]; then
+    onecloud
+    cumebox2
+    chainedbox
+    vm
+    e900v22c
+    octopus_flanet
+else
+    case $1 in  
+        onecloud)  
+            onecloud
+            ;;
+        cumebox2)  
+            cumebox2
+            ;;
+        chainedbox) 
+            chainedbox
+            ;;
+        vm)  
+            vm
+            ;;
+        e900v22c)  
+            e900v22c
+            ;;
+        octopus-flanet)  
+            octopus_flanet
+            ;;
+        *)  
+            echo "Do no thing." 
+            ;;
+    esac
+fi
