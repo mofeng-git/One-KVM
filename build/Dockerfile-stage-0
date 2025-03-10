@@ -47,6 +47,7 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
         libspeex-dev \
         libspeexdsp-dev \
         libusb-1.0-0-dev \
+	&& apt clean \
     && rm -rf /var/lib/apt/lists/*
 
 COPY build/cargo_config /tmp/config
@@ -69,7 +70,7 @@ RUN --security=insecure pip config set global.index-url https://pypi.tuna.tsingh
         more-itertools multidict netifaces packaging passlib pillow ply psutil \
         pycparser pyelftools pyghmi pygments pyparsing pyotp qrcode requests \
         semantic-version setproctitle six spidev tabulate urllib3 wrapt xlib \
-        yarl pyserial pyyaml zstandard supervisor
+        yarl pyserial pyyaml zstandard supervisor pyfatfs
 
 # 编译安装 libnice、libsrtp、libwebsockets 和 janus-gateway
 RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libnice \

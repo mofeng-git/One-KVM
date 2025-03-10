@@ -62,6 +62,7 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
                /run/kvmd \
                /tmp/kvmd-nginx \
     && touch /run/kvmd/ustreamer.sock \
+	&& apt clean \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/lib /tmp/wheel
 

@@ -21,43 +21,38 @@
 #                                                                            #
 # ========================================================================== #
 
-
-import textwrap
-
-import setuptools.command.easy_install
 from setuptools import setup, find_packages
 
-
-# =====
-class _Template(str):
-    def __init__(self, text: str) -> None:
-        self.__text = textwrap.dedent(text).strip()
-
-    def __mod__(self, kv: dict) -> str:
-        kv = {"module_name": kv["ep"].module_name, **kv}
-        return (self.__text % (kv))
-
-
-class _ScriptWriter(setuptools.command.easy_install.ScriptWriter):
-    template = _Template("""
-        # EASY-INSTALL-ENTRY-SCRIPT: %(spec)r,%(group)r,%(name)r
-
-        __requires__ = %(spec)r
-
-        from %(module_name)s import main
-
-        if __name__ == '__main__':
-            main()
-    """)
-
-
-# =====
 def main() -> None:
-    setuptools.command.easy_install.ScriptWriter = _ScriptWriter
+    # Define entry points manually with specific import paths
+    entry_points = {
+        "console_scripts": [
+            "kvmd = kvmd.apps.kvmd:main",
+            "kvmd-media = kvmd.apps.media:main",
+            "kvmd-pst = kvmd.apps.pst:main",
+            "kvmd-pstrun = kvmd.apps.pstrun:main",
+            "kvmd-otg = kvmd.apps.otg:main",
+            "kvmd-otgnet = kvmd.apps.otgnet:main",
+            "kvmd-otgmsd = kvmd.apps.otgmsd:main",
+            "kvmd-otgconf = kvmd.apps.otgconf:main",
+            "kvmd-htpasswd = kvmd.apps.htpasswd:main",
+            "kvmd-totp = kvmd.apps.totp:main",
+            "kvmd-edidconf = kvmd.apps.edidconf:main",
+            "kvmd-ipmi = kvmd.apps.ipmi:main",
+            "kvmd-vnc = kvmd.apps.vnc:main",
+            "kvmd-nginx-mkconf = kvmd.apps.ngxmkconf:main",
+            "kvmd-janus = kvmd.apps.janus:main",
+            "kvmd-watchdog = kvmd.apps.watchdog:main",
+            "kvmd-oled = kvmd.apps.oled:main",
+            "kvmd-helper-pst-remount = kvmd.helpers.remount:main",
+            "kvmd-helper-otgmsd-remount = kvmd.helpers.remount:main",
+            "kvmd-helper-swapfiles = kvmd.helpers.swapfiles:main",
+        ]
+    }
 
     setup(
         name="kvmd",
-        version="4.49",
+        version="4.20",
         url="https://github.com/pikvm/kvmd",
         license="GPLv3",
         author="Maxim Devaev",
@@ -117,30 +112,7 @@ def main() -> None:
             "kvmd": ["i18n/zh/LC_MESSAGES/*.mo"],
         },
 
-        entry_points={
-            "console_scripts": [
-                "kvmd = kvmd.apps.kvmd:main",
-                "kvmd-media = kvmd.apps.media:main",
-                "kvmd-pst = kvmd.apps.pst:main",
-                "kvmd-pstrun = kvmd.apps.pstrun:main",
-                "kvmd-otg = kvmd.apps.otg:main",
-                "kvmd-otgnet = kvmd.apps.otgnet:main",
-                "kvmd-otgmsd = kvmd.apps.otgmsd:main",
-                "kvmd-otgconf = kvmd.apps.otgconf:main",
-                "kvmd-htpasswd = kvmd.apps.htpasswd:main",
-                "kvmd-totp = kvmd.apps.totp:main",
-                "kvmd-edidconf = kvmd.apps.edidconf:main",
-                "kvmd-ipmi = kvmd.apps.ipmi:main",
-                "kvmd-vnc = kvmd.apps.vnc:main",
-                "kvmd-nginx-mkconf = kvmd.apps.ngxmkconf:main",
-                "kvmd-janus = kvmd.apps.janus:main",
-                "kvmd-watchdog = kvmd.apps.watchdog:main",
-                "kvmd-oled = kvmd.apps.oled:main",
-                "kvmd-helper-pst-remount = kvmd.helpers.remount:main",
-                "kvmd-helper-otgmsd-remount = kvmd.helpers.remount:main",
-                "kvmd-helper-swapfiles = kvmd.helpers.swapfiles:main",
-            ],
-        },
+        entry_points=entry_points,
 
         classifiers=[
             "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
