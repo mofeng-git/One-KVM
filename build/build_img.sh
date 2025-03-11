@@ -212,6 +212,7 @@ instal_one-kvm() {
         && mv /usr/local/bin/kvmd* /usr/bin \
         && cp /One-KVM/configs/os/services/* /etc/systemd/system/ \
         && cp /One-KVM/configs/os/tmpfiles.conf /usr/lib/tmpfiles.d/ \
+		&& mv /etc/kvmd/supervisord.conf /etc/supervisord.conf \
         && chmod +x /etc/update-motd.d/* \
         && echo 'kvmd ALL=(ALL) NOPASSWD: /etc/kvmd/custom_atx/gpio.sh' >>  /etc/sudoers \
         && echo 'kvmd ALL=(ALL) NOPASSWD: /etc/kvmd/custom_atx/usbrelay_hid.sh' >>  /etc/sudoers \
