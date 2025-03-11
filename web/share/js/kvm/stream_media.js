@@ -37,6 +37,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 	var __ws = null;
 	var __ping_timer = null;
 	var __missed_heartbeats = 0;
+
 	var __decoder = null;
 	var __codec = "";
 	var __canvas = $("stream-canvas");
@@ -86,11 +87,15 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 			__ws.onerror = __wsErrorHandler;
 			__ws.onclose = __wsCloseHandler;
 			__ws.onmessage = async (event) => {
-				if (typeof event.data === "string") {
-					event = JSON.parse(event.data);
-					__wsJsonHandler(event.event_type, event.event);
-				} else { // Binary
-					await __wsBinHandler(event.data);
+				try {
+					if (typeof event.data === "string") {
+						event = JSON.parse(event.data);
+						__wsJsonHandler(event.event_type, event.event);
+					} else { // Binary
+						await __wsBinHandler(event.data);
+					}
+				} catch (ex) {
+					__wsErrorHandler(ex);
 				}
 			};
 		}
@@ -142,10 +147,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 			clearInterval(__ping_timer);
 			__ping_timer = null;
 		}
-		if (__decoder) {
-			__decoder.close();
-			__decoder = null;
-		}
+		__closeDecoder();
 		__missed_heartbeats = 0;
 		__fps_accum = 0;
 		__ws = null;
@@ -156,38 +158,12 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 
 	var __wsJsonHandler = function(event_type, event) {
 		if (event_type === "media") {
-			__decoderCreate(event.video);
+			__setupCodec(event.video);
 		}
 	};
 
-	var __wsBinHandler = async (data) => {
-		let header = new Uint8Array(data.slice(0, 2));
-
-		if (header[0] === 255) { // Pong
-			__missed_heartbeats = 0;
-
-		} else if (header[0] === 1 && __decoder !== null) { // Video frame
-			let key = !!header[1];
-			if (__decoder.state !== "configured") {
-				if (!key) {
-					return;
-				}
-				await __decoder.configure({"codec": __codec, "optimizeForLatency": true});
-				__setActive();
-			}
-
-			let chunk = new EncodedVideoChunk({ // eslint-disable-line no-undef
-				"timestamp": (performance.now() + performance.timeOrigin) * 1000,
-				"type": (key ? "key" : "delta"),
-				"data": data.slice(2),
-			});
-			await __decoder.decode(chunk);
-		}
-	};
-
-	var __decoderCreate = function(formats) {
-		__decoderDestroy();
-
+	var __setupCodec = function(formats) {
+		__closeDecoder();
 		if (formats.h264 === undefined) {
 			let msg = "No H.264 stream available on PiKVM";
 			__setInfo(false, false, msg);
@@ -203,17 +179,74 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 			__logInfo(msg);
 			return;
 		}
-
-		__decoder = new VideoDecoder({ // eslint-disable-line no-undef
-			"output": __drawFrame,
-			"error": (err) => __logInfo(err.message),
-		});
 		__codec = `avc1.${formats.h264.profile_level_id}`;
-
 		__ws.send(JSON.stringify({
 			"event_type": "start",
 			"event": {"type": "video", "format": "h264"},
 		}));
+	};
+
+	var __wsBinHandler = async (data) => {
+		let header = new Uint8Array(data.slice(0, 2));
+		if (header[0] === 255) { // Pong
+			__missed_heartbeats = 0;
+		} else if (header[0] === 1) { // Video frame
+			let key = !!header[1];
+			if (await __ensureDecoder(key)) {
+				await __processFrame(key, data.slice(2));
+			}
+		}
+	};
+
+	var __ensureDecoder = async (key) => {
+		if (__codec === "") {
+			return false;
+		}
+		if (__decoder === null || __decoder.state === "closed") {
+			let started = (__codec !== "");
+			let codec = __codec;
+			__closeDecoder();
+			__codec = codec;
+			__decoder = new VideoDecoder({ // eslint-disable-line no-undef
+				"output": __drawFrame,
+				"error": (err) => __logInfo(err.message),
+			});
+			if (started) {
+				__ws.send(new Uint8Array([0]));
+			}
+		}
+		if (__decoder.state !== "configured") {
+			if (!key) {
+				return false;
+			}
+			await __decoder.configure({"codec": __codec, "optimizeForLatency": true});
+		}
+		if (__decoder.state === "configured") {
+			__setActive();
+			return true;
+		}
+		return false;
+	};
+
+	var __processFrame = async (key, raw) => {
+		let chunk = new EncodedVideoChunk({ // eslint-disable-line no-undef
+			"timestamp": (performance.now() + performance.timeOrigin) * 1000,
+			"type": (key ? "key" : "delta"),
+			"data": raw,
+		});
+		await __decoder.decode(chunk);
+	};
+
+	var __closeDecoder = function() {
+		if (__decoder !== null) {
+			try {
+				__decoder.close();
+			} catch { // eslint-disable-line no-empty
+			} finally {
+				__decoder = null;
+				__codec = "";
+			}
+		}
 	};
 
 	var __drawFrame = function(frame) {
@@ -251,14 +284,6 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 			__fps_accum += 1;
 		} finally {
 			frame.close();
-		}
-	};
-
-	var __decoderDestroy = function() {
-		if (__decoder !== null) {
-			__decoder.close();
-			__decoder = null;
-			__codec = "";
 		}
 	};
 
