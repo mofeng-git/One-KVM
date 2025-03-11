@@ -48,7 +48,8 @@ from .hid.mouse import make_mouse_hid
 # =====
 def _mkdir(path: str) -> None:
     get_logger().info("MKDIR --- %s", path)
-    os.mkdir(path)
+    if not os.path.isdir(path):
+        os.makedirs(path, exist_ok=True)
 
 
 def _chown(path: str, user: str, optional: bool=False) -> None:
