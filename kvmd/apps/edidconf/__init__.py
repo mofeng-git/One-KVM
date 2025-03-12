@@ -71,7 +71,7 @@ def _read_out2_edid() -> (Edid | None):
         data = file.read()
         if len(data) == 0:
             return None
-    return Edid.from_file(os.path.join(path, "edid"))
+    return Edid.from_file(os.path.join(path, "edid"), allow_short=True)
 
 
 def _adopt_out2_ids(dest: Edid) -> None:
