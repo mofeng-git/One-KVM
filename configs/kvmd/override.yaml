@@ -37,7 +37,7 @@ kvmd:
         forever: true
 
         desired_fps:
-            default: 30
+            default: 60
             max: 60
 
         h264_bitrate:
