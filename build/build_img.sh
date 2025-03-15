@@ -25,7 +25,7 @@ BOOTFS=/tmp/bootfs
 ROOTFS=/tmp/rootfs
 OUTPUTDIR=/mnt/nas/src/output
 LOOPDEV=/dev/loop10
-DATE=240303
+DATE=240315
 export LC_ALL=C
 
 write_meta() {
@@ -115,8 +115,7 @@ onecloud_rootfs() {
 }
 
 cumebox2_rootfs() {
-    cp $SRCPATH/image/cumebox2/Armbian_24.8.1_Khadas-vim1_bookworm_current_6.6.47_minimal.img $SRCPATH/tmp/rootfs.img
-    dd if=/dev/zero of=/tmp/add.img bs=1M count=1500 && cat /tmp/add.img >> $SRCPATH/tmp/rootfs.img && rm /tmp/add.img
+    cp $SRCPATH/image/cumebox2/Armbian_25.2.2_Khadas-vim1_bookworm_current_6.12.17_minimal.img $SRCPATH/tmp/rootfs.img
     sudo parted -s $SRCPATH/tmp/rootfs.img resizepart 1 100% || exit -1
     sudo losetup --offset $((8192*512)) $LOOPDEV $SRCPATH/tmp/rootfs.img  || exit -1
     sudo e2fsck -f $LOOPDEV && sudo resize2fs $LOOPDEV
@@ -166,6 +165,7 @@ config_cumebox2_file() {
     sudo mkdir $ROOTFS/etc/oled
     sudo cp $SRCPATH/image/cumebox2/v-fix.dtb $ROOTFS/boot/dtb/amlogic/meson-gxl-s905x-khadas-vim.dtb
     sudo cp $SRCPATH/image/cumebox2/ssd $ROOTFS/usr/bin/
+	sudo chmod +x $ROOTFS/usr/bin/ssd
     sudo cp $SRCPATH/image/cumebox2/config.json $ROOTFS/etc/oled/config.json
 }
 
@@ -178,8 +178,8 @@ instal_one-kvm() {
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
         df -h \
         && apt-get update \
-        && apt install -y --no-install-recommends libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim iptables \
-        	curl kmod libmicrohttpd12 libjansson4 libssl3 libsofia-sip-ua0 libglib2.0-0 libopus0 libogg0 libcurl4 libconfig9 python3-pip \
+        && apt install -y --no-install-recommends libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim iptables network-manager \
+        	curl kmod libmicrohttpd12 libjansson4 libssl3 libsofia-sip-ua0 libglib2.0-0 libopus0 libogg0 libcurl4 libconfig9 python3-pip net-tools \
         && apt clean \
 		&& rm -rf /var/lib/apt/lists/* "
 
@@ -194,8 +194,6 @@ instal_one-kvm() {
         pip3 install --no-cache-dir --break-system-packages /tmp/wheel/*.whl \
         && pip3 cache purge \
 		&& rm -r /tmp/wheel "
-
-#pip3 install --target=/usr/lib/python3/dist-packages --break-system-packages pyfatfs -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
     sudo chroot --userspec "root:root" $ROOTFS bash -c " \
         cd /One-KVM \
