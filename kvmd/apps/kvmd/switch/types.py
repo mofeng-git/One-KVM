@@ -59,31 +59,37 @@ class EdidInfo:
         except ParsedEdidNoBlockError:
             pass
 
+        audio: bool = False
+        try:
+            audio = parsed.get_audio()
+        except ParsedEdidNoBlockError:
+            pass
+
         return EdidInfo(
             mfc_id=parsed.get_mfc_id(),
             product_id=parsed.get_product_id(),
             serial=parsed.get_serial(),
             monitor_name=monitor_name,
             monitor_serial=monitor_serial,
-            audio=parsed.get_audio(),
+            audio=audio,
         )
 
 
 @dataclasses.dataclass(frozen=True)
 class Edid:
-    name:  str
-    data:  bytes
-    crc:   int = dataclasses.field(default=0)
-    valid: bool = dataclasses.field(default=False)
-    info:  (EdidInfo | None) = dataclasses.field(default=None)
-
-    __HEADER = b"\x00\xFF\xFF\xFF\xFF\xFF\xFF\x00"
+    name:     str
+    data:     bytes
+    crc:      int = dataclasses.field(default=0)
+    valid:    bool = dataclasses.field(default=False)
+    info:     (EdidInfo | None) = dataclasses.field(default=None)
+    _packed:  bytes = dataclasses.field(default=b"")
 
     def __post_init__(self) -> None:
         assert len(self.name) > 0
-        assert len(self.data) == 256
-        object.__setattr__(self, "crc", bitbang.make_crc16(self.data))
-        object.__setattr__(self, "valid", self.data.startswith(self.__HEADER))
+        assert len(self.data) in [128, 256]
+        object.__setattr__(self, "_packed", (self.data + (b"\x00" * 128))[:256])
+        object.__setattr__(self, "crc", bitbang.make_crc16(self._packed))  # Calculate CRC for filled data
+        object.__setattr__(self, "valid", ParsedEdid.is_header_valid(self.data))
         try:
             object.__setattr__(self, "info", EdidInfo.from_data(self.data))
         except Exception:
@@ -93,7 +99,7 @@ class Edid:
         return "".join(f"{item:0{2}X}" for item in self.data)
 
     def pack(self) -> bytes:
-        return self.data
+        return self._packed
 
     @classmethod
     def from_data(cls, name: str, data: (str | bytes | None)) -> "Edid":
@@ -101,14 +107,14 @@ class Edid:
             return Edid(name, b"\x00" * 256)
 
         if isinstance(data, bytes):
-            if data.startswith(cls.__HEADER):
+            if ParsedEdid.is_header_valid(cls.data):
                 return Edid(name, data)  # Бинарный едид
             data_hex = data.decode()  # Текстовый едид, прочитанный как бинарный из файла
         else:  # isinstance(data, str)
             data_hex = str(data)  # Текстовый едид
 
         data_hex = re.sub(r"\s", "", data_hex)
-        assert len(data_hex) == 512
+        assert len(data_hex) in [256, 512]
         data = bytes([
             int(data_hex[index:index + 2], 16)
             for index in range(0, len(data_hex), 2)

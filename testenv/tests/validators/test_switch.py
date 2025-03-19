@@ -94,6 +94,9 @@ def test_fail__valid_switch_edid_id__allowed_default(arg: Any) -> None:
 
 # =====
 @pytest.mark.parametrize("arg", [
+    "f" * 256,
+    "0" * 256,
+    "1a" * 128,
     "f" * 512,
     "0" * 512,
     "1a" * 256,

@@ -61,23 +61,17 @@ def _print_edid(edid: Edid) -> None:
             pass
 
 
-def _read_out2_edid() -> (Edid | None):
+def _find_out2_edid_path() -> str:
     card = os.path.basename(os.readlink("/dev/dri/by-path/platform-gpu-card"))
     path = f"/sys/devices/platform/gpu/drm/{card}/{card}-HDMI-A-2"
     with open(os.path.join(path, "status")) as file:
         if file.read().startswith("d"):
-            return None
-    with open(os.path.join(path, "edid"), "rb") as file:
-        data = file.read()
-        if len(data) == 0:
-            return None
-    return Edid.from_file(os.path.join(path, "edid"), allow_short=True)
+            raise SystemExit("No display found")
+    return os.path.join(path, "edid")
 
 
 def _adopt_out2_ids(dest: Edid) -> None:
-    src = _read_out2_edid()
-    if src is None:
-        raise SystemExit("No display found")
+    src = Edid.from_file(_find_out2_edid_path())
     dest.set_monitor_name(src.get_monitor_name())
     try:
         dest.get_monitor_serial()
@@ -123,7 +117,9 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
     parser.add_argument("--import-preset", choices=presets,
                         help="Restore default EDID or choose the preset", metavar=f"{{ {' | '.join(presets)} }}",)
     parser.add_argument("--import-display-ids", action="store_true",
-                        help="On PiKVM V4, import and adopt IDs from physical display connected to OUT2")
+                        help="On PiKVM V4, import and adopt IDs from a physical display connected to the OUT2 port")
+    parser.add_argument("--import-display", action="store_true",
+                        help="On PiKVM V4, import full EDID from a physical display connected to the OUT2 port")
     parser.add_argument("--set-audio", type=valid_bool,
                         help="Enable or disable audio", metavar="<yes|no>")
     parser.add_argument("--set-mfc-id",
@@ -154,6 +150,9 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
             base = Edid.from_file(os.path.join(options.presets_path, f"{base_name}.hex"))
             imp = f"_{imp}"
         options.imp = os.path.join(options.presets_path, f"{imp}.hex")
+
+    if options.import_display:
+        options.imp = _find_out2_edid_path()
 
     orig_edid_path = options.edid_path
     if options.imp:
