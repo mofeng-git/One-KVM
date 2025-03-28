@@ -89,6 +89,14 @@ sudo docker run --name kvmd -itd \
 | 我家云 | Chainedbox | USB 采集卡、OTG | 241004 |
 | 龙芯久久派 | 2k0300 | USB 采集卡、CH9329 | 241025 |
 
+### 文件下载
+
+Github：https://github.com/mofeng-git/One-KVM/releases
+
+免登录高速下载地址：https://pan.huang1111.cn/s/mxkx3T1 （由 Huang1111公益计划 赞助）
+
+百度网盘（需登录）：https://pan.baidu.com/s/166-2Y8PBF4SbHXFkGmFJYg?pwd=o9a
+
 ### 赞助方式
 
 这个项目基于众多开源项目二次开发，作者为此花费了大量的时间和精力进行测试和维护。若此项目对您有用，您可以考虑通过 **[为爱发电](https://afdian.com/a/silentwind)** 赞助一笔小钱支持作者。作者将能有更多的金钱来测试和维护 One-KVM 的各种配置，并在项目上投入更多的时间和精力。
