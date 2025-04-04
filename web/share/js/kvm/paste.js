@@ -84,7 +84,7 @@ export function Paste(__recorder) {
 					} else if (http.status === 200) {
 						__recorder.recordPrintEvent(text, keymap, slow);
 					}
-				}, text, "text/plain");
+				}, text, "text/plain", 7 * 24 * 3600);
 			};
 
 			if ($("hid-pak-ask-switch").checked) {
