@@ -179,6 +179,7 @@ export function Ocr(__getGeometry) {
 		tools.el.setEnabled($("stream-ocr-lang-selector"), false);
 		$("stream-ocr-led").className = "led-yellow-rotating-fast";
 		let params = {
+			"allow_offline": 1,
 			"ocr": 1,
 			"ocr_langs": $("stream-ocr-lang-selector").value,
 			"ocr_left": __sel.left,
