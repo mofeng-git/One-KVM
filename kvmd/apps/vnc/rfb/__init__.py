@@ -65,6 +65,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         width: int,
         height: int,
         name: str,
+        scroll_rate: int,
         allow_cut_after: float,
         vnc_passwds: list[str],
         vencrypt: bool,
@@ -81,6 +82,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self._width = width
         self._height = height
         self.__name = name
+        self.__scroll_rate = scroll_rate
         self.__allow_cut_after = allow_cut_after
         self.__vnc_passwds = vnc_passwds
         self.__vencrypt = vencrypt
@@ -493,6 +495,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         ext_buttons = 0
         if self._encodings.has_ext_mouse and (buttons & 0x80):  # Marker bit 7 for ext event
             ext_buttons = await self._read_number("ext pointer event buttons", "B")
+        sr = self.__scroll_rate
         await self._on_pointer_event(
             buttons={
                 "left": bool(buttons & 0x1),
@@ -502,8 +505,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
                 "down": bool(ext_buttons & 0x1),
             },
             wheel={
-                "x": (-4 if buttons & 0x40 else (4 if buttons & 0x20 else 0)),
-                "y": (-4 if buttons & 0x10 else (4 if buttons & 0x8 else 0)),
+                "x": (-sr if buttons & 0x40 else (sr if buttons & 0x20 else 0)),
+                "y": (-sr if buttons & 0x10 else (sr if buttons & 0x8 else 0)),
             },
             move={
                 "x": tools.remap(to_x, 0, self._width, *MouseRange.RANGE),
