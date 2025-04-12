@@ -40,9 +40,9 @@ from kvmd.crypto import KvmdHtpasswdFile
 
 
 # =====
-_E_AUTH = HttpExposed("GET", "/foo_auth", True, (lambda: None))
-_E_UNAUTH = HttpExposed("GET", "/bar_unauth", True, (lambda: None))
-_E_FREE = HttpExposed("GET", "/baz_free", False, (lambda: None))
+_E_AUTH = HttpExposed("GET", "/foo_auth", auth_required=True, allow_usc=True, handler=(lambda: None))
+_E_UNAUTH = HttpExposed("GET", "/bar_unauth", auth_required=True, allow_usc=True, handler=(lambda: None))
+_E_FREE = HttpExposed("GET", "/baz_free", auth_required=False, allow_usc=True, handler=(lambda: None))
 
 
 def _make_service_kwargs(path: str) -> dict:
@@ -62,6 +62,8 @@ async def _get_configured_manager(
     manager = AuthManager(
         enabled=True,
         expire=0,
+        usc_users=[],
+        usc_groups=[],
         unauth_paths=unauth_paths,
 
         int_type="htpasswd",
@@ -262,6 +264,8 @@ async def test_ok__disabled() -> None:
         manager = AuthManager(
             enabled=False,
             expire=0,
+            usc_users=[],
+            usc_groups=[],
             unauth_paths=[],
 
             int_type="foobar",

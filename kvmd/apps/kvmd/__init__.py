@@ -77,6 +77,8 @@ def main(argv: (list[str] | None)=None) -> None:
         auth_manager=AuthManager(
             enabled=config.auth.enabled,
             expire=config.auth.expire,
+            usc_users=config.auth.usc.users,
+            usc_groups=config.auth.usc.groups,
             unauth_paths=([] if config.prometheus.auth.enabled else ["/export/prometheus/metrics"]),
 
             int_type=config.auth.internal.type,

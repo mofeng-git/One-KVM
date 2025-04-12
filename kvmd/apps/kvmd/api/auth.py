@@ -31,6 +31,7 @@ from ....htserver import HttpExposed
 from ....htserver import exposed_http
 from ....htserver import make_json_response
 from ....htserver import set_request_auth_info
+from ....htserver import get_request_unix_credentials
 
 from ....validators.auth import valid_user
 from ....validators.auth import valid_passwd
@@ -76,6 +77,14 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
                 raise ForbiddenError()
             return
 
+        if exposed.allow_usc:
+            creds = get_request_unix_credentials(req)
+            if creds is not None:
+                user = auth_manager.check_unix_credentials(creds)  # type: ignore
+                if user:
+                    set_request_auth_info(req, f"{user}[{creds.uid}] (unix)")
+                    return
+
         raise UnauthorizedError()
 
 
@@ -85,7 +94,7 @@ class AuthApi:
 
     # =====
 
-    @exposed_http("POST", "/auth/login", auth_required=False)
+    @exposed_http("POST", "/auth/login", auth_required=False, allow_usc=False)
     async def __login_handler(self, req: Request) -> Response:
         if self.__auth_manager.is_auth_enabled():
             credentials = await req.post()
@@ -99,13 +108,14 @@ class AuthApi:
             raise ForbiddenError()
         return make_json_response()
 
-    @exposed_http("POST", "/auth/logout")
+    @exposed_http("POST", "/auth/logout", allow_usc=False)
     async def __logout_handler(self, req: Request) -> Response:
         if self.__auth_manager.is_auth_enabled():
             token = valid_auth_token(req.cookies.get(_COOKIE_AUTH_TOKEN, ""))
             self.__auth_manager.logout(token)
         return make_json_response()
 
-    @exposed_http("GET", "/auth/check")
+    # XXX: This handle is used for access control so it should NEVER allow access by socket credentials
+    @exposed_http("GET", "/auth/check", allow_usc=False)
     async def __check_handler(self, _: Request) -> Response:
         return make_json_response()

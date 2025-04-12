@@ -360,6 +360,11 @@ def _get_config_scheme() -> dict:
                 "enabled": Option(True, type=valid_bool),
                 "expire":  Option(0,    type=valid_expire),
 
+                "usc": {
+                    "users":  Option([], type=valid_users_list),  # PiKVM username has a same regex as a UNIX username
+                    "groups": Option([], type=valid_users_list),  # groupname has a same regex as a username
+                },
+
                 "internal": {
                     "type":        Option("htpasswd"),
                     "force_users": Option([], type=valid_users_list),

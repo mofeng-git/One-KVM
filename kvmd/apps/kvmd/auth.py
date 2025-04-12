@@ -20,6 +20,8 @@
 # ========================================================================== #
 
 
+import pwd
+import grp
 import dataclasses
 import time
 import datetime
@@ -35,6 +37,7 @@ from ...plugins.auth import BaseAuthService
 from ...plugins.auth import get_auth_service_class
 
 from ...htserver import HttpExposed
+from ...htserver import RequestUnixCredentials
 
 
 # =====
@@ -49,11 +52,13 @@ class _Session:
         assert self.expire_ts >= 0
 
 
-class AuthManager:  # pylint: disable=too-many-instance-attributes
+class AuthManager:  # pylint: disable=too-many-arguments,too-many-instance-attributes
     def __init__(
         self,
         enabled: bool,
         expire: int,
+        usc_users: list[str],
+        usc_groups: list[str],
         unauth_paths: list[str],
 
         int_type: str,
@@ -78,9 +83,15 @@ class AuthManager:  # pylint: disable=too-many-instance-attributes
             logger.info("Maximum user session time is limited: %s",
                         self.__format_seconds(expire))
 
+        self.__usc_uids = self.__load_usc_uids(usc_users, usc_groups)
+        if self.__usc_uids:
+            logger.info("Unauth UNIX socket access is allowed for users: %s",
+                        list(self.__usc_uids.values()))
+
         self.__unauth_paths = frozenset(unauth_paths)  # To speed up
-        for path in self.__unauth_paths:
-            logger.warning("Authorization is disabled for API %r", path)
+        if self.__unauth_paths:
+            logger.info("Authorization is disabled for APIs: %s",
+                        list(self.__unauth_paths))
 
         self.__int_service: (BaseAuthService | None) = None
         if enabled:
@@ -244,3 +255,29 @@ class AuthManager:  # pylint: disable=too-many-instance-attributes
             await self.__int_service.cleanup()
             if self.__ext_service:
                 await self.__ext_service.cleanup()
+
+    # =====
+
+    def __load_usc_uids(self, users: list[str], groups: list[str]) -> dict[int, str]:
+        uids: dict[int, str] = {}
+
+        pwds: dict[str, int] = {}
+        for pw in pwd.getpwall():
+            assert pw.pw_name == pw.pw_name.strip()
+            assert pw.pw_name
+            pwds[pw.pw_name] = pw.pw_uid
+            if pw.pw_name in users:
+                uids[pw.pw_uid] = pw.pw_name
+
+        for gr in grp.getgrall():
+            if gr.gr_name in groups:
+                for member in gr.gr_mem:
+                    if member in pwds:
+                        uid = pwds[member]
+                        uids[uid] = member
+
+        return uids
+
+    def check_unix_credentials(self, creds: RequestUnixCredentials) -> (str | None):
+        assert self.__enabled
+        return self.__usc_uids.get(creds.uid)

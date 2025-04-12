@@ -83,3 +83,6 @@ StorageContext.read_port_names
 StorageContext.read_atx_cp_delays
 StorageContext.read_atx_cpl_delays
 StorageContext.read_atx_cr_delays
+
+RequestUnixCredentials.pid
+RequestUnixCredentials.gid
