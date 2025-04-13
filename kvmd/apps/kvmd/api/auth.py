@@ -46,46 +46,48 @@ _COOKIE_AUTH_TOKEN = "auth_token"
 
 
 async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, req: Request) -> None:
-    if auth_manager.is_auth_required(exposed):
-        user = req.headers.get("X-KVMD-User", "")
-        if user:
-            user = valid_user(user)
-            passwd = req.headers.get("X-KVMD-Passwd", "")
-            set_request_auth_info(req, f"{user} (xhdr)")
-            if not (await auth_manager.authorize(user, valid_passwd(passwd))):
-                raise ForbiddenError()
-            return
+    if not auth_manager.is_auth_required(exposed):
+        return
 
-        token = req.cookies.get(_COOKIE_AUTH_TOKEN, "")
-        if token:
-            user = auth_manager.check(valid_auth_token(token))  # type: ignore
-            if not user:
-                set_request_auth_info(req, "- (token)")
-                raise ForbiddenError()
-            set_request_auth_info(req, f"{user} (token)")
-            return
+    user = req.headers.get("X-KVMD-User", "")
+    if user:
+        user = valid_user(user)
+        passwd = req.headers.get("X-KVMD-Passwd", "")
+        set_request_auth_info(req, f"{user} (xhdr)")
+        if not (await auth_manager.authorize(user, valid_passwd(passwd))):
+            raise ForbiddenError()
+        return
 
-        basic_auth = req.headers.get("Authorization", "")
-        if basic_auth and basic_auth[:6].lower() == "basic ":
-            try:
-                (user, passwd) = base64.b64decode(basic_auth[6:]).decode("utf-8").split(":")
-            except Exception:
-                raise UnauthorizedError()
-            user = valid_user(user)
-            set_request_auth_info(req, f"{user} (basic)")
-            if not (await auth_manager.authorize(user, valid_passwd(passwd))):
-                raise ForbiddenError()
-            return
+    token = req.cookies.get(_COOKIE_AUTH_TOKEN, "")
+    if token:
+        user = auth_manager.check(valid_auth_token(token))  # type: ignore
+        if not user:
+            set_request_auth_info(req, "- (token)")
+            raise ForbiddenError()
+        set_request_auth_info(req, f"{user} (token)")
+        return
 
-        if exposed.allow_usc:
-            creds = get_request_unix_credentials(req)
-            if creds is not None:
-                user = auth_manager.check_unix_credentials(creds)  # type: ignore
-                if user:
-                    set_request_auth_info(req, f"{user}[{creds.uid}] (unix)")
-                    return
+    basic_auth = req.headers.get("Authorization", "")
+    if basic_auth and basic_auth[:6].lower() == "basic ":
+        try:
+            (user, passwd) = base64.b64decode(basic_auth[6:]).decode("utf-8").split(":")
+        except Exception:
+            raise UnauthorizedError()
+        user = valid_user(user)
+        set_request_auth_info(req, f"{user} (basic)")
+        if not (await auth_manager.authorize(user, valid_passwd(passwd))):
+            raise ForbiddenError()
+        return
 
-        raise UnauthorizedError()
+    if exposed.allow_usc:
+        creds = get_request_unix_credentials(req)
+        if creds is not None:
+            user = auth_manager.check_unix_credentials(creds)  # type: ignore
+            if user:
+                set_request_auth_info(req, f"{user}[{creds.uid}] (unix)")
+                return
+
+    raise UnauthorizedError()
 
 
 class AuthApi:
