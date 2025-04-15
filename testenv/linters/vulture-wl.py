@@ -86,3 +86,5 @@ StorageContext.read_atx_cr_delays
 
 RequestUnixCredentials.pid
 RequestUnixCredentials.gid
+
+KvmdClientWs.send_mouse_relative_event

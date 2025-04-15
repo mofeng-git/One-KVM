@@ -193,6 +193,9 @@ class KvmdClientWs:
     async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
         await self.__writer_queue.put(struct.pack(">bhh", 3, to_x, to_y))
 
+    async def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
+        await self.__writer_queue.put(struct.pack(">bbbb", 4, 0, delta_x, delta_y))
+
     async def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         await self.__writer_queue.put(struct.pack(">bbbb", 5, 0, delta_x, delta_y))
 
