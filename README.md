@@ -105,7 +105,7 @@ Github：https://github.com/mofeng-git/One-KVM/releases
 
 免登录高速下载地址：https://pan.huang1111.cn/s/mxkx3T1 （由 Huang1111公益计划 赞助）
 
-百度网盘（需登录）：https://pan.baidu.com/s/166-2Y8PBF4SbHXFkGmFJYg?pwd=o9a
+百度网盘（需登录）：https://pan.baidu.com/s/166-2Y8PBF4SbHXFkGmFJYg?pwd=o9aj
 
 ### 赞助方式
 
