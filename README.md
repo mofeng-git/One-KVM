@@ -2,15 +2,25 @@
 <h3 align=center><a href="https://github.com/mofeng-git/One-KVM/blob/master/README.md">简体中文</a> </h3>
 <p align=right>&nbsp;</p>
 
-### 介绍
+### 项目介绍
 
-One-KVM 是基于廉价计算机硬件和 [PiKVM]((https://github.com/pikvm/pikvm)) 软件二次开发的 BIOS 级远程控制项目。可以实现远程管理服务器或工作站，无需在被控机安装软件调整设置，实现无侵入式控制，适用范围广泛。
+**One-KVM** 是一款基于经济实惠的硬件和强大的开源 [PiKVM](https://github.com/pikvm/pikvm) 软件进行二次开发的 DIY IP-KVM 解决方案。它旨在为您提供**BIOS 级别**的远程服务器或工作站管理能力，如同您亲身坐在屏幕前操作一般。
 
-使用文档：[https://one-kvm.mofeng.run](https://one-kvm.mofeng.run)
+**核心优势：**
 
-演示网站：[https://kvmd-demo.mofeng.run](https://kvmd-demo.mofeng.run)
+*   **完全无侵入:** 无需在目标机器上安装任何软件或驱动，不依赖操作系统，可远程访问 BIOS/UEFI 设置、进行系统安装或故障排查。
+*   **低成本实现:** 利用常见的廉价硬件（如旧安卓盒子、开发板等）即可搭建，大幅降低 KVM over IP 的门槛。
+*   **功能丰富:** 在 PiKVM 基础上，增加了 Docker 部署、视频录制、简体中文界面优化等多项实用功能 (详见下方功能对比)。
+*   **部署灵活:** 支持 Docker 快速部署，并为特定硬件平台（如玩客云、我家云等）提供开箱即用的整合包。
 
-![image-20240926220156381](https://github.com/user-attachments/assets/a7848bca-e43c-434e-b812-27a45fad7910)
+无论您是需要管理家庭实验室、办公室服务器，还是希望为特定嵌入式设备添加远程管理能力，One-KVM 都提供了一个高性价比且功能强大的选择。
+
+**快速访问:**
+
+*   **详细使用文档:** [https://one-kvm.mofeng.run](https://one-kvm.mofeng.run)
+*   **在线演示:** [https://kvmd-demo.mofeng.run](https://kvmd-demo.mofeng.run)
+
+![One-KVM 界面截图](https://github.com/user-attachments/assets/a7848bca-e43c-434e-b812-27a45fad7910)
 
 ### 软件功能
 
@@ -144,6 +154,34 @@ Will
 guoke
 
 mgt
+
+姜沢掵
+
+ui_beam
+
+爱发电用户_c0dd7
+
+爱发电用户_dnjK
+
+忍者胖猪
+
+永遠の願い
+
+爱发电用户_GBrF
+
+爱发电用户_fd65c
+
+爱发电用户_vhNa
+
+爱发电用户_Xu6S
+
+moss
+
+woshididi
+
+爱发电用户_a0fd1
+
+爱发电用户_f6bH
 
 ......
 </details>
