@@ -155,6 +155,10 @@ KEYMAP: dict[int, Key] = {
     ecodes.KEY_KATAKANA: Key(mcu=McuKey(code=109), usb=UsbKey(code=136, is_modifier=False)),
     ecodes.KEY_HENKAN: Key(mcu=McuKey(code=110), usb=UsbKey(code=138, is_modifier=False)),
     ecodes.KEY_MUHENKAN: Key(mcu=McuKey(code=111), usb=UsbKey(code=139, is_modifier=False)),
+    ecodes.KEY_MUTE: Key(mcu=McuKey(code=112), usb=UsbKey(code=127, is_modifier=False)),
+    ecodes.KEY_VOLUMEUP: Key(mcu=McuKey(code=113), usb=UsbKey(code=128, is_modifier=False)),
+    ecodes.KEY_VOLUMEDOWN: Key(mcu=McuKey(code=114), usb=UsbKey(code=129, is_modifier=False)),
+    ecodes.KEY_F20: Key(mcu=McuKey(code=115), usb=UsbKey(code=111, is_modifier=False)),
 }
 
 
@@ -270,6 +274,10 @@ WEB_TO_EVDEV = {
     "KanaMode": ecodes.KEY_KATAKANA,
     "Convert": ecodes.KEY_HENKAN,
     "NonConvert": ecodes.KEY_MUHENKAN,
+    "AudioVolumeMute": ecodes.KEY_MUTE,
+    "AudioVolumeUp": ecodes.KEY_VOLUMEUP,
+    "AudioVolumeDown": ecodes.KEY_VOLUMEDOWN,
+    "F20": ecodes.KEY_F20,
 }
 
 
@@ -562,6 +570,7 @@ AT1_TO_EVDEV = {
     86: ecodes.KEY_102ND,
     87: ecodes.KEY_F11,
     88: ecodes.KEY_F12,
+    90: ecodes.KEY_F20,
     112: ecodes.KEY_KATAKANA,
     115: ecodes.KEY_RO,
     121: ecodes.KEY_HENKAN,
@@ -569,6 +578,9 @@ AT1_TO_EVDEV = {
     125: ecodes.KEY_YEN,
     57372: ecodes.KEY_KPENTER,
     57373: ecodes.KEY_RIGHTCTRL,
+    57376: ecodes.KEY_MUTE,
+    57390: ecodes.KEY_VOLUMEDOWN,
+    57392: ecodes.KEY_VOLUMEUP,
     57397: ecodes.KEY_KPSLASH,
     57400: ecodes.KEY_RIGHTALT,
     57414: ecodes.KEY_PAUSE,

@@ -108,7 +108,9 @@ def _parse_usb_key(key: str) -> _UsbKey:
     return _UsbKey(code, is_modifier)
 
 
-def _parse_ps2_key(key: str) -> _Ps2Key:
+def _parse_ps2_key(key: str) -> (_Ps2Key | None):
+    if ":" not in key:
+        return None
     (code_type, raw_code) = key.split(":")
     return _Ps2Key(
         code=int(raw_code, 16),
