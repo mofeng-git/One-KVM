@@ -20,6 +20,8 @@
 # ========================================================================== #
 
 
+from evdev import ecodes
+
 from . import tools
 
 
@@ -46,3 +48,13 @@ class MouseDelta:
     @classmethod
     def normalize(cls, value: int) -> int:
         return min(max(cls.MIN, value), cls.MAX)
+
+
+# =====
+MOUSE_TO_EVDEV = {
+    "left":   ecodes.BTN_LEFT,
+    "right":  ecodes.BTN_RIGHT,
+    "middle": ecodes.BTN_MIDDLE,
+    "up":     ecodes.BTN_BACK,
+    "down":   ecodes.BTN_FORWARD,
+}

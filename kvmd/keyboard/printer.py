@@ -25,8 +25,9 @@ import ctypes.util
 
 from typing import Generator
 
+from evdev import ecodes
+
 from .keysym import SymmapModifiers
-from .mappings import WebModifiers
 
 
 # =====
@@ -56,10 +57,10 @@ def _ch_to_keysym(ch: str) -> int:
 
 
 # =====
-def text_to_web_keys(  # pylint: disable=too-many-branches
+def text_to_evdev_keys(  # pylint: disable=too-many-branches
     text: str,
-    symmap: dict[int, dict[int, str]],
-) -> Generator[tuple[str, bool], None, None]:
+    symmap: dict[int, dict[int, int]],
+) -> Generator[tuple[int, bool], None, None]:
 
     shift = False
     altgr = False
@@ -68,11 +69,11 @@ def text_to_web_keys(  # pylint: disable=too-many-branches
         # https://stackoverflow.com/questions/12343987/convert-ascii-character-to-x11-keycode
         # https://www.ascii-code.com
         if ch == "\n":
-            keys = {0: "Enter"}
+            keys = {0: ecodes.KEY_ENTER}
         elif ch == "\t":
-            keys = {0: "Tab"}
+            keys = {0: ecodes.KEY_TAB}
         elif ch == " ":
-            keys = {0: "Space"}
+            keys = {0: ecodes.KEY_SPACE}
         else:
             if ch in ["‚", "‘", "’"]:
                 ch = "'"
@@ -95,17 +96,17 @@ def text_to_web_keys(  # pylint: disable=too-many-branches
                 continue
 
             if modifiers & SymmapModifiers.SHIFT and not shift:
-                yield (WebModifiers.SHIFT_LEFT, True)
+                yield (ecodes.KEY_LEFTSHIFT, True)
                 shift = True
             elif not (modifiers & SymmapModifiers.SHIFT) and shift:
-                yield (WebModifiers.SHIFT_LEFT, False)
+                yield (ecodes.KEY_LEFTSHIFT, False)
                 shift = False
 
             if modifiers & SymmapModifiers.ALTGR and not altgr:
-                yield (WebModifiers.ALT_RIGHT, True)
+                yield (ecodes.KEY_RIGHTALT, True)
                 altgr = True
             elif not (modifiers & SymmapModifiers.ALTGR) and altgr:
-                yield (WebModifiers.ALT_RIGHT, False)
+                yield (ecodes.KEY_RIGHTALT, False)
                 altgr = False
 
             yield (key, True)
@@ -113,6 +114,6 @@ def text_to_web_keys(  # pylint: disable=too-many-branches
             break
 
     if shift:
-        yield (WebModifiers.SHIFT_LEFT, False)
+        yield (ecodes.KEY_LEFTSHIFT, False)
     if altgr:
-        yield (WebModifiers.ALT_RIGHT, False)
+        yield (ecodes.KEY_RIGHTALT, False)

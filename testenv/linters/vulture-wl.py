@@ -29,6 +29,7 @@ _AtxApiPart.switch_power
 _UsbKey.arduino_modifier_code
 
 _KeyMapping.web_name
+_KeyMapping.evdev_name
 _KeyMapping.mcu_code
 _KeyMapping.usb_key
 _KeyMapping.ps2_key

@@ -32,9 +32,11 @@ from ...logging import get_logger
 
 from ...keyboard.keysym import SymmapModifiers
 from ...keyboard.keysym import build_symmap
-from ...keyboard.mappings import WebModifiers
+from ...keyboard.mappings import EvdevModifiers
 from ...keyboard.mappings import X11Modifiers
-from ...keyboard.mappings import AT1_TO_WEB
+from ...keyboard.mappings import AT1_TO_EVDEV
+
+from ...mouse import MOUSE_TO_EVDEV
 
 from ...clients.kvmd import KvmdClientWs
 from ...clients.kvmd import KvmdClientSession
@@ -80,7 +82,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         desired_fps: int,
         mouse_output: str,
         keymap_name: str,
-        symmap: dict[int, dict[int, str]],
+        symmap: dict[int, dict[int, int]],
         scroll_rate: int,
         allow_cut_after: float,
 
@@ -132,8 +134,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
         # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
         # Все это нужно только чтобы не посылать лишние жсоны в сокет KVMD
-        self.__mouse_buttons: dict[str, (bool | None)] = dict.fromkeys(["left", "right", "middle", "up", "down"], None)
-        self.__mouse_move = {"x": -1, "y": -1}
+        self.__mouse_buttons: dict[str, (bool | None)] = dict.fromkeys(MOUSE_TO_EVDEV, None)
+        self.__mouse_move = (-1, -1)  # (X, Y)
 
         self.__modifiers = 0
 
@@ -337,45 +339,45 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def _on_key_event(self, code: int, state: bool) -> None:
-        is_modifier = self.__switch_modifiers(code, state)
+        is_modifier = self.__switch_modifiers_x11(code, state)
         variants = self.__symmap.get(code)
         fake_shift = False
 
         if variants:
             if is_modifier:
-                web_key = variants.get(0)
+                key = variants.get(0)
             else:
-                web_key = variants.get(self.__modifiers)
-                if web_key is None:
-                    web_key = variants.get(0)
+                key = variants.get(self.__modifiers)
+                if key is None:
+                    key = variants.get(0)
 
-                if web_key is None and self.__modifiers == 0 and SymmapModifiers.SHIFT in variants:
+                if key is None and self.__modifiers == 0 and SymmapModifiers.SHIFT in variants:
                     # JUMP doesn't send shift events:
                     #   - https://github.com/pikvm/pikvm/issues/820
-                    web_key = variants[SymmapModifiers.SHIFT]
+                    key = variants[SymmapModifiers.SHIFT]
                     fake_shift = True
 
-            if web_key and self.__kvmd_ws:
+            if key and self.__kvmd_ws:
                 if fake_shift:
-                    await self.__kvmd_ws.send_key_event(WebModifiers.SHIFT_LEFT, True)
-                await self.__kvmd_ws.send_key_event(web_key, state)
+                    await self.__kvmd_ws.send_key_event(EvdevModifiers.SHIFT_LEFT, True)
+                await self.__kvmd_ws.send_key_event(key, state)
                 if fake_shift:
-                    await self.__kvmd_ws.send_key_event(WebModifiers.SHIFT_LEFT, False)
+                    await self.__kvmd_ws.send_key_event(EvdevModifiers.SHIFT_LEFT, False)
 
     async def _on_ext_key_event(self, code: int, state: bool) -> None:
-        web_key = AT1_TO_WEB.get(code)
-        if web_key:
-            self.__switch_modifiers(web_key, state)  # Предполагаем, что модификаторы всегда известны
+        key = AT1_TO_EVDEV.get(code, 0)
+        if key:
+            self.__switch_modifiers_evdev(key, state)  # Предполагаем, что модификаторы всегда известны
             if self.__kvmd_ws:
-                await self.__kvmd_ws.send_key_event(web_key, state)
+                await self.__kvmd_ws.send_key_event(key, state)
 
-    def __switch_modifiers(self, key: (int | str), state: bool) -> bool:
+    def __switch_modifiers_x11(self, key: int, state: bool) -> bool:
         mod = 0
-        if key in X11Modifiers.SHIFTS or key in WebModifiers.SHIFTS:
+        if key in X11Modifiers.SHIFTS:
             mod = SymmapModifiers.SHIFT
-        elif key == X11Modifiers.ALTGR or key == WebModifiers.ALT_RIGHT:
+        elif key == X11Modifiers.ALTGR:
             mod = SymmapModifiers.ALTGR
-        elif key in X11Modifiers.CTRLS or key in WebModifiers.CTRLS:
+        elif key in X11Modifiers.CTRLS:
             mod = SymmapModifiers.CTRL
         if mod == 0:
             return False
@@ -385,18 +387,34 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             self.__modifiers &= ~mod
         return True
 
-    async def _on_pointer_event(self, buttons: dict[str, bool], wheel: dict[str, int], move: dict[str, int]) -> None:
+    def __switch_modifiers_evdev(self, key: int, state: bool) -> bool:
+        mod = 0
+        if key in EvdevModifiers.SHIFTS:
+            mod = SymmapModifiers.SHIFT
+        elif key == EvdevModifiers.ALT_RIGHT:
+            mod = SymmapModifiers.ALTGR
+        elif key in EvdevModifiers.CTRLS:
+            mod = SymmapModifiers.CTRL
+        if mod == 0:
+            return False
+        if state:
+            self.__modifiers |= mod
+        else:
+            self.__modifiers &= ~mod
+        return True
+
+    async def _on_pointer_event(self, buttons: dict[str, bool], wheel: tuple[int, int], move: tuple[int, int]) -> None:
         if self.__kvmd_ws:
-            if wheel["x"] or wheel["y"]:
-                await self.__kvmd_ws.send_mouse_wheel_event(wheel["x"], wheel["y"])
+            if wheel[0] or wheel[1]:
+                await self.__kvmd_ws.send_mouse_wheel_event(*wheel)
 
             if self.__mouse_move != move:
-                await self.__kvmd_ws.send_mouse_move_event(move["x"], move["y"])
+                await self.__kvmd_ws.send_mouse_move_event(*move)
                 self.__mouse_move = move
 
             for (button, state) in buttons.items():
                 if self.__mouse_buttons[button] != state:
-                    await self.__kvmd_ws.send_mouse_button_event(button, state)
+                    await self.__kvmd_ws.send_mouse_button_event(MOUSE_TO_EVDEV[button], state)
                     self.__mouse_buttons[button] = state
 
     async def _on_cut_event(self, text: str) -> None:

@@ -67,7 +67,7 @@ class KeyboardProcess(BaseDeviceProcess):
         self._clear_queue()
         self._queue_event(ResetEvent())
 
-    def send_key_event(self, key: str, state: bool) -> None:
+    def send_key_event(self, key: int, state: bool) -> None:
         self._queue_event(make_keyboard_event(key, state))
 
     # =====

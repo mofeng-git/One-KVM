@@ -182,22 +182,22 @@ class KvmdClientWs:
             finally:
                 self.__communicated = False
 
-    async def send_key_event(self, key: str, state: bool) -> None:
-        mask = (0b01 if state else 0)
-        await self.__writer_queue.put(bytes([1, mask]) + key.encode("ascii"))
+    async def send_key_event(self, key: int, state: bool) -> None:
+        mask = (0b10000000 | int(bool(state)))
+        await self.__writer_queue.put(struct.pack(">BBH", 1, mask, key))
 
-    async def send_mouse_button_event(self, button: str, state: bool) -> None:
-        mask = (0b01 if state else 0)
-        await self.__writer_queue.put(bytes([2, mask]) + button.encode("ascii"))
+    async def send_mouse_button_event(self, button: int, state: bool) -> None:
+        mask = (0b10000000 | int(bool(state)))
+        await self.__writer_queue.put(struct.pack(">BBH", 2, mask, button))
 
     async def send_mouse_move_event(self, to_x: int, to_y: int) -> None:
-        await self.__writer_queue.put(struct.pack(">bhh", 3, to_x, to_y))
+        await self.__writer_queue.put(struct.pack(">Bhh", 3, to_x, to_y))
 
     async def send_mouse_relative_event(self, delta_x: int, delta_y: int) -> None:
-        await self.__writer_queue.put(struct.pack(">bbbb", 4, 0, delta_x, delta_y))
+        await self.__writer_queue.put(struct.pack(">BBbb", 4, 0, delta_x, delta_y))
 
     async def send_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
-        await self.__writer_queue.put(struct.pack(">bbbb", 5, 0, delta_x, delta_y))
+        await self.__writer_queue.put(struct.pack(">BBbb", 5, 0, delta_x, delta_y))
 
 
 class KvmdClientSession(BaseHttpClientSession):

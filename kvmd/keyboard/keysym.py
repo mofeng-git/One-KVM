@@ -30,9 +30,9 @@ import Xlib.keysymdef
 from ..logging import get_logger
 
 from .mappings import At1Key
-from .mappings import WebModifiers
+from .mappings import EvdevModifiers
 from .mappings import X11_TO_AT1
-from .mappings import AT1_TO_WEB
+from .mappings import AT1_TO_EVDEV
 
 
 # =====
@@ -42,11 +42,11 @@ class SymmapModifiers:
     CTRL: int = 0x4
 
 
-def build_symmap(path: str) -> dict[int, dict[int, str]]:  # x11 keysym -> [(modifiers, webkey), ...]
+def build_symmap(path: str) -> dict[int, dict[int, int]]:  # x11 keysym -> [(symmap_modifiers, evdev_code), ...]
     # https://github.com/qemu/qemu/blob/95a9457fd44ad97c518858a4e1586a5498f9773c/ui/keymaps.c
     logger = get_logger()
 
-    symmap: dict[int, dict[int, str]] = {}
+    symmap: dict[int, dict[int, int]] = {}
     for (src, items) in [
         (path, list(_read_keyboard_layout(path).items())),
         ("<builtin>", list(X11_TO_AT1.items())),
@@ -57,14 +57,14 @@ def build_symmap(path: str) -> dict[int, dict[int, str]]:  # x11 keysym -> [(mod
 
         for (code, keys) in items:
             for key in keys:
-                web_name = AT1_TO_WEB.get(key.code)
-                if web_name is not None:
+                evdev_code = AT1_TO_EVDEV.get(key.code)
+                if evdev_code is not None:
                     if (
-                        (web_name in WebModifiers.SHIFTS and key.shift)  # pylint: disable=too-many-boolean-expressions
-                        or (web_name in WebModifiers.ALTS and key.altgr)
-                        or (web_name in WebModifiers.CTRLS and key.ctrl)
+                        (evdev_code in EvdevModifiers.SHIFTS and key.shift)  # pylint: disable=too-many-boolean-expressions
+                        or (evdev_code in EvdevModifiers.ALTS and key.altgr)
+                        or (evdev_code in EvdevModifiers.CTRLS and key.ctrl)
                     ):
-                        logger.error("Invalid modifier key at mapping %s: %s / %s", src, web_name, key)
+                        logger.error("Invalid modifier key at mapping %s: %s / %s", src, evdev_code, key)
                         continue
 
                     modifiers = (
@@ -75,7 +75,7 @@ def build_symmap(path: str) -> dict[int, dict[int, str]]:  # x11 keysym -> [(mod
                     )
                     if code not in symmap:
                         symmap[code] = {}
-                    symmap[code].setdefault(modifiers, web_name)
+                    symmap[code].setdefault(modifiers, evdev_code)
     return symmap
 
 

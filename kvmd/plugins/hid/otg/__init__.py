@@ -206,10 +206,10 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             self._set_jiggler_active(jiggler)
             self.__notifier.notify()
 
-    def _send_key_event(self, key: str, state: bool) -> None:
+    def _send_key_event(self, key: int, state: bool) -> None:
         self.__keyboard_proc.send_key_event(key, state)
 
-    def _send_mouse_button_event(self, button: str, state: bool) -> None:
+    def _send_mouse_button_event(self, button: int, state: bool) -> None:
         self.__mouse_current.send_button_event(button, state)
 
     def _send_mouse_move_event(self, to_x: int, to_y: int) -> None:

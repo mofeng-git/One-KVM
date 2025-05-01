@@ -29,6 +29,8 @@ from typing import Callable
 from typing import AsyncGenerator
 from typing import Any
 
+from evdev import ecodes
+
 from ...yamlconf import Option
 
 from ...validators.basic import valid_bool
@@ -37,7 +39,8 @@ from ...validators.basic import valid_string_list
 from ...validators.hid import valid_hid_key
 from ...validators.hid import valid_hid_mouse_move
 
-from ...keyboard.mappings import WebModifiers
+from ...keyboard.mappings import WEB_TO_EVDEV
+from ...keyboard.mappings import EvdevModifiers
 from ...mouse import MouseRange
 
 from .. import BasePlugin
@@ -60,7 +63,7 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
         jiggler_interval: int,
     ) -> None:
 
-        self.__ignore_keys = ignore_keys
+        self.__ignore_keys = [WEB_TO_EVDEV[key] for key in ignore_keys]
 
         self.__mouse_x_range = (mouse_x_min, mouse_x_max)
         self.__mouse_y_range = (mouse_y_min, mouse_y_max)
@@ -142,7 +145,7 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
 
     async def send_key_events(
         self,
-        keys: Iterable[tuple[str, bool]],
+        keys: Iterable[tuple[int, bool]],
         no_ignore_keys: bool=False,
         slow: bool=False,
     ) -> None:
@@ -153,24 +156,24 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
                     await asyncio.sleep(0.02)
                 self.send_key_event(key, state, False)
 
-    def send_key_event(self, key: str, state: bool, finish: bool) -> None:
+    def send_key_event(self, key: int, state: bool, finish: bool) -> None:
         self._send_key_event(key, state)
-        if state and finish and (key not in WebModifiers.ALL and key != "PrintScreen"):
+        if state and finish and (key not in EvdevModifiers.ALL and key != ecodes.KEY_SYSRQ):
             # Считаем что PrintScreen это модификатор для Alt+SysRq+...
             # По-хорошему надо учитывать факт нажатия на Alt, но можно и забить.
             self._send_key_event(key, False)
         self.__bump_activity()
 
-    def _send_key_event(self, key: str, state: bool) -> None:
+    def _send_key_event(self, key: int, state: bool) -> None:
         raise NotImplementedError
 
     # =====
 
-    def send_mouse_button_event(self, button: str, state: bool) -> None:
+    def send_mouse_button_event(self, button: int, state: bool) -> None:
         self._send_mouse_button_event(button, state)
         self.__bump_activity()
 
-    def _send_mouse_button_event(self, button: str, state: bool) -> None:
+    def _send_mouse_button_event(self, button: int, state: bool) -> None:
         raise NotImplementedError
 
     # =====

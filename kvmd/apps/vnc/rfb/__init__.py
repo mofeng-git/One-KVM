@@ -159,7 +159,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _on_ext_key_event(self, code: int, state: bool) -> None:
         raise NotImplementedError
 
-    async def _on_pointer_event(self, buttons: dict[str, bool], wheel: dict[str, int], move: dict[str, int]) -> None:
+    async def _on_pointer_event(self, buttons: dict[str, bool], wheel: tuple[int, int], move: tuple[int, int]) -> None:
         raise NotImplementedError
 
     async def _on_cut_event(self, text: str) -> None:
@@ -498,20 +498,20 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         sr = self.__scroll_rate
         await self._on_pointer_event(
             buttons={
-                "left": bool(buttons & 0x1),
-                "right": bool(buttons & 0x4),
+                "left":   bool(buttons & 0x1),
+                "right":  bool(buttons & 0x4),
                 "middle": bool(buttons & 0x2),
-                "up": bool(ext_buttons & 0x2),
-                "down": bool(ext_buttons & 0x1),
+                "up":     bool(ext_buttons & 0x2),
+                "down":   bool(ext_buttons & 0x1),
             },
-            wheel={
-                "x": (-sr if buttons & 0x40 else (sr if buttons & 0x20 else 0)),
-                "y": (-sr if buttons & 0x10 else (sr if buttons & 0x8 else 0)),
-            },
-            move={
-                "x": tools.remap(to_x, 0, self._width, *MouseRange.RANGE),
-                "y": tools.remap(to_y, 0, self._height, *MouseRange.RANGE),
-            },
+            wheel=(
+                (-sr if buttons & 0x40 else (sr if buttons & 0x20 else 0)),
+                (-sr if buttons & 0x10 else (sr if buttons & 0x8 else 0)),
+            ),
+            move=(
+                tools.remap(to_x, 0, self._width, *MouseRange.RANGE),
+                tools.remap(to_y, 0, self._height, *MouseRange.RANGE),
+            ),
         )
 
     async def __handle_client_cut_text(self) -> None:

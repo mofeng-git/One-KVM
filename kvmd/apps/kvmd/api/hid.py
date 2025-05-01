@@ -31,8 +31,11 @@ from typing import Callable
 from aiohttp.web import Request
 from aiohttp.web import Response
 
+from ....keyboard.mappings import WEB_TO_EVDEV
 from ....keyboard.keysym import build_symmap
-from ....keyboard.printer import text_to_web_keys
+from ....keyboard.printer import text_to_evdev_keys
+
+from ....mouse import MOUSE_TO_EVDEV
 
 from ....htserver import exposed_http
 from ....htserver import exposed_ws
@@ -124,10 +127,10 @@ class HidApi:
             text = text[:limit]
         symmap = self.__ensure_symmap(req.query.get("keymap", self.__default_keymap_name))
         slow = valid_bool(req.query.get("slow", False))
-        await self.__hid.send_key_events(text_to_web_keys(text, symmap), no_ignore_keys=True, slow=slow)
+        await self.__hid.send_key_events(text_to_evdev_keys(text, symmap), no_ignore_keys=True, slow=slow)
         return make_json_response()
 
-    def __ensure_symmap(self, keymap_name: str) -> dict[int, dict[int, str]]:
+    def __ensure_symmap(self, keymap_name: str) -> dict[int, dict[int, int]]:
         keymap_name = valid_printable_filename(keymap_name, "keymap")
         path = os.path.join(self.__keymaps_dir_path, keymap_name)
         try:
@@ -139,7 +142,7 @@ class HidApi:
         return self.__inner_ensure_symmap(path, st.st_mtime)
 
     @functools.lru_cache(maxsize=10)
-    def __inner_ensure_symmap(self, path: str, mod_ts: int) -> dict[int, dict[int, str]]:
+    def __inner_ensure_symmap(self, path: str, mod_ts: int) -> dict[int, dict[int, int]]:
         _ = mod_ts  # For LRU
         return build_symmap(path)
 
@@ -148,9 +151,12 @@ class HidApi:
     @exposed_ws(1)
     async def __ws_bin_key_handler(self, _: WsSession, data: bytes) -> None:
         try:
-            key = valid_hid_key(data[1:].decode("ascii"))
             state = bool(data[0] & 0b01)
             finish = bool(data[0] & 0b10)
+            if data[0] & 0b10000000:
+                key = struct.unpack(">H", data[1:])[0]
+            else:
+                key = WEB_TO_EVDEV[valid_hid_key(data[1:33].decode("ascii"))]
         except Exception:
             return
         self.__hid.send_key_event(key, state, finish)
@@ -158,7 +164,11 @@ class HidApi:
     @exposed_ws(2)
     async def __ws_bin_mouse_button_handler(self, _: WsSession, data: bytes) -> None:
         try:
-            button = valid_hid_mouse_button(data[1:].decode("ascii"))
+            state = bool(data[0] & 0b01)
+            if data[0] & 0b10000000:
+                button = struct.unpack(">H", data[1:])[0]
+            else:
+                button = MOUSE_TO_EVDEV[valid_hid_mouse_button(data[1:33].decode("ascii"))]
             state = bool(data[0] & 0b01)
         except Exception:
             return
@@ -199,7 +209,7 @@ class HidApi:
     @exposed_ws("key")
     async def __ws_key_handler(self, _: WsSession, event: dict) -> None:
         try:
-            key = valid_hid_key(event["key"])
+            key = WEB_TO_EVDEV[valid_hid_key(event["key"])]
             state = valid_bool(event["state"])
             finish = valid_bool(event.get("finish", False))
         except Exception:
@@ -209,7 +219,7 @@ class HidApi:
     @exposed_ws("mouse_button")
     async def __ws_mouse_button_handler(self, _: WsSession, event: dict) -> None:
         try:
-            button = valid_hid_mouse_button(event["button"])
+            button = MOUSE_TO_EVDEV[valid_hid_mouse_button(event["button"])]
             state = valid_bool(event["state"])
         except Exception:
             return
@@ -248,7 +258,7 @@ class HidApi:
 
     @exposed_http("POST", "/hid/events/send_key")
     async def __events_send_key_handler(self, req: Request) -> Response:
-        key = valid_hid_key(req.query.get("key"))
+        key = WEB_TO_EVDEV[valid_hid_key(req.query.get("key"))]
         if "state" in req.query:
             state = valid_bool(req.query["state"])
             finish = valid_bool(req.query.get("finish", False))
@@ -259,7 +269,7 @@ class HidApi:
 
     @exposed_http("POST", "/hid/events/send_mouse_button")
     async def __events_send_mouse_button_handler(self, req: Request) -> Response:
-        button = valid_hid_mouse_button(req.query.get("button"))
+        button = MOUSE_TO_EVDEV[valid_hid_mouse_button(req.query.get("button"))]
         if "state" in req.query:
             state = valid_bool(req.query["state"])
             self.__hid.send_mouse_button_event(button, state)

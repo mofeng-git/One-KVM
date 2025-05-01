@@ -51,6 +51,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-qrcode \
 		python-pyserial \
 		python-pyudev \
+		python-evdev \
 		python-setproctitle \
 		python-psutil \
 		python-netifaces \
