@@ -72,7 +72,7 @@ class _KeyMapping:
     evdev_name: str
     mcu_code: int
     usb_key: _UsbKey
-    ps2_key: _Ps2Key
+    ps2_key: (_Ps2Key | None)
     at1_code: int
     x11_keys: set[_X11Key]
 
