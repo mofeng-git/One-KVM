@@ -3,7 +3,7 @@ li.right#text-dropdown
 		+navbar_led("stream-ocr-led", "led-gear", "feature-disabled")
 		span Text
 
-	.menu#text-menu
+	.menu#text-menu(style="width: 360px")
 		.text
 			b Paste text as keypress sequence#[br]
 			sub Please note that PiKVM cannot switch the keyboard layout
@@ -12,8 +12,8 @@ li.right#text-dropdown
 			textarea#hid-pak-text(data-focus placeholder="Enter your text here")
 		table.kv
 			tr
-				td #[button#hid-pak-button(disabled data-force-hide-menu) &bull; Paste]
-				td using host keymap
+				td #[button#hid-pak-button(disabled data-force-hide-menu title="Ctrl+Enter when the text is focused") &bull; Paste]
+				td using a host keymap
 				td #[select#hid-pak-keymap-selector]
 		table.kv
 			tr
@@ -39,8 +39,8 @@ li.right#text-dropdown
 					td text recognition
 			table.kv
 				tr
-					td(colspan="4") &bull; Press #[b Enter] to recognize and copy text to clipboard
+					td(colspan="4") &bull; Next hit the #[b Enter] to recognize and copy text to clipboard...
 				tr
-					td(colspan="4") &bull; Press #[b Esc] to cancel selection
+					td(colspan="4") &bull; Or hit the #[b Escape] to cancel a selection
 				tr
 					td

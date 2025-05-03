@@ -46,7 +46,6 @@
     <link rel="stylesheet" href="../share/css/keypad.css">
     <link rel="stylesheet" href="../share/css/tabs.css">
     <link rel="stylesheet" href="../share/css/kvm/stream.css">
-    <link rel="stylesheet" href="../share/css/kvm/hid.css">
     <link rel="stylesheet" href="../share/css/kvm/msd.css">
     <link rel="stylesheet" href="../share/css/kvm/system.css">
     <link rel="stylesheet" href="../share/css/kvm/keyboard.css">
@@ -763,7 +762,7 @@
                 </tr>
               </table>
           <hr>
-          <input id="hid-recorder-new-script-file" type="file">
+          <input id="hid-recorder-new-script-file" type="file" style="display: none">
           <div class="buttons buttons-row">
             <button class="row50" id="hid-recorder-upload" disabled>Upload script</button>
             <button class="row50" id="hid-recorder-download" disabled>Download script</button>
@@ -771,7 +770,7 @@
         </div>
       </li>
       <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="../share/svg/led-gear.svg"><span>Text</span></a>
-        <div class="menu" id="text-menu">
+        <div class="menu" id="text-menu" style="width: 360px">
           <div class="text"><b>Paste text as keypress sequence<br></b><sub>Please note that PiKVM cannot switch the keyboard layout</sub></div>
           <hr>
           <div class="text" style="margin-right: 20px">
@@ -780,9 +779,9 @@
           <table class="kv">
             <tr>
               <td>
-                <button id="hid-pak-button" disabled data-force-hide-menu>&bull; Paste</button>
+                <button id="hid-pak-button" disabled data-force-hide-menu title="Ctrl+Enter when the text is focused">&bull; Paste</button>
               </td>
-              <td>using host keymap</td>
+              <td>using a host keymap</td>
               <td>
                 <select id="hid-pak-keymap-selector"></select>
               </td>
@@ -839,10 +838,10 @@
             </table>
             <table class="kv">
               <tr>
-                <td colspan="4">&bull; Press <b>Enter</b> to recognize and copy text to clipboard</td>
+                <td colspan="4">&bull; Next hit the <b>Enter</b> to recognize and copy text to clipboard...</td>
               </tr>
               <tr>
-                <td colspan="4">&bull; Press <b>Esc</b> to cancel selection</td>
+                <td colspan="4">&bull; Or hit the <b>Escape</b> to cancel a selection</td>
               </tr>
               <tr>
                 <td></td>
