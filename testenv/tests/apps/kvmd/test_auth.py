@@ -22,15 +22,24 @@
 
 import os
 import asyncio
+import base64
 import contextlib
 
 from typing import AsyncGenerator
 
+from aiohttp.test_utils import make_mocked_request
+
 import pytest
+
+from kvmd.validators import ValidatorError
 
 from kvmd.yamlconf import make_config
 
 from kvmd.apps.kvmd.auth import AuthManager
+from kvmd.apps.kvmd.api.auth import check_request_auth
+
+from kvmd.htserver import UnauthorizedError
+from kvmd.htserver import ForbiddenError
 
 from kvmd.plugins.auth import get_auth_service_class
 
@@ -83,6 +92,57 @@ async def _get_configured_manager(
 
 
 # =====
+@pytest.mark.asyncio
+async def test_ok__request(tmpdir) -> None:  # type: ignore
+    path = os.path.abspath(str(tmpdir.join("htpasswd")))
+
+    htpasswd = KvmdHtpasswdFile(path, new=True)
+    htpasswd.set_password("admin", "pass")
+    htpasswd.save()
+
+    async with _get_configured_manager([], path) as manager:
+        async def check(exposed: HttpExposed, **kwargs) -> None:  # type: ignore
+            await check_request_auth(manager, exposed, make_mocked_request(exposed.method, exposed.path, **kwargs))
+
+        await check(_E_FREE)
+        with pytest.raises(UnauthorizedError):
+            await check(_E_AUTH)
+
+        # ===
+
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"X-KVMD-User": "admin", "X-KVMD-Passwd": "foo"})
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"X-KVMD-User": "adminx", "X-KVMD-Passwd": "pass"})
+
+        await check(_E_AUTH, headers={"X-KVMD-User": "admin", "X-KVMD-Passwd": "pass"})
+
+        # ===
+
+        with pytest.raises(UnauthorizedError):
+            await check(_E_AUTH, headers={"Cookie": "auth_token="})
+        with pytest.raises(ValidatorError):
+            await check(_E_AUTH, headers={"Cookie": "auth_token=0"})
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"Cookie": f"auth_token={'0' * 64}"})
+
+        token = await manager.login("admin", "pass", 0)
+        assert token
+        await check(_E_AUTH, headers={"Cookie": f"auth_token={token}"})
+        manager.logout(token)
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"Cookie": f"auth_token={token}"})
+
+        # ===
+
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"Authorization": "basic " + base64.b64encode(b"admin:foo").decode()})
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"Authorization": "basic " + base64.b64encode(b"adminx:pass").decode()})
+
+        await check(_E_AUTH, headers={"Authorization": "basic " + base64.b64encode(b"admin:pass").decode()})
+
+
 @pytest.mark.asyncio
 async def test_ok__expire(tmpdir) -> None:  # type: ignore
     path = os.path.abspath(str(tmpdir.join("htpasswd")))

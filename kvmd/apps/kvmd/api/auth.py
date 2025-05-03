@@ -54,18 +54,18 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
         user = valid_user(user)
         passwd = req.headers.get("X-KVMD-Passwd", "")
         set_request_auth_info(req, f"{user} (xhdr)")
-        if not (await auth_manager.authorize(user, valid_passwd(passwd))):
-            raise ForbiddenError()
-        return
+        if (await auth_manager.authorize(user, valid_passwd(passwd))):
+            return
+        raise ForbiddenError()
 
     token = req.cookies.get(_COOKIE_AUTH_TOKEN, "")
     if token:
         user = auth_manager.check(valid_auth_token(token))  # type: ignore
-        if not user:
-            set_request_auth_info(req, "- (token)")
-            raise ForbiddenError()
-        set_request_auth_info(req, f"{user} (token)")
-        return
+        if user:
+            set_request_auth_info(req, f"{user} (token)")
+            return
+        set_request_auth_info(req, "- (token)")
+        raise ForbiddenError()
 
     basic_auth = req.headers.get("Authorization", "")
     if basic_auth and basic_auth[:6].lower() == "basic ":
@@ -75,9 +75,9 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
             raise UnauthorizedError()
         user = valid_user(user)
         set_request_auth_info(req, f"{user} (basic)")
-        if not (await auth_manager.authorize(user, valid_passwd(passwd))):
-            raise ForbiddenError()
-        return
+        if (await auth_manager.authorize(user, valid_passwd(passwd))):
+            return
+        raise ForbiddenError()
 
     if exposed.allow_usc:
         creds = get_request_unix_credentials(req)
@@ -86,6 +86,7 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
             if user:
                 set_request_auth_info(req, f"{user}[{creds.uid}] (unix)")
                 return
+        raise UnauthorizedError()
 
     raise UnauthorizedError()
 
