@@ -59,6 +59,7 @@ Dumper.ignore_aliases
 _auth_server_port_fixture
 _test_user
 
+Switch.__x_set_dummies
 Switch.__x_set_port_names
 Switch.__x_set_atx_cp_delays
 Switch.__x_set_atx_cpl_delays
@@ -69,16 +70,19 @@ Nak.NO_DOWNLINK
 Nak.DOWNLINK_OVERFLOW
 UnitFlags.flashing_busy
 UnitFlags.has_hpd
+StateCache.get_dummies
 StateCache.get_port_names
 StateCache.get_atx_cp_delays
 StateCache.get_atx_cpl_delays
 StorageContext.write_edids
+StorageContext.write_dummies
 StorageContext.write_colors
 StorageContext.write_port_names
 StorageContext.write_atx_cp_delays
 StorageContext.write_atx_cpl_delays
 StorageContext.write_atx_cr_delays
 StorageContext.read_edids
+StorageContext.read_dummies
 StorageContext.read_colors
 StorageContext.read_port_names
 StorageContext.read_atx_cp_delays

@@ -241,7 +241,8 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 		if (__decoder !== null) {
 			try {
 				__decoder.close();
-			} catch { // eslint-disable-line no-empty
+			} catch {
+				// Pass
 			} finally {
 				__decoder = null;
 				__codec = "";

@@ -281,7 +281,7 @@ class _PortsDict(Generic[_T]):
         else:
             self.kvs[port] = value
 
-    def __eq__(self, other: "_PortsDict[_T]") -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, self.__class__):
             return False
         return (self.kvs == other.kvs)

@@ -486,7 +486,7 @@ export function Switch() {
 								<div class="switch-box">
 									<input
 										type="checkbox" id="__switch-port-dummy-switch"
-										${model.ports[port].video.dummy ? 'checked' : ''}
+										${model.ports[port].video.dummy ? "checked" : ""}
 									/>
 									<label for="__switch-port-dummy-switch">
 										<span class="switch-inner"></span>
