@@ -34,6 +34,7 @@ from .lib import aiotools
 from .lib import aioproc
 
 from .types import Edids
+from .types import Dummies
 from .types import Colors
 
 from .proto import Response
@@ -78,6 +79,11 @@ class _CmdSetUnitBeacon(_BaseCmd):
 @dataclasses.dataclass(frozen=True)
 class _CmdSetEdids(_BaseCmd):
     edids: Edids
+
+
+@dataclasses.dataclass(frozen=True)
+class _CmdSetDummies(_BaseCmd):
+    dummies: Dummies
 
 
 @dataclasses.dataclass(frozen=True)
@@ -189,7 +195,7 @@ class Chain:  # pylint: disable=too-many-instance-attributes
         self.__actual = False
 
         self.__edids = Edids()
-
+        self.__dummies = Dummies({})
         self.__colors = Colors()
 
         self.__units: list[_UnitContext] = []
@@ -224,6 +230,9 @@ class Chain:  # pylint: disable=too-many-instance-attributes
 
     def set_edids(self, edids: Edids) -> None:
         self.__queue_cmd(_CmdSetEdids(edids))  # Will be copied because of multiprocessing.Queue()
+
+    def set_dummies(self, dummies: Dummies) -> None:
+        self.__queue_cmd(_CmdSetDummies(dummies))
 
     def set_colors(self, colors: Colors) -> None:
         self.__queue_cmd(_CmdSetColors(colors))
@@ -348,6 +357,9 @@ class Chain:  # pylint: disable=too-many-instance-attributes
                 case _CmdSetEdids():
                     self.__edids = cmd.edids
 
+                case _CmdSetDummies():
+                    self.__dummies = cmd.dummies
+
                 case _CmdSetColors():
                     self.__colors = cmd.colors
 
@@ -373,7 +385,7 @@ class Chain:  # pylint: disable=too-many-instance-attributes
 
     def __adjust_quirks(self) -> None:
         for (unit, ctx) in enumerate(self.__units):
-            if ctx.state is not None and (ctx.state.version.sw_dev or ctx.state.version.sw >= 7):
+            if ctx.state is not None and ctx.state.version.is_fresh(7):
                 ignore_hpd = (unit == 0 and self.__ignore_hpd_on_top)
                 if ctx.state.quirks.ignore_hpd != ignore_hpd:
                     get_logger().info("Applying quirk ignore_hpd=%s to [%d] ...",
@@ -403,6 +415,7 @@ class Chain:  # pylint: disable=too-many-instance-attributes
                 self.__ensure_config_port(unit, ctx)
                 if self.__actual:
                     self.__ensure_config_edids(unit, ctx)
+                    self.__ensure_config_dummies(unit, ctx)
                     self.__ensure_config_colors(unit, ctx)
 
     def __ensure_config_port(self, unit: int, ctx: _UnitContext) -> None:
@@ -428,6 +441,19 @@ class Chain:  # pylint: disable=too-many-instance-attributes
                                       edid.crc, edid.valid, edid.name)
                     ctx.changing_rid = self.__device.request_set_edid(unit, ch, edid)
                     break  # Busy globally
+
+    def __ensure_config_dummies(self, unit: int, ctx: _UnitContext) -> None:
+        assert ctx.state is not None
+        if ctx.state.version.is_fresh(8) and ctx.can_be_changed():
+            for ch in range(4):
+                port = self.get_virtual_port(unit, ch)
+                dummy = self.__dummies[port]
+                if ctx.state.video_dummies[ch] != dummy:
+                    get_logger().info("Changing dummy flag on port %d on [%d:%d]: %d -> %d ...",
+                                      port, unit, ch,
+                                      ctx.state.video_dummies[ch], dummy)
+                    ctx.changing_rid = self.__device.request_set_dummy(unit, ch, dummy)
+                    break  # Busy globally (actually not but it can be changed in the firmware)
 
     def __ensure_config_colors(self, unit: int, ctx: _UnitContext) -> None:
         assert self.__actual

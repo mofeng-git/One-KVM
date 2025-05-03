@@ -41,6 +41,7 @@ from .proto import BodySetBeacon
 from .proto import BodyAtxClick
 from .proto import BodySetEdid
 from .proto import BodyClearEdid
+from .proto import BodySetDummy
 from .proto import BodySetColors
 from .proto import BodySetQuirks
 
@@ -163,6 +164,9 @@ class Device:
         if edid.valid:
             return self.__send_request(Header.SET_EDID, unit, BodySetEdid(ch, edid))
         return self.__send_request(Header.CLEAR_EDID, unit, BodyClearEdid(ch))
+
+    def request_set_dummy(self, unit: int, ch: int, on: bool) -> int:
+        return self.__send_request(Header.SET_DUMMY, unit, BodySetDummy(ch, on))
 
     def request_set_colors(self, unit: int, ch: int, colors: Colors) -> int:
         return self.__send_request(Header.SET_COLORS, unit, BodySetColors(ch, colors))

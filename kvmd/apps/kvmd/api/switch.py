@@ -79,6 +79,7 @@ class SwitchApi:
             param: validator(req.query.get(param))
             for (param, validator) in [
                 ("edid_id", (lambda arg: valid_switch_edid_id(arg, allow_default=True))),
+                ("dummy",   valid_bool),
                 ("name",    valid_switch_port_name),
                 ("atx_click_power_delay",      valid_switch_atx_click_delay),
                 ("atx_click_power_long_delay", valid_switch_atx_click_delay),

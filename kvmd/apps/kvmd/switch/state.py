@@ -27,6 +27,7 @@ import time
 from typing import AsyncGenerator
 
 from .types import Edids
+from .types import Dummies
 from .types import Color
 from .types import Colors
 from .types import PortNames
@@ -48,8 +49,8 @@ class _UnitInfo:
 
 
 # =====
-class StateCache:  # pylint: disable=too-many-instance-attributes
-    __FW_VERSION = 7
+class StateCache:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+    __FW_VERSION = 8
 
     __FULL    = 0xFFFF
     __SUMMARY = 0x01
@@ -62,6 +63,7 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self) -> None:
         self.__edids = Edids()
+        self.__dummies = Dummies({})
         self.__colors = Colors()
         self.__port_names = PortNames({})
         self.__atx_cp_delays = AtxClickPowerDelays({})
@@ -76,6 +78,9 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
 
     def get_edids(self) -> Edids:
         return self.__edids.copy()
+
+    def get_dummies(self) -> Dummies:
+        return self.__dummies.copy()
 
     def get_colors(self) -> Colors:
         return self.__colors
@@ -226,6 +231,9 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
                                     "reset": self.__atx_cr_delays[port],
                                 },
                             },
+                            "video": {
+                                "dummy": self.__dummies[port],
+                            },
                         })
                     if x_edids:
                         state["edids"]["used"].append(self.__edids.get_id_for_port(port))
@@ -326,6 +334,12 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
         self.__edids = edids.copy()
         if changed:
             self.__bump_state(self.__EDIDS)
+
+    def set_dummies(self, dummies: Dummies) -> None:
+        changed = (not self.__dummies.compare_on_ports(dummies, self.__get_ports()))
+        self.__dummies = dummies.copy()
+        if changed:
+            self.__bump_state(self.__FULL)
 
     def set_colors(self, colors: Colors) -> None:
         changed = (self.__colors != colors)

@@ -459,7 +459,7 @@ export function Switch() {
 
 		let create_content = function(el_parent) {
 			let html = `
-				<table>
+				<table style="width: 100%">
 					<tr>
 						<td>Port name:</td>
 						<td><input
@@ -473,9 +473,33 @@ export function Switch() {
 						<td><select id="__switch-port-edid-selector" style="width: 100%"></select></td>
 					</tr>
 				</table>
-				<hr>
-				<table>
 			`;
+
+			let fw = model.units[model.ports[port].unit].firmware;
+			if (fw.devbuild || fw.version >= 8) {
+				html += `
+					<hr>
+					<table style="width: 100%">
+						<tr>
+							<td>Simulate display on inactive port:</td>
+							<td align="right">
+								<div class="switch-box">
+									<input
+										type="checkbox" id="__switch-port-dummy-switch"
+										${model.ports[port].video.dummy ? 'checked' : ''}
+									/>
+									<label for="__switch-port-dummy-switch">
+										<span class="switch-inner"></span>
+										<span class="switch"></span>
+									</label>
+								</div>
+							</td>
+						</tr>
+					</table>
+				`;
+			}
+
+			html += "<hr><table style=\"width: 100%\">";
 			for (let kv of Object.entries(atx_actions)) {
 				html += `
 					<tr>
@@ -491,6 +515,7 @@ export function Switch() {
 				`;
 			}
 			html += "</table>";
+
 			el_parent.innerHTML = html;
 
 			let el_selector = $("__switch-port-edid-selector");
@@ -521,6 +546,7 @@ export function Switch() {
 				let params = {
 					"port": port,
 					"edid_id": $("__switch-port-edid-selector").value,
+					"dummy": $("__switch-port-dummy-switch").checked,
 					"name": $("__switch-port-name-input").value,
 				};
 				for (let action of Object.keys(atx_actions)) {

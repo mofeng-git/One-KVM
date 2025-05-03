@@ -32,6 +32,7 @@ from .lib import Inotify
 
 from .types import Edid
 from .types import Edids
+from .types import Dummies
 from .types import Color
 from .types import Colors
 from .types import PortNames
@@ -68,6 +69,7 @@ class SwitchUnknownEdidError(SwitchOperationError):
 # =====
 class Switch:  # pylint: disable=too-many-public-methods
     __X_EDIDS          = "edids"
+    __X_DUMMIES        = "dummies"
     __X_COLORS         = "colors"
     __X_PORT_NAMES     = "port_names"
     __X_ATX_CP_DELAYS  = "atx_cp_delays"
@@ -75,7 +77,7 @@ class Switch:  # pylint: disable=too-many-public-methods
     __X_ATX_CR_DELAYS  = "atx_cr_delays"
 
     __X_ALL = frozenset([
-        __X_EDIDS, __X_COLORS, __X_PORT_NAMES,
+        __X_EDIDS, __X_DUMMIES, __X_COLORS, __X_PORT_NAMES,
         __X_ATX_CP_DELAYS, __X_ATX_CPL_DELAYS, __X_ATX_CR_DELAYS,
     ])
 
@@ -102,6 +104,12 @@ class Switch:  # pylint: disable=too-many-public-methods
     def __x_set_edids(self, edids: Edids, save: bool=True) -> None:
         self.__chain.set_edids(edids)
         self.__cache.set_edids(edids)
+        if save:
+            self.__save_notifier.notify()
+
+    def __x_set_dummies(self, dummies: Dummies, save: bool=True) -> None:
+        self.__chain.set_dummies(dummies)
+        self.__cache.set_dummies(dummies)
         if save:
             self.__save_notifier.notify()
 
@@ -236,6 +244,7 @@ class Switch:  # pylint: disable=too-many-public-methods
         self,
         port: int,
         edid_id: (str | None)=None,
+        dummy: (bool | None)=None,
         name: (str | None)=None,
         atx_click_power_delay: (float | None)=None,
         atx_click_power_long_delay: (float | None)=None,
@@ -250,15 +259,16 @@ class Switch:  # pylint: disable=too-many-public-methods
                 edids.assign(port, edid_id)
                 self.__x_set_edids(edids)
 
-            for (key, value) in [
-                (self.__X_PORT_NAMES,     name),
-                (self.__X_ATX_CP_DELAYS,  atx_click_power_delay),
-                (self.__X_ATX_CPL_DELAYS, atx_click_power_long_delay),
-                (self.__X_ATX_CR_DELAYS,  atx_click_reset_delay),
+            for (reset, key, value) in [
+                (None, self.__X_DUMMIES,        dummy),  # None can't be used now
+                ("",   self.__X_PORT_NAMES,     name),
+                (0,    self.__X_ATX_CP_DELAYS,  atx_click_power_delay),
+                (0,    self.__X_ATX_CPL_DELAYS, atx_click_power_long_delay),
+                (0,    self.__X_ATX_CR_DELAYS,  atx_click_reset_delay),
             ]:
                 if value is not None:
                     new = getattr(self.__cache, f"get_{key}")()
-                    new[port] = (value or None)  # None == reset to default
+                    new[port] = (None if value == reset else value)  # Value or reset default
                     getattr(self, f"_Switch__x_set_{key}")(new)
 
     # =====
@@ -375,7 +385,7 @@ class Switch:  # pylint: disable=too-many-public-methods
         prevs = dict.fromkeys(self.__X_ALL)
         while True:
             await self.__save_notifier.wait()
-            while (await self.__save_notifier.wait(5)):
+            while not (await self.__save_notifier.wait(5)):
                 pass
             while True:
                 try:

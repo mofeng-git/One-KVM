@@ -61,6 +61,7 @@ class Header(Packable, Unpackable):
     CLEAR_EDID = 10
     SET_COLORS = 12
     SET_QUIRKS = 13
+    SET_DUMMY  = 14
 
     __struct = struct.Struct("<BHBB")
 
@@ -96,6 +97,9 @@ class UnitVersion:
     sw:     int
     sw_dev: bool
 
+    def is_fresh(self, version: int) -> bool:
+        return (self.sw_dev or (self.sw >= version))
+
 
 @dataclasses.dataclass(frozen=True)
 class UnitFlags:
@@ -121,11 +125,12 @@ class UnitState(Unpackable):  # pylint: disable=too-many-instance-attributes
     video_hpd:     tuple[bool, bool, bool, bool, bool]
     video_edid:    tuple[bool, bool, bool, bool]
     video_crc:     tuple[int,  int,  int,  int]
+    video_dummies: tuple[bool, bool, bool, bool]
     usb_5v_sens:   tuple[bool, bool, bool, bool]
     atx_busy:      tuple[bool, bool, bool, bool]
     quirks:        UnitQuirks
 
-    __struct = struct.Struct("<HHHBBHHHHHHBBBHHHHBxBB29x")
+    __struct = struct.Struct("<HHHBBHHHHHHBBBHHHHBxBBB28x")
 
     def compare_edid(self, ch: int, edid: Optional["Edid"]) -> bool:
         if edid is None:
@@ -142,7 +147,7 @@ class UnitState(Unpackable):  # pylint: disable=too-many-instance-attributes
             sw_version, hw_version, flags, ch,
             beacons, nc0, nc1, nc2, nc3, nc4, nc5,
             video_5v_sens, video_hpd, video_edid, vc0, vc1, vc2, vc3,
-            usb_5v_sens, atx_busy, quirks,
+            usb_5v_sens, atx_busy, quirks, video_dummies,
         ) = cls.__struct.unpack_from(data, offset=offset)
         return UnitState(
             version=UnitVersion(
@@ -163,6 +168,7 @@ class UnitState(Unpackable):  # pylint: disable=too-many-instance-attributes
             video_hpd=cls.__make_flags5(video_hpd),
             video_edid=cls.__make_flags4(video_edid),
             video_crc=(vc0, vc1, vc2, vc3),
+            video_dummies=cls.__make_flags4(video_dummies),
             usb_5v_sens=cls.__make_flags4(usb_5v_sens),
             atx_busy=cls.__make_flags4(atx_busy),
             quirks=UnitQuirks(ignore_hpd=bool(quirks & 0x01)),
@@ -268,6 +274,18 @@ class BodyClearEdid(Packable):
 
     def pack(self) -> bytes:
         return self.ch.to_bytes()
+
+
+@dataclasses.dataclass(frozen=True)
+class BodySetDummy(Packable):
+    ch: int
+    on: bool
+
+    def __post_init__(self) -> None:
+        assert 0 <= self.ch <= 3
+
+    def pack(self) -> bytes:
+        return self.ch.to_bytes() + self.on.to_bytes()
 
 
 @dataclasses.dataclass(frozen=True)
