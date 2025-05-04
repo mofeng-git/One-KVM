@@ -68,7 +68,7 @@ depends=(
 	python-dbus
 	python-dbus-next
 	python-pygments
-	python-pyghmi
+	"python-pyghmi>=1.6.0-2"
 	python-pam
 	python-pillow
 	python-xlib

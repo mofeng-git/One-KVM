@@ -27,6 +27,7 @@ import multiprocessing.queues
 import queue
 import shlex
 
+from typing import Generator
 from typing import TypeVar
 
 
@@ -81,3 +82,13 @@ def build_cmd(cmd: list[str], cmd_remove: list[str], cmd_append: list[str]) -> l
         *filter((lambda item: item not in cmd_remove), cmd[1:]),
         *cmd_append,
     ]
+
+
+# =====
+def passwds_splitted(text: str) -> Generator[tuple[int, str]]:
+    for (lineno, line) in enumerate(text.split("\n")):
+        line = line.rstrip("\r")
+        ls = line.strip()
+        if len(ls) == 0 or ls.startswith("#"):
+            continue
+        yield (lineno, line)

@@ -1,14 +1,11 @@
-# This file describes the credentials for IPMI users. The first pair separated by colon
-# is the login and password with which the user can access to IPMI. The second pair
-# is the name and password with which the user can access to KVMD API. The arrow is used
-# as a separator and shows the direction of user registration in the system.
+# This file describes the credentials for IPMI users in format "login:password",
+# one per line. The passwords are NOT encrypted.
 #
 # WARNING! IPMI protocol is completely unsafe by design. In short, the authentication
 # process for IPMI 2.0 mandates that the server send a salted SHA1 or MD5 hash of the
-# requested user's password to the client, prior to the client authenticating. Never use
-# the same passwords for KVMD and IPMI users. This default configuration is shown here
-# for example only.
+# requested user's password to the client, prior to the client authenticating.
 #
-# And even better not to use IPMI. Instead, you can directly use KVMD API via curl.
+# NEVER use the same passwords for KVMD and IPMI users.
+# This default configuration is shown here just for the example only.
 
-admin:admin -> admin:admin
+admin:admin

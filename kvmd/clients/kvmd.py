@@ -217,8 +217,10 @@ class KvmdClientSession(BaseHttpClientSession):
 
 class KvmdClient(BaseHttpClient):
     def make_session(self, user: str="", passwd: str="") -> KvmdClientSession:
-        headers = {
-            "X-KVMD-User": user,
-            "X-KVMD-Passwd": passwd,
-        }
+        headers: (dict[str, str] | None) = None
+        if user:
+            headers = {
+                "X-KVMD-User": user,
+                "X-KVMD-Passwd": passwd,
+            }
         return KvmdClientSession(lambda: self._make_http_session(headers))

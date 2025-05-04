@@ -362,7 +362,9 @@ def _get_config_scheme() -> dict:
                 "expire":  Option(0,    type=valid_expire),
 
                 "usc": {
-                    "users":  Option([], type=valid_users_list),  # PiKVM username has a same regex as a UNIX username
+                    "users":  Option([
+                        "kvmd-ipmi",
+                    ], type=valid_users_list),  # PiKVM username has a same regex as a UNIX username
                     "groups": Option([], type=valid_users_list),  # groupname has a same regex as a username
                 },
 

@@ -1,6 +1,6 @@
 python-periphery
 pyserial-asyncio
-pyghmi
+git+https://opendev.org/x/pyghmi.git#33cff21882b6782c20b054e6e8adcf94b5e09561
 spidev
 pyrad
 types-PyYAML
