@@ -288,7 +288,7 @@ class RequestUnixCredentials:
     gid: int
 
     def __post_init__(self) -> None:
-        assert self.pid > 0
+        assert self.pid >= 0
         assert self.uid >= 0
         assert self.gid >= 0
 
@@ -304,7 +304,8 @@ def get_request_unix_credentials(req: BaseRequest) -> (RequestUnixCredentials | 
     except Exception:
         return None
     (pid, uid, gid) = struct.unpack("iii", data)
-    if pid <= 0 or uid < 0 or gid < 0:
+    if pid < 0 or uid < 0 or gid < 0:
+        # PID == 0 inside a docker container
         return None
     return RequestUnixCredentials(pid=pid, uid=uid, gid=gid)
 
