@@ -45,28 +45,31 @@ from ..auth import AuthManager
 _COOKIE_AUTH_TOKEN = "auth_token"
 
 
-async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, req: Request) -> None:
-    if not auth_manager.is_auth_required(exposed):
-        return
-
+async def _check_xhdr(auth_manager: AuthManager, _: HttpExposed, req: Request) -> bool:
     user = req.headers.get("X-KVMD-User", "")
     if user:
         user = valid_user(user)
         passwd = req.headers.get("X-KVMD-Passwd", "")
         set_request_auth_info(req, f"{user} (xhdr)")
         if (await auth_manager.authorize(user, valid_passwd(passwd))):
-            return
+            return True
         raise ForbiddenError()
+    return False
 
+
+async def _check_token(auth_manager: AuthManager, _: HttpExposed, req: Request) -> bool:
     token = req.cookies.get(_COOKIE_AUTH_TOKEN, "")
     if token:
-        user = auth_manager.check(valid_auth_token(token))  # type: ignore
+        user = auth_manager.check(valid_auth_token(token))
         if user:
             set_request_auth_info(req, f"{user} (token)")
-            return
+            return True
         set_request_auth_info(req, "- (token)")
         raise ForbiddenError()
+    return False
 
+
+async def _check_basic(auth_manager: AuthManager, _: HttpExposed, req: Request) -> bool:
     basic_auth = req.headers.get("Authorization", "")
     if basic_auth and basic_auth[:6].lower() == "basic ":
         try:
@@ -76,18 +79,29 @@ async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, re
         user = valid_user(user)
         set_request_auth_info(req, f"{user} (basic)")
         if (await auth_manager.authorize(user, valid_passwd(passwd))):
-            return
+            return True
         raise ForbiddenError()
+    return False
 
+
+async def _check_usc(auth_manager: AuthManager, exposed: HttpExposed, req: Request) -> bool:
     if exposed.allow_usc:
         creds = get_request_unix_credentials(req)
         if creds is not None:
-            user = auth_manager.check_unix_credentials(creds)  # type: ignore
+            user = auth_manager.check_unix_credentials(creds)
             if user:
                 set_request_auth_info(req, f"{user}[{creds.uid}] (unix)")
-                return
+                return True
         raise UnauthorizedError()
+    return False
 
+
+async def check_request_auth(auth_manager: AuthManager, exposed: HttpExposed, req: Request) -> None:
+    if not auth_manager.is_auth_required(exposed):
+        return
+    for checker in [_check_xhdr, _check_token, _check_basic, _check_usc]:
+        if (await checker(auth_manager, exposed, req)):
+            return
     raise UnauthorizedError()
 
 
