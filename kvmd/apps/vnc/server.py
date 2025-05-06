@@ -27,6 +27,7 @@ import dataclasses
 import contextlib
 
 import aiohttp
+import async_lru
 
 from ...logging import get_logger
 
@@ -54,9 +55,6 @@ from ... import network
 from .rfb import RfbClient
 from .rfb.stream import rfb_format_remote
 from .rfb.errors import RfbError
-
-from .vncauth import VncAuthKvmdCredentials
-from .vncauth import VncAuthManager
 
 from .render import make_text_jpeg
 
@@ -89,13 +87,12 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         kvmd: KvmdClient,
         streamers: list[BaseStreamerClient],
 
-        vnc_credentials: dict[str, VncAuthKvmdCredentials],
+        vncpasses: set[str],
         vencrypt: bool,
         none_auth_only: bool,
+
         shared_params: _SharedParams,
     ) -> None:
-
-        self.__vnc_credentials = vnc_credentials
 
         super().__init__(
             reader=reader,
@@ -106,7 +103,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             x509_key_path=x509_key_path,
             scroll_rate=scroll_rate,
             allow_cut_after=allow_cut_after,
-            vnc_passwds=list(vnc_credentials),
+            vncpasses=vncpasses,
             vencrypt=vencrypt,
             none_auth_only=none_auth_only,
             **dataclasses.asdict(shared_params),
@@ -321,19 +318,17 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def _authorize_userpass(self, user: str, passwd: str) -> bool:
-        self.__kvmd_session = self.__kvmd.make_session(user, passwd)
-        if (await self.__kvmd_session.auth.check()):
+        self.__kvmd_session = self.__kvmd.make_session()
+        if (await self.__kvmd_session.auth.check(user, passwd)):
             self.__stage1_authorized.set_passed()
             return True
         return False
 
-    async def _on_authorized_vnc_passwd(self, passwd: str) -> str:
-        kc = self.__vnc_credentials[passwd]
-        if (await self._authorize_userpass(kc.user, kc.passwd)):
-            return kc.user
-        return ""
+    async def _on_authorized_vncpass(self) -> None:
+        self.__kvmd_session = self.__kvmd.make_session()
+        self.__stage1_authorized.set_passed()
 
-    async def _on_authorized_none(self) -> bool:
+    async def _authorize_none(self) -> bool:
         return (await self._authorize_userpass("", ""))
 
     # =====
@@ -461,6 +456,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         x509_cert_path: str,
         x509_key_path: str,
 
+        vncpass_enabled: bool,
+        vncpass_path: str,
         vencrypt_enabled: bool,
 
         desired_fps: int,
@@ -471,7 +468,6 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
 
         kvmd: KvmdClient,
         streamers: list[BaseStreamerClient],
-        vnc_auth_manager: VncAuthManager,
     ) -> None:
 
         self.__host = network.get_listen_host(host)
@@ -481,7 +477,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         keymap_name = os.path.basename(keymap_path)
         symmap = build_symmap(keymap_path)
 
-        self.__vnc_auth_manager = vnc_auth_manager
+        self.__vncpass_enabled = vncpass_enabled
+        self.__vncpass_path = vncpass_path
 
         shared_params = _SharedParams()
 
@@ -508,8 +505,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, timeout)  # type: ignore
 
                 try:
-                    async with kvmd.make_session("", "") as kvmd_session:
-                        none_auth_only = await kvmd_session.auth.check()
+                    async with kvmd.make_session() as kvmd_session:
+                        none_auth_only = await kvmd_session.auth.check("", "")
                 except (aiohttp.ClientError, asyncio.TimeoutError) as ex:
                     logger.error("%s [entry]: Can't check KVMD auth mode: %s", remote, tools.efmt(ex))
                     return
@@ -529,9 +526,9 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     allow_cut_after=allow_cut_after,
                     kvmd=kvmd,
                     streamers=streamers,
-                    vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
-                    none_auth_only=none_auth_only,
+                    vncpasses=(await self.__read_vncpasses()),
                     vencrypt=vencrypt_enabled,
+                    none_auth_only=none_auth_only,
                     shared_params=shared_params,
                 ).run()
             except Exception:
@@ -542,9 +539,6 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         self.__handle_client = handle_client
 
     async def __inner_run(self) -> None:
-        if not (await self.__vnc_auth_manager.read_credentials())[1]:
-            raise SystemExit(1)
-
         get_logger(0).info("Listening VNC on TCP [%s]:%d ...", self.__host, self.__port)
         (family, _, _, _, addr) = socket.getaddrinfo(self.__host, self.__port, type=socket.SOCK_STREAM)[0]
         with contextlib.closing(socket.socket(family, socket.SOCK_STREAM)) as sock:
@@ -560,6 +554,21 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             )
             async with server:
                 await server.serve_forever()
+
+    @async_lru.alru_cache(maxsize=1, ttl=1)
+    async def __read_vncpasses(self) -> set[str]:
+        if self.__vncpass_enabled:
+            try:
+                vncpasses: set[str] = set()
+                for (_, line) in tools.passwds_splitted(await aiotools.read_file(self.__vncpass_path)):
+                    if " -> " in line:  # Compatibility with old ipmipasswd file format
+                        line = line.split(" -> ", 1)[0]
+                    if len(line.strip()) > 0:
+                        vncpasses.add(line)
+                return vncpasses
+            except Exception:
+                get_logger(0).exception("Unhandled exception while reading VNCAuth passwd file")
+        return set()
 
     def run(self) -> None:
         aiotools.run(self.__inner_run())

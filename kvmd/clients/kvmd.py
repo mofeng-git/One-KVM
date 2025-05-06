@@ -56,16 +56,22 @@ class _BaseApiPart:
 
 
 class _AuthApiPart(_BaseApiPart):
-    async def check(self) -> bool:
+    async def check(self, user: str, passwd: str) -> bool:
         session = self._ensure_http_session()
         try:
-            async with session.get("/auth/check") as resp:
+            async with session.get("/auth/check", headers={
+                "X-KVMD-User":   user,
+                "X-KVMD-Passwd": passwd,
+            }) as resp:
+
                 htclient.raise_not_200(resp)
-                return True
+                return (resp.status == 200)  # Just for my paranoia
+
         except aiohttp.ClientResponseError as ex:
             if ex.status in [400, 401, 403]:
                 return False
             raise
+        raise RuntimeError("We should't be here")
 
 
 class _StreamerApiPart(_BaseApiPart):
@@ -216,11 +222,5 @@ class KvmdClientSession(BaseHttpClientSession):
 
 
 class KvmdClient(BaseHttpClient):
-    def make_session(self, user: str="", passwd: str="") -> KvmdClientSession:
-        headers: (dict[str, str] | None) = None
-        if user:
-            headers = {
-                "X-KVMD-User": user,
-                "X-KVMD-Passwd": passwd,
-            }
-        return KvmdClientSession(lambda: self._make_http_session(headers))
+    def make_session(self) -> KvmdClientSession:
+        return KvmdClientSession(self._make_http_session)

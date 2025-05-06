@@ -67,7 +67,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         name: str,
         scroll_rate: int,
         allow_cut_after: float,
-        vnc_passwds: list[str],
+
+        vncpasses: set[str],
         vencrypt: bool,
         none_auth_only: bool,
     ) -> None:
@@ -84,7 +85,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self.__name = name
         self.__scroll_rate = scroll_rate
         self.__allow_cut_after = allow_cut_after
-        self.__vnc_passwds = vnc_passwds
+
+        self.__vncpasses = vncpasses
         self.__vencrypt = vencrypt
         self.__none_auth_only = none_auth_only
 
@@ -145,10 +147,10 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _authorize_userpass(self, user: str, passwd: str) -> bool:
         raise NotImplementedError
 
-    async def _on_authorized_vnc_passwd(self, passwd: str) -> str:
+    async def _on_authorized_vncpass(self) -> None:
         raise NotImplementedError
 
-    async def _on_authorized_none(self) -> bool:
+    async def _authorize_none(self) -> bool:
         raise NotImplementedError
 
     # =====
@@ -260,7 +262,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             sec_types[19] = ("VeNCrypt", self.__handshake_security_vencrypt)
         if self.__none_auth_only:
             sec_types[1] = ("None", self.__handshake_security_none)
-        elif self.__vnc_passwds:
+        elif self.__vncpasses:
             sec_types[2] = ("VNCAuth", self.__handshake_security_vnc_auth)
 
         if not sec_types:
@@ -306,7 +308,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
                 if self.__x509_cert_path:
                     auth_types[262] = ("VeNCrypt/X509Plain", 2, self.__handshake_security_vencrypt_userpass)
                 auth_types[259] = ("VeNCrypt/TLSPlain", 1, self.__handshake_security_vencrypt_userpass)
-            if self.__vnc_passwds:
+            if self.__vncpasses:
                 # Некоторые клиенты не умеют работать с нешифрованными соединениями внутри VeNCrypt:
                 #   - https://github.com/LibVNC/libvncserver/issues/458
                 #   - https://bugzilla.redhat.com/show_bug.cgi?id=692048
@@ -356,7 +358,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         )
 
     async def __handshake_security_none(self) -> None:
-        allow = await self._on_authorized_none()
+        allow = await self._authorize_none()
         await self.__handshake_security_send_result(
             allow=allow,
             allow_msg="NoneAuth access granted",
@@ -368,20 +370,19 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         challenge = rfb_make_challenge()
         await self._write_struct("VNCAuth challenge request", "", challenge)
 
-        user = ""
+        allow = False
         response = (await self._read_struct("VNCAuth challenge response", "16s"))[0]
-        for passwd in self.__vnc_passwds:
+        for passwd in self.__vncpasses:
             passwd_bytes = passwd.encode("utf-8", errors="ignore")
             if rfb_encrypt_challenge(challenge, passwd_bytes) == response:
-                user = await self._on_authorized_vnc_passwd(passwd)
-                if user:
-                    assert user == user.strip()
+                await self._on_authorized_vncpass()
+                allow = True
                 break
 
         await self.__handshake_security_send_result(
-            allow=bool(user),
-            allow_msg=f"VNCAuth access granted for user {user!r}",
-            deny_msg="VNCAuth access denied (user not found)",
+            allow=allow,
+            allow_msg="VNCAuth access granted",
+            deny_msg="VNCAuth access denied (passwd not found)",
             deny_reason="Invalid password",
         )
 

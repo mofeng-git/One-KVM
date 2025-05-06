@@ -364,6 +364,7 @@ def _get_config_scheme() -> dict:
                 "usc": {
                     "users":  Option([
                         "kvmd-ipmi",
+                        "kvmd-vnc",
                     ], type=valid_users_list),  # PiKVM username has a same regex as a UNIX username
                     "groups": Option([], type=valid_users_list),  # groupname has a same regex as a username
                 },
@@ -798,8 +799,8 @@ def _get_config_scheme() -> dict:
 
             "auth": {
                 "vncauth": {
-                    "enabled": Option(False, type=valid_bool),
-                    "file":    Option("/etc/kvmd/vncpasswd", type=valid_abs_file, unpack_as="path"),
+                    "enabled": Option(False, type=valid_bool, unpack_as="vncpass_enabled"),
+                    "file":    Option("/etc/kvmd/vncpasswd", type=valid_abs_file, unpack_as="vncpass_path"),
                 },
                 "vencrypt": {
                     "enabled": Option(True, type=valid_bool, unpack_as="vencrypt_enabled"),

@@ -30,7 +30,6 @@ from ... import htclient
 
 from .. import init
 
-from .vncauth import VncAuthManager
 from .server import VncServer
 
 
@@ -76,8 +75,8 @@ def main(argv: (list[str] | None)=None) -> None:
 
         kvmd=KvmdClient(user_agent=user_agent, **config.kvmd._unpack()),
         streamers=streamers,
-        vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),
 
         **config.server.keepalive._unpack(),
+        **config.auth.vncauth._unpack(),
         **config.auth.vencrypt._unpack(),
     ).run()
