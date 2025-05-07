@@ -747,7 +747,6 @@ def _get_config_scheme() -> dict:
             "mouse_output":    Option("usb", type=valid_hid_mouse_output),
             "keymap":          Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
             "scroll_rate":     Option(4,   type=functools.partial(valid_number, min=1, max=30)),
-            "allow_cut_after": Option(3.0, type=valid_float_f0),
 
             "server": {
                 "host":        Option("",   type=valid_ip_or_host, if_empty=""),
