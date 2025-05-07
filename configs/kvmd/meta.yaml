@@ -4,6 +4,4 @@
 # will be displayed in the web interface.
 
 server:
-    host: localhost.localdomain
-
-kvm: {}
+    host: "@auto"

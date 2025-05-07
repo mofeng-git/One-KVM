@@ -57,8 +57,8 @@ export function Info() {
 			$("kvmd-meta-json").innerText = JSON.stringify(state, undefined, 4);
 
 			if (state.server && state.server.host) {
-				$("kvmd-meta-server-host").innerText = `Server: ${state.server.host}`;
-				document.title = `PiKVM Session: ${state.server.host}`;
+				$("kvmd-meta-server-host").innerText = state.server.host;
+				document.title = `${state.server.host} | PiKVM Session`;
 			} else {
 				$("kvmd-meta-server-host").innerText = "";
 				document.title = "PiKVM Session";

@@ -115,10 +115,10 @@ function __showKvmdInfo(info) {
 	}
 
 	if (info.meta !== null && info.meta.server && info.meta.server.host) {
-		$("kvmd-meta-server-host").innerHTML = info.meta.server.host;
-		document.title = `PiKVM Index: ${info.meta.server.host}`;
+		$("kvmd-meta-server-host").innerText = info.meta.server.host;
+		document.title = `${info.meta.server.host} | PiKVM Index`;
 	} else {
-		$("kvmd-meta-server-host").innerHTML = "";
+		$("kvmd-meta-server-host").innerHTML = "<i>Invalid meta</i>";
 		document.title = "PiKVM Index";
 	}
 }
