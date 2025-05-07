@@ -163,7 +163,17 @@ class StateCache:  # pylint: disable=too-many-instance-attributes,too-many-publi
                 },
             }
         if x_summary:
-            state["summary"] = {"active_port": self.__active_port, "synced": self.__synced}
+            state["summary"] = {
+                "active_port": self.__active_port,
+                "active_id": (
+                    "" if self.__active_port < 0 else (
+                        f"{self.__active_port // 4 + 1}.{self.__active_port % 4 + 1}"
+                        if len(self.__units) > 1 else
+                        f"{self.__active_port + 1}"
+                    )
+                ),
+                "synced": self.__synced,
+            }
         if x_edids:
             state["edids"] = {
                 "all": {
@@ -224,6 +234,7 @@ class StateCache:  # pylint: disable=too-many-instance-attributes,too-many-publi
                             "unit": unit,
                             "channel": ch,
                             "name": self.__port_names[port],
+                            "id": (f"{unit + 1}.{ch + 1}" if len(self.__units) > 1 else f"{ch + 1}"),
                             "atx": {
                                 "click_delays": {
                                     "power": self.__atx_cp_delays[port],
