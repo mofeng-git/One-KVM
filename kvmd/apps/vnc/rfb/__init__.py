@@ -47,6 +47,11 @@ from .stream import RfbClientStream
 
 
 # =====
+class _SecurityError(Exception):
+    pass
+
+
+# =====
 class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attributes
     # https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
     # https://www.toptal.com/java/implementing-remote-framebuffer-server-java
@@ -94,6 +99,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self.__fb_cont_updates = False
         self.__fb_reset_h264 = False
 
+        self.__authorized = False
+
         self.__lock = asyncio.Lock()
 
     # =====
@@ -134,6 +141,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def __main_task_loop(self) -> None:
         await self.__handshake_version()
         await self.__handshake_security()
+        if not self.__authorized:
+            raise _SecurityError()
         await self.__handshake_init()
         await self.__main_loop()
 
@@ -385,6 +394,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         if allow:
             get_logger(0).info("%s [main]: %s", self._remote, allow_msg)
             await self._write_struct("access OK", "L", 0)
+            self.__authorized = True
         else:
             await self._write_struct("access denial flag", "L", 1, drain=(self.__rfb_version < 8))
             if self.__rfb_version >= 8:
@@ -394,6 +404,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     # =====
 
     async def __handshake_init(self) -> None:
+        if not self.__authorized:
+            raise _SecurityError()
+
         await self._read_number("initial shared flag", "B")  # Shared flag, ignored
 
         await self._write_struct("initial FB size", "HH", self._width, self._height, drain=False)
@@ -417,6 +430,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     # =====
 
     async def __main_loop(self) -> None:
+        if not self.__authorized:
+            raise _SecurityError()
         handlers = {
             0: self.__handle_set_pixel_format,
             2: self.__handle_set_encodings,
