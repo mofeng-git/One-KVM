@@ -136,6 +136,26 @@ class _AtxApiPart(_BaseApiPart):
             raise
 
 
+class _SwitchApiPart(_BaseApiPart):
+    async def set_active_prev(self) -> None:
+        session = self._ensure_http_session()
+        async with session.post("/switch/set_active_prev") as resp:
+            htclient.raise_not_200(resp)
+
+    async def set_active_next(self) -> None:
+        session = self._ensure_http_session()
+        async with session.post("/switch/set_active_next") as resp:
+            htclient.raise_not_200(resp)
+
+    async def set_active(self, port: int) -> None:
+        session = self._ensure_http_session()
+        async with session.post(
+            url="/switch/set_active",
+            params={"port": port},
+        ) as resp:
+            htclient.raise_not_200(resp)
+
+
 # =====
 class KvmdClientWs:
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
@@ -213,6 +233,7 @@ class KvmdClientSession(BaseHttpClientSession):
         self.streamer = _StreamerApiPart(self._ensure_http_session)
         self.hid = _HidApiPart(self._ensure_http_session)
         self.atx = _AtxApiPart(self._ensure_http_session)
+        self.switch = _SwitchApiPart(self._ensure_http_session)
 
     @contextlib.asynccontextmanager
     async def ws(self) -> AsyncGenerator[KvmdClientWs, None]:

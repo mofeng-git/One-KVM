@@ -55,6 +55,14 @@ class _CmdSetActual(_BaseCmd):
     actual: bool
 
 
+class _CmdSetActivePrev(_BaseCmd):
+    pass
+
+
+class _CmdSetActiveNext(_BaseCmd):
+    pass
+
+
 @dataclasses.dataclass(frozen=True)
 class _CmdSetActivePort(_BaseCmd):
     port: int
@@ -212,6 +220,12 @@ class Chain:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
+    def set_active_prev(self) -> None:
+        self.__queue_cmd(_CmdSetActivePrev())
+
+    def set_active_next(self) -> None:
+        self.__queue_cmd(_CmdSetActiveNext())
+
     def set_active_port(self, port: int) -> None:
         self.__queue_cmd(_CmdSetActivePort(port))
 
@@ -330,10 +344,29 @@ class Chain:  # pylint: disable=too-many-instance-attributes
                 case _CmdSetActual():
                     self.__actual = cmd.actual
 
+                case _CmdSetActivePrev():
+                    if len(self.__units) > 0:
+                        port = self.__active_port
+                        port -= 1
+                        if port >= 0:
+                            self.__active_port = port
+                            self.__queue_event(PortActivatedEvent(self.__active_port))
+
+                case _CmdSetActiveNext():
+                    port = self.__active_port
+                    if port < 0:
+                        port = 0
+                    else:
+                        port += 1
+                    if port < len(self.__units) * 4:
+                        self.__active_port = port
+                        self.__queue_event(PortActivatedEvent(self.__active_port))
+
                 case _CmdSetActivePort():
                     # Может быть вызвано изнутри при синхронизации
-                    self.__active_port = cmd.port
-                    self.__queue_event(PortActivatedEvent(self.__active_port))
+                    if cmd.port < len(self.__units) * 4:
+                        self.__active_port = cmd.port
+                        self.__queue_event(PortActivatedEvent(self.__active_port))
 
                 case _CmdSetPortBeacon():
                     (unit, ch) = self.get_real_unit_channel(cmd.port)

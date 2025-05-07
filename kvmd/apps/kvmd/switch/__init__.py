@@ -141,6 +141,12 @@ class Switch:  # pylint: disable=too-many-public-methods
 
     # =====
 
+    async def set_active_prev(self) -> None:
+        self.__chain.set_active_prev()
+
+    async def set_active_next(self) -> None:
+        self.__chain.set_active_next()
+
     async def set_active_port(self, port: int) -> None:
         self.__chain.set_active_port(port)
 
