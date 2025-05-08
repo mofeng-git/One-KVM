@@ -147,7 +147,7 @@ class _SwitchApiPart(_BaseApiPart):
         async with session.post("/switch/set_active_next") as resp:
             htclient.raise_not_200(resp)
 
-    async def set_active(self, port: int) -> None:
+    async def set_active(self, port: float) -> None:
         session = self._ensure_http_session()
         async with session.post(
             url="/switch/set_active",

@@ -220,6 +220,18 @@ class Chain:  # pylint: disable=too-many-instance-attributes
 
     # =====
 
+    def translate_port(self, port: float) -> int:
+        assert port >= 0
+        if int(port) == port:
+            return int(port)
+        (unit, ch) = map(int, str(port).split("."))
+        unit = min(max(unit, 1), 5)
+        ch = min(max(ch, 1), 4)
+        port = min((unit - 1) * 4 + (ch - 1), 19)
+        return port
+
+    # =====
+
     def set_active_prev(self) -> None:
         self.__queue_cmd(_CmdSetActivePrev())
 

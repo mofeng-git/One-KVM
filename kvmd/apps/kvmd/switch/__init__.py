@@ -147,13 +147,13 @@ class Switch:  # pylint: disable=too-many-public-methods
     async def set_active_next(self) -> None:
         self.__chain.set_active_next()
 
-    async def set_active_port(self, port: int) -> None:
-        self.__chain.set_active_port(port)
+    async def set_active_port(self, port: float) -> None:
+        self.__chain.set_active_port(self.__chain.translate_port(port))
 
     # =====
 
-    async def set_port_beacon(self, port: int, on: bool) -> None:
-        self.__chain.set_port_beacon(port, on)
+    async def set_port_beacon(self, port: float, on: bool) -> None:
+        self.__chain.set_port_beacon(self.__chain.translate_port(port), on)
 
     async def set_uplink_beacon(self, unit: int, on: bool) -> None:
         self.__chain.set_uplink_beacon(unit, on)
@@ -163,33 +163,35 @@ class Switch:  # pylint: disable=too-many-public-methods
 
     # =====
 
-    async def atx_power_on(self, port: int) -> None:
+    async def atx_power_on(self, port: float) -> None:
         self.__inner_atx_cp(port, False, self.__X_ATX_CP_DELAYS)
 
-    async def atx_power_off(self, port: int) -> None:
+    async def atx_power_off(self, port: float) -> None:
         self.__inner_atx_cp(port, True, self.__X_ATX_CP_DELAYS)
 
-    async def atx_power_off_hard(self, port: int) -> None:
+    async def atx_power_off_hard(self, port: float) -> None:
         self.__inner_atx_cp(port, True, self.__X_ATX_CPL_DELAYS)
 
-    async def atx_power_reset_hard(self, port: int) -> None:
+    async def atx_power_reset_hard(self, port: float) -> None:
         self.__inner_atx_cr(port, True)
 
-    async def atx_click_power(self, port: int) -> None:
+    async def atx_click_power(self, port: float) -> None:
         self.__inner_atx_cp(port, None, self.__X_ATX_CP_DELAYS)
 
-    async def atx_click_power_long(self, port: int) -> None:
+    async def atx_click_power_long(self, port: float) -> None:
         self.__inner_atx_cp(port, None, self.__X_ATX_CPL_DELAYS)
 
-    async def atx_click_reset(self, port: int) -> None:
+    async def atx_click_reset(self, port: float) -> None:
         self.__inner_atx_cr(port, None)
 
-    def __inner_atx_cp(self, port: int, if_powered: (bool | None), x_delay: str) -> None:
+    def __inner_atx_cp(self, port: float, if_powered: (bool | None), x_delay: str) -> None:
         assert x_delay in [self.__X_ATX_CP_DELAYS, self.__X_ATX_CPL_DELAYS]
+        port = self.__chain.translate_port(port)
         delay = getattr(self.__cache, f"get_{x_delay}")()[port]
         self.__chain.click_power(port, delay, if_powered)
 
-    def __inner_atx_cr(self, port: int, if_powered: (bool | None)) -> None:
+    def __inner_atx_cr(self, port: float, if_powered: (bool | None)) -> None:
+        port = self.__chain.translate_port(port)
         delay = self.__cache.get_atx_cr_delays()[port]
         self.__chain.click_reset(port, delay, if_powered)
 
@@ -257,6 +259,7 @@ class Switch:  # pylint: disable=too-many-public-methods
         atx_click_reset_delay: (float | None)=None,
     ) -> None:
 
+        port = self.__chain.translate_port(port)
         async with self.__lock:
             if edid_id is not None:
                 edids = self.__cache.get_edids()

@@ -28,6 +28,7 @@ from ....htserver import make_json_response
 
 from ....validators.basic import valid_bool
 from ....validators.basic import valid_int_f0
+from ....validators.basic import valid_float_f0
 from ....validators.basic import valid_stripped_string_not_empty
 from ....validators.kvm import valid_atx_power_action
 from ....validators.kvm import valid_atx_button
@@ -64,7 +65,7 @@ class SwitchApi:
 
     @exposed_http("POST", "/switch/set_active")
     async def __set_active_port_handler(self, req: Request) -> Response:
-        port = valid_int_f0(req.query.get("port"))
+        port = valid_float_f0(req.query.get("port"))
         await self.__switch.set_active_port(port)
         return make_json_response()
 
@@ -72,7 +73,7 @@ class SwitchApi:
     async def __set_beacon_handler(self, req: Request) -> Response:
         on = valid_bool(req.query.get("state"))
         if "port" in req.query:
-            port = valid_int_f0(req.query.get("port"))
+            port = valid_float_f0(req.query.get("port"))
             await self.__switch.set_port_beacon(port, on)
         elif "uplink" in req.query:
             unit = valid_int_f0(req.query.get("uplink"))
@@ -84,7 +85,7 @@ class SwitchApi:
 
     @exposed_http("POST", "/switch/set_port_params")
     async def __set_port_params(self, req: Request) -> Response:
-        port = valid_int_f0(req.query.get("port"))
+        port = valid_float_f0(req.query.get("port"))
         params = {
             param: validator(req.query.get(param))
             for (param, validator) in [
@@ -153,7 +154,7 @@ class SwitchApi:
 
     @exposed_http("POST", "/switch/atx/power")
     async def __power_handler(self, req: Request) -> Response:
-        port = valid_int_f0(req.query.get("port"))
+        port = valid_float_f0(req.query.get("port"))
         action = valid_atx_power_action(req.query.get("action"))
         await ({
             "on":         self.__switch.atx_power_on,
@@ -165,7 +166,7 @@ class SwitchApi:
 
     @exposed_http("POST", "/switch/atx/click")
     async def __click_handler(self, req: Request) -> Response:
-        port = valid_int_f0(req.query.get("port"))
+        port = valid_float_f0(req.query.get("port"))
         button = valid_atx_button(req.query.get("button"))
         await ({
             "power":      self.__switch.atx_click_power,
