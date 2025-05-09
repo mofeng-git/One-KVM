@@ -27,6 +27,8 @@ from typing import Callable
 from typing import Coroutine
 from typing import AsyncGenerator
 
+from evdev import ecodes
+
 from ....logging import get_logger
 
 from .... import tools
@@ -165,7 +167,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _on_ext_key_event(self, code: int, state: bool) -> None:
         raise NotImplementedError
 
-    async def _on_pointer_event(self, buttons: dict[str, bool], wheel: tuple[int, int], move: tuple[int, int]) -> None:
+    async def _on_pointer_event(self, buttons: dict[int, bool], wheel: tuple[int, int], move: tuple[int, int]) -> None:
         raise NotImplementedError
 
     async def _on_cut_event(self, text: str) -> None:
@@ -508,11 +510,11 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         sr = self.__scroll_rate
         await self._on_pointer_event(
             buttons={
-                "left":   bool(buttons & 0x1),
-                "right":  bool(buttons & 0x4),
-                "middle": bool(buttons & 0x2),
-                "up":     bool(ext_buttons & 0x2),
-                "down":   bool(ext_buttons & 0x1),
+                ecodes.BTN_LEFT:    bool(buttons & 0x1),
+                ecodes.BTN_RIGHT:   bool(buttons & 0x4),
+                ecodes.BTN_MIDDLE:  bool(buttons & 0x2),
+                ecodes.BTN_BACK:    bool(ext_buttons & 0x2),
+                ecodes.BTN_FORWARD: bool(ext_buttons & 0x1),
             },
             wheel=(
                 (-sr if buttons & 0x40 else (sr if buttons & 0x20 else 0)),

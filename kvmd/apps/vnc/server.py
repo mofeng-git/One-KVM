@@ -38,8 +38,6 @@ from ...keyboard.mappings import X11Modifiers
 from ...keyboard.mappings import AT1_TO_EVDEV
 from ...keyboard.magic import BaseMagicHandler
 
-from ...mouse import MOUSE_TO_EVDEV
-
 from ...clients.kvmd import KvmdClientWs
 from ...clients.kvmd import KvmdClientSession
 from ...clients.kvmd import KvmdClient
@@ -132,7 +130,7 @@ class _Client(RfbClient, BaseMagicHandler):  # pylint: disable=too-many-instance
 
         # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
         # Все это нужно только чтобы не посылать лишние жсоны в сокет KVMD
-        self.__mouse_buttons: dict[str, (bool | None)] = dict.fromkeys(MOUSE_TO_EVDEV, None)
+        self.__mouse_buttons: dict[int, bool] = {}
         self.__mouse_move = (-1, -1)  # (X, Y)
         self.__modifiers = 0
 
@@ -465,7 +463,7 @@ class _Client(RfbClient, BaseMagicHandler):  # pylint: disable=too-many-instance
 
     # =====
 
-    async def _on_pointer_event(self, buttons: dict[str, bool], wheel: tuple[int, int], move: tuple[int, int]) -> None:
+    async def _on_pointer_event(self, buttons: dict[int, bool], wheel: tuple[int, int], move: tuple[int, int]) -> None:
         assert self.__stage1_authorized.is_passed()
         if self.__kvmd_ws:
             if wheel[0] or wheel[1]:
@@ -476,8 +474,8 @@ class _Client(RfbClient, BaseMagicHandler):  # pylint: disable=too-many-instance
                 self.__mouse_move = move
 
             for (button, state) in buttons.items():
-                if self.__mouse_buttons[button] != state:
-                    await self.__kvmd_ws.send_mouse_button_event(MOUSE_TO_EVDEV[button], state)
+                if self.__mouse_buttons.get(button) != state:
+                    await self.__kvmd_ws.send_mouse_button_event(button, state)
                     self.__mouse_buttons[button] = state
 
     async def _on_cut_event(self, text: str) -> None:
