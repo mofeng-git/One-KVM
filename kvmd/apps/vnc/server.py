@@ -25,9 +25,12 @@ import asyncio
 import socket
 import dataclasses
 import contextlib
+import time
 
 import aiohttp
 import async_lru
+
+from evdev import ecodes
 
 from ...logging import get_logger
 
@@ -68,6 +71,10 @@ class _SharedParams:
 
 
 class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
+    __MAGIC_KEY = ecodes.KEY_LEFTALT
+    __MAGIC_TIMEOUT = 2
+    __MAGIC_TRIGGER = 2
+
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals
         self,
         reader: asyncio.StreamReader,
@@ -131,8 +138,17 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         # Все это нужно только чтобы не посылать лишние жсоны в сокет KVMD
         self.__mouse_buttons: dict[str, (bool | None)] = dict.fromkeys(MOUSE_TO_EVDEV, None)
         self.__mouse_move = (-1, -1)  # (X, Y)
-
         self.__modifiers = 0
+
+        self.__clipboard = ""
+
+        self.__magic_taps = 0
+        self.__magic_ts = 0.0
+        self.__magic_codes: list[int] = []
+
+        self.__info_host = ""
+        self.__info_switch_units = 0
+        self.__info_switch_active = ""
 
     # =====
 
@@ -178,16 +194,22 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     async def __process_ws_event(self, event_type: str, event: dict) -> None:
         if event_type == "info":
             if "meta" in event:
+                host = ""
                 try:
-                    host = event["meta"]["server"]["host"]
+                    if isinstance(event["meta"]["server"]["host"], str):
+                        host = event["meta"]["server"]["host"].strip()
                 except Exception:
-                    host = None
-                else:
-                    if isinstance(host, str):
-                        name = f"PiKVM: {host}"
-                        if self._encodings.has_rename:
-                            await self._send_rename(name)
-                        self.__shared_params.name = name
+                    pass
+                self.__info_host = host
+                await self.__update_info()
+
+        elif event_type == "switch":
+            if "model" in event:
+                self.__info_switch_units = len(event["model"]["units"])
+            if "summary" in event:
+                self.__info_switch_active = event["summary"]["active_id"]
+            if "model" in event or "summary" in event:
+                await self.__update_info()
 
         elif event_type == "hid":
             if (
@@ -196,6 +218,17 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 and ("leds" in event["keyboard"])
             ):
                 await self._send_leds_state(**event["keyboard"]["leds"])
+
+    async def __update_info(self) -> None:
+        info: list[str] = []
+        if self.__info_switch_units > 0:
+            info.append("Port " + (self.__info_switch_active or "not selected"))
+        if self.__info_host:
+            info.append(self.__info_host)
+        info.append("PiKVM")
+        self.__shared_params.name = " | ".join(info)
+        if self._encodings.has_rename:
+            await self._send_rename(self.__shared_params.name)
 
     # =====
 
@@ -329,6 +362,8 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def _on_key_event(self, code: int, state: bool) -> None:
+        assert self.__stage1_authorized.is_passed()
+
         is_modifier = self.__switch_modifiers_x11(code, state)
         variants = self.__symmap.get(code)
         fake_shift = False
@@ -347,19 +382,19 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                     key = variants[SymmapModifiers.SHIFT]
                     fake_shift = True
 
-            if key and self.__kvmd_ws:
+            if key:
                 if fake_shift:
-                    await self.__kvmd_ws.send_key_event(EvdevModifiers.SHIFT_LEFT, True)
-                await self.__kvmd_ws.send_key_event(key, state)
+                    await self.__handle_key(ecodes.KEY_LEFTSHIFT, True)
+                await self.__handle_key(key, state)
                 if fake_shift:
-                    await self.__kvmd_ws.send_key_event(EvdevModifiers.SHIFT_LEFT, False)
+                    await self.__handle_key(ecodes.KEY_LEFTSHIFT, False)
 
     async def _on_ext_key_event(self, code: int, state: bool) -> None:
+        assert self.__stage1_authorized.is_passed()
         key = AT1_TO_EVDEV.get(code, 0)
         if key:
             self.__switch_modifiers_evdev(key, state)  # Предполагаем, что модификаторы всегда известны
-            if self.__kvmd_ws:
-                await self.__kvmd_ws.send_key_event(key, state)
+            await self.__handle_key(key, state)
 
     def __switch_modifiers_x11(self, key: int, state: bool) -> bool:
         mod = 0
@@ -393,7 +428,83 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
             self.__modifiers &= ~mod
         return True
 
+    async def __handle_key(self, key: int, state: bool) -> None:  # pylint: disable=too-many-branches
+        if self.__magic_ts + self.__MAGIC_TIMEOUT < time.monotonic():
+            self.__magic_taps = 0
+            self.__magic_ts = 0
+            self.__magic_codes = []
+
+        if key == self.__MAGIC_KEY:
+            if not state:
+                self.__magic_taps += 1
+                self.__magic_ts = time.monotonic()
+        elif state:
+            taps = self.__magic_taps
+            codes = self.__magic_codes
+            self.__magic_taps = 0
+            self.__magic_ts = 0
+            self.__magic_codes = []
+            if taps >= self.__MAGIC_TRIGGER:
+                if key == ecodes.KEY_P:
+                    await self.__handle_magic_clipboard_print()
+                    return
+                elif key in [ecodes.KEY_UP, ecodes.KEY_LEFT]:
+                    await self.__handle_magic_switch_prev()
+                    return
+                elif key in [ecodes.KEY_DOWN, ecodes.KEY_RIGHT]:
+                    await self.__handle_magic_switch_next()
+                    return
+                elif ecodes.KEY_1 <= key <= ecodes.KEY_8:
+                    if 1 <= self.__info_switch_units <= 2:
+                        await self.__handle_magic_switch_port(key - ecodes.KEY_1)
+                    elif self.__info_switch_units > 2:
+                        codes.append(key - ecodes.KEY_1 + 1)
+                        if len(codes) == 1:
+                            self.__magic_taps = taps
+                            self.__magic_ts = time.monotonic()
+                            self.__magic_codes = codes
+                        elif len(codes) >= 2:
+                            await self.__handle_magic_switch_port(codes[0] + codes[1] / 10)
+                    return
+
+        if self.__kvmd_ws:
+            await self.__kvmd_ws.send_key_event(key, state)
+
+    async def __handle_magic_switch_prev(self) -> None:
+        assert self.__kvmd_session
+        if self.__info_switch_units > 0:
+            get_logger(0).info("%s [main]: Switching port to the previous one ...", self._remote)
+            await self.__kvmd_session.switch.set_active_prev()
+
+    async def __handle_magic_switch_next(self) -> None:
+        assert self.__kvmd_session
+        if self.__info_switch_units > 0:
+            get_logger(0).info("%s [main]: Switching port to the next one ...", self._remote)
+            await self.__kvmd_session.switch.set_active_next()
+
+    async def __handle_magic_switch_port(self, port: float) -> None:
+        assert self.__kvmd_session
+        if self.__info_switch_units > 0:
+            get_logger(0).info("%s [main]: Switching port to %s ...", self._remote, port)
+            await self.__kvmd_session.switch.set_active(port)
+
+    async def __handle_magic_clipboard_print(self) -> None:
+        assert self.__kvmd_session
+        if self.__clipboard:
+            logger = get_logger(0)
+            logger.info("%s [main]: Printing %d characters ...", self._remote, len(self.__clipboard))
+            try:
+                (keymap_name, available) = await self.__kvmd_session.hid.get_keymaps()
+                if self.__keymap_name in available:
+                    keymap_name = self.__keymap_name
+                await self.__kvmd_session.hid.print(self.__clipboard, 0, keymap_name)
+            except Exception:
+                logger.exception("%s [main]: Can't print characters", self._remote)
+
+    # =====
+
     async def _on_pointer_event(self, buttons: dict[str, bool], wheel: tuple[int, int], move: tuple[int, int]) -> None:
+        assert self.__stage1_authorized.is_passed()
         if self.__kvmd_ws:
             if wheel[0] or wheel[1]:
                 await self.__kvmd_ws.send_mouse_wheel_event(*wheel)
@@ -409,16 +520,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
 
     async def _on_cut_event(self, text: str) -> None:
         assert self.__stage1_authorized.is_passed()
-        assert self.__kvmd_session
-        logger = get_logger(0)
-        logger.info("%s [main]: Printing %d characters ...", self._remote, len(text))
-        try:
-            (keymap_name, available) = await self.__kvmd_session.hid.get_keymaps()
-            if self.__keymap_name in available:
-                keymap_name = self.__keymap_name
-            await self.__kvmd_session.hid.print(text, 0, keymap_name)
-        except Exception:
-            logger.exception("%s [main]: Can't print characters", self._remote)
+        self.__clipboard = text
 
     async def _on_set_encodings(self) -> None:
         assert self.__stage1_authorized.is_passed()
