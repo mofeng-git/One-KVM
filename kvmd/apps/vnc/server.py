@@ -212,10 +212,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         if not streaming:
                             logger.info("%s [streamer]: Streaming ...", self._remote)
                             streaming = True
-                        if frame["online"]:
-                            await self.__queue_frame(frame)
-                        else:
-                            await self.__queue_frame("No signal")
+                        await self.__queue_frame(frame)
             except StreamerError as ex:
                 if isinstance(ex, StreamerPermError):
                     streamer = self.__get_default_streamer()
