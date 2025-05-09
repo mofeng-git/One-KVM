@@ -31,11 +31,7 @@ import async_lru
 
 from ...logging import get_logger
 
-from ...keyboard.keysym import SymmapModifiers
 from ...keyboard.keysym import build_symmap
-from ...keyboard.mappings import EvdevModifiers
-from ...keyboard.mappings import X11Modifiers
-from ...keyboard.mappings import AT1_TO_EVDEV
 from ...keyboard.magic import BaseMagicHandler
 
 from ...clients.kvmd import KvmdClientWs
@@ -100,6 +96,7 @@ class _Client(RfbClient, BaseMagicHandler):  # pylint: disable=too-many-instance
             tls_timeout=tls_timeout,
             x509_cert_path=x509_cert_path,
             x509_key_path=x509_key_path,
+            symmap=symmap,
             scroll_rate=scroll_rate,
             vncpasses=vncpasses,
             vencrypt=vencrypt,
@@ -111,7 +108,6 @@ class _Client(RfbClient, BaseMagicHandler):  # pylint: disable=too-many-instance
         self.__desired_fps = desired_fps
         self.__mouse_output = mouse_output
         self.__keymap_name = keymap_name
-        self.__symmap = symmap
 
         self.__kvmd = kvmd
         self.__streamers = streamers
@@ -127,10 +123,6 @@ class _Client(RfbClient, BaseMagicHandler):  # pylint: disable=too-many-instance
 
         self.__fb_queue: "asyncio.Queue[dict]" = asyncio.Queue()
         self.__fb_has_key = False
-
-        # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
-        # Все это нужно только чтобы не посылать лишние жсоны в сокет KVMD
-        self.__modifiers = 0
 
         self.__clipboard = ""
 
@@ -349,72 +341,9 @@ class _Client(RfbClient, BaseMagicHandler):  # pylint: disable=too-many-instance
 
     # =====
 
-    async def _on_key_event(self, code: int, state: bool) -> None:
+    async def _on_key_event(self, key: int, state: bool) -> None:
         assert self.__stage1_authorized.is_passed()
-
-        is_modifier = self.__switch_modifiers_x11(code, state)
-        variants = self.__symmap.get(code)
-        fake_shift = False
-
-        if variants:
-            if is_modifier:
-                key = variants.get(0)
-            else:
-                key = variants.get(self.__modifiers)
-                if key is None:
-                    key = variants.get(0)
-
-                if key is None and self.__modifiers == 0 and SymmapModifiers.SHIFT in variants:
-                    # JUMP doesn't send shift events:
-                    #   - https://github.com/pikvm/pikvm/issues/820
-                    key = variants[SymmapModifiers.SHIFT]
-                    fake_shift = True
-
-            if key:
-                if fake_shift:
-                    await self._magic_handle_key(EvdevModifiers.SHIFT_LEFT, True)
-                await self._magic_handle_key(key, state)
-                if fake_shift:
-                    await self._magic_handle_key(EvdevModifiers.SHIFT_LEFT, False)
-
-    async def _on_ext_key_event(self, code: int, state: bool) -> None:
-        assert self.__stage1_authorized.is_passed()
-        key = AT1_TO_EVDEV.get(code, 0)
-        if key:
-            self.__switch_modifiers_evdev(key, state)  # Предполагаем, что модификаторы всегда известны
-            await self._magic_handle_key(key, state)
-
-    def __switch_modifiers_x11(self, key: int, state: bool) -> bool:
-        mod = 0
-        if key in X11Modifiers.SHIFTS:
-            mod = SymmapModifiers.SHIFT
-        elif key == X11Modifiers.ALTGR:
-            mod = SymmapModifiers.ALTGR
-        elif key in X11Modifiers.CTRLS:
-            mod = SymmapModifiers.CTRL
-        if mod == 0:
-            return False
-        if state:
-            self.__modifiers |= mod
-        else:
-            self.__modifiers &= ~mod
-        return True
-
-    def __switch_modifiers_evdev(self, key: int, state: bool) -> bool:
-        mod = 0
-        if key in EvdevModifiers.SHIFTS:
-            mod = SymmapModifiers.SHIFT
-        elif key == EvdevModifiers.ALT_RIGHT:
-            mod = SymmapModifiers.ALTGR
-        elif key in EvdevModifiers.CTRLS:
-            mod = SymmapModifiers.CTRL
-        if mod == 0:
-            return False
-        if state:
-            self.__modifiers |= mod
-        else:
-            self.__modifiers &= ~mod
-        return True
+        await self._magic_handle_key(key, state)
 
     async def _on_magic_switch_prev(self) -> None:
         assert self.__kvmd_session
