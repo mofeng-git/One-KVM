@@ -130,8 +130,6 @@ class _Client(RfbClient, BaseMagicHandler):  # pylint: disable=too-many-instance
 
         # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
         # Все это нужно только чтобы не посылать лишние жсоны в сокет KVMD
-        self.__mouse_buttons: dict[int, bool] = {}
-        self.__mouse_move = (-1, -1)  # (X, Y)
         self.__modifiers = 0
 
         self.__clipboard = ""
@@ -463,20 +461,22 @@ class _Client(RfbClient, BaseMagicHandler):  # pylint: disable=too-many-instance
 
     # =====
 
-    async def _on_pointer_event(self, buttons: dict[int, bool], wheel: tuple[int, int], move: tuple[int, int]) -> None:
+    async def _on_mouse_button_event(self, button: int, state: bool) -> None:
         assert self.__stage1_authorized.is_passed()
         if self.__kvmd_ws:
-            if wheel[0] or wheel[1]:
-                await self.__kvmd_ws.send_mouse_wheel_event(*wheel)
+            await self.__kvmd_ws.send_mouse_button_event(button, state)
 
-            if self.__mouse_move != move:
-                await self.__kvmd_ws.send_mouse_move_event(*move)
-                self.__mouse_move = move
+    async def _on_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        assert self.__stage1_authorized.is_passed()
+        if self.__kvmd_ws:
+            await self.__kvmd_ws.send_mouse_wheel_event(delta_x, delta_y)
 
-            for (button, state) in buttons.items():
-                if self.__mouse_buttons.get(button) != state:
-                    await self.__kvmd_ws.send_mouse_button_event(button, state)
-                    self.__mouse_buttons[button] = state
+    async def _on_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        assert self.__stage1_authorized.is_passed()
+        if self.__kvmd_ws:
+            await self.__kvmd_ws.send_mouse_move_event(to_x, to_y)
+
+    # =====
 
     async def _on_cut_event(self, text: str) -> None:
         assert self.__stage1_authorized.is_passed()

@@ -105,6 +105,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
         self.__lock = asyncio.Lock()
 
+        self.__mouse_buttons: dict[int, bool] = {}
+        self.__mouse_move = (-1, -1, -1, -1)  # (width, height, X, Y)
+
     # =====
 
     async def _run(self, **coros: Coroutine) -> None:
@@ -167,7 +170,13 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _on_ext_key_event(self, code: int, state: bool) -> None:
         raise NotImplementedError
 
-    async def _on_pointer_event(self, buttons: dict[int, bool], wheel: tuple[int, int], move: tuple[int, int]) -> None:
+    async def _on_mouse_button_event(self, button: int, state: bool) -> None:
+        raise NotImplementedError
+
+    async def _on_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        raise NotImplementedError
+
+    async def _on_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         raise NotImplementedError
 
     async def _on_cut_event(self, text: str) -> None:
@@ -507,24 +516,32 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         ext_buttons = 0
         if self._encodings.has_ext_mouse and (buttons & 0x80):  # Marker bit 7 for ext event
             ext_buttons = await self._read_number("ext pointer event buttons", "B")
-        sr = self.__scroll_rate
-        await self._on_pointer_event(
-            buttons={
-                ecodes.BTN_LEFT:    bool(buttons & 0x1),
-                ecodes.BTN_RIGHT:   bool(buttons & 0x4),
-                ecodes.BTN_MIDDLE:  bool(buttons & 0x2),
-                ecodes.BTN_BACK:    bool(ext_buttons & 0x2),
-                ecodes.BTN_FORWARD: bool(ext_buttons & 0x1),
-            },
-            wheel=(
+
+        if buttons & (0x40 | 0x20 | 0x10 | 0x08):
+            sr = self.__scroll_rate
+            await self._on_mouse_wheel_event(
                 (-sr if buttons & 0x40 else (sr if buttons & 0x20 else 0)),
-                (-sr if buttons & 0x10 else (sr if buttons & 0x8 else 0)),
-            ),
-            move=(
+                (-sr if buttons & 0x10 else (sr if buttons & 0x08 else 0)),
+            )
+
+        move = (self._width, self._height, to_x, to_y)
+        if self.__mouse_move != move:
+            await self._on_mouse_move_event(
                 tools.remap(to_x, 0, self._width, *MouseRange.RANGE),
                 tools.remap(to_y, 0, self._height, *MouseRange.RANGE),
-            ),
-        )
+            )
+            self.__mouse_move = move
+
+        for (code, state) in [
+            (ecodes.BTN_LEFT,    bool(buttons & 0x1)),
+            (ecodes.BTN_RIGHT,   bool(buttons & 0x4)),
+            (ecodes.BTN_MIDDLE,  bool(buttons & 0x2)),
+            (ecodes.BTN_BACK,    bool(ext_buttons & 0x2)),
+            (ecodes.BTN_FORWARD, bool(ext_buttons & 0x1)),
+        ]:
+            if self.__mouse_buttons.get(code) != state:
+                await self._on_mouse_button_event(code, state)
+                self.__mouse_buttons[code] = state
 
     async def __handle_client_cut_text(self) -> None:
         length = (await self._read_struct("cut text length", "xxx L"))[0]
