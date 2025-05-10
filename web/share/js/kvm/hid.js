@@ -43,31 +43,11 @@ export function Hid(__getGeometry, __recorder) {
 		__keyboard = new Keyboard(__recorder.recordWsEvent);
 		__mouse = new Mouse(__getGeometry, __recorder.recordWsEvent);
 
-		let hidden_attr = null;
-		let visibility_change_attr = null;
-
-		if (typeof document.hidden !== "undefined") {
-			hidden_attr = "hidden";
-			visibility_change_attr = "visibilitychange";
-		} else if (typeof document.webkitHidden !== "undefined") {
-			hidden_attr = "webkitHidden";
-			visibility_change_attr = "webkitvisibilitychange";
-		} else if (typeof document.mozHidden !== "undefined") {
-			hidden_attr = "mozHidden";
-			visibility_change_attr = "mozvisibilitychange";
-		}
-
-		if (visibility_change_attr) {
-			document.addEventListener(
-				visibility_change_attr,
-				function() {
-					if (document[hidden_attr]) {
-						__releaseAll();
-					}
-				},
-				false
-			);
-		}
+		document.addEventListener("visibilitychange", function() {
+			if (document.visibilityState === "hidden") {
+				__releaseAll();
+			}
+		}, false);
 
 		window.addEventListener("pagehide", __releaseAll);
 		window.addEventListener("blur", __releaseAll);
