@@ -41,6 +41,8 @@ function __WindowManager() {
 	var __windows = [];
 	var __menu_buttons = [];
 
+	var __catch_menu_esc = false;
+
 	var __init__ = function() {
 		for (let el of $$$("button")) {
 			// XXX: Workaround for iOS Safari:
@@ -140,7 +142,8 @@ function __WindowManager() {
 			tools.el.setOnClick(el, () => self.showWindow($(el.getAttribute("data-show-window"))));
 		}
 
-		window.onmouseup = window.ontouchend = __globalMouseButtonHandler;
+		window.addEventListener("mouseup", __globalMouseButtonHandler);
+		window.addEventListener("touchend", __globalMouseButtonHandler);
 
 		window.addEventListener("focusin", (event) => __focusInOut(event, true));
 		window.addEventListener("focusout", (event) => __focusInOut(event, false));
@@ -148,7 +151,15 @@ function __WindowManager() {
 		window.addEventListener("resize", __organizeWindowsOnBrowserResize);
 		window.addEventListener("orientationchange", __organizeWindowsOnBrowserResize);
 
-		document.onfullscreenchange = __onFullScreenChange;
+		document.addEventListener("fullscreenchange", __onFullScreenChange);
+
+		document.addEventListener("keyup", function(event) {
+			if (__catch_menu_esc && event.code === "Escape") {
+				event.preventDefault();
+				__closeAllMenues();
+				__activateLastWindow();
+			}
+		});
 	};
 
 	/************************************************************************/
@@ -261,14 +272,14 @@ function __WindowManager() {
 			el_cancel_bt.className = "row50";
 		}
 
-		el_win.onkeyup = function(event) {
+		el_win.addEventListener("keyup", function (event) {
 			event.preventDefault();
 			if (ok && event.code === "Enter") {
 				el_ok_bt.click();
 			} else if (cancel && event.code === "Escape") {
 				el_cancel_bt.click();
 			}
-		};
+		});
 
 		let promise = null;
 		if (ok || cancel) {
@@ -393,21 +404,15 @@ function __WindowManager() {
 		}
 
 		if (all_hidden) {
-			document.onkeyup = null;
+			__catch_menu_esc = false;
 			__activateLastWindow();
 		} else {
-			document.onkeyup = function(event) {
-				if (event.code === "Escape") {
-					event.preventDefault();
-					__closeAllMenues();
-					__activateLastWindow();
-				}
-			};
+			__catch_menu_esc = true;
 		}
 	};
 
 	var __closeAllMenues = function() {
-		document.onkeyup = null;
+		__catch_menu_esc = false;
 		for (let el_bt of __menu_buttons) {
 			let el_menu = el_bt.parentElement.querySelector(".menu");
 			el_bt.classList.remove("menu-button-pressed");
@@ -569,6 +574,7 @@ function __WindowManager() {
 		}
 
 		let prev_pos = {"x": 0, "y": 0};
+		let moving = false;
 
 		function startMoving(event) {
 			// При перетаскивании resizable-окна за правый кран экрана оно ужимается.
@@ -582,18 +588,16 @@ function __WindowManager() {
 
 			if (!event.touches || event.touches.length === 1) {
 				el_header.classList.add("window-header-grabbed");
-
 				prev_pos = getEventPosition(event);
-
-				document.onmousemove = doMoving;
-				document.onmouseup = stopMoving;
-
-				document.ontouchmove = doMoving;
-				document.ontouchend = stopMoving;
+				moving = true;
 			}
 		}
 
 		function doMoving(event) {
+			if (!moving) {
+				return;
+			}
+
 			el_win.removeAttribute("data-centered");
 
 			event = (event || window.event);
@@ -611,12 +615,7 @@ function __WindowManager() {
 
 		function stopMoving() {
 			el_header.classList.remove("window-header-grabbed");
-
-			document.onmousemove = null;
-			document.onmouseup = null;
-
-			document.ontouchmove = null;
-			document.ontouchend = null;
+			moving = false;
 		}
 
 		function getEventPosition(event) {
@@ -628,10 +627,18 @@ function __WindowManager() {
 		}
 
 		el_win.setAttribute("data-centered", "");
-		el_win.onmousedown = el_win.ontouchstart = () => __activateWindow(el_win);
 
-		el_grab.onmousedown = startMoving;
-		el_grab.ontouchstart = startMoving;
+		document.addEventListener("mousemove", doMoving);
+		document.addEventListener("mouseup", stopMoving);
+
+		document.addEventListener("touchmove", doMoving);
+		document.addEventListener("touchend", stopMoving);
+
+		el_win.addEventListener("mousedown", () => __activateWindow(el_win));
+		el_win.addEventListener("touchstart", () => __activateWindow(el_win));
+
+		el_grab.addEventListener("mousedown", startMoving);
+		el_grab.addEventListener("touchstart", startMoving);
 	};
 
 	var __onFullScreenChange = function(event) {
