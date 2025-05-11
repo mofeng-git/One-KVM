@@ -39,13 +39,18 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __keypad = null;
 
 	var __timer = null;
-	var __planned_pos = {"x": 0, "y": 0};
+
+	var __planned_pos = null;
 	var __sent_pos = {"x": 0, "y": 0};
+
+	var __relative_sens = 1.0;
 	var __relative_deltas = [];
 	var __relative_touch_pos = null;
-	var __relative_sens = 1.0;
+
 	var __scroll_rate = 5;
+	var __scroll_fix = (tools.browser.is_mac ? 5 : 1);
 	var __scroll_delta = {"x": 0, "y": 0};
+	var __scroll_touch_pos = null;
 
 	var __stream_hovered = false;
 
@@ -54,18 +59,18 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 
 		$("hid-mouse-led").title = "Mouse free";
 
-		document.onpointerlockchange = __relativeCapturedHandler; // Only for relative
-		document.onpointerlockerror = __relativeCapturedHandler;
-		$("stream-box").onmouseenter = () => __streamHoveredHandler(true);
-		$("stream-box").onmouseleave = () => __streamHoveredHandler(false);
-		$("stream-box").onmousedown = (event) => __streamButtonHandler(event, true);
-		$("stream-box").onmouseup = (event) => __streamButtonHandler(event, false);
-		$("stream-box").oncontextmenu = (event) => event.preventDefault();
-		$("stream-box").onmousemove = __streamMoveHandler;
-		$("stream-box").onwheel = __streamScrollHandler;
-		$("stream-box").ontouchstart = (event) => __streamTouchStartHandler(event);
-		$("stream-box").ontouchmove = (event) => __streamTouchMoveHandler(event);
-		$("stream-box").ontouchend = (event) => __streamTouchEndHandler(event);
+		document.addEventListener("pointerlockchange", __relativeCapturedHandler); // Only for relative
+		document.addEventListener("pointerlockerror", __relativeCapturedHandler);
+		$("stream-box").addEventListener("mouseenter", () => __streamHoveredHandler(true));
+		$("stream-box").addEventListener("mouseleave", () => __streamHoveredHandler(false));
+		$("stream-box").addEventListener("mousedown", (event) => __streamButtonHandler(event, true));
+		$("stream-box").addEventListener("mouseup", (event) => __streamButtonHandler(event, false));
+		$("stream-box").addEventListener("contextmenu", (event) => event.preventDefault());
+		$("stream-box").addEventListener("mousemove", __streamMoveHandler);
+		$("stream-box").addEventListener("wheel", __streamScrollHandler);
+		$("stream-box").addEventListener("touchstart", __streamTouchStartHandler);
+		$("stream-box").addEventListener("touchmove", __streamTouchMoveHandler);
+		$("stream-box").addEventListener("touchend", __streamTouchEndHandler);
 
 		tools.storage.bindSimpleSwitch($("hid-mouse-squash-switch"), "hid.mouse.squash", true);
 		tools.slider.setParams($("hid-mouse-sens-slider"), 0.1, 1.9, 0.1, tools.storage.get("hid.mouse.sens", 1.0), __updateRelativeSens);
@@ -214,30 +219,58 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			} else {
 				__relative_touch_pos = __getTouchPosition(event, 0);
 			}
+		} else if (event.touches.length >= 2) {
+			__planned_pos = null;
+			__relative_touch_pos = null;
 		}
 	};
 
 	var __streamTouchMoveHandler = function(event) {
 		event.preventDefault();
 		if (event.touches.length === 1) {
+			let pos = __getTouchPosition(event, 0);
 			if (__absolute) {
-				__planned_pos = __getTouchPosition(event, 0);
+				__planned_pos = pos;
 			} else if (__relative_touch_pos === null) {
-				__relative_touch_pos = __getTouchPosition(event, 0);
+				__relative_touch_pos = pos;
 			} else {
-				let pos = __getTouchPosition(event, 0);
 				__sendOrPlanRelativeMove({
 					"x": (pos.x - __relative_touch_pos.x),
 					"y": (pos.y - __relative_touch_pos.y),
 				});
 				__relative_touch_pos = pos;
 			}
+		} else if (event.touches.length >= 2) {
+			let pos = __getTouchPosition(event, 0);
+			if (__scroll_touch_pos === null) {
+				__scroll_touch_pos = pos;
+			} else {
+				let dx = pos.x - __scroll_touch_pos.x;
+				let dy = pos.y - __scroll_touch_pos.y;
+				if (Math.abs(dx) < 15) {
+					dx = 0;
+				}
+				if (Math.abs(dy) < 15) {
+					dy = 0;
+				}
+				if (dx || dy) {
+					__sendScroll({"x": dx, "y": dy});
+					__scroll_touch_pos = null;
+				}
+			}
+			__planned_pos = null;
+			__relative_touch_pos = null;
 		}
 	};
 
 	var __streamTouchEndHandler = function(event) {
 		event.preventDefault();
 		__sendPlannedMove();
+		__scroll_touch_pos = null;
+		if (event.touches.length >= 2) {
+			__planned_pos = null;
+			__relative_touch_pos = null;
+		}
 	};
 
 	var __getTouchPosition = function(event, index) {
@@ -278,28 +311,31 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 
 		let delta = {"x": 0, "y": 0};
 		if ($("hid-mouse-cumulative-scrolling-switch").checked) {
-			let factor = (tools.browser.is_mac ? 5 : 1);
-
-			__scroll_delta.x += event.deltaX * factor; // Horizontal scrolling
-			if (Math.abs(__scroll_delta.x) >= 100) {
-				delta.x = __scroll_delta.x / Math.abs(__scroll_delta.x) * (-__scroll_rate);
+			if (__scroll_delta.x && Math.sign(__scroll_delta.x) !== Math.sign(event.deltaX)) {
+				delta.x = __scroll_delta.x;
 				__scroll_delta.x = 0;
+			} else {
+				__scroll_delta.x += event.deltaX * __scroll_fix;
+				if (Math.abs(__scroll_delta.x) >= 100) {
+					delta.x = __scroll_delta.x;
+					__scroll_delta.x = 0;
+				}
 			}
 
-			__scroll_delta.y += event.deltaY * factor; // Vertical scrolling
-			if (Math.abs(__scroll_delta.y) >= 100) {
-				delta.y = __scroll_delta.y / Math.abs(__scroll_delta.y) * (-__scroll_rate);
+			if (__scroll_delta.y && Math.sign(__scroll_delta.y) !== Math.sign(event.deltaY)) {
+				delta.y = __scroll_delta.y;
 				__scroll_delta.y = 0;
+			} else {
+				__scroll_delta.y += event.deltaY * __scroll_fix;
+				if (Math.abs(__scroll_delta.y) >= 100) {
+					delta.y = __scroll_delta.y;
+					__scroll_delta.y = 0;
+				}
 			}
 		} else {
-			if (event.deltaX !== 0) {
-				delta.x = event.deltaX / Math.abs(event.deltaX) * (-__scroll_rate);
-			}
-			if (event.deltaY !== 0) {
-				delta.y = event.deltaY / Math.abs(event.deltaY) * (-__scroll_rate);
-			}
+			delta.x = event.deltaX;
+			delta.y = event.deltaY;
 		}
-
 		__sendScroll(delta);
 	};
 
@@ -319,13 +355,20 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	};
 
 	var __sendScroll = function(delta) {
-		if (delta.x || delta.y) {
-			if ($("hid-mouse-reverse-scrolling-switch").checked) {
-				delta.y *= -1;
-			}
+		// Send a single scroll step defined by rate
+		if (delta.x) {
+			delta.x = Math.sign(delta.x) * (-__scroll_rate);
 			if ($("hid-mouse-reverse-panning-switch").checked) {
 				delta.x *= -1;
 			}
+		}
+		if (delta.y) {
+			delta.y = Math.sign(delta.y) * (-__scroll_rate);
+			if ($("hid-mouse-reverse-scrolling-switch").checked) {
+				delta.y *= -1;
+			}
+		}
+		if (delta.x || delta.y) {
 			tools.debug("Mouse: scrolled:", delta);
 			__sendEvent("mouse_wheel", {"delta": delta});
 		}
@@ -334,7 +377,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __sendPlannedMove = function() {
 		if (__absolute) {
 			let pos = __planned_pos;
-			if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
+			if (pos !== null && (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y)) {
 				let geo = __getGeometry();
 				let to = {
 					"x": tools.remap(pos.x, geo.x, geo.width, -32768, 32767),
