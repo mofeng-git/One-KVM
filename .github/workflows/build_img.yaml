@@ -1,0 +1,74 @@
+name: Build One-KVM Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_target:
+        description: 'Target device name'
+        required: true
+        type: choice
+        options:
+          - onecloud
+          - cumebox2
+          - chainedbox
+          - vm
+          - e900v22c
+          - octopus-flanet
+          - all
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container:
+      image: node:18
+      options: --user root --privileged
+      env:
+        TZ: Asia/Shanghai
+      volumes:
+        - /dev:/dev
+        - /mnt/nfs/lfs/:/mnt/nfs/lfs/
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get install -y --no-install-recommends \
+            sudo tzdata docker.io qemu-utils qemu-user-static binfmt-support parted e2fsprogs \
+            curl tar python3 python3-pip rsync git android-sdk-libsparse-utils coreutils zerofree
+          apt-get clean
+          rm -rf /var/lib/apt/lists/*
+          ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
+          echo $TZ > /etc/timezone
+          update-binfmts --enable
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      - name: Build image
+        run: |
+          echo "BUILD_DATE=$(date +%y%m%d)" >> $GITHUB_ENV
+
+          chmod +x build/build_img.sh
+
+          echo "Starting build for target: ${{ github.event.inputs.device_target }}"
+          bash build/build_img.sh ${{ github.event.inputs.device_target }}
+
+          echo "Build script finished."
+        env:
+          CI_PROJECT_DIR: ${{ github.workspace }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: onekvm-image-${{ github.event.inputs.device_target }}-${{ env.BUILD_DATE }}
+          path: |
+            ${{ github.workspace }}/output/*.img
+            ${{ github.workspace }}/output/*.vmdk
+            ${{ github.workspace }}/output/*.vdi
+            ${{ github.workspace }}/output/*.burn.img
+          if-no-files-found: ignore
+        env:
+          CI_PROJECT_DIR: ${{ github.workspace }}

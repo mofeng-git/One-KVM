@@ -1,25 +1,4 @@
 #!/bin/bash
-# ========================================================================== #
-#                                                                            #
-#    KVMD - The main PiKVM daemon.                                           #
-#                                                                            #
-#    Copyright (C) 2023-2025  SilentWind <mofeng654321@hotmail.com>         #
-#                                                                            #
-#    This program is free software: you can redistribute it and/or modify    #
-#    it under the terms of the GNU General Public License as published by    #
-#    the Free Software Foundation, either version 3 of the License, or       #
-#    (at your option) any later version.                                     #
-#                                                                            #
-#    This program is distributed in the hope that it will be useful,         #
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of          #
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           #
-#    GNU General Public License for more details.                            #
-#                                                                            #
-#    You should have received a copy of the GNU General Public License       #
-#    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
-#                                                                            #
-# ========================================================================== #
-#!/bin/bash
 
 # --- 配置 ---
 # 允许通过环境变量覆盖默认路径
@@ -28,7 +7,20 @@ BOOTFS="${BOOTFS:-/tmp/bootfs}"
 ROOTFS="${ROOTFS:-/tmp/rootfs}"
 OUTPUTDIR="${OUTPUTDIR:-/mnt/nfs/lfs/src/output}"
 TMPDIR="${TMPDIR:-$SRCPATH/tmp}"
+
+get_git_commit_id() {
+    if git rev-parse --is-inside-work-tree &>/dev/null; then
+        git rev-parse --short HEAD 2>/dev/null || echo ""
+    else
+        echo ""
+    fi
+}
+
+GIT_COMMIT_ID=$(get_git_commit_id)
 DATE=$(date +%y%m%d)
+if [ -n "$GIT_COMMIT_ID" ]; then
+    DATE="${DATE}-${GIT_COMMIT_ID}"
+fi
 export LC_ALL=C
 
 # 全局变量
@@ -38,8 +30,7 @@ BOOTFS_MOUNTED=0
 PROC_MOUNTED=0
 SYS_MOUNTED=0
 DEV_MOUNTED=0
-DOCKER_CONTAINER_NAME="to_build_rootfs_$$" # 使用PID防止并发冲突
-#PREBUILT_DIR="$TMPDIR/prebuilt_binaries"
+DOCKER_CONTAINER_NAME="to_build_rootfs_$$"
 PREBUILT_DIR="/tmp/prebuilt_binaries"
 
 # --- 清理函数 ---
@@ -107,6 +98,47 @@ cleanup() {
     echo "信息：清理完成。"
 }
 
+# 在打包镜像前调用此函数，确保干净卸载所有挂载点和loop设备
+unmount_all() {
+    echo "信息：执行卸载操作，准备打包..."
+    # 卸载 chroot 环境下的挂载点
+    if [[ "$DEV_MOUNTED" -eq 1 ]]; then
+        echo "信息：卸载 $ROOTFS/dev ..."
+        sudo umount "$ROOTFS/dev" || echo "警告：卸载 $ROOTFS/dev 失败，可能已被卸载"
+        DEV_MOUNTED=0
+    fi
+    if [[ "$SYS_MOUNTED" -eq 1 ]]; then
+        echo "信息：卸载 $ROOTFS/sys ..."
+        sudo umount "$ROOTFS/sys" || echo "警告：卸载 $ROOTFS/sys 失败，可能已被卸载"
+        SYS_MOUNTED=0
+    fi
+    if [[ "$PROC_MOUNTED" -eq 1 ]]; then
+        echo "信息：卸载 $ROOTFS/proc ..."
+        sudo umount "$ROOTFS/proc" || echo "警告：卸载 $ROOTFS/proc 失败，可能已被卸载"
+        PROC_MOUNTED=0
+    fi
+
+    # 卸载主根文件系统
+    if [[ "$ROOTFS_MOUNTED" -eq 1 && -d "$ROOTFS" ]]; then
+        echo "信息：卸载 $ROOTFS ..."
+        sudo umount "$ROOTFS" || sudo umount -l "$ROOTFS" || echo "警告：卸载 $ROOTFS 失败"
+        ROOTFS_MOUNTED=0
+    fi
+    
+    # 尝试分离 loop 设备前执行 zerofree（如果文件系统支持）
+    if [[ -n "$LOOPDEV" && -b "$LOOPDEV" ]]; then
+        echo "信息：尝试 zerofree $LOOPDEV ..."
+        sudo zerofree "$LOOPDEV" || echo "警告：zerofree $LOOPDEV 失败，可能文件系统不支持或未干净卸载"
+        echo "信息：分离 loop 设备 $LOOPDEV ..."
+        sudo losetup -d "$LOOPDEV" || echo "警告：分离 $LOOPDEV 失败"
+        LOOPDEV=""
+    fi
+
+    sudo rm -rf "$PREBUILT_DIR"
+
+    echo "信息：卸载操作完成，可以安全打包镜像。"
+}
+
 # --- 注册清理函数 ---
 # 在脚本退出、收到错误信号、中断信号、终止信号时执行 cleanup
 trap cleanup EXIT ERR INT TERM
@@ -118,16 +150,9 @@ find_loop_device() {
     echo "信息：查找可用的 loop 设备..."
     # 只使用 --find 来获取设备名
     LOOPDEV=$(sudo losetup --find)
-    if [[ -z "$LOOPDEV" || ! -e "$LOOPDEV" ]]; then # 检查设备是否存在，而不是 -b (因为此时还未关联)
-        echo "错误：无法找到可用的 loop 设备。请确保 'loop' 内核模块已加载且有可用设备。" >&2
-        # 尝试加载模块以防万一
-        sudo modprobe loop || echo "警告：尝试加载 loop 模块失败。"
-        # 再次尝试查找
-        LOOPDEV=$(sudo losetup --find)
-         if [[ -z "$LOOPDEV" || ! -e "$LOOPDEV" ]]; then
-            echo "错误：再次尝试后仍无法找到可用的 loop 设备。" >&2
-            exit 1
-         fi
+    if [[ -z "$LOOPDEV" || ! -e "$LOOPDEV" ]]; then
+        echo "错误：再次尝试后仍无法找到可用的 loop 设备。" >&2
+        exit 1
     fi
     echo "信息：找到可用 loop 设备名：$LOOPDEV"
 }
@@ -177,8 +202,6 @@ mount_rootfs() {
     echo "信息：根文件系统及虚拟文件系统挂载完成。"
 }
 
-# umount_rootfs 函数不再需要，清理工作由 trap -> cleanup 完成
-
 prepare_dns_and_mirrors() {
     echo "信息：在 chroot 环境中准备 DNS 和更换软件源..."
     run_in_chroot "
@@ -191,14 +214,13 @@ prepare_dns_and_mirrors() {
     "
 }
 
-# (可选) 如果需要强制使用特定 Armbian 源
 delete_armbian_verify(){
     echo "信息：在 chroot 环境中修改 Armbian 软件源..."
     run_in_chroot "echo 'deb http://mirrors.ustc.edu.cn/armbian bullseye main bullseye-utils bullseye-desktop' > /etc/apt/sources.list.d/armbian.list"
 }
 
 prepare_external_binaries() {
-    local platform="$1" # linux/arm or linux/amd64 or linux/aarch64
+    local platform="$1" # linux/armhf or linux/amd64 or linux/aarch64
     local docker_image="registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd-stage-0"
 
     echo "信息：准备外部预编译二进制文件 (平台: $platform)..."
@@ -211,14 +233,12 @@ prepare_external_binaries() {
     sudo docker create --name "$DOCKER_CONTAINER_NAME" "$docker_image" || { echo "错误：创建 Docker 容器 $DOCKER_CONTAINER_NAME 失败" >&2; exit 1; }
 
     echo "信息：从 Docker 容器导出文件到 $PREBUILT_DIR ..."
-    # 不直接解压到 $ROOTFS，先解压到临时目录
     sudo docker export "$DOCKER_CONTAINER_NAME" | sudo tar -xf - -C "$PREBUILT_DIR" || { echo "错误：导出并解压 Docker 容器内容失败" >&2; exit 1; }
 
-    # Docker 容器使命完成，可以删除了 (也可以等到 trap cleanup)
-    # sudo docker rm "$DOCKER_CONTAINER_NAME"
-    # DOCKER_CONTAINER_NAME="" # 清空变量避免 trap 重复删除
-
     echo "信息：预编译二进制文件准备完成，存放于 $PREBUILT_DIR"
+
+    # 删除 Docker 容器
+    sudo docker rm -f "$DOCKER_CONTAINER_NAME" || { echo "错误：删除 Docker 容器 $DOCKER_CONTAINER_NAME 失败" >&2; exit 1; }    
 }
 
 config_base_files() {
@@ -230,9 +250,9 @@ config_base_files() {
     ensure_dir "$ROOTFS/etc/kvmd/vnc"
     ensure_dir "$ROOTFS/var/lib/kvmd/msd/images"
     ensure_dir "$ROOTFS/var/lib/kvmd/msd/meta"
-    ensure_dir "$ROOTFS/opt/vc/bin" # 即使是假的 vcgencmd 也需要目录
+    ensure_dir "$ROOTFS/opt/vc/bin"
     ensure_dir "$ROOTFS/usr/share/kvmd"
-    ensure_dir "$ROOTFS/One-KVM" # 源码目录
+    ensure_dir "$ROOTFS/One-KVM"
     ensure_dir "$ROOTFS/usr/share/janus/javascript"
     ensure_dir "$ROOTFS/usr/lib/ustreamer/janus"
     ensure_dir "$ROOTFS/run/kvmd"
@@ -241,32 +261,28 @@ config_base_files() {
     ensure_dir "$ROOTFS/usr/lib/janus/loggers"
 
     echo "信息：复制 One-KVM 源码..."
-    # 假设当前目录就是 One-KVM 源码根目录
     sudo rsync -a --exclude={.git,.github,output,tmp} . "$ROOTFS/One-KVM/" || { echo "错误：复制 One-KVM 源码失败" >&2; exit 1; }
 
     echo "信息：复制配置文件..."
     sudo cp -r configs/kvmd/* configs/nginx configs/janus "$ROOTFS/etc/kvmd/"
     sudo cp -r web extras contrib/keymaps "$ROOTFS/usr/share/kvmd/"
-    sudo cp testenv/fakes/vcgencmd "$ROOTFS/usr/bin/" # Fake vcgencmd
+    sudo cp testenv/fakes/vcgencmd "$ROOTFS/usr/bin/"
     sudo cp -r testenv/js/* "$ROOTFS/usr/share/janus/javascript/"
     sudo cp "build/platform/$platform_id" "$ROOTFS/usr/share/kvmd/platform" || { echo "错误：复制平台文件 build/platform/$platform_id 失败" >&2; exit 1; }
 
-    # 复制特定设备的 rc.local (如果存在)
     if [ -f "$SRCPATH/image/$platform_id/rc.local" ]; then
         echo "信息：复制设备特定的 rc.local 文件..."
         sudo cp "$SRCPATH/image/$platform_id/rc.local" "$ROOTFS/etc/"
     fi
 
     echo "信息：从预编译目录复制二进制文件和库..."
-    # 从 prepare_external_binaries 准备好的目录复制
-    # 注意：这里的路径需要根据 docker export 出来的实际结构调整
     sudo cp "$PREBUILT_DIR/tmp/lib/"* "$ROOTFS/lib/"*-linux-*/ || echo "警告：复制 /tmp/lib/* 失败，可能源目录或目标目录不存在或不匹配"
     sudo cp "$PREBUILT_DIR/tmp/ustreamer/ustreamer" "$PREBUILT_DIR/tmp/ustreamer/ustreamer-dump" "$PREBUILT_DIR/usr/bin/janus" "$ROOTFS/usr/bin/" || { echo "错误：复制 ustreamer/janus 二进制文件失败" >&2; exit 1; }
 	sudo cp "$PREBUILT_DIR/tmp/ustreamer/janus/libjanus_ustreamer.so" "$ROOTFS/usr/lib/ustreamer/janus/" || { echo "错误：复制 libjanus_ustreamer.so 失败" >&2; exit 1; }
 	sudo cp "$PREBUILT_DIR/tmp/wheel/"*.whl "$ROOTFS/tmp/wheel/" || { echo "错误：复制 Python wheel 文件失败" >&2; exit 1; }
 	sudo cp "$PREBUILT_DIR/usr/lib/janus/transports/"* "$ROOTFS/usr/lib/janus/transports/" || { echo "错误：复制 Janus transports 失败" >&2; exit 1; }
 
-	# 禁用 apt-file (如果不需要)
+	# 禁用 apt-file
  	if [ -f "$ROOTFS/etc/apt/apt.conf.d/50apt-file.conf" ]; then
         echo "信息：禁用 apt-file 配置..."
         sudo mv "$ROOTFS/etc/apt/apt.conf.d/50apt-file.conf" "$ROOTFS/etc/apt/apt.conf.d/50apt-file.conf.disabled"
@@ -275,7 +291,7 @@ config_base_files() {
 }
 
 
-# --- KVMD 安装与配置 (拆分后) ---
+# --- KVMD 安装与配置 ---
 
 install_base_packages() {
     echo "信息：在 chroot 环境中更新源并安装基础软件包..."
@@ -357,11 +373,8 @@ configure_system() {
 install_webterm() {
     local arch="$1" # armhf, aarch64, x86_64
     local ttyd_arch="$arch"
-    # ttyd release 可能没有 armhf，需要确认使用的架构名
+
     if [ "$arch" = "armhf" ]; then
-        # ttyd 可能标记为 armv7, arm, 需要确认
-        echo "警告：ttyd 可能没有 armhf 的 release，尝试使用 armv7 或 arm。请检查 ttyd release 页面！"
-        # 假设用 armv7
         ttyd_arch="armv7"
     elif [ "$arch" = "amd64" ]; then
          ttyd_arch="x86_64" # ttyd 通常用 x86_64
@@ -385,14 +398,14 @@ apply_kvmd_tweaks() {
     echo "信息：根据架构 ($arch) 和设备类型 ($device_type) 调整 KVMD 配置..."
 
     if [ "$arch" = "x86_64" ] || [ "$arch" = "amd64" ]; then
-        echo "信息：检测到 x86_64/amd64 架构，禁用 OTG，设置 ATX 为 USBRELAY_HID..."
+        echo "信息：目标平台为 x86_64/amd64 架构，禁用 OTG，设置 ATX 为 USBRELAY_HID..."
         run_in_chroot "
         systemctl disable kvmd-otg && \\
         sed -i 's/^ATX=.*/ATX=USBRELAY_HID/' /etc/kvmd/atx.sh && \\
         sed -i 's/device: \/dev\/ttyUSB0/device: \/dev\/kvmd-hid/g' /etc/kvmd/override.yaml
         "
     else
-        echo "信息：检测到 ARM 架构 ($arch)..."
+        echo "信息：：目标平台为 ARM 架构 ($arch)..."
         # ARM 架构，配置 HID 为 OTG
         hid_setting="otg"
         run_in_chroot "
@@ -405,7 +418,7 @@ apply_kvmd_tweaks() {
 
         # 根据 device_type 配置 ATX
         if [ "$device_type" = "gpio" ]; then
-            echo "信息：设备类型为 gpio，设置 ATX 为 GPIO 并配置引脚..."
+            echo "信息：电源控制设备类型为 gpio，设置 ATX 为 GPIO 并配置引脚..."
             atx_setting="GPIO"
              run_in_chroot "
              sed -i 's/^ATX=.*/ATX=GPIO/' /etc/kvmd/atx.sh && \\
@@ -413,15 +426,18 @@ apply_kvmd_tweaks() {
              sed -i 's/REBOOTPIN/gpiochip0 11/g' /etc/kvmd/custom_atx/gpio.sh
              "
         else
-            echo "信息：设备类型不是 gpio ($device_type)，设置 ATX 为 USBRELAY_HID..."
+            echo "信息：电源控制设备类型不是 gpio ($device_type)，设置 ATX 为 USBRELAY_HID..."
             atx_setting="USBRELAY_HID"
              run_in_chroot "sed -i 's/^ATX=.*/ATX=USBRELAY_HID/' /etc/kvmd/atx.sh"
         fi
 
         # 配置视频设备
         if [ "$device_type" = "video1" ]; then
-            echo "信息：设备类型为 video1，设置视频设备为 /dev/video1..."
+            echo "信息：视频设备类型为 video1，设置视频设备为 /dev/video1..."
             run_in_chroot "sed -i 's|/dev/video0|/dev/video1|g' /etc/kvmd/override.yaml"
+        elif [ "$device_type" = "kvmd-video" ]; then
+            echo "信息：视频设备类型为 kvmd-video，设置视频设备为 /dev/kvmd-video..."
+            run_in_chroot "sed -i 's|/dev/video0|/dev/kvmd-video|g' /etc/kvmd/override.yaml"
         else
              echo "信息：使用默认视频设备 /dev/video0..."
         fi
@@ -485,6 +501,12 @@ pack_img() {
     echo "信息：开始打包镜像 ($device_name_friendly)..."
     ensure_dir "$OUTPUTDIR"
 
+    # 确保在打包前已经正确卸载了所有挂载点和loop设备
+    if [[ "$ROOTFS_MOUNTED" -eq 1 || "$DEV_MOUNTED" -eq 1 || "$SYS_MOUNTED" -eq 1 || "$PROC_MOUNTED" -eq 1 || -n "$LOOPDEV" && -b "$LOOPDEV" ]]; then
+        echo "警告：发现未卸载的挂载点或loop设备，尝试再次卸载..."
+        unmount_all
+    fi
+
     echo "信息：移动镜像文件 $source_img 到 $OUTPUTDIR/$target_img_name ..."
     sudo mv "$source_img" "$OUTPUTDIR/$target_img_name" || { echo "错误：移动镜像文件失败" >&2; exit 1; }
 
@@ -511,6 +533,12 @@ pack_img_onecloud() {
     echo "信息：开始为 Onecloud 打包 burn 镜像..."
     ensure_dir "$OUTPUTDIR"
 
+    # 确保在打包前已经正确卸载了所有挂载点和loop设备
+    if [[ "$ROOTFS_MOUNTED" -eq 1 || "$DEV_MOUNTED" -eq 1 || "$SYS_MOUNTED" -eq 1 || "$PROC_MOUNTED" -eq 1 || -n "$LOOPDEV" && -b "$LOOPDEV" ]]; then
+        echo "警告：发现未卸载的挂载点或loop设备，尝试再次卸载..."
+        unmount_all
+    fi
+
     echo "信息：将 raw rootfs 转换为 sparse image..."
     # 先删除可能存在的旧 sparse 文件
     sudo rm -f "$rootfs_sparse_img"
@@ -518,13 +546,11 @@ pack_img_onecloud() {
     sudo rm "$rootfs_raw_img" # 删除 raw 文件，因为它已被转换
 
     echo "信息：使用 AmlImg 工具打包..."
-    # 确保 AmlImg 工具可执行
     sudo chmod +x "$aml_packer"
     sudo "$aml_packer" pack "$OUTPUTDIR/$target_img_name" "$TMPDIR/" || { echo "错误：AmlImg 打包失败" >&2; exit 1; }
 
     echo "信息：清理 Onecloud 临时文件..."
-    sudo rm -f "$TMPDIR/6.boot.PARTITION.sparse" "$TMPDIR/7.rootfs.PARTITION.sparse" "$TMPDIR/dts.img" # 清理所有已知部件
-    # 注意：TMPDIR 下可能还有其他由 unpack 生成的文件，按需清理
+    sudo rm -f "$TMPDIR/6.boot.PARTITION.sparse" "$TMPDIR/7.rootfs.PARTITION.sparse" "$TMPDIR/dts.img"
 
     echo "信息：Onecloud burn 镜像打包完成: $OUTPUTDIR/$target_img_name"
 }
@@ -539,12 +565,14 @@ onecloud_rootfs() {
     local bootfs_sparse="$TMPDIR/6.boot.PARTITION.sparse"
     local rootfs_sparse="$TMPDIR/7.rootfs.PARTITION.sparse"
     local bootfs_loopdev="" # 存储 bootfs 使用的 loop 设备
+    local add_size_mb=400
 
     echo "信息：准备 Onecloud Rootfs..."
     ensure_dir "$TMPDIR"
     ensure_dir "$BOOTFS"
 
     echo "信息：解包 Onecloud burn 镜像..."
+    sudo "$unpacker" unpack "$source_image" "$TMPDIR" || { echo "错误：解包失败" >&2; exit 1; }
     # ... (unpacker logic) ...
 
     echo "信息：转换 bootfs 和 rootfs sparse 镜像到 raw 格式..."
@@ -565,8 +593,8 @@ onecloud_rootfs() {
     sudo losetup -d "$bootfs_loopdev" || { echo "警告：分离 bootfs loop 设备 $bootfs_loopdev 失败" >&2; }
     # bootfs_loopdev 对应的设备现在是空闲的
 
-    echo "信息：扩展 rootfs 镜像..."
-    # ... (dd, cat, rm add.img) ...
+    echo "信息：扩展 rootfs 镜像 (${add_size_mb}MB)..."
+    sudo dd if=/dev/zero bs=1M count="$add_size_mb" >> "$rootfs_img" || { echo "错误：扩展 rootfs 镜像失败" >&2; exit 1; }
 
     echo "信息：检查并调整 rootfs 文件系统大小 (在文件上)..."
     # 注意：e2fsck/resize2fs 现在直接操作镜像文件，而不是 loop 设备
@@ -673,7 +701,7 @@ e900v22c_rootfs() {
     cp "$source_image" "$target_image" || { echo "错误：复制 E900V22C 原始镜像失败" >&2; exit 1; }
 
     echo "信息：扩展镜像文件 (${add_size_mb}MB)..."
-    # ... (dd, cat, rm add.img logic) ...
+    sudo dd if=/dev/zero bs=1M count="$add_size_mb" >> "$target_image" || { echo "错误：扩展镜像文件失败" >&2; exit 1; }
 
     echo "信息：调整镜像分区大小 (分区 2)..."
     sudo parted -s "$target_image" resizepart 2 100% || { echo "错误：使用 parted 调整分区 2 大小失败" >&2; exit 1; }
@@ -755,15 +783,16 @@ config_octopus_flanet_files() {
 
 build_target() {
     local target="$1"
+    local build_time=$(date "+%Y-%m-%d %H:%M:%S")
     echo "=================================================="
-    echo "信息：开始构建目标: $target"
+    echo "信息：构建目标: $target"
+    echo "信息：构建时间: $build_time"
     echo "=================================================="
 
     # 设置全局变量，供后续函数使用
     TARGET_DEVICE_NAME="$target"
     NEED_PREPARE_DNS=false # 默认不需要准备 DNS
 
-    # 1. 准备 Rootfs
     case "$target" in
         onecloud)
             onecloud_rootfs
@@ -787,7 +816,7 @@ build_target() {
             ;;
         vm)
             vm_rootfs
-            local arch="amd64" # 使用 amd64 触发 x86_64 逻辑
+            local arch="amd64"
             local device_type=""
             local network_type=""
             NEED_PREPARE_DNS=true
@@ -797,7 +826,6 @@ build_target() {
             local arch="aarch64"
             local device_type="video1"
             local network_type=""
-            # E900V22C 原始镜像可能需要换源/DNS
             NEED_PREPARE_DNS=true
             ;;
         octopus-flanet)
@@ -813,20 +841,14 @@ build_target() {
             ;;
     esac
 
-    # 2. 挂载 Rootfs
     mount_rootfs
 
-    # 3. 安装和配置 KVMD
     install_and_configure_kvmd "$arch" "$device_type" "$network_type"
 
-    # 4. 写入元数据/主机名
     write_meta "$target"
+    
+    unmount_all
 
-    # 5. 清理挂载 (由 trap -> cleanup 自动完成)
-    # 手动触发一次 unmount (如果需要立即 unmount 而不是等脚本结束)
-    # umount_rootfs # 不再需要显式调用
-
-    # 6. 打包镜像
     case "$target" in
         onecloud)
             pack_img_onecloud
@@ -848,7 +870,6 @@ build_target() {
             ;;
         *)
             echo "错误：未知的打包类型 for '$target'" >&2
-            # 不退出，允许后续清理
             ;;
     esac
 
@@ -884,10 +905,8 @@ if ! command -v "$SRCPATH/image/onecloud/AmlImg_v0.3.1_linux_amd64" &> /dev/null
         sudo chmod +x "$SRCPATH/image/onecloud/AmlImg_v0.3.1_linux_amd64" || echo "警告：设置 AmlImg 执行权限失败"
      else
         echo "错误：构建 onecloud 需要 '$SRCPATH/image/onecloud/AmlImg_v0.3.1_linux_amd64'，但未找到。" >&2
-        # 不退出，如果是 all 模式，可能其他目标还能构建
      fi
 fi
-
 
 # 执行构建
 if [ "$1" = "all" ]; then
@@ -903,4 +922,4 @@ else
     build_target "$1"
 fi
 
-exit 0 # 显式成功退出
+exit 0
