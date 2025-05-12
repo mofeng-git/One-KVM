@@ -145,8 +145,38 @@ function __WindowManager() {
 		window.addEventListener("mouseup", __globalMouseButtonHandler);
 		window.addEventListener("touchend", __globalMouseButtonHandler);
 
-		window.addEventListener("focusin", (event) => __focusInOut(event, true));
-		window.addEventListener("focusout", (event) => __focusInOut(event, false));
+		window.addEventListener("focusin", (event) => __focusInOut(event.target, true));
+		window.addEventListener("focusout", (event) => __focusInOut(event.target, false));
+
+		// Окна с iframe нуждаются в особенной логике для подсветки,
+		// потому что из iframe не приходят события фокуса.
+		// Мы можешь лишь следить за focus/blur на окне и проверять
+		// активный элемент, и если это iframe - назодить его окно,
+		// и подсвечивать его. Или наоборот, тушить все окна,
+		// в которых есть другие iframe.
+		window.addEventListener("focus", function() {
+			let el_active = document.activeElement;
+			for (let el of document.getElementsByTagName("iframe")) {
+				if (el !== el_active) {
+					__focusInOut(el, false);
+				}
+			}
+		});
+		window.addEventListener("blur", function() {
+			// При переходе в iframe, в хромиуме прилетает два блура:
+			// с первым активный элемент становится body, со вторым - iframe.
+			// В фоксе оба раза это будет body, но если проверить чуть позже -
+			// то станет iframe. Таймаут решает проблему.
+			setTimeout(function() {
+				let el = document.activeElement;
+				if (el && el.tagName.toLowerCase() === "iframe") {
+					let el_parent = __focusInOut(el, true);
+					if (el_parent !== null) {
+						__activateWindow(el_parent);
+					}
+				}
+			}, 100);
+		});
 
 		window.addEventListener("resize", __organizeWindowsOnBrowserResize);
 		window.addEventListener("orientationchange", __organizeWindowsOnBrowserResize);
@@ -421,16 +451,17 @@ function __WindowManager() {
 		}
 	};
 
-	var __focusInOut = function(event, focus_in) {
-		let el_parent;
-		if ((el_parent = event.target.closest(".modal-window")) !== null) {
+	var __focusInOut = function(el, focus_in) {
+		let el_parent = null;
+		if ((el_parent = el.closest(".modal-window")) !== null) {
 			el_parent.classList.toggle("window-active", focus_in);
-		} else if ((el_parent = event.target.closest(".window")) !== null) {
+		} else if ((el_parent = el.closest(".window")) !== null) {
 			el_parent.classList.toggle("window-active", focus_in);
-		} else if ((el_parent = event.target.closest(".menu")) !== null) {
+		} else if ((el_parent = el.closest(".menu")) !== null) {
 			el_parent.classList.toggle("menu-active", focus_in);
 		}
-		tools.debug(`UI: Focus ${focus_in ? "IN" : "OUT"}:`, el_parent);
+		tools.info(`UI: Focus ${focus_in ? "IN" : "OUT"}:`, el_parent);
+		return el_parent;
 	};
 
 	var __globalMouseButtonHandler = function(event) {
