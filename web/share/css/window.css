@@ -131,6 +131,7 @@ div.window div.window-header button.window-button-enter-full-tab,
 div.window div.window-header button.window-button-original,
 div.window div.window-header button.window-button-maximize,
 div.window div.window-header button.window-button-close {
+	line-height: 1px;
 	border: none;
 	position: absolute;
 	top: -2px;
