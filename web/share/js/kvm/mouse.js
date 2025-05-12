@@ -380,8 +380,8 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			if (pos !== null && (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y)) {
 				let geo = __getGeometry();
 				let to = {
-					"x": tools.remap(pos.x, geo.x, geo.width, -32768, 32767),
-					"y": tools.remap(pos.y, geo.y, geo.height, -32768, 32767),
+					"x": tools.remap(pos.x - geo.x, 0, geo.width - 1, -32768, 32767),
+					"y": tools.remap(pos.y - geo.y, 0, geo.height - 1, -32768, 32767),
 				};
 				tools.debug("Mouse: moved:", to);
 				__sendEvent("mouse_move", {"to": to});

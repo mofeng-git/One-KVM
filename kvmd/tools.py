@@ -33,7 +33,8 @@ from typing import TypeVar
 
 # =====
 def remap(value: int, in_min: int, in_max: int, out_min: int, out_max: int) -> int:
-    return int((value - in_min) * (out_max - out_min) // (in_max - in_min) + out_min)
+    result = int((value - in_min) * (out_max - out_min) // ((in_max - in_min) or 1) + out_min)
+    return min(max(result, out_min), out_max)
 
 
 # =====

@@ -590,8 +590,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         move = (self._width, self._height, to_x, to_y)
         if self.__mouse_move != move:
             await self._on_mouse_move_event(
-                tools.remap(to_x, 0, self._width, *MouseRange.RANGE),
-                tools.remap(to_y, 0, self._height, *MouseRange.RANGE),
+                tools.remap(to_x, 0, self._width - 1, *MouseRange.RANGE),
+                tools.remap(to_y, 0, self._height - 1, *MouseRange.RANGE),
             )
             self.__mouse_move = move
 

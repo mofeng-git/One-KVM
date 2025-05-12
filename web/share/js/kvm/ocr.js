@@ -137,10 +137,10 @@ export function Ocr(__getGeometry) {
 			let rel_bottom = Math.max(__start_pos.y, __end_pos.y) - rect.top + offset;
 			let geo = __getGeometry();
 			__sel = {
-				"left": tools.remap(rel_left, geo.x, geo.width, 0, geo.real_width),
-				"right": tools.remap(rel_right, geo.x, geo.width, 0, geo.real_width),
-				"top": tools.remap(rel_top, geo.y, geo.height, 0, geo.real_height),
-				"bottom": tools.remap(rel_bottom, geo.y, geo.height, 0, geo.real_height),
+				"left": tools.remap(rel_left - geo.x, 0, geo.width, 0, geo.real_width),
+				"right": tools.remap(rel_right - geo.x, 0, geo.width, 0, geo.real_width),
+				"top": tools.remap(rel_top - geo.y, 0, geo.height, 0, geo.real_height),
+				"bottom": tools.remap(rel_bottom - geo.y, 0, geo.height, 0, geo.real_height),
 			};
 		} else {
 			__sel = null;

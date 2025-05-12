@@ -136,14 +136,9 @@ export var tools = new function() {
 		return `${hours}:${mins}:${secs}.${millis}`;
 	};
 
-	self.remap = function(x, a1, b1, a2, b2) {
-		let remapped = Math.round((x - a1) / b1 * (b2 - a2) + a2);
-		if (remapped < a2) {
-			return a2;
-		} else if (remapped > b2) {
-			return b2;
-		}
-		return remapped;
+	self.remap = function(value, in_min, in_max, out_min, out_max) {
+		let result = Math.round((value - in_min) * (out_max - out_min) / ((in_max - in_min) || 1) + out_min);
+		return Math.min(Math.max(result, out_min), out_max);
 	};
 
 	self.getRandomInt = function(min, max) {
