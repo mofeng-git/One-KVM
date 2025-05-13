@@ -245,8 +245,8 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			if (__scroll_touch_pos === null) {
 				__scroll_touch_pos = pos;
 			} else {
-				let dx = pos.x - __scroll_touch_pos.x;
-				let dy = pos.y - __scroll_touch_pos.y;
+				let dx = __scroll_touch_pos.x - pos.x;
+				let dy = __scroll_touch_pos.y - pos.y;
 				if (Math.abs(dx) < 15) {
 					dx = 0;
 				}
