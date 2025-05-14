@@ -145,8 +145,8 @@ function __WindowManager() {
 		window.addEventListener("mouseup", __globalMouseButtonHandler);
 		window.addEventListener("touchend", __globalMouseButtonHandler);
 
-		window.addEventListener("focusin", (event) => __focusInOut(event.target, true));
-		window.addEventListener("focusout", (event) => __focusInOut(event.target, false));
+		window.addEventListener("focusin", (ev) => __focusInOut(ev.target, true));
+		window.addEventListener("focusout", (ev) => __focusInOut(ev.target, false));
 
 		// Окна с iframe нуждаются в особенной логике для подсветки,
 		// потому что из iframe не приходят события фокуса.
@@ -183,9 +183,9 @@ function __WindowManager() {
 
 		document.addEventListener("fullscreenchange", __onFullScreenChange);
 
-		document.addEventListener("keyup", function(event) {
-			if (__catch_menu_esc && event.code === "Escape") {
-				event.preventDefault();
+		document.addEventListener("keyup", function(ev) {
+			if (__catch_menu_esc && ev.code === "Escape") {
+				ev.preventDefault();
 				__closeAllMenues();
 				__activateLastWindow();
 			}
@@ -302,11 +302,11 @@ function __WindowManager() {
 			el_cancel_bt.className = "row50";
 		}
 
-		el_win.addEventListener("keyup", function (event) {
-			event.preventDefault();
-			if (ok && event.code === "Enter") {
+		el_win.addEventListener("keyup", function (ev) {
+			ev.preventDefault();
+			if (ok && ev.code === "Enter") {
 				el_ok_bt.click();
-			} else if (cancel && event.code === "Escape") {
+			} else if (cancel && ev.code === "Escape") {
 				el_cancel_bt.click();
 			}
 		});
@@ -464,13 +464,13 @@ function __WindowManager() {
 		return el_parent;
 	};
 
-	var __globalMouseButtonHandler = function(event) {
+	var __globalMouseButtonHandler = function(ev) {
 		if (
-			event.target.closest
-			&& !event.target.closest(".menu-button")
-			&& !event.target.closest(".modal")
+			ev.target.closest
+			&& !ev.target.closest(".menu-button")
+			&& !ev.target.closest(".modal")
 		) {
-			for (let el = event.target; el && el !== document; el = el.parentNode) {
+			for (let el = ev.target; el && el !== document; el = el.parentNode) {
 				if (el.classList.contains("menu")) {
 					return;
 				} else if (el.hasAttribute("data-force-hide-menu")) {
@@ -607,41 +607,41 @@ function __WindowManager() {
 		let prev_pos = {"x": 0, "y": 0};
 		let moving = false;
 
-		function startMoving(event) {
+		function startMoving(ev) {
 			// При перетаскивании resizable-окна за правый кран экрана оно ужимается.
 			// Этот костыль фиксит это.
 			el_win.style.width = el_win.offsetWidth + "px";
 
 			__closeAllMenues();
 			__activateWindow(el_win);
-			event = (event || window.event);
-			event.preventDefault();
+			ev = (ev || window.ev);
+			ev.preventDefault();
 
-			if (!event.touches || event.touches.length === 1) {
+			if (!ev.touches || ev.touches.length === 1) {
 				el_header.classList.add("window-header-grabbed");
-				prev_pos = getEventPosition(event);
+				prev_pos = getEventPosition(ev);
 				moving = true;
 			}
 		}
 
-		function doMoving(event) {
+		function doMoving(ev) {
 			if (!moving) {
 				return;
 			}
 
 			el_win.removeAttribute("data-centered");
 
-			event = (event || window.event);
-			event.preventDefault();
+			ev = (ev || window.ev);
+			ev.preventDefault();
 
-			let event_pos = getEventPosition(event);
-			let x = prev_pos.x - event_pos.x;
-			let y = prev_pos.y - event_pos.y;
+			let ev_pos = getEventPosition(ev);
+			let x = prev_pos.x - ev_pos.x;
+			let y = prev_pos.y - ev_pos.y;
 
 			el_win.style.top = (el_win.offsetTop - y) + "px";
 			el_win.style.left = (el_win.offsetLeft - x) + "px";
 
-			prev_pos = event_pos;
+			prev_pos = ev_pos;
 		}
 
 		function stopMoving() {
@@ -649,11 +649,11 @@ function __WindowManager() {
 			moving = false;
 		}
 
-		function getEventPosition(event) {
-			if (event.touches) {
-				return {"x": event.touches[0].clientX, "y": event.touches[0].clientY};
+		function getEventPosition(ev) {
+			if (ev.touches) {
+				return {"x": ev.touches[0].clientX, "y": ev.touches[0].clientY};
 			} else {
-				return {"x": event.clientX, "y": event.clientY};
+				return {"x": ev.clientX, "y": ev.clientY};
 			}
 		}
 
@@ -672,8 +672,8 @@ function __WindowManager() {
 		el_grab.addEventListener("touchstart", startMoving);
 	};
 
-	var __onFullScreenChange = function(event) {
-		let el_win = event.target;
+	var __onFullScreenChange = function(ev) {
+		let el_win = ev.target;
 		if (!document.fullscreenElement) {
 			let rect = el_win.before_full_screen;
 			if (rect) {

@@ -87,13 +87,13 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 			__ws.onopen = __wsOpenHandler;
 			__ws.onerror = __wsErrorHandler;
 			__ws.onclose = __wsCloseHandler;
-			__ws.onmessage = async (event) => {
+			__ws.onmessage = async (ev) => {
 				try {
-					if (typeof event.data === "string") {
-						event = JSON.parse(event.data);
-						__wsJsonHandler(event.event_type, event.event);
+					if (typeof ev.data === "string") {
+						ev = JSON.parse(ev.data);
+						__wsJsonHandler(ev.event_type, ev.event);
 					} else { // Binary
-						await __wsBinHandler(event.data);
+						await __wsBinHandler(ev.data);
 					}
 				} catch (ex) {
 					__wsErrorHandler(ex);
@@ -102,8 +102,8 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 		}
 	};
 
-	var __wsOpenHandler = function(event) {
-		__logInfo("Socket opened:", event);
+	var __wsOpenHandler = function(ev) {
+		__logInfo("Socket opened:", ev);
 		__missed_heartbeats = 0;
 		__ping_timer = setInterval(__ping, 1000);
 	};
@@ -136,14 +136,14 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 		__setInactive();
 	};
 
-	var __wsErrorHandler = function(event) {
-		__logInfo("Socket error:", event);
-		__setInfo(false, false, event);
+	var __wsErrorHandler = function(ev) {
+		__logInfo("Socket error:", ev);
+		__setInfo(false, false, ev);
 		__wsForceClose();
 	};
 
-	var __wsCloseHandler = function(event) {
-		__logInfo("Socket closed:", event);
+	var __wsCloseHandler = function(ev) {
+		__logInfo("Socket closed:", ev);
 		if (__ping_timer) {
 			clearInterval(__ping_timer);
 			__ping_timer = null;
@@ -157,9 +157,9 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 		}
 	};
 
-	var __wsJsonHandler = function(event_type, event) {
-		if (event_type === "media") {
-			__setupCodec(event.video);
+	var __wsJsonHandler = function(ev_type, ev) {
+		if (ev_type === "media") {
+			__setupCodec(ev.video);
 		}
 	};
 

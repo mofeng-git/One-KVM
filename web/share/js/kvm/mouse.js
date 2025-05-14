@@ -63,9 +63,9 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		document.addEventListener("pointerlockerror", __relativeCapturedHandler);
 		$("stream-box").addEventListener("mouseenter", () => __streamHoveredHandler(true));
 		$("stream-box").addEventListener("mouseleave", () => __streamHoveredHandler(false));
-		$("stream-box").addEventListener("mousedown", (event) => __streamButtonHandler(event, true));
-		$("stream-box").addEventListener("mouseup", (event) => __streamButtonHandler(event, false));
-		$("stream-box").addEventListener("contextmenu", (event) => event.preventDefault());
+		$("stream-box").addEventListener("mousedown", (ev) => __streamButtonHandler(ev, true));
+		$("stream-box").addEventListener("mouseup", (ev) => __streamButtonHandler(ev, false));
+		$("stream-box").addEventListener("contextmenu", (ev) => ev.preventDefault());
 		$("stream-box").addEventListener("mousemove", __streamMoveHandler);
 		$("stream-box").addEventListener("wheel", __streamScrollHandler);
 		$("stream-box").addEventListener("touchstart", __streamTouchStartHandler);
@@ -194,11 +194,11 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		__updateOnlineLeds();
 	};
 
-	var __streamButtonHandler = function(event, state) {
+	var __streamButtonHandler = function(ev, state) {
 		// https://www.w3schools.com/jsref/event_button.asp
-		event.preventDefault();
+		ev.preventDefault();
 		if (__absolute || __isRelativeCaptured()) {
-			switch (event.button) {
+			switch (ev.button) {
 				case 0: __keypad.emitByCode("left", state); break;
 				case 2: __keypad.emitByCode("right", state); break;
 				case 1: __keypad.emitByCode("middle", state); break;
@@ -210,25 +210,25 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
-	var __streamTouchStartHandler = function(event) {
-		event.preventDefault();
-		if (event.touches.length === 1) {
+	var __streamTouchStartHandler = function(ev) {
+		ev.preventDefault();
+		if (ev.touches.length === 1) {
 			if (__absolute) {
-				__planned_pos = __getTouchPosition(event, 0);
+				__planned_pos = __getTouchPosition(ev, 0);
 				__sendPlannedMove();
 			} else {
-				__relative_touch_pos = __getTouchPosition(event, 0);
+				__relative_touch_pos = __getTouchPosition(ev, 0);
 			}
-		} else if (event.touches.length >= 2) {
+		} else if (ev.touches.length >= 2) {
 			__planned_pos = null;
 			__relative_touch_pos = null;
 		}
 	};
 
-	var __streamTouchMoveHandler = function(event) {
-		event.preventDefault();
-		if (event.touches.length === 1) {
-			let pos = __getTouchPosition(event, 0);
+	var __streamTouchMoveHandler = function(ev) {
+		ev.preventDefault();
+		if (ev.touches.length === 1) {
+			let pos = __getTouchPosition(ev, 0);
 			if (__absolute) {
 				__planned_pos = pos;
 			} else if (__relative_touch_pos === null) {
@@ -240,8 +240,8 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 				});
 				__relative_touch_pos = pos;
 			}
-		} else if (event.touches.length >= 2) {
-			let pos = __getTouchPosition(event, 0);
+		} else if (ev.touches.length >= 2) {
+			let pos = __getTouchPosition(ev, 0);
 			if (__scroll_touch_pos === null) {
 				__scroll_touch_pos = pos;
 			} else {
@@ -263,47 +263,47 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
-	var __streamTouchEndHandler = function(event) {
-		event.preventDefault();
+	var __streamTouchEndHandler = function(ev) {
+		ev.preventDefault();
 		__sendPlannedMove();
 		__scroll_touch_pos = null;
-		if (event.touches.length >= 2) {
+		if (ev.touches.length >= 2) {
 			__planned_pos = null;
 			__relative_touch_pos = null;
 		}
 	};
 
-	var __getTouchPosition = function(event, index) {
-		if (event.touches[index].target && event.touches[index].target.getBoundingClientRect) {
-			let rect = event.touches[index].target.getBoundingClientRect();
+	var __getTouchPosition = function(ev, index) {
+		if (ev.touches[index].target && ev.touches[index].target.getBoundingClientRect) {
+			let rect = ev.touches[index].target.getBoundingClientRect();
 			return {
-				"x": Math.round(event.touches[index].clientX - rect.left),
-				"y": Math.round(event.touches[index].clientY - rect.top),
+				"x": Math.round(ev.touches[index].clientX - rect.left),
+				"y": Math.round(ev.touches[index].clientY - rect.top),
 			};
 		}
 		return null;
 	};
 
-	var __streamMoveHandler = function(event) {
+	var __streamMoveHandler = function(ev) {
 		if (__absolute) {
-			let rect = event.target.getBoundingClientRect();
+			let rect = ev.target.getBoundingClientRect();
 			__planned_pos = {
-				"x": Math.max(Math.round(event.clientX - rect.left), 0),
-				"y": Math.max(Math.round(event.clientY - rect.top), 0),
+				"x": Math.max(Math.round(ev.clientX - rect.left), 0),
+				"y": Math.max(Math.round(ev.clientY - rect.top), 0),
 			};
 		} else if (__isRelativeCaptured()) {
 			__sendOrPlanRelativeMove({
-				"x": event.movementX,
-				"y": event.movementY,
+				"x": ev.movementX,
+				"y": ev.movementY,
 			});
 		}
 	};
 
-	var __streamScrollHandler = function(event) {
+	var __streamScrollHandler = function(ev) {
 		// https://learn.javascript.ru/mousewheel
 		// https://stackoverflow.com/a/24595588
 
-		event.preventDefault();
+		ev.preventDefault();
 
 		if (!__absolute && !__isRelativeCaptured()) {
 			return;
@@ -311,30 +311,30 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 
 		let delta = {"x": 0, "y": 0};
 		if ($("hid-mouse-cumulative-scrolling-switch").checked) {
-			if (__scroll_delta.x && Math.sign(__scroll_delta.x) !== Math.sign(event.deltaX)) {
+			if (__scroll_delta.x && Math.sign(__scroll_delta.x) !== Math.sign(ev.deltaX)) {
 				delta.x = __scroll_delta.x;
 				__scroll_delta.x = 0;
 			} else {
-				__scroll_delta.x += event.deltaX * __scroll_fix;
+				__scroll_delta.x += ev.deltaX * __scroll_fix;
 				if (Math.abs(__scroll_delta.x) >= 100) {
 					delta.x = __scroll_delta.x;
 					__scroll_delta.x = 0;
 				}
 			}
 
-			if (__scroll_delta.y && Math.sign(__scroll_delta.y) !== Math.sign(event.deltaY)) {
+			if (__scroll_delta.y && Math.sign(__scroll_delta.y) !== Math.sign(ev.deltaY)) {
 				delta.y = __scroll_delta.y;
 				__scroll_delta.y = 0;
 			} else {
-				__scroll_delta.y += event.deltaY * __scroll_fix;
+				__scroll_delta.y += ev.deltaY * __scroll_fix;
 				if (Math.abs(__scroll_delta.y) >= 100) {
 					delta.y = __scroll_delta.y;
 					__scroll_delta.y = 0;
 				}
 			}
 		} else {
-			delta.x = event.deltaX;
-			delta.y = event.deltaY;
+			delta.x = ev.deltaX;
+			delta.y = ev.deltaY;
 		}
 		__sendScroll(delta);
 	};
@@ -400,12 +400,12 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		__sendEvent("mouse_button", {"button": button, "state": state});
 	};
 
-	var __sendEvent = function(event_type, event) {
-		event = {"event_type": event_type, "event": event};
+	var __sendEvent = function(ev_type, ev) {
+		ev = {"event_type": ev_type, "event": ev};
 		if (__ws && !$("hid-mute-switch").checked) {
-			__ws.sendHidEvent(event);
+			__ws.sendHidEvent(ev);
 		}
-		__recordWsEvent(event);
+		__recordWsEvent(ev);
 	};
 
 	__init__();

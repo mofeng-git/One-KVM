@@ -34,10 +34,10 @@ export function main() {
 	if (checkBrowser(null, "kvm/x-mobile.css")) {
 		tools.storage.bindSimpleSwitch($("page-close-ask-switch"), "page.close.ask", true, function(value) {
 			if (value) {
-				window.onbeforeunload = function(event) {
+				window.onbeforeunload = function(ev) {
 					let text = "Are you sure you want to close PiKVM session?";
-					if (event) {
-						event.returnValue = text;
+					if (ev) {
+						ev.returnValue = text;
 					}
 					return text;
 				};

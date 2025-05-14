@@ -152,25 +152,25 @@ export var tools = new function() {
 	self.el = new function() {
 		return {
 			"setOnClick": function(el, callback, prevent_default=true) {
-				el.onclick = el.ontouchend = function(event) {
+				el.onclick = el.ontouchend = function(ev) {
 					if (prevent_default) {
-						event.preventDefault();
+						ev.preventDefault();
 					}
 					callback();
 				};
 			},
 			"setOnDown": function(el, callback, prevent_default=true) {
-				el.onmousedown = el.ontouchstart = function(event) {
+				el.onmousedown = el.ontouchstart = function(ev) {
 					if (prevent_default) {
-						event.preventDefault();
+						ev.preventDefault();
 					}
 					callback();
 				};
 			},
 			"setOnUp": function(el, callback, prevent_default=true) {
-				el.onmouseup = el.ontouchend = function(event) {
+				el.onmouseup = el.ontouchend = function(ev) {
 					if (prevent_default) {
-						event.preventDefault();
+						ev.preventDefault();
 					}
 					callback();
 				};
@@ -210,9 +210,9 @@ export var tools = new function() {
 					el.__pressed = true;
 				};
 
-				el.onmouseup = el.ontouchend = function(event) {
+				el.onmouseup = el.ontouchend = function(ev) {
 					let value = self.slider.getValue(el);
-					event.preventDefault();
+					ev.preventDefault();
 					clear_timer();
 					el.__execution_timer = setTimeout(function() {
 						el.__pressed = false;

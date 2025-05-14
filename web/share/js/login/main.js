@@ -40,9 +40,9 @@ export function main() {
 		}, false);
 
 		tools.el.setOnClick($("login-button"), __login);
-		$("user-input").onkeyup = $("passwd-input").onkeyup = $("code-input").onkeyup = function(event) {
-			if (event.code === "Enter") {
-				event.preventDefault();
+		$("user-input").onkeyup = $("passwd-input").onkeyup = $("code-input").onkeyup = function(ev) {
+			if (ev.code === "Enter") {
+				ev.preventDefault();
 				$("login-button").click();
 			}
 		};

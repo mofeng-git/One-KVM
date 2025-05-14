@@ -53,14 +53,14 @@ export function Ocr(__getGeometry) {
 		$("stream-ocr-window").addEventListener("resize", __resetSelection);
 		$("stream-ocr-window").close_hook = __resetSelection;
 
-		$("stream-ocr-window").onkeyup = function(event) {
-			event.preventDefault();
-			if (event.code === "Enter") {
+		$("stream-ocr-window").onkeyup = function(ev) {
+			ev.preventDefault();
+			if (ev.code === "Enter") {
 				if (__sel) {
 					__recognizeSelection();
 					wm.closeWindow($("stream-ocr-window"));
 				}
-			} else if (event.code === "Escape") {
+			} else if (ev.code === "Escape") {
 				wm.closeWindow($("stream-ocr-window"));
 			}
 		};
@@ -98,17 +98,17 @@ export function Ocr(__getGeometry) {
 		el.value = tools.storage.get("stream.ocr.lang", langs["default"]);
 	};
 
-	var __startSelection = function(event) {
+	var __startSelection = function(ev) {
 		if (__start_pos === null) {
 			tools.hidden.setVisible($("stream-ocr-selection"), false);
-			__start_pos = __getGlobalPosition(event);
+			__start_pos = __getGlobalPosition(ev);
 			__end_pos = null;
 		}
 	};
 
-	var __changeSelection = function(event) {
+	var __changeSelection = function(ev) {
 		if (__start_pos !== null) {
-			__end_pos = __getGlobalPosition(event);
+			__end_pos = __getGlobalPosition(ev);
 			let width = Math.abs(__start_pos.x - __end_pos.x);
 			let height = Math.abs(__start_pos.y - __end_pos.y);
 			let el = $("stream-ocr-selection");
@@ -120,8 +120,8 @@ export function Ocr(__getGeometry) {
 		}
 	};
 
-	var __endSelection = function(event) {
-		__changeSelection(event);
+	var __endSelection = function(ev) {
+		__changeSelection(ev);
 		let el = $("stream-ocr-selection");
 		let ok = (
 			el.offsetWidth > 1 && el.offsetHeight > 1
@@ -149,13 +149,13 @@ export function Ocr(__getGeometry) {
 		__end_pos = null;
 	};
 
-	var __getGlobalPosition = function(event) {
+	var __getGlobalPosition = function(ev) {
 		let rect = $("stream-box").getBoundingClientRect();
 		let geo = __getGeometry();
 		let offset = __getNavbarOffset();
 		return {
-			"x": Math.min(Math.max(event.clientX, rect.left + geo.x), rect.right - geo.x),
-			"y": Math.min(Math.max(event.clientY - offset, rect.top + geo.y - offset), rect.bottom - geo.y - offset),
+			"x": Math.min(Math.max(ev.clientX, rect.left + geo.x), rect.right - geo.x),
+			"y": Math.min(Math.max(ev.clientY - offset, rect.top + geo.y - offset), rect.bottom - geo.y - offset),
 		};
 	};
 

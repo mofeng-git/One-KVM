@@ -94,17 +94,17 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 		}
 	};
 
-	self.emitByKeyEvent = function(event, state) {
-		if (event.repeat) {
+	self.emitByKeyEvent = function(ev, state) {
+		if (ev.repeat) {
 			return;
 		}
 
-		let code = event.code;
+		let code = ev.code;
 		if (__apply_fixes) {
 			// https://github.com/pikvm/pikvm/issues/819
-			if (code === "IntlBackslash" && ["`", "~"].includes(event.key)) {
+			if (code === "IntlBackslash" && ["`", "~"].includes(ev.key)) {
 				code = "Backquote";
-			} else if (code === "Backquote" && ["§", "±"].includes(event.key)) {
+			} else if (code === "Backquote" && ["§", "±"].includes(ev.key)) {
 				code = "IntlBackslash";
 			}
 		}

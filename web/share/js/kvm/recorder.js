@@ -63,8 +63,8 @@ export function Recorder() {
 		__refresh();
 	};
 
-	self.recordWsEvent = function(event) {
-		__recordEvent(event);
+	self.recordWsEvent = function(ev) {
+		__recordEvent(ev);
 	};
 
 	self.recordPrintEvent = function(text, keymap, slow) {
@@ -83,7 +83,7 @@ export function Recorder() {
 		__recordEvent({"event_type": "gpio_pulse", "event": {"channel": channel}});
 	};
 
-	var __recordEvent = function(event) {
+	var __recordEvent = function(ev) {
 		if (__recording) {
 			let now = new Date().getTime();
 			if (__last_event_ts) {
@@ -92,7 +92,7 @@ export function Recorder() {
 				__events_time += delay;
 			}
 			__last_event_ts = now;
-			__events.push(event);
+			__events.push(ev);
 			__setCounters(__events.length, __events_time);
 		}
 	};
@@ -149,73 +149,73 @@ export function Recorder() {
 					let raw_events = JSON.parse(reader.result);
 					__checkType(raw_events, "object", "Base of script is not an objects list");
 
-					for (let event of raw_events) {
-						__checkType(event, "object", "Non-dict event");
-						__checkType(event.event, "object", "Non-dict event");
+					for (let ev of raw_events) {
+						__checkType(ev, "object", "Non-dict event");
+						__checkType(ev.event, "object", "Non-dict event");
 
-						if (event.event_type === "delay") {
-							__checkUnsigned(event.event.millis, "Non-unsigned delay");
-							events_time += event.event.millis;
+						if (ev.event_type === "delay") {
+							__checkUnsigned(ev.event.millis, "Non-unsigned delay");
+							events_time += ev.event.millis;
 
-						} else if (event.event_type === "print") {
-							__checkType(event.event.text, "string", "Non-string print text");
-							if (event.event.keymap !== undefined) {
-								__checkType(event.event.keymap, "string", "Non-string keymap");
+						} else if (ev.event_type === "print") {
+							__checkType(ev.event.text, "string", "Non-string print text");
+							if (ev.event.keymap !== undefined) {
+								__checkType(ev.event.keymap, "string", "Non-string keymap");
 							}
-							if (event.event.slow !== undefined) {
-								__checkType(event.event.slow, "boolean", "Non-bool slow");
+							if (ev.event.slow !== undefined) {
+								__checkType(ev.event.slow, "boolean", "Non-bool slow");
 							}
 
-						} else if (event.event_type === "key") {
-							__checkType(event.event.key, "string", "Non-string key code");
-							__checkType(event.event.state, "boolean", "Non-bool key state");
+						} else if (ev.event_type === "key") {
+							__checkType(ev.event.key, "string", "Non-string key code");
+							__checkType(ev.event.state, "boolean", "Non-bool key state");
 
-						} else if (event.event_type === "mouse_button") {
-							__checkType(event.event.button, "string", "Non-string mouse button code");
-							__checkType(event.event.state, "boolean", "Non-bool mouse button state");
+						} else if (ev.event_type === "mouse_button") {
+							__checkType(ev.event.button, "string", "Non-string mouse button code");
+							__checkType(ev.event.state, "boolean", "Non-bool mouse button state");
 
-						} else if (event.event_type === "mouse_move") {
-							__checkType(event.event.to, "object", "Non-object mouse move target");
-							__checkInt(event.event.to.x, "Non-int mouse move X");
-							__checkInt(event.event.to.y, "Non-int mouse move Y");
+						} else if (ev.event_type === "mouse_move") {
+							__checkType(ev.event.to, "object", "Non-object mouse move target");
+							__checkInt(ev.event.to.x, "Non-int mouse move X");
+							__checkInt(ev.event.to.y, "Non-int mouse move Y");
 
-						} else if (event.event_type === "mouse_relative") {
-							__checkMouseRelativeDelta(event.event.delta);
-							__checkType(event.event.squash, "boolean", "Non-boolean squash");
+						} else if (ev.event_type === "mouse_relative") {
+							__checkMouseRelativeDelta(ev.event.delta);
+							__checkType(ev.event.squash, "boolean", "Non-boolean squash");
 
-						} else if (event.event_type === "mouse_wheel") {
-							__checkType(event.event.delta, "object", "Non-object mouse wheel delta");
-							__checkInt(event.event.delta.x, "Non-int mouse delta X");
-							__checkInt(event.event.delta.y, "Non-int mouse delta Y");
+						} else if (ev.event_type === "mouse_wheel") {
+							__checkType(ev.event.delta, "object", "Non-object mouse wheel delta");
+							__checkInt(ev.event.delta.x, "Non-int mouse delta X");
+							__checkInt(ev.event.delta.y, "Non-int mouse delta Y");
 
-						} else if (event.event_type === "atx_button") {
-							__checkType(event.event.button, "string", "Non-string ATX button");
+						} else if (ev.event_type === "atx_button") {
+							__checkType(ev.event.button, "string", "Non-string ATX button");
 
-						} else if (event.event_type === "gpio_switch") {
-							__checkType(event.event.channel, "string", "Non-string GPIO channel");
-							__checkType(event.event.state, "boolean", "Non-bool GPIO state");
+						} else if (ev.event_type === "gpio_switch") {
+							__checkType(ev.event.channel, "string", "Non-string GPIO channel");
+							__checkType(ev.event.state, "boolean", "Non-bool GPIO state");
 
-						} else if (event.event_type === "gpio_pulse") {
-							__checkType(event.event.channel, "string", "Non-string GPIO channel");
+						} else if (ev.event_type === "gpio_pulse") {
+							__checkType(ev.event.channel, "string", "Non-string GPIO channel");
 
-						} else if (event.event_type === "delay_random") {
-							__checkType(event.event.range, "object", "Non-object random delay range");
-							__checkUnsigned(event.event.range.min, "Non-unsigned random delay range min");
-							__checkUnsigned(event.event.range.max, "Non-unsigned random delay range max");
-							__checkRangeMinMax(event.event.range, "Invalid random delay range");
-							events_time += event.event.range.max;
+						} else if (ev.event_type === "delay_random") {
+							__checkType(ev.event.range, "object", "Non-object random delay range");
+							__checkUnsigned(ev.event.range.min, "Non-unsigned random delay range min");
+							__checkUnsigned(ev.event.range.max, "Non-unsigned random delay range max");
+							__checkRangeMinMax(ev.event.range, "Invalid random delay range");
+							events_time += ev.event.range.max;
 
-						} else if (event.event_type === "mouse_move_random") { // Hack for pikvm/pikvm#1041
-							__checkType(event.event.range, "object", "Non-object random mouse move range");
-							__checkInt(event.event.range.min, "Non-int random mouse move range min");
-							__checkInt(event.event.range.max, "Non-int random mouse move range max");
-							__checkRangeMinMax(event.event.range, "Invalid random mouse move range");
+						} else if (ev.event_type === "mouse_move_random") { // Hack for pikvm/pikvm#1041
+							__checkType(ev.event.range, "object", "Non-object random mouse move range");
+							__checkInt(ev.event.range.min, "Non-int random mouse move range min");
+							__checkInt(ev.event.range.max, "Non-int random mouse move range max");
+							__checkRangeMinMax(ev.event.range, "Invalid random mouse move range");
 
 						} else {
-							throw `Unknown event type: ${event.event_type}`;
+							throw `Unknown event type: ${ev.event_type}`;
 						}
 
-						events.push(event);
+						events.push(ev);
 					}
 
 					__events = events;
@@ -274,24 +274,24 @@ export function Recorder() {
 	var __runEvents = function(index, time=0) {
 		while (index < __events.length) {
 			__setCounters(__events.length - index + 1, __events_time - time);
-			let event = __events[index];
+			let ev = __events[index];
 
-			if (["delay", "delay_random"].includes(event.event_type)) {
+			if (["delay", "delay_random"].includes(ev.event_type)) {
 				let millis = (
-					event.event_type === "delay"
-						? event.event.millis
-						: tools.getRandomInt(event.event.range.min, event.event.range.max)
+					ev.event_type === "delay"
+						? ev.event.millis
+						: tools.getRandomInt(ev.event.range.min, ev.event.range.max)
 				);
 				__play_timer = setTimeout(() => __runEvents(index + 1, time + millis), millis);
 				return;
 
-			} else if (event.event_type === "print") {
+			} else if (ev.event_type === "print") {
 				let params = {"limit": 0};
-				if (event.event.keymap !== undefined) {
-					params["keymap"] = event.event.keymap;
+				if (ev.event.keymap !== undefined) {
+					params["keymap"] = ev.event.keymap;
 				}
-				if (event.event.slow !== undefined) {
-					params["slow"] = event.event.slow;
+				if (ev.event.slow !== undefined) {
+					params["slow"] = ev.event.slow;
 				}
 				tools.httpPost("api/hid/print", params, function(http) {
 					if (http.status === 413) {
@@ -303,11 +303,11 @@ export function Recorder() {
 					} else if (http.status === 200) {
 						__play_timer = setTimeout(() => __runEvents(index + 1, time), 0);
 					}
-				}, event.event.text, "text/plain");
+				}, ev.event.text, "text/plain");
 				return;
 
-			} else if (event.event_type === "atx_button") {
-				tools.httpPost("api/atx/click", {"button": event.event.button}, function(http) {
+			} else if (ev.event_type === "atx_button") {
+				tools.httpPost("api/atx/click", {"button": ev.event.button}, function(http) {
 					if (http.status !== 200) {
 						wm.error("ATX error", http.responseText);
 						__stopProcess();
@@ -317,12 +317,12 @@ export function Recorder() {
 				});
 				return;
 
-			} else if (["gpio_switch", "gpio_pulse"].includes(event.event_type)) {
+			} else if (["gpio_switch", "gpio_pulse"].includes(ev.event_type)) {
 				let path = "api/gpio";
-				let params = {"channel": event.event.channel};
-				if (event.event_type === "gpio_switch") {
+				let params = {"channel": ev.event.channel};
+				if (ev.event_type === "gpio_switch") {
 					path += "/switch";
-					params["state"] = event.event.to;
+					params["state"] = ev.event.to;
 				} else { // gpio_pulse
 					path += "/pulse";
 				}
@@ -336,19 +336,19 @@ export function Recorder() {
 				});
 				return;
 
-			} else if (event.event_type === "key") {
-				event.event.finish = $("hid-keyboard-bad-link-switch").checked;
-				__ws.sendHidEvent(event);
+			} else if (ev.event_type === "key") {
+				ev.event.finish = $("hid-keyboard-bad-link-switch").checked;
+				__ws.sendHidEvent(ev);
 
-			} else if (["mouse_button", "mouse_move", "mouse_wheel", "mouse_relative"].includes(event.event_type)) {
-				__ws.sendHidEvent(event);
+			} else if (["mouse_button", "mouse_move", "mouse_wheel", "mouse_relative"].includes(ev.event_type)) {
+				__ws.sendHidEvent(ev);
 
-			} else if (event.event_type === "mouse_move_random") {
+			} else if (ev.event_type === "mouse_move_random") {
 				__ws.sendHidEvent({
 					"event_type": "mouse_move",
 					"event": {"to": {
-						"x": tools.getRandomInt(event.event.range.min, event.event.range.max),
-						"y": tools.getRandomInt(event.event.range.min, event.event.range.max),
+						"x": tools.getRandomInt(ev.event.range.min, ev.event.range.max),
+						"y": tools.getRandomInt(ev.event.range.min, ev.event.range.max),
 					}},
 				});
 			}

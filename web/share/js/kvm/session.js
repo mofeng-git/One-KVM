@@ -72,15 +72,15 @@ export function Session() {
 		tools.httpGet("api/auth/check", null, function(http) {
 			if (http.status === 200) {
 				__ws = new WebSocket(tools.makeWsUrl("api/ws"));
-				__ws.sendHidEvent = (event) => __sendHidEvent(__ws, event.event_type, event.event);
+				__ws.sendHidEvent = (ev) => __sendHidEvent(__ws, ev.event_type, ev.event);
 				__ws.binaryType = "arraybuffer";
 				__ws.onopen = __wsOpenHandler;
-				__ws.onmessage = async (event) => {
-					if (typeof event.data === "string") {
-						event = JSON.parse(event.data);
-						__wsJsonHandler(event.event_type, event.event);
+				__ws.onmessage = async (ev) => {
+					if (typeof ev.data === "string") {
+						ev = JSON.parse(ev.data);
+						__wsJsonHandler(ev.event_type, ev.event);
 					} else { // Binary
-						__wsBinHandler(event.data);
+						__wsBinHandler(ev.data);
 					}
 				};
 				__ws.onerror = __wsErrorHandler;
@@ -96,8 +96,8 @@ export function Session() {
 		});
 	};
 
-	var __wsOpenHandler = function(event) {
-		tools.debug("Session: socket opened:", event);
+	var __wsOpenHandler = function(ev) {
+		tools.debug("Session: socket opened:", ev);
 		$("link-led").className = "led-green";
 		$("link-led").title = "Connected";
 		__recorder.setSocket(__ws);
@@ -113,36 +113,36 @@ export function Session() {
 		}
 	};
 
-	var __wsJsonHandler = function(event_type, event) {
-		switch (event_type) {
-			case "info": __info.setState(event); break;
-			case "gpio": __gpio.setState(event); break;
-			case "hid": __hid.setState(event); break;
-			case "hid_keymaps": __paste.setState(event); break;
-			case "atx": __atx.setState(event); break;
-			case "streamer": __streamer.setState(event); break;
-			case "ocr": __ocr.setState(event); break;
+	var __wsJsonHandler = function(ev_type, ev) {
+		switch (ev_type) {
+			case "info": __info.setState(ev); break;
+			case "gpio": __gpio.setState(ev); break;
+			case "hid": __hid.setState(ev); break;
+			case "hid_keymaps": __paste.setState(ev); break;
+			case "atx": __atx.setState(ev); break;
+			case "streamer": __streamer.setState(ev); break;
+			case "ocr": __ocr.setState(ev); break;
 
 			case "msd":
-				if (event.online === false) {
+				if (ev.online === false) {
 					__switch.setMsdConnected(false);
-				} else if (event.drive !== undefined) {
-					__switch.setMsdConnected(event.drive.connected);
+				} else if (ev.drive !== undefined) {
+					__switch.setMsdConnected(ev.drive.connected);
 				}
-				__msd.setState(event);
+				__msd.setState(ev);
 				break;
 
 			case "switch":
-				if (event.model) {
-					__atx.setHasSwitch(event.model.ports.length > 0);
+				if (ev.model) {
+					__atx.setHasSwitch(ev.model.ports.length > 0);
 				}
-				__switch.setState(event);
+				__switch.setState(ev);
 				break;
 		}
 	};
 
-	var __wsErrorHandler = function(event) {
-		tools.error("Session: socket error:", event);
+	var __wsErrorHandler = function(ev) {
+		tools.error("Session: socket error:", ev);
 		if (__ws) {
 			__ws.onclose = null;
 			__ws.close();
@@ -150,8 +150,8 @@ export function Session() {
 		}
 	};
 
-	var __wsCloseHandler = function(event) {
-		tools.debug("Session: socket closed:", event);
+	var __wsCloseHandler = function(ev) {
+		tools.debug("Session: socket closed:", ev);
 		$("link-led").className = "led-gray";
 
 		if (__ping_timer) {
@@ -190,43 +190,43 @@ export function Session() {
 
 	var __ascii_encoder = new TextEncoder("ascii");
 
-	var __sendHidEvent = function(ws, event_type, event) {
-		if (event_type === "key") {
-			let data = __ascii_encoder.encode("\x01\x00" + event.key);
-			data[1] = (event.state ? 1 : 0);
-			if (event.finish === true) { // Optional
+	var __sendHidEvent = function(ws, ev_type, ev) {
+		if (ev_type === "key") {
+			let data = __ascii_encoder.encode("\x01\x00" + ev.key);
+			data[1] = (ev.state ? 1 : 0);
+			if (ev.finish === true) { // Optional
 				data[1] |= 0x02;
 			}
 			ws.send(data);
 
-		} else if (event_type === "mouse_button") {
-			let data = __ascii_encoder.encode("\x02\x00" + event.button);
-			data[1] = (event.state ? 1 : 0);
+		} else if (ev_type === "mouse_button") {
+			let data = __ascii_encoder.encode("\x02\x00" + ev.button);
+			data[1] = (ev.state ? 1 : 0);
 			ws.send(data);
 
-		} else if (event_type === "mouse_move") {
+		} else if (ev_type === "mouse_move") {
 			let data = new Uint8Array([
 				3,
-				(event.to.x >> 8) & 0xFF, event.to.x & 0xFF,
-				(event.to.y >> 8) & 0xFF, event.to.y & 0xFF,
+				(ev.to.x >> 8) & 0xFF, ev.to.x & 0xFF,
+				(ev.to.y >> 8) & 0xFF, ev.to.y & 0xFF,
 			]);
 			ws.send(data);
 
-		} else if (event_type === "mouse_relative" || event_type === "mouse_wheel") {
+		} else if (ev_type === "mouse_relative" || ev_type === "mouse_wheel") {
 			let data;
-			if (Array.isArray(event.delta)) {
-				data = new Int8Array(2 + event.delta.length * 2);
+			if (Array.isArray(ev.delta)) {
+				data = new Int8Array(2 + ev.delta.length * 2);
 				let index = 0;
-				for (let delta of event.delta) {
+				for (let delta of ev.delta) {
 					data[index + 2] = delta["x"];
 					data[index + 3] = delta["y"];
 					index += 2;
 				}
 			} else {
-				data = new Int8Array([0, 0, event.delta.x, event.delta.y]);
+				data = new Int8Array([0, 0, ev.delta.x, ev.delta.y]);
 			}
-			data[0] = (event_type === "mouse_relative" ? 4 : 5);
-			data[1] = (event.squash ? 1 : 0);
+			data[0] = (ev_type === "mouse_relative" ? 4 : 5);
+			data[1] = (ev.squash ? 1 : 0);
 			ws.send(data);
 		}
 	};

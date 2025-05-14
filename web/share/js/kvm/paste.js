@@ -33,8 +33,8 @@ export function Paste(__recorder) {
 	/************************************************************************/
 
 	var __init__ = function() {
-		$("hid-pak-text").addEventListener("keyup", function(event) {
-			if (event.ctrlKey && event.code == "Enter") {
+		$("hid-pak-text").addEventListener("keyup", function(ev) {
+			if (ev.ctrlKey && ev.code == "Enter") {
 				$("hid-pak-button").click();
 			}
 		});
