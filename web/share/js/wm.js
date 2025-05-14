@@ -130,7 +130,7 @@ function __WindowManager() {
 				if (el && __getFullScreenFunction(el_win)) {
 					el.title = "Go to full-screen mode";
 					tools.el.setOnClick(el, function() {
-						__fullScreenWindow(el_win);
+						__setFullScreenWindow(el_win);
 						el_win.focus(el_win); // Почему-то теряется фокус
 						__activateLastWindow(el_win);
 					});
@@ -258,7 +258,7 @@ function __WindowManager() {
 		return __modalDialog(header, create_content, ok, cancel);
 	};
 
-	var __modalDialog = function(header, html, ok, cancel, parent=null) {
+	var __modalDialog = function(header, html, ok, cancel, el_parent=null) {
 		let el_active_menu = (document.activeElement && document.activeElement.closest(".menu"));
 
 		let el_modal = document.createElement("div");
@@ -340,7 +340,7 @@ function __WindowManager() {
 		}
 
 		__windows.push(el_modal);
-		(parent || document.fullscreenElement || document.body).appendChild(el_modal);
+		(el_parent || document.fullscreenElement || document.body).appendChild(el_modal);
 		if (typeof html === "function") {
 			// Это должно быть здесь, потому что элемент должен иметь родителя чтобы существовать
 			html(el_content, el_ok_bt);
@@ -675,7 +675,7 @@ function __WindowManager() {
 	var __onFullScreenChange = function(ev) {
 		let el_win = ev.target;
 		if (!document.fullscreenElement) {
-			let rect = el_win.before_full_screen;
+			let rect = el_win.__before_full_screen_rect;
 			if (rect) {
 				el_win.style.width = rect.width + "px";
 				el_win.style.height = rect.height + "px";
@@ -685,8 +685,8 @@ function __WindowManager() {
 		}
 	};
 
-	var __fullScreenWindow = function(el_win) {
-		el_win.before_full_screen = el_win.getBoundingClientRect();
+	var __setFullScreenWindow = function(el_win) {
+		el_win.__before_full_screen_rect = el_win.getBoundingClientRect();
 		__getFullScreenFunction(el_win).call(el_win);
 		if (navigator.keyboard && navigator.keyboard.lock) {
 			navigator.keyboard.lock();
