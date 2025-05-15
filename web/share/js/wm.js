@@ -121,7 +121,7 @@ function __WindowManager() {
 
 			{
 				let el = el_win.querySelector(".window-header .window-button-full-screen");
-				if (el && __getFullScreenFunction(el_win)) {
+				if (el && el_win.requestFullscreen) {
 					el.title = "Go to full-screen mode";
 					tools.el.setOnClick(el, function() {
 						__setFullScreenWindow(el_win);
@@ -681,7 +681,7 @@ function __WindowManager() {
 
 	var __setFullScreenWindow = function(el_win) {
 		el_win.__before_full_screen_rect = el_win.getBoundingClientRect();
-		__getFullScreenFunction(el_win).call(el_win);
+		el_win.requestFullscreen();
 		if (navigator.keyboard && navigator.keyboard.lock) {
 			navigator.keyboard.lock();
 		} else {
@@ -704,17 +704,6 @@ function __WindowManager() {
 		el_win.style.top = vertical_offset + "px";
 		el_win.style.width = window.innerWidth + "px";
 		el_win.style.height = window.innerHeight - vertical_offset + "px";
-	};
-
-	var __getFullScreenFunction = function(el_win) {
-		if (el_win.requestFullscreen) {
-			return el_win.requestFullscreen;
-		} else if (el_win.webkitRequestFullscreen) {
-			return el_win.webkitRequestFullscreen;
-		} else if (el_win.mozRequestFullscreen) {
-			return el_win.mozRequestFullscreen;
-		}
-		return null;
 	};
 
 	__init__();
