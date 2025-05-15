@@ -44,12 +44,6 @@ function __WindowManager() {
 	var __catch_menu_esc = false;
 
 	var __init__ = function() {
-		for (let el of $$$("button")) {
-			// XXX: Workaround for iOS Safari:
-			// https://stackoverflow.com/questions/3885018/active-pseudo-class-doesnt-work-in-mobile-safari
-			el.ontouchstart = function() {};
-		}
-
 		for (let el of $$("menu-button")) {
 			el.parentElement.querySelector(".menu").setAttribute("tabindex", "-1");
 			tools.el.setOnDown(el, () => __toggleMenu(el));
