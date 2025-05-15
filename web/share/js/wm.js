@@ -45,7 +45,7 @@ function __WindowManager() {
 
 	var __init__ = function() {
 		for (let el of $$("menu-button")) {
-			el.parentElement.querySelector(".menu").setAttribute("tabindex", "-1");
+			el.parentElement.querySelector(".menu").tabIndex = -1;
 			tools.el.setOnDown(el, () => __toggleMenu(el));
 			__menu_buttons.push(el);
 		}
@@ -55,7 +55,7 @@ function __WindowManager() {
 		}
 
 		for (let el_win of $$("window")) {
-			el_win.setAttribute("tabindex", "-1");
+			el_win.tabIndex = -1;
 			__makeWindowMovable(el_win);
 			__windows.push(el_win);
 
@@ -261,7 +261,7 @@ function __WindowManager() {
 
 		let el_win = document.createElement("div");
 		el_win.className = "modal-window";
-		el_win.setAttribute("tabindex", "-1");
+		el_win.tabIndex = -1;
 		el_modal.appendChild(el_win);
 
 		let el_header = document.createElement("div");
@@ -453,7 +453,7 @@ function __WindowManager() {
 		} else if ((el_parent = el.closest(".menu")) !== null) {
 			el_parent.classList.toggle("menu-active", focus_in);
 		}
-		tools.info(`UI: Focus ${focus_in ? "IN" : "OUT"}:`, el_parent);
+		tools.debug(`UI: Focus ${focus_in ? "IN" : "OUT"}:`, el_parent);
 		return el_parent;
 	};
 
