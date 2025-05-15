@@ -125,7 +125,6 @@ function __WindowManager() {
 					el.title = "Go to full-screen mode";
 					tools.el.setOnClick(el, function() {
 						__setFullScreenWindow(el_win);
-						el_win.focus(el_win); // Почему-то теряется фокус
 						__activateLastWindow(el_win);
 					});
 				}
@@ -534,8 +533,9 @@ function __WindowManager() {
 	var __activateLastWindow = function(el_except_win=null) {
 		let el_last_win = null;
 
-		if (document.activeElement) {
-			el_last_win = (document.activeElement.closest(".modal-window") || document.activeElement.closest(".window"));
+		let el_active = document.activeElement;
+		if (el_active) {
+			el_last_win = (el_active.closest(".modal-window") || el_active.closest(".window"));
 			if (el_last_win && window.getComputedStyle(el_last_win, null).visibility === "hidden") {
 				el_last_win = null;
 			}
@@ -568,12 +568,13 @@ function __WindowManager() {
 			let el_to_focus;
 			let el_focused; // A window which contains a focus
 
+			let el_active = document.activeElement;
 			if (el_win.className === "modal") {
 				el_to_focus = el_win.querySelector(".modal-window");
-				el_focused = (document.activeElement && document.activeElement.closest(".modal-window"));
+				el_focused = (el_active && el_active.closest(".modal-window"));
 			} else { // .window
 				el_to_focus = el_win;
-				el_focused = (document.activeElement && document.activeElement.closest(".window"));
+				el_focused = (el_active && el_active.closest(".window"));
 			}
 
 			if (el_win.className !== "modal" && parseInt(el_win.style.zIndex) !== __top_z_index) {
@@ -694,6 +695,7 @@ function __WindowManager() {
 			);
 			__modalDialog("Keyboard lock is unsupported", msg, true, false, el_win);
 		}
+		el_win.focus(el_win); // Почему-то теряется фокус
 	};
 
 	var __maximizeWindow = function(el_win) {
