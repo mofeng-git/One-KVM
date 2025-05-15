@@ -384,11 +384,11 @@ function __WindowManager() {
 
 	self.setFullTabWindow = function(el_win, enabled) {
 		el_win.classList.toggle("window-full-tab", enabled);
-		__activateLastWindow(el_win);
 		let el_navbar = $("navbar");
 		if (el_navbar) {
 			tools.hidden.setVisible(el_navbar, !enabled);
 		}
+		setTimeout(() => __activateWindow(el_win), 100);
 	};
 
 	var __closeWindow = function(el_win) {
