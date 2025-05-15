@@ -346,7 +346,8 @@ function __WindowManager() {
 		return promise;
 	};
 
-	self.showWindow = function(el_win, activate=true, center=false) {
+	self.showWindow = function(el_win) {
+		let center = false;
 		let showed = false;
 		if (!self.isWindowVisible(el_win)) {
 			center = true;
@@ -354,9 +355,7 @@ function __WindowManager() {
 		}
 		__organizeWindow(el_win, center);
 		el_win.style.visibility = "visible";
-		if (activate) {
-			__activateWindow(el_win);
-		}
+		__activateWindow(el_win);
 		if (el_win.show_hook) {
 			if (showed) {
 				el_win.show_hook();
