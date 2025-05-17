@@ -7,23 +7,24 @@ RUN echo 'Server = https://mirror.rackspace.com/archlinux/$repo/os/$arch' > /etc
 	&& pacman-key --init \
 	&& pacman-key --populate archlinux
 
-RUN pacman --noconfirm --ask=4 -Syy \
-	&& pacman --needed --noconfirm --ask=4 -S \
+RUN \
+	--mount=type=cache,id=kvmd-pacman-pkg,target=/var/cache/pacman/pkg \
+	--mount=type=cache,id=kvmd-pacman-db,target=/var/lib/pacman/sync \
+	PACMAN="pacman --noconfirm --ask=4 --needed" \
+	&& $PACMAN -Syy \
 		archlinux-keyring \
-	&& pacman --needed --noconfirm --ask=4 -S \
+	&& $PACMAN -S \
 		glibc \
 		pacman \
 		openssl \
 		openssl-1.1 \
 	&& pacman-db-upgrade \
-	&& pacman --noconfirm --ask=4 -Syu \
-	&& pacman --needed --noconfirm --ask=4 -S \
+	&& $PACMAN -Syu \
 		p11-kit \
 		ca-certificates \
 		ca-certificates-mozilla \
 		ca-certificates-utils \
-	&& pacman -Syu --noconfirm --ask=4 \
-	&& pacman -S --needed --noconfirm --ask=4 \
+	&& $PACMAN -Syu \
 		base-devel \
 		autoconf-archive \
 		help2man \
@@ -78,28 +79,35 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		eslint \
 		npm \
 		shellcheck \
-	&& (pacman -Sc --noconfirm || true) \
-	&& rm -rf /var/cache/pacman/pkg/*
+	&& :
 
 COPY testenv/requirements.txt requirements.txt
-RUN pip install --break-system-packages -r requirements.txt
+RUN \
+	--mount=type=cache,id=kvmd-pip,target=/root/.cache/pip \
+	pip install --break-system-packages --root-user-action=ignore \
+		-r requirements.txt
 
 # https://stackoverflow.com/questions/57534295
 WORKDIR /root
-RUN npm install htmlhint -g \
-	&& npm install pug \
-	&& npm install pug-cli -g \
-	&& npm install @babel/eslint-parser -g
+RUN \
+	--mount=type=cache,id=kvmd-npm,target=/root/.npm \
+	--mount=type=tmpfs,target=/tmp \
+	npm install -g \
+		htmlhint \
+		pug \
+		pug-cli \
+		@babel/eslint-parser
 WORKDIR /
 
 ARG USTREAMER_MIN_VERSION
 ENV USTREAMER_MIN_VERSION $USTREAMER_MIN_VERSION
 RUN echo $USTREAMER_MIN_VERSION
-RUN git clone https://github.com/pikvm/ustreamer \
+RUN \
+	--mount=type=tmpfs,target=/tmp \
+	cd /tmp \
+	&& git clone --depth=1 https://github.com/pikvm/ustreamer \
 	&& cd ustreamer \
-	&& make WITH_PYTHON=1 PREFIX=/usr DESTDIR=/ install \
-	&& cd - \
-	&& rm -rf ustreamer
+	&& make WITH_PYTHON=1 PREFIX=/usr DESTDIR=/ install
 
 RUN mkdir -p \
 		/etc/kvmd/{nginx,vnc} \
@@ -112,4 +120,4 @@ COPY testenv/fakes/sys /fake_sysfs/sys
 COPY testenv/fakes/proc /fake_procfs/proc
 COPY testenv/fakes/etc /fake_etc/etc
 
-CMD /bin/bash
+CMD ["/bin/bash"]
