@@ -564,7 +564,8 @@ function __WindowManager() {
 		let ah = el_win.__aspect_ratio_height;
 		let gw = view.right - view.left;
 		let gh = view.bottom - view.top;
-		if (aw && ah) {
+		if (el_win.organize_hook && aw && ah) {
+			// Умная машинерия только для aspect-ratio
 			if (aw / gw < ah / gh) {
 				el_win.style.width = "";
 				el_win.style.height = gh + "px";
@@ -573,10 +574,10 @@ function __WindowManager() {
 				el_win.style.height = "";
 				el_win.style.width = gw + "px";
 			}
-		}/* else {
+		} else {
 			el_win.style.width = gw + "px";
 			el_win.style.height = gh + "px";
-		}*/
+		}
 
 		let rect = el_win.getBoundingClientRect();
 		el_win.style.left = Math.round((view.right - rect.width) / 2) + "px";
