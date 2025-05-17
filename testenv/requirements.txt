@@ -6,3 +6,4 @@ pyrad
 types-PyYAML
 types-aiofiles
 luma.oled
+gpiod>=2.3
