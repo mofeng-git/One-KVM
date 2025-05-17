@@ -26,6 +26,7 @@
 import {ROOT_PREFIX} from "../vars.js";
 import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
+import {clipboard} from "./clipboard.js";
 
 
 export function Switch() {
@@ -234,7 +235,7 @@ export function Switch() {
 		if (edid_id && __state && __state.edids) {
 			let data = __state.edids.all[edid_id].data;
 			data = data.replace(/(.{32})/g, "$1\n");
-			wm.copyTextToClipboard(data);
+			clipboard.setText(data);
 		}
 	};
 

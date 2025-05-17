@@ -25,6 +25,7 @@
 
 import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
+import {clipboard} from "./clipboard.js";
 
 
 export function Ocr(__getGeometry) {
@@ -189,7 +190,7 @@ export function Ocr(__getGeometry) {
 		};
 		tools.httpGet("api/streamer/snapshot", params, function(http) {
 			if (http.status === 200) {
-				wm.copyTextToClipboard(http.responseText);
+				clipboard.setText(http.responseText);
 			} else {
 				wm.error("OCR error:<br>", http.responseText);
 			}

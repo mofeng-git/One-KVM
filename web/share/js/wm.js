@@ -187,50 +187,6 @@ function __WindowManager() {
 
 	/************************************************************************/
 
-	self.copyTextToClipboard = function(text) {
-		let workaround = function(ex) {
-			// https://stackoverflow.com/questions/60317969/document-execcommandcopy-not-working-even-though-the-dom-element-is-created
-			__modalDialog("Info", "Press OK to copy the text to the clipboard", true, false).then(function() {
-				tools.error("copyTextToClipboard(): navigator.clipboard.writeText() is not working:", ex);
-				tools.info("copyTextToClipboard(): Trying a workaround...");
-
-				let el = document.createElement("textarea");
-				el.readonly = true;
-				el.contentEditable = true;
-				el.style.position = "absolute";
-				el.style.top = "-1000px";
-				el.value = text;
-				document.body.appendChild(el);
-
-				// Select the content of the textarea
-				el.select(); // Ordinary browsers
-				el.setSelectionRange(0, el.value.length); // iOS
-
-				try {
-					ex = (document.execCommand("copy") ? null : "Unknown error");
-				} catch (ex) { // eslint-disable-line no-unused-vars
-				}
-
-				// Remove the added textarea again:
-				document.body.removeChild(el);
-
-				if (ex) {
-					tools.error("copyTextToClipboard(): Workaround failed:", ex);
-					self.error("Can't copy text to the clipboard", `${ex}`);
-				}
-			});
-		};
-		if (navigator.clipboard) {
-			navigator.clipboard.writeText(text).then(function() {
-				self.info("The text has been copied to the clipboard");
-			}, function(ex) {
-				workaround(ex);
-			});
-		} else {
-			workaround("navigator.clipboard is not available");
-		}
-	};
-
 	self.info = (html, ...args) => __modalCodeDialog("Info", html, args.join("\n"), true, false);
 	self.error = (html, ...args) => __modalCodeDialog("Error", html, args.join("\n"), true, false);
 	self.confirm = (html, ...args) => __modalCodeDialog("Question", html, args.join("\n"), true, true);
