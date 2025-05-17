@@ -27,7 +27,7 @@ import {ROOT_PREFIX} from "../vars.js";
 import {tools, $} from "../tools.js";
 
 
-export function MjpegStreamer(__setActive, __setInactive, __setInfo) {
+export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeHook) {
 	var self = this;
 
 	/************************************************************************/
@@ -62,6 +62,7 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo) {
 			if (__id.length > 0 && __id in __state.stream.clients_stat) {
 				__setStreamActive();
 				__stopChecking();
+				__organizeHook();
 			} else {
 				__ensureChecking();
 			}

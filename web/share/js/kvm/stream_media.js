@@ -26,7 +26,7 @@
 import {tools, $} from "../tools.js";
 
 
-export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
+export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeHook, __orient) {
 	var self = this;
 
 	/************************************************************************/
@@ -282,6 +282,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __orient) {
 			if (__canvas.width !== width || __canvas.height !== height) {
 				__canvas.width = width;
 				__canvas.height = height;
+				__organizeHook();
 			}
 
 			if (__orient === 0) {

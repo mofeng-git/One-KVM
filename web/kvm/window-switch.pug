@@ -15,10 +15,12 @@ mixin color_slider_tr(name, title)
 		td #[button(id=`switch-color-${name}-default-button` class="small" title="Reset default") &#8635;]
 
 
-.window#switch-window(style="width: min-content")
+.window#switch-window(data-show-centered style="width: min-content")
 	.window-header
 		.window-grab Switch settings
-		button.window-button-close #[b &times;]
+		.window-buttons
+			button.window-button-original &bull;
+			button.window-button-close #[b &times;]
 
 	.tabs-box
 		+switch_tab("edid", "EDIDs collection", true)

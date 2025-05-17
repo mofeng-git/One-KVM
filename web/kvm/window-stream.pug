@@ -1,14 +1,15 @@
 .window#stream-ocr-window
 	.hidden#stream-ocr-selection
 
-.window.window-resizable#stream-window
+.window.window-resizable#stream-window(data-show-maximized)
 	.window-header#stream-window-header
 		.window-grab MJPEG
-		button.window-button-close #[b &times;]
-		button.window-button-maximize &#9744;
-		button.window-button-original &bull;
-		button.window-button-enter-full-tab &#9650;
-		button.window-button-full-screen &#10530;
+		.window-buttons
+			button.window-button-full-screen &#10530;
+			button.window-button-enter-full-tab &#9650;
+			button.window-button-original &bull;
+			button.window-button-maximize &#9744;
+			button.window-button-close #[b &times;]
 
 	#stream-info
 

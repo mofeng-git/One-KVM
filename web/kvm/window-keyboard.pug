@@ -30,10 +30,12 @@ mixin lamp(cls)
 	img(class=`inline-lamp-small ${cls} led-gray` src=`${svg_dir}/led-square.svg`)
 
 
-.window#keyboard-window
+.window#keyboard-window(data-show-centered)
 	.window-header#keyboard-window-header
 		.window-grab Virtual Keyboard
-		button.window-button-close #[b &times;]
+		.window-buttons
+			button.window-button-original &bull;
+			button.window-button-close #[b &times;]
 
 	.keypad#keyboard-desktop(align="center")
 		.keypad-block

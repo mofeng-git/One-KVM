@@ -60,21 +60,59 @@ function __WindowManager() {
 			__windows.push(el_win);
 
 			if (el_win.classList.contains("window-resizable") && window.ResizeObserver) {
+				el_win.__observer_timer = null;
 				new ResizeObserver(function() {
-					// При переполнении рабочей области сократить размер окна по высоте.
-					// По ширине оно настраивается само в CSS.
-					let view = self.getViewGeometry();
-					let rect = el_win.getBoundingClientRect();
-					if ((rect.bottom - rect.top) > (view.bottom - view.top)) {
-						let ratio = (rect.bottom - rect.top) / (view.bottom - view.top);
-						el_win.style.height = view.bottom - view.top + "px";
-						el_win.style.width = Math.round((rect.right - rect.left) / ratio) + "px";
-					}
-
-					if (el_win.hasAttribute("data-centered")) {
-						__centerWindow(el_win);
+					// Таймер нужен чтобы остановить дребезг ресайза: observer вызывает
+					// __organizeWindow(), который сам по себе триггерит observer.
+					if (el_win.__observer_timer === null || el_win.__manual_resizing) {
+						__organizeWindow(el_win, !el_win.__manual_resizing);
+						if (el_win.__observer_timer !== null) {
+							clearTimeout(el_win.__observer_timer);
+						}
+						el_win.__observer_timer = setTimeout(function() {
+							el_win.__observer_timer = null;
+						}, 100);
 					}
 				}).observe(el_win);
+				el_win.addEventListener("pointerrawupdate", function(ev) {
+					// События pointerdown и touchdown не генерируются при ресайзе за уголок,
+					// поэтому отлавливаем pointerrawupdate для тач-событий.
+					let events = ev.getCoalescedEvents();
+					for (ev of events) {
+						if (
+							ev.target === el_win && ev.pointerType === "touch" && ev.buttons
+							&& Math.abs(el_win.clientWidth - ev.offsetX) < 20
+							&& Math.abs(el_win.clientHeight - ev.offsetY) < 20
+						) {
+							__setWindowMca(el_win, false, null, true);
+							break;
+						}
+					}
+				});
+				el_win.addEventListener("mousedown", function(ev) {
+					if (
+						ev.target === el_win
+						&& Math.abs(el_win.clientWidth - ev.offsetX) < 20
+						&& Math.abs(el_win.clientHeight - ev.offsetY) < 20
+					) {
+						el_win.__manual_resizing = true;
+					}
+				});
+				document.addEventListener("mouseup", function() {
+					if (el_win.__manual_resizing) {
+						__organizeWindow(el_win);
+					}
+					el_win.__manual_resizing = false;
+				});
+				document.addEventListener("mousemove", function(ev) {
+					if (el_win.__manual_resizing) {
+						__setWindowMca(el_win, false, null, true);
+						if (!ev.buttons) {
+							__organizeWindow(el_win);
+							el_win.__manual_resizing = false;
+						}
+					}
+				});
 			}
 
 			{
@@ -90,8 +128,9 @@ function __WindowManager() {
 				if (el) {
 					el.title = "Maximize window";
 					tools.el.setOnClick(el, function() {
-						__maximizeWindow(el_win);
-						__activateLastWindow(el_win);
+						__setWindowMca(el_win, true, false, false);
+						__organizeWindow(el_win);
+						__activateWindow(el_win);
 					});
 				}
 			}
@@ -101,10 +140,11 @@ function __WindowManager() {
 				if (el) {
 					el.title = "Reduce window to its original size and center it";
 					tools.el.setOnClick(el, function() {
+						__setWindowMca(el_win, false, true, false);
 						el_win.style.width = "";
 						el_win.style.height = "";
-						__centerWindow(el_win);
-						__activateLastWindow(el_win);
+						__organizeWindow(el_win);
+						__activateWindow(el_win);
 					});
 				}
 			}
@@ -125,7 +165,7 @@ function __WindowManager() {
 					el.title = "Go to full-screen mode";
 					tools.el.setOnClick(el, function() {
 						__setFullScreenWindow(el_win);
-						__activateLastWindow(el_win);
+						__activateWindow(el_win);
 					});
 				}
 			}
@@ -301,20 +341,46 @@ function __WindowManager() {
 		return promise;
 	};
 
+	var __setWindowMca = function(el_win, maximized, centered, adjusted) {
+		if (maximized !== null) {
+			el_win.toggleAttribute("data-maximized", maximized);
+			if (maximized) {
+				el_win.removeAttribute("data-centered");
+			}
+		}
+		if (centered !== null) {
+			el_win.toggleAttribute("data-centered", centered);
+			if (centered) {
+				el_win.removeAttribute("data-maximized");
+			}
+		}
+		if (adjusted !== null) {
+			el_win.toggleAttribute("data-adjusted", adjusted);
+			if (adjusted) {
+				el_win.removeAttribute("data-maximized");
+			}
+		}
+	};
+
 	self.showWindow = function(el_win) {
-		let center = false;
 		let showed = false;
 		if (!self.isWindowVisible(el_win)) {
-			center = true;
 			showed = true;
 		}
-		__organizeWindow(el_win, center);
+
+		if (!el_win.hasAttribute("data-adjusted")) {
+			if (el_win.hasAttribute("data-show-maximized") && !el_win.hasAttribute("data-centered")) {
+				__setWindowMca(el_win, true, false, false);
+			} else if (el_win.hasAttribute("data-show-centered") && !el_win.hasAttribute("data-maximized")) {
+				__setWindowMca(el_win, false, true, false);
+			}
+		}
+		__organizeWindow(el_win);
+
 		el_win.style.visibility = "visible";
 		__activateWindow(el_win);
-		if (el_win.show_hook) {
-			if (showed) {
-				el_win.show_hook();
-			}
+		if (showed && el_win.show_hook) {
+			el_win.show_hook();
 		}
 	};
 
@@ -344,6 +410,18 @@ function __WindowManager() {
 			tools.hidden.setVisible(el_navbar, !enabled);
 		}
 		setTimeout(() => __activateWindow(el_win), 100);
+	};
+
+	self.setAspectRatio = function(el_win, width, height) {
+		// XXX: Values from CSS
+		width += 9 + 9 + 2 + 2;
+		height += 30 + 9 + 2 + 2;
+		el_win.__aspect_ratio_width = width;
+		el_win.__aspect_ratio_height = height;
+		el_win.style.maxWidth = "fit-content";
+		el_win.style.maxHeight = "fit-content";
+		el_win.style.aspectRatio = `${width} / ${height}`;
+		__organizeWindow(el_win, true, false);
 	};
 
 	var __closeWindow = function(el_win) {
@@ -438,23 +516,20 @@ function __WindowManager() {
 	var __organizeWindowsOnBrowserResize = function() {
 		for (let el_win of $$("window")) {
 			if (el_win.style.visibility === "visible") {
-				if (tools.browser.is_mobile && el_win.classList.contains("window-resizable")) {
-					// FIXME: При смене ориентации на мобильном браузере надо сбрасывать
-					// настройки окна стрима, поэтому тут стоит вот этот костыль
-					el_win.style.width = "";
-					el_win.style.height = "";
-				}
 				__organizeWindow(el_win);
 			}
 		}
 	};
 
-	var __organizeWindow = function(el_win, center=false) {
-		let view = self.getViewGeometry();
-		let rect = el_win.getBoundingClientRect();
+	var __organizeWindow = function(el_win, auto_shrink=true, organize_hook=true) {
+		if (organize_hook && el_win.organize_hook) {
+			el_win.organize_hook();
+		}
 
-		if (el_win.classList.contains("window-resizable")) {
+		if (auto_shrink && el_win.classList.contains("window-resizable")) {
 			// При переполнении рабочей области сократить размер окна
+			let view = self.getViewGeometry();
+			let rect = el_win.getBoundingClientRect();
 			if ((rect.bottom - rect.top) > (view.bottom - view.top)) {
 				let ratio = (rect.bottom - rect.top) / (view.bottom - view.top);
 				el_win.style.height = view.bottom - view.top + "px";
@@ -463,32 +538,65 @@ function __WindowManager() {
 			if ((rect.right - rect.left) > (view.right - view.left)) {
 				el_win.style.width = view.right - view.left + "px";
 			}
-			rect = el_win.getBoundingClientRect();
 		}
 
-		if (el_win.hasAttribute("data-centered") || center) {
-			__centerWindow(el_win);
+		if (el_win.hasAttribute("data-maximized")) {
+			__organizeMaximizeWindow(el_win);
+		} else if (el_win.hasAttribute("data-centered")) {
+			__organizeCenterWindow(el_win);
 		} else {
-			if (rect.top <= view.top) {
-				el_win.style.top = view.top + "px";
-			} else if (rect.bottom > view.bottom) {
-				el_win.style.top = view.bottom - rect.height + "px";
-			}
-
-			if (rect.left <= view.left) {
-				el_win.style.left = view.left + "px";
-			} else if (rect.right > view.right) {
-				el_win.style.left = view.right - rect.width + "px";
-			}
+			__organizeFitWindow(el_win);
 		}
 	};
 
-	var __centerWindow = function(el_win) {
+	var __organizeCenterWindow = function(el_win) {
 		let view = self.getViewGeometry();
 		let rect = el_win.getBoundingClientRect();
 		el_win.style.top = Math.max(view.top, Math.round((view.bottom - rect.height) / 2)) + "px";
 		el_win.style.left = Math.round((view.right - rect.width) / 2) + "px";
-		el_win.setAttribute("data-centered", "");
+	};
+
+	var __organizeMaximizeWindow = function(el_win) {
+		let view = self.getViewGeometry();
+		el_win.style.top = view.top + "px";
+
+		let aw = el_win.__aspect_ratio_width;
+		let ah = el_win.__aspect_ratio_height;
+		let gw = view.right - view.left;
+		let gh = view.bottom - view.top;
+		if (aw && ah) {
+			if (aw / gw < ah / gh) {
+				el_win.style.width = "";
+				el_win.style.height = gh + "px";
+			} else {
+				el_win.style.left = "";
+				el_win.style.height = "";
+				el_win.style.width = gw + "px";
+			}
+		}/* else {
+			el_win.style.width = gw + "px";
+			el_win.style.height = gh + "px";
+		}*/
+
+		let rect = el_win.getBoundingClientRect();
+		el_win.style.left = Math.round((view.right - rect.width) / 2) + "px";
+	};
+
+	var __organizeFitWindow = function(el_win) {
+		let view = self.getViewGeometry();
+		let rect = el_win.getBoundingClientRect();
+
+		if (rect.top <= view.top) {
+			el_win.style.top = view.top + "px";
+		} else if (rect.bottom > view.bottom) {
+			el_win.style.top = view.bottom - rect.height + "px";
+		}
+
+		if (rect.left <= view.left) {
+			el_win.style.left = view.left + "px";
+		} else if (rect.right > view.right) {
+			el_win.style.left = view.right - rect.width + "px";
+		}
 	};
 
 	var __activateLastWindow = function(el_except_win=null) {
@@ -584,7 +692,7 @@ function __WindowManager() {
 				return;
 			}
 
-			el_win.removeAttribute("data-centered");
+			__setWindowMca(el_win, false, false, true);
 
 			ev = (ev || window.ev);
 			ev.preventDefault();
@@ -611,8 +719,6 @@ function __WindowManager() {
 				return {"x": ev.clientX, "y": ev.clientY};
 			}
 		}
-
-		el_win.setAttribute("data-centered", "");
 
 		document.addEventListener("mousemove", doMoving);
 		document.addEventListener("mouseup", stopMoving);
@@ -657,15 +763,6 @@ function __WindowManager() {
 			__modalDialog("Keyboard lock is unsupported", msg, true, false, el_win);
 		}
 		el_win.focus(el_win); // Почему-то теряется фокус
-	};
-
-	var __maximizeWindow = function(el_win) {
-		let el_navbar = $("navbar");
-		let vertical_offset = (el_navbar ? el_navbar.offsetHeight : 0);
-		el_win.style.left = "0px";
-		el_win.style.top = vertical_offset + "px";
-		el_win.style.width = window.innerWidth + "px";
-		el_win.style.height = window.innerHeight - vertical_offset + "px";
 	};
 
 	__init__();

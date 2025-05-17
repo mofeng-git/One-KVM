@@ -982,14 +982,16 @@
     <div class="window" id="stream-ocr-window">
       <div class="hidden" id="stream-ocr-selection"></div>
     </div>
-    <div class="window window-resizable" id="stream-window">
+    <div class="window window-resizable" id="stream-window" data-show-maximized>
       <div class="window-header" id="stream-window-header">
         <div class="window-grab">MJPEG</div>
-        <button class="window-button-close"><b>&times;</b></button>
-        <button class="window-button-maximize">&#9744;</button>
-        <button class="window-button-original">&bull;</button>
-        <button class="window-button-enter-full-tab">&#9650;</button>
-        <button class="window-button-full-screen">&#10530;</button>
+        <div class="window-buttons">
+          <button class="window-button-full-screen">&#10530;</button>
+          <button class="window-button-enter-full-tab">&#9650;</button>
+          <button class="window-button-original">&bull;</button>
+          <button class="window-button-maximize">&#9744;</button>
+          <button class="window-button-close"><b>&times;</b></button>
+        </div>
       </div>
       <div id="stream-info"></div>
       <button class="window-button-exit-full-tab">&#9660;</button>
@@ -1032,10 +1034,13 @@
         </div>
       </div>
     </div>
-    <div class="window" id="keyboard-window">
+    <div class="window" id="keyboard-window" data-show-centered>
       <div class="window-header" id="keyboard-window-header">
         <div class="window-grab">Virtual Keyboard</div>
-        <button class="window-button-close"><b>&times;</b></button>
+        <div class="window-buttons">
+          <button class="window-button-original">&bull;</button>
+          <button class="window-button-close"><b>&times;</b></button>
+        </div>
       </div>
       <div class="keypad" id="keyboard-desktop" align="center">
         <div class="keypad-block">
@@ -2111,10 +2116,13 @@
         </div>
       </div>
     </div>
-    <div class="window" id="switch-window" style="width: min-content">
+    <div class="window" id="switch-window" data-show-centered style="width: min-content">
       <div class="window-header">
         <div class="window-grab">Switch settings</div>
-        <button class="window-button-close"><b>&times;</b></button>
+        <div class="window-buttons">
+          <button class="window-button-original">&bull;</button>
+          <button class="window-button-close"><b>&times;</b></button>
+        </div>
       </div>
       <div class="tabs-box">
             <input checked type="radio" name="switch-tab-button" id="switch-tab-edid-button">
@@ -2258,10 +2266,13 @@
             </div>
       </div>
     </div>
-    <div class="window" id="about-window">
+    <div class="window" id="about-window" data-show-centered>
       <div class="window-header">
         <div class="window-grab">About</div>
-        <button class="window-button-close"><b>&times;</b></button>
+        <div class="window-buttons">
+          <button class="window-button-original">&bull;</button>
+          <button class="window-button-close"><b>&times;</b></button>
+        </div>
       </div>
       <div id="about">
         <table>
@@ -2961,15 +2972,18 @@
         <p class="text credits"><a target="_blank" href="https://pikvm.org">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">Support</a></p>
       </div>
     </div>
-    <div class="window window-resizable" id="webterm-window" style="width: 720px; height: 480px">
+    <div class="window window-resizable" id="webterm-window" data-show-centered style="display: flex; min-width: 720px; min-height: 480px">
       <div class="window-header">
         <div class="window-grab">Terminal</div>
-        <button class="window-button-close"><b>&times;</b></button>
-        <button class="window-button-maximize">&#9744;</button>
-        <!-- Терминал глючит из-за зажимаемой клавиши ESC для выхода-->
-        <!-- button(class="window-button-full-screen") &#10530;-->
+        <div class="window-buttons">
+          <button class="window-button-original">&bull;</button>
+          <button class="window-button-maximize">&#9744;</button>
+          <button class="window-button-close"><b>&times;</b></button>
+          <!-- Терминал глючит из-за зажимаемой клавиши ESC для выхода-->
+          <!-- button(class="window-button-full-screen") &#10530;-->
+        </div>
       </div>
-      <iframe id="webterm-iframe" src="" style="width: 100%; height: 100%"></iframe>
+      <iframe id="webterm-iframe" src="" style="width: 100%; flex: 1"></iframe>
     </div>
     <ul class="navbar-bg-tips">
       <li class="left">

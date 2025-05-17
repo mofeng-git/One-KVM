@@ -29,7 +29,7 @@ import {tools, $} from "../tools.js";
 var _Janus = null;
 
 
-export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, __allow_audio, __allow_mic) {
+export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeHook, __orient, __allow_audio, __allow_mic) {
 	var self = this;
 
 	/************************************************************************/
@@ -48,6 +48,8 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 
 	var __state = null;
 	var __frames = 0;
+	var __res = {"width": -1, "height": -1};
+	var __resize_listener_installed = false;
 
 	var __ice = null;
 
@@ -84,11 +86,28 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 		__state = state;
 		__stop = false;
 		__ensureJanus(false);
+		if (!__resize_listener_installed) {
+			$("stream-video").addEventListener("resize", __videoResizeHandler);
+			__resize_listener_installed = true;
+		}
 	};
 
 	self.stopStream = function() {
 		__stop = true;
 		__destroyJanus();
+		if (__resize_listener_installed) {
+			$("stream-video").removeEventListener("resize", __videoResizeHandler);
+			__resize_listener_installed = false;
+		}
+	};
+
+	var __videoResizeHandler = function(ev) {
+		let el = ev.target;
+		if (__res.width !== el.videoWidth || __res.height !== el.videoHeight) {
+			__res.width = el.videoWidth;
+			__res.height = el.videoHeight;
+			__organizeHook();
+		}
 	};
 
 	var __ensureJanus = function(internal) {
