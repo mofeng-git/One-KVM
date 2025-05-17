@@ -564,7 +564,7 @@ function __WindowManager() {
 		let ah = el_win.__aspect_ratio_height;
 		let gw = view.right - view.left;
 		let gh = view.bottom - view.top;
-		if (el_win.organize_hook && aw && ah) {
+		if (aw && ah) {
 			// Умная машинерия только для aspect-ratio
 			if (aw / gw < ah / gh) {
 				el_win.style.width = "";
@@ -574,7 +574,10 @@ function __WindowManager() {
 				el_win.style.height = "";
 				el_win.style.width = gw + "px";
 			}
-		} else {
+		} else if (!el_win.hasAttribute("data-organize-hook")) {
+			// FIXME: Можно было бы проверять наличие organize_hook,
+			// но эвент от обзервера приходит раньше чем настроятся хуки.
+			// По идее это надо бы глобально исправить.
 			el_win.style.width = gw + "px";
 			el_win.style.height = gh + "px";
 		}
