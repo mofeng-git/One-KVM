@@ -425,8 +425,13 @@ function __WindowManager() {
 					break;
 				}
 			}
-			__closeAllMenues();
-			__activateLastWindow();
+			setTimeout(function() {
+				// Тач-событие на хроме не долетает при data-force-hide-menu,
+				// судя по всему оно прерывается при закрытии меню.
+				// Откладываем обработку.
+				__closeAllMenues();
+				__activateLastWindow();
+			}, 10);
 		}
 	};
 
