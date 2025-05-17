@@ -24,6 +24,7 @@ import asyncio
 import contextlib
 import struct
 
+import typing
 from typing import Callable
 from typing import AsyncGenerator
 
@@ -71,7 +72,7 @@ class _AuthApiPart(_BaseApiPart):
             if ex.status in [400, 401, 403]:
                 return False
             raise
-        raise RuntimeError("We should't be here")
+        typing.assert_never("We should't be here")
 
 
 class _StreamerApiPart(_BaseApiPart):
