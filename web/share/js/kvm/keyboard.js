@@ -35,7 +35,7 @@ export function Keyboard(__recordWsEvent) {
 	var __keypad = null;
 
 	var __init__ = function() {
-		__keypad = new Keypad("div#keyboard-window", __sendKey, true);
+		__keypad = new Keypad($("keyboard-window"), __sendKey, true);
 
 		$("hid-keyboard-led").title = "Keyboard free";
 

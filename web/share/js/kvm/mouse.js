@@ -55,7 +55,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __stream_hovered = false;
 
 	var __init__ = function() {
-		__keypad = new Keypad("div#stream-mouse-buttons", __sendButton, false);
+		__keypad = new Keypad($("stream-mouse-buttons"), __sendButton, false);
 
 		$("hid-mouse-led").title = "Mouse free";
 

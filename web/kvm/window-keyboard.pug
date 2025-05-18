@@ -13,7 +13,7 @@ mixin key(sp, code, classes="", width=0)
 
 
 mixin modifier(sp, code, classes="", width=0)
-	div(data-code=code class=`modifier ${classes}` style=(width ? `width: ${width}px` : ""))
+	div(data-code=code, data-allow-autohold, class=`key ${classes}`, style=(width ? `width: ${width}px` : ""))
 		.label
 			| #[b &bull;]#[br]
 			block
@@ -21,7 +21,7 @@ mixin modifier(sp, code, classes="", width=0)
 
 
 mixin empty(sp, classes="", width=0)
-	div(class=`empty ${classes}` style=(width ? `width:${width}px` : ""))
+	div(class=`empty ${classes}`, style=(width ? `width:${width}px` : ""))
 		.label &nbsp;
 	+spacer(sp)
 

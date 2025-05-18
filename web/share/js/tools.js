@@ -164,7 +164,7 @@ export var tools = new function() {
 					if (prevent_default) {
 						ev.preventDefault();
 					}
-					callback();
+					callback(ev);
 				};
 			},
 			"setOnUp": function(el, callback, prevent_default=true) {

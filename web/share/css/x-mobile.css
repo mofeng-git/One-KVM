@@ -113,9 +113,3 @@ ul#navbar li a.menu-button:hover:not(.active) {
 div.keypad {
 	zoom: 1.28 !important;
 }
-
-div.keypad div.key:hover,
-div.keypad div.modifier:hover {
-	color: var(--cs-key-default-fg);
-	background-color: var(--cs-key-default-bg);
-}
