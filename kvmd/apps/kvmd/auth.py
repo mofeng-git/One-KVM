@@ -85,7 +85,7 @@ class AuthManager:  # pylint: disable=too-many-arguments,too-many-instance-attri
 
         self.__usc_uids = self.__load_usc_uids(usc_users, usc_groups)
         if self.__usc_uids:
-            logger.info("Unauth UNIX socket access is allowed for users: %s",
+            logger.info("Selfauth UNIX socket access is allowed for users: %s",
                         list(self.__usc_uids.values()))
 
         self.__unauth_paths = frozenset(unauth_paths)  # To speed up

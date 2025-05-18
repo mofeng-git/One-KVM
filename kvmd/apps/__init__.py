@@ -362,11 +362,8 @@ def _get_config_scheme() -> dict:
                 "expire":  Option(0,    type=valid_expire),
 
                 "usc": {
-                    "users":  Option([
-                        "kvmd-ipmi",
-                        "kvmd-vnc",
-                    ], type=valid_users_list),  # PiKVM username has a same regex as a UNIX username
-                    "groups": Option([], type=valid_users_list),  # groupname has a same regex as a username
+                    "users":  Option([], type=valid_users_list),  # PiKVM username has a same regex as a UNIX username
+                    "groups": Option(["kvmd-selfauth"], type=valid_users_list),  # groupname has a same regex as a username
                 },
 
                 "internal": {
