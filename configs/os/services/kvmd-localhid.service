@@ -1,0 +1,16 @@
+[Unit]
+Description=PiKVM - Local HID to KVMD proxy
+After=kvmd.service systemd-udevd.service
+
+[Service]
+User=kvmd-localhid
+Group=kvmd-localhid
+Type=simple
+Restart=always
+RestartSec=3
+
+ExecStart=/usr/bin/kvmd-localhid --run
+TimeoutStopSec=3
+
+[Install]
+WantedBy=multi-user.target

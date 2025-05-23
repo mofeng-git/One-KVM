@@ -237,9 +237,9 @@ class KvmdClientSession(BaseHttpClientSession):
         self.switch = _SwitchApiPart(self._ensure_http_session)
 
     @contextlib.asynccontextmanager
-    async def ws(self) -> AsyncGenerator[KvmdClientWs, None]:
+    async def ws(self, stream: bool=True) -> AsyncGenerator[KvmdClientWs, None]:
         session = self._ensure_http_session()
-        async with session.ws_connect("/ws", params={"legacy": "0"}) as ws:
+        async with session.ws_connect("/ws", params={"stream": int(stream)}) as ws:
             yield KvmdClientWs(ws)
 
 

@@ -212,6 +212,18 @@ async def wait_first(*aws: asyncio.Task) -> tuple[set[asyncio.Task], set[asyncio
 
 
 # =====
+async def spawn_and_follow(*coros: Coroutine) -> None:
+    tasks: list[asyncio.Task] = list(map(asyncio.create_task, coros))
+    try:
+        await asyncio.gather(*tasks)
+    except Exception:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
+
+
+# =====
 async def close_writer(writer: asyncio.StreamWriter) -> bool:
     closing = writer.is_closing()
     if not closing:

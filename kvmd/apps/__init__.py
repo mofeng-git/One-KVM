@@ -804,6 +804,13 @@ def _get_config_scheme() -> dict:
             },
         },
 
+        "localhid": {
+            "kvmd": {
+                "unix":    Option("/run/kvmd/kvmd.sock", type=valid_abs_path, unpack_as="unix_path"),
+                "timeout": Option(5.0, type=valid_float_f01),
+            },
+        },
+
         "nginx": {
             "http": {
                 "ipv4": Option("0.0.0.0", type=functools.partial(valid_ip, v6=False)),
