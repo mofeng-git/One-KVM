@@ -1,5 +1,5 @@
 general: {
-	debug_level = 2
+	debug_level = 4
 }
 nat: {
 	nice_debug = false
