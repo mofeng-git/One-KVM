@@ -440,6 +440,7 @@ export function Switch() {
 
 		let model = __state.model;
 		let edids = __state.edids;
+		let pa = model.ports[port]; // Port attrs
 
 		let atx_actions = {
 			"power": "ATX power click",
@@ -465,7 +466,7 @@ export function Switch() {
 						<td>Port name:</td>
 						<td><input
 							type="text" autocomplete="off" id="__switch-port-name-input"
-							value="${tools.escape(model.ports[port].name)}" placeholder="Host ${port + 1}"
+							value="${tools.escape(pa.name)}" placeholder="Host ${port + 1}"
 							style="width:100%"
 						/></td>
 					</tr>
@@ -476,7 +477,7 @@ export function Switch() {
 				</table>
 			`;
 
-			let fw = model.units[model.ports[port].unit].firmware;
+			let fw = model.units[pa.unit].firmware;
 			if (fw.devbuild || fw.version >= 8) {
 				html += `
 					<hr>
@@ -487,7 +488,7 @@ export function Switch() {
 								<div class="switch-box">
 									<input
 										type="checkbox" id="__switch-port-dummy-switch"
-										${model.ports[port].video.dummy ? "checked" : ""}
+										${pa.video.dummy ? "checked" : ""}
 									/>
 									<label for="__switch-port-dummy-switch">
 										<span class="switch-inner"></span>
@@ -537,12 +538,12 @@ export function Switch() {
 				let reset_default = tools.partial(function(el_slider, limits) {
 					tools.slider.setValue(el_slider, limits["default"]);
 				}, el_slider, limits);
-				tools.slider.setParams(el_slider, limits.min, limits.max, 0.5, model.ports[port].atx.click_delays[action], display_value);
+				tools.slider.setParams(el_slider, limits.min, limits.max, 0.5, pa.atx.click_delays[action], display_value);
 				tools.el.setOnClick($(`__switch-port-atx-click-${action}-delay-default-button`), reset_default);
 			}
 		};
 
-		wm.modal(`Port ${__state.model.ports[port].id} settings`, create_content, true, true).then(function(ok) {
+		wm.modal(`Port ${pa.id} settings`, create_content, true, true).then(function(ok) {
 			if (ok) {
 				let params = {
 					"port": port,
