@@ -548,9 +548,12 @@ export function Switch() {
 				let params = {
 					"port": port,
 					"edid_id": $("__switch-port-edid-selector").value,
-					"dummy": $("__switch-port-dummy-switch").checked,
 					"name": $("__switch-port-name-input").value,
 				};
+				let el_dummy_switch = $("__switch-port-dummy-switch");
+				if (el_dummy_switch) { // Only for devbuild or firmware >= 8
+					params["dummy"] = $("__switch-port-dummy-switch").checked;
+				}
 				for (let action of Object.keys(atx_actions)) {
 					params[`atx_click_${action}_delay`] = tools.slider.getValue($(`__switch-port-atx-click-${action}-delay-slider`));
 				};
