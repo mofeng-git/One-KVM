@@ -109,7 +109,7 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
         log_info "已禁用 WebTerm 功能"
         rm -r /usr/share/kvmd/extras/webterm
     else
-        cat >> /etc/supervisord.conf  << EOF
+        cat >> /etc/kvmd/supervisord.conf  << EOF
 
 [program:kvmd-webterm]
 command=/usr/local/bin/ttyd --interface=/run/kvmd/ttyd.sock --port=0 --writable /bin/bash -c '/etc/kvmd/armbain-motd; bash'
@@ -125,14 +125,14 @@ EOF
     fi
 
     if [ "$NOWEBTERMWRITE" == "1" ]; then
-        sed -i "s/--writable//g" /etc/supervisord.conf
+        sed -i "s/--writable//g" /etc/kvmd/supervisord.conf
     fi
 
     if [  "$NOVNC" == "1" ]; then
         log_info "已禁用 VNC 功能"
         rm -r /usr/share/kvmd/extras/vnc
     else
-        cat >> /etc/supervisord.conf << EOF
+        cat >> /etc/kvmd/supervisord.conf << EOF
 
 [program:kvmd-vnc]
 command=python -m kvmd.apps.vnc --run
@@ -151,7 +151,7 @@ EOF
         log_info "已禁用IPMI功能"
         rm -r /usr/share/kvmd/extras/ipmi
     else
-        cat >> /etc/supervisord.conf << EOF
+        cat >> /etc/kvmd/supervisord.conf << EOF
 
 [program:kvmd-ipmi]
 command=python -m kvmd.apps.ipmi --run
@@ -241,4 +241,4 @@ if [ "$OTG" == "1" ]; then
 fi
 
 log_info "One-KVM 配置文件准备完成，正在启动服务..."
-exec supervisord -c /etc/supervisord.conf
+exec supervisord -c /etc/kvmd/supervisord.conf

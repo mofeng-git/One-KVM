@@ -12,64 +12,72 @@ on:
           - latest
 
 jobs:
-  build-and-push-image:
+  build:
     runs-on: ubuntu-22.04
     container:
-      image: docker:24.0-cli
-    env:
-      TZ: Asia/Shanghai
-      # 定义环境变量，方便管理
-      # 修改为你的 Docker Registry 地址，如果是 Docker Hub，则为 docker.io (可以省略)
-      # 如果是 Gitea 内置的包管理器，则为你的 Gitea 实例地址，例如 gitea.example.com:5000
-      DOCKER_REGISTRY: docker.io
-      # 推荐使用 Gitea 的内置变量来动态生成镜像名
-      #IMAGE_NAME: ${{ gitea.repository_owner }}/${{ gitea.repository_name }}
-      IMAGE_NAME: silentwind0/kvmd:${{ inputs.version }}
+      image: node:18
+      env:
+        TZ: Asia/Shanghai
 
     steps:
-
-      - name: Print Build Information
-        run: |
-          echo "Workflow triggered for version: ${{ inputs.version }}"
-          echo "Current time: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Install dependencies
         run: |
           apt-get update
           export DEBIAN_FRONTEND=noninteractive
-          apt-get install -y --no-install-recommends sudo tzdata node git
+          apt-get install -y --no-install-recommends \
+            sudo tzdata docker.io qemu-utils qemu-user-static binfmt-support parted e2fsprogs \
+            curl tar python3 python3-pip rsync git android-sdk-libsparse-utils coreutils zerofree
           apt-get clean
           rm -rf /var/lib/apt/lists/*
           ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
           echo $TZ > /etc/timezone
+          update-binfmts --enable
         env:
           DEBIAN_FRONTEND: noninteractive
 
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Install Docker Buildx
+        run: |
+          # 创建插件目录
+          mkdir -p ~/.docker/cli-plugins
+          # 下载 buildx 二进制文件
+          BUILDX_VERSION="v0.11.2"
+          curl -L "https://github.com/docker/buildx/releases/download/${BUILDX_VERSION}/buildx-${BUILDX_VERSION}.linux-amd64" -o ~/.docker/cli-plugins/docker-buildx
+          chmod +x ~/.docker/cli-plugins/docker-buildx
+          # 验证安装
+          docker buildx version
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      #- name: Install QEMU
+      #  run: |
+          # 安装 QEMU 模拟器
+          #docker run --privileged --rm tonistiigi/binfmt --install all
+          # 验证 QEMU 安装
+          #docker buildx inspect --bootstrap
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Create and use new builder instance
+        run: |
+          # 创建新的 builder 实例
+          docker buildx create --name mybuilder --driver docker-container --bootstrap
+          # 使用新创建的 builder
+          docker buildx use mybuilder
+          # 验证支持的平台
+          docker buildx inspect --bootstrap
 
-      #- name: Login to Docker Hub
-      #  uses: docker/login-action@v3
+      - name: Build multi-arch image
+        run: |
+          # 构建多架构镜像
+          docker buildx build \
+            --platform linux/amd64,linux/arm64,linux/arm/v7 \
+            --file ./build/Dockerfile \
+            --tag silentwind/kvmd:${{ github.event.inputs.version }} \
+            .
+
+      #- name: Login to DockerHub
+      #  uses: docker/login-action@v2
       #  with:
       #    username: ${{ secrets.DOCKERHUB_USERNAME }}
       #    password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and Push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./build/Dockerfile
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
-          #push: true
-          push: false
-          tags: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
-          cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
       

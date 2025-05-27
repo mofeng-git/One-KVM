@@ -1,0 +1,18 @@
+[Unit]
+Description=Generate Random MAC Address for OneCloud (One-time)
+Documentation=https://github.com/your-repo/One-KVM
+Before=systemd-networkd.service
+Before=network-pre.target
+Wants=network-pre.target
+After=local-fs.target
+ConditionPathExists=!/var/lib/kvmd/.mac-generated
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/generate-random-mac.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target 

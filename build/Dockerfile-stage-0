@@ -82,14 +82,14 @@ RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libn
     && tar xf libsrtp-2.2.0.tar.gz \
     && cd libsrtp-2.2.0 \
     && ./configure --prefix=/usr --enable-openssl \
-    && make shared_library && make install \
+    && make shared_library -j && make install \
     && cd /tmp \
     && rm -rf /tmp/libsrtp* \
     && git clone --depth=1 https://libwebsockets.org/repo/libwebsockets /tmp/libwebsockets \
     && cd /tmp/libwebsockets \
     && mkdir build && cd build \
     && cmake -DLWS_MAX_SMP=1 -DLWS_WITHOUT_EXTENSIONS=0 -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_C_FLAGS="-fpic" .. \
-    && make && make install \
+    && make -j && make install \
     && cd /tmp \
     && rm -rf /tmp/libwebsockets \
     && git clone --depth=1 https://github.com/meetecho/janus-gateway.git /tmp/janus-gateway \
@@ -98,7 +98,7 @@ RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libn
     && ./configure --enable-static --enable-websockets --enable-plugin-audiobridge \
         --disable-data-channels --disable-rabbitmq --disable-mqtt --disable-all-plugins \
         --disable-all-loggers --prefix=/usr \
-    && make && make install \
+    && make -j && make install \
     && cd /tmp \
     && rm -rf /tmp/janus-gateway
 

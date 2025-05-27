@@ -1,0 +1,26 @@
+[Unit]
+Description=KVMD First Run Initialization (One-time)
+Documentation=https://github.com/your-repo/One-KVM
+Before=kvmd.service
+Before=kvmd-nginx.service
+Before=kvmd-otg.service
+Before=kvmd-vnc.service
+Before=kvmd-ipmi.service
+Before=kvmd-webterm.service
+Before=kvmd-janus.service
+Before=kvmd-media.service
+After=local-fs.target
+After=network.target
+Wants=local-fs.target
+ConditionPathExists=!/var/lib/kvmd/.kvmd-firstrun-completed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/kvmd-firstrun.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target 
