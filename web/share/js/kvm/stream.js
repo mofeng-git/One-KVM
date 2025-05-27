@@ -45,7 +45,7 @@ export function Streamer() {
 	var __init__ = function() {
 		__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeHook);
 
-		$("stream-led").title = "Stream inactive";
+		$("stream-led").title = "No stream from PiKVM";
 
 		tools.slider.setParams($("stream-quality-slider"), 5, 100, 5, 80, function(value) {
 			$("stream-quality-value").innerText = `${value}%`;
@@ -261,7 +261,7 @@ export function Streamer() {
 
 	var __setInactive = function() {
 		$("stream-led").className = "led-gray";
-		$("stream-led").title = "Stream inactive";
+		$("stream-led").title = "No stream from PiKVM";
 	};
 
 	var __setControlsEnabled = function(enabled) {
@@ -279,7 +279,7 @@ export function Streamer() {
 		let title = `${__streamer.getName()} - `;
 		if (is_active) {
 			if (!online) {
-				title += "No signal / ";
+				title += "No video from host / ";
 			}
 			title += `${__res.width}x${__res.height}`;
 			if (text.length > 0) {
@@ -289,7 +289,7 @@ export function Streamer() {
 			if (text.length > 0) {
 				title += text;
 			} else {
-				title += "Inactive";
+				title += "No stream from PiKVM";
 			}
 		}
 		el_grab.innerText = el_info.innerText = title;
