@@ -2280,7 +2280,19 @@
           </tr>
         </table><br>
         <div class="tabs-box">
-              <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
+              <input checked type="radio" name="about-tab-button" id="about-tab-version-button">
+              <label for="about-tab-version-button">Version</label>
+              <div class="tab">
+                <div class="code" id="about-version"><span class="code-comment">No data</span>
+                </div>
+              </div>
+              <input type="radio" name="about-tab-button" id="about-tab-hardware-button">
+              <label for="about-tab-hardware-button">Hardware</label>
+              <div class="tab">
+                <div class="code" id="about-hardware"><span class="code-comment">No data</span>
+                </div>
+              </div>
+              <input type="radio" name="about-tab-button" id="about-tab-meta-button">
               <label for="about-tab-meta-button">Meta</label>
               <div class="tab">
                 <div class="code" id="about-meta">
@@ -2291,18 +2303,6 @@
                       // is specified in the file /etc/kvmd/meta.yaml</span><br>
                     <pre id="kvmd-meta-json">No data</pre>
                   </div>
-                </div>
-              </div>
-              <input type="radio" name="about-tab-button" id="about-tab-hardware-button">
-              <label for="about-tab-hardware-button">Hardware</label>
-              <div class="tab">
-                <div class="code" id="about-hardware"><span class="code-comment">No data</span>
-                </div>
-              </div>
-              <input type="radio" name="about-tab-button" id="about-tab-version-button">
-              <label for="about-tab-version-button">Version</label>
-              <div class="tab">
-                <div class="code" id="about-version"><span class="code-comment">No data</span>
                 </div>
               </div>
               <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
@@ -2983,7 +2983,7 @@
       </li>
     </ul>
     <ul class="footer">
-      <li class="left"><span id="kvmd-meta-server-host" title="KVM/Server name (see System/About)"></span>&nbsp; | &nbsp;<span id="kvmd-version-kvmd" title="KVMD version"></span>&nbsp; | &nbsp;<span id="kvmd-version-streamer" title="Streamer version"></span></li>
+      <li class="left"><span id="kvmd-meta-server-host" title="KVM/Server name (see System/About)"></span>&nbsp; | &nbsp;<span id="kvmd-info-platform" title="PiKVM Platform"></span>&nbsp; | &nbsp;<span id="kvmd-version-kvmd" title="KVMD version"></span>&nbsp; | &nbsp;<span id="kvmd-version-streamer" title="Streamer version"></span></li>
       <li class="right"><a target="_blank" href="https://pikvm.org">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org">Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org/support">Support</a></li>
     </ul>
   </body>

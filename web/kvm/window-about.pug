@@ -33,7 +33,10 @@ mixin about_tab(name, title, checked=false)
 								| Copyright &copy; 2018-2024 #[a(target="_blank" href="mailto:mdevaev@gmail.com") Maxim Devaev]
 		br
 		.tabs-box
-			+about_tab("meta", "Meta", true)
+			+about_tab("version", "Version", true)
+			+about_tab("hardware", "Hardware")
+
+			+about_tab("meta", "Meta")
 				div
 					span.code-comment
 						| // You can get this JSON using handle
@@ -42,9 +45,6 @@ mixin about_tab(name, title, checked=false)
 						| // is specified in the file /etc/kvmd/meta.yaml
 					br
 					pre#kvmd-meta-json No data
-
-			+about_tab("hardware", "Hardware")
-			+about_tab("version", "Version")
 
 			+about_tab("thanks", "Thanks")
 				span.code-comment

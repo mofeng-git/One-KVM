@@ -204,6 +204,7 @@ export function Info() {
 			${tools.escape(state.kernel.system)} kernel:
 			${__formatUname(state.kernel)}
 		`;
+		$("kvmd-info-platform").innerText = p.model;
 		$("kvmd-version-kvmd").innerText = state.kvmd.version;
 		$("kvmd-version-streamer").innerText = s.version;
 	};
