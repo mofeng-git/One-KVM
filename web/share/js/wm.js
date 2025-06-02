@@ -230,7 +230,6 @@ function __WindowManager() {
 	self.info = (html, ...args) => __modalCodeDialog("Info", html, args.join("\n"), true, false);
 	self.error = (html, ...args) => __modalCodeDialog("Error", html, args.join("\n"), true, false);
 	self.confirm = (html, ...args) => __modalCodeDialog("Question", html, args.join("\n"), true, true);
-	self.modal = (header, html, ok, cancel) => __modalDialog(header, html, ok, cancel);
 
 	var __modalCodeDialog = function(header, html, code, ok, cancel) {
 		let create_content = function(el_content) {
@@ -244,10 +243,10 @@ function __WindowManager() {
 			}
 			el_content.innerHTML = html;
 		};
-		return __modalDialog(header, create_content, ok, cancel);
+		return self.modal(header, create_content, ok, cancel);
 	};
 
-	var __modalDialog = function(header, html, ok, cancel, el_parent=null) {
+	self.modal = function(header, html, ok, cancel) {
 		let el_active_menu = (document.activeElement && document.activeElement.closest(".menu"));
 
 		let el_modal = document.createElement("div");
@@ -329,7 +328,7 @@ function __WindowManager() {
 		}
 
 		__windows.push(el_modal);
-		(el_parent || document.fullscreenElement || document.body).appendChild(el_modal);
+		(document.fullscreenElement || document.body).appendChild(el_modal);
 		if (typeof html === "function") {
 			// Это должно быть здесь, потому что элемент должен иметь родителя чтобы существовать
 			html(el_content, el_ok_bt);
@@ -752,21 +751,23 @@ function __WindowManager() {
 
 	var __setFullScreenWindow = function(el_win) {
 		el_win.__before_full_screen_rect = el_win.getBoundingClientRect();
-		el_win.requestFullscreen();
-		if (navigator.keyboard && navigator.keyboard.lock) {
-			navigator.keyboard.lock();
-		} else {
-			let msg = (
-				"Shortcuts like Alt+Tab, Ctrl+W, Ctrl+N might not be captured.<br>"
-				+ "For best keyboard handling use any browser with<br><a target=\"_blank\""
-				+ " href=\"https://developer.mozilla.org/en-US/docs/Web"
-				+ "/API/Keyboard_API#Browser_compatibility\">keyboard lock support from this list</a>.<br><br>"
-				+ "In Chrome use HTTPS and enable <i>system-keyboard-lock</i><br>"
-				+ "by putting at URL <i>chrome://flags/#system-keyboard-lock</i>"
-			);
-			__modalDialog("Keyboard lock is unsupported", msg, true, false, el_win);
-		}
-		el_win.focus(el_win); // Почему-то теряется фокус
+		el_win.requestFullscreen().then(function() {
+			el_win.focus(el_win); // Почему-то теряется фокус
+			if (navigator.keyboard && navigator.keyboard.lock) {
+				navigator.keyboard.lock();
+			} else {
+				let msg = (
+					"The Keyboard Lock API is not supported by this browser.<br><br>"
+					+ "It means that shortcuts like Alt+Tab and Ctrl+W might not be captured.<br>"
+					+ "For best keyboard handling use any browser with<br><a target=\"_blank\""
+					+ " href=\"https://developer.mozilla.org/en-US/docs/Web"
+					+ "/API/Keyboard_API#Browser_compatibility\">keyboard lock support from this list</a>.<br><br>"
+					+ "In Chrome use HTTPS and enable <i>system-keyboard-lock</i><br>"
+					+ "by putting at URL <i>chrome://flags/#system-keyboard-lock</i>"
+				);
+				self.info(msg);
+			}
+		});
 	};
 
 	__init__();
