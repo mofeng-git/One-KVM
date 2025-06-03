@@ -98,7 +98,7 @@ tox: testenv
 
 $(TESTENV_GPIO):
 	test ! -e $(TESTENV_GPIO)
-	sudo modprobe gpio-mockup gpio_mockup_ranges=0,40
+	sudo modprobe gpio_mockup gpio_mockup_ranges=0,40
 	test -c $(TESTENV_GPIO)
 
 
