@@ -265,6 +265,26 @@ export var tools = new function() {
 		};
 	};
 
+	self.sw = new function() {
+		return {
+			"makeItem": function(id, checked) {
+				id = tools.escape(id);
+				return `
+					<div class="switch-box">
+						<input
+							type="checkbox" id="${id}"
+							${checked ? "checked" : ""}
+						/>
+						<label for="${id}">
+							<span class="switch-inner"></span>
+							<span class="switch"></span>
+						</label>
+					</div>
+				`;
+			},
+		};
+	};
+
 	self.radio = new function() {
 		return {
 			"makeItem": function(name, title, value) {

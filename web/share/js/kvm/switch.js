@@ -484,18 +484,7 @@ export function Switch() {
 					<table style="width: 100%">
 						<tr>
 							<td>Simulate display on inactive port:</td>
-							<td align="right">
-								<div class="switch-box">
-									<input
-										type="checkbox" id="__switch-port-dummy-switch"
-										${pa.video.dummy ? "checked" : ""}
-									/>
-									<label for="__switch-port-dummy-switch">
-										<span class="switch-inner"></span>
-										<span class="switch"></span>
-									</label>
-								</div>
-							</td>
+							<td align="right">${tools.sw.makeItem("__switch-port-dummy-switch", pa.video.dummy)}</td>
 						</tr>
 					</table>
 				`;
