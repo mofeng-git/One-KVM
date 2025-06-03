@@ -22,7 +22,11 @@ li.right.feature-disabled#switch-dropdown
 				| when you decide to install it.
 			hr
 
-		+menu_switch_table("switch-atx-ask-switch", true, true) Ask ATX click confirmation:
+		table.kv
+			tr
+				+menu_switch_td2("switch-atx-ask-switch", true, true) Ask ATX click confirmation:
+			tr
+				+menu_switch_td2("switch-msd-ask-switch", true, true) Confirm switching when the Drive is connected:
 		hr
 
 		table.kv#switch-chain

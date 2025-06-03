@@ -56,8 +56,8 @@ div.modal div.modal-window div.modal-header {
 }
 
 div.modal div.modal-window div.modal-content {
-	max-width: 500px;
-	max-height: 500px;
+	max-width: 600px;
+	max-height: 600px;
 	padding: 16px 9px 16px 9px;
 }
 
