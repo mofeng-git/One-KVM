@@ -63,14 +63,15 @@ class _Netcfg:  # pylint: disable=too-many-instance-attributes
 
 class _Service:  # pylint: disable=too-many-instance-attributes
     def __init__(self, config: Section) -> None:
+        self.__ip_cmd: list[str] = config.otgnet.commands.ip_cmd
+        self.__iptables_cmd: list[str] = config.otgnet.commands.iptables_cmd
+
         self.__iface_net: str = config.otgnet.iface.net
-        self.__ip_cmd: list[str] = config.otgnet.iface.ip_cmd
 
         self.__allow_icmp: bool = config.otgnet.firewall.allow_icmp
         self.__allow_tcp: list[int] = sorted(set(config.otgnet.firewall.allow_tcp))
         self.__allow_udp: list[int] = sorted(set(config.otgnet.firewall.allow_udp))
         self.__forward_iface: str = config.otgnet.firewall.forward_iface
-        self.__iptables_cmd: list[str] = config.otgnet.firewall.iptables_cmd
 
         def build_cmd(key: str) -> list[str]:
             return tools.build_cmd(

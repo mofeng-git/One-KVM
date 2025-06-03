@@ -192,6 +192,14 @@ def _init_config(config_path: str, override_options: list[str], **load_flags: bo
 
 
 def _patch_raw(raw_config: dict) -> None:  # pylint: disable=too-many-branches
+    for (sub, cmd) in [("iface", "ip_cmd"), ("firewall", "iptables_cmd")]:
+        if isinstance(raw_config.get("otgnet"), dict):
+            if isinstance(raw_config["otgnet"].get(sub), dict):
+                if raw_config["otgnet"][sub].get(cmd):
+                    raw_config["otgnet"].setdefault("commands", {})
+                    raw_config["otgnet"]["commands"][cmd] = raw_config["otgnet"][sub][cmd]
+                    del raw_config["otgnet"][sub][cmd]
+
     if isinstance(raw_config.get("otg"), dict):
         for (old, new) in [
             ("msd", "msd"),
@@ -666,8 +674,7 @@ def _get_config_scheme() -> dict:
 
         "otgnet": {
             "iface": {
-                "net":    Option("172.30.30.0/24", type=functools.partial(valid_net, v6=False)),
-                "ip_cmd": Option(["/usr/bin/ip"],  type=valid_command),
+                "net": Option("172.30.30.0/24", type=functools.partial(valid_net, v6=False)),
             },
 
             "firewall": {
@@ -675,10 +682,12 @@ def _get_config_scheme() -> dict:
                 "allow_tcp":     Option([],   type=valid_ports_list),
                 "allow_udp":     Option([67], type=valid_ports_list),
                 "forward_iface": Option("",   type=valid_stripped_string),
-                "iptables_cmd":  Option(["/usr/sbin/iptables", "--wait=5"], type=valid_command),
             },
 
             "commands": {
+                "ip_cmd":       Option(["/usr/bin/ip"],  type=valid_command),
+                "iptables_cmd": Option(["/usr/sbin/iptables", "--wait=5"], type=valid_command),
+
                 "pre_start_cmd":        Option(["/bin/true", "pre-start"], type=valid_command),
                 "pre_start_cmd_remove": Option([], type=valid_options),
                 "pre_start_cmd_append": Option([], type=valid_options),
