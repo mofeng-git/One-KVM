@@ -123,7 +123,7 @@ depends=(
 	# fsck for /boot
 	dosfstools
 
-	# pgrep for kvmd-udev-restart-pass
+	# pgrep for kvmd-udev-restart-pass, sysctl for kvmd-otgnet
 	procps-ng
 
 	# Misc

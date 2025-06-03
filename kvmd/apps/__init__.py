@@ -687,6 +687,7 @@ def _get_config_scheme() -> dict:
             "commands": {
                 "ip_cmd":       Option(["/usr/bin/ip"],  type=valid_command),
                 "iptables_cmd": Option(["/usr/sbin/iptables", "--wait=5"], type=valid_command),
+                "sysctl_cmd":   Option(["/usr/sbin/sysctl"], type=valid_command),
 
                 "pre_start_cmd":        Option(["/bin/true", "pre-start"], type=valid_command),
                 "pre_start_cmd_remove": Option([], type=valid_options),
