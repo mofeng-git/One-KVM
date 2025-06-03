@@ -345,7 +345,7 @@ export function Streamer() {
 	};
 
 	var __clickResetButton = function() {
-		wm.confirm("Are you sure you want to reset stream?").then(function(ok) {
+		wm.confirm("Are you sure you want to reset the stream?").then(function(ok) {
 			if (ok) {
 				__resetStream();
 				tools.httpPost("api/streamer/reset", null, function(http) {
