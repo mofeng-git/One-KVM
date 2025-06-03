@@ -246,49 +246,56 @@ function __WindowManager() {
 		return self.modal(header, create_content, ok, cancel);
 	};
 
-	self.modal = function(header, html, ok, cancel) {
+	self.modal = function(header, html, ok, cancel, save_key=null) {
+		let save_id = null;
+		if (save_key !== null) {
+			save_key = `modal.saved.${save_key}`;
+			let saved = tools.storage.getInt(save_key, -1);
+			if (saved === 0 || saved === 1) {
+				return (new Promise((resolve) => resolve(!!saved)));
+			}
+		}
+
 		let el_active_menu = (document.activeElement && document.activeElement.closest(".menu"));
+
+		let inner = `
+			<div class="modal-window" tabindex="-1">
+				<div class="modal-header">${tools.escape(header)}</div>
+				<div class="modal-content"></div>
+		`;
+		if (save_key !== null) {
+			save_id = tools.makeTextId();
+			inner += `
+				<hr style="margin: 0px">
+				<div class="modal-content">
+					<table style="width: 100%">
+						<tr>
+							<td>Don't show this message again:</td>
+							<td align="right">${tools.sw.makeItem(save_id, false)}</td>
+						</tr>
+					</table>
+				</div>
+			`;
+		};
+		inner += "<div class=\"modal-buttons buttons-row\">";
+		let bt_cls = ((ok && cancel) ? "row50": "row100");
+		if (cancel) {
+			inner += `<button class="modal-button-cancel ${bt_cls}">Cancel</button>`;
+		}
+		if (ok) {
+			inner += `<button class="modal-button-ok ${bt_cls}">OK</button>`;
+		}
+		inner += "</div></div>";
 
 		let el_modal = document.createElement("div");
 		el_modal.className = "modal";
 		el_modal.style.visibility = "visible";
+		el_modal.innerHTML = inner;
 
-		let el_win = document.createElement("div");
-		el_win.className = "modal-window";
-		el_win.tabIndex = -1;
-		el_modal.appendChild(el_win);
-
-		let el_header = document.createElement("div");
-		el_header.className = "modal-header";
-		el_header.innerText = header;
-		el_win.appendChild(el_header);
-
-		let el_content = document.createElement("div");
-		el_content.className = "modal-content";
-		el_win.appendChild(el_content);
-
-		let el_buttons = document.createElement("div");
-		el_buttons.classList.add("modal-buttons", "buttons-row");
-		el_win.appendChild(el_buttons);
-
-		let el_cancel_bt = null;
-		let el_ok_bt = null;
-		if (cancel) {
-			el_cancel_bt = document.createElement("button");
-			el_cancel_bt.className = "row100";
-			el_cancel_bt.innerText = "Cancel";
-			el_buttons.appendChild(el_cancel_bt);
-		}
-		if (ok) {
-			el_ok_bt = document.createElement("button");
-			el_ok_bt.className = "row100";
-			el_ok_bt.innerText = "OK";
-			el_buttons.appendChild(el_ok_bt);
-		}
-		if (ok && cancel) {
-			el_ok_bt.className = "row50";
-			el_cancel_bt.className = "row50";
-		}
+		let el_win = el_modal.querySelector(".modal-window");
+		let el_content = el_win.querySelector(".modal-content");
+		let el_ok_bt = el_win.querySelector(".modal-button-ok");
+		let el_cancel_bt = el_win.querySelector(".modal-button-cancel");
 
 		el_win.addEventListener("keyup", function (ev) {
 			ev.preventDefault();
@@ -303,6 +310,10 @@ function __WindowManager() {
 		if (ok || cancel) {
 			promise = new Promise(function(resolve) {
 				function close(retval) {
+					if (save_key !== null && $(save_id).checked) {
+						tools.storage.setInt(save_key, (retval ? 1 : 0));
+					}
+
 					__closeWindow(el_win);
 					let index = __windows.indexOf(el_modal);
 					if (index !== -1) {
@@ -756,16 +767,15 @@ function __WindowManager() {
 			if (navigator.keyboard && navigator.keyboard.lock) {
 				navigator.keyboard.lock();
 			} else {
-				let msg = (
-					"The Keyboard Lock API is not supported by this browser.<br><br>"
-					+ "It means that shortcuts like Alt+Tab and Ctrl+W might not be captured.<br>"
+				let html = (
+					"Shortcuts like Alt+Tab and Ctrl+W might not be captured.<br>"
 					+ "For best keyboard handling use any browser with<br><a target=\"_blank\""
 					+ " href=\"https://developer.mozilla.org/en-US/docs/Web"
 					+ "/API/Keyboard_API#Browser_compatibility\">keyboard lock support from this list</a>.<br><br>"
 					+ "In Chrome use HTTPS and enable <i>system-keyboard-lock</i><br>"
 					+ "by putting at URL <i>chrome://flags/#system-keyboard-lock</i>"
 				);
-				self.info(msg);
+				self.modal("The Keyboard Lock API is not supported", html, true, false, "full-screen");
 			}
 		});
 	};
