@@ -102,6 +102,11 @@ class HidApi:
         await self.__hid.reset()
         return make_json_response()
 
+    @exposed_http("GET", "/hid/inactivity")
+    async def __inactivity_handler(self, _: Request) -> Response:
+        secs = self.__hid.get_inactivity_seconds()
+        return make_json_response({"inactivity": secs})
+
     # =====
 
     async def get_keymaps(self) -> dict:  # Ugly hack to generate hid_keymaps_state (see server.py)
