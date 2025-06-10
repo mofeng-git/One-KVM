@@ -201,6 +201,7 @@ package_kvmd() {
 	mkdir -p "$pkgdir/etc/kvmd/override.d"
 
 	mkdir -p "$pkgdir/var/lib/kvmd/"{msd,pst}
+	chmod 1775 "$pkgdir/var/lib/kvmd/pst"
 }
 
 
