@@ -1,15 +1,9 @@
 ---
 name: BUG 反馈
-about: Create a report to help us improve
+about: 反馈你所遇到的软件 BUG 或其他错误
 title: "[BUG]"
-labels: 错误
+labels: BUG
 assignees: ''
-
----
-
-好的，这是一个优化后的 GitHub issue bug 反馈模板。
-
-新模板旨在引导用户清晰地提供必要信息，同时通过简洁的语言和清晰的结构，减轻填写负担。
 
 ---
 
