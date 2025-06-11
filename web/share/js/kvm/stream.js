@@ -108,21 +108,31 @@ export function Streamer() {
 		tools.el.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
 		tools.el.setOnClick($("stream-reset-button"), __clickResetButton);
 
+		tools.storage.bindSimpleSwitch($("stream-suspend-switch"), "stream.suspend", false, __visibilityHook);
+
 		$("stream-window").show_hook = __visibilityHook;
 		$("stream-window").close_hook = __visibilityHook;
 		$("stream-window").organize_hook = __organizeHook;
+
+		document.addEventListener("visibilitychange", __visibilityHook);
 	};
 
 	/************************************************************************/
 
 	var __isStreamRequired = function() {
-		return wm.isWindowVisible($("stream-window"));
+		return (
+			wm.isWindowVisible($("stream-window"))
+			&& (
+				!$("stream-suspend-switch").checked
+				|| (document.visibilityState === "visible")
+			)
+		);
 	};
 
 	var __visibilityHook = function() {
 		let req = __isStreamRequired();
 		__applyState(req ? __state : null);
-	}
+	};
 
 	var __organizeHook = function() {
 		let geo = self.getGeometry();
@@ -180,7 +190,8 @@ export function Streamer() {
 
 	var __applyState = function(state) {
 		if (__janus_imported === null) {
-			alert("__janus_imported is null, please report");
+			// XXX: This warning is triggered by visibilitychange event via the __visibilityHook()
+			// alert("__janus_imported is null, please report");
 			return;
 		}
 
