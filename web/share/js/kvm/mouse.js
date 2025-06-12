@@ -37,19 +37,18 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	var __abs = true;
 
 	var __keypad = null;
-
 	var __timer = null;
+
+	var __touch_pos = null;
 
 	var __abs_pos = null;
 
 	var __rel_sens = 1.0;
 	var __rel_deltas = [];
-	var __rel_touch_pos = null;
 
 	var __scroll_rate = 5;
 	var __scroll_fix = (tools.browser.is_mac ? 5 : 1);
 	var __scroll_delta = {"x": 0, "y": 0};
-	var __scroll_touch_pos = null;
 
 	var __stream_hovered = false;
 
@@ -106,8 +105,8 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			document.exitPointerLock();
 		}
 		if (__abs && !abs) {
+			__touch_pos = null;
 			__rel_deltas = [];
-			__rel_touch_pos = null;
 		}
 		__abs = abs;
 		__updateOnlineLeds();
@@ -213,41 +212,35 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 
 	var __streamTouchStartHandler = function(ev) {
 		ev.preventDefault();
-		if (ev.touches.length === 1) {
-			if (__abs) {
-				__abs_pos = __getTouchPosition(ev, 0);
-				__sendPlannedMove();
-			} else {
-				__rel_touch_pos = __getTouchPosition(ev, 0);
-			}
-		} else if (ev.touches.length >= 2) {
+		let pos = __getTouchPosition(ev, 0);
+		if (__abs && ev.touches.length === 1) {
+			__abs_pos = pos;
+			__sendPlannedMove();
+		} else if (!__abs) {
+			__touch_pos = pos;
 			__abs_pos = null;
-			__rel_touch_pos = null;
 		}
 	};
 
 	var __streamTouchMoveHandler = function(ev) {
 		ev.preventDefault();
+		let pos = __getTouchPosition(ev, 0);
 		if (ev.touches.length === 1) {
-			let pos = __getTouchPosition(ev, 0);
 			if (__abs) {
 				__abs_pos = pos;
-			} else if (__rel_touch_pos === null) {
-				__rel_touch_pos = pos;
-			} else {
+			} else if (__touch_pos !== null) {
 				__sendOrPlanRelativeMove({
-					"x": (pos.x - __rel_touch_pos.x),
-					"y": (pos.y - __rel_touch_pos.y),
+					"x": (pos.x - __touch_pos.x),
+					"y": (pos.y - __touch_pos.y),
 				});
-				__rel_touch_pos = pos;
+				__touch_pos = pos;
 			}
 		} else if (ev.touches.length >= 2) {
-			let pos = __getTouchPosition(ev, 0);
-			if (__scroll_touch_pos === null) {
-				__scroll_touch_pos = pos;
+			if (__touch_pos === null) {
+				__touch_pos = pos;
 			} else {
-				let dx = __scroll_touch_pos.x - pos.x;
-				let dy = __scroll_touch_pos.y - pos.y;
+				let dx = __touch_pos.x - pos.x;
+				let dy = __touch_pos.y - pos.y;
 				if (Math.abs(dx) < 15) {
 					dx = 0;
 				}
@@ -256,22 +249,18 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 				}
 				if (dx || dy) {
 					__sendScroll({"x": dx, "y": dy});
-					__scroll_touch_pos = null;
+					__touch_pos = null;
 				}
 			}
 			__abs_pos = null;
-			__rel_touch_pos = null;
 		}
 	};
 
 	var __streamTouchEndHandler = function(ev) {
 		ev.preventDefault();
 		__sendPlannedMove();
-		__scroll_touch_pos = null;
-		if (ev.touches.length >= 2) {
-			__abs_pos = null;
-			__rel_touch_pos = null;
-		}
+		__touch_pos = null;
+		__abs_pos = null;
 	};
 
 	var __getTouchPosition = function(ev, index) {
