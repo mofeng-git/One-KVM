@@ -297,13 +297,22 @@ function __WindowManager() {
 		let el_ok_bt = el_win.querySelector(".modal-button-ok");
 		let el_cancel_bt = el_win.querySelector(".modal-button-cancel");
 
+		let key_pressed = "";
+		el_win.addEventListener("keydown", function (ev) {
+			ev.preventDefault();
+			key_pressed = ev.code;
+		});
+
 		el_win.addEventListener("keyup", function (ev) {
 			ev.preventDefault();
-			if (ok && ev.code === "Enter") {
-				el_ok_bt.click();
-			} else if (cancel && ev.code === "Escape") {
-				el_cancel_bt.click();
+			if (ev.code === key_pressed) {
+				if (ok && ev.code === "Enter") {
+					el_ok_bt.click();
+				} else if (cancel && ev.code === "Escape") {
+					el_cancel_bt.click();
+				}
 			}
+			key_pressed = "";
 		});
 
 		let promise = null;
