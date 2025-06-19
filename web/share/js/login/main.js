@@ -69,7 +69,7 @@ function __login() {
 				break;
 
 			case 403:
-				wm.error("Invalid credentials").then(__tryAgain);
+				wm.error("Invalid username, password, or OTP").then(__tryAgain);
 				break;
 
 			default: {
@@ -82,7 +82,7 @@ function __login() {
 				if (error === "ValidatorError") {
 					wm.error("Invalid characters in credentials").then(__tryAgain);
 				} else {
-					wm.error("Login error", http.responseText).then(__tryAgain);
+					wm.error("Unexpected login error:", http.responseText).then(__tryAgain);
 				}
 			} break;
 		}
