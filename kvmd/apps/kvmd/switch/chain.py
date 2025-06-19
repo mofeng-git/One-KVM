@@ -331,13 +331,21 @@ class Chain:  # pylint: disable=too-many-instance-attributes
         self.__device.request_state()
         self.__device.request_atx_leds()
         while not self.__stop_event.is_set():
+            count = 0
             if self.__select():
+                count = 0
                 for resp in self.__device.read_all():
                     self.__update_units(resp)
                     self.__adjust_quirks()
                     self.__adjust_start_port()
                     self.__finish_changing_request(resp)
                 self.__consume_commands()
+            else:
+                count += 1
+                if count >= 5:
+                    # Heartbeat
+                    self.__device.request_state()
+                    count = 0
             self.__ensure_config()
 
     def __select(self) -> bool:
