@@ -299,16 +299,16 @@ function __WindowManager() {
 
 		let key_pressed = "";
 		el_win.addEventListener("keydown", function (ev) {
-			ev.preventDefault();
 			key_pressed = ev.code;
 		});
 
 		el_win.addEventListener("keyup", function (ev) {
-			ev.preventDefault();
 			if (ev.code === key_pressed) {
 				if (ok && ev.code === "Enter") {
+					ev.preventDefault();
 					el_ok_bt.click();
 				} else if (cancel && ev.code === "Escape") {
+					ev.preventDefault();
 					el_cancel_bt.click();
 				}
 			}
