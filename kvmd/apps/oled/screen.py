@@ -52,3 +52,7 @@ class Screen:
     def draw_image(self, image_path: str) -> None:
         with luma_canvas(self.__device) as draw:
             draw.bitmap(self.__offset, Image.open(image_path).convert("1"), fill="white")
+
+    def draw_white(self) -> None:
+        with luma_canvas(self.__device) as draw:
+            draw.rectangle((0, 0, self.__device.width, self.__device.height), fill="white")

@@ -78,6 +78,7 @@ def main() -> None:  # pylint: disable=too-many-locals,too-many-branches,too-man
     parser.add_argument("--image", default="", type=(lambda arg: _get_data_path("pics", arg)), help="Display some image, wait a single interval and exit")
     parser.add_argument("--text", default="", help="Display some text, wait a single interval and exit")
     parser.add_argument("--pipe", action="store_true", help="Read and display lines from stdin until EOF, wait a single interval and exit")
+    parser.add_argument("--fill", action="store_true", help="Fill the display with 0xFF")
     parser.add_argument("--clear-on-exit", action="store_true", help="Clear display on exit")
     parser.add_argument("--contrast", default=64, type=int, help="Set OLED contrast, values from 0 to 255")
     parser.add_argument("--fahrenheit", action="store_true", help="Display temperature in Fahrenheit instead of Celsius")
@@ -120,6 +121,9 @@ def main() -> None:  # pylint: disable=too-many-locals,too-many-branches,too-man
                     screen.draw_text(text.replace("\0", ""))
                     text = ""
             time.sleep(options.interval)
+
+        elif options.fill:
+            screen.draw_white()
 
         else:
             stop_reason: (str | None) = None
