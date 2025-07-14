@@ -75,7 +75,8 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         self.__long_click_delay = long_click_delay
 
         self.__notifier = aiotools.AioNotifier()
-        self.__region = aiotools.AioExclusiveRegion(AtxIsBusyError, self.__notifier)
+        self.__power_region = aiotools.AioExclusiveRegion(AtxIsBusyError, self.__notifier)
+        self.__reset_region = aiotools.AioExclusiveRegion(AtxIsBusyError, self.__notifier)
 
         self.__line_req: (gpiod.LineRequest | None) = None
 
@@ -122,9 +123,15 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         )
 
     async def get_state(self) -> dict:
+        power_busy = self.__power_region.is_busy()
+        reset_busy = self.__reset_region.is_busy()
         return {
             "enabled": True,
-            "busy": self.__region.is_busy(),
+            "busy": (power_busy or reset_busy),
+            "acts": {
+                "power": power_busy,
+                "reset": reset_busy,
+            },
             "leds": {
                 "power": self.__reader.get(self.__power_led_pin),
                 "hdd": self.__reader.get(self.__hdd_led_pin),
@@ -175,13 +182,13 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def click_power(self, wait: bool) -> None:
-        await self.__click("power", self.__power_switch_pin, self.__click_delay, wait)
+        await self.__click("power", self.__power_region, self.__power_switch_pin, self.__click_delay, wait)
 
     async def click_power_long(self, wait: bool) -> None:
-        await self.__click("power_long", self.__power_switch_pin, self.__long_click_delay, wait)
+        await self.__click("power_long", self.__power_region, self.__power_switch_pin, self.__long_click_delay, wait)
 
     async def click_reset(self, wait: bool) -> None:
-        await self.__click("reset", self.__reset_switch_pin, self.__click_delay, wait)
+        await self.__click("reset", self.__reset_region, self.__reset_switch_pin, self.__click_delay, wait)
 
     # =====
 
@@ -189,14 +196,14 @@ class Plugin(BaseAtx):  # pylint: disable=too-many-instance-attributes
         return (await self.get_state())["leds"]["power"]
 
     @aiotools.atomic_fg
-    async def __click(self, name: str, pin: int, delay: float, wait: bool) -> None:
+    async def __click(self, name: str, region: aiotools.AioExclusiveRegion, pin: int, delay: float, wait: bool) -> None:
         if wait:
-            with self.__region:
+            with region:
                 await self.__inner_click(name, pin, delay)
         else:
             await aiotools.run_region_task(
                 f"Can't perform ATX {name} click or operation was not completed",
-                self.__region, self.__inner_click, name, pin, delay,
+                region, self.__inner_click, name, pin, delay,
             )
 
     @aiotools.atomic_fg

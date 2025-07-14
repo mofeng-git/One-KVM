@@ -43,6 +43,10 @@ class Plugin(BaseAtx):
         return {
             "enabled": False,
             "busy": False,
+            "acts": {
+                "power": False,
+                "reset": False,
+            },
             "leds": {
                 "power": False,
                 "hdd": False,
