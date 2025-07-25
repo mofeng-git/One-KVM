@@ -129,7 +129,7 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeH
 	var __checkStream = function() {
 		__findId();
 
-		if (__id.legnth > 0 && __id in __state.stream.clients_stat) {
+		if (__id.length > 0 && __id in __state.stream.clients_stat) {
 			__setStreamActive();
 			__stopChecking();
 
