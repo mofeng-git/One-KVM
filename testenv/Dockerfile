@@ -51,6 +51,7 @@ RUN \
 		python-pyotp \
 		python-qrcode \
 		python-pyserial \
+		python-pyusb \
 		python-pyudev \
 		python-evdev \
 		python-setproctitle \
