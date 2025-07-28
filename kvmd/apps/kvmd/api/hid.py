@@ -47,6 +47,7 @@ from ....plugins.hid import BaseHid
 
 from ....validators import raise_error
 from ....validators.basic import valid_bool
+from ....validators.basic import valid_number
 from ....validators.basic import valid_int_f0
 from ....validators.basic import valid_string_list
 from ....validators.os import valid_printable_filename
@@ -134,7 +135,18 @@ class HidApi:
             text = text[:limit]
         symmap = self.__ensure_symmap(req.query.get("keymap", self.__default_keymap_name))
         slow = valid_bool(req.query.get("slow", False))
-        await self.__hid.send_key_events(text_to_evdev_keys(text, symmap), no_ignore_keys=True, slow=slow)
+        delay = float(valid_number(
+            arg=req.query.get("delay", (0.02 if slow else 0)),
+            min=0,
+            max=5,
+            type=float,
+            name="keys delay",
+        ))
+        await self.__hid.send_key_events(
+            keys=text_to_evdev_keys(text, symmap),
+            no_ignore_keys=True,
+            delay=delay,
+        )
         return make_json_response()
 
     def __ensure_symmap(self, keymap_name: str) -> dict[int, dict[int, int]]:
@@ -273,7 +285,7 @@ class HidApi:
                 *zip(press, itertools.repeat(True)),
                 *zip(release, itertools.repeat(False)),
             ]
-            await self.__hid.send_key_events(seq, no_ignore_keys=True, slow=True)
+            await self.__hid.send_key_events(seq, no_ignore_keys=True, delay=0.05)
         return make_json_response()
 
     @exposed_http("POST", "/hid/events/send_key")

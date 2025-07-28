@@ -152,13 +152,13 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
         self,
         keys: Iterable[tuple[int, bool]],
         no_ignore_keys: bool=False,
-        slow: bool=False,
+        delay: float=0.0,
     ) -> None:
 
         for (key, state) in keys:
             if no_ignore_keys or key not in self.__ignore_keys:
-                if slow:
-                    await asyncio.sleep(0.02)
+                if delay > 0:
+                    await asyncio.sleep(delay)
                 self.send_key_event(key, state, False)
 
     def send_key_event(self, key: int, state: bool, finish: bool) -> None:

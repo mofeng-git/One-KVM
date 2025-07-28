@@ -67,8 +67,8 @@ export function Recorder() {
 		__recordEvent(ev);
 	};
 
-	self.recordPrintEvent = function(text, keymap, slow) {
-		__recordEvent({"event_type": "print", "event": {"text": text, "keymap": keymap, "slow": slow}});
+	self.recordPrintEvent = function(text, keymap, delay) {
+		__recordEvent({"event_type": "print", "event": {"text": text, "keymap": keymap, "delay": delay}});
 	};
 
 	self.recordAtxButtonEvent = function(button) {
@@ -164,6 +164,9 @@ export function Recorder() {
 							}
 							if (ev.event.slow !== undefined) {
 								__checkType(ev.event.slow, "boolean", "Non-bool slow");
+							}
+							if (ev.event.delay !== undefined) {
+								__checkInt(ev.event.delay, "Non-int delay");
 							}
 
 						} else if (ev.event_type === "key") {
@@ -292,6 +295,9 @@ export function Recorder() {
 				}
 				if (ev.event.slow !== undefined) {
 					params["slow"] = ev.event.slow;
+				}
+				if (ev.event.delay !== undefined) {
+					params["delay"] = ev.event.delay / 1000;
 				}
 				tools.httpPost("api/hid/print", params, function(http) {
 					if (http.status === 413) {
