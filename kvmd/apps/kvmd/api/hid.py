@@ -129,7 +129,7 @@ class HidApi:
     @exposed_http("POST", "/hid/print")
     async def __print_handler(self, req: Request) -> Response:
         text = await req.text()
-        limit = int(valid_int_f0(req.query.get("limit", 1024)))
+        limit = valid_int_f0(req.query.get("limit", 1024))
         if limit > 0:
             text = text[:limit]
         symmap = self.__ensure_symmap(req.query.get("keymap", self.__default_keymap_name))
