@@ -26,7 +26,6 @@ jobs:
         TZ: Asia/Shanghai
       volumes:
         - /dev:/dev
-        - /mnt/nfs/lfs/:/mnt/nfs/lfs/
 
     steps:
       - name: Checkout code
@@ -61,7 +60,7 @@ jobs:
           CI_PROJECT_DIR: ${{ github.workspace }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: onekvm-image-${{ github.event.inputs.device_target }}-${{ env.BUILD_DATE }}
           path: |
