@@ -61,23 +61,19 @@ jobs:
           GITHUB_ACTIONS: true
           OUTPUTDIR: ${{ github.workspace }}/output
 
-       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        id: release
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: CI Build ${{ github.event.inputs.device_target }} ${{ github.ref }}
-          draft: false
+          tag_name: ${{ github.event.inputs.device_target }}-${{ env.BUILD_DATE }}
+          name: CI Build ${{ github.event.inputs.device_target }} ${{ env.BUILD_DATE }}
           prerelease: true
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/output/*.xz
-          asset_name: onekvm-image-${{ github.event.inputs.device_target }}-${{ env.BUILD_DATE }}.xz
-          asset_content_type: application/x-xz
+          files: ${{ github.workspace }}/output/*.xz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
