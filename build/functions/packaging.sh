@@ -48,6 +48,10 @@ pack_img_onecloud() {
         unmount_all
     fi
 
+    # 自动下载 AmlImg 工具（如果不存在）
+    download_file_if_missing "$aml_packer" || { echo "错误：下载 AmlImg 工具失败" >&2; exit 1; }
+    sudo chmod +x "$aml_packer" || { echo "错误：设置 AmlImg 工具执行权限失败" >&2; exit 1; }
+
     echo "信息：将 raw rootfs 转换为 sparse image..."
     # 先删除可能存在的旧 sparse 文件
     sudo rm -f "$rootfs_sparse_img"
@@ -55,7 +59,6 @@ pack_img_onecloud() {
     sudo rm "$rootfs_raw_img" # 删除 raw 文件，因为它已被转换
 
     echo "信息：使用 AmlImg 工具打包..."
-    sudo chmod +x "$aml_packer"
     sudo "$aml_packer" pack "$OUTPUTDIR/$target_img_name" "$TMPDIR/" || { echo "错误：AmlImg 打包失败" >&2; exit 1; }
 
     echo "信息：清理 Onecloud 临时文件..."

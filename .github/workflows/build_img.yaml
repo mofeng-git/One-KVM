@@ -38,7 +38,7 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt-get install -y --no-install-recommends \
             sudo tzdata docker.io qemu-utils qemu-user-static binfmt-support parted e2fsprogs \
-            curl tar python3 python3-pip rsync git android-sdk-libsparse-utils coreutils zerofree
+            curl tar python3 python3-pip rsync git android-sdk-libsparse-utils coreutils zerofree wget
           apt-get clean
           rm -rf /var/lib/apt/lists/*
           ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
