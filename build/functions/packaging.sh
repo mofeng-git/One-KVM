@@ -8,7 +8,7 @@ compress_image_file() {
     
     if is_github_actions && [[ -f "$file_path" ]]; then
         echo "信息：压缩镜像文件: $file_path"
-        if xz -9 "$file_path"; then
+        if xz -9 -vv "$file_path"; then
             echo "信息：压缩完成: ${file_path}.xz"
         else
             echo "警告：压缩文件 $file_path 失败"

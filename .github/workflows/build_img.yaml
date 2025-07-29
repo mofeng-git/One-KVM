@@ -61,19 +61,23 @@ jobs:
           GITHUB_ACTIONS: true
           OUTPUTDIR: ${{ github.workspace }}/output
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: onekvm-image-${{ github.event.inputs.device_target }}-${{ env.BUILD_DATE }}
-          path: |
-            ${{ github.workspace }}/output/*.img
-            ${{ github.workspace }}/output/*.img.xz
-            ${{ github.workspace }}/output/*.vmdk
-            ${{ github.workspace }}/output/*.vmdk.xz
-            ${{ github.workspace }}/output/*.vdi
-            ${{ github.workspace }}/output/*.vdi.xz
-            ${{ github.workspace }}/output/*.burn.img
-            ${{ github.workspace }}/output/*.burn.img.xz
-          if-no-files-found: ignore
+       - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
         env:
-          CI_PROJECT_DIR: ${{ github.workspace }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: CI Build ${{ github.event.inputs.device_target }} ${{ github.ref }}
+          draft: false
+          prerelease: true
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/output/*.xz
+          asset_name: onekvm-image-${{ github.event.inputs.device_target }}-${{ env.BUILD_DATE }}.xz
+          asset_content_type: application/x-xz
