@@ -65,7 +65,7 @@ jobs:
         id: release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ env.BUILD_DATE }}-${{ github.event.inputs.device_target }}
+          tag_name: v${{ env.BUILD_DATE }}-${{ github.event.inputs.device_target }}-${{ github.run_id }}
           name: CI Build ${{ github.event.inputs.device_target }} ${{ env.BUILD_DATE }}
           files: ${{ github.workspace }}/output/*.xz
           prerelease: true
