@@ -65,7 +65,7 @@ jobs:
         id: release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.inputs.device_target }}-${{ env.BUILD_DATE }}
+          tag_name: v${{ env.BUILD_DATE }}-${{ github.event.inputs.device_target }}
           name: CI Build ${{ github.event.inputs.device_target }} ${{ env.BUILD_DATE }}
           prerelease: true
         env:
@@ -74,6 +74,7 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: v${{ env.BUILD_DATE }}-${{ github.event.inputs.device_target }}
           files: ${{ github.workspace }}/output/*.xz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
