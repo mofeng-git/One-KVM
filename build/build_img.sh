@@ -135,6 +135,9 @@ build_target() {
             ;;
     esac
 
+    # 在 GitHub Actions 环境中清理下载的文件
+    cleanup_downloaded_files
+
     echo "=================================================="
     echo "信息：目标 $target 构建完成！"
     echo "=================================================="

@@ -172,6 +172,14 @@ write_meta() {
     run_in_chroot "sed -i 's/localhost.localdomain/$hostname/g' /etc/kvmd/meta.yaml"
 }
 
+# 检测是否在 GitHub Actions 环境中
+is_github_actions() {
+    [[ -n "$GITHUB_ACTIONS" ]]
+}
+
+# 记录下载的文件列表（仅在 GitHub Actions 环境中）
+DOWNLOADED_FILES_LIST="/tmp/downloaded_files.txt"
+
 # 自动下载文件函数
 download_file_if_missing() {
     local file_path="$1"
@@ -204,6 +212,10 @@ download_file_if_missing() {
     
     if curl -f -L -o "$file_path" "$remote_url" 2>/dev/null; then
         echo "信息：下载成功: $file_path"
+        # 在 GitHub Actions 环境中记录下载的文件
+        if is_github_actions; then
+            echo "$file_path" >> "$DOWNLOADED_FILES_LIST"
+        fi
         return 0
     fi
     
@@ -216,6 +228,10 @@ download_file_if_missing() {
         echo "信息：下载 .xz 文件成功，正在解压..."
         if xz -d "$xz_file"; then
             echo "信息：解压成功: $file_path"
+            # 在 GitHub Actions 环境中记录下载的文件
+            if is_github_actions; then
+                echo "$file_path" >> "$DOWNLOADED_FILES_LIST"
+            fi
             return 0
         else
             echo "错误：解压 .xz 文件失败" >&2
@@ -226,6 +242,21 @@ download_file_if_missing() {
     
     echo "错误：无法下载文件 $file_path (尝试了原始版本和 .xz 版本)" >&2
     return 1
+}
+
+# 清理下载的文件（仅在 GitHub Actions 环境中）
+cleanup_downloaded_files() {
+    if is_github_actions && [[ -f "$DOWNLOADED_FILES_LIST" ]]; then
+        echo "信息：清理 GitHub Actions 环境中下载的文件..."
+        while IFS= read -r file_path; do
+            if [[ -f "$file_path" ]]; then
+                echo "信息：删除下载的文件: $file_path"
+                rm -f "$file_path"
+            fi
+        done < "$DOWNLOADED_FILES_LIST"
+        rm -f "$DOWNLOADED_FILES_LIST"
+        echo "信息：下载文件清理完成"
+    fi
 }
 
 # 检查必要的外部工具
