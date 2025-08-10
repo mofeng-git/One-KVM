@@ -21,6 +21,7 @@
 
 
 import asyncio
+import re
 
 from typing import Any
 
@@ -68,6 +69,7 @@ class ExportApi:
         for mode in sorted(UserGpioModes.ALL):
             for (channel, ch_state) in gpio_state["state"][f"{mode}s"].items():  # type: ignore
                 if not channel.startswith("__"):  # Hide special GPIOs
+                    channel = re.sub(r"[^\w]", "_", channel)
                     for key in ["online", "state"]:
                         self.__append_prometheus_rows(rows, ch_state["state"], f"pikvm_gpio_{mode}_{key}_{channel}")
 
