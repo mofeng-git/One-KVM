@@ -134,7 +134,8 @@ export function Gpio(__recorder) {
 
 	var __createItem = function(item) {
 		if (item.type === "label") {
-			return item.text;
+			// User may want to use HTML in the text so we don't perform escaping here.
+			return `<span class="__gpio-label">${item.text}</span>`;
 
 		} else if (item.type === "input") {
 			let e_ch_class = tools.escape(`__gpio-led-${item.channel}`);
