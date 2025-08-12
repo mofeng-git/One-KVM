@@ -23,8 +23,6 @@
 import asyncio
 import asyncio.subprocess
 
-from typing import Callable
-
 from ....logging import get_logger
 
 from .... import tools
@@ -42,8 +40,6 @@ class Runner:  # pylint: disable=too-many-instance-attributes
         pre_start_cmd: list[str],
         cmd: list[str],
         post_stop_cmd: list[str],
-
-        get_params: Callable[[], dict],
     ) -> None:
 
         self.__reset_delay = reset_delay
@@ -53,8 +49,7 @@ class Runner:  # pylint: disable=too-many-instance-attributes
         self.__cmd: list[str] = cmd
         self.__post_stop_cmd: list[str] = post_stop_cmd
 
-        self.__get_params = get_params
-
+        self.__proc_params: dict = {}
         self.__proc_task: (asyncio.Task | None) = None
         self.__proc: (asyncio.subprocess.Process | None) = None  # pylint: disable=no-member
 
@@ -62,7 +57,7 @@ class Runner:  # pylint: disable=too-many-instance-attributes
         self.__stopper_wip = False
 
     @aiotools.atomic_fg
-    async def ensure_start(self, reset: bool) -> None:
+    async def ensure_start(self, params: dict) -> None:
         if not self.__proc_task or self.__stopper_task:
             logger = get_logger(0)
 
@@ -75,11 +70,19 @@ class Runner:  # pylint: disable=too-many-instance-attributes
                 else:
                     await asyncio.gather(self.__stopper_task, return_exceptions=True)
 
-            if reset and self.__reset_delay > 0:
-                logger.info("Waiting %.2f seconds for reset delay ...", self.__reset_delay)
-                await asyncio.sleep(self.__reset_delay)
             logger.info("Starting streamer ...")
-            await self.__inner_start()
+            await self.__inner_start(params)
+
+    @aiotools.atomic_fg
+    async def ensure_restart(self, params: dict) -> None:
+        logger = get_logger(0)
+        start = bool(self.__proc_task and not self.__stopper_task)  # Если запущено и не планирует останавливаться
+        await self.ensure_stop(immediately=True)
+        if self.__reset_delay > 0:
+            logger.info("Waiting %.2f seconds for reset delay ...", self.__reset_delay)
+            await asyncio.sleep(self.__reset_delay)
+        if start:
+            await self.ensure_start(params)
 
     @aiotools.atomic_fg
     async def ensure_stop(self, immediately: bool) -> None:
@@ -114,18 +117,15 @@ class Runner:  # pylint: disable=too-many-instance-attributes
                 logger.info("Planning to stop streamer in %.2f seconds ...", self.__shutdown_delay)
                 self.__stopper_task = asyncio.create_task(delayed_stop())
 
-    def is_working(self) -> bool:
-        # Запущено и не планирует останавливаться
-        return bool(self.__proc_task and not self.__stopper_task)
+    def is_running(self) -> bool:
+        return bool(self.__proc_task)
 
     # =====
 
-    def _is_alive(self) -> bool:
-        return bool(self.__proc_task)
-
     @aiotools.atomic_fg
-    async def __inner_start(self) -> None:
+    async def __inner_start(self, params: dict) -> None:
         assert not self.__proc_task
+        self.__proc_params = params
         await self.__run_hook("PRE-START-CMD", self.__pre_start_cmd)
         self.__proc_task = asyncio.create_task(self.__process_task_loop())
 
@@ -159,8 +159,7 @@ class Runner:  # pylint: disable=too-many-instance-attributes
                 await asyncio.sleep(1)
 
     def __make_cmd(self, cmd: list[str]) -> list[str]:
-        params = self.__get_params()
-        return [part.format(**params) for part in cmd]
+        return [part.format(**self.__proc_params) for part in cmd]
 
     async def __run_hook(self, name: str, cmd: list[str]) -> None:
         logger = get_logger()

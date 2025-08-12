@@ -83,6 +83,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
 
         self.__unix_path = unix_path
         self.__snapshot_timeout = snapshot_timeout
+        self.__process_name_prefix = process_name_prefix
 
         self.__params = Params(**params_kwargs)
 
@@ -92,11 +93,6 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
             pre_start_cmd=tools.build_cmd(pre_start_cmd, pre_start_cmd_remove, pre_start_cmd_append),
             cmd=tools.build_cmd(cmd, cmd_remove, cmd_append),
             post_stop_cmd=tools.build_cmd(post_stop_cmd, post_stop_cmd_remove, post_stop_cmd_append),
-            get_params=(lambda: {
-                "unix": unix_path,
-                "process_name_prefix": process_name_prefix,
-                **self.__params.get_params(),
-            }),
         )
 
         self.__client = HttpStreamerClient(
@@ -114,20 +110,27 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
     # =====
 
     @aiotools.atomic_fg
-    async def ensure_start(self, reset: bool) -> None:
-        await self.__runner.ensure_start(reset)
+    async def ensure_start(self) -> None:
+        await self.__runner.ensure_start(self.__make_params())
 
     @aiotools.atomic_fg
-    async def ensure_stop(self, immediately: bool) -> None:
-        await self.__runner.ensure_stop(immediately)
+    async def ensure_restart(self) -> None:
+        await self.__runner.ensure_restart(self.__make_params())
 
-    def is_working(self) -> bool:
-        return self.__runner.is_working()
+    def __make_params(self) -> dict:
+        return {
+            "unix": self.__unix_path,
+            "process_name_prefix": self.__process_name_prefix,
+            **self.__params.get_params(),
+        }
+
+    @aiotools.atomic_fg
+    async def ensure_stop(self) -> None:
+        await self.__runner.ensure_stop(immediately=False)
 
     # =====
 
     def set_params(self, params: dict) -> None:
-        assert not self.__runner._is_alive()  # pylint: disable=protected-access
         self.__notifier.notify(self.__ST_PARAMS)
         return self.__params.set_params(params)
 
@@ -194,7 +197,7 @@ class Streamer:  # pylint: disable=too-many-instance-attributes
                 yield new
 
     async def __get_streamer_state(self) -> (dict | None):
-        if self.__runner._is_alive():  # pylint: disable=protected-access
+        if self.__runner.is_running():
             session = self.__ensure_client_session()
             try:
                 return (await session.get_state())

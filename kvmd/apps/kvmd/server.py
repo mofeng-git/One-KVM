@@ -322,18 +322,17 @@ class KvmdServer(HttpServer):  # pylint: disable=too-many-arguments,too-many-ins
         while True:
             cur = (self.__has_stream_clients() or self.__snapshoter.snapshoting() or self.__stream_forever)
             if not prev and cur:
-                await self.__streamer.ensure_start(reset=False)
+                await self.__streamer.ensure_start()
             elif prev and not cur:
-                await self.__streamer.ensure_stop(immediately=False)
+                await self.__streamer.ensure_stop()
 
-            if self.__reset_streamer or self.__new_streamer_params:
-                start = self.__streamer.is_working()
-                await self.__streamer.ensure_stop(immediately=True)
-                if self.__new_streamer_params:
-                    self.__streamer.set_params(self.__new_streamer_params)
-                    self.__new_streamer_params = {}
-                if start:
-                    await self.__streamer.ensure_start(reset=self.__reset_streamer)
+            if self.__new_streamer_params:
+                self.__streamer.set_params(self.__new_streamer_params)
+                self.__new_streamer_params = {}
+                self.__reset_streamer = True
+
+            if self.__reset_streamer:
+                await self.__streamer.ensure_restart()
                 self.__reset_streamer = False
 
             prev = cur
