@@ -282,11 +282,11 @@ class BaseHid(BasePlugin):  # pylint: disable=too-many-instance-attributes
             if self.__j_active and (self.__j_activity_ts + self.__j_interval < self.__get_monotonic_seconds()):
                 if self.__j_absolute:
                     (x, y) = (self.__j_last_x, self.__j_last_y)
-                    for move in [100, -100, 100, -100, 0]:
+                    for move in (([100, -100] * 5) + [0]):
                         self.send_mouse_move_event(MouseRange.normalize(x + move), MouseRange.normalize(y + move))
                         await asyncio.sleep(0.1)
                 else:
-                    for move in [10, -10, 10, -10]:
+                    for move in ([10, -10] * 5):
                         self.send_mouse_relative_event(move, move)
                         await asyncio.sleep(0.1)
             await asyncio.sleep(1)
