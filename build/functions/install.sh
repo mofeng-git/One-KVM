@@ -21,7 +21,12 @@ delete_armbian_verify(){
 
 prepare_external_binaries() {
     local platform="$1" # linux/armhf or linux/amd64 or linux/aarch64
-    local docker_image="registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd-stage-0"
+    # 如果在 GitHub Actions 环境下，使用 silentwind0/kvmd-stage-0，否则用阿里云镜像
+    if is_github_actions; then
+        local docker_image="silentwind0/kvmd-stage-0"
+    else
+        local docker_image="registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd-stage-0"
+    fi
 
     echo "信息：准备外部预编译二进制文件 (平台: $platform)..."
     ensure_dir "$PREBUILT_DIR"

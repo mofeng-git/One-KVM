@@ -26,11 +26,10 @@ jobs:
         TZ: Asia/Shanghai
       volumes:
         - /dev:/dev
-        - /mnt/nfs/lfs/:/mnt/nfs/lfs/
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -38,7 +37,7 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt-get install -y --no-install-recommends \
             sudo tzdata docker.io qemu-utils qemu-user-static binfmt-support parted e2fsprogs \
-            curl tar python3 python3-pip rsync git android-sdk-libsparse-utils coreutils zerofree
+            curl tar python3 python3-pip rsync git android-sdk-libsparse-utils coreutils zerofree wget
           apt-get clean
           rm -rf /var/lib/apt/lists/*
           ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
@@ -59,16 +58,16 @@ jobs:
           echo "Build script finished."
         env:
           CI_PROJECT_DIR: ${{ github.workspace }}
+          GITHUB_ACTIONS: true
+          OUTPUTDIR: ${{ github.workspace }}/output
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+      - name: Create GitHub Release
+        id: release
+        uses: softprops/action-gh-release@v1
         with:
-          name: onekvm-image-${{ github.event.inputs.device_target }}-${{ env.BUILD_DATE }}
-          path: |
-            ${{ github.workspace }}/output/*.img
-            ${{ github.workspace }}/output/*.vmdk
-            ${{ github.workspace }}/output/*.vdi
-            ${{ github.workspace }}/output/*.burn.img
-          if-no-files-found: ignore
+          tag_name: v${{ env.BUILD_DATE }}-${{ github.event.inputs.device_target }}-${{ github.run_id }}
+          name: CI Build ${{ github.event.inputs.device_target }} ${{ env.BUILD_DATE }}
+          files: ${{ github.workspace }}/output/*.xz
+          prerelease: true
         env:
-          CI_PROJECT_DIR: ${{ github.workspace }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,21 @@
+wget https://github.com/hzyitc/AmlImg/releases/download/v0.3.1/AmlImg_v0.3.1_linux_amd64 -O /mnt/src/image/onecloud/AmlImg_v0.3.1_linux_amd64
+chmod +x /mnt/src/image/onecloud/AmlImg_v0.3.1_linux_amd64
+
+
+#!/bin/bash
+# 文件映射脚本
+# 本地目录前缀：/mnt
+# 远程URL前缀：https://files.mofeng.run
+
+LOCAL_PREFIX="/mnt"
+REMOTE_PREFIX="https://files.mofeng.run"
+
+# 文件相对路径
+REL_PATH="src/image/onecloud/Armbian_by-SilentWind_24.5.0-trunk_Onecloud_bookworm_legacy_5.9.0-rc7_minimal_support-dvd-emulation.burn.img"
+
+LOCAL_FILE="$LOCAL_PREFIX/$REL_PATH"
+REMOTE_URL="$REMOTE_PREFIX/$REL_PATH"
+
+echo "下载 $REMOTE_URL 到 $LOCAL_FILE"
+mkdir -p "$(dirname "$LOCAL_FILE")"
+wget -O "$LOCAL_FILE" "$REMOTE_URL"

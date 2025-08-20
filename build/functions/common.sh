@@ -172,9 +172,96 @@ write_meta() {
     run_in_chroot "sed -i 's/localhost.localdomain/$hostname/g' /etc/kvmd/meta.yaml"
 }
 
+# 检测是否在 GitHub Actions 环境中
+is_github_actions() {
+    [[ -n "$GITHUB_ACTIONS" ]]
+}
+
+# 记录下载的文件列表（仅在 GitHub Actions 环境中）
+DOWNLOADED_FILES_LIST="/tmp/downloaded_files.txt"
+
+# 自动下载文件函数
+download_file_if_missing() {
+    local file_path="$1"
+    local relative_path=""
+    
+    # 如果文件已存在，直接返回
+    if [[ -f "$file_path" ]]; then
+        echo "信息：文件已存在: $file_path"
+        return 0
+    fi
+    
+    # 计算相对于 SRCPATH 的路径
+    if [[ "$file_path" == "$SRCPATH"/* ]]; then
+        relative_path="${file_path#$SRCPATH/}"
+    else
+        echo "错误：文件路径 $file_path 不在 SRCPATH ($SRCPATH) 下" >&2
+        return 1
+    fi
+    
+    echo "信息：文件不存在，尝试下载: $file_path"
+    echo "信息：相对路径: $relative_path"
+    
+    # 确保目标目录存在
+    local target_dir="$(dirname "$file_path")"
+    ensure_dir "$target_dir"
+    
+    # 首先尝试直接下载
+    local remote_url="${REMOTE_PREFIX}/${relative_path}"
+    echo "信息：尝试下载: $remote_url"
+    
+    if curl -f -L -o "$file_path" "$remote_url" 2>/dev/null; then
+        echo "信息：下载成功: $file_path"
+        # 在 GitHub Actions 环境中记录下载的文件
+        if is_github_actions; then
+            echo "$file_path" >> "$DOWNLOADED_FILES_LIST"
+        fi
+        return 0
+    fi
+    
+    # 如果直接下载失败，尝试添加 .xz 后缀
+    echo "信息：直接下载失败，尝试 .xz 压缩版本..."
+    local xz_url="${remote_url}.xz"
+    local xz_file="${file_path}.xz"
+    
+    if curl -f -L -o "$xz_file" "$xz_url" 2>/dev/null; then
+        echo "信息：下载 .xz 文件成功，正在解压..."
+        if xz -d "$xz_file"; then
+            echo "信息：解压成功: $file_path"
+            # 在 GitHub Actions 环境中记录下载的文件
+            if is_github_actions; then
+                echo "$file_path" >> "$DOWNLOADED_FILES_LIST"
+            fi
+            return 0
+        else
+            echo "错误：解压 .xz 文件失败" >&2
+            rm -f "$xz_file"
+            return 1
+        fi
+    fi
+    
+    echo "错误：无法下载文件 $file_path (尝试了原始版本和 .xz 版本)" >&2
+    return 1
+}
+
+# 清理下载的文件（仅在 GitHub Actions 环境中）
+cleanup_downloaded_files() {
+    if is_github_actions && [[ -f "$DOWNLOADED_FILES_LIST" ]]; then
+        echo "信息：清理 GitHub Actions 环境中下载的文件..."
+        while IFS= read -r file_path; do
+            if [[ -f "$file_path" ]]; then
+                echo "信息：删除下载的文件: $file_path"
+                rm -f "$file_path"
+            fi
+        done < "$DOWNLOADED_FILES_LIST"
+        rm -f "$DOWNLOADED_FILES_LIST"
+        echo "信息：下载文件清理完成"
+    fi
+}
+
 # 检查必要的外部工具
 check_required_tools() {
-    local required_tools="sudo docker losetup mount umount parted e2fsck resize2fs qemu-img curl tar python3 pip3 rsync git simg2img img2simg dd cat rm mkdir mv cp sed chmod chown ln grep printf id"
+    local required_tools="sudo docker losetup mount umount parted e2fsck resize2fs qemu-img curl tar python3 pip3 rsync git simg2img img2simg dd cat rm mkdir mv cp sed chmod chown ln grep printf id xz"
     
     for cmd in $required_tools; do
         if ! command -v "$cmd" &> /dev/null; then

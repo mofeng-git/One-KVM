@@ -2,11 +2,14 @@
 
 # --- 配置 ---
 # 允许通过环境变量覆盖默认路径
-SRCPATH="${SRCPATH:-/mnt/nfs/lfs/src}"
+SRCPATH="${SRCPATH:-/mnt/src}"
 BOOTFS="${BOOTFS:-/tmp/bootfs}"
 ROOTFS="${ROOTFS:-/tmp/rootfs}"
-OUTPUTDIR="${OUTPUTDIR:-/mnt/nfs/lfs/src/output}"
+OUTPUTDIR="${OUTPUTDIR:-/mnt/output}"
 TMPDIR="${TMPDIR:-$SRCPATH/tmp}"
+
+# 远程文件下载配置
+REMOTE_PREFIX="${REMOTE_PREFIX:-https://files.mofeng.run/src}"
 
 export LC_ALL=C
 
@@ -131,6 +134,9 @@ build_target() {
             echo "错误：未知的打包类型 for '$target'" >&2
             ;;
     esac
+
+    # 在 GitHub Actions 环境中清理下载的文件
+    cleanup_downloaded_files
 
     echo "=================================================="
     echo "信息：目标 $target 构建完成！"
