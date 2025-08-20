@@ -60,9 +60,9 @@ class LogApi:
                     record["service"],
                     record["msg"],
                 )).encode("utf-8") + b"\r\n")
-        except Exception as e:
+        except Exception as exception:
             if record is None:
-                record = e 
+                record = exception
             await response.write(f"Module systemd.journal is unavailable.\n{record}".encode("utf-8"))
             return response
         return response

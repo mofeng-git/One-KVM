@@ -157,7 +157,7 @@ class BaseMsd(BasePlugin):
 
     async def set_connected(self, connected: bool) -> None:
         raise NotImplementedError()
-    
+
     async def make_image(self, zipped: bool) -> None:
         raise NotImplementedError()
 

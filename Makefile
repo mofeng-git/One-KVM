@@ -28,6 +28,8 @@ all:
 	@ echo "    make testenv          # Build test environment"
 	@ echo "    make tox              # Run tests and linters"
 	@ echo "    make tox E=pytest     # Run selected test environment"
+	@ echo "    make tox-local        # Run tests and linters locally (no Docker)"
+	@ echo "    make tox-local E=flake8 # Run selected test locally"
 	@ echo "    make gpio             # Create gpio mockup"
 	@ echo "    make run              # Run kvmd"
 	@ echo "    make run CMD=...      # Run specified command inside kvmd environment"
@@ -94,6 +96,10 @@ tox: testenv
 			&& cd /src \
 			&& $(if $(CMD),$(CMD),tox -q -c testenv/tox.ini $(if $(E),-e $(E),-p auto)) \
 		"
+
+
+tox-local:
+	@./check-code.sh $(if $(E),$(E),all)
 
 
 $(TESTENV_GPIO):

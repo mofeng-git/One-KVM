@@ -21,7 +21,8 @@
 #                                                                            #
 # ========================================================================== #
 
-from setuptools import setup, find_packages
+from setuptools import setup
+
 
 def main() -> None:
     # Define entry points manually with specific import paths

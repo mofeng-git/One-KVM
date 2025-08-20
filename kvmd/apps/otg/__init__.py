@@ -201,8 +201,8 @@ class _GadgetConfig:
         rw: bool,
         removable: bool,
         fua: bool,
-        inquiry_string_cdrom: str,
-        inquiry_string_flash: str,
+        _inquiry_string_cdrom: str,
+        _inquiry_string_flash: str,
     ) -> None:
 
         # Endpoints number depends on transport_type but we can consider that this is 2
@@ -216,8 +216,8 @@ class _GadgetConfig:
         _write(join(func_path, "lun.0/ro"), int(not rw))
         _write(join(func_path, "lun.0/removable"), int(removable))
         _write(join(func_path, "lun.0/nofua"), int(not fua))
-        #_write(join(func_path, "lun.0/inquiry_string_cdrom"), inquiry_string_cdrom)
-        #_write(join(func_path, "lun.0/inquiry_string"), inquiry_string_flash)
+        # _write(join(func_path, "lun.0/inquiry_string_cdrom"), inquiry_string_cdrom)
+        # _write(join(func_path, "lun.0/inquiry_string"), inquiry_string_flash)
         if user != "root":
             _chown(join(func_path, "lun.0/cdrom"), user)
             _chown(join(func_path, "lun.0/ro"), user)
@@ -316,8 +316,8 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
         gc.add_msd(
             start=cod.msd.start,
             user=config.otg.user,
-            inquiry_string_cdrom=usb.make_inquiry_string(**cod.msd.default.inquiry_string.cdrom._unpack()),
-            inquiry_string_flash=usb.make_inquiry_string(**cod.msd.default.inquiry_string.flash._unpack()),
+            _inquiry_string_cdrom=usb.make_inquiry_string(**cod.msd.default.inquiry_string.cdrom._unpack()),
+            _inquiry_string_flash=usb.make_inquiry_string(**cod.msd.default.inquiry_string.flash._unpack()),
             **cod.msd.default._unpack(ignore="inquiry_string"),
         )
         if cod.drives.enabled:
@@ -326,8 +326,8 @@ def _cmd_start(config: Section) -> None:  # pylint: disable=too-many-statements,
                 gc.add_msd(
                     start=cod.drives.start,
                     user="root",
-                    inquiry_string_cdrom=usb.make_inquiry_string(**cod.drives.default.inquiry_string.cdrom._unpack()),
-                    inquiry_string_flash=usb.make_inquiry_string(**cod.drives.default.inquiry_string.flash._unpack()),
+                    _inquiry_string_cdrom=usb.make_inquiry_string(**cod.drives.default.inquiry_string.cdrom._unpack()),
+                    _inquiry_string_flash=usb.make_inquiry_string(**cod.drives.default.inquiry_string.flash._unpack()),
                     **cod.drives.default._unpack(ignore="inquiry_string"),
                 )
 

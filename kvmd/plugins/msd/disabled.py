@@ -77,6 +77,9 @@ class Plugin(BaseMsd):
     async def set_connected(self, connected: bool) -> None:
         raise MsdDisabledError()
 
+    async def make_image(self, zipped: bool) -> None:
+        raise MsdDisabledError()
+
     @contextlib.asynccontextmanager
     async def read_image(self, name: str) -> AsyncGenerator[BaseMsdReader, None]:
         if self is not None:  # XXX: Vulture and pylint hack

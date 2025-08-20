@@ -23,6 +23,7 @@
 
 import errno
 import argparse
+import os
 
 from ...validators.basic import valid_bool
 from ...validators.basic import valid_int_f0
@@ -36,6 +37,7 @@ from .. import init
 # =====
 def _has_param(gadget: str, instance: int, param: str) -> bool:
     return os.access(_get_param_path(gadget, instance, param), os.F_OK)
+
 
 def _get_param_path(gadget: str, instance: int, param: str) -> str:
     return usb.get_gadget_path(gadget, usb.G_FUNCTIONS, f"mass_storage.usb{instance}/lun.0", param)
