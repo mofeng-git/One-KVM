@@ -22,6 +22,7 @@
 
 import os
 import socket
+import struct
 import asyncio
 import contextlib
 import dataclasses
@@ -83,6 +84,7 @@ class HttpExposed:
     method: str
     path: str
     auth_required: bool
+    allow_usc: bool
     handler: Callable
 
 
@@ -90,14 +92,22 @@ _HTTP_EXPOSED = "_http_exposed"
 _HTTP_METHOD = "_http_method"
 _HTTP_PATH = "_http_path"
 _HTTP_AUTH_REQUIRED = "_http_auth_required"
+_HTTP_ALLOW_USC = "_http_allow_usc"
 
 
-def exposed_http(http_method: str, path: str, auth_required: bool=True) -> Callable:
+def exposed_http(
+    http_method: str,
+    path: str,
+    auth_required: bool=True,
+    allow_usc: bool=True,
+) -> Callable:
+
     def set_attrs(handler: Callable) -> Callable:
         setattr(handler, _HTTP_EXPOSED, True)
         setattr(handler, _HTTP_METHOD, http_method)
         setattr(handler, _HTTP_PATH, path)
         setattr(handler, _HTTP_AUTH_REQUIRED, auth_required)
+        setattr(handler, _HTTP_ALLOW_USC, allow_usc)
         return handler
     return set_attrs
 
@@ -108,6 +118,7 @@ def _get_exposed_http(obj: object) -> list[HttpExposed]:
             method=getattr(handler, _HTTP_METHOD),
             path=getattr(handler, _HTTP_PATH),
             auth_required=getattr(handler, _HTTP_AUTH_REQUIRED),
+            allow_usc=getattr(handler, _HTTP_ALLOW_USC),
             handler=handler,
         )
         for handler in [getattr(obj, name) for name in dir(obj)]
@@ -270,6 +281,35 @@ def set_request_auth_info(req: BaseRequest, info: str) -> None:
     setattr(req, _REQUEST_AUTH_INFO, info)
 
 
+@dataclasses.dataclass(frozen=True)
+class RequestUnixCredentials:
+    pid: int
+    uid: int
+    gid: int
+
+    def __post_init__(self) -> None:
+        assert self.pid >= 0
+        assert self.uid >= 0
+        assert self.gid >= 0
+
+
+def get_request_unix_credentials(req: BaseRequest) -> (RequestUnixCredentials | None):
+    if req.transport is None:
+        return None
+    sock = req.transport.get_extra_info("socket")
+    if sock is None:
+        return None
+    try:
+        data = sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("iii"))
+    except Exception:
+        return None
+    (pid, uid, gid) = struct.unpack("iii", data)
+    if pid < 0 or uid < 0 or gid < 0:
+        # PID == 0 when the client is outside of server's PID namespace, e.g. when kvmd runs in a container
+        return None
+    return RequestUnixCredentials(pid=pid, uid=uid, gid=gid)
+
+
 # =====
 @dataclasses.dataclass(frozen=True)
 class WsSession:
@@ -314,13 +354,14 @@ class HttpServer:
 
         if unix_rm and os.path.exists(unix_path):
             os.remove(unix_path)
-        server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server_socket.bind(unix_path)
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+        sock.bind(unix_path)
         if unix_mode:
             os.chmod(unix_path, unix_mode)
 
         run_app(
-            sock=server_socket,
+            sock=sock,
             app=self.__make_app(),
             shutdown_timeout=1,
             access_log_format=access_log_format,

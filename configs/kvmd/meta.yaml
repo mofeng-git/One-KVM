@@ -4,11 +4,11 @@
 # will be displayed in the web interface.
 
 server:
-    host: localhost.localdomain
+    host: "@auto"
 
 kvm: {
-    base_on: PiKVM,
-    app_name: One-KVM,
-    main_version: 241204,
-    author: SilentWind
+    base_on: "PiKVM",
+    app_name: "One-KVM",
+    main_version: "241204",
+    author: "SilentWind"
 }

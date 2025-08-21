@@ -69,6 +69,9 @@ class _CeaBlock:
         return _CeaBlock(tag, data)
 
 
+_LONG = 256
+_SHORT = 128
+
 _CEA = 128
 _CEA_AUDIO = 1
 _CEA_SPEAKERS = 4
@@ -78,22 +81,27 @@ class Edid:
     # https://en.wikipedia.org/wiki/Extended_Display_Identification_Data
 
     def __init__(self, data: bytes) -> None:
-        assert len(data) == 256
+        assert len(data) in [_SHORT, _LONG], f"Invalid EDID length: {len(data)}, should be {_SHORT} or {_LONG} bytes"
+        self.__long = (len(data) == _LONG)
+        if self.__long:
+            assert data[126] == 1, "Zero extensions number"
+            assert (data[_CEA + 0], data[_CEA + 1]) == (0x02, 0x03), "Can't find CEA extension"
         self.__data = list(data)
+
+    @classmethod
+    def is_header_valid(cls, data: bytes) -> bool:
+        return data.startswith(b"\x00\xFF\xFF\xFF\xFF\xFF\xFF\x00")
 
     @classmethod
     def from_file(cls, path: str) -> "Edid":
         with _smart_open(path, "rb") as file:
             data = file.read()
-            if not data.startswith(b"\x00\xFF\xFF\xFF\xFF\xFF\xFF\x00"):
+            if not cls.is_header_valid(data):
                 text = re.sub(r"\s", "", data.decode())
                 data = bytes([
                     int(text[index:index + 2], 16)
                     for index in range(0, len(text), 2)
                 ])
-            assert len(data) == 256, f"Invalid EDID length: {len(data)}, should be 256 bytes"
-            assert data[126] == 1, "Zero extensions number"
-            assert (data[_CEA + 0], data[_CEA + 1]) == (0x02, 0x03), "Can't find CEA extension"
         return Edid(data)
 
     def write_hex(self, path: str) -> None:
@@ -115,7 +123,8 @@ class Edid:
 
     def __update_checksums(self) -> None:
         self.__data[127] = 256 - (sum(self.__data[:127]) % 256)
-        self.__data[255] = 256 - (sum(self.__data[128:255]) % 256)
+        if self.__long:
+            self.__data[255] = 256 - (sum(self.__data[128:255]) % 256)
 
     # =====
 
@@ -229,6 +238,9 @@ class Edid:
             self.__data[_CEA + 3] &= (0xFF - 0b01000000)  # ~X
 
     def __parse_cea(self) -> tuple[list[_CeaBlock], bytes]:
+        if not self.__long:
+            raise EdidNoBlockError("This EDID does not contain any CEA blocks")
+
         cea = self.__data[_CEA:]
         dtd_begin = cea[2]
         if dtd_begin == 0:

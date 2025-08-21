@@ -65,6 +65,7 @@ from ..validators.basic import valid_string_list
 
 from ..validators.auth import valid_user
 from ..validators.auth import valid_users_list
+from ..validators.auth import valid_expire
 
 from ..validators.os import valid_abs_path
 from ..validators.os import valid_abs_file
@@ -73,6 +74,7 @@ from ..validators.os import valid_unix_mode
 from ..validators.os import valid_options
 from ..validators.os import valid_command
 
+from ..validators.net import valid_ip
 from ..validators.net import valid_ip_or_host
 from ..validators.net import valid_net
 from ..validators.net import valid_port
@@ -190,6 +192,14 @@ def _init_config(config_path: str, override_options: list[str], **load_flags: bo
 
 
 def _patch_raw(raw_config: dict) -> None:  # pylint: disable=too-many-branches
+    for (sub, cmd) in [("iface", "ip_cmd"), ("firewall", "iptables_cmd")]:
+        if isinstance(raw_config.get("otgnet"), dict):
+            if isinstance(raw_config["otgnet"].get(sub), dict):
+                if raw_config["otgnet"][sub].get(cmd):
+                    raw_config["otgnet"].setdefault("commands", {})
+                    raw_config["otgnet"]["commands"][cmd] = raw_config["otgnet"][sub][cmd]
+                    del raw_config["otgnet"][sub][cmd]
+
     if isinstance(raw_config.get("otg"), dict):
         for (old, new) in [
             ("msd", "msd"),
@@ -357,6 +367,12 @@ def _get_config_scheme() -> dict:
 
             "auth": {
                 "enabled": Option(True, type=valid_bool),
+                "expire":  Option(0,    type=valid_expire),
+
+                "usc": {
+                    "users":  Option([], type=valid_users_list),  # PiKVM username has a same regex as a UNIX username
+                    "groups": Option(["kvmd-selfauth"], type=valid_users_list),  # groupname has a same regex as a username
+                },
 
                 "internal": {
                     "type":        Option("htpasswd"),
@@ -457,7 +473,7 @@ def _get_config_scheme() -> dict:
 
                 "unix":    Option("/run/kvmd/ustreamer.sock", type=valid_abs_path, unpack_as="unix_path"),
                 "timeout": Option(2.0, type=valid_float_f01),
-                "snapshot_timeout": Option(1.0, type=valid_float_f01),  # error_delay * 3 + 1
+                "snapshot_timeout": Option(5.0, type=valid_float_f01),  # error_delay * 3 + 1
 
                 "process_name_prefix": Option("kvmd/streamer"),
 
@@ -504,8 +520,9 @@ def _get_config_scheme() -> dict:
             },
 
             "switch": {
-                "device":       Option("/dev/kvmd-switch", type=valid_abs_path, unpack_as="device_path"),
-                "default_edid": Option("/etc/kvmd/switch-edid.hex", type=valid_abs_path, unpack_as="default_edid_path"),
+                "device":            Option("/dev/kvmd-switch", type=valid_abs_path, unpack_as="device_path"),
+                "default_edid":      Option("/etc/kvmd/switch-edid.hex", type=valid_abs_path, unpack_as="default_edid_path"),
+                "ignore_hpd_on_top": Option(False, type=valid_bool),
             },
         },
 
@@ -558,15 +575,15 @@ def _get_config_scheme() -> dict:
             "vendor_id":      Option(0x1D6B, type=valid_otg_id),  # Linux Foundation
             "product_id":     Option(0x0104, type=valid_otg_id),  # Multifunction Composite Gadget
             "manufacturer":   Option("PiKVM", type=valid_stripped_string),
-            "product":        Option("Composite KVM Device", type=valid_stripped_string),
+            "product":        Option("PiKVM Composite Device", type=valid_stripped_string),
             "serial":         Option("CAFEBABE", type=valid_stripped_string, if_none=None),
+            "config":         Option("",     type=valid_stripped_string),
             "device_version": Option(-1,     type=functools.partial(valid_number, min=-1, max=0xFFFF)),
             "usb_version":    Option(0x0200, type=valid_otg_id),
             "max_power":      Option(250,    type=functools.partial(valid_number, min=50, max=500)),
             "remote_wakeup":  Option(True,   type=valid_bool),
 
             "gadget":     Option("kvmd", type=valid_otg_gadget),
-            "config":     Option("PiKVM device", type=valid_stripped_string_not_empty),
             "udc":        Option("",     type=valid_stripped_string),
             "endpoints":  Option(9,      type=valid_int_f0),
             "init_delay": Option(3.0,    type=valid_float_f01),
@@ -657,8 +674,7 @@ def _get_config_scheme() -> dict:
 
         "otgnet": {
             "iface": {
-                "net":    Option("172.30.30.0/24", type=functools.partial(valid_net, v6=False)),
-                "ip_cmd": Option(["/usr/bin/ip"],  type=valid_command),
+                "net": Option("172.30.30.0/24", type=functools.partial(valid_net, v6=False)),
             },
 
             "firewall": {
@@ -666,10 +682,13 @@ def _get_config_scheme() -> dict:
                 "allow_tcp":     Option([],   type=valid_ports_list),
                 "allow_udp":     Option([67], type=valid_ports_list),
                 "forward_iface": Option("",   type=valid_stripped_string),
-                "iptables_cmd":  Option(["/usr/sbin/iptables", "--wait=5"], type=valid_command),
             },
 
             "commands": {
+                "ip_cmd":       Option(["/usr/bin/ip"],  type=valid_command),
+                "iptables_cmd": Option(["/usr/sbin/iptables", "--wait=5"], type=valid_command),
+                "sysctl_cmd":   Option(["/usr/sbin/sysctl"], type=valid_command),
+
                 "pre_start_cmd":        Option(["/bin/true", "pre-start"], type=valid_command),
                 "pre_start_cmd_remove": Option([], type=valid_options),
                 "pre_start_cmd_append": Option([], type=valid_options),
@@ -734,7 +753,7 @@ def _get_config_scheme() -> dict:
             "desired_fps":     Option(30, type=valid_stream_fps),
             "mouse_output":    Option("usb", type=valid_hid_mouse_output),
             "keymap":          Option("/usr/share/kvmd/keymaps/en-us", type=valid_abs_file),
-            "allow_cut_after": Option(3.0, type=valid_float_f0),
+            "scroll_rate":     Option(4,   type=functools.partial(valid_number, min=1, max=30)),
 
             "server": {
                 "host":        Option("",   type=valid_ip_or_host, if_empty=""),
@@ -786,8 +805,8 @@ def _get_config_scheme() -> dict:
 
             "auth": {
                 "vncauth": {
-                    "enabled": Option(False, type=valid_bool),
-                    "file":    Option("/etc/kvmd/vncpasswd", type=valid_abs_file, unpack_as="path"),
+                    "enabled": Option(False, type=valid_bool, unpack_as="vncpass_enabled"),
+                    "file":    Option("/etc/kvmd/vncpasswd", type=valid_abs_file, unpack_as="vncpass_path"),
                 },
                 "vencrypt": {
                     "enabled": Option(True, type=valid_bool, unpack_as="vencrypt_enabled"),
@@ -795,13 +814,24 @@ def _get_config_scheme() -> dict:
             },
         },
 
+        "localhid": {
+            "kvmd": {
+                "unix":    Option("/run/kvmd/kvmd.sock", type=valid_abs_path, unpack_as="unix_path"),
+                "timeout": Option(5.0, type=valid_float_f01),
+            },
+        },
+
         "nginx": {
             "http": {
-                "port": Option(80, type=valid_port),
+                "ipv4": Option("0.0.0.0", type=functools.partial(valid_ip, v6=False)),
+                "ipv6": Option("::",      type=functools.partial(valid_ip, v4=False)),
+                "port": Option(80,        type=valid_port),
             },
             "https": {
-                "enabled": Option(True, type=valid_bool),
-                "port":    Option(443,  type=valid_port),
+                "enabled": Option(True,      type=valid_bool),
+                "ipv4":    Option("0.0.0.0", type=functools.partial(valid_ip, v6=False)),
+                "ipv6":    Option("::",      type=functools.partial(valid_ip, v4=False)),
+                "port":    Option(443,       type=valid_port),
             },
         },
 

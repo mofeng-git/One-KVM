@@ -46,7 +46,7 @@ class Keyboard:
     async def get_leds(self) -> dict[str, bool]:
         return (await self.__leds.get())
 
-    def process_key(self, key: str, state: bool) -> bytes:
+    def process_key(self, key: int, state: bool) -> bytes:
         code = KEYMAP[key].usb.code
         is_modifier = KEYMAP[key].usb.is_modifier
         if state:

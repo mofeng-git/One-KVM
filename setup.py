@@ -53,7 +53,7 @@ def main() -> None:
 
     setup(
         name="kvmd",
-        version="4.20",
+        version="4.94",
         url="https://github.com/pikvm/kvmd",
         license="GPLv3",
         author="Maxim Devaev",
@@ -80,6 +80,7 @@ def main() -> None:
             "kvmd.clients",
             "kvmd.apps",
             "kvmd.apps.kvmd",
+            "kvmd.apps.kvmd.streamer",
             "kvmd.apps.kvmd.switch",
             "kvmd.apps.kvmd.info",
             "kvmd.apps.kvmd.api",
@@ -98,6 +99,7 @@ def main() -> None:
             "kvmd.apps.ipmi",
             "kvmd.apps.vnc",
             "kvmd.apps.vnc.rfb",
+            "kvmd.apps.localhid",
             "kvmd.apps.ngxmkconf",
             "kvmd.apps.janus",
             "kvmd.apps.watchdog",
@@ -113,7 +115,31 @@ def main() -> None:
             "kvmd": ["i18n/zh/LC_MESSAGES/*.mo"],
         },
 
-        entry_points=entry_points,
+        entry_points={
+            "console_scripts": [
+                "kvmd = kvmd.apps.kvmd:main",
+                "kvmd-media = kvmd.apps.media:main",
+                "kvmd-pst = kvmd.apps.pst:main",
+                "kvmd-pstrun = kvmd.apps.pstrun:main",
+                "kvmd-otg = kvmd.apps.otg:main",
+                "kvmd-otgnet = kvmd.apps.otgnet:main",
+                "kvmd-otgmsd = kvmd.apps.otgmsd:main",
+                "kvmd-otgconf = kvmd.apps.otgconf:main",
+                "kvmd-htpasswd = kvmd.apps.htpasswd:main",
+                "kvmd-totp = kvmd.apps.totp:main",
+                "kvmd-edidconf = kvmd.apps.edidconf:main",
+                "kvmd-ipmi = kvmd.apps.ipmi:main",
+                "kvmd-vnc = kvmd.apps.vnc:main",
+                "kvmd-localhid = kvmd.apps.localhid:main",
+                "kvmd-nginx-mkconf = kvmd.apps.ngxmkconf:main",
+                "kvmd-janus = kvmd.apps.janus:main",
+                "kvmd-watchdog = kvmd.apps.watchdog:main",
+                "kvmd-oled = kvmd.apps.oled:main",
+                "kvmd-helper-pst-remount = kvmd.helpers.remount:main",
+                "kvmd-helper-otgmsd-remount = kvmd.helpers.remount:main",
+                "kvmd-helper-swapfiles = kvmd.helpers.swapfiles:main",
+            ],
+        },
 
         classifiers=[
             "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",

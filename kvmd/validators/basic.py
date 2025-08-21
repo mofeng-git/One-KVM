@@ -70,7 +70,13 @@ def valid_number(
 
     arg = valid_stripped_string_not_empty(arg, name)
     try:
-        arg = type(arg)
+        if type == int:
+            if arg.startswith(("0x", "0X")):
+                arg = int(arg[2:], 16)
+            else:
+                arg = int(arg)
+        else:
+            arg = type(arg)
     except Exception:
         raise_error(arg, name)
 

@@ -136,6 +136,10 @@ uint8_t keymapUsb(uint8_t code) {
 		case 109: return 136; // KanaMode
 		case 110: return 138; // Convert
 		case 111: return 139; // NonConvert
+		case 112: return 127; // AudioVolumeMute
+		case 113: return 128; // AudioVolumeUp
+		case 114: return 129; // AudioVolumeDown
+		case 115: return 111; // F20
 		default: return 0;
 	}
 }

@@ -35,6 +35,13 @@ from kvmd.validators.basic import valid_string_list
 
 
 # =====
+def _to_int(arg: Any) -> int:
+    if isinstance(arg, str) and arg.strip().startswith(("0x", "0X")):
+        arg = int(arg.strip()[2:], 16)
+    return int(str(arg).strip())
+
+
+# =====
 @pytest.mark.parametrize("arg, retval", [
     ("1",     True),
     ("true",  True),
@@ -60,34 +67,34 @@ def test_fail__valid_bool(arg: Any) -> None:
 
 
 # =====
-@pytest.mark.parametrize("arg", ["1 ", "-1", 1, -1, 0, 100500])
+@pytest.mark.parametrize("arg", ["1 ", "-1", 1, -1, 0, 100500, " 0xff"])
 def test_ok__valid_number(arg: Any) -> None:
-    assert valid_number(arg) == int(str(arg).strip())
+    assert valid_number(arg) == _to_int(arg)
 
 
-@pytest.mark.parametrize("arg", ["test", "", None, "1x", 100500.0])
+@pytest.mark.parametrize("arg", ["test", "", None, "1x", 100500.0, "ff"])
 def test_fail__valid_number(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_number(arg))
 
 
-@pytest.mark.parametrize("arg", [-5, 0, 5, "-5 ", "0 ", "5 "])
+@pytest.mark.parametrize("arg", [-5, 0, 5, "-5 ", "0 ", "5 ", " 0x05"])
 def test_ok__valid_number__min_max(arg: Any) -> None:
-    assert valid_number(arg, -5, 5) == int(str(arg).strip())
+    assert valid_number(arg, -5, 5) == _to_int(arg)
 
 
-@pytest.mark.parametrize("arg", ["test", "", None, -6, 6, "-6 ", "6 "])
+@pytest.mark.parametrize("arg", ["test", "", None, -6, 6, "-6 ", "6 ", "0x06"])
 def test_fail__valid_number__min_max(arg: Any) -> None:  # pylint: disable=invalid-name
     with pytest.raises(ValidatorError):
         print(valid_number(arg, -5, 5))
 
 
 # =====
-@pytest.mark.parametrize("arg", [0, 1, 5, "5 "])
+@pytest.mark.parametrize("arg", [0, 1, 5, "5 ", " 0x05"])
 def test_ok__valid_int_f0(arg: Any) -> None:
     value = valid_int_f0(arg)
     assert type(value) is int  # pylint: disable=unidiomatic-typecheck
-    assert value == int(str(arg).strip())
+    assert value == _to_int(arg)
 
 
 @pytest.mark.parametrize("arg", ["test", "", None, -6, "-6 ", "5.0"])
@@ -97,14 +104,14 @@ def test_fail__valid_int_f0(arg: Any) -> None:
 
 
 # =====
-@pytest.mark.parametrize("arg", [1, 5, "5 "])
+@pytest.mark.parametrize("arg", [1, 5, "5 ", " 0x05"])
 def test_ok__valid_int_f1(arg: Any) -> None:
     value = valid_int_f1(arg)
     assert type(value) is int  # pylint: disable=unidiomatic-typecheck
-    assert value == int(str(arg).strip())
+    assert value == _to_int(arg)
 
 
-@pytest.mark.parametrize("arg", ["test", "", None, -6, "-6 ", 0, "0 ", "5.0"])
+@pytest.mark.parametrize("arg", ["test", "", None, -6, "-6 ", 0, "0 ", "5.0", "0x0"])
 def test_fail__valid_int_f1(arg: Any) -> None:
     with pytest.raises(ValidatorError):
         print(valid_int_f1(arg))

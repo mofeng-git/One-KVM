@@ -121,6 +121,16 @@ class IptablesForwardIn(BaseCtl):
         ]
 
 
+class SysctlIpv4ForwardCtl(BaseCtl):
+    def __init__(self, base_cmd: list[str]) -> None:
+        self.__base_cmd = base_cmd
+
+    def get_command(self, direct: bool) -> list[str]:
+        if direct:
+            return [*self.__base_cmd, "net.ipv4.ip_forward=1"]
+        return []  # Don't revert the command because some services can require it too
+
+
 class CustomCtl(BaseCtl):
     def __init__(
         self,

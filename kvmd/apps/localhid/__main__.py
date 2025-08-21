@@ -20,16 +20,5 @@
 # ========================================================================== #
 
 
-import pytest
-
-from kvmd.keyboard.mappings import KEYMAP
-
-
-# =====
-def test_ok__keymap() -> None:
-    assert KEYMAP["KeyA"].mcu.code == 1
-
-
-def test_fail__keymap() -> None:
-    with pytest.raises(KeyError):
-        print(KEYMAP["keya"])
+from . import main
+main()

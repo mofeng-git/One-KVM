@@ -23,6 +23,8 @@
 import dataclasses
 import struct
 
+from evdev import ecodes
+
 from ....keyboard.mappings import KEYMAP
 
 from ....mouse import MouseRange
@@ -106,33 +108,36 @@ class ClearEvent(BaseEvent):
 
 @dataclasses.dataclass(frozen=True)
 class KeyEvent(BaseEvent):
-    name: str
+    code:  int
     state: bool
 
     def __post_init__(self) -> None:
-        assert self.name in KEYMAP
+        assert self.code in KEYMAP
 
     def make_request(self) -> bytes:
-        code = KEYMAP[self.name].mcu.code
+        code = KEYMAP[self.code].mcu.code
         return _make_request(struct.pack(">BBBxx", 0x11, code, int(self.state)))
 
 
 @dataclasses.dataclass(frozen=True)
 class MouseButtonEvent(BaseEvent):
-    name: str
+    code:  int
     state: bool
 
     def __post_init__(self) -> None:
-        assert self.name in ["left", "right", "middle", "up", "down"]
+        assert self.code in [
+            ecodes.BTN_LEFT, ecodes.BTN_RIGHT, ecodes.BTN_MIDDLE,
+            ecodes.BTN_BACK, ecodes.BTN_FORWARD,
+        ]
 
     def make_request(self) -> bytes:
         (code, state_pressed, is_main) = {
-            "left":   (0b10000000, 0b00001000, True),
-            "right":  (0b01000000, 0b00000100, True),
-            "middle": (0b00100000, 0b00000010, True),
-            "up":     (0b10000000, 0b00001000, False),  # Back
-            "down":   (0b01000000, 0b00000100, False),  # Forward
-        }[self.name]
+            ecodes.BTN_LEFT:    (0b10000000, 0b00001000, True),
+            ecodes.BTN_RIGHT:   (0b01000000, 0b00000100, True),
+            ecodes.BTN_MIDDLE:  (0b00100000, 0b00000010, True),
+            ecodes.BTN_BACK:    (0b10000000, 0b00001000, False),  # Up
+            ecodes.BTN_FORWARD: (0b01000000, 0b00000100, False),  # Down
+        }[self.code]
         if self.state:
             code |= state_pressed
         if is_main:

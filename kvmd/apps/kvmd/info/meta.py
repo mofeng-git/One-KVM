@@ -20,6 +20,8 @@
 # ========================================================================== #
 
 
+import socket
+
 from typing import AsyncGenerator
 
 from ....logging import get_logger
@@ -39,7 +41,10 @@ class MetaInfoSubmanager(BaseInfoSubmanager):
 
     async def get_state(self) -> (dict | None):
         try:
-            return ((await aiotools.run_async(load_yaml_file, self.__meta_path)) or {})
+            meta = ((await aiotools.run_async(load_yaml_file, self.__meta_path)) or {})
+            if meta["server"]["host"] == "@auto":
+                meta["server"]["host"] = socket.getfqdn()
+            return meta
         except Exception:
             get_logger(0).exception("Can't parse meta")
         return None

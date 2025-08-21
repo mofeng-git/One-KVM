@@ -1,115 +1,118 @@
-li(id="msd-dropdown" class="right feature-disabled")
-	a(class="menu-button" href="#")
+li.right.feature-disabled#msd-dropdown
+	a.menu-button(href="#")
 		+navbar_led("msd-led", "led-msd")
 		span(i18n="kvm_text60") Drive
-	div(id="msd-menu" class="menu")
-		div(class="text")
+	.menu#msd-menu
+		.text
 			b(i18n="kvm_text61") Mass Storage Drive: 
-			span(id="msd-status")
+			span#msd-status
 			br
 		hr
-		div(id="msd-message-offline" class="hidden")
+		.hidden#msd-message-offline
 			+menu_message("warning", "Mass Storage Drive is offline", "msd-message-offline")
 			hr
-		div(id="msd-message-image-broken" class="hidden")
+		.hidden#msd-message-image-broken
 			+menu_message("warning", "Current image is broken!", "msd-message-image-broken")
 				| Perhaps uploading was interrupted#[br]
 			hr
-		div(id="msd-message-too-big-for-dvd" class="hidden")
+		.hidden#msd-message-too-big-for-dvd
 			+menu_message("warning", "Current image is too big for DVD!", "msd-message-too-big-for-dvd")
 				| The maximum is 31.6GiB. Please switch to the Flash mode.
 			hr
-		div(id="msd-message-out-of-storage" class="hidden")
+		.hidden#msd-message-out-of-storage
 			+menu_message("warning", "Current image is out of storage", "msd-message-out-of-storage")
 				| This image was connected manually using #[b kvmd-otgmsd]
 			hr
-		div(id="msd-message-rw-enabled" class="hidden")
+		.hidden#msd-message-rw-enabled
 			+menu_message("warning", "Read-write mode is enabled", "msd-message-rw-enabled")
 				| Do not turn off PiKVM while this is active to prevent#[br]
 				| filesystem corruption. Use read-only mode where possible,#[br]
 				| as writing to SD card often can reduce its lifespan.
 			hr
-		div(id="msd-message-downloads" class="hidden")
-			+menu_message("info", "The image is being downloaded from PiKVM", "msd-message-downloads")
+		.hidden#msd-message-downloads
+			+menu_message("info", "The image is being downloaded from One-KVM", "msd-message-downloads")
 				| Please wait
 			hr
-		table(class="kv")
+
+		table.kv
 			tr
 				td(i18n="kvm_text62") Image:
-				td(width="100%") #[select(disabled id="msd-image-selector")]
-				td #[button(disabled id="msd-download-button" title="Download image") #[b &nbsp;&nbsp;&#x21E9;&nbsp;&nbsp;]]
-				td #[button(disabled id="msd-remove-button" title="Remove image") #[b &nbsp;&nbsp;&times;&nbsp;&nbsp;]]
-		table(class="kv")
+				td(width="100%") #[select#msd-image-selector(disabled)]
+				td #[button#msd-download-button(disabled title="Download image") #[b &nbsp;&nbsp;&#x21E9;&nbsp;&nbsp;]]
+				td #[button#msd-remove-button(disabled title="Remove image") #[b &nbsp;&nbsp;&times;&nbsp;&nbsp;]]
+		table.kv
 			tr
-				td(i18n="kvm_text63") Drive #[a(target="_blank" href="https://docs.pikvm.org/msd") mode]:
-				td
-					div(class="radio-box")
-						input(checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1")
-						label(for="msd-mode-radio-cdrom") CD/DVD
-						input(type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0")
-						label(for="msd-mode-radio-flash") Flash
+				+menu_radio_td2("msd-mode-radio", [
+					{title: "CD/DVD", value: "1", checked: true},
+					{title: "Flash", value: "0"},
+				]) Drive #[a(target="_blank" href="https://docs.pikvm.org/msd") mode]:
 				td &nbsp;
-				+menu_switch_notable("msd-rw-switch", "Writable", false, false, "msd-rw-switch")
+				+menu_switch_td2("msd-rw-switch", false, false) Writable:
 			tr
-				td(i18n="kvm_text84") 文件内容：
+				td(i18n="kvm_text84") Files：
 				td
-					div(class="radio-box")
-						input(checked type="radio" id="msd-mode-radio-image" name="file-mode-radio" value="1")
+					div.radio-box()
+						input#msd-mode-radio-image(checked type="radio" name="file-mode-radio" value="1")
 						label(for="msd-mode-radio-image" i18n="kvm_text90") ImageFiles
-						input(type="radio" id="msd-mode-radio-file" name="file-mode-radio" value="0")
+						input#msd-mode-radio-file(type="radio" name="file-mode-radio" value="0")
 						label(for="msd-mode-radio-file" i18n="kvm_text91") NormalFiles
-		div(id="msd-storages")
 		hr
-		div(class="buttons buttons-row")
-			button(disabled id="msd-select-new-button" class="row50" i18n="kvm_text64") Select image to upload
-			button(disabled id="msd-upload-new-button" class="row25" i18n="kvm_text65") Upload
-			button(disabled id="msd-abort-new-button" class="row25" i18n="kvm_text66") Abort
-		div(id="msd-message-another-user-uploads" class="hidden")
-			hr
+
+		#msd-storages
+		hr
+		.buttons.buttons-row
+			button.row50#msd-select-new-button(disabled i18n="kvm_text64") Select image to upload
+			button.row25#msd-upload-new-button(disabled i18n="kvm_text65") Upload
+			button.row25#msd-abort-new-button(disabled i18n="kvm_text66") Abort
+		.hidden#msd-message-another-user-uploads
 			+menu_message("info", "Another user uploads an image", "msd-message-another-user-uploads")
-		div(id="msd-new-sub" class="hidden")
 			hr
-			table(class="kv")
+
+		.hidden#msd-new-sub
+			table.kv
 				tr
 					td(i18n="kvm_text68") Specify a local file:
-					td #[input(type="file" id="msd-new-file")]
+					td #[input#msd-new-file(type="file")]
 				tr
 					td(i18n="kvm_text69") #[b Or] paste a URL:
-					td #[input(type="text" id="msd-new-url" style="width: 100%")]
-				tr(id="msd-new-part" class="hidden")
+					td #[input#msd-new-url(type="text" style="width: 100%")]
+				tr.hidden#msd-new-part
 					td(i18n="kvm_text70") Upload partition:
-					td(width="100%") #[select(id="msd-new-part-selector")]
+					td(width="100%") #[select#msd-new-part-selector]
 		div(id="msd-uploading-sub" class="hidden")
 			hr
-			table(class="kv")
+
+		.hidden#msd-uploading-sub
+			table.kv
 				tr
 					td(i18n="kvm_text74") New image:
-					td(id="msd-uploading-name" class="value")
+					td.value#msd-uploading-name
 				tr
 					td(i18n="kvm_text75") Upload size:
-					td(id="msd-uploading-size" class="value")
-			div(class="text")
-				div(id="msd-uploading-progress" class="progress")
-					span(id="msd-uploading-progress-value" class="progress-value")
-		div(id="msd-new-tips" class="hidden")
+					td.value#msd-uploading-size
+			.text
+				.progress#msd-uploading-progress
+					span.progress-value#msd-uploading-progress-value
 			hr
-			table(class="kv")
+
+		.hidden#msd-new-tips
+			table.kv
 				tr
-					td(class="value" i18n="kvm_text71") Note:
+					td.value(i18n="kvm_text71") Note:
 					td(i18n="kvm_text72") &bull; Don't close the browser page until the upload is complete.
 				tr
 					td
 					td(i18n="kvm_text73") &bull; To speed up the upload, close the stream window.
 		hr
-		div(class="buttons buttons-row")
-			button(disabled id="msd-connect-button" class="row50" i18n="kvm_text76") Connect drive to Server
-			button(disabled id="msd-disconnect-button" class="row25" i18n="kvm_text77") Disconnect
-			button(disabled id="msd-reset-button" class="row25" i18n="kvm_text78") Reset
 
-
+		.buttons.buttons-row
+			button.row50#msd-connect-button(disabled i18n="kvm_text76") Connect drive to Server
+			button.row25#msd-disconnect-button(disabled i18n="kvm_text77") Disconnect
+			button.row25#msd-reset-button(disabled i18n="kvm_text78") Reset
 
 		hr
-		div(class="text")
+
+		.text
 			b(i18n="kvm_text85") Quick file transfer:
 			br
 			sub(i18n="kvm_text86") &bull; Select NormalFiles tab to upload, package them and mount image
@@ -117,8 +120,9 @@ li(id="msd-dropdown" class="right feature-disabled")
 			sub(i18n="kvm_text87") &bull; Disconnect MSD, unpackage it, select tab to download
 			br
 		hr
+		
 		div(class="buttons buttons-row")
-			button(id="msd-file-image-update-button" class="row50" i18n="kvm_text88") Package files into image
-			button(id="msd-file-image-unzip-button" class="row50" i18n="kvm_text89") Unpackage files from image
+			button.row50#msd-file-image-update-button(i18n="kvm_text88") Package files into image
+			button.row50#msd-file-image-unzip-button(i18n="kvm_text89") Unpackage files from image
 		hr
 		

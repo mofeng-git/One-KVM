@@ -17,8 +17,6 @@ kvmd:
 
     hid:
         type: otg
-        mouse_alt:
-            device: /dev/kvmd-hid-mouse-alt
 
     atx:
         type: gpio

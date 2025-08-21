@@ -29,11 +29,11 @@ import getpass
 from typing import Generator
 from typing import Any
 
-import passlib.apache
-
 import pytest
 
 from kvmd.apps.htpasswd import main
+
+from kvmd.crypto import KvmdHtpasswdFile
 
 
 # =====
@@ -42,28 +42,30 @@ def _make_passwd(user: str) -> str:
 
 
 @pytest.fixture(name="htpasswd", params=[[], ["admin"], ["admin", "user"]])
-def _htpasswd_fixture(request) -> Generator[passlib.apache.HtpasswdFile, None, None]:  # type: ignore
+def _htpasswd_fixture(request) -> Generator[KvmdHtpasswdFile, None, None]:  # type: ignore
     (fd, path) = tempfile.mkstemp()
     os.close(fd)
-    htpasswd = passlib.apache.HtpasswdFile(path)
+    htpasswd = KvmdHtpasswdFile(path)
     for user in request.param:
         htpasswd.set_password(user, _make_passwd(user))
     htpasswd.save()
-    yield htpasswd
-    os.remove(path)
+    try:
+        yield htpasswd
+    finally:
+        os.remove(path)
 
 
-def _run_htpasswd(cmd: list[str], htpasswd_path: str, internal_type: str="htpasswd") -> None:
+def _run_htpasswd(cmd: list[str], htpasswd_path: str, int_type: str="htpasswd") -> None:
     cmd = ["kvmd-htpasswd", *cmd, "--set-options"]
-    if internal_type != "htpasswd":  # By default
-        cmd.append("kvmd/auth/internal/type=" + internal_type)
+    if int_type != "htpasswd":  # By default
+        cmd.append("kvmd/auth/internal/type=" + int_type)
     if htpasswd_path:
         cmd.append("kvmd/auth/internal/file=" + htpasswd_path)
     main(cmd)
 
 
 # =====
-def test_ok__list(htpasswd: passlib.apache.HtpasswdFile, capsys) -> None:  # type: ignore
+def test_ok__list(htpasswd: KvmdHtpasswdFile, capsys) -> None:  # type: ignore
     _run_htpasswd(["list"], htpasswd.path)
     (out, err) = capsys.readouterr()
     assert len(err) == 0
@@ -71,24 +73,32 @@ def test_ok__list(htpasswd: passlib.apache.HtpasswdFile, capsys) -> None:  # typ
 
 
 # =====
-def test_ok__set_change_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__set_stdin(htpasswd: KvmdHtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
 
         mocker.patch.object(builtins, "input", (lambda: " test "))
+
         _run_htpasswd(["set", "admin", "--read-stdin"], htpasswd.path)
+
+        with pytest.raises(SystemExit, match="The user 'new' is not exist"):
+            _run_htpasswd(["set", "new", "--read-stdin"], htpasswd.path)
 
         htpasswd.load(force=True)
         assert htpasswd.check_password("admin", " test ")
         assert old_users == set(htpasswd.users())
 
 
-def test_ok__set_add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__add_stdin(htpasswd: KvmdHtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         mocker.patch.object(builtins, "input", (lambda: " test "))
-        _run_htpasswd(["set", "new", "--read-stdin"], htpasswd.path)
+
+        _run_htpasswd(["add", "new", "--read-stdin"], htpasswd.path)
+
+        with pytest.raises(SystemExit, match="The user 'new' is already exists"):
+            _run_htpasswd(["add", "new", "--read-stdin"], htpasswd.path)
 
         htpasswd.load(force=True)
         assert htpasswd.check_password("new", " test ")
@@ -96,20 +106,24 @@ def test_ok__set_add_stdin(htpasswd: passlib.apache.HtpasswdFile, mocker) -> Non
 
 
 # =====
-def test_ok__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_ok__set_getpass(htpasswd: KvmdHtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
 
         mocker.patch.object(getpass, "getpass", (lambda *_, **__: " test "))
+
         _run_htpasswd(["set", "admin"], htpasswd.path)
+
+        with pytest.raises(SystemExit, match="The user 'new' is not exist"):
+            _run_htpasswd(["set", "new"], htpasswd.path)
 
         htpasswd.load(force=True)
         assert htpasswd.check_password("admin", " test ")
         assert old_users == set(htpasswd.users())
 
 
-def test_fail__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker) -> None:  # type: ignore
+def test_fail__set_getpass(htpasswd: KvmdHtpasswdFile, mocker) -> None:  # type: ignore
     old_users = set(htpasswd.users())
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
@@ -137,13 +151,15 @@ def test_fail__set_change_getpass(htpasswd: passlib.apache.HtpasswdFile, mocker)
 
 
 # =====
-def test_ok__del(htpasswd: passlib.apache.HtpasswdFile) -> None:
+def test_ok__del(htpasswd: KvmdHtpasswdFile) -> None:
     old_users = set(htpasswd.users())
 
     if old_users:
         assert htpasswd.check_password("admin", _make_passwd("admin"))
+        _run_htpasswd(["del", "admin"], htpasswd.path)
 
-    _run_htpasswd(["del", "admin"], htpasswd.path)
+    with pytest.raises(SystemExit, match="The user 'admin' is not exist"):
+        _run_htpasswd(["del", "admin"], htpasswd.path)
 
     htpasswd.load(force=True)
     assert not htpasswd.check_password("admin", _make_passwd("admin"))
@@ -152,13 +168,13 @@ def test_ok__del(htpasswd: passlib.apache.HtpasswdFile) -> None:
 
 # =====
 def test_fail__not_htpasswd() -> None:
-    with pytest.raises(SystemExit, match="Error: KVMD internal auth not using 'htpasswd'"):
-        _run_htpasswd(["list"], "", internal_type="http")
+    with pytest.raises(SystemExit, match="Error: KVMD internal auth does not use 'htpasswd'"):
+        _run_htpasswd(["list"], "", int_type="http")
 
 
 def test_fail__unknown_plugin() -> None:
     with pytest.raises(SystemExit, match="ConfigError: Unknown plugin 'auth/foobar'"):
-        _run_htpasswd(["list"], "", internal_type="foobar")
+        _run_htpasswd(["list"], "", int_type="foobar")
 
 
 def test_fail__invalid_passwd(mocker, tmpdir) -> None:  # type: ignore
@@ -166,4 +182,4 @@ def test_fail__invalid_passwd(mocker, tmpdir) -> None:  # type: ignore
     open(path, "w").close()  # pylint: disable=consider-using-with
     mocker.patch.object(builtins, "input", (lambda: "\n"))
     with pytest.raises(SystemExit, match="The argument is not a valid passwd characters"):
-        _run_htpasswd(["set", "admin", "--read-stdin"], path)
+        _run_htpasswd(["add", "admin", "--read-stdin"], path)

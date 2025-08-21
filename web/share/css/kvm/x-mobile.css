@@ -34,6 +34,11 @@ div#stream-window {
 	width: 100% !important;
 	-webkit-transform: translateX(-50%) !important;
 	transform: translateX(-50%) !important;
+
+	/* Ignore stream's resize_hook() */
+	aspect-ratio: unset !important;
+	max-width: unset !important;
+	max-height: unset !important;
 }
 
 div#stream-window::after {

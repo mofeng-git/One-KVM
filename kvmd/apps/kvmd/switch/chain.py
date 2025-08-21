@@ -34,6 +34,7 @@ from .lib import aiotools
 from .lib import aioproc
 
 from .types import Edids
+from .types import Dummies
 from .types import Colors
 
 from .proto import Response
@@ -52,6 +53,14 @@ class _BaseCmd:
 @dataclasses.dataclass(frozen=True)
 class _CmdSetActual(_BaseCmd):
     actual: bool
+
+
+class _CmdSetActivePrev(_BaseCmd):
+    pass
+
+
+class _CmdSetActiveNext(_BaseCmd):
+    pass
 
 
 @dataclasses.dataclass(frozen=True)
@@ -78,6 +87,11 @@ class _CmdSetUnitBeacon(_BaseCmd):
 @dataclasses.dataclass(frozen=True)
 class _CmdSetEdids(_BaseCmd):
     edids: Edids
+
+
+@dataclasses.dataclass(frozen=True)
+class _CmdSetDummies(_BaseCmd):
+    dummies: Dummies
 
 
 @dataclasses.dataclass(frozen=True)
@@ -177,13 +191,19 @@ class UnitAtxLedsEvent(BaseEvent):
 
 # =====
 class Chain:  # pylint: disable=too-many-instance-attributes
-    def __init__(self, device_path: str) -> None:
+    def __init__(
+        self,
+        device_path: str,
+        ignore_hpd_on_top: bool,
+    ) -> None:
+
         self.__device = Device(device_path)
+        self.__ignore_hpd_on_top = ignore_hpd_on_top
 
         self.__actual = False
 
         self.__edids = Edids()
-
+        self.__dummies = Dummies({})
         self.__colors = Colors()
 
         self.__units: list[_UnitContext] = []
@@ -199,6 +219,24 @@ class Chain:  # pylint: disable=too-many-instance-attributes
         self.__queue_cmd(_CmdSetActual(actual))
 
     # =====
+
+    def translate_port(self, port: float) -> int:
+        assert port >= 0
+        if int(port) == port:
+            return int(port)
+        (unit, ch) = map(int, str(port).split("."))
+        unit = min(max(unit, 1), 5)
+        ch = min(max(ch, 1), 4)
+        port = min((unit - 1) * 4 + (ch - 1), 19)
+        return port
+
+    # =====
+
+    def set_active_prev(self) -> None:
+        self.__queue_cmd(_CmdSetActivePrev())
+
+    def set_active_next(self) -> None:
+        self.__queue_cmd(_CmdSetActiveNext())
 
     def set_active_port(self, port: int) -> None:
         self.__queue_cmd(_CmdSetActivePort(port))
@@ -218,6 +256,9 @@ class Chain:  # pylint: disable=too-many-instance-attributes
 
     def set_edids(self, edids: Edids) -> None:
         self.__queue_cmd(_CmdSetEdids(edids))  # Will be copied because of multiprocessing.Queue()
+
+    def set_dummies(self, dummies: Dummies) -> None:
+        self.__queue_cmd(_CmdSetDummies(dummies))
 
     def set_colors(self, colors: Colors) -> None:
         self.__queue_cmd(_CmdSetColors(colors))
@@ -290,12 +331,21 @@ class Chain:  # pylint: disable=too-many-instance-attributes
         self.__device.request_state()
         self.__device.request_atx_leds()
         while not self.__stop_event.is_set():
+            count = 0
             if self.__select():
+                count = 0
                 for resp in self.__device.read_all():
                     self.__update_units(resp)
+                    self.__adjust_quirks()
                     self.__adjust_start_port()
                     self.__finish_changing_request(resp)
                 self.__consume_commands()
+            else:
+                count += 1
+                if count >= 5:
+                    # Heartbeat
+                    self.__device.request_state()
+                    count = 0
             self.__ensure_config()
 
     def __select(self) -> bool:
@@ -314,10 +364,29 @@ class Chain:  # pylint: disable=too-many-instance-attributes
                 case _CmdSetActual():
                     self.__actual = cmd.actual
 
+                case _CmdSetActivePrev():
+                    if len(self.__units) > 0:
+                        port = self.__active_port
+                        port -= 1
+                        if port >= 0:
+                            self.__active_port = port
+                            self.__queue_event(PortActivatedEvent(self.__active_port))
+
+                case _CmdSetActiveNext():
+                    port = self.__active_port
+                    if port < 0:
+                        port = 0
+                    else:
+                        port += 1
+                    if port < len(self.__units) * 4:
+                        self.__active_port = port
+                        self.__queue_event(PortActivatedEvent(self.__active_port))
+
                 case _CmdSetActivePort():
                     # Может быть вызвано изнутри при синхронизации
-                    self.__active_port = cmd.port
-                    self.__queue_event(PortActivatedEvent(self.__active_port))
+                    if cmd.port < len(self.__units) * 4:
+                        self.__active_port = cmd.port
+                        self.__queue_event(PortActivatedEvent(self.__active_port))
 
                 case _CmdSetPortBeacon():
                     (unit, ch) = self.get_real_unit_channel(cmd.port)
@@ -340,6 +409,9 @@ class Chain:  # pylint: disable=too-many-instance-attributes
 
                 case _CmdSetEdids():
                     self.__edids = cmd.edids
+
+                case _CmdSetDummies():
+                    self.__dummies = cmd.dummies
 
                 case _CmdSetColors():
                     self.__colors = cmd.colors
@@ -364,6 +436,15 @@ class Chain:  # pylint: disable=too-many-instance-attributes
                 self.__units[resp.header.unit].atx_leds = resp.body
                 self.__queue_event(UnitAtxLedsEvent(resp.header.unit, resp.body))
 
+    def __adjust_quirks(self) -> None:
+        for (unit, ctx) in enumerate(self.__units):
+            if ctx.state is not None and ctx.state.version.is_fresh(7):
+                ignore_hpd = (unit == 0 and self.__ignore_hpd_on_top)
+                if ctx.state.quirks.ignore_hpd != ignore_hpd:
+                    get_logger().info("Applying quirk ignore_hpd=%s to [%d] ...",
+                                      ignore_hpd, unit)
+                    self.__device.request_set_quirks(unit, ignore_hpd)
+
     def __adjust_start_port(self) -> None:
         if self.__active_port < 0:
             for (unit, ctx) in enumerate(self.__units):
@@ -387,6 +468,7 @@ class Chain:  # pylint: disable=too-many-instance-attributes
                 self.__ensure_config_port(unit, ctx)
                 if self.__actual:
                     self.__ensure_config_edids(unit, ctx)
+                    self.__ensure_config_dummies(unit, ctx)
                     self.__ensure_config_colors(unit, ctx)
 
     def __ensure_config_port(self, unit: int, ctx: _UnitContext) -> None:
@@ -412,6 +494,19 @@ class Chain:  # pylint: disable=too-many-instance-attributes
                                       edid.crc, edid.valid, edid.name)
                     ctx.changing_rid = self.__device.request_set_edid(unit, ch, edid)
                     break  # Busy globally
+
+    def __ensure_config_dummies(self, unit: int, ctx: _UnitContext) -> None:
+        assert ctx.state is not None
+        if ctx.state.version.is_fresh(8) and ctx.can_be_changed():
+            for ch in range(4):
+                port = self.get_virtual_port(unit, ch)
+                dummy = self.__dummies[port]
+                if ctx.state.video_dummies[ch] != dummy:
+                    get_logger().info("Changing dummy flag on port %d on [%d:%d]: %d -> %d ...",
+                                      port, unit, ch,
+                                      ctx.state.video_dummies[ch], dummy)
+                    ctx.changing_rid = self.__device.request_set_dummy(unit, ch, dummy)
+                    break  # Busy globally (actually not but it can be changed in the firmware)
 
     def __ensure_config_colors(self, unit: int, ctx: _UnitContext) -> None:
         assert self.__actual

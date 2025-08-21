@@ -31,6 +31,8 @@ from ... import aiotools
 
 from ...plugins.hid import BaseHid
 
+from ...keyboard.mappings import WEB_TO_EVDEV
+
 from .streamer import Streamer
 
 
@@ -63,7 +65,7 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
         else:
             self.__idle_interval = self.__live_interval = 0.0
 
-        self.__wakeup_key = wakeup_key
+        self.__wakeup_key = WEB_TO_EVDEV.get(wakeup_key, 0)
         self.__wakeup_move = wakeup_move
 
         self.__online_delay = online_delay
@@ -121,8 +123,8 @@ class Snapshoter:  # pylint: disable=too-many-instance-attributes
     async def __wakeup(self) -> None:
         logger = get_logger(0)
 
-        if self.__wakeup_key:
-            logger.info("Waking up using key %r ...", self.__wakeup_key)
+        if self.__wakeup_key > 0:
+            logger.info("Waking up using keyboard ...")
             await self.__hid.send_key_events(
                 keys=[(self.__wakeup_key, True), (self.__wakeup_key, False)],
                 no_ignore_keys=True,

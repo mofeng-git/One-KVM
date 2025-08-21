@@ -30,13 +30,13 @@ import argparse
 
 from typing import Generator
 
-import passlib.apache
-
 from ...yamlconf import Section
 
 from ...validators import ValidatorError
 from ...validators.auth import valid_user
 from ...validators.auth import valid_passwd
+
+from ...crypto import KvmdHtpasswdFile
 
 from .. import init
 
@@ -44,13 +44,13 @@ from .. import init
 # =====
 def _get_htpasswd_path(config: Section) -> str:
     if config.kvmd.auth.internal.type != "htpasswd":
-        raise SystemExit(f"Error: KVMD internal auth not using 'htpasswd'"
+        raise SystemExit(f"Error: KVMD internal auth does not use 'htpasswd'"
                          f" (now configured {config.kvmd.auth.internal.type!r})")
     return config.kvmd.auth.internal.file
 
 
 @contextlib.contextmanager
-def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.HtpasswdFile, None, None]:
+def _get_htpasswd_for_write(config: Section) -> Generator[KvmdHtpasswdFile, None, None]:
     path = _get_htpasswd_path(config)
     (tmp_fd, tmp_path) = tempfile.mkstemp(
         prefix=f".{os.path.basename(path)}.",
@@ -65,7 +65,7 @@ def _get_htpasswd_for_write(config: Section) -> Generator[passlib.apache.Htpassw
                 os.fchmod(tmp_fd, st.st_mode)
         finally:
             os.close(tmp_fd)
-        htpasswd = passlib.apache.HtpasswdFile(tmp_path)
+        htpasswd = KvmdHtpasswdFile(tmp_path)
         yield htpasswd
         htpasswd.save()
         os.rename(tmp_path, path)
@@ -96,28 +96,55 @@ def _print_invalidate_tip(prepend_nl: bool) -> None:
 
 # ====
 def _cmd_list(config: Section, _: argparse.Namespace) -> None:
-    for user in sorted(passlib.apache.HtpasswdFile(_get_htpasswd_path(config)).users()):
+    for user in sorted(KvmdHtpasswdFile(_get_htpasswd_path(config)).users()):
         print(user)
 
 
-def _cmd_set(config: Section, options: argparse.Namespace) -> None:
+def _change_user(config: Section, options: argparse.Namespace, create: bool) -> None:
     with _get_htpasswd_for_write(config) as htpasswd:
+        assert options.user == options.user.strip()
+        assert options.user
+
         has_user = (options.user in htpasswd.users())
+        if create:
+            if has_user:
+                raise SystemExit(f"The user {options.user!r} is already exists")
+        else:
+            if not has_user:
+                raise SystemExit(f"The user {options.user!r} is not exist")
+
         if options.read_stdin:
             passwd = valid_passwd(input())
         else:
             passwd = valid_passwd(getpass.getpass("Password: ", stream=sys.stderr))
             if valid_passwd(getpass.getpass("Repeat: ", stream=sys.stderr)) != passwd:
                 raise SystemExit("Sorry, passwords do not match")
+
         htpasswd.set_password(options.user, passwd)
+
     if has_user and not options.quiet:
         _print_invalidate_tip(True)
 
 
+def _cmd_add(config: Section, options: argparse.Namespace) -> None:
+    _change_user(config, options, create=True)
+
+
+def _cmd_set(config: Section, options: argparse.Namespace) -> None:
+    _change_user(config, options, create=False)
+
+
 def _cmd_delete(config: Section, options: argparse.Namespace) -> None:
     with _get_htpasswd_for_write(config) as htpasswd:
+        assert options.user == options.user.strip()
+        assert options.user
+
         has_user = (options.user in htpasswd.users())
+        if not has_user:
+            raise SystemExit(f"The user {options.user!r} is not exist")
+
         htpasswd.delete(options.user)
+
     if has_user and not options.quiet:
         _print_invalidate_tip(False)
 
@@ -138,19 +165,25 @@ def main(argv: (list[str] | None)=None) -> None:
     parser.set_defaults(cmd=(lambda *_: parser.print_help()))
     subparsers = parser.add_subparsers()
 
-    cmd_list_parser = subparsers.add_parser("list", help="List users")
-    cmd_list_parser.set_defaults(cmd=_cmd_list)
+    sub = subparsers.add_parser("list", help="List users")
+    sub.set_defaults(cmd=_cmd_list)
 
-    cmd_set_parser = subparsers.add_parser("set", help="Create user or change password")
-    cmd_set_parser.add_argument("user", type=valid_user)
-    cmd_set_parser.add_argument("-i", "--read-stdin", action="store_true", help="Read password from stdin")
-    cmd_set_parser.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
-    cmd_set_parser.set_defaults(cmd=_cmd_set)
+    sub = subparsers.add_parser("add", help="Add user")
+    sub.add_argument("user", type=valid_user)
+    sub.add_argument("-i", "--read-stdin", action="store_true", help="Read password from stdin")
+    sub.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
+    sub.set_defaults(cmd=_cmd_add)
 
-    cmd_delete_parser = subparsers.add_parser("del", help="Delete user")
-    cmd_delete_parser.add_argument("user", type=valid_user)
-    cmd_delete_parser.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
-    cmd_delete_parser.set_defaults(cmd=_cmd_delete)
+    sub = subparsers.add_parser("set", help="Change user's password")
+    sub.add_argument("user", type=valid_user)
+    sub.add_argument("-i", "--read-stdin", action="store_true", help="Read password from stdin")
+    sub.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
+    sub.set_defaults(cmd=_cmd_set)
+
+    sub = subparsers.add_parser("del", help="Delete user")
+    sub.add_argument("user", type=valid_user)
+    sub.add_argument("-q", "--quiet", action="store_true", help="Don't show invalidation note")
+    sub.set_defaults(cmd=_cmd_delete)
 
     options = parser.parse_args(argv[1:])
     try:

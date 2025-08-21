@@ -66,22 +66,22 @@ async def _run_process(cmd: list[str], data_path: str) -> asyncio.subprocess.Pro
 
 async def _run_cmd_ws(cmd: list[str], ws: aiohttp.ClientWebSocketResponse) -> int:  # pylint: disable=too-many-branches
     logger = get_logger(0)
-    receive_task: (asyncio.Task | None) = None
+    recv_task: (asyncio.Task | None) = None
     proc_task: (asyncio.Task | None) = None
     proc: (asyncio.subprocess.Process | None) = None  # pylint: disable=no-member
 
     try:  # pylint: disable=too-many-nested-blocks
         while True:
-            if receive_task is None:
-                receive_task = asyncio.create_task(ws.receive())
+            if recv_task is None:
+                recv_task = asyncio.create_task(ws.receive())
             if proc_task is None and proc is not None:
                 proc_task = asyncio.create_task(proc.wait())
 
-            tasks = list(filter(None, [receive_task, proc_task]))
+            tasks = list(filter(None, [recv_task, proc_task]))
             done = (await aiotools.wait_first(*tasks))[0]
 
-            if receive_task in done:
-                msg = receive_task.result()
+            if recv_task in done:
+                msg = recv_task.result()
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     (event_type, event) = htserver.parse_ws_event(msg.data)
                     if event_type == "storage":
@@ -98,15 +98,15 @@ async def _run_cmd_ws(cmd: list[str], ws: aiohttp.ClientWebSocketResponse) -> in
                 else:
                     logger.error("Unknown PST message type: %r", msg)
                     break
-                receive_task = None
+                recv_task = None
 
             if proc_task in done:
                 break
     except Exception:
         logger.exception("Unhandled exception")
 
-    if receive_task is not None:
-        receive_task.cancel()
+    if recv_task is not None:
+        recv_task.cancel()
     if proc_task is not None:
         proc_task.cancel()
     if proc is not None:

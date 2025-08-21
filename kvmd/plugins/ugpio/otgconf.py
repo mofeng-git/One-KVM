@@ -108,7 +108,7 @@ class Plugin(BaseUserGpioDriver):
 
     async def write(self, pin: str, state: bool) -> None:
         async with self.__lock:
-            if self.read(pin) == state:
+            if (await self.read(pin)) == state:
                 return
             if pin == "udc":
                 if state:

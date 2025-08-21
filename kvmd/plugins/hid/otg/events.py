@@ -23,6 +23,8 @@
 import struct
 import dataclasses
 
+from evdev import ecodes
+
 from ....keyboard.mappings import UsbKey
 from ....keyboard.mappings import KEYMAP
 
@@ -46,7 +48,7 @@ class ResetEvent(BaseEvent):
 # =====
 @dataclasses.dataclass(frozen=True)
 class KeyEvent(BaseEvent):
-    key: UsbKey
+    key:   UsbKey
     state: bool
 
     def __post_init__(self) -> None:
@@ -56,13 +58,13 @@ class KeyEvent(BaseEvent):
 @dataclasses.dataclass(frozen=True)
 class ModifierEvent(BaseEvent):
     modifier: UsbKey
-    state: bool
+    state:    bool
 
     def __post_init__(self) -> None:
         assert self.modifier.is_modifier
 
 
-def make_keyboard_event(key: str, state: bool) -> (KeyEvent | ModifierEvent):
+def make_keyboard_event(key: int, state: bool) -> (KeyEvent | ModifierEvent):
     usb_key = KEYMAP[key].usb
     if usb_key.is_modifier:
         return ModifierEvent(usb_key, state)
@@ -102,17 +104,17 @@ def make_keyboard_report(
 # =====
 @dataclasses.dataclass(frozen=True)
 class MouseButtonEvent(BaseEvent):
-    button: str
-    state: bool
-    code: int = 0
+    button: int
+    state:  bool
+    code:   int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "code", {
-            "left":   0x1,
-            "right":  0x2,
-            "middle": 0x4,
-            "up":     0x8,  # Back
-            "down":   0x10,  # Forward
+            ecodes.BTN_LEFT:    0x1,
+            ecodes.BTN_RIGHT:   0x2,
+            ecodes.BTN_MIDDLE:  0x4,
+            ecodes.BTN_BACK:    0x8,  # Back/Up
+            ecodes.BTN_FORWARD: 0x10,  # Forward/Down
         }[self.button])
 
 

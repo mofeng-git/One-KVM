@@ -110,32 +110,13 @@ class RfbClientStream:
     # =====
 
     async def _start_tls(self, ssl_context: ssl.SSLContext, ssl_timeout: float) -> None:
-        loop = asyncio.get_event_loop()
-
-        ssl_reader = asyncio.StreamReader()
-        protocol = asyncio.StreamReaderProtocol(ssl_reader)
-
         try:
-            transport = await loop.start_tls(
-                self.__writer.transport,
-                protocol,
+            await self.__writer.start_tls(
                 ssl_context,
-                server_side=True,
                 ssl_handshake_timeout=ssl_timeout,
             )
         except ConnectionError as ex:
             raise RfbConnectionError("Can't start TLS", ex)
-
-        ssl_reader.set_transport(transport)  # type: ignore
-        ssl_writer = asyncio.StreamWriter(
-            transport=transport,  # type: ignore
-            protocol=protocol,
-            reader=ssl_reader,
-            loop=loop,
-        )
-
-        self.__reader = ssl_reader
-        self.__writer = ssl_writer
 
     async def _close(self) -> None:
         await aiotools.close_writer(self.__writer)

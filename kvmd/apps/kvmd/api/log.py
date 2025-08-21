@@ -52,17 +52,15 @@ class LogApi:
             raise LogReaderDisabledError()
         seek = valid_log_seek(req.query.get("seek", 0))
         follow = valid_bool(req.query.get("follow", False))
-        response = await start_streaming(req, "text/plain")
+        resp = await start_streaming(req, "text/plain")
         try:
             async for record in self.__log_reader.poll_log(seek, follow):
-                await response.write(("[%s %s] --- %s" % (
+                await resp.write(("[%s %s] --- %s" % (
                     record["dt"].strftime("%Y-%m-%d %H:%M:%S"),
                     record["service"],
                     record["msg"],
                 )).encode("utf-8") + b"\r\n")
         except Exception as exception:
-            if record is None:
-                record = exception
-            await response.write(f"Module systemd.journal is unavailable.\n{record}".encode("utf-8"))
-            return response
-        return response
+            await resp.write(f"Module systemd.journal is unavailable.\n{exception}".encode("utf-8"))
+            return resp
+        return resp

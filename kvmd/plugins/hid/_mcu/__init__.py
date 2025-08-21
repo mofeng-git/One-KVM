@@ -285,10 +285,10 @@ class BaseMcuHid(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-
     def set_connected(self, connected: bool) -> None:
         self.__queue_event(SetConnectedEvent(connected), clear=True)
 
-    def _send_key_event(self, key: str, state: bool) -> None:
+    def _send_key_event(self, key: int, state: bool) -> None:
         self.__queue_event(KeyEvent(key, state))
 
-    def _send_mouse_button_event(self, button: str, state: bool) -> None:
+    def _send_mouse_button_event(self, button: int, state: bool) -> None:
         self.__queue_event(MouseButtonEvent(button, state))
 
     def _send_mouse_move_event(self, to_x: int, to_y: int) -> None:

@@ -99,9 +99,9 @@ class FanInfoSubmanager(BaseInfoSubmanager):
     async def __get_fan_state(self) -> (dict | None):
         try:
             async with self.__make_http_session() as session:
-                async with session.get("http://localhost/state") as response:
-                    htclient.raise_not_200(response)
-                    return (await response.json())["result"]
+                async with session.get("http://localhost/state") as resp:
+                    htclient.raise_not_200(resp)
+                    return (await resp.json())["result"]
         except Exception as ex:
             get_logger(0).error("Can't read fan state: %s", ex)
             return None

@@ -21,6 +21,7 @@
 
 
 import asyncio
+import re
 
 from typing import Any
 
@@ -57,7 +58,7 @@ class ExportApi:
     async def __get_prometheus_metrics(self) -> str:
         (atx_state, info_state, gpio_state) = await asyncio.gather(*[
             self.__atx.get_state(),
-            self.__info_manager.get_state(["hw", "fan"]),
+            self.__info_manager.get_state(["health", "fan"]),
             self.__user_gpio.get_state(),
         ])
         rows: list[str] = []
@@ -68,10 +69,11 @@ class ExportApi:
         for mode in sorted(UserGpioModes.ALL):
             for (channel, ch_state) in gpio_state["state"][f"{mode}s"].items():  # type: ignore
                 if not channel.startswith("__"):  # Hide special GPIOs
+                    channel = re.sub(r"[^\w]", "_", channel)
                     for key in ["online", "state"]:
                         self.__append_prometheus_rows(rows, ch_state["state"], f"pikvm_gpio_{mode}_{key}_{channel}")
 
-        self.__append_prometheus_rows(rows, info_state["hw"]["health"], "pikvm_hw")  # type: ignore
+        self.__append_prometheus_rows(rows, info_state["health"], "pikvm_hw")  # type: ignore
         self.__append_prometheus_rows(rows, info_state["fan"], "pikvm_fan")
 
         return "\n".join(rows)

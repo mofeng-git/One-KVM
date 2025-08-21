@@ -60,6 +60,8 @@ class Header(Packable, Unpackable):
     SET_EDID   = 9
     CLEAR_EDID = 10
     SET_COLORS = 12
+    SET_QUIRKS = 13
+    SET_DUMMY  = 14
 
     __struct = struct.Struct("<BHBB")
 
@@ -90,16 +92,31 @@ class Nak(Unpackable):
 
 
 @dataclasses.dataclass(frozen=True)
+class UnitVersion:
+    hw:     int
+    sw:     int
+    sw_dev: bool
+
+    def is_fresh(self, version: int) -> bool:
+        return (self.sw_dev or (self.sw >= version))
+
+
+@dataclasses.dataclass(frozen=True)
 class UnitFlags:
     changing_busy: bool
     flashing_busy: bool
     has_downlink:  bool
+    has_hpd:       bool
+
+
+@dataclasses.dataclass(frozen=True)
+class UnitQuirks:
+    ignore_hpd: bool
 
 
 @dataclasses.dataclass(frozen=True)
 class UnitState(Unpackable):  # pylint: disable=too-many-instance-attributes
-    sw_version:    int
-    hw_version:    int
+    version:       UnitVersion
     flags:         UnitFlags
     ch:            int
     beacons:       tuple[bool, bool, bool, bool, bool, bool]
@@ -108,10 +125,12 @@ class UnitState(Unpackable):  # pylint: disable=too-many-instance-attributes
     video_hpd:     tuple[bool, bool, bool, bool, bool]
     video_edid:    tuple[bool, bool, bool, bool]
     video_crc:     tuple[int,  int,  int,  int]
+    video_dummies: tuple[bool, bool, bool, bool]
     usb_5v_sens:   tuple[bool, bool, bool, bool]
     atx_busy:      tuple[bool, bool, bool, bool]
+    quirks:        UnitQuirks
 
-    __struct = struct.Struct("<HHHBBHHHHHHBBBHHHHBxB30x")
+    __struct = struct.Struct("<HHHBBHHHHHHBBBHHHHBxBBB28x")
 
     def compare_edid(self, ch: int, edid: Optional["Edid"]) -> bool:
         if edid is None:
@@ -128,15 +147,19 @@ class UnitState(Unpackable):  # pylint: disable=too-many-instance-attributes
             sw_version, hw_version, flags, ch,
             beacons, nc0, nc1, nc2, nc3, nc4, nc5,
             video_5v_sens, video_hpd, video_edid, vc0, vc1, vc2, vc3,
-            usb_5v_sens, atx_busy,
+            usb_5v_sens, atx_busy, quirks, video_dummies,
         ) = cls.__struct.unpack_from(data, offset=offset)
         return UnitState(
-            sw_version,
-            hw_version,
+            version=UnitVersion(
+                hw=hw_version,
+                sw=(sw_version & 0x7FFF),
+                sw_dev=bool(sw_version & 0x8000),
+            ),
             flags=UnitFlags(
                 changing_busy=bool(flags & 0x80),
                 flashing_busy=bool(flags & 0x40),
                 has_downlink=bool(flags & 0x02),
+                has_hpd=bool(flags & 0x04),
             ),
             ch=ch,
             beacons=cls.__make_flags6(beacons),
@@ -145,8 +168,10 @@ class UnitState(Unpackable):  # pylint: disable=too-many-instance-attributes
             video_hpd=cls.__make_flags5(video_hpd),
             video_edid=cls.__make_flags4(video_edid),
             video_crc=(vc0, vc1, vc2, vc3),
+            video_dummies=cls.__make_flags4(video_dummies),
             usb_5v_sens=cls.__make_flags4(usb_5v_sens),
             atx_busy=cls.__make_flags4(atx_busy),
+            quirks=UnitQuirks(ignore_hpd=bool(quirks & 0x01)),
         )
 
     @classmethod
@@ -252,6 +277,18 @@ class BodyClearEdid(Packable):
 
 
 @dataclasses.dataclass(frozen=True)
+class BodySetDummy(Packable):
+    ch: int
+    on: bool
+
+    def __post_init__(self) -> None:
+        assert 0 <= self.ch <= 3
+
+    def pack(self) -> bytes:
+        return self.ch.to_bytes() + self.on.to_bytes()
+
+
+@dataclasses.dataclass(frozen=True)
 class BodySetColors(Packable):
     ch:     int
     colors: Colors
@@ -261,6 +298,14 @@ class BodySetColors(Packable):
 
     def pack(self) -> bytes:
         return self.ch.to_bytes() + self.colors.pack()
+
+
+@dataclasses.dataclass(frozen=True)
+class BodySetQuirks(Packable):
+    ignore_hpd: bool
+
+    def pack(self) -> bytes:
+        return self.ignore_hpd.to_bytes()
 
 
 # =====

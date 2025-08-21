@@ -30,7 +30,7 @@ import {tools, $} from "../tools.js";
 var _Janus = null;
 
 
-export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, __allow_audio, __allow_mic) {
+export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeHook, __orient, __allow_audio, __allow_mic) {
 	var self = this;
 
 	/************************************************************************/
@@ -49,6 +49,10 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 
 	var __state = null;
 	var __frames = 0;
+	var __res = {"width": -1, "height": -1};
+	var __resize_listener_installed = false;
+
+	var __ice = null;
 
 	/************************************************************************/
 
@@ -83,11 +87,28 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 		__state = state;
 		__stop = false;
 		__ensureJanus(false);
+		if (!__resize_listener_installed) {
+			$("stream-video").addEventListener("resize", __videoResizeHandler);
+			__resize_listener_installed = true;
+		}
 	};
 
 	self.stopStream = function() {
 		__stop = true;
 		__destroyJanus();
+		if (__resize_listener_installed) {
+			$("stream-video").removeEventListener("resize", __videoResizeHandler);
+			__resize_listener_installed = false;
+		}
+	};
+
+	var __videoResizeHandler = function(ev) {
+		let el = ev.target;
+		if (__res.width !== el.videoWidth || __res.height !== el.videoHeight) {
+			__res.width = el.videoWidth;
+			__res.height = el.videoHeight;
+			__organizeHook();
+		}
 	};
 
 	var __ensureJanus = function(internal) {
@@ -97,9 +118,10 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 			__setInfo(false, false, "");
 			__logInfo("Starting Janus ...");
 			__janus = new _Janus({
-				"server": `${tools.is_https ? "wss" : "ws"}://${location.host}/janus/ws`,
+				"server": tools.makeWsUrl("janus/ws"),
 				"ipv6": true,
 				"destroyOnUnload": false,
+				"iceServers": () => __getIceServers(),
 				"success": __attachJanus,
 				"error": function(error) {
 					__logError(error);
@@ -107,6 +129,15 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 					__finishJanus();
 				},
 			});
+		}
+	};
+
+	var __getIceServers = function() {
+		if (__ice !== null && __ice.url) {
+			__logInfo("Using the custom ICE Server got from uStreamer:", __ice);
+			return [{"urls": __ice.url}];
+		} else {
+			return [];
 		}
 	};
 
@@ -202,7 +233,8 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 			"success": function(handle) {
 				__handle = handle;
 				__logInfo("uStreamer attached:", handle.getPlugin(), handle.getId());
-				__sendWatch();
+				__logInfo("Sending FEATURES ...");
+				__handle.send({"message": {"request": "features"}});
 			},
 
 			"error": function(error) {
@@ -233,7 +265,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 				__stopRetryEmsgInterval();
 
 				if (msg.result) {
-					__logInfo("Got uStreamer result message:", msg.result.status); // starting, started, stopped
+					__logInfo("Got uStreamer result message:", msg.result); // starting, started, stopped
 					if (msg.result.status === "started") {
 						__setActive();
 						__setInfo(false, false, "");
@@ -243,6 +275,8 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 					} else if (msg.result.status === "features") {
 						tools.feature.setEnabled($("stream-audio"), msg.result.features.audio);
 						tools.feature.setEnabled($("stream-mic"), msg.result.features.mic);
+						__ice = msg.result.features.ice;
+						__sendWatch();
 					}
 				} else if (msg.error_code || msg.error) {
 					__logError("Got uStreamer error message:", msg.error_code, "-", msg.error);
@@ -298,7 +332,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 				// Chrome sends `muted` notifiation for tracks in `disconnected` ICE state
 				// and Janus.js just removes muted track from list of available tracks.
 				// But track still exists actually so it's safe to just ignore
-				// reason == "mute" and "unmute".
+				// reason === "mute" and "unmute".
 				let reason = (meta || {}).reason;
 				__logInfo("Got onremotetrack:", id, added, reason, track, meta);
 				if (added && reason === "created") {
@@ -412,8 +446,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __orient, _
 
 	var __sendWatch = function() {
 		if (__handle) {
-			__logInfo(`Sending WATCH(orient=${__orient}, audio=${__allow_audio}, mic=${__allow_mic}) + FEATURES ...`);
-			__handle.send({"message": {"request": "features"}});
+			__logInfo(`Sending WATCH(orient=${__orient}, audio=${__allow_audio}, mic=${__allow_mic}) ...`);
 			__handle.send({"message": {"request": "watch", "params": {
 				"orientation": __orient,
 				"audio": __allow_audio,

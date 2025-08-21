@@ -21,27 +21,37 @@
 
 
 import os
+import asyncio
+import base64
 import contextlib
 
 from typing import AsyncGenerator
 
-import passlib.apache
+from aiohttp.test_utils import make_mocked_request
 
 import pytest
+
+from kvmd.validators import ValidatorError
 
 from kvmd.yamlconf import make_config
 
 from kvmd.apps.kvmd.auth import AuthManager
+from kvmd.apps.kvmd.api.auth import check_request_auth
+
+from kvmd.htserver import UnauthorizedError
+from kvmd.htserver import ForbiddenError
 
 from kvmd.plugins.auth import get_auth_service_class
 
 from kvmd.htserver import HttpExposed
 
+from kvmd.crypto import KvmdHtpasswdFile
+
 
 # =====
-_E_AUTH = HttpExposed("GET", "/foo_auth", True, (lambda: None))
-_E_UNAUTH = HttpExposed("GET", "/bar_unauth", True, (lambda: None))
-_E_FREE = HttpExposed("GET", "/baz_free", False, (lambda: None))
+_E_AUTH = HttpExposed("GET", "/foo_auth", auth_required=True, allow_usc=True, handler=(lambda: None))
+_E_UNAUTH = HttpExposed("GET", "/bar_unauth", auth_required=True, allow_usc=True, handler=(lambda: None))
+_E_FREE = HttpExposed("GET", "/baz_free", auth_required=False, allow_usc=True, handler=(lambda: None))
 
 
 def _make_service_kwargs(path: str) -> dict:
@@ -53,21 +63,24 @@ def _make_service_kwargs(path: str) -> dict:
 @contextlib.asynccontextmanager
 async def _get_configured_manager(
     unauth_paths: list[str],
-    internal_path: str,
-    external_path: str="",
-    force_internal_users: (list[str] | None)=None,
+    int_path: str,
+    ext_path: str="",
+    force_int_users: (list[str] | None)=None,
 ) -> AsyncGenerator[AuthManager, None]:
 
     manager = AuthManager(
         enabled=True,
+        expire=0,
+        usc_users=[],
+        usc_groups=[],
         unauth_paths=unauth_paths,
 
-        internal_type="htpasswd",
-        internal_kwargs=_make_service_kwargs(internal_path),
-        force_internal_users=(force_internal_users or []),
+        int_type="htpasswd",
+        int_kwargs=_make_service_kwargs(int_path),
+        force_int_users=(force_int_users or []),
 
-        external_type=("htpasswd" if external_path else ""),
-        external_kwargs=(_make_service_kwargs(external_path) if external_path else {}),
+        ext_type=("htpasswd" if ext_path else ""),
+        ext_kwargs=(_make_service_kwargs(ext_path) if ext_path else {}),
 
         totp_secret_path="",
     )
@@ -80,10 +93,61 @@ async def _get_configured_manager(
 
 # =====
 @pytest.mark.asyncio
-async def test_ok__internal(tmpdir) -> None:  # type: ignore
+async def test_ok__request(tmpdir) -> None:  # type: ignore
     path = os.path.abspath(str(tmpdir.join("htpasswd")))
 
-    htpasswd = passlib.apache.HtpasswdFile(path, new=True)
+    htpasswd = KvmdHtpasswdFile(path, new=True)
+    htpasswd.set_password("admin", "pass")
+    htpasswd.save()
+
+    async with _get_configured_manager([], path) as manager:
+        async def check(exposed: HttpExposed, **kwargs) -> None:  # type: ignore
+            await check_request_auth(manager, exposed, make_mocked_request(exposed.method, exposed.path, **kwargs))
+
+        await check(_E_FREE)
+        with pytest.raises(UnauthorizedError):
+            await check(_E_AUTH)
+
+        # ===
+
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"X-KVMD-User": "admin", "X-KVMD-Passwd": "foo"})
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"X-KVMD-User": "adminx", "X-KVMD-Passwd": "pass"})
+
+        await check(_E_AUTH, headers={"X-KVMD-User": "admin", "X-KVMD-Passwd": "pass"})
+
+        # ===
+
+        with pytest.raises(UnauthorizedError):
+            await check(_E_AUTH, headers={"Cookie": "auth_token="})
+        with pytest.raises(ValidatorError):
+            await check(_E_AUTH, headers={"Cookie": "auth_token=0"})
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"Cookie": f"auth_token={'0' * 64}"})
+
+        token = await manager.login("admin", "pass", 0)
+        assert token
+        await check(_E_AUTH, headers={"Cookie": f"auth_token={token}"})
+        manager.logout(token)
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"Cookie": f"auth_token={token}"})
+
+        # ===
+
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"Authorization": "basic " + base64.b64encode(b"admin:foo").decode()})
+        with pytest.raises(ForbiddenError):
+            await check(_E_AUTH, headers={"Authorization": "basic " + base64.b64encode(b"adminx:pass").decode()})
+
+        await check(_E_AUTH, headers={"Authorization": "basic " + base64.b64encode(b"admin:pass").decode()})
+
+
+@pytest.mark.asyncio
+async def test_ok__expire(tmpdir) -> None:  # type: ignore
+    path = os.path.abspath(str(tmpdir.join("htpasswd")))
+
+    htpasswd = KvmdHtpasswdFile(path, new=True)
     htpasswd.set_password("admin", "pass")
     htpasswd.save()
 
@@ -96,15 +160,15 @@ async def test_ok__internal(tmpdir) -> None:  # type: ignore
         assert manager.check("xxx") is None
         manager.logout("xxx")
 
-        assert (await manager.login("user", "foo")) is None
-        assert (await manager.login("admin", "foo")) is None
-        assert (await manager.login("user", "pass")) is None
+        assert (await manager.login("user", "foo", 3)) is None
+        assert (await manager.login("admin", "foo", 3)) is None
+        assert (await manager.login("user", "pass", 3)) is None
 
-        token1 = await manager.login("admin", "pass")
+        token1 = await manager.login("admin", "pass", 3)
         assert isinstance(token1, str)
         assert len(token1) == 64
 
-        token2 = await manager.login("admin", "pass")
+        token2 = await manager.login("admin", "pass", 3)
         assert isinstance(token2, str)
         assert len(token2) == 64
         assert token1 != token2
@@ -119,7 +183,75 @@ async def test_ok__internal(tmpdir) -> None:  # type: ignore
         assert manager.check(token2) is None
         assert manager.check("foobar") is None
 
-        token3 = await manager.login("admin", "pass")
+        token3 = await manager.login("admin", "pass", 3)
+        assert isinstance(token3, str)
+        assert len(token3) == 64
+        assert token1 != token3
+        assert token2 != token3
+
+        token4 = await manager.login("admin", "pass", 6)
+        assert isinstance(token4, str)
+        assert len(token4) == 64
+        assert token1 != token4
+        assert token2 != token4
+        assert token3 != token4
+
+        await asyncio.sleep(4)
+
+        assert manager.check(token1) is None
+        assert manager.check(token2) is None
+        assert manager.check(token3) is None
+        assert manager.check(token4) == "admin"
+
+        await asyncio.sleep(3)
+
+        assert manager.check(token1) is None
+        assert manager.check(token2) is None
+        assert manager.check(token3) is None
+        assert manager.check(token4) is None
+
+
+@pytest.mark.asyncio
+async def test_ok__internal(tmpdir) -> None:  # type: ignore
+    path = os.path.abspath(str(tmpdir.join("htpasswd")))
+
+    htpasswd = KvmdHtpasswdFile(path, new=True)
+    htpasswd.set_password("admin", "pass")
+    htpasswd.save()
+
+    async with _get_configured_manager([], path) as manager:
+        assert manager.is_auth_enabled()
+        assert manager.is_auth_required(_E_AUTH)
+        assert manager.is_auth_required(_E_UNAUTH)
+        assert not manager.is_auth_required(_E_FREE)
+
+        assert manager.check("xxx") is None
+        manager.logout("xxx")
+
+        assert (await manager.login("user", "foo", 0)) is None
+        assert (await manager.login("admin", "foo", 0)) is None
+        assert (await manager.login("user", "pass", 0)) is None
+
+        token1 = await manager.login("admin", "pass", 0)
+        assert isinstance(token1, str)
+        assert len(token1) == 64
+
+        token2 = await manager.login("admin", "pass", 0)
+        assert isinstance(token2, str)
+        assert len(token2) == 64
+        assert token1 != token2
+
+        assert manager.check(token1) == "admin"
+        assert manager.check(token2) == "admin"
+        assert manager.check("foobar") is None
+
+        manager.logout(token1)
+
+        assert manager.check(token1) is None
+        assert manager.check(token2) is None
+        assert manager.check("foobar") is None
+
+        token3 = await manager.login("admin", "pass", 0)
         assert isinstance(token3, str)
         assert len(token3) == 64
         assert token1 != token3
@@ -131,12 +263,12 @@ async def test_ok__external(tmpdir) -> None:  # type: ignore
     path1 = os.path.abspath(str(tmpdir.join("htpasswd1")))
     path2 = os.path.abspath(str(tmpdir.join("htpasswd2")))
 
-    htpasswd1 = passlib.apache.HtpasswdFile(path1, new=True)
+    htpasswd1 = KvmdHtpasswdFile(path1, new=True)
     htpasswd1.set_password("admin", "pass1")
     htpasswd1.set_password("local", "foobar")
     htpasswd1.save()
 
-    htpasswd2 = passlib.apache.HtpasswdFile(path2, new=True)
+    htpasswd2 = KvmdHtpasswdFile(path2, new=True)
     htpasswd2.set_password("admin", "pass2")
     htpasswd2.set_password("user", "foobar")
     htpasswd2.save()
@@ -147,17 +279,17 @@ async def test_ok__external(tmpdir) -> None:  # type: ignore
         assert manager.is_auth_required(_E_UNAUTH)
         assert not manager.is_auth_required(_E_FREE)
 
-        assert (await manager.login("local", "foobar")) is None
-        assert (await manager.login("admin", "pass2")) is None
+        assert (await manager.login("local", "foobar", 0)) is None
+        assert (await manager.login("admin", "pass2", 0)) is None
 
-        token = await manager.login("admin", "pass1")
+        token = await manager.login("admin", "pass1", 0)
         assert token is not None
 
         assert manager.check(token) == "admin"
         manager.logout(token)
         assert manager.check(token) is None
 
-        token = await manager.login("user", "foobar")
+        token = await manager.login("user", "foobar", 0)
         assert token is not None
 
         assert manager.check(token) == "user"
@@ -169,7 +301,7 @@ async def test_ok__external(tmpdir) -> None:  # type: ignore
 async def test_ok__unauth(tmpdir) -> None:  # type: ignore
     path = os.path.abspath(str(tmpdir.join("htpasswd")))
 
-    htpasswd = passlib.apache.HtpasswdFile(path, new=True)
+    htpasswd = KvmdHtpasswdFile(path, new=True)
     htpasswd.set_password("admin", "pass")
     htpasswd.save()
 
@@ -191,14 +323,17 @@ async def test_ok__disabled() -> None:
     try:
         manager = AuthManager(
             enabled=False,
+            expire=0,
+            usc_users=[],
+            usc_groups=[],
             unauth_paths=[],
 
-            internal_type="foobar",
-            internal_kwargs={},
-            force_internal_users=[],
+            int_type="foobar",
+            int_kwargs={},
+            force_int_users=[],
 
-            external_type="",
-            external_kwargs={},
+            ext_type="",
+            ext_kwargs={},
 
             totp_secret_path="",
         )
@@ -212,7 +347,7 @@ async def test_ok__disabled() -> None:
             await manager.authorize("admin", "admin")
 
         with pytest.raises(AssertionError):
-            await manager.login("admin", "admin")
+            await manager.login("admin", "admin", 0)
 
         with pytest.raises(AssertionError):
             manager.logout("xxx")

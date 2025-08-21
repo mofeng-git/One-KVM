@@ -23,88 +23,82 @@
 "use strict";
 
 
-import {tools, $$$} from "./tools.js";
+import {tools} from "./tools.js";
 
 
-export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
+export function Keypad(__el_keypad, __sendKey, __apply_fixes) {
 	var self = this;
 
 	/************************************************************************/
 
-	var __merged = {};
 	var __keys = {};
-	var __modifiers = {};
+	var __hold_timers = {};
 
 	var __fix_mac_cmd = false;
 	var __fix_win_altgr = false;
 	var __altgr_ctrl_timer = null;
 
 	var __init__ = function() {
+		__el_keypad.addEventListener("contextmenu", (ev) => ev.preventDefault());
+
 		if (__apply_fixes) {
 			__fix_mac_cmd = tools.browser.is_mac;
 			if (__fix_mac_cmd) {
-				tools.info(`Keymap at ${__keys_parent}: enabled Fix-Mac-CMD`);
+				tools.info(`Keymap at ${__el_keypad.id}: enabled Fix-Mac-CMD`);
 			}
 			__fix_win_altgr = tools.browser.is_win;
 			if (__fix_win_altgr) {
-				tools.info(`Keymap at ${__keys_parent}: enabled Fix-Win-AltGr`);
+				tools.info(`Keymap at ${__el_keypad.id}: enabled Fix-Win-AltGr`);
 			}
 		}
 
-		for (let el_key of $$$(`${__keys_parent} div.key`)) {
+		for (let el_key of [].slice.call(__el_keypad.getElementsByClassName("key"))) {
+			if (el_key.hasAttribute("data-allow-autohold")) {
+				el_key.title = "Long left click or short right click for hold, middle for lock";
+			} else {
+				el_key.title = "Right click for hold, middle for lock";
+			}
+
 			let code = el_key.getAttribute("data-code");
 
 			tools.setDefault(__keys, code, []);
 			__keys[code].push(el_key);
 
-			tools.setDefault(__merged, code, []);
-			__merged[code].push(el_key);
-
-			tools.el.setOnDown(el_key, () => __clickHandler(el_key, true));
-			tools.el.setOnUp(el_key, () => __clickHandler(el_key, false));
+			tools.el.setOnDown(el_key, (ev) => __clickHandler(el_key, ev));
+			tools.el.setOnUp(el_key, () => __clickHandler(el_key, null));
 			el_key.onmouseout = function() {
-				if (__isPressed(el_key)) {
-					__clickHandler(el_key, false);
+				if (
+					__isActive(el_key, "pressed")
+					&& !__isActive(el_key, "holded")
+					&& !__isActive(el_key, "locked")
+				) {
+					__clickHandler(el_key, null);
 				}
 			};
-		}
-
-		for (let el_key of $$$(`${__keys_parent} div.modifier`)) {
-			let code = el_key.getAttribute("data-code");
-
-			tools.setDefault(__modifiers, code, []);
-			__modifiers[code].push(el_key);
-
-			tools.setDefault(__merged, code, []);
-			__merged[code].push(el_key);
-
-			tools.el.setOnDown(el_key, () => __toggleModifierHandler(el_key));
 		}
 	};
 
 	/************************************************************************/
 
 	self.releaseAll = function() {
-		for (let dict of [__keys, __modifiers]) {
-			for (let code in dict) {
-				if (__isActive(dict[code][0])) {
-					self.emitByCode(code, false);
-				}
+		for (let code in __keys) {
+			if (__isActive(__keys[code][0])) {
+				self.emitByCode(code, false);
 			}
 		}
 	};
 
-	self.emitByKeyEvent = function(event, state) {
-		if (event.repeat) {
+	self.emitByKeyEvent = function(ev, state) {
+		if (ev.repeat) {
 			return;
 		}
 
-		let code = event.code;
+		let code = ev.code;
 		if (__apply_fixes) {
 			// https://github.com/pikvm/pikvm/issues/819
-			if (code == "IntlBackslash" && ["`", "~"].includes(event.key)) {
+			if (code === "IntlBackslash" && ["`", "~"].includes(ev.key)) {
 				code = "Backquote";
-			} else if (code == "Backquote" && ["§", "±"].includes(event.key)) {
+			} else if (code === "Backquote" && ["§", "±"].includes(ev.key)) {
 				code = "IntlBackslash";
 			}
 		}
@@ -113,7 +107,10 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 	};
 
 	self.emitByCode = function(code, state, apply_fixes=true) {
-		if (code in __merged) {
+		if (code in __keys) {
+			let el_key = __keys[code][0];
+			__stopHoldTimer(el_key);
+
 			if (__fix_win_altgr && apply_fixes) {
 				if (!__fixWinAltgr(code, state)) {
 					return;
@@ -122,13 +119,21 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 			if (__fix_mac_cmd && apply_fixes) {
 				__fixMacCmd(code, state);
 			}
-			__commonHandler(__merged[code][0], state, false);
-			__unholdModifiers();
-		}
+
+			if (state && !__isActive(el_key)) {
+				__deactivate(el_key);
+				__activate(el_key, "pressed");
+				__process(el_key, true);
+			} else {
+				__deactivate(el_key);
+				__process(el_key, false);
+			}
+			__unholdAll();
+		};
 	};
 
 	var __fixMacCmd = function(code, state) {
-		if ((code == "MetaLeft" || code == "MetaRight") && !state) {
+		if ((code === "MetaLeft" || code === "MetaRight") && !state) {
 			for (code in __keys) {
 				if (__isActive(__keys[code][0])) {
 					self.emitByCode(code, false, false);
@@ -148,7 +153,7 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 					self.emitByCode("ControlLeft", true, false);
 				}
 			}
-			if (code === "ControlLeft" && !__isActive(__modifiers["ControlLeft"][0])) {
+			if (code === "ControlLeft" && !__isActive(__keys["ControlLeft"][0])) {
 				__altgr_ctrl_timer = setTimeout(function() {
 					__altgr_ctrl_timer = null;
 					self.emitByCode("ControlLeft", true, false);
@@ -165,61 +170,93 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 		return true; // Continue handling
 	};
 
-	var __clickHandler = function(el_key, state) {
-		__commonHandler(el_key, state, false);
-		__unholdModifiers();
-	};
+	var __clickHandler = function(el_key, ev) {
+		let state = false;
+		let act = "pressed";
+		if (ev) {
+			state = (ev.type === "mousedown" || ev.type === "touchstart");
+			if (ev.type === "mousedown") {
+				if (ev.button === 1) {
+					act = "locked";
+				} else if (ev.button === 2) {
+					act = "holded";
+				}
+			}
+		}
 
-	var __toggleModifierHandler = function(el_key) {
-		__commonHandler(el_key, !__isActive(el_key), true);
-	};
-
-	var __commonHandler = function(el_key, state, hold) {
 		if (state && !__isActive(el_key)) {
+			__stopHoldTimer(el_key);
 			__deactivate(el_key);
-			__activate(el_key, (hold ? "holded" : "pressed"));
+			__activate(el_key, act);
 			__process(el_key, true);
+			__startHoldTimer(el_key);
 		} else {
-			__deactivate(el_key);
-			__process(el_key, false);
+			let fixed = (__isActive(el_key, "holded") || __isActive(el_key, "locked"));
+			if (!state && fixed && __stopHoldTimer(el_key)) {
+				return; // Игнорировать первое отжатие сразу после нажатия
+			}
+			if (!state) {
+				__stopHoldTimer(el_key);
+				__deactivate(el_key);
+				__process(el_key, false);
+				if (!fixed) {
+					__unholdAll();
+				}
+			}
 		}
 	};
 
-	var __unholdModifiers = function() {
-		for (let code in __modifiers) {
-			let el_key = __modifiers[code][0];
-			if (__isHolded(el_key)) {
+	var __startHoldTimer = function(el_key) {
+		__stopHoldTimer(el_key);
+		let code = el_key.getAttribute("data-code");
+		__hold_timers[code] = setTimeout(function() {
+			// Помимо прямой функции, hold timer используется для детектирования факта
+			// нажатия в рамках одной сессии press/release, чтобы не отпустить сразу же
+			// зажатую или заблокированную клавишу. Поэтому таймер инициализируется всегда,
+			// но основную функцию выполняет только если у него есть атрибут data-allow-autohold.
+			if (el_key.hasAttribute("data-allow-autohold")) {
+				__deactivate(el_key);
+				__activate(el_key, "holded");
+			}
+		}, 500); // Check keypad.css for the animation
+	};
+
+	var __stopHoldTimer = function(el_key) {
+		let code = el_key.getAttribute("data-code");
+		if (!__hold_timers[code]) {
+			return false;
+		}
+		clearTimeout(__hold_timers[code]);
+		__hold_timers[code] = null;
+		return true;
+	};
+
+	var __unholdAll = function() {
+		for (let el_key of [].slice.call(__el_keypad.getElementsByClassName("key"))) {
+			__stopHoldTimer(el_key);
+			if (__isActive(el_key, "holded") && !__isActive(el_key, "locked")) { // Skip duplicating keys
 				__deactivate(el_key);
 				__process(el_key, false);
 			}
 		}
 	};
 
-	var __isPressed = function(el_key) {
-		let is_pressed = false;
+	var __isActive = function(el_key, cls=null) {
 		let el_keys = __resolveKeys(el_key);
 		for (el_key of el_keys) {
-			is_pressed = (is_pressed || el_key.classList.contains("pressed"));
+			if (cls) {
+				if (el_key.classList.contains(cls)) {
+					return true;
+				}
+			} else if (
+				el_key.classList.contains("pressed")
+				|| el_key.classList.contains("holded")
+				|| el_key.classList.contains("locked")
+			) {
+				return true;
+			}
 		}
-		return is_pressed;
-	};
-
-	var __isHolded = function(el_key) {
-		let is_holded = false;
-		let el_keys = __resolveKeys(el_key);
-		for (el_key of el_keys) {
-			is_holded = (is_holded || el_key.classList.contains("holded"));
-		}
-		return is_holded;
-	};
-
-	var __isActive = function(el_key) {
-		let is_active = false;
-		let el_keys = __resolveKeys(el_key);
-		for (el_key of el_keys) {
-			is_active = (is_active || el_key.classList.contains("pressed") || el_key.classList.contains("holded"));
-		}
-		return is_active;
+		return false;
 	};
 
 	var __activate = function(el_key, cls) {
@@ -234,12 +271,13 @@ export function Keypad(__keys_parent, __sendKey, __apply_fixes) {
 		for (el_key of el_keys) {
 			el_key.classList.remove("pressed");
 			el_key.classList.remove("holded");
+			el_key.classList.remove("locked");
 		}
 	};
 
 	var __resolveKeys = function(el_key) {
 		let code = el_key.getAttribute("data-code");
-		return __merged[code];
+		return __keys[code];
 	};
 
 	var __process = function(el_key, state) {

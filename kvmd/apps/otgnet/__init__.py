@@ -45,6 +45,7 @@ from .netctl import IptablesAllowIcmpCtl
 from .netctl import IptablesAllowPortCtl
 from .netctl import IptablesForwardOut
 from .netctl import IptablesForwardIn
+from .netctl import SysctlIpv4ForwardCtl
 from .netctl import CustomCtl
 
 
@@ -63,14 +64,16 @@ class _Netcfg:  # pylint: disable=too-many-instance-attributes
 
 class _Service:  # pylint: disable=too-many-instance-attributes
     def __init__(self, config: Section) -> None:
+        self.__ip_cmd: list[str] = config.otgnet.commands.ip_cmd
+        self.__iptables_cmd: list[str] = config.otgnet.commands.iptables_cmd
+        self.__sysctl_cmd: list[str] = config.otgnet.commands.sysctl_cmd
+
         self.__iface_net: str = config.otgnet.iface.net
-        self.__ip_cmd: list[str] = config.otgnet.iface.ip_cmd
 
         self.__allow_icmp: bool = config.otgnet.firewall.allow_icmp
         self.__allow_tcp: list[int] = sorted(set(config.otgnet.firewall.allow_tcp))
         self.__allow_udp: list[int] = sorted(set(config.otgnet.firewall.allow_udp))
         self.__forward_iface: str = config.otgnet.firewall.forward_iface
-        self.__iptables_cmd: list[str] = config.otgnet.firewall.iptables_cmd
 
         def build_cmd(key: str) -> list[str]:
             return tools.build_cmd(
@@ -115,6 +118,7 @@ class _Service:  # pylint: disable=too-many-instance-attributes
             *([IptablesForwardIn(self.__iptables_cmd, netcfg.iface)] if self.__forward_iface else []),
             IptablesDropAllCtl(self.__iptables_cmd, netcfg.iface),
             IfaceAddIpCtl(self.__ip_cmd, netcfg.iface, f"{netcfg.iface_ip}/{netcfg.net_prefix}"),
+            *([SysctlIpv4ForwardCtl(self.__sysctl_cmd)] if self.__forward_iface else []),
             CustomCtl(self.__post_start_cmd, self.__pre_stop_cmd, placeholders),
         ]
         if direct:
@@ -130,6 +134,8 @@ class _Service:  # pylint: disable=too-many-instance-attributes
     async def __run_ctl(self, ctl: BaseCtl, direct: bool) -> bool:
         logger = get_logger()
         cmd = ctl.get_command(direct)
+        if not cmd:
+            return True
         logger.info("CMD: %s", tools.cmdfmt(cmd))
         try:
             return (not (await aioproc.log_process(cmd, logger)).returncode)

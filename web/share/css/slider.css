@@ -20,26 +20,23 @@
 *****************************************************************************/
 
 
-@supports (-webkit-appearance:none) {
+input[type=range] {
+	cursor: pointer;
+	outline: none;
+	width: 100%;
+	box-shadow: none;
+	background: transparent;
+}
+@supports (-webkit-locale: auto) { /* WebKit only */
 	input[type=range] {
-		cursor: pointer;
-		outline: none;
-		width: 100%;
-		box-shadow: none;
-		background: transparent;
 		margin: 8px 0 8px 0;
 		-webkit-appearance: none;
 		-webkit-tap-highlight-color: transparent;
 	}
 }
-@supports not (-webkit-appearance:none) {
+@supports not (-webkit-locale: auto) { /* Firefox */
 	input[type=range] {
-		cursor: pointer;
-		outline: none;
-		width: 100%;
-		box-shadow: none;
-		margin-left: 0;
-		margin-right: 0;
+		margin: 1px 0 1px 0;
 	}
 }
 input[type=range]:disabled {
@@ -81,8 +78,8 @@ input[type=range]:disabled::-moz-range-track {
 
 input[type=range]::-moz-range-thumb {
 	border: var(--border-intensive-2px);
-	height: 18px;
-	width: 18px;
+	height: 14px;
+	width: 14px;
 	border-radius: 25px;
 	background: var(--cs-thumb-default-bg);
 }

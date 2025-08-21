@@ -30,6 +30,7 @@ class StunInfo:
     nat_type:  StunNatType
     src_ip:    str
     ext_ip:    str
+    stun_host: str
     stun_ip:   str
     stun_port: int
 
@@ -102,6 +103,7 @@ class Stun:
             nat_type=nat_type,
             src_ip=src_ip,
             ext_ip=ext_ip,
+            stun_host=self.__host,
             stun_ip=self.__stun_ip,
             stun_port=self.__port,
         )

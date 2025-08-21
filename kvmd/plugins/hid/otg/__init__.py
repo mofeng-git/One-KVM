@@ -110,7 +110,7 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
                 "horizontal_wheel":   Option(True,  type=valid_bool),
             },
             "mouse_alt": {
-                "device":           Option("",   type=valid_abs_path, if_empty="", unpack_as="device_path"),
+                "device":           Option("/dev/kvmd-hid-mouse-alt", type=valid_abs_path, if_empty="", unpack_as="device_path"),
                 "select_timeout":   Option(0.1,  type=valid_float_f01),
                 "queue_timeout":    Option(0.1,  type=valid_float_f01),
                 "write_retries":    Option(150,  type=valid_int_f1),
@@ -206,10 +206,10 @@ class Plugin(BaseHid):  # pylint: disable=too-many-instance-attributes
             self._set_jiggler_active(jiggler)
             self.__notifier.notify()
 
-    def _send_key_event(self, key: str, state: bool) -> None:
+    def _send_key_event(self, key: int, state: bool) -> None:
         self.__keyboard_proc.send_key_event(key, state)
 
-    def _send_mouse_button_event(self, button: str, state: bool) -> None:
+    def _send_mouse_button_event(self, button: int, state: bool) -> None:
         self.__mouse_current.send_button_event(button, state)
 
     def _send_mouse_move_event(self, to_x: int, to_y: int) -> None:

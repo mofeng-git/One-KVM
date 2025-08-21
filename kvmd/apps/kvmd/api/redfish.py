@@ -102,13 +102,25 @@ class RedfishApi:
             "Actions": {
                 "#ComputerSystem.Reset": {
                     "ResetType@Redfish.AllowableValues": list(self.__actions),
-                    "target": "/redfish/v1/Systems/0/Actions/ComputerSystem.Reset"
+                    "target": "/redfish/v1/Systems/0/Actions/ComputerSystem.Reset",
+                },
+                "#ComputerSystem.SetDefaultBootOrder": {  # https://github.com/pikvm/pikvm/issues/1525
+                    "target": "/redfish/v1/Systems/0/Actions/ComputerSystem.SetDefaultBootOrder",
                 },
             },
             "Id": "0",
             "HostName": host,
             "PowerState": ("On" if atx_state["leds"]["power"] else "Off"),  # type: ignore
+            "Boot": {
+                "BootSourceOverrideEnabled": "Disabled",
+                "BootSourceOverrideTarget": None,
+            },
         }, wrap_result=False)
+
+    @exposed_http("PATCH", "/redfish/v1/Systems/0")
+    async def __patch_handler(self, _: Request) -> Response:
+        # https://github.com/pikvm/pikvm/issues/1525
+        return Response(body=None, status=204)
 
     @exposed_http("POST", "/redfish/v1/Systems/0/Actions/ComputerSystem.Reset")
     async def __power_handler(self, req: Request) -> Response:

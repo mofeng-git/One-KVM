@@ -23,6 +23,9 @@
 "use strict";
 
 
+import {ROOT_PREFIX} from "./vars.js";
+
+
 export var browser = new function() {
 	// https://stackoverflow.com/questions/9847580/how-to-detect-safari-chrome-ie-firefox-and-opera-browser/9851769
 	// https://github.com/fingerprintjs/fingerprintjs/discussions/641
@@ -133,12 +136,12 @@ export function checkBrowser(desktop_css, mobile_css) {
 		let force_desktop = (new URL(window.location.href)).searchParams.get("force_desktop");
 		let force_mobile = (new URL(window.location.href)).searchParams.get("force_mobile");
 		if ((force_desktop || !browser.is_mobile) && !force_mobile) {
-			__addCssLink("/share/css/x-desktop.css");
+			__addCssLink("x-desktop.css");
 			if (desktop_css) {
 				__addCssLink(desktop_css);
 			}
 		} else {
-			__addCssLink("/share/css/x-mobile.css");
+			__addCssLink("x-mobile.css");
 			if (mobile_css) {
 				__addCssLink(mobile_css);
 			}
@@ -148,6 +151,7 @@ export function checkBrowser(desktop_css, mobile_css) {
 }
 
 function __addCssLink(path) {
+	path = `${ROOT_PREFIX}share/css/${path}`;
 	console.log("===== Adding CSS:", path);
 	let el_head = document.getElementsByTagName("head")[0];
 	let el_link = document.createElement("link");

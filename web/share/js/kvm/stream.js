@@ -44,9 +44,9 @@ export function Streamer() {
 	var __res = {"width": 640, "height": 480};
 
 	var __init__ = function() {
-		__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
+		__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeHook);
 
-		$("stream-led").title = "Stream inactive";
+		$("stream-led").title = "No stream from PiKVM";
 
 		tools.slider.setParams($("stream-quality-slider"), 5, 100, 5, 80, function(value) {
 			$("stream-quality-value").innerText = `${value}%`;
@@ -73,13 +73,13 @@ export function Streamer() {
 		tools.radio.setOnClick("stream-mode-radio", __clickModeRadio, false);
 
 		// Not getInt() because of radio is a string container.
-		// Also don't reset Janus at class init.
+		// Also don't reset Streamer at class init.
 		tools.radio.clickValue("stream-orient-radio", tools.storage.get("stream.orient", 0));
 		tools.radio.setOnClick("stream-orient-radio", function() {
-			if (__streamer.getMode() === "janus") { // Right now it's working only for H.264
+			if (["janus", "media"].includes(__streamer.getMode())) {
 				let orient = parseInt(tools.radio.getValue("stream-orient-radio"));
 				tools.storage.setInt("stream.orient", orient);
-				if (__streamer.getOrientation() != orient) {
+				if (__streamer.getOrientation() !== orient) {
 					__resetStream();
 				}
 			}
@@ -112,14 +112,36 @@ export function Streamer() {
 		tools.el.setOnClick($("stream-record-stop-button"), __clickRecordStopButton);
 
 
-		$("stream-window").show_hook = () => __applyState(__state);
-		$("stream-window").close_hook = () => __applyState(null);
+		tools.storage.bindSimpleSwitch($("stream-suspend-switch"), "stream.suspend", false, __visibilityHook);
 
-		//hidden stream-record-stop-button
-		document.getElementById('stream-record-stop-button').disabled = true;
+		$("stream-window").show_hook = __visibilityHook;
+		$("stream-window").close_hook = __visibilityHook;
+		$("stream-window").organize_hook = __organizeHook;
+
+		document.addEventListener("visibilitychange", __visibilityHook);
 	};
 
 	/************************************************************************/
+
+	var __isStreamRequired = function() {
+		return (
+			wm.isWindowVisible($("stream-window"))
+			&& (
+				!$("stream-suspend-switch").checked
+				|| (document.visibilityState === "visible")
+			)
+		);
+	};
+
+	var __visibilityHook = function() {
+		let req = __isStreamRequired();
+		__applyState(req ? __state : null);
+	};
+
+	var __organizeHook = function() {
+		let geo = self.getGeometry();
+		wm.setAspectRatio($("stream-window"), geo.width, geo.height);
+	};
 
 	self.ensureDeps = function(callback) {
 		JanusStreamer.ensure_janus(function(avail) {
@@ -167,13 +189,13 @@ export function Streamer() {
 			__state = null;
 			__setControlsEnabled(false);
 		}
-		let visible = wm.isWindowVisible($("stream-window"));
-		__applyState((visible && __state && __state.features) ? state : null);
+		__applyState((__isStreamRequired() && __state && __state.features) ? state : null);
 	};
 
 	var __applyState = function(state) {
 		if (__janus_imported === null) {
-			alert("__janus_imported is null, please report");
+			// XXX: This warning is triggered by visibilitychange event via the __visibilityHook()
+			// alert("__janus_imported is null, please report");
 			return;
 		}
 
@@ -267,7 +289,7 @@ export function Streamer() {
 
 	var __setInactive = function() {
 		$("stream-led").className = "led-gray";
-		$("stream-led").title = "Stream inactive";
+		$("stream-led").title = "No stream from PiKVM";
 	};
 
 	var __setControlsEnabled = function(enabled) {
@@ -285,7 +307,7 @@ export function Streamer() {
 		let title = `${__streamer.getName()} - `;
 		if (is_active) {
 			if (!online) {
-				title += "No signal / ";
+				title += "No video from host / ";
 			}
 			title += `${__res.width}x${__res.height}`;
 			if (text.length > 0) {
@@ -295,7 +317,7 @@ export function Streamer() {
 			if (text.length > 0) {
 				title += text;
 			} else {
-				title += "Inactive";
+				title += "No stream from PiKVM";
 			}
 		}
 		el_grab.innerText = el_info.innerText = title;
@@ -306,27 +328,26 @@ export function Streamer() {
 			mode = __streamer.getMode();
 		}
 		__streamer.stopStream();
-		if (mode === "mjpeg") {
-			// For mjpeg mode, create an instance of MjpegStreamer
-			__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo);
-			tools.feature.setEnabled($("stream-orient"), false);
-			tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
-			tools.feature.setEnabled($("stream-mic"), false); // Ditto
-		} else if (mode === "media") {
-			// For media mode, create an instance of MediaStreamer
-			__streamer = new MediaStreamer(__setActive, __setInactive, __setInfo);
-			tools.feature.setEnabled($("stream-orient"), false);
-			tools.feature.setEnabled($("stream-audio"), false); // Assuming this should be disabled for MediaStreamer as well
-			tools.feature.setEnabled($("stream-mic"), false); // Ditto
-		} else { // janus
-			// For janus mode, create an instance of JanusStreamer with specific settings
-			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo,
-				tools.storage.getInt("stream.orient", 0), !$("stream-video").muted, $("stream-mic-switch").checked);
+		let orient = tools.storage.getInt("stream.orient", 0);
+		if (mode === "janus") {
+			let allow_audio = !$("stream-video").muted;
+			let allow_mic = $("stream-mic-switch").checked;
+			__streamer = new JanusStreamer(__setActive, __setInactive, __setInfo, __organizeHook, orient, allow_audio, allow_mic);
 			// Firefox doesn't support RTP orientation:
 			//  - https://bugzilla.mozilla.org/show_bug.cgi?id=1316448
 			tools.feature.setEnabled($("stream-orient"), !tools.browser.is_firefox);
+		} else {
+			if (mode === "media") {
+				__streamer = new MediaStreamer(__setActive, __setInactive, __setInfo, __organizeHook, orient);
+				tools.feature.setEnabled($("stream-orient"), true);
+			} else { // mjpeg
+				__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeHook);
+				tools.feature.setEnabled($("stream-orient"), false);
+			}
+			tools.feature.setEnabled($("stream-audio"), false); // Enabling in stream_janus.js
+			tools.feature.setEnabled($("stream-mic"), false); // Ditto
 		}
-		if (wm.isWindowVisible($("stream-window"))) {
+		if (__isStreamRequired()) {
 			__streamer.ensureStream((__state && __state.streamer !== undefined) ? __state.streamer : null);
 		}
 	};
@@ -343,19 +364,14 @@ export function Streamer() {
 	};
 
 	var __clickScreenshotButton = function() {
-		let el = document.createElement("a");
-		el.href = "/api/streamer/snapshot";
-		el.target = "_blank";
-		document.body.appendChild(el);
-		el.click();
-		setTimeout(() => document.body.removeChild(el), 0);
+		tools.windowOpen("api/streamer/snapshot");
 	};
 
 	var __clickResetButton = function() {
-		wm.confirm("Are you sure you want to reset stream?").then(function(ok) {
+		wm.confirm("Are you sure you want to reset the stream?").then(function(ok) {
 			if (ok) {
 				__resetStream();
-				tools.httpPost("/api/streamer/reset", null, function(http) {
+				tools.httpPost("api/streamer/reset", null, function(http) {
 					if (http.status !== 200) {
 						wm.error("Can't reset stream", http.responseText);
 					}
@@ -440,7 +456,7 @@ export function Streamer() {
 	};
 
 	var __sendParam = function(name, value) {
-		tools.httpPost("/api/streamer/set_params", {[name]: value}, function(http) {
+		tools.httpPost("api/streamer/set_params", {[name]: value}, function(http) {
 			if (http.status !== 200) {
 				wm.error("Can't configure stream", http.responseText);
 			}

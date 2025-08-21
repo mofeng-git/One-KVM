@@ -27,14 +27,14 @@ import dataclasses
 import contextlib
 
 import aiohttp
+import async_lru
+
+from evdev import ecodes
 
 from ...logging import get_logger
 
-from ...keyboard.keysym import SymmapModifiers
 from ...keyboard.keysym import build_symmap
-from ...keyboard.mappings import WebModifiers
-from ...keyboard.mappings import X11Modifiers
-from ...keyboard.mappings import AT1_TO_WEB
+from ...keyboard.magic import MagicHandler
 
 from ...clients.kvmd import KvmdClientWs
 from ...clients.kvmd import KvmdClientSession
@@ -52,9 +52,6 @@ from ... import network
 from .rfb import RfbClient
 from .rfb.stream import rfb_format_remote
 from .rfb.errors import RfbError
-
-from .vncauth import VncAuthKvmdCredentials
-from .vncauth import VncAuthManager
 
 from .render import make_text_jpeg
 
@@ -80,29 +77,30 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         desired_fps: int,
         mouse_output: str,
         keymap_name: str,
-        symmap: dict[int, dict[int, str]],
-        allow_cut_after: float,
+        symmap: dict[int, dict[int, int]],
+        scroll_rate: int,
 
         kvmd: KvmdClient,
         streamers: list[BaseStreamerClient],
 
-        vnc_credentials: dict[str, VncAuthKvmdCredentials],
+        vncpasses: set[str],
         vencrypt: bool,
         none_auth_only: bool,
+
         shared_params: _SharedParams,
     ) -> None:
 
-        self.__vnc_credentials = vnc_credentials
-
-        super().__init__(
+        RfbClient.__init__(
+            self,
             reader=reader,
             writer=writer,
             tls_ciphers=tls_ciphers,
             tls_timeout=tls_timeout,
             x509_cert_path=x509_cert_path,
             x509_key_path=x509_key_path,
-            allow_cut_after=allow_cut_after,
-            vnc_passwds=list(vnc_credentials),
+            symmap=symmap,
+            scroll_rate=scroll_rate,
+            vncpasses=vncpasses,
             vencrypt=vencrypt,
             none_auth_only=none_auth_only,
             **dataclasses.asdict(shared_params),
@@ -111,7 +109,6 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         self.__desired_fps = desired_fps
         self.__mouse_output = mouse_output
         self.__keymap_name = keymap_name
-        self.__symmap = symmap
 
         self.__kvmd = kvmd
         self.__streamers = streamers
@@ -128,12 +125,23 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
         self.__fb_queue: "asyncio.Queue[dict]" = asyncio.Queue()
         self.__fb_has_key = False
 
-        # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
-        # Все это нужно только чтобы не посылать лишние жсоны в сокет KVMD
-        self.__mouse_buttons: dict[str, (bool | None)] = dict.fromkeys(["left", "right", "middle", "up", "down"], None)
-        self.__mouse_move = {"x": -1, "y": -1}
+        self.__clipboard = ""
 
-        self.__modifiers = 0
+        self.__info_host = ""
+        self.__info_switch_units = 0
+        self.__info_switch_active = ""
+
+        self.__magic = MagicHandler(
+            proxy_handler=self.__on_magic_key_proxy,
+            key_handlers={
+                ecodes.KEY_P:     self.__on_magic_clipboard_print,
+                ecodes.KEY_UP:    self.__on_magic_switch_prev,
+                ecodes.KEY_LEFT:  self.__on_magic_switch_prev,
+                ecodes.KEY_DOWN:  self.__on_magic_switch_next,
+                ecodes.KEY_RIGHT: self.__on_magic_switch_next,
+            },
+            numeric_handler=self.__on_magic_switch_port,
+        )
 
     # =====
 
@@ -179,16 +187,22 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     async def __process_ws_event(self, event_type: str, event: dict) -> None:
         if event_type == "info":
             if "meta" in event:
+                host = ""
                 try:
-                    host = event["meta"]["server"]["host"]
+                    if isinstance(event["meta"]["server"]["host"], str):
+                        host = event["meta"]["server"]["host"].strip()
                 except Exception:
-                    host = None
-                else:
-                    if isinstance(host, str):
-                        name = f"PiKVM: {host}"
-                        if self._encodings.has_rename:
-                            await self._send_rename(name)
-                        self.__shared_params.name = name
+                    pass
+                self.__info_host = host
+                await self.__update_info()
+
+        elif event_type == "switch":
+            if "model" in event:
+                self.__info_switch_units = len(event["model"]["units"])
+            if "summary" in event:
+                self.__info_switch_active = event["summary"]["active_id"]
+            if "model" in event or "summary" in event:
+                await self.__update_info()
 
         elif event_type == "hid":
             if (
@@ -197,6 +211,17 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                 and ("leds" in event["keyboard"])
             ):
                 await self._send_leds_state(**event["keyboard"]["leds"])
+
+    async def __update_info(self) -> None:
+        info: list[str] = []
+        if self.__info_switch_units > 0:
+            info.append("Port " + (self.__info_switch_active or "not selected"))
+        if self.__info_host:
+            info.append(self.__info_host)
+        info.append("PiKVM")
+        self.__shared_params.name = " | ".join(info)
+        if self._encodings.has_rename:
+            await self._send_rename(self.__shared_params.name)
 
     # =====
 
@@ -213,10 +238,7 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
                         if not streaming:
                             logger.info("%s [streamer]: Streaming ...", self._remote)
                             streaming = True
-                        if frame["online"]:
-                            await self.__queue_frame(frame)
-                        else:
-                            await self.__queue_frame("No signal")
+                        await self.__queue_frame(frame)
             except StreamerError as ex:
                 if isinstance(ex, StreamerPermError):
                     streamer = self.__get_default_streamer()
@@ -317,98 +339,91 @@ class _Client(RfbClient):  # pylint: disable=too-many-instance-attributes
     # =====
 
     async def _authorize_userpass(self, user: str, passwd: str) -> bool:
-        self.__kvmd_session = self.__kvmd.make_session(user, passwd)
-        if (await self.__kvmd_session.auth.check()):
+        self.__kvmd_session = self.__kvmd.make_session()
+        if (await self.__kvmd_session.auth.check(user, passwd)):
             self.__stage1_authorized.set_passed()
             return True
         return False
 
-    async def _on_authorized_vnc_passwd(self, passwd: str) -> str:
-        kc = self.__vnc_credentials[passwd]
-        if (await self._authorize_userpass(kc.user, kc.passwd)):
-            return kc.user
-        return ""
+    async def _on_authorized_vncpass(self) -> None:
+        self.__kvmd_session = self.__kvmd.make_session()
+        self.__stage1_authorized.set_passed()
 
-    async def _on_authorized_none(self) -> bool:
+    async def _authorize_none(self) -> bool:
         return (await self._authorize_userpass("", ""))
 
     # =====
 
-    async def _on_key_event(self, code: int, state: bool) -> None:
-        is_modifier = self.__switch_modifiers(code, state)
-        variants = self.__symmap.get(code)
-        fake_shift = False
+    async def _on_key_event(self, key: int, state: bool) -> None:
+        assert self.__stage1_authorized.is_passed()
+        await self.__magic.handle_key(key, state)
 
-        if variants:
-            if is_modifier:
-                web_key = variants.get(0)
-            else:
-                web_key = variants.get(self.__modifiers)
-                if web_key is None:
-                    web_key = variants.get(0)
+    async def __on_magic_switch_prev(self) -> None:
+        assert self.__kvmd_session
+        if self.__info_switch_units > 0:
+            get_logger(0).info("%s [main]: Switching port to the previous one ...", self._remote)
+            await self.__kvmd_session.switch.set_active_prev()
 
-                if web_key is None and self.__modifiers == 0 and SymmapModifiers.SHIFT in variants:
-                    # JUMP doesn't send shift events:
-                    #   - https://github.com/pikvm/pikvm/issues/820
-                    web_key = variants[SymmapModifiers.SHIFT]
-                    fake_shift = True
+    async def __on_magic_switch_next(self) -> None:
+        assert self.__kvmd_session
+        if self.__info_switch_units > 0:
+            get_logger(0).info("%s [main]: Switching port to the next one ...", self._remote)
+            await self.__kvmd_session.switch.set_active_next()
 
-            if web_key and self.__kvmd_ws:
-                if fake_shift:
-                    await self.__kvmd_ws.send_key_event(WebModifiers.SHIFT_LEFT, True)
-                await self.__kvmd_ws.send_key_event(web_key, state)
-                if fake_shift:
-                    await self.__kvmd_ws.send_key_event(WebModifiers.SHIFT_LEFT, False)
-
-    async def _on_ext_key_event(self, code: int, state: bool) -> None:
-        web_key = AT1_TO_WEB.get(code)
-        if web_key:
-            self.__switch_modifiers(web_key, state)  # Предполагаем, что модификаторы всегда известны
-            if self.__kvmd_ws:
-                await self.__kvmd_ws.send_key_event(web_key, state)
-
-    def __switch_modifiers(self, key: (int | str), state: bool) -> bool:
-        mod = 0
-        if key in X11Modifiers.SHIFTS or key in WebModifiers.SHIFTS:
-            mod = SymmapModifiers.SHIFT
-        elif key == X11Modifiers.ALTGR or key == WebModifiers.ALT_RIGHT:
-            mod = SymmapModifiers.ALTGR
-        elif key in X11Modifiers.CTRLS or key in WebModifiers.CTRLS:
-            mod = SymmapModifiers.CTRL
-        if mod == 0:
-            return False
-        if state:
-            self.__modifiers |= mod
-        else:
-            self.__modifiers &= ~mod
+    async def __on_magic_switch_port(self, codes: list[int]) -> bool:
+        assert self.__kvmd_session
+        assert len(codes) > 0
+        if self.__info_switch_units <= 0:
+            return True
+        elif 1 <= self.__info_switch_units <= 2:
+            port = float(codes[0])
+        else:  # self.__info_switch_units > 2:
+            if len(codes) == 1:
+                return False  # Wait for the second key
+            port = (codes[0] + 1) + (codes[1] + 1) / 10
+        get_logger(0).info("%s [main]: Switching port to %s ...", self._remote, port)
+        await self.__kvmd_session.switch.set_active(port)
         return True
 
-    async def _on_pointer_event(self, buttons: dict[str, bool], wheel: dict[str, int], move: dict[str, int]) -> None:
+    async def __on_magic_clipboard_print(self) -> None:
+        assert self.__kvmd_session
+        if self.__clipboard:
+            logger = get_logger(0)
+            logger.info("%s [main]: Printing %d characters ...", self._remote, len(self.__clipboard))
+            try:
+                (keymap_name, available) = await self.__kvmd_session.hid.get_keymaps()
+                if self.__keymap_name in available:
+                    keymap_name = self.__keymap_name
+                await self.__kvmd_session.hid.print(self.__clipboard, 0, keymap_name)
+            except Exception:
+                logger.exception("%s [main]: Can't print characters", self._remote)
+
+    async def __on_magic_key_proxy(self, key: int, state: bool) -> None:
         if self.__kvmd_ws:
-            if wheel["x"] or wheel["y"]:
-                await self.__kvmd_ws.send_mouse_wheel_event(wheel["x"], wheel["y"])
+            await self.__kvmd_ws.send_key_event(key, state)
 
-            if self.__mouse_move != move:
-                await self.__kvmd_ws.send_mouse_move_event(move["x"], move["y"])
-                self.__mouse_move = move
+    # =====
 
-            for (button, state) in buttons.items():
-                if self.__mouse_buttons[button] != state:
-                    await self.__kvmd_ws.send_mouse_button_event(button, state)
-                    self.__mouse_buttons[button] = state
+    async def _on_mouse_button_event(self, button: int, state: bool) -> None:
+        assert self.__stage1_authorized.is_passed()
+        if self.__kvmd_ws:
+            await self.__kvmd_ws.send_mouse_button_event(button, state)
+
+    async def _on_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
+        assert self.__stage1_authorized.is_passed()
+        if self.__kvmd_ws:
+            await self.__kvmd_ws.send_mouse_wheel_event(delta_x, delta_y)
+
+    async def _on_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        assert self.__stage1_authorized.is_passed()
+        if self.__kvmd_ws:
+            await self.__kvmd_ws.send_mouse_move_event(to_x, to_y)
+
+    # =====
 
     async def _on_cut_event(self, text: str) -> None:
         assert self.__stage1_authorized.is_passed()
-        assert self.__kvmd_session
-        logger = get_logger(0)
-        logger.info("%s [main]: Printing %d characters ...", self._remote, len(text))
-        try:
-            (keymap_name, available) = await self.__kvmd_session.hid.get_keymaps()
-            if self.__keymap_name in available:
-                keymap_name = self.__keymap_name
-            await self.__kvmd_session.hid.print(text, 0, keymap_name)
-        except Exception:
-            logger.exception("%s [main]: Can't print characters", self._remote)
+        self.__clipboard = text
 
     async def _on_set_encodings(self) -> None:
         assert self.__stage1_authorized.is_passed()
@@ -441,16 +456,17 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         x509_cert_path: str,
         x509_key_path: str,
 
+        vncpass_enabled: bool,
+        vncpass_path: str,
         vencrypt_enabled: bool,
 
         desired_fps: int,
         mouse_output: str,
         keymap_path: str,
-        allow_cut_after: float,
+        scroll_rate: int,
 
         kvmd: KvmdClient,
         streamers: list[BaseStreamerClient],
-        vnc_auth_manager: VncAuthManager,
     ) -> None:
 
         self.__host = network.get_listen_host(host)
@@ -460,7 +476,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         keymap_name = os.path.basename(keymap_path)
         symmap = build_symmap(keymap_path)
 
-        self.__vnc_auth_manager = vnc_auth_manager
+        self.__vncpass_enabled = vncpass_enabled
+        self.__vncpass_path = vncpass_path
 
         shared_params = _SharedParams()
 
@@ -487,8 +504,8 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, timeout)  # type: ignore
 
                 try:
-                    async with kvmd.make_session("", "") as kvmd_session:
-                        none_auth_only = await kvmd_session.auth.check()
+                    async with kvmd.make_session() as kvmd_session:
+                        none_auth_only = await kvmd_session.auth.check("", "")
                 except (aiohttp.ClientError, asyncio.TimeoutError) as ex:
                     logger.error("%s [entry]: Can't check KVMD auth mode: %s", remote, tools.efmt(ex))
                     return
@@ -504,12 +521,12 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
                     mouse_output=mouse_output,
                     keymap_name=keymap_name,
                     symmap=symmap,
-                    allow_cut_after=allow_cut_after,
+                    scroll_rate=scroll_rate,
                     kvmd=kvmd,
                     streamers=streamers,
-                    vnc_credentials=(await self.__vnc_auth_manager.read_credentials())[0],
-                    none_auth_only=none_auth_only,
+                    vncpasses=(await self.__read_vncpasses()),
                     vencrypt=vencrypt_enabled,
+                    none_auth_only=none_auth_only,
                     shared_params=shared_params,
                 ).run()
             except Exception:
@@ -520,9 +537,6 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
         self.__handle_client = handle_client
 
     async def __inner_run(self) -> None:
-        if not (await self.__vnc_auth_manager.read_credentials())[1]:
-            raise SystemExit(1)
-
         get_logger(0).info("Listening VNC on TCP [%s]:%d ...", self.__host, self.__port)
         (family, _, _, _, addr) = socket.getaddrinfo(self.__host, self.__port, type=socket.SOCK_STREAM)[0]
         with contextlib.closing(socket.socket(family, socket.SOCK_STREAM)) as sock:
@@ -538,6 +552,21 @@ class VncServer:  # pylint: disable=too-many-instance-attributes
             )
             async with server:
                 await server.serve_forever()
+
+    @async_lru.alru_cache(maxsize=1, ttl=1)
+    async def __read_vncpasses(self) -> set[str]:
+        if self.__vncpass_enabled:
+            try:
+                vncpasses: set[str] = set()
+                for (_, line) in tools.passwds_splitted(await aiotools.read_file(self.__vncpass_path)):
+                    if " -> " in line:  # Compatibility with old ipmipasswd file format
+                        line = line.split(" -> ", 1)[0]
+                    if len(line.strip()) > 0:
+                        vncpasses.add(line)
+                return vncpasses
+            except Exception:
+                get_logger(0).exception("Unhandled exception while reading VNCAuth passwd file")
+        return set()
 
     def run(self) -> None:
         aiotools.run(self.__inner_run())

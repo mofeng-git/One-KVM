@@ -27,6 +27,7 @@ import time
 from typing import AsyncGenerator
 
 from .types import Edids
+from .types import Dummies
 from .types import Color
 from .types import Colors
 from .types import PortNames
@@ -48,8 +49,8 @@ class _UnitInfo:
 
 
 # =====
-class StateCache:  # pylint: disable=too-many-instance-attributes
-    __FW_VERSION = 5
+class StateCache:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+    __FW_VERSION = 8
 
     __FULL    = 0xFFFF
     __SUMMARY = 0x01
@@ -62,6 +63,7 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self) -> None:
         self.__edids = Edids()
+        self.__dummies = Dummies({})
         self.__colors = Colors()
         self.__port_names = PortNames({})
         self.__atx_cp_delays = AtxClickPowerDelays({})
@@ -76,6 +78,9 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
 
     def get_edids(self) -> Edids:
         return self.__edids.copy()
+
+    def get_dummies(self) -> Dummies:
+        return self.__dummies.copy()
 
     def get_colors(self) -> Colors:
         return self.__colors
@@ -158,7 +163,17 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
                 },
             }
         if x_summary:
-            state["summary"] = {"active_port": self.__active_port, "synced": self.__synced}
+            state["summary"] = {
+                "active_port": self.__active_port,
+                "active_id": (
+                    "" if self.__active_port < 0 else (
+                        f"{self.__active_port // 4 + 1}.{self.__active_port % 4 + 1}"
+                        if len(self.__units) > 1 else
+                        f"{self.__active_port + 1}"
+                    )
+                ),
+                "synced": self.__synced,
+            }
         if x_edids:
             state["edids"] = {
                 "all": {
@@ -195,7 +210,10 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
             assert ui.state is not None
             assert ui.atx_leds is not None
             if x_model:
-                state["model"]["units"].append({"firmware": {"version": ui.state.sw_version}})
+                state["model"]["units"].append({"firmware": {
+                    "version":  ui.state.version.sw,
+                    "devbuild": ui.state.version.sw_dev,
+                }})
             if x_video:
                 state["video"]["links"].extend(ui.state.video_5v_sens[:4])
             if x_usb:
@@ -216,12 +234,16 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
                             "unit": unit,
                             "channel": ch,
                             "name": self.__port_names[port],
+                            "id": (f"{unit + 1}.{ch + 1}" if len(self.__units) > 1 else f"{ch + 1}"),
                             "atx": {
                                 "click_delays": {
                                     "power": self.__atx_cp_delays[port],
                                     "power_long": self.__atx_cpl_delays[port],
                                     "reset": self.__atx_cr_delays[port],
                                 },
+                            },
+                            "video": {
+                                "dummy": self.__dummies[port],
                             },
                         })
                     if x_edids:
@@ -323,6 +345,12 @@ class StateCache:  # pylint: disable=too-many-instance-attributes
         self.__edids = edids.copy()
         if changed:
             self.__bump_state(self.__EDIDS)
+
+    def set_dummies(self, dummies: Dummies) -> None:
+        changed = (not self.__dummies.compare_on_ports(dummies, self.__get_ports()))
+        self.__dummies = dummies.copy()
+        if changed:
+            self.__bump_state(self.__FULL)
 
     def set_colors(self, colors: Colors) -> None:
         changed = (self.__colors != colors)
