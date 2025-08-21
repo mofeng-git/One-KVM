@@ -232,7 +232,11 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             led_byte = conn.xfer(cmd)
         except ChipResponseError as ex:
             self.__set_state_online(False)
-            get_logger(0).error("Invalid chip response: %s", tools.efmt(ex))
+            get_logger(0).error("Invalid chip response: %s，%s", self.__device_path, tools.efmt(ex))
+            try:
+                conn.xfer(b"\x00\x0F\x00")
+            except Exception:
+                return False
             time.sleep(2)
         else:
             if led_byte >= 0:
