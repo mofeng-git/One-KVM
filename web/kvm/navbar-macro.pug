@@ -1,31 +1,31 @@
 li.right#macro-dropdown
 	a.menu-button(href="#")
 		+navbar_led("hid-recorder-led", "led-gear")
-		span(i18n="kvm_text32") Macro
+		span(i18n="macro_menu") Macro
 	.menu
 		.text
-			b(i18n="kvm_text33") Record and play HID/ATX/GPIO actions#[br]
-			sub(i18n="kvm_text34") For security reasons, the record will not be saved on the PiKVM
+			b(i18n="macro_description") Record and play HID/ATX/GPIO actions#[br]
+			sub(i18n="macro_security_note") For security reasons, the record will not be saved on the PiKVM
 		hr
 		.buttons.buttons-row
-			button.row25#hid-recorder-record(disabled data-force-hide-menu i18n="kvm_text35") &bull; Rec
-			button.row25#hid-recorder-stop(disabled i18n="kvm_text36") Stop
-			button.row25#hid-recorder-play(disabled i18n="kvm_text37") Play
-			button.row25#hid-recorder-clear(disabled i18n="kvm_text38") Clear
+			button.row25#hid-recorder-record(disabled data-force-hide-menu i18n="macro_record") &bull; Rec
+			button.row25#hid-recorder-stop(disabled i18n="macro_stop") Stop
+			button.row25#hid-recorder-play(disabled i18n="macro_play") Play
+			button.row25#hid-recorder-clear(disabled i18n="macro_clear") Clear
 		hr
 
 		table.kv
 			tr
-				td(i18n="kvm_text39") Script time:
+				td(i18n="macro_script_time") Script time:
 				td.value#hid-recorder-time(colspan="2") 00:00:00.0
 			tr
-				td(i18n="kvm_text40") Scripted events:
+				td(i18n="macro_script_events") Scripted events:
 				tdvalue#hid-recorder-events-count 0
-				td #[sup #[i(i18n="kvm_text41") include delays]]
+				td #[sup #[i(i18n="macro_include_delays") include delays]]
 		hr
 		+menu_switch_table("hid-recorder-loop-switch", "Infinite loop playback", false, false, "hid-recorder-loop-switch")
 		hr
 		input#hid-recorder-new-script-file(type="file"  style="display: none")
 		.buttons.buttons-row
-			button.row50#hid-recorder-upload(disabled i18n="kvm_text42") Upload script
-			button.row50#hid-recorder-download(disabled i18n="kvm_text43") Download script
+			button.row50#hid-recorder-upload(disabled i18n="macro_upload_script") Upload script
+			button.row50#hid-recorder-download(disabled i18n="macro_download_script") Download script

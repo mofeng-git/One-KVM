@@ -30,16 +30,16 @@ block start
 
 	#app-keyboard-warning
 		hr
-		p.text(i18n="index_text_1")
+		p.text(i18n="keyboard_limitation_note")
 			| Please note that when you are working with a KVM session or another application that captures the keyboard,
 			| you can't use some keyboard shortcuts such as Ctrl+Alt+Del (which will be caught by your OS) or Ctrl+W (caught by your browser).
-		p.text(i18n="index_text_2")
+		p.text(i18n="browser_solution_note")
 			| To override this limitation you can use #[a(target="_blank" href="https://google.com/chrome") Google Chrome]
 			| or #[a(target="_blank" href="https://chromium.org/Home") Chromium] in application mode.
-		.code#app-text
+		.code#app-text.hidden
 
 	hr
 	p.text.credits
-		a(target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12") One-KVM Project
+		a(target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="onekvm_project_link") One-KVM Project
 		| &nbsp; | &nbsp;
-		a(target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13") One-KVM Documentation
+		a(target="_blank" href="https://one-kvm.mofeng.run" i18n="onekvm_documentation_link") One-KVM Documentation

@@ -12,7 +12,7 @@ mixin about_tab(name, title, i18nid, checked=false)
 
 .window#about-window(data-show-centered)
 	.window-header
-		.window-grab(i18n="kvm_text1") About
+		.window-grab(i18n="about_title") About
 		.window-buttons
 			button.window-button-original &bull;
 			button.window-button-close #[b &times;]
@@ -47,7 +47,7 @@ mixin about_tab(name, title, i18nid, checked=false)
 					pre#kvmd-meta-json No data
 
 			+about_tab("thanks", "Thanks", "thanks")
-				span.code-comment( i18n="kvm_text2")
+				span.code-comment( i18n="about_sponsors")
 					| // These kind people donated money to the PiKVM project#[br]
 					| // and supported the work on it. We are very grateful#[br]
 					| // for their help, and memorializing their names#[br]
@@ -57,10 +57,10 @@ mixin about_tab(name, title, i18nid, checked=false)
 					| or #[a(target="_blank" href="https://paypal.me/pikvm") Paypal].
 		br
 		p.text.credits
-			a(target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12") One-KVM Project
+			a(target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="onekvm_project_link") One-KVM Project
 			| &nbsp; | &nbsp;
-			a(target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13") One-KVM Documentation
+			a(target="_blank" href="https://one-kvm.mofeng.run" i18n="onekvm_documentation_link") One-KVM Documentation
 			| &nbsp; | &nbsp;
-			a(target="_blank" href="https://pikvm.org" i18n="index_text_10") PiKVM Project
+			a(target="_blank" href="https://pikvm.org" i18n="pikvm_project_link") PiKVM Project
 			| &nbsp; | &nbsp;
-			a(target="_blank" href="https://docs.pikvm.org" i18n="index_text_11") Documentation
+			a(target="_blank" href="https://docs.pikvm.org" i18n="pikvm_documentation_link") Documentation

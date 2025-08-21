@@ -41,7 +41,7 @@ block body
 					tr
 						td(colspan=2) #[hr]
 					tr
-						td #[a(target="_blank" href="https://docs.pikvm.org/auth/#session-expiration") Remember me]:&nbsp;
+						td(i18n="remember_me") #[a(target="_blank" href="https://docs.pikvm.org/auth/#session-expiration") Remember me]:&nbsp;
 						td
 							+radio("expire-radio", [
 								{"title": "1h", "value": "3600"},
@@ -49,13 +49,13 @@ block body
 								{"title": "Forever", "value": "0", "checked": true},
 							])
 					tr
-						td(colspan=2) #[hr]
-					tr
 						td(i18n="select_language") Select language:&nbsp;
 						td
 							select#selectLanguage(style="width:100%")
 								option#zh(selected="selected" i18n="chinese") Simplified Chinese
 								option#en(i18n="english") English
+					tr
+						td(colspan=2) #[hr]
 					tr
 						td
 						td #[button.key#login-button(style="width:100%" i18n="login") Login]

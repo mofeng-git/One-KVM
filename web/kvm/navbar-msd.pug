@@ -1,10 +1,10 @@
 li.right.feature-disabled#msd-dropdown
 	a.menu-button(href="#")
 		+navbar_led("msd-led", "led-msd")
-		span(i18n="kvm_text60") Drive
+		span(i18n="drive_menu") Drive
 	.menu#msd-menu
 		.text
-			b(i18n="kvm_text61") Mass Storage Drive: 
+			b(i18n="drive_title") Mass Storage Drive: 
 			span#msd-status
 			br
 		hr
@@ -36,7 +36,7 @@ li.right.feature-disabled#msd-dropdown
 
 		table.kv
 			tr
-				td(i18n="kvm_text62") Image:
+				td(i18n="drive_image") Image:
 				td(width="100%") #[select#msd-image-selector(disabled)]
 				td #[button#msd-download-button(disabled title="Download image") #[b &nbsp;&nbsp;&#x21E9;&nbsp;&nbsp;]]
 				td #[button#msd-remove-button(disabled title="Remove image") #[b &nbsp;&nbsp;&times;&nbsp;&nbsp;]]
@@ -49,21 +49,21 @@ li.right.feature-disabled#msd-dropdown
 				td &nbsp;
 				+menu_switch_td2("msd-rw-switch", false, false) Writable:
 			tr
-				td(i18n="kvm_text84") Files：
+				td(i18n="drive_file_display") Files：
 				td
 					div.radio-box()
 						input#msd-mode-radio-image(checked type="radio" name="file-mode-radio" value="1")
-						label(for="msd-mode-radio-image" i18n="kvm_text90") ImageFiles
+						label(for="msd-mode-radio-image" i18n="drive_image_files") ImageFiles
 						input#msd-mode-radio-file(type="radio" name="file-mode-radio" value="0")
-						label(for="msd-mode-radio-file" i18n="kvm_text91") NormalFiles
+						label(for="msd-mode-radio-file" i18n="drive_normal_files") NormalFiles
 		hr
 
 		#msd-storages
 		hr
 		.buttons.buttons-row
-			button.row50#msd-select-new-button(disabled i18n="kvm_text64") Select image to upload
-			button.row25#msd-upload-new-button(disabled i18n="kvm_text65") Upload
-			button.row25#msd-abort-new-button(disabled i18n="kvm_text66") Abort
+			button.row50#msd-select-new-button(disabled i18n="drive_select_upload") Select image to upload
+			button.row25#msd-upload-new-button(disabled i18n="drive_upload") Upload
+			button.row25#msd-abort-new-button(disabled i18n="drive_abort") Abort
 		.hidden#msd-message-another-user-uploads
 			+menu_message("info", "Another user uploads an image", "msd-message-another-user-uploads")
 			hr
@@ -71,13 +71,13 @@ li.right.feature-disabled#msd-dropdown
 		.hidden#msd-new-sub
 			table.kv
 				tr
-					td(i18n="kvm_text68") Specify a local file:
+					td(i18n="drive_local_file") Specify a local file:
 					td #[input#msd-new-file(type="file")]
 				tr
-					td(i18n="kvm_text69") #[b Or] paste a URL:
+					td(i18n="drive_paste_url") #[b Or] paste a URL:
 					td #[input#msd-new-url(type="text" style="width: 100%")]
 				tr.hidden#msd-new-part
-					td(i18n="kvm_text70") Upload partition:
+					td(i18n="drive_upload_partition") Upload partition:
 					td(width="100%") #[select#msd-new-part-selector]
 		div(id="msd-uploading-sub" class="hidden")
 			hr
@@ -85,10 +85,10 @@ li.right.feature-disabled#msd-dropdown
 		.hidden#msd-uploading-sub
 			table.kv
 				tr
-					td(i18n="kvm_text74") New image:
+					td(i18n="drive_new_image") New image:
 					td.value#msd-uploading-name
 				tr
-					td(i18n="kvm_text75") Upload size:
+					td(i18n="drive_upload_size") Upload size:
 					td.value#msd-uploading-size
 			.text
 				.progress#msd-uploading-progress
@@ -98,31 +98,31 @@ li.right.feature-disabled#msd-dropdown
 		.hidden#msd-new-tips
 			table.kv
 				tr
-					td.value(i18n="kvm_text71") Note:
-					td(i18n="kvm_text72") &bull; Don't close the browser page until the upload is complete.
+					td.value(i18n="drive_note") Note:
+					td(i18n="drive_note_browser") &bull; Don't close the browser page until the upload is complete.
 				tr
 					td
-					td(i18n="kvm_text73") &bull; To speed up the upload, close the stream window.
+					td(i18n="drive_note_stream") &bull; To speed up the upload, close the stream window.
 		hr
 
 		.buttons.buttons-row
-			button.row50#msd-connect-button(disabled i18n="kvm_text76") Connect drive to Server
-			button.row25#msd-disconnect-button(disabled i18n="kvm_text77") Disconnect
-			button.row25#msd-reset-button(disabled i18n="kvm_text78") Reset
+			button.row50#msd-connect-button(disabled i18n="drive_connect") Connect drive to Server
+			button.row25#msd-disconnect-button(disabled i18n="drive_disconnect") Disconnect
+			button.row25#msd-reset-button(disabled i18n="drive_reset") Reset
 
 		hr
 
 		.text
-			b(i18n="kvm_text85") Quick file transfer:
+			b(i18n="drive_quick_transfer") Quick file transfer:
 			br
-			sub(i18n="kvm_text86") &bull; Select NormalFiles tab to upload, package them and mount image
+			sub(i18n="drive_transfer_upload_note") &bull; Select NormalFiles tab to upload, package them and mount image
 			br
-			sub(i18n="kvm_text87") &bull; Disconnect MSD, unpackage it, select tab to download
+			sub(i18n="drive_transfer_download_note") &bull; Disconnect MSD, unpackage it, select tab to download
 			br
 		hr
 		
 		div(class="buttons buttons-row")
-			button.row50#msd-file-image-update-button(i18n="kvm_text88") Package files into image
-			button.row50#msd-file-image-unzip-button(i18n="kvm_text89") Unpackage files from image
+			button.row50#msd-file-image-update-button(i18n="drive_package_files") Package files into image
+			button.row50#msd-file-image-unzip-button(i18n="drive_unpackage_files") Unpackage files from image
 		hr
 		

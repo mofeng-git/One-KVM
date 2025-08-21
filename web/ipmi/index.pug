@@ -9,15 +9,15 @@ append vars
 		index_link = true
 
 block start
-	p.text(i18n="ipmi_text1")
+	p.text(i18n="ipmi_daemon_running")
 		| This PiKVM device has running #[b kvmd-ipmi] daemon and provides IPMI 2.0 interface for some basic
 		| BMC operations like on/off/reset the server.
-	p.text(i18n="ipmi_text2")
+	p.text(i18n="ipmi_security_warning")
 		| #[b WARNING!] We strongly don't recommend you to use IPMI in untrusted networks because
 		| this protocol is completely unsafe by design. In short, the authentication process for IPMI mandates
 		| that the server send a salted SHA1 or MD5 hash of the requested user's password to the client,
 		| prior to the client authenticating.
-	p.tetx(i18n="ipmi_text3")
+	p.text(i18n="ipmi_password_recommendation")
 		| #[b NEVER] use the same passwords for KVMD and IPMI users. And even better not to use IPMI.
 		| Instead, you can directly use KVMD API via curl. Here some examples:
 	.code#ipmi-text(style="max-height:200px")

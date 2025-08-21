@@ -144,22 +144,22 @@
           </div>
         </li>
       </div>
-      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="../share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="../share/svg/led-video.svg"><img class="led-gray" id="hid-keyboard-led" src="../share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="../share/svg/led-hid-mouse.svg"><span i18n="kvm_text3">System</span></a>
+      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="../share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="../share/svg/led-video.svg"><img class="led-gray" id="hid-keyboard-led" src="../share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="../share/svg/led-hid-mouse.svg"><span i18n="system_menu">System</span></a>
         <div class="menu" id="system-menu">
           <table class="kv">
             <tr>
-              <td class="value" i18n="kvm_text4">Runtime settings &amp; tools</td>
+              <td class="value" i18n="system_runtime_settings">Runtime settings &amp; tools</td>
               <td class="feature-disabled" id="system-tool-webterm">
-                <button class="small" data-force-hide-menu data-show-window="webterm-window" i18n="kvm_text5">&bull; Term</button>
+                <button class="small" data-force-hide-menu data-show-window="webterm-window" i18n="system_terminal">&bull; Term</button>
               </td>
               <td id="system-tool-about">
-                <button class="small" data-force-hide-menu data-show-window="about-window" i18n="kvm_text6">&bull; About</button>
+                <button class="small" data-force-hide-menu data-show-window="about-window" i18n="system_about">&bull; About</button>
               </td>
               <td id="system-tool-log">
-                <button class="small" id="open-log-button" data-force-hide-menu i18n="kvm_text7">&bull; Log</button>
+                <button class="small" id="open-log-button" data-force-hide-menu i18n="system_log">&bull; Log</button>
               </td>
               <td class="feature-disabled" id="system-tool-wol">
-                <button class="__gpio-button-__wol__ __gpio-button small" data-force-hide-menu data-channel="__wol__" data-confirm="Are you sure to send Wake-on-LAN packet to the server?" i18n="kvm_text8">&bull; WoL</button>
+                <button class="__gpio-button-__wol__ __gpio-button small" data-force-hide-menu data-channel="__wol__" data-confirm="Are you sure to send Wake-on-LAN packet to the server?" i18n="system_wol">&bull; WoL</button>
               </td>
             </tr>
           </table>
@@ -199,13 +199,13 @@
           </div>
           <table class="kv">
             <tr class="feature-disabled" id="stream-resolution">
-              <td i18n="kvm_text9">Resolution:</td>
+              <td i18n="video_resolution">Resolution:</td>
               <td>
                 <select id="stream-resolution-selector" disabled></select>
               </td>
             </tr>
             <tr class="feature-disabled" id="stream-quality">
-                  <td>JPEG quality:
+                  <td i18n="video_jpeg_quality">JPEG quality:
                   </td>
                   <td class="value-slider">
                     <input type="range" id="stream-quality-slider">
@@ -213,7 +213,7 @@
                   <td class="value-number" id="stream-quality-value"></td>
             </tr>
             <tr>
-                  <td>JPEG max fps:
+                  <td i18n="video_jpeg_fps">JPEG max fps:
                   </td>
                   <td class="value-slider">
                     <input type="range" id="stream-desired-fps-slider">
@@ -221,7 +221,7 @@
                   <td class="value-number" id="stream-desired-fps-value"></td>
             </tr>
             <tr class="feature-disabled" id="stream-h264-bitrate">
-                  <td>H.264 kbps:
+                  <td i18n="video_h264_bitrate">H.264 kbps:
                   </td>
                   <td class="value-slider">
                     <input type="range" id="stream-h264-bitrate-slider">
@@ -229,7 +229,7 @@
                   <td class="value-number" id="stream-h264-bitrate-value"></td>
             </tr>
             <tr class="feature-disabled" id="stream-h264-gop">
-                  <td>H.264 gop:
+                  <td i18n="video_h264_gop">H.264 gop:
                   </td>
                   <td class="value-slider">
                     <input type="range" id="stream-h264-gop-slider">
@@ -237,7 +237,7 @@
                   <td class="value-number" id="stream-h264-gop-value"></td>
             </tr>
             <tr class="feature-disabled" id="stream-mode">
-                  <td><a target="_blank" href="https://docs.pikvm.org/webrtc">Video mode</a>:
+                  <td><a target="_blank" href="https://docs.pikvm.org/webrtc" i18n="video_mode">Video mode</a>:
                   </td>
                   <td>
                     <div class="radio-box">
@@ -267,7 +267,7 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="stream-audio">
-                  <td>Audio volume:
+                  <td i18n="audio_volume">Audio volume:
                   </td>
                   <td class="value-slider">
                     <input type="range" id="stream-audio-volume-slider">
@@ -287,37 +287,37 @@
           </table>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row33" data-force-hide-menu data-show-window="stream-window" i18n="kvm_text20">&bull; Show stream</button>
-            <button class="row33" id="stream-screenshot-button" data-force-hide-menu i18n="kvm_text21">&bull; Screenshot</button>
-            <button class="row33" id="stream-reset-button" i18n="kvm_text22">Reset stream</button>
+            <button class="row33" data-force-hide-menu data-show-window="stream-window" i18n="stream_show">&bull; Show stream</button>
+            <button class="row33" id="stream-screenshot-button" data-force-hide-menu i18n="stream_screenshot">&bull; Screenshot</button>
+            <button class="row33" id="stream-reset-button" i18n="stream_reset">Reset stream</button>
           </div>
           <hr>
-          <div class="text"><b i18n="kvm_text79">Video Record<br></b><sub i18n="kvm_text80">Record video using the browser API, and will be downloaded automatically</sub></div>
+          <div class="text"><b i18n="video_record_title">Video Record<br></b><sub i18n="video_record_description">Record video using the browser API, and will be downloaded automatically</sub></div>
           <div class="buttons buttons-row">
-            <button class="row50" id="stream-record-start-button" data-force-hide-menu i18n="kvm_text81">&bull; Start recording</button>
-            <button class="row50" id="stream-record-stop-button" data-force-hide-menu i18n="kvm_text82">&bull; End recording</button>
+            <button class="row50" id="stream-record-start-button" data-force-hide-menu i18n="video_record_start">&bull; Start recording</button>
+            <button class="row50" id="stream-record-stop-button" data-force-hide-menu i18n="video_record_stop">&bull; End recording</button>
           </div>
           <hr>
           <table class="kv">
             <tr class="feature-disabled" id="hid-outputs-keyboard">
-              <td i18n="kvm_text23">Keyboard mode:</td>
+              <td i18n="hid_keyboard_mode">Keyboard mode:</td>
               <td>
                 <div class="radio-box" id="hid-outputs-keyboard-box"></div>
               </td>
             </tr>
             <tr class="feature-disabled" id="hid-outputs-mouse">
-              <td><a target="_blank" href="https://docs.pikvm.org/mouse" i18n="kvm_text24">Mouse mode</a>:</td>
+              <td><a target="_blank" href="https://docs.pikvm.org/mouse" i18n="hid_mouse_mode">Mouse mode</a>:</td>
               <td>
                 <div class="radio-box" id="hid-outputs-mouse-box"></div>
               </td>
             </tr>
           </table>
               <details>
-                <summary>Keyboard &amp; mouse (HID) settings</summary>
+                <summary i18n="hid_settings">Keyboard &amp; mouse (HID) settings</summary>
                 <div class="spoiler">
                       <table class="kv">
                         <tr>
-                              <td>Swap Left Ctrl and Caps keys:
+                              <td i18n="hid-keyboard-swap-cc-switch">Swap Left Ctrl and Caps keys:
                               </td>
                               <td align="right">
                                 <div class="switch-box">
@@ -330,7 +330,7 @@
                   <hr>
                   <table class="kv">
                     <tr>
-                          <td>Mouse polling:
+                          <td i18n="hid_mouse_polling">Mouse polling:
                           </td>
                           <td class="value-slider">
                             <input type="range" id="hid-mouse-rate-slider">
@@ -338,7 +338,7 @@
                           <td class="value-number" id="hid-mouse-rate-value"></td>
                     </tr>
                     <tr class="feature-disabled" id="hid-mouse-sens">
-                          <td>Relative sensitivity:
+                          <td i18n="hid_mouse_sensitivity">Relative sensitivity:
                           </td>
                           <td class="value-slider">
                             <input type="range" id="hid-mouse-sens-slider">
@@ -346,21 +346,21 @@
                           <td class="value-number" id="hid-mouse-sens-value"></td>
                     </tr>
                     <tr class="feature-disabled" id="hid-mouse-squash">
-                          <td>Squash relative moves:
+                          <td i18n="hid-mouse-squash-switch">Squash relative moves:
                           </td>
                           <td align="right">
                             <div class="switch-box">
-                              <input checked="hid-mouse-squash-switch" disabled type="checkbox" id="hid-mouse-squash-switch">
+                              <input disabled type="checkbox" id="hid-mouse-squash-switch">
                               <label for="hid-mouse-squash-switch"><span class="switch-inner"></span><span class="switch"></span></label>
                             </div>
                           </td>
                     </tr>
                     <tr>
-                      <td>Reverse scrolling:</td>
+                      <td i18n="hid_mouse_reverse_scroll">Reverse scrolling:</td>
                       <td>
                         <table>
                           <tr>
-                                <td>Y:
+                                <td i18n="hid-mouse-reverse-scrolling-switch">Y:
                                 </td>
                                 <td align="right">
                                   <div class="switch-box">
@@ -369,7 +369,7 @@
                                   </div>
                                 </td>
                             <td>&nbsp;&nbsp;</td>
-                                <td>X:
+                                <td i18n="hid-mouse-reverse-panning-switch">X:
                                 </td>
                                 <td align="right">
                                   <div class="switch-box">
@@ -382,7 +382,7 @@
                       </td>
                     </tr>
                     <tr>
-                          <td>Cumulative scrolling:
+                          <td i18n="hid-mouse-cumulative-scrolling-switch">Cumulative scrolling:
                           </td>
                           <td align="right">
                             <div class="switch-box">
@@ -392,7 +392,7 @@
                           </td>
                     </tr>
                     <tr>
-                          <td>Scroll rate:
+                          <td i18n="hid_mouse_scroll_rate">Scroll rate:
                           </td>
                           <td class="value-slider">
                             <input type="range" id="hid-mouse-scroll-slider">
@@ -400,7 +400,7 @@
                           <td class="value-number" id="hid-mouse-scroll-value"></td>
                     </tr>
                     <tr>
-                          <td>Show the blue dot:
+                          <td i18n="hid-mouse-dot-switch">Show the blue dot:
                           </td>
                           <td align="right">
                             <div class="switch-box">
@@ -413,11 +413,11 @@
                 </div>
               </details>
               <details>
-                <summary>Web UI settings</summary>
+                <summary i18n="web_ui_settings">Web UI settings</summary>
                 <div class="spoiler">
                   <table class="kv">
                     <tr>
-                          <td>Ask page close confirmation:
+                          <td i18n="page-close-ask-switch">Ask page close confirmation:
                           </td>
                           <td align="right">
                             <div class="switch-box">
@@ -427,7 +427,7 @@
                           </td>
                     </tr>
                     <tr>
-                          <td>Expand for the entire tab by default:
+                          <td i18n="page-full-tab-stream-switch">Expand for the entire tab by default:
                           </td>
                           <td align="right">
                             <div class="switch-box">
@@ -437,7 +437,7 @@
                           </td>
                     </tr>
                     <tr>
-                          <td>Suspend stream when tab is not active:
+                          <td i18n="stream-suspend-switch">Suspend stream when tab is not active:
                           </td>
                           <td align="right">
                             <div class="switch-box">
@@ -451,7 +451,7 @@
               </details>
           <table class="kv">
             <tr>
-                  <td>Bad link mode (release keys immediately):
+                  <td i18n="hid-keyboard-bad-link-switch">Bad link mode (release keys immediately):
                   </td>
                   <td align="right">
                     <div class="switch-box">
@@ -461,7 +461,7 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="hid-connect">
-                  <td>Connect HID to Server:
+                  <td i18n="hid-connect-switch">Connect HID to Server:
                   </td>
                   <td align="right">
                     <div class="switch-box">
@@ -471,7 +471,7 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="hid-jiggler">
-                  <td><a target="_blank" href="https://docs.pikvm.org/mouse_jiggler">Mouse jiggler</a>:
+                  <td i18n="hid-jiggler-switch"><a target="_blank" href="https://docs.pikvm.org/mouse_jiggler">Mouse jiggler</a>:
                   </td>
                   <td align="right">
                     <div class="switch-box">
@@ -481,7 +481,7 @@
                   </td>
             </tr>
             <tr>
-                  <td>Mute all input HID events:
+                  <td i18n="hid-mute-switch">Mute all input HID events:
                   </td>
                   <td align="right">
                     <div class="switch-box">
@@ -491,7 +491,7 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="v3-usb-breaker">
-                  <td>Connect main USB to Server:
+                  <td i18n="usb_breaker_confirm"><span i18n="usb_connect_main">Connect main USB to Server:</span>
                   </td>
                   <td align="right">
                     <div class="switch-box">
@@ -501,7 +501,7 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="v4-locator">
-                  <td>Enable locator LED:
+                  <td i18n="locator_led_enable"><span i18n="locator_led_enable">Enable locator LED:</span>
                   </td>
                   <td align="right">
                     <div class="switch-box">
@@ -513,8 +513,8 @@
           </table>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" data-force-hide-menu data-show-window="keyboard-window" i18n="kvm_text30">&bull; Show keyboard</button>
-            <button class="row50" id="hid-reset-button" disabled i18n="kvm_text31">Reset HID</button>
+            <button class="row50" data-force-hide-menu data-show-window="keyboard-window" i18n="hid_show_keyboard">&bull; Show keyboard</button>
+            <button class="row50" id="hid-reset-button" disabled i18n="hid_reset">Reset HID</button>
           </div>
         </div>
       </li>
@@ -543,9 +543,9 @@
           </div>
         </div>
       </li>
-      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="../share/svg/led-msd.svg"><span i18n="kvm_text60">Drive</span></a>
+      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="../share/svg/led-msd.svg"><span i18n="drive_menu">Drive</span></a>
         <div class="menu" id="msd-menu">
-          <div class="text"><b i18n="kvm_text61">Mass Storage Drive: </b><span id="msd-status"></span><br></div>
+          <div class="text"><b i18n="drive_title">Mass Storage Drive: </b><span id="msd-status"></span><br></div>
           <hr>
           <div class="hidden" id="msd-message-offline">
                 <div class="text">
@@ -632,7 +632,7 @@
           </div>
           <table class="kv">
             <tr>
-              <td i18n="kvm_text62">Image:</td>
+              <td i18n="drive_image">Image:</td>
               <td width="100%">
                 <select id="msd-image-selector" disabled></select>
               </td>
@@ -667,13 +667,13 @@
                   </td>
             </tr>
             <tr>
-              <td i18n="kvm_text84">Files：</td>
+              <td i18n="drive_file_display">Files：</td>
               <td>
                 <div class="radio-box">
                   <input id="msd-mode-radio-image" checked type="radio" name="file-mode-radio" value="1">
-                  <label for="msd-mode-radio-image" i18n="kvm_text90">ImageFiles</label>
+                  <label for="msd-mode-radio-image" i18n="drive_image_files">ImageFiles</label>
                   <input id="msd-mode-radio-file" type="radio" name="file-mode-radio" value="0">
-                  <label for="msd-mode-radio-file" i18n="kvm_text91">NormalFiles</label>
+                  <label for="msd-mode-radio-file" i18n="drive_normal_files">NormalFiles</label>
                 </div>
               </td>
             </tr>
@@ -682,9 +682,9 @@
           <div id="msd-storages"></div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" id="msd-select-new-button" disabled i18n="kvm_text64">Select image to upload</button>
-            <button class="row25" id="msd-upload-new-button" disabled i18n="kvm_text65">Upload</button>
-            <button class="row25" id="msd-abort-new-button" disabled i18n="kvm_text66">Abort</button>
+            <button class="row50" id="msd-select-new-button" disabled i18n="drive_select_upload">Select image to upload</button>
+            <button class="row25" id="msd-upload-new-button" disabled i18n="drive_upload">Upload</button>
+            <button class="row25" id="msd-abort-new-button" disabled i18n="drive_abort">Abort</button>
           </div>
           <div class="hidden" id="msd-message-another-user-uploads">
                 <div class="text">
@@ -700,19 +700,19 @@
           <div class="hidden" id="msd-new-sub">
             <table class="kv">
               <tr>
-                <td i18n="kvm_text68">Specify a local file:</td>
+                <td i18n="drive_local_file">Specify a local file:</td>
                 <td>
                   <input id="msd-new-file" type="file">
                 </td>
               </tr>
               <tr>
-                <td i18n="kvm_text69"><b>Or</b> paste a URL:</td>
+                <td i18n="drive_paste_url"><b>Or</b> paste a URL:</td>
                 <td>
                   <input id="msd-new-url" type="text" style="width: 100%">
                 </td>
               </tr>
               <tr class="hidden" id="msd-new-part">
-                <td i18n="kvm_text70">Upload partition:</td>
+                <td i18n="drive_upload_partition">Upload partition:</td>
                 <td width="100%">
                   <select id="msd-new-part-selector"></select>
                 </td>
@@ -725,11 +725,11 @@
           <div class="hidden" id="msd-uploading-sub">
             <table class="kv">
               <tr>
-                <td i18n="kvm_text74">New image:</td>
+                <td i18n="drive_new_image">New image:</td>
                 <td class="value" id="msd-uploading-name"></td>
               </tr>
               <tr>
-                <td i18n="kvm_text75">Upload size:</td>
+                <td i18n="drive_upload_size">Upload size:</td>
                 <td class="value" id="msd-uploading-size"></td>
               </tr>
             </table>
@@ -741,51 +741,51 @@
           <div class="hidden" id="msd-new-tips">
             <table class="kv">
               <tr>
-                <td class="value" i18n="kvm_text71">Note:</td>
-                <td i18n="kvm_text72">&bull; Don't close the browser page until the upload is complete.</td>
+                <td class="value" i18n="drive_note">Note:</td>
+                <td i18n="drive_note_browser">&bull; Don't close the browser page until the upload is complete.</td>
               </tr>
               <tr>
                 <td></td>
-                <td i18n="kvm_text73">&bull; To speed up the upload, close the stream window.</td>
+                <td i18n="drive_note_stream">&bull; To speed up the upload, close the stream window.</td>
               </tr>
             </table>
           </div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" id="msd-connect-button" disabled i18n="kvm_text76">Connect drive to Server</button>
-            <button class="row25" id="msd-disconnect-button" disabled i18n="kvm_text77">Disconnect</button>
-            <button class="row25" id="msd-reset-button" disabled i18n="kvm_text78">Reset</button>
+            <button class="row50" id="msd-connect-button" disabled i18n="drive_connect">Connect drive to Server</button>
+            <button class="row25" id="msd-disconnect-button" disabled i18n="drive_disconnect">Disconnect</button>
+            <button class="row25" id="msd-reset-button" disabled i18n="drive_reset">Reset</button>
           </div>
           <hr>
-          <div class="text"><b i18n="kvm_text85">Quick file transfer:</b><br><sub i18n="kvm_text86">&bull; Select NormalFiles tab to upload, package them and mount image</sub><br><sub i18n="kvm_text87">&bull; Disconnect MSD, unpackage it, select tab to download</sub><br></div>
+          <div class="text"><b i18n="drive_quick_transfer">Quick file transfer:</b><br><sub i18n="drive_transfer_upload_note">&bull; Select NormalFiles tab to upload, package them and mount image</sub><br><sub i18n="drive_transfer_download_note">&bull; Disconnect MSD, unpackage it, select tab to download</sub><br></div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" id="msd-file-image-update-button" i18n="kvm_text88">Package files into image</button>
-            <button class="row50" id="msd-file-image-unzip-button" i18n="kvm_text89">Unpackage files from image</button>
+            <button class="row50" id="msd-file-image-update-button" i18n="drive_package_files">Package files into image</button>
+            <button class="row50" id="msd-file-image-unzip-button" i18n="drive_unpackage_files">Unpackage files from image</button>
           </div>
           <hr>
         </div>
       </li>
-      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="../share/svg/led-gear.svg"><span i18n="kvm_text32">Macro</span></a>
+      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="../share/svg/led-gear.svg"><span i18n="macro_menu">Macro</span></a>
         <div class="menu">
-          <div class="text"><b i18n="kvm_text33">Record and play HID/ATX/GPIO actions<br></b><sub i18n="kvm_text34">For security reasons, the record will not be saved on the PiKVM</sub></div>
+          <div class="text"><b i18n="macro_description">Record and play HID/ATX/GPIO actions<br></b><sub i18n="macro_security_note">For security reasons, the record will not be saved on the PiKVM</sub></div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row25" id="hid-recorder-record" disabled data-force-hide-menu i18n="kvm_text35">&bull; Rec</button>
-            <button class="row25" id="hid-recorder-stop" disabled i18n="kvm_text36">Stop</button>
-            <button class="row25" id="hid-recorder-play" disabled i18n="kvm_text37">Play</button>
-            <button class="row25" id="hid-recorder-clear" disabled i18n="kvm_text38">Clear</button>
+            <button class="row25" id="hid-recorder-record" disabled data-force-hide-menu i18n="macro_record">&bull; Rec</button>
+            <button class="row25" id="hid-recorder-stop" disabled i18n="macro_stop">Stop</button>
+            <button class="row25" id="hid-recorder-play" disabled i18n="macro_play">Play</button>
+            <button class="row25" id="hid-recorder-clear" disabled i18n="macro_clear">Clear</button>
           </div>
           <hr>
           <table class="kv">
             <tr>
-              <td i18n="kvm_text39">Script time:</td>
+              <td i18n="macro_script_time">Script time:</td>
               <td class="value" id="hid-recorder-time" colspan="2">00:00:00.0</td>
             </tr>
             <tr>
-              <td i18n="kvm_text40">Scripted events:</td>
+              <td i18n="macro_script_events">Scripted events:</td>
               <tdvalue id="hid-recorder-events-count">0</tdvalue>
-              <td><sup><i i18n="kvm_text41">include delays</i></sup></td>
+              <td><sup><i i18n="macro_include_delays">include delays</i></sup></td>
             </tr>
           </table>
           <hr>
@@ -804,14 +804,14 @@
           <hr>
           <input id="hid-recorder-new-script-file" type="file" style="display: none">
           <div class="buttons buttons-row">
-            <button class="row50" id="hid-recorder-upload" disabled i18n="kvm_text42">Upload script</button>
-            <button class="row50" id="hid-recorder-download" disabled i18n="kvm_text43">Download script</button>
+            <button class="row50" id="hid-recorder-upload" disabled i18n="macro_upload_script">Upload script</button>
+            <button class="row50" id="hid-recorder-download" disabled i18n="macro_download_script">Download script</button>
           </div>
         </div>
       </li>
-      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="../share/svg/led-gear.svg"><span i18n="kvm_text44">Text</span></a>
+      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="../share/svg/led-gear.svg"><span i18n="text_menu">Text</span></a>
         <div class="menu" id="text-menu" style="width: 360px">
-          <div class="text"><b i18n="kvm_text45">Paste text as keypress sequence<br></b><sub i18n="kvm_text46">Please note that PiKVM cannot switch the keyboard layout</sub></div>
+          <div class="text"><b i18n="text_paste_description">Paste text as keypress sequence<br></b><sub i18n="text_keyboard_layout_note">Please note that PiKVM cannot switch the keyboard layout</sub></div>
           <hr>
           <div class="text" style="margin-right: 20px">
             <textarea id="hid-pak-text" data-focus placeholder="Enter your text here"></textarea>
@@ -819,9 +819,9 @@
           <table class="kv">
             <tr>
               <td>
-                <button id="hid-pak-button" disabled data-force-hide-menu title="Ctrl+Enter when the text is focused" i18n="kvm_text47">&bull; Paste</button>
+                <button id="hid-pak-button" disabled data-force-hide-menu title="Ctrl+Enter when the text is focused" i18n="text_paste_button">&bull; Paste</button>
               </td>
-              <td i18n="kvm_text48">using host keymap</td>
+              <td i18n="text_using_keymap">using host keymap</td>
               <td>
                 <select id="hid-pak-keymap-selector"></select>
               </td>
@@ -837,7 +837,7 @@
                   <td class="value-number" id="hid-pak-delay-value"></td>
             </tr>
             <tr>
-                  <td>Hide input text:
+                  <td i18n="hid-pak-secure-switch">Hide input text:
                   </td>
                   <td align="right">
                     <div class="switch-box">
@@ -847,7 +847,7 @@
                   </td>
             </tr>
             <tr>
-                  <td>Ask paste confirmation:
+                  <td i18n="hid-pak-ask-switch">Ask paste confirmation:
                   </td>
                   <td align="right">
                     <div class="switch-box">
@@ -860,26 +860,26 @@
           <div class="feature-disabled" id="stream-ocr">
             <hr><br>
             <hr>
-            <div class="text"><b i18n="kvm_text49">Text recognition <sup><i>&beta;</i></sup><br></b><sub i18n="kvm_text50"><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> works locally on PiKVM</sub></div>
+            <div class="text"><b i18n="text_ocr_title">Text recognition <sup><i>&beta;</i></sup><br></b><sub i18n="text_ocr_local_note"><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> works locally on PiKVM</sub></div>
             <hr>
             <table class="kv">
               <tr>
                 <td>
-                  <button id="stream-ocr-button" data-force-hide-menu i18n="kvm_text51">&bull; Select area</button>
+                  <button id="stream-ocr-button" data-force-hide-menu i18n="text_ocr_select_area">&bull; Select area</button>
                 </td>
-                <td i18n="kvm_text52">for</td>
+                <td i18n="text_ocr_for">for</td>
                 <td>
                   <select id="stream-ocr-lang-selector"></select>
                 </td>
-                <td i18n="kvm_text53">text recognition</td>
+                <td i18n="text_ocr_recognition">text recognition</td>
               </tr>
             </table>
             <table class="kv">
               <tr>
-                <td colspan="4" i18n="kvm_text54">&bull; Next hit the <b>Enter</b> to recognize and copy text to clipboard...</td>
+                <td colspan="4" i18n="text_ocr_enter_hint">&bull; Next hit the <b>Enter</b> to recognize and copy text to clipboard...</td>
               </tr>
               <tr>
-                <td colspan="4" i18n="kvm_text55">&bull; Or hit the <b>Escape</b> to cancel a selection</td>
+                <td colspan="4" i18n="text_ocr_escape_hint">&bull; Or hit the <b>Escape</b> to cancel a selection</td>
               </tr>
               <tr>
                 <td></td>
@@ -888,9 +888,9 @@
           </div>
         </div>
       </li>
-      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#" i18n="kvm_text56">Shortcuts</a>
+      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#" i18n="shortcuts_menu">Shortcuts</a>
         <div class="menu" id="shortcuts-menu">
-          <div class="text"><b i18n="kvm_text57">Quick keyboard shortcuts<br></b><sub i18n="kvm_text58">Also see <i>System &rarr; Show keyboard</i></sub></div>
+          <div class="text"><b i18n="shortcuts_description">Quick keyboard shortcuts<br></b><sub i18n="shortcuts_also_see">Also see <i>System &rarr; Show keyboard</i></sub></div>
           <hr>
           <div class="buttons">
             <div class="buttons-row">
@@ -932,7 +932,7 @@
           <hr>
           <div class="text">
             &darr; &bull; Alt+SysRq+... <sup><i>linux magic
-            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html" i18n="kvm_text59">help</a></i></sup>
+            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html" i18n="shortcuts_help">help</a></i></sup>
           </div>
           <hr>
           <div class="buttons">
@@ -955,7 +955,7 @@
           <hr>
               <table class="kv">
                 <tr>
-                      <td>
+                      <td i18n>
                       </td>
                       <td align="right">
                         <div class="switch-box">
@@ -1073,7 +1073,7 @@
     </div>
     <div class="window" id="keyboard-window" data-show-centered>
       <div class="window-header" id="keyboard-window-header">
-        <div class="window-grab" i18n="kvm_text15">Virtual Keyboard</div>
+        <div class="window-grab" i18n="virtual_keyboard_title">Virtual Keyboard</div>
         <div class="window-buttons">
           <button class="window-button-original">&bull;</button>
           <button class="window-button-close"><b>&times;</b></button>
@@ -2305,7 +2305,7 @@
     </div>
     <div class="window" id="about-window" data-show-centered>
       <div class="window-header">
-        <div class="window-grab" i18n="kvm_text1">About</div>
+        <div class="window-grab" i18n="about_title">About</div>
         <div class="window-buttons">
           <button class="window-button-original">&bull;</button>
           <button class="window-button-close"><b>&times;</b></button>
@@ -2356,7 +2356,7 @@
               <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
               <label for="about-tab-thanks-button" i18n="thanks">Thanks</label>
               <div class="tab">
-                <div class="code" id="about-thanks"><span class="code-comment" i18n="kvm_text2">// These kind people donated money to the PiKVM project<br>
+                <div class="code" id="about-thanks"><span class="code-comment" i18n="about_sponsors">// These kind people donated money to the PiKVM project<br>
                     // and supported the work on it. We are very grateful<br>
                     // for their help, and memorializing their names<br>
                     // is the least we can do in gratitude.<br>
@@ -2366,12 +2366,12 @@
                 </div>
               </div>
         </div><br>
-        <p class="text credits"><a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13">One-KVM Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org" i18n="index_text_10">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org" i18n="index_text_11">Documentation</a></p>
+        <p class="text credits"><a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="onekvm_project_link">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="onekvm_documentation_link">One-KVM Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org" i18n="pikvm_project_link">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org" i18n="pikvm_documentation_link">Documentation</a></p>
       </div>
     </div>
     <div class="window window-resizable" id="webterm-window" data-show-centered style="display: flex; min-width: 720px; min-height: 480px">
       <div class="window-header">
-        <div class="window-grab" i18n="kvm_text16">Terminal</div>
+        <div class="window-grab" i18n="terminal_title">Terminal</div>
         <div class="window-buttons">
           <button class="window-button-original">&bull;</button>
           <button class="window-button-maximize">&#9744;</button>
@@ -2392,7 +2392,7 @@
     </ul>
     <ul class="footer">
       <li class="left"><span id="kvmd-meta-server-host" title="KVM/Server name (see System/About)"></span>&nbsp; | &nbsp;<span id="kvmd-info-platform" title="PiKVM Platform"></span>&nbsp; | &nbsp;<span id="kvmd-version-kvmd" title="KVMD version"></span>&nbsp; | &nbsp;<span id="kvmd-version-streamer" title="Streamer version"></span></li>
-      <li class="right"><a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13">One-KVM Documentation</a></li>
+      <li class="right"><a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="onekvm_project_link">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="onekvm_documentation_link">One-KVM Documentation</a></li>
     </ul>
   </body>
 </html>

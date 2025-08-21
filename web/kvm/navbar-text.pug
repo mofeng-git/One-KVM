@@ -1,19 +1,19 @@
 li.right#text-dropdown
 	a.menu-button(href="#")
 		+navbar_led("stream-ocr-led", "led-gear", "feature-disabled")
-		span(i18n="kvm_text44") Text
+		span(i18n="text_menu") Text
 	.menu#text-menu(style="width: 360px")
 		.text
-			b(i18n="kvm_text45") Paste text as keypress sequence#[br]
-			sub(i18n="kvm_text46") Please note that PiKVM cannot switch the keyboard layout
+			b(i18n="text_paste_description") Paste text as keypress sequence#[br]
+			sub(i18n="text_keyboard_layout_note") Please note that PiKVM cannot switch the keyboard layout
 		hr
 		.text(style="margin-right: 20px")
 			textarea#hid-pak-text(data-focus placeholder="Enter your text here")
 		table.kv
 			tr
 				td
-					button#hid-pak-button(disabled data-force-hide-menu title="Ctrl+Enter when the text is focused" i18n="kvm_text47") &bull; Paste
-				td(i18n="kvm_text48") using host keymap
+					button#hid-pak-button(disabled data-force-hide-menu title="Ctrl+Enter when the text is focused" i18n="text_paste_button") &bull; Paste
+				td(i18n="text_using_keymap") using host keymap
 				td #[select#hid-pak-keymap-selector]
 		table.kv
 			tr
@@ -28,19 +28,19 @@ li.right#text-dropdown
 			br
 			hr
 			.text
-				b(i18n="kvm_text49") Text recognition <sup><i>&beta;</i></sup>#[br]
-				sub(i18n="kvm_text50") #[a(target="_blank" href="https://docs.pikvm.org/ocr") OCR] works locally on PiKVM
+				b(i18n="text_ocr_title") Text recognition <sup><i>&beta;</i></sup>#[br]
+				sub(i18n="text_ocr_local_note") #[a(target="_blank" href="https://docs.pikvm.org/ocr") OCR] works locally on PiKVM
 			hr
 			table.kv
 				tr
-					td #[button#stream-ocr-button(data-force-hide-menu  i18n="kvm_text51") &bull; Select area]
-					td(i18n="kvm_text52") for
+					td #[button#stream-ocr-button(data-force-hide-menu  i18n="text_ocr_select_area") &bull; Select area]
+					td(i18n="text_ocr_for") for
 					td #[select#stream-ocr-lang-selector]
-					td(i18n="kvm_text53") text recognition
+					td(i18n="text_ocr_recognition") text recognition
 			table.kv
 				tr
-					td(colspan="4" i18n="kvm_text54") &bull; Next hit the #[b Enter] to recognize and copy text to clipboard...
+					td(colspan="4" i18n="text_ocr_enter_hint") &bull; Next hit the #[b Enter] to recognize and copy text to clipboard...
 				tr
-					td(colspan="4" i18n="kvm_text55") &bull; Or hit the #[b Escape] to cancel a selection
+					td(colspan="4" i18n="text_ocr_escape_hint") &bull; Or hit the #[b Escape] to cancel a selection
 				tr
 					td

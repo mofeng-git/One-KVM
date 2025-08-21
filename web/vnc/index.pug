@@ -9,13 +9,13 @@ append vars
 		index_link = true
 
 block start
-	p.text(i18n="vnc_text1")
+	p.text(i18n="vnc_daemon_running")
 		| This PiKVM device has running #[b kvmd-vnc] daemon and provides VNC access to the server.
-	p.text(i18n="vnc_text2")
+	p.text(i18n="vnc_security_warning")
 		| #[b WARNING!] We strongly don't recommend you to use VNC in untrusted networks without
 		| enabled X.509 or TLS encryption. Otherwise your passwords are transmitted in a plain text
 		| over the network.
-	p.text(i18n="vnc_text3")
+	p.text(i18n="vnc_client_requirements")
 		| Your VNC client must support Tight JPEG compression and password authentication.
 		| #[a(href="https://tigervnc.org") TigerVNC] is a good choice.
 		| On Linux, this client will most likely be available for installation from the repository.

@@ -14,8 +14,8 @@ mixin menu_message(icon, short, classes="", i18nid)
 							block
 
 
-mixin menu_switch_td2_gpio(channel, confirm_off="")
-	td
+mixin menu_switch_td2_gpio(channel, confirm_off="", i18nid)
+	td(i18n=i18nid)
 		block
 	td(align="right")
 		.switch-box
@@ -33,7 +33,7 @@ mixin menu_switch_td2_gpio(channel, confirm_off="")
 
 
 mixin menu_switch_td2(id, enabled, checked, i18nid)
-	td
+	td(i18n=i18nid)
 		block
 	td(align="right")
 		.switch-box
@@ -65,7 +65,7 @@ mixin menu_radio_td2(name, items, i18nid)
 mixin menu_slider_td3(slider_id, value_id, enabled, i18nid)
 	-
 		enabled = (enabled || true)
-	td
+	td(i18n=i18nid)
 		block
 	td.value-slider
 		input(type="range" id=slider_id disabled=!enabled)
@@ -74,7 +74,7 @@ mixin menu_slider_td3(slider_id, value_id, enabled, i18nid)
 
 mixin menu_spoiler(title, i18nid)
 	details
-		summary !{title}
+		summary(i18n=i18nid) !{title}
 		div(class="spoiler")
 			block
 
