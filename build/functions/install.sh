@@ -107,7 +107,8 @@ install_base_packages() {
         libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \\
         iptables network-manager curl kmod libmicrohttpd12 libjansson4 libssl3 \\
         libsofia-sip-ua0 libglib2.0-0 libopus0 libogg0 libcurl4 libconfig9 \\
-        python3-pip net-tools && \\
+        python3-pip net-tools libavcodec59 libavformat59 libavutil57 libswscale6 \\
+        libavfilter8 libavdevice59 v4l-utils libv4l-0 && \\
     apt clean && \\
     rm -rf /var/lib/apt/lists/*
     "
