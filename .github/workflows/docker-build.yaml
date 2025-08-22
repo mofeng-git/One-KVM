@@ -103,6 +103,8 @@ jobs:
           provenance: false
           sbom: false
           allow: security.insecure
+          build-args: |
+            CACHEBUST=$(date +%s)
 
   build-main:
     runs-on: ubuntu-22.04

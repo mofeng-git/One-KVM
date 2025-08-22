@@ -132,7 +132,9 @@ RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libn
     && rm -rf /tmp/janus-gateway
 
 # 编译 ustreamer
-RUN sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
+ARG CACHEBUST=1
+RUN echo "Cache bust: $CACHEBUST" \
+    && sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
     && git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
     && make -j WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 -C /tmp/ustreamer \
     && /tmp/ustreamer/ustreamer -v \
