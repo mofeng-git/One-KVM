@@ -214,7 +214,8 @@ EOF
             log_info "视频输入格式已设置为 $VIDFORMAT"
         fi
     fi
-    
+
+   
     touch /etc/kvmd/.init_flag
     log_info "初始化配置完成"
 fi

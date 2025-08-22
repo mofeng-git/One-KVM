@@ -168,6 +168,9 @@ otgnet:
             - "/bin/true"
         pre_stop_cmd:
             - "/bin/true"
+        sysctl_cmd:
+            #- "/usr/sbin/sysctl"
+            - "/bin/true"
 
 nginx:
     http:

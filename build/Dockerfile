@@ -42,6 +42,7 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
         libnss3 \
         libasound2 \
         nano \
+        unzip \
     && cp /tmp/lib/* /lib/*-linux-*/ \
     && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check /tmp/wheel/*.whl \
     && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check pyfatfs \

@@ -47,6 +47,8 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
         libspeex-dev \
         libspeexdsp-dev \
         libusb-1.0-0-dev \
+        libldap2-dev \
+        libsasl2-dev  \
 	&& apt clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -70,7 +72,15 @@ RUN --security=insecure pip config set global.index-url https://pypi.tuna.tsingh
         more-itertools multidict netifaces packaging passlib pillow ply psutil \
         pycparser pyelftools pyghmi pygments pyparsing pyotp qrcode requests \
         semantic-version setproctitle six spidev tabulate urllib3 wrapt xlib \
-        yarl pyserial pyyaml zstandard supervisor pyfatfs
+        yarl pyserial pyyaml zstandard supervisor pyfatfs pyserial python-periphery \
+        python-ldap python-pam pyrad pyudev pyusb luma.oled pyserial-asyncio
+
+# 编译 python vedev库
+# && wget https://raw.githubusercontent.com/torvalds/linux/refs/heads/master/include/uapi/linux/input.h \
+# && wget https://raw.githubusercontent.com/torvalds/linux/refs/heads/master/include/uapi/linux/input-event-codes.h \
+RUN git clone --depth=1 https://github.com/gvalkov/python-evdev.git /tmp/python-evdev \
+    && cd /tmp/python-evdev \
+    && python3 setup.py bdist_wheel  --dist-dir /tmp/wheel/
 
 # 编译安装 libnice、libsrtp、libwebsockets 和 janus-gateway
 RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libnice \
@@ -113,7 +123,8 @@ RUN sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount
 # 复制必要的库文件
 RUN mkdir /tmp/lib \
     && cd /lib/*-linux-*/ \
-    && cp libevent_core-*.so.7 libbsd.so.0 libevent_pthreads-*.so.7 libspeexdsp.so.1 \
-       libevent-*.so.7 libjpeg.so.62 libx264.so.164 libyuv.so.0 libnice.so.10 \
-       /usr/lib/libsrtp2.so.1 /usr/lib/libwebsockets.so.19 \
-       /tmp/lib/
+    && cp libevent_core-*.so.* libbsd.so.* libevent_pthreads-*.so.* libspeexdsp.so.* \
+       libevent-*.so.* libjpeg.so.* libx264.so.* libyuv.so.* libnice.so.* \
+       /tmp/lib/ \
+    && find /usr/lib -name "libsrtp2.so.*" -exec cp {} /tmp/lib/ \; \
+    && find /usr/lib -name "libwebsockets.so.*" -exec cp {} /tmp/lib/ \;
