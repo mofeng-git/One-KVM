@@ -24,8 +24,10 @@
 	OTHER DEALINGS IN THE SOFTWARE.
  */
 
+import "./adapter.js";
+
 // eslint-disable-next-line no-unused-vars
-var Janus = (function (factory) {
+export var Janus = (function (factory) {
 	if (typeof define === 'function' && define.amd) {
 		define(factory);
 	} else if (typeof module === 'object' && module.exports) {
@@ -1893,7 +1895,7 @@ var Janus = (function (factory) {
 				return;
 			}
 			let pc_config = {
-				iceServers: iceServers,
+				iceServers: (typeof iceServers  === "function" ? iceServers() : iceServers),
 				iceTransportPolicy: iceTransportPolicy,
 				bundlePolicy: bundlePolicy
 			};

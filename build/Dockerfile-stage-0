@@ -48,7 +48,28 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
         libspeexdsp-dev \
         libusb-1.0-0-dev \
         libldap2-dev \
-        libsasl2-dev  \
+        libsasl2-dev \
+        ffmpeg \
+        libavcodec-dev \
+        libavformat-dev \
+        libavutil-dev \
+        libswscale-dev \
+        libavfilter-dev \
+        libavdevice-dev \
+        vainfo \
+        libva-dev \
+        libva-drm2 \
+        libva-x11-2 \
+        libdrm-dev \
+        mesa-va-drivers \
+        mesa-vdpau-drivers \
+        v4l-utils \
+        libv4l-dev \
+	&& if [ ${TARGETARCH} != arm ] && [ ${TARGETARCH} != arm64 ]; then \
+		apt-get install -y --no-install-recommends \
+			intel-media-va-driver \
+			i965-va-driver; \
+	fi \
 	&& apt clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -76,8 +97,6 @@ RUN --security=insecure pip config set global.index-url https://pypi.tuna.tsingh
         python-ldap python-pam pyrad pyudev pyusb luma.oled pyserial-asyncio
 
 # 编译 python vedev库
-# && wget https://raw.githubusercontent.com/torvalds/linux/refs/heads/master/include/uapi/linux/input.h \
-# && wget https://raw.githubusercontent.com/torvalds/linux/refs/heads/master/include/uapi/linux/input-event-codes.h \
 RUN git clone --depth=1 https://github.com/gvalkov/python-evdev.git /tmp/python-evdev \
     && cd /tmp/python-evdev \
     && python3 setup.py bdist_wheel  --dist-dir /tmp/wheel/
@@ -115,8 +134,7 @@ RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libn
 # 编译 ustreamer
 RUN sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
     && git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
-    && sed -i '68s/-Wl,-Bstatic//' /tmp/ustreamer/src/Makefile \
-    && make -j WITH_PYTHON=1 WITH_JANUS=1 WITH_LIBX264=1 -C /tmp/ustreamer \
+    && make -j WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 -C /tmp/ustreamer \
     && /tmp/ustreamer/ustreamer -v \
     && cp /tmp/ustreamer/python/dist/*.whl /tmp/wheel/
 
@@ -124,7 +142,7 @@ RUN sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount
 RUN mkdir /tmp/lib \
     && cd /lib/*-linux-*/ \
     && cp libevent_core-*.so.* libbsd.so.* libevent_pthreads-*.so.* libspeexdsp.so.* \
-       libevent-*.so.* libjpeg.so.* libx264.so.* libyuv.so.* libnice.so.* \
+       libevent-*.so.* libjpeg.so.* libyuv.so.* libnice.so.* \
        /tmp/lib/ \
     && find /usr/lib -name "libsrtp2.so.*" -exec cp {} /tmp/lib/ \; \
     && find /usr/lib -name "libwebsockets.so.*" -exec cp {} /tmp/lib/ \;
