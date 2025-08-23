@@ -103,8 +103,6 @@ jobs:
           provenance: false
           sbom: false
           allow: security.insecure
-          build-args: |
-            CACHEBUST=$(date +%s)
 
   build-main:
     runs-on: ubuntu-22.04
@@ -150,10 +148,8 @@ jobs:
         run: |
           if [[ "${{ github.event.inputs.build_type }}" == "dev" ]]; then
             echo "tag=dev" >> $GITHUB_OUTPUT
-            echo "cachebust=$(date +%s)" >> $GITHUB_OUTPUT
           elif [[ "${{ github.event.inputs.build_type }}" == "release" ]]; then
             echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-            echo "cachebust=$(date +%s)" >> $GITHUB_OUTPUT
           fi
 
       - name: Extract metadata
@@ -186,8 +182,6 @@ jobs:
           cache-to: type=gha,mode=max,scope=main
           provenance: false
           sbom: false
-          build-args: |
-            CACHEBUST=${{ steps.version.outputs.cachebust }}
 
       - name: Build summary
         run: |
@@ -196,6 +190,5 @@ jobs:
           echo "- **Version Tag**: ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Platforms**: ${{ github.event.inputs.platforms }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Aliyun Enabled**: ${{ github.event.inputs.enable_aliyun }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Cache Bust**: ${{ steps.version.outputs.cachebust }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Tags**:" >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.meta.outputs.tags }}" | sed 's/^/  - /' >> $GITHUB_STEP_SUMMARY
