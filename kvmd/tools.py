@@ -27,12 +27,14 @@ import multiprocessing.queues
 import queue
 import shlex
 
+from typing import Generator
 from typing import TypeVar
 
 
 # =====
 def remap(value: int, in_min: int, in_max: int, out_min: int, out_max: int) -> int:
-    return int((value - in_min) * (out_max - out_min) // (in_max - in_min) + out_min)
+    result = int((value - in_min) * (out_max - out_min) // ((in_max - in_min) or 1) + out_min)
+    return min(max(result, out_min), out_max)
 
 
 # =====
@@ -81,3 +83,13 @@ def build_cmd(cmd: list[str], cmd_remove: list[str], cmd_append: list[str]) -> l
         *filter((lambda item: item not in cmd_remove), cmd[1:]),
         *cmd_append,
     ]
+
+
+# =====
+def passwds_splitted(text: str) -> Generator[tuple[int, str], None, None]:
+    for (lineno, line) in enumerate(text.split("\n")):
+        line = line.rstrip("\r")
+        ls = line.strip()
+        if len(ls) == 0 or ls.startswith("#"):
+            continue
+        yield (lineno, line)

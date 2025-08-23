@@ -1,4 +1,8 @@
 kvmd:
+    auth:
+        usc:
+            users: [root]
+
     server:
         unix_mode: 0666
 
@@ -9,6 +13,8 @@ kvmd:
         keyboard:
             device: /dev/null
         mouse:
+            device: /dev/null
+        mouse_alt:
             device: /dev/null
         noop: true
 

@@ -3,7 +3,7 @@
 initramfs initramfs-linux.img followkernel
 
 hdmi_force_hotplug=1
-gpu_mem=128
+gpu_mem=192
 enable_uart=1
 dtoverlay=disable-bt
 

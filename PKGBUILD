@@ -39,7 +39,7 @@ for _variant in "${_variants[@]}"; do
 	pkgname+=(kvmd-platform-$_platform-$_board)
 done
 pkgbase=kvmd
-pkgver=4.49
+pkgver=4.94
 pkgrel=1
 pkgdesc="The main PiKVM daemon"
 url="https://github.com/pikvm/kvmd"
@@ -53,6 +53,8 @@ depends=(
 	python-aiofiles
 	python-async-lru
 	python-passlib
+	# python-bcrypt is needed for passlib
+	python-bcrypt
 	python-pyotp
 	python-qrcode
 	python-periphery
@@ -66,7 +68,7 @@ depends=(
 	python-dbus
 	python-dbus-next
 	python-pygments
-	python-pyghmi
+	"python-pyghmi>=1.6.0-2"
 	python-pam
 	python-pillow
 	python-xlib
@@ -80,6 +82,7 @@ depends=(
 	python-luma-oled
 	python-pyusb
 	python-pyudev
+	python-evdev
 	"libgpiod>=2.1"
 	freetype2
 	"v4l-utils>=1.22.1-1"
@@ -94,7 +97,7 @@ depends=(
 	certbot
 	platform-io-access
 	raspberrypi-utils
-	"ustreamer>=6.26"
+	"ustreamer>=6.37"
 
 	# Systemd UDEV bug
 	"systemd>=248.3-2"
@@ -120,7 +123,7 @@ depends=(
 	# fsck for /boot
 	dosfstools
 
-	# pgrep for kvmd-udev-restart-pass
+	# pgrep for kvmd-udev-restart-pass, sysctl for kvmd-otgnet
 	procps-ng
 
 	# Misc
@@ -163,7 +166,9 @@ package_kvmd() {
 
 	install -Dm755 -t "$pkgdir/usr/bin" scripts/kvmd-{bootconfig,gencert,certbot}
 
-	install -Dm644 -t "$pkgdir/usr/lib/systemd/system" configs/os/services/*
+	install -dm755 "$pkgdir/usr/lib/systemd/system"
+	cp -rd configs/os/services -T "$pkgdir/usr/lib/systemd/system"
+
 	install -DTm644 configs/os/sysusers.conf "$pkgdir/usr/lib/sysusers.d/kvmd.conf"
 	install -DTm644 configs/os/tmpfiles.conf "$pkgdir/usr/lib/tmpfiles.d/kvmd.conf"
 
@@ -198,6 +203,7 @@ package_kvmd() {
 	mkdir -p "$pkgdir/etc/kvmd/override.d"
 
 	mkdir -p "$pkgdir/var/lib/kvmd/"{msd,pst}
+	chmod 1775 "$pkgdir/var/lib/kvmd/pst"
 }
 
 
@@ -210,7 +216,7 @@ for _variant in "${_variants[@]}"; do
 		cd \"kvmd-\$pkgver\"
 
 		pkgdesc=\"PiKVM platform configs - $_platform for $_board\"
-		depends=(kvmd=$pkgver-$pkgrel \"linux-rpi-pikvm>=6.6.45-10\" \"raspberrypi-bootloader-pikvm>=20240818-1\")
+		depends=(kvmd=$pkgver-$pkgrel \"linux-rpi-pikvm>=6.6.45-13\" \"raspberrypi-bootloader-pikvm>=20240818-1\")
 
 		backup=(
 			etc/sysctl.d/99-kvmd.conf

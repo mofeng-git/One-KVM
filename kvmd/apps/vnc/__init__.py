@@ -30,7 +30,6 @@ from ... import htclient
 
 from .. import init
 
-from .vncauth import VncAuthManager
 from .server import VncServer
 
 
@@ -71,12 +70,12 @@ def main(argv: (list[str] | None)=None) -> None:
         desired_fps=config.desired_fps,
         mouse_output=config.mouse_output,
         keymap_path=config.keymap,
-        allow_cut_after=config.allow_cut_after,
+        scroll_rate=config.scroll_rate,
 
         kvmd=KvmdClient(user_agent=user_agent, **config.kvmd._unpack()),
         streamers=streamers,
-        vnc_auth_manager=VncAuthManager(**config.auth.vncauth._unpack()),
 
         **config.server.keepalive._unpack(),
+        **config.auth.vncauth._unpack(),
         **config.auth.vencrypt._unpack(),
     ).run()

@@ -55,6 +55,10 @@ source /usr/share/kvmd/platform || true
 
 rw
 
+need_reboot() {
+	touch /boot/pikvm-reboot.txt
+}
+
 
 # ========== First boot and/or Avahi configuration ==========
 
@@ -148,7 +152,7 @@ if [ -n "$ENABLE_AVAHI" ]; then
 		make_avahi_service
 	fi
 	systemctl enable avahi-daemon || true
-	touch /boot/pikvm-reboot.txt
+	need_reboot
 fi
 
 
@@ -171,7 +175,7 @@ TTYVHangup=no
 TTYVTDisallocate=no
 end_of_file
 	systemctl enable getty@ttyGS0.service
-	touch /boot/pikvm-reboot.txt
+	need_reboot
 fi
 
 
@@ -256,22 +260,26 @@ if [ -n "$WIFI_ESSID" ]; then
 	else
 		make_dhcp_iface "$WIFI_IFACE" 50
 	fi
+	_wpa="/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
 	if [ "${#WIFI_PASSWD}" -ge 8 ];then
-		wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+		wpa_passphrase "$WIFI_ESSID" "$WIFI_PASSWD" > "$_wpa"
 	else
-		cat <<end_of_file > "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+		cat <<end_of_file > "$_wpa"
 network={
 	ssid=$(printf '"%q"' "$WIFI_ESSID")
 	key_mgmt=NONE
 }
 end_of_file
 	fi
-	chmod 640 "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+	chmod 640 "$_wpa"
 	if [ -n "$WIFI_HIDDEN" ]; then
-		sed -i -e 's/^}/\tscan_ssid=1\n}/g' "/etc/wpa_supplicant/wpa_supplicant-$WIFI_IFACE.conf"
+		sed -i -e 's/^}/\tscan_ssid=1\n}/g' "$_wpa"
+	fi
+	if [ -n "$WIFI_WPA23" ]; then
+		sed -i -e 's/^}/\tkey_mgmt=WPA-PSK-SHA256 WPA-PSK\n\tieee80211w=1\n}/g' "$_wpa"
 	fi
 	systemctl enable "wpa_supplicant@$WIFI_IFACE.service" || true
-	touch /boot/pikvm-reboot.txt
+	need_reboot
 fi
 
 

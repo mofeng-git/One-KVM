@@ -21,7 +21,12 @@ delete_armbian_verify(){
 
 prepare_external_binaries() {
     local platform="$1" # linux/armhf or linux/amd64 or linux/aarch64
-    local docker_image="registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd-stage-0"
+    # 如果在 GitHub Actions 环境下，使用 silentwind0/kvmd-stage-0，否则用阿里云镜像
+    if is_github_actions; then
+        local docker_image="silentwind0/kvmd-stage-0"
+    else
+        local docker_image="registry.cn-hangzhou.aliyuncs.com/silentwind/kvmd-stage-0"
+    fi
 
     echo "信息：准备外部预编译二进制文件 (平台: $platform)..."
     ensure_dir "$PREBUILT_DIR"
@@ -102,7 +107,8 @@ install_base_packages() {
         libxkbcommon-x11-0 nginx tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \\
         iptables network-manager curl kmod libmicrohttpd12 libjansson4 libssl3 \\
         libsofia-sip-ua0 libglib2.0-0 libopus0 libogg0 libcurl4 libconfig9 \\
-        python3-pip net-tools && \\
+        python3-pip net-tools libavcodec59 libavformat59 libavutil57 libswscale6 \\
+        libavfilter8 libavdevice59 v4l-utils libv4l-0 && \\
     apt clean && \\
     rm -rf /var/lib/apt/lists/*
     "

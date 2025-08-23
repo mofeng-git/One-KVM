@@ -1,39 +1,67 @@
 extends ../base.pug
 
+
+mixin radio(name, items)
+	.radio-box
+		each item in items
+			-
+				let id = `${name}-${item["value"]}`
+				let checked = (item["checked"] || false)
+			input(type="radio" id=id name=name value=item["value"] checked=checked)
+			label(for=id) !{item["title"]}
+
+
 append vars
-	- title = "One-KVM Login"
-	- main_js = "login/main"
-	- css_list = css_list.concat(["window", "modal", "login/login"])
+	-
+		root_prefix = "../"
+		title = "One-KVM Login"
+		main_js = "login/main"
+		css_list.push("window", "modal", "radio", "login/login")
+
 
 block body
 	form(action="javascript:void(0)")
-		div(id="login-box")
-			div(id="login")
+		#login-box
+			#login
 				table
 					tr
+						td #[img.svg-gray#login-logo(src=`${svg_dir}/logo.svg` alt="&pi;-kvm")]
+						td
+					tr
+						td(colspan=2) #[hr]
+					tr
 						td(i18n="username") Username:&nbsp;
-						td #[input(type="text" id="user-input" autocapitalize="off")]
+						td #[input#user-input(type="text" autocapitalize="off")]
 					tr
 						td(i18n="password") Password:&nbsp;
-						td #[input(type="password" id="passwd-input" autocapitalize="off")]
+						td #[input#passwd-input(type="password" autocapitalize="off")]
 					tr
 						td(i18n="2fa_code") 2FA code:&nbsp;
-						td #[input(type="text" id="code-input" placeholder="if enabled" i18n="if_enabled")]
+						td #[input#code-input(type="text" placeholder="if enabled"  autocomplete="off" i18n="if_enabled")]
 					tr
-						td(colspan=2)
-							hr
+						td(colspan=2) #[hr]
+					tr
+						td(i18n="remember_me") #[a(target="_blank" href="https://docs.pikvm.org/auth/#session-expiration") Remember me]:&nbsp;
+						td
+							+radio("expire-radio", [
+								{"title": "1h", "value": "3600"},
+								{"title": "12h", "value": "43200"},
+								{"title": "Forever", "value": "0", "checked": true},
+							])
 					tr
 						td(i18n="select_language") Select language:&nbsp;
 						td
-							select(id="selectLanguage" style="width:100%")
-								option(id='zh', selected="selected" i18n="chinese") Simplified Chinese
-								option(id='en' i18n="english") English
+							select#selectLanguage(style="width:100%")
+								option#zh(selected="selected" i18n="chinese") Simplified Chinese
+								option#en(i18n="english") English
+					tr
+						td(colspan=2) #[hr]
 					tr
 						td
-						td #[button(id="login-button" class="key" style="width:100%" i18n="login") Login]
+						td #[button.key#login-button(style="width:100%" i18n="login") Login]
 
-	ul(class="footer")
-		li(class="left"  i18n="footer-left")
+	ul.footer
+		li.left(i18n="footer-left")
 			| This site is actively using JavaScript.#[br]
 			| It doesn't contain ads, but is blocked by some ad filters.#[br]
 			| Please turn it off to continue and reload the page.

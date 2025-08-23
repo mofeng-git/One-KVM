@@ -24,8 +24,8 @@ upload:
 	bash -ex -c " \
 		current=`cat .current`; \
 		if [ '$($@_CURRENT)' == 'spi' ] || [ '$($@_CURRENT)' == 'aum' ]; then \
-			gpioset 0 25=1; \
-			gpioset 0 25=0; \
+			gpioset -c gpiochip0 -t 30ms,0 25=1; \
+			gpioset -c gpiochip0 -t 30ms,0 25=0; \
 		fi \
 	"
 	platformio run --environment '$($@_CURRENT)' --project-conf 'platformio-$($@_CONFIG).ini' --target upload

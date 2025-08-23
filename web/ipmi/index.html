@@ -27,37 +27,39 @@
   <head>
     <meta charset="utf-8">
     <title>One-KVM IPMI Info</title>
-    <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
-    <link rel="manifest" href="/share/site.webmanifest">
-    <link rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5">
+    <link rel="apple-touch-icon" sizes="180x180" href="../share/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../share/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../share/favicon-16x16.png">
+    <link rel="manifest" href="../share/site.webmanifest">
+    <link rel="mask-icon" href="../share/safari-pinned-tab.svg" color="#5bbad5">
     <meta name="msapplication-TileColor" content="#2b5797">
     <meta name="theme-color" content="#ffffff">
-    <link rel="stylesheet" href="/share/css/vars.css">
-    <link rel="stylesheet" href="/share/css/main.css">
-    <link rel="stylesheet" href="/share/css/start.css">
-    <link rel="stylesheet" href="/share/css/user.css">
-    <script src="/share/js/i18n/jquery-3.7.1.min.js"></script>
-    <script src="/share/js/i18n/jquery.i18n.min.js"></script>
-    <script src="/share/js/i18n/i18n.js"></script>
-    <script type="module">import {main} from "/share/js/ipmi/main.js";
+    <link rel="stylesheet" href="../share/css/vars.css">
+    <link rel="stylesheet" href="../share/css/main.css">
+    <link rel="stylesheet" href="../share/css/start.css">
+    <link rel="stylesheet" href="../share/css/user.css">
+    <script src="../share/js/i18n/jquery-3.7.1.min.js"></script>
+    <script src="../share/js/i18n/jquery.i18n.min.js"></script>
+    <script src="../share/js/i18n/i18n.js"></script>
+    <script type="module">import {setRootPrefix} from "../share/js/vars.js";
+      setRootPrefix("../");
+      import {main} from "../share/js/ipmi/main.js";
       main();
     </script>
   </head>
   <body>
     <div class="start-box">
-      <div class="start"><a style="display:inline-block; margin-top:4px; color:#5c90bc; text-decoration:none" href="/" i18n="index">&nbsp;&nbsp;&larr;&nbsp;&nbsp; [ One-KVM Index ]</a>
+      <div class="start"><a style="display:inline-block; margin-top:4px; color:#5c90bc; text-decoration:none" href="../" i18n="index">&nbsp;&nbsp;&larr;&nbsp;&nbsp; [ One-KVM Index ]</a>
         <hr>
-        <p class="text" i18n="ipmi_text1">This PiKVM device has running <b>kvmd-ipmi</b> daemon and provides IPMI 2.0 interface for some basic
+        <p class="text" i18n="ipmi_daemon_running">This PiKVM device has running <b>kvmd-ipmi</b> daemon and provides IPMI 2.0 interface for some basic
           BMC operations like on/off/reset the server.
         </p>
-        <p class="text" i18n="ipmi_text2"><b>WARNING!</b> We strongly don't recommend you to use IPMI in untrusted networks because
+        <p class="text" i18n="ipmi_security_warning"><b>WARNING!</b> We strongly don't recommend you to use IPMI in untrusted networks because
           this protocol is completely unsafe by design. In short, the authentication process for IPMI mandates
           that the server send a salted SHA1 or MD5 hash of the requested user's password to the client,
           prior to the client authenticating.
         </p>
-        <p class="text" i18n="ipmi_text3"><b>NEVER</b> use the same passwords for KVMD and IPMI users. And even better not to use IPMI.
+        <p class="text" i18n="ipmi_password_recommendation"><b>NEVER</b> use the same passwords for KVMD and IPMI users. And even better not to use IPMI.
           Instead, you can directly use KVMD API via curl. Here some examples:
         </p>
         <div class="code" id="ipmi-text" style="max-height:200px"></div>

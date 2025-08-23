@@ -214,7 +214,14 @@ EOF
             log_info "视频输入格式已设置为 $VIDFORMAT"
         fi
     fi
-    
+
+    if [ ! -z "$HWENCODER" ]; then
+        if sed -i "s/--h264-hwenc=disabled/--h264-hwenc=$HWENCODER/g" /etc/kvmd/override.yaml; then
+            log_info "硬件编码器已设置为 $HWENCODER"
+        fi
+    fi
+
+   
     touch /etc/kvmd/.init_flag
     log_info "初始化配置完成"
 fi

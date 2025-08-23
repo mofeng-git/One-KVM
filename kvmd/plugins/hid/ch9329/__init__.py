@@ -168,10 +168,10 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             self._set_jiggler_active(jiggler)
             self.__notifier.notify()
 
-    def _send_key_event(self, key: str, state: bool) -> None:
+    def _send_key_event(self, key: int, state: bool) -> None:
         self.__queue_cmd(self.__keyboard.process_key(key, state))
 
-    def _send_mouse_button_event(self, button: str, state: bool) -> None:
+    def _send_mouse_button_event(self, button: int, state: bool) -> None:
         self.__queue_cmd(self.__mouse.process_button(button, state))
 
     def _send_mouse_move_event(self, to_x: int, to_y: int) -> None:
@@ -232,7 +232,11 @@ class Plugin(BaseHid, multiprocessing.Process):  # pylint: disable=too-many-inst
             led_byte = conn.xfer(cmd)
         except ChipResponseError as ex:
             self.__set_state_online(False)
-            get_logger(0).error("Invalid chip response: %s", tools.efmt(ex))
+            get_logger(0).error("Invalid chip response: %s，%s", self.__device_path, tools.efmt(ex))
+            try:
+                conn.xfer(b"\x00\x0F\x00")
+            except Exception:
+                return False
             time.sleep(2)
         else:
             if led_byte >= 0:

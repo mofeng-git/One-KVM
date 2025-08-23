@@ -34,38 +34,43 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 
 	var __ws = null;
 	var __online = true;
-	var __absolute = true;
+	var __abs = true;
 
 	var __keypad = null;
-
 	var __timer = null;
-	var __planned_pos = {"x": 0, "y": 0};
-	var __sent_pos = {"x": 0, "y": 0};
-	var __relative_deltas = [];
-	var __relative_touch_pos = null;
-	var __relative_sens = 1.0;
+
+	var __touch_pos = null;
+
+	var __abs_pos = null;
+
+	var __rel_sens = 1.0;
+	var __rel_deltas = [];
+
 	var __scroll_rate = 5;
+	var __scroll_fix = (tools.browser.is_mac ? 5 : 1);
 	var __scroll_delta = {"x": 0, "y": 0};
 
 	var __stream_hovered = false;
 
 	var __init__ = function() {
-		__keypad = new Keypad("div#stream-mouse-buttons", __sendButton, false);
+		__keypad = new Keypad($("stream-mouse-buttons"), __sendButton, false);
 
 		$("hid-mouse-led").title = "Mouse free";
 
-		document.onpointerlockchange = __relativeCapturedHandler; // Only for relative
-		document.onpointerlockerror = __relativeCapturedHandler;
-		$("stream-box").onmouseenter = () => __streamHoveredHandler(true);
-		$("stream-box").onmouseleave = () => __streamHoveredHandler(false);
-		$("stream-box").onmousedown = (event) => __streamButtonHandler(event, true);
-		$("stream-box").onmouseup = (event) => __streamButtonHandler(event, false);
-		$("stream-box").oncontextmenu = (event) => event.preventDefault();
-		$("stream-box").onmousemove = __streamMoveHandler;
-		$("stream-box").onwheel = __streamScrollHandler;
-		$("stream-box").ontouchstart = (event) => __streamTouchStartHandler(event);
-		$("stream-box").ontouchmove = (event) => __streamTouchMoveHandler(event);
-		$("stream-box").ontouchend = (event) => __streamTouchEndHandler(event);
+		document.addEventListener("pointerlockchange", __relativeCapturedHandler); // Only for relative
+		document.addEventListener("pointerlockerror", __relativeCapturedHandler);
+
+		$("stream-box").addEventListener("contextmenu", (ev) => ev.preventDefault());
+		$("stream-box").addEventListener("mouseenter", () => __streamHoveredHandler(true));
+		$("stream-box").addEventListener("mouseleave", () => __streamHoveredHandler(false));
+		$("stream-box").addEventListener("mousedown", (ev) => __streamButtonHandler(ev, true));
+		$("stream-box").addEventListener("mouseup", (ev) => __streamButtonHandler(ev, false));
+		$("stream-box").addEventListener("mousemove", __streamMoveHandler);
+		$("stream-box").addEventListener("wheel", __streamScrollHandler);
+
+		$("stream-box").addEventListener("touchstart", __streamTouchStartHandler);
+		$("stream-box").addEventListener("touchmove", __streamTouchMoveHandler);
+		$("stream-box").addEventListener("touchend", __streamTouchEndHandler);
 
 		tools.storage.bindSimpleSwitch($("hid-mouse-squash-switch"), "hid.mouse.squash", true);
 		tools.slider.setParams($("hid-mouse-sens-slider"), 0.1, 1.9, 0.1, tools.storage.get("hid.mouse.sens", 1.0), __updateRelativeSens);
@@ -84,26 +89,26 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 
 	self.setSocket = function(ws) {
 		__ws = ws;
-		if (!__absolute && __isRelativeCaptured()) {
+		if (!__abs && __isRelativeCaptured()) {
 			document.exitPointerLock();
 		}
 		__updateOnlineLeds();
 	};
 
-	self.setState = function(online, absolute, hid_online, hid_busy) {
+	self.setState = function(online, abs, hid_online, hid_busy) {
 		if (!hid_online) {
 			__online = null;
 		} else {
 			__online = (online && !hid_busy);
 		}
-		if (!__absolute && absolute && __isRelativeCaptured()) {
+		if (!__abs && abs && __isRelativeCaptured()) {
 			document.exitPointerLock();
 		}
-		if (__absolute && !absolute) {
-			__relative_deltas = [];
-			__relative_touch_pos = null;
+		if (__abs && !abs) {
+			__touch_pos = null;
+			__rel_deltas = [];
 		}
-		__absolute = absolute;
+		__abs = abs;
 		__updateOnlineLeds();
 	};
 
@@ -112,7 +117,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	};
 
 	var __updateRate = function(value) {
-		$("hid-mouse-rate-value").innerHTML = value + " ms";
+		$("hid-mouse-rate-value").innerText = value + " ms";
 		tools.storage.set("hid.mouse.rate", value);
 		if (__timer) {
 			clearInterval(__timer);
@@ -121,19 +126,19 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	};
 
 	var __updateScrollRate = function(value) {
-		$("hid-mouse-scroll-value").innerHTML = value;
+		$("hid-mouse-scroll-value").innerText = value;
 		tools.storage.set("hid.mouse.scroll_rate", value);
 		__scroll_rate = value;
 	};
 
 	var __updateRelativeSens = function(value) {
-		$("hid-mouse-sens-value").innerHTML = value.toFixed(1);
+		$("hid-mouse-sens-value").innerText = value.toFixed(1);
 		tools.storage.set("hid.mouse.sens", value);
-		__relative_sens = value;
+		__rel_sens = value;
 	};
 
 	var __streamHoveredHandler = function(hovered) {
-		if (__absolute) {
+		if (__abs) {
 			__stream_hovered = hovered;
 			__updateOnlineLeds();
 		}
@@ -141,7 +146,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 
 	var __updateOnlineLeds = function() {
 		let is_captured;
-		if (__absolute) {
+		if (__abs) {
 			is_captured = (__stream_hovered || tools.browser.is_mobile);
 		} else {
 			is_captured = __isRelativeCaptured();
@@ -170,7 +175,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		$("hid-mouse-led").className = led;
 		$("hid-mouse-led").title = title;
 
-		if (__absolute && is_captured) {
+		if (__abs && is_captured) {
 			let dot = $("hid-mouse-dot-switch").checked;
 			$("stream-box").classList.toggle("stream-box-mouse-dot", (dot && __ws));
 			$("stream-box").classList.toggle("stream-box-mouse-none", (!dot && __ws));
@@ -189,128 +194,149 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		__updateOnlineLeds();
 	};
 
-	var __streamButtonHandler = function(event, state) {
+	var __streamButtonHandler = function(ev, state) {
 		// https://www.w3schools.com/jsref/event_button.asp
-		event.preventDefault();
-		if (__absolute || __isRelativeCaptured()) {
-			switch (event.button) {
+		ev.preventDefault();
+		if (__abs || __isRelativeCaptured()) {
+			switch (ev.button) {
 				case 0: __keypad.emitByCode("left", state); break;
 				case 2: __keypad.emitByCode("right", state); break;
 				case 1: __keypad.emitByCode("middle", state); break;
 				case 3: __keypad.emitByCode("up", state); break;
 				case 4: __keypad.emitByCode("down", state); break;
 			}
-		} else if (!__absolute && !__isRelativeCaptured() && !state) {
+		} else if (!__abs && !__isRelativeCaptured() && !state) {
 			$("stream-box").requestPointerLock();
 		}
 	};
 
-	var __streamTouchStartHandler = function(event) {
-		event.preventDefault();
-		if (event.touches.length === 1) {
-			if (__absolute) {
-				__planned_pos = __getTouchPosition(event, 0);
-				__sendPlannedMove();
-			} else {
-				__relative_touch_pos = __getTouchPosition(event, 0);
-			}
+	var __streamTouchStartHandler = function(ev) {
+		ev.preventDefault();
+		let pos = __getTouchPosition(ev, 0);
+		if (__abs && ev.touches.length === 1) {
+			__abs_pos = pos;
+			__sendPlannedMove();
+		} else if (!__abs) {
+			__touch_pos = pos;
+			__abs_pos = null;
 		}
 	};
 
-	var __streamTouchMoveHandler = function(event) {
-		event.preventDefault();
-		if (event.touches.length === 1) {
-			if (__absolute) {
-				__planned_pos = __getTouchPosition(event, 0);
-			} else if (__relative_touch_pos === null) {
-				__relative_touch_pos = __getTouchPosition(event, 0);
-			} else {
-				let pos = __getTouchPosition(event, 0);
+	var __streamTouchMoveHandler = function(ev) {
+		ev.preventDefault();
+		let pos = __getTouchPosition(ev, 0);
+		if (ev.touches.length === 1) {
+			if (__abs) {
+				__abs_pos = pos;
+			} else if (__touch_pos !== null) {
 				__sendOrPlanRelativeMove({
-					"x": (pos.x - __relative_touch_pos.x),
-					"y": (pos.y - __relative_touch_pos.y),
+					"x": (pos.x - __touch_pos.x),
+					"y": (pos.y - __touch_pos.y),
 				});
-				__relative_touch_pos = pos;
+				__touch_pos = pos;
 			}
+		} else if (ev.touches.length >= 2) {
+			if (__touch_pos === null) {
+				__touch_pos = pos;
+			} else {
+				let dx = __touch_pos.x - pos.x;
+				let dy = __touch_pos.y - pos.y;
+				if (Math.abs(dx) < 15) {
+					dx = 0;
+				}
+				if (Math.abs(dy) < 15) {
+					dy = 0;
+				}
+				if (dx || dy) {
+					__sendScroll({"x": dx, "y": dy});
+					__touch_pos = null;
+				}
+			}
+			__abs_pos = null;
 		}
 	};
 
-	var __streamTouchEndHandler = function(event) {
-		event.preventDefault();
+	var __streamTouchEndHandler = function(ev) {
+		ev.preventDefault();
 		__sendPlannedMove();
+		__touch_pos = null;
+		__abs_pos = null;
 	};
 
-	var __getTouchPosition = function(event, index) {
-		if (event.touches[index].target && event.touches[index].target.getBoundingClientRect) {
-			let rect = event.touches[index].target.getBoundingClientRect();
+	var __getTouchPosition = function(ev, index) {
+		if (ev.touches[index].target && ev.touches[index].target.getBoundingClientRect) {
+			let rect = ev.touches[index].target.getBoundingClientRect();
 			return {
-				"x": Math.round(event.touches[index].clientX - rect.left),
-				"y": Math.round(event.touches[index].clientY - rect.top),
+				"x": Math.round(ev.touches[index].clientX - rect.left),
+				"y": Math.round(ev.touches[index].clientY - rect.top),
 			};
 		}
 		return null;
 	};
 
-	var __streamMoveHandler = function(event) {
-		if (__absolute) {
-			let rect = event.target.getBoundingClientRect();
-			__planned_pos = {
-				"x": Math.max(Math.round(event.clientX - rect.left), 0),
-				"y": Math.max(Math.round(event.clientY - rect.top), 0),
+	var __streamMoveHandler = function(ev) {
+		if (__abs) {
+			let rect = ev.target.getBoundingClientRect();
+			__abs_pos = {
+				"x": Math.max(Math.round(ev.clientX - rect.left), 0),
+				"y": Math.max(Math.round(ev.clientY - rect.top), 0),
 			};
 		} else if (__isRelativeCaptured()) {
 			__sendOrPlanRelativeMove({
-				"x": event.movementX,
-				"y": event.movementY,
+				"x": ev.movementX,
+				"y": ev.movementY,
 			});
 		}
 	};
 
-	var __streamScrollHandler = function(event) {
+	var __streamScrollHandler = function(ev) {
 		// https://learn.javascript.ru/mousewheel
 		// https://stackoverflow.com/a/24595588
 
-		event.preventDefault();
+		ev.preventDefault();
 
-		if (!__absolute && !__isRelativeCaptured()) {
+		if (!__abs && !__isRelativeCaptured()) {
 			return;
 		}
 
 		let delta = {"x": 0, "y": 0};
 		if ($("hid-mouse-cumulative-scrolling-switch").checked) {
-			let factor = (tools.browser.is_mac ? 5 : 1);
-
-			__scroll_delta.x += event.deltaX * factor; // Horizontal scrolling
-			if (Math.abs(__scroll_delta.x) >= 100) {
-				delta.x = __scroll_delta.x / Math.abs(__scroll_delta.x) * (-__scroll_rate);
+			if (__scroll_delta.x && Math.sign(__scroll_delta.x) !== Math.sign(ev.deltaX)) {
+				delta.x = __scroll_delta.x;
 				__scroll_delta.x = 0;
+			} else {
+				__scroll_delta.x += ev.deltaX * __scroll_fix;
+				if (Math.abs(__scroll_delta.x) >= 100) {
+					delta.x = __scroll_delta.x;
+					__scroll_delta.x = 0;
+				}
 			}
 
-			__scroll_delta.y += event.deltaY * factor; // Vertical scrolling
-			if (Math.abs(__scroll_delta.y) >= 100) {
-				delta.y = __scroll_delta.y / Math.abs(__scroll_delta.y) * (-__scroll_rate);
+			if (__scroll_delta.y && Math.sign(__scroll_delta.y) !== Math.sign(ev.deltaY)) {
+				delta.y = __scroll_delta.y;
 				__scroll_delta.y = 0;
+			} else {
+				__scroll_delta.y += ev.deltaY * __scroll_fix;
+				if (Math.abs(__scroll_delta.y) >= 100) {
+					delta.y = __scroll_delta.y;
+					__scroll_delta.y = 0;
+				}
 			}
 		} else {
-			if (event.deltaX !== 0) {
-				delta.x = event.deltaX / Math.abs(event.deltaX) * (-__scroll_rate);
-			}
-			if (event.deltaY !== 0) {
-				delta.y = event.deltaY / Math.abs(event.deltaY) * (-__scroll_rate);
-			}
+			delta.x = ev.deltaX;
+			delta.y = ev.deltaY;
 		}
-
 		__sendScroll(delta);
 	};
 
 	var __sendOrPlanRelativeMove = function(delta) {
 		delta = {
-			"x": Math.min(Math.max(-127, Math.floor(delta.x * __relative_sens)), 127),
-			"y": Math.min(Math.max(-127, Math.floor(delta.y * __relative_sens)), 127),
+			"x": Math.min(Math.max(-127, Math.floor(delta.x * __rel_sens)), 127),
+			"y": Math.min(Math.max(-127, Math.floor(delta.y * __rel_sens)), 127),
 		};
 		if (delta.x || delta.y) {
 			if ($("hid-mouse-squash-switch").checked) {
-				__relative_deltas.push(delta);
+				__rel_deltas.push(delta);
 			} else {
 				tools.debug("Mouse: relative:", delta);
 				__sendEvent("mouse_relative", {"delta": delta});
@@ -319,35 +345,41 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 	};
 
 	var __sendScroll = function(delta) {
-		if (delta.x || delta.y) {
-			if ($("hid-mouse-reverse-scrolling-switch").checked) {
-				delta.y *= -1;
-			}
+		// Send a single scroll step defined by rate
+		if (delta.x) {
+			delta.x = Math.sign(delta.x) * (-__scroll_rate);
 			if ($("hid-mouse-reverse-panning-switch").checked) {
 				delta.x *= -1;
 			}
+		}
+		if (delta.y) {
+			delta.y = Math.sign(delta.y) * (-__scroll_rate);
+			if ($("hid-mouse-reverse-scrolling-switch").checked) {
+				delta.y *= -1;
+			}
+		}
+		if (delta.x || delta.y) {
 			tools.debug("Mouse: scrolled:", delta);
 			__sendEvent("mouse_wheel", {"delta": delta});
 		}
 	};
 
 	var __sendPlannedMove = function() {
-		if (__absolute) {
-			let pos = __planned_pos;
-			if (pos.x !== __sent_pos.x || pos.y !== __sent_pos.y) {
+		if (__abs) {
+			if (__abs_pos !== null) {
 				let geo = __getGeometry();
 				let to = {
-					"x": tools.remap(pos.x, geo.x, geo.width, -32768, 32767),
-					"y": tools.remap(pos.y, geo.y, geo.height, -32768, 32767),
+					"x": tools.remap(__abs_pos.x - geo.x, 0, geo.width - 1, -32768, 32767),
+					"y": tools.remap(__abs_pos.y - geo.y, 0, geo.height - 1, -32768, 32767),
 				};
-				tools.debug("Mouse: moved:", to);
+				tools.debug("Mouse: abs:", to);
 				__sendEvent("mouse_move", {"to": to});
-				__sent_pos = pos;
+				__abs_pos = null;
 			}
-		} else if (__relative_deltas.length) {
-			tools.debug("Mouse: relative:", __relative_deltas);
-			__sendEvent("mouse_relative", {"delta": __relative_deltas, "squash": true});
-			__relative_deltas = [];
+		} else if (__rel_deltas.length) {
+			tools.debug("Mouse: relative:", __rel_deltas);
+			__sendEvent("mouse_relative", {"delta": __rel_deltas, "squash": true});
+			__rel_deltas = [];
 		}
 	};
 
@@ -357,12 +389,12 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		__sendEvent("mouse_button", {"button": button, "state": state});
 	};
 
-	var __sendEvent = function(event_type, event) {
-		event = {"event_type": event_type, "event": event};
+	var __sendEvent = function(ev_type, ev) {
+		ev = {"event_type": ev_type, "event": ev};
 		if (__ws && !$("hid-mute-switch").checked) {
-			__ws.sendHidEvent(event);
+			__ws.sendHidEvent(ev);
 		}
-		__recordWsEvent(event);
+		__recordWsEvent(ev);
 	};
 
 	__init__();

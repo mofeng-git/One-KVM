@@ -1,154 +1,152 @@
-li(id="system-dropdown" class="right")
-	a(class="menu-button" href="#")
+li.right#system-dropdown
+	a.menu-button(href="#")
 		+navbar_led("link-led", "led-link")
 		+navbar_led("stream-led", "led-video")
 		+navbar_led("hid-keyboard-led", "led-hid-keyboard")
 		+navbar_led("hid-mouse-led", "led-hid-mouse")
-		span(i18n="kvm_text3") System
-	div(id="system-menu" class="menu")
-		table(class="kv")
+		span(i18n="system_menu") System
+
+	.menu#system-menu
+		table.kv
 			tr
-				td(class="value" i18n="kvm_text4") Runtime settings &amp; tools
-				td(id="system-tool-webterm" class="feature-disabled") #[button(data-force-hide-menu data-show-window="webterm-window" class="small" i18n="kvm_text5") &bull; Term]
-				td(id="system-tool-about") #[button(data-force-hide-menu data-show-window="about-window" class="small" i18n="kvm_text6") &bull; About]
-				td(id="system-tool-log") #[button(data-force-hide-menu id="open-log-button" class="small" i18n="kvm_text7") &bull; Log]
-				td(id="system-tool-wol" class="feature-disabled")
-					button(data-force-hide-menu class="__gpio-button-__wol__ __gpio-button small" data-channel="__wol__"
-						data-confirm="Are you sure to send Wake-on-LAN packet to the server?" i18n="kvm_text8") &bull; WoL
+				td.value(i18n="system_runtime_settings")
+					| Runtime settings &amp; tools
+				td.feature-disabled#system-tool-webterm
+					button.small(data-force-hide-menu data-show-window="webterm-window" i18n="system_terminal") &bull; Term
+				td#system-tool-about
+					button.small(data-force-hide-menu data-show-window="about-window" i18n="system_about") &bull; About
+				td#system-tool-log
+					button.small#open-log-button(data-force-hide-menu i18n="system_log") &bull; Log
+				td.feature-disabled#system-tool-wol
+					button(
+						data-force-hide-menu
+						class="__gpio-button-__wol__ __gpio-button small"
+						data-channel="__wol__"
+						data-confirm="Are you sure to send Wake-on-LAN packet to the server?"
+						i18n="system_wol"
+					) &bull; WoL
 		hr
-		div(id="stream-message-no-webrtc" class="hidden")
-			+menu_message("warning", "WebRTC is not supported by this browser")
+
+		.hidden#stream-message-no-webrtc
+			+menu_message("warning", "WebRTC is not supported by this browser", "", "stream-message-no-support-webrtc")
 			hr
-		div(id="stream-message-no-vd" class="hidden")
-			+menu_message("warning", "Direct HTTP H.264 streaming is not supported")
+		.hidden#stream-message-no-vd
+			+menu_message("warning", "Direct H.264 streaming is not supported", "", "stream-message-no-support-drict-h264")
 			hr
-		div(id="stream-message-no-h264" class="hidden")
-			+menu_message("warning", "H.264 is not supported by this browser", "stream-message-no-h264")
+		.hidden#stream-message-no-h264
+			+menu_message("warning", "H.264 is not supported by this browser","", "stream-message-no-h264")
 			hr
-		table(class="kv")
-			tr(id="stream-resolution" class="feature-disabled")
-				td(i18n="kvm_text9") Resolution:
-				td #[select(disabled id="stream-resolution-selector")]
-			tr(id="stream-quality" class="feature-disabled")
-				td(i18n="kvm_text10") JPEG quality:
-				td(class="value-slider") #[input(disabled type="range" id="stream-quality-slider" class="slider")]
-				td(id="stream-quality-value" class="value-number")
+
+		table.kv
+			tr.feature-disabled#stream-resolution
+				td(i18n="video_resolution") Resolution:
+				td #[select#stream-resolution-selector(disabled)]
+			tr.feature-disabled#stream-quality
+				+menu_slider_td3("stream-quality-slider", "stream-quality-value", false, "video_jpeg_quality") JPEG quality:
 			tr
-				td(i18n="kvm_text11") JPEG max fps:
-				td(class="value-slider") #[input(disabled type="range" id="stream-desired-fps-slider" class="slider")]
-				td(id="stream-desired-fps-value" class="value-number")
-			tr(id="stream-h264-bitrate" class="feature-disabled")
-				td(i18n="kvm_text12") H.264 kbps:
-				td(class="value-slider") #[input(disabled type="range" id="stream-h264-bitrate-slider" class="slider")]
-				td(id="stream-h264-bitrate-value" class="value-number")
-			tr(id="stream-h264-gop" class="feature-disabled")
-				td(i18n="kvm_text13") H.264 #[a(target="_blank" href="https://docs.pikvm.org/webrtc") gop]:
-				td(class="value-slider") #[input(disabled type="range" id="stream-h264-gop-slider" class="slider")]
-				td(id="stream-h264-gop-value" class="value-number")
-			tr(id="stream-mode" class="feature-disabled")
-				td(i18n="kvm_text14") Video #[a(target="_blank" href="https://docs.pikvm.org/webrtc") mode]:
-				td
-					div(class="radio-box")
-						input(checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg")
-						label(for="stream-mode-radio-mjpeg") Legacy<br>MJPEG
-						input(type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media")
-						label(for="stream-mode-radio-media") Direct<br>H.264
-						input(type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus")
-						label(for="stream-mode-radio-janus") WebRTC<br>H.264	
-			tr(id="stream-orient" class="feature-disabled")
-				td(i18n="kvm_text17") Orientation:
-				td
-					div(class="radio-box")
-						input(checked type="radio" id="stream-orient-radio-0" name="stream-orient-radio" value="0")
-						label(for="stream-orient-radio-0" i18n="kvm_text18") Default
-						input(type="radio" id="stream-orient-radio-90" name="stream-orient-radio" value="90")
-						label(for="stream-orient-radio-90") 90&deg;
-						input(type="radio" id="stream-orient-radio-180" name="stream-orient-radio" value="180")
-						label(for="stream-orient-radio-180") 180&deg;
-						input(type="radio" id="stream-orient-radio-270" name="stream-orient-radio" value="270")
-						label(for="stream-orient-radio-270") 270&deg;
-			tr(id="stream-audio" class="feature-disabled")
-				td(i18n="kvm_text19") Audio volume:
-				td(class="value-slider") #[input(type="range" id="stream-audio-volume-slider" class="slider")]
-				td(id="stream-audio-volume-value" class="value-number")
-			tr(id="stream-mic" class="feature-disabled")
-				+menu_switch_notable("stream-mic-switch", "Microphone", false, false)
+				+menu_slider_td3("stream-desired-fps-slider", "stream-desired-fps-value", false, "video_jpeg_fps") JPEG max fps:
+			tr.feature-disabled#stream-h264-bitrate
+				+menu_slider_td3("stream-h264-bitrate-slider", "stream-h264-bitrate-value", false, "video_h264_bitrate") H.264 kbps:
+			tr.feature-disabled#stream-h264-gop
+				+menu_slider_td3("stream-h264-gop-slider", "stream-h264-gop-value", false, "video_h264_gop") H.264 gop:
+			tr.feature-disabled#stream-mode
+				+menu_radio_td2("stream-mode-radio", [
+					{title: "WebRTC<br>H.264", value: "janus"},
+					{title: "Direct<br>H.264", value: "media"},
+					{title: "Legacy<br>MJPEG", value: "mjpeg", checked: true},
+				], "video_mode") #[a(target="_blank" href="https://docs.pikvm.org/webrtc") Video mode]:
+			tr.feature-disabled#stream-orient
+				+menu_radio_td2("stream-orient-radio", [
+					{title: "Default", value: "0", checked: true},
+					{title: "90&deg;", value: "90"},
+					{title: "180&deg;", value: "180"},
+					{title: "270&deg;", value: "270"},
+				], "video_orientation") Orientation:
+			tr.feature-disabled#stream-audio
+				+menu_slider_td3("stream-audio-volume-slider", "stream-audio-volume-value", false, "audio_volume") Audio volume:
+			tr.feature-disabled#stream-mic
+				+menu_switch_td2("stream-mic-switch", false, "stream-mic-switch") Microphone:
 		hr
-		div(class="buttons buttons-row")
-			button(data-force-hide-menu data-show-window="stream-window" class="row33" i18n="kvm_text20") &bull; Show stream
-			button(data-force-hide-menu id="stream-screenshot-button" class="row33" i18n="kvm_text21") &bull; Screenshot
-			button(id="stream-reset-button" class="row33" i18n="kvm_text22") Reset stream
-		div(class="text")
-			b(i18n="kvm_text79") Video Record#[br]
-			sub(i18n="kvm_text80") Record video using the browser API, and will be downloaded automatically
-		div(class="buttons buttons-row")
-			button(data-force-hide-menu id="stream-record-start-button" class="row50" i18n="kvm_text81") &bull; Start recording
-			button(data-force-hide-menu id="stream-record-stop-button" class="row50" i18n="kvm_text82") &bull; End recording
+
+		.buttons.buttons-row
+			button.row33(data-force-hide-menu data-show-window="stream-window" i18n="stream_show") &bull; Show stream
+			button.row33#stream-screenshot-button(data-force-hide-menu i18n="stream_screenshot") &bull; Screenshot
+			button.row33#stream-reset-button( i18n="stream_reset") Reset stream
 		hr
-		table(class="kv")
-			tr(id="hid-outputs-keyboard", class="feature-disabled")
-				td(i18n="kvm_text23") Keyboard mode:
-				td #[div(id="hid-outputs-keyboard-box" class="radio-box")]
-			tr(id="hid-outputs-mouse", class="feature-disabled")
-				td(i18n="kvm_text24") Mouse #[a(target="_blank" href="https://docs.pikvm.org/mouse") mode]:
-				td #[div(id="hid-outputs-mouse-box" class="radio-box")]
-		details
-			summary(i18n="kvm_text25") Keyboard &amp; Mouse (HID) settings
-			div(class="spoiler")
-				table(class="kv")
-					tr
-						+menu_switch_notable("hid-keyboard-swap-cc-switch", "Swap Left Ctrl and Caps keys", true, false, "hid-keyboard-swap-cc-switch")
-				hr
-				table(class="kv")
-					tr
-						td(i18n="kvm_text26") Mouse polling:
-						td(class="value-slider") #[input(type="range" id="hid-mouse-rate-slider" class="slider")]
-						td(id="hid-mouse-rate-value" class="value-number")
-					tr(id="hid-mouse-sens" class="feature-disabled")
-						td(i18n="kvm_text27") Relative sensitivity:
-						td(class="value-slider") #[input(disabled type="range" id="hid-mouse-sens-slider" class="slider")]
-						td(id="hid-mouse-sens-value" class="value-number")
-					tr(id="hid-mouse-squash" class="feature-disabled")
-						+menu_switch_notable("hid-mouse-squash-switch", "Squash relative moves", true, true, "hid-mouse-squash-switch")
-					tr
-						td(i18n="kvm_text28") Reverse scrolling:
-						td
-							table
-								tr
-									+menu_switch_notable("hid-mouse-reverse-scrolling-switch", "Y", true, false)
-									td &nbsp;&nbsp;
-									+menu_switch_notable("hid-mouse-reverse-panning-switch", "X", true, false)
-					tr
-						+menu_switch_notable("hid-mouse-cumulative-scrolling-switch", "Cumulative scrolling", true, false,"hid-mouse-cumulative-scrolling-switch")
-					tr
-						td(i18n="kvm_text29") Scroll rate:
-						td(class="value-slider") #[input(type="range" id="hid-mouse-scroll-slider" class="slider")]
-						td(id="hid-mouse-scroll-value" class="value-number")
-					tr
-						+menu_switch_notable("hid-mouse-dot-switch", "Show the blue dot", true, true,  "hid-mouse-dot-switch")
-		details
-			summary(i18n="kvm_text83") Web UI settings
-			div(class="spoiler")
-				table(class="kv")
-					tr
-						+menu_switch_notable("page-close-ask-switch", "Ask page close confirmation", true, true, "page-close-ask-switch")
-					tr
-						+menu_switch_notable("page-full-tab-stream-switch", "Expand for the entire tab by default", true, false,"page-full-tab-stream-switch")
-		table(class="kv")
+
+
+		.text
+			b(i18n="video_record_title") Video Record#[br]
+			sub(i18n="video_record_description") Record video using the browser API, and will be downloaded automatically
+		.buttons.buttons-row
+			button.row50#stream-record-start-button(data-force-hide-menu i18n="video_record_start") &bull; Start recording
+			button.row50#stream-record-stop-button(data-force-hide-menu  i18n="video_record_stop") &bull; End recording
+		hr
+
+		table.kv
+			tr.feature-disabled#hid-outputs-keyboard
+				td(i18n="hid_keyboard_mode") Keyboard mode:
+				td #[div.radio-box#hid-outputs-keyboard-box]
+			tr.feature-disabled#hid-outputs-mouse
+				td #[a(target="_blank" href="https://docs.pikvm.org/mouse" i18n="hid_mouse_mode") Mouse mode]:
+				td #[div.radio-box#hid-outputs-mouse-box]
+
+		+menu_spoiler("Keyboard &amp; mouse (HID) settings", "hid_settings")
+			+menu_switch_table("hid-keyboard-swap-cc-switch", true, false, "hid-keyboard-swap-cc-switch") Swap Left Ctrl and Caps keys:
+			hr
+			table(class="kv")
+				tr
+					+menu_slider_td3("hid-mouse-rate-slider", "hid-mouse-rate-value", false, "hid_mouse_polling") Mouse polling:
+				tr.feature-disabled#hid-mouse-sens
+					+menu_slider_td3("hid-mouse-sens-slider", "hid-mouse-sens-value", false, "hid_mouse_sensitivity") Relative sensitivity:
+				tr(id="hid-mouse-squash" class="feature-disabled")
+					+menu_switch_td2("hid-mouse-squash-switch", false, false, "hid-mouse-squash-switch") Squash relative moves:
+				tr
+					td(i18n="hid_mouse_reverse_scroll") Reverse scrolling:
+					td
+						table
+							tr
+								+menu_switch_td2("hid-mouse-reverse-scrolling-switch", true, false, "hid-mouse-reverse-scrolling-switch") Y:
+								td &nbsp;&nbsp;
+								+menu_switch_td2("hid-mouse-reverse-panning-switch", true, false, "hid-mouse-reverse-panning-switch") X:
+				tr
+					+menu_switch_td2("hid-mouse-cumulative-scrolling-switch", true, false, "hid-mouse-cumulative-scrolling-switch") Cumulative scrolling:
+				tr
+					+menu_slider_td3("hid-mouse-scroll-slider", "hid-mouse-scroll-value", true, "hid_mouse_scroll_rate") Scroll rate:
+				tr
+					+menu_switch_td2("hid-mouse-dot-switch", true, true, "hid-mouse-dot-switch") Show the blue dot:
+
+		+menu_spoiler("Web UI settings", "web_ui_settings")
+			table.kv
+				tr
+					+menu_switch_td2("page-close-ask-switch", true, true, "page-close-ask-switch") Ask page close confirmation:
+				tr
+					+menu_switch_td2("page-full-tab-stream-switch", true, false, "page-full-tab-stream-switch") Expand for the entire tab by default:
+				tr
+					+menu_switch_td2("stream-suspend-switch", true, false, "stream-suspend-switch") Suspend stream when tab is not active:
+
+		table.kv
 			tr
-				+menu_switch_notable("hid-keyboard-bad-link-switch", "Bad link mode (release keys immediately)", true, false,"hid-keyboard-bad-link-switch")
-			tr(id="hid-connect" class="feature-disabled")
-				+menu_switch_notable("hid-connect-switch", "Connect HID to Server", true, true, "hid-connect-switch")
-			tr(id="hid-jiggler" class="feature-disabled")
-				+menu_switch_notable("hid-jiggler-switch", "<a href=\"https://docs.pikvm.org/mouse_jiggler\" target=\"_blank\">Mouse jiggler</a>", false, false,"hid-jiggler-switch")
+				+menu_switch_td2("hid-keyboard-bad-link-switch", true, false, "hid-keyboard-bad-link-switch") Bad link mode (release keys immediately):
+			tr.feature-disabled#hid-connect
+				+menu_switch_td2("hid-connect-switch", true, true, "hid-connect-switch") Connect HID to Server:
+			tr.feature-disabled#hid-jiggler
+				+menu_switch_td2("hid-jiggler-switch", false, false, "hid-jiggler-switch")
+					| #[a(target="_blank" href="https://docs.pikvm.org/mouse_jiggler") Mouse jiggler]:
 			tr
-				+menu_switch_notable("hid-mute-switch", "Mute HID input events", true, false, "hid-mute-switch")
-			tr(id="v3-usb-breaker" class="feature-disabled")
-				+menu_switch_notable_gpio("__v3_usb_breaker__", "Connect main USB to Server",
-					"Turning off this switch will disconnect the main USB<br>from the server.  Are you sure you want to continue?")
-			tr(id="v4-locator" class="feature-disabled")
-				+menu_switch_notable_gpio("__v4_locator__", "Enable locator LED")
+				+menu_switch_td2("hid-mute-switch", true, false, "hid-mute-switch") Mute all input HID events:
+			tr.feature-disabled#v3-usb-breaker
+				+menu_switch_td2_gpio(
+					"__v3_usb_breaker__",
+					"Turning off this switch will disconnect the main USB from the server.  Are you sure you want to continue?",
+					"usb_breaker_confirm"
+				)
+					span(i18n="usb_connect_main") Connect main USB to Server:
+			tr.feature-disabled#v4-locator
+				+menu_switch_td2_gpio("__v4_locator__", "","locator_led_enable")
+					span(i18n="locator_led_enable") Enable locator LED:
 		hr
-		div(class="buttons buttons-row")
-			button(data-force-hide-menu data-show-window="keyboard-window" class="row50" i18n="kvm_text30") &bull; Show keyboard
-			button(disabled id="hid-reset-button" class="row50" i18n="kvm_text31") Reset HID
+
+		.buttons.buttons-row
+			button.row50(data-force-hide-menu data-show-window="keyboard-window"  i18n="hid_show_keyboard") &bull; Show keyboard
+			button.row50#hid-reset-button(disabled i18n="hid_reset") Reset HID

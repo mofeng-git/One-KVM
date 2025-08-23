@@ -34,7 +34,6 @@ from ....yamlconf.loader import load_yaml_file
 
 from .... import tools
 from .... import aiotools
-from .... import env
 
 from .. import sysunit
 

@@ -31,7 +31,7 @@ from .auth import AuthInfoSubmanager
 from .system import SystemInfoSubmanager
 from .meta import MetaInfoSubmanager
 from .extras import ExtrasInfoSubmanager
-from .hw import HwInfoSubmanager
+from .health import HealthInfoSubmanager
 from .fan import FanInfoSubmanager
 
 
@@ -39,11 +39,11 @@ from .fan import FanInfoSubmanager
 class InfoManager:
     def __init__(self, config: Section) -> None:
         self.__subs: dict[str, BaseInfoSubmanager] = {
-            "system": SystemInfoSubmanager(config.kvmd.streamer.cmd),
+            "system": SystemInfoSubmanager(config.kvmd.info.hw.platform, config.kvmd.streamer.cmd),
             "auth":   AuthInfoSubmanager(config.kvmd.auth.enabled),
             "meta":   MetaInfoSubmanager(config.kvmd.info.meta),
             "extras": ExtrasInfoSubmanager(config),
-            "hw":     HwInfoSubmanager(**config.kvmd.info.hw._unpack()),
+            "health": HealthInfoSubmanager(**config.kvmd.info.hw._unpack(ignore="platform")),
             "fan":    FanInfoSubmanager(**config.kvmd.info.fan._unpack()),
         }
         self.__queue: "asyncio.Queue[tuple[str, (dict | None)]]" = asyncio.Queue()
@@ -52,11 +52,28 @@ class InfoManager:
         return set(self.__subs)
 
     async def get_state(self, fields: (list[str] | None)=None) -> dict:
-        fields = (fields or list(self.__subs))
-        return dict(zip(fields, await asyncio.gather(*[
+        fields_set = set(fields or list(self.__subs))
+
+        hw = ("hw" in fields_set)  # Old for compatible
+        system = ("system" in fields_set)
+        if hw:
+            fields_set.remove("hw")
+            fields_set.add("health")
+            fields_set.add("system")
+
+        state = dict(zip(fields_set, await asyncio.gather(*[
             self.__subs[field].get_state()
-            for field in fields
+            for field in fields_set
         ])))
+
+        if hw:
+            state["hw"] = {
+                "health":   state.pop("health"),
+                "platform": (state["system"] or {}).pop("platform"),  # {} makes mypy happy
+            }
+            if not system:
+                state.pop("system")
+        return state
 
     async def trigger_state(self) -> None:
         await asyncio.gather(*[
@@ -70,7 +87,7 @@ class InfoManager:
         #   - auth   -- Partial
         #   - meta   -- Partial, nullable
         #   - extras -- Partial, nullable
-        #   - hw     -- Partial
+        #   - health -- Partial
         #   - fan    -- Partial
         # ===========================
 

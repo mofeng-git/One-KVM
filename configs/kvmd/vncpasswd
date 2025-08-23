@@ -1,12 +1,9 @@
-# This file describes the credentials for VNCAuth. The left part before arrow is a passphrase
-# for VNCAuth. The right part is username and password with which the user can access to KVMD API.
-# The arrow is used as a separator and shows the relationship of user registrations on the system.
+# This file contains passwords for the legacy VNCAuth, one per line.
+# The passwords are NOT encrypted.
 #
-# Never use the same passwords for VNC and IPMI users. This default configuration is shown here
-# for example only.
+# WARNING! The VNCAuth method is NOT secure and should not be used at all.
+# But we support it for compatibility with some clients.
 #
-# If this file does not contain any entries, VNCAuth will be disabled and you will only be able
-# to login in using your KVMD username and password using VeNCrypt methods.
+# NEVER use the same passwords for KVMD, IPMI and VNCAuth users.
 
-# pa$$phr@se -> admin:password
-admin -> admin:admin
+admin

@@ -4,7 +4,7 @@
 
 onecloud_rootfs() {
     local unpacker="$SRCPATH/image/onecloud/AmlImg_v0.3.1_linux_amd64"
-    local source_image="$SRCPATH/image/onecloud/Armbian_by-SilentWind_24.5.0-trunk_Onecloud_bookworm_legacy_5.9.0-rc7_minimal.burn.img"
+    local source_image="$SRCPATH/image/onecloud/Armbian_by-SilentWind_24.5.0-trunk_Onecloud_bookworm_legacy_5.9.0-rc7_minimal_support-dvd-emulation.burn.img"
     local bootfs_img="$TMPDIR/bootfs.img"
     local rootfs_img="$TMPDIR/rootfs.img"
     local bootfs_sparse="$TMPDIR/6.boot.PARTITION.sparse"
@@ -15,6 +15,13 @@ onecloud_rootfs() {
     echo "信息：准备 Onecloud Rootfs..."
     ensure_dir "$TMPDIR"
     ensure_dir "$BOOTFS"
+
+    # 自动下载 AmlImg 工具（如果不存在）
+    download_file_if_missing "$unpacker" || { echo "错误：下载 AmlImg 工具失败" >&2; exit 1; }
+    sudo chmod +x "$unpacker" || { echo "错误：设置 AmlImg 工具执行权限失败" >&2; exit 1; }
+
+    # 自动下载源镜像文件（如果不存在）
+    download_file_if_missing "$source_image" || { echo "错误：下载 Onecloud 原始镜像失败" >&2; exit 1; }
 
     echo "信息：解包 Onecloud burn 镜像..."
     sudo "$unpacker" unpack "$source_image" "$TMPDIR" || { echo "错误：解包失败" >&2; exit 1; }
@@ -30,7 +37,12 @@ onecloud_rootfs() {
     sudo losetup "$bootfs_loopdev" "$bootfs_img" || { echo "错误：关联 bootfs 镜像到 $bootfs_loopdev 失败" >&2; exit 1; }
     sudo mount "$bootfs_loopdev" "$BOOTFS" || { echo "错误：挂载 bootfs ($bootfs_loopdev) 失败" >&2; exit 1; }
     BOOTFS_MOUNTED=1
-    sudo cp "$SRCPATH/image/onecloud/meson8b-onecloud-fix.dtb" "$BOOTFS/dtb/meson8b-onecloud.dtb" || { echo "错误：复制修复后的 DTB 文件失败" >&2; exit 1; }
+    
+    # 自动下载 DTB 文件（如果不存在）
+    local dtb_file="$SRCPATH/image/onecloud/meson8b-onecloud-fix.dtb"
+    download_file_if_missing "$dtb_file" || { echo "错误：下载 Onecloud DTB 文件失败" >&2; exit 1; }
+    
+    sudo cp "$dtb_file" "$BOOTFS/dtb/meson8b-onecloud.dtb" || { echo "错误：复制修复后的 DTB 文件失败" >&2; exit 1; }
     sudo umount "$BOOTFS" || { echo "警告：卸载 bootfs ($BOOTFS) 失败" >&2; BOOTFS_MOUNTED=0; } # 卸载失败不应中断流程
     BOOTFS_MOUNTED=0
     echo "信息：分离 bootfs loop 设备 $bootfs_loopdev..."
@@ -60,6 +72,10 @@ cumebox2_rootfs() {
 
     echo "信息：准备 Cumebox2 Rootfs..."
     ensure_dir "$TMPDIR"
+    
+    # 自动下载源镜像文件（如果不存在）
+    download_file_if_missing "$source_image" || { echo "错误：下载 Cumebox2 原始镜像失败" >&2; exit 1; }
+    
     cp "$source_image" "$target_image" || { echo "错误：复制 Cumebox2 原始镜像失败" >&2; exit 1; }
 
     echo "信息：调整镜像分区大小..."
@@ -86,6 +102,10 @@ chainedbox_rootfs_and_fix_dtb() {
 
     echo "信息：准备 Chainedbox Rootfs 并修复 DTB..."
     ensure_dir "$TMPDIR"; ensure_dir "$BOOTFS"
+    
+    # 自动下载源镜像文件（如果不存在）
+    download_file_if_missing "$source_image" || { echo "错误：下载 Chainedbox 原始镜像失败" >&2; exit 1; }
+    
     cp "$source_image" "$target_image" || { echo "错误：复制 Chainedbox 原始镜像失败" >&2; exit 1; }
 
     echo "信息：挂载 boot 分区并修复 DTB..."
@@ -95,7 +115,12 @@ chainedbox_rootfs_and_fix_dtb() {
     sudo losetup --offset "$boot_offset" "$bootfs_loopdev" "$target_image" || { echo "错误：设置 boot 分区 loop 设备 $bootfs_loopdev 失败" >&2; exit 1; }
     sudo mount "$bootfs_loopdev" "$BOOTFS" || { echo "错误：挂载 boot 分区 ($bootfs_loopdev) 失败" >&2; exit 1; }
     BOOTFS_MOUNTED=1
-    sudo cp "$SRCPATH/image/chainedbox/rk3328-l1pro-1296mhz-fix.dtb" "$BOOTFS/dtb/rockchip/rk3328-l1pro-1296mhz.dtb" || { echo "错误：复制修复后的 DTB 文件失败" >&2; exit 1; }
+    
+    # 自动下载 DTB 文件（如果不存在）
+    local dtb_file="$SRCPATH/image/chainedbox/rk3328-l1pro-1296mhz-fix.dtb"
+    download_file_if_missing "$dtb_file" || { echo "错误：下载 Chainedbox DTB 文件失败" >&2; exit 1; }
+    
+    sudo cp "$dtb_file" "$BOOTFS/dtb/rockchip/rk3328-l1pro-1296mhz.dtb" || { echo "错误：复制修复后的 DTB 文件失败" >&2; exit 1; }
     sudo umount "$BOOTFS" || { echo "警告：卸载 boot 分区 ($BOOTFS) 失败" >&2; BOOTFS_MOUNTED=0; }
     BOOTFS_MOUNTED=0
     echo "信息：分离 boot loop 设备 $bootfs_loopdev..."
@@ -116,6 +141,10 @@ vm_rootfs() {
 
     echo "信息：准备 Vm Rootfs..."
     ensure_dir "$TMPDIR"
+    
+    # 自动下载源镜像文件（如果不存在）
+    download_file_if_missing "$source_image" || { echo "错误：下载 Vm 原始镜像失败" >&2; exit 1; }
+    
     cp "$source_image" "$target_image" || { echo "错误：复制 Vm 原始镜像失败" >&2; exit 1; }
 
     echo "信息：设置带偏移量的 loop 设备..."
@@ -134,6 +163,10 @@ e900v22c_rootfs() {
 
     echo "信息：准备 E900V22C Rootfs..."
     ensure_dir "$TMPDIR"
+    
+    # 自动下载源镜像文件（如果不存在）
+    download_file_if_missing "$source_image" || { echo "错误：下载 E900V22C 原始镜像失败" >&2; exit 1; }
+    
     cp "$source_image" "$target_image" || { echo "错误：复制 E900V22C 原始镜像失败" >&2; exit 1; }
 
     echo "信息：扩展镜像文件 (${add_size_mb}MB)..."
@@ -164,6 +197,10 @@ octopus_flanet_rootfs() {
 
     echo "信息：准备 Octopus-Planet Rootfs..."
     ensure_dir "$TMPDIR"; ensure_dir "$BOOTFS"
+    
+    # 自动下载源镜像文件（如果不存在）
+    download_file_if_missing "$source_image" || { echo "错误：下载 Octopus-Planet 原始镜像失败" >&2; exit 1; }
+    
     cp "$source_image" "$target_image" || { echo "错误：复制 Octopus-Planet 原始镜像失败" >&2; exit 1; }
 
     echo "信息：挂载 boot 分区并修改 uEnv.txt (使用 VIM2 DTB)..."
@@ -199,14 +236,30 @@ octopus_flanet_rootfs() {
 config_cumebox2_files() {
     echo "信息：为 Cumebox2 配置特定文件 (OLED, DTB)..."
     ensure_dir "$ROOTFS/etc/oled"
+    
+    # 自动下载 Cumebox2 相关文件（如果不存在）
+    local dtb_file="$SRCPATH/image/cumebox2/v-fix.dtb"
+    local ssd_file="$SRCPATH/image/cumebox2/ssd"
+    local config_file="$SRCPATH/image/cumebox2/config.json"
+    
+    download_file_if_missing "$dtb_file" || echo "警告：下载 Cumebox2 DTB 失败"
+    download_file_if_missing "$ssd_file" || echo "警告：下载 Cumebox2 ssd 脚本失败"
+    download_file_if_missing "$config_file" || echo "警告：下载 Cumebox2 配置文件失败"
+    
     # 注意 DTB 路径可能需要根据实际 Armbian 版本调整
-    sudo cp "$SRCPATH/image/cumebox2/v-fix.dtb" "$ROOTFS/boot/dtb/amlogic/meson-gxl-s905x-khadas-vim.dtb" || echo "警告：复制 Cumebox2 DTB 失败"
-    sudo cp "$SRCPATH/image/cumebox2/ssd" "$ROOTFS/usr/bin/" || echo "警告：复制 Cumebox2 ssd 脚本失败"
+    sudo cp "$dtb_file" "$ROOTFS/boot/dtb/amlogic/meson-gxl-s905x-khadas-vim.dtb" || echo "警告：复制 Cumebox2 DTB 失败"
+    sudo cp "$ssd_file" "$ROOTFS/usr/bin/" || echo "警告：复制 Cumebox2 ssd 脚本失败"
 	sudo chmod +x "$ROOTFS/usr/bin/ssd" || echo "警告：设置 ssd 脚本执行权限失败"
-    sudo cp "$SRCPATH/image/cumebox2/config.json" "$ROOTFS/etc/oled/config.json" || echo "警告：复制 OLED 配置文件失败"
+    sudo cp "$config_file" "$ROOTFS/etc/oled/config.json" || echo "警告：复制 OLED 配置文件失败"
 }
 
 config_octopus_flanet_files() {
     echo "信息：为 Octopus-Planet 配置特定文件 (model_database.conf)..."
-    sudo cp "$SRCPATH/image/octopus-flanet/model_database.conf" "$ROOTFS/etc/model_database.conf" || echo "警告：复制 model_database.conf 失败"
+    
+    # 自动下载 Octopus-Planet 相关文件（如果不存在）
+    local config_file="$SRCPATH/image/octopus-flanet/model_database.conf"
+    
+    download_file_if_missing "$config_file" || echo "警告：下载 Octopus-Planet 配置文件失败"
+    
+    sudo cp "$config_file" "$ROOTFS/etc/model_database.conf" || echo "警告：复制 model_database.conf 失败"
 } 

@@ -4,7 +4,8 @@ TESTENV_IMAGE ?= kvmd-testenv
 TESTENV_HID ?= /dev/ttyS10
 TESTENV_VIDEO ?= /dev/video0
 TESTENV_GPIO ?= /dev/gpiochip0
-TESTENV_RELAY ?= $(if $(shell ls /dev/hidraw0 2>/dev/null || true),/dev/hidraw0,)
+TESTENV_RELAY ?=
+#TESTENV_RELAY ?= $(if $(shell ls /dev/hidraw0 2>/dev/null || true),/dev/hidraw0,)
 
 LIBGPIOD_VERSION ?= 1.6.3
 
@@ -28,6 +29,8 @@ all:
 	@ echo "    make testenv          # Build test environment"
 	@ echo "    make tox              # Run tests and linters"
 	@ echo "    make tox E=pytest     # Run selected test environment"
+	@ echo "    make tox-local        # Run tests and linters locally (no Docker)"
+	@ echo "    make tox-local E=flake8 # Run selected test locally"
 	@ echo "    make gpio             # Create gpio mockup"
 	@ echo "    make run              # Run kvmd"
 	@ echo "    make run CMD=...      # Run specified command inside kvmd environment"
@@ -96,9 +99,13 @@ tox: testenv
 		"
 
 
+tox-local:
+	@./check-code.sh $(if $(E),$(E),all)
+
+
 $(TESTENV_GPIO):
 	test ! -e $(TESTENV_GPIO)
-	sudo modprobe gpio-mockup gpio_mockup_ranges=0,40
+	sudo modprobe gpio_mockup gpio_mockup_ranges=0,40
 	test -c $(TESTENV_GPIO)
 
 

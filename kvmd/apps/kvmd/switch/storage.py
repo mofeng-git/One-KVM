@@ -39,6 +39,7 @@ from .lib import get_logger
 
 from .types import Edid
 from .types import Edids
+from .types import Dummies
 from .types import Color
 from .types import Colors
 from .types import PortNames
@@ -51,6 +52,8 @@ from .types import AtxClickResetDelays
 class StorageContext:
     __F_EDIDS_ALL = "edids_all.json"
     __F_EDIDS_PORT = "edids_port.json"
+
+    __F_DUMMIES = "dummies.json"
 
     __F_COLORS = "colors.json"
 
@@ -73,6 +76,9 @@ class StorageContext:
             if edid_id != Edids.DEFAULT_ID
         })
         await self.__write_json_keyvals(self.__F_EDIDS_PORT, edids.port)
+
+    async def write_dummies(self, dummies: Dummies) -> None:
+        await self.__write_json_keyvals(self.__F_DUMMIES, dummies.kvs)
 
     async def write_colors(self, colors: Colors) -> None:
         await self.__write_json_keyvals(self.__F_COLORS, {
@@ -115,6 +121,10 @@ class StorageContext:
         }
         port_edids = await self.__read_json_keyvals_int(self.__F_EDIDS_PORT)
         return Edids(all_edids, port_edids)
+
+    async def read_dummies(self) -> Dummies:
+        kvs = await self.__read_json_keyvals_int(self.__F_DUMMIES)
+        return Dummies({key: bool(value) for (key, value) in kvs.items()})
 
     async def read_colors(self) -> Colors:
         raw = await self.__read_json_keyvals(self.__F_COLORS)

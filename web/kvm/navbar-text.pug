@@ -1,52 +1,46 @@
-li(id="text-dropdown" class="right")
-	a(class="menu-button" href="#")
+li.right#text-dropdown
+	a.menu-button(href="#")
 		+navbar_led("stream-ocr-led", "led-gear", "feature-disabled")
-		span(i18n="kvm_text44") Text
-	div(id="text-menu" class="menu")
-		div(class="text")
-			b(i18n="kvm_text45") Paste text as keypress sequence#[br]
-			sub(i18n="kvm_text46") Please note that PiKVM cannot switch the keyboard layout
+		span(i18n="text_menu") Text
+	.menu#text-menu(style="width: 360px")
+		.text
+			b(i18n="text_paste_description") Paste text as keypress sequence#[br]
+			sub(i18n="text_keyboard_layout_note") Please note that PiKVM cannot switch the keyboard layout
 		hr
-		div(class="text" style="margin-right: 20px")
-			textarea(id="hid-pak-text" data-focus placeholder="Enter your text here")
-		table(class="kv")
+		.text(style="margin-right: 20px")
+			textarea#hid-pak-text(data-focus placeholder="Enter your text here")
+		table.kv
 			tr
 				td
-					button(disabled data-force-hide-menu id="hid-pak-button" i18n="kvm_text47") &bull; Paste
-				td(i18n="kvm_text48") using host keymap
-				td
-					select(id="hid-pak-keymap-selector")
-		table(class="kv")
+					button#hid-pak-button(disabled data-force-hide-menu title="Ctrl+Enter when the text is focused" i18n="text_paste_button") &bull; Paste
+				td(i18n="text_using_keymap") using host keymap
+				td #[select#hid-pak-keymap-selector]
+		table.kv
 			tr
-				+menu_switch_notable("hid-pak-slow-switch", "Slow typing", true, false)
+				+menu_slider_td3("hid-pak-delay-slider", "hid-pak-delay-value", true, false, "hid-pak-slow-switch") Delay between keys:
 			tr
-				+menu_switch_notable("hid-pak-secure-switch", "Hide input text", true, false)
+				+menu_switch_td2("hid-pak-secure-switch", true, false, "hid-pak-secure-switch") Hide input text:
 			tr
-				+menu_switch_notable("hid-pak-slow-switch", "Slow typing", true, false, "hid-pak-slow-switch")
-			tr
-				+menu_switch_notable("hid-pak-secure-switch", "Hide input text", true, false, "hid-pak-secure-switch")
-			tr
-				+menu_switch_notable("hid-pak-ask-switch", "Ask paste confirmation", true, true, "hid-pak-ask-switch")
-		div(id="stream-ocr" class="feature-disabled")
+				+menu_switch_td2("hid-pak-ask-switch", true, true, "hid-pak-ask-switch") Ask paste confirmation:
+
+		.feature-disabled#stream-ocr
 			hr
 			br
 			hr
-			div(class="text")
-				b(i18n="kvm_text49") Text recognition <sup><i>&beta;</i></sup>#[br]
-				sub(i18n="kvm_text50") #[a(target="_blank" href="https://docs.pikvm.org/ocr") OCR] works locally on PiKVM
+			.text
+				b(i18n="text_ocr_title") Text recognition <sup><i>&beta;</i></sup>#[br]
+				sub(i18n="text_ocr_local_note") #[a(target="_blank" href="https://docs.pikvm.org/ocr") OCR] works locally on PiKVM
 			hr
-			table(class="kv")
+			table.kv
 				tr
-					td
-						button(data-force-hide-menu id="stream-ocr-button" i18n="kvm_text51") &bull; Select area
-					td(i18n="kvm_text52") for
-					td
-						select(id="stream-ocr-lang-selector")
-					td(i18n="kvm_text53") text recognition
-			table(class="kv")
+					td #[button#stream-ocr-button(data-force-hide-menu  i18n="text_ocr_select_area") &bull; Select area]
+					td(i18n="text_ocr_for") for
+					td #[select#stream-ocr-lang-selector]
+					td(i18n="text_ocr_recognition") text recognition
+			table.kv
 				tr
-					td(colspan="4" i18n="kvm_text54") &bull; Press #[b Enter] to recognize and copy text to clipboard
+					td(colspan="4" i18n="text_ocr_enter_hint") &bull; Next hit the #[b Enter] to recognize and copy text to clipboard...
 				tr
-					td(colspan="4" i18n="kvm_text55") &bull; Press #[b Esc] to cancel selection
+					td(colspan="4" i18n="text_ocr_escape_hint") &bull; Or hit the #[b Escape] to cancel a selection
 				tr
 					td

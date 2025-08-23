@@ -153,7 +153,7 @@ class _SpiPhy(BasePhy):  # pylint: disable=too-many-instance-attributes
                 )
 
     @contextlib.contextmanager
-    def __sw_cs_connected(self) -> Generator[(Callable[[bool], bool] | None), None, None]:
+    def __sw_cs_connected(self) -> Generator[(Callable[[bool], None] | None), None, None]:
         if self.__sw_cs_pin > 0:
             with gpiod.request_lines(
                 self.__gpio_device_path,

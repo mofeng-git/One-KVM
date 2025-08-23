@@ -48,7 +48,7 @@ kvmd:
             - "--device=/dev/video0"
             - "--persistent"
             - "--format=mjpeg"
-            - "--encoder=LIBX264-VIDEO"
+            - "--encoder=FFMPEG-VIDEO"
             - "--resolution={resolution}"
             - "--desired-fps={desired_fps}"
             - "--drop-same-frames=30"
@@ -67,6 +67,8 @@ kvmd:
             - "--h264-bitrate={h264_bitrate}"
             - "--h264-gop={h264_gop}"
             - "--h264-preset=ultrafast"
+            - "--h264-hwenc=disabled"
+            - "--h264-hwenc-fallback"
             - "--slowdown"
     gpio:
         drivers:
@@ -167,6 +169,9 @@ otgnet:
         post_start_cmd:
             - "/bin/true"
         pre_stop_cmd:
+            - "/bin/true"
+        sysctl_cmd:
+            #- "/usr/sbin/sysctl"
             - "/bin/true"
 
 nginx:

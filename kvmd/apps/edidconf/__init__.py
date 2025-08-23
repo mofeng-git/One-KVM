@@ -61,6 +61,33 @@ def _print_edid(edid: Edid) -> None:
             pass
 
 
+def _find_out2_edid_path() -> str:
+    card = os.path.basename(os.readlink("/dev/dri/by-path/platform-gpu-card"))
+    path = f"/sys/devices/platform/gpu/drm/{card}/{card}-HDMI-A-2"
+    with open(os.path.join(path, "status")) as file:
+        if file.read().startswith("d"):
+            raise SystemExit("No display found")
+    return os.path.join(path, "edid")
+
+
+def _adopt_out2_ids(dest: Edid) -> None:
+    src = Edid.from_file(_find_out2_edid_path())
+    dest.set_monitor_name(src.get_monitor_name())
+    try:
+        dest.get_monitor_serial()
+    except EdidNoBlockError:
+        pass
+    else:
+        try:
+            ser = src.get_monitor_serial()
+        except EdidNoBlockError:
+            ser = "{:08X}".format(src.get_serial())
+        dest.set_monitor_serial(ser)
+    dest.set_mfc_id(src.get_mfc_id())
+    dest.set_product_id(src.get_product_id())
+    dest.set_serial(src.get_serial())
+
+
 # =====
 def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-branches,too-many-statements
     # (parent_parser, argv, _) = init(
@@ -89,6 +116,10 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
                         help="Import the specified bin/hex EDID to the [--edid] file as a hex text", metavar="<file>")
     parser.add_argument("--import-preset", choices=presets,
                         help="Restore default EDID or choose the preset", metavar=f"{{ {' | '.join(presets)} }}",)
+    parser.add_argument("--import-display-ids", action="store_true",
+                        help="On PiKVM V4, import and adopt IDs from a physical display connected to the OUT2 port")
+    parser.add_argument("--import-display", action="store_true",
+                        help="On PiKVM V4, import full EDID from a physical display connected to the OUT2 port")
     parser.add_argument("--set-audio", type=valid_bool,
                         help="Enable or disable audio", metavar="<yes|no>")
     parser.add_argument("--set-mfc-id",
@@ -120,6 +151,9 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
             imp = f"_{imp}"
         options.imp = os.path.join(options.presets_path, f"{imp}.hex")
 
+    if options.import_display:
+        options.imp = _find_out2_edid_path()
+
     orig_edid_path = options.edid_path
     if options.imp:
         options.export_hex = options.edid_path
@@ -127,6 +161,10 @@ def main(argv: (list[str] | None)=None) -> None:  # pylint: disable=too-many-bra
 
     edid = Edid.from_file(options.edid_path)
     changed = False
+
+    if options.import_display_ids:
+        _adopt_out2_ids(edid)
+        changed = True
 
     for cmd in dir(Edid):
         if cmd.startswith("set_"):

@@ -23,6 +23,7 @@
 import asyncio
 import threading
 import dataclasses
+import typing
 
 import gpiod
 
@@ -101,10 +102,10 @@ class AioReader:  # pylint: disable=too-many-instance-attributes
                 if line_req.wait_edge_events(1):
                     new: dict[int, bool] = {}
                     for event in line_req.read_edge_events():
-                        (pin, value) = self.__parse_event(event)
-                        new[pin] = value
-                    for (pin, value) in new.items():
-                        self.__values[pin].set(value)
+                        (pin, state) = self.__parse_event(event)
+                        new[pin] = state
+                    for (pin, state) in new.items():
+                        self.__values[pin].set(state)
                 else:  # Timeout
                     # XXX: Лимит был актуален для 1.6. Надо проверить, поменялось ли это в 2.x.
                     # Размер буфера ядра - 16 эвентов на линии. При превышении этого числа,
@@ -114,11 +115,12 @@ class AioReader:  # pylint: disable=too-many-instance-attributes
                         self.__values[pin].set(bool(value.value))  # type: ignore
 
     def __parse_event(self, event: gpiod.EdgeEvent) -> tuple[int, bool]:
-        if event.event_type == event.Type.RISING_EDGE:
-            return (event.line_offset, True)
-        elif event.event_type == event.Type.FALLING_EDGE:
-            return (event.line_offset, False)
-        raise RuntimeError(f"Invalid event {event} type: {event.type}")
+        match event.event_type:
+            case event.Type.RISING_EDGE:
+                return (event.line_offset, True)
+            case event.Type.FALLING_EDGE:
+                return (event.line_offset, False)
+        typing.assert_never(event.event_type)
 
 
 class _DebouncedValue:

@@ -40,7 +40,7 @@ div.window-resizable {
 div.window-active {
 	border: var(--border-window-active-2px) !important;
 }
-div.window-resizable.window-active::after {
+div.window-resizable.window-active:not(.window-full-tab)::after {
 	content: "";
 	width: 0;
 	height: 0;
@@ -61,6 +61,11 @@ div.window:fullscreen {
 	width: 100% !important;
 	height: 100% !important;
 	padding: 0px !important;
+
+	/* Ignore stream's resize_hook() */
+	aspect-ratio: unset !important;
+	max-width: unset !important;
+	max-height: unset !important;
 }
 div.window:fullscreen::after {
 	display: none;
@@ -75,6 +80,11 @@ div.window:-webkit-full-screen {
 	width: 100% !important;
 	height: 100% !important;
 	padding: 0px !important;
+
+	/* Ignore stream's resize_hook() */
+	aspect-ratio: unset !important;
+	max-width: unset !important;
+	max-height: unset !important;
 }
 div.window:-webkit-full-screen::after {
 	display: none;
@@ -88,6 +98,11 @@ div.window.window-full-tab {
 	width: 100% !important;
 	height: 100% !important;
 	padding: 0px !important;
+
+	/* Ignore stream's resize_hook() */
+	aspect-ratio: unset !important;
+	max-width: unset !important;
+	max-height: unset !important;
 }
 
 div.window div.window-header {
@@ -126,35 +141,35 @@ div.window div.window-header-grabbed {
 	border-bottom: var(--border-intensive-thin);
 }
 
-div.window div.window-header button.window-button-full-screen,
-div.window div.window-header button.window-button-enter-full-tab,
-div.window div.window-header button.window-button-original,
-div.window div.window-header button.window-button-maximize,
-div.window div.window-header button.window-button-close {
-	border: none;
+div.window div.window-header div.window-buttons {
 	position: absolute;
 	top: -2px;
+	right: 0;
+	font-size: 0px;
+	background-color: var(--cs-window-default-bg);
+}
+
+div.window div.window-header div.window-buttons button.window-button-full-screen,
+div.window div.window-header div.window-buttons button.window-button-enter-full-tab,
+div.window div.window-header div.window-buttons button.window-button-original,
+div.window div.window-header div.window-buttons button.window-button-maximize,
+div.window div.window-header div.window-buttons button.window-button-close {
+	line-height: 1px;
+	border: none;
+	border-radius: 0px;
 	width: 44px;
 	height: 24px;
 	padding-left: 0;
 	padding-right: 0;
+	margin-left: 1px;
 	color: var(--cs-window-closer-default-fg);
 	display: inline-block;
 }
-div.window div.window-header button.window-button-full-screen {
-	right: 180px;
+div.window[data-centered] div.window-header div.window-buttons button.window-button-original {
+	color: var(--cs-window-button-special-fg);
 }
-div.window div.window-header button.window-button-enter-full-tab {
-	right: 135px;
-}
-div.window div.window-header button.window-button-original {
-	right: 90px;
-}
-div.window div.window-header button.window-button-maximize {
-	right: 45px;
-}
-div.window div.window-header button.window-button-close {
-	right: 0px;
+div.window[data-maximized] div.window-header div.window-buttons button.window-button-maximize {
+	color: var(--cs-window-button-special-fg);
 }
 
 div.window button.window-button-exit-full-tab {

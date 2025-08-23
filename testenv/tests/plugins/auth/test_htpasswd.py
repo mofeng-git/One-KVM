@@ -22,9 +22,9 @@
 
 import os
 
-import passlib.apache
-
 import pytest
+
+from kvmd.crypto import KvmdHtpasswdFile
 
 from . import get_configured_auth_service
 
@@ -34,7 +34,7 @@ from . import get_configured_auth_service
 async def test_ok__htpasswd_service(tmpdir) -> None:  # type: ignore
     path = os.path.abspath(str(tmpdir.join("htpasswd")))
 
-    htpasswd = passlib.apache.HtpasswdFile(path, new=True)
+    htpasswd = KvmdHtpasswdFile(path, new=True)
     htpasswd.set_password("admin", "pass")
     htpasswd.save()
 

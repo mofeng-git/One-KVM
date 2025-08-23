@@ -85,7 +85,7 @@ class MouseProcess(BaseDeviceProcess):
         self._clear_queue()
         self._queue_event(ResetEvent())
 
-    def send_button_event(self, button: str, state: bool) -> None:
+    def send_button_event(self, button: int, state: bool) -> None:
         self._queue_event(MouseButtonEvent(button, state))
 
     def send_move_event(self, to_x: int, to_y: int) -> None:

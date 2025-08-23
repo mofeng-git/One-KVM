@@ -49,13 +49,15 @@ oneeighth 0x03 shift altgr
 quotedbl 0x04
 3 0x04 shift
 numbersign 0x04 altgr
-sterling 0x04 shift altgr
+# KVMD
+#sterling 0x04 shift altgr
 
 # evdev 5 (0x5), QKeyCode "4", number 0x5
 apostrophe 0x05
 4 0x05 shift
 braceleft 0x05 altgr
-dollar 0x05 shift altgr
+# KVMD
+#dollar 0x05 shift altgr
 
 # evdev 6 (0x6), QKeyCode "5", number 0x6
 parenleft 0x06
@@ -91,7 +93,8 @@ plusminus 0x0a shift altgr
 agrave 0x0b
 0 0x0b shift
 at 0x0b altgr
-degree 0x0b shift altgr
+# KVMD
+#degree 0x0b shift altgr
 
 # evdev 12 (0xc), QKeyCode "minus", number 0xc
 parenright 0x0c
@@ -122,7 +125,8 @@ AE 0x10 shift altgr
 z 0x11
 Z 0x11 shift
 guillemotleft 0x11 altgr
-less 0x11 shift altgr
+#KVMD
+#less 0x11 shift altgr
 
 # evdev 18 (0x12), QKeyCode "e", number 0x12
 e 0x12
@@ -200,7 +204,8 @@ Greek_OMEGA 0x1e shift altgr
 s 0x1f
 S 0x1f shift
 ssharp 0x1f altgr
-section 0x1f shift altgr
+# KVMD
+#section 0x1f shift altgr
 
 # evdev 32 (0x20), QKeyCode "d", number 0x20
 d 0x20
@@ -247,7 +252,8 @@ Lstroke 0x26 shift altgr
 # evdev 39 (0x27), QKeyCode "semicolon", number 0x27
 m 0x27
 M 0x27 shift
-mu 0x27 altgr
+# KVMD
+#mu 0x27 altgr
 masculine 0x27 shift altgr
 
 # evdev 40 (0x28), QKeyCode "apostrophe", number 0x28
@@ -280,7 +286,8 @@ Lstroke 0x2c shift altgr
 x 0x2d
 X 0x2d shift
 guillemotright 0x2d altgr
-greater 0x2d shift altgr
+# KVMD
+#greater 0x2d shift altgr
 
 # evdev 46 (0x2e), QKeyCode "c", number 0x2e
 c 0x2e

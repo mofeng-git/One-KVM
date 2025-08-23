@@ -25,7 +25,6 @@ import asyncio
 import contextlib
 import dataclasses
 import functools
-import time
 import os
 import copy
 import pyfatfs
@@ -303,7 +302,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
                 self.__drive.set_rw_flag(self.__state.vd.rw)
                 self.__drive.set_cdrom_flag(self.__state.vd.cdrom)
-                #reset UDC to fix otg cd-rom and flash switch
+                # reset UDC to fix otg cd-rom and flash switch
                 try:
                     udc_path = self.__drive.get_udc_path()
                     with open(udc_path) as file:
@@ -313,7 +312,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                             file.write("\n")
                     with open(udc_path, "w") as file:
                         file.write(sorted(os.listdir("/sys/class/udc"))[0])
-                except:
+                except Exception:
                     logger = get_logger(0)
                     logger.error("Can't reset UDC")
                 if self.__state.vd.rw:
@@ -329,69 +328,7 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
 
     @aiotools.atomic_fg
     async def make_image(self, zipped: bool) -> None:
-        #Note: img size >= 64M
-        def create_fat_image(img_size: int, file_img_path: str, source_dir: str, fat_type: int = 32, label: str = 'One-KVM'):
-            def add_directory_to_fat(fat: str, src_path: str, dst_path: str):
-                for item in os.listdir(src_path):
-                    src_item_path = os.path.join(src_path, item)
-                    dst_item_path = os.path.join(dst_path, item)
-
-                    if os.path.isdir(src_item_path):
-                        fat.makedir(dst_item_path)
-                        add_directory_to_fat(fat, src_item_path, dst_item_path)
-                    elif os.path.isfile(src_item_path):
-                        with open(src_item_path, 'rb') as src_file:
-                            fat.create(dst_item_path)
-                            with fat.open(dst_item_path, 'wb') as dst_file:
-                                dst_file.write(src_file.read())
-            print(file_img_path)
-            with open(file_img_path, 'wb') as f:
-                f.seek(img_size * 1024 *1024 - 1)
-                f.write(b'\0')
-            fat_file =  pyfatfs.PyFat.PyFat()
-            try:
-                fat_file.mkfs(file_img_path, fat_type = fat_type, label = label)
-            except Exception as e:
-                get_logger(0).exception(f"Error making FAT Filesystem: {e}")
-            finally:
-                fat_file.close()
-            fat_handle =  pyfatfs.PyFatFS.PyFatFS(file_img_path)
-            try:
-                add_directory_to_fat(fat_handle, source_dir, '/')
-            except Exception as e:
-                get_logger(0).exception(f"Error adding directory to FAT image: {e}")
-            finally:
-                fat_handle.close()
-
-        def extract_fat_image(file_img_path: str, output_dir: str):
-            try:
-                for root, dirs, files in os.walk(output_dir, topdown=False):
-                    for name in files:
-                        os.remove(os.path.join(root, name))
-                    for name in dirs:
-                        os.rmdir(os.path.join(root, name))
-            except Exception as e:
-                get_logger(0).exception(f"Error removing normal file or directory: {e}")
-            fat_handle =  pyfatfs.PyFatFS.PyFatFS(file_img_path)
-            try:
-                def extract_directory(fat_handle, src_path: str, dst_path: str):
-                    for entry in fat_handle.listdir(src_path):
-                        src_item_path = os.path.join(src_path, entry)
-                        dst_item_path = os.path.join(dst_path, entry)
-
-                        if fat_handle.gettype(src_item_path) is pyfatfs.PyFatFS.ResourceType.directory:
-                            os.makedirs(dst_item_path, exist_ok=True)
-                            extract_directory(fat_handle, src_item_path, dst_item_path)
-                        else:
-                            with fat_handle.open(src_item_path, 'rb') as src_file:
-                                with open(dst_item_path, 'wb') as dst_file:
-                                    dst_file.write(src_file.read())
-                extract_directory(fat_handle, '/', output_dir)
-            except Exception as e:
-                get_logger(0).exception(f"Error extracting FAT image: {e}")
-            finally:
-                fat_handle.close()
-
+        # Note: img size >= 64M
         async with self.__state.busy():
             msd_path = self.__msd_path
             file_storage_path = os.path.join(msd_path, self.__normalfiles_path)
@@ -402,10 +339,74 @@ class Plugin(BaseMsd):  # pylint: disable=too-many-instance-attributes
                     os.makedirs(file_storage_path)
                 if os.path.exists(file_img_path):
                     os.remove(file_img_path)
-                create_fat_image(img_size, file_img_path, file_storage_path)
+                self._create_fat_image(img_size, file_img_path, file_storage_path)
             else:
                 if os.path.exists(file_img_path):
-                    extract_fat_image(file_img_path, file_storage_path)
+                    self._extract_fat_image(file_img_path, file_storage_path)
+
+    def _create_fat_image(self, img_size: int, file_img_path: str, source_dir: str, fat_type: int = 32, label: str = "One-KVM") -> None:
+        print(file_img_path)
+        with open(file_img_path, "wb") as file_handle:
+            file_handle.seek(img_size * 1024 * 1024 - 1)
+            file_handle.write(b"\0")
+        fat_file = pyfatfs.PyFat.PyFat()
+        try:
+            fat_file.mkfs(file_img_path, fat_type=fat_type, label=label)
+        except Exception as exception:
+            get_logger(0).exception("Error making FAT Filesystem: %s", exception)
+        finally:
+            fat_file.close()
+        fat_handle = pyfatfs.PyFatFS.PyFatFS(file_img_path)
+        try:
+            self._add_directory_to_fat(fat_handle, source_dir, "/")
+        except Exception as exception:
+            get_logger(0).exception("Error adding directory to FAT image: %s", exception)
+        finally:
+            fat_handle.close()
+
+    def _add_directory_to_fat(self, fat, src_path: str, dst_path: str) -> None:  # type: ignore
+        for item in os.listdir(src_path):
+            src_item_path = os.path.join(src_path, item)
+            dst_item_path = os.path.join(dst_path, item)
+
+            if os.path.isdir(src_item_path):
+                fat.makedir(dst_item_path)  # type: ignore
+                self._add_directory_to_fat(fat, src_item_path, dst_item_path)
+            elif os.path.isfile(src_item_path):
+                with open(src_item_path, "rb") as src_file:
+                    fat.create(dst_item_path)  # type: ignore
+                    with fat.open(dst_item_path, "wb") as dst_file:  # type: ignore
+                        dst_file.write(src_file.read())
+
+    def _extract_fat_image(self, file_img_path: str, output_dir: str) -> None:
+        try:
+            for root, dirs, files in os.walk(output_dir, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+        except Exception as exception:
+            get_logger(0).exception("Error removing normal file or directory: %s", exception)
+        fat_handle = pyfatfs.PyFatFS.PyFatFS(file_img_path)
+        try:
+            self._extract_directory(fat_handle, "/", output_dir)
+        except Exception as exception:
+            get_logger(0).exception("Error extracting FAT image: %s", exception)
+        finally:
+            fat_handle.close()
+
+    def _extract_directory(self, fat_handle, src_path: str, dst_path: str) -> None:  # type: ignore
+        for entry in fat_handle.listdir(src_path):  # type: ignore
+            src_item_path = os.path.join(src_path, entry)
+            dst_item_path = os.path.join(dst_path, entry)
+
+            if fat_handle.gettype(src_item_path) is pyfatfs.PyFatFS.ResourceType.directory:  # type: ignore
+                os.makedirs(dst_item_path, exist_ok=True)
+                self._extract_directory(fat_handle, src_item_path, dst_item_path)
+            else:
+                with fat_handle.open(src_item_path, "rb") as src_file:  # type: ignore
+                    with open(dst_item_path, "wb") as dst_file:
+                        dst_file.write(src_file.read())
 
     @contextlib.asynccontextmanager
     async def read_image(self, name: str) -> AsyncGenerator[MsdFileReader, None]:

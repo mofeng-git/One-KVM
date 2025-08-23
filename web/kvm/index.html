@@ -27,49 +27,50 @@
   <head>
     <meta charset="utf-8">
     <title>One-KVM Session</title>
-    <link rel="apple-touch-icon" sizes="180x180" href="/share/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/share/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/share/favicon-16x16.png">
-    <link rel="manifest" href="/share/site.webmanifest">
-    <link rel="mask-icon" href="/share/safari-pinned-tab.svg" color="#5bbad5">
+    <link rel="apple-touch-icon" sizes="180x180" href="../share/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../share/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../share/favicon-16x16.png">
+    <link rel="manifest" href="../share/site.webmanifest">
+    <link rel="mask-icon" href="../share/safari-pinned-tab.svg" color="#5bbad5">
     <meta name="msapplication-TileColor" content="#2b5797">
     <meta name="theme-color" content="#ffffff">
-    <link rel="stylesheet" href="/share/css/vars.css">
-    <link rel="stylesheet" href="/share/css/main.css">
-    <link rel="stylesheet" href="/share/css/navbar.css">
-    <link rel="stylesheet" href="/share/css/window.css">
-    <link rel="stylesheet" href="/share/css/modal.css">
-    <link rel="stylesheet" href="/share/css/led.css">
-    <link rel="stylesheet" href="/share/css/slider.css">
-    <link rel="stylesheet" href="/share/css/switch.css">
-    <link rel="stylesheet" href="/share/css/radio.css">
-    <link rel="stylesheet" href="/share/css/progress.css">
-    <link rel="stylesheet" href="/share/css/keypad.css">
-    <link rel="stylesheet" href="/share/css/tabs.css">
-    <link rel="stylesheet" href="/share/css/kvm/stream.css">
-    <link rel="stylesheet" href="/share/css/kvm/hid.css">
-    <link rel="stylesheet" href="/share/css/kvm/msd.css">
-    <link rel="stylesheet" href="/share/css/kvm/system.css">
-    <link rel="stylesheet" href="/share/css/kvm/keyboard.css">
-    <link rel="stylesheet" href="/share/css/kvm/about.css">
-    <link rel="stylesheet" href="/share/css/user.css">
-    <script src="/share/js/i18n/jquery-3.7.1.min.js"></script>
-    <script src="/share/js/i18n/jquery.i18n.min.js"></script>
-    <script src="/share/js/i18n/i18n.js"></script>
-    <script type="module">import {main} from "/share/js/kvm/main.js";
+    <link rel="stylesheet" href="../share/css/vars.css">
+    <link rel="stylesheet" href="../share/css/main.css">
+    <link rel="stylesheet" href="../share/css/navbar.css">
+    <link rel="stylesheet" href="../share/css/window.css">
+    <link rel="stylesheet" href="../share/css/modal.css">
+    <link rel="stylesheet" href="../share/css/led.css">
+    <link rel="stylesheet" href="../share/css/slider.css">
+    <link rel="stylesheet" href="../share/css/switch.css">
+    <link rel="stylesheet" href="../share/css/radio.css">
+    <link rel="stylesheet" href="../share/css/progress.css">
+    <link rel="stylesheet" href="../share/css/keypad.css">
+    <link rel="stylesheet" href="../share/css/tabs.css">
+    <link rel="stylesheet" href="../share/css/kvm/stream.css">
+    <link rel="stylesheet" href="../share/css/kvm/msd.css">
+    <link rel="stylesheet" href="../share/css/kvm/system.css">
+    <link rel="stylesheet" href="../share/css/kvm/keyboard.css">
+    <link rel="stylesheet" href="../share/css/kvm/about.css">
+    <link rel="stylesheet" href="../share/css/user.css">
+    <script src="../share/js/i18n/jquery-3.7.1.min.js"></script>
+    <script src="../share/js/i18n/jquery.i18n.min.js"></script>
+    <script src="../share/js/i18n/i18n.js"></script>
+    <script type="module">import {setRootPrefix} from "../share/js/vars.js";
+      setRootPrefix("../");
+      import {main} from "../share/js/kvm/main.js";
       main();
     </script>
   </head>
   <body class="body-no-select">
     <ul id="navbar">
-      <li class="left"><a id="logo" href="/">&larr;&nbsp;&nbsp;<img class="svg-gray" src="/share/svg/logo.svg" alt="&amp;pi;-kvm"></a></li>
+      <li class="left"><a id="logo" href="../">&larr;&nbsp;&nbsp;<img class="svg-gray" src="../share/svg/logo.svg" alt="&amp;pi;-kvm"></a></li>
       <div class="hidden" id="hw-health-dropdown">
-        <li class="left"><a class="menu-button" href="#"><img class="hidden" id="hw-health-undervoltage-led" src="/share/svg/led-undervoltage.svg"><img class="hidden" id="hw-health-overheating-led" src="/share/svg/led-overheating.svg"></a>
+        <li class="left"><a class="menu-button" href="#"><img class="hidden" id="hw-health-undervoltage-led" src="../share/svg/led-undervoltage.svg"><img class="hidden" id="hw-health-overheating-led" src="../share/svg/led-overheating.svg"></a>
           <div class="menu">
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
                     </tr>
                     <tr>
@@ -83,7 +84,7 @@
                   <div class="text">
                     <table>
                       <tr>
-                        <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-undervoltage.svg"></td>
+                        <td rowspan="2"><img class="sign led-gray" src="../share/svg/led-undervoltage.svg"></td>
                         <td style="line-height:1.5"><b>Undervoltage detected</b></td>
                       </tr>
                       <tr>
@@ -98,7 +99,7 @@
                   <div class="text">
                     <table>
                       <tr>
-                        <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-overheating.svg"></td>
+                        <td rowspan="2"><img class="sign led-gray" src="../share/svg/led-overheating.svg"></td>
                         <td style="line-height:1.5"><b>Overheating detected</b></td>
                       </tr>
                       <tr>
@@ -112,12 +113,12 @@
         </li>
       </div>
       <div class="hidden" id="fan-health-dropdown">
-        <li class="left"><a class="menu-button" href="#"><img class="hidden" id="fan-health-led" src="/share/svg/led-fan.svg"></a>
+        <li class="left"><a class="menu-button" href="#"><img class="hidden" id="fan-health-led" src="../share/svg/led-fan.svg"></a>
           <div class="menu">
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Raspberry Pi's health is at risk</b></td>
                     </tr>
                     <tr>
@@ -131,11 +132,11 @@
                   <div class="text">
                     <table>
                       <tr>
-                        <td rowspan="2"><img class="sign led-gray" src="/share/svg/led-fan.svg"></td>
+                        <td rowspan="2"><img class="sign led-gray" src="../share/svg/led-fan.svg"></td>
                         <td style="line-height:1.5"><b>Fan failed</b></td>
                       </tr>
                       <tr>
-                        <td><sup style="line-height:1">A fan error occured, please <a href="/api/log?seek=3600&amp;follow=1" target="_blank">check the log</a></sup></td>
+                        <td><sup style="line-height:1">A fan error occured, please <a href="../api/log?seek=3600&amp;follow=1" target="_blank">check the log</a></sup></td>
                       </tr>
                     </table>
                   </div>
@@ -143,22 +144,22 @@
           </div>
         </li>
       </div>
-      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="/share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="/share/svg/led-video.svg"><img class="led-gray" id="hid-keyboard-led" src="/share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="/share/svg/led-hid-mouse.svg"><span i18n="kvm_text3">System</span></a>
+      <li class="right" id="system-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="link-led" src="../share/svg/led-link.svg"><img class="led-gray" id="stream-led" src="../share/svg/led-video.svg"><img class="led-gray" id="hid-keyboard-led" src="../share/svg/led-hid-keyboard.svg"><img class="led-gray" id="hid-mouse-led" src="../share/svg/led-hid-mouse.svg"><span i18n="system_menu">System</span></a>
         <div class="menu" id="system-menu">
           <table class="kv">
             <tr>
-              <td class="value" i18n="kvm_text4">Runtime settings &amp; tools</td>
+              <td class="value" i18n="system_runtime_settings">Runtime settings &amp; tools</td>
               <td class="feature-disabled" id="system-tool-webterm">
-                <button class="small" data-force-hide-menu data-show-window="webterm-window" i18n="kvm_text5">&bull; Term</button>
+                <button class="small" data-force-hide-menu data-show-window="webterm-window" i18n="system_terminal">&bull; Term</button>
               </td>
               <td id="system-tool-about">
-                <button class="small" data-force-hide-menu data-show-window="about-window" i18n="kvm_text6">&bull; About</button>
+                <button class="small" data-force-hide-menu data-show-window="about-window" i18n="system_about">&bull; About</button>
               </td>
               <td id="system-tool-log">
-                <button class="small" data-force-hide-menu id="open-log-button" i18n="kvm_text7">&bull; Log</button>
+                <button class="small" id="open-log-button" data-force-hide-menu i18n="system_log">&bull; Log</button>
               </td>
               <td class="feature-disabled" id="system-tool-wol">
-                <button class="__gpio-button-__wol__ __gpio-button small" data-force-hide-menu data-channel="__wol__" data-confirm="Are you sure to send Wake-on-LAN packet to the server?" i18n="kvm_text8">&bull; WoL</button>
+                <button class="__gpio-button-__wol__ __gpio-button small" data-force-hide-menu data-channel="__wol__" data-confirm="Are you sure to send Wake-on-LAN packet to the server?" i18n="system_wol">&bull; WoL</button>
               </td>
             </tr>
           </table>
@@ -167,8 +168,8 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
-                      <td style="line-height:1.5"><b>WebRTC is not supported by this browser</b></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b i18n="stream-message-no-support-webrtc">WebRTC is not supported by this browser</b></td>
                     </tr>
                   </table>
                 </div>
@@ -178,8 +179,8 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/warning.svg"></td>
-                      <td style="line-height:1.5"><b>Direct HTTP H.264 streaming is not supported</b></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b i18n="stream-message-no-support-drict-h264">Direct H.264 streaming is not supported</b></td>
                     </tr>
                   </table>
                 </div>
@@ -189,8 +190,8 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign stream-message-no-h264" src="/share/svg/warning.svg"></td>
-                      <td style="line-height:1.5"><b>H.264 is not supported by this browser</b></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/warning.svg"></td>
+                      <td style="line-height:1.5"><b i18n="stream-message-no-h264">H.264 is not supported by this browser</b></td>
                     </tr>
                   </table>
                 </div>
@@ -198,79 +199,87 @@
           </div>
           <table class="kv">
             <tr class="feature-disabled" id="stream-resolution">
-              <td i18n="kvm_text9">Resolution:</td>
+              <td i18n="video_resolution">Resolution:</td>
               <td>
-                <select disabled id="stream-resolution-selector"></select>
+                <select id="stream-resolution-selector" disabled></select>
               </td>
             </tr>
             <tr class="feature-disabled" id="stream-quality">
-              <td i18n="kvm_text10">JPEG quality:</td>
-              <td class="value-slider">
-                <input class="slider" disabled type="range" id="stream-quality-slider">
-              </td>
-              <td class="value-number" id="stream-quality-value"></td>
+                  <td i18n="video_jpeg_quality">JPEG quality:
+                  </td>
+                  <td class="value-slider">
+                    <input type="range" id="stream-quality-slider">
+                  </td>
+                  <td class="value-number" id="stream-quality-value"></td>
             </tr>
             <tr>
-              <td i18n="kvm_text11">JPEG max fps:</td>
-              <td class="value-slider">
-                <input class="slider" disabled type="range" id="stream-desired-fps-slider">
-              </td>
-              <td class="value-number" id="stream-desired-fps-value"></td>
+                  <td i18n="video_jpeg_fps">JPEG max fps:
+                  </td>
+                  <td class="value-slider">
+                    <input type="range" id="stream-desired-fps-slider">
+                  </td>
+                  <td class="value-number" id="stream-desired-fps-value"></td>
             </tr>
             <tr class="feature-disabled" id="stream-h264-bitrate">
-              <td i18n="kvm_text12">H.264 kbps:</td>
-              <td class="value-slider">
-                <input class="slider" disabled type="range" id="stream-h264-bitrate-slider">
-              </td>
-              <td class="value-number" id="stream-h264-bitrate-value"></td>
+                  <td i18n="video_h264_bitrate">H.264 kbps:
+                  </td>
+                  <td class="value-slider">
+                    <input type="range" id="stream-h264-bitrate-slider">
+                  </td>
+                  <td class="value-number" id="stream-h264-bitrate-value"></td>
             </tr>
             <tr class="feature-disabled" id="stream-h264-gop">
-              <td i18n="kvm_text13">H.264 <a target="_blank" href="https://docs.pikvm.org/webrtc">gop</a>:</td>
-              <td class="value-slider">
-                <input class="slider" disabled type="range" id="stream-h264-gop-slider">
-              </td>
-              <td class="value-number" id="stream-h264-gop-value"></td>
+                  <td i18n="video_h264_gop">H.264 gop:
+                  </td>
+                  <td class="value-slider">
+                    <input type="range" id="stream-h264-gop-slider">
+                  </td>
+                  <td class="value-number" id="stream-h264-gop-value"></td>
             </tr>
             <tr class="feature-disabled" id="stream-mode">
-              <td i18n="kvm_text14">Video <a target="_blank" href="https://docs.pikvm.org/webrtc">mode</a>:</td>
-              <td>
-                <div class="radio-box">
-                  <input checked type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg">
-                  <label for="stream-mode-radio-mjpeg">Legacy<br>MJPEG</label>
-                  <input type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media">
-                  <label for="stream-mode-radio-media">Direct<br>H.264</label>
-                  <input type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus">
-                  <label for="stream-mode-radio-janus">WebRTC<br>H.264	</label>
-                </div>
-              </td>
+                  <td i18n="video_mode"><a target="_blank" href="https://docs.pikvm.org/webrtc">Video mode</a>:
+                  </td>
+                  <td>
+                    <div class="radio-box">
+                      <input type="radio" id="stream-mode-radio-janus" name="stream-mode-radio" value="janus">
+                      <label for="stream-mode-radio-janus">WebRTC<br>H.264</label>
+                      <input type="radio" id="stream-mode-radio-media" name="stream-mode-radio" value="media">
+                      <label for="stream-mode-radio-media">Direct<br>H.264</label>
+                      <input type="radio" id="stream-mode-radio-mjpeg" name="stream-mode-radio" value="mjpeg" checked>
+                      <label for="stream-mode-radio-mjpeg">Legacy<br>MJPEG</label>
+                    </div>
+                  </td>
             </tr>
             <tr class="feature-disabled" id="stream-orient">
-              <td i18n="kvm_text17">Orientation:</td>
-              <td>
-                <div class="radio-box">
-                  <input checked type="radio" id="stream-orient-radio-0" name="stream-orient-radio" value="0">
-                  <label for="stream-orient-radio-0" i18n="kvm_text18">Default</label>
-                  <input type="radio" id="stream-orient-radio-90" name="stream-orient-radio" value="90">
-                  <label for="stream-orient-radio-90">90&deg;</label>
-                  <input type="radio" id="stream-orient-radio-180" name="stream-orient-radio" value="180">
-                  <label for="stream-orient-radio-180">180&deg;</label>
-                  <input type="radio" id="stream-orient-radio-270" name="stream-orient-radio" value="270">
-                  <label for="stream-orient-radio-270">270&deg;</label>
-                </div>
-              </td>
+                  <td i18n="video_orientation">Orientation:
+                  </td>
+                  <td>
+                    <div class="radio-box">
+                      <input type="radio" id="stream-orient-radio-0" name="stream-orient-radio" value="0" checked>
+                      <label for="stream-orient-radio-0">Default</label>
+                      <input type="radio" id="stream-orient-radio-90" name="stream-orient-radio" value="90">
+                      <label for="stream-orient-radio-90">90&deg;</label>
+                      <input type="radio" id="stream-orient-radio-180" name="stream-orient-radio" value="180">
+                      <label for="stream-orient-radio-180">180&deg;</label>
+                      <input type="radio" id="stream-orient-radio-270" name="stream-orient-radio" value="270">
+                      <label for="stream-orient-radio-270">270&deg;</label>
+                    </div>
+                  </td>
             </tr>
             <tr class="feature-disabled" id="stream-audio">
-              <td i18n="kvm_text19">Audio volume:</td>
-              <td class="value-slider">
-                <input class="slider" type="range" id="stream-audio-volume-slider">
-              </td>
-              <td class="value-number" id="stream-audio-volume-value"></td>
+                  <td i18n="audio_volume">Audio volume:
+                  </td>
+                  <td class="value-slider">
+                    <input type="range" id="stream-audio-volume-slider">
+                  </td>
+                  <td class="value-number" id="stream-audio-volume-value"></td>
             </tr>
             <tr class="feature-disabled" id="stream-mic">
-                  <td>Microphone:</td>
+                  <td>Microphone:
+                  </td>
                   <td align="right">
                     <div class="switch-box">
-                      <input disabled type="checkbox" id="stream-mic-switch">
+                      <input checked="stream-mic-switch" disabled type="checkbox" id="stream-mic-switch">
                       <label for="stream-mic-switch"><span class="switch-inner"></span><span class="switch"></span></label>
                     </div>
                   </td>
@@ -278,149 +287,172 @@
           </table>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row33" data-force-hide-menu data-show-window="stream-window" i18n="kvm_text20">&bull; Show stream</button>
-            <button class="row33" data-force-hide-menu id="stream-screenshot-button" i18n="kvm_text21">&bull; Screenshot</button>
-            <button class="row33" id="stream-reset-button" i18n="kvm_text22">Reset stream</button>
+            <button class="row33" data-force-hide-menu data-show-window="stream-window" i18n="stream_show">&bull; Show stream</button>
+            <button class="row33" id="stream-screenshot-button" data-force-hide-menu i18n="stream_screenshot">&bull; Screenshot</button>
+            <button class="row33" id="stream-reset-button" i18n="stream_reset">Reset stream</button>
           </div>
-          <div class="text"><b i18n="kvm_text79">Video Record<br></b><sub i18n="kvm_text80">Record video using the browser API, and will be downloaded automatically</sub></div>
+          <hr>
+          <div class="text"><b i18n="video_record_title">Video Record<br></b><sub i18n="video_record_description">Record video using the browser API, and will be downloaded automatically</sub></div>
           <div class="buttons buttons-row">
-            <button class="row50" data-force-hide-menu id="stream-record-start-button" i18n="kvm_text81">&bull; Start recording</button>
-            <button class="row50" data-force-hide-menu id="stream-record-stop-button" i18n="kvm_text82">&bull; End recording</button>
+            <button class="row50" id="stream-record-start-button" data-force-hide-menu i18n="video_record_start">&bull; Start recording</button>
+            <button class="row50" id="stream-record-stop-button" data-force-hide-menu i18n="video_record_stop">&bull; End recording</button>
           </div>
           <hr>
           <table class="kv">
             <tr class="feature-disabled" id="hid-outputs-keyboard">
-              <td i18n="kvm_text23">Keyboard mode:</td>
+              <td i18n="hid_keyboard_mode">Keyboard mode:</td>
               <td>
                 <div class="radio-box" id="hid-outputs-keyboard-box"></div>
               </td>
             </tr>
             <tr class="feature-disabled" id="hid-outputs-mouse">
-              <td i18n="kvm_text24">Mouse <a target="_blank" href="https://docs.pikvm.org/mouse">mode</a>:</td>
+              <td><a target="_blank" href="https://docs.pikvm.org/mouse" i18n="hid_mouse_mode">Mouse mode</a>:</td>
               <td>
                 <div class="radio-box" id="hid-outputs-mouse-box"></div>
               </td>
             </tr>
           </table>
-          <details>
-            <summary i18n="kvm_text25">Keyboard &amp; Mouse (HID) settings</summary>
-            <div class="spoiler">
-              <table class="kv">
-                <tr>
-                      <td i18n="hid-keyboard-swap-cc-switch">Swap Left Ctrl and Caps keys:</td>
-                      <td align="right">
-                        <div class="switch-box">
-                          <input type="checkbox" id="hid-keyboard-swap-cc-switch">
-                          <label for="hid-keyboard-swap-cc-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                        </div>
+              <details>
+                <summary i18n="hid_settings">Keyboard &amp; mouse (HID) settings</summary>
+                <div class="spoiler">
+                      <table class="kv">
+                        <tr>
+                              <td i18n="hid-keyboard-swap-cc-switch">Swap Left Ctrl and Caps keys:
+                              </td>
+                              <td align="right">
+                                <div class="switch-box">
+                                  <input type="checkbox" id="hid-keyboard-swap-cc-switch">
+                                  <label for="hid-keyboard-swap-cc-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                                </div>
+                              </td>
+                        </tr>
+                      </table>
+                  <hr>
+                  <table class="kv">
+                    <tr>
+                          <td i18n="hid_mouse_polling">Mouse polling:
+                          </td>
+                          <td class="value-slider">
+                            <input type="range" id="hid-mouse-rate-slider">
+                          </td>
+                          <td class="value-number" id="hid-mouse-rate-value"></td>
+                    </tr>
+                    <tr class="feature-disabled" id="hid-mouse-sens">
+                          <td i18n="hid_mouse_sensitivity">Relative sensitivity:
+                          </td>
+                          <td class="value-slider">
+                            <input type="range" id="hid-mouse-sens-slider">
+                          </td>
+                          <td class="value-number" id="hid-mouse-sens-value"></td>
+                    </tr>
+                    <tr class="feature-disabled" id="hid-mouse-squash">
+                          <td i18n="hid-mouse-squash-switch">Squash relative moves:
+                          </td>
+                          <td align="right">
+                            <div class="switch-box">
+                              <input disabled type="checkbox" id="hid-mouse-squash-switch">
+                              <label for="hid-mouse-squash-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                            </div>
+                          </td>
+                    </tr>
+                    <tr>
+                      <td i18n="hid_mouse_reverse_scroll">Reverse scrolling:</td>
+                      <td>
+                        <table>
+                          <tr>
+                                <td i18n="hid-mouse-reverse-scrolling-switch">Y:
+                                </td>
+                                <td align="right">
+                                  <div class="switch-box">
+                                    <input type="checkbox" id="hid-mouse-reverse-scrolling-switch">
+                                    <label for="hid-mouse-reverse-scrolling-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                                  </div>
+                                </td>
+                            <td>&nbsp;&nbsp;</td>
+                                <td i18n="hid-mouse-reverse-panning-switch">X:
+                                </td>
+                                <td align="right">
+                                  <div class="switch-box">
+                                    <input type="checkbox" id="hid-mouse-reverse-panning-switch">
+                                    <label for="hid-mouse-reverse-panning-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                                  </div>
+                                </td>
+                          </tr>
+                        </table>
                       </td>
-                </tr>
-              </table>
-              <hr>
-              <table class="kv">
-                <tr>
-                  <td i18n="kvm_text26">Mouse polling:</td>
-                  <td class="value-slider">
-                    <input class="slider" type="range" id="hid-mouse-rate-slider">
-                  </td>
-                  <td class="value-number" id="hid-mouse-rate-value"></td>
-                </tr>
-                <tr class="feature-disabled" id="hid-mouse-sens">
-                  <td i18n="kvm_text27">Relative sensitivity:</td>
-                  <td class="value-slider">
-                    <input class="slider" disabled type="range" id="hid-mouse-sens-slider">
-                  </td>
-                  <td class="value-number" id="hid-mouse-sens-value"></td>
-                </tr>
-                <tr class="feature-disabled" id="hid-mouse-squash">
-                      <td i18n="hid-mouse-squash-switch">Squash relative moves:</td>
-                      <td align="right">
-                        <div class="switch-box">
-                          <input checked type="checkbox" id="hid-mouse-squash-switch">
-                          <label for="hid-mouse-squash-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                        </div>
-                      </td>
-                </tr>
-                <tr>
-                  <td i18n="kvm_text28">Reverse scrolling:</td>
-                  <td>
-                    <table>
-                      <tr>
-                            <td>Y:</td>
-                            <td align="right">
-                              <div class="switch-box">
-                                <input type="checkbox" id="hid-mouse-reverse-scrolling-switch">
-                                <label for="hid-mouse-reverse-scrolling-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                              </div>
-                            </td>
-                        <td>&nbsp;&nbsp;</td>
-                            <td>X:</td>
-                            <td align="right">
-                              <div class="switch-box">
-                                <input type="checkbox" id="hid-mouse-reverse-panning-switch">
-                                <label for="hid-mouse-reverse-panning-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                              </div>
-                            </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                <tr>
-                      <td i18n="hid-mouse-cumulative-scrolling-switch">Cumulative scrolling:</td>
-                      <td align="right">
-                        <div class="switch-box">
-                          <input type="checkbox" id="hid-mouse-cumulative-scrolling-switch">
-                          <label for="hid-mouse-cumulative-scrolling-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                        </div>
-                      </td>
-                </tr>
-                <tr>
-                  <td i18n="kvm_text29">Scroll rate:</td>
-                  <td class="value-slider">
-                    <input class="slider" type="range" id="hid-mouse-scroll-slider">
-                  </td>
-                  <td class="value-number" id="hid-mouse-scroll-value"></td>
-                </tr>
-                <tr>
-                      <td i18n="hid-mouse-dot-switch">Show the blue dot:</td>
-                      <td align="right">
-                        <div class="switch-box">
-                          <input checked type="checkbox" id="hid-mouse-dot-switch">
-                          <label for="hid-mouse-dot-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                        </div>
-                      </td>
-                </tr>
-              </table>
-            </div>
-          </details>
-          <details>
-            <summary i18n="kvm_text83">Web UI settings</summary>
-            <div class="spoiler">
-              <table class="kv">
-                <tr>
-                      <td i18n="page-close-ask-switch">Ask page close confirmation:</td>
-                      <td align="right">
-                        <div class="switch-box">
-                          <input checked type="checkbox" id="page-close-ask-switch">
-                          <label for="page-close-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                        </div>
-                      </td>
-                </tr>
-                <tr>
-                      <td i18n="page-full-tab-stream-switch">Expand for the entire tab by default:</td>
-                      <td align="right">
-                        <div class="switch-box">
-                          <input type="checkbox" id="page-full-tab-stream-switch">
-                          <label for="page-full-tab-stream-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                        </div>
-                      </td>
-                </tr>
-              </table>
-            </div>
-          </details>
+                    </tr>
+                    <tr>
+                          <td i18n="hid-mouse-cumulative-scrolling-switch">Cumulative scrolling:
+                          </td>
+                          <td align="right">
+                            <div class="switch-box">
+                              <input type="checkbox" id="hid-mouse-cumulative-scrolling-switch">
+                              <label for="hid-mouse-cumulative-scrolling-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                            </div>
+                          </td>
+                    </tr>
+                    <tr>
+                          <td i18n="hid_mouse_scroll_rate">Scroll rate:
+                          </td>
+                          <td class="value-slider">
+                            <input type="range" id="hid-mouse-scroll-slider">
+                          </td>
+                          <td class="value-number" id="hid-mouse-scroll-value"></td>
+                    </tr>
+                    <tr>
+                          <td i18n="hid-mouse-dot-switch">Show the blue dot:
+                          </td>
+                          <td align="right">
+                            <div class="switch-box">
+                              <input checked type="checkbox" id="hid-mouse-dot-switch">
+                              <label for="hid-mouse-dot-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                            </div>
+                          </td>
+                    </tr>
+                  </table>
+                </div>
+              </details>
+              <details>
+                <summary i18n="web_ui_settings">Web UI settings</summary>
+                <div class="spoiler">
+                  <table class="kv">
+                    <tr>
+                          <td i18n="page-close-ask-switch">Ask page close confirmation:
+                          </td>
+                          <td align="right">
+                            <div class="switch-box">
+                              <input checked type="checkbox" id="page-close-ask-switch">
+                              <label for="page-close-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                            </div>
+                          </td>
+                    </tr>
+                    <tr>
+                          <td i18n="page-full-tab-stream-switch">Expand for the entire tab by default:
+                          </td>
+                          <td align="right">
+                            <div class="switch-box">
+                              <input type="checkbox" id="page-full-tab-stream-switch">
+                              <label for="page-full-tab-stream-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                            </div>
+                          </td>
+                    </tr>
+                    <tr>
+                          <td i18n="stream-suspend-switch">Suspend stream when tab is not active:
+                          </td>
+                          <td align="right">
+                            <div class="switch-box">
+                              <input type="checkbox" id="stream-suspend-switch">
+                              <label for="stream-suspend-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                            </div>
+                          </td>
+                    </tr>
+                  </table>
+                </div>
+              </details>
           <table class="kv">
             <tr>
-                  <td i18n="hid-keyboard-bad-link-switch">Bad link mode (release keys immediately):</td>
+                  <td i18n="hid-keyboard-bad-link-switch">Bad link mode (release keys immediately):
+                  </td>
                   <td align="right">
                     <div class="switch-box">
                       <input type="checkbox" id="hid-keyboard-bad-link-switch">
@@ -429,7 +461,8 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="hid-connect">
-                  <td i18n="hid-connect-switch">Connect HID to Server:</td>
+                  <td i18n="hid-connect-switch">Connect HID to Server:
+                  </td>
                   <td align="right">
                     <div class="switch-box">
                       <input checked type="checkbox" id="hid-connect-switch">
@@ -438,7 +471,8 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="hid-jiggler">
-                  <td i18n="hid-jiggler-switch"><a href="https://docs.pikvm.org/mouse_jiggler" target="_blank">Mouse jiggler</a>:</td>
+                  <td i18n="hid-jiggler-switch"><a target="_blank" href="https://docs.pikvm.org/mouse_jiggler">Mouse jiggler</a>:
+                  </td>
                   <td align="right">
                     <div class="switch-box">
                       <input disabled type="checkbox" id="hid-jiggler-switch">
@@ -447,7 +481,8 @@
                   </td>
             </tr>
             <tr>
-                  <td i18n="hid-mute-switch">Mute HID input events:</td>
+                  <td i18n="hid-mute-switch">Mute all input HID events:
+                  </td>
                   <td align="right">
                     <div class="switch-box">
                       <input type="checkbox" id="hid-mute-switch">
@@ -456,16 +491,18 @@
                   </td>
             </tr>
             <tr class="feature-disabled" id="v3-usb-breaker">
-                  <td>Connect main USB to Server:</td>
+                  <td i18n="usb_breaker_confirm"><span i18n="usb_connect_main">Connect main USB to Server:</span>
+                  </td>
                   <td align="right">
                     <div class="switch-box">
-                      <input class="__gpio-switch-__v3_usb_breaker__ gpio-switch" disabled type="checkbox" id="__gpio-switch-__v3_usb_breaker__" data-channel="__v3_usb_breaker__" data-confirm-off="Turning off this switch will disconnect the main USB&lt;br&gt;from the server.  Are you sure you want to continue?">
+                      <input class="__gpio-switch-__v3_usb_breaker__ gpio-switch" disabled type="checkbox" id="__gpio-switch-__v3_usb_breaker__" data-channel="__v3_usb_breaker__" data-confirm-off="Turning off this switch will disconnect the main USB from the server.  Are you sure you want to continue?">
                       <label for="__gpio-switch-__v3_usb_breaker__"><span class="switch-inner"></span><span class="switch"></span></label>
                     </div>
                   </td>
             </tr>
             <tr class="feature-disabled" id="v4-locator">
-                  <td>Enable locator LED:</td>
+                  <td i18n="locator_led_enable"><span i18n="locator_led_enable">Enable locator LED:</span>
+                  </td>
                   <td align="right">
                     <div class="switch-box">
                       <input class="__gpio-switch-__v4_locator__ gpio-switch" disabled type="checkbox" id="__gpio-switch-__v4_locator__" data-channel="__v4_locator__" data-confirm-off="">
@@ -476,18 +513,19 @@
           </table>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" data-force-hide-menu data-show-window="keyboard-window" i18n="kvm_text30">&bull; Show keyboard</button>
-            <button class="row50" disabled id="hid-reset-button" i18n="kvm_text31">Reset HID</button>
+            <button class="row50" data-force-hide-menu data-show-window="keyboard-window" i18n="hid_show_keyboard">&bull; Show keyboard</button>
+            <button class="row50" id="hid-reset-button" disabled i18n="hid_reset">Reset HID</button>
           </div>
         </div>
       </li>
-      <li class="right feature-disabled" id="atx-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" id="atx-hdd-led" src="/share/svg/led-atx-hdd.svg"><span>ATX</span></a>
+      <li class="right feature-disabled" id="atx-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="atx-power-led" src="../share/svg/led-atx-power.svg"><img class="led-gray" id="atx-hdd-led" src="../share/svg/led-atx-hdd.svg"><span>ATX</span></a>
         <div class="menu">
           <div class="text"><b>Control the server's power<br></b><sub>Use the short click for ACPI shutdown</sub></div>
           <hr>
               <table class="kv">
                 <tr>
-                      <td i18n="atx-ask-switch">Ask click confirmation:</td>
+                      <td>Ask click confirmation:
+                      </td>
                       <td align="right">
                         <div class="switch-box">
                           <input checked type="checkbox" id="atx-ask-switch">
@@ -498,22 +536,22 @@
               </table>
           <hr>
           <div class="buttons">
-            <button disabled data-force-hide-menu id="atx-power-button">&bull; Click Power <sup><i>short</i></sup></button>
-            <button disabled data-force-hide-menu id="atx-power-button-long">&bull; Click Power <sup><i>long</i></sup></button>
+            <button id="atx-power-button" disabled data-force-hide-menu>&bull; Click Power <sup><i>short</i></sup></button>
+            <button id="atx-power-button-long" disabled data-force-hide-menu>&bull; Click Power <sup><i>long</i></sup></button>
             <hr>
-            <button disabled data-force-hide-menu id="atx-reset-button">&bull; Click Reset</button>
+            <button id="atx-reset-button" disabled data-force-hide-menu>&bull; Click Reset</button>
           </div>
         </div>
       </li>
-      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="/share/svg/led-msd.svg"><span i18n="kvm_text60">Drive</span></a>
+      <li class="right feature-disabled" id="msd-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="msd-led" src="../share/svg/led-msd.svg"><span i18n="drive_menu">Drive</span></a>
         <div class="menu" id="msd-menu">
-          <div class="text"><b i18n="kvm_text61">Mass Storage Drive: </b><span id="msd-status"></span><br></div>
+          <div class="text"><b i18n="drive_title">Mass Storage Drive: </b><span id="msd-status"></span><br></div>
           <hr>
           <div class="hidden" id="msd-message-offline">
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign msd-message-offline" src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-offline" src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Mass Storage Drive is offline</b></td>
                     </tr>
                   </table>
@@ -524,7 +562,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign msd-message-image-broken" src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-image-broken" src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Current image is broken!</b></td>
                     </tr>
                     <tr>
@@ -538,7 +576,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign msd-message-too-big-for-dvd" src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-too-big-for-dvd" src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Current image is too big for DVD!</b></td>
                     </tr>
                     <tr>
@@ -552,7 +590,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign msd-message-out-of-storage" src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-out-of-storage" src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Current image is out of storage</b></td>
                     </tr>
                     <tr>
@@ -566,7 +604,7 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign msd-message-rw-enabled" src="/share/svg/warning.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-rw-enabled" src="../share/svg/warning.svg"></td>
                       <td style="line-height:1.5"><b>Read-write mode is enabled</b></td>
                     </tr>
                     <tr>
@@ -582,8 +620,8 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign msd-message-downloads" src="/share/svg/info.svg"></td>
-                      <td style="line-height:1.5"><b>The image is being downloaded from PiKVM</b></td>
+                      <td rowspan="2"><img class="sign msd-message-downloads" src="../share/svg/info.svg"></td>
+                      <td style="line-height:1.5"><b>The image is being downloaded from One-KVM</b></td>
                     </tr>
                     <tr>
                       <td><sup style="line-height:1">Please wait</sup></td>
@@ -594,31 +632,33 @@
           </div>
           <table class="kv">
             <tr>
-              <td i18n="kvm_text62">Image:</td>
+              <td i18n="drive_image">Image:</td>
               <td width="100%">
-                <select disabled id="msd-image-selector"></select>
+                <select id="msd-image-selector" disabled></select>
               </td>
               <td>
-                <button disabled id="msd-download-button" title="Download image"><b>&nbsp;&nbsp;&#x21E9;&nbsp;&nbsp;</b></button>
+                <button id="msd-download-button" disabled title="Download image"><b>&nbsp;&nbsp;&#x21E9;&nbsp;&nbsp;</b></button>
               </td>
               <td>
-                <button disabled id="msd-remove-button" title="Remove image"><b>&nbsp;&nbsp;&times;&nbsp;&nbsp;</b></button>
+                <button id="msd-remove-button" disabled title="Remove image"><b>&nbsp;&nbsp;&times;&nbsp;&nbsp;</b></button>
               </td>
             </tr>
           </table>
           <table class="kv">
             <tr>
-              <td i18n="kvm_text63">Drive <a target="_blank" href="https://docs.pikvm.org/msd">mode</a>:</td>
-              <td>
-                <div class="radio-box">
-                  <input checked type="radio" id="msd-mode-radio-cdrom" name="msd-mode-radio" value="1">
-                  <label for="msd-mode-radio-cdrom">CD/DVD</label>
-                  <input type="radio" id="msd-mode-radio-flash" name="msd-mode-radio" value="0">
-                  <label for="msd-mode-radio-flash">Flash</label>
-                </div>
-              </td>
+                  <td>Drive <a target="_blank" href="https://docs.pikvm.org/msd">mode</a>:
+                  </td>
+                  <td>
+                    <div class="radio-box">
+                      <input type="radio" id="msd-mode-radio-1" name="msd-mode-radio" value="1" checked>
+                      <label for="msd-mode-radio-1">CD/DVD</label>
+                      <input type="radio" id="msd-mode-radio-0" name="msd-mode-radio" value="0">
+                      <label for="msd-mode-radio-0">Flash</label>
+                    </div>
+                  </td>
               <td>&nbsp;</td>
-                  <td i18n="msd-rw-switch">Writable:</td>
+                  <td>Writable:
+                  </td>
                   <td align="right">
                     <div class="switch-box">
                       <input disabled type="checkbox" id="msd-rw-switch">
@@ -627,52 +667,52 @@
                   </td>
             </tr>
             <tr>
-              <td i18n="kvm_text84">文件内容：</td>
+              <td i18n="drive_file_display">Files：</td>
               <td>
                 <div class="radio-box">
-                  <input checked type="radio" id="msd-mode-radio-image" name="file-mode-radio" value="1">
-                  <label for="msd-mode-radio-image" i18n="kvm_text90">ImageFiles</label>
-                  <input type="radio" id="msd-mode-radio-file" name="file-mode-radio" value="0">
-                  <label for="msd-mode-radio-file" i18n="kvm_text91">NormalFiles</label>
+                  <input id="msd-mode-radio-image" checked type="radio" name="file-mode-radio" value="1">
+                  <label for="msd-mode-radio-image" i18n="drive_image_files">ImageFiles</label>
+                  <input id="msd-mode-radio-file" type="radio" name="file-mode-radio" value="0">
+                  <label for="msd-mode-radio-file" i18n="drive_normal_files">NormalFiles</label>
                 </div>
               </td>
             </tr>
           </table>
+          <hr>
           <div id="msd-storages"></div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" disabled id="msd-select-new-button" i18n="kvm_text64">Select image to upload</button>
-            <button class="row25" disabled id="msd-upload-new-button" i18n="kvm_text65">Upload</button>
-            <button class="row25" disabled id="msd-abort-new-button" i18n="kvm_text66">Abort</button>
+            <button class="row50" id="msd-select-new-button" disabled i18n="drive_select_upload">Select image to upload</button>
+            <button class="row25" id="msd-upload-new-button" disabled i18n="drive_upload">Upload</button>
+            <button class="row25" id="msd-abort-new-button" disabled i18n="drive_abort">Abort</button>
           </div>
           <div class="hidden" id="msd-message-another-user-uploads">
-            <hr>
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign msd-message-another-user-uploads" src="/share/svg/info.svg"></td>
+                      <td rowspan="2"><img class="sign msd-message-another-user-uploads" src="../share/svg/info.svg"></td>
                       <td style="line-height:1.5"><b>Another user uploads an image</b></td>
                     </tr>
                   </table>
                 </div>
+            <hr>
           </div>
           <div class="hidden" id="msd-new-sub">
-            <hr>
             <table class="kv">
               <tr>
-                <td i18n="kvm_text68">Specify a local file:</td>
+                <td i18n="drive_local_file">Specify a local file:</td>
                 <td>
-                  <input type="file" id="msd-new-file">
+                  <input id="msd-new-file" type="file">
                 </td>
               </tr>
               <tr>
-                <td i18n="kvm_text69"><b>Or</b> paste a URL:</td>
+                <td i18n="drive_paste_url"><b>Or</b> paste a URL:</td>
                 <td>
-                  <input type="text" id="msd-new-url" style="width: 100%">
+                  <input id="msd-new-url" type="text" style="width: 100%">
                 </td>
               </tr>
               <tr class="hidden" id="msd-new-part">
-                <td i18n="kvm_text70">Upload partition:</td>
+                <td i18n="drive_upload_partition">Upload partition:</td>
                 <td width="100%">
                   <select id="msd-new-part-selector"></select>
                 </td>
@@ -681,94 +721,97 @@
           </div>
           <div class="hidden" id="msd-uploading-sub">
             <hr>
+          </div>
+          <div class="hidden" id="msd-uploading-sub">
             <table class="kv">
               <tr>
-                <td i18n="kvm_text74">New image:</td>
+                <td i18n="drive_new_image">New image:</td>
                 <td class="value" id="msd-uploading-name"></td>
               </tr>
               <tr>
-                <td i18n="kvm_text75">Upload size:</td>
+                <td i18n="drive_upload_size">Upload size:</td>
                 <td class="value" id="msd-uploading-size"></td>
               </tr>
             </table>
             <div class="text">
               <div class="progress" id="msd-uploading-progress"><span class="progress-value" id="msd-uploading-progress-value"></span></div>
             </div>
+            <hr>
           </div>
           <div class="hidden" id="msd-new-tips">
-            <hr>
             <table class="kv">
               <tr>
-                <td class="value" i18n="kvm_text71">Note:</td>
-                <td i18n="kvm_text72">&bull; Don't close the browser page until the upload is complete.</td>
+                <td class="value" i18n="drive_note">Note:</td>
+                <td i18n="drive_note_browser">&bull; Don't close the browser page until the upload is complete.</td>
               </tr>
               <tr>
                 <td></td>
-                <td i18n="kvm_text73">&bull; To speed up the upload, close the stream window.</td>
+                <td i18n="drive_note_stream">&bull; To speed up the upload, close the stream window.</td>
               </tr>
             </table>
           </div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" disabled id="msd-connect-button" i18n="kvm_text76">Connect drive to Server</button>
-            <button class="row25" disabled id="msd-disconnect-button" i18n="kvm_text77">Disconnect</button>
-            <button class="row25" disabled id="msd-reset-button" i18n="kvm_text78">Reset</button>
+            <button class="row50" id="msd-connect-button" disabled i18n="drive_connect">Connect drive to Server</button>
+            <button class="row25" id="msd-disconnect-button" disabled i18n="drive_disconnect">Disconnect</button>
+            <button class="row25" id="msd-reset-button" disabled i18n="drive_reset">Reset</button>
           </div>
           <hr>
-          <div class="text"><b i18n="kvm_text85">Quick file transfer:</b><br><sub i18n="kvm_text86">&bull; Select NormalFiles tab to upload, package them and mount image</sub><br><sub i18n="kvm_text87">&bull; Disconnect MSD, unpackage it, select tab to download</sub><br></div>
+          <div class="text"><b i18n="drive_quick_transfer">Quick file transfer:</b><br><sub i18n="drive_transfer_upload_note">&bull; Select NormalFiles tab to upload, package them and mount image</sub><br><sub i18n="drive_transfer_download_note">&bull; Disconnect MSD, unpackage it, select tab to download</sub><br></div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row50" id="msd-file-image-update-button" i18n="kvm_text88">Package files into image</button>
-            <button class="row50" id="msd-file-image-unzip-button" i18n="kvm_text89">Unpackage files from image</button>
+            <button class="row50" id="msd-file-image-update-button" i18n="drive_package_files">Package files into image</button>
+            <button class="row50" id="msd-file-image-unzip-button" i18n="drive_unpackage_files">Unpackage files from image</button>
           </div>
           <hr>
         </div>
       </li>
-      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="/share/svg/led-gear.svg"><span i18n="kvm_text32">Macro</span></a>
+      <li class="right" id="macro-dropdown"><a class="menu-button" href="#"><img class="led-gray" id="hid-recorder-led" src="../share/svg/led-gear.svg"><span i18n="macro_menu">Macro</span></a>
         <div class="menu">
-          <div class="text"><b i18n="kvm_text33">Record and play HID/ATX/GPIO actions<br></b><sub i18n="kvm_text34">For security reasons, the record will not be saved on the PiKVM</sub></div>
+          <div class="text"><b i18n="macro_description">Record and play HID/ATX/GPIO actions<br></b><sub i18n="macro_security_note">For security reasons, the record will not be saved on the PiKVM</sub></div>
           <hr>
           <div class="buttons buttons-row">
-            <button class="row25" disabled data-force-hide-menu id="hid-recorder-record" i18n="kvm_text35">&bull; Rec</button>
-            <button class="row25" disabled id="hid-recorder-stop" i18n="kvm_text36">Stop</button>
-            <button class="row25" disabled id="hid-recorder-play" i18n="kvm_text37">Play</button>
-            <button class="row25" disabled id="hid-recorder-clear" i18n="kvm_text38">Clear</button>
+            <button class="row25" id="hid-recorder-record" disabled data-force-hide-menu i18n="macro_record">&bull; Rec</button>
+            <button class="row25" id="hid-recorder-stop" disabled i18n="macro_stop">Stop</button>
+            <button class="row25" id="hid-recorder-play" disabled i18n="macro_play">Play</button>
+            <button class="row25" id="hid-recorder-clear" disabled i18n="macro_clear">Clear</button>
           </div>
           <hr>
           <table class="kv">
             <tr>
-              <td i18n="kvm_text39">Script time:</td>
-              <td class="value" colspan="2" id="hid-recorder-time">00:00:00.0</td>
+              <td i18n="macro_script_time">Script time:</td>
+              <td class="value" id="hid-recorder-time" colspan="2">00:00:00.0</td>
             </tr>
             <tr>
-              <td i18n="kvm_text40">Scripted events:</td>
-              <td class="value" id="hid-recorder-events-count">0</td>
-              <td><sup><i i18n="kvm_text41">include delays</i></sup></td>
+              <td i18n="macro_script_events">Scripted events:</td>
+              <tdvalue id="hid-recorder-events-count">0</tdvalue>
+              <td><sup><i i18n="macro_include_delays">include delays</i></sup></td>
             </tr>
           </table>
           <hr>
               <table class="kv">
                 <tr>
-                      <td i18n="hid-recorder-loop-switch">Infinite loop playback:</td>
+                      <td>
+                      </td>
                       <td align="right">
                         <div class="switch-box">
-                          <input disabled type="checkbox" id="hid-recorder-loop-switch">
+                          <input type="checkbox" id="hid-recorder-loop-switch">
                           <label for="hid-recorder-loop-switch"><span class="switch-inner"></span><span class="switch"></span></label>
                         </div>
                       </td>
                 </tr>
               </table>
           <hr>
-          <input type="file" id="hid-recorder-new-script-file">
+          <input id="hid-recorder-new-script-file" type="file" style="display: none">
           <div class="buttons buttons-row">
-            <button class="row50" disabled id="hid-recorder-upload" i18n="kvm_text42">Upload script</button>
-            <button class="row50" disabled id="hid-recorder-download" i18n="kvm_text43">Download script</button>
+            <button class="row50" id="hid-recorder-upload" disabled i18n="macro_upload_script">Upload script</button>
+            <button class="row50" id="hid-recorder-download" disabled i18n="macro_download_script">Download script</button>
           </div>
         </div>
       </li>
-      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="/share/svg/led-gear.svg"><span i18n="kvm_text44">Text</span></a>
-        <div class="menu" id="text-menu">
-          <div class="text"><b i18n="kvm_text45">Paste text as keypress sequence<br></b><sub i18n="kvm_text46">Please note that PiKVM cannot switch the keyboard layout</sub></div>
+      <li class="right" id="text-dropdown"><a class="menu-button" href="#"><img class="feature-disabled" id="stream-ocr-led" src="../share/svg/led-gear.svg"><span i18n="text_menu">Text</span></a>
+        <div class="menu" id="text-menu" style="width: 360px">
+          <div class="text"><b i18n="text_paste_description">Paste text as keypress sequence<br></b><sub i18n="text_keyboard_layout_note">Please note that PiKVM cannot switch the keyboard layout</sub></div>
           <hr>
           <div class="text" style="margin-right: 20px">
             <textarea id="hid-pak-text" data-focus placeholder="Enter your text here"></textarea>
@@ -776,9 +819,9 @@
           <table class="kv">
             <tr>
               <td>
-                <button disabled data-force-hide-menu id="hid-pak-button" i18n="kvm_text47">&bull; Paste</button>
+                <button id="hid-pak-button" disabled data-force-hide-menu title="Ctrl+Enter when the text is focused" i18n="text_paste_button">&bull; Paste</button>
               </td>
-              <td i18n="kvm_text48">using host keymap</td>
+              <td i18n="text_using_keymap">using host keymap</td>
               <td>
                 <select id="hid-pak-keymap-selector"></select>
               </td>
@@ -786,34 +829,16 @@
           </table>
           <table class="kv">
             <tr>
-                  <td>Slow typing:</td>
-                  <td align="right">
-                    <div class="switch-box">
-                      <input type="checkbox" id="hid-pak-slow-switch">
-                      <label for="hid-pak-slow-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                    </div>
+                  <td>Delay between keys:
                   </td>
+                  <td class="value-slider">
+                    <input type="range" id="hid-pak-delay-slider">
+                  </td>
+                  <td class="value-number" id="hid-pak-delay-value"></td>
             </tr>
             <tr>
-                  <td>Hide input text:</td>
-                  <td align="right">
-                    <div class="switch-box">
-                      <input type="checkbox" id="hid-pak-secure-switch">
-                      <label for="hid-pak-secure-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                    </div>
+                  <td i18n="hid-pak-secure-switch">Hide input text:
                   </td>
-            </tr>
-            <tr>
-                  <td i18n="hid-pak-slow-switch">Slow typing:</td>
-                  <td align="right">
-                    <div class="switch-box">
-                      <input type="checkbox" id="hid-pak-slow-switch">
-                      <label for="hid-pak-slow-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                    </div>
-                  </td>
-            </tr>
-            <tr>
-                  <td i18n="hid-pak-secure-switch">Hide input text:</td>
                   <td align="right">
                     <div class="switch-box">
                       <input type="checkbox" id="hid-pak-secure-switch">
@@ -822,7 +847,8 @@
                   </td>
             </tr>
             <tr>
-                  <td i18n="hid-pak-ask-switch">Ask paste confirmation:</td>
+                  <td i18n="hid-pak-ask-switch">Ask paste confirmation:
+                  </td>
                   <td align="right">
                     <div class="switch-box">
                       <input checked type="checkbox" id="hid-pak-ask-switch">
@@ -834,26 +860,26 @@
           <div class="feature-disabled" id="stream-ocr">
             <hr><br>
             <hr>
-            <div class="text"><b i18n="kvm_text49">Text recognition <sup><i>&beta;</i></sup><br></b><sub i18n="kvm_text50"><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> works locally on PiKVM</sub></div>
+            <div class="text"><b i18n="text_ocr_title">Text recognition <sup><i>&beta;</i></sup><br></b><sub i18n="text_ocr_local_note"><a target="_blank" href="https://docs.pikvm.org/ocr">OCR</a> works locally on PiKVM</sub></div>
             <hr>
             <table class="kv">
               <tr>
                 <td>
-                  <button data-force-hide-menu id="stream-ocr-button" i18n="kvm_text51">&bull; Select area</button>
+                  <button id="stream-ocr-button" data-force-hide-menu i18n="text_ocr_select_area">&bull; Select area</button>
                 </td>
-                <td i18n="kvm_text52">for</td>
+                <td i18n="text_ocr_for">for</td>
                 <td>
                   <select id="stream-ocr-lang-selector"></select>
                 </td>
-                <td i18n="kvm_text53">text recognition</td>
+                <td i18n="text_ocr_recognition">text recognition</td>
               </tr>
             </table>
             <table class="kv">
               <tr>
-                <td colspan="4" i18n="kvm_text54">&bull; Press <b>Enter</b> to recognize and copy text to clipboard</td>
+                <td colspan="4" i18n="text_ocr_enter_hint">&bull; Next hit the <b>Enter</b> to recognize and copy text to clipboard...</td>
               </tr>
               <tr>
-                <td colspan="4" i18n="kvm_text55">&bull; Press <b>Esc</b> to cancel selection</td>
+                <td colspan="4" i18n="text_ocr_escape_hint">&bull; Or hit the <b>Escape</b> to cancel a selection</td>
               </tr>
               <tr>
                 <td></td>
@@ -862,13 +888,13 @@
           </div>
         </div>
       </li>
-      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#" i18n="kvm_text56">Shortcuts</a>
+      <li class="right" id="shortcuts-dropdown"><a class="menu-button" href="#" i18n="shortcuts_menu">Shortcuts</a>
         <div class="menu" id="shortcuts-menu">
-          <div class="text"><b i18n="kvm_text57">Quick keyboard shortcuts<br></b><sub i18n="kvm_text58">Also see <i>System &rarr; Show keyboard</i></sub></div>
+          <div class="text"><b i18n="shortcuts_description">Quick keyboard shortcuts<br></b><sub i18n="shortcuts_also_see">Also see <i>System &rarr; Show keyboard</i></sub></div>
           <hr>
           <div class="buttons">
             <div class="buttons-row">
-              <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"></button>
+              <button class="row50" data-force-hide-menu data-shortcut="CapsLock">&bull; Caps Lock &nbsp;<img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="../share/svg/led-square.svg"></button>
               <button class="row50" data-force-hide-menu data-shortcut="MetaLeft">&bull; Left Win</button>
             </div>
             <hr>
@@ -906,30 +932,31 @@
           <hr>
           <div class="text">
             &darr; &bull; Alt+SysRq+... <sup><i>linux magic
-            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html" i18n="kvm_text59">help</a></i></sup>
+            <a target="_blank" href="https://www.kernel.org/doc/html/latest/admin-guide/sysrq.html" i18n="shortcuts_help">help</a></i></sup>
           </div>
           <hr>
           <div class="buttons">
             <div class="buttons-row">
-              <button class="row25" data-shortcut="AltLeft PrintScreen KeyF" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Call the OOM killer to kill a memory hog process">F</button>
-              <button class="row25" data-shortcut="AltLeft PrintScreen KeyM" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Dump current memory info to the console">M</button>
-              <button class="row25" data-shortcut="AltLeft PrintScreen KeyD" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Show all locks that are held">D</button>
-              <button class="row25" data-shortcut="AltLeft PrintScreen KeyT" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Dump a list of current tasks and their information to the console">T</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyF" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center" title="Call the OOM killer to kill a memory hog process">F</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyM" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center" title="Dump current memory info to the console">M</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyD" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center" title="Show all locks that are held">D</button>
+              <button class="row25" data-shortcut="AltLeft PrintScreen KeyT" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center" title="Dump a list of current tasks and their information to the console">T</button>
             </div>
             <hr>
             <div class="buttons-row">
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyR" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Turn off keyboard raw mode, set it to XLATE">R</button>
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyE" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Send a SIGTERM to all processes, except for init">E</button>
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyI" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Send a SIGKILL to all processes, except for init">I</button>
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyS" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Attempt to sync all mounted filesystems">S</button>
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyU" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Attempt to remount all mounted filesystems read-only">U</button>
-              <button class="row16" data-shortcut="AltLeft PrintScreen KeyB" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center;" title="Immediately reboot the system without syncing or unmounting disks">B</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyR" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center" title="Turn off keyboard raw mode, set it to XLATE">R</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyE" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center" title="Send a SIGTERM to all processes, except for init">E</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyI" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center" title="Send a SIGKILL to all processes, except for init">I</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyS" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center" title="Attempt to sync all mounted filesystems">S</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyU" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center" title="Attempt to remount all mounted filesystems read-only">U</button>
+              <button class="row16" data-shortcut="AltLeft PrintScreen KeyB" data-shortcut-confirm="hid-sysrq-ask-switch" style="text-align: center" title="Immediately reboot the system without syncing or unmounting disks">B</button>
             </div>
           </div>
           <hr>
               <table class="kv">
                 <tr>
-                      <td i18n="hid-sysrq-ask-switch">Ask the magic confirmation:</td>
+                      <td i18n>
+                      </td>
                       <td align="right">
                         <div class="switch-box">
                           <input checked type="checkbox" id="hid-sysrq-ask-switch">
@@ -943,9 +970,9 @@
       <li class="right feature-disabled" id="gpio-dropdown"><a class="menu-button" id="gpio-menu-button" href="#"><span>GPIO</span></a>
         <div class="menu" id="gpio-menu"></div>
       </li>
-      <li class="right feature-disabled" id="switch-dropdown"><a class="menu-button" id="switch-menu-button" href="#"><img class="led-gray" id="switch-atx-power-led" src="/share/svg/led-atx-power.svg"><img class="led-gray" id="switch-atx-hdd-led" src="/share/svg/led-atx-hdd.svg"><span>Switch <i><sub id="switch-active-port"></sub></i></span></a>
+      <li class="right feature-disabled" id="switch-dropdown"><a class="menu-button" id="switch-menu-button" href="#"><img class="led-gray" id="switch-atx-power-led" src="../share/svg/led-atx-power.svg"><img class="led-gray" id="switch-atx-hdd-led" src="../share/svg/led-atx-hdd.svg"><span>Switch <i><sub id="switch-active-port"></sub></i></span></a>
         <div class="menu" id="switch-menu">
-          <table style="border-spacing: 0px;">
+          <table style="border-spacing: 0px">
             <tr>
               <td>
                 <div class="text"><b><a target="_blank" href="https://docs.pikvm.org/switch">PiKVM Switch</a> is attached<br></b><sub>Select a port or perform any available action like ATX click</sub></div>
@@ -962,27 +989,39 @@
                 <div class="text">
                   <table>
                     <tr>
-                      <td rowspan="2"><img class="sign " src="/share/svg/info.svg"></td>
+                      <td rowspan="2"><img class="sign " src="../share/svg/info.svg"></td>
                       <td style="line-height:1.5"><b>Good news! Your switch is ready to get the firmware update</b></td>
                     </tr>
                     <tr>
-                      <td><sup style="line-height:1">Please <a target="_blank" href="https://docs.pikvm.org/switch/#firmware-updating">follow the instructions</a> when you decide to install it.</sup></td>
+                      <td><sup style="line-height:1">Please <a target="_blank" href="https://docs.pikvm.org/switch/#firmware-updating">follow the instructions</a>
+                          when you decide to install it.</sup></td>
                     </tr>
                   </table>
                 </div>
             <hr>
           </div>
-              <table class="kv">
-                <tr>
-                      <td>Ask ATX click confirmation:</td>
-                      <td align="right">
-                        <div class="switch-box">
-                          <input checked type="checkbox" id="switch-atx-ask-switch">
-                          <label for="switch-atx-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
-                        </div>
-                      </td>
-                </tr>
-              </table>
+          <table class="kv">
+            <tr>
+                  <td>Ask ATX click confirmation:
+                  </td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input checked type="checkbox" id="switch-atx-ask-switch">
+                      <label for="switch-atx-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+            <tr>
+                  <td>Confirm switching when the Drive is connected:
+                  </td>
+                  <td align="right">
+                    <div class="switch-box">
+                      <input checked type="checkbox" id="switch-msd-ask-switch">
+                      <label for="switch-msd-ask-switch"><span class="switch-inner"></span><span class="switch"></span></label>
+                    </div>
+                  </td>
+            </tr>
+          </table>
           <hr>
           <table class="kv" id="switch-chain"></table>
         </div>
@@ -991,18 +1030,20 @@
     <div class="window" id="stream-ocr-window">
       <div class="hidden" id="stream-ocr-selection"></div>
     </div>
-    <div class="window window-resizable" id="stream-window">
+    <div class="window window-resizable" id="stream-window" data-show-maximized data-organize-hook>
       <div class="window-header" id="stream-window-header">
         <div class="window-grab">MJPEG</div>
-        <button class="window-button-close"><b>&times;</b></button>
-        <button class="window-button-maximize">&#9744;</button>
-        <button class="window-button-original">&bull;</button>
-        <button class="window-button-enter-full-tab">&#9650;</button>
-        <button class="window-button-full-screen">&#10530;</button>
+        <div class="window-buttons">
+          <button class="window-button-full-screen">&#10530;</button>
+          <button class="window-button-enter-full-tab">&#9650;</button>
+          <button class="window-button-original">&bull;</button>
+          <button class="window-button-maximize">&#9744;</button>
+          <button class="window-button-close"><b>&times;</b></button>
+        </div>
       </div>
       <div id="stream-info"></div>
       <button class="window-button-exit-full-tab">&#9660;</button>
-      <div class="stream-box-offline" id="stream-box"><img id="stream-image" src="/share/png/blank-stream.png">
+      <div class="stream-box-offline" id="stream-box"><img id="stream-image" src="../share/png/blank-stream.png">
         <video class="hidden" id="stream-video" disablePictureInPicture="true" autoplay playsinline muted></video>
         <canvas class="hidden" id="stream-canvas"></canvas>
         <div id="stream-fullscreen-active"></div>
@@ -1010,42 +1051,33 @@
       <div class="keypad" id="stream-mouse-buttons" align="center">
         <div class="keypad-block">
           <div class="keypad-row">
-            <div class="key wide-3 left rounded-left" data-code="left">
-              <div class="label">Left</div>
+            <div class="key wide-3 left rounded-left" data-code="left" data-allow-autohold>
+              <div class="label"><b>&bull;</b><br>Left</div>
             </div>
-            <div class="modifier left small rounded-right" data-code="left">
-              <div class="label"><b>&bull;</b><br>Hold</div>
+            <div class="key wide-1 rounded-none" data-code="middle" data-allow-autohold>
+              <div class="label"><b>&bull;</b><br>Mid</div>
             </div>
-            <div class="empty" style="width:15px"></div>
-            <div class="key wide-1 left rounded-left" data-code="middle">
-              <div class="label">Mid</div>
+            <div class="key wide-3 right rounded-right" data-code="right" data-allow-autohold>
+              <div class="label"><b>&bull;</b><br>Right</div>
             </div>
-            <div class="modifier left small rounded-right" data-code="middle">
-              <div class="label"><b>&bull;</b><br>Hold</div>
+            <div class="empty" style="width: 30px"></div>
+            <div class="key small rounded-left" data-code="up" data-allow-autohold>
+              <div class="label"><b>&bull;</b><br>Up</div>
             </div>
-            <div class="empty" style="width:15px"></div>
-            <div class="modifier right small rounded-left" data-code="right">
-              <div class="label"><b>&bull;</b><br>Hold</div>
-            </div>
-            <div class="key wide-3 right rounded-right" data-code="right">
-              <div class="label">Right</div>
-            </div>
-            <div class="empty" style="width:30px"></div>
-            <div class="key small rounded-left" data-code="up">
-              <div class="label">Up</div>
-            </div>
-            <div class="key small rounded-right" data-code="down">
-              <div class="label">Down</div>
+            <div class="key small rounded-right" data-code="down" data-allow-autohold>
+              <div class="label"><b>&bull;</b><br>Down</div>
             </div>
           </div>
         </div>
       </div>
-      <canvas class="hidden" id="stream-mjpeg-canvas"></canvas>
     </div>
-    <div class="window" id="keyboard-window">
+    <div class="window" id="keyboard-window" data-show-centered>
       <div class="window-header" id="keyboard-window-header">
-        <div class="window-grab" i18n="kvm_text15">Virtual Keyboard</div>
-        <button class="window-button-close"><b>&times;</b></button>
+        <div class="window-grab" i18n="virtual_keyboard_title">Virtual Keyboard</div>
+        <div class="window-buttons">
+          <button class="window-button-original">&bull;</button>
+          <button class="window-button-close"><b>&times;</b></button>
+        </div>
       </div>
       <div class="keypad" id="keyboard-desktop" align="center">
         <div class="keypad-block">
@@ -1054,74 +1086,74 @@
                   <div class="label">Esc
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="empty " style="width:24px">
                   <div class="label">&nbsp;</div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F1">
                   <div class="label">F1
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F2">
                   <div class="label">F2
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F3">
                   <div class="label">F3
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F4">
                   <div class="label">F4
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="empty " style="width:10px">
                   <div class="label">&nbsp;</div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F5">
                   <div class="label">F5
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F6">
                   <div class="label">F6
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F7">
                   <div class="label">F7
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F8">
                   <div class="label">F8
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="empty " style="width:10px">
                   <div class="label">&nbsp;</div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F9">
                   <div class="label">F9
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F10">
                   <div class="label">F10
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F11">
                   <div class="label">F11
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="F12">
                   <div class="label">F12
                   </div>
@@ -1133,67 +1165,67 @@
                   <div class="label">~<br>`
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit1">
                   <div class="label">!<br>1
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit2">
                   <div class="label">@<br>2
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit3">
                   <div class="label">#<br>3
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit4">
                   <div class="label">$<br>4
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit5">
                   <div class="label">%<br>5
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit6">
                   <div class="label">^<br>6
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit7">
                   <div class="label">&amp;<br>7
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit8">
                   <div class="label">*<br>8
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit9">
                   <div class="label">(<br>9
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit0">
                   <div class="label">)<br>0
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Minus">
                   <div class="label">_<br>-
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Equal">
                   <div class="label">+<br>=
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key wide-1 right" data-code="Backspace">
                   <div class="label">&#8612;
                   </div>
@@ -1204,67 +1236,67 @@
                   <div class="label">&#8676;<br>&#8677;
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyQ">
                   <div class="label">Q
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyW">
                   <div class="label">W
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyE">
                   <div class="label">E
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyR">
                   <div class="label">R
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyT">
                   <div class="label">T
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyY">
                   <div class="label">Y
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyU">
                   <div class="label">U
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyI">
                   <div class="label">I
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyO">
                   <div class="label">O
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyP">
                   <div class="label">P
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="BracketLeft">
                   <div class="label">{<br>[
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="BracketRight">
                   <div class="label">}<br>]
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Backslash">
                   <div class="label">|<br>&bsol;
                   </div>
@@ -1272,168 +1304,168 @@
           </div>
           <div class="keypad-row">
                 <div class="key wide-2 left small" data-code="CapsLock">
-                  <div class="label"><img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="../share/svg/led-square.svg"><br> Caps Lock
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyA">
                   <div class="label">A
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyS">
                   <div class="label">S
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyD">
                   <div class="label">D
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyF">
                   <div class="label">F
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyG">
                   <div class="label">G
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyH">
                   <div class="label">H
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyJ">
                   <div class="label">J
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyK">
                   <div class="label">K
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyL">
                   <div class="label">L
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Semicolon">
                   <div class="label">:<br>;
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Quote">
                   <div class="label">"<br>'
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key wide-2 right small" data-code="Enter">
                   <div class="label">Enter<br>&crarr;
                   </div>
                 </div>
           </div>
           <div class="keypad-row">
-                <div class="modifier wide-3 left small" data-code="ShiftLeft">
+                <div class="key wide-3 left small" data-code="ShiftLeft" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Shift
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyZ">
                   <div class="label">Z
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyX">
                   <div class="label">X
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyC">
                   <div class="label">C
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyV">
                   <div class="label">V
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyB">
                   <div class="label">B
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyN">
                   <div class="label">N
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyM">
                   <div class="label">M
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Comma">
                   <div class="label">&lt;<br>,
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Period">
                   <div class="label">&gt;<br>.
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Slash">
                   <div class="label">?<br>/
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="modifier wide-3 right small" data-code="ShiftRight">
+                    <div class="spacer"></div>
+                <div class="key wide-3 right small" data-code="ShiftRight" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Shift
                   </div>
                 </div>
           </div>
           <div class="keypad-row">
-                <div class="modifier wide-1 left small" data-code="ControlLeft">
+                <div class="key wide-1 left small" data-code="ControlLeft" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Ctrl
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
-                <div class="modifier wide-1 left small" data-code="MetaLeft">
+                    <div class="spacer-fixed"></div>
+                <div class="key wide-1 left small" data-code="MetaLeft" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Win
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
-                <div class="modifier wide-1 left small" data-code="AltLeft">
+                    <div class="spacer-fixed"></div>
+                <div class="key wide-1 left small" data-code="AltLeft" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Alt
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key wide-4" data-code="Space">
                   <div class="label">
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
-                <div class="modifier wide-1 right small" data-code="AltRight">
+                    <div class="spacer-fixed"></div>
+                <div class="key wide-1 right small" data-code="AltRight" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Alt
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
-                <div class="modifier wide-1 right small" data-code="MetaRight">
+                    <div class="spacer-fixed"></div>
+                <div class="key wide-1 right small" data-code="MetaRight" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Win
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="ContextMenu">
                   <div class="label"><br>Menu
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
-                <div class="modifier wide-1 right small" data-code="ControlRight">
+                    <div class="spacer-fixed"></div>
+                <div class="key wide-1 right small" data-code="ControlRight" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Ctrl
                   </div>
                 </div>
@@ -1441,16 +1473,16 @@
         </div>
         <div class="keypad-block">
           <div class="keypad-row">
-                <div class="modifier small" data-code="PrintScreen">
+                <div class="key small" data-code="PrintScreen" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Pt/Sq
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="ScrollLock">
-                  <div class="label"><img class="inline-lamp-small hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-scroll-led led-gray" src="../share/svg/led-square.svg"><br> ScrLk
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="Pause">
                   <div class="label">P/Brk
                   </div>
@@ -1462,12 +1494,12 @@
                   <div class="label">Ins
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="Home">
                   <div class="label">Home
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="PageUp">
                   <div class="label">PgUp
                   </div>
@@ -1478,12 +1510,12 @@
                   <div class="label">Del
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="End">
                   <div class="label">End
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="PageDown">
                   <div class="label">PgDn
                   </div>
@@ -1494,12 +1526,12 @@
                 <div class="empty ">
                   <div class="label">&nbsp;</div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="ArrowUp">
                   <div class="label">&uarr;
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="empty ">
                   <div class="label">&nbsp;</div>
                 </div>
@@ -1509,12 +1541,12 @@
                   <div class="label">&larr;
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key " data-code="ArrowDown">
                   <div class="label">&darr;
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key " data-code="ArrowRight">
                   <div class="label">&rarr;
                   </div>
@@ -1526,15 +1558,15 @@
                 <div class="empty small">
                   <div class="label">&nbsp;</div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="empty small">
                   <div class="label">&nbsp;</div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="empty small">
                   <div class="label">&nbsp;</div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="Power">
                   <div class="label">PWR
                   </div>
@@ -1543,20 +1575,20 @@
           <hr>
           <div class="keypad-row">
                 <div class="key small" data-code="NumLock">
-                  <div class="label"><img class="inline-lamp-small hid-keyboard-num-led led-gray" src="/share/svg/led-square.svg"><br> NmLk
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-num-led led-gray" src="../share/svg/led-square.svg"><br> NmLk
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key " data-code="NumpadDivide">
                   <div class="label">/
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key " data-code="NumpadMultiply">
                   <div class="label">*
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key " data-code="NumpadSubtract">
                   <div class="label">-
                   </div>
@@ -1567,17 +1599,17 @@
                   <div class="label">7<br>Home
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="Numpad8">
                   <div class="label">8<br>&uarr;
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="Numpad9">
                   <div class="label">9<br>PgUp
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="empty ">
                   <div class="label">&nbsp;</div>
                 </div>
@@ -1587,17 +1619,17 @@
                   <div class="label">4<br>&larr;
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="Numpad5">
                   <div class="label">5<br><br>
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="Numpad6">
                   <div class="label">6<br>&rarr;
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key " data-code="NumpadAdd">
                   <div class="label">+
                   </div>
@@ -1608,17 +1640,17 @@
                   <div class="label">1<br>End
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="Numpad2">
                   <div class="label">2<br>&darr;
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="Numpad3">
                   <div class="label">3<br>PgDn
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="empty ">
                   <div class="label">&nbsp;</div>
                 </div>
@@ -1628,16 +1660,16 @@
                   <div class="label">0<br>Ins
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="empty ">
                   <div class="label">&nbsp;</div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="NumpadDecimal">
                   <div class="label">.<br>Del
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="NumpadEnter">
                   <div class="label">Ent
                   </div>
@@ -1665,19 +1697,19 @@
                 </div>
           </div>
           <div class="keypad-row">
-                <div class="modifier small" data-code="KanaMode">
+                <div class="key small" data-code="KanaMode" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Kana
                   </div>
                 </div>
           </div>
           <div class="keypad-row">
-                <div class="modifier small" data-code="NonConvert">
+                <div class="key small" data-code="NonConvert" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>N/Cnv
                   </div>
                 </div>
           </div>
           <div class="keypad-row">
-                <div class="modifier small" data-code="Convert">
+                <div class="key small" data-code="Convert" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Cnv
                   </div>
                 </div>
@@ -1691,7 +1723,7 @@
                   <div class="label">Esc
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key wide-0 small rounded-left" data-code="F1">
                   <div class="label">F1
                   </div>
@@ -1708,7 +1740,7 @@
                   <div class="label">F4
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key wide-0 small rounded-left" data-code="F5">
                   <div class="label">F5
                   </div>
@@ -1725,7 +1757,7 @@
                   <div class="label">F8
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key wide-0 small rounded-left" data-code="F9">
                   <div class="label">F9
                   </div>
@@ -1742,37 +1774,37 @@
                   <div class="label">F12
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
-                <div class="modifier small" data-code="PrintScreen">
+                    <div class="spacer-fixed"></div>
+                <div class="key small" data-code="PrintScreen" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Pt/Sq
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="ScrollLock">
-                  <div class="label"><img class="inline-lamp-small hid-keyboard-scroll-led led-gray" src="/share/svg/led-square.svg"><br> ScrLk
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-scroll-led led-gray" src="../share/svg/led-square.svg"><br> ScrLk
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="Pause">
                   <div class="label">P/Brk
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="Insert">
                   <div class="label">Ins
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="Home">
                   <div class="label">Home
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="End">
                   <div class="label">End
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="Delete">
                   <div class="label">Del
                   </div>
@@ -1783,68 +1815,68 @@
                   <div class="label">~<br>`
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit1">
                   <div class="label">!<br>1
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit2">
                   <div class="label">@<br>2
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit3">
                   <div class="label">#<br>3
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit4">
                   <div class="label">$<br>4
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit5">
                   <div class="label">%<br>5
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit6">
                   <div class="label">^<br>6
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit7">
                   <div class="label">&amp;<br>7
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit8">
                   <div class="label">*<br>8
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit9">
                   <div class="label">(<br>9
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Digit0">
                   <div class="label">)<br>0
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Minus">
                   <div class="label">_<br>-
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Equal">
                   <div class="label">+<br>=
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="key wide-2 right" data-code="Backspace" style="width:101px">
+                    <div class="spacer"></div>
+                <div class="key wide-2 right" data-code="Backspace" style="width: 101px">
                   <div class="label">&#8612;
                   </div>
                 </div>
@@ -1854,265 +1886,265 @@
                   <div class="label">&#8676;<br>&#8677;
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyQ">
                   <div class="label">Q
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyW">
                   <div class="label">W
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyE">
                   <div class="label">E
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyR">
                   <div class="label">R
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyT">
                   <div class="label">T
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyY">
                   <div class="label">Y
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyU">
                   <div class="label">U
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyI">
                   <div class="label">I
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyO">
                   <div class="label">O
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyP">
                   <div class="label">P
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="BracketLeft">
                   <div class="label">{<br>[
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="BracketRight">
                   <div class="label">}<br>]
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="key wide-1 left" data-code="Backslash" style="width:78px">
+                    <div class="spacer"></div>
+                <div class="key wide-1 left" data-code="Backslash" style="width: 78px">
                   <div class="label">|<br>&bsol;
                   </div>
                 </div>
           </div>
           <div class="keypad-row">
                 <div class="key wide-2 left small" data-code="CapsLock">
-                  <div class="label"><img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="/share/svg/led-square.svg"><br> Caps Lock
+                  <div class="label"><img class="inline-lamp-small hid-keyboard-caps-led led-gray" src="../share/svg/led-square.svg"><br> Caps Lock
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyA">
                   <div class="label">A
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyS">
                   <div class="label">S
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyD">
                   <div class="label">D
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyF">
                   <div class="label">F
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyG">
                   <div class="label">G
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyH">
                   <div class="label">H
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyJ">
                   <div class="label">J
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyK">
                   <div class="label">K
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyL">
                   <div class="label">L
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Semicolon">
                   <div class="label">:<br>;
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Quote">
                   <div class="label">`<br>'
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="key wide-3 right small" data-code="Enter" style="width:116px">
+                    <div class="spacer"></div>
+                <div class="key wide-3 right small" data-code="Enter" style="width: 116px">
                   <div class="label">Enter<br>&crarr;
                   </div>
                 </div>
           </div>
           <div class="keypad-row">
-                <div class="modifier wide-3 left small" data-code="ShiftLeft">
+                <div class="key wide-3 left small" data-code="ShiftLeft" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Shift
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyZ">
                   <div class="label">Z
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyX">
                   <div class="label">X
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyC">
                   <div class="label">C
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyV">
                   <div class="label">V
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyB">
                   <div class="label">B
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyN">
                   <div class="label">N
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key single" data-code="KeyM">
                   <div class="label">M
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Comma">
                   <div class="label">&lt;<br>,
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Period">
                   <div class="label">&gt;<br>.
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="Slash">
                   <div class="label">?<br>/
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="PageUp">
                   <div class="label">PgUp
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key " data-code="ArrowUp">
                   <div class="label">&uarr;
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key small" data-code="PageDown">
                   <div class="label">PgDn
                   </div>
                 </div>
           </div>
           <div class="keypad-row">
-                <div class="modifier wide-1 left small" data-code="ControlLeft">
+                <div class="key wide-1 left small" data-code="ControlLeft" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Ctrl
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="modifier wide-1 left small" data-code="MetaLeft">
+                    <div class="spacer"></div>
+                <div class="key wide-1 left small" data-code="MetaLeft" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Win
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="modifier wide-1 left small" data-code="AltLeft">
+                    <div class="spacer"></div>
+                <div class="key wide-1 left small" data-code="AltLeft" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Alt
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="key " data-code="Space" style="width:190px">
+                    <div class="spacer"></div>
+                <div class="key " data-code="Space" style="width: 190px">
                   <div class="label">
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="modifier right small" data-code="AltRight">
+                    <div class="spacer"></div>
+                <div class="key right small" data-code="AltRight" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Alt
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="modifier right small" data-code="MetaRight">
+                    <div class="spacer"></div>
+                <div class="key right small" data-code="MetaRight" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Win
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key small" data-code="ContextMenu">
                   <div class="label"><br>Menu
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="modifier right small" data-code="ShiftRight">
+                    <div class="spacer"></div>
+                <div class="key right small" data-code="ShiftRight" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Shift
                   </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="modifier right small" data-code="ControlRight">
+                    <div class="spacer"></div>
+                <div class="key right small" data-code="ControlRight" data-allow-autohold>
                   <div class="label"><b>&bull;</b><br>Ctrl
                   </div>
                 </div>
-                <div class="spacer"></div>
+                    <div class="spacer"></div>
                 <div class="key " data-code="ArrowLeft">
                   <div class="label">&larr;
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key " data-code="ArrowDown">
                   <div class="label">&darr;
                   </div>
                 </div>
-                <div class="spacer-fixed"></div>
+                    <div class="spacer-fixed"></div>
                 <div class="key " data-code="ArrowRight">
                   <div class="label">&rarr;
                   </div>
@@ -2121,10 +2153,13 @@
         </div>
       </div>
     </div>
-    <div class="window" id="switch-window" style="width:min-content">
+    <div class="window" id="switch-window" data-show-centered style="width: min-content">
       <div class="window-header">
         <div class="window-grab">Switch settings</div>
-        <button class="window-button-close"><b>&times;</b></button>
+        <div class="window-buttons">
+          <button class="window-button-original">&bull;</button>
+          <button class="window-button-close"><b>&times;</b></button>
+        </div>
       </div>
       <div class="tabs-box">
             <input checked type="radio" name="switch-tab-button" id="switch-tab-edid-button">
@@ -2133,9 +2168,9 @@
               <table>
                 <tr>
                   <td colspan="2">
-                    <select id="switch-edid-selector" size="8"></select>
+                    <select id="switch-edid-selector" size="8" style="width: -webkit-fill-available; width: -moz-available;"></select>
                   </td>
-                  <td rowspan="2" style="vertical-align:top">
+                  <td rowspan="2" style="vertical-align: top">
                     <table class="kv">
                       <tr>
                         <td>Manufacturer:</td>
@@ -2164,7 +2199,7 @@
                       <tr>
                         <td>Data:</td>
                         <td>
-                          <button class="small" disabled id="switch-edid-copy-data-button">Copy</button>
+                          <button class="small" id="switch-edid-copy-data-button" disabled>Copy</button>
                         </td>
                       </tr>
                     </table>
@@ -2174,8 +2209,8 @@
                   <td>
                     <button id="switch-edid-add-button">Add new</button>
                   </td>
-                  <td style="float:right">
-                    <button disabled id="switch-edid-remove-button">Remove</button>
+                  <td style="float: right">
+                    <button id="switch-edid-remove-button" disabled>Remove</button>
                   </td>
                 </tr>
               </table>
@@ -2184,62 +2219,45 @@
             <label for="switch-tab-colors-button">Color scheme</label>
             <div class="tab">
               <table>
-                <!--tr
-                td Role
-                td Color
-                td Brightness
-                td
-                td Reset
-                -->
-                <!--trtd 
-                <hr>
-                td 
-                <hr>
-                td 
-                <hr>
-                td
-                td 
-                <hr>
-                -->
-                <tr>
-                  <td style="white-space: nowrap">Selected port:</td>
-                  <td>
-                    <input type="color" id="switch-color-active-input">
-                  </td>
-                  <td>
-                    <input type="range" id="switch-color-active-brightness-slider" style="min-width:150px">
-                  </td>
-                  <td>&nbsp;&nbsp;&nbsp;</td>
-                  <td>
-                    <button class="small" id="switch-color-active-default-button" title="Reset default">&#8635;</button>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="white-space: nowrap">Inactive port:</td>
-                  <td>
-                    <input type="color" id="switch-color-inactive-input">
-                  </td>
-                  <td>
-                    <input type="range" id="switch-color-inactive-brightness-slider" style="min-width:150px">
-                  </td>
-                  <td>&nbsp;&nbsp;&nbsp;</td>
-                  <td>
-                    <button class="small" id="switch-color-inactive-default-button" title="Reset default">&#8635;</button>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="white-space: nowrap">Blinking beacon:</td>
-                  <td>
-                    <input type="color" id="switch-color-beacon-input">
-                  </td>
-                  <td>
-                    <input type="range" id="switch-color-beacon-brightness-slider" style="min-width:150px">
-                  </td>
-                  <td>&nbsp;&nbsp;&nbsp;</td>
-                  <td>
-                    <button class="small" id="switch-color-beacon-default-button" title="Reset default">&#8635;</button>
-                  </td>
-                </tr>
+                    <tr>
+                      <td style="white-space: nowrap">Selected port:</td>
+                      <td>
+                        <input type="color" id="switch-color-active-input">
+                      </td>
+                      <td>
+                        <input type="range" id="switch-color-active-brightness-slider" style="min-width: 150px">
+                      </td>
+                      <td>&nbsp;&nbsp;&nbsp;</td>
+                      <td>
+                        <button class="small" id="switch-color-active-default-button" title="Reset default">&#8635;</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="white-space: nowrap">Inactive port:</td>
+                      <td>
+                        <input type="color" id="switch-color-inactive-input">
+                      </td>
+                      <td>
+                        <input type="range" id="switch-color-inactive-brightness-slider" style="min-width: 150px">
+                      </td>
+                      <td>&nbsp;&nbsp;&nbsp;</td>
+                      <td>
+                        <button class="small" id="switch-color-inactive-default-button" title="Reset default">&#8635;</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="white-space: nowrap">Blinking beacon:</td>
+                      <td>
+                        <input type="color" id="switch-color-beacon-input">
+                      </td>
+                      <td>
+                        <input type="range" id="switch-color-beacon-brightness-slider" style="min-width: 150px">
+                      </td>
+                      <td>&nbsp;&nbsp;&nbsp;</td>
+                      <td>
+                        <button class="small" id="switch-color-beacon-default-button" title="Reset default">&#8635;</button>
+                      </td>
+                    </tr>
                 <tr>
                   <td>
                     <hr>
@@ -2255,45 +2273,48 @@
                     <hr>
                   </td>
                 </tr>
-                <tr>
-                  <td style="white-space: nowrap">Flashing downlink:</td>
-                  <td>
-                    <input type="color" id="switch-color-flashing-input">
-                  </td>
-                  <td>
-                    <input type="range" id="switch-color-flashing-brightness-slider" style="min-width:150px">
-                  </td>
-                  <td>&nbsp;&nbsp;&nbsp;</td>
-                  <td>
-                    <button class="small" id="switch-color-flashing-default-button" title="Reset default">&#8635;</button>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="white-space: nowrap">Bootloader mode:</td>
-                  <td>
-                    <input type="color" id="switch-color-bootloader-input">
-                  </td>
-                  <td>
-                    <input type="range" id="switch-color-bootloader-brightness-slider" style="min-width:150px">
-                  </td>
-                  <td>&nbsp;&nbsp;&nbsp;</td>
-                  <td>
-                    <button class="small" id="switch-color-bootloader-default-button" title="Reset default">&#8635;</button>
-                  </td>
-                </tr>
+                    <tr>
+                      <td style="white-space: nowrap">Flashing downlink:</td>
+                      <td>
+                        <input type="color" id="switch-color-flashing-input">
+                      </td>
+                      <td>
+                        <input type="range" id="switch-color-flashing-brightness-slider" style="min-width: 150px">
+                      </td>
+                      <td>&nbsp;&nbsp;&nbsp;</td>
+                      <td>
+                        <button class="small" id="switch-color-flashing-default-button" title="Reset default">&#8635;</button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="white-space: nowrap">Bootloader mode:</td>
+                      <td>
+                        <input type="color" id="switch-color-bootloader-input">
+                      </td>
+                      <td>
+                        <input type="range" id="switch-color-bootloader-brightness-slider" style="min-width: 150px">
+                      </td>
+                      <td>&nbsp;&nbsp;&nbsp;</td>
+                      <td>
+                        <button class="small" id="switch-color-bootloader-default-button" title="Reset default">&#8635;</button>
+                      </td>
+                    </tr>
               </table>
             </div>
       </div>
     </div>
-    <div class="window" id="about-window">
+    <div class="window" id="about-window" data-show-centered>
       <div class="window-header">
-        <div class="window-grab" i18n="kvm_text1">About</div>
-        <button class="window-button-close"><b>&times;</b></button>
+        <div class="window-grab" i18n="about_title">About</div>
+        <div class="window-buttons">
+          <button class="window-button-original">&bull;</button>
+          <button class="window-button-close"><b>&times;</b></button>
+        </div>
       </div>
       <div id="about">
         <table>
           <tr>
-            <td class="logo"><a href="https://pikvm.org" target="_blank"><img class="svg-gray" src="/share/svg/logo.svg" alt="PiKVM" height="40"></a></td>
+            <td class="logo"><a href="https://pikvm.org" target="_blank"><img class="svg-gray" src="../share/svg/logo.svg" alt="PiKVM" height="40"></a></td>
             <td>
               <table>
                 <tr>
@@ -2307,15 +2328,10 @@
           </tr>
         </table><br>
         <div class="tabs-box">
-              <input checked type="radio" name="about-tab-button" id="about-tab-meta-button">
-              <label for="about-tab-meta-button" i18n="meta">Meta</label>
+              <input checked type="radio" name="about-tab-button" id="about-tab-version-button">
+              <label for="about-tab-version-button" i18n="version">Version</label>
               <div class="tab">
-                <div class="code" id="about-meta">
-                  <div><span class="code-comment">// You can get this JSON using handle <a target="_blank" href="/api/info?fields=meta">/api/info?fields=meta</a><br>
-                      // In the standard configuration this data<br>
-                      // is specified in the file /etc/kvmd/meta.yaml</span><br>
-                    <pre id="kvmd-meta-json">No data</pre>
-                  </div>
+                <div class="code" id="about-version"><span class="code-comment">No data</span>
                 </div>
               </div>
               <input type="radio" name="about-tab-button" id="about-tab-hardware-button">
@@ -2324,16 +2340,23 @@
                 <div class="code" id="about-hardware"><span class="code-comment">No data</span>
                 </div>
               </div>
-              <input type="radio" name="about-tab-button" id="about-tab-version-button">
-              <label for="about-tab-version-button" i18n="version">Version</label>
+              <input type="radio" name="about-tab-button" id="about-tab-meta-button">
+              <label for="about-tab-meta-button" i18n="meta">Meta</label>
               <div class="tab">
-                <div class="code" id="about-version"><span class="code-comment">No data</span>
+                <div class="code" id="about-meta">
+                  <div><span class="code-comment">
+                      // You can get this JSON using handle
+                      <a target="_blank" href="../api/info?fields=meta">/api/info?fields=meta</a><br>
+                      // In the standard configuration this data<br>
+                      // is specified in the file /etc/kvmd/meta.yaml</span><br>
+                    <pre id="kvmd-meta-json">No data</pre>
+                  </div>
                 </div>
               </div>
               <input type="radio" name="about-tab-button" id="about-tab-thanks-button">
               <label for="about-tab-thanks-button" i18n="thanks">Thanks</label>
               <div class="tab">
-                <div class="code" id="about-thanks"><span class="code-comment" i18n="kvm_text2">// These kind people donated money to the PiKVM project<br>
+                <div class="code" id="about-thanks"><span class="code-comment" i18n="about_sponsors">// These kind people donated money to the PiKVM project<br>
                     // and supported the work on it. We are very grateful<br>
                     // for their help, and memorializing their names<br>
                     // is the least we can do in gratitude.<br>
@@ -2343,18 +2366,21 @@
                 </div>
               </div>
         </div><br>
-        <p class="text credits"><a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13">One-KVM Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org" i18n="index_text_10">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org" i18n="index_text_11">Documentation</a></p>
+        <p class="text credits"><a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="onekvm_project_link">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="onekvm_documentation_link">One-KVM Documentation</a>&nbsp; | &nbsp;<a target="_blank" href="https://pikvm.org" i18n="pikvm_project_link">PiKVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://docs.pikvm.org" i18n="pikvm_documentation_link">Documentation</a></p>
       </div>
     </div>
-    <div class="window window-resizable" id="webterm-window" style="width: 640px; height: 480px">
+    <div class="window window-resizable" id="webterm-window" data-show-centered style="display: flex; min-width: 720px; min-height: 480px">
       <div class="window-header">
-        <div class="window-grab" i18n="kvm_text16">Terminal</div>
-        <button class="window-button-close"><b>&times;</b></button>
-        <button class="window-button-maximize">&#9744;</button>
-        <!-- Терминал глючит из-за зажимаемой клавиши ESC для выхода-->
-        <!-- button(class="window-button-full-screen") &#10530;-->
+        <div class="window-grab" i18n="terminal_title">Terminal</div>
+        <div class="window-buttons">
+          <button class="window-button-original">&bull;</button>
+          <button class="window-button-maximize">&#9744;</button>
+          <button class="window-button-close"><b>&times;</b></button>
+          <!-- Терминал глючит из-за зажимаемой клавиши ESC для выхода-->
+          <!-- button(class="window-button-full-screen") &#10530;-->
+        </div>
       </div>
-      <iframe id="webterm-iframe" src="" style="width: 100%; height: 100%"></iframe>
+      <iframe id="webterm-iframe" src="" style="width: 100%; flex: 1"></iframe>
     </div>
     <ul class="navbar-bg-tips">
       <li class="left">
@@ -2365,8 +2391,8 @@
       </li>
     </ul>
     <ul class="footer">
-      <li class="left"><span id="kvmd-meta-server-host" title="Server name (see System/About)"></span>&nbsp; | &nbsp;<span id="kvmd-version-kvmd" title="KVMD version"></span>&nbsp; | &nbsp;<span id="kvmd-version-streamer" title="Streamer version"></span></li>
-      <li class="right"><a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13">One-KVM Documentation</a></li>
+      <li class="left"><span id="kvmd-meta-server-host" title="KVM/Server name (see System/About)"></span>&nbsp; | &nbsp;<span id="kvmd-info-platform" title="PiKVM Platform"></span>&nbsp; | &nbsp;<span id="kvmd-version-kvmd" title="KVMD version"></span>&nbsp; | &nbsp;<span id="kvmd-version-streamer" title="Streamer version"></span></li>
+      <li class="right"><a target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="onekvm_project_link">One-KVM Project</a>&nbsp; | &nbsp;<a target="_blank" href="https://one-kvm.mofeng.run" i18n="onekvm_documentation_link">One-KVM Documentation</a></li>
     </ul>
   </body>
 </html>

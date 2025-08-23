@@ -22,7 +22,8 @@
 
 from typing import Any
 
-from ..keyboard.mappings import KEYMAP
+from ..keyboard.mappings import WEB_TO_EVDEV
+from ..mouse import MOUSE_TO_EVDEV
 
 from ..mouse import MouseRange
 from ..mouse import MouseDelta
@@ -42,7 +43,7 @@ def valid_hid_mouse_output(arg: Any) -> str:
 
 
 def valid_hid_key(arg: Any) -> str:
-    return check_string_in_list(arg, "Keyboard key", KEYMAP, lower=False)
+    return check_string_in_list(arg, "Keyboard key", WEB_TO_EVDEV, lower=False)
 
 
 def valid_hid_mouse_move(arg: Any) -> int:
@@ -51,7 +52,7 @@ def valid_hid_mouse_move(arg: Any) -> int:
 
 
 def valid_hid_mouse_button(arg: Any) -> str:
-    return check_string_in_list(arg, "Mouse button", ["left", "right", "middle", "up", "down"])
+    return check_string_in_list(arg, "Mouse button", MOUSE_TO_EVDEV)
 
 
 def valid_hid_mouse_delta(arg: Any) -> int:

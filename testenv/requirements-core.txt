@@ -1,0 +1,6 @@
+# Core dependencies for code quality checks (hardware dependencies excluded)
+python-dateutil>=2.8.1
+pyserial
+pyserial-asyncio
+types-PyYAML
+types-aiofiles

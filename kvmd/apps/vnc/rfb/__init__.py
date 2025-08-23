@@ -22,17 +22,22 @@
 
 import asyncio
 import ssl
-import time
 
 from typing import Callable
 from typing import Coroutine
 from typing import AsyncGenerator
+
+from evdev import ecodes
 
 from ....logging import get_logger
 
 from .... import tools
 from .... import aiotools
 
+from ....keyboard.keysym import SymmapModifiers
+from ....keyboard.mappings import EvdevModifiers
+from ....keyboard.mappings import X11Modifiers
+from ....keyboard.mappings import AT1_TO_EVDEV
 from ....mouse import MouseRange
 
 from .errors import RfbError
@@ -45,6 +50,11 @@ from .crypto import rfb_make_challenge
 from .crypto import rfb_encrypt_challenge
 
 from .stream import RfbClientStream
+
+
+# =====
+class _SecurityError(Exception):
+    pass
 
 
 # =====
@@ -65,8 +75,10 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         width: int,
         height: int,
         name: str,
-        allow_cut_after: float,
-        vnc_passwds: list[str],
+        symmap: dict[int, dict[int, int]],
+        scroll_rate: int,
+
+        vncpasses: set[str],
         vencrypt: bool,
         none_auth_only: bool,
     ) -> None:
@@ -81,8 +93,10 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self._width = width
         self._height = height
         self.__name = name
-        self.__allow_cut_after = allow_cut_after
-        self.__vnc_passwds = vnc_passwds
+        self.__scroll_rate = scroll_rate
+        self.__symmap = symmap
+
+        self.__vncpasses = vncpasses
         self.__vencrypt = vencrypt
         self.__none_auth_only = none_auth_only
 
@@ -93,9 +107,15 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         self.__fb_cont_updates = False
         self.__fb_reset_h264 = False
 
-        self.__allow_cut_since_ts = 0.0
+        self.__authorized = False
 
         self.__lock = asyncio.Lock()
+
+        # Эти состояния шарить не обязательно - бекенд исключает дублирующиеся события.
+        # Все это нужно только чтобы не посылать лишние события в сокет KVMD
+        self.__modifiers = 0
+        self.__mouse_buttons: dict[int, bool] = {}
+        self.__mouse_move = (-1, -1, -1, -1)  # (width, height, X, Y)
 
     # =====
 
@@ -135,6 +155,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def __main_task_loop(self) -> None:
         await self.__handshake_version()
         await self.__handshake_security()
+        if not self.__authorized:
+            raise _SecurityError()
         await self.__handshake_init()
         await self.__main_loop()
 
@@ -143,21 +165,24 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     async def _authorize_userpass(self, user: str, passwd: str) -> bool:
         raise NotImplementedError
 
-    async def _on_authorized_vnc_passwd(self, passwd: str) -> str:
+    async def _on_authorized_vncpass(self) -> None:
         raise NotImplementedError
 
-    async def _on_authorized_none(self) -> bool:
+    async def _authorize_none(self) -> bool:
         raise NotImplementedError
 
     # =====
 
-    async def _on_key_event(self, code: int, state: bool) -> None:
+    async def _on_key_event(self, key: int, state: bool) -> None:
         raise NotImplementedError
 
-    async def _on_ext_key_event(self, code: int, state: bool) -> None:
+    async def _on_mouse_button_event(self, button: int, state: bool) -> None:
         raise NotImplementedError
 
-    async def _on_pointer_event(self, buttons: dict[str, bool], wheel: dict[str, int], move: dict[str, int]) -> None:
+    async def _on_mouse_move_event(self, to_x: int, to_y: int) -> None:
+        raise NotImplementedError
+
+    async def _on_mouse_wheel_event(self, delta_x: int, delta_y: int) -> None:
         raise NotImplementedError
 
     async def _on_cut_event(self, text: str) -> None:
@@ -235,18 +260,18 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
         await self._write_struct("handshake server version", "", b"RFB 003.008\n")
 
-        response = await self._read_text("handshake client version", 12)
+        resp = await self._read_text("handshake client version", 12)
         if (
-            not response.startswith("RFB 003.00")
-            or not response.endswith("\n")
-            or response[-2] not in ["3", "5", "7", "8"]
+            not resp.startswith("RFB 003.00")
+            or not resp.endswith("\n")
+            or resp[-2] not in ["3", "5", "7", "8"]
         ):
-            raise RfbError(f"Invalid version response: {response!r}")
+            raise RfbError(f"Invalid version response: {resp!r}")
 
         try:
-            version = int(response[-2])
+            version = int(resp[-2])
         except ValueError:
-            raise RfbError(f"Invalid version response: {response!r}")
+            raise RfbError(f"Invalid version response: {resp!r}")
         self.__rfb_version = (3 if version == 5 else version)
         get_logger(0).info("%s [main]: Using RFB version 3.%d", self._remote, self.__rfb_version)
 
@@ -258,7 +283,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             sec_types[19] = ("VeNCrypt", self.__handshake_security_vencrypt)
         if self.__none_auth_only:
             sec_types[1] = ("None", self.__handshake_security_none)
-        elif self.__vnc_passwds:
+        elif self.__vncpasses:
             sec_types[2] = ("VNCAuth", self.__handshake_security_vnc_auth)
 
         if not sec_types:
@@ -304,7 +329,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
                 if self.__x509_cert_path:
                     auth_types[262] = ("VeNCrypt/X509Plain", 2, self.__handshake_security_vencrypt_userpass)
                 auth_types[259] = ("VeNCrypt/TLSPlain", 1, self.__handshake_security_vencrypt_userpass)
-            if self.__vnc_passwds:
+            if self.__vncpasses:
                 # Некоторые клиенты не умеют работать с нешифрованными соединениями внутри VeNCrypt:
                 #   - https://github.com/LibVNC/libvncserver/issues/458
                 #   - https://bugzilla.redhat.com/show_bug.cgi?id=692048
@@ -354,7 +379,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         )
 
     async def __handshake_security_none(self) -> None:
-        allow = await self._on_authorized_none()
+        allow = await self._authorize_none()
         await self.__handshake_security_send_result(
             allow=allow,
             allow_msg="NoneAuth access granted",
@@ -366,20 +391,19 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         challenge = rfb_make_challenge()
         await self._write_struct("VNCAuth challenge request", "", challenge)
 
-        user = ""
+        allow = False
         response = (await self._read_struct("VNCAuth challenge response", "16s"))[0]
-        for passwd in self.__vnc_passwds:
+        for passwd in self.__vncpasses:
             passwd_bytes = passwd.encode("utf-8", errors="ignore")
             if rfb_encrypt_challenge(challenge, passwd_bytes) == response:
-                user = await self._on_authorized_vnc_passwd(passwd)
-                if user:
-                    assert user == user.strip()
+                await self._on_authorized_vncpass()
+                allow = True
                 break
 
         await self.__handshake_security_send_result(
-            allow=bool(user),
-            allow_msg=f"VNCAuth access granted for user {user!r}",
-            deny_msg="VNCAuth access denied (user not found)",
+            allow=allow,
+            allow_msg="VNCAuth access granted",
+            deny_msg="VNCAuth access denied (passwd not found)",
             deny_reason="Invalid password",
         )
 
@@ -387,6 +411,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
         if allow:
             get_logger(0).info("%s [main]: %s", self._remote, allow_msg)
             await self._write_struct("access OK", "L", 0)
+            self.__authorized = True
         else:
             await self._write_struct("access denial flag", "L", 1, drain=(self.__rfb_version < 8))
             if self.__rfb_version >= 8:
@@ -396,6 +421,9 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     # =====
 
     async def __handshake_init(self) -> None:
+        if not self.__authorized:
+            raise _SecurityError()
+
         await self._read_number("initial shared flag", "B")  # Shared flag, ignored
 
         await self._write_struct("initial FB size", "HH", self._width, self._height, drain=False)
@@ -419,7 +447,8 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
     # =====
 
     async def __main_loop(self) -> None:
-        self.__allow_cut_since_ts = time.monotonic() + self.__allow_cut_after
+        if not self.__authorized:
+            raise _SecurityError()
         handlers = {
             0: self.__handle_set_pixel_format,
             2: self.__handle_set_encodings,
@@ -486,40 +515,101 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def __handle_key_event(self) -> None:
         (state, code) = await self._read_struct("key event", "? xx L")
-        await self._on_key_event(code, state)  # type: ignore
+        state = bool(state)
+
+        is_modifier = self.__switch_modifiers_x11(code, state)
+        variants = self.__symmap.get(code)
+        fake_shift = False
+
+        if variants:
+            if is_modifier:
+                key = variants.get(0)
+            else:
+                key = variants.get(self.__modifiers)
+                if key is None:
+                    key = variants.get(0)
+
+                if key is None and self.__modifiers == 0 and SymmapModifiers.SHIFT in variants:
+                    # JUMP doesn't send shift events:
+                    #   - https://github.com/pikvm/pikvm/issues/820
+                    key = variants[SymmapModifiers.SHIFT]
+                    fake_shift = True
+
+            if key:
+                if fake_shift:
+                    await self._on_key_event(EvdevModifiers.SHIFT_LEFT, True)
+                await self._on_key_event(key, state)
+                if fake_shift:
+                    await self._on_key_event(EvdevModifiers.SHIFT_LEFT, False)
+
+    def __switch_modifiers_x11(self, code: int, state: bool) -> bool:
+        mod = 0
+        if code in X11Modifiers.SHIFTS:
+            mod = SymmapModifiers.SHIFT
+        elif code == X11Modifiers.ALTGR:
+            mod = SymmapModifiers.ALTGR
+        elif code in X11Modifiers.CTRLS:
+            mod = SymmapModifiers.CTRL
+        if mod == 0:
+            return False
+        if state:
+            self.__modifiers |= mod
+        else:
+            self.__modifiers &= ~mod
+        return True
+
+    def __switch_modifiers_evdev(self, key: int, state: bool) -> bool:
+        mod = 0
+        if key in EvdevModifiers.SHIFTS:
+            mod = SymmapModifiers.SHIFT
+        elif key == EvdevModifiers.ALT_RIGHT:
+            mod = SymmapModifiers.ALTGR
+        elif key in EvdevModifiers.CTRLS:
+            mod = SymmapModifiers.CTRL
+        if mod == 0:
+            return False
+        if state:
+            self.__modifiers |= mod
+        else:
+            self.__modifiers &= ~mod
+        return True
 
     async def __handle_pointer_event(self) -> None:
         (buttons, to_x, to_y) = await self._read_struct("pointer event", "B HH")
         ext_buttons = 0
         if self._encodings.has_ext_mouse and (buttons & 0x80):  # Marker bit 7 for ext event
             ext_buttons = await self._read_number("ext pointer event buttons", "B")
-        await self._on_pointer_event(
-            buttons={
-                "left": bool(buttons & 0x1),
-                "right": bool(buttons & 0x4),
-                "middle": bool(buttons & 0x2),
-                "up": bool(ext_buttons & 0x2),
-                "down": bool(ext_buttons & 0x1),
-            },
-            wheel={
-                "x": (-4 if buttons & 0x40 else (4 if buttons & 0x20 else 0)),
-                "y": (-4 if buttons & 0x10 else (4 if buttons & 0x8 else 0)),
-            },
-            move={
-                "x": tools.remap(to_x, 0, self._width, *MouseRange.RANGE),
-                "y": tools.remap(to_y, 0, self._height, *MouseRange.RANGE),
-            },
-        )
+
+        if buttons & (0x40 | 0x20 | 0x10 | 0x08):
+            sr = self.__scroll_rate
+            await self._on_mouse_wheel_event(
+                (-sr if buttons & 0x40 else (sr if buttons & 0x20 else 0)),
+                (-sr if buttons & 0x10 else (sr if buttons & 0x08 else 0)),
+            )
+
+        move = (self._width, self._height, to_x, to_y)
+        if self.__mouse_move != move:
+            await self._on_mouse_move_event(
+                tools.remap(to_x, 0, self._width - 1, *MouseRange.RANGE),
+                tools.remap(to_y, 0, self._height - 1, *MouseRange.RANGE),
+            )
+            self.__mouse_move = move
+
+        for (code, state) in [
+            (ecodes.BTN_LEFT,    bool(buttons & 0x1)),
+            (ecodes.BTN_RIGHT,   bool(buttons & 0x4)),
+            (ecodes.BTN_MIDDLE,  bool(buttons & 0x2)),
+            (ecodes.BTN_BACK,    bool(ext_buttons & 0x2)),
+            (ecodes.BTN_FORWARD, bool(ext_buttons & 0x1)),
+        ]:
+            if self.__mouse_buttons.get(code) != state:
+                await self._on_mouse_button_event(code, state)
+                self.__mouse_buttons[code] = state
 
     async def __handle_client_cut_text(self) -> None:
         length = (await self._read_struct("cut text length", "xxx L"))[0]
         text = await self._read_text("cut text data", length)
-        if self.__allow_cut_since_ts > 0 and time.monotonic() >= self.__allow_cut_since_ts:
-            # We should ignore cut event a few seconds after handshake
-            # because bVNC, AVNC and maybe some other clients perform
-            # it right after the connection automatically.
-            #   - https://github.com/pikvm/pikvm/issues/1420
-            await self._on_cut_event(text)
+        await self._on_cut_event(text)
 
     async def __handle_enable_cont_updates(self) -> None:
         enabled = bool((await self._read_struct("enabled ContUpdates", "B HH HH"))[0])
@@ -532,6 +622,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
 
     async def __handle_qemu_event(self) -> None:
         (sub_type, state, code) = await self._read_struct("QEMU event (key?)", "B H xxxx L")
+        state = bool(state)
         if sub_type != 0:
             raise RfbError(f"Invalid QEMU sub-message type: {sub_type}")
         if code == 0xB7:
@@ -539,4 +630,7 @@ class RfbClient(RfbClientStream):  # pylint: disable=too-many-instance-attribute
             code = 0x54
         if code & 0x80:
             code = (0xE0 << 8) | (code & ~0x80)
-        await self._on_ext_key_event(code, bool(state))
+        key = AT1_TO_EVDEV.get(code, 0)
+        if key:
+            self.__switch_modifiers_evdev(key, state)  # Предполагаем, что модификаторы всегда известны
+            await self._on_key_event(key, state)

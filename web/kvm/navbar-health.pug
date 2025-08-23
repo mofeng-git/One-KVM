@@ -1,32 +1,34 @@
-div(id="hw-health-dropdown" class="hidden")
-	li(class="left")
-		a(class="menu-button" href="#")
+.hidden#hw-health-dropdown
+	li.left
+		a.menu-button(href="#")
 			+navbar_led("hw-health-undervoltage-led", "led-undervoltage", "hidden")
 			+navbar_led("hw-health-overheating-led", "led-overheating", "hidden")
-		div(class="menu")
+
+		.menu
 			+menu_message("warning", "Raspberry Pi's health is at risk")
 				| This is not a drill! A red icon indicates a current issue,#[br]
 				| a yellow one that was observed since the device booted up
-			div(id="hw-health-message-undervoltage" class="hidden")
+			.hidden#hw-health-message-undervoltage
 				hr
 				+menu_message("led-undervoltage", "Undervoltage detected", "led-gray")
 					| Make sure your power supply and cabling are providing#[br]
 					| enough power to the Raspberry Pi (3A minimum)
-			div(id="hw-health-message-overheating" class="hidden")
+			.hidden#hw-health-message-overheating
 				hr
 				+menu_message("led-overheating", "Overheating detected", "led-gray")
 					| Frequency capping due to overheating,#[br]
 					| please improve cooling of the Raspberry Pi
 
-div(id="fan-health-dropdown" class="hidden")
-	li(class="left")
-		a(class="menu-button" href="#")
+.hidden#fan-health-dropdown
+	li.left
+		a.menu-button(href="#")
 			+navbar_led("fan-health-led", "led-fan", "hidden")
-		div(class="menu")
+
+		.menu
 			+menu_message("warning", "Raspberry Pi's health is at risk")
 				| This is not a drill! A red icon indicates a current issue,#[br]
 				| a yellow one that was observed in the past
-			div(id="fan-health-message-fail")
+			#fan-health-message-fail
 				hr
 				+menu_message("led-fan", "Fan failed", "led-gray")
-					| A fan error occured, please #[a(href="/api/log?seek=3600&follow=1" target="_blank") check the log]
+					| A fan error occured, please #[a(href=`${root_prefix}api/log?seek=3600&follow=1` target="_blank") check the log]

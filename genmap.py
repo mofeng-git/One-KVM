@@ -69,9 +69,10 @@ class _X11Key:
 @dataclasses.dataclass(frozen=True)
 class _KeyMapping:
     web_name: str
+    evdev_name: str
     mcu_code: int
     usb_key: _UsbKey
-    ps2_key: _Ps2Key
+    ps2_key: (_Ps2Key | None)
     at1_code: int
     x11_keys: set[_X11Key]
 
@@ -107,7 +108,9 @@ def _parse_usb_key(key: str) -> _UsbKey:
     return _UsbKey(code, is_modifier)
 
 
-def _parse_ps2_key(key: str) -> _Ps2Key:
+def _parse_ps2_key(key: str) -> (_Ps2Key | None):
+    if ":" not in key:
+        return None
     (code_type, raw_code) = key.split(":")
     return _Ps2Key(
         code=int(raw_code, 16),
@@ -122,6 +125,7 @@ def _read_keymap_csv(path: str) -> list[_KeyMapping]:
             if len(row) >= 6:
                 keymap.append(_KeyMapping(
                     web_name=row["web_name"],
+                    evdev_name=row["evdev_name"],
                     mcu_code=int(row["mcu_code"]),
                     usb_key=_parse_usb_key(row["usb_key"]),
                     ps2_key=_parse_ps2_key(row["ps2_key"]),
@@ -150,6 +154,7 @@ def main() -> None:
 
     # Fields list:
     #   - Web
+    #   - Linux/evdev
     #   - MCU code
     #   - USB code (^ for the modifier mask)
     #   - PS/2 key

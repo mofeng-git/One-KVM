@@ -1,8 +1,11 @@
-div(id="webterm-window" class="window window-resizable" style="width: 640px; height: 480px")
-	div(class="window-header")
-		div(class="window-grab" i18n="kvm_text16") Terminal
-		button(class="window-button-close") #[b &times;]
-		button(class="window-button-maximize") &#9744;
-		// Терминал глючит из-за зажимаемой клавиши ESC для выхода
-		// button(class="window-button-full-screen") &#10530;
-	iframe(id="webterm-iframe" src="" style="width: 100%; height: 100%")
+.window.window-resizable#webterm-window(data-show-centered style="display: flex; min-width: 720px; min-height: 480px")
+	.window-header
+		.window-grab(i18n="terminal_title") Terminal
+		.window-buttons
+			button.window-button-original &bull;
+			button.window-button-maximize &#9744;
+			button.window-button-close #[b &times;]
+			// Терминал глючит из-за зажимаемой клавиши ESC для выхода
+			// button(class="window-button-full-screen") &#10530;
+
+	iframe#webterm-iframe(src="" style="width: 100%; flex: 1")

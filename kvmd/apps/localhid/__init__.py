@@ -1,8 +1,8 @@
-/*****************************************************************************
+# ========================================================================== #
 #                                                                            #
 #    KVMD - The main PiKVM daemon.                                           #
 #                                                                            #
-#    Copyright (C) 2018-2024  Maxim Devaev <mdevaev@gmail.com>               #
+#    Copyright (C) 2020  Maxim Devaev <mdevaev@gmail.com>                    #
 #                                                                            #
 #    This program is free software: you can redistribute it and/or modify    #
 #    it under the terms of the GNU General Public License as published by    #
@@ -17,13 +17,29 @@
 #    You should have received a copy of the GNU General Public License       #
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.  #
 #                                                                            #
-*****************************************************************************/
+# ========================================================================== #
 
 
-div#text-menu {
-	width: 340px;
-}
+from ...clients.kvmd import KvmdClient
 
-input#hid-recorder-new-script-file {
-	display: none;
-}
+from ... import htclient
+
+from .. import init
+
+from .server import LocalHidServer
+
+
+# =====
+def main(argv: (list[str] | None)=None) -> None:
+    config = init(
+        prog="kvmd-localhid",
+        description=" Local HID to KVMD proxy",
+        check_run=True,
+        argv=argv,
+    )[2].localhid
+
+    user_agent = htclient.make_user_agent("KVMD-LocalHID")
+
+    LocalHidServer(
+        kvmd=KvmdClient(user_agent=user_agent, **config.kvmd._unpack()),
+    ).run()

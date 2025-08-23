@@ -23,8 +23,10 @@
 "use strict";
 
 
+import {ROOT_PREFIX} from "../vars.js";
 import {tools, $} from "../tools.js";
 import {wm} from "../wm.js";
+import {clipboard} from "./clipboard.js";
 
 
 export function Switch() {
@@ -44,6 +46,7 @@ export function Switch() {
 		tools.el.setOnClick($("switch-edid-copy-data-button"), __clickCopyEdidDataButton);
 
 		tools.storage.bindSimpleSwitch($("switch-atx-ask-switch"), "switch.atx.ask", true);
+		tools.storage.bindSimpleSwitch($("switch-msd-ask-switch"), "switch.msd.ask", true);
 
 		for (let role of ["inactive", "active", "flashing", "beacon", "bootloader"]) {
 			let el_brightness = $(`switch-color-${role}-brightness-slider`);
@@ -125,7 +128,7 @@ export function Switch() {
 			+ ":" + brightness.toString(16).padStart(2, "0")
 			+ ":" + color.blink_ms.toString(16).padStart(4, "0")
 		);
-		__sendPost("/api/switch/set_colors", {[role]: rgbx}, function() {
+		__sendPost("api/switch/set_colors", {[role]: rgbx}, function() {
 			el_color.value = (
 				"#"
 				+ color.red.toString(16).padStart(2, "0")
@@ -137,7 +140,7 @@ export function Switch() {
 	};
 
 	var __clickSetDefaultColorButton = function(role) {
-		__sendPost("/api/switch/set_colors", {[role]: "default"});
+		__sendPost("api/switch/set_colors", {[role]: "default"});
 	};
 
 	var __applyEdids = function(edids) {
@@ -177,8 +180,8 @@ export function Switch() {
 	};
 
 	var __clickAddEdidButton = function() {
-		let create_content = function(el_parent, el_ok_button) {
-			tools.el.setEnabled(el_ok_button, false);
+		let create_content = function(el_parent, el_ok_bt) {
+			tools.el.setEnabled(el_ok_bt, false);
 			el_parent.innerHTML = `
 				<table>
 					<tr>
@@ -202,7 +205,7 @@ export function Switch() {
 			el_name.oninput = el_data.oninput = function() {
 				let name = el_name.value.replace(/\s+/g, "");
 				let data = el_data.value.replace(/\s+/g, "");
-				tools.el.setEnabled(el_ok_button, ((name.length > 0) && /[0-9a-fA-F]{512}/.test(data)));
+				tools.el.setEnabled(el_ok_bt, ((name.length > 0) && /[0-9a-fA-F]{512}/.test(data)));
 			};
 		};
 
@@ -210,7 +213,7 @@ export function Switch() {
 			if (ok) {
 				let name = $("__switch-edid-new-name-input").value;
 				let data = $("__switch-edid-new-data-text").value;
-				__sendPost("/api/switch/edids/create", {"name": name, "data": data});
+				__sendPost("api/switch/edids/create", {"name": name, "data": data});
 			}
 		});
 	};
@@ -222,7 +225,7 @@ export function Switch() {
 			let html = "Are you sure to remove this EDID?<br>Ports that used it will change it to the default.";
 			wm.confirm(html, name).then(function(ok) {
 				if (ok) {
-					__sendPost("/api/switch/edids/remove", {"id": edid_id});
+					__sendPost("api/switch/edids/remove", {"id": edid_id});
 				}
 			});
 		}
@@ -233,7 +236,7 @@ export function Switch() {
 		if (edid_id && __state && __state.edids) {
 			let data = __state.edids.all[edid_id].data;
 			data = data.replace(/(.{32})/g, "$1\n");
-			wm.copyTextToClipboard(data);
+			clipboard.setText(data);
 		}
 	};
 
@@ -305,7 +308,7 @@ export function Switch() {
 			if (active < 0 || active >= __state.model.ports.length) {
 				$("switch-active-port").innerText = "N/A";
 			} else {
-				$("switch-active-port").innerText = "p" + __formatPort(__state.model, active);
+				$("switch-active-port").innerText = "p" + summary.active_id;
 			}
 			for (let port = 0; port < __state.model.ports.length; ++port) {
 				__setLedState($(`__switch-port-led-p${port}`), "green", (port === active));
@@ -333,7 +336,7 @@ export function Switch() {
 		let content = "";
 		let unit = -1;
 		for (let port = 0; port < model.ports.length; ++port) {
-			let pa = model.ports[port]; // pa == port attrs
+			let pa = model.ports[port]; // pa === port attrs
 			if (unit !== pa.unit) {
 				unit = pa.unit;
 				content += `${unit > 0 ? "<tr><td colspan=100><hr></td></tr>" : ""}
@@ -344,11 +347,11 @@ export function Switch() {
 						<td colspan=100>
 							<div class="buttons-row">
 								<button id="__switch-beacon-button-u${unit}" class="small" title="Toggle uplink Beacon Led">
-									<img id="__switch-beacon-led-u${unit}" class="inline-lamp led-gray" src="/share/svg/led-beacon.svg"/>
+									<img id="__switch-beacon-led-u${unit}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-beacon.svg"/>
 									Uplink
 								</button>
 								<button id="__switch-beacon-button-d${unit}" class="small" title="Toggle downlink Beacon Led">
-									<img id="__switch-beacon-led-d${unit}" class="inline-lamp led-gray" src="/share/svg/led-beacon.svg"/>
+									<img id="__switch-beacon-led-d${unit}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-beacon.svg"/>
 									Downlink
 								</button>
 							</div>
@@ -360,15 +363,15 @@ export function Switch() {
 			content += `
 				<tr>
 					<td>Port:</td>
-					<td class="value">${__formatPort(model, port)}</td>
+					<td class="value">${pa.id}</td>
 					<td>&nbsp;&nbsp;</td>
 					<td>
 						<div class="buttons-row">
 							<button id="__switch-port-button-p${port}" title="Activate this port">
-								<img id="__switch-port-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-circle.svg"/>
+								<img id="__switch-port-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-circle.svg"/>
 							</button>
 							<button id="__switch-params-button-p${port}" title="Configure this port">
-								<img id="__switch-params-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-gear.svg"/>
+								<img id="__switch-params-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-gear.svg"/>
 							</button>
 						</div>
 					</td>
@@ -385,14 +388,14 @@ export function Switch() {
 					</td>
 					<td style="font-size:1em">
 						<button id="__switch-beacon-button-p${port}" class="small" title="Toggle Beacon Led on this port">
-							<img id="__switch-beacon-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-beacon.svg"/>
+							<img id="__switch-beacon-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-beacon.svg"/>
 						</button>
 					</td>
 					<td>
-						<img id="__switch-video-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-video.svg" title="Video Link"/>
-						<img id="__switch-usb-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-usb.svg" title="USB Link"/>
-						<img id="__switch-atx-power-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-atx-power.svg" title="Power Led"/>
-						<img id="__switch-atx-hdd-led-p${port}" class="inline-lamp led-gray" src="/share/svg/led-atx-hdd.svg" title="HDD Led"/>
+						<img id="__switch-video-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-video.svg" title="Video Link"/>
+						<img id="__switch-usb-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-usb.svg" title="USB Link"/>
+						<img id="__switch-atx-power-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-atx-power.svg" title="Power Led"/>
+						<img id="__switch-atx-hdd-led-p${port}" class="inline-lamp led-gray" src="${ROOT_PREFIX}share/svg/led-atx-hdd.svg" title="HDD Led"/>
 					</td>
 					<td>
 						<div class="buttons-row">
@@ -407,7 +410,8 @@ export function Switch() {
 		$("switch-chain").innerHTML = content;
 
 		if (model.units.length > 0) {
-			tools.hidden.setVisible($("switch-message-update"), (model.firmware.version > model.units[0].firmware.version));
+			let fw = model.units[0].firmware;
+			tools.hidden.setVisible($("switch-message-update"), (fw.devbuild || fw.version < model.firmware.version));
 		}
 
 		for (let unit = 0; unit < model.units.length; ++unit) {
@@ -437,6 +441,7 @@ export function Switch() {
 
 		let model = __state.model;
 		let edids = __state.edids;
+		let pa = model.ports[port]; // Port attrs
 
 		let atx_actions = {
 			"power": "ATX power click",
@@ -457,12 +462,12 @@ export function Switch() {
 
 		let create_content = function(el_parent) {
 			let html = `
-				<table>
+				<table style="width: 100%">
 					<tr>
 						<td>Port name:</td>
 						<td><input
 							type="text" autocomplete="off" id="__switch-port-name-input"
-							value="${tools.escape(model.ports[port].name)}" placeholder="Host ${port + 1}"
+							value="${tools.escape(pa.name)}" placeholder="Host ${port + 1}"
 							style="width:100%"
 						/></td>
 					</tr>
@@ -471,9 +476,22 @@ export function Switch() {
 						<td><select id="__switch-port-edid-selector" style="width: 100%"></select></td>
 					</tr>
 				</table>
-				<hr>
-				<table>
 			`;
+
+			let fw = model.units[pa.unit].firmware;
+			if (fw.devbuild || fw.version >= 8) {
+				html += `
+					<hr>
+					<table style="width: 100%">
+						<tr>
+							<td>Simulate display on inactive port:</td>
+							<td align="right">${tools.sw.makeItem("__switch-port-dummy-switch", pa.video.dummy)}</td>
+						</tr>
+					</table>
+				`;
+			}
+
+			html += "<hr><table style=\"width: 100%\">";
 			for (let kv of Object.entries(atx_actions)) {
 				html += `
 					<tr>
@@ -489,6 +507,7 @@ export function Switch() {
 				`;
 			}
 			html += "</table>";
+
 			el_parent.innerHTML = html;
 
 			let el_selector = $("__switch-port-edid-selector");
@@ -509,32 +528,28 @@ export function Switch() {
 				let reset_default = tools.partial(function(el_slider, limits) {
 					tools.slider.setValue(el_slider, limits["default"]);
 				}, el_slider, limits);
-				tools.slider.setParams(el_slider, limits.min, limits.max, 0.5, model.ports[port].atx.click_delays[action], display_value);
+				tools.slider.setParams(el_slider, limits.min, limits.max, 0.5, pa.atx.click_delays[action], display_value);
 				tools.el.setOnClick($(`__switch-port-atx-click-${action}-delay-default-button`), reset_default);
 			}
 		};
 
-		wm.modal(`Port ${__formatPort(__state.model, port)} settings`, create_content, true, true).then(function(ok) {
+		wm.modal(`Port ${pa.id} settings`, create_content, true, true).then(function(ok) {
 			if (ok) {
 				let params = {
 					"port": port,
 					"edid_id": $("__switch-port-edid-selector").value,
 					"name": $("__switch-port-name-input").value,
 				};
+				let el_dummy_switch = $("__switch-port-dummy-switch");
+				if (el_dummy_switch) { // Only for devbuild or firmware >= 8
+					params["dummy"] = $("__switch-port-dummy-switch").checked;
+				}
 				for (let action of Object.keys(atx_actions)) {
 					params[`atx_click_${action}_delay`] = tools.slider.getValue($(`__switch-port-atx-click-${action}-delay-slider`));
 				};
-				__sendPost("/api/switch/set_port_params", params);
+				__sendPost("api/switch/set_port_params", params);
 			}
 		});
-	};
-
-	var __formatPort = function(model, port) {
-		if (model.units.length > 1) {
-			return `${model.ports[port].unit + 1}.${model.ports[port].channel + 1}`;
-		} else {
-			return `${port + 1}`;
-		}
 	};
 
 	var __setLedState = function(el, color, on) {
@@ -549,41 +564,50 @@ export function Switch() {
 	};
 
 	var __switchActivePort = function(port) {
+		let switch_port = () => __sendPost("api/switch/set_active", {"port": port});
 		if (__msd_connected) {
-			wm.error(`
-				Oops! Before port switching, please disconnect an active Mass Storage Drive image first.
-				Otherwise, it will break a current USB operation (OS installation, Live CD, or whatever).
-			`);
+			if ($("switch-msd-ask-switch").checked) {
+				wm.confirm(`
+					The Mass Storage Drive is active.<br><br>
+					If you switch the port now, it will break a current USB disk operation<br>
+					(OS installation, Live CD, or whatever).<br><br>
+					Are you sure you want to continue a port switching?
+				`).then(function(ok) {
+					if (ok) {
+						switch_port();
+					}
+				});
+			} else {
+				switch_port();
+			}
 		} else {
-			__sendPost("/api/switch/set_active", {"port": port});
+			switch_port();
 		}
 	};
 
 	var __switchUplinkBeacon = function(unit) {
 		let state = false;
 		try { state = !__state.beacons.uplinks[unit]; } catch {}; // eslint-disable-line no-empty
-		__sendPost("/api/switch/set_beacon", {"uplink": unit, "state": state});
+		__sendPost("api/switch/set_beacon", {"uplink": unit, "state": state});
 	};
 
 	var __switchDownlinkBeacon = function(unit) {
 		let state = false;
 		try { state = !__state.beacons.downlinks[unit]; } catch {}; // eslint-disable-line no-empty
-		__sendPost("/api/switch/set_beacon", {"downlink": unit, "state": state});
+		__sendPost("api/switch/set_beacon", {"downlink": unit, "state": state});
 	};
 
 	var __switchPortBeacon = function(port) {
 		let state = false;
 		try { state = !__state.beacons.ports[port]; } catch {}; // eslint-disable-line no-empty
-		__sendPost("/api/switch/set_beacon", {"port": port, "state": state});
+		__sendPost("api/switch/set_beacon", {"port": port, "state": state});
 	};
 
 	var __atxClick = function(port, button) {
-		let click_button = function() {
-			__sendPost("/api/switch/atx/click", {"port": port, "button": button});
-		};
+		let click_button = () => __sendPost("api/switch/atx/click", {"port": port, "button": button});
 		if ($("switch-atx-ask-switch").checked) {
 			wm.confirm(`
-				Are you sure you want to press the <b>${button}</b> button?<br>
+				Are you sure you want to press the <b>${tools.escape(button)}</b> button?<br>
 				Warning! This could cause data loss on the server.
 			`).then(function(ok) {
 				if (ok) {

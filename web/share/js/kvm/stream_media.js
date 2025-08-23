@@ -26,7 +26,7 @@
 import {tools, $} from "../tools.js";
 
 
-export function MediaStreamer(__setActive, __setInactive, __setInfo) {
+export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeHook, __orient) {
 	var self = this;
 
 	/************************************************************************/
@@ -37,17 +37,20 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 	var __ws = null;
 	var __ping_timer = null;
 	var __missed_heartbeats = 0;
-	var __decoder = null;
+
 	var __codec = "";
+	var __decoder = null;
+	var __frame = null;
 	var __canvas = $("stream-canvas");
 	var __ctx = __canvas.getContext("2d");
 
 	var __state = null;
-	var __frames = 0;
+	var __fps_accum = 0;
 
 	/************************************************************************/
 
-	self.getName = () => "HTTP H.264";
+	self.getOrientation = () => __orient;
+	self.getName = () => "Direct H.264";
 	self.getMode = () => "media";
 
 	self.getResolution = function() {
@@ -79,23 +82,28 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 			__setInactive();
 			__setInfo(false, false, "");
 			__logInfo("Starting Media ...");
-			__ws = new WebSocket(`${tools.is_https ? "wss" : "ws"}://${location.host}/api/media/ws`);
+			__ws = new WebSocket(tools.makeWsUrl("api/media/ws"));
 			__ws.binaryType = "arraybuffer";
 			__ws.onopen = __wsOpenHandler;
 			__ws.onerror = __wsErrorHandler;
 			__ws.onclose = __wsCloseHandler;
-			__ws.onmessage = async (event) => {
-				if (typeof event.data === "string") {
-					__wsJsonHandler(JSON.parse(event.data));
-				} else { // Binary
-					await __wsBinHandler(event.data);
+			__ws.onmessage = async (ev) => {
+				try {
+					if (typeof ev.data === "string") {
+						ev = JSON.parse(ev.data);
+						__wsJsonHandler(ev.event_type, ev.event);
+					} else { // Binary
+						await __wsBinHandler(ev.data);
+					}
+				} catch (ex) {
+					__wsErrorHandler(ex);
 				}
 			};
 		}
 	};
 
-	var __wsOpenHandler = function(event) {
-		__logInfo("Socket opened:", event);
+	var __wsOpenHandler = function(ev) {
+		__logInfo("Socket opened:", ev);
 		__missed_heartbeats = 0;
 		__ping_timer = setInterval(__ping, 1000);
 	};
@@ -110,8 +118,8 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 
 			if (__decoder && __decoder.state === "configured") {
 				let online = !!(__state && __state.source.online);
-				let info = `${__frames} fps dynamic`;
-				__frames = 0;
+				let info = `${__fps_accum} fps dynamic`;
+				__fps_accum = 0;
 				__setInfo(true, online, info);
 			}
 		} catch (ex) {
@@ -128,64 +136,35 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 		__setInactive();
 	};
 
-	var __wsErrorHandler = function(event) {
-		__logInfo("Socket error:", event);
-		__setInfo(false, false, event);
+	var __wsErrorHandler = function(ev) {
+		__logInfo("Socket error:", ev);
+		__setInfo(false, false, ev);
 		__wsForceClose();
 	};
 
-	var __wsCloseHandler = function(event) {
-		__logInfo("Socket closed:", event);
+	var __wsCloseHandler = function(ev) {
+		__logInfo("Socket closed:", ev);
 		if (__ping_timer) {
 			clearInterval(__ping_timer);
 			__ping_timer = null;
 		}
-		if (__decoder) {
-			__decoder.close();
-			__decoder = null;
-		}
+		__closeDecoder();
 		__missed_heartbeats = 0;
-		__frames = 0;
+		__fps_accum = 0;
 		__ws = null;
 		if (!__stop) {
 			setTimeout(() => __ensureMedia(true), 1000);
 		}
 	};
 
-	var __wsJsonHandler = function(event) {
-		if (event.event_type === "media") {
-			__decoderCreate(event.event.video);
+	var __wsJsonHandler = function(ev_type, ev) {
+		if (ev_type === "media") {
+			__setupCodec(ev.video);
 		}
 	};
 
-	var __wsBinHandler = async (data) => {
-		let header = new Uint8Array(data.slice(0, 2));
-
-		if (header[0] === 255) { // Pong
-			__missed_heartbeats = 0;
-
-		} else if (header[0] === 1 && __decoder !== null) { // Video frame
-			let key = !!header[1];
-			if (__decoder.state !== "configured") {
-				if (!key) {
-					return;
-				}
-				await __decoder.configure({"codec": __codec, "optimizeForLatency": true});
-				__setActive();
-			}
-
-			let chunk = new EncodedVideoChunk({ // eslint-disable-line no-undef
-				"timestamp": (performance.now() + performance.timeOrigin) * 1000,
-				"type": (key ? "key" : "delta"),
-				"data": data.slice(2),
-			});
-			await __decoder.decode(chunk);
-		}
-	};
-
-	var __decoderCreate = function(formats) {
-		__decoderDestroy();
-
+	var __setupCodec = function(formats) {
+		__closeDecoder();
 		if (formats.h264 === undefined) {
 			let msg = "No H.264 stream available on PiKVM";
 			__setInfo(false, false, msg);
@@ -201,35 +180,144 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo) {
 			__logInfo(msg);
 			return;
 		}
-
-		__decoder = new VideoDecoder({ // eslint-disable-line no-undef
-			"output": (frame) => {
-				try {
-					if (__canvas.width !== frame.displayWidth || __canvas.height !== frame.displayHeight) {
-						__canvas.width = frame.displayWidth;
-						__canvas.height = frame.displayHeight;
-					}
-					__ctx.drawImage(frame, 0, 0);
-					__frames += 1;
-				} finally {
-					frame.close();
-				}
-			},
-			"error": (err) => __logInfo(err.message),
-		});
 		__codec = `avc1.${formats.h264.profile_level_id}`;
-
 		__ws.send(JSON.stringify({
 			"event_type": "start",
 			"event": {"type": "video", "format": "h264"},
 		}));
 	};
 
-	var __decoderDestroy = function() {
+	var __wsBinHandler = async (data) => {
+		let header = new Uint8Array(data.slice(0, 2));
+		if (header[0] === 255) { // Pong
+			__missed_heartbeats = 0;
+		} else if (header[0] === 1) { // Video frame
+			let key = !!header[1];
+			if (await __ensureDecoder(key)) {
+				await __processFrame(key, data.slice(2));
+			}
+		}
+	};
+
+	var __ensureDecoder = async (key) => {
+		if (__codec === "") {
+			return false;
+		}
+		if (__decoder === null || __decoder.state === "closed") {
+			let started = (__codec !== "");
+			let codec = __codec;
+			__closeDecoder();
+			__codec = codec;
+			__decoder = new VideoDecoder({ // eslint-disable-line no-undef
+				"output": __renderFrame,
+				"error": (err) => __logInfo(err.message),
+			});
+			if (started) {
+				__ws.send(new Uint8Array([0]));
+			}
+		}
+		if (__decoder.state !== "configured") {
+			if (!key) {
+				return false;
+			}
+			await __decoder.configure({"codec": __codec, "optimizeForLatency": true});
+		}
+		if (__decoder.state === "configured") {
+			__setActive();
+			return true;
+		}
+		return false;
+	};
+
+	var __processFrame = async (key, raw) => {
+		let chunk = new EncodedVideoChunk({ // eslint-disable-line no-undef
+			"timestamp": (performance.now() + performance.timeOrigin) * 1000,
+			"type": (key ? "key" : "delta"),
+			"data": raw,
+		});
+		await __decoder.decode(chunk);
+	};
+
+	var __closeDecoder = function() {
 		if (__decoder !== null) {
-			__decoder.close();
-			__decoder = null;
-			__codec = "";
+			try {
+				__decoder.close();
+			} finally {
+				__codec = "";
+				__decoder = null;
+				if (__frame !== null) {
+					try {
+						__closeFrame(__frame);
+					} finally {
+						__frame = null;
+					}
+				}
+			}
+		}
+	};
+
+	var __renderFrame = function(frame) {
+		if (__frame === null) {
+			__frame = frame;
+			window.requestAnimationFrame(__drawPendingFrame, __canvas);
+		} else {
+			__closeFrame(frame);
+		}
+	};
+
+	var __drawPendingFrame = function() {
+		if (__frame === null) {
+			return;
+		}
+		try {
+			let width = __frame.displayWidth;
+			let height = __frame.displayHeight;
+			switch (__orient) {
+				case 90:
+				case 270:
+					width = __frame.displayHeight;
+					height = __frame.displayWidth;
+			}
+
+			if (__canvas.width !== width || __canvas.height !== height) {
+				__canvas.width = width;
+				__canvas.height = height;
+				__organizeHook();
+			}
+
+			if (__orient === 0) {
+				__ctx.drawImage(__frame, 0, 0);
+			} else {
+				__ctx.save();
+				try {
+					switch(__orient) {
+						case 90: __ctx.translate(0, height); __ctx.rotate(-Math.PI / 2); break;
+						case 180: __ctx.translate(width, height); __ctx.rotate(-Math.PI); break;
+						case 270: __ctx.translate(width, 0); __ctx.rotate(Math.PI / 2); break;
+					}
+					__ctx.drawImage(__frame, 0, 0);
+				} finally {
+					__ctx.restore();
+				}
+			}
+			__fps_accum += 1;
+		} finally {
+			__closeFrame(__frame);
+			__frame = null;
+		}
+	};
+
+	var __closeFrame = function(frame) {
+		if (!tools.browser.is_firefox) {
+			// FIXME: On Firefox, image is flickering when we're closing the frame for some reason.
+			// So we're just not performing the close() and it seems there is no problems here
+			// because Firefox is implementing some auto-closing logic. With auto-close,
+			// no flickering observed.
+			//  - https://github.com/mozilla/gecko-dev/blob/82333a9/dom/media/webcodecs/VideoFrame.cpp
+			// Note at 2025.05.13:
+			//  - The problem is not observed on nightly Firefox 140.
+			//  - It's also not observed with hardware accelleration on 138.
+			frame.close();
 		}
 	};
 

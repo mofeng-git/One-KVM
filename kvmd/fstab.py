@@ -38,12 +38,12 @@ class Partition:
 
 
 # =====
-def find_msd(msd_directory_path) -> Partition:
+def find_msd(msd_directory_path: str = "/var/lib/kvmd/msd") -> Partition:
     return _find_single("otgmsd", msd_directory_path)
 
 
-def find_pst() -> Partition:
-    return _find_single("pst")
+def find_pst(msd_directory_path: str = "/var/lib/kvmd/msd") -> Partition:
+    return _find_single("pst", msd_directory_path)
 
 
 # =====
@@ -51,8 +51,8 @@ def _find_single(part_type: str, msd_directory_path: str) -> Partition:
     parts = _find_partitions(part_type, True)
     if len(parts) == 0:
         if os.path.exists(msd_directory_path):
-            #set default value
-            parts = [Partition(mount_path = msd_directory_path, root_path = msd_directory_path, group = 'kvmd', user = 'kvmd')]
+            # set default value
+            parts = [Partition(mount_path=msd_directory_path, root_path=msd_directory_path, group="kvmd", user="kvmd")]
         else:
             raise RuntimeError(f"Can't find {part_type!r} mountpoint")
     return parts[0]

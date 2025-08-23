@@ -2,46 +2,52 @@ mixin about_tab(name, title, i18nid, checked=false)
 	- let button_id = `about-tab-${name}-button`
 	input(checked=checked type="radio" name="about-tab-button", id=button_id)
 	label(for=button_id i18n=i18nid) #{title}
-	div(class="tab")
-		div(id=`about-${name}` class="code")
+	.tab
+		.code(id=`about-${name}`)
 			if block
 				block
 			else
-				span(class="code-comment") No data
+				span.code-comment No data
 
-div(id="about-window" class="window")
-	div(class="window-header")
-		div(class="window-grab" i18n="kvm_text1") About
-		button(class="window-button-close") #[b &times;]
-	div(id="about")
+
+.window#about-window(data-show-centered)
+	.window-header
+		.window-grab(i18n="about_title") About
+		.window-buttons
+			button.window-button-original &bull;
+			button.window-button-close #[b &times;]
+
+	#about
 		table
 			tr
-				td(class="logo")
+				td.logo
 					a(href="https://pikvm.org" target="_blank")
-						img(class="svg-gray" src=`${svg_dir}/logo.svg` alt="PiKVM" height="40")
+						img.svg-gray(src=`${svg_dir}/logo.svg` alt="PiKVM" height="40")
 				td
 					table
-						tr #[td(colspan="2" class="title" i18n="index_title") The Open Source KVM over IP]
 						tr
-							td(colspan="2" class="copyright" i18n="copyright")
+							td.title(colspan="2" i18n="index_title")
+								| The Open Source KVM over IP
+						tr
+							td.copyright(colspan="2" i18n="copyright")
 								| Copyright &copy; 2018-2024 #[a(target="_blank" href="mailto:mdevaev@gmail.com") Maxim Devaev]
 		br
-		div(class="tabs-box")
-			+about_tab("meta", "Meta", "meta", true)
+		.tabs-box
+			+about_tab("version", "Version", "version", true)
+			+about_tab("hardware", "Hardware", "hardware")
+
+			+about_tab("meta", "Meta", "meta")
 				div
-					span(class="code-comment")
-						| // You can get this JSON using handle #[a(target="_blank" href="/api/info?fields=meta") /api/info?fields=meta]#[br]
+					span.code-comment
+						| // You can get this JSON using handle
+						| #[a(target="_blank" href=`${root_prefix}api/info?fields=meta`) /api/info?fields=meta]#[br]
 						| // In the standard configuration this data#[br]
 						| // is specified in the file /etc/kvmd/meta.yaml
 					br
-					pre(id="kvmd-meta-json")
-						| No data
-
-			+about_tab("hardware", "Hardware", "hardware")
-			+about_tab("version", "Version", "version")
+					pre#kvmd-meta-json No data
 
 			+about_tab("thanks", "Thanks", "thanks")
-				span(class="code-comment" i18n="kvm_text2")
+				span.code-comment( i18n="about_sponsors")
 					| // These kind people donated money to the PiKVM project#[br]
 					| // and supported the work on it. We are very grateful#[br]
 					| // for their help, and memorializing their names#[br]
@@ -50,11 +56,11 @@ div(id="about-window" class="window")
 					| // you can donate on #[a(target="_blank" href="https://www.patreon.com/pikvm") Patreon]
 					| or #[a(target="_blank" href="https://paypal.me/pikvm") Paypal].
 		br
-		p(class="text credits")
-			a(target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12") One-KVM Project
+		p.text.credits
+			a(target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="onekvm_project_link") One-KVM Project
 			| &nbsp; | &nbsp;
-			a(target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13") One-KVM Documentation
+			a(target="_blank" href="https://one-kvm.mofeng.run" i18n="onekvm_documentation_link") One-KVM Documentation
 			| &nbsp; | &nbsp;
-			a(target="_blank" href="https://pikvm.org" i18n="index_text_10") PiKVM Project
+			a(target="_blank" href="https://pikvm.org" i18n="pikvm_project_link") PiKVM Project
 			| &nbsp; | &nbsp;
-			a(target="_blank" href="https://docs.pikvm.org" i18n="index_text_11") Documentation
+			a(target="_blank" href="https://docs.pikvm.org" i18n="pikvm_documentation_link") Documentation

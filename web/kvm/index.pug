@@ -1,30 +1,39 @@
 extends ../base.pug
 
+
 append vars
-	- title = "One-KVM Session"
-	- main_js = "kvm/main"
-	- body_class = "body-no-select"
-	- css_list = css_list.concat(["navbar", "window", "modal", "led", "slider", "switch", "radio", "progress", "keypad", "tabs"])
-	- css_list = css_list.concat(["kvm/stream", "kvm/hid", "kvm/msd", "kvm/system", "kvm/keyboard", "kvm/about"])
+	-
+		root_prefix = "../"
+		title = "One-KVM Session"
+		main_js = "kvm/main"
+		body_class = "body-no-select"
+		css_list.push(
+			"navbar", "window", "modal", "led", "slider",
+			"switch", "radio", "progress", "keypad", "tabs",
+			"kvm/stream", "kvm/msd",
+			"kvm/system", "kvm/keyboard", "kvm/about"
+		)
 
 block body
 	include navbar.pug
 	include windows.pug
 
-	ul(class="navbar-bg-tips")
-		li(class="left")
-			pre(id="kvmd-meta-tips-left")
-		li(class="right")
-			pre(id="kvmd-meta-tips-right")
+	ul.navbar-bg-tips
+		li.left
+			pre#kvmd-meta-tips-left
+		li.right
+			pre#kvmd-meta-tips-right
 
-	ul(class="footer")
-		li(class="left")
-			span(id="kvmd-meta-server-host" title="Server name (see System/About)")
+	ul.footer
+		li.left
+			span#kvmd-meta-server-host(title="KVM/Server name (see System/About)")
 			| &nbsp; | &nbsp;
-			span(id="kvmd-version-kvmd" title="KVMD version")
+			span#kvmd-info-platform(title="PiKVM Platform")
 			| &nbsp; | &nbsp;
-			span(id="kvmd-version-streamer" title="Streamer version")
-		li(class="right")
-			a(target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="index_text_12") One-KVM Project
+			span#kvmd-version-kvmd(title="KVMD version")
 			| &nbsp; | &nbsp;
-			a(target="_blank" href="https://one-kvm.mofeng.run" i18n="index_text_13") One-KVM Documentation
+			span#kvmd-version-streamer(title="Streamer version")
+		li.right
+			a(target="_blank" href="https://github.com/mofeng-git/One-KVM" i18n="onekvm_project_link") One-KVM Project
+			| &nbsp; | &nbsp;
+			a(target="_blank" href="https://one-kvm.mofeng.run" i18n="onekvm_documentation_link") One-KVM Documentation

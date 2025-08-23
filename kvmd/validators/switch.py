@@ -50,7 +50,7 @@ def valid_switch_edid_data(arg: Any) -> str:
     name = "switch EDID data"
     arg = valid_stripped_string(arg, name=name)
     arg = re.sub(r"\s", "", arg)
-    return check_re_match(arg, name, "(?i)^[0-9a-f]{512}$").upper()
+    return check_re_match(arg, name, "(?i)^([0-9a-f]{256}|[0-9a-f]{512})$").upper()
 
 
 def valid_switch_color(arg: Any, allow_default: bool) -> str:

@@ -34,7 +34,7 @@ div.keypad div.keypad-block:not(:first-child) {
 
 div.keypad div.keypad-row {
 	display: flex;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 	white-space: nowrap;
 	height: 40px;
 	margin-bottom: 5px;
@@ -52,7 +52,6 @@ div.keypad div.keypad-row div.spacer-fixed {
 }
 
 div.keypad div.key,
-div.keypad div.modifier,
 div.keypad div.empty {
 	vertical-align: top;
 	font-size: 0.9em;
@@ -65,8 +64,7 @@ div.keypad div.empty {
 div.keypad div.empty {
 	border: thin solid transparent;
 }
-div.keypad div.key,
-div.keypad div.modifier {
+div.keypad div.key {
 	box-shadow: var(--shadow-micro);
 	border: var(--border-key-thin);
 	border-radius: 6px;
@@ -74,33 +72,57 @@ div.keypad div.modifier {
 	background-color: var(--cs-key-default-bg);
 	cursor: pointer;
 }
-div.keypad div.key:hover,
-div.keypad div.modifier:hover {
-	color: var(--cs-key-hovered-fg);
-	background-color: var(--cs-key-hovered-bg);
+@media (hover: hover) {
+	div.keypad div.key:not(div.holded):not(div.locked):hover {
+		color: var(--cs-key-hovered-fg);
+		background-color: var(--cs-key-hovered-bg);
+	}
 }
+
 div.keypad div.rounded-left {
-	border-radius: 6px 0px 0px 6px !important;
+	border-radius: 6px 0px 0px 6px;
 }
 div.keypad div.rounded-right {
-	border-radius: 0px 6px 6px 0px !important;
+	border-radius: 0px 6px 6px 0px;
 }
 div.keypad div.rounded-none {
-	border-radius: 0px !important;
+	border-radius: 0px;
 }
+
 div.keypad div.pressed {
 	box-shadow: none;
-	color: var(--cs-key-pressed-fg) !important;
-	background-color: var(--cs-key-pressed-bg) !important;
+	color: var(--cs-key-pressed-fg);
+	background-color: var(--cs-key-pressed-bg);
 }
+
+div.keypad div.pressed:not(div.holded):not(div.locked):hover[data-allow-autohold] {
+	/* :active is not working on Firefox and iOS */
+	background: linear-gradient(to top, var(--cs-key-holded-bg) 50%, var(--cs-key-pressed-bg) 0);
+	background-size: 100% 200%;
+	background-position: top;
+	animation: keypad-animate-holding 0.2s 0.3s forwards;
+}
+@keyframes keypad-animate-holding {
+	100% {
+		background-position: bottom;
+	}
+}
+
 div.keypad div.holded {
-	box-shadow: none;
-	color: var(--cs-key-default-fg) !important;
+	/* Override animation end on iOS with !important */
+	box-shadow: none !important;
+	color: var(--cs-key-holded-fg) !important;
 	background-color: var(--cs-key-holded-bg) !important;
 }
+
+div.keypad div.locked {
+	box-shadow: none;
+	color: var(--cs-key-locked-fg);
+	background-color: var(--cs-key-locked-bg);
+}
+
 div.keypad div.key:last-child,
-div.keypad div.empty:last-child,
-div.keypad div.modifier:last-child {
+div.keypad div.empty:last-child {
 	margin-right: 0;
 }
 div.keypad div.wide-0 {
@@ -120,12 +142,12 @@ div.keypad div.wide-4 {
 	width: 288px;
 }
 div.keypad div.left {
-	text-align: left !important;
-	padding-left: 6px !important;
+	text-align: left;
+	padding-left: 6px;
 }
 div.keypad div.right {
-	text-align: right !important;
-	padding-right: 6px !important;
+	text-align: right;
+	padding-right: 6px;
 }
 div.keypad div.small {
 	font-size: 0.7em;
@@ -141,4 +163,7 @@ div.keypad div.label {
 
 div.keypad b {
 	color: var(--cs-key-holded-bg);
+}
+div.keypad div.locked b {
+	color: var(--cs-key-locked-bg);
 }

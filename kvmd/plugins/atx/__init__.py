@@ -54,7 +54,8 @@ class BaseAtx(BasePlugin):
     async def poll_state(self) -> AsyncGenerator[dict, None]:
         # ==== Granularity table ====
         #   - enabled -- Full
-        #   - busy    -- Partial
+        #   - busy    -- Partial, follows with acts
+        #   - acts    -- Partial, follows with busy
         #   - leds    -- Partial
         # ===========================
 

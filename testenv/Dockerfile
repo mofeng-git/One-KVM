@@ -7,23 +7,24 @@ RUN echo 'Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch
 	&& pacman-key --init \
 	&& pacman-key --populate archlinux
 
-RUN pacman --noconfirm --ask=4 -Syy \
-	&& pacman --needed --noconfirm --ask=4 -S \
+RUN \
+	--mount=type=cache,id=kvmd-pacman-pkg,target=/var/cache/pacman/pkg \
+	--mount=type=cache,id=kvmd-pacman-db,target=/var/lib/pacman/sync \
+	PACMAN="pacman --noconfirm --ask=4 --needed" \
+	&& $PACMAN -Syy \
 		archlinux-keyring \
-	&& pacman --needed --noconfirm --ask=4 -S \
+	&& $PACMAN -S \
 		glibc \
 		pacman \
 		openssl \
 		openssl-1.1 \
 	&& pacman-db-upgrade \
-	&& pacman --noconfirm --ask=4 -Syu \
-	&& pacman --needed --noconfirm --ask=4 -S \
+	&& $PACMAN -Syu \
 		p11-kit \
 		ca-certificates \
 		ca-certificates-mozilla \
 		ca-certificates-utils \
-	&& pacman -Syu --noconfirm --ask=4 \
-	&& pacman -S --needed --noconfirm --ask=4 \
+	&& $PACMAN -Syu \
 		base-devel \
 		autoconf-archive \
 		help2man \
@@ -46,10 +47,13 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		python-aiofiles \
 		python-async-lru \
 		python-passlib \
+		python-bcrypt \
 		python-pyotp \
 		python-qrcode \
 		python-pyserial \
+		python-pyusb \
 		python-pyudev \
+		python-evdev \
 		python-setproctitle \
 		python-psutil \
 		python-netifaces \
@@ -76,8 +80,7 @@ RUN pacman --noconfirm --ask=4 -Syy \
 		eslint \
 		npm \
 		shellcheck \
-	&& (pacman -Sc --noconfirm || true) \
-	&& rm -rf /var/cache/pacman/pkg/*
+	&& :
 
 COPY testenv/requirements.txt requirements.txt
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
@@ -97,11 +100,12 @@ WORKDIR /
 ARG USTREAMER_MIN_VERSION
 ENV USTREAMER_MIN_VERSION $USTREAMER_MIN_VERSION
 RUN echo $USTREAMER_MIN_VERSION
-RUN git clone https://github.com/pikvm/ustreamer \
+RUN \
+	--mount=type=tmpfs,target=/tmp \
+	cd /tmp \
+	&& git clone --depth=1 https://github.com/pikvm/ustreamer \
 	&& cd ustreamer \
-	&& make WITH_PYTHON=1 PREFIX=/usr DESTDIR=/ install \
-	&& cd - \
-	&& rm -rf ustreamer
+	&& make WITH_PYTHON=1 PREFIX=/usr DESTDIR=/ install
 
 RUN mkdir -p \
 		/etc/kvmd/{nginx,vnc} \
@@ -114,4 +118,4 @@ COPY testenv/fakes/sys /fake_sysfs/sys
 COPY testenv/fakes/proc /fake_procfs/proc
 COPY testenv/fakes/etc /fake_etc/etc
 
-CMD /bin/bash
+CMD ["/bin/bash"]

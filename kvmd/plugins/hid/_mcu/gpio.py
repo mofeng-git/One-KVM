@@ -68,7 +68,7 @@ class Gpio:  # pylint: disable=too-many-instance-attributes
             self.__line_req = gpiod.request_lines(
                 self.__device_path,
                 consumer="kvmd::hid",
-                config=config,
+                config=config,  # type: ignore
             )
 
     def __exit__(

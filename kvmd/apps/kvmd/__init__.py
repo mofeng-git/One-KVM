@@ -76,14 +76,17 @@ def main(argv: (list[str] | None)=None) -> None:
     KvmdServer(
         auth_manager=AuthManager(
             enabled=config.auth.enabled,
+            expire=config.auth.expire,
+            usc_users=config.auth.usc.users,
+            usc_groups=config.auth.usc.groups,
             unauth_paths=([] if config.prometheus.auth.enabled else ["/export/prometheus/metrics"]),
 
-            internal_type=config.auth.internal.type,
-            internal_kwargs=config.auth.internal._unpack(ignore=["type", "force_users"]),
-            force_internal_users=config.auth.internal.force_users,
+            int_type=config.auth.internal.type,
+            int_kwargs=config.auth.internal._unpack(ignore=["type", "force_users"]),
+            force_int_users=config.auth.internal.force_users,
 
-            external_type=config.auth.external.type,
-            external_kwargs=(config.auth.external._unpack(ignore=["type"]) if config.auth.external.type else {}),
+            ext_type=config.auth.external.type,
+            ext_kwargs=(config.auth.external._unpack(ignore=["type"]) if config.auth.external.type else {}),
 
             totp_secret_path=config.auth.totp.secret.file,
         ),

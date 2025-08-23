@@ -2,7 +2,7 @@ mixin navbar_led(id, icon, cls="led-gray")
 	img(id=id, class=cls src=`${svg_dir}/${icon}.svg`)
 
 mixin menu_message(icon, short, classes="", i18nid)
-	div(class="text")
+	.text
 		table
 			tr
 				td(rowspan="2") #[img(class=`sign ${classes}` src=`${svg_dir}/${icon}.svg`)]
@@ -13,34 +13,76 @@ mixin menu_message(icon, short, classes="", i18nid)
 						sup(style="line-height:1")
 							block
 
-mixin menu_switch_notable_gpio(channel, title, confirm_off="")
-	td !{title}:
-	td(align="right")
-		div(class="switch-box")
-			input(disabled type="checkbox" id=`__gpio-switch-${channel}` class=`__gpio-switch-${channel} gpio-switch`
-				data-channel=channel data-confirm-off=confirm_off)
-			label(for=`__gpio-switch-${channel}`)
-				span(class="switch-inner")
-				span(class="switch")
 
-mixin menu_switch_notable(id, title, enabled, checked, i18nid)
-	td(i18n=i18nid) !{title}:
+mixin menu_switch_td2_gpio(channel, confirm_off="", i18nid)
+	td(i18n=i18nid)
+		block
 	td(align="right")
-		div(class="switch-box")
+		.switch-box
+			input(
+				disabled
+				type="checkbox"
+				id=`__gpio-switch-${channel}`
+				class=`__gpio-switch-${channel} gpio-switch`
+				data-channel=channel
+				data-confirm-off=confirm_off
+			)
+			label(for=`__gpio-switch-${channel}`)
+				span.switch-inner
+				span.switch
+
+
+mixin menu_switch_td2(id, enabled, checked, i18nid)
+	td(i18n=i18nid)
+		block
+	td(align="right")
+		.switch-box
 			input(checked=checked disabled=!enabled type="checkbox" id=id)
 			label(for=id)
-				span(class="switch-inner")
-				span(class="switch")
+				span.switch-inner
+				span.switch
 
-mixin menu_switch(id, title, enabled, checked, i18nid)
-	table(class="kv")
+mixin menu_switch_table(id, title, enabled, checked, i18nid)
+	table.kv
 		tr
-			+menu_switch_notable(id, title, enabled, checked, i18nid)
+			+menu_switch_td2(id, title, enabled, checked, i18nid)
+				block
 
-ul(id="navbar")
-	li(class="left")
-		a(id="logo" href="/") &larr;&nbsp;&nbsp;
-			img(class="svg-gray" src=`${svg_dir}/logo.svg` alt="&pi;-kvm")
+
+mixin menu_radio_td2(name, items, i18nid)
+	td(i18n=i18nid)
+		block
+	td
+		.radio-box
+			each item in items
+				-
+					let id = `${name}-${item["value"]}`
+					let checked = (item["checked"] || false)
+				input(type="radio" id=id name=name value=item["value"] checked=checked)
+				label(for=id) !{item["title"]}
+
+
+mixin menu_slider_td3(slider_id, value_id, enabled, i18nid)
+	-
+		enabled = (enabled || true)
+	td(i18n=i18nid)
+		block
+	td.value-slider
+		input(type="range" id=slider_id disabled=!enabled)
+	td.value-number(id=value_id)
+
+
+mixin menu_spoiler(title, i18nid)
+	details
+		summary(i18n=i18nid) !{title}
+		div(class="spoiler")
+			block
+
+
+ul#navbar
+	li.left
+		a(id="logo" href=root_prefix) &larr;&nbsp;&nbsp;
+			img.svg-gray(src=`${svg_dir}/logo.svg` alt="&pi;-kvm")
 
 	include navbar-health.pug
 

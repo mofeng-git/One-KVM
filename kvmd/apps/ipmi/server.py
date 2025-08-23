@@ -70,7 +70,6 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
 
         super().__init__(authdata=auth_manager, address=host, port=port)
 
-        self.__auth_manager = auth_manager
         self.__kvmd = kvmd
 
         self.__host = host
@@ -165,11 +164,10 @@ class IpmiServer(BaseIpmiServer):  # pylint: disable=too-many-instance-attribute
     def __make_request(self, session: IpmiServerSession, name: str, func_path: str, **kwargs):  # type: ignore
         async def runner():  # type: ignore
             logger = get_logger(0)
-            credentials = self.__auth_manager.get_credentials(session.username.decode())
-            logger.info("[%s]: Performing request %s from user %r (IPMI) as %r (KVMD)",
-                        session.sockaddr[0], name, credentials.ipmi_user, credentials.kvmd_user)
+            logger.info("[%s]: Performing request %s from IPMI user %r ...",
+                        session.sockaddr[0], name, session.username.decode())
             try:
-                async with self.__kvmd.make_session(credentials.kvmd_user, credentials.kvmd_passwd) as kvmd_session:
+                async with self.__kvmd.make_session() as kvmd_session:
                     func = functools.reduce(getattr, func_path.split("."), kvmd_session)
                     return (await func(**kwargs))
             except (aiohttp.ClientError, asyncio.TimeoutError) as ex:

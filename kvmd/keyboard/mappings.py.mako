@@ -22,6 +22,8 @@
 
 import dataclasses
 
+from evdev import ecodes
+
 
 # =====
 @dataclasses.dataclass(frozen=True)
@@ -31,7 +33,7 @@ class McuKey:
 
 @dataclasses.dataclass(frozen=True)
 class UsbKey:
-    code: int
+    code:        int
     is_modifier: bool
 
 
@@ -41,29 +43,36 @@ class Key:
     usb: UsbKey
 
 <%! import operator %>
-KEYMAP: dict[str, Key] = {
+KEYMAP: dict[int, Key] = {
 % for km in sorted(keymap, key=operator.attrgetter("mcu_code")):
-    "${km.web_name}": Key(mcu=McuKey(code=${km.mcu_code}), usb=UsbKey(code=${km.usb_key.code}, is_modifier=${km.usb_key.is_modifier})),
+    ecodes.${km.evdev_name}: Key(mcu=McuKey(code=${km.mcu_code}), usb=UsbKey(code=${km.usb_key.code}, is_modifier=${km.usb_key.is_modifier})),
+% endfor
+}
+
+
+WEB_TO_EVDEV = {
+% for km in sorted(keymap, key=operator.attrgetter("mcu_code")):
+    "${km.web_name}": ecodes.${km.evdev_name},
 % endfor
 }
 
 
 # =====
-class WebModifiers:
-    SHIFT_LEFT = "ShiftLeft"
-    SHIFT_RIGHT = "ShiftRight"
+class EvdevModifiers:
+    SHIFT_LEFT = ecodes.KEY_LEFTSHIFT
+    SHIFT_RIGHT = ecodes.KEY_RIGHTSHIFT
     SHIFTS = set([SHIFT_LEFT, SHIFT_RIGHT])
 
-    ALT_LEFT = "AltLeft"
-    ALT_RIGHT = "AltRight"
+    ALT_LEFT = ecodes.KEY_LEFTALT
+    ALT_RIGHT = ecodes.KEY_RIGHTALT
     ALTS = set([ALT_LEFT, ALT_RIGHT])
 
-    CTRL_LEFT = "ControlLeft"
-    CTRL_RIGHT = "ControlRight"
+    CTRL_LEFT = ecodes.KEY_LEFTCTRL
+    CTRL_RIGHT = ecodes.KEY_RIGHTCTRL
     CTRLS = set([CTRL_LEFT, CTRL_RIGHT])
 
-    META_LEFT = "MetaLeft"
-    META_RIGHT = "MetaRight"
+    META_LEFT = ecodes.KEY_LEFTMETA
+    META_RIGHT = ecodes.KEY_RIGHTMETA
     METAS = set([META_LEFT, META_RIGHT])
 
     ALL = (SHIFTS | ALTS | CTRLS | METAS)
@@ -84,10 +93,10 @@ class X11Modifiers:
 # =====
 @dataclasses.dataclass(frozen=True)
 class At1Key:
-    code: int
+    code:  int
     shift: bool
     altgr: bool = False
-    ctrl: bool = False
+    ctrl:  bool = False
 
 
 X11_TO_AT1 = {
@@ -99,8 +108,8 @@ X11_TO_AT1 = {
 }
 
 
-AT1_TO_WEB = {
+AT1_TO_EVDEV = {
 % for km in sorted(keymap, key=operator.attrgetter("at1_code")):
-    ${km.at1_code}: "${km.web_name}",
+    ${km.at1_code}: ecodes.${km.evdev_name},
 % endfor
 }

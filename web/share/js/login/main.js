@@ -32,10 +32,17 @@ export function main() {
 	if (checkBrowser(null, null)) {
 		initWindowManager();
 
+		// Radio is a string container
+		tools.radio.clickValue("expire-radio", tools.storage.get("login.expire", 0));
+		tools.radio.setOnClick("expire-radio", function() {
+			let expire = parseInt(tools.radio.getValue("expire-radio"));
+			tools.storage.setInt("login.expire", expire);
+		}, false);
+
 		tools.el.setOnClick($("login-button"), __login);
-		$("user-input").onkeyup = $("passwd-input").onkeyup = $("code-input").onkeyup = function(event) {
-			if (event.code === "Enter") {
-				event.preventDefault();
+		$("user-input").onkeyup = $("passwd-input").onkeyup = $("code-input").onkeyup = function(ev) {
+			if (ev.code === "Enter") {
+				ev.preventDefault();
 				$("login-button").click();
 			}
 		};
@@ -45,31 +52,43 @@ export function main() {
 }
 
 function __login() {
-	let user = $("user-input").value;
-	if (user.length === 0) {
+	let e_user = encodeURIComponent($("user-input").value);
+	if (e_user.length === 0) {
 		$("user-input").focus();
-	} else {
-		let passwd = $("passwd-input").value + $("code-input").value;
-		let body = `user=${encodeURIComponent(user)}&passwd=${encodeURIComponent(passwd)}`;
-		tools.httpPost("/api/auth/login", null, function(http) {
-			if (http.status === 200) {
-				document.location.href = "/";
-			} else if (http.status === 403) {
-				wm.error("Invalid credentials").then(__tryAgain);
-			} else {
+		return;
+	}
+
+	let e_passwd = encodeURIComponent($("passwd-input").value + $("code-input").value);
+	let e_expire = encodeURIComponent(tools.radio.getValue("expire-radio"));
+	let body = `user=${e_user}&passwd=${e_passwd}&expire=${e_expire}`;
+
+	tools.httpPost("api/auth/login", null, function(http) {
+		switch (http.status) {
+			case 200:
+				tools.currentOpen("");
+				break;
+
+			case 403:
+				wm.error("Invalid username, password, or OTP").then(__tryAgain);
+				break;
+
+			default: {
 				let error = "";
 				if (http.status === 400) {
-					try { error = JSON.parse(http.responseText)["result"]["error"]; } catch { /* Nah */ }
+					try {
+						error = JSON.parse(http.responseText)["result"]["error"];
+					} catch { /* Nah */ }
 				}
 				if (error === "ValidatorError") {
 					wm.error("Invalid characters in credentials").then(__tryAgain);
 				} else {
-					wm.error("Login error", http.responseText).then(__tryAgain);
+					wm.error("Unexpected login error:", http.responseText).then(__tryAgain);
 				}
-			}
-		}, body, "application/x-www-form-urlencoded");
-		__setEnabled(false);
-	}
+			} break;
+		}
+	}, body, "application/x-www-form-urlencoded");
+
+	__setEnabled(false);
 }
 
 function __setEnabled(enabled) {

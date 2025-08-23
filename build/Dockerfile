@@ -42,6 +42,31 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
         libnss3 \
         libasound2 \
         nano \
+        unzip \
+        libavcodec59 \
+        libavformat59 \
+        libavutil57 \
+        libswscale6 \
+        libavfilter8 \
+        libavdevice59 \
+    && if [ ${TARGETARCH} != arm ] && [ ${TARGETARCH} != arm64 ]; then \
+        apt-get install -y --no-install-recommends \
+            ffmpeg \
+            vainfo \
+            libva2 \
+            libva-drm2 \
+            libva-x11-2 \
+            libdrm2 \
+            mesa-va-drivers \
+            mesa-vdpau-drivers \
+            intel-media-va-driver \
+            i965-va-driver; \
+    fi \
+    && if [ ${TARGETARCH} = arm ] || [ ${TARGETARCH} = arm64 ]; then \
+        apt-get install -y --no-install-recommends \
+            v4l-utils \
+            libv4l-0; \
+    fi \
     && cp /tmp/lib/* /lib/*-linux-*/ \
     && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check /tmp/wheel/*.whl \
     && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check pyfatfs \

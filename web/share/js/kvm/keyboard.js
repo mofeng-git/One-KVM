@@ -35,17 +35,17 @@ export function Keyboard(__recordWsEvent) {
 	var __keypad = null;
 
 	var __init__ = function() {
-		__keypad = new Keypad("div#keyboard-window", __sendKey, true);
+		__keypad = new Keypad($("keyboard-window"), __sendKey, true);
 
 		$("hid-keyboard-led").title = "Keyboard free";
 
-		$("keyboard-window").onkeydown = (event) => __keyboardHandler(event, true);
-		$("keyboard-window").onkeyup = (event) => __keyboardHandler(event, false);
+		$("keyboard-window").onkeydown = (ev) => __keyboardHandler(ev, true);
+		$("keyboard-window").onkeyup = (ev) => __keyboardHandler(ev, false);
 		$("keyboard-window").onfocus = __updateOnlineLeds;
 		$("keyboard-window").onblur = __updateOnlineLeds;
 
-		$("stream-window").onkeydown = (event) => __keyboardHandler(event, true);
-		$("stream-window").onkeyup = (event) => __keyboardHandler(event, false);
+		$("stream-window").onkeydown = (ev) => __keyboardHandler(ev, true);
+		$("stream-window").onkeyup = (ev) => __keyboardHandler(ev, false);
 		$("stream-window").onfocus = __updateOnlineLeds;
 		$("stream-window").onblur = __updateOnlineLeds;
 
@@ -125,9 +125,9 @@ export function Keyboard(__recordWsEvent) {
 		$("hid-keyboard-led").title = title;
 	};
 
-	var __keyboardHandler = function(event, state) {
-		event.preventDefault();
-		__keypad.emitByKeyEvent(event, state);
+	var __keyboardHandler = function(ev, state) {
+		ev.preventDefault();
+		__keypad.emitByKeyEvent(ev, state);
 	};
 
 	var __sendKey = function(code, state) {
@@ -139,7 +139,7 @@ export function Keyboard(__recordWsEvent) {
 				code = "ControlLeft";
 			}
 		}
-		let event = {
+		let ev = {
 			"event_type": "key",
 			"event": {
 				"key": code,
@@ -148,10 +148,10 @@ export function Keyboard(__recordWsEvent) {
 			},
 		};
 		if (__ws && !$("hid-mute-switch").checked) {
-			__ws.sendHidEvent(event);
+			__ws.sendHidEvent(ev);
 		}
-		delete event.event.finish;
-		__recordWsEvent(event);
+		delete ev.event.finish;
+		__recordWsEvent(ev);
 	};
 
 	__init__();

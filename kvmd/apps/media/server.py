@@ -52,6 +52,9 @@ class _Source:
     clients:      dict[WsSession, "_Client"] = dataclasses.field(default_factory=dict)
     key_required: bool = dataclasses.field(default=False)
 
+    def is_diff(self) -> bool:
+        return StreamerFormats.is_diff(self.streamer.get_format())
+
 
 @dataclasses.dataclass
 class _Client:
@@ -97,6 +100,14 @@ class MediaServer(HttpServer):
     @exposed_ws(0)
     async def __ws_bin_ping_handler(self, ws: WsSession, _: bytes) -> None:
         await ws.send_bin(255, b"")  # Ping-pong
+
+    @exposed_ws(1)
+    async def __ws_bin_key_handler(self, ws: WsSession, _: bytes) -> None:
+        for src in self.__srcs:
+            if ws in src.clients:
+                if src.is_diff():
+                    src.key_required = True
+                break
 
     @exposed_ws("start")
     async def __ws_start_handler(self, ws: WsSession, event: dict) -> None:
@@ -145,7 +156,7 @@ class MediaServer(HttpServer):
     # =====
 
     async def __sender(self, client: _Client) -> None:
-        need_key = StreamerFormats.is_diff(client.src.streamer.get_format())
+        need_key = client.src.is_diff()
         if need_key:
             client.src.key_required = True
         has_key = False
