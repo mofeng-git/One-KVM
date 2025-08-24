@@ -123,7 +123,7 @@ RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libn
     && make shared_library -j && make install \
     && cd /tmp \
     && rm -rf /tmp/libsrtp* \
-    && git clone --depth=1 https://libwebsockets.org/repo/libwebsockets /tmp/libwebsockets \
+    && git clone --depth=1 https://github.com/warmcat/libwebsockets /tmp/libwebsockets \
     && cd /tmp/libwebsockets \
     && mkdir build && cd build \
     && cmake -DLWS_MAX_SMP=1 -DLWS_WITHOUT_EXTENSIONS=0 -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_C_FLAGS="-fpic" .. \
