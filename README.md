@@ -3,6 +3,8 @@
   <h1>One-KVM</h1>
   <p><strong>基于 PiKVM 的 DIY IP-KVM 解决方案</strong></p>
   
+  <p><a href="README.md">简体中文</a> | <a href="README.en.md">English</a></p>
+  
   [![GitHub stars](https://img.shields.io/github/stars/mofeng-git/One-KVM?style=social)](https://github.com/mofeng-git/One-KVM/stargazers)
   [![GitHub forks](https://img.shields.io/github/forks/mofeng-git/One-KVM?style=social)](https://github.com/mofeng-git/One-KVM/network/members)
   [![GitHub issues](https://img.shields.io/github/issues/mofeng-git/One-KVM)](https://github.com/mofeng-git/One-KVM/issues)
@@ -90,6 +92,41 @@ curl -sSL https://one-kvm.mofeng.run/quick_start.sh -o quick_start.sh && bash qu
 
 #### 手动部署
 
+推荐使用 --net=host 网络模式以获得更好的 wol 功能和 webrtc 通信支持。
+
+docker host 网络模式：
+
+    端口 8080：HTTP Web 服务
+    端口 4430：HTTPS Web 服务
+    端口 5900：VNC 服务
+    端口 623：IPMI 服务
+    端口 20000-40000：WebRTC 通信端口范围，用于低延迟视频传输
+    端口 9（UDP）：Wake-on-LAN（WOL）唤醒功能
+
+docker host 模式：
+
+**使用 OTG 作为虚拟 HID：**
+
+```bash
+sudo docker run --name kvmd -itd --privileged=true \
+    -v /lib/modules:/lib/modules:ro -v /dev:/dev \
+    -v /sys/kernel/config:/sys/kernel/config -e OTG=1 \
+    --net=host \
+    silentwind0/kvmd
+```
+
+**使用 CH9329 作为虚拟 HID：**
+
+```bash
+sudo docker run --name kvmd -itd \
+    --device /dev/video0:/dev/video0 \
+    --device /dev/ttyUSB0:/dev/ttyUSB0 \
+    --net=host \
+    silentwind0/kvmd
+```
+
+docker bridge 模式：
+
 **使用 OTG 作为虚拟 HID：**
 
 ```bash
@@ -106,7 +143,6 @@ sudo docker run --name kvmd -itd --privileged=true \
 sudo docker run --name kvmd -itd \
     --device /dev/video0:/dev/video0 \
     --device /dev/ttyUSB0:/dev/ttyUSB0 \
-    --device /dev/snd:/dev/snd \
     -p 8080:8080 -p 4430:4430 -p 5900:5900 -p 623:623 \
     silentwind0/kvmd
 ```
