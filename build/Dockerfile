@@ -9,6 +9,7 @@ COPY --from=builder /tmp/ustreamer/ustreamer /tmp/ustreamer/ustreamer-dump /usr/
 COPY --from=builder /tmp/wheel/*.whl /tmp/wheel/
 COPY --from=builder /tmp/ustreamer/libjanus_ustreamer.so /usr/lib/ustreamer/janus/
 COPY --from=builder /usr/lib/janus/transports/* /usr/lib/janus/transports/
+COPY --from=builder /opt/usr/ /usr/
 
 ARG TARGETARCH
 
@@ -43,12 +44,15 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
         libasound2 \
         nano \
         unzip \
-        libavcodec59 \
-        libavformat59 \
-        libavutil57 \
-        libswscale6 \
-        libavfilter8 \
-        libavdevice59 \
+    && if [ ${TARGETARCH} != arm64 ]; then \
+        apt-get install -y --no-install-recommends \
+            libavcodec59 \
+            libavformat59 \
+            libavutil57 \
+            libswscale6 \
+            libavfilter8 \
+            libavdevice59; \
+    fi \
     && if [ ${TARGETARCH} != arm ] && [ ${TARGETARCH} != arm64 ]; then \
         apt-get install -y --no-install-recommends \
             ffmpeg \

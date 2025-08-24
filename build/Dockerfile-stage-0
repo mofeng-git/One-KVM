@@ -49,26 +49,35 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
         libusb-1.0-0-dev \
         libldap2-dev \
         libsasl2-dev \
-        ffmpeg \
-        libavcodec-dev \
-        libavformat-dev \
-        libavutil-dev \
-        libswscale-dev \
-        libavfilter-dev \
-        libavdevice-dev \
-        vainfo \
-        libva-dev \
-        libva-drm2 \
-        libva-x11-2 \
         libdrm-dev \
         mesa-va-drivers \
         mesa-vdpau-drivers \
         v4l-utils \
         libv4l-dev \
+	&& if [ ${TARGETARCH} != arm64 ]; then \
+		apt-get install -y --no-install-recommends \
+			ffmpeg \
+			libavcodec-dev \
+			libavformat-dev \
+			libavutil-dev \
+			libswscale-dev \
+			libavfilter-dev \
+			libavdevice-dev; \
+	fi \
 	&& if [ ${TARGETARCH} != arm ] && [ ${TARGETARCH} != arm64 ]; then \
 		apt-get install -y --no-install-recommends \
+			vainfo \
+			libva-dev \
+			libva-drm2 \
+			libva-x11-2 \
 			intel-media-va-driver \
 			i965-va-driver; \
+	fi \
+	&& if [ ${TARGETARCH} = arm64 ]; then \
+		apt-get install -y --no-install-recommends \
+			ninja-build \
+			zlib1g-dev \
+			libswresample-dev; \
 	fi \
 	&& apt clean \
     && rm -rf /var/lib/apt/lists/*
@@ -130,6 +139,27 @@ RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libn
     && make -j && make install \
     && cd /tmp \
     && rm -rf /tmp/janus-gateway
+
+# 编译 Rockchip MPP、RGA 和 FFmpeg（仅 arm64）
+RUN if [ ${TARGETARCH} = arm64 ]; then \
+    	git clone --depth=1 https://github.com/rockchip-linux/mpp.git /tmp/mpp \
+    	&& cd /tmp/mpp \
+    	&& cmake -DRKPLATFORM=ON -DCMAKE_INSTALL_PREFIX=/usr . \
+    	&& make -j$(nproc) \
+    	&& make install \
+    	&& make install DESTDIR=/opt \
+    	&& git clone --depth=1 -b 1.9.1 https://github.com/airockchip/librga /tmp/librga \
+    	&& cd /tmp/librga \
+    	&& meson setup --prefix=/usr rkrga_build \
+    	&& ninja -C rkrga_build install \
+    	&& DESTDIR=/opt ninja -C rkrga_build install \
+    	&& git clone --depth=1 https://github.com/nyanmisaka/ffmpeg-rockchip.git /tmp/ffmpeg-rockchip \
+    	&& cd /tmp/ffmpeg-rockchip \
+    	&& ./configure --prefix=/usr --enable-gpl --enable-version3 --enable-libdrm --enable-rkmpp --enable-rkrga --enable-alsa --enable-libv4l2 --enable-libx264 --enable-v4l2-m2m --disable-programs \
+    	&& make -j$(nproc) \
+    	&& make install \
+    	&& make install DESTDIR=/opt; \
+    fi
 
 # 编译 ustreamer
 RUN echo "Building ustreamer with timestamp cache bust" \
