@@ -153,14 +153,12 @@ RUN if [ ${TARGETARCH} = arm64 ]; then \
     	&& cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DBUILD_TEST=OFF .. \
     	&& make -j$(nproc) \
     	&& make install \
-    	&& make install DESTDIR=/opt \
     	&& git clone -b jellyfin-rga --depth=1 https://github.com/nyanmisaka/rk-mirrors.git /tmp/rkrga \
     	&& cd /tmp/ \
     	&& meson setup rkrga rkrga_build --prefix=/usr --libdir=lib --buildtype=release -Dcpp_args=-fpermissive -Dlibdrm=false -Dlibrga_demo=false \
     	&& meson configure rkrga_build > /dev/null \
     	&& ninja -C rkrga_build install \
-    	&& DESTDIR=/opt ninja -C rkrga_build install \
-    	&& git clone https://github.com/nyanmisaka/ffmpeg-rockchip.git /tmp/ffmpeg-rockchip \
+    	&& git clone --depth=1 https://github.com/nyanmisaka/ffmpeg-rockchip.git /tmp/ffmpeg-rockchip \
     	&& cd /tmp/ffmpeg-rockchip \
     	&& ./configure --prefix=/usr --enable-gpl --enable-version3 --enable-libdrm --enable-rkmpp --enable-rkrga \
           --enable-libv4l2 --enable-libx264 --enable-shared --disable-programs \
@@ -168,21 +166,16 @@ RUN if [ ${TARGETARCH} = arm64 ]; then \
           --disable-decoders --disable-debug --disable-alsa \
     	&& make -j$(nproc) \
     	&& make install \
-    	&& make install DESTDIR=/opt \
-    	&& cd /opt && tar -czf /tmp/arm64-libs.tar.gz usr/ \
-    	&& rm -rf /tmp/rkmpp /tmp/rkrga /tmp/ffmpeg-rockchip /opt/usr; \
+    	&& rm -rf /tmp/rkmpp /tmp/rkrga /tmp/ffmpeg-rockchip; \
     fi
 
 # 编译 ustreamer
-RUN echo "Building ustreamer with timestamp cache bust" \
-    && sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
-    && TIMESTAMP=$(date +%s%N) \
-    && git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer-${TIMESTAMP} \
-    && make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 -C /tmp/ustreamer-${TIMESTAMP} \
-    && /tmp/ustreamer-${TIMESTAMP}/ustreamer -v \
-    && /tmp/ustreamer-${TIMESTAMP}/ustreamer-dump -v \
-    && cp /tmp/ustreamer-${TIMESTAMP}/python/dist/*.whl /tmp/wheel/ \
-    && mv /tmp/ustreamer-${TIMESTAMP} /tmp/ustreamer
+RUN sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
+    && git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
+    && make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 -C /tmp/ustreamer \
+    && /tmp/ustreamer/ustreamer -v \
+    && /tmp/ustreamer/ustreamer-dump -v \
+    && cp /tmp/ustreamer/python/dist/*.whl /tmp/wheel/
 
 # 复制必要的库文件
 RUN mkdir /tmp/lib \
@@ -196,5 +189,6 @@ RUN mkdir /tmp/lib \
         find /usr/lib -name "libav*.so.*" -exec cp {} /tmp/lib/ \; \
         && find /usr/lib -name "libsw*.so.*" -exec cp {} /tmp/lib/ \; \
         && find /usr/lib -name "libpostproc.so.*" -exec cp {} /tmp/lib/ \; \
+        && find /usr/lib -name "librockchip*" -exec cp {} /tmp/lib/ \; \
         && find /usr/lib -name "librga.so.*" -exec cp {} /tmp/lib/ \; ; \
     fi

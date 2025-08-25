@@ -99,7 +99,8 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
     && touch /run/kvmd/ustreamer.sock \
 	&& apt clean \
     && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /tmp/lib /tmp/wheel
+    && rm -rf /tmp/lib /tmp/wheel \
+    && ustreamer -v
 
 COPY testenv/fakes/vcgencmd scripts/kvmd* /usr/bin/
 COPY extras/ /usr/share/kvmd/extras/
