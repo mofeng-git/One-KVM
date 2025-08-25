@@ -45,6 +45,8 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
         libwebsockets17 \
         libnss3 \
         libasound2 \
+        libdrm2 \
+        libx264-164 \
         nano \
         unzip \
     && if [ ${TARGETARCH} != arm64 ]; then \
@@ -63,7 +65,6 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
             libva2 \
             libva-drm2 \
             libva-x11-2 \
-            libdrm2 \
             mesa-va-drivers \
             mesa-vdpau-drivers \
             intel-media-va-driver \

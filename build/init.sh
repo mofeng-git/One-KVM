@@ -71,6 +71,7 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
 
     # 设置用户名和密码
     if [ ! -z "$USERNAME" ] && [ ! -z "$PASSWORD" ]; then
+        # 设置自定义用户名和密码
         if python -m kvmd.apps.htpasswd del admin \
             && echo "$PASSWORD" | python -m kvmd.apps.htpasswd set -i "$USERNAME" \
             && echo "$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/vncpasswd \
@@ -78,6 +79,16 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
             log_info "用户凭据设置成功"
         else
             log_error "用户凭据设置失败"
+            exit 1
+        fi
+    elif [ ! -z "$PASSWORD" ] && [ -z "$USERNAME" ]; then
+        # 只设置密码，保持admin用户名
+        if echo "$PASSWORD" | python -m kvmd.apps.htpasswd set -i "admin" \
+            && echo "$PASSWORD -> admin:$PASSWORD" > /etc/kvmd/vncpasswd \
+            && echo "admin:$PASSWORD -> admin:$PASSWORD" > /etc/kvmd/ipmipasswd; then
+            log_info "admin 用户密码设置成功"
+        else
+            log_error "admin 用户密码设置失败"
             exit 1
         fi
     else
@@ -210,14 +221,27 @@ EOF
     fi
 
     if [ ! -z "$VIDEOFORMAT" ]; then
-        if sed -i "s/format=mjpeg/format=$VIDFORMAT/g" /etc/kvmd/override.yaml; then
-            log_info "视频输入格式已设置为 $VIDFORMAT"
+        if sed -i "s/format=mjpeg/format=$VIDEOFORMAT/g" /etc/kvmd/override.yaml; then
+            log_info "视频输入格式已设置为 $VIDEOFORMAT"
         fi
     fi
 
     if [ ! -z "$HWENCODER" ]; then
         if sed -i "s/--h264-hwenc=disabled/--h264-hwenc=$HWENCODER/g" /etc/kvmd/override.yaml; then
             log_info "硬件编码器已设置为 $HWENCODER"
+        fi
+    fi
+
+    # 设置WEB端口
+    if [ ! -z "$HTTPPORT" ]; then
+        if sed -i "s/port: 8080/port: $HTTPPORT/g" /etc/kvmd/override.yaml; then
+            log_info "HTTP 端口已设置为 $HTTPPORT"
+        fi
+    fi
+
+    if [ ! -z "$HTTPSPORT" ]; then
+        if sed -i "s/port: 4430/port: $HTTPSPORT/g" /etc/kvmd/override.yaml; then
+            log_info "HTTPS 端口已设置为 $HTTPSPORT"
         fi
     fi
 
