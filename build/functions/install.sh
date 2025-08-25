@@ -180,9 +180,8 @@ configure_system() {
     cat /One-KVM/configs/os/udev/v2-hdmiusb-rpi4.rules > /etc/udev/rules.d/99-kvmd.rules && \\
     echo 'libcomposite' >> /etc/modules && \\
     mv /usr/local/bin/kvmd* /usr/bin/ || echo '信息：/usr/local/bin/kvmd* 未找到或移动失败，可能已在/usr/bin' && \\
-    cp /One-KVM/configs/os/services/* /etc/systemd/system/ && \\
+    cp -r /One-KVM/configs/os/services/* /etc/systemd/system/ && \\
     cp /One-KVM/configs/os/tmpfiles.conf /usr/lib/tmpfiles.d/ && \\
-    mv /etc/kvmd/supervisord.conf /etc/supervisord.conf && \\
     chmod +x /etc/update-motd.d/* || echo '警告：chmod /etc/update-motd.d/* 失败' && \\
     echo 'kvmd ALL=(ALL) NOPASSWD: /etc/kvmd/custom_atx/gpio.sh' >> /etc/sudoers && \\
     echo 'kvmd ALL=(ALL) NOPASSWD: /etc/kvmd/custom_atx/usbrelay_hid.sh' >> /etc/sudoers && \\
@@ -210,7 +209,7 @@ install_webterm() {
 
     echo "信息：在 chroot 环境中下载并安装 ttyd ($ttyd_arch)..."
     run_in_chroot "
-    curl -L https://gh.llkk.cc/https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${ttyd_arch} -o /usr/bin/ttyd && \\
+    curl -L https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${ttyd_arch} -o /usr/bin/ttyd && \\
     chmod +x /usr/bin/ttyd && \\
     mkdir -p /home/kvmd-webterm && \\
     chown kvmd-webterm /home/kvmd-webterm

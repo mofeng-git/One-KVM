@@ -4,14 +4,17 @@ FROM python:3.11.11-slim-bookworm
 
 LABEL maintainer="mofeng654321@hotmail.com"
 
+ARG TARGETARCH
+
 COPY --from=builder /tmp/lib/* /tmp/lib/
 COPY --from=builder /tmp/ustreamer/ustreamer /tmp/ustreamer/ustreamer-dump /usr/bin/janus /usr/bin/
 COPY --from=builder /tmp/wheel/*.whl /tmp/wheel/
 COPY --from=builder /tmp/ustreamer/libjanus_ustreamer.so /usr/lib/ustreamer/janus/
 COPY --from=builder /usr/lib/janus/transports/* /usr/lib/janus/transports/
-COPY --from=builder /opt/usr/ /usr/
-
-ARG TARGETARCH
+COPY --from=builder /tmp/arm64-libs.tar.gz /tmp/
+RUN if [ ${TARGETARCH} = arm64 ]; then \
+        cd / && tar -xzf /tmp/arm64-libs.tar.gz && rm -f /tmp/arm64-libs.tar.gz; \
+    fi
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
