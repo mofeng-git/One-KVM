@@ -180,6 +180,7 @@ RUN echo "Building ustreamer with timestamp cache bust" \
     && git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer-${TIMESTAMP} \
     && make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 -C /tmp/ustreamer-${TIMESTAMP} \
     && /tmp/ustreamer-${TIMESTAMP}/ustreamer -v \
+    && /tmp/ustreamer-${TIMESTAMP}/ustreamer-dump -v \
     && cp /tmp/ustreamer-${TIMESTAMP}/python/dist/*.whl /tmp/wheel/ \
     && mv /tmp/ustreamer-${TIMESTAMP} /tmp/ustreamer
 
@@ -190,4 +191,10 @@ RUN mkdir /tmp/lib \
        libevent-*.so.* libjpeg.so.* libyuv.so.* libnice.so.* \
        /tmp/lib/ \
     && find /usr/lib -name "libsrtp2.so.*" -exec cp {} /tmp/lib/ \; \
-    && find /usr/lib -name "libwebsockets.so.*" -exec cp {} /tmp/lib/ \;
+    && find /usr/lib -name "libwebsockets.so.*" -exec cp {} /tmp/lib/ \; \
+    && if [ ${TARGETARCH} = arm64 ]; then \
+        find /usr/lib -name "libav*.so.*" -exec cp {} /tmp/lib/ \; \
+        && find /usr/lib -name "libsw*.so.*" -exec cp {} /tmp/lib/ \; \
+        && find /usr/lib -name "libpostproc.so.*" -exec cp {} /tmp/lib/ \; \
+        && find /usr/lib -name "librga.so.*" -exec cp {} /tmp/lib/ \; ; \
+    fi
