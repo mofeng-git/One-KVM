@@ -337,10 +337,10 @@ export function Msd() {
 		}
 		if (file) {
 			let e_image = encodeURIComponent(file.name);
-			__http.open("POST", `${ROOT_PREFIX}api/msd/write?prefix=${e_prefix}&image=${e_image}&remove_incomplete=1`, true);
+			__http.open("POST", `${ROOT_PREFIX}api/msd/write?prefix=${prefix}&image=${e_image}&remove_incomplete=1`, true);
 		} else {
 			let e_url = encodeURIComponent($("msd-new-url").value);
-			__http.open("POST", `${ROOT_PREFIX}api/msd/write_remote?prefix=${e_prefix}&url=${e_url}&remove_incomplete=1`, true);
+			__http.open("POST", `${ROOT_PREFIX}api/msd/write_remote?prefix=${prefix}&url=${e_url}&remove_incomplete=1`, true);
 		}
 		__http.upload.timeout = 7 * 24 * 3600;
 		__http.onreadystatechange = __uploadStateChange;

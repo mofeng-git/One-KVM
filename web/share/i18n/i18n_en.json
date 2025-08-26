@@ -122,6 +122,7 @@
     "drive_unpackage_files":"Unpackage files from image",
     "drive_image_files":"Image Files",
     "drive_normal_files":"Normal Files",
+    "drive_writable":"Writable:",
 
     "atx-ask-switch":"Ask click confirmation",
     "hid-recorder-loop-switch":"Infinite loop playback",
