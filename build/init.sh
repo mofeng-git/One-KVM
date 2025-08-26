@@ -73,7 +73,7 @@ if [ ! -f /etc/kvmd/.init_flag ]; then
     if [ ! -z "$USERNAME" ] && [ ! -z "$PASSWORD" ]; then
         # 设置自定义用户名和密码
         if python -m kvmd.apps.htpasswd del admin \
-            && echo "$PASSWORD" | python -m kvmd.apps.htpasswd set -i "$USERNAME" \
+            && echo "$PASSWORD" | python -m kvmd.apps.htpasswd add -i "$USERNAME" \
             && echo "$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/vncpasswd \
             && echo "$USERNAME:$PASSWORD -> $USERNAME:$PASSWORD" > /etc/kvmd/ipmipasswd; then
             log_info "用户凭据设置成功"
