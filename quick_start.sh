@@ -262,7 +262,7 @@ function get_install_command(){
     local append_env=""
 
     if [[ "$use_hid" == "CH9329" ]]; then
-        append_command="--device $video_device:/dev/video0 --device $ch9329_address:/dev/ttyUSB0 -v ./kvmd_config:/etc/kvmd"
+        append_command="--device $video_device:/dev/video0 --device $ch9329_address:/dev/ttyUSB0 -v /kvmd_config:/etc/kvmd"
         
         if [[ -d "/dev/snd" ]]; then
             append_command="$append_command --device /dev/snd:/dev/snd -e AUDIONUM=${audio_device:3}"
@@ -270,7 +270,7 @@ function get_install_command(){
         append_env="-e USERNAME=$username -e PASSWORD=$password -e CH9329SPEED=$ch9329_serial_rate"
         docker_command="$sudo_command $docker_init_command $append_command $DOCKER_PORT $append_env $userenv $DOCKER_IMAGE_PATH"
     else
-        append_command="--privileged=true -v /lib/modules:/lib/modules:ro -v /dev:/dev -v /sys/kernel/config:/sys/kernel/config -v ./kvmd_config:/etc/kvmd"
+        append_command="--privileged=true -v /lib/modules:/lib/modules:ro -v /dev:/dev -v /sys/kernel/config:/sys/kernel/config -v /kvmd_config:/etc/kvmd"
         if [[ -d "/dev/snd" ]]; then
             append_command="$append_command -e AUDIONUM=${audio_device:3}"
         fi
