@@ -47,7 +47,7 @@ li.right.feature-disabled#msd-dropdown
 					{title: "Flash", value: "0"},
 				]) Drive #[a(target="_blank" href="https://docs.pikvm.org/msd") mode]:
 				td &nbsp;
-				+menu_switch_td2("msd-rw-switch", false, false) Writable:
+				+menu_switch_td2("msd-rw-switch", false, false, "msd-rw-switch") Writable:
 			tr
 				td(i18n="drive_file_display") Files：
 				td
@@ -79,8 +79,6 @@ li.right.feature-disabled#msd-dropdown
 				tr.hidden#msd-new-part
 					td(i18n="drive_upload_partition") Upload partition:
 					td(width="100%") #[select#msd-new-part-selector]
-		div(id="msd-uploading-sub" class="hidden")
-			hr
 
 		.hidden#msd-uploading-sub
 			table.kv

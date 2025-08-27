@@ -4,13 +4,17 @@ FROM python:3.11.11-slim-bookworm
 
 LABEL maintainer="mofeng654321@hotmail.com"
 
+ARG TARGETARCH
+
 COPY --from=builder /tmp/lib/* /tmp/lib/
 COPY --from=builder /tmp/ustreamer/ustreamer /tmp/ustreamer/ustreamer-dump /usr/bin/janus /usr/bin/
 COPY --from=builder /tmp/wheel/*.whl /tmp/wheel/
 COPY --from=builder /tmp/ustreamer/libjanus_ustreamer.so /usr/lib/ustreamer/janus/
 COPY --from=builder /usr/lib/janus/transports/* /usr/lib/janus/transports/
-
-ARG TARGETARCH
+COPY --from=builder /tmp/arm64-libs.tar.gz* /tmp/
+RUN if [ ${TARGETARCH} = arm64 ] && [ -f /tmp/arm64-libs.tar.gz ]; then \
+        cd / && tar -xzf /tmp/arm64-libs.tar.gz && rm -f /tmp/arm64-libs.tar.gz; \
+    fi
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -41,32 +45,38 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
         libwebsockets17 \
         libnss3 \
         libasound2 \
+        libdrm2 \
+        libx264-164 \
+        libyuv0 \
         nano \
         unzip \
-        libavcodec59 \
-        libavformat59 \
-        libavutil57 \
-        libswscale6 \
-        libavfilter8 \
-        libavdevice59 \
-    && if [ ${TARGETARCH} != arm ] && [ ${TARGETARCH} != arm64 ]; then \
-        apt-get install -y --no-install-recommends \
-            ffmpeg \
-            vainfo \
-            libva2 \
-            libva-drm2 \
-            libva-x11-2 \
-            libdrm2 \
-            mesa-va-drivers \
-            mesa-vdpau-drivers \
-            intel-media-va-driver \
-            i965-va-driver; \
-    fi \
-    && if [ ${TARGETARCH} = arm ] || [ ${TARGETARCH} = arm64 ]; then \
-        apt-get install -y --no-install-recommends \
-            v4l-utils \
-            libv4l-0; \
-    fi \
+    && case ${TARGETARCH} in \
+        amd64) \
+            apt-get install -y --no-install-recommends \
+                libavcodec59 libavformat59 libavutil57 \
+                libswscale6 libavfilter8 libavdevice59 \
+                ffmpeg vainfo \
+                libva2 libva-drm2 libva-x11-2 \
+                mesa-va-drivers mesa-vdpau-drivers \
+                intel-media-va-driver i965-va-driver \
+                ;; \
+        arm) \
+            apt-get install -y --no-install-recommends \
+                libavcodec59 libavformat59 libavutil57 \
+                libswscale6 libavfilter8 libavdevice59 \
+                v4l-utils libv4l-0 \
+                ;; \
+        arm64) \
+            apt-get install -y --no-install-recommends \
+                v4l-utils libv4l-0 \
+                libstdc++6 \
+                libva2 libva-drm2 libva-x11-2 \
+                libvdpau1 ocl-icd-libopencl1 \
+                ;; \
+        *) \
+            echo "Unsupported architecture: ${TARGETARCH}" && exit 1 \
+            ;; \
+    esac \
     && cp /tmp/lib/* /lib/*-linux-*/ \
     && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check /tmp/wheel/*.whl \
     && pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check pyfatfs \
@@ -89,7 +99,8 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
     && touch /run/kvmd/ustreamer.sock \
 	&& apt clean \
     && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /tmp/lib /tmp/wheel
+    && rm -rf /tmp/lib /tmp/wheel \
+    && ustreamer -v
 
 COPY testenv/fakes/vcgencmd scripts/kvmd* /usr/bin/
 COPY extras/ /usr/share/kvmd/extras/

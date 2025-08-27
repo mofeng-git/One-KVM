@@ -122,6 +122,7 @@
     "drive_unpackage_files":"从镜像文件解压文件",
     "drive_image_files":"镜像文件模式",
     "drive_normal_files":"普通文件模式",
+    "drive_writable":"可写：",
 
 
 

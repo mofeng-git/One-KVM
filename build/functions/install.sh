@@ -108,7 +108,7 @@ install_base_packages() {
         iptables network-manager curl kmod libmicrohttpd12 libjansson4 libssl3 \\
         libsofia-sip-ua0 libglib2.0-0 libopus0 libogg0 libcurl4 libconfig9 \\
         python3-pip net-tools libavcodec59 libavformat59 libavutil57 libswscale6 \\
-        libavfilter8 libavdevice59 v4l-utils libv4l-0 && \\
+        libavfilter8 libavdevice59 v4l-utils libv4l-0 nano unzip && \\
     apt clean && \\
     rm -rf /var/lib/apt/lists/*
     "
@@ -180,9 +180,8 @@ configure_system() {
     cat /One-KVM/configs/os/udev/v2-hdmiusb-rpi4.rules > /etc/udev/rules.d/99-kvmd.rules && \\
     echo 'libcomposite' >> /etc/modules && \\
     mv /usr/local/bin/kvmd* /usr/bin/ || echo '信息：/usr/local/bin/kvmd* 未找到或移动失败，可能已在/usr/bin' && \\
-    cp /One-KVM/configs/os/services/* /etc/systemd/system/ && \\
+    cp -r /One-KVM/configs/os/services/* /etc/systemd/system/ && \\
     cp /One-KVM/configs/os/tmpfiles.conf /usr/lib/tmpfiles.d/ && \\
-    mv /etc/kvmd/supervisord.conf /etc/supervisord.conf && \\
     chmod +x /etc/update-motd.d/* || echo '警告：chmod /etc/update-motd.d/* 失败' && \\
     echo 'kvmd ALL=(ALL) NOPASSWD: /etc/kvmd/custom_atx/gpio.sh' >> /etc/sudoers && \\
     echo 'kvmd ALL=(ALL) NOPASSWD: /etc/kvmd/custom_atx/usbrelay_hid.sh' >> /etc/sudoers && \\
@@ -203,14 +202,16 @@ install_webterm() {
     local ttyd_arch="$arch"
 
     if [ "$arch" = "armhf" ]; then
-        ttyd_arch="armv7"
+        ttyd_arch="armhf"
     elif [ "$arch" = "amd64" ]; then
-         ttyd_arch="x86_64" # ttyd 通常用 x86_64
+         ttyd_arch="x86_64"
+    elif [ "$arch" = "aarch64" ]; then
+         ttyd_arch="aarch64"
     fi
 
     echo "信息：在 chroot 环境中下载并安装 ttyd ($ttyd_arch)..."
     run_in_chroot "
-    curl -L https://gh.llkk.cc/https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${ttyd_arch} -o /usr/bin/ttyd && \\
+    curl -L https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${ttyd_arch} -o /usr/bin/ttyd && \\
     chmod +x /usr/bin/ttyd && \\
     mkdir -p /home/kvmd-webterm && \\
     chown kvmd-webterm /home/kvmd-webterm

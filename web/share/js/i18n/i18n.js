@@ -42,20 +42,34 @@ function getCookie(name)
     return ""
 }
 
-var i18nLanguage = "zh";
+function detectBrowserLanguage() {
+    var browserLang = navigator.language || navigator.userLanguage;
+    if (browserLang.startsWith('zh')) {
+        return 'zh';
+    } else if (browserLang.startsWith('en')) {
+        return 'en';
+    } else {
+        return 'zh';
+    }
+}
+
+var i18nLanguage = detectBrowserLanguage();
 
 $(document).ready(function() {
-     if (getCookie('userLanguage')) {
+    if (getCookie('userLanguage')) {
         i18nLanguage = getCookie('userLanguage');
-        if (i18nLanguage == "zh") {
-            no = 0;
-        }else if (i18nLanguage == "en") {
-            no = 1;
-        }
-        $("#selectLanguage").each(function(){
-            $(this).find("option").eq(no).prop("selected",true)
-        });
     }
+    
+    var no;
+    if (i18nLanguage == "zh") {
+        no = 0;
+    } else if (i18nLanguage == "en") {
+        no = 1;
+    }
+    
+    $("#selectLanguage").each(function(){
+        $(this).find("option").eq(no).prop("selected", true);
+    });
 
     $("[i18n]").i18n({
         defaultLang: i18nLanguage,
