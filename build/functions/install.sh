@@ -202,9 +202,11 @@ install_webterm() {
     local ttyd_arch="$arch"
 
     if [ "$arch" = "armhf" ]; then
-        ttyd_arch="armv7"
+        ttyd_arch="armhf"
     elif [ "$arch" = "amd64" ]; then
-         ttyd_arch="x86_64" # ttyd 通常用 x86_64
+         ttyd_arch="x86_64"
+    elif [ "$arch" = "aarch64" ]; then
+         ttyd_arch="aarch64"
     fi
 
     echo "信息：在 chroot 环境中下载并安装 ttyd ($ttyd_arch)..."

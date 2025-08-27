@@ -221,7 +221,7 @@ EOF
     fi
 
     if [ ! -z "$VIDEOFORMAT" ]; then
-        if sed -i "s/format=mjpeg/format=$VIDEOFORMAT/g" /etc/kvmd/override.yaml; then
+        if sed -i "s/--format=mjpeg/--format=$VIDEOFORMAT/g" /etc/kvmd/override.yaml; then
             log_info "视频输入格式已设置为 $VIDEOFORMAT"
         fi
     fi
