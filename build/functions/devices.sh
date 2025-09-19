@@ -10,7 +10,7 @@ onecloud_rootfs() {
     local bootfs_sparse="$TMPDIR/6.boot.PARTITION.sparse"
     local rootfs_sparse="$TMPDIR/7.rootfs.PARTITION.sparse"
     local bootfs_loopdev="" # 存储 bootfs 使用的 loop 设备
-    local add_size_mb=400
+    local add_size_mb=600
 
     echo "信息：准备 Onecloud Rootfs..."
     ensure_dir "$TMPDIR"
@@ -159,7 +159,7 @@ e900v22c_rootfs() {
     local source_image="$SRCPATH/image/e900v22c/Armbian_23.08.0_amlogic_s905l3a_bookworm_5.15.123_server_2023.08.01.img"
     local target_image="$TMPDIR/rootfs.img"
     local offset=$((532480 * 512))
-    local add_size_mb=400
+    local add_size_mb=600
 
     echo "信息：准备 E900V22C Rootfs..."
     ensure_dir "$TMPDIR"
@@ -192,7 +192,7 @@ octopus_flanet_rootfs() {
     local target_image="$TMPDIR/rootfs.img"
     local boot_offset=$((8192 * 512))
     local rootfs_offset=$((1056768 * 512))
-    local add_size_mb=400
+    local add_size_mb=600
     local bootfs_loopdev=""
 
     echo "信息：准备 Octopus-Planet Rootfs..."
@@ -215,6 +215,37 @@ octopus_flanet_rootfs() {
     BOOTFS_MOUNTED=0
     echo "信息：分离 boot loop 设备 $bootfs_loopdev..."
     sudo losetup -d "$bootfs_loopdev" || { echo "警告：分离 boot 分区 loop 设备 $bootfs_loopdev 失败" >&2; }
+
+    echo "信息：调整镜像分区大小 (分区 2)..."
+    sudo parted -s "$target_image" resizepart 2 100% || { echo "错误：使用 parted 调整分区 2 大小失败" >&2; exit 1; }
+
+    echo "信息：设置 rootfs 分区的 loop 设备..."
+    find_loop_device # 找 loop 给 rootfs
+    echo "信息：将 $target_image (偏移 $rootfs_offset) 关联到 $LOOPDEV..."
+    sudo losetup --offset "$rootfs_offset" "$LOOPDEV" "$target_image" || { echo "错误：设置 rootfs 分区 loop 设备 $LOOPDEV 失败" >&2; exit 1; }
+
+    echo "信息：检查并调整文件系统大小 (在 loop 设备上)..."
+    sudo e2fsck -f -y "$LOOPDEV" || { echo "警告：e2fsck 检查 $LOOPDEV 失败" >&2; exit 1; }
+    sudo resize2fs "$LOOPDEV" || { echo "错误：resize2fs 调整 $LOOPDEV 大小失败" >&2; exit 1; }
+
+    echo "信息：Octopus-Planet Rootfs 准备完成，loop 设备 $LOOPDEV 已就绪。"
+}
+
+onecloud_pro_rootfs() {
+    local source_image="$SRCPATH/image/onecloud-pro/Armbian-by-SilentWind_24.5.0_amlogic_Onecloud-Pro_jammy_6.6.28_server.img"
+    local target_image="$TMPDIR/rootfs.img"
+    local boot_offset=$((8192 * 512))
+    local rootfs_offset=$((1056768 * 512))
+    local add_size_mb=600
+    local bootfs_loopdev=""
+
+    echo "信息：准备 Octopus-Planet Rootfs..."
+    ensure_dir "$TMPDIR"; ensure_dir "$BOOTFS"
+    
+    # 自动下载源镜像文件（如果不存在）
+    download_file_if_missing "$source_image" || { echo "错误：下载 Octopus-Planet 原始镜像失败" >&2; exit 1; }
+    
+    cp "$source_image" "$target_image" || { echo "错误：复制 Octopus-Planet 原始镜像失败" >&2; exit 1; }
 
     echo "信息：调整镜像分区大小 (分区 2)..."
     sudo parted -s "$target_image" resizepart 2 100% || { echo "错误：使用 parted 调整分区 2 大小失败" >&2; exit 1; }

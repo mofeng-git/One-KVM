@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - onecloud
+          - onecloud-pro
           - cumebox2
           - chainedbox
           - vm
