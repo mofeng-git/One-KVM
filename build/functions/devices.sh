@@ -69,7 +69,7 @@ cumebox2_rootfs() {
     local source_image="$SRCPATH/image/cumebox2/Armbian_24.8.1_Khadas-vim1_bookworm_current_6.6.47_minimal.img"
     local target_image="$TMPDIR/rootfs.img"
     local offset=$((8192 * 512))
-	local add_size_mb=600
+	local add_size_mb=900
 
     echo "信息：准备 Cumebox2 Rootfs..."
     ensure_dir "$TMPDIR"
