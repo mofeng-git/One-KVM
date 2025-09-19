@@ -69,6 +69,7 @@ cumebox2_rootfs() {
     local source_image="$SRCPATH/image/cumebox2/Armbian_24.8.1_Khadas-vim1_bookworm_current_6.6.47_minimal.img"
     local target_image="$TMPDIR/rootfs.img"
     local offset=$((8192 * 512))
+	local add_size_mb=600
 
     echo "信息：准备 Cumebox2 Rootfs..."
     ensure_dir "$TMPDIR"
@@ -77,7 +78,10 @@ cumebox2_rootfs() {
     download_file_if_missing "$source_image" || { echo "错误：下载 Cumebox2 原始镜像失败" >&2; exit 1; }
     
     cp "$source_image" "$target_image" || { echo "错误：复制 Cumebox2 原始镜像失败" >&2; exit 1; }
-
+	
+	echo "信息：扩展镜像文件 (${add_size_mb}MB)..."
+ 	sudo dd if=/dev/zero bs=1M count="$add_size_mb" >> "$target_image" || { echo "错误：扩展镜像文件失败" >&2; exit 1; }
+  
     echo "信息：调整镜像分区大小..."
     sudo parted -s "$target_image" resizepart 1 100% || { echo "错误：使用 parted 调整分区大小失败" >&2; exit 1; }
 
