@@ -77,6 +77,8 @@ config_base_files() {
     sudo cp scripts/kvmd-gencert scripts/kvmd-bootconfig scripts/kvmd-certbot scripts/kvmd-udev-hdmiusb-check scripts/kvmd-udev-restart-pass build/scripts/kvmd-firstrun.sh "$ROOTFS/usr/bin/"
     sudo chmod +x "$ROOTFS/usr/bin/kvmd-gencert" "$ROOTFS/usr/bin/kvmd-bootconfig" "$ROOTFS/usr/bin/kvmd-certbot" "$ROOTFS/usr/bin/kvmd-udev-hdmiusb-check" "$ROOTFS/usr/bin/kvmd-udev-restart-pass" "$ROOTFS/usr/bin/kvmd-firstrun.sh"
     
+    # 尝试下载或使用本地 rc.local 文件
+    download_rc_local "$platform_id"
     if [ -f "$SRCPATH/image/$platform_id/rc.local" ]; then
         echo "信息：复制设备特定的 rc.local 文件..."
         sudo cp "$SRCPATH/image/$platform_id/rc.local" "$ROOTFS/etc/"

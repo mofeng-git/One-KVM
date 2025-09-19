@@ -66,9 +66,10 @@ onecloud_rootfs() {
 }
 
 cumebox2_rootfs() {
-    local source_image="$SRCPATH/image/cumebox2/Armbian_25.2.2_Khadas-vim1_bookworm_current_6.12.17_minimal.img"
+    local source_image="$SRCPATH/image/cumebox2/Armbian_24.8.1_Khadas-vim1_bookworm_current_6.6.47_minimal.img"
     local target_image="$TMPDIR/rootfs.img"
     local offset=$((8192 * 512))
+	local add_size_mb=900
 
     echo "信息：准备 Cumebox2 Rootfs..."
     ensure_dir "$TMPDIR"
@@ -77,7 +78,10 @@ cumebox2_rootfs() {
     download_file_if_missing "$source_image" || { echo "错误：下载 Cumebox2 原始镜像失败" >&2; exit 1; }
     
     cp "$source_image" "$target_image" || { echo "错误：复制 Cumebox2 原始镜像失败" >&2; exit 1; }
-
+	
+	echo "信息：扩展镜像文件 (${add_size_mb}MB)..."
+ 	sudo dd if=/dev/zero bs=1M count="$add_size_mb" >> "$target_image" || { echo "错误：扩展镜像文件失败" >&2; exit 1; }
+  
     echo "信息：调整镜像分区大小..."
     sudo parted -s "$target_image" resizepart 1 100% || { echo "错误：使用 parted 调整分区大小失败" >&2; exit 1; }
 
@@ -188,7 +192,7 @@ e900v22c_rootfs() {
 }
 
 octopus_flanet_rootfs() {
-    local source_image="$SRCPATH/image/octopus-flanet/Armbian_24.11.0_amlogic_s912_bookworm_6.1.114_server_2024.11.01.img"
+    local source_image="$SRCPATH/image/octopus-flanet/Armbian_25.05.0_amlogic_s912_bookworm_6.1.129_server_2025.03.02.img"
     local target_image="$TMPDIR/rootfs.img"
     local boot_offset=$((8192 * 512))
     local rootfs_offset=$((1056768 * 512))

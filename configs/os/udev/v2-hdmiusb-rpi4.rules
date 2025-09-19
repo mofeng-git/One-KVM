@@ -4,3 +4,4 @@ KERNEL=="video[0-9]*", SUBSYSTEM=="video4linux", PROGRAM="/usr/bin/kvmd-udev-hdm
 KERNEL=="hidg0", GROUP="kvmd", SYMLINK+="kvmd-hid-keyboard"
 KERNEL=="hidg1", GROUP="kvmd", SYMLINK+="kvmd-hid-mouse"
 KERNEL=="hidg2", GROUP="kvmd", SYMLINK+="kvmd-hid-mouse-alt"
+KERNEL=="ttyUSB0", GROUP="kvmd", SYMLINK+="kvmd-hid"

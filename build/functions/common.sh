@@ -244,6 +244,37 @@ download_file_if_missing() {
     return 1
 }
 
+# 下载 rc.local 文件
+download_rc_local() {
+    local platform_id="$1"
+    local rc_local_path="$SRCPATH/image/$platform_id/rc.local"
+    local relative_path="image/$platform_id/rc.local"
+    local remote_url="$REMOTE_PREFIX/$relative_path"
+
+    echo "信息：检查是否需要下载 rc.local 文件 ($platform_id)..."
+
+    # 如果本地文件不存在，尝试下载
+    if [ ! -f "$rc_local_path" ]; then
+        echo "信息：本地 rc.local 文件不存在，尝试从远程下载..."
+        ensure_dir "$(dirname "$rc_local_path")"
+
+        if curl -sSL --fail "$remote_url" -o "$rc_local_path"; then
+            echo "信息：成功下载 rc.local 文件：$remote_url"
+            # 在 GitHub Actions 环境中记录下载的文件
+            if is_github_actions; then
+                echo "$rc_local_path" >> "$DOWNLOADED_FILES_LIST"
+            fi
+            return 0
+        else
+            echo "信息：远程 rc.local 文件不存在或下载失败：$remote_url"
+            return 1
+        fi
+    else
+        echo "信息：使用本地 rc.local 文件：$rc_local_path"
+        return 0
+    fi
+}
+
 # 清理下载的文件（仅在 GitHub Actions 环境中）
 cleanup_downloaded_files() {
     if is_github_actions && [[ -f "$DOWNLOADED_FILES_LIST" ]]; then
