@@ -192,7 +192,7 @@ e900v22c_rootfs() {
 }
 
 octopus_flanet_rootfs() {
-    local source_image="$SRCPATH/image/octopus-flanet/Armbian_24.11.0_amlogic_s912_bookworm_6.1.114_server_2024.11.01.img"
+    local source_image="$SRCPATH/image/octopus-flanet/Armbian_25.05.0_amlogic_s912_bookworm_6.1.129_server_2025.03.02.img"
     local target_image="$TMPDIR/rootfs.img"
     local boot_offset=$((8192 * 512))
     local rootfs_offset=$((1056768 * 512))
