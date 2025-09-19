@@ -10,7 +10,7 @@ prepare_dns_and_mirrors() {
     && printf '%s\\n' 'nameserver 1.1.1.1' 'nameserver 1.0.0.1' > /etc/resolv.conf \\
     && echo '信息：尝试更换镜像源...' \\
     && bash <(curl -sSL https://gitee.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh) \\
-        --source mirrors.tuna.tsinghua.edu.cn --upgrade-software false --web-protocol http || echo '警告：更换镜像源脚本执行失败，可能网络不通或脚本已更改'
+        --source mirrors.ustc.edu.cn --upgrade-software false --web-protocol http || echo '警告：更换镜像源脚本执行失败，可能网络不通或脚本已更改'
     "
 }
 
@@ -246,7 +246,15 @@ apply_kvmd_tweaks() {
 
 
         # 根据 device_type 配置 ATX
-        if [ "$device_type" = "gpio" ]; then
+        if [[ "$device_type" == *"gpio-onecloud-pro"* ]]; then
+            echo "信息：电源控制设备类型为 gpio，设置 ATX 为 GPIO 并配置引脚..."
+            atx_setting="GPIO"
+             run_in_chroot "
+             sed -i 's/^ATX=.*/ATX=GPIO/' /etc/kvmd/atx.sh && \\
+             sed -i 's/SHUTDOWNPIN/gpiochip0 7/g' /etc/kvmd/custom_atx/gpio.sh && \\
+             sed -i 's/REBOOTPIN/gpiochip0 11/g' /etc/kvmd/custom_atx/gpio.sh
+             "
+        elif [[ "$device_type" == *"gpio-onecloud"* ]]; then
             echo "信息：电源控制设备类型为 gpio，设置 ATX 为 GPIO 并配置引脚..."
             atx_setting="GPIO"
              run_in_chroot "
@@ -261,10 +269,10 @@ apply_kvmd_tweaks() {
         fi
 
         # 配置视频设备
-        if [ "$device_type" = "video1" ]; then
+        if [[ "$device_type" == *"video1"* ]]; then
             echo "信息：视频设备类型为 video1，设置视频设备为 /dev/video1..."
             run_in_chroot "sed -i 's|/dev/video0|/dev/video1|g' /etc/kvmd/override.yaml"
-        elif [ "$device_type" = "kvmd-video" ]; then
+        elif [[ "$device_type" == *"video1"* ]]; then
             echo "信息：视频设备类型为 kvmd-video，设置视频设备为 /dev/kvmd-video..."
             run_in_chroot "sed -i 's|/dev/video0|/dev/kvmd-video|g' /etc/kvmd/override.yaml"
         else

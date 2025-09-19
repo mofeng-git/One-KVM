@@ -59,7 +59,7 @@ build_target() {
         onecloud)
             onecloud_rootfs
             local arch="armhf"
-            local device_type="gpio"
+            local device_type="gpio-onecloud"
             local network_type="systemd-networkd"
             ;;
         cumebox2)
@@ -97,6 +97,13 @@ build_target() {
             local network_type=""
             NEED_PREPARE_DNS=true
             ;;
+        onecloud-pro)
+            onecloud_pro_rootfs
+            local arch="aarch64"
+            local device_type="gpio-onecloud-pro video1"
+            local network_type=""
+            NEED_PREPARE_DNS=true
+            ;;
         *)
             echo "错误：未知或不支持的目标 '$target'" >&2
             exit 1
@@ -124,11 +131,14 @@ build_target() {
         chainedbox)
             pack_img "Chainedbox"
             ;;
-         e900v22c)
+        e900v22c)
             pack_img "E900v22c"
             ;;
-         octopus-flanet)
+        octopus-flanet)
             pack_img "Octopus-Flanet"
+            ;;
+        onecloud-pro)
+            pack_img "Onecloud-Pro"
             ;;
         *)
             echo "错误：未知的打包类型 for '$target'" >&2
@@ -148,7 +158,7 @@ build_target() {
 # 检查是否提供了目标参数
 if [ -z "$1" ]; then
     echo "用法: $0 <target|all>"
-    echo "可用目标: onecloud, cumebox2, chainedbox, vm, e900v22c, octopus-flanet"
+    echo "可用目标: onecloud, cumebox2, chainedbox, vm, e900v22c, octopus-flanet, onecloud-pro"
     exit 1
 fi
 
@@ -167,6 +177,7 @@ if [ "$1" = "all" ]; then
     build_target "vm"
     build_target "e900v22c"
     build_target "octopus-flanet"
+    build_target "onecloud-pro"
     echo "信息：所有目标构建完成。"
 else
     build_target "$1"
