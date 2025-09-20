@@ -15,6 +15,7 @@ on:
           - vm
           - e900v22c
           - octopus-flanet
+          - orangepi-zero
           - all
       create_release:
         description: 'Create GitHub Release'
