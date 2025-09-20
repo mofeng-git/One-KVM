@@ -333,12 +333,82 @@ config_octopus_flanet_files() {
     sudo cp "$config_file" "$ROOTFS/etc/model_database.conf" || echo "警告：复制 model_database.conf 失败"
 }
 
-config_orangepizero_files() {
+config_orangepi_zero_files() {
     echo "信息：配置 Orange Pi Zero 特定文件..."
 
     # 清空 modules.conf 文件，避免加载不必要的模块
     run_in_chroot "echo 'libcomposite' > /etc/modules-load.d/modules.conf"
-    run_in_chroot "echo 'libcomposite' > /etc/modules"
 
     echo "信息：Orange Pi Zero 特定配置完成。"
+}
+
+config_onecloud_pro_files() {
+    echo "信息：配置 Onecloud Pro 特定文件..."
+    echo "信息：Onecloud Pro 特定配置完成。"
+}
+
+oec_turbo_rootfs() {
+    local source_image="$SRCPATH/image/oec-turbo/Flash_Armbian_25.05.0_rockchip_efused-wxy-oec_bookworm_6.1.99_server_2025.03.20.img"
+    local target_image="$TMPDIR/rootfs.img"
+    local rootfs_offset=$((1409024 * 512))  # 根据分区7的起始扇区计算
+
+    echo "信息：准备 OEC-Turbo Rootfs (Debian 12)..."
+    ensure_dir "$TMPDIR"
+
+    echo "信息：下载或使用本地 OEC-Turbo 原始镜像..."
+    download_file_if_missing "$source_image" || { echo "错误：下载 OEC-Turbo 原始镜像失败" >&2; exit 1; }
+
+    cp "$source_image" "$target_image" || { echo "错误：复制 OEC-Turbo 原始镜像失败" >&2; exit 1; }
+
+    find_loop_device
+    # 设置 loop 设备指向 rootfs 分区 (分区7)
+    sudo losetup "$LOOPDEV" "$target_image" -o "$rootfs_offset" || { echo "错误：设置 loop 设备失败" >&2; exit 1; }
+
+    echo "信息：OEC-Turbo Rootfs 准备完成，loop 设备 $LOOPDEV 已就绪。"
+}
+
+config_oec_turbo_files() {
+    echo "信息：配置 OEC-Turbo 特定文件..."
+
+    # 替换 override.yaml 中的硬件编码配置，启用 RK MPP 硬件编码
+    echo "信息：配置 VPU 硬件编码支持..."
+    run_in_chroot "sed -i 's/--h264-hwenc=disabled/--h264-hwenc=rkmpp/g' /etc/kvmd/override.yaml"
+
+    # 替换 DTB 文件
+    replace_oec_turbo_dtb
+
+    echo "信息：OEC-Turbo 特定配置完成。"
+}
+
+replace_oec_turbo_dtb() {
+    local dtb_source="$SRCPATH/image/oec-turbo/rk3566-onething-oec-box.dtb"
+    local target_image="$TMPDIR/rootfs.img"
+    local boot_offset=$((360448 * 512))  # boot 分区6的偏移
+    local boot_mount="$TMPDIR/oec_boot_mount"
+    local dtb_target_path="dtb/rockchip/rk3566-onething-oec-box.dtb"
+    local boot_loopdev=""
+
+    echo "信息：替换 OEC-Turbo DTB 文件..."
+
+    if [ ! -f "$dtb_source" ]; then
+        echo "信息：尝试下载 DTB 文件..."
+        download_file_if_missing "$dtb_source"
+    fi
+
+    echo "信息：为 boot 分区查找独立的 loop 设备..."
+    # 查找一个新的loop设备用于boot分区
+    boot_loopdev=$(losetup -f)
+    ensure_dir "$boot_mount"
+
+    losetup -o "$boot_offset" "$boot_loopdev" "$target_image"
+    mount "$boot_loopdev" "$boot_mount"
+
+    # 确保目标目录存在并复制 DTB 文件
+    mkdir -p "$boot_mount/$(dirname "$dtb_target_path")"
+    cp "$dtb_source" "$boot_mount/$dtb_target_path"
+    echo "信息：DTB 文件替换成功: $dtb_target_path"
+
+    umount "$boot_mount"
+    losetup -d "$boot_loopdev"
+    rmdir "$boot_mount"
 }

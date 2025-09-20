@@ -16,6 +16,7 @@ on:
           - e900v22c
           - octopus-flanet
           - orangepi-zero
+          - oec-turbo
           - all
       create_release:
         description: 'Create GitHub Release'

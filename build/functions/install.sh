@@ -78,7 +78,7 @@ config_base_files() {
     sudo chmod +x "$ROOTFS/usr/bin/kvmd-gencert" "$ROOTFS/usr/bin/kvmd-bootconfig" "$ROOTFS/usr/bin/kvmd-certbot" "$ROOTFS/usr/bin/kvmd-udev-hdmiusb-check" "$ROOTFS/usr/bin/kvmd-udev-restart-pass" "$ROOTFS/usr/bin/kvmd-firstrun.sh"
     
     # 尝试下载或使用本地 rc.local 文件
-    download_rc_local "$platform_id"
+    download_rc_local "$platform_id" || echo "信息：rc.local 文件不存在，跳过"
     if [ -f "$SRCPATH/image/$platform_id/rc.local" ]; then
         echo "信息：复制设备特定的 rc.local 文件..."
         sudo cp "$SRCPATH/image/$platform_id/rc.local" "$ROOTFS/etc/"
@@ -304,9 +304,11 @@ install_and_configure_kvmd() {
     config_base_files "$TARGET_DEVICE_NAME" # 使用全局变量传递设备名
 
     # 特定设备的额外文件配置 (如果存在)
-    if declare -f "config_${TARGET_DEVICE_NAME}_files" > /dev/null; then
-        echo "信息：执行特定设备的文件配置函数 config_${TARGET_DEVICE_NAME}_files ..."
-        "config_${TARGET_DEVICE_NAME}_files"
+    # 将设备名中的连字符转换为下划线以匹配函数名
+    local device_func_name="${TARGET_DEVICE_NAME//-/_}"
+    if declare -f "config_${device_func_name}_files" > /dev/null; then
+        echo "信息：执行特定设备的文件配置函数 config_${device_func_name}_files ..."
+        "config_${device_func_name}_files"
     fi
 
     # 某些镜像可能需要准备DNS和换源
