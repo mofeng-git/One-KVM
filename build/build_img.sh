@@ -101,7 +101,7 @@ build_target() {
             onecloud_pro_rootfs
             local arch="aarch64"
             local device_type="gpio-onecloud-pro video1"
-            local network_type=""
+            local network_type="systemd-networkd"
             NEED_PREPARE_DNS=true
             ;;
         orangepi-zero)

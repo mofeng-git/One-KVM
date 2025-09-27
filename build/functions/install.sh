@@ -121,9 +121,9 @@ configure_network() {
     if [ "$network_type" = "systemd-networkd" ]; then
         echo "信息：在 chroot 环境中配置 systemd-networkd..."
         
-        # 检查是否为onecloud平台，如果是则使用随机MAC地址生成机制
-        if [ "$TARGET_DEVICE_NAME" = "onecloud" ]; then
-            echo "信息：为onecloud平台配置随机MAC地址生成机制..."
+        # onecloud 与 onecloud-pro 均启用基于 SN 的 MAC 地址生成
+        if [ "$TARGET_DEVICE_NAME" = "onecloud" ] || [ "$TARGET_DEVICE_NAME" = "onecloud-pro" ]; then
+            echo "信息：为 ${TARGET_DEVICE_NAME} 平台配置基于 SN 的 MAC 地址生成机制..."
             
             # 复制MAC地址生成脚本
             sudo cp "$SCRIPT_DIR/scripts/generate-random-mac.sh" "$ROOTFS/usr/local/bin/"
@@ -140,7 +140,7 @@ configure_network() {
             systemctl enable systemd-networkd systemd-resolved && \\
             systemctl enable kvmd-generate-mac.service
             "
-            echo "信息：onecloud随机MAC地址生成机制配置完成"
+            echo "信息：${TARGET_DEVICE_NAME} 基于 SN 的 MAC 地址生成机制配置完成"
         fi
     else
         echo "信息：使用默认的网络管理器 (NetworkManager)..."
