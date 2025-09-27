@@ -110,7 +110,7 @@ install_base_packages() {
         iptables network-manager curl kmod libmicrohttpd12 libjansson4 libssl3 \\
         libsofia-sip-ua0 libglib2.0-0 libopus0 libogg0 libcurl4 libconfig9 \\
         python3-pip net-tools libavcodec59 libavformat59 libavutil57 libswscale6 \\
-        libavfilter8 libavdevice59 v4l-utils libv4l-0 nano unzip && \\
+        libavfilter8 libavdevice59 v4l-utils libv4l-0 nano unzip dnsmasq && \\
     apt clean && \\
     rm -rf /var/lib/apt/lists/*
     "
@@ -181,6 +181,7 @@ configure_system() {
     cat /One-KVM/configs/os/sudoers/v2-hdmiusb >> /etc/sudoers && \\
     cat /One-KVM/configs/os/udev/v2-hdmiusb-rpi4.rules > /etc/udev/rules.d/99-kvmd.rules && \\
     echo 'libcomposite' >> /etc/modules && \\
+    echo 'net.ipv4.ip_forward = 1' > /etc/sysctl.d/99-kvmd-extra.conf && \\
     mv /usr/local/bin/kvmd* /usr/bin/ || echo '信息：/usr/local/bin/kvmd* 未找到或移动失败，可能已在/usr/bin' && \\
     cp -r /One-KVM/configs/os/services/* /etc/systemd/system/ && \\
     cp /One-KVM/configs/os/tmpfiles.conf /usr/lib/tmpfiles.d/ && \\
@@ -193,8 +194,8 @@ configure_system() {
     sed -i 's/8080/80/g' /etc/kvmd/override.yaml && \\
     sed -i 's/4430/443/g' /etc/kvmd/override.yaml && \\
     chown kvmd -R /var/lib/kvmd/msd/ && \\
-    systemctl enable kvmd kvmd-otg kvmd-nginx kvmd-vnc kvmd-ipmi kvmd-webterm kvmd-janus kvmd-media && \\
-    systemctl disable nginx && \\
+    systemctl enable dnsmasq kvmd kvmd-otg kvmd-nginx kvmd-vnc kvmd-ipmi kvmd-webterm kvmd-janus kvmd-media && \\
+    systemctl disable nginx systemd-resolved && \\
     rm -rf /One-KVM
     "
 }
