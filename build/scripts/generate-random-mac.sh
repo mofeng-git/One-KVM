@@ -54,7 +54,7 @@ generate_random_mac() {
     if [ -f "$EFUSE_SYSFS_PATH" ]; then
         sn_offset=$(grep --binary-files=text -boP "$SN_PREFIX" "$EFUSE_SYSFS_PATH" | head -n1 | cut -d: -f1)
         if [ -n "$sn_offset" ]; then
-            sn=$(dd if="$EFUSE_SYSFS_PATH" bs=1 skip="$sn_offset" count="$SN_EXPECTED_LENGTH" 2>/dev/null)
+            sn=$(cat "$EFUSE_SYSFS_PATH" | dd bs=1 skip="$sn_offset" count="$SN_EXPECTED_LENGTH" 2>/dev/null)
             if [ ${#sn} -eq $SN_EXPECTED_LENGTH ]; then
                 echo "S/N: $sn" >&2  # 输出到 stderr，避免干扰返回值
                 # 使用 SN 的 SHA-256 哈希生成后 5 字节（避免多余管道）
