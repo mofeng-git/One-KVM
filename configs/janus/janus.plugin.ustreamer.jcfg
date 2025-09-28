@@ -2,6 +2,6 @@ video: {
 	sink = "kvmd::ustreamer::h264"
 }
 acap: {
-     device = "hw:0"
+     device = "hw:0,0"
      tc358743 = "/dev/video0"
 }

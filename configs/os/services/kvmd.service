@@ -1,6 +1,6 @@
 [Unit]
 Description=One-KVM - The main daemon
-After=network.target network-online.target nss-lookup.target
+After=network.target network-online.target nss-lookup.target rc-local.service
 
 [Service]
 User=kvmd

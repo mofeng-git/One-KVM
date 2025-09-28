@@ -383,6 +383,10 @@ exit 0
 EOF"
     run_in_chroot "chmod +x /etc/rc.local"
 
+    # 确保 rc-local.service 被启用，以便 kvmd 服务可以依赖它
+    echo "信息：启用 rc-local.service 服务..."
+    run_in_chroot "systemctl enable rc-local.service"
+
     # 替换 DTB 文件
     replace_oec_turbo_dtb
 
