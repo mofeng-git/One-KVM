@@ -54,16 +54,13 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
         mesa-vdpau-drivers \
         v4l-utils \
         libv4l-dev \
-	&& if [ ${TARGETARCH} != arm64 ]; then \
-		apt-get install -y --no-install-recommends \
-			ffmpeg \
-			libavcodec-dev \
-			libavformat-dev \
-			libavutil-dev \
-			libswscale-dev \
-			libavfilter-dev \
-			libavdevice-dev; \
-	fi \
+        ffmpeg \
+        libavcodec-dev \
+        libavformat-dev \
+        libavutil-dev \
+        libswscale-dev \
+        libavfilter-dev \
+        libavdevice-dev \
 	&& if [ ${TARGETARCH} != arm ] && [ ${TARGETARCH} != arm64 ]; then \
 		apt-get install -y --no-install-recommends \
 			vainfo \
@@ -148,7 +145,7 @@ RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libn
 
 # 编译 Rockchip MPP、RGA 和 FFmpeg（仅 arm64）
 RUN if [ ${TARGETARCH} = arm64 ]; then \
-    	git clone -b jellyfin-mpp --depth=1 https://github.com/nyanmisaka/mpp.git /tmp/rkmpp \
+    	git clone --depth=1 https://github.com/rockchip-linux/mpp.git /tmp/rkmpp \
     	&& mkdir -p /tmp/rkmpp/rkmpp_build && cd /tmp/rkmpp/rkmpp_build \
     	&& cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DBUILD_TEST=OFF .. \
     	&& make -j$(nproc) \
@@ -158,21 +155,17 @@ RUN if [ ${TARGETARCH} = arm64 ]; then \
     	&& meson setup rkrga rkrga_build --prefix=/usr --libdir=lib --buildtype=release -Dcpp_args=-fpermissive -Dlibdrm=false -Dlibrga_demo=false \
     	&& meson configure rkrga_build > /dev/null \
     	&& ninja -C rkrga_build install \
-    	&& git clone --depth=1 https://github.com/nyanmisaka/ffmpeg-rockchip.git /tmp/ffmpeg-rockchip \
-    	&& cd /tmp/ffmpeg-rockchip \
-    	&& ./configure --prefix=/usr --enable-gpl --enable-version3 --enable-libdrm --enable-rkmpp --enable-rkrga \
-          --enable-libv4l2 --enable-libx264 --enable-shared --disable-programs \
-          --disable-doc --disable-htmlpages --disable-manpages --disable-network  --disable-protocols \
-          --disable-decoders --disable-debug --disable-alsa \
-    	&& make -j$(nproc) \
-    	&& make install \
-    	&& rm -rf /tmp/rkmpp /tmp/rkrga /tmp/ffmpeg-rockchip; \
+        && rm -rf /tmp/rkmpp /tmp/rkrga; \
     fi
 
 # 编译 ustreamer
 RUN sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
     && git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
-    && make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 -C /tmp/ustreamer \
+    && if [ ${TARGETARCH} = arm64 ]; then \
+        make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 WITH_MPP=1 -C /tmp/ustreamer; \
+    else \
+        make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 -C /tmp/ustreamer; \
+    fi \
     && /tmp/ustreamer/ustreamer -v \
     && /tmp/ustreamer/ustreamer-dump -v \
     && cp /tmp/ustreamer/python/dist/*.whl /tmp/wheel/
@@ -186,8 +179,7 @@ RUN mkdir /tmp/lib \
     && find /usr/lib -name "libsrtp2.so.*" -exec cp {} /tmp/lib/ \; \
     && find /usr/lib -name "libwebsockets.so.*" -exec cp {} /tmp/lib/ \; \
     && if [ ${TARGETARCH} = arm64 ]; then \
-        find /usr/lib -name "libav*.so.*" -exec cp {} /tmp/lib/ \; \
-        && find /usr/lib -name "libsw*.so.*" -exec cp {} /tmp/lib/ \; \
+        find /usr/lib -name "libsw*.so.*" -exec cp {} /tmp/lib/ \; \
         && find /usr/lib -name "libpostproc.so.*" -exec cp {} /tmp/lib/ \; \
         && find /usr/lib -name "librockchip*" -exec cp {} /tmp/lib/ \; \
         && find /usr/lib -name "librga.so.*" -exec cp {} /tmp/lib/ \; ; \

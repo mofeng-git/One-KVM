@@ -68,8 +68,9 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
                 ;; \
         arm64) \
             apt-get install -y --no-install-recommends \
-                v4l-utils libv4l-0 \
-                libstdc++6 \
+                v4l-utils libv4l-0 libavutil57 \
+                libstdc++6 libavcodec59 libavformat59 \
+                libswscale6 libavfilter8 libavdevice59 \
                 libva2 libva-drm2 libva-x11-2 \
                 libvdpau1 ocl-icd-libopencl1 \
                 ;; \
