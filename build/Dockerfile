@@ -87,6 +87,18 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.lis
        fi \
     && curl https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.$ARCH -L -o /usr/local/bin/ttyd \
     && chmod +x /usr/local/bin/ttyd \
+    && mkdir -p /tmp/gostc && cd /tmp/gostc \
+    && case ${TARGETARCH} in \
+        amd64) GOSTC_ARCH=amd64_v1 ;; \
+        arm) GOSTC_ARCH=arm_7 ;; \
+        arm64) GOSTC_ARCH=arm64_v8.0 ;; \
+        *) echo "Unsupported architecture for gostc: ${TARGETARCH}" && exit 1 ;; \
+    esac \
+    && curl -L https://github.com/mofeng-git/gostc-open/releases/download/v2.0.8-beta.2/gostc_linux_${GOSTC_ARCH}.tar.gz -o gostc.tar.gz \
+    && tar -xzf gostc.tar.gz \
+    && mv gostc /usr/bin/ \
+    && chmod +x /usr/bin/gostc \
+    && cd / && rm -rf /tmp/gostc \
     && adduser kvmd --gecos "" --disabled-password \
     && ln -sf /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata \
     && mkdir -p /etc/kvmd_backup/override.d \

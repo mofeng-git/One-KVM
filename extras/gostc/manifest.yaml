@@ -1,0 +1,6 @@
+name: GOSTC
+description: GOSTC Server
+icon: share/svg/gostc.svg
+path: extras/gostc
+daemon: kvmd-gostc
+place: 11

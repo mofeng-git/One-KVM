@@ -110,7 +110,7 @@ install_base_packages() {
         iptables network-manager curl kmod libmicrohttpd12 libjansson4 libssl3 \\
         libsofia-sip-ua0 libglib2.0-0 libopus0 libogg0 libcurl4 libconfig9 \\
         python3-pip net-tools libavcodec59 libavformat59 libavutil57 libswscale6 \\
-        libavfilter8 libavdevice59 v4l-utils libv4l-0 nano unzip dnsmasq && \\
+        libavfilter8 libavdevice59 v4l-utils libv4l-0 nano unzip dnsmasq python3-systemd && \\
     apt clean && \\
     rm -rf /var/lib/apt/lists/*
     "
@@ -194,7 +194,7 @@ configure_system() {
     sed -i 's/8080/80/g' /etc/kvmd/override.yaml && \\
     sed -i 's/4430/443/g' /etc/kvmd/override.yaml && \\
     chown kvmd -R /var/lib/kvmd/msd/ && \\
-    systemctl enable dnsmasq kvmd kvmd-otg kvmd-nginx kvmd-vnc kvmd-ipmi kvmd-webterm kvmd-janus kvmd-media && \\
+    systemctl enable dnsmasq kvmd kvmd-otg kvmd-nginx kvmd-vnc kvmd-ipmi kvmd-webterm kvmd-janus kvmd-media kvmd-gostc && \\
     systemctl disable nginx systemd-resolved && \\
     rm -rf /One-KVM
     "
@@ -219,6 +219,54 @@ install_webterm() {
     mkdir -p /home/kvmd-webterm && \\
     chown kvmd-webterm /home/kvmd-webterm
     "
+}
+
+install_gostc() {
+    local arch="$1" # armhf, aarch64, x86_64
+    local gostc_arch="$arch"
+    local gostc_version="v2.0.8-beta.2"
+    
+    # 根据架构映射下载文件名
+    case "$arch" in
+        armhf) gostc_arch="arm_7" ;;
+        aarch64) gostc_arch="arm64_v8.0" ;;
+        x86_64|amd64) gostc_arch="amd64_v1" ;;
+        *) echo "错误：不支持的架构 $arch"; exit 1 ;;
+    esac
+    
+    echo "信息：在 chroot 环境中下载并安装 gostc ($gostc_arch)..."
+    run_in_chroot "
+    mkdir -p /tmp/gostc && cd /tmp/gostc && \\
+    curl -L https://github.com/mofeng-git/gostc-open/releases/download/${gostc_version}/gostc_linux_${gostc_arch}.tar.gz -o gostc.tar.gz && \\
+    tar -xzf gostc.tar.gz && \\
+    mv gostc /usr/bin/ && \\
+    chmod +x /usr/bin/gostc && \\
+    cd / && rm -rf /tmp/gostc
+    "
+    
+    echo "信息：创建 gostc systemd 服务文件..."
+    run_in_chroot "
+    cat > /etc/systemd/system/kvmd-gostc.service << 'EOF'
+[Unit]
+Description=基于FRP开发的内网穿透 客户端/节点
+ConditionFileIsExecutable=/usr/bin/gostc
+After=network.target
+
+[Service]
+StartLimitInterval=5
+StartLimitBurst=10
+ExecStart=/usr/bin/gostc \"-web-addr\" \"0.0.0.0:18080\"
+WorkingDirectory=/usr/bin
+Restart=always
+RestartSec=10
+EnvironmentFile=-/etc/sysconfig/gostc
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    "
+    
+    echo "信息：gostc 安装和配置完成"
 }
 
 apply_kvmd_tweaks() {
@@ -324,6 +372,7 @@ install_and_configure_kvmd() {
     configure_network "$network_type"
     install_python_deps
     configure_kvmd_core
+    install_gostc "$arch" # 安装 gostc
     configure_system
     install_webterm "$arch" # 传递原始架构名给ttyd下载
     apply_kvmd_tweaks "$arch" "$device_type"

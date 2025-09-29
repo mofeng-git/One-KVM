@@ -162,9 +162,9 @@ RUN if [ ${TARGETARCH} = arm64 ]; then \
 RUN sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
     && git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
     && if [ ${TARGETARCH} = arm64 ]; then \
-        make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 WITH_MPP=1 -C /tmp/ustreamer; \
+        make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 WITH_MPP=1 WITH_DRM=1 -C /tmp/ustreamer; \
     else \
-        make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 -C /tmp/ustreamer; \
+        make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 WITH_DRM=1 -C /tmp/ustreamer; \
     fi \
     && /tmp/ustreamer/ustreamer -v \
     && /tmp/ustreamer/ustreamer-dump -v \
