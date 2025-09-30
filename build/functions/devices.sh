@@ -384,11 +384,17 @@ config_oec_turbo_files() {
     echo "信息：配置 VPU 硬件编码支持..."
     run_in_chroot "sed -i 's/--h264-hwenc=disabled/--h264-hwenc=rkmpp/g' /etc/kvmd/override.yaml"
 
+    run_in_chroot "cat > /etc/udev/rules.d/99-kvmd-hw-access.rules <<'EOF'
+SUBSYSTEM=="dma_heap", KERNEL=="system-uncached", GROUP="render", MODE="0660"
+KERNEL=="mpp_service", GROUP="render", MODE="0660"
+EOF"
+
+
     # 配置 rc.local 自启脚本，添加设备权限设置
     echo "信息：配置 rc.local 自启脚本..."
     run_in_chroot "cat > /etc/rc.local << 'EOF'
 #!/bin/bash
-chmod 777 /dev/mpp_service /dev/rga
+usermod -aG render,video kvmd
 exit 0
 EOF"
     run_in_chroot "chmod +x /etc/rc.local"
