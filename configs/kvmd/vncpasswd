@@ -6,4 +6,4 @@
 #
 # NEVER use the same passwords for KVMD, IPMI and VNCAuth users.
 
-admin
+admin -> admin:admin
