@@ -194,6 +194,8 @@ configure_system() {
     sed -i 's/8080/80/g' /etc/kvmd/override.yaml && \\
     sed -i 's/4430/443/g' /etc/kvmd/override.yaml && \\
     chown kvmd -R /var/lib/kvmd/msd/ && \\
+    rm /etc/resolv.conf && \\
+    printf '%s\\n' 'nameserver 1.1.1.1' 'nameserver 1.0.0.1' > /etc/resolv.conf && \
     systemctl enable dnsmasq kvmd kvmd-otg kvmd-nginx kvmd-vnc kvmd-ipmi kvmd-webterm kvmd-janus kvmd-media kvmd-gostc && \\
     systemctl disable nginx systemd-resolved && \\
     rm -rf /One-KVM
@@ -331,6 +333,8 @@ apply_kvmd_tweaks() {
         fi
     fi
     echo "信息：KVMD 配置调整完成。"
+
+    run_in_chroot "apt remove -y --purge systemd-resolved"
 }
 
 # --- 整体安装流程 ---
