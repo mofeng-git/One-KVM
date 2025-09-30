@@ -352,7 +352,7 @@ config_onecloud_files() {
     
     # 在 ustreamer 命令中添加 DRM 设备配置
     echo "信息：为 Onecloud 添加 DRM 设备支持..."
-    run_in_chroot "sed -i \"/--device=\\/dev\\/video0/a\\            - \\\"--drm-device /dev/dri/card1\\\"\" /etc/kvmd/override.yaml"
+    run_in_chroot "sed -i \"/--device=\\/dev\\/video0/a\\            - \\\"--drm-device=/dev/dri/card1\\\"\" /etc/kvmd/override.yaml"
     
     echo "信息：Onecloud 特定配置完成。"
 }
