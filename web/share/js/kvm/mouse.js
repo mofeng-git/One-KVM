@@ -169,7 +169,7 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 			}
 		} else {
 			if (is_captured) {
-				title = "Mouse captured, PiKVM offline";
+				title = "Mouse captured, One-KVM offline";
 			}
 		}
 		$("hid-mouse-led").className = led;

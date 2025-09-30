@@ -46,7 +46,7 @@ export function Streamer() {
 	var __init__ = function() {
 		__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeHook);
 
-		$("stream-led").title = "No stream from PiKVM";
+		$("stream-led").title = "No stream from One-KVM";
 
 		tools.slider.setParams($("stream-quality-slider"), 5, 100, 5, 80, function(value) {
 			$("stream-quality-value").innerText = `${value}%`;
@@ -289,7 +289,7 @@ export function Streamer() {
 
 	var __setInactive = function() {
 		$("stream-led").className = "led-gray";
-		$("stream-led").title = "No stream from PiKVM";
+		$("stream-led").title = "No stream from One-KVM";
 	};
 
 	var __setControlsEnabled = function(enabled) {
@@ -317,7 +317,7 @@ export function Streamer() {
 			if (text.length > 0) {
 				title += text;
 			} else {
-				title += "No stream from PiKVM";
+				title += "No stream from One-KVM";
 			}
 		}
 		el_grab.innerText = el_info.innerText = title;

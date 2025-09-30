@@ -166,7 +166,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 	var __setupCodec = function(formats) {
 		__closeDecoder();
 		if (formats.h264 === undefined) {
-			let msg = "No H.264 stream available on PiKVM";
+			let msg = "No H.264 stream available on One-KVM";
 			__setInfo(false, false, msg);
 			__logInfo(msg);
 			return;

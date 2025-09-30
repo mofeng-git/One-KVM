@@ -103,10 +103,10 @@ function __showKvmdInfo(info) {
 
 	if (info.meta !== null && info.meta.server && info.meta.server.host) {
 		$("kvmd-meta-server-host").innerText = info.meta.server.host;
-		document.title = `${info.meta.server.host} | PiKVM Index`;
+		document.title = `${info.meta.server.host} | One-KVM Index`;
 	} else {
 		$("kvmd-meta-server-host").innerHTML = "<i>Invalid meta</i>";
-		document.title = "PiKVM Index";
+		document.title = "One-KVM Index";
 	}
 }
 

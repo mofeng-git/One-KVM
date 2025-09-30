@@ -118,7 +118,7 @@ export function Keyboard(__recordWsEvent) {
 			}
 		} else {
 			if (is_captured) {
-				title = "Keyboard captured, PiKVM offline";
+				title = "Keyboard captured, One-KVM offline";
 			}
 		}
 		$("hid-keyboard-led").className = led;
