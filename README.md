@@ -12,7 +12,7 @@
   
   <p>
     <a href="https://docs.one-kvm.cn">📖 详细文档</a> •
-    <a href="https://kvmd-demo.mofeng.run">🚀 在线演示</a> •
+    <a href="https://demo.one-kvm.cn/">🚀 在线演示</a> •
     <a href="#快速开始">⚡ 快速开始</a> •
     <a href="#功能介绍">📊 功能介绍</a>
   </p>
