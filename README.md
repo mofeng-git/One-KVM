@@ -11,7 +11,7 @@
   [![GitHub license](https://img.shields.io/github/license/mofeng-git/One-KVM)](https://github.com/mofeng-git/One-KVM/blob/master/LICENSE)
   
   <p>
-    <a href="https://one-kvm.mofeng.run">📖 详细文档</a> •
+    <a href="https://docs.one-kvm.cn">📖 详细文档</a> •
     <a href="https://kvmd-demo.mofeng.run">🚀 在线演示</a> •
     <a href="#快速开始">⚡ 快速开始</a> •
     <a href="#功能介绍">📊 功能介绍</a>
@@ -68,7 +68,7 @@
 |:--------:|:-------:|:-----:|:------:|:------:|
 | 简体中文 WebUI | ✅ | ❌ | ✅ | ✅ |
 | 远程视频流 | MJPEG/H.264 | MJPEG/H.264 | MJPEG/H.264 | MJPEG/H.264 |
-| H.264 视频编码 | CPU | GPU | 未知 | GPU |
+| H.264 视频编码 | CPU/GPU | GPU | 未知 | GPU |
 | 远程音频流 | ✅ | ✅ | ✅ | ✅ |
 | 远程鼠键控制 | OTG/CH9329 | OTG/CH9329/Pico/Bluetooth | OTG | OTG |
 | VNC 控制 | ✅ | ✅ | ✅ | ✅ |
@@ -87,7 +87,7 @@ Docker 版本支持 OTG 或 CH9329 作为虚拟 HID，兼容 amd64、arm64、arm
 #### 一键脚本部署
 
 ```bash
-curl -sSL https://one-kvm.mofeng.run/quick_start.sh -o quick_start.sh && bash quick_start.sh
+curl -sSL https://docs.one-kvm.cn/quick_start.sh -o quick_start.sh && bash quick_start.sh
 ```
 
 #### 手动部署
@@ -157,6 +157,7 @@ sudo docker run --name kvmd -itd \
 - **GitHub Releases：** [https://github.com/mofeng-git/One-KVM/releases](https://github.com/mofeng-git/One-KVM/releases)
 
 **其他下载方式：**
+- **免登录高速下载：** [http://sd1.files.one-kvm.cn/](http://sd1.files.one-kvm.cn/)（由群友赞助，支持直链，接入 EdgeOne CDN，建议使用多线程下载工具下载获取最高速度）
 - **免登录下载：** [https://pan.huang1111.cn/s/mxkx3T1](https://pan.huang1111.cn/s/mxkx3T1) （由 Huang1111公益计划 提供）
 - **百度网盘：** [https://pan.baidu.com/s/166-2Y8PBF4SbHXFkGmFJYg?pwd=o9aj](https://pan.baidu.com/s/166-2Y8PBF4SbHXFkGmFJYg?pwd=o9aj) （提取码：o9aj）
 
@@ -170,19 +171,7 @@ sudo docker run --name kvmd -itd \
 | Virtualbox | Virtualbox-uefi | USB 采集卡、CH9329 | 241004 | ✅ |
 | s905l3a 通用包 | E900v22c | USB 采集卡、OTG | 241004 | ✅ |
 | 我家云 | Chainedbox | USB 采集卡、OTG | 241004 | ✅ |
-| 龙芯久久派 | 2k0300 | USB 采集卡、CH9329 | 241025 | ✅ |
-
-## 🤝 贡献指南
-
-欢迎各种形式的贡献！
-
-### 如何贡献
-
-1. **Fork 本仓库**
-2. **创建功能分支：** `git checkout -b feature/AmazingFeature`
-3. **提交更改：** `git commit -m 'Add some AmazingFeature'`
-4. **推送到分支：** `git push origin feature/AmazingFeature`
-5. **提交 Pull Request**
+| 龙芯久久派 | 2k0300 | USB 采集卡、CH9329 | 241025 | ❌ |
 
 ### 报告问题
 
@@ -280,6 +269,30 @@ sudo docker run --name kvmd -itd \
 
 - 爱发电用户_e3202
 
+- 一语念白
+
+- 云边
+
+- 爱发电用户_5a711
+
+- 爱发电用户_9a706
+
+- T0m9ir1SUKI
+
+- 爱发电用户_56d52
+
+- 爱发电用户_3N6F
+
+- DUSK
+
+- 飘零
+
+- .
+
+- 饭太稀
+
+- 葱
+
 - ......
 
 </details>
@@ -295,6 +308,14 @@ sudo docker run --name kvmd -itd \
 
 **文件存储服务：**
 - **[Huang1111公益计划](https://pan.huang1111.cn/s/mxkx3T1)** - 提供免登录下载服务
+
+**云服务商**
+
+- **[林枫云](https://www.dkdun.cn)** - 赞助了本项目宁波大带宽服务器
+
+![林枫云](./img/36076FEFF0898A80EBD5756D28F4076C.png)
+
+林枫云主营国内外地域的精品线路业务服务器、高主频游戏服务器和大带宽服务器。
 
 ## 📚 其他
 
