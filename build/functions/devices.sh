@@ -384,24 +384,25 @@ config_oec_turbo_files() {
     echo "信息：配置 VPU 硬件编码支持..."
     run_in_chroot "sed -i 's/--h264-hwenc=disabled/--h264-hwenc=rkmpp/g' /etc/kvmd/override.yaml"
 
+    echo "信息：配置 udev 规则以授权 kvmd 组访问硬件设备..."
     run_in_chroot "cat > /etc/udev/rules.d/99-kvmd-hw-access.rules <<'EOF'
-SUBSYSTEM=="dma_heap", KERNEL=="system-uncached", GROUP="render", MODE="0660"
-KERNEL=="mpp_service", GROUP="render", MODE="0660"
+# Generic hardware access for kvmd
+# Safe on all platforms — rules only apply if device exists
+
+# Rockchip MPP (rkmpp)
+KERNEL==\"mpp_service\", GROUP=\"kvmd\", MODE=\"0660\"
+
+# DMA-Heap (used by modern MPP)
+SUBSYSTEM==\"dma_heap\", KERNEL==\"system\",           GROUP=\"kvmd\", MODE=\"0660\"
+SUBSYSTEM==\"dma_heap\", KERNEL==\"system-uncached\", GROUP=\"kvmd\", MODE=\"0660\"
+SUBSYSTEM==\"dma_heap\", KERNEL==\"reserved\",        GROUP=\"kvmd\", MODE=\"0660\"
+
+# Optional legacy Rockchip devices
+KERNEL==\"rkvdec\", GROUP=\"kvmd\", MODE=\"0660\"
+KERNEL==\"rkvenc\", GROUP=\"kvmd\", MODE=\"0660\"
+KERNEL==\"rga\",    GROUP=\"kvmd\", MODE=\"0660\"
+
 EOF"
-
-
-    # 配置 rc.local 自启脚本，添加设备权限设置
-    echo "信息：配置 rc.local 自启脚本..."
-    run_in_chroot "cat > /etc/rc.local << 'EOF'
-#!/bin/bash
-usermod -aG render,video kvmd
-exit 0
-EOF"
-    run_in_chroot "chmod +x /etc/rc.local"
-
-    # 确保 rc-local.service 被启用，以便 kvmd 服务可以依赖它
-    echo "信息：启用 rc-local.service 服务..."
-    run_in_chroot "systemctl enable rc-local.service"
 
     # 替换 DTB 文件
     replace_oec_turbo_dtb
