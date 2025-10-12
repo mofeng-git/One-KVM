@@ -214,6 +214,12 @@ octopus_flanet_rootfs() {
     sudo losetup --offset "$boot_offset" "$bootfs_loopdev" "$target_image" || { echo "错误：设置 boot 分区 loop 设备 $bootfs_loopdev 失败" >&2; exit 1; }
     sudo mount "$bootfs_loopdev" "$BOOTFS" || { echo "错误：挂载 boot 分区 ($bootfs_loopdev) 失败" >&2; exit 1; }
     BOOTFS_MOUNTED=1
+
+    # 自动下载 Octopus-Planet 相关文件
+    local dtb_file="$SRCPATH/image/octopus-flanet/meson-gxm-octopus-planet.dtb"
+    download_file_if_missing "$dtb_file" || echo "警告：下载 Octopus-Planet DTB 失败"
+    sudo cp "$dtb_file" "$BOOTFS/boot/dtb/amlogic/meson-gxm-octopus-planet.dtb" || echo "警告：复制 Octopus-Planet DTB 失败"
+
     sudo sed -i "s/meson-gxm-octopus-planet.dtb/meson-gxm-khadas-vim2.dtb/g" "$BOOTFS/uEnv.txt" || { echo "错误：修改 uEnv.txt 失败" >&2; exit 1; }
     sudo umount "$BOOTFS" || { echo "警告：卸载 boot 分区 ($BOOTFS) 失败" >&2; BOOTFS_MOUNTED=0; }
     BOOTFS_MOUNTED=0
@@ -314,8 +320,7 @@ config_cumebox2_files() {
     download_file_if_missing "$dtb_file" || echo "警告：下载 Cumebox2 DTB 失败"
     download_file_if_missing "$ssd_file" || echo "警告：下载 Cumebox2 ssd 脚本失败"
     download_file_if_missing "$config_file" || echo "警告：下载 Cumebox2 配置文件失败"
-    
-    # 注意 DTB 路径可能需要根据实际 Armbian 版本调整
+
     sudo cp "$dtb_file" "$ROOTFS/boot/dtb/amlogic/meson-gxl-s905x-khadas-vim.dtb" || echo "警告：复制 Cumebox2 DTB 失败"
     sudo cp "$ssd_file" "$ROOTFS/usr/bin/" || echo "警告：复制 Cumebox2 ssd 脚本失败"
 	sudo chmod +x "$ROOTFS/usr/bin/ssd" || echo "警告：设置 ssd 脚本执行权限失败"
