@@ -344,7 +344,9 @@ config_orangepi_zero_files() {
 
 config_onecloud_pro_files() {
     echo "信息：配置 Onecloud Pro 特定文件..."
-    echo "信息：Onecloud Pro 特定配置完成。"
+    # 在 ustreamer 命令中添加 DRM 设备配置
+    echo "信息：为 Onecloud-pro 添加 DRM 设备支持..."
+    run_in_chroot "sed -i \"/--device=\\/dev\\/video1/a\\            - \\\"--drm-device=/dev/dri/card0\\\"\" /etc/kvmd/override.yaml"
 }
 
 config_onecloud_files() {
