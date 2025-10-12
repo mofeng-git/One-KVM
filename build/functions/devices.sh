@@ -331,6 +331,9 @@ config_octopus_flanet_files() {
     download_file_if_missing "$config_file" || echo "警告：下载 Octopus-Planet 配置文件失败"
 
     sudo cp "$config_file" "$ROOTFS/etc/model_database.conf" || echo "警告：复制 model_database.conf 失败"
+
+    echo "信息：为 Octopus-Planet 添加 DRM 设备支持..."
+    run_in_chroot "sed -i \"/--device=\\/dev\\/video0/a\\            - \\\"--drm-device=/dev/dri/card0\\\"\" /etc/kvmd/override.yaml"
 }
 
 config_orangepi_zero_files() {
@@ -344,13 +347,14 @@ config_orangepi_zero_files() {
 
 config_onecloud_pro_files() {
     echo "信息：配置 Onecloud Pro 特定文件..."
-    echo "信息：Onecloud Pro 特定配置完成。"
+
+    echo "信息：为 Onecloud Pro 添加 DRM 设备支持..."
+    run_in_chroot "sed -i \"/--device=\\/dev\\/video0/a\\            - \\\"--drm-device=/dev/dri/card0\\\"\" /etc/kvmd/override.yaml"
 }
 
 config_onecloud_files() {
     echo "信息：配置 Onecloud 特定文件..."
     
-    # 在 ustreamer 命令中添加 DRM 设备配置
     echo "信息：为 Onecloud 添加 DRM 设备支持..."
     run_in_chroot "sed -i \"/--device=\\/dev\\/video0/a\\            - \\\"--drm-device=/dev/dri/card1\\\"\" /etc/kvmd/override.yaml"
     
