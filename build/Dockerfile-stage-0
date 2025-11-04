@@ -113,58 +113,75 @@ RUN git clone --depth=1 https://github.com/gvalkov/python-evdev.git /tmp/python-
     && python3 setup.py bdist_wheel --dist-dir /tmp/wheel/ \
     && rm -rf /tmp/python-evdev
 
-# 编译安装 libnice、libsrtp、libwebsockets 和 janus-gateway
-RUN git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libnice \
+# 编译安装 libnice、libsrtp、libwebsockets 和 janus-gateway（显式 Release 与按架构优化）
+RUN export COMMON_CFLAGS='-O2 -pipe -fPIC -fstack-protector-strong -D_FORTIFY_SOURCE=2' \
+    && if [ "${TARGETARCH}" = arm64 ]; then export CFLAGS="$COMMON_CFLAGS -march=armv8-a"; \
+       elif [ "${TARGETARCH}" = arm ]; then export CFLAGS="$COMMON_CFLAGS -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a7"; \
+       else export CFLAGS="$COMMON_CFLAGS -march=x86-64 -mtune=generic"; fi \
+    && export CXXFLAGS="$CFLAGS" LDFLAGS="-Wl,-O1 -Wl,--as-needed" \
+    && git clone --depth=1 https://gitlab.freedesktop.org/libnice/libnice /tmp/libnice \
     && cd /tmp/libnice \
-    && meson --prefix=/usr build && ninja -C build && ninja -C build install \
+    && meson setup build --prefix=/usr --buildtype=release -Doptimization=2 -Dc_args="$CFLAGS" -Dcpp_args="$CXXFLAGS" \
+    && ninja -C build && ninja -C build install \
     && rm -rf /tmp/libnice \
     && curl https://github.com/cisco/libsrtp/archive/v2.2.0.tar.gz -L -o /tmp/libsrtp-2.2.0.tar.gz \
     && cd /tmp \
     && tar xf libsrtp-2.2.0.tar.gz \
     && cd libsrtp-2.2.0 \
-    && ./configure --prefix=/usr --enable-openssl \
+    && CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" ./configure --prefix=/usr --enable-openssl \
     && make shared_library -j$(nproc) && make install \
     && cd /tmp \
     && rm -rf /tmp/libsrtp* \
     && git clone --depth=1 https://github.com/warmcat/libwebsockets /tmp/libwebsockets \
     && cd /tmp/libwebsockets \
     && mkdir build && cd build \
-    && cmake -DLWS_MAX_SMP=1 -DLWS_WITHOUT_EXTENSIONS=0 -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_C_FLAGS="-fpic" .. \
+    && cmake -DLWS_MAX_SMP=1 -DLWS_WITHOUT_EXTENSIONS=0 -DCMAKE_INSTALL_PREFIX:PATH=/usr \
+             -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS_RELEASE="$CFLAGS -fPIC" -DCMAKE_CXX_FLAGS_RELEASE="$CXXFLAGS -fPIC" .. \
     && make -j$(nproc) && make install \
     && cd /tmp \
     && rm -rf /tmp/libwebsockets \
     && git clone --depth=1 https://github.com/meetecho/janus-gateway.git /tmp/janus-gateway \
     && cd /tmp/janus-gateway \
     && sh autogen.sh \
-    && ./configure --enable-static --enable-websockets --enable-plugin-audiobridge \
+    && CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" ./configure --enable-static --enable-websockets --enable-plugin-audiobridge \
         --disable-data-channels --disable-rabbitmq --disable-mqtt --disable-all-plugins \
         --disable-all-loggers --prefix=/usr \
     && make  -j$(nproc) && make install \
     && cd /tmp \
     && rm -rf /tmp/janus-gateway
 
-# 编译 Rockchip MPP、RGA 和 FFmpeg（仅 arm64）
+# 编译 Rockchip MPP、RGA（仅 arm64，显式 Release 与按架构优化）
 RUN if [ ${TARGETARCH} = arm64 ]; then \
-    	git clone --depth=1 https://github.com/rockchip-linux/mpp.git /tmp/rkmpp \
+        export COMMON_CFLAGS='-O2 -pipe -fPIC -fstack-protector-strong -D_FORTIFY_SOURCE=2' \
+        && export CFLAGS="$COMMON_CFLAGS -march=armv8-a" \
+        && export CXXFLAGS="$CFLAGS" \
+    	&& git clone --depth=1 https://github.com/rockchip-linux/mpp.git /tmp/rkmpp \
     	&& mkdir -p /tmp/rkmpp/rkmpp_build && cd /tmp/rkmpp/rkmpp_build \
-    	&& cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DBUILD_TEST=OFF .. \
+    	&& cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DBUILD_TEST=OFF \
+                 -DCMAKE_C_FLAGS_RELEASE="$CFLAGS" -DCMAKE_CXX_FLAGS_RELEASE="$CXXFLAGS" .. \
     	&& make -j$(nproc) \
     	&& make install \
     	&& git clone -b jellyfin-rga --depth=1 https://github.com/nyanmisaka/rk-mirrors.git /tmp/rkrga \
     	&& cd /tmp/ \
-    	&& meson setup rkrga rkrga_build --prefix=/usr --libdir=lib --buildtype=release -Dcpp_args=-fpermissive -Dlibdrm=false -Dlibrga_demo=false \
+    	&& meson setup rkrga rkrga_build --prefix=/usr --libdir=lib --buildtype=release -Doptimization=2 \
+                 -Dc_args="$CFLAGS" -Dcpp_args="$CXXFLAGS -fpermissive" -Dlibdrm=false -Dlibrga_demo=false \
     	&& meson configure rkrga_build > /dev/null \
     	&& ninja -C rkrga_build install \
         && rm -rf /tmp/rkmpp /tmp/rkrga; \
     fi
 
-# 编译 ustreamer
+# 编译 ustreamer（按架构优化）
 RUN sed --in-place --expression 's|^#include "refcount.h"$|#include "../refcount.h"|g' /usr/include/janus/plugins/plugin.h \
     && git clone --depth=1 https://github.com/mofeng-git/ustreamer /tmp/ustreamer \
+    && export COMMON_CFLAGS='-O2 -pipe -fPIC -fstack-protector-strong -D_FORTIFY_SOURCE=2' \
+    && if [ "${TARGETARCH}" = arm64 ]; then export CFLAGS="$COMMON_CFLAGS -march=armv8-a"; \
+       elif [ "${TARGETARCH}" = arm ]; then export CFLAGS="$COMMON_CFLAGS -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a7"; \
+       else export CFLAGS="$COMMON_CFLAGS -march=x86-64 -mtune=generic"; fi \
+    && export CXXFLAGS="$CFLAGS" \
     && if [ ${TARGETARCH} = arm64 ]; then \
-        make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 WITH_MPP=1 WITH_DRM=1 -C /tmp/ustreamer; \
+        make -j$(nproc) CFLAGS="$CFLAGS" WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 WITH_MPP=1 WITH_DRM=1 -C /tmp/ustreamer; \
     else \
-        make -j$(nproc) WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 WITH_DRM=1 -C /tmp/ustreamer; \
+        make -j$(nproc) CFLAGS="$CFLAGS" WITH_PYTHON=1 WITH_JANUS=1 WITH_FFMPEG=1 WITH_DRM=1 -C /tmp/ustreamer; \
     fi \
     && /tmp/ustreamer/ustreamer -v \
     && /tmp/ustreamer/ustreamer-dump -v \
@@ -178,9 +195,8 @@ RUN mkdir /tmp/lib \
        /tmp/lib/ \
     && find /usr/lib -name "libsrtp2.so.*" -exec cp {} /tmp/lib/ \; \
     && find /usr/lib -name "libwebsockets.so.*" -exec cp {} /tmp/lib/ \; \
-    && if [ ${TARGETARCH} = arm64 ]; then \
-        find /usr/lib -name "libsw*.so.*" -exec cp {} /tmp/lib/ \; \
-        && find /usr/lib -name "libpostproc.so.*" -exec cp {} /tmp/lib/ \; \
-        && find /usr/lib -name "librockchip*" -exec cp {} /tmp/lib/ \; \
-        && find /usr/lib -name "librga.so.*" -exec cp {} /tmp/lib/ \; ; \
-    fi
+    && [ "${TARGETARCH}" = "arm64" ] && \
+       find /usr/lib -name "libsw*.so.*" -exec cp {} /tmp/lib/ \; && \
+       find /usr/lib -name "libpostproc.so.*" -exec cp {} /tmp/lib/ \; && \
+       find /usr/lib -name "librockchip*" -exec cp {} /tmp/lib/ \; && \
+       find /usr/lib -name "librga.so.*" -exec cp {} /tmp/lib/ \; || true
