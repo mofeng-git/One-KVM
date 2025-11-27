@@ -181,7 +181,7 @@ EOF
     if [ "$OTG" == "1" ]; then
         log_info "已启用 OTG 功能"
         sed -i "s/ch9329/otg/g" /etc/kvmd/override.yaml
-        sed -i "s/device: \/dev\/ttyUSB0//g" /etc/kvmd/override.yaml
+        sed -i "s|device: /dev/ttyUSB0||g" /etc/kvmd/override.yaml
         if [ "$NOMSD" == 1 ]; then
             log_info "已禁用 MSD 功能"
         else
@@ -190,8 +190,8 @@ EOF
     fi
 
     if [ ! -z "$VIDEONUM" ]; then
-        if sed -i "s/\/dev\/video0/\/dev\/video$VIDEONUM/g" /etc/kvmd/override.yaml && \
-           sed -i "s/\/dev\/video0/\/dev\/video$VIDEONUM/g" /etc/kvmd/janus/janus.plugin.ustreamer.jcfg; then
+        if sed -i "s|/dev/video0|/dev/video$VIDEONUM|g" /etc/kvmd/override.yaml && \
+        sed -i "s|/dev/video0|/dev/video$VIDEONUM|g" /etc/kvmd/janus/janus.plugin.ustreamer.jcfg; then
             log_info "视频设备已设置为 /dev/video$VIDEONUM"
         fi
     fi
@@ -205,6 +205,12 @@ EOF
     if [ ! -z "$CH9329SPEED" ]; then
         if sed -i "s/speed: 9600/speed: $CH9329SPEED/g" /etc/kvmd/override.yaml; then
             log_info "CH9329 串口速率已设置为 $CH9329SPEED"
+        fi
+    fi
+
+    if [ ! -z "$CH9329NUM" ]; then
+        if sed -i "s|/dev/ttyUSB0|/dev/ttyUSB$CH9329NUM|g" /etc/kvmd/override.yaml; then
+            log_info "CH9329 串口设备已设置为 $CH9329NUM"
         fi
     fi
 
