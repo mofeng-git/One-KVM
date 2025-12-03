@@ -157,10 +157,6 @@ media:
 
         jpeg:
             sink: 'kvmd::ustreamer::jpeg'
-janus:
-    stun:
-        host: stun.cloudflare.com
-        port: 3478
 
 otgnet:
     commands:

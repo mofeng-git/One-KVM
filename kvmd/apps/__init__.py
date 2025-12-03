@@ -81,6 +81,7 @@ from ..validators.net import valid_port
 from ..validators.net import valid_ports_list
 from ..validators.net import valid_mac
 from ..validators.net import valid_ssl_ciphers
+from ..validators.net import valid_ice_servers
 
 from ..validators.hid import valid_hid_key
 from ..validators.hid import valid_hid_mouse_output
@@ -860,6 +861,7 @@ def _get_config_scheme() -> dict:
             ], type=valid_command),
             "cmd_remove": Option([], type=valid_options),
             "cmd_append": Option([], type=valid_options),
+            "local_ice_servers": Option([], type=valid_ice_servers, unpack_as="ice_servers"),
         },
 
         "watchdog": {

@@ -47,6 +47,29 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Inject TURN config (optional)
+        if: ${{ env.TURN_HOST != '' }}
+        run: |
+          mkdir -p configs/kvmd/override.d
+          cat > configs/kvmd/override.d/turn.yaml <<EOF
+          janus:
+            stun:
+              host: ${TURN_HOST}
+              port: ${TURN_PORT}
+            local_ice_servers:
+              - urls:
+                  - "stun:${TURN_HOST}:${TURN_PORT}"
+                  - "turn:${TURN_HOST}:${TURN_PORT}?transport=udp"
+                  - "turn:${TURN_HOST}:${TURN_PORT}?transport=tcp"
+                username: "${TURN_USER}"
+                credential: "${TURN_PASS}"
+          EOF
+        env:
+          TURN_HOST: ${{ secrets.TURN_HOST }}
+          TURN_PORT: ${{ secrets.TURN_PORT }}
+          TURN_USER: ${{ secrets.TURN_USER }}
+          TURN_PASS: ${{ secrets.TURN_PASS }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -116,6 +139,29 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Inject TURN config (optional)
+        if: ${{ env.TURN_HOST != '' }}
+        run: |
+          mkdir -p configs/kvmd/override.d
+          cat > configs/kvmd/override.d/turn.yaml <<EOF
+          janus:
+            stun:
+              host: ${TURN_HOST}
+              port: ${TURN_PORT}
+            local_ice_servers:
+              - urls:
+                  - "stun:${TURN_HOST}:${TURN_PORT}"
+                  - "turn:${TURN_HOST}:${TURN_PORT}?transport=udp"
+                  - "turn:${TURN_HOST}:${TURN_PORT}?transport=tcp"
+                username: "${TURN_USER}"
+                credential: "${TURN_PASS}"
+          EOF
+        env:
+          TURN_HOST: ${{ secrets.TURN_HOST }}
+          TURN_PORT: ${{ secrets.TURN_PORT }}
+          TURN_USER: ${{ secrets.TURN_USER }}
+          TURN_PASS: ${{ secrets.TURN_PASS }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

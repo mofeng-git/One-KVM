@@ -111,7 +111,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __ensureJanus = function(internal) {
+var __ensureJanus = function(internal) {
 		if (__janus === null && !__stop && (!__ensuring || internal)) {
 			__ensuring = true;
 			__setInactive();
@@ -131,10 +131,75 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 			});
 		}
 	};
+	var __decodeIcePayload = function(payload) {
+		if (typeof payload !== "string") {
+			return null;
+		}
+		let data = payload.trim();
+		if (data.startsWith("json:")) {
+			data = data.slice(5).trim();
+		}
+		if (data.startsWith("{") || data.startsWith("[")) {
+			try {
+				let parsed = JSON.parse(data);
+				if (Array.isArray(parsed)) {
+					return parsed;
+				} else if (parsed && Array.isArray(parsed.servers)) {
+					return parsed.servers;
+				}
+				return null;
+			} catch (error) {
+				__logError("Can't parse ICE payload:", error);
+			}
+		}
+		return null;
+	};
+
+	var __normalizeIceEntry = function(entry) {
+		if (!entry || typeof entry !== "object") {
+			return null;
+		}
+		let urls = entry.urls;
+		if (typeof urls === "string") {
+			urls = [urls];
+		}
+		if (!Array.isArray(urls) || urls.length === 0) {
+			return null;
+		}
+		let normalized = {"urls": urls};
+		if (entry.username) {
+			normalized.username = entry.username;
+		}
+		if (entry.credential) {
+			normalized.credential = entry.credential;
+		}
+		if (entry.credentialType) {
+			normalized.credentialType = entry.credentialType;
+		}
+		return normalized;
+	};
+
+	var __normalizeIceServers = function(payload) {
+		let parsed = __decodeIcePayload(payload);
+		if (!parsed) {
+			return null;
+		}
+		let servers = [];
+		for (let entry of parsed) {
+			let normalized = __normalizeIceEntry(entry);
+			if (normalized) {
+				servers.push(normalized);
+			}
+		}
+		return (servers.length > 0 ? servers : null);
+	};
 
 	var __getIceServers = function() {
 		if (__ice !== null && __ice.url) {
-			__logInfo("Using the custom ICE Server got from uStreamer:", __ice);
+			let normalized = __normalizeIceServers(__ice.url);
+			if (normalized !== null) {
+				return normalized;
+			}
 			return [{"urls": __ice.url}];
 		} else {
 			return [];

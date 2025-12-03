@@ -120,3 +120,39 @@ def valid_ssl_ciphers(arg: Any) -> str:
 def valid_url(arg: Any) -> str:
     # XXX: VERY primitive
     return check_re_match(arg, "HTTP(S) URL", r"^https?://[\[\w]+\S*")
+
+
+def valid_ice_servers(arg: Any) -> list[dict[str, Any]]:
+    name = "ICE servers list"
+    if arg is None:
+        return []
+    if not isinstance(arg, list):
+        raise_error(arg, name)
+    servers: list[dict[str, Any]] = []
+    for item in arg:
+        if not isinstance(item, dict):
+            raise_error(item, "ICE server entry")
+        urls = item.get("urls")
+        if isinstance(urls, str):
+            urls_list = [valid_stripped_string_not_empty(urls, "ICE server URL")]
+        elif isinstance(urls, list):
+            urls_list = [
+                valid_stripped_string_not_empty(url, "ICE server URL")
+                for url in urls
+            ]
+        else:
+            raise_error(urls, "ICE server URLs")
+        if not urls_list:
+            raise_error(urls, "ICE server URLs")
+        server: dict[str, Any] = {"urls": urls_list}
+        username = item.get("username")
+        if username is not None:
+            server["username"] = valid_stripped_string_not_empty(username, "ICE username")
+        credential = item.get("credential")
+        if credential is not None:
+            server["credential"] = valid_stripped_string_not_empty(credential, "ICE credential")
+        credential_type = item.get("credential_type") or item.get("credentialType")
+        if credential_type is not None:
+            server["credentialType"] = valid_stripped_string_not_empty(credential_type, "ICE credentialType")
+        servers.append(server)
+    return servers

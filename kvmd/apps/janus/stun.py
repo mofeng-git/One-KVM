@@ -136,7 +136,12 @@ class Stun:
             return (StunNatType.FULL_CONE_NAT, resp)
 
         if first.changed is None:
-            raise RuntimeError(f"Changed addr is None: {first}")
+            get_logger(0).warning(
+                "STUN server %s:%d responded without CHANGED-ADDRESS; skipping NAT type detection",
+                self.__host,
+                self.__port,
+            )
+            return (StunNatType.ERROR, first)
         resp = await self.__make_request("Change request [ext_ip != src_ip]", first.changed, b"")
         if not resp.ok:
             return (StunNatType.CHANGED_ADDR_ERROR, resp)

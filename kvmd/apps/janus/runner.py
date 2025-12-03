@@ -2,6 +2,8 @@ import asyncio
 import asyncio.subprocess
 import socket
 import dataclasses
+import json
+from typing import Any
 
 import netifaces
 
@@ -43,6 +45,7 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
         cmd: list[str],
         cmd_remove: list[str],
         cmd_append: list[str],
+        ice_servers: list[dict[str, Any]],
     ) -> None:
 
         self.__stun = Stun(stun_host, stun_port, stun_timeout, stun_retries, stun_retries_delay)
@@ -52,6 +55,7 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
         self.__check_retries_delay = check_retries_delay
 
         self.__cmd = tools.build_cmd(cmd, cmd_remove, cmd_append)
+        self.__ice_servers = ice_servers
 
         self.__janus_task: (asyncio.Task | None) = None
         self.__janus_proc: (asyncio.subprocess.Process | None) = None  # pylint: disable=no-member
@@ -173,13 +177,25 @@ class JanusRunner:  # pylint: disable=too-many-instance-attributes
             part.format(**placeholders)
             for part in cmd
         ]
-        self.__janus_proc = await aioproc.run_process(
-            cmd=cmd,
-            env={"JANUS_USTREAMER_WEB_ICE_URL": f"stun:{netcfg.stun_host}:{netcfg.stun_port}"},
-        )
+        env = {}
+        ice_payload = self.__build_ice_payload(netcfg)
+        if ice_payload:
+            env["JANUS_USTREAMER_WEB_ICE_URL"] = ice_payload
+        self.__janus_proc = await aioproc.run_process(cmd=cmd, env=env or None)
         get_logger(0).info("Started Janus pid=%d: %s", self.__janus_proc.pid, tools.cmdfmt(cmd))
 
     async def __kill_janus_proc(self) -> None:
         if self.__janus_proc:
             await aioproc.kill_process(self.__janus_proc, 5, get_logger(0))
         self.__janus_proc = None
+
+    def __build_ice_payload(self, netcfg: _Netcfg) -> (str | None):
+        if self.__ice_servers:
+            try:
+                return f"json:{json.dumps(self.__ice_servers, ensure_ascii=False)}"
+            except Exception as ex:  # pragma: no cover
+                get_logger(0).error("Can't encode ICE servers: %s", tools.efmt(ex))
+                return None
+        if netcfg.stun_host and netcfg.stun_port:
+            return f"stun:{netcfg.stun_host}:{netcfg.stun_port}"
+        return None
