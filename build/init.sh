@@ -184,7 +184,7 @@ EOF
         cat >> /etc/kvmd/supervisord.conf << EOF
 
 [program:kvmd-gostc]
-command=/usr/bin/gostc -web-addr 0.0.0.0:18080
+command=/usr/bin/gostc -web-addr 127.0.0.1:18080
 autostart=true
 autorestart=true
 startsecs=5
