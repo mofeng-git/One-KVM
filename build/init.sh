@@ -159,7 +159,7 @@ EOF
     fi
 
     if [  "$NOIPMI" == "1" ]; then
-        log_info "已禁用IPMI功能"
+        log_info "已禁用 IPMI 功能"
         rm -r /usr/share/kvmd/extras/ipmi
     else
         cat >> /etc/kvmd/supervisord.conf << EOF
@@ -170,6 +170,25 @@ directory=/
 autostart=true
 autorestart=true
 priority=12
+stopasgroup=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes = 0
+redirect_stderr=true
+EOF
+    fi
+
+    if [ "$NOGOSTC" == "1" ]; then
+        log_info "已禁用 GOSTC 功能"
+        rm -rf /usr/share/kvmd/extras/gostc
+    else
+        cat >> /etc/kvmd/supervisord.conf << EOF
+
+[program:kvmd-gostc]
+command=/usr/bin/gostc -web-addr 0.0.0.0:18080
+autostart=true
+autorestart=true
+startsecs=5
+priority=300
 stopasgroup=true
 stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes = 0
