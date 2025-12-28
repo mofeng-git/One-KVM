@@ -1,0 +1,66 @@
+# Cross-compilation image for ARM64 based on Debian 12
+# Uses multiarch to install ARM64 libraries on x86_64 host
+
+FROM debian:12
+
+# Install Rust toolchain
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Add ARM64 architecture
+RUN dpkg --add-architecture arm64
+
+# Install cross-compiler and native build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    pkg-config \
+    cmake \
+    nasm \
+    git \
+    libclang-dev \
+    llvm \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ARM64 development libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libasound2-dev:arm64 \
+    libv4l-dev:arm64 \
+    libudev-dev:arm64 \
+    zlib1g-dev:arm64 \
+    libjpeg62-turbo-dev:arm64 \
+    libyuv-dev:arm64 \
+    libavcodec-dev:arm64 \
+    libavformat-dev:arm64 \
+    libavutil-dev:arm64 \
+    libswscale-dev:arm64 \
+    libswresample-dev:arm64 \
+    libx264-dev:arm64 \
+    libx265-dev:arm64 \
+    libvpx-dev:arm64 \
+    libopus-dev:arm64 \
+    libva-dev:arm64 \
+    libdrm-dev:arm64 \
+    libx11-dev:arm64 \
+    libxcb1-dev:arm64 \
+    libxau-dev:arm64 \
+    libxdmcp-dev:arm64 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Rust target
+RUN rustup target add aarch64-unknown-linux-gnu
+
+# Configure environment for cross-compilation
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+    CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
+    CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
+    AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar \
+    PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
+    PKG_CONFIG_ALLOW_CROSS=1

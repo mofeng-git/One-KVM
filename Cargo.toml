@@ -1,0 +1,141 @@
+[package]
+name = "one-kvm"
+version = "0.1.0"
+edition = "2021"
+authors = ["SilentWind"]
+description = "A open and lightweight IP-KVM solution written in Rust"
+license = "GPL-3.0"
+repository = "https://github.com/mofeng-git/One-KVM"
+keywords = ["kvm", "ipkvm", "remote-management", "embedded"]
+categories = ["embedded", "network-programming"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+
+# Web framework
+axum = { version = "0.7", features = ["ws", "multipart", "tokio"] }
+axum-extra = { version = "0.9", features = ["typed-header", "cookie"] }
+tower-http = { version = "0.5", features = ["fs", "cors", "trace", "compression-gzip"] }
+
+# Database - Use bundled SQLite for static linking
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Authentication
+argon2 = "0.5"
+rand = "0.8"
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
+nix = { version = "0.29", features = ["fs", "net", "hostname"] }
+
+# HTTP client (for URL downloads)
+# Use rustls-tls by default, but allow native-tls for systems with older GLIBC
+reqwest = { version = "0.12", features = ["stream", "rustls-tls"], default-features = false }
+urlencoding = "2"
+
+# Static file embedding
+rust-embed = { version = "8", features = ["compression"] }
+mime_guess = "2"
+
+# TLS/HTTPS
+rustls = { version = "0.23", features = ["ring"] }
+rustls-pemfile = "2"
+tokio-rustls = { version = "0.26", features = ["ring"] }
+rcgen = "0.13"
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+
+# CLI argument parsing
+clap = { version = "4", features = ["derive"] }
+
+# Time
+time = "0.3"
+
+# Video capture (V4L2)
+v4l = "0.14"
+
+# JPEG encoding (libjpeg-turbo, SIMD accelerated)
+turbojpeg = "1.1"
+
+# Bytes handling
+bytes = "1"
+bytemuck = { version = "1.14", features = ["derive"] }
+
+# Frame deduplication (hash-based comparison)
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
+
+# Async channels
+async-stream = "0.3"
+futures = "0.3"
+
+# WebSocket client (for ttyd proxy)
+tokio-tungstenite = "0.24"
+
+# High-performance synchronization
+parking_lot = "0.12"
+arc-swap = "1.7"
+
+# WebRTC
+webrtc = "0.14"
+rtp = "0.14"
+
+# Audio (ALSA capture + Opus encoding)
+# Note: audiopus links to libopus.so (unavoidable for audio support)
+alsa = "0.9"
+audiopus = "0.2"
+
+# HID (serial port for CH9329)
+serialport = "4"
+async-trait = "0.1"
+libc = "0.2"
+
+# Ventoy bootable image support
+ventoy-img = { path = "libs/ventoy-img-rs" }
+
+# ATX (GPIO control)
+gpio-cdev = "0.6"
+
+# H264 hardware/software encoding (hwcodec from rustdesk)
+hwcodec = { path = "libs/hwcodec" }
+
+# High-performance pixel format conversion (libyuv)
+libyuv = { path = "res/vcpkg/libyuv" }
+
+# TypeScript type generation
+typeshare = "1.0"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+# Static linking profile for musl targets
+[profile.release-static]
+inherits = "release"
+opt-level = "z"  # Optimize for size
+
+# Cross-compilation targets
+# aarch64-unknown-linux-gnu (ARM64) - Primary target
+# armv7-unknown-linux-gnueabihf (ARMv7)
+# x86_64-unknown-linux-gnu (x86_64)

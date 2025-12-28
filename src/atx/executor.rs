@@ -1,0 +1,305 @@
+//! ATX Key Executor
+//!
+//! Lightweight executor for a single ATX key operation.
+//! Each executor handles one button (power or reset) with its own hardware binding.
+
+use gpio_cdev::{Chip, LineHandle, LineRequestFlags};
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::time::Duration;
+use tokio::time::sleep;
+use tracing::{debug, info};
+
+use super::types::{ActiveLevel, AtxDriverType, AtxKeyConfig};
+use crate::error::{AppError, Result};
+
+/// Timing constants for ATX operations
+pub mod timing {
+    use std::time::Duration;
+
+    /// Short press duration (power on/graceful shutdown)
+    pub const SHORT_PRESS: Duration = Duration::from_millis(500);
+
+    /// Long press duration (force power off)
+    pub const LONG_PRESS: Duration = Duration::from_millis(5000);
+
+    /// Reset press duration
+    pub const RESET_PRESS: Duration = Duration::from_millis(500);
+}
+
+/// Executor for a single ATX key operation
+///
+/// Each executor manages one hardware button (power or reset).
+/// It handles both GPIO and USB relay backends.
+pub struct AtxKeyExecutor {
+    config: AtxKeyConfig,
+    gpio_handle: Mutex<Option<LineHandle>>,
+    /// Cached USB relay file handle to avoid repeated open/close syscalls
+    usb_relay_handle: Mutex<Option<File>>,
+    initialized: AtomicBool,
+}
+
+impl AtxKeyExecutor {
+    /// Create a new executor with the given configuration
+    pub fn new(config: AtxKeyConfig) -> Self {
+        Self {
+            config,
+            gpio_handle: Mutex::new(None),
+            usb_relay_handle: Mutex::new(None),
+            initialized: AtomicBool::new(false),
+        }
+    }
+
+    /// Check if this executor is configured
+    pub fn is_configured(&self) -> bool {
+        self.config.is_configured()
+    }
+
+    /// Check if this executor is initialized
+    pub fn is_initialized(&self) -> bool {
+        self.initialized.load(Ordering::Relaxed)
+    }
+
+    /// Initialize the executor
+    pub async fn init(&mut self) -> Result<()> {
+        if !self.config.is_configured() {
+            debug!("ATX key executor not configured, skipping init");
+            return Ok(());
+        }
+
+        match self.config.driver {
+            AtxDriverType::Gpio => self.init_gpio().await?,
+            AtxDriverType::UsbRelay => self.init_usb_relay().await?,
+            AtxDriverType::None => {}
+        }
+
+        self.initialized.store(true, Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// Initialize GPIO backend
+    async fn init_gpio(&mut self) -> Result<()> {
+        info!(
+            "Initializing GPIO ATX executor on {} pin {}",
+            self.config.device, self.config.pin
+        );
+
+        let mut chip = Chip::new(&self.config.device)
+            .map_err(|e| AppError::Internal(format!("GPIO chip open failed: {}", e)))?;
+
+        let line = chip.get_line(self.config.pin).map_err(|e| {
+            AppError::Internal(format!("GPIO line {} failed: {}", self.config.pin, e))
+        })?;
+
+        // Initial value depends on active level (start in inactive state)
+        let initial_value = match self.config.active_level {
+            ActiveLevel::High => 0, // Inactive = low
+            ActiveLevel::Low => 1,  // Inactive = high
+        };
+
+        let handle = line
+            .request(LineRequestFlags::OUTPUT, initial_value, "one-kvm-atx")
+            .map_err(|e| AppError::Internal(format!("GPIO request failed: {}", e)))?;
+
+        *self.gpio_handle.lock().unwrap() = Some(handle);
+        debug!("GPIO pin {} configured successfully", self.config.pin);
+        Ok(())
+    }
+
+    /// Initialize USB relay backend
+    async fn init_usb_relay(&self) -> Result<()> {
+        info!(
+            "Initializing USB relay ATX executor on {} channel {}",
+            self.config.device, self.config.pin
+        );
+
+        // Open and cache the device handle
+        let device = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&self.config.device)
+            .map_err(|e| AppError::Internal(format!("USB relay device open failed: {}", e)))?;
+
+        *self.usb_relay_handle.lock().unwrap() = Some(device);
+
+        // Ensure relay is off initially
+        self.send_usb_relay_command(false)?;
+
+        debug!(
+            "USB relay channel {} configured successfully",
+            self.config.pin
+        );
+        Ok(())
+    }
+
+    /// Pulse the button for the specified duration
+    pub async fn pulse(&self, duration: Duration) -> Result<()> {
+        if !self.is_configured() {
+            return Err(AppError::Internal("ATX key not configured".to_string()));
+        }
+
+        if !self.is_initialized() {
+            return Err(AppError::Internal("ATX key not initialized".to_string()));
+        }
+
+        match self.config.driver {
+            AtxDriverType::Gpio => self.pulse_gpio(duration).await,
+            AtxDriverType::UsbRelay => self.pulse_usb_relay(duration).await,
+            AtxDriverType::None => Ok(()),
+        }
+    }
+
+    /// Pulse GPIO pin
+    async fn pulse_gpio(&self, duration: Duration) -> Result<()> {
+        let (active, inactive) = match self.config.active_level {
+            ActiveLevel::High => (1u8, 0u8),
+            ActiveLevel::Low => (0u8, 1u8),
+        };
+
+        // Set to active state
+        {
+            let guard = self.gpio_handle.lock().unwrap();
+            let handle = guard
+                .as_ref()
+                .ok_or_else(|| AppError::Internal("GPIO not initialized".to_string()))?;
+            handle
+                .set_value(active)
+                .map_err(|e| AppError::Internal(format!("GPIO set failed: {}", e)))?;
+        }
+
+        // Wait for duration (no lock held)
+        sleep(duration).await;
+
+        // Set to inactive state
+        {
+            let guard = self.gpio_handle.lock().unwrap();
+            if let Some(handle) = guard.as_ref() {
+                handle.set_value(inactive).ok();
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Pulse USB relay
+    async fn pulse_usb_relay(&self, duration: Duration) -> Result<()> {
+        // Turn relay on
+        self.send_usb_relay_command(true)?;
+
+        // Wait for duration
+        sleep(duration).await;
+
+        // Turn relay off
+        self.send_usb_relay_command(false)?;
+
+        Ok(())
+    }
+
+    /// Send USB relay command using cached handle
+    fn send_usb_relay_command(&self, on: bool) -> Result<()> {
+        let channel = self.config.pin as u8;
+
+        // Standard HID relay command format
+        let cmd = if on {
+            [0x00, channel + 1, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00]
+        } else {
+            [0x00, channel + 1, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x00]
+        };
+
+        let mut guard = self.usb_relay_handle.lock().unwrap();
+        let device = guard
+            .as_mut()
+            .ok_or_else(|| AppError::Internal("USB relay not initialized".to_string()))?;
+
+        device
+            .write_all(&cmd)
+            .map_err(|e| AppError::Internal(format!("USB relay write failed: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Shutdown the executor
+    pub async fn shutdown(&mut self) -> Result<()> {
+        if !self.is_initialized() {
+            return Ok(());
+        }
+
+        match self.config.driver {
+            AtxDriverType::Gpio => {
+                // Release GPIO handle
+                *self.gpio_handle.lock().unwrap() = None;
+            }
+            AtxDriverType::UsbRelay => {
+                // Ensure relay is off before closing handle
+                let _ = self.send_usb_relay_command(false);
+                // Release USB relay handle
+                *self.usb_relay_handle.lock().unwrap() = None;
+            }
+            AtxDriverType::None => {}
+        }
+
+        self.initialized.store(false, Ordering::Relaxed);
+        debug!("ATX key executor shutdown complete");
+        Ok(())
+    }
+}
+
+impl Drop for AtxKeyExecutor {
+    fn drop(&mut self) {
+        // Ensure GPIO lines are released
+        *self.gpio_handle.lock().unwrap() = None;
+
+        // Ensure USB relay is off and handle released
+        if self.config.driver == AtxDriverType::UsbRelay && self.is_initialized() {
+            let _ = self.send_usb_relay_command(false);
+        }
+        *self.usb_relay_handle.lock().unwrap() = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_executor_creation() {
+        let config = AtxKeyConfig::default();
+        let executor = AtxKeyExecutor::new(config);
+        assert!(!executor.is_configured());
+        assert!(!executor.is_initialized());
+    }
+
+    #[test]
+    fn test_executor_with_gpio_config() {
+        let config = AtxKeyConfig {
+            driver: AtxDriverType::Gpio,
+            device: "/dev/gpiochip0".to_string(),
+            pin: 5,
+            active_level: ActiveLevel::High,
+        };
+        let executor = AtxKeyExecutor::new(config);
+        assert!(executor.is_configured());
+        assert!(!executor.is_initialized());
+    }
+
+    #[test]
+    fn test_executor_with_usb_relay_config() {
+        let config = AtxKeyConfig {
+            driver: AtxDriverType::UsbRelay,
+            device: "/dev/hidraw0".to_string(),
+            pin: 0,
+            active_level: ActiveLevel::High, // Ignored for USB relay
+        };
+        let executor = AtxKeyExecutor::new(config);
+        assert!(executor.is_configured());
+    }
+
+    #[test]
+    fn test_timing_constants() {
+        assert_eq!(timing::SHORT_PRESS.as_millis(), 500);
+        assert_eq!(timing::LONG_PRESS.as_millis(), 5000);
+        assert_eq!(timing::RESET_PRESS.as_millis(), 500);
+    }
+}

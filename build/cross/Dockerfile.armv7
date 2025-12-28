@@ -1,0 +1,66 @@
+# Cross-compilation image for ARMv7 based on Debian 12
+# Uses multiarch to install ARMv7 libraries on x86_64 host
+
+FROM debian:12
+
+# Install Rust toolchain
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Add armhf architecture
+RUN dpkg --add-architecture armhf
+
+# Install cross-compiler and native build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    pkg-config \
+    cmake \
+    nasm \
+    git \
+    libclang-dev \
+    llvm \
+    gcc-arm-linux-gnueabihf \
+    g++-arm-linux-gnueabihf \
+    libc6-dev-armhf-cross \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ARMv7 development libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libasound2-dev:armhf \
+    libv4l-dev:armhf \
+    libudev-dev:armhf \
+    zlib1g-dev:armhf \
+    libjpeg62-turbo-dev:armhf \
+    libyuv-dev:armhf \
+    libavcodec-dev:armhf \
+    libavformat-dev:armhf \
+    libavutil-dev:armhf \
+    libswscale-dev:armhf \
+    libswresample-dev:armhf \
+    libx264-dev:armhf \
+    libx265-dev:armhf \
+    libvpx-dev:armhf \
+    libopus-dev:armhf \
+    libva-dev:armhf \
+    libdrm-dev:armhf \
+    libx11-dev:armhf \
+    libxcb1-dev:armhf \
+    libxau-dev:armhf \
+    libxdmcp-dev:armhf \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Rust target
+RUN rustup target add armv7-unknown-linux-gnueabihf
+
+# Configure environment for cross-compilation
+ENV CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc \
+    CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc \
+    CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++ \
+    AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar \
+    PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig \
+    PKG_CONFIG_ALLOW_CROSS=1

@@ -1,0 +1,111 @@
+LIBMFX_1.0 {
+  global:
+    MFXInit;
+    MFXClose;
+    MFXQueryIMPL;
+    MFXQueryVersion;
+
+    MFXJoinSession;
+    MFXDisjoinSession;
+    MFXCloneSession;
+    MFXSetPriority;
+    MFXGetPriority;
+
+    MFXVideoCORE_SetBufferAllocator;
+    MFXVideoCORE_SetFrameAllocator;
+    MFXVideoCORE_SetHandle;
+    MFXVideoCORE_GetHandle;
+    MFXVideoCORE_SyncOperation;
+
+    MFXVideoENCODE_Query;
+    MFXVideoENCODE_QueryIOSurf;
+    MFXVideoENCODE_Init;
+    MFXVideoENCODE_Reset;
+    MFXVideoENCODE_Close;
+    MFXVideoENCODE_GetVideoParam;
+    MFXVideoENCODE_GetEncodeStat;
+    MFXVideoENCODE_EncodeFrameAsync;
+
+    MFXVideoDECODE_Query;
+    MFXVideoDECODE_DecodeHeader;
+    MFXVideoDECODE_QueryIOSurf;
+    MFXVideoDECODE_Init;
+    MFXVideoDECODE_Reset;
+    MFXVideoDECODE_Close;
+    MFXVideoDECODE_GetVideoParam;
+    MFXVideoDECODE_GetDecodeStat;
+    MFXVideoDECODE_SetSkipMode;
+    MFXVideoDECODE_GetPayload;
+    MFXVideoDECODE_DecodeFrameAsync;
+
+    MFXVideoVPP_Query;
+    MFXVideoVPP_QueryIOSurf;
+    MFXVideoVPP_Init;
+    MFXVideoVPP_Reset;
+    MFXVideoVPP_Close;
+
+    MFXVideoVPP_GetVideoParam;
+    MFXVideoVPP_GetVPPStat;
+    MFXVideoVPP_RunFrameVPPAsync;
+
+  local:
+    *;
+};
+
+LIBMFX_1.1 {
+  global:
+    MFXVideoUSER_Register;
+    MFXVideoUSER_Unregister;
+    MFXVideoUSER_ProcessFrameAsync;
+} LIBMFX_1.0;
+
+LIBMFX_1.8 {
+  global:
+    MFXVideoUSER_Load;
+    MFXVideoUSER_UnLoad;
+} LIBMFX_1.1;
+
+LIBMFX_1.10 {
+  global:
+    MFXVideoENC_Query;
+    MFXVideoENC_QueryIOSurf;
+    MFXVideoENC_Init;
+    MFXVideoENC_Reset;
+    MFXVideoENC_Close;
+    MFXVideoENC_ProcessFrameAsync;
+    MFXVideoVPP_RunFrameVPPAsyncEx;
+
+} LIBMFX_1.1;
+
+LIBMFX_1.13 {
+  global:
+    MFXVideoPAK_Query;
+    MFXVideoPAK_QueryIOSurf;
+    MFXVideoPAK_Init;
+    MFXVideoPAK_Reset;
+    MFXVideoPAK_Close;
+    MFXVideoPAK_ProcessFrameAsync;
+    MFXVideoUSER_LoadByPath;
+} LIBMFX_1.10;
+
+LIBMFX_1.14 {
+  global:
+    MFXInitEx;
+    MFXDoWork;
+} LIBMFX_1.13;
+
+LIBMFX_1.19 {
+  global:
+    MFXVideoENC_GetVideoParam;
+    MFXVideoPAK_GetVideoParam;
+    MFXVideoCORE_QueryPlatform;
+    MFXVideoUSER_GetPlugin;
+} LIBMFX_1.14;
+
+LIBMFXAUDIO_1.9 {
+  global:
+    MFXAudioUSER_Load;
+    MFXAudioUSER_UnLoad;
+  local:
+    *;
+};

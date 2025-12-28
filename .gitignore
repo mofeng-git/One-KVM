@@ -1,0 +1,38 @@
+# Rust
+/target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local data
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Certificates
+*.pem
+*.crt
+*.key
+
+# Logs
+*.log
+
+# Build artifacts
+/dist/
+
+# Frontend (built files)
+/web/node_modules/
+.mcp.json
+CLAUDE.md
+.gemini/settings.json

@@ -1,0 +1,76 @@
+# One-KVM Runtime Image
+# This Dockerfile only packages pre-compiled binaries (no compilation)
+# Used after cross-compiling with `cross build`
+
+ARG TARGETPLATFORM=linux/amd64
+
+FROM debian:12-slim
+
+ARG TARGETPLATFORM
+
+# Install runtime dependencies only (matches build environment)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Runtime libraries
+    libasound2 \
+    libv4l-0 \
+    libudev1 \
+    zlib1g \
+    libjpeg62-turbo \
+    libyuv0 \
+    # FFmpeg runtime
+    libavcodec59 \
+    libavformat59 \
+    libavutil57 \
+    libswscale6 \
+    libswresample4 \
+    # Video codecs
+    libx264-164 \
+    libx265-199 \
+    libvpx7 \
+    # Audio codec
+    libopus0 \
+    # Hardware acceleration
+    libva2 \
+    libva-drm2 \
+    libdrm2 \
+    # X11 (for VAAPI)
+    libx11-6 \
+    libxcb1 \
+    # Utilities
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Intel Media SDK runtime for x86_64 only
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends libmfx1 && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# Create directories
+RUN mkdir -p /etc/one-kvm/ventoy
+
+# Copy init script
+COPY init.sh /init.sh
+
+# Copy binaries (these are placed by the build script)
+COPY one-kvm /usr/bin/one-kvm
+COPY ttyd /usr/bin/ttyd
+COPY gostc /usr/bin/gostc
+COPY easytier-core /usr/bin/easytier-core
+
+# Copy ventoy resources if they exist
+COPY ventoy/ /etc/one-kvm/ventoy/
+
+# Set permissions and verify
+RUN chmod +x /init.sh /usr/bin/one-kvm /usr/bin/ttyd /usr/bin/gostc /usr/bin/easytier-core && \
+    /usr/bin/one-kvm --help
+
+# Expose ports
+EXPOSE 8080 8443
+
+# Data volume
+VOLUME ["/etc/one-kvm"]
+
+# Entrypoint
+CMD ["/init.sh"]

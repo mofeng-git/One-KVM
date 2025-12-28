@@ -1,0 +1,16 @@
+# Build output
+/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+*.img
+!resources/*.img

@@ -1,0 +1,57 @@
+# Cross-compilation image for x86_64 based on Debian 12
+# Matches the runtime environment exactly
+
+FROM debian:12
+
+# Install Rust toolchain
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install build dependencies (same as runtime Debian 12)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build tools
+    build-essential \
+    pkg-config \
+    cmake \
+    nasm \
+    git \
+    libclang-dev \
+    llvm \
+    # Core system libraries
+    libasound2-dev \
+    libv4l-dev \
+    libudev-dev \
+    zlib1g-dev \
+    # Video/image processing
+    libjpeg62-turbo-dev \
+    libyuv-dev \
+    # FFmpeg and codecs
+    libavcodec-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libswscale-dev \
+    libswresample-dev \
+    # Video codec libraries
+    libx264-dev \
+    libx265-dev \
+    libvpx-dev \
+    # Audio codec
+    libopus-dev \
+    # Hardware acceleration
+    libva-dev \
+    libdrm-dev \
+    libmfx-dev \
+    # X11 libraries
+    libx11-dev \
+    libxcb1-dev \
+    libxau-dev \
+    libxdmcp-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Rust target
+RUN rustup target add x86_64-unknown-linux-gnu
