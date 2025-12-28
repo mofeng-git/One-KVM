@@ -49,10 +49,11 @@ One-KVM 是一个用 Rust 编写的开放轻量的 IP-KVM（基于 IP 的键盘�
 
 ```bash
 docker run -d --privileged \
-  -v /dev:/dev \
-  -v /sys/kernel/config:/sys/kernel/config \
-  --net=host \
-  siletwind0/one-kvm
+   --name one-kvm \
+   -v /dev:/dev \
+   -v /sys/kernel/config:/sys/kernel/config \
+   --net=host \
+   silentwind0/one-kvm
 ```
 
 访问 http://IP:8080

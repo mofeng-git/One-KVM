@@ -232,12 +232,24 @@ build_for_platform() {
     # Copy init script
     cp "$PROJECT_ROOT/build/init.sh" "$staging/init.sh"
 
-    # Copy ventoy resources if they exist
-    if [ -d "$PROJECT_ROOT/res/ventoy" ]; then
-        cp -r "$PROJECT_ROOT/res/ventoy/"* "$staging/ventoy/" 2>/dev/null || true
+    # Copy ventoy resources (decompress xz files if needed)
+    local ventoy_src="$PROJECT_ROOT/libs/ventoy-img-rs/resources"
+    if [ -d "$ventoy_src" ]; then
+        echo_info "Copying Ventoy resources..."
+        # Copy boot.img directly
+        if [ -f "$ventoy_src/boot.img" ]; then
+            cp "$ventoy_src/boot.img" "$staging/ventoy/"
+        fi
+        # Decompress xz files
+        if [ -f "$ventoy_src/core.img.xz" ]; then
+            xz -dk "$ventoy_src/core.img.xz" -c > "$staging/ventoy/core.img"
+        fi
+        if [ -f "$ventoy_src/ventoy.disk.img.xz" ]; then
+            xz -dk "$ventoy_src/ventoy.disk.img.xz" -c > "$staging/ventoy/ventoy.disk.img"
+        fi
+    else
+        echo_warn "Ventoy resources not found at $ventoy_src"
     fi
-    # Ensure ventoy dir exists (even if empty) for COPY command
-    touch "$staging/ventoy/.keep"
 
     # Copy Dockerfile
     cp "$PROJECT_ROOT/build/Dockerfile.runtime" "$staging/Dockerfile"

@@ -6,7 +6,7 @@ set -e
 
 # Start one-kvm with default options
 # Additional options can be passed via environment variables
-EXTRA_ARGS=""
+EXTRA_ARGS="-d /etc/one-kvm"
 
 # Enable HTTPS if requested
 if [ "${ENABLE_HTTPS:-false}" = "true" ]; then
