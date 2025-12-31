@@ -3,6 +3,8 @@ use typeshare::typeshare;
 
 // Re-export ExtensionsConfig from extensions module
 pub use crate::extensions::ExtensionsConfig;
+// Re-export RustDeskConfig from rustdesk module
+pub use crate::rustdesk::config::RustDeskConfig;
 
 /// Main application configuration
 #[typeshare]
@@ -29,6 +31,8 @@ pub struct AppConfig {
     pub web: WebConfig,
     /// Extensions settings (ttyd, gostc, easytier)
     pub extensions: ExtensionsConfig,
+    /// RustDesk remote access settings
+    pub rustdesk: RustDeskConfig,
 }
 
 impl Default for AppConfig {
@@ -44,6 +48,7 @@ impl Default for AppConfig {
             stream: StreamConfig::default(),
             web: WebConfig::default(),
             extensions: ExtensionsConfig::default(),
+            rustdesk: RustDeskConfig::default(),
         }
     }
 }

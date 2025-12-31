@@ -587,6 +587,11 @@ export {
   atxConfigApi,
   audioConfigApi,
   extensionsApi,
+  rustdeskConfigApi,
+  type RustDeskConfigResponse,
+  type RustDeskStatusResponse,
+  type RustDeskConfigUpdate,
+  type RustDeskPasswordResponse,
 } from './config'
 
 // 导出生成的类型

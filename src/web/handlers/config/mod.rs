@@ -13,6 +13,8 @@
 //! - PATCH /api/config/atx   - 更新 ATX 配置
 //! - GET  /api/config/audio  - 获取音频配置
 //! - PATCH /api/config/audio - 更新音频配置
+//! - GET  /api/config/rustdesk - 获取 RustDesk 配置
+//! - PATCH /api/config/rustdesk - 更新 RustDesk 配置
 
 mod apply;
 mod types;
@@ -23,6 +25,7 @@ mod hid;
 mod msd;
 mod atx;
 mod audio;
+mod rustdesk;
 
 // 导出 handler 函数
 pub use video::{get_video_config, update_video_config};
@@ -31,6 +34,10 @@ pub use hid::{get_hid_config, update_hid_config};
 pub use msd::{get_msd_config, update_msd_config};
 pub use atx::{get_atx_config, update_atx_config};
 pub use audio::{get_audio_config, update_audio_config};
+pub use rustdesk::{
+    get_rustdesk_config, get_rustdesk_status, update_rustdesk_config,
+    regenerate_device_id, regenerate_device_password, get_device_password,
+};
 
 // 保留全局配置查询（向后兼容）
 use axum::{extract::State, Json};

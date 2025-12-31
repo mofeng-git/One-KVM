@@ -113,6 +113,11 @@ gpio-cdev = "0.6"
 # H264 hardware/software encoding (hwcodec from rustdesk)
 hwcodec = { path = "libs/hwcodec" }
 
+# RustDesk protocol support
+prost = "0.13"
+sodiumoxide = "0.2"
+sha2 = "0.10"
+
 # High-performance pixel format conversion (libyuv)
 libyuv = { path = "res/vcpkg/libyuv" }
 
@@ -122,6 +127,9 @@ typeshare = "1.0"
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3"
+
+[build-dependencies]
+prost-build = "0.13"
 
 [profile.release]
 opt-level = 3

@@ -12,8 +12,12 @@ import {
   msdConfigApi,
   atxConfigApi,
   extensionsApi,
+  rustdeskConfigApi,
   type EncoderBackendInfo,
   type User as UserType,
+  type RustDeskConfigResponse,
+  type RustDeskStatusResponse,
+  type RustDeskPasswordResponse,
 } from '@/api'
 import type {
   ExtensionsStatus,
@@ -66,6 +70,8 @@ import {
   ChevronRight,
   Plus,
   ExternalLink,
+  Copy,
+  ScreenShare,
 } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
@@ -97,6 +103,7 @@ const navGroups = computed(() => [
   {
     title: t('settings.extensions'),
     items: [
+      { id: 'ext-rustdesk', label: t('extensions.rustdesk.title'), icon: ScreenShare },
       { id: 'ext-ttyd', label: t('extensions.ttyd.title'), icon: Terminal },
       { id: 'ext-gostc', label: t('extensions.gostc.title'), icon: Globe },
       { id: 'ext-easytier', label: t('extensions.easytier.title'), icon: Network },
@@ -158,6 +165,18 @@ const extConfig = ref({
   ttyd: { enabled: false, shell: '/bin/bash', credential: '' },
   gostc: { enabled: false, addr: 'gostc.mofeng.run', key: '', tls: true },
   easytier: { enabled: false, network_name: '', network_secret: '', peer_urls: [] as string[], virtual_ip: '' },
+})
+
+// RustDesk config state
+const rustdeskConfig = ref<RustDeskConfigResponse | null>(null)
+const rustdeskStatus = ref<RustDeskStatusResponse | null>(null)
+const rustdeskPassword = ref<RustDeskPasswordResponse | null>(null)
+const rustdeskLoading = ref(false)
+const rustdeskCopied = ref<'id' | 'password' | null>(null)
+const rustdeskLocalConfig = ref({
+  enabled: false,
+  rendezvous_server: '',
+  relay_server: '',
 })
 
 // Config
@@ -764,6 +783,135 @@ function getAtxDevicesForDriver(driver: string): string[] {
   return []
 }
 
+// RustDesk management functions
+async function loadRustdeskConfig() {
+  rustdeskLoading.value = true
+  try {
+    const [config, status] = await Promise.all([
+      rustdeskConfigApi.get(),
+      rustdeskConfigApi.getStatus(),
+    ])
+    rustdeskConfig.value = config
+    rustdeskStatus.value = status
+    rustdeskLocalConfig.value = {
+      enabled: config.enabled,
+      rendezvous_server: config.rendezvous_server,
+      relay_server: config.relay_server || '',
+    }
+  } catch (e) {
+    console.error('Failed to load RustDesk config:', e)
+  } finally {
+    rustdeskLoading.value = false
+  }
+}
+
+async function loadRustdeskPassword() {
+  try {
+    rustdeskPassword.value = await rustdeskConfigApi.getPassword()
+  } catch (e) {
+    console.error('Failed to load RustDesk password:', e)
+  }
+}
+
+async function saveRustdeskConfig() {
+  loading.value = true
+  saved.value = false
+  try {
+    await rustdeskConfigApi.update({
+      enabled: rustdeskLocalConfig.value.enabled,
+      rendezvous_server: rustdeskLocalConfig.value.rendezvous_server || undefined,
+      relay_server: rustdeskLocalConfig.value.relay_server || undefined,
+    })
+    await loadRustdeskConfig()
+    saved.value = true
+    setTimeout(() => (saved.value = false), 2000)
+  } catch (e) {
+    console.error('Failed to save RustDesk config:', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function regenerateRustdeskId() {
+  if (!confirm(t('extensions.rustdesk.confirmRegenerateId'))) return
+  rustdeskLoading.value = true
+  try {
+    await rustdeskConfigApi.regenerateId()
+    await loadRustdeskConfig()
+    await loadRustdeskPassword()
+  } catch (e) {
+    console.error('Failed to regenerate RustDesk ID:', e)
+  } finally {
+    rustdeskLoading.value = false
+  }
+}
+
+async function regenerateRustdeskPassword() {
+  if (!confirm(t('extensions.rustdesk.confirmRegeneratePassword'))) return
+  rustdeskLoading.value = true
+  try {
+    await rustdeskConfigApi.regeneratePassword()
+    await loadRustdeskConfig()
+    await loadRustdeskPassword()
+  } catch (e) {
+    console.error('Failed to regenerate RustDesk password:', e)
+  } finally {
+    rustdeskLoading.value = false
+  }
+}
+
+function copyToClipboard(text: string, type: 'id' | 'password') {
+  navigator.clipboard.writeText(text).then(() => {
+    rustdeskCopied.value = type
+    setTimeout(() => (rustdeskCopied.value = null), 2000)
+  })
+}
+
+function getRustdeskServiceStatusText(status: string | undefined): string {
+  if (!status) return t('extensions.rustdesk.notConfigured')
+  switch (status) {
+    case 'running': return t('extensions.running')
+    case 'starting': return t('extensions.starting')
+    case 'stopped': return t('extensions.stopped')
+    case 'not_initialized': return t('extensions.rustdesk.notInitialized')
+    default:
+      // Handle "error: xxx" format
+      if (status.startsWith('error:')) return t('extensions.failed')
+      return status
+  }
+}
+
+function getRustdeskRendezvousStatusText(status: string | null | undefined): string {
+  if (!status) return '-'
+  switch (status) {
+    case 'registered': return t('extensions.rustdesk.registered')
+    case 'connected': return t('extensions.rustdesk.connected')
+    case 'connecting': return t('extensions.rustdesk.connecting')
+    case 'disconnected': return t('extensions.rustdesk.disconnected')
+    default:
+      // Handle "error: xxx" format
+      if (status.startsWith('error:')) return t('extensions.failed')
+      return status
+  }
+}
+
+function getRustdeskStatusClass(status: string | null | undefined): string {
+  switch (status) {
+    case 'running':
+    case 'registered':
+    case 'connected': return 'bg-green-500'
+    case 'starting':
+    case 'connecting': return 'bg-yellow-500'
+    case 'stopped':
+    case 'not_initialized':
+    case 'disconnected': return 'bg-gray-400'
+    default:
+      // Handle "error: xxx" format
+      if (status?.startsWith('error:')) return 'bg-red-500'
+      return 'bg-gray-400'
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
   // Load theme preference
@@ -781,6 +929,8 @@ onMounted(async () => {
     loadExtensions(),
     loadAtxConfig(),
     loadAtxDevices(),
+    loadRustdeskConfig(),
+    loadRustdeskPassword(),
   ])
 })
 </script>
@@ -1620,6 +1770,137 @@ onMounted(async () => {
             <!-- Save button -->
             <div v-if="extensions?.easytier?.available" class="flex justify-end">
               <Button :disabled="loading || isExtRunning(extensions?.easytier?.status)" @click="saveExtensionConfig('easytier')">
+                <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
+              </Button>
+            </div>
+          </div>
+
+          <!-- RustDesk Section -->
+          <div v-show="activeSection === 'ext-rustdesk'" class="space-y-6">
+            <Card>
+              <CardHeader>
+                <div class="flex items-center justify-between">
+                  <div class="space-y-1.5">
+                    <CardTitle>{{ t('extensions.rustdesk.title') }}</CardTitle>
+                    <CardDescription>{{ t('extensions.rustdesk.desc') }}</CardDescription>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Badge :variant="rustdeskStatus?.service_status === 'Running' ? 'default' : 'secondary'">
+                      {{ getRustdeskServiceStatusText(rustdeskStatus?.service_status) }}
+                    </Badge>
+                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadRustdeskConfig" :disabled="rustdeskLoading">
+                      <RefreshCw :class="['h-4 w-4', rustdeskLoading ? 'animate-spin' : '']" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <!-- Status and controls -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div :class="['w-2 h-2 rounded-full', getRustdeskStatusClass(rustdeskStatus?.service_status)]" />
+                    <span class="text-sm">{{ getRustdeskServiceStatusText(rustdeskStatus?.service_status) }}</span>
+                    <template v-if="rustdeskStatus?.rendezvous_status">
+                      <span class="text-muted-foreground">|</span>
+                      <div :class="['w-2 h-2 rounded-full', getRustdeskStatusClass(rustdeskStatus?.rendezvous_status)]" />
+                      <span class="text-sm text-muted-foreground">{{ getRustdeskRendezvousStatusText(rustdeskStatus?.rendezvous_status) }}</span>
+                    </template>
+                  </div>
+                </div>
+                <Separator />
+
+                <!-- Config -->
+                <div class="grid gap-4">
+                  <div class="flex items-center justify-between">
+                    <Label>{{ t('extensions.autoStart') }}</Label>
+                    <Switch v-model="rustdeskLocalConfig.enabled" />
+                  </div>
+                  <div class="grid grid-cols-4 items-center gap-4">
+                    <Label class="text-right">{{ t('extensions.rustdesk.rendezvousServer') }}</Label>
+                    <div class="col-span-3 space-y-1">
+                      <Input
+                        v-model="rustdeskLocalConfig.rendezvous_server"
+                        :placeholder="t('extensions.rustdesk.rendezvousServerPlaceholder')"
+                      />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.rendezvousServerHint') }}</p>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-4 items-center gap-4">
+                    <Label class="text-right">{{ t('extensions.rustdesk.relayServer') }}</Label>
+                    <div class="col-span-3 space-y-1">
+                      <Input
+                        v-model="rustdeskLocalConfig.relay_server"
+                        :placeholder="t('extensions.rustdesk.relayServerPlaceholder')"
+                      />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.relayServerHint') }}</p>
+                    </div>
+                  </div>
+                </div>
+                <Separator />
+
+                <!-- Device Info -->
+                <div class="space-y-3">
+                  <h4 class="text-sm font-medium">{{ t('extensions.rustdesk.deviceInfo') }}</h4>
+
+                  <!-- Device ID -->
+                  <div class="grid grid-cols-4 items-center gap-4">
+                    <Label class="text-right">{{ t('extensions.rustdesk.deviceId') }}</Label>
+                    <div class="col-span-3 flex items-center gap-2">
+                      <code class="font-mono text-lg bg-muted px-3 py-1 rounded">{{ rustdeskConfig?.device_id || '-' }}</code>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-8 w-8"
+                        @click="copyToClipboard(rustdeskConfig?.device_id || '', 'id')"
+                        :disabled="!rustdeskConfig?.device_id"
+                      >
+                        <Check v-if="rustdeskCopied === 'id'" class="h-4 w-4 text-green-500" />
+                        <Copy v-else class="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" @click="regenerateRustdeskId" :disabled="rustdeskLoading">
+                        <RefreshCw class="h-4 w-4 mr-1" />
+                        {{ t('extensions.rustdesk.regenerateId') }}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <!-- Device Password (直接显示) -->
+                  <div class="grid grid-cols-4 items-center gap-4">
+                    <Label class="text-right">{{ t('extensions.rustdesk.devicePassword') }}</Label>
+                    <div class="col-span-3 flex items-center gap-2">
+                      <code class="font-mono text-lg bg-muted px-3 py-1 rounded">{{ rustdeskPassword?.device_password || '-' }}</code>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-8 w-8"
+                        @click="copyToClipboard(rustdeskPassword?.device_password || '', 'password')"
+                        :disabled="!rustdeskPassword?.device_password"
+                      >
+                        <Check v-if="rustdeskCopied === 'password'" class="h-4 w-4 text-green-500" />
+                        <Copy v-else class="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" @click="regenerateRustdeskPassword" :disabled="rustdeskLoading">
+                        <RefreshCw class="h-4 w-4 mr-1" />
+                        {{ t('extensions.rustdesk.regeneratePassword') }}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <!-- Keypair Status -->
+                  <div class="grid grid-cols-4 items-center gap-4">
+                    <Label class="text-right">{{ t('extensions.rustdesk.keypairGenerated') }}</Label>
+                    <div class="col-span-3">
+                      <Badge :variant="rustdeskConfig?.has_keypair ? 'default' : 'secondary'">
+                        {{ rustdeskConfig?.has_keypair ? t('common.yes') : t('common.no') }}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <!-- Save button -->
+            <div class="flex justify-end">
+              <Button :disabled="loading" @click="saveRustdeskConfig">
                 <Check v-if="saved" class="h-4 w-4 mr-2" /><Save v-else class="h-4 w-4 mr-2" />{{ saved ? t('common.success') : t('common.save') }}
               </Button>
             </div>

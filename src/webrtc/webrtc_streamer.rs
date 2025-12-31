@@ -293,6 +293,26 @@ impl WebRtcStreamer {
         Ok(pipeline)
     }
 
+    /// Ensure video pipeline is running and return it for external consumers
+    ///
+    /// This is a public wrapper around ensure_video_pipeline for external
+    /// components (like RustDesk) that need to share the encoded video stream.
+    pub async fn ensure_video_pipeline_for_external(
+        &self,
+        tx: broadcast::Sender<VideoFrame>,
+    ) -> Result<Arc<SharedVideoPipeline>> {
+        self.ensure_video_pipeline(tx).await
+    }
+
+    /// Get the current pipeline configuration (if pipeline is running)
+    pub async fn get_pipeline_config(&self) -> Option<SharedVideoPipelineConfig> {
+        if let Some(ref pipeline) = *self.video_pipeline.read().await {
+            Some(pipeline.config().await)
+        } else {
+            None
+        }
+    }
+
     // === Audio Management ===
 
     /// Check if audio is enabled

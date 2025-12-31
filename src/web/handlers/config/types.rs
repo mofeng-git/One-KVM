@@ -2,6 +2,7 @@ use serde::Deserialize;
 use typeshare::typeshare;
 use crate::config::*;
 use crate::error::AppError;
+use crate::rustdesk::config::RustDeskConfig;
 
 // ===== Video Config =====
 #[typeshare]
@@ -391,6 +392,63 @@ impl AudioConfigUpdate {
         }
         if let Some(ref quality) = self.quality {
             config.quality = quality.clone();
+        }
+    }
+}
+
+// ===== RustDesk Config =====
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct RustDeskConfigUpdate {
+    pub enabled: Option<bool>,
+    pub rendezvous_server: Option<String>,
+    pub relay_server: Option<String>,
+    pub device_password: Option<String>,
+}
+
+impl RustDeskConfigUpdate {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        // Validate rendezvous server format (should be host:port)
+        if let Some(ref server) = self.rendezvous_server {
+            if !server.is_empty() && !server.contains(':') {
+                return Err(AppError::BadRequest(
+                    "Rendezvous server must be in format 'host:port' (e.g., rs.example.com:21116)".into(),
+                ));
+            }
+        }
+        // Validate relay server format if provided
+        if let Some(ref server) = self.relay_server {
+            if !server.is_empty() && !server.contains(':') {
+                return Err(AppError::BadRequest(
+                    "Relay server must be in format 'host:port' (e.g., rs.example.com:21117)".into(),
+                ));
+            }
+        }
+        // Validate password (minimum 6 characters if provided)
+        if let Some(ref password) = self.device_password {
+            if !password.is_empty() && password.len() < 6 {
+                return Err(AppError::BadRequest(
+                    "Device password must be at least 6 characters".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn apply_to(&self, config: &mut RustDeskConfig) {
+        if let Some(enabled) = self.enabled {
+            config.enabled = enabled;
+        }
+        if let Some(ref server) = self.rendezvous_server {
+            config.rendezvous_server = server.clone();
+        }
+        if let Some(ref server) = self.relay_server {
+            config.relay_server = if server.is_empty() { None } else { Some(server.clone()) };
+        }
+        if let Some(ref password) = self.device_password {
+            if !password.is_empty() {
+                config.device_password = password.clone();
+            }
         }
     }
 }

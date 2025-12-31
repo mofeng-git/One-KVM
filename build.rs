@@ -14,8 +14,26 @@ fn main() {
 
     println!("cargo:rustc-env=BUILD_DATE={}", build_date);
 
+    // Compile protobuf files for RustDesk protocol
+    compile_protos();
+
     // Rerun if the script itself changes
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=protos/rendezvous.proto");
+    println!("cargo:rerun-if-changed=protos/message.proto");
+}
+
+/// Compile protobuf files using prost-build
+fn compile_protos() {
+    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+
+    prost_build::Config::new()
+        .out_dir(&out_dir)
+        .compile_protos(
+            &["protos/rendezvous.proto", "protos/message.proto"],
+            &["protos/"],
+        )
+        .expect("Failed to compile protobuf files");
 }
 
 /// Convert days since Unix epoch to year-month-day

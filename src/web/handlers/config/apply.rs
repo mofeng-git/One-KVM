@@ -360,3 +360,62 @@ pub async fn apply_audio_config(
 
     Ok(())
 }
+
+/// 应用 RustDesk 配置变更
+pub async fn apply_rustdesk_config(
+    state: &Arc<AppState>,
+    old_config: &crate::rustdesk::config::RustDeskConfig,
+    new_config: &crate::rustdesk::config::RustDeskConfig,
+) -> Result<()> {
+    tracing::info!("Applying RustDesk config changes...");
+
+    let mut rustdesk_guard = state.rustdesk.write().await;
+
+    // Check if service needs to be stopped
+    if old_config.enabled && !new_config.enabled {
+        // Disable service
+        if let Some(ref service) = *rustdesk_guard {
+            if let Err(e) = service.stop().await {
+                tracing::error!("Failed to stop RustDesk service: {}", e);
+            }
+            tracing::info!("RustDesk service stopped");
+        }
+        *rustdesk_guard = None;
+        return Ok(());
+    }
+
+    // Check if service needs to be started or restarted
+    if new_config.enabled {
+        let need_restart = old_config.rendezvous_server != new_config.rendezvous_server
+            || old_config.device_id != new_config.device_id
+            || old_config.device_password != new_config.device_password;
+
+        if rustdesk_guard.is_none() {
+            // Create new service
+            tracing::info!("Initializing RustDesk service...");
+            let service = crate::rustdesk::RustDeskService::new(
+                new_config.clone(),
+                state.stream_manager.clone(),
+                state.hid.clone(),
+                state.audio.clone(),
+            );
+            if let Err(e) = service.start().await {
+                tracing::error!("Failed to start RustDesk service: {}", e);
+            } else {
+                tracing::info!("RustDesk service started with ID: {}", new_config.device_id);
+            }
+            *rustdesk_guard = Some(std::sync::Arc::new(service));
+        } else if need_restart {
+            // Restart existing service with new config
+            if let Some(ref service) = *rustdesk_guard {
+                if let Err(e) = service.restart(new_config.clone()).await {
+                    tracing::error!("Failed to restart RustDesk service: {}", e);
+                } else {
+                    tracing::info!("RustDesk service restarted with ID: {}", new_config.device_id);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}

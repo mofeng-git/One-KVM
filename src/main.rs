@@ -17,6 +17,7 @@ use one_kvm::extensions::ExtensionManager;
 use one_kvm::hid::{HidBackendType, HidController};
 use one_kvm::msd::MsdController;
 use one_kvm::otg::OtgService;
+use one_kvm::rustdesk::RustDeskService;
 use one_kvm::state::AppState;
 use one_kvm::video::format::{PixelFormat, Resolution};
 use one_kvm::video::{Streamer, VideoStreamManager};
@@ -374,6 +375,29 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("Video stream manager initialized with mode: {:?}", initial_mode);
     }
 
+    // Create RustDesk service (optional, based on config)
+    let rustdesk = if config.rustdesk.is_valid() {
+        tracing::info!(
+            "Initializing RustDesk service: ID={} -> {}",
+            config.rustdesk.device_id,
+            config.rustdesk.rendezvous_addr()
+        );
+        let service = RustDeskService::new(
+            config.rustdesk.clone(),
+            stream_manager.clone(),
+            hid.clone(),
+            audio.clone(),
+        );
+        Some(Arc::new(service))
+    } else {
+        if config.rustdesk.enabled {
+            tracing::warn!("RustDesk enabled but configuration is incomplete (missing server or credentials)");
+        } else {
+            tracing::info!("RustDesk disabled in configuration");
+        }
+        None
+    };
+
     // Create application state
     let state = AppState::new(
         config_store.clone(),
@@ -385,11 +409,34 @@ async fn main() -> anyhow::Result<()> {
         msd,
         atx,
         audio,
+        rustdesk.clone(),
         extensions.clone(),
         events.clone(),
         shutdown_tx.clone(),
         data_dir.clone(),
     );
+
+    // Start RustDesk service if enabled
+    if let Some(ref service) = rustdesk {
+        if let Err(e) = service.start().await {
+            tracing::error!("Failed to start RustDesk service: {}", e);
+        } else {
+            // Save generated keypair and UUID to config
+            if let Some(updated_config) = service.save_credentials() {
+                if let Err(e) = config_store
+                    .update(|cfg| {
+                        cfg.rustdesk.public_key = updated_config.public_key.clone();
+                        cfg.rustdesk.private_key = updated_config.private_key.clone();
+                        cfg.rustdesk.uuid = updated_config.uuid.clone();
+                    })
+                    .await
+                {
+                    tracing::warn!("Failed to save RustDesk credentials: {}", e);
+                }
+            }
+            tracing::info!("RustDesk service started");
+        }
+    }
 
     // Start enabled extensions
     {
@@ -635,6 +682,15 @@ async fn cleanup(state: &Arc<AppState>) {
     // Stop all extensions
     state.extensions.stop_all().await;
     tracing::info!("Extensions stopped");
+
+    // Stop RustDesk service
+    if let Some(ref service) = *state.rustdesk.read().await {
+        if let Err(e) = service.stop().await {
+            tracing::warn!("Failed to stop RustDesk service: {}", e);
+        } else {
+            tracing::info!("RustDesk service stopped");
+        }
+    }
 
     // Stop video
     if let Err(e) = state.stream_manager.stop().await {

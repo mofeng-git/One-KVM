@@ -89,6 +89,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/config/atx", patch(handlers::config::update_atx_config))
         .route("/config/audio", get(handlers::config::get_audio_config))
         .route("/config/audio", patch(handlers::config::update_audio_config))
+        // RustDesk configuration endpoints
+        .route("/config/rustdesk", get(handlers::config::get_rustdesk_config))
+        .route("/config/rustdesk", patch(handlers::config::update_rustdesk_config))
+        .route("/config/rustdesk/status", get(handlers::config::get_rustdesk_status))
+        .route("/config/rustdesk/password", get(handlers::config::get_device_password))
+        .route("/config/rustdesk/regenerate-id", post(handlers::config::regenerate_device_id))
+        .route("/config/rustdesk/regenerate-password", post(handlers::config::regenerate_device_password))
         // MSD (Mass Storage Device) endpoints
         .route("/msd/status", get(handlers::msd_status))
         .route("/msd/images", get(handlers::msd_images_list))

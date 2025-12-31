@@ -253,3 +253,78 @@ export const extensionsApi = {
       body: JSON.stringify(config),
     }),
 }
+
+// ===== RustDesk 配置 API =====
+
+/** RustDesk 配置响应 */
+export interface RustDeskConfigResponse {
+  enabled: boolean
+  rendezvous_server: string
+  relay_server: string | null
+  device_id: string
+  has_password: boolean
+  has_keypair: boolean
+}
+
+/** RustDesk 状态响应 */
+export interface RustDeskStatusResponse {
+  config: RustDeskConfigResponse
+  service_status: string
+  rendezvous_status: string | null
+}
+
+/** RustDesk 配置更新 */
+export interface RustDeskConfigUpdate {
+  enabled?: boolean
+  rendezvous_server?: string
+  relay_server?: string
+  device_password?: string
+}
+
+/** RustDesk 密码响应 */
+export interface RustDeskPasswordResponse {
+  device_id: string
+  device_password: string
+}
+
+export const rustdeskConfigApi = {
+  /**
+   * 获取 RustDesk 配置
+   */
+  get: () => request<RustDeskConfigResponse>('/config/rustdesk'),
+
+  /**
+   * 更新 RustDesk 配置
+   */
+  update: (config: RustDeskConfigUpdate) =>
+    request<RustDeskConfigResponse>('/config/rustdesk', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+
+  /**
+   * 获取 RustDesk 完整状态
+   */
+  getStatus: () => request<RustDeskStatusResponse>('/config/rustdesk/status'),
+
+  /**
+   * 获取设备密码（管理员专用）
+   */
+  getPassword: () => request<RustDeskPasswordResponse>('/config/rustdesk/password'),
+
+  /**
+   * 重新生成设备 ID
+   */
+  regenerateId: () =>
+    request<RustDeskConfigResponse>('/config/rustdesk/regenerate-id', {
+      method: 'POST',
+    }),
+
+  /**
+   * 重新生成设备密码
+   */
+  regeneratePassword: () =>
+    request<RustDeskConfigResponse>('/config/rustdesk/regenerate-password', {
+      method: 'POST',
+    }),
+}

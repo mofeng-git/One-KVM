@@ -541,6 +541,78 @@ impl VideoStreamManager {
         self.streamer.frame_sender().await
     }
 
+    /// Subscribe to encoded video frames from the shared video pipeline
+    ///
+    /// This allows RustDesk (and other consumers) to receive H264/H265/VP8/VP9
+    /// encoded frames without running a separate encoder. The encoding is shared
+    /// with WebRTC sessions.
+    ///
+    /// This method ensures video capture is running before subscribing.
+    /// Returns None if video capture cannot be started or pipeline creation fails.
+    pub async fn subscribe_encoded_frames(
+        &self,
+    ) -> Option<tokio::sync::broadcast::Receiver<crate::video::shared_video_pipeline::EncodedVideoFrame>> {
+        // 1. Ensure video capture is initialized
+        if self.streamer.state().await == StreamerState::Uninitialized {
+            tracing::info!("Initializing video capture for encoded frame subscription");
+            if let Err(e) = self.streamer.init_auto().await {
+                tracing::error!("Failed to initialize video capture for encoded frames: {}", e);
+                return None;
+            }
+        }
+
+        // 2. Ensure video capture is running (streaming)
+        if self.streamer.state().await != StreamerState::Streaming {
+            tracing::info!("Starting video capture for encoded frame subscription");
+            if let Err(e) = self.streamer.start().await {
+                tracing::error!("Failed to start video capture for encoded frames: {}", e);
+                return None;
+            }
+            // Wait for capture to stabilize
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+
+        // 3. Get frame sender from running capture
+        let frame_tx = match self.streamer.frame_sender().await {
+            Some(tx) => tx,
+            None => {
+                tracing::warn!("Cannot subscribe to encoded frames: no frame sender available");
+                return None;
+            }
+        };
+
+        // 4. Synchronize WebRTC config with actual capture format
+        let (format, resolution, fps) = self.streamer.current_video_config().await;
+        tracing::info!(
+            "Connecting encoded frame subscription: {}x{} {:?} @ {}fps",
+            resolution.width, resolution.height, format, fps
+        );
+        self.webrtc_streamer.update_video_config(resolution, format, fps).await;
+
+        // 5. Use WebRtcStreamer to ensure the shared video pipeline is running
+        // This will create the pipeline if needed
+        match self.webrtc_streamer.ensure_video_pipeline_for_external(frame_tx).await {
+            Ok(pipeline) => Some(pipeline.subscribe()),
+            Err(e) => {
+                tracing::error!("Failed to start shared video pipeline: {}", e);
+                None
+            }
+        }
+    }
+
+    /// Get the current video encoding configuration from the shared pipeline
+    pub async fn get_encoding_config(&self) -> Option<crate::video::shared_video_pipeline::SharedVideoPipelineConfig> {
+        self.webrtc_streamer.get_pipeline_config().await
+    }
+
+    /// Set video codec for the shared video pipeline
+    ///
+    /// This allows external consumers (like RustDesk) to set the video codec
+    /// before subscribing to encoded frames.
+    pub async fn set_video_codec(&self, codec: crate::video::encoder::VideoCodecType) -> crate::error::Result<()> {
+        self.webrtc_streamer.set_video_codec(codec).await
+    }
+
     /// Publish event to event bus
     async fn publish_event(&self, event: SystemEvent) {
         if let Some(ref events) = *self.events.read().await {
