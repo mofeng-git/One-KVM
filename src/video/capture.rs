@@ -143,7 +143,7 @@ impl VideoCapturer {
     /// Create a new video capturer
     pub fn new(config: CaptureConfig) -> Self {
         let (state_tx, state_rx) = watch::channel(CaptureState::Stopped);
-        let (frame_tx, _) = broadcast::channel(16); // Buffer up to 16 frames
+        let (frame_tx, _) = broadcast::channel(64); // Buffer up to 64 frames for software encoding
 
         Self {
             config,

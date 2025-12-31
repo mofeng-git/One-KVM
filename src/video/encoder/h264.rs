@@ -126,7 +126,7 @@ impl Default for H264Config {
     fn default() -> Self {
         Self {
             base: EncoderConfig::default(),
-            bitrate_kbps: 8000,
+            bitrate_kbps: 1000,
             gop_size: 30,
             fps: 30,
             input_format: H264InputFormat::Nv12,

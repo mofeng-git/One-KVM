@@ -15,10 +15,41 @@ extern "C" {
 #define LOG_MODULE "UTIL"
 #include "log.h"
 
+namespace {
+
+// Helper function: check if encoder is software H264 (libx264)
+bool is_software_h264(const std::string &name) {
+  if (name != "h264" && name != "libx264") return false;
+  // Exclude all hardware encoders
+  static const char* hw_suffixes[] = {
+    "nvenc", "amf", "qsv", "vaapi", "rkmpp",
+    "v4l2m2m", "videotoolbox", "mediacodec", "_mf"
+  };
+  for (const auto& suffix : hw_suffixes) {
+    if (name.find(suffix) != std::string::npos) return false;
+  }
+  return true;
+}
+
+// Helper function: check if encoder is software HEVC (libx265)
+bool is_software_hevc(const std::string &name) {
+  if (name != "hevc" && name != "libx265") return false;
+  static const char* hw_suffixes[] = {
+    "nvenc", "amf", "qsv", "vaapi", "rkmpp",
+    "v4l2m2m", "videotoolbox", "mediacodec", "_mf"
+  };
+  for (const auto& suffix : hw_suffixes) {
+    if (name.find(suffix) != std::string::npos) return false;
+  }
+  return true;
+}
+
+} // anonymous namespace
+
 namespace util_encode {
 
 void set_av_codec_ctx(AVCodecContext *c, const std::string &name, int kbs,
-                      int gop, int fps) {
+                      int gop, int fps, int thread_count) {
   c->has_b_frames = 0;
   c->max_b_frames = 0;
   if (gop > 0 && gop < std::numeric_limits<int16_t>::max()) {
@@ -48,9 +79,19 @@ void set_av_codec_ctx(AVCodecContext *c, const std::string &name, int kbs,
   c->framerate = av_make_q(fps, 1);
   c->flags |= AV_CODEC_FLAG2_LOCAL_HEADER;
   c->flags |= AV_CODEC_FLAG_LOW_DELAY;
-  c->slices = 1;
-  c->thread_type = FF_THREAD_SLICE;
-  c->thread_count = c->slices;
+
+  // Threading configuration: use frame-based threading for software encoders
+  if (is_software_h264(name) || is_software_hevc(name)) {
+    // Software encoders benefit from frame-level parallelism
+    c->thread_type = FF_THREAD_FRAME;
+    c->thread_count = thread_count > 0 ? thread_count : 4;
+    c->slices = 1;
+  } else {
+    // Hardware encoders typically use slice-based threading
+    c->slices = 1;
+    c->thread_type = FF_THREAD_SLICE;
+    c->thread_count = c->slices;
+  }
 
   // https://github.com/obsproject/obs-studio/blob/3cc7dc0e7cf8b01081dc23e432115f7efd0c8877/plugins/obs-ffmpeg/obs-ffmpeg-mux.c#L160
   c->color_range = AVCOL_RANGE_MPEG;
@@ -58,7 +99,10 @@ void set_av_codec_ctx(AVCodecContext *c, const std::string &name, int kbs,
   c->color_primaries = AVCOL_PRI_SMPTE170M;
   c->color_trc = AVCOL_TRC_SMPTE170M;
 
-  if (name.find("h264") != std::string::npos) {
+  // Profile selection: use BASELINE for software H264 (faster, simpler)
+  if (is_software_h264(name)) {
+    c->profile = FF_PROFILE_H264_BASELINE;  // Simpler profile for real-time
+  } else if (name.find("h264") != std::string::npos) {
     c->profile = FF_PROFILE_H264_HIGH;
   } else if (name.find("hevc") != std::string::npos) {
     c->profile = FF_PROFILE_HEVC_MAIN;
@@ -126,6 +170,44 @@ bool set_lantency_free(void *priv_data, const std::string &name) {
         // row-mt failure is not fatal
       }
     }
+  }
+  // libx264 software encoder - zero latency tuning
+  if (is_software_h264(name)) {
+    // zerolatency: disable B-frames, reduce lookahead, disable CABAC etc.
+    if ((ret = av_opt_set(priv_data, "tune", "zerolatency", 0)) < 0) {
+      LOG_ERROR(std::string("libx264 set tune zerolatency failed, ret = ") + av_err2str(ret));
+      // tune failure is not fatal, continue
+    }
+    // Disable B-frame adaptation (extra safety, zerolatency already includes this)
+    av_opt_set_int(priv_data, "b-adapt", 0, 0);
+    // Set low rc-lookahead for minimal latency
+    av_opt_set_int(priv_data, "rc-lookahead", 0, 0);
+    // Use sliced-threads for lower latency (encode slices in parallel within same frame)
+    av_opt_set_int(priv_data, "sliced-threads", 1, 0);
+    // Disable mb-tree for lower memory and faster encoding
+    av_opt_set_int(priv_data, "mbtree", 0, 0);
+    // Disable adaptive quantization for speed
+    av_opt_set_int(priv_data, "aq-mode", 0, 0);
+    // Use simpler motion estimation for speed
+    av_opt_set(priv_data, "me", "dia", 0);  // diamond search (fastest)
+    // Reduce subpixel motion estimation refinement
+    av_opt_set_int(priv_data, "subq", 1, 0);  // 1 = fastest
+    // Reduce reference frames for speed
+    av_opt_set_int(priv_data, "refs", 1, 0);
+  }
+  // libx265 software encoder - zero latency tuning
+  if (is_software_hevc(name)) {
+    if ((ret = av_opt_set(priv_data, "tune", "zerolatency", 0)) < 0) {
+      LOG_ERROR(std::string("libx265 set tune zerolatency failed, ret = ") + av_err2str(ret));
+      // tune failure is not fatal, continue
+    }
+    // x265 specific low-latency parameters
+    // bframes=0: no B-frames
+    // rc-lookahead=0: no lookahead
+    // no-slices-wpp=1: disable wavefront parallel processing for lower latency
+    // frame-threads=1: single frame thread for lower latency
+    av_opt_set(priv_data, "x265-params",
+               "bframes=0:rc-lookahead=0:ref=1:no-b-adapt=1:aq-mode=0", 0);
   }
   return true;
 }
@@ -219,6 +301,50 @@ bool set_quality(void *priv_data, const std::string &name, int quality) {
                   av_err2str(ret));
         return false;
       }
+    }
+  }
+  // libx264 software encoder presets
+  if (is_software_h264(name)) {
+    const char* preset = nullptr;
+    switch (quality) {
+    case Quality_High:
+      preset = "veryfast";  // Good quality while maintaining fast encoding
+      break;
+    case Quality_Medium:
+      preset = "superfast"; // Balance between speed and quality
+      break;
+    case Quality_Low:
+      preset = "ultrafast"; // Fastest speed, lowest CPU usage
+      break;
+    default:
+      preset = "superfast"; // Default to superfast for embedded devices
+      break;
+    }
+    if ((ret = av_opt_set(priv_data, "preset", preset, 0)) < 0) {
+      LOG_ERROR(std::string("libx264 set preset ") + preset + " failed, ret = " + av_err2str(ret));
+      return false;
+    }
+  }
+  // libx265 software encoder presets
+  if (is_software_hevc(name)) {
+    const char* preset = nullptr;
+    switch (quality) {
+    case Quality_High:
+      preset = "veryfast";
+      break;
+    case Quality_Medium:
+      preset = "superfast";
+      break;
+    case Quality_Low:
+      preset = "ultrafast";
+      break;
+    default:
+      preset = "superfast";
+      break;
+    }
+    if ((ret = av_opt_set(priv_data, "preset", preset, 0)) < 0) {
+      LOG_ERROR(std::string("libx265 set preset ") + preset + " failed, ret = " + av_err2str(ret));
+      return false;
     }
   }
   return true;

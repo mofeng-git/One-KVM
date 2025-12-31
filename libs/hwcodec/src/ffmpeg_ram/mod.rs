@@ -119,14 +119,14 @@ impl CodecInfo {
     pub fn soft() -> CodecInfos {
         CodecInfos {
             h264: Some(CodecInfo {
-                name: "h264".to_owned(),
+                name: "libx264".to_owned(),
                 mc_name: Default::default(),
                 format: H264,
                 hwdevice: AV_HWDEVICE_TYPE_NONE,
                 priority: Priority::Soft as _,
             }),
             h265: Some(CodecInfo {
-                name: "hevc".to_owned(),
+                name: "libx265".to_owned(),
                 mc_name: Default::default(),
                 format: H265,
                 hwdevice: AV_HWDEVICE_TYPE_NONE,

@@ -179,7 +179,7 @@ const selectedDevice = ref<string>('')
 const selectedFormat = ref<string>('')
 const selectedResolution = ref<string>('')
 const selectedFps = ref<number>(30)
-const selectedBitrate = ref<number[]>([8000])
+const selectedBitrate = ref<number[]>([1000])
 
 // UI state
 const applying = ref(false)

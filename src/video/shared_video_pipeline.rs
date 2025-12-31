@@ -77,7 +77,7 @@ impl Default for SharedVideoPipelineConfig {
             resolution: Resolution::HD720,
             input_format: PixelFormat::Yuyv,
             output_codec: VideoEncoderType::H264,
-            bitrate_kbps: 8000,
+            bitrate_kbps: 1000,
             fps: 30,
             gop_size: 30,
             encoder_backend: None,
@@ -311,7 +311,7 @@ impl SharedVideoPipeline {
             config.input_format
         );
 
-        let (frame_tx, _) = broadcast::channel(16);
+        let (frame_tx, _) = broadcast::channel(64);  // Increased from 16 for software encoding
         let (running_tx, running_rx) = watch::channel(false);
         let nv12_size = (config.resolution.width * config.resolution.height * 3 / 2) as usize;
         let yuv420p_size = nv12_size; // Same size as NV12

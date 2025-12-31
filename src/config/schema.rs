@@ -375,7 +375,7 @@ impl Default for StreamConfig {
         Self {
             mode: StreamMode::Mjpeg,
             encoder: EncoderType::Auto,
-            bitrate_kbps: 8000,
+            bitrate_kbps: 1000,
             gop_size: 30,
             stun_server: Some("stun:stun.l.google.com:19302".to_string()),
             turn_server: None,

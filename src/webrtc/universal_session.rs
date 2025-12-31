@@ -64,7 +64,7 @@ impl Default for UniversalSessionConfig {
             codec: VideoEncoderType::H264,
             resolution: Resolution::HD720,
             input_format: PixelFormat::Mjpeg,
-            bitrate_kbps: 8000,
+            bitrate_kbps: 1000,
             fps: 30,
             gop_size: 30,
             audio_enabled: false,

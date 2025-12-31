@@ -35,8 +35,8 @@ impl Default for WebRtcConfig {
             turn_servers: vec![],
             enable_datachannel: true,
             video_codec: VideoCodec::H264,
-            target_bitrate_kbps: 8000,
-            max_bitrate_kbps: 5000,
+            target_bitrate_kbps: 1000,
+            max_bitrate_kbps: 2000,
             min_bitrate_kbps: 500,
             enable_audio: true,
         }
