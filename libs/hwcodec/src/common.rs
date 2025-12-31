@@ -5,9 +5,6 @@
 use serde_derive::{Deserialize, Serialize};
 include!(concat!(env!("OUT_DIR"), "/common_ffi.rs"));
 
-pub(crate) const DATA_H264_720P: &[u8] = include_bytes!("res/720p.h264");
-pub(crate) const DATA_H265_720P: &[u8] = include_bytes!("res/720p.h265");
-
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Driver {
     NV,
@@ -31,14 +28,8 @@ pub(crate) fn supported_gpu(_encode: bool) -> (bool, bool, bool) {
     unsafe {
         #[cfg(windows)]
         {
-            #[cfg(feature = "vram")]
-            return (
-                _encode && crate::vram::nv::nv_encode_driver_support() == 0
-                    || !_encode && crate::vram::nv::nv_decode_driver_support() == 0,
-                crate::vram::amf::amf_driver_support() == 0,
-                crate::vram::mfx::mfx_driver_support() == 0,
-            );
-            #[cfg(not(feature = "vram"))]
+            // Without VRAM feature, assume all GPU types might be available
+            // FFmpeg will handle the actual detection
             return (true, true, true);
         }
 
@@ -53,55 +44,21 @@ pub(crate) fn supported_gpu(_encode: bool) -> (bool, bool, bool) {
     }
 }
 
-#[cfg(target_os = "macos")]
-pub(crate) fn get_video_toolbox_codec_support() -> (bool, bool, bool, bool) {
-    use std::ffi::c_void;
-
-    extern "C" {
-        fn checkVideoToolboxSupport(
-            h264_encode: *mut i32,
-            h265_encode: *mut i32,
-            h264_decode: *mut i32,
-            h265_decode: *mut i32,
-        ) -> c_void;
-    }
-
-    let mut h264_encode = 0;
-    let mut h265_encode = 0;
-    let mut h264_decode = 0;
-    let mut h265_decode = 0;
-    unsafe {
-        checkVideoToolboxSupport(
-            &mut h264_encode as *mut _,
-            &mut h265_encode as *mut _,
-            &mut h264_decode as *mut _,
-            &mut h265_decode as *mut _,
-        );
-    }
-    (
-        h264_encode == 1,
-        h265_encode == 1,
-        h264_decode == 1,
-        h265_decode == 1,
-    )
-}
-
 pub fn get_gpu_signature() -> u64 {
-    #[cfg(any(windows, target_os = "macos"))]
+    #[cfg(windows)]
     {
         extern "C" {
             pub fn GetHwcodecGpuSignature() -> u64;
         }
         unsafe { GetHwcodecGpuSignature() }
     }
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(not(windows))]
     {
         0
     }
 }
 
-// called by child process
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub fn setup_parent_death_signal() {
     use std::sync::Once;
 
@@ -123,7 +80,6 @@ pub fn setup_parent_death_signal() {
     });
 }
 
-// called by parent process
 #[cfg(windows)]
 pub fn child_exit_when_parent_exit(child_process_id: u32) -> bool {
     unsafe {

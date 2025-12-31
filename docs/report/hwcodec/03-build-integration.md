@@ -7,43 +7,35 @@ libs/hwcodec/
 ├── Cargo.toml           # 包配置
 ├── Cargo.lock           # 依赖锁定
 ├── build.rs             # 构建脚本
-├── src/                 # Rust 源码
-│   ├── lib.rs           # 库入口
-│   ├── common.rs        # 公共定义
-│   ├── ffmpeg.rs        # FFmpeg 集成
-│   ├── mux.rs           # 混流器
-│   ├── android.rs       # Android 支持
-│   ├── ffmpeg_ram/      # RAM 编解码
-│   │   ├── mod.rs
-│   │   ├── encode.rs
-│   │   └── decode.rs
-│   ├── vram/            # GPU 编解码 (Windows)
-│   │   ├── mod.rs
-│   │   ├── encode.rs
-│   │   ├── decode.rs
-│   │   └── ...
-│   └── res/             # 测试资源
-│       ├── 720p.h264
-│       └── 720p.h265
-├── cpp/                 # C++ 源码
-│   ├── common/          # 公共代码
-│   ├── ffmpeg_ram/      # FFmpeg RAM 实现
-│   ├── ffmpeg_vram/     # FFmpeg VRAM 实现
-│   ├── nv/              # NVIDIA 实现
-│   ├── amf/             # AMD 实现
-│   ├── mfx/             # Intel 实现
-│   ├── mux/             # 混流实现
-│   └── yuv/             # YUV 处理
-├── externals/           # 外部 SDK (Git 子模块)
-│   ├── nv-codec-headers_n12.1.14.0/
-│   ├── Video_Codec_SDK_12.1.14/
-│   ├── AMF_v1.4.35/
-│   └── MediaSDK_22.5.4/
-├── dev/                 # 开发工具
-│   ├── capture/         # 捕获工具
-│   ├── render/          # 渲染工具
-│   └── tool/            # 通用工具
-└── examples/            # 示例程序
+└── src/                 # Rust 源码
+    ├── lib.rs           # 库入口
+    ├── common.rs        # 公共定义
+    ├── ffmpeg.rs        # FFmpeg 集成
+    └── ffmpeg_ram/      # RAM 编解码
+        ├── mod.rs
+        ├── encode.rs
+        └── decode.rs
+└── cpp/                 # C++ 源码
+    ├── common/          # 公共代码
+    │   ├── log.cpp
+    │   ├── log.h
+    │   ├── util.cpp
+    │   ├── util.h
+    │   ├── callback.h
+    │   ├── common.h
+    │   └── platform/
+    │       ├── linux/
+    │       │   ├── linux.cpp
+    │       │   └── linux.h
+    │       └── win/
+    │           ├── win.cpp
+    │           └── win.h
+    ├── ffmpeg_ram/      # FFmpeg RAM 实现
+    │   ├── ffmpeg_ram_encode.cpp
+    │   ├── ffmpeg_ram_decode.cpp
+    │   └── ffmpeg_ram_ffi.h
+    └── yuv/             # YUV 处理
+        └── yuv.cpp
 ```
 
 ## 2. Cargo 配置
@@ -53,12 +45,12 @@ libs/hwcodec/
 ```toml
 [package]
 name = "hwcodec"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2021"
+description = "Hardware video codec for IP-KVM (Windows/Linux)"
 
 [features]
 default = []
-vram = []  # GPU VRAM 直接编解码 (仅 Windows)
 
 [dependencies]
 log = "0.4"              # 日志
@@ -72,26 +64,23 @@ bindgen = "0.59"         # FFI 绑定生成
 
 [dev-dependencies]
 env_logger = "0.10"      # 日志输出
-rand = "0.8"             # 随机数
 ```
 
-### 2.2 Feature 说明
+### 2.2 与原版的区别
 
-| Feature | 说明 | 平台 |
-|---------|------|------|
-| `default` | 基础功能 | 全平台 |
-| `vram` | GPU VRAM 直接编解码 | 仅 Windows |
+| 特性 | 原版 (RustDesk) | 简化版 (One-KVM) |
+|------|-----------------|------------------|
+| `vram` feature | ✓ | ✗ (已移除) |
+| 外部 SDK | 需要 | 不需要 |
+| 版本号 | 0.7.1 | 0.8.0 |
+| 目标平台 | Windows/Linux/macOS/Android | Windows/Linux |
 
 ### 2.3 使用方式
 
 ```toml
-# 基础使用
+# 在 One-KVM 项目中使用
 [dependencies]
 hwcodec = { path = "libs/hwcodec" }
-
-# 启用 VRAM 功能 (Windows)
-[dependencies]
-hwcodec = { path = "libs/hwcodec", features = ["vram"] }
 ```
 
 ## 3. 构建脚本详解 (build.rs)
@@ -109,11 +98,7 @@ fn main() {
     // 2. 构建 FFmpeg 相关模块
     ffmpeg::build_ffmpeg(&mut builder);
 
-    // 3. 构建 SDK 模块 (Windows + vram feature)
-    #[cfg(all(windows, feature = "vram"))]
-    sdk::build_sdk(&mut builder);
-
-    // 4. 编译生成静态库
+    // 3. 编译生成静态库
     builder.static_crt(true).compile("hwcodec");
 }
 ```
@@ -138,9 +123,6 @@ fn build_common(builder: &mut Build) {
 
     #[cfg(target_os = "linux")]
     builder.file(common_dir.join("platform/linux/linux.cpp"));
-
-    #[cfg(target_os = "macos")]
-    builder.file(common_dir.join("platform/mac/mac.mm"));
 
     // 工具代码
     builder.files([
@@ -168,11 +150,8 @@ mod ffmpeg {
         // 链接系统库
         link_os();
 
-        // 构建子模块
+        // 构建 FFmpeg RAM 模块
         build_ffmpeg_ram(builder);
-        #[cfg(feature = "vram")]
-        build_ffmpeg_vram(builder);
-        build_mux(builder);
     }
 }
 ```
@@ -186,8 +165,6 @@ fn link_vcpkg(builder: &mut Build, path: PathBuf) -> PathBuf {
     // 目标平台识别
     let target = match (target_os, target_arch) {
         ("windows", "x86_64") => "x64-windows-static",
-        ("macos", "x86_64") => "x64-osx",
-        ("macos", "aarch64") => "arm64-osx",
         ("linux", arch) => format!("{}-linux", arch),
         _ => panic!("unsupported platform"),
     };
@@ -239,56 +216,11 @@ fn link_os() {
     let libs: Vec<&str> = match target_os.as_str() {
         "windows" => vec!["User32", "bcrypt", "ole32", "advapi32"],
         "linux" => vec!["drm", "X11", "stdc++", "z"],
-        "macos" | "ios" => vec!["c++", "m"],
-        "android" => vec!["z", "m", "android", "atomic", "mediandk"],
         _ => panic!("unsupported os"),
     };
 
     for lib in libs {
         println!("cargo:rustc-link-lib={}", lib);
-    }
-
-    // macOS 框架
-    if target_os == "macos" || target_os == "ios" {
-        for framework in ["CoreFoundation", "CoreVideo", "CoreMedia",
-                         "VideoToolbox", "AVFoundation"] {
-            println!("cargo:rustc-link-lib=framework={}", framework);
-        }
-    }
-}
-```
-
-### 3.6 SDK 模块构建 (Windows)
-
-```rust
-#[cfg(all(windows, feature = "vram"))]
-mod sdk {
-    pub fn build_sdk(builder: &mut Build) {
-        build_amf(builder);  // AMD AMF
-        build_nv(builder);   // NVIDIA
-        build_mfx(builder);  // Intel MFX
-    }
-
-    fn build_nv(builder: &mut Build) {
-        let sdk_path = externals_dir.join("Video_Codec_SDK_12.1.14");
-
-        // 包含 SDK 头文件
-        builder.includes([
-            sdk_path.join("Interface"),
-            sdk_path.join("Samples/Utils"),
-            sdk_path.join("Samples/NvCodec"),
-        ]);
-
-        // 编译 SDK 源文件
-        builder.file(sdk_path.join("Samples/NvCodec/NvEncoder/NvEncoder.cpp"));
-        builder.file(sdk_path.join("Samples/NvCodec/NvEncoder/NvEncoderD3D11.cpp"));
-        builder.file(sdk_path.join("Samples/NvCodec/NvDecoder/NvDecoder.cpp"));
-
-        // 编译封装代码
-        builder.files([
-            nv_dir.join("nv_encode.cpp"),
-            nv_dir.join("nv_decode.cpp"),
-        ]);
     }
 }
 ```
@@ -332,40 +264,10 @@ impl bindgen::callbacks::ParseCallbacks for CommonCallbacks {
 | `common_ffi.rs` | `common.h`, `callback.h` | 枚举、常量、回调类型 |
 | `ffmpeg_ffi.rs` | `ffmpeg_ffi.h` | FFmpeg 日志级别、函数 |
 | `ffmpeg_ram_ffi.rs` | `ffmpeg_ram_ffi.h` | 编解码器函数 |
-| `mux_ffi.rs` | `mux_ffi.h` | 混流器函数 |
 
-## 5. 外部依赖管理
+## 5. 平台构建指南
 
-### 5.1 Git 子模块
-
-```bash
-# 初始化子模块
-git submodule update --init --recursive
-
-# 更新子模块
-git submodule update --remote externals
-```
-
-### 5.2 子模块配置 (.gitmodules)
-
-```
-[submodule "externals"]
-    path = libs/hwcodec/externals
-    url = https://github.com/rustdesk-org/externals.git
-```
-
-### 5.3 依赖版本
-
-| 依赖 | 版本 | 用途 |
-|------|------|------|
-| nv-codec-headers | n12.1.14.0 | NVIDIA FFmpeg 编码头 |
-| Video_Codec_SDK | 12.1.14 | NVIDIA 编解码 SDK |
-| AMF | v1.4.35 | AMD Advanced Media Framework |
-| MediaSDK | 22.5.4 | Intel Media SDK |
-
-## 6. 平台构建指南
-
-### 6.1 Linux 构建
+### 5.1 Linux 构建
 
 ```bash
 # 安装 FFmpeg 开发库
@@ -374,11 +276,14 @@ sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
 # 安装其他依赖
 sudo apt install libdrm-dev libx11-dev pkg-config
 
+# 安装 clang (bindgen 需要)
+sudo apt install clang libclang-dev
+
 # 构建
 cargo build --release -p hwcodec
 ```
 
-### 6.2 Windows 构建 (VCPKG)
+### 5.2 Windows 构建 (VCPKG)
 
 ```powershell
 # 安装 VCPKG
@@ -393,25 +298,10 @@ cd vcpkg
 $env:VCPKG_ROOT = "C:\path\to\vcpkg"
 
 # 构建
-cargo build --release -p hwcodec --features vram
-```
-
-### 6.3 macOS 构建
-
-```bash
-# 安装 FFmpeg (Homebrew)
-brew install ffmpeg pkg-config
-
-# 或使用 VCPKG
-export VCPKG_ROOT=/path/to/vcpkg
-vcpkg install ffmpeg:arm64-osx  # Apple Silicon
-vcpkg install ffmpeg:x64-osx    # Intel
-
-# 构建
 cargo build --release -p hwcodec
 ```
 
-### 6.4 交叉编译
+### 5.3 交叉编译
 
 ```bash
 # 安装 cross
@@ -424,9 +314,9 @@ cross build --release -p hwcodec --target aarch64-unknown-linux-gnu
 cross build --release -p hwcodec --target armv7-unknown-linux-gnueabihf
 ```
 
-## 7. 集成到 One-KVM
+## 6. 集成到 One-KVM
 
-### 7.1 依赖配置
+### 6.1 依赖配置
 
 ```toml
 # Cargo.toml
@@ -434,12 +324,12 @@ cross build --release -p hwcodec --target armv7-unknown-linux-gnueabihf
 hwcodec = { path = "libs/hwcodec" }
 ```
 
-### 7.2 使用示例
+### 6.2 使用示例
 
 ```rust
 use hwcodec::ffmpeg_ram::encode::{Encoder, EncodeContext};
 use hwcodec::ffmpeg_ram::decode::{Decoder, DecodeContext};
-use hwcodec::ffmpeg::AVPixelFormat;
+use hwcodec::ffmpeg::{AVPixelFormat, AVHWDeviceType};
 
 // 检测可用编码器
 let encoders = Encoder::available_encoders(ctx, None);
@@ -458,31 +348,41 @@ let encoder = Encoder::new(EncodeContext {
 
 // 编码
 let frames = encoder.encode(&yuv_data, pts_ms)?;
+
+// 创建 MJPEG 解码器 (IP-KVM 专用)
+let decoder = Decoder::new(DecodeContext {
+    name: "mjpeg".to_string(),
+    device_type: AVHWDeviceType::AV_HWDEVICE_TYPE_NONE,
+    thread_count: 4,
+})?;
+
+// 解码
+let frames = decoder.decode(&mjpeg_data)?;
 ```
 
-### 7.3 日志集成
+### 6.3 日志集成
 
 ```rust
 // hwcodec 使用 log crate，与 One-KVM 日志系统兼容
 use log::{debug, info, warn, error};
 
-// C++ 层日志通过回调传递
+// C++ 层日志通过回调传递到 Rust
 #[no_mangle]
-pub extern "C" fn hwcodec_log(level: i32, message: *const c_char) {
+pub extern "C" fn hwcodec_av_log_callback(level: i32, message: *const c_char) {
+    // 转发到 Rust log 系统
     match level {
-        0 => error!("{}", message),
-        1 => warn!("{}", message),
-        2 => info!("{}", message),
-        3 => debug!("{}", message),
-        4 => trace!("{}", message),
+        AV_LOG_ERROR => error!("{}", message),
+        AV_LOG_WARNING => warn!("{}", message),
+        AV_LOG_INFO => info!("{}", message),
+        AV_LOG_DEBUG => debug!("{}", message),
         _ => {}
     }
 }
 ```
 
-## 8. 故障排除
+## 7. 故障排除
 
-### 8.1 编译错误
+### 7.1 编译错误
 
 **FFmpeg 未找到**:
 ```
@@ -502,7 +402,7 @@ error: failed to run custom build command for `hwcodec`
 sudo apt install clang libclang-dev
 ```
 
-### 8.2 链接错误
+### 7.2 链接错误
 
 **符号未定义**:
 ```
@@ -521,7 +421,7 @@ sudo ldconfig
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 ```
 
-### 8.3 运行时错误
+### 7.3 运行时错误
 
 **硬件编码器不可用**:
 ```
@@ -537,3 +437,41 @@ Encoder h264_vaapi test failed
 avcodec_receive_frame failed, ret = -11
 ```
 解决: 这通常表示需要更多输入数据 (EAGAIN)，是正常行为
+
+## 8. 与原版 RustDesk hwcodec 的构建差异
+
+### 8.1 移除的构建步骤
+
+| 步骤 | 原因 |
+|------|------|
+| `build_mux()` | 移除了 Mux 模块 |
+| `build_ffmpeg_vram()` | 移除了 VRAM 模块 |
+| `sdk::build_sdk()` | 移除了外部 SDK 依赖 |
+| macOS 框架链接 | 移除了 macOS 支持 |
+| Android NDK 链接 | 移除了 Android 支持 |
+
+### 8.2 简化的构建流程
+
+```
+原版构建流程:
+build.rs
+├── build_common()
+├── ffmpeg::build_ffmpeg()
+│   ├── build_ffmpeg_ram()
+│   ├── build_ffmpeg_vram()  [已移除]
+│   └── build_mux()          [已移除]
+└── sdk::build_sdk()         [已移除]
+
+简化版构建流程:
+build.rs
+├── build_common()
+└── ffmpeg::build_ffmpeg()
+    └── build_ffmpeg_ram()
+```
+
+### 8.3 优势
+
+1. **更快的编译**: 无需编译外部 SDK 代码
+2. **更少的依赖**: 无需下载 ~9MB 的外部 SDK
+3. **更简单的维护**: 代码量减少约 67%
+4. **更小的二进制**: 不包含未使用的功能

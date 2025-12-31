@@ -1,11 +1,6 @@
 pub mod common;
 pub mod ffmpeg;
 pub mod ffmpeg_ram;
-pub mod mux;
-#[cfg(all(windows, feature = "vram"))]
-pub mod vram;
-#[cfg(target_os = "android")]
-pub mod android;
 
 #[no_mangle]
 pub extern "C" fn hwcodec_log(level: i32, message: *const std::os::raw::c_char) {

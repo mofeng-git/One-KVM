@@ -2,26 +2,24 @@
 
 ## 1. 项目概述
 
-hwcodec 是一个基于 FFmpeg 的硬件视频编解码库，来源于 RustDesk 项目并针对 One-KVM 进行了定制优化。该库提供跨平台的 GPU 加速视频编解码能力，支持多个 GPU 厂商和多种编码标准。
+hwcodec 是一个基于 FFmpeg 的硬件视频编解码库，来源于 RustDesk 项目并针对 One-KVM 进行了深度定制优化。该库专注于 IP-KVM 场景，提供 Windows 和 Linux 平台的 GPU 加速视频编码能力。
 
 ### 1.1 项目位置
 
 ```
 libs/hwcodec/
 ├── src/          # Rust 源代码
-├── cpp/          # C++ 源代码
-├── externals/    # 外部依赖 (SDK)
-├── dev/          # 开发工具
-└── examples/     # 示例程序
+└── cpp/          # C++ 源代码
 ```
 
 ### 1.2 核心特性
 
-- **多编解码格式支持**: H.264, H.265 (HEVC), VP8, VP9, AV1, MJPEG
-- **硬件加速**: NVENC/NVDEC, AMF, Intel QSV/MFX, VAAPI, RKMPP, V4L2 M2M, VideoToolbox
-- **跨平台**: Windows, Linux, macOS, Android, iOS
+- **多编解码格式支持**: H.264, H.265 (HEVC), VP8, VP9, MJPEG
+- **硬件加速**: NVENC, AMF, Intel QSV (Windows), VAAPI, RKMPP, V4L2 M2M (Linux)
+- **跨平台**: Windows, Linux (x86_64, ARM64, ARMv7)
 - **低延迟优化**: 专为实时流媒体场景设计
 - **Rust/C++ 混合架构**: Rust 提供安全的上层 API，C++ 实现底层编解码逻辑
+- **IP-KVM 专用**: 解码仅支持 MJPEG（采集卡输出格式），编码支持多种硬件加速
 
 ## 2. 架构设计
 
@@ -30,35 +28,31 @@ libs/hwcodec/
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Rust API Layer                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ ffmpeg_ram  │  │    vram     │  │        mux          │  │
-│  │   module    │  │   module    │  │      module         │  │
-│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘  │
-├─────────┼────────────────┼───────────────────┼──────────────┤
-│         │                │                   │              │
-│         │         FFI Bindings (bindgen)     │              │
-│         ▼                ▼                   ▼              │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │                    ffmpeg_ram module                     ││
+│  │              (encode.rs + decode.rs)                     ││
+│  └──────────────────────────┬──────────────────────────────┘│
+├─────────────────────────────┼───────────────────────────────┤
+│                             │                               │
+│                  FFI Bindings (bindgen)                     │
+│                             ▼                               │
 ├─────────────────────────────────────────────────────────────┤
 │                     C++ Core Layer                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ ffmpeg_ram  │  │ ffmpeg_vram │  │    mux.cpp          │  │
-│  │  encode/    │  │  encode/    │  │                     │  │
-│  │  decode     │  │  decode     │  │                     │  │
-│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘  │
-├─────────┼────────────────┼───────────────────┼──────────────┤
-│         │                │                   │              │
-│         └────────────────┴───────────────────┘              │
-│                          │                                  │
-│                          ▼                                  │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │               ffmpeg_ram (encode/decode)                 ││
+│  └──────────────────────────┬──────────────────────────────┘│
+├─────────────────────────────┼───────────────────────────────┤
+│                             │                               │
+│                             ▼                               │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │                    FFmpeg Libraries                   │   │
 │  │  libavcodec │ libavutil │ libavformat │ libswscale   │   │
 │  └──────────────────────────────────────────────────────┘   │
-│                          │                                  │
-├──────────────────────────┼──────────────────────────────────┤
+│                             │                               │
+├─────────────────────────────┼───────────────────────────────┤
 │         Hardware Acceleration Backends                      │
 │  ┌────────┐ ┌─────┐ ┌─────┐ ┌───────┐ ┌───────┐ ┌───────┐  │
-│  │ NVENC  │ │ AMF │ │ MFX │ │ VAAPI │ │ RKMPP │ │V4L2M2M│  │
+│  │ NVENC  │ │ AMF │ │ QSV │ │ VAAPI │ │ RKMPP │ │V4L2M2M│  │
 │  └────────┘ └─────┘ └─────┘ └───────┘ └───────┘ └───────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -68,8 +62,6 @@ libs/hwcodec/
 | 模块 | 职责 | 关键文件 |
 |------|------|----------|
 | `ffmpeg_ram` | 基于 RAM 的软件/硬件编解码 | `src/ffmpeg_ram/` |
-| `vram` | GPU 显存直接编解码 (Windows) | `src/vram/` |
-| `mux` | 视频混流 (MP4/MKV) | `src/mux.rs` |
 | `common` | 公共定义和 GPU 检测 | `src/common.rs` |
 | `ffmpeg` | FFmpeg 日志和初始化 | `src/ffmpeg.rs` |
 
@@ -82,17 +74,11 @@ libs/hwcodec/
 pub mod common;
 pub mod ffmpeg;
 pub mod ffmpeg_ram;
-pub mod mux;
-#[cfg(all(windows, feature = "vram"))]
-pub mod vram;
-#[cfg(target_os = "android")]
-pub mod android;
 ```
 
 **功能**:
 - 导出所有子模块
-- 提供 C 日志回调函数 `hwcodec_log`
-- 条件编译: `vram` 模块仅在 Windows + vram feature 启用时编译
+- 提供 C 日志回调函数
 
 ### 3.2 公共模块 (common.rs)
 
@@ -111,13 +97,11 @@ pub enum Driver {
 
 | 平台 | 检测函数 | 检测方式 |
 |------|----------|----------|
-| Linux | `linux_support_nv()` | 加载 CUDA/NVENC 动态库 |
+| Linux | `linux_support_nv()` | 加载 libcuda.so + libnvidia-encode.so |
 | Linux | `linux_support_amd()` | 检查 `libamfrt64.so.1` |
 | Linux | `linux_support_intel()` | 检查 `libvpl.so`/`libmfx.so` |
 | Linux | `linux_support_rkmpp()` | 检查 `/dev/mpp_service` |
 | Linux | `linux_support_v4l2m2m()` | 检查 `/dev/video*` 设备 |
-| macOS | `get_video_toolbox_codec_support()` | 调用 VideoToolbox API |
-| Windows | 通过 VRAM 模块检测 | 查询 D3D11 设备 |
 
 ### 3.3 FFmpeg RAM 编码模块
 
@@ -129,7 +113,7 @@ pub enum Driver {
 pub struct CodecInfo {
     pub name: String,           // 编码器名称如 "h264_nvenc"
     pub mc_name: Option<String>, // MediaCodec 名称 (Android)
-    pub format: DataFormat,      // H264/H265/VP8/VP9/AV1/MJPEG
+    pub format: DataFormat,      // H264/H265/VP8/VP9/MJPEG
     pub priority: i32,           // 优先级 (Best=0, Good=1, Normal=2, Soft=3, Bad=4)
     pub hwdevice: AVHWDeviceType, // 硬件设备类型
 }
@@ -179,7 +163,7 @@ pub struct Encoder {
 
 #### 3.3.2 C++ 层 (cpp/ffmpeg_ram/)
 
-**FFmpegRamEncoder 类** (ffmpeg_ram_encode.cpp:97-420):
+**FFmpegRamEncoder 类** (ffmpeg_ram_encode.cpp):
 
 ```cpp
 class FFmpegRamEncoder {
@@ -225,6 +209,8 @@ fill_frame() - 填充 AVFrame 数据指针
 
 ### 3.4 FFmpeg RAM 解码模块
 
+**IP-KVM 专用设计**: 解码器仅支持 MJPEG 软件解码，因为 IP-KVM 场景中视频采集卡输出的是 MJPEG 格式。
+
 **Decoder 类**:
 
 ```rust
@@ -244,16 +230,27 @@ pub struct DecodeFrame {
 }
 ```
 
+**available_decoders()**: 仅返回 MJPEG 软件解码器
+
+```rust
+pub fn available_decoders() -> Vec<CodecInfo> {
+    vec![CodecInfo {
+        name: "mjpeg".to_owned(),
+        format: MJPEG,
+        hwdevice: AV_HWDEVICE_TYPE_NONE,
+        priority: Priority::Best as _,
+        ..Default::default()
+    }]
+}
+```
+
 **C++ 实现** (ffmpeg_ram_decode.cpp):
 
 ```cpp
 class FFmpegRamDecoder {
     AVCodecContext *c_ = NULL;
-    AVBufferRef *hw_device_ctx_ = NULL;
-    AVFrame *sw_frame_ = NULL;   // 软件帧 (用于硬件→软件转换)
     AVFrame *frame_ = NULL;      // 解码输出帧
     AVPacket *pkt_ = NULL;
-    bool hwaccel_ = true;
 
     int do_decode(const void *obj);
 };
@@ -262,23 +259,16 @@ class FFmpegRamDecoder {
 **解码流程**:
 
 ```
-输入编码数据
+输入 MJPEG 数据
       │
       ▼
 avcodec_send_packet() - 发送数据到解码器
       │
       ▼
-avcodec_receive_frame() - 获取解码帧
+avcodec_receive_frame() - 获取解码帧 (YUV420P)
       │
-      ├──▶ (软件解码) 直接使用 frame_
-      │
-      └──▶ (硬件解码) av_hwframe_transfer_data()
-                            │
-                            ▼
-                    sw_frame_ (GPU → CPU)
-                            │
-                            ▼
-                    callback() - 回调输出
+      ▼
+callback() - 回调输出
 ```
 
 ## 4. 硬件加速支持
@@ -293,27 +283,32 @@ avcodec_receive_frame() - 获取解码帧
 | VAAPI | 通用 | Linux | h264_vaapi, hevc_vaapi, vp8_vaapi, vp9_vaapi |
 | RKMPP | Rockchip | Linux | h264_rkmpp, hevc_rkmpp |
 | V4L2 M2M | ARM SoC | Linux | h264_v4l2m2m, hevc_v4l2m2m |
-| VideoToolbox | Apple | macOS/iOS | hevc_videotoolbox |
-| MediaCodec | Google | Android | h264_mediacodec, hevc_mediacodec |
 
 ### 4.2 硬件检测逻辑 (Linux)
 
 ```cpp
 // libs/hwcodec/cpp/common/platform/linux/linux.cpp
 
-// NVIDIA 检测 - 加载 CUDA 和 NVENC 动态库
+// NVIDIA 检测 - 简化的动态库检测
 int linux_support_nv() {
-    CudaFunctions *cuda_dl = NULL;
-    NvencFunctions *nvenc_dl = NULL;
-    CuvidFunctions *cvdl = NULL;
-    load_driver(&cuda_dl, &nvenc_dl, &cvdl);
-    // 成功加载则返回 0
+    void *handle = dlopen("libcuda.so.1", RTLD_LAZY);
+    if (!handle) handle = dlopen("libcuda.so", RTLD_LAZY);
+    if (!handle) return -1;
+    dlclose(handle);
+
+    handle = dlopen("libnvidia-encode.so.1", RTLD_LAZY);
+    if (!handle) handle = dlopen("libnvidia-encode.so", RTLD_LAZY);
+    if (!handle) return -1;
+    dlclose(handle);
+    return 0;
 }
 
 // AMD 检测 - 检查 AMF 运行时库
 int linux_support_amd() {
     void *handle = dlopen("libamfrt64.so.1", RTLD_LAZY);
-    // 成功加载则返回 0
+    if (!handle) return -1;
+    dlclose(handle);
+    return 0;
 }
 
 // Intel 检测 - 检查 VPL/MFX 库
@@ -379,11 +374,6 @@ bool set_lantency_free(void *priv_data, const std::string &name) {
         name.find("vaapi") != std::string::npos) {
         av_opt_set(priv_data, "async_depth", "1", 0);
     }
-    // VideoToolbox: 实时模式
-    if (name.find("videotoolbox") != std::string::npos) {
-        av_opt_set_int(priv_data, "realtime", 1, 0);
-        av_opt_set_int(priv_data, "prio_speed", 1, 0);
-    }
     // libvpx: 实时模式
     if (name.find("libvpx") != std::string::npos) {
         av_opt_set(priv_data, "deadline", "realtime", 0);
@@ -394,86 +384,19 @@ bool set_lantency_free(void *priv_data, const std::string &name) {
 }
 ```
 
-## 5. 混流模块 (Mux)
+## 5. 构建系统
 
-### 5.1 功能概述
-
-混流模块提供将编码后的视频流写入容器格式 (MP4/MKV) 的功能。
-
-### 5.2 Rust API
-
-```rust
-// libs/hwcodec/src/mux.rs
-
-pub struct MuxContext {
-    pub filename: String,    // 输出文件名
-    pub width: usize,        // 视频宽度
-    pub height: usize,       // 视频高度
-    pub is265: bool,         // 是否为 H.265
-    pub framerate: usize,    // 帧率
-}
-
-pub struct Muxer {
-    inner: *mut c_void,      // C++ Muxer 指针
-    pub ctx: MuxContext,
-    start: Instant,          // 开始时间
-}
-
-impl Muxer {
-    pub fn new(ctx: MuxContext) -> Result<Self, ()>;
-    pub fn write_video(&mut self, data: &[u8], key: bool) -> Result<(), i32>;
-    pub fn write_tail(&mut self) -> Result<(), i32>;
-}
-```
-
-### 5.3 C++ 实现
-
-```cpp
-// libs/hwcodec/cpp/mux/mux.cpp
-
-class Muxer {
-    OutputStream video_st;       // 视频流
-    AVFormatContext *oc = NULL;  // 格式上下文
-    int framerate;
-    int64_t start_ms;           // 起始时间戳
-    int64_t last_pts;           // 上一帧 PTS
-    int got_first;              // 是否收到第一帧
-
-    bool init(const char *filename, int width, int height,
-              int is265, int framerate);
-    int write_video_frame(const uint8_t *data, int len,
-                          int64_t pts_ms, int key);
-};
-```
-
-**写入流程**:
-
-```
-write_video_frame()
-      │
-      ├── 检查是否为关键帧 (第一帧必须是关键帧)
-      │
-      ├── 计算 PTS (相对于 start_ms)
-      │
-      ├── 填充 AVPacket
-      │
-      ├── av_packet_rescale_ts() (ms → stream timebase)
-      │
-      └── av_write_frame() → 写入文件
-```
-
-## 6. 构建系统
-
-### 6.1 Cargo.toml 配置
+### 5.1 Cargo.toml 配置
 
 ```toml
 [package]
 name = "hwcodec"
-version = "0.7.1"
+version = "0.8.0"
+edition = "2021"
+description = "Hardware video codec for IP-KVM (Windows/Linux)"
 
 [features]
 default = []
-vram = []  # GPU VRAM 直接编解码 (Windows only)
 
 [dependencies]
 log = "0.4"
@@ -486,7 +409,7 @@ cc = "1.0"      # C++ 编译
 bindgen = "0.59" # FFI 绑定生成
 ```
 
-### 6.2 构建流程 (build.rs)
+### 5.2 构建流程 (build.rs)
 
 ```
 build.rs
@@ -494,57 +417,61 @@ build.rs
     ├── build_common()
     │   ├── 生成 common_ffi.rs (bindgen)
     │   ├── 编译平台相关 C++ 代码
-    │   └── 链接系统库 (d3d11, dxgi, stdc++)
+    │   └── 链接系统库 (stdc++)
     │
-    ├── ffmpeg::build_ffmpeg()
-    │   ├── 生成 ffmpeg_ffi.rs
-    │   ├── 链接 FFmpeg 库 (VCPKG 或 pkg-config)
-    │   ├── build_ffmpeg_ram()
-    │   │   └── 编译 ffmpeg_ram_encode.cpp, ffmpeg_ram_decode.cpp
-    │   ├── build_ffmpeg_vram() [vram feature]
-    │   │   └── 编译 ffmpeg_vram_encode.cpp, ffmpeg_vram_decode.cpp
-    │   └── build_mux()
-    │       └── 编译 mux.cpp
-    │
-    └── sdk::build_sdk() [Windows + vram feature]
-        ├── build_nv() - NVIDIA SDK
-        ├── build_amf() - AMD AMF
-        └── build_mfx() - Intel MFX
+    └── ffmpeg::build_ffmpeg()
+        ├── 生成 ffmpeg_ffi.rs
+        ├── 链接 FFmpeg 库 (VCPKG 或 pkg-config)
+        └── build_ffmpeg_ram()
+            └── 编译 ffmpeg_ram_encode.cpp, ffmpeg_ram_decode.cpp
 ```
 
-### 6.3 FFmpeg 链接方式
+### 5.3 FFmpeg 链接方式
 
 | 方式 | 平台 | 条件 |
 |------|------|------|
 | VCPKG 静态链接 | 跨平台 | 设置 `VCPKG_ROOT` 环境变量 |
 | pkg-config 动态链接 | Linux | 默认方式 |
 
-## 7. 外部依赖
+## 6. 与原版 hwcodec 的区别
 
-### 7.1 SDK 版本
+针对 One-KVM IP-KVM 场景，对原版 RustDesk hwcodec 进行了以下简化：
 
-| SDK | 版本 | 用途 |
-|-----|------|------|
-| nv-codec-headers | n12.1.14.0 | NVIDIA 编码头文件 |
-| Video_Codec_SDK | 12.1.14 | NVIDIA 编解码 SDK |
-| AMF | v1.4.35 | AMD Advanced Media Framework |
-| MediaSDK | 22.5.4 | Intel Media SDK |
+### 6.1 移除的功能
 
-### 7.2 FFmpeg 依赖库
+| 移除项 | 原因 |
+|--------|------|
+| VRAM 模块 | IP-KVM 不需要 GPU 显存直接编解码 |
+| Mux 模块 | IP-KVM 不需要录制到文件 |
+| macOS 支持 | IP-KVM 目标平台不包含 macOS |
+| Android 支持 | IP-KVM 目标平台不包含 Android |
+| 外部 SDK | 简化构建，减少依赖 |
+| 多格式解码 | IP-KVM 仅需 MJPEG 解码 |
 
-```
-libavcodec   - 编解码核心
-libavutil    - 工具函数
-libavformat  - 容器格式
-libswscale   - 图像缩放转换
-```
+### 6.2 保留的功能
 
-## 8. 总结
+| 保留项 | 用途 |
+|--------|------|
+| FFmpeg RAM 编码 | WebRTC 视频编码 |
+| FFmpeg RAM 解码 | MJPEG 采集卡解码 |
+| 硬件加速编码 | 低延迟高效编码 |
+| 软件编码后备 | 无硬件加速时的兜底方案 |
 
-hwcodec 库通过 Rust/C++ 混合架构，在保证内存安全的同时实现了高性能的视频编解码。其核心设计特点包括:
+### 6.3 代码量对比
 
-1. **统一的编解码器 API**: 无论使用硬件还是软件编解码，上层 API 保持一致
+| 指标 | 原版 | 简化版 | 减少 |
+|------|------|--------|------|
+| 外部 SDK | ~9MB | 0 | 100% |
+| C++ 文件 | ~30 | ~10 | ~67% |
+| Rust 模块 | 6 | 3 | 50% |
+
+## 7. 总结
+
+hwcodec 库通过 Rust/C++ 混合架构，在保证内存安全的同时实现了高性能的视频编解码。针对 One-KVM IP-KVM 场景的优化设计特点包括:
+
+1. **精简的编解码器 API**: 解码仅支持 MJPEG，编码支持多种硬件加速
 2. **自动硬件检测**: 运行时自动检测并选择最优的硬件加速后端
 3. **优先级系统**: 基于质量和性能为不同编码器分配优先级
 4. **低延迟优化**: 针对实时流媒体场景进行了专门优化
-5. **跨平台支持**: 覆盖主流操作系统和 GPU 厂商
+5. **简化的构建系统**: 无需外部 SDK，仅依赖系统 FFmpeg
+6. **Windows/Linux 跨平台**: 支持 x86_64、ARM64、ARMv7 架构

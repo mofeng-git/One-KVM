@@ -1,3 +1,0 @@
-[submodule "externals"]
-	path = externals
-	url = https://github.com/rustdesk-org/externals.git

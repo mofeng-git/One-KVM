@@ -1,8 +1,5 @@
 use crate::{
-    common::{
-        DataFormat::{self, *},
-        Quality, RateControl, TEST_TIMEOUT_MS,
-    },
+    common::DataFormat::{self, *},
     ffmpeg::{init_av_log, AVPixelFormat},
     ffmpeg_ram::{
         ffmpeg_linesize_offset_length, ffmpeg_ram_encode, ffmpeg_ram_free_encoder,
@@ -21,6 +18,9 @@ use super::Priority;
 #[cfg(any(windows, target_os = "linux"))]
 use crate::common::Driver;
 
+/// Timeout for encoder test in milliseconds
+const TEST_TIMEOUT_MS: u64 = 3000;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct EncodeContext {
     pub name: String,
@@ -31,8 +31,8 @@ pub struct EncodeContext {
     pub align: i32,
     pub fps: i32,
     pub gop: i32,
-    pub rc: RateControl,
-    pub quality: Quality,
+    pub rc: crate::common::RateControl,
+    pub quality: crate::common::Quality,
     pub kbs: i32,
     pub q: i32,
     pub thread_count: i32,
@@ -175,25 +175,15 @@ impl Encoder {
     pub fn available_encoders(ctx: EncodeContext, _sdk: Option<String>) -> Vec<CodecInfo> {
         use log::debug;
 
-        if !(cfg!(windows) || cfg!(target_os = "linux") || cfg!(target_os = "macos")) {
+        if !(cfg!(windows) || cfg!(target_os = "linux")) {
             return vec![];
         }
         let mut codecs: Vec<CodecInfo> = vec![];
         #[cfg(any(windows, target_os = "linux"))]
         {
             let contains = |_vendor: Driver, _format: DataFormat| {
-                #[cfg(all(windows, feature = "vram"))]
-                {
-                    if let Some(_sdk) = _sdk.as_ref() {
-                        if !_sdk.is_empty() {
-                            if let Ok(available) =
-                                crate::vram::Available::deserialize(_sdk.as_str())
-                            {
-                                return available.contains(true, _vendor, _format);
-                            }
-                        }
-                    }
-                }
+                // Without VRAM feature, we can't check SDK availability
+                // Just return true and let FFmpeg handle the actual detection
                 true
             };
             let (_nv, amf, _intel) = crate::common::supported_gpu(true);
@@ -245,7 +235,6 @@ impl Encoder {
                 });
             }
             if amf {
-                // sdk not use h265
                 codecs.push(CodecInfo {
                     name: "hevc_amf".to_owned(),
                     format: H265,
@@ -322,28 +311,6 @@ impl Encoder {
             }
         }
 
-        #[cfg(target_os = "macos")]
-        {
-            let (_h264, h265, _, _) = crate::common::get_video_toolbox_codec_support();
-            // h264 encode failed too often, not AV_CODEC_CAP_HARDWARE
-            // if h264 {
-            //     codecs.push(CodecInfo {
-            //         name: "h264_videotoolbox".to_owned(),
-            //         format: H264,
-            //         priority: Priority::Best as _,
-            //         ..Default::default()
-            //     });
-            // }
-            if h265 {
-                codecs.push(CodecInfo {
-                    name: "hevc_videotoolbox".to_owned(),
-                    format: H265,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                });
-            }
-        }
-
         // qsv doesn't support yuv420p
         codecs.retain(|c| {
             let ctx = ctx.clone();
@@ -379,11 +346,7 @@ impl Encoder {
                         let mut passed = false;
                         let mut last_err: Option<i32> = None;
 
-                        let max_attempts = if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
-                            3
-                        } else {
-                            1
-                        };
+                        let max_attempts = 1;
                         for attempt in 0..max_attempts {
                             let pts = (attempt as i64) * 33; // 33ms is an approximation for 30 FPS (1000 / 30)
                             let start = std::time::Instant::now();

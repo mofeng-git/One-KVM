@@ -1,6 +1,3 @@
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-use super::Priority;
-use crate::common::TEST_TIMEOUT_MS;
 use crate::ffmpeg::{init_av_log, AVHWDeviceType::*};
 
 use crate::{
@@ -8,7 +5,7 @@ use crate::{
     ffmpeg::{AVHWDeviceType, AVPixelFormat},
     ffmpeg_ram::{
         ffmpeg_ram_decode, ffmpeg_ram_free_decoder, ffmpeg_ram_new_decoder, CodecInfo,
-        AV_NUM_DATA_POINTERS,
+        AV_NUM_DATA_POINTERS, Priority,
     },
 };
 use log::error;
@@ -16,7 +13,6 @@ use std::{
     ffi::{c_void, CString},
     os::raw::c_int,
     slice::from_raw_parts,
-    time::Instant,
     vec,
 };
 
@@ -179,188 +175,19 @@ impl Decoder {
         }
     }
 
+    /// Returns available decoders for IP-KVM scenario.
+    /// Only MJPEG software decoder is supported as IP-KVM captures from video capture cards
+    /// that output MJPEG streams.
     pub fn available_decoders() -> Vec<CodecInfo> {
-        use log::debug;
-
-        #[allow(unused_mut)]
-        let mut codecs: Vec<CodecInfo> = vec![];
-        // windows disable nvdec to avoid gpu stuck
-        #[cfg(target_os = "linux")]
-        {
-            let (nv, _, _) = crate::common::supported_gpu(false);
-            debug!("Linux GPU support detected - NV: {}", nv);
-            if nv {
-                codecs.push(CodecInfo {
-                    name: "h264".to_owned(),
-                    format: H264,
-                    hwdevice: AV_HWDEVICE_TYPE_CUDA,
-                    priority: Priority::Good as _,
-                    ..Default::default()
-                });
-                codecs.push(CodecInfo {
-                    name: "hevc".to_owned(),
-                    format: H265,
-                    hwdevice: AV_HWDEVICE_TYPE_CUDA,
-                    priority: Priority::Good as _,
-                    ..Default::default()
-                });
-            }
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            codecs.append(&mut vec![
-                CodecInfo {
-                    name: "h264".to_owned(),
-                    format: H264,
-                    hwdevice: AV_HWDEVICE_TYPE_D3D11VA,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                },
-                CodecInfo {
-                    name: "hevc".to_owned(),
-                    format: H265,
-                    hwdevice: AV_HWDEVICE_TYPE_D3D11VA,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                },
-            ]);
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            codecs.append(&mut vec![
-                CodecInfo {
-                    name: "h264".to_owned(),
-                    format: H264,
-                    hwdevice: AV_HWDEVICE_TYPE_VAAPI,
-                    priority: Priority::Good as _,
-                    ..Default::default()
-                },
-                CodecInfo {
-                    name: "hevc".to_owned(),
-                    format: H265,
-                    hwdevice: AV_HWDEVICE_TYPE_VAAPI,
-                    priority: Priority::Good as _,
-                    ..Default::default()
-                },
-                CodecInfo {
-                    name: "mjpeg".to_owned(),
-                    format: MJPEG,
-                    hwdevice: AV_HWDEVICE_TYPE_VAAPI,
-                    priority: Priority::Good as _,
-                    ..Default::default()
-                },
-            ]);
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            let (_, _, h264, h265) = crate::common::get_video_toolbox_codec_support();
-            debug!(
-                "VideoToolbox decode support - H264: {}, H265: {}",
-                h264, h265
-            );
-            if h264 {
-                codecs.push(CodecInfo {
-                    name: "h264".to_owned(),
-                    format: H264,
-                    hwdevice: AV_HWDEVICE_TYPE_VIDEOTOOLBOX,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                });
-            }
-            if h265 {
-                codecs.push(CodecInfo {
-                    name: "hevc".to_owned(),
-                    format: H265,
-                    hwdevice: AV_HWDEVICE_TYPE_VIDEOTOOLBOX,
-                    priority: Priority::Best as _,
-                    ..Default::default()
-                });
-            }
-        }
-
-        let mut res = Vec::<CodecInfo>::new();
-        let buf264 = &crate::common::DATA_H264_720P[..];
-        let buf265 = &crate::common::DATA_H265_720P[..];
-
-        for codec in codecs {
-            // Skip if this format already exists in results
-            if res
-                .iter()
-                .any(|existing: &CodecInfo| existing.format == codec.format)
-            {
-                continue;
-            }
-
-            debug!(
-                "Testing decoder: {} (hwdevice: {:?})",
-                codec.name, codec.hwdevice
-            );
-
-            let c = DecodeContext {
-                name: codec.name.clone(),
-                device_type: codec.hwdevice,
-                thread_count: 4,
-            };
-
-            match Decoder::new(c) {
-                Ok(mut decoder) => {
-                    debug!("Decoder {} created successfully", codec.name);
-
-                    // MJPEG decoder doesn't need test data - just verify it can be created
-                    if codec.format == MJPEG {
-                        debug!("MJPEG decoder {} test passed (creation only)", codec.name);
-                        res.push(codec);
-                        continue;
-                    }
-
-                    let data = match codec.format {
-                        H264 => buf264,
-                        H265 => buf265,
-                        _ => {
-                            log::error!("Unsupported format: {:?}, skipping", codec.format);
-                            continue;
-                        }
-                    };
-
-                    let start = Instant::now();
-
-                    match decoder.decode(data) {
-                        Ok(_) => {
-                            let elapsed = start.elapsed().as_millis();
-
-                            if elapsed < TEST_TIMEOUT_MS as _ {
-                                debug!("Decoder {} test passed", codec.name);
-                                res.push(codec);
-                            } else {
-                                debug!(
-                                    "Decoder {} test failed - timeout: {}ms",
-                                    codec.name, elapsed
-                                );
-                            }
-                        }
-                        Err(err) => {
-                            debug!("Decoder {} test failed with error: {}", codec.name, err);
-                        }
-                    }
-                }
-                Err(_) => {
-                    debug!("Failed to create decoder {}", codec.name);
-                }
-            }
-        }
-
-        let soft = CodecInfo::soft();
-        if let Some(c) = soft.h264 {
-            res.push(c);
-        }
-        if let Some(c) = soft.h265 {
-            res.push(c);
-        }
-
-        res
+        // IP-KVM scenario only needs MJPEG decoding
+        // MJPEG comes from video capture cards, software decoding is sufficient
+        vec![CodecInfo {
+            name: "mjpeg".to_owned(),
+            format: MJPEG,
+            hwdevice: AV_HWDEVICE_TYPE_NONE,
+            priority: Priority::Best as _,
+            ..Default::default()
+        }]
     }
 }
 

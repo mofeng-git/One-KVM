@@ -9,7 +9,7 @@
 ```rust
 pub struct EncodeContext {
     pub name: String,          // 编码器名称
-    pub mc_name: Option<String>, // MediaCodec 名称 (Android)
+    pub mc_name: Option<String>, // MediaCodec 名称 (保留字段)
     pub width: i32,            // 视频宽度 (必须为偶数)
     pub height: i32,           // 视频高度 (必须为偶数)
     pub pixfmt: AVPixelFormat, // 像素格式
@@ -58,7 +58,6 @@ pub struct EncodeContext {
 | `hevc_rkmpp` | H.265 | Rockchip MPP | Linux |
 | `h264_v4l2m2m` | H.264 | V4L2 M2M | Linux |
 | `hevc_v4l2m2m` | H.265 | V4L2 M2M | Linux |
-| `hevc_videotoolbox` | H.265 | VideoToolbox | macOS |
 | `h264` | H.264 | 软件 (x264) | 全平台 |
 | `hevc` | H.265 | 软件 (x265) | 全平台 |
 | `libvpx` | VP8 | 软件 | 全平台 |
@@ -161,51 +160,44 @@ for encoder in available_encoders {
 
 ## 2. 解码器 API
 
-### 2.1 解码器初始化
+### 2.1 IP-KVM 专用设计
+
+在 One-KVM IP-KVM 场景中，解码器仅支持 MJPEG 软件解码。这是因为视频采集卡输出的格式是 MJPEG，不需要其他格式的硬件解码支持。
+
+### 2.2 解码器初始化
 
 #### DecodeContext 参数
 
 ```rust
 pub struct DecodeContext {
-    pub name: String,           // 解码器名称
-    pub device_type: AVHWDeviceType, // 硬件设备类型
+    pub name: String,           // 解码器名称 ("mjpeg")
+    pub device_type: AVHWDeviceType, // 硬件设备类型 (NONE)
     pub thread_count: i32,      // 解码线程数
 }
 ```
 
-#### 硬件设备类型
-
-| AVHWDeviceType | 说明 |
-|----------------|------|
-| `AV_HWDEVICE_TYPE_NONE` | 软件解码 |
-| `AV_HWDEVICE_TYPE_CUDA` | NVIDIA CUDA |
-| `AV_HWDEVICE_TYPE_VAAPI` | Linux VAAPI |
-| `AV_HWDEVICE_TYPE_D3D11VA` | Windows D3D11 |
-| `AV_HWDEVICE_TYPE_VIDEOTOOLBOX` | macOS VideoToolbox |
-| `AV_HWDEVICE_TYPE_MEDIACODEC` | Android MediaCodec |
-
-### 2.2 创建解码器
+### 2.3 创建解码器
 
 ```rust
 use hwcodec::ffmpeg_ram::decode::{Decoder, DecodeContext};
 use hwcodec::ffmpeg::AVHWDeviceType;
 
 let ctx = DecodeContext {
-    name: "h264".to_string(),
-    device_type: AVHWDeviceType::AV_HWDEVICE_TYPE_VAAPI,
+    name: "mjpeg".to_string(),
+    device_type: AVHWDeviceType::AV_HWDEVICE_TYPE_NONE,
     thread_count: 4,
 };
 
 let decoder = Decoder::new(ctx)?;
 ```
 
-### 2.3 解码帧
+### 2.4 解码帧
 
 ```rust
-// 输入编码数据
-let encoded_packet: Vec<u8> = receive_encoded_data();
+// 输入 MJPEG 编码数据
+let mjpeg_data: Vec<u8> = receive_mjpeg_frame();
 
-match decoder.decode(&encoded_packet) {
+match decoder.decode(&mjpeg_data) {
     Ok(frames) => {
         for frame in frames.iter() {
             println!("Decoded: {}x{}, format={:?}, key={}",
@@ -214,7 +206,7 @@ match decoder.decode(&encoded_packet) {
             // 访问 YUV 数据
             let y_plane = &frame.data[0];
             let u_plane = &frame.data[1];
-            let v_plane = &frame.data[2]; // 仅 YUV420P
+            let v_plane = &frame.data[2];
         }
     }
     Err(code) => {
@@ -223,7 +215,7 @@ match decoder.decode(&encoded_packet) {
 }
 ```
 
-### 2.4 DecodeFrame 结构体
+### 2.5 DecodeFrame 结构体
 
 ```rust
 pub struct DecodeFrame {
@@ -246,7 +238,7 @@ pub struct DecodeFrame {
 | `NV12` | 2 | Y | UV (交错) | - |
 | `NV21` | 2 | Y | VU (交错) | - |
 
-### 2.5 检测可用解码器
+### 2.6 获取可用解码器
 
 ```rust
 use hwcodec::ffmpeg_ram::decode::Decoder;
@@ -256,6 +248,9 @@ for decoder in available_decoders {
     println!("Available: {} (format: {:?}, hwdevice: {:?})",
              decoder.name, decoder.format, decoder.hwdevice);
 }
+
+// 输出:
+// Available: mjpeg (format: MJPEG, hwdevice: AV_HWDEVICE_TYPE_NONE)
 ```
 
 ## 3. 码率控制模式
@@ -287,7 +282,6 @@ pub enum RateControl {
 | amf | ✓ | ✓ (低延迟) | ✗ |
 | qsv | ✓ | ✓ | ✗ |
 | vaapi | ✓ | ✓ | ✗ |
-| mediacodec | ✓ | ✓ | ✓ |
 
 ## 4. 质量等级
 
@@ -310,45 +304,9 @@ pub enum Quality {
 | Medium | p4 | balanced | medium |
 | Low | p1 | speed | veryfast |
 
-## 5. 混流器 API
+## 5. 错误处理
 
-### 5.1 创建混流器
-
-```rust
-use hwcodec::mux::{Muxer, MuxContext};
-
-let ctx = MuxContext {
-    filename: "/tmp/output.mp4".to_string(),
-    width: 1920,
-    height: 1080,
-    is265: false,  // H.264
-    framerate: 30,
-};
-
-let muxer = Muxer::new(ctx)?;
-```
-
-### 5.2 写入视频帧
-
-```rust
-// 编码后的帧数据
-let encoded_data: Vec<u8> = encoder.encode(...)?;
-let is_keyframe = true;
-
-muxer.write_video(&encoded_data, is_keyframe)?;
-```
-
-### 5.3 完成写入
-
-```rust
-// 写入文件尾
-muxer.write_tail()?;
-// muxer 被 drop 时自动释放资源
-```
-
-## 6. 错误处理
-
-### 6.1 错误码
+### 5.1 错误码
 
 | 错误码 | 常量 | 说明 |
 |--------|------|------|
@@ -356,7 +314,7 @@ muxer.write_tail()?;
 | -1 | `HWCODEC_ERR_COMMON` | 通用错误 |
 | -2 | `HWCODEC_ERR_HEVC_COULD_NOT_FIND_POC` | HEVC 解码参考帧丢失 |
 
-### 6.2 常见错误处理
+### 5.2 常见错误处理
 
 ```rust
 match encoder.encode(&yuv_data, pts) {
@@ -372,9 +330,9 @@ match encoder.encode(&yuv_data, pts) {
 }
 ```
 
-## 7. 最佳实践
+## 6. 最佳实践
 
-### 7.1 编码器选择策略
+### 6.1 编码器选择策略
 
 ```rust
 fn select_best_encoder(
@@ -399,7 +357,7 @@ fn select_best_encoder(
 }
 ```
 
-### 7.2 帧内存布局
+### 6.2 帧内存布局
 
 ```rust
 // 获取 NV12 帧布局信息
@@ -417,7 +375,7 @@ let mut buffer = vec![0u8; length as usize];
 // 填充 UV 平面: buffer[offset[0]..length]
 ```
 
-### 7.3 关键帧控制
+### 6.3 关键帧控制
 
 ```rust
 let mut frame_count = 0;
@@ -433,7 +391,7 @@ loop {
 }
 ```
 
-### 7.4 线程安全
+### 6.4 线程安全
 
 ```rust
 // Decoder 实现了 Send + Sync
@@ -442,4 +400,82 @@ unsafe impl Sync for Decoder {}
 
 // 可以安全地在多线程间传递
 let decoder = Arc::new(Mutex::new(Decoder::new(ctx)?));
+```
+
+## 7. IP-KVM 典型使用场景
+
+### 7.1 视频采集和转码流程
+
+```
+USB 采集卡 (MJPEG)
+       │
+       ▼
+┌─────────────────┐
+│ MJPEG Decoder   │ ◄── Decoder::new("mjpeg")
+│ (软件解码)      │
+└────────┬────────┘
+         │ YUV420P
+         ▼
+┌─────────────────┐
+│ H264 Encoder    │ ◄── Encoder::new("h264_vaapi")
+│ (硬件加速)      │
+└────────┬────────┘
+         │ H264 NAL
+         ▼
+    WebRTC 传输
+```
+
+### 7.2 完整示例
+
+```rust
+use hwcodec::ffmpeg_ram::decode::{Decoder, DecodeContext};
+use hwcodec::ffmpeg_ram::encode::{Encoder, EncodeContext};
+use hwcodec::ffmpeg::AVHWDeviceType;
+
+// 创建 MJPEG 解码器
+let decode_ctx = DecodeContext {
+    name: "mjpeg".to_string(),
+    device_type: AVHWDeviceType::AV_HWDEVICE_TYPE_NONE,
+    thread_count: 4,
+};
+let mut decoder = Decoder::new(decode_ctx)?;
+
+// 检测并选择最佳编码器
+let encode_ctx = EncodeContext {
+    name: String::new(),
+    width: 1920,
+    height: 1080,
+    // ...
+};
+let available = Encoder::available_encoders(encode_ctx.clone(), None);
+let best_h264 = available.iter()
+    .filter(|e| e.format == DataFormat::H264)
+    .min_by_key(|e| e.priority)
+    .expect("No H264 encoder available");
+
+// 使用最佳编码器创建实例
+let encode_ctx = EncodeContext {
+    name: best_h264.name.clone(),
+    ..encode_ctx
+};
+let mut encoder = Encoder::new(encode_ctx)?;
+
+// 处理循环
+loop {
+    let mjpeg_frame = capture_frame();
+
+    // 解码 MJPEG -> YUV
+    let decoded = decoder.decode(&mjpeg_frame)?;
+
+    // 编码 YUV -> H264
+    for frame in decoded {
+        let yuv_data = frame.data.concat();
+        let encoded = encoder.encode(&yuv_data, pts)?;
+
+        // 发送编码数据
+        for packet in encoded {
+            send_to_webrtc(packet.data);
+        }
+    }
+}
 ```
