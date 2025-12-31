@@ -27,6 +27,7 @@ import type {
   AtxDevices,
 } from '@/types/generated'
 import { setLanguage } from '@/i18n'
+import { useClipboard } from '@/composables/useClipboard'
 import AppLayout from '@/components/AppLayout.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -173,6 +174,7 @@ const rustdeskStatus = ref<RustDeskStatusResponse | null>(null)
 const rustdeskPassword = ref<RustDeskPasswordResponse | null>(null)
 const rustdeskLoading = ref(false)
 const rustdeskCopied = ref<'id' | 'password' | null>(null)
+const { copy: clipboardCopy } = useClipboard()
 const rustdeskLocalConfig = ref({
   enabled: false,
   rendezvous_server: '',
@@ -860,11 +862,12 @@ async function regenerateRustdeskPassword() {
   }
 }
 
-function copyToClipboard(text: string, type: 'id' | 'password') {
-  navigator.clipboard.writeText(text).then(() => {
+async function copyToClipboard(text: string, type: 'id' | 'password') {
+  const success = await clipboardCopy(text)
+  if (success) {
     rustdeskCopied.value = type
     setTimeout(() => (rustdeskCopied.value = null), 2000)
-  })
+  }
 }
 
 function getRustdeskServiceStatusText(status: string | undefined): string {
