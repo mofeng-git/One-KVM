@@ -21,7 +21,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, watch, Mutex, RwLock};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
+
+/// Grace period before auto-stopping pipeline when no subscribers (in seconds)
+const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
 
 use crate::error::{AppError, Result};
 use crate::video::convert::{Nv12Converter, PixelConverter};
@@ -562,6 +565,14 @@ impl SharedVideoPipeline {
         *self.running_rx.borrow()
     }
 
+    /// Subscribe to running state changes
+    ///
+    /// Returns a watch receiver that can be used to detect when the pipeline stops.
+    /// This is useful for auto-cleanup when the pipeline auto-stops due to no subscribers.
+    pub fn running_watch(&self) -> watch::Receiver<bool> {
+        self.running_rx.clone()
+    }
+
     /// Get current codec
     pub async fn current_codec(&self) -> VideoEncoderType {
         self.config.read().await.output_codec
@@ -614,6 +625,10 @@ impl SharedVideoPipeline {
             let mut fps_frame_count: u64 = 0;
             let mut running_rx = pipeline.running_rx.clone();
 
+            // Track when we last had subscribers for auto-stop feature
+            let mut no_subscribers_since: Option<Instant> = None;
+            let grace_period = Duration::from_secs(AUTO_STOP_GRACE_PERIOD_SECS);
+
             loop {
                 tokio::select! {
                     biased;
@@ -629,8 +644,36 @@ impl SharedVideoPipeline {
                             Ok(video_frame) => {
                                 pipeline.stats.lock().await.frames_captured += 1;
 
-                                if pipeline.frame_tx.receiver_count() == 0 {
+                                let subscriber_count = pipeline.frame_tx.receiver_count();
+
+                                if subscriber_count == 0 {
+                                    // Track when we started having no subscribers
+                                    if no_subscribers_since.is_none() {
+                                        no_subscribers_since = Some(Instant::now());
+                                        trace!("No subscribers, starting grace period timer");
+                                    }
+
+                                    // Check if grace period has elapsed
+                                    if let Some(since) = no_subscribers_since {
+                                        if since.elapsed() >= grace_period {
+                                            info!(
+                                                "No subscribers for {}s, auto-stopping video pipeline",
+                                                grace_period.as_secs()
+                                            );
+                                            // Signal stop and break out of loop
+                                            let _ = pipeline.running.send(false);
+                                            break;
+                                        }
+                                    }
+
+                                    // Skip encoding but continue loop (within grace period)
                                     continue;
+                                } else {
+                                    // Reset the no-subscriber timer when we have subscribers again
+                                    if no_subscribers_since.is_some() {
+                                        trace!("Subscriber connected, resetting grace period timer");
+                                        no_subscribers_since = None;
+                                    }
                                 }
 
                                 let start = Instant::now();

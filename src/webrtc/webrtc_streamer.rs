@@ -199,7 +199,7 @@ impl WebRtcStreamer {
     ///
     /// Supports H264, H265, VP8, VP9. This will restart the video pipeline
     /// and close all existing sessions.
-    pub async fn set_video_codec(&self, codec: VideoCodecType) -> Result<()> {
+    pub async fn set_video_codec(self: &Arc<Self>, codec: VideoCodecType) -> Result<()> {
         let current = *self.video_codec.read().await;
         if current == codec {
             return Ok(());
@@ -263,7 +263,10 @@ impl WebRtcStreamer {
     }
 
     /// Ensure video pipeline is initialized and running
-    async fn ensure_video_pipeline(&self, tx: broadcast::Sender<VideoFrame>) -> Result<Arc<SharedVideoPipeline>> {
+    async fn ensure_video_pipeline(
+        self: &Arc<Self>,
+        tx: broadcast::Sender<VideoFrame>,
+    ) -> Result<Arc<SharedVideoPipeline>> {
         let mut pipeline_guard = self.video_pipeline.write().await;
 
         if let Some(ref pipeline) = *pipeline_guard {
@@ -289,6 +292,41 @@ impl WebRtcStreamer {
         let pipeline = SharedVideoPipeline::new(pipeline_config)?;
         pipeline.start(tx.subscribe()).await?;
 
+        // Start a monitor task to detect when pipeline auto-stops
+        let pipeline_weak = Arc::downgrade(&pipeline);
+        let streamer_weak = Arc::downgrade(self);
+        let mut running_rx = pipeline.running_watch();
+
+        tokio::spawn(async move {
+            // Wait for pipeline to stop (running becomes false)
+            while running_rx.changed().await.is_ok() {
+                if !*running_rx.borrow() {
+                    info!("Video pipeline auto-stopped, cleaning up resources");
+
+                    // Clear pipeline reference in WebRtcStreamer
+                    if let Some(streamer) = streamer_weak.upgrade() {
+                        let mut pipeline_guard = streamer.video_pipeline.write().await;
+                        // Only clear if it's the same pipeline that stopped
+                        if let Some(ref current) = *pipeline_guard {
+                            if let Some(stopped_pipeline) = pipeline_weak.upgrade() {
+                                if Arc::ptr_eq(current, &stopped_pipeline) {
+                                    *pipeline_guard = None;
+                                    info!("Cleared stopped video pipeline reference");
+                                }
+                            }
+                        }
+                        drop(pipeline_guard);
+
+                        // Clear video frame source to signal upstream to stop
+                        *streamer.video_frame_tx.write().await = None;
+                        info!("Cleared video frame source");
+                    }
+                    break;
+                }
+            }
+            debug!("Video pipeline monitor task ended");
+        });
+
         *pipeline_guard = Some(pipeline.clone());
         Ok(pipeline)
     }
@@ -298,7 +336,7 @@ impl WebRtcStreamer {
     /// This is a public wrapper around ensure_video_pipeline for external
     /// components (like RustDesk) that need to share the encoded video stream.
     pub async fn ensure_video_pipeline_for_external(
-        &self,
+        self: &Arc<Self>,
         tx: broadcast::Sender<VideoFrame>,
     ) -> Result<Arc<SharedVideoPipeline>> {
         self.ensure_video_pipeline(tx).await
@@ -586,7 +624,7 @@ impl WebRtcStreamer {
     // === Session Management ===
 
     /// Create a new WebRTC session
-    pub async fn create_session(&self) -> Result<String> {
+    pub async fn create_session(self: &Arc<Self>) -> Result<String> {
         let session_id = uuid::Uuid::new_v4().to_string();
         let codec = *self.video_codec.read().await;
 
@@ -845,7 +883,7 @@ impl WebRtcStreamer {
     ///
     /// Note: Hardware encoders (VAAPI, NVENC, etc.) don't support dynamic bitrate changes.
     /// This method restarts the pipeline to apply the new bitrate.
-    pub async fn set_bitrate(&self, bitrate_kbps: u32) -> Result<()> {
+    pub async fn set_bitrate(self: &Arc<Self>, bitrate_kbps: u32) -> Result<()> {
         // Update config first
         self.config.write().await.bitrate_kbps = bitrate_kbps;
 

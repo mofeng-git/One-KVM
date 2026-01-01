@@ -496,13 +496,53 @@ impl Streamer {
         let mjpeg_handler = self.mjpeg_handler.clone();
         let mut frame_rx = capturer.subscribe();
         let state_ref = Arc::downgrade(self);
+        let frame_tx = capturer.frame_sender();
 
         tokio::spawn(async move {
             info!("Frame distribution task started");
+
+            // Track when we started having no active consumers
+            let mut idle_since: Option<std::time::Instant> = None;
+            const IDLE_STOP_DELAY_SECS: u64 = 5;
+
             loop {
                 match frame_rx.recv().await {
                     Ok(frame) => {
                         mjpeg_handler.update_frame(frame);
+
+                        // Check if there are any active consumers:
+                        // - MJPEG clients via mjpeg_handler
+                        // - Other subscribers (WebRTC/RustDesk) via frame_tx receiver_count
+                        // Note: receiver_count includes this task, so > 1 means other subscribers
+                        let mjpeg_clients = mjpeg_handler.client_count();
+                        let other_subscribers = frame_tx.receiver_count().saturating_sub(1);
+
+                        if mjpeg_clients == 0 && other_subscribers == 0 {
+                            if idle_since.is_none() {
+                                idle_since = Some(std::time::Instant::now());
+                                trace!("No active video consumers, starting idle timer");
+                            } else if let Some(since) = idle_since {
+                                if since.elapsed().as_secs() >= IDLE_STOP_DELAY_SECS {
+                                    info!(
+                                        "No active video consumers for {}s, stopping frame distribution",
+                                        IDLE_STOP_DELAY_SECS
+                                    );
+                                    // Stop the streamer
+                                    if let Some(streamer) = state_ref.upgrade() {
+                                        if let Err(e) = streamer.stop().await {
+                                            warn!("Failed to stop streamer during idle cleanup: {}", e);
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        } else {
+                            // Reset idle timer when we have consumers
+                            if idle_since.is_some() {
+                                trace!("Video consumers active, resetting idle timer");
+                                idle_since = None;
+                            }
+                        }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                         trace!("Frame distribution lagged by {} frames", n);
