@@ -3,6 +3,10 @@
 
 FROM debian:12
 
+# Set Rustup mirrors (Aliyun)
+ENV RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
+    RUSTUP_DIST_SERVER=https://mirrors.aliyun.com/rustup
+
 # Install Rust toolchain
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -22,6 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libclang-dev \
     llvm \
+    protobuf-compiler \
+    libssl-dev \
+    mold \
     # Core system libraries
     libasound2-dev \
     libv4l-dev \
@@ -55,3 +62,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Add Rust target
 RUN rustup target add x86_64-unknown-linux-gnu
+
+# Configure mold as the linker
+ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold"

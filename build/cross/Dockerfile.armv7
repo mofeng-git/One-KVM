@@ -3,6 +3,10 @@
 
 FROM debian:12
 
+# Set Rustup mirrors (Aliyun)
+ENV RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
+    RUSTUP_DIST_SERVER=https://mirrors.aliyun.com/rustup
+
 # Install Rust toolchain
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -24,24 +28,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libclang-dev \
     llvm \
+    protobuf-compiler \
+    mold \
+    meson \
+    ninja-build \
+    wget \
     gcc-arm-linux-gnueabihf \
     g++-arm-linux-gnueabihf \
     libc6-dev-armhf-cross \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ARMv7 development libraries
+# Install ARMv7 development libraries (without system ffmpeg)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl-dev:armhf \
     libasound2-dev:armhf \
     libv4l-dev:armhf \
     libudev-dev:armhf \
     zlib1g-dev:armhf \
     libjpeg62-turbo-dev:armhf \
     libyuv-dev:armhf \
-    libavcodec-dev:armhf \
-    libavformat-dev:armhf \
-    libavutil-dev:armhf \
-    libswscale-dev:armhf \
-    libswresample-dev:armhf \
     libx264-dev:armhf \
     libx265-dev:armhf \
     libvpx-dev:armhf \
@@ -54,13 +59,106 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxdmcp-dev:armhf \
     && rm -rf /var/lib/apt/lists/*
 
+# Download and build FFmpeg with RKMPP support
+RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
+    && wget -q https://files.mofeng.run/src/image/other/ffmpeg.tar.gz \
+    && tar -xzf ffmpeg.tar.gz \
+    && cd ffmpeg \
+    # Build RKMPP
+    && mkdir -p rkmpp/build && cd rkmpp/build \
+    && cmake .. \
+        -DCMAKE_SYSTEM_NAME=Linux \
+        -DCMAKE_SYSTEM_PROCESSOR=arm \
+        -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
+        -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
+        -DCMAKE_INSTALL_PREFIX=/usr/arm-linux-gnueabihf \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=ON \
+        -DBUILD_TEST=OFF \
+    && make -j$(nproc) \
+    && make install \
+    && cd ../.. \
+    # Build RKRGA - create cross file for meson
+    && echo '[binaries]' > /tmp/armhf-cross.txt \
+    && echo "c = 'arm-linux-gnueabihf-gcc'" >> /tmp/armhf-cross.txt \
+    && echo "cpp = 'arm-linux-gnueabihf-g++'" >> /tmp/armhf-cross.txt \
+    && echo "ar = 'arm-linux-gnueabihf-ar'" >> /tmp/armhf-cross.txt \
+    && echo "strip = 'arm-linux-gnueabihf-strip'" >> /tmp/armhf-cross.txt \
+    && echo "pkgconfig = 'pkg-config'" >> /tmp/armhf-cross.txt \
+    && echo '[host_machine]' >> /tmp/armhf-cross.txt \
+    && echo "system = 'linux'" >> /tmp/armhf-cross.txt \
+    && echo "cpu_family = 'arm'" >> /tmp/armhf-cross.txt \
+    && echo "cpu = 'armv7'" >> /tmp/armhf-cross.txt \
+    && echo "endian = 'little'" >> /tmp/armhf-cross.txt \
+    && cd rkrga \
+    && meson setup build --prefix=/usr/arm-linux-gnueabihf --libdir=lib \
+        --cross-file=/tmp/armhf-cross.txt \
+        --buildtype=release \
+        -Dcpp_args=-fpermissive \
+        -Dlibdrm=false \
+        -Dlibrga_demo=false \
+    && ninja -C build \
+    && ninja -C build install \
+    && cd .. \
+    # Create pkg-config wrapper for cross-compilation
+    && echo '#!/bin/sh' > /tmp/armhf-pkg-config \
+    && echo 'export PKG_CONFIG_LIBDIR=/usr/arm-linux-gnueabihf/lib/pkgconfig:/usr/lib/arm-linux-gnueabihf/pkgconfig' >> /tmp/armhf-pkg-config \
+    && echo 'export PKG_CONFIG_PATH=""' >> /tmp/armhf-pkg-config \
+    && echo 'export PKG_CONFIG_SYSROOT_DIR=""' >> /tmp/armhf-pkg-config \
+    && echo 'exec pkg-config "$@"' >> /tmp/armhf-pkg-config \
+    && chmod +x /tmp/armhf-pkg-config \
+    # Build FFmpeg with RKMPP
+    && cd ffmpeg-rockchip \
+    && ./configure \
+        --prefix=/usr/arm-linux-gnueabihf \
+        --cross-prefix=arm-linux-gnueabihf- \
+        --arch=arm \
+        --target-os=linux \
+        --enable-cross-compile \
+        --pkg-config=/tmp/armhf-pkg-config \
+        --enable-gpl \
+        --enable-version3 \
+        --enable-shared \
+        --disable-static \
+        --enable-libdrm \
+        --enable-rkmpp \
+        --enable-rkrga \
+        --enable-libv4l2 \
+        --enable-libx264 \
+        --enable-libx265 \
+        --enable-libvpx \
+        --enable-vaapi \
+        --enable-v4l2-m2m \
+        --disable-programs \
+        --disable-doc \
+        --disable-htmlpages \
+        --disable-manpages \
+        --disable-podpages \
+        --disable-txtpages \
+        --disable-network \
+        --disable-protocols \
+        --disable-debug \
+        --disable-decoder=mjpeg \
+        --disable-decoder=mjpegb \
+    && make -j$(nproc) \
+    && make install \
+    && cd / \
+    && rm -rf /tmp/ffmpeg-build /tmp/armhf-cross.txt /tmp/armhf-pkg-config
+
 # Add Rust target
 RUN rustup target add armv7-unknown-linux-gnueabihf
 
+# Create symlink for mold to work with cross-compiler
+RUN ln -s /usr/bin/mold /usr/bin/arm-linux-gnueabihf-ld.mold
+
 # Configure environment for cross-compilation
+# Use PKG_CONFIG_LIBDIR to completely replace default search paths
+# This ensures we use our custom-built FFmpeg instead of system FFmpeg
 ENV CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc \
     CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc \
     CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++ \
     AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar \
-    PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig \
-    PKG_CONFIG_ALLOW_CROSS=1
+    PKG_CONFIG_LIBDIR=/usr/arm-linux-gnueabihf/lib/pkgconfig:/usr/lib/arm-linux-gnueabihf/pkgconfig \
+    PKG_CONFIG_PATH="" \
+    PKG_CONFIG_ALLOW_CROSS=1 \
+    RUSTFLAGS="-C linker=arm-linux-gnueabihf-gcc -C link-arg=-fuse-ld=mold"

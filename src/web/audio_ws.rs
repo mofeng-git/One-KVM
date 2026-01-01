@@ -180,42 +180,6 @@ fn encode_audio_packet(frame: &OpusFrame, stream_start: Instant) -> Vec<u8> {
     buf
 }
 
-/// Decode audio packet from binary format (for testing/debugging)
-#[allow(dead_code)]
-pub fn decode_audio_packet(data: &[u8]) -> Option<AudioPacketHeader> {
-    if data.len() < 15 {
-        return None;
-    }
-
-    if data[0] != AUDIO_PACKET_TYPE {
-        return None;
-    }
-
-    let timestamp = u32::from_le_bytes([data[1], data[2], data[3], data[4]]);
-    let duration_ms = u16::from_le_bytes([data[5], data[6]]);
-    let sequence = u32::from_le_bytes([data[7], data[8], data[9], data[10]]);
-    let data_length = u32::from_le_bytes([data[11], data[12], data[13], data[14]]);
-
-    Some(AudioPacketHeader {
-        packet_type: data[0],
-        timestamp,
-        duration_ms,
-        sequence,
-        data_length,
-    })
-}
-
-/// Audio packet header (for decoding/testing)
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct AudioPacketHeader {
-    pub packet_type: u8,
-    pub timestamp: u32,
-    pub duration_ms: u16,
-    pub sequence: u32,
-    pub data_length: u32,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

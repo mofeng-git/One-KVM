@@ -31,10 +31,6 @@ const MIN_REG_TIMEOUT_MS: u64 = 3_000;
 /// Maximum registration timeout
 const MAX_REG_TIMEOUT_MS: u64 = 30_000;
 
-/// Connection timeout
-#[allow(dead_code)]
-const CONNECT_TIMEOUT_MS: u64 = 18_000;
-
 /// Timer interval for checking registration status
 const TIMER_INTERVAL_MS: u64 = 300;
 
@@ -682,7 +678,6 @@ impl AddrMangle {
     }
 
     /// Decode bytes to SocketAddr using RustDesk's mangle algorithm
-    #[allow(dead_code)]
     pub fn decode(bytes: &[u8]) -> Option<SocketAddr> {
         use std::convert::TryInto;
         use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4};

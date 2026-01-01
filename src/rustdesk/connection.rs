@@ -723,16 +723,6 @@ impl Connection {
         }
     }
 
-    /// Create public key message (for legacy compatibility)
-    fn create_public_key_message(&self) -> hbb::Message {
-        hbb::Message {
-            union: Some(message::Union::PublicKey(hbb::PublicKey {
-                asymmetric_value: self.keypair.public_key_bytes().to_vec(),
-                symmetric_value: vec![],
-            })),
-        }
-    }
-
     /// Handle peer's public key and negotiate session encryption
     /// After successful negotiation, send Hash message for password authentication
     async fn handle_peer_public_key(

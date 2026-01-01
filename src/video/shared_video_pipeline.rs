@@ -314,7 +314,7 @@ impl SharedVideoPipeline {
             config.input_format
         );
 
-        let (frame_tx, _) = broadcast::channel(8);  // Reduced from 64 for lower latency
+        let (frame_tx, _) = broadcast::channel(16);  // Reduced from 64 for lower latency
         let (running_tx, running_rx) = watch::channel(false);
         let nv12_size = (config.resolution.width * config.resolution.height * 3 / 2) as usize;
         let yuv420p_size = nv12_size; // Same size as NV12

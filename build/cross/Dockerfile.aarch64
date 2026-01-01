@@ -3,6 +3,10 @@
 
 FROM debian:12
 
+# Set Rustup mirrors (Aliyun)
+ENV RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
+    RUSTUP_DIST_SERVER=https://mirrors.aliyun.com/rustup
+
 # Install Rust toolchain
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -24,24 +28,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libclang-dev \
     llvm \
+    protobuf-compiler \
+    mold \
+    meson \
+    ninja-build \
+    wget \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ARM64 development libraries
+# Install ARM64 development libraries (without system ffmpeg)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl-dev:arm64 \
     libasound2-dev:arm64 \
     libv4l-dev:arm64 \
     libudev-dev:arm64 \
     zlib1g-dev:arm64 \
     libjpeg62-turbo-dev:arm64 \
     libyuv-dev:arm64 \
-    libavcodec-dev:arm64 \
-    libavformat-dev:arm64 \
-    libavutil-dev:arm64 \
-    libswscale-dev:arm64 \
-    libswresample-dev:arm64 \
     libx264-dev:arm64 \
     libx265-dev:arm64 \
     libvpx-dev:arm64 \
@@ -54,13 +59,106 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxdmcp-dev:arm64 \
     && rm -rf /var/lib/apt/lists/*
 
+# Download and build FFmpeg with RKMPP support
+RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
+    && wget -q https://files.mofeng.run/src/image/other/ffmpeg.tar.gz \
+    && tar -xzf ffmpeg.tar.gz \
+    && cd ffmpeg \
+    # Build RKMPP
+    && mkdir -p rkmpp/build && cd rkmpp/build \
+    && cmake .. \
+        -DCMAKE_SYSTEM_NAME=Linux \
+        -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+        -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+        -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+        -DCMAKE_INSTALL_PREFIX=/usr/aarch64-linux-gnu \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=ON \
+        -DBUILD_TEST=OFF \
+    && make -j$(nproc) \
+    && make install \
+    && cd ../.. \
+    # Build RKRGA - create cross file for meson
+    && echo '[binaries]' > /tmp/aarch64-cross.txt \
+    && echo "c = 'aarch64-linux-gnu-gcc'" >> /tmp/aarch64-cross.txt \
+    && echo "cpp = 'aarch64-linux-gnu-g++'" >> /tmp/aarch64-cross.txt \
+    && echo "ar = 'aarch64-linux-gnu-ar'" >> /tmp/aarch64-cross.txt \
+    && echo "strip = 'aarch64-linux-gnu-strip'" >> /tmp/aarch64-cross.txt \
+    && echo "pkgconfig = 'pkg-config'" >> /tmp/aarch64-cross.txt \
+    && echo '[host_machine]' >> /tmp/aarch64-cross.txt \
+    && echo "system = 'linux'" >> /tmp/aarch64-cross.txt \
+    && echo "cpu_family = 'aarch64'" >> /tmp/aarch64-cross.txt \
+    && echo "cpu = 'aarch64'" >> /tmp/aarch64-cross.txt \
+    && echo "endian = 'little'" >> /tmp/aarch64-cross.txt \
+    && cd rkrga \
+    && meson setup build --prefix=/usr/aarch64-linux-gnu --libdir=lib \
+        --cross-file=/tmp/aarch64-cross.txt \
+        --buildtype=release \
+        -Dcpp_args=-fpermissive \
+        -Dlibdrm=false \
+        -Dlibrga_demo=false \
+    && ninja -C build \
+    && ninja -C build install \
+    && cd .. \
+    # Create pkg-config wrapper for cross-compilation
+    && echo '#!/bin/sh' > /tmp/aarch64-pkg-config \
+    && echo 'export PKG_CONFIG_LIBDIR=/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig' >> /tmp/aarch64-pkg-config \
+    && echo 'export PKG_CONFIG_PATH=""' >> /tmp/aarch64-pkg-config \
+    && echo 'export PKG_CONFIG_SYSROOT_DIR=""' >> /tmp/aarch64-pkg-config \
+    && echo 'exec pkg-config "$@"' >> /tmp/aarch64-pkg-config \
+    && chmod +x /tmp/aarch64-pkg-config \
+    # Build FFmpeg with RKMPP
+    && cd ffmpeg-rockchip \
+    && ./configure \
+        --prefix=/usr/aarch64-linux-gnu \
+        --cross-prefix=aarch64-linux-gnu- \
+        --arch=aarch64 \
+        --target-os=linux \
+        --enable-cross-compile \
+        --pkg-config=/tmp/aarch64-pkg-config \
+        --enable-gpl \
+        --enable-version3 \
+        --enable-shared \
+        --disable-static \
+        --enable-libdrm \
+        --enable-rkmpp \
+        --enable-rkrga \
+        --enable-libv4l2 \
+        --enable-libx264 \
+        --enable-libx265 \
+        --enable-libvpx \
+        --enable-vaapi \
+        --enable-v4l2-m2m \
+        --disable-programs \
+        --disable-doc \
+        --disable-htmlpages \
+        --disable-manpages \
+        --disable-podpages \
+        --disable-txtpages \
+        --disable-network \
+        --disable-protocols \
+        --disable-debug \
+        --disable-decoder=mjpeg \
+        --disable-decoder=mjpegb \
+    && make -j$(nproc) \
+    && make install \
+    && cd / \
+    && rm -rf /tmp/ffmpeg-build /tmp/aarch64-cross.txt /tmp/aarch64-pkg-config
+
 # Add Rust target
 RUN rustup target add aarch64-unknown-linux-gnu
 
+# Create symlink for mold to work with cross-compiler
+RUN ln -s /usr/bin/mold /usr/bin/aarch64-linux-gnu-ld.mold
+
 # Configure environment for cross-compilation
+# Use PKG_CONFIG_LIBDIR to completely replace default search paths
+# This ensures we use our custom-built FFmpeg instead of system FFmpeg
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
     CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
     AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar \
-    PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
-    PKG_CONFIG_ALLOW_CROSS=1
+    PKG_CONFIG_LIBDIR=/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig \
+    PKG_CONFIG_PATH="" \
+    PKG_CONFIG_ALLOW_CROSS=1 \
+    RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc -C link-arg=-fuse-ld=mold"

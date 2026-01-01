@@ -140,7 +140,7 @@ impl AudioCapturer {
     /// Create a new audio capturer
     pub fn new(config: AudioConfig) -> Self {
         let (state_tx, state_rx) = watch::channel(CaptureState::Stopped);
-        let (frame_tx, _) = broadcast::channel(32);
+        let (frame_tx, _) = broadcast::channel(16); // Buffer size 16 for low latency
 
         Self {
             config,

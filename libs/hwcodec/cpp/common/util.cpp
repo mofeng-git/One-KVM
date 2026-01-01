@@ -136,6 +136,26 @@ bool set_lantency_free(void *priv_data, const std::string &name) {
       return false;
     }
   }
+  // RKMPP (Rockchip MPP) hardware encoder - minimize buffer latency
+  if (name.find("rkmpp") != std::string::npos) {
+    // Set async_depth to 1 for minimal buffering (0 = synchronous, higher = more buffering)
+    if ((ret = av_opt_set(priv_data, "async_depth", "1", 0)) < 0) {
+      LOG_WARN(std::string("rkmpp set async_depth failed, ret = ") + av_err2str(ret));
+      // Not fatal - older FFmpeg versions may not support this option
+    }
+  }
+  // V4L2 M2M hardware encoder - minimize buffer latency
+  if (name.find("v4l2m2m") != std::string::npos) {
+    // Minimize number of output buffers for lower latency
+    if ((ret = av_opt_set_int(priv_data, "num_output_buffers", 2, 0)) < 0) {
+      LOG_WARN(std::string("v4l2m2m set num_output_buffers failed, ret = ") + av_err2str(ret));
+      // Not fatal
+    }
+    if ((ret = av_opt_set_int(priv_data, "num_capture_buffers", 2, 0)) < 0) {
+      LOG_WARN(std::string("v4l2m2m set num_capture_buffers failed, ret = ") + av_err2str(ret));
+      // Not fatal
+    }
+  }
   if (name.find("videotoolbox") != std::string::npos) {
     if ((ret = av_opt_set_int(priv_data, "realtime", 1, 0)) < 0) {
       LOG_ERROR(std::string("videotoolbox set realtime failed, ret = ") + av_err2str(ret));

@@ -28,8 +28,6 @@ use crate::utils::LogThrottler;
 const RESP_OK: u8 = 0x00;
 const RESP_ERR_HID_UNAVAILABLE: u8 = 0x01;
 const RESP_ERR_INVALID_MESSAGE: u8 = 0x02;
-#[allow(dead_code)]
-const RESP_ERR_SEND_FAILED: u8 = 0x03;
 
 /// WebSocket HID upgrade handler
 pub async fn ws_hid_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {

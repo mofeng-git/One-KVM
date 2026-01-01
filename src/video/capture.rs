@@ -143,7 +143,7 @@ impl VideoCapturer {
     /// Create a new video capturer
     pub fn new(config: CaptureConfig) -> Self {
         let (state_tx, state_rx) = watch::channel(CaptureState::Stopped);
-        let (frame_tx, _) = broadcast::channel(4); // Reduced from 64 for lower latency
+        let (frame_tx, _) = broadcast::channel(16); // Buffer size 16 for low latency
 
         Self {
             config,

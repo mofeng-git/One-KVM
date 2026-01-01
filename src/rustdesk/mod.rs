@@ -383,12 +383,6 @@ impl RustDeskService {
         self.start().await
     }
 
-    /// Get a shutdown receiver for graceful shutdown handling
-    #[allow(dead_code)]
-    pub fn shutdown_rx(&self) -> broadcast::Receiver<()> {
-        self.shutdown_tx.subscribe()
-    }
-
     /// Save keypair and UUID to config
     /// Returns the updated config if changes were made
     pub fn save_credentials(&self) -> Option<RustDeskConfig> {

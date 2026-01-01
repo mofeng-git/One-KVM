@@ -167,7 +167,7 @@ impl MjpegStreamHandler {
 
     /// Create handler with custom drop limit
     pub fn with_drop_limit(max_drop: u64) -> Self {
-        let (frame_notify, _) = broadcast::channel(4); // Reduced from 16 for lower latency
+        let (frame_notify, _) = broadcast::channel(16); // Buffer size 16 for low latency
         Self {
             current_frame: ArcSwap::from_pointee(None),
             frame_notify,

@@ -111,7 +111,7 @@ impl AudioStreamer {
     /// Create a new audio streamer with specified configuration
     pub fn with_config(config: AudioStreamerConfig) -> Self {
         let (state_tx, state_rx) = watch::channel(AudioStreamState::Stopped);
-        let (opus_tx, _) = broadcast::channel(64);
+        let (opus_tx, _) = broadcast::channel(16); // Buffer size 16 for low latency
 
         Self {
             config: RwLock::new(config),

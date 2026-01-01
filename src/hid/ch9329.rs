@@ -449,29 +449,6 @@ impl Ch9329Backend {
         self.port.lock().is_some()
     }
 
-    /// Convert I/O error to HidError with appropriate error code
-    #[allow(dead_code)]
-    fn io_error_to_hid_error(e: std::io::Error, operation: &str) -> AppError {
-        let error_code = match e.kind() {
-            std::io::ErrorKind::NotFound => "port_not_found",
-            std::io::ErrorKind::PermissionDenied => "permission_denied",
-            std::io::ErrorKind::TimedOut => "timeout",
-            std::io::ErrorKind::BrokenPipe => "broken_pipe",
-            _ => match e.raw_os_error() {
-                Some(6) => "enxio",      // ENXIO - no such device
-                Some(19) => "enodev",    // ENODEV - no such device
-                Some(5) => "eio",        // EIO - I/O error
-                _ => "serial_error",
-            },
-        };
-
-        AppError::HidError {
-            backend: "ch9329".to_string(),
-            reason: format!("{}: {}", operation, e),
-            error_code: error_code.to_string(),
-        }
-    }
-
     /// Convert serialport error to HidError
     fn serial_error_to_hid_error(e: serialport::Error, operation: &str) -> AppError {
         let error_code = match e.kind() {

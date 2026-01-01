@@ -573,7 +573,7 @@ impl UniversalSession {
                                 }
                             }
                             Err(broadcast::error::RecvError::Lagged(n)) => {
-                                warn!("Session {} lagged by {} frames", session_id, n);
+                                debug!("Session {} lagged by {} frames", session_id, n);
                             }
                             Err(broadcast::error::RecvError::Closed) => {
                                 info!("Video frame channel closed for session {}", session_id);

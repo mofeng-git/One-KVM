@@ -452,9 +452,7 @@ impl Streamer {
                     Ok(frame) => {
                         mjpeg_handler.update_frame(frame);
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        trace!("Frame distribution lagged by {} frames", n);
-                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                         debug!("Frame channel closed");
                         break;
@@ -544,9 +542,7 @@ impl Streamer {
                             }
                         }
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        trace!("Frame distribution lagged by {} frames", n);
-                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                         debug!("Frame channel closed");
                         break;

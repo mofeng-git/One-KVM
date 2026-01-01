@@ -4,9 +4,10 @@ use axum::{
     routing::get,
     Router,
 };
+#[cfg(debug_assertions)]
 use std::path::PathBuf;
+#[cfg(debug_assertions)]
 use std::sync::OnceLock;
-use tracing;
 
 // Only embed assets in release mode
 #[cfg(not(debug_assertions))]
@@ -22,6 +23,7 @@ pub struct StaticAssets;
 /// Get the base directory for static files
 /// In debug mode: relative to executable directory
 /// In release mode: not used (embedded assets)
+#[cfg(debug_assertions)]
 fn get_static_base_dir() -> PathBuf {
     static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
     BASE_DIR.get_or_init(|| {

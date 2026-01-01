@@ -383,7 +383,7 @@ pub struct PeerConnectionManager {
 impl PeerConnectionManager {
     /// Create a new peer connection manager
     pub fn new(config: WebRtcConfig) -> Self {
-        let (frame_tx, _) = broadcast::channel(16);
+        let (frame_tx, _) = broadcast::channel(16); // Buffer size 16 for low latency
 
         Self {
             config,
@@ -395,7 +395,7 @@ impl PeerConnectionManager {
 
     /// Create a new peer connection manager with HID controller
     pub fn with_hid(config: WebRtcConfig, hid: Arc<HidController>) -> Self {
-        let (frame_tx, _) = broadcast::channel(16);
+        let (frame_tx, _) = broadcast::channel(16); // Buffer size 16 for low latency
 
         Self {
             config,

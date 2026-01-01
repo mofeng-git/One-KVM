@@ -376,7 +376,6 @@ impl UniversalVideoTrack {
                 _ => {}
             }
 
-            trace!("H264 NAL: type={} size={}", nal_type, nal.data.len());
             nals.push(nal.data.freeze());
         }
 

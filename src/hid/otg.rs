@@ -284,31 +284,6 @@ impl OtgBackend {
         Ok(())
     }
 
-    /// Close a device (used when ESHUTDOWN is received)
-    #[allow(dead_code)]
-    fn close_device(&self, device_type: DeviceType) {
-        let dev_mutex = match device_type {
-            DeviceType::Keyboard => &self.keyboard_dev,
-            DeviceType::MouseRelative => &self.mouse_rel_dev,
-            DeviceType::MouseAbsolute => &self.mouse_abs_dev,
-        };
-
-        let mut dev = dev_mutex.lock();
-        if dev.is_some() {
-            debug!("Closing {:?} device handle for recovery", device_type);
-            *dev = None;
-        }
-    }
-
-    /// Close all device handles (for recovery)
-    #[allow(dead_code)]
-    fn close_all_devices(&self) {
-        self.close_device(DeviceType::Keyboard);
-        self.close_device(DeviceType::MouseRelative);
-        self.close_device(DeviceType::MouseAbsolute);
-        self.online.store(false, Ordering::Relaxed);
-    }
-
     /// Open a HID device file with read/write access
     fn open_device(path: &PathBuf) -> Result<File> {
         OpenOptions::new()
@@ -527,7 +502,6 @@ impl OtgBackend {
                 Ok(_) => {
                     self.online.store(true, Ordering::Relaxed);
                     self.reset_error_count();
-                    trace!("Sent absolute mouse report: {:02X?}", data);
                     Ok(())
                 }
                 Err(e) => {
