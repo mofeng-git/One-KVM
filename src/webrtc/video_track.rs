@@ -421,9 +421,11 @@ impl UniversalVideoTrack {
     /// Write VP8 frame
     async fn write_vp8_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
         // VP8 frames are sent directly without NAL parsing
+        // Calculate frame duration based on configured FPS
+        let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
         let sample = Sample {
             data: Bytes::copy_from_slice(data),
-            duration: Duration::from_secs(1),
+            duration: frame_duration,
             ..Default::default()
         };
 
@@ -452,9 +454,11 @@ impl UniversalVideoTrack {
     /// Write VP9 frame
     async fn write_vp9_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
         // VP9 frames are sent directly without NAL parsing
+        // Calculate frame duration based on configured FPS
+        let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
         let sample = Sample {
             data: Bytes::copy_from_slice(data),
-            duration: Duration::from_secs(1),
+            duration: frame_duration,
             ..Default::default()
         };
 
@@ -483,13 +487,15 @@ impl UniversalVideoTrack {
     /// Send NAL units as samples (H264 only)
     async fn send_nals(&self, nals: Vec<Bytes>, is_keyframe: bool) -> Result<()> {
         let mut total_bytes = 0u64;
+        // Calculate frame duration based on configured FPS
+        let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
 
         match &self.track {
             TrackType::Sample(track) => {
                 for nal_data in nals {
                     let sample = Sample {
                         data: nal_data.clone(),
-                        duration: Duration::from_secs(1),
+                        duration: frame_duration,
                         ..Default::default()
                     };
 

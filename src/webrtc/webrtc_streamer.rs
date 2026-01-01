@@ -533,16 +533,12 @@ impl WebRtcStreamer {
             info!("Closed {} existing sessions due to config change", session_count);
         }
 
-        // Update config
+        // Update config (preserve user-configured bitrate)
         let mut config = self.config.write().await;
         config.resolution = resolution;
         config.input_format = format;
         config.fps = fps;
-
-        // Scale bitrate based on resolution
-        let base_pixels: u64 = 1280 * 720;
-        let actual_pixels: u64 = resolution.width as u64 * resolution.height as u64;
-        config.bitrate_kbps = ((8000u64 * actual_pixels / base_pixels).max(1000).min(15000)) as u32;
+        // Note: bitrate is NOT auto-scaled here - use set_bitrate() or config to change it
 
         info!(
             "WebRTC config updated: {}x{} {:?} @ {} fps, {} kbps",
