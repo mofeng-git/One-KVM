@@ -36,6 +36,12 @@ fn compile_protos() {
 
     prost_build::Config::new()
         .out_dir(&out_dir)
+        // Use bytes::Bytes for video/audio frame data to enable zero-copy
+        .bytes([
+            "EncodedVideoFrame.data",
+            "AudioFrame.data",
+            "CursorData.colors",
+        ])
         .compile_protos(
             &["protos/rendezvous.proto", "protos/message.proto"],
             &["protos/"],

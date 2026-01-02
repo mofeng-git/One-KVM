@@ -895,6 +895,9 @@ impl WebRtcStreamer {
                 preset
             );
 
+            // Save video_frame_tx BEFORE stopping pipeline (monitor task will clear it)
+            let saved_frame_tx = self.video_frame_tx.read().await.clone();
+
             // Stop existing pipeline
             if let Some(ref pipeline) = *self.video_pipeline.read().await {
                 pipeline.stop();
@@ -907,13 +910,16 @@ impl WebRtcStreamer {
             *self.video_pipeline.write().await = None;
 
             // Recreate pipeline with new config if we have a frame source
-            if let Some(ref tx) = *self.video_frame_tx.read().await {
+            if let Some(tx) = saved_frame_tx {
                 // Get existing sessions that need to be reconnected
                 let session_ids: Vec<String> = self.sessions.read().await.keys().cloned().collect();
 
                 if !session_ids.is_empty() {
+                    // Restore video_frame_tx before recreating pipeline
+                    *self.video_frame_tx.write().await = Some(tx.clone());
+
                     // Recreate pipeline
-                    let pipeline = self.ensure_video_pipeline(tx.clone()).await?;
+                    let pipeline = self.ensure_video_pipeline(tx).await?;
 
                     // Reconnect all sessions to new pipeline
                     let sessions = self.sessions.read().await;

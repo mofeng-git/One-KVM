@@ -98,6 +98,48 @@ pub async fn write_frame<W: AsyncWrite + Unpin>(writer: &mut W, data: &[u8]) -> 
     Ok(())
 }
 
+/// Write a framed message using a reusable buffer (reduces allocations)
+///
+/// This version reuses the provided BytesMut buffer to avoid allocation on each call.
+/// The buffer is cleared before use and will grow as needed.
+pub async fn write_frame_buffered<W: AsyncWrite + Unpin>(
+    writer: &mut W,
+    data: &[u8],
+    buf: &mut BytesMut,
+) -> io::Result<()> {
+    buf.clear();
+    encode_frame_into(data, buf)?;
+    writer.write_all(buf).await?;
+    writer.flush().await?;
+    Ok(())
+}
+
+/// Encode a message with RustDesk's variable-length framing into an existing buffer
+pub fn encode_frame_into(data: &[u8], buf: &mut BytesMut) -> io::Result<()> {
+    let len = data.len();
+
+    // Reserve space for header (max 4 bytes) + data
+    buf.reserve(4 + len);
+
+    if len <= 0x3F {
+        buf.put_u8((len << 2) as u8);
+    } else if len <= 0x3FFF {
+        buf.put_u16_le(((len << 2) as u16) | 0x1);
+    } else if len <= 0x3FFFFF {
+        let h = ((len << 2) as u32) | 0x2;
+        buf.put_u8((h & 0xFF) as u8);
+        buf.put_u8(((h >> 8) & 0xFF) as u8);
+        buf.put_u8(((h >> 16) & 0xFF) as u8);
+    } else if len <= MAX_PACKET_LENGTH {
+        buf.put_u32_le(((len << 2) as u32) | 0x3);
+    } else {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Message too large"));
+    }
+
+    buf.extend_from_slice(data);
+    Ok(())
+}
+
 /// BytesCodec for stateful decoding (compatible with tokio-util codec)
 #[derive(Debug, Clone, Copy)]
 pub struct BytesCodec {

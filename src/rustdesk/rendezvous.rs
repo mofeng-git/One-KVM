@@ -353,7 +353,6 @@ impl RendezvousMediator {
         let id = self.device_id();
         let serial = *self.serial.read();
 
-        debug!("Sending RegisterPeer: id={}, serial={}", id, serial);
         let msg = make_register_peer(&id, serial);
         let bytes = msg.encode_to_vec();
         socket.send(&bytes).await?;
@@ -445,7 +444,6 @@ impl RendezvousMediator {
 
         match msg.union {
             Some(rendezvous_message::Union::RegisterPeerResponse(rpr)) => {
-                debug!("Received RegisterPeerResponse, request_pk={}", rpr.request_pk);
                 if rpr.request_pk {
                     // Server wants us to register our public key
                     info!("Server requested public key registration");

@@ -1,8 +1,9 @@
 //! RustDesk Frame Adapters
 //!
 //! Converts One-KVM video/audio frames to RustDesk protocol format.
+//! Optimized for zero-copy where possible and buffer reuse.
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use prost::Message as ProstMessage;
 
 use super::protocol::hbb::{self, message, EncodedVideoFrame, EncodedVideoFrames, AudioFrame, AudioFormat, Misc};
@@ -55,8 +56,10 @@ impl VideoFrameAdapter {
         self.codec = codec;
     }
 
-    /// Convert encoded video data to RustDesk Message
-    pub fn encode_frame(&mut self, data: &[u8], is_keyframe: bool, timestamp_ms: u64) -> hbb::Message {
+    /// Convert encoded video data to RustDesk Message (zero-copy version)
+    ///
+    /// This version takes Bytes directly to avoid copying the frame data.
+    pub fn encode_frame_from_bytes(&mut self, data: Bytes, is_keyframe: bool, timestamp_ms: u64) -> hbb::Message {
         // Calculate relative timestamp
         if self.seq == 0 {
             self.timestamp_base = timestamp_ms;
@@ -64,7 +67,7 @@ impl VideoFrameAdapter {
         let pts = (timestamp_ms - self.timestamp_base) as i64;
 
         let frame = EncodedVideoFrame {
-            data: data.to_vec(),
+            data,  // Zero-copy: Bytes is reference-counted
             key: is_keyframe,
             pts,
             ..Default::default()
@@ -107,10 +110,24 @@ impl VideoFrameAdapter {
         }
     }
 
+    /// Convert encoded video data to RustDesk Message
+    pub fn encode_frame(&mut self, data: &[u8], is_keyframe: bool, timestamp_ms: u64) -> hbb::Message {
+        self.encode_frame_from_bytes(Bytes::copy_from_slice(data), is_keyframe, timestamp_ms)
+    }
+
+    /// Encode frame to bytes for sending (zero-copy version)
+    ///
+    /// Takes Bytes directly to avoid copying the frame data.
+    pub fn encode_frame_bytes_zero_copy(&mut self, data: Bytes, is_keyframe: bool, timestamp_ms: u64) -> Bytes {
+        let msg = self.encode_frame_from_bytes(data, is_keyframe, timestamp_ms);
+        let mut buf = BytesMut::with_capacity(msg.encoded_len());
+        msg.encode(&mut buf).expect("encode should not fail");
+        buf.freeze()
+    }
+
     /// Encode frame to bytes for sending
     pub fn encode_frame_bytes(&mut self, data: &[u8], is_keyframe: bool, timestamp_ms: u64) -> Bytes {
-        let msg = self.encode_frame(data, is_keyframe, timestamp_ms);
-        Bytes::from(ProstMessage::encode_to_vec(&msg))
+        self.encode_frame_bytes_zero_copy(Bytes::copy_from_slice(data), is_keyframe, timestamp_ms)
     }
 
     /// Get current sequence number
@@ -163,7 +180,7 @@ impl AudioFrameAdapter {
     /// Convert Opus audio data to RustDesk Message
     pub fn encode_opus_frame(&self, data: &[u8]) -> hbb::Message {
         let frame = AudioFrame {
-            data: data.to_vec(),
+            data: Bytes::copy_from_slice(data),
         };
 
         hbb::Message {
@@ -202,7 +219,7 @@ impl CursorAdapter {
             hoty,
             width,
             height,
-            colors,
+            colors: Bytes::from(colors),
             ..Default::default()
         };
 
