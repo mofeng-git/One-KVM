@@ -12,7 +12,6 @@ use std::ffi::c_int;
 
 include!(concat!(env!("OUT_DIR"), "/ffmpeg_ram_ffi.rs"));
 
-pub mod decode;
 pub mod encode;
 
 pub enum Priority {
@@ -52,7 +51,6 @@ impl CodecInfo {
         let mut vp8: Option<CodecInfo> = None;
         let mut vp9: Option<CodecInfo> = None;
         let mut av1: Option<CodecInfo> = None;
-        let mut mjpeg: Option<CodecInfo> = None;
 
         for coder in coders {
             match coder.format {
@@ -96,14 +94,6 @@ impl CodecInfo {
                     }
                     None => av1 = Some(coder),
                 },
-                DataFormat::MJPEG => match &mjpeg {
-                    Some(old) => {
-                        if old.priority > coder.priority {
-                            mjpeg = Some(coder)
-                        }
-                    }
-                    None => mjpeg = Some(coder),
-                },
             }
         }
         CodecInfos {
@@ -112,7 +102,6 @@ impl CodecInfo {
             vp8,
             vp9,
             av1,
-            mjpeg,
         }
     }
 
@@ -147,13 +136,6 @@ impl CodecInfo {
                 priority: Priority::Soft as _,
             }),
             av1: None,
-            mjpeg: Some(CodecInfo {
-                name: "mjpeg".to_owned(),
-                mc_name: Default::default(),
-                format: MJPEG,
-                hwdevice: AV_HWDEVICE_TYPE_NONE,
-                priority: Priority::Soft as _,
-            }),
         }
     }
 }
@@ -165,7 +147,6 @@ pub struct CodecInfos {
     pub vp8: Option<CodecInfo>,
     pub vp9: Option<CodecInfo>,
     pub av1: Option<CodecInfo>,
-    pub mjpeg: Option<CodecInfo>,
 }
 
 impl CodecInfos {

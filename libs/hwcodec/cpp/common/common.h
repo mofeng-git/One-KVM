@@ -28,7 +28,6 @@ enum DataFormat {
   VP8,
   VP9,
   AV1,
-  MJPEG,
 };
 
 // same as Driver

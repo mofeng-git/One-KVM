@@ -101,7 +101,8 @@ mod ffmpeg {
     fn link_system_ffmpeg(builder: &mut Build) {
         use std::process::Command;
 
-        let libs = ["libavcodec", "libavutil", "libavformat", "libswscale"];
+        // Only need libavcodec and libavutil for encoding
+        let libs = ["libavcodec", "libavutil"];
 
         for lib in &libs {
             // Get cflags
@@ -134,7 +135,7 @@ mod ffmpeg {
                         }
                     }
                 } else {
-                    panic!("pkg-config failed for {}. Install FFmpeg development libraries: sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev", lib);
+                    panic!("pkg-config failed for {}. Install FFmpeg development libraries: sudo apt install libavcodec-dev libavutil-dev", lib);
                 }
             } else {
                 panic!("pkg-config not found. Install pkg-config and FFmpeg development libraries.");
@@ -178,7 +179,8 @@ mod ffmpeg {
             )
         );
         {
-            let mut static_libs = vec!["avcodec", "avutil", "avformat"];
+            // Only need avcodec and avutil for encoding
+            let mut static_libs = vec!["avcodec", "avutil"];
             if target_os == "windows" {
                 static_libs.push("libmfx");
             }
@@ -251,7 +253,7 @@ mod ffmpeg {
             .unwrap();
 
         builder.files(
-            ["ffmpeg_ram_encode.cpp", "ffmpeg_ram_decode.cpp"].map(|f| ffmpeg_ram_dir.join(f)),
+            ["ffmpeg_ram_encode.cpp"].map(|f| ffmpeg_ram_dir.join(f)),
         );
     }
 }

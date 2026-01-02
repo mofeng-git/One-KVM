@@ -92,6 +92,8 @@ pub enum H265InputFormat {
     Yuv420p,
     /// NV12 - Y plane + interleaved UV plane (optimal for hardware encoders)
     Nv12,
+    /// YUYV422 - packed YUV 4:2:2 format (optimal for RKMPP direct input)
+    Yuyv422,
 }
 
 impl Default for H265InputFormat {
@@ -142,6 +144,23 @@ impl H265Config {
             gop_size: 30,
             fps: 30,
             input_format: H265InputFormat::Nv12,
+        }
+    }
+
+    /// Create config for low latency streaming with YUYV422 input (optimal for RKMPP direct input)
+    pub fn low_latency_yuyv422(resolution: Resolution, bitrate_kbps: u32) -> Self {
+        Self {
+            base: EncoderConfig {
+                resolution,
+                input_format: PixelFormat::Yuyv,
+                quality: bitrate_kbps,
+                fps: 30,
+                gop_size: 30,
+            },
+            bitrate_kbps,
+            gop_size: 30,
+            fps: 30,
+            input_format: H265InputFormat::Yuyv422,
         }
     }
 
@@ -311,13 +330,14 @@ impl H265Encoder {
         let width = config.base.resolution.width;
         let height = config.base.resolution.height;
 
-        // Software encoders (libx265) require YUV420P, hardware encoders use NV12
+        // Software encoders (libx265) require YUV420P, hardware encoders use NV12 or YUYV422
         let (pixfmt, actual_input_format) = if is_software {
             (AVPixelFormat::AV_PIX_FMT_YUV420P, H265InputFormat::Yuv420p)
         } else {
             match config.input_format {
                 H265InputFormat::Nv12 => (AVPixelFormat::AV_PIX_FMT_NV12, H265InputFormat::Nv12),
                 H265InputFormat::Yuv420p => (AVPixelFormat::AV_PIX_FMT_YUV420P, H265InputFormat::Yuv420p),
+                H265InputFormat::Yuyv422 => (AVPixelFormat::AV_PIX_FMT_YUYV422, H265InputFormat::Yuyv422),
             }
         };
 
@@ -548,6 +568,7 @@ impl Encoder for H265Encoder {
         match self.config.input_format {
             H265InputFormat::Nv12 => matches!(format, PixelFormat::Nv12),
             H265InputFormat::Yuv420p => matches!(format, PixelFormat::Yuv420),
+            H265InputFormat::Yuyv422 => matches!(format, PixelFormat::Yuyv),
         }
     }
 }

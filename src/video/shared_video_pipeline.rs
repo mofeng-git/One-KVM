@@ -411,9 +411,22 @@ impl SharedVideoPipeline {
                 Box::new(H264EncoderWrapper(encoder))
             }
             VideoEncoderType::H265 => {
-                let encoder_config = H265Config::low_latency(config.resolution, config.bitrate_kbps);
+                // Determine H265 input format based on backend and input format
+                let encoder_config = if use_yuyv_direct {
+                    H265Config::low_latency_yuyv422(config.resolution, config.bitrate_kbps)
+                } else {
+                    H265Config::low_latency(config.resolution, config.bitrate_kbps)
+                };
 
-                let encoder = if let Some(ref backend) = config.encoder_backend {
+                let encoder = if use_yuyv_direct {
+                    // Force RKMPP backend for YUYV direct input
+                    let codec_name = get_codec_name(VideoEncoderType::H265, Some(EncoderBackend::Rkmpp))
+                        .ok_or_else(|| AppError::VideoError(
+                            "RKMPP backend not available for H.265".to_string()
+                        ))?;
+                    info!("Creating H265 encoder with RKMPP backend for YUYV direct input (codec: {})", codec_name);
+                    H265Encoder::with_codec(encoder_config, &codec_name)?
+                } else if let Some(ref backend) = config.encoder_backend {
                     let codec_name = get_codec_name(VideoEncoderType::H265, Some(*backend))
                         .ok_or_else(|| AppError::VideoError(format!(
                             "Backend {:?} does not support H.265", backend

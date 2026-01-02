@@ -16,19 +16,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Install build dependencies (same as runtime Debian 12)
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build tools
     build-essential \
     pkg-config \
     cmake \
     nasm \
+    yasm \
     git \
     libclang-dev \
     llvm \
     protobuf-compiler \
     libssl-dev \
     mold \
+    wget \
     # Core system libraries
     libasound2-dev \
     libv4l-dev \
@@ -37,13 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Video/image processing
     libjpeg62-turbo-dev \
     libyuv-dev \
-    # FFmpeg and codecs
-    libavcodec-dev \
-    libavformat-dev \
-    libavutil-dev \
-    libswscale-dev \
-    libswresample-dev \
-    # Video codec libraries
+    # Video codec libraries (for FFmpeg build)
     libx264-dev \
     libx265-dev \
     libvpx-dev \
@@ -60,8 +56,85 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxdmcp-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Download and build FFmpeg with minimal configuration for encoding only
+RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
+    && wget -q https://files.mofeng.run/src/image/other/ffmpeg.tar.gz \
+    && tar -xzf ffmpeg.tar.gz \
+    && cd ffmpeg/ffmpeg-rockchip \
+    && ./configure \
+        --prefix=/usr/local \
+        --enable-gpl \
+        --enable-version3 \
+        --enable-shared \
+        --disable-static \
+        # Hardware acceleration
+        --enable-libdrm \
+        --enable-vaapi \
+        --enable-libmfx \
+        # Software encoding libraries
+        --enable-libx264 \
+        --enable-libx265 \
+        --enable-libvpx \
+        # Disable programs and docs
+        --disable-programs \
+        --disable-doc \
+        --disable-htmlpages \
+        --disable-manpages \
+        --disable-podpages \
+        --disable-txtpages \
+        # Disable network
+        --disable-network \
+        --disable-protocols \
+        # Disable unused libraries
+        --disable-avformat \
+        --disable-swscale \
+        --disable-swresample \
+        --disable-avfilter \
+        --disable-avdevice \
+        --disable-postproc \
+        # Disable all decoders
+        --disable-decoders \
+        # Disable all encoders, enable only needed ones
+        --disable-encoders \
+        --enable-encoder=h264_vaapi \
+        --enable-encoder=hevc_vaapi \
+        --enable-encoder=vp8_vaapi \
+        --enable-encoder=vp9_vaapi \
+        --enable-encoder=h264_qsv \
+        --enable-encoder=hevc_qsv \
+        --enable-encoder=libx264 \
+        --enable-encoder=libx265 \
+        --enable-encoder=libvpx_vp8 \
+        --enable-encoder=libvpx_vp9 \
+        # Disable muxers/demuxers
+        --disable-muxers \
+        --disable-demuxers \
+        # Disable parsers except needed ones
+        --disable-parsers \
+        --enable-parser=h264 \
+        --enable-parser=hevc \
+        --enable-parser=vp8 \
+        --enable-parser=vp9 \
+        # Disable BSFs except needed ones
+        --disable-bsfs \
+        --enable-bsf=h264_mp4toannexb \
+        --enable-bsf=hevc_mp4toannexb \
+        # Disable hardware decoding
+        --disable-hwaccels \
+        # Disable other unused features
+        --disable-indevs \
+        --disable-outdevs \
+        --disable-filters \
+        --disable-debug \
+    && make -j$(nproc) \
+    && make install \
+    && ldconfig \
+    && cd / \
+    && rm -rf /tmp/ffmpeg-build
+
 # Add Rust target
 RUN rustup target add x86_64-unknown-linux-gnu
 
-# Configure mold as the linker
-ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold"
+# Configure mold as the linker and use custom FFmpeg
+ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold" \
+    PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH}"

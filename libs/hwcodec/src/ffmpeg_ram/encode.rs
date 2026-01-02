@@ -447,14 +447,6 @@ impl Encoder {
             }
         }
 
-        // Add MJPEG software encoder if not already present
-        if !res.iter().any(|c| c.format == MJPEG) {
-            if let Some(mjpeg_soft) = soft_codecs.mjpeg {
-                debug!("Adding software MJPEG encoder: {}", mjpeg_soft.name);
-                res.push(mjpeg_soft);
-            }
-        }
-
         res
     }
 

@@ -107,7 +107,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && echo 'export PKG_CONFIG_SYSROOT_DIR=""' >> /tmp/armhf-pkg-config \
     && echo 'exec pkg-config "$@"' >> /tmp/armhf-pkg-config \
     && chmod +x /tmp/armhf-pkg-config \
-    # Build FFmpeg with RKMPP
+    # Build FFmpeg with RKMPP (minimal build for encoding only)
     && cd ffmpeg-rockchip \
     && ./configure \
         --prefix=/usr/arm-linux-gnueabihf \
@@ -120,26 +120,69 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
         --enable-version3 \
         --enable-shared \
         --disable-static \
+        # Hardware acceleration
         --enable-libdrm \
         --enable-rkmpp \
         --enable-rkrga \
-        --enable-libv4l2 \
+        --enable-vaapi \
+        --enable-v4l2-m2m \
+        # Software encoding libraries
         --enable-libx264 \
         --enable-libx265 \
         --enable-libvpx \
-        --enable-vaapi \
-        --enable-v4l2-m2m \
+        # Disable programs and docs
         --disable-programs \
         --disable-doc \
         --disable-htmlpages \
         --disable-manpages \
         --disable-podpages \
         --disable-txtpages \
+        # Disable network
         --disable-network \
         --disable-protocols \
+        # Disable unused libraries
+        --disable-avformat \
+        --disable-swscale \
+        --disable-swresample \
+        --disable-avfilter \
+        --disable-avdevice \
+        --disable-postproc \
+        # Disable all decoders
+        --disable-decoders \
+        # Disable all encoders, enable only needed ones
+        --disable-encoders \
+        --enable-encoder=h264_vaapi \
+        --enable-encoder=hevc_vaapi \
+        --enable-encoder=vp8_vaapi \
+        --enable-encoder=vp9_vaapi \
+        --enable-encoder=h264_rkmpp \
+        --enable-encoder=hevc_rkmpp \
+        --enable-encoder=h264_v4l2m2m \
+        --enable-encoder=hevc_v4l2m2m \
+        --enable-encoder=libx264 \
+        --enable-encoder=libx265 \
+        --enable-encoder=libvpx_vp8 \
+        --enable-encoder=libvpx_vp9 \
+        # Disable muxers/demuxers
+        --disable-muxers \
+        --disable-demuxers \
+        # Disable parsers except needed ones
+        --disable-parsers \
+        --enable-parser=h264 \
+        --enable-parser=hevc \
+        --enable-parser=vp8 \
+        --enable-parser=vp9 \
+        # Disable BSFs except needed ones
+        --disable-bsfs \
+        --enable-bsf=h264_mp4toannexb \
+        --enable-bsf=hevc_mp4toannexb \
+        # Disable hardware decoding
+        --disable-hwaccels \
+        # Disable other unused features
+        --disable-indevs \
+        --disable-outdevs \
+        --disable-filters \
         --disable-debug \
-        --disable-decoder=mjpeg \
-        --disable-decoder=mjpegb \
     && make -j$(nproc) \
     && make install \
     && cd / \
