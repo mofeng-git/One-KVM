@@ -17,7 +17,69 @@ export interface KeyboardLayout {
     }
     control: string[][]
     arrows: string[][]
+    media: string[] // Media keys row
   }
+}
+
+// OS-specific keyboard layout type
+export type KeyboardOsType = 'windows' | 'mac' | 'android'
+
+// Bottom row layouts for different OS
+export const osBottomRows: Record<KeyboardOsType, string[]> = {
+  // Windows: Ctrl - Win - Alt - Space - Alt - Win - Menu - Ctrl
+  windows: ['ControlLeft', 'MetaLeft', 'AltLeft', 'Space', 'AltRight', 'MetaRight', 'Menu', 'ControlRight'],
+  // Mac: Ctrl - Option - Cmd - Space - Cmd - Option - Ctrl
+  mac: ['ControlLeft', 'AltLeft', 'MetaLeft', 'Space', 'MetaRight', 'AltRight', 'ControlRight'],
+  // Android: simplified layout
+  android: ['ControlLeft', 'AltLeft', 'Space', 'AltRight', 'ControlRight'],
+}
+
+// OS-specific modifier display names
+export const osModifierLabels: Record<KeyboardOsType, Record<string, string>> = {
+  windows: {
+    ControlLeft: '^Ctrl',
+    ControlRight: 'Ctrl^',
+    MetaLeft: '⊞Win',
+    MetaRight: 'Win⊞',
+    AltLeft: 'Alt',
+    AltRight: 'Alt',
+    AltGr: 'AltGr',
+    Menu: 'Menu',
+  },
+  mac: {
+    ControlLeft: '^Ctrl',
+    ControlRight: 'Ctrl^',
+    MetaLeft: '⌘Cmd',
+    MetaRight: 'Cmd⌘',
+    AltLeft: '⌥Opt',
+    AltRight: 'Opt⌥',
+    AltGr: '⌥Opt',
+    Menu: 'Menu',
+  },
+  android: {
+    ControlLeft: 'Ctrl',
+    ControlRight: 'Ctrl',
+    MetaLeft: 'Meta',
+    MetaRight: 'Meta',
+    AltLeft: 'Alt',
+    AltRight: 'Alt',
+    AltGr: 'Alt',
+    Menu: 'Menu',
+  },
+}
+
+// Media keys (Consumer Control)
+export const mediaKeys = ['PrevTrack', 'PlayPause', 'NextTrack', 'Stop', 'Mute', 'VolumeDown', 'VolumeUp']
+
+// Media key display names
+export const mediaKeyLabels: Record<string, string> = {
+  PlayPause: '⏯',
+  Stop: '⏹',
+  NextTrack: '⏭',
+  PrevTrack: '⏮',
+  Mute: '🔇',
+  VolumeUp: '🔊',
+  VolumeDown: '🔉',
 }
 
 // English US Layout
@@ -153,6 +215,7 @@ export const enUSLayout: KeyboardLayout = {
       ['ArrowUp'],
       ['ArrowLeft', 'ArrowDown', 'ArrowRight'],
     ],
+    media: ['PrevTrack', 'PlayPause', 'NextTrack', 'Stop', 'Mute', 'VolumeDown', 'VolumeUp'],
   },
 }
 

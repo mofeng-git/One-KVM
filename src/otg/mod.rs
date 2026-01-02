@@ -31,5 +31,5 @@ pub use function::{FunctionMeta, GadgetFunction};
 pub use hid::{HidFunction, HidFunctionType};
 pub use manager::{wait_for_hid_devices, OtgGadgetManager};
 pub use msd::{MsdFunction, MsdLunConfig};
-pub use report_desc::{KEYBOARD_WITH_LED, MOUSE_ABSOLUTE, MOUSE_RELATIVE};
+pub use report_desc::{KEYBOARD, MOUSE_ABSOLUTE, MOUSE_RELATIVE};
 pub use service::{HidDevicePaths, OtgService, OtgServiceState};

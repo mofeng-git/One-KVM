@@ -550,6 +550,10 @@ export default {
     hide: '隐藏',
     show: '显示虚拟键盘',
     layoutSelect: '键盘布局',
+    osWindows: 'Windows',
+    osMac: 'Mac',
+    osAndroid: 'Android',
+    mediaKeys: '多媒体键',
   },
   config: {
     applied: '配置已应用',

@@ -6,8 +6,6 @@ import { cn } from '@/lib/utils'
 const props = defineProps<{
   pressedKeys?: string[]
   capsLock?: boolean
-  numLock?: boolean
-  scrollLock?: boolean
   mousePosition?: { x: number; y: number }
   debugMode?: boolean
   compact?: boolean
@@ -15,34 +13,39 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
+// Key name mapping for friendly display
+const keyNameMap: Record<string, string> = {
+  MetaLeft: 'Win', MetaRight: 'Win',
+  ControlLeft: 'Ctrl', ControlRight: 'Ctrl',
+  ShiftLeft: 'Shift', ShiftRight: 'Shift',
+  AltLeft: 'Alt', AltRight: 'Alt',
+  CapsLock: 'Caps', NumLock: 'Num', ScrollLock: 'Scroll',
+  Backspace: 'Back', Delete: 'Del',
+  ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
+  Escape: 'Esc', Enter: 'Enter', Tab: 'Tab', Space: 'Space',
+  PageUp: 'PgUp', PageDown: 'PgDn',
+  Insert: 'Ins', Home: 'Home', End: 'End',
+}
+
 const keysDisplay = computed(() => {
   if (!props.pressedKeys || props.pressedKeys.length === 0) return ''
-  return props.pressedKeys.join(', ')
+  return props.pressedKeys
+    .map(key => keyNameMap[key] || key.replace(/^(Key|Digit)/, ''))
+    .join(', ')
 })
-
-// Has any LED active
-const hasActiveLed = computed(() => props.capsLock || props.numLock || props.scrollLock)
 </script>
 
 <template>
   <div class="w-full border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
     <!-- Compact mode for small screens -->
     <div v-if="compact" class="flex items-center justify-between text-xs px-2 py-0.5">
-      <!-- LED indicators only in compact mode -->
+      <!-- LED indicator only in compact mode -->
       <div class="flex items-center gap-1">
         <span
           v-if="capsLock"
           class="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-medium"
         >C</span>
-        <span
-          v-if="numLock"
-          class="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-medium"
-        >N</span>
-        <span
-          v-if="scrollLock"
-          class="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-medium"
-        >S</span>
-        <span v-if="!hasActiveLed" class="text-muted-foreground/40 text-[10px]">-</span>
+        <span v-else class="text-muted-foreground/40 text-[10px]">-</span>
       </div>
       <!-- Keys in compact mode -->
       <div v-if="keysDisplay" class="text-[10px] text-muted-foreground truncate max-w-[150px]">
@@ -67,8 +70,8 @@ const hasActiveLed = computed(() => props.capsLock || props.numLock || props.scr
         </div>
       </div>
 
-      <!-- Right side: Keyboard LED states -->
-      <div class="flex items-center divide-x divide-slate-200 dark:divide-slate-700 shrink-0">
+      <!-- Right side: Caps Lock LED state -->
+      <div class="flex items-center shrink-0">
         <div
           :class="cn(
             'px-2 py-1 select-none transition-colors',
@@ -77,24 +80,6 @@ const hasActiveLed = computed(() => props.capsLock || props.numLock || props.scr
         >
           <span class="hidden sm:inline">{{ t('infobar.caps') }}</span>
           <span class="sm:hidden">C</span>
-        </div>
-        <div
-          :class="cn(
-            'px-2 py-1 select-none transition-colors',
-            numLock ? 'text-foreground font-medium bg-primary/5' : 'text-muted-foreground/40'
-          )"
-        >
-          <span class="hidden sm:inline">{{ t('infobar.num') }}</span>
-          <span class="sm:hidden">N</span>
-        </div>
-        <div
-          :class="cn(
-            'px-2 py-1 select-none transition-colors',
-            scrollLock ? 'text-foreground font-medium bg-primary/5' : 'text-muted-foreground/40'
-          )"
-        >
-          <span class="hidden sm:inline">{{ t('infobar.scroll') }}</span>
-          <span class="sm:hidden">S</span>
         </div>
       </div>
     </div>

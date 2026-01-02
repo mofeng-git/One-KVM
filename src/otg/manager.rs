@@ -118,6 +118,15 @@ impl OtgGadgetManager {
         Ok(device_path)
     }
 
+    /// Add consumer control function (multimedia keys)
+    pub fn add_consumer_control(&mut self) -> Result<PathBuf> {
+        let func = HidFunction::consumer_control(self.hid_instance);
+        let device_path = func.device_path();
+        self.add_function(Box::new(func))?;
+        self.hid_instance += 1;
+        Ok(device_path)
+    }
+
     /// Add MSD function (returns MsdFunction handle for LUN configuration)
     pub fn add_msd(&mut self) -> Result<MsdFunction> {
         let func = MsdFunction::new(self.msd_instance);

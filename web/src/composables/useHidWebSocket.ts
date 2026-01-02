@@ -5,15 +5,17 @@ import { ref, onUnmounted } from 'vue'
 import {
   type HidKeyboardEvent,
   type HidMouseEvent,
+  type HidConsumerEvent,
   encodeKeyboardEvent,
   encodeMouseEvent,
+  encodeConsumerEvent,
   RESP_OK,
   RESP_ERR_HID_UNAVAILABLE,
   RESP_ERR_INVALID_MESSAGE,
 } from '@/types/hid'
 import { buildWsUrl, WS_RECONNECT_DELAY } from '@/types/websocket'
 
-export type { HidKeyboardEvent, HidMouseEvent }
+export type { HidKeyboardEvent, HidMouseEvent, HidConsumerEvent }
 
 let wsInstance: WebSocket | null = null
 const connected = ref(false)
@@ -213,6 +215,23 @@ function sendMouse(event: HidMouseEvent): Promise<void> {
   })
 }
 
+// Send consumer control event (multimedia keys)
+function sendConsumer(event: HidConsumerEvent): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!wsInstance || wsInstance.readyState !== WebSocket.OPEN) {
+      reject(new Error('WebSocket not connected'))
+      return
+    }
+
+    try {
+      wsInstance.send(encodeConsumerEvent(event))
+      resolve()
+    } catch (err) {
+      reject(err)
+    }
+  })
+}
+
 export function useHidWebSocket() {
   onUnmounted(() => {
     // Don't disconnect on component unmount - WebSocket is shared
@@ -229,6 +248,7 @@ export function useHidWebSocket() {
     disconnect,
     sendKeyboard,
     sendMouse,
+    sendConsumer,
   }
 }
 

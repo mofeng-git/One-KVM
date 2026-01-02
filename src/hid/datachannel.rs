@@ -4,6 +4,7 @@
 //! - Byte 0: Message type
 //!   - 0x01: Keyboard event
 //!   - 0x02: Mouse event
+//!   - 0x03: Consumer control event (multimedia keys)
 //! - Remaining bytes: Event data
 //!
 //! Keyboard event (type 0x01):
@@ -29,9 +30,13 @@
 //! - Bytes 2-3: X coordinate (i16 LE for relative, u16 LE for absolute)
 //! - Bytes 4-5: Y coordinate (i16 LE for relative, u16 LE for absolute)
 //! - Byte 6: Button (0=left, 1=middle, 2=right) or Scroll delta (i8)
+//!
+//! Consumer control event (type 0x03):
+//! - Bytes 1-2: Usage code (u16 LE)
 
 use tracing::{debug, warn};
 
+use super::types::ConsumerEvent;
 use super::{
     KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent, MouseEventType,
 };
@@ -39,6 +44,7 @@ use super::{
 /// Message types
 pub const MSG_KEYBOARD: u8 = 0x01;
 pub const MSG_MOUSE: u8 = 0x02;
+pub const MSG_CONSUMER: u8 = 0x03;
 
 /// Keyboard event types
 pub const KB_EVENT_DOWN: u8 = 0x00;
@@ -56,6 +62,7 @@ pub const MS_EVENT_SCROLL: u8 = 0x04;
 pub enum HidChannelEvent {
     Keyboard(KeyboardEvent),
     Mouse(MouseEvent),
+    Consumer(ConsumerEvent),
 }
 
 /// Parse a binary HID message from DataChannel
@@ -70,6 +77,7 @@ pub fn parse_hid_message(data: &[u8]) -> Option<HidChannelEvent> {
     match msg_type {
         MSG_KEYBOARD => parse_keyboard_message(&data[1..]),
         MSG_MOUSE => parse_mouse_message(&data[1..]),
+        MSG_CONSUMER => parse_consumer_message(&data[1..]),
         _ => {
             warn!("Unknown HID message type: 0x{:02X}", msg_type);
             None
@@ -171,6 +179,20 @@ fn parse_mouse_message(data: &[u8]) -> Option<HidChannelEvent> {
         button,
         scroll,
     }))
+}
+
+/// Parse consumer control message payload
+fn parse_consumer_message(data: &[u8]) -> Option<HidChannelEvent> {
+    if data.len() < 2 {
+        warn!("Consumer message too short: {} bytes", data.len());
+        return None;
+    }
+
+    let usage = u16::from_le_bytes([data[0], data[1]]);
+
+    debug!("Parsed consumer: usage=0x{:04X}", usage);
+
+    Some(HidChannelEvent::Consumer(ConsumerEvent { usage }))
 }
 
 /// Encode a keyboard event to binary format (for sending to client if needed)

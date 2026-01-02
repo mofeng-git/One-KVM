@@ -226,6 +226,11 @@ impl PeerConnection {
                                         debug!("Failed to send mouse event: {}", e);
                                     }
                                 }
+                                HidChannelEvent::Consumer(consumer_event) => {
+                                    if let Err(e) = hid.send_consumer(consumer_event).await {
+                                        debug!("Failed to send consumer event: {}", e);
+                                    }
+                                }
                             }
                         }
                     })

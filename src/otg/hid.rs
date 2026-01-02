@@ -5,14 +5,14 @@ use tracing::debug;
 
 use super::configfs::{create_dir, create_symlink, remove_dir, remove_file, write_bytes, write_file};
 use super::function::{FunctionMeta, GadgetFunction};
-use super::report_desc::{KEYBOARD_WITH_LED, MOUSE_ABSOLUTE, MOUSE_RELATIVE};
+use super::report_desc::{CONSUMER_CONTROL, KEYBOARD, MOUSE_ABSOLUTE, MOUSE_RELATIVE};
 use crate::error::Result;
 
 /// HID function type
 #[derive(Debug, Clone)]
 pub enum HidFunctionType {
-    /// Keyboard with LED feedback support
-    /// Uses 2 endpoints: IN (reports) + OUT (LED status)
+    /// Keyboard (no LED feedback)
+    /// Uses 1 endpoint: IN
     Keyboard,
     /// Relative mouse (traditional mouse movement)
     /// Uses 1 endpoint: IN
@@ -20,33 +20,39 @@ pub enum HidFunctionType {
     /// Absolute mouse (touchscreen-like positioning)
     /// Uses 1 endpoint: IN
     MouseAbsolute,
+    /// Consumer control (multimedia keys)
+    /// Uses 1 endpoint: IN
+    ConsumerControl,
 }
 
 impl HidFunctionType {
     /// Get endpoints required for this function type
     pub fn endpoints(&self) -> u8 {
         match self {
-            HidFunctionType::Keyboard => 2, // IN + OUT for LED
+            HidFunctionType::Keyboard => 1,
             HidFunctionType::MouseRelative => 1,
             HidFunctionType::MouseAbsolute => 1,
+            HidFunctionType::ConsumerControl => 1,
         }
     }
 
     /// Get HID protocol
     pub fn protocol(&self) -> u8 {
         match self {
-            HidFunctionType::Keyboard => 1,      // Keyboard
-            HidFunctionType::MouseRelative => 2, // Mouse
-            HidFunctionType::MouseAbsolute => 2, // Mouse
+            HidFunctionType::Keyboard => 1,         // Keyboard
+            HidFunctionType::MouseRelative => 2,    // Mouse
+            HidFunctionType::MouseAbsolute => 2,    // Mouse
+            HidFunctionType::ConsumerControl => 0,  // None
         }
     }
 
     /// Get HID subclass
     pub fn subclass(&self) -> u8 {
         match self {
-            HidFunctionType::Keyboard => 1,      // Boot interface
-            HidFunctionType::MouseRelative => 1, // Boot interface
-            HidFunctionType::MouseAbsolute => 0, // No boot interface (absolute not in boot protocol)
+            HidFunctionType::Keyboard => 1,         // Boot interface
+            HidFunctionType::MouseRelative => 1,    // Boot interface
+            HidFunctionType::MouseAbsolute => 0,    // No boot interface
+            HidFunctionType::ConsumerControl => 0,  // No boot interface
         }
     }
 
@@ -56,15 +62,17 @@ impl HidFunctionType {
             HidFunctionType::Keyboard => 8,
             HidFunctionType::MouseRelative => 4,
             HidFunctionType::MouseAbsolute => 6,
+            HidFunctionType::ConsumerControl => 2,
         }
     }
 
     /// Get report descriptor
     pub fn report_desc(&self) -> &'static [u8] {
         match self {
-            HidFunctionType::Keyboard => KEYBOARD_WITH_LED,
+            HidFunctionType::Keyboard => KEYBOARD,
             HidFunctionType::MouseRelative => MOUSE_RELATIVE,
             HidFunctionType::MouseAbsolute => MOUSE_ABSOLUTE,
+            HidFunctionType::ConsumerControl => CONSUMER_CONTROL,
         }
     }
 
@@ -74,6 +82,7 @@ impl HidFunctionType {
             HidFunctionType::Keyboard => "Keyboard",
             HidFunctionType::MouseRelative => "Relative Mouse",
             HidFunctionType::MouseAbsolute => "Absolute Mouse",
+            HidFunctionType::ConsumerControl => "Consumer Control",
         }
     }
 }
@@ -117,6 +126,15 @@ impl HidFunction {
         }
     }
 
+    /// Create a consumer control function
+    pub fn consumer_control(instance: u8) -> Self {
+        Self {
+            instance,
+            func_type: HidFunctionType::ConsumerControl,
+            name: format!("hid.usb{}", instance),
+        }
+    }
+
     /// Get function path in gadget
     fn function_path(&self, gadget_path: &Path) -> PathBuf {
         gadget_path.join("functions").join(self.name())
@@ -154,16 +172,6 @@ impl GadgetFunction for HidFunction {
         write_file(&func_path.join("protocol"), &self.func_type.protocol().to_string())?;
         write_file(&func_path.join("subclass"), &self.func_type.subclass().to_string())?;
         write_file(&func_path.join("report_length"), &self.func_type.report_length().to_string())?;
-
-        // For keyboard, enable OUT endpoint for LED feedback
-        // no_out_endpoint: 0 = enable OUT endpoint, 1 = disable
-        if matches!(self.func_type, HidFunctionType::Keyboard) {
-            let no_out_path = func_path.join("no_out_endpoint");
-            if no_out_path.exists() || func_path.exists() {
-                // Try to write, ignore error if file doesn't exist yet
-                let _ = write_file(&no_out_path, "0");
-            }
-        }
 
         // Write report descriptor
         write_bytes(&func_path.join("report_desc"), self.func_type.report_desc())?;
@@ -205,7 +213,7 @@ mod tests {
 
     #[test]
     fn test_hid_function_types() {
-        assert_eq!(HidFunctionType::Keyboard.endpoints(), 2);
+        assert_eq!(HidFunctionType::Keyboard.endpoints(), 1);
         assert_eq!(HidFunctionType::MouseRelative.endpoints(), 1);
         assert_eq!(HidFunctionType::MouseAbsolute.endpoints(), 1);
 

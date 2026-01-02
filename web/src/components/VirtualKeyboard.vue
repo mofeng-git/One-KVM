@@ -6,10 +6,18 @@ import 'simple-keyboard/build/css/index.css'
 import { hidApi } from '@/api'
 import {
   keys,
+  consumerKeys,
   latchingKeys,
   modifiers,
   type KeyName,
+  type ConsumerKeyName,
 } from '@/lib/keyboardMappings'
+import {
+  type KeyboardOsType,
+  osBottomRows,
+  mediaKeys,
+  mediaKeyLabels,
+} from '@/lib/keyboardLayouts'
 
 const props = defineProps<{
   visible: boolean
@@ -27,6 +35,7 @@ const { t } = useI18n()
 
 // State
 const isAttached = ref(props.attached ?? true)
+const selectedOs = ref<KeyboardOsType>('windows')
 
 // Keyboard instances
 const mainKeyboard = ref<Keyboard | null>(null)
@@ -64,6 +73,9 @@ const position = ref({ x: 100, y: 100 })
 
 // Unique ID for this keyboard instance
 const keyboardId = ref(`kb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+
+// Get bottom row based on selected OS
+const getBottomRow = () => osBottomRows[selectedOs.value].join(' ')
 
 // Keyboard layouts - matching JetKVM style
 const keyboardLayout = {
@@ -103,91 +115,139 @@ const keyboardLayout = {
 }
 
 // Key display mapping with Unicode symbols (JetKVM style)
-const keyDisplayMap: Record<string, string> = {
-  // Macros - compact format
-  CtrlAltDelete: 'Ctrl+Alt+Del',
-  AltMetaEscape: 'Alt+Meta+Esc',
-  CtrlAltBackspace: 'Ctrl+Alt+Bksp',
+const keyDisplayMap = computed<Record<string, string>>(() => {
+  // OS-specific Meta key labels
+  const metaLabel = selectedOs.value === 'windows' ? '⊞ Win'
+    : selectedOs.value === 'mac' ? '⌘ Cmd' : 'Meta'
 
-  // Modifiers with symbols
-  ControlLeft: '^Ctrl',
-  ControlRight: 'Ctrl^',
-  ShiftLeft: '⇧Shift',
-  ShiftRight: 'Shift⇧',
-  AltLeft: '⌥Alt',
-  AltGr: 'AltGr',
-  MetaLeft: '⌘Meta',
-  MetaRight: 'Meta⌘',
-  Menu: 'Menu',
+  return {
+    // Macros - compact format
+    CtrlAltDelete: 'Ctrl+Alt+Del',
+    AltMetaEscape: 'Alt+Meta+Esc',
+    CtrlAltBackspace: 'Ctrl+Alt+Bksp',
 
-  // Special keys with symbols
-  Escape: 'Esc',
-  Backspace: '⌫',
-  Tab: '⇥Tab',
-  CapsLock: '⇪Caps',
-  Enter: '↵',
-  Space: ' ',
+    // Modifiers - simplified
+    ControlLeft: 'Ctrl',
+    ControlRight: 'Ctrl',
+    ShiftLeft: 'Shift',
+    ShiftRight: 'Shift',
+    AltLeft: 'Alt',
+    AltRight: 'Alt',
+    AltGr: 'AltGr',
+    MetaLeft: metaLabel,
+    MetaRight: metaLabel,
+    Menu: 'Menu',
 
-  // Navigation with symbols
-  Insert: 'Ins',
-  Delete: '⌫Del',
-  Home: 'Home',
-  End: 'End',
-  PageUp: 'PgUp',
-  PageDown: 'PgDn',
+    // Special keys
+    Escape: 'Esc',
+    Backspace: '⌫',
+    Tab: 'Tab',
+    CapsLock: 'Caps',
+    Enter: 'Enter',
+    Space: ' ',
 
-  // Arrows
-  ArrowUp: '↑',
-  ArrowDown: '↓',
-  ArrowLeft: '←',
-  ArrowRight: '→',
+    // Navigation
+    Insert: 'Ins',
+    Delete: 'Del',
+    Home: 'Home',
+    End: 'End',
+    PageUp: 'PgUp',
+    PageDown: 'PgDn',
 
-  // Control cluster
-  PrintScreen: 'PrtSc',
-  ScrollLock: 'ScrLk',
-  Pause: 'Pause',
+    // Arrows
+    ArrowUp: '↑',
+    ArrowDown: '↓',
+    ArrowLeft: '←',
+    ArrowRight: '→',
 
-  // Function keys
-  F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4',
-  F5: 'F5', F6: 'F6', F7: 'F7', F8: 'F8',
-  F9: 'F9', F10: 'F10', F11: 'F11', F12: 'F12',
+    // Control cluster
+    PrintScreen: 'PrtSc',
+    ScrollLock: 'ScrLk',
+    Pause: 'Pause',
 
-  // Letters
-  KeyA: 'a', KeyB: 'b', KeyC: 'c', KeyD: 'd', KeyE: 'e',
-  KeyF: 'f', KeyG: 'g', KeyH: 'h', KeyI: 'i', KeyJ: 'j',
-  KeyK: 'k', KeyL: 'l', KeyM: 'm', KeyN: 'n', KeyO: 'o',
-  KeyP: 'p', KeyQ: 'q', KeyR: 'r', KeyS: 's', KeyT: 't',
-  KeyU: 'u', KeyV: 'v', KeyW: 'w', KeyX: 'x', KeyY: 'y',
-  KeyZ: 'z',
+    // Function keys
+    F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4',
+    F5: 'F5', F6: 'F6', F7: 'F7', F8: 'F8',
+    F9: 'F9', F10: 'F10', F11: 'F11', F12: 'F12',
 
-  // Capital letters
-  '(KeyA)': 'A', '(KeyB)': 'B', '(KeyC)': 'C', '(KeyD)': 'D', '(KeyE)': 'E',
-  '(KeyF)': 'F', '(KeyG)': 'G', '(KeyH)': 'H', '(KeyI)': 'I', '(KeyJ)': 'J',
-  '(KeyK)': 'K', '(KeyL)': 'L', '(KeyM)': 'M', '(KeyN)': 'N', '(KeyO)': 'O',
-  '(KeyP)': 'P', '(KeyQ)': 'Q', '(KeyR)': 'R', '(KeyS)': 'S', '(KeyT)': 'T',
-  '(KeyU)': 'U', '(KeyV)': 'V', '(KeyW)': 'W', '(KeyX)': 'X', '(KeyY)': 'Y',
-  '(KeyZ)': 'Z',
+    // Letters
+    KeyA: 'a', KeyB: 'b', KeyC: 'c', KeyD: 'd', KeyE: 'e',
+    KeyF: 'f', KeyG: 'g', KeyH: 'h', KeyI: 'i', KeyJ: 'j',
+    KeyK: 'k', KeyL: 'l', KeyM: 'm', KeyN: 'n', KeyO: 'o',
+    KeyP: 'p', KeyQ: 'q', KeyR: 'r', KeyS: 's', KeyT: 't',
+    KeyU: 'u', KeyV: 'v', KeyW: 'w', KeyX: 'x', KeyY: 'y',
+    KeyZ: 'z',
 
-  // Numbers
-  Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5',
-  Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9', Digit0: '0',
+    // Capital letters
+    '(KeyA)': 'A', '(KeyB)': 'B', '(KeyC)': 'C', '(KeyD)': 'D', '(KeyE)': 'E',
+    '(KeyF)': 'F', '(KeyG)': 'G', '(KeyH)': 'H', '(KeyI)': 'I', '(KeyJ)': 'J',
+    '(KeyK)': 'K', '(KeyL)': 'L', '(KeyM)': 'M', '(KeyN)': 'N', '(KeyO)': 'O',
+    '(KeyP)': 'P', '(KeyQ)': 'Q', '(KeyR)': 'R', '(KeyS)': 'S', '(KeyT)': 'T',
+    '(KeyU)': 'U', '(KeyV)': 'V', '(KeyW)': 'W', '(KeyX)': 'X', '(KeyY)': 'Y',
+    '(KeyZ)': 'Z',
 
-  // Shifted Numbers
-  '(Digit1)': '!', '(Digit2)': '@', '(Digit3)': '#', '(Digit4)': '$', '(Digit5)': '%',
-  '(Digit6)': '^', '(Digit7)': '&', '(Digit8)': '*', '(Digit9)': '(', '(Digit0)': ')',
+    // Numbers
+    Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5',
+    Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9', Digit0: '0',
 
-  // Symbols
-  Minus: '-', '(Minus)': '_',
-  Equal: '=', '(Equal)': '+',
-  BracketLeft: '[', '(BracketLeft)': '{',
-  BracketRight: ']', '(BracketRight)': '}',
-  Backslash: '\\', '(Backslash)': '|',
-  Semicolon: ';', '(Semicolon)': ':',
-  Quote: "'", '(Quote)': '"',
-  Comma: ',', '(Comma)': '<',
-  Period: '.', '(Period)': '>',
-  Slash: '/', '(Slash)': '?',
-  Backquote: '`', '(Backquote)': '~',
+    // Shifted Numbers
+    '(Digit1)': '!', '(Digit2)': '@', '(Digit3)': '#', '(Digit4)': '$', '(Digit5)': '%',
+    '(Digit6)': '^', '(Digit7)': '&', '(Digit8)': '*', '(Digit9)': '(', '(Digit0)': ')',
+
+    // Symbols
+    Minus: '-', '(Minus)': '_',
+    Equal: '=', '(Equal)': '+',
+    BracketLeft: '[', '(BracketLeft)': '{',
+    BracketRight: ']', '(BracketRight)': '}',
+    Backslash: '\\', '(Backslash)': '|',
+    Semicolon: ';', '(Semicolon)': ':',
+    Quote: "'", '(Quote)': '"',
+    Comma: ',', '(Comma)': '<',
+    Period: '.', '(Period)': '>',
+    Slash: '/', '(Slash)': '?',
+    Backquote: '`', '(Backquote)': '~',
+  }
+})
+
+// Handle media key press (Consumer Control)
+async function onMediaKeyPress(key: string) {
+  if (key in consumerKeys) {
+    const usage = consumerKeys[key as ConsumerKeyName]
+    try {
+      await hidApi.consumer(usage)
+    } catch (err) {
+      console.error('[VirtualKeyboard] Media key send failed:', err)
+    }
+  }
+}
+
+// Switch OS layout
+function switchOsLayout(os: KeyboardOsType) {
+  selectedOs.value = os
+  // Save preference to localStorage
+  localStorage.setItem('vkb-os-layout', os)
+  // Update keyboard layout
+  updateKeyboardLayout()
+}
+
+// Update keyboard layout based on selected OS
+function updateKeyboardLayout() {
+  const bottomRow = getBottomRow()
+  const newLayout = {
+    ...keyboardLayout.main,
+    default: [
+      ...keyboardLayout.main.default.slice(0, -1),
+      bottomRow,
+    ],
+    shift: [
+      ...keyboardLayout.main.shift.slice(0, -1),
+      bottomRow,
+    ],
+  }
+  mainKeyboard.value?.setOptions({ layout: newLayout, display: keyDisplayMap.value })
+  controlKeyboard.value?.setOptions({ display: keyDisplayMap.value })
+  arrowsKeyboard.value?.setOptions({ display: keyDisplayMap.value })
+  updateKeyboardButtonTheme()
 }
 
 // Key press handler
@@ -364,7 +424,7 @@ function initKeyboards() {
   mainKeyboard.value = new Keyboard(mainEl, {
     layout: keyboardLayout.main,
     layoutName: layoutName.value,
-    display: keyDisplayMap,
+    display: keyDisplayMap.value,
     theme: 'hg-theme-default hg-layout-default vkb-keyboard',
     onKeyPress: onKeyDown,
     onKeyReleased: onKeyUp,
@@ -385,7 +445,7 @@ function initKeyboards() {
   controlKeyboard.value = new Keyboard(controlEl, {
     layout: keyboardLayout.control,
     layoutName: 'default',
-    display: keyDisplayMap,
+    display: keyDisplayMap.value,
     theme: 'hg-theme-default hg-layout-default vkb-keyboard',
     onKeyPress: onKeyDown,
     onKeyReleased: onKeyUp,
@@ -400,7 +460,7 @@ function initKeyboards() {
   arrowsKeyboard.value = new Keyboard(arrowsEl, {
     layout: keyboardLayout.arrows,
     layoutName: 'default',
-    display: keyDisplayMap,
+    display: keyDisplayMap.value,
     theme: 'hg-theme-default hg-layout-default vkb-keyboard',
     onKeyPress: onKeyDown,
     onKeyReleased: onKeyUp,
@@ -504,6 +564,12 @@ watch(() => props.attached, (value) => {
 })
 
 onMounted(() => {
+  // Load saved OS layout preference
+  const savedOs = localStorage.getItem('vkb-os-layout') as KeyboardOsType | null
+  if (savedOs && ['windows', 'mac', 'android'].includes(savedOs)) {
+    selectedOs.value = savedOs
+  }
+
   document.addEventListener('mousemove', onDrag)
   document.addEventListener('touchmove', onDrag)
   document.addEventListener('mouseup', endDrag)
@@ -539,9 +605,22 @@ onUnmounted(() => {
         @mousedown="startDrag"
         @touchstart="startDrag"
       >
-        <button class="vkb-btn" @click="toggleAttached">
-          {{ isAttached ? t('virtualKeyboard.detach') : t('virtualKeyboard.attach') }}
-        </button>
+        <div class="vkb-header-left">
+          <button class="vkb-btn" @click="toggleAttached">
+            {{ isAttached ? t('virtualKeyboard.detach') : t('virtualKeyboard.attach') }}
+          </button>
+          <div class="vkb-os-selector">
+            <button
+              v-for="os in (['windows', 'mac', 'android'] as KeyboardOsType[])"
+              :key="os"
+              class="vkb-os-btn"
+              :class="{ 'vkb-os-btn--active': selectedOs === os }"
+              @click.stop="switchOsLayout(os)"
+            >
+              {{ os === 'windows' ? 'Win' : os === 'mac' ? 'Mac' : 'Android' }}
+            </button>
+          </div>
+        </div>
         <span class="vkb-title">{{ t('virtualKeyboard.title') }}</span>
         <button class="vkb-btn" @click="close">
           {{ t('virtualKeyboard.hide') }}
@@ -550,10 +629,23 @@ onUnmounted(() => {
 
       <!-- Keyboard body -->
       <div class="vkb-body">
-        <div :id="`${keyboardId}-main`" class="kb-main-container"></div>
-        <div class="vkb-side">
-          <div :id="`${keyboardId}-control`" class="kb-control-container"></div>
-          <div :id="`${keyboardId}-arrows`" class="kb-arrows-container"></div>
+        <!-- Media keys row -->
+        <div class="vkb-media-row">
+          <button
+            v-for="key in mediaKeys"
+            :key="key"
+            class="vkb-media-btn"
+            @click="onMediaKeyPress(key)"
+          >
+            {{ mediaKeyLabels[key] || key }}
+          </button>
+        </div>
+        <div class="vkb-keyboards">
+          <div :id="`${keyboardId}-main`" class="kb-main-container"></div>
+          <div class="vkb-side">
+            <div :id="`${keyboardId}-control`" class="kb-control-container"></div>
+            <div :id="`${keyboardId}-arrows`" class="kb-arrows-container"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -820,6 +912,7 @@ html.dark .hg-theme-default .hg-button.down-key,
   border-bottom: 1px solid #e5e7eb;
   background: #f9fafb;
   min-height: 28px;
+  position: relative;
 }
 
 :global(.dark .vkb-header) {
@@ -832,7 +925,16 @@ html.dark .hg-theme-default .hg-button.down-key,
   border-radius: 8px 8px 0 0;
 }
 
+.vkb-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .vkb-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 12px;
   font-weight: 500;
   color: #374151;
@@ -868,10 +970,57 @@ html.dark .hg-theme-default .hg-button.down-key,
   background: #4b5563;
 }
 
+/* OS selector */
+.vkb-os-selector {
+  display: flex;
+  gap: 2px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  padding: 2px;
+}
+
+:global(.dark .vkb-os-selector) {
+  background: #374151;
+}
+
+.vkb-os-btn {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.vkb-os-btn:hover {
+  color: #374151;
+}
+
+.vkb-os-btn--active {
+  background: white;
+  color: #374151;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.1);
+}
+
+:global(.dark .vkb-os-btn) {
+  color: #9ca3af;
+}
+
+:global(.dark .vkb-os-btn:hover) {
+  color: #d1d5db;
+}
+
+:global(.dark .vkb-os-btn--active) {
+  background: #4b5563;
+  color: #f9fafb;
+}
+
 /* Keyboard body */
 .vkb-body {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   padding: 8px;
   gap: 8px;
   background: #f3f4f6;
@@ -883,6 +1032,55 @@ html.dark .hg-theme-default .hg-button.down-key,
 
 .vkb--floating .vkb-body {
   border-radius: 0 0 8px 8px;
+}
+
+/* Media keys row */
+.vkb-media-row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+:global(.dark .vkb-media-row) {
+  border-color: #374151;
+}
+
+.vkb-media-btn {
+  padding: 4px 12px;
+  font-size: 16px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 40px;
+}
+
+.vkb-media-btn:hover {
+  background: #f3f4f6;
+}
+
+.vkb-media-btn:active {
+  background: #3b82f6;
+  color: white;
+}
+
+:global(.dark .vkb-media-btn) {
+  background: #374151;
+  border-color: #4b5563;
+  color: #f9fafb;
+}
+
+:global(.dark .vkb-media-btn:hover) {
+  background: #4b5563;
+}
+
+/* Keyboards container */
+.vkb-keyboards {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
 }
 
 .kb-main-container {
@@ -903,7 +1101,7 @@ html.dark .hg-theme-default .hg-button.down-key,
 
 /* Responsive */
 @media (max-width: 900px) {
-  .vkb-body {
+  .vkb-keyboards {
     flex-direction: column;
   }
 

@@ -122,6 +122,13 @@ async fn handle_binary_message(data: &[u8], state: &AppState) -> Result<(), Stri
                 .await
                 .map_err(|e| e.to_string())?;
         }
+        HidChannelEvent::Consumer(consumer_event) => {
+            state
+                .hid
+                .send_consumer(consumer_event)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
     }
 
     Ok(())

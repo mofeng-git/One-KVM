@@ -256,6 +256,11 @@ impl WsHidHandler {
             HidChannelEvent::Mouse(ms_event) => {
                 hid.send_mouse(ms_event).await.map_err(|e| e.to_string())?;
             }
+            HidChannelEvent::Consumer(consumer_event) => {
+                hid.send_consumer(consumer_event)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
         }
 
         client.events_processed.fetch_add(1, Ordering::Relaxed);

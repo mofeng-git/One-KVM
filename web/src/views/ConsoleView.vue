@@ -98,8 +98,6 @@ const mouseMode = ref<'absolute' | 'relative'>('absolute')
 const pressedKeys = ref<string[]>([])
 const keyboardLed = ref({
   capsLock: false,
-  numLock: false,
-  scrollLock: false,
 })
 const mousePosition = ref({ x: 0, y: 0 })
 const lastMousePosition = ref({ x: 0, y: 0 }) // Track last position for relative mode
@@ -1284,8 +1282,6 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 
   keyboardLed.value.capsLock = e.getModifierState('CapsLock')
-  keyboardLed.value.numLock = e.getModifierState('NumLock')
-  keyboardLed.value.scrollLock = e.getModifierState('ScrollLock')
 
   const modifiers = {
     ctrl: e.ctrlKey,
@@ -1481,6 +1477,10 @@ function handleVirtualKeyDown(key: string) {
   // Add to pressedKeys for InfoBar display
   if (!pressedKeys.value.includes(key)) {
     pressedKeys.value = [...pressedKeys.value, key]
+  }
+  // Toggle CapsLock state when virtual keyboard presses CapsLock
+  if (key === 'CapsLock') {
+    keyboardLed.value.capsLock = !keyboardLed.value.capsLock
   }
 }
 
@@ -1910,8 +1910,6 @@ onUnmounted(() => {
     <InfoBar
       :pressed-keys="pressedKeys"
       :caps-lock="keyboardLed.capsLock"
-      :num-lock="keyboardLed.numLock"
-      :scroll-lock="keyboardLed.scrollLock"
       :mouse-position="mousePosition"
       :debug-mode="false"
     />

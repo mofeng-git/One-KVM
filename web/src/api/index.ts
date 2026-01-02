@@ -355,6 +355,12 @@ export const hidApi = {
   reset: () =>
     request<{ success: boolean }>('/hid/reset', { method: 'POST' }),
 
+  consumer: async (usage: number) => {
+    await ensureHidConnection()
+    await hidWs.sendConsumer({ usage })
+    return { success: true }
+  },
+
   // WebSocket connection management
   connectWebSocket: () => hidWs.connect(),
   disconnectWebSocket: () => hidWs.disconnect(),

@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use super::types::{KeyboardEvent, MouseEvent};
+use super::types::{ConsumerEvent, KeyboardEvent, MouseEvent};
 use crate::error::Result;
 
 /// Default CH9329 baud rate
@@ -93,6 +93,14 @@ pub trait HidBackend: Send + Sync {
 
     /// Send a mouse event
     async fn send_mouse(&self, event: MouseEvent) -> Result<()>;
+
+    /// Send a consumer control event (multimedia keys)
+    /// Default implementation returns an error (not supported)
+    async fn send_consumer(&self, _event: ConsumerEvent) -> Result<()> {
+        Err(crate::error::AppError::BadRequest(
+            "Consumer control not supported by this backend".to_string(),
+        ))
+    }
 
     /// Reset all inputs (release all keys/buttons)
     async fn reset(&self) -> Result<()>;

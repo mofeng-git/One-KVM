@@ -39,6 +39,7 @@ pub struct HidDevicePaths {
     pub keyboard: PathBuf,
     pub mouse_relative: PathBuf,
     pub mouse_absolute: PathBuf,
+    pub consumer: Option<PathBuf>,
 }
 
 impl Default for HidDevicePaths {
@@ -47,6 +48,7 @@ impl Default for HidDevicePaths {
             keyboard: PathBuf::from("/dev/hidg0"),
             mouse_relative: PathBuf::from("/dev/hidg1"),
             mouse_absolute: PathBuf::from("/dev/hidg2"),
+            consumer: Some(PathBuf::from("/dev/hidg3")),
         }
     }
 }
@@ -353,16 +355,18 @@ impl OtgService {
                 manager.add_keyboard(),
                 manager.add_mouse_relative(),
                 manager.add_mouse_absolute(),
+                manager.add_consumer_control(),
             ) {
-                (Ok(kb), Ok(rel), Ok(abs)) => {
+                (Ok(kb), Ok(rel), Ok(abs), Ok(consumer)) => {
                     hid_paths = Some(HidDevicePaths {
                         keyboard: kb,
                         mouse_relative: rel,
                         mouse_absolute: abs,
+                        consumer: Some(consumer),
                     });
                     debug!("HID functions added to gadget");
                 }
-                (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
+                (Err(e), _, _, _) | (_, Err(e), _, _) | (_, _, Err(e), _) | (_, _, _, Err(e)) => {
                     let error = format!("Failed to add HID functions: {}", e);
                     let mut state = self.state.write().await;
                     state.error = Some(error.clone());

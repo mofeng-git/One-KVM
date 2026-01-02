@@ -22,9 +22,15 @@ export interface HidMouseEvent {
   scroll?: number
 }
 
+/** Consumer control event for HID input (multimedia keys) */
+export interface HidConsumerEvent {
+  usage: number // Consumer Control Usage code (e.g., 0x00CD for Play/Pause)
+}
+
 // Binary message constants (must match datachannel.rs / ws_hid.rs)
 export const MSG_KEYBOARD = 0x01
 export const MSG_MOUSE = 0x02
+export const MSG_CONSUMER = 0x03
 
 // Keyboard event types
 export const KB_EVENT_DOWN = 0x00
@@ -104,6 +110,18 @@ export function encodeMouseEvent(event: HidMouseEvent): ArrayBuffer {
   } else {
     view.setUint8(6, 0)
   }
+
+  return buffer
+}
+
+/** Encode consumer control event to binary format (3 bytes) */
+export function encodeConsumerEvent(event: HidConsumerEvent): ArrayBuffer {
+  const buffer = new ArrayBuffer(3)
+  const view = new DataView(buffer)
+
+  view.setUint8(0, MSG_CONSUMER)
+  // Usage code as u16 LE
+  view.setUint16(1, event.usage, true)
 
   return buffer
 }

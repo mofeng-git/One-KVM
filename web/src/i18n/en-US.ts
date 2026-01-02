@@ -550,6 +550,10 @@ export default {
     hide: 'Hide',
     show: 'Show Virtual Keyboard',
     layoutSelect: 'Keyboard Layout',
+    osWindows: 'Windows',
+    osMac: 'Mac',
+    osAndroid: 'Android',
+    mediaKeys: 'Media Keys',
   },
   config: {
     applied: 'Configuration applied',

@@ -18,17 +18,19 @@
 //! See: https://github.com/raspberrypi/linux/issues/4373
 
 use async_trait::async_trait;
+use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use parking_lot::Mutex;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::io::AsFd;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use tracing::{debug, info, trace, warn};
 
 use super::backend::HidBackend;
 use super::keymap;
-use super::types::{KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType};
+use super::types::{ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType};
 use crate::error::{AppError, Result};
 use crate::otg::{HidDevicePaths, wait_for_hid_devices};
 
@@ -38,6 +40,7 @@ enum DeviceType {
     Keyboard,
     MouseRelative,
     MouseAbsolute,
+    ConsumerControl,
 }
 
 /// Keyboard LED state
@@ -79,7 +82,7 @@ impl LedState {
     }
 }
 
-/// OTG HID backend with 3 devices
+/// OTG HID backend with 4 devices
 ///
 /// This backend opens HID device files created by OtgService.
 /// It does NOT manage the USB gadget itself - that's handled by OtgService.
@@ -99,12 +102,16 @@ pub struct OtgBackend {
     mouse_rel_path: PathBuf,
     /// Absolute mouse device path (/dev/hidg2)
     mouse_abs_path: PathBuf,
+    /// Consumer control device path (/dev/hidg3)
+    consumer_path: PathBuf,
     /// Keyboard device file
     keyboard_dev: Mutex<Option<File>>,
     /// Relative mouse device file
     mouse_rel_dev: Mutex<Option<File>>,
     /// Absolute mouse device file
     mouse_abs_dev: Mutex<Option<File>>,
+    /// Consumer control device file
+    consumer_dev: Mutex<Option<File>>,
     /// Current keyboard state
     keyboard_state: Mutex<KeyboardReport>,
     /// Current mouse button state
@@ -125,8 +132,8 @@ pub struct OtgBackend {
     eagain_count: AtomicU8,
 }
 
-/// Threshold for consecutive EAGAIN errors before reporting offline
-const EAGAIN_OFFLINE_THRESHOLD: u8 = 3;
+/// Write timeout in milliseconds (same as JetKVM's hidWriteTimeout)
+const HID_WRITE_TIMEOUT_MS: i32 = 500;
 
 impl OtgBackend {
     /// Create OTG backend from device paths provided by OtgService
@@ -138,9 +145,11 @@ impl OtgBackend {
             keyboard_path: paths.keyboard,
             mouse_rel_path: paths.mouse_relative,
             mouse_abs_path: paths.mouse_absolute,
+            consumer_path: paths.consumer.unwrap_or_else(|| PathBuf::from("/dev/hidg3")),
             keyboard_dev: Mutex::new(None),
             mouse_rel_dev: Mutex::new(None),
             mouse_abs_dev: Mutex::new(None),
+            consumer_dev: Mutex::new(None),
             keyboard_state: Mutex::new(KeyboardReport::default()),
             mouse_buttons: AtomicU8::new(0),
             led_state: parking_lot::RwLock::new(LedState::default()),
@@ -175,6 +184,39 @@ impl OtgBackend {
         self.error_count.store(0, Ordering::Relaxed);
         // Also reset EAGAIN count - successful operation means device is working
         self.eagain_count.store(0, Ordering::Relaxed);
+    }
+
+    /// Write data to HID device with timeout (JetKVM style)
+    ///
+    /// Uses poll() to wait for device to be ready for writing.
+    /// If timeout expires, silently drops the data (acceptable for mouse movement).
+    /// Returns Ok(true) if write succeeded, Ok(false) if timed out (silently dropped).
+    fn write_with_timeout(&self, file: &mut File, data: &[u8]) -> std::io::Result<bool> {
+        let mut pollfd = [PollFd::new(file.as_fd(), PollFlags::POLLOUT)];
+
+        match poll(&mut pollfd, PollTimeout::from(HID_WRITE_TIMEOUT_MS as u16)) {
+            Ok(1) => {
+                // Device ready, check for errors
+                if let Some(revents) = pollfd[0].revents() {
+                    if revents.contains(PollFlags::POLLERR) || revents.contains(PollFlags::POLLHUP) {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::BrokenPipe,
+                            "Device error or hangup",
+                        ));
+                    }
+                }
+                // Write the data
+                file.write_all(data)?;
+                Ok(true)
+            }
+            Ok(0) => {
+                // Timeout - silently drop (JetKVM behavior)
+                trace!("HID write timeout, dropping data");
+                Ok(false)
+            }
+            Ok(_) => Ok(false),
+            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+        }
     }
 
     /// Set the UDC name for state checking
@@ -247,6 +289,7 @@ impl OtgBackend {
             DeviceType::Keyboard => (&self.keyboard_path, &self.keyboard_dev),
             DeviceType::MouseRelative => (&self.mouse_rel_path, &self.mouse_rel_dev),
             DeviceType::MouseAbsolute => (&self.mouse_abs_path, &self.mouse_abs_dev),
+            DeviceType::ConsumerControl => (&self.consumer_path, &self.consumer_dev),
         };
 
         // Check if device path exists
@@ -342,7 +385,7 @@ impl OtgBackend {
     ///
     /// This method ensures the device is open before writing, and handles
     /// ESHUTDOWN errors by closing the device handle for later reconnection.
-    /// EAGAIN errors are treated as temporary - device stays open.
+    /// Uses write_with_timeout to avoid blocking on busy devices.
     fn send_keyboard_report(&self, report: &KeyboardReport) -> Result<()> {
         // Ensure device is ready
         self.ensure_device(DeviceType::Keyboard)?;
@@ -350,11 +393,16 @@ impl OtgBackend {
         let mut dev = self.keyboard_dev.lock();
         if let Some(ref mut file) = *dev {
             let data = report.to_bytes();
-            match file.write_all(&data) {
-                Ok(_) => {
+            match self.write_with_timeout(file, &data) {
+                Ok(true) => {
                     self.online.store(true, Ordering::Relaxed);
                     self.reset_error_count();
                     trace!("Sent keyboard report: {:02X?}", data);
+                    Ok(())
+                }
+                Ok(false) => {
+                    // Timeout - silently dropped (JetKVM behavior)
+                    self.log_throttled_error("HID keyboard write timeout, dropped");
                     Ok(())
                 }
                 Err(e) => {
@@ -370,26 +418,9 @@ impl OtgBackend {
                             Err(Self::io_error_to_hid_error(e, "Failed to write keyboard report"))
                         }
                         Some(11) => {
-                            // EAGAIN - temporary busy, track consecutive count
-                            self.log_throttled_error("HID keyboard busy (EAGAIN)");
-                            let count = self.eagain_count.fetch_add(1, Ordering::Relaxed) + 1;
-
-                            if count >= EAGAIN_OFFLINE_THRESHOLD {
-                                // Exceeded threshold, report as offline
-                                self.online.store(false, Ordering::Relaxed);
-                                Err(AppError::HidError {
-                                    backend: "otg".to_string(),
-                                    reason: format!("Device busy ({} consecutive EAGAIN)", count),
-                                    error_code: "eagain".to_string(),
-                                })
-                            } else {
-                                // Within threshold, return retry error (won't trigger offline event)
-                                Err(AppError::HidError {
-                                    backend: "otg".to_string(),
-                                    reason: "Device temporarily busy".to_string(),
-                                    error_code: "eagain_retry".to_string(),
-                                })
-                            }
+                            // EAGAIN after poll - should be rare, silently drop
+                            trace!("Keyboard EAGAIN after poll, dropping");
+                            Ok(())
                         }
                         _ => {
                             self.online.store(false, Ordering::Relaxed);
@@ -413,7 +444,7 @@ impl OtgBackend {
     ///
     /// This method ensures the device is open before writing, and handles
     /// ESHUTDOWN errors by closing the device handle for later reconnection.
-    /// EAGAIN errors are treated as temporary - device stays open.
+    /// Uses write_with_timeout to avoid blocking on busy devices.
     fn send_mouse_report_relative(&self, buttons: u8, dx: i8, dy: i8, wheel: i8) -> Result<()> {
         // Ensure device is ready
         self.ensure_device(DeviceType::MouseRelative)?;
@@ -421,11 +452,15 @@ impl OtgBackend {
         let mut dev = self.mouse_rel_dev.lock();
         if let Some(ref mut file) = *dev {
             let data = [buttons, dx as u8, dy as u8, wheel as u8];
-            match file.write_all(&data) {
-                Ok(_) => {
+            match self.write_with_timeout(file, &data) {
+                Ok(true) => {
                     self.online.store(true, Ordering::Relaxed);
                     self.reset_error_count();
                     trace!("Sent relative mouse report: {:02X?}", data);
+                    Ok(())
+                }
+                Ok(false) => {
+                    // Timeout - silently dropped (JetKVM behavior)
                     Ok(())
                 }
                 Err(e) => {
@@ -440,26 +475,8 @@ impl OtgBackend {
                             Err(Self::io_error_to_hid_error(e, "Failed to write mouse report"))
                         }
                         Some(11) => {
-                            // EAGAIN - temporary busy, track consecutive count
-                            self.log_throttled_error("HID relative mouse busy (EAGAIN)");
-                            let count = self.eagain_count.fetch_add(1, Ordering::Relaxed) + 1;
-
-                            if count >= EAGAIN_OFFLINE_THRESHOLD {
-                                // Exceeded threshold, report as offline
-                                self.online.store(false, Ordering::Relaxed);
-                                Err(AppError::HidError {
-                                    backend: "otg".to_string(),
-                                    reason: format!("Device busy ({} consecutive EAGAIN)", count),
-                                    error_code: "eagain".to_string(),
-                                })
-                            } else {
-                                // Within threshold, return retry error (won't trigger offline event)
-                                Err(AppError::HidError {
-                                    backend: "otg".to_string(),
-                                    reason: "Device temporarily busy".to_string(),
-                                    error_code: "eagain_retry".to_string(),
-                                })
-                            }
+                            // EAGAIN after poll - should be rare, silently drop
+                            Ok(())
                         }
                         _ => {
                             self.online.store(false, Ordering::Relaxed);
@@ -483,7 +500,7 @@ impl OtgBackend {
     ///
     /// This method ensures the device is open before writing, and handles
     /// ESHUTDOWN errors by closing the device handle for later reconnection.
-    /// EAGAIN errors are treated as temporary - device stays open.
+    /// Uses write_with_timeout to avoid blocking on busy devices.
     fn send_mouse_report_absolute(&self, buttons: u8, x: u16, y: u16, wheel: i8) -> Result<()> {
         // Ensure device is ready
         self.ensure_device(DeviceType::MouseAbsolute)?;
@@ -498,10 +515,14 @@ impl OtgBackend {
                 (y >> 8) as u8,
                 wheel as u8,
             ];
-            match file.write_all(&data) {
-                Ok(_) => {
+            match self.write_with_timeout(file, &data) {
+                Ok(true) => {
                     self.online.store(true, Ordering::Relaxed);
                     self.reset_error_count();
+                    Ok(())
+                }
+                Ok(false) => {
+                    // Timeout - silently dropped (JetKVM behavior)
                     Ok(())
                 }
                 Err(e) => {
@@ -516,26 +537,8 @@ impl OtgBackend {
                             Err(Self::io_error_to_hid_error(e, "Failed to write mouse report"))
                         }
                         Some(11) => {
-                            // EAGAIN - temporary busy, track consecutive count
-                            self.log_throttled_error("HID absolute mouse busy (EAGAIN)");
-                            let count = self.eagain_count.fetch_add(1, Ordering::Relaxed) + 1;
-
-                            if count >= EAGAIN_OFFLINE_THRESHOLD {
-                                // Exceeded threshold, report as offline
-                                self.online.store(false, Ordering::Relaxed);
-                                Err(AppError::HidError {
-                                    backend: "otg".to_string(),
-                                    reason: format!("Device busy ({} consecutive EAGAIN)", count),
-                                    error_code: "eagain".to_string(),
-                                })
-                            } else {
-                                // Within threshold, return retry error (won't trigger offline event)
-                                Err(AppError::HidError {
-                                    backend: "otg".to_string(),
-                                    reason: "Device temporarily busy".to_string(),
-                                    error_code: "eagain_retry".to_string(),
-                                })
-                            }
+                            // EAGAIN after poll - should be rare, silently drop
+                            Ok(())
                         }
                         _ => {
                             self.online.store(false, Ordering::Relaxed);
@@ -553,6 +556,66 @@ impl OtgBackend {
                 error_code: "not_opened".to_string(),
             })
         }
+    }
+
+    /// Send consumer control report (2 bytes: usage_lo, usage_hi)
+    ///
+    /// Sends a consumer control usage code and then releases it (sends 0x0000).
+    fn send_consumer_report(&self, usage: u16) -> Result<()> {
+        // Ensure device is ready
+        self.ensure_device(DeviceType::ConsumerControl)?;
+
+        let mut dev = self.consumer_dev.lock();
+        if let Some(ref mut file) = *dev {
+            // Send the usage code
+            let data = [(usage & 0xFF) as u8, (usage >> 8) as u8];
+            match self.write_with_timeout(file, &data) {
+                Ok(true) => {
+                    trace!("Sent consumer report: {:02X?}", data);
+                    // Send release (0x0000)
+                    let release = [0u8, 0u8];
+                    let _ = self.write_with_timeout(file, &release);
+                    self.online.store(true, Ordering::Relaxed);
+                    self.reset_error_count();
+                    Ok(())
+                }
+                Ok(false) => {
+                    // Timeout - silently dropped
+                    Ok(())
+                }
+                Err(e) => {
+                    let error_code = e.raw_os_error();
+                    match error_code {
+                        Some(108) => {
+                            self.online.store(false, Ordering::Relaxed);
+                            debug!("Consumer control ESHUTDOWN, closing for recovery");
+                            *dev = None;
+                            Err(Self::io_error_to_hid_error(e, "Failed to write consumer report"))
+                        }
+                        Some(11) => {
+                            // EAGAIN after poll - silently drop
+                            Ok(())
+                        }
+                        _ => {
+                            self.online.store(false, Ordering::Relaxed);
+                            warn!("Consumer control write error: {}", e);
+                            Err(Self::io_error_to_hid_error(e, "Failed to write consumer report"))
+                        }
+                    }
+                }
+            }
+        } else {
+            Err(AppError::HidError {
+                backend: "otg".to_string(),
+                reason: "Consumer control device not opened".to_string(),
+                error_code: "not_opened".to_string(),
+            })
+        }
+    }
+
+    /// Send consumer control event
+    pub fn send_consumer(&self, event: ConsumerEvent) -> Result<()> {
+        self.send_consumer_report(event.usage)
     }
 
     /// Read keyboard LED state (non-blocking)
@@ -633,6 +696,15 @@ impl HidBackend for OtgBackend {
             info!("Absolute mouse device opened: {}", self.mouse_abs_path.display());
         } else {
             warn!("Absolute mouse device not found: {}", self.mouse_abs_path.display());
+        }
+
+        // Open consumer control device (optional, may not exist on older setups)
+        if self.consumer_path.exists() {
+            let file = Self::open_device(&self.consumer_path)?;
+            *self.consumer_dev.lock() = Some(file);
+            info!("Consumer control device opened: {}", self.consumer_path.display());
+        } else {
+            debug!("Consumer control device not found: {}", self.consumer_path.display());
         }
 
         // Mark as online if all devices opened successfully
@@ -751,6 +823,7 @@ impl HidBackend for OtgBackend {
         *self.keyboard_dev.lock() = None;
         *self.mouse_rel_dev.lock() = None;
         *self.mouse_abs_dev.lock() = None;
+        *self.consumer_dev.lock() = None;
 
         // Gadget cleanup is handled by OtgService, not here
 
@@ -760,6 +833,10 @@ impl HidBackend for OtgBackend {
 
     fn supports_absolute_mouse(&self) -> bool {
         self.mouse_abs_path.exists()
+    }
+
+    async fn send_consumer(&self, event: ConsumerEvent) -> Result<()> {
+        self.send_consumer_report(event.usage)
     }
 
     fn screen_resolution(&self) -> Option<(u32, u32)> {
@@ -789,6 +866,7 @@ impl Drop for OtgBackend {
         *self.keyboard_dev.lock() = None;
         *self.mouse_rel_dev.lock() = None;
         *self.mouse_abs_dev.lock() = None;
+        *self.consumer_dev.lock() = None;
         debug!("OtgBackend dropped, device files closed");
     }
 }

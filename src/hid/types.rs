@@ -255,6 +255,14 @@ impl MouseEvent {
 pub enum HidEvent {
     Keyboard(KeyboardEvent),
     Mouse(MouseEvent),
+    Consumer(ConsumerEvent),
+}
+
+/// Consumer control event (multimedia keys)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsumerEvent {
+    /// Consumer control usage code (e.g., 0x00CD for Play/Pause)
+    pub usage: u16,
 }
 
 /// USB HID keyboard report (8 bytes)

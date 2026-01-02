@@ -13,6 +13,7 @@
 
 pub mod backend;
 pub mod ch9329;
+pub mod consumer;
 pub mod datachannel;
 pub mod keymap;
 pub mod monitor;
@@ -24,7 +25,8 @@ pub use backend::{HidBackend, HidBackendType};
 pub use monitor::{HidHealthMonitor, HidHealthStatus, HidMonitorConfig};
 pub use otg::LedState;
 pub use types::{
-    KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent, MouseEventType,
+    ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent,
+    MouseEventType,
 };
 
 /// HID backend information
@@ -186,6 +188,33 @@ impl HidController {
                         // Report error to monitor, but skip temporary EAGAIN retries
                         // - "eagain_retry": within threshold, just temporary busy
                         // - "eagain": exceeded threshold, report as error
+                        if let AppError::HidError { ref backend, ref reason, ref error_code } = e {
+                            if error_code != "eagain_retry" {
+                                self.monitor.report_error(backend, None, reason, error_code).await;
+                            }
+                        }
+                        Err(e)
+                    }
+                }
+            }
+            None => Err(AppError::BadRequest("HID backend not available".to_string())),
+        }
+    }
+
+    /// Send consumer control event (multimedia keys)
+    pub async fn send_consumer(&self, event: ConsumerEvent) -> Result<()> {
+        let backend = self.backend.read().await;
+        match backend.as_ref() {
+            Some(b) => {
+                match b.send_consumer(event).await {
+                    Ok(_) => {
+                        if self.monitor.is_error().await {
+                            let backend_type = self.backend_type.read().await;
+                            self.monitor.report_recovered(backend_type.name_str()).await;
+                        }
+                        Ok(())
+                    }
+                    Err(e) => {
                         if let AppError::HidError { ref backend, ref reason, ref error_code } = e {
                             if error_code != "eagain_retry" {
                                 self.monitor.report_error(backend, None, reason, error_code).await;

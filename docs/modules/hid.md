@@ -8,11 +8,28 @@ HID (Human Interface Device) 模块负责将键盘和鼠标事件转发到目标
 
 - 键盘事件处理 (按键、修饰键)
 - 鼠标事件处理 (移动、点击、滚轮)
+- 多媒体键支持 (Consumer Control)
 - 支持绝对和相对鼠标模式
 - 多后端支持 (OTG、CH9329)
 - WebSocket 和 DataChannel 输入
 
-### 1.2 文件结构
+### 1.2 USB Endpoint 使用
+
+OTG 模式下的 endpoint 分配：
+
+| 功能 | IN 端点 | OUT 端点 | 说明 |
+|------|---------|----------|------|
+| Keyboard | 1 | 0 | 无 LED 反馈 |
+| MouseRelative | 1 | 0 | 相对鼠标 |
+| MouseAbsolute | 1 | 0 | 绝对鼠标 |
+| ConsumerControl | 1 | 0 | 多媒体键 |
+| **HID 总计** | **4** | **0** | |
+| MSD | 1 | 1 | 大容量存储 |
+| **全部总计** | **5** | **1** | 兼容 6 endpoint 设备 |
+
+> 注：EP0 (控制端点) 独立于数据端点，不计入上述统计。
+
+### 1.3 文件结构
 
 ```
 src/hid/
@@ -20,6 +37,7 @@ src/hid/
 ├── backend.rs          # 后端抽象
 ├── otg.rs              # OTG 后端 (33KB)
 ├── ch9329.rs           # CH9329 串口后端 (46KB)
+├── consumer.rs         # Consumer Control 常量定义
 ├── keymap.rs           # 按键映射 (14KB)
 ├── types.rs            # 类型定义
 ├── monitor.rs          # 健康监视 (14KB)
@@ -93,10 +111,11 @@ HidBackendType::Otg
     │
     ├── 检查 OtgService 是否可用
     │
-    ├── 请求 HID 函数 (3个设备)
-    │   ├── /dev/hidg0 (键盘)
-    │   ├── /dev/hidg1 (相对鼠标)
-    │   └── /dev/hidg2 (绝对鼠标)
+    ├── 请求 HID 函数 (4个设备, 共4个IN端点)
+    │   ├── /dev/hidg0 (键盘, 1 IN)
+    │   ├── /dev/hidg1 (相对鼠标, 1 IN)
+    │   ├── /dev/hidg2 (绝对鼠标, 1 IN)
+    │   └── /dev/hidg3 (Consumer Control, 1 IN)
     │
     └── 创建 OtgHidBackend
 
@@ -158,6 +177,9 @@ impl HidController {
 
     /// 发送鼠标事件
     pub async fn send_mouse(&self, event: &MouseEvent) -> Result<()>;
+
+    /// 发送多媒体键事件 (Consumer Control)
+    pub async fn send_consumer(&self, event: &ConsumerEvent) -> Result<()>;
 
     /// 设置鼠标模式
     pub fn set_mouse_mode(&self, mode: MouseMode);
@@ -305,6 +327,23 @@ pub struct MouseAbsoluteReport {
     pub x: u16,           // X 坐标 (0 ~ 32767)
     pub y: u16,           // Y 坐标 (0 ~ 32767)
     pub wheel: i8,        // 滚轮 (-127 ~ 127)
+}
+
+/// Consumer Control 报告 (2 字节)
+#[repr(C, packed)]
+pub struct ConsumerControlReport {
+    pub usage: u16,       // Consumer Control Usage Code (LE)
+}
+
+// 常用 Consumer Control Usage Codes
+pub mod consumer_usage {
+    pub const PLAY_PAUSE: u16 = 0x00CD;
+    pub const STOP: u16 = 0x00B7;
+    pub const NEXT_TRACK: u16 = 0x00B5;
+    pub const PREV_TRACK: u16 = 0x00B6;
+    pub const MUTE: u16 = 0x00E2;
+    pub const VOLUME_UP: u16 = 0x00E9;
+    pub const VOLUME_DOWN: u16 = 0x00EA;
 }
 ```
 
@@ -455,6 +494,25 @@ pub enum MouseMode {
 }
 ```
 
+### 4.3 Consumer Control 事件 (types.rs)
+
+```rust
+/// Consumer Control 事件 (多媒体键)
+pub struct ConsumerEvent {
+    /// USB HID Consumer Control Usage Code
+    pub usage: u16,
+}
+
+// 常用 Usage Codes (参考 USB HID Usage Tables)
+// 0x00CD - Play/Pause
+// 0x00B7 - Stop
+// 0x00B5 - Next Track
+// 0x00B6 - Previous Track
+// 0x00E2 - Mute
+// 0x00E9 - Volume Up
+// 0x00EA - Volume Down
+```
+
 ---
 
 ## 5. 按键映射
@@ -573,7 +631,36 @@ pub enum HidMessage {
 
 ### 6.2 DataChannel Handler (datachannel.rs)
 
-用于 WebRTC 模式下的 HID 事件处理。
+用于 WebRTC 模式下的 HID 事件处理，使用二进制协议。
+
+#### 二进制消息格式
+
+```
+消息类型常量:
+MSG_KEYBOARD = 0x01  // 键盘事件
+MSG_MOUSE    = 0x02  // 鼠标事件
+MSG_CONSUMER = 0x03  // Consumer Control 事件
+
+键盘消息 (4 字节):
+┌──────────┬──────────┬──────────┬──────────┐
+│ MSG_TYPE │ EVENT    │ KEY_CODE │ MODIFIER │
+│  0x01    │ 0/1      │ scancode │ bitmask  │
+└──────────┴──────────┴──────────┴──────────┘
+EVENT: 0=keydown, 1=keyup
+
+鼠标消息 (7 字节):
+┌──────────┬──────────┬──────────┬──────────┬──────────┐
+│ MSG_TYPE │ EVENT    │ X (i16)  │ Y (i16)  │ BTN/SCRL │
+│  0x02    │ 0-4      │ LE       │ LE       │ u8/i8    │
+└──────────┴──────────┴──────────┴──────────┴──────────┘
+EVENT: 0=move, 1=moveabs, 2=down, 3=up, 4=scroll
+
+Consumer Control 消息 (3 字节):
+┌──────────┬──────────────────────┐
+│ MSG_TYPE │ USAGE CODE (u16 LE)  │
+│  0x03    │ e.g. 0x00CD          │
+└──────────┴──────────────────────┘
+```
 
 ```rust
 pub struct HidDataChannelHandler {

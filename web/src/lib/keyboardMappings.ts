@@ -136,12 +136,6 @@ export const keys = {
   F23: 0x72,
   F24: 0x73,
 
-  // Media/System keys (Consumer Control)
-  // Note: These are Consumer Control keys, may need special handling
-  Mute: 0x7f,
-  VolumeUp: 0x80,
-  VolumeDown: 0x81,
-
   // Modifiers (these are special - HID codes 0xE0-0xE7)
   ControlLeft: 0xe0,
   ShiftLeft: 0xe1,
@@ -155,6 +149,20 @@ export const keys = {
 } as const
 
 export type KeyName = keyof typeof keys
+
+// Consumer Control Usage codes (for multimedia keys)
+// These are sent via a separate Consumer Control HID report
+export const consumerKeys = {
+  PlayPause: 0x00cd,
+  Stop: 0x00b7,
+  NextTrack: 0x00b5,
+  PrevTrack: 0x00b6,
+  Mute: 0x00e2,
+  VolumeUp: 0x00e9,
+  VolumeDown: 0x00ea,
+} as const
+
+export type ConsumerKeyName = keyof typeof consumerKeys
 
 // Modifier bitmasks for HID report byte 0
 export const modifiers = {
