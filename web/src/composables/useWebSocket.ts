@@ -5,6 +5,7 @@
 //   on('stream.state_changed', (data) => { ... })
 
 import { ref } from 'vue'
+import { buildWsUrl, WS_RECONNECT_DELAY } from '@/types/websocket'
 
 export interface WsEvent {
   event: string
@@ -19,15 +20,13 @@ const connected = ref(false)
 const reconnectAttempts = ref(0)
 const networkError = ref(false)
 const networkErrorMessage = ref<string | null>(null)
-const RECONNECT_DELAY = 3000
 
 function connect() {
   if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
     return
   }
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const url = `${protocol}//${window.location.host}/api/ws`
+  const url = buildWsUrl('/api/ws')
 
   try {
     wsInstance = new WebSocket(url)
@@ -62,7 +61,7 @@ function connect() {
 
       // Auto-reconnect with infinite retry
       reconnectAttempts.value++
-      setTimeout(connect, RECONNECT_DELAY)
+      setTimeout(connect, WS_RECONNECT_DELAY)
     }
 
     wsInstance.onerror = () => {

@@ -172,6 +172,17 @@ const isFormatRecommended = (formatName: string): boolean => {
   return false
 }
 
+// Check if a format is not recommended for current video mode
+// In WebRTC mode, compressed formats (MJPEG/JPEG) are not recommended
+const isFormatNotRecommended = (formatName: string): boolean => {
+  const upperFormat = formatName.toUpperCase()
+  // WebRTC mode: MJPEG/JPEG are not recommended (require decoding before encoding)
+  if (props.videoMode !== 'mjpeg') {
+    return upperFormat === 'MJPEG' || upperFormat === 'JPEG'
+  }
+  return false
+}
+
 // Selected values (mode comes from props)
 const selectedDevice = ref<string>('')
 const selectedFormat = ref<string>('')
@@ -645,6 +656,12 @@ watch(() => props.open, (isOpen) => {
                   >
                     {{ t('actionbar.recommended') }}
                   </span>
+                  <span
+                    v-else-if="isFormatNotRecommended(selectedFormatInfo.format)"
+                    class="text-[10px] px-1 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 shrink-0"
+                  >
+                    {{ t('actionbar.notRecommended') }}
+                  </span>
                 </div>
                 <span v-else class="text-muted-foreground">{{ t('actionbar.selectFormat') }}</span>
               </SelectTrigger>
@@ -653,7 +670,7 @@ watch(() => props.open, (isOpen) => {
                   v-for="format in availableFormats"
                   :key="format.format"
                   :value="format.format"
-                  class="text-xs"
+                  :class="['text-xs', { 'opacity-50': isFormatNotRecommended(format.format) }]"
                 >
                   <div class="flex items-center gap-2">
                     <span>{{ format.description }}</span>
@@ -662,6 +679,12 @@ watch(() => props.open, (isOpen) => {
                       class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                     >
                       {{ t('actionbar.recommended') }}
+                    </span>
+                    <span
+                      v-else-if="isFormatNotRecommended(format.format)"
+                      class="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
+                    >
+                      {{ t('actionbar.notRecommended') }}
                     </span>
                   </div>
                 </SelectItem>

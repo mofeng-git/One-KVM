@@ -122,6 +122,7 @@ export default {
     backendSoftware: 'Software',
     backendAuto: 'Auto',
     recommended: 'Recommended',
+    notRecommended: 'Not Recommended',
     // HID Config
     hidConfig: 'Mouse & HID',
     mouseSettings: 'Mouse Settings',

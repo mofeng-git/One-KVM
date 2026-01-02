@@ -2,6 +2,7 @@
 
 import { ref, watch } from 'vue'
 import { OpusDecoder } from 'opus-decoder'
+import { buildWsUrl } from '@/types/websocket'
 
 // Binary protocol header format (15 bytes)
 // [type:1][timestamp:4][duration:2][sequence:4][length:4][data:...]
@@ -72,8 +73,7 @@ export function useAudioPlayer() {
         await audioContext.resume()
       }
 
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const url = `${protocol}//${location.host}/api/ws/audio`
+      const url = buildWsUrl('/api/ws/audio')
 
       ws = new WebSocket(url)
       ws.binaryType = 'arraybuffer'

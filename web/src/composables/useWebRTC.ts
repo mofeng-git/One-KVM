@@ -4,6 +4,14 @@
 import { ref, onUnmounted, computed, type Ref } from 'vue'
 import { webrtcApi } from '@/api'
 import { generateUUID } from '@/lib/utils'
+import {
+  type HidKeyboardEvent,
+  type HidMouseEvent,
+  encodeKeyboardEvent,
+  encodeMouseEvent,
+} from '@/types/hid'
+
+export type { HidKeyboardEvent, HidMouseEvent }
 
 export type WebRTCState = 'disconnected' | 'connecting' | 'connected' | 'failed'
 
@@ -26,106 +34,6 @@ export interface WebRTCStats {
   remoteCandidateType: IceCandidateType
   transportProtocol: string // 'udp' | 'tcp'
   isRelay: boolean // true if using TURN relay
-}
-
-export interface HidKeyboardEvent {
-  type: 'keydown' | 'keyup'
-  key: number
-  modifiers?: {
-    ctrl?: boolean
-    shift?: boolean
-    alt?: boolean
-    meta?: boolean
-  }
-}
-
-export interface HidMouseEvent {
-  type: 'move' | 'moveabs' | 'down' | 'up' | 'scroll'
-  x?: number
-  y?: number
-  button?: number
-  scroll?: number
-}
-
-// Binary message constants (must match datachannel.rs)
-const MSG_KEYBOARD = 0x01
-const MSG_MOUSE = 0x02
-
-// Keyboard event types
-const KB_EVENT_DOWN = 0x00
-const KB_EVENT_UP = 0x01
-
-// Mouse event types
-const MS_EVENT_MOVE = 0x00
-const MS_EVENT_MOVE_ABS = 0x01
-const MS_EVENT_DOWN = 0x02
-const MS_EVENT_UP = 0x03
-const MS_EVENT_SCROLL = 0x04
-
-// Encode keyboard event to binary format
-function encodeKeyboardEvent(event: HidKeyboardEvent): ArrayBuffer {
-  const buffer = new ArrayBuffer(4)
-  const view = new DataView(buffer)
-
-  view.setUint8(0, MSG_KEYBOARD)
-  view.setUint8(1, event.type === 'keydown' ? KB_EVENT_DOWN : KB_EVENT_UP)
-  view.setUint8(2, event.key & 0xff)
-
-  // Build modifiers bitmask
-  let modifiers = 0
-  if (event.modifiers?.ctrl) modifiers |= 0x01 // Left Ctrl
-  if (event.modifiers?.shift) modifiers |= 0x02 // Left Shift
-  if (event.modifiers?.alt) modifiers |= 0x04 // Left Alt
-  if (event.modifiers?.meta) modifiers |= 0x08 // Left Meta
-  view.setUint8(3, modifiers)
-
-  return buffer
-}
-
-// Encode mouse event to binary format
-function encodeMouseEvent(event: HidMouseEvent): ArrayBuffer {
-  const buffer = new ArrayBuffer(7)
-  const view = new DataView(buffer)
-
-  view.setUint8(0, MSG_MOUSE)
-
-  // Event type
-  let eventType = MS_EVENT_MOVE
-  switch (event.type) {
-    case 'move':
-      eventType = MS_EVENT_MOVE
-      break
-    case 'moveabs':
-      eventType = MS_EVENT_MOVE_ABS
-      break
-    case 'down':
-      eventType = MS_EVENT_DOWN
-      break
-    case 'up':
-      eventType = MS_EVENT_UP
-      break
-    case 'scroll':
-      eventType = MS_EVENT_SCROLL
-      break
-  }
-  view.setUint8(1, eventType)
-
-  // X coordinate (i16 LE)
-  view.setInt16(2, event.x ?? 0, true)
-
-  // Y coordinate (i16 LE)
-  view.setInt16(4, event.y ?? 0, true)
-
-  // Button or scroll delta
-  if (event.type === 'down' || event.type === 'up') {
-    view.setUint8(6, event.button ?? 0)
-  } else if (event.type === 'scroll') {
-    view.setInt8(6, event.scroll ?? 0)
-  } else {
-    view.setUint8(6, 0)
-  }
-
-  return buffer
 }
 
 // Cached ICE servers from backend API

@@ -568,6 +568,32 @@ impl WebRtcStreamer {
         );
     }
 
+    /// Check if current encoder configuration uses hardware encoding
+    ///
+    /// Returns true if:
+    /// - A specific hardware backend is configured, OR
+    /// - Auto mode is used and hardware encoders are available
+    pub async fn is_hardware_encoding(&self) -> bool {
+        let config = self.config.read().await;
+        match config.encoder_backend {
+            Some(backend) => backend.is_hardware(),
+            None => {
+                // Auto mode: check if hardware encoder is available for current codec
+                use crate::video::encoder::registry::{EncoderRegistry, VideoEncoderType};
+                let codec_type = match *self.video_codec.read().await {
+                    VideoCodecType::H264 => VideoEncoderType::H264,
+                    VideoCodecType::H265 => VideoEncoderType::H265,
+                    VideoCodecType::VP8 => VideoEncoderType::VP8,
+                    VideoCodecType::VP9 => VideoEncoderType::VP9,
+                };
+                EncoderRegistry::global()
+                    .best_encoder(codec_type, false)
+                    .map(|e| e.is_hardware)
+                    .unwrap_or(false)
+            }
+        }
+    }
+
     /// Update ICE configuration (STUN/TURN servers)
     ///
     /// Note: Changes take effect for new sessions only.

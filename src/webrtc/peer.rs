@@ -351,6 +351,15 @@ impl PeerConnection {
 
     /// Close the connection
     pub async fn close(&self) -> Result<()> {
+        // Reset HID state to release any held keys/buttons
+        if let Some(ref hid) = self.hid_controller {
+            if let Err(e) = hid.reset().await {
+                tracing::warn!("Failed to reset HID on peer {} close: {}", self.session_id, e);
+            } else {
+                tracing::debug!("HID reset on peer {} close", self.session_id);
+            }
+        }
+
         if let Some(ref track) = self.video_track {
             track.stop();
         }

@@ -2,52 +2,24 @@
 // Uses the same binary format as WebRTC DataChannel for consistency
 
 import { ref, onUnmounted } from 'vue'
+import {
+  type HidKeyboardEvent,
+  type HidMouseEvent,
+  encodeKeyboardEvent,
+  encodeMouseEvent,
+  RESP_OK,
+  RESP_ERR_HID_UNAVAILABLE,
+  RESP_ERR_INVALID_MESSAGE,
+} from '@/types/hid'
+import { buildWsUrl, WS_RECONNECT_DELAY } from '@/types/websocket'
 
-export interface HidKeyboardEvent {
-  type: 'keydown' | 'keyup'
-  key: number
-  modifiers?: {
-    ctrl?: boolean
-    shift?: boolean
-    alt?: boolean
-    meta?: boolean
-  }
-}
-
-export interface HidMouseEvent {
-  type: 'move' | 'moveabs' | 'down' | 'up' | 'scroll'
-  x?: number
-  y?: number
-  button?: number // 0=left, 1=middle, 2=right
-  scroll?: number
-}
-
-// Binary message constants (must match datachannel.rs)
-const MSG_KEYBOARD = 0x01
-const MSG_MOUSE = 0x02
-
-// Keyboard event types
-const KB_EVENT_DOWN = 0x00
-const KB_EVENT_UP = 0x01
-
-// Mouse event types
-const MS_EVENT_MOVE = 0x00
-const MS_EVENT_MOVE_ABS = 0x01
-const MS_EVENT_DOWN = 0x02
-const MS_EVENT_UP = 0x03
-const MS_EVENT_SCROLL = 0x04
-
-// Response codes from server
-const RESP_OK = 0x00
-const RESP_ERR_HID_UNAVAILABLE = 0x01
-const RESP_ERR_INVALID_MESSAGE = 0x02
+export type { HidKeyboardEvent, HidMouseEvent }
 
 let wsInstance: WebSocket | null = null
 const connected = ref(false)
 const reconnectAttempts = ref(0)
 const networkError = ref(false)
 const networkErrorMessage = ref<string | null>(null)
-const RECONNECT_DELAY = 3000
 let reconnectTimeout: number | null = null
 const hidUnavailable = ref(false) // Track if HID is unavailable to prevent unnecessary reconnects
 
@@ -60,72 +32,6 @@ let throttleTimer: number | null = null
 // Connection promise to avoid race conditions
 let connectionPromise: Promise<boolean> | null = null
 let connectionResolved = false
-
-// Encode keyboard event to binary format
-function encodeKeyboardEvent(event: HidKeyboardEvent): ArrayBuffer {
-  const buffer = new ArrayBuffer(4)
-  const view = new DataView(buffer)
-
-  view.setUint8(0, MSG_KEYBOARD)
-  view.setUint8(1, event.type === 'keydown' ? KB_EVENT_DOWN : KB_EVENT_UP)
-  view.setUint8(2, event.key & 0xff)
-
-  // Build modifiers bitmask
-  let modifiers = 0
-  if (event.modifiers?.ctrl) modifiers |= 0x01 // Left Ctrl
-  if (event.modifiers?.shift) modifiers |= 0x02 // Left Shift
-  if (event.modifiers?.alt) modifiers |= 0x04 // Left Alt
-  if (event.modifiers?.meta) modifiers |= 0x08 // Left Meta
-  view.setUint8(3, modifiers)
-
-  return buffer
-}
-
-// Encode mouse event to binary format
-function encodeMouseEvent(event: HidMouseEvent): ArrayBuffer {
-  const buffer = new ArrayBuffer(7)
-  const view = new DataView(buffer)
-
-  view.setUint8(0, MSG_MOUSE)
-
-  // Event type
-  let eventType = MS_EVENT_MOVE
-  switch (event.type) {
-    case 'move':
-      eventType = MS_EVENT_MOVE
-      break
-    case 'moveabs':
-      eventType = MS_EVENT_MOVE_ABS
-      break
-    case 'down':
-      eventType = MS_EVENT_DOWN
-      break
-    case 'up':
-      eventType = MS_EVENT_UP
-      break
-    case 'scroll':
-      eventType = MS_EVENT_SCROLL
-      break
-  }
-  view.setUint8(1, eventType)
-
-  // X coordinate (i16 LE)
-  view.setInt16(2, event.x ?? 0, true)
-
-  // Y coordinate (i16 LE)
-  view.setInt16(4, event.y ?? 0, true)
-
-  // Button or scroll delta
-  if (event.type === 'down' || event.type === 'up') {
-    view.setUint8(6, event.button ?? 0)
-  } else if (event.type === 'scroll') {
-    view.setInt8(6, event.scroll ?? 0)
-  } else {
-    view.setUint8(6, 0)
-  }
-
-  return buffer
-}
 
 function connect(): Promise<boolean> {
   // If already connected, return immediately
@@ -145,8 +51,7 @@ function connect(): Promise<boolean> {
     networkErrorMessage.value = null
     hidUnavailable.value = false
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const url = `${protocol}//${window.location.host}/api/ws/hid`
+    const url = buildWsUrl('/api/ws/hid')
 
     try {
       wsInstance = new WebSocket(url)
@@ -197,7 +102,7 @@ function connect(): Promise<boolean> {
         networkError.value = true
         networkErrorMessage.value = 'HID WebSocket disconnected'
         reconnectAttempts.value++
-        reconnectTimeout = window.setTimeout(() => connect(), RECONNECT_DELAY)
+        reconnectTimeout = window.setTimeout(() => connect(), WS_RECONNECT_DELAY)
       }
 
       wsInstance.onerror = () => {

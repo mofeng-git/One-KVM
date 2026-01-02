@@ -75,6 +75,9 @@ const videoError = ref(false)
 const videoErrorMessage = ref('')
 const videoRestarting = ref(false) // Track if video is restarting due to config change
 
+// Video aspect ratio (dynamically updated from actual video dimensions)
+const videoAspectRatio = ref<number | null>(null)
+
 // Backend-provided FPS (received from WebSocket stream.stats_update events)
 const backendFps = ref(0)
 
@@ -342,6 +345,11 @@ function handleVideoLoad() {
   // This fixes the timing issue where device_info event may arrive before stream is fully active
   if (videoMode.value === 'mjpeg') {
     systemStore.setStreamOnline(true)
+    // Update aspect ratio from MJPEG image dimensions
+    const img = videoRef.value
+    if (img && img.naturalWidth && img.naturalHeight) {
+      videoAspectRatio.value = img.naturalWidth / img.naturalHeight
+    }
   }
 
   if (!videoLoading.value) {
@@ -834,7 +842,8 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
   retryCount = 0
   consecutiveErrors = 0
 
-  // 停止 MJPEG 流
+  // 停止 MJPEG 流 - 重置 timestamp 以停止请求
+  mjpegTimestamp.value = 0
   if (videoRef.value) {
     videoRef.value.src = ''
   }
@@ -850,6 +859,20 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
         description: t('console.webrtcConnectedDesc'),
         duration: 3000,
       })
+
+      // Try to attach video immediately in case track is already available
+      if (webrtc.videoTrack.value && webrtcVideoRef.value) {
+        const stream = webrtc.getMediaStream()
+        if (stream) {
+          webrtcVideoRef.value.srcObject = stream
+          try {
+            await webrtcVideoRef.value.play()
+          } catch {
+            // AbortError is expected when switching modes quickly, ignore it
+          }
+        }
+      }
+
       videoLoading.value = false
       videoMode.value = codec
       unifiedAudio.switchMode('webrtc')
@@ -877,7 +900,8 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
   retryCount = 0
   consecutiveErrors = 0
 
-  // 停止 MJPEG 流，避免同时下载两个视频流
+  // 停止 MJPEG 流 - 重置 timestamp 以停止请求
+  mjpegTimestamp.value = 0
   if (videoRef.value) {
     videoRef.value.src = ''
   }
@@ -906,10 +930,22 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
       })
 
       // Video will be attached by the watch on webrtc.videoTrack
-      // Don't manually attach here to avoid race condition with ontrack
+      // But also try to attach immediately in case track is already available
+      if (webrtc.videoTrack.value && webrtcVideoRef.value) {
+        const stream = webrtc.getMediaStream()
+        if (stream) {
+          webrtcVideoRef.value.srcObject = stream
+          try {
+            await webrtcVideoRef.value.play()
+          } catch {
+            // AbortError is expected when switching modes quickly, ignore it
+          }
+        }
+      }
+
       videoLoading.value = false
 
-      // Step 3: Switch audio to WebRTC mode
+      // Step 4: Switch audio to WebRTC mode
       unifiedAudio.switchMode('webrtc')
     } else {
       throw new Error('WebRTC connection failed')
@@ -963,10 +999,9 @@ async function switchToMJPEG() {
 function handleVideoModeChange(mode: VideoMode) {
   if (mode === videoMode.value) return
 
-  // Reset mjpegTimestamp to 0 BEFORE changing videoMode
-  // This prevents mjpegUrl from returning a valid URL with old timestamp
-  // when switching back to MJPEG mode
-  if (mode === 'mjpeg') {
+  // Reset mjpegTimestamp to 0 when switching away from MJPEG
+  // This prevents mjpegUrl from returning a valid URL and stops MJPEG requests
+  if (mode !== 'mjpeg') {
     mjpegTimestamp.value = 0
   }
 
@@ -1022,6 +1057,10 @@ watch(webrtc.stats, (stats) => {
     backendFps.value = Math.round(stats.framesPerSecond)
     // WebRTC is receiving frames, set stream online
     systemStore.setStreamOnline(true)
+    // Update aspect ratio from WebRTC video dimensions
+    if (stats.frameWidth && stats.frameHeight) {
+      videoAspectRatio.value = stats.frameWidth / stats.frameHeight
+    }
   }
 }, { deep: true })
 
@@ -1760,10 +1799,17 @@ onUnmounted(() => {
       />
 
       <!-- Video Container -->
-      <div class="relative h-full flex items-center justify-center p-4">
+      <div class="relative h-full w-full flex items-center justify-center p-2 sm:p-4">
         <div
           ref="videoContainerRef"
-          class="relative max-w-full max-h-full aspect-video bg-black overflow-hidden"
+          class="relative bg-black overflow-hidden flex items-center justify-center"
+          :style="{
+            aspectRatio: videoAspectRatio ? String(videoAspectRatio) : '16/9',
+            maxWidth: '100%',
+            maxHeight: '100%',
+            minWidth: '320px',
+            minHeight: '180px',
+          }"
           :class="{
             'opacity-60': videoLoading || videoError,
             'cursor-crosshair': cursorVisible,

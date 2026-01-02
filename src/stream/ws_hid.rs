@@ -225,6 +225,16 @@ impl WsHidHandler {
                 }
             }
         }
+
+        // Reset HID state when client disconnects to release any held keys/buttons
+        let hid = self.hid_controller.read().clone();
+        if let Some(hid) = hid {
+            if let Err(e) = hid.reset().await {
+                warn!("WsHidHandler: Failed to reset HID on client {} disconnect: {}", client_id, e);
+            } else {
+                debug!("WsHidHandler: HID reset on client {} disconnect", client_id);
+            }
+        }
     }
 
     /// Handle binary HID message

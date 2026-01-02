@@ -208,6 +208,10 @@ impl VideoStreamManager {
 
         if current_mode == new_mode {
             debug!("Already in {:?} mode, no switch needed", new_mode);
+            // Even if mode is the same, ensure video capture is running for WebRTC
+            if new_mode == StreamMode::WebRTC {
+                self.ensure_video_capture_running().await?;
+            }
             return Ok(());
         }
 
@@ -221,6 +225,43 @@ impl VideoStreamManager {
         let result = self.do_switch_mode(current_mode, new_mode.clone()).await;
         self.switching.store(false, Ordering::SeqCst);
         result
+    }
+
+    /// Ensure video capture is running (for WebRTC mode)
+    async fn ensure_video_capture_running(self: &Arc<Self>) -> Result<()> {
+        // Initialize streamer if not already initialized
+        if self.streamer.state().await == StreamerState::Uninitialized {
+            info!("Initializing video capture for WebRTC (ensure)");
+            if let Err(e) = self.streamer.init_auto().await {
+                error!("Failed to initialize video capture: {}", e);
+                return Err(e);
+            }
+        }
+
+        // Start video capture if not streaming
+        if self.streamer.state().await != StreamerState::Streaming {
+            info!("Starting video capture for WebRTC (ensure)");
+            if let Err(e) = self.streamer.start().await {
+                error!("Failed to start video capture: {}", e);
+                return Err(e);
+            }
+
+            // Wait a bit for capture to stabilize
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+
+        // Reconnect frame source to WebRTC
+        if let Some(frame_tx) = self.streamer.frame_sender().await {
+            let (format, resolution, fps) = self.streamer.current_video_config().await;
+            info!(
+                "Reconnecting frame source to WebRTC: {}x{} {:?} @ {}fps",
+                resolution.width, resolution.height, format, fps
+            );
+            self.webrtc_streamer.update_video_config(resolution, format, fps).await;
+            self.webrtc_streamer.set_video_source(frame_tx).await;
+        }
+
+        Ok(())
     }
 
     /// Internal implementation of mode switching (called with lock held)
@@ -276,6 +317,22 @@ impl VideoStreamManager {
         match new_mode {
             StreamMode::Mjpeg => {
                 info!("Starting MJPEG streaming");
+
+                // Auto-switch to MJPEG format if device supports it
+                if let Some(device) = self.streamer.current_device().await {
+                    let (current_format, resolution, fps) = self.streamer.current_video_config().await;
+                    let available_formats: Vec<PixelFormat> = device.formats.iter().map(|f| f.format).collect();
+
+                    // If current format is not MJPEG and device supports MJPEG, switch to it
+                    if current_format != PixelFormat::Mjpeg && available_formats.contains(&PixelFormat::Mjpeg) {
+                        info!("Auto-switching to MJPEG format for MJPEG mode");
+                        let device_path = device.path.to_string_lossy().to_string();
+                        if let Err(e) = self.streamer.apply_video_config(&device_path, PixelFormat::Mjpeg, resolution, fps).await {
+                            warn!("Failed to auto-switch to MJPEG format: {}, keeping current format", e);
+                        }
+                    }
+                }
+
                 if let Err(e) = self.streamer.start().await {
                     error!("Failed to start MJPEG streamer: {}", e);
                     return Err(e);
@@ -291,6 +348,29 @@ impl VideoStreamManager {
                     if let Err(e) = self.streamer.init_auto().await {
                         error!("Failed to initialize video capture for WebRTC: {}", e);
                         return Err(e);
+                    }
+                }
+
+                // Auto-switch to non-compressed format if current format is MJPEG/JPEG
+                if let Some(device) = self.streamer.current_device().await {
+                    let (current_format, resolution, fps) = self.streamer.current_video_config().await;
+
+                    if current_format.is_compressed() {
+                        let available_formats: Vec<PixelFormat> = device.formats.iter().map(|f| f.format).collect();
+
+                        // Determine if using hardware encoding
+                        let is_hardware = self.webrtc_streamer.is_hardware_encoding().await;
+
+                        if let Some(recommended) = PixelFormat::recommended_for_encoding(&available_formats, is_hardware) {
+                            info!(
+                                "Auto-switching from {:?} to {:?} for WebRTC encoding (hardware={})",
+                                current_format, recommended, is_hardware
+                            );
+                            let device_path = device.path.to_string_lossy().to_string();
+                            if let Err(e) = self.streamer.apply_video_config(&device_path, recommended, resolution, fps).await {
+                                warn!("Failed to auto-switch format for WebRTC: {}, keeping current format", e);
+                            }
+                        }
                     }
                 }
 

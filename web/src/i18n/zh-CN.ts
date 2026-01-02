@@ -122,6 +122,7 @@ export default {
     backendSoftware: '软件编码',
     backendAuto: '自动',
     recommended: '推荐',
+    notRecommended: '不推荐',
     // HID Config
     hidConfig: '鼠键配置',
     mouseSettings: '鼠标设置',

@@ -138,6 +138,34 @@ impl PixelFormat {
         }
     }
 
+    /// Get recommended format for video encoding (WebRTC)
+    ///
+    /// Hardware encoding prefers: NV12 > YUYV
+    /// Software encoding prefers: YUYV > NV12
+    ///
+    /// Returns None if no suitable format is available
+    pub fn recommended_for_encoding(available: &[PixelFormat], is_hardware: bool) -> Option<PixelFormat> {
+        if is_hardware {
+            // Hardware encoding: NV12 > YUYV
+            if available.contains(&PixelFormat::Nv12) {
+                return Some(PixelFormat::Nv12);
+            }
+            if available.contains(&PixelFormat::Yuyv) {
+                return Some(PixelFormat::Yuyv);
+            }
+        } else {
+            // Software encoding: YUYV > NV12
+            if available.contains(&PixelFormat::Yuyv) {
+                return Some(PixelFormat::Yuyv);
+            }
+            if available.contains(&PixelFormat::Nv12) {
+                return Some(PixelFormat::Nv12);
+            }
+        }
+        // Fallback to any non-compressed format
+        available.iter().find(|f| !f.is_compressed()).copied()
+    }
+
     /// Get all supported formats
     pub fn all() -> &'static [PixelFormat] {
         &[
