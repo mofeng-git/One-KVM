@@ -484,17 +484,25 @@ impl UniversalVideoTrack {
     }
 
     /// Send NAL units as samples (H264 only)
+    ///
+    /// Important: Only the last NAL unit should have the frame duration set.
+    /// All NAL units in a frame share the same RTP timestamp, so only the last
+    /// one should increment the timestamp by the frame duration.
     async fn send_nals(&self, nals: Vec<Bytes>, is_keyframe: bool) -> Result<()> {
         let mut total_bytes = 0u64;
         // Calculate frame duration based on configured FPS
         let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
+        let nal_count = nals.len();
 
         match &self.track {
             TrackType::Sample(track) => {
-                for nal_data in nals {
+                for (i, nal_data) in nals.into_iter().enumerate() {
+                    let is_last = i == nal_count - 1;
+                    // Only the last NAL should have duration set
+                    // This ensures all NALs in a frame share the same RTP timestamp
                     let sample = Sample {
                         data: nal_data.clone(),
-                        duration: frame_duration,
+                        duration: if is_last { frame_duration } else { Duration::ZERO },
                         ..Default::default()
                     };
 

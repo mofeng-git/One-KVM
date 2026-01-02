@@ -99,6 +99,8 @@ pub enum H264InputFormat {
     Yuv420p,
     /// NV12 - Y plane + interleaved UV plane (optimal for VAAPI)
     Nv12,
+    /// YUYV422 - packed YUV 4:2:2 format (optimal for RKMPP direct input)
+    Yuyv422,
 }
 
 impl Default for H264InputFormat {
@@ -154,6 +156,17 @@ impl H264Config {
             gop_size: 30,
             fps: 30,
             input_format: H264InputFormat::Yuv420p,
+        }
+    }
+
+    /// Create config for low latency streaming with YUYV422 input (optimal for RKMPP direct input)
+    pub fn low_latency_yuyv422(resolution: Resolution, bitrate_kbps: u32) -> Self {
+        Self {
+            base: EncoderConfig::h264(resolution, bitrate_kbps),
+            bitrate_kbps,
+            gop_size: 30,
+            fps: 30,
+            input_format: H264InputFormat::Yuyv422,
         }
     }
 
@@ -275,6 +288,7 @@ impl H264Encoder {
         let pixfmt = match config.input_format {
             H264InputFormat::Nv12 => AVPixelFormat::AV_PIX_FMT_NV12,
             H264InputFormat::Yuv420p => AVPixelFormat::AV_PIX_FMT_YUV420P,
+            H264InputFormat::Yuyv422 => AVPixelFormat::AV_PIX_FMT_YUYV422,
         };
 
         info!(
@@ -367,11 +381,12 @@ impl H264Encoder {
 
         match self.inner.encode(data, pts_ms) {
             Ok(frames) => {
-                // Copy frame data to owned HwEncodeFrame
+                // Zero-copy: drain frames from hwcodec buffer instead of cloning
+                // hwcodec returns &mut Vec, so we can take ownership via drain
                 let owned_frames: Vec<HwEncodeFrame> = frames
-                    .iter()
+                    .drain(..)
                     .map(|f| HwEncodeFrame {
-                        data: f.data.clone(),
+                        data: f.data, // Move, not clone
                         pts: f.pts,
                         key: f.key,
                     })
@@ -438,7 +453,7 @@ impl Encoder for H264Encoder {
         // Assume input is YUV420P
         let pts_ms = (sequence * 1000 / self.config.fps as u64) as i64;
 
-        let frames = self.encode_yuv420p(data, pts_ms)?;
+        let mut frames = self.encode_yuv420p(data, pts_ms)?;
 
         if frames.is_empty() {
             // Encoder needs more frames (shouldn't happen with our config)
@@ -446,12 +461,12 @@ impl Encoder for H264Encoder {
             return Err(AppError::VideoError("Encoder returned no frames".to_string()));
         }
 
-        // Take the first frame
-        let frame = &frames[0];
+        // Take ownership of the first frame (zero-copy)
+        let frame = frames.remove(0);
         let key_frame = frame.key == 1;
 
         Ok(EncodedFrame::h264(
-            Bytes::from(frame.data.clone()),
+            Bytes::from(frame.data), // Move Vec into Bytes (zero-copy)
             self.config.base.resolution,
             key_frame,
             sequence,
@@ -479,6 +494,7 @@ impl Encoder for H264Encoder {
         match self.config.input_format {
             H264InputFormat::Nv12 => matches!(format, PixelFormat::Nv12),
             H264InputFormat::Yuv420p => matches!(format, PixelFormat::Yuv420),
+            H264InputFormat::Yuyv422 => matches!(format, PixelFormat::Yuyv),
         }
     }
 }

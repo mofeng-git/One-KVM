@@ -184,6 +184,14 @@ impl MjpegStreamHandler {
 
     /// Update current frame
     pub fn update_frame(&self, frame: VideoFrame) {
+        // Skip JPEG encoding if no clients are connected (optimization for WebRTC-only mode)
+        // This avoids unnecessary libyuv conversion when only WebRTC is active
+        if self.clients.read().is_empty() && !frame.format.is_compressed() {
+            // Still update the online status and sequence for monitoring purposes
+            // but skip the expensive JPEG encoding
+            return;
+        }
+
         // If frame is not JPEG, encode it
         let frame = if !frame.format.is_compressed() {
             match self.encode_to_jpeg(&frame) {

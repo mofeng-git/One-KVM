@@ -490,10 +490,13 @@ impl UnifiedVideoTrack {
 
     /// Write VP8 frame (raw encoded)
     async fn write_vp8_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
+        // Calculate frame duration based on configured FPS
+        let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
+
         // VP8 frames are sent directly
         let sample = Sample {
             data: Bytes::copy_from_slice(data),
-            duration: Duration::from_secs(1),
+            duration: frame_duration,
             ..Default::default()
         };
 
@@ -514,10 +517,13 @@ impl UnifiedVideoTrack {
 
     /// Write VP9 frame (raw encoded)
     async fn write_vp9_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
+        // Calculate frame duration based on configured FPS
+        let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
+
         // VP9 frames are sent directly
         let sample = Sample {
             data: Bytes::copy_from_slice(data),
-            duration: Duration::from_secs(1),
+            duration: frame_duration,
             ..Default::default()
         };
 
@@ -537,25 +543,33 @@ impl UnifiedVideoTrack {
     }
 
     /// Send NAL units via track (for H264/H265)
+    ///
+    /// Important: Only the last NAL unit should have the frame duration set.
+    /// All NAL units in a frame share the same RTP timestamp, so only the last
+    /// one should increment the timestamp by the frame duration.
     async fn send_nal_units(&self, nals: Vec<Bytes>, is_keyframe: bool) -> Result<()> {
         let mut total_bytes = 0u64;
-        let mut nal_count = 0;
+        let nal_count = nals.len();
+        // Calculate frame duration based on configured FPS
+        let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
 
-        for nal_data in nals {
+        for (i, nal_data) in nals.into_iter().enumerate() {
+            let is_last = i == nal_count - 1;
+            // Only the last NAL should have duration set
+            // This ensures all NALs in a frame share the same RTP timestamp
             let sample = Sample {
                 data: nal_data.clone(),
-                duration: Duration::from_secs(1),
+                duration: if is_last { frame_duration } else { Duration::ZERO },
                 ..Default::default()
             };
 
             if let Err(e) = self.track.write_sample(&sample).await {
-                if nal_count % 100 == 0 {
+                if i % 100 == 0 {
                     debug!("write_sample failed (no peer?): {}", e);
                 }
             }
 
             total_bytes += nal_data.len() as u64;
-            nal_count += 1;
         }
 
         if nal_count > 0 {

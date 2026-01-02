@@ -426,10 +426,11 @@ impl H265Encoder {
 
         match self.inner.encode(data, pts_ms) {
             Ok(frames) => {
+                // Zero-copy: drain frames from hwcodec buffer instead of cloning
                 let owned_frames: Vec<HwEncodeFrame> = frames
-                    .iter()
+                    .drain(..)
                     .map(|f| HwEncodeFrame {
-                        data: f.data.clone(),
+                        data: f.data, // Move, not clone
                         pts: f.pts,
                         key: f.key,
                     })
@@ -505,7 +506,7 @@ impl Encoder for H265Encoder {
     fn encode(&mut self, data: &[u8], sequence: u64) -> Result<EncodedFrame> {
         let pts_ms = (sequence * 1000 / self.config.fps as u64) as i64;
 
-        let frames = self.encode_raw(data, pts_ms)?;
+        let mut frames = self.encode_raw(data, pts_ms)?;
 
         if frames.is_empty() {
             warn!("H.265 encoder returned no frames");
@@ -514,11 +515,12 @@ impl Encoder for H265Encoder {
             ));
         }
 
-        let frame = &frames[0];
+        // Take ownership of the first frame (zero-copy)
+        let frame = frames.remove(0);
         let key_frame = frame.key == 1;
 
         Ok(EncodedFrame {
-            data: Bytes::from(frame.data.clone()),
+            data: Bytes::from(frame.data), // Move Vec into Bytes (zero-copy)
             format: EncodedFormat::H265,
             resolution: self.config.base.resolution,
             key_frame,

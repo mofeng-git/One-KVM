@@ -33,6 +33,14 @@ static int calculate_offset_length(int pix_fmt, int height, const int *linesize,
     offset[0] = linesize[0] * height;
     *length = offset[0] + linesize[1] * height / 2;
     break;
+  case AV_PIX_FMT_YUYV422:
+  case AV_PIX_FMT_YVYU422:
+  case AV_PIX_FMT_UYVY422:
+    // Packed YUV 4:2:2 formats: single plane, 2 bytes per pixel
+    // linesize[0] = width * 2 (YUYV/YVYU/UYVY are interleaved)
+    offset[0] = 0;  // Only one plane
+    *length = linesize[0] * height;
+    break;
   default:
     LOG_ERROR(std::string("unsupported pixfmt") + std::to_string(pix_fmt));
     return -1;
@@ -412,6 +420,19 @@ private:
       frame->data[0] = data;
       frame->data[1] = data + offset[0];
       frame->data[2] = data + offset[1];
+      break;
+    case AV_PIX_FMT_YUYV422:
+    case AV_PIX_FMT_YVYU422:
+    case AV_PIX_FMT_UYVY422:
+      // Packed YUV 4:2:2 formats: single plane, linesize[0] = width * 2
+      if (data_length < frame->height * frame->linesize[0]) {
+        LOG_ERROR(std::string("fill_frame: YUYV422 data length error. data_length:") +
+                  std::to_string(data_length) +
+                  ", linesize[0]:" + std::to_string(frame->linesize[0]) +
+                  ", height:" + std::to_string(frame->height));
+        return -1;
+      }
+      frame->data[0] = data;
       break;
     default:
       LOG_ERROR(std::string("fill_frame: unsupported format, ") +

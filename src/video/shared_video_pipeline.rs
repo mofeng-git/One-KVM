@@ -17,7 +17,7 @@
 //! ```
 
 use bytes::Bytes;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, watch, Mutex, RwLock};
@@ -292,6 +292,8 @@ pub struct SharedVideoPipeline {
     yuv420p_buffer: Mutex<Vec<u8>>,
     /// Whether the encoder needs YUV420P (true) or NV12 (false)
     encoder_needs_yuv420p: AtomicBool,
+    /// Whether YUYV direct input is enabled (RKMPP optimization)
+    yuyv_direct_input: AtomicBool,
     frame_tx: broadcast::Sender<EncodedVideoFrame>,
     stats: Mutex<SharedVideoPipelineStats>,
     running: watch::Sender<bool>,
@@ -300,6 +302,9 @@ pub struct SharedVideoPipeline {
     sequence: AtomicU64,
     /// Atomic flag for keyframe request (avoids lock contention)
     keyframe_requested: AtomicBool,
+    /// Pipeline start time for PTS calculation (epoch millis, 0 = not set)
+    /// Uses AtomicI64 instead of Mutex for lock-free access
+    pipeline_start_time_ms: AtomicI64,
 }
 
 impl SharedVideoPipeline {
@@ -329,12 +334,14 @@ impl SharedVideoPipeline {
             nv12_buffer: Mutex::new(vec![0u8; nv12_size]),
             yuv420p_buffer: Mutex::new(vec![0u8; yuv420p_size]),
             encoder_needs_yuv420p: AtomicBool::new(false),
+            yuyv_direct_input: AtomicBool::new(false),
             frame_tx,
             stats: Mutex::new(SharedVideoPipelineStats::default()),
             running: running_tx,
             running_rx,
             sequence: AtomicU64::new(0),
             keyframe_requested: AtomicBool::new(false),
+            pipeline_start_time_ms: AtomicI64::new(0),
         });
 
         Ok(pipeline)
@@ -353,18 +360,41 @@ impl SharedVideoPipeline {
             }
         };
 
+        // Check if RKMPP backend is available for YUYV direct input optimization
+        let is_rkmpp_available = registry.encoder_with_backend(VideoEncoderType::H264, EncoderBackend::Rkmpp).is_some();
+        let use_yuyv_direct = is_rkmpp_available && config.input_format == PixelFormat::Yuyv;
+
+        if use_yuyv_direct {
+            info!("RKMPP backend detected with YUYV input, enabling YUYV direct input optimization");
+        }
+
         // Create encoder based on codec type
         let encoder: Box<dyn VideoEncoderTrait + Send> = match config.output_codec {
             VideoEncoderType::H264 => {
+                // Determine H264 input format based on backend and input format
+                let h264_input_format = if use_yuyv_direct {
+                    crate::video::encoder::h264::H264InputFormat::Yuyv422
+                } else {
+                    crate::video::encoder::h264::H264InputFormat::Nv12
+                };
+
                 let encoder_config = H264Config {
                     base: EncoderConfig::h264(config.resolution, config.bitrate_kbps),
                     bitrate_kbps: config.bitrate_kbps,
                     gop_size: config.gop_size,
                     fps: config.fps,
-                    input_format: crate::video::encoder::h264::H264InputFormat::Nv12,
+                    input_format: h264_input_format,
                 };
 
-                let encoder = if let Some(ref backend) = config.encoder_backend {
+                let encoder = if use_yuyv_direct {
+                    // Force RKMPP backend for YUYV direct input
+                    let codec_name = get_codec_name(VideoEncoderType::H264, Some(EncoderBackend::Rkmpp))
+                        .ok_or_else(|| AppError::VideoError(
+                            "RKMPP backend not available for H.264".to_string()
+                        ))?;
+                    info!("Creating H264 encoder with RKMPP backend for YUYV direct input (codec: {})", codec_name);
+                    H264Encoder::with_codec(encoder_config, &codec_name)?
+                } else if let Some(ref backend) = config.encoder_backend {
                     // Specific backend requested
                     let codec_name = get_codec_name(VideoEncoderType::H264, Some(*backend))
                         .ok_or_else(|| AppError::VideoError(format!(
@@ -440,15 +470,19 @@ impl SharedVideoPipeline {
         info!(
             "Encoder {} needs {} format",
             codec_name,
-            if needs_yuv420p { "YUV420P" } else { "NV12" }
+            if use_yuyv_direct { "YUYV422 (direct)" } else if needs_yuv420p { "YUV420P" } else { "NV12" }
         );
 
         // Create converter or decoder based on input format and encoder needs
         info!("Initializing input format handler for: {} -> {}",
               config.input_format,
-              if needs_yuv420p { "YUV420P" } else { "NV12" });
+              if use_yuyv_direct { "YUYV422 (direct)" } else if needs_yuv420p { "YUV420P" } else { "NV12" });
 
-        let (nv12_converter, yuv420p_converter, mjpeg_decoder, mjpeg_turbo_decoder) = if needs_yuv420p {
+        let (nv12_converter, yuv420p_converter, mjpeg_decoder, mjpeg_turbo_decoder) = if use_yuyv_direct {
+            // RKMPP with YUYV direct input - skip all conversion
+            info!("YUYV direct input enabled for RKMPP, skipping format conversion");
+            (None, None, None, None)
+        } else if needs_yuv420p {
             // Software encoder needs YUV420P
             match config.input_format {
                 PixelFormat::Yuv420 => {
@@ -527,6 +561,7 @@ impl SharedVideoPipeline {
         *self.mjpeg_decoder.lock().await = mjpeg_decoder;
         *self.mjpeg_turbo_decoder.lock().await = mjpeg_turbo_decoder;
         self.encoder_needs_yuv420p.store(needs_yuv420p, Ordering::Release);
+        self.yuyv_direct_input.store(use_yuyv_direct, Ordering::Release);
 
         Ok(())
     }
@@ -749,7 +784,28 @@ impl SharedVideoPipeline {
         let codec = config.output_codec;
         drop(config);
 
-        let pts_ms = (frame_count * 1000 / fps as u64) as i64;
+        // Calculate PTS from real capture timestamp (lock-free using AtomicI64)
+        // This ensures smooth playback even when capture timing varies
+        let frame_ts_ms = frame.capture_ts.elapsed().as_millis() as i64;
+        // Convert Instant to a comparable value (negate elapsed to get "time since epoch")
+        let current_ts_ms = -(frame_ts_ms);
+
+        // Try to set start time if not yet set (first frame wins)
+        let start_ts = self.pipeline_start_time_ms.load(Ordering::Acquire);
+        let pts_ms = if start_ts == 0 {
+            // First frame - try to set the start time
+            // Use compare_exchange to ensure only one thread sets it
+            let _ = self.pipeline_start_time_ms.compare_exchange(
+                0,
+                current_ts_ms,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            );
+            0 // First frame has PTS 0
+        } else {
+            // Subsequent frames: PTS = current - start
+            current_ts_ms - start_ts
+        };
 
         // Debug log for H265
         if codec == VideoEncoderType::H265 && frame_count % 30 == 1 {
@@ -857,13 +913,12 @@ impl SharedVideoPipeline {
                         }
                     }
 
-                    let config = self.config.read().await;
                     Ok(Some(EncodedVideoFrame {
                         data: Bytes::from(encoded.data),
                         pts_ms,
                         is_keyframe,
                         sequence,
-                        duration: Duration::from_millis(1000 / config.fps as u64),
+                        duration: Duration::from_millis(1000 / fps as u64),
                         codec,
                     }))
                 } else {
