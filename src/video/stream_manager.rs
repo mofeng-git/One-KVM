@@ -613,6 +613,14 @@ impl VideoStreamManager {
         self.webrtc_streamer.set_video_codec(codec).await
     }
 
+    /// Set bitrate preset for the shared video pipeline
+    ///
+    /// This allows external consumers (like RustDesk) to adjust the video quality
+    /// based on client preferences.
+    pub async fn set_bitrate_preset(&self, preset: crate::video::encoder::BitratePreset) -> crate::error::Result<()> {
+        self.webrtc_streamer.set_bitrate_preset(preset).await
+    }
+
     /// Publish event to event bus
     async fn publish_event(&self, event: SystemEvent) {
         if let Some(ref events) = *self.events.read().await {

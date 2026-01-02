@@ -30,6 +30,7 @@ use crate::error::{AppError, Result};
 use crate::hid::datachannel::{parse_hid_message, HidChannelEvent};
 use crate::hid::HidController;
 use crate::video::encoder::registry::VideoEncoderType;
+use crate::video::encoder::BitratePreset;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::shared_video_pipeline::EncodedVideoFrame;
 
@@ -47,12 +48,10 @@ pub struct UniversalSessionConfig {
     pub resolution: Resolution,
     /// Input pixel format
     pub input_format: PixelFormat,
-    /// Target bitrate in kbps
-    pub bitrate_kbps: u32,
+    /// Bitrate preset
+    pub bitrate_preset: BitratePreset,
     /// Target FPS
     pub fps: u32,
-    /// GOP size
-    pub gop_size: u32,
     /// Enable audio track
     pub audio_enabled: bool,
 }
@@ -64,9 +63,8 @@ impl Default for UniversalSessionConfig {
             codec: VideoEncoderType::H264,
             resolution: Resolution::HD720,
             input_format: PixelFormat::Mjpeg,
-            bitrate_kbps: 1000,
+            bitrate_preset: BitratePreset::Balanced,
             fps: 30,
-            gop_size: 30,
             audio_enabled: false,
         }
     }
@@ -144,7 +142,7 @@ impl UniversalSession {
             stream_id: "one-kvm-stream".to_string(),
             codec: video_codec,
             resolution: config.resolution,
-            bitrate_kbps: config.bitrate_kbps,
+            bitrate_kbps: config.bitrate_preset.bitrate_kbps(),
             fps: config.fps,
         };
         let video_track = Arc::new(UniversalVideoTrack::new(track_config));

@@ -17,12 +17,10 @@
 //! ```
 
 use bytes::Bytes;
-use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{debug, trace, warn};
-use webrtc::media::io::h264_reader::H264Reader;
 use webrtc::media::Sample;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -201,18 +199,6 @@ pub struct VideoTrackStats {
     pub errors: u64,
 }
 
-/// Cached codec parameters for H264/H265
-#[derive(Debug, Default)]
-struct CachedParams {
-    /// H264: SPS, H265: VPS
-    #[allow(dead_code)]
-    vps: Option<Bytes>,
-    /// SPS (both H264 and H265)
-    sps: Option<Bytes>,
-    /// PPS (both H264 and H265)
-    pps: Option<Bytes>,
-}
-
 /// Track type wrapper to support different underlying track implementations
 enum TrackType {
     /// Sample-based track with built-in payloader (H264, VP8, VP9)
@@ -243,8 +229,6 @@ pub struct UniversalVideoTrack {
     config: UniversalVideoTrackConfig,
     /// Statistics
     stats: Mutex<VideoTrackStats>,
-    /// Cached parameters for H264/H265
-    cached_params: Mutex<CachedParams>,
     /// H265 RTP state (only used for H265)
     h265_state: Option<Mutex<H265RtpState>>,
 }
@@ -294,7 +278,6 @@ impl UniversalVideoTrack {
             codec: config.codec,
             config,
             stats: Mutex::new(VideoTrackStats::default()),
-            cached_params: Mutex::new(CachedParams::default()),
             h265_state,
         }
     }
@@ -341,71 +324,43 @@ impl UniversalVideoTrack {
     }
 
     /// Write H264 frame (Annex B format)
+    ///
+    /// Sends the entire Annex B frame as a single Sample to allow the
+    /// H264Payloader to aggregate SPS+PPS into STAP-A packets.
     async fn write_h264_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
-        let cursor = Cursor::new(data);
-        let mut h264_reader = H264Reader::new(cursor, 1024 * 1024);
+        // Send entire Annex B frame as one Sample
+        // The H264Payloader in rtp crate will:
+        // 1. Parse NAL units from Annex B format
+        // 2. Cache SPS and PPS
+        // 3. Aggregate SPS+PPS+IDR into STAP-A when possible
+        // 4. Fragment large NALs using FU-A
+        let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
+        let sample = Sample {
+            data: Bytes::copy_from_slice(data),
+            duration: frame_duration,
+            ..Default::default()
+        };
 
-        let mut nals: Vec<Bytes> = Vec::new();
-        let mut has_sps = false;
-        let mut has_pps = false;
-        let mut has_idr = false;
-
-        // Parse NAL units
-        while let Ok(nal) = h264_reader.next_nal() {
-            if nal.data.is_empty() {
-                continue;
-            }
-
-            let nal_type = nal.data[0] & 0x1F;
-
-            // Skip AUD (9) and filler (12)
-            if nal_type == 9 || nal_type == 12 {
-                continue;
-            }
-
-            match nal_type {
-                5 => has_idr = true,
-                7 => {
-                    has_sps = true;
-                    self.cached_params.lock().await.sps = Some(nal.data.clone().freeze());
-                }
-                8 => {
-                    has_pps = true;
-                    self.cached_params.lock().await.pps = Some(nal.data.clone().freeze());
-                }
-                _ => {}
-            }
-
-            nals.push(nal.data.freeze());
-        }
-
-        // Inject cached SPS/PPS before IDR if missing
-        if has_idr && (!has_sps || !has_pps) {
-            let mut injected: Vec<Bytes> = Vec::new();
-            let params = self.cached_params.lock().await;
-
-            if !has_sps {
-                if let Some(ref sps) = params.sps {
-                    debug!("Injecting cached H264 SPS");
-                    injected.push(sps.clone());
+        match &self.track {
+            TrackType::Sample(track) => {
+                if let Err(e) = track.write_sample(&sample).await {
+                    debug!("H264 write_sample failed: {}", e);
                 }
             }
-            if !has_pps {
-                if let Some(ref pps) = params.pps {
-                    debug!("Injecting cached H264 PPS");
-                    injected.push(pps.clone());
-                }
-            }
-            drop(params);
-
-            if !injected.is_empty() {
-                injected.extend(nals);
-                nals = injected;
+            TrackType::Rtp(_) => {
+                warn!("H264 should not use RTP track");
             }
         }
 
-        // Send NAL units
-        self.send_nals(nals, is_keyframe).await
+        // Update stats
+        let mut stats = self.stats.lock().await;
+        stats.frames_sent += 1;
+        stats.bytes_sent += data.len() as u64;
+        if is_keyframe {
+            stats.keyframes_sent += 1;
+        }
+
+        Ok(())
     }
 
     /// Write H265 frame (Annex B format)
@@ -476,52 +431,6 @@ impl UniversalVideoTrack {
         let mut stats = self.stats.lock().await;
         stats.frames_sent += 1;
         stats.bytes_sent += data.len() as u64;
-        if is_keyframe {
-            stats.keyframes_sent += 1;
-        }
-
-        Ok(())
-    }
-
-    /// Send NAL units as samples (H264 only)
-    ///
-    /// Important: Only the last NAL unit should have the frame duration set.
-    /// All NAL units in a frame share the same RTP timestamp, so only the last
-    /// one should increment the timestamp by the frame duration.
-    async fn send_nals(&self, nals: Vec<Bytes>, is_keyframe: bool) -> Result<()> {
-        let mut total_bytes = 0u64;
-        // Calculate frame duration based on configured FPS
-        let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
-        let nal_count = nals.len();
-
-        match &self.track {
-            TrackType::Sample(track) => {
-                for (i, nal_data) in nals.into_iter().enumerate() {
-                    let is_last = i == nal_count - 1;
-                    // Only the last NAL should have duration set
-                    // This ensures all NALs in a frame share the same RTP timestamp
-                    let sample = Sample {
-                        data: nal_data.clone(),
-                        duration: if is_last { frame_duration } else { Duration::ZERO },
-                        ..Default::default()
-                    };
-
-                    if let Err(e) = track.write_sample(&sample).await {
-                        debug!("NAL write_sample failed: {}", e);
-                    }
-
-                    total_bytes += nal_data.len() as u64;
-                }
-            }
-            TrackType::Rtp(_) => {
-                warn!("send_nals should not be called for RTP track (H265)");
-            }
-        }
-
-        // Update stats
-        let mut stats = self.stats.lock().await;
-        stats.frames_sent += 1;
-        stats.bytes_sent += total_bytes;
         if is_keyframe {
             stats.keyframes_sent += 1;
         }

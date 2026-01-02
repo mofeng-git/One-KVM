@@ -22,6 +22,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::hid::HidController;
 use crate::video::encoder::registry::{EncoderRegistry, VideoEncoderType};
+use crate::video::encoder::BitratePreset;
 use crate::video::stream_manager::VideoStreamManager;
 
 use super::bytes_codec::{read_frame, write_frame};
@@ -507,7 +508,7 @@ impl Connection {
         *self.state.write() = ConnectionState::Active;
 
         // Select the best available video codec
-        // Priority: VP8 > VP9 > H264 > H265 (VP8/VP9 are more widely supported by software decoders)
+        // Priority: H264 > H265 > VP8 > VP9 (H264/H265 leverage hardware encoding)
         let negotiated = self.negotiate_video_codec();
         self.negotiated_codec = Some(negotiated);
         info!("Negotiated video codec: {:?}", negotiated);
@@ -519,28 +520,29 @@ impl Connection {
     }
 
     /// Negotiate video codec - select the best available encoder
-    /// Priority: VP8 > VP9 > H264 > H265 (VP8/VP9 have better software decoder support)
+    /// Priority: H264 > H265 > VP8 > VP9 (H264/H265 leverage hardware encoding on embedded devices)
     fn negotiate_video_codec(&self) -> VideoEncoderType {
         let registry = EncoderRegistry::global();
 
         // Check availability in priority order
-        // VP8 is preferred because it has the best compatibility with software decoders
-        if registry.is_format_available(VideoEncoderType::VP8, false) {
-            return VideoEncoderType::VP8;
-        }
-        if registry.is_format_available(VideoEncoderType::VP9, false) {
-            return VideoEncoderType::VP9;
-        }
+        // H264 is preferred because it has the best hardware encoder support (RKMPP, VAAPI, etc.)
+        // and most RustDesk clients support H264 hardware decoding
         if registry.is_format_available(VideoEncoderType::H264, false) {
             return VideoEncoderType::H264;
         }
         if registry.is_format_available(VideoEncoderType::H265, false) {
             return VideoEncoderType::H265;
         }
+        if registry.is_format_available(VideoEncoderType::VP8, false) {
+            return VideoEncoderType::VP8;
+        }
+        if registry.is_format_available(VideoEncoderType::VP9, false) {
+            return VideoEncoderType::VP9;
+        }
 
-        // Fallback to VP8 (should always be available via libvpx)
-        warn!("No video encoder available, defaulting to VP8");
-        VideoEncoderType::VP8
+        // Fallback to H264 (should be available via hardware or software encoder)
+        warn!("No video encoder available, defaulting to H264");
+        VideoEncoderType::H264
     }
 
     /// Handle misc message with Arc writer
@@ -575,8 +577,30 @@ impl Connection {
         Ok(())
     }
 
-    /// Handle Option message from client (includes codec preference)
+    /// Handle Option message from client (includes codec and quality preferences)
     async fn handle_option_message(&mut self, opt: &hbb::OptionMessage) -> anyhow::Result<()> {
+        // Handle image quality preset
+        // RustDesk ImageQuality: NotSet=0, Low=2, Balanced=3, Best=4
+        // Map to One-KVM BitratePreset: Low->Speed, Balanced->Balanced, Best->Quality
+        let image_quality = opt.image_quality;
+        if image_quality != 0 {
+            let preset = match image_quality {
+                2 => Some(BitratePreset::Speed),    // Low -> Speed (1 Mbps)
+                3 => Some(BitratePreset::Balanced), // Balanced -> Balanced (4 Mbps)
+                4 => Some(BitratePreset::Quality),  // Best -> Quality (8 Mbps)
+                _ => None,
+            };
+
+            if let Some(preset) = preset {
+                info!("Client requested quality preset: {:?} (image_quality={})", preset, image_quality);
+                if let Some(ref video_manager) = self.video_manager {
+                    if let Err(e) = video_manager.set_bitrate_preset(preset).await {
+                        warn!("Failed to set bitrate preset: {}", e);
+                    }
+                }
+            }
+        }
+
         // Check if client sent supported_decoding with a codec preference
         if let Some(ref supported_decoding) = opt.supported_decoding {
             let prefer = supported_decoding.prefer;
@@ -616,9 +640,9 @@ impl Connection {
             }
         }
 
-        // Log other options for debugging
+        // Log custom_image_quality (accept but don't process)
         if opt.custom_image_quality > 0 {
-            debug!("Client requested image quality: {}", opt.custom_image_quality);
+            debug!("Client sent custom_image_quality: {} (ignored)", opt.custom_image_quality);
         }
         if opt.custom_fps > 0 {
             debug!("Client requested FPS: {}", opt.custom_fps);
@@ -665,7 +689,7 @@ impl Connection {
         let state = self.state.clone();
         let conn_id = self.id;
         let shutdown_tx = self.shutdown_tx.clone();
-        let negotiated_codec = self.negotiated_codec.unwrap_or(VideoEncoderType::VP8);
+        let negotiated_codec = self.negotiated_codec.unwrap_or(VideoEncoderType::H264);
 
         let task = tokio::spawn(async move {
             info!("Starting video streaming for connection {} with codec {:?}", conn_id, negotiated_codec);
@@ -1298,12 +1322,12 @@ async fn run_video_streaming(
     // Get encoding config for logging
     if let Some(config) = video_manager.get_encoding_config().await {
         info!(
-            "RustDesk connection {} using shared video pipeline: {:?} {}x{} @ {} kbps",
+            "RustDesk connection {} using shared video pipeline: {:?} {}x{} @ {}",
             conn_id,
             config.output_codec,
             config.resolution.width,
             config.resolution.height,
-            config.bitrate_kbps
+            config.bitrate_preset
         );
     }
 

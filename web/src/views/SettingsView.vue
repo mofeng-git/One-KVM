@@ -45,6 +45,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
   Monitor,
   Keyboard,
   Info,
@@ -73,6 +79,7 @@ import {
   ExternalLink,
   Copy,
   ScreenShare,
+  CircleHelp,
 } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
@@ -1825,7 +1832,28 @@ onMounted(async () => {
                         v-model="rustdeskLocalConfig.rendezvous_server"
                         :placeholder="t('extensions.rustdesk.rendezvousServerPlaceholder')"
                       />
-                      <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.rendezvousServerHint') }}</p>
+                      <div class="flex items-center gap-1">
+                        <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.rendezvousServerHint') }}</p>
+                        <TooltipProvider v-if="rustdeskStatus?.public_server">
+                          <Tooltip>
+                            <TooltipTrigger as-child>
+                              <CircleHelp class="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="right" class="max-w-xs">
+                              <div class="space-y-1.5 text-xs">
+                                <p class="font-medium">{{ t('extensions.rustdesk.publicServerInfo') }}</p>
+                                <div class="space-y-1">
+                                  <p><span class="text-muted-foreground">{{ t('extensions.rustdesk.publicServerAddress') }}:</span> {{ rustdeskStatus.public_server.server }}</p>
+                                  <p><span class="text-muted-foreground">{{ t('extensions.rustdesk.publicServerKey') }}:</span> <code class="text-[10px] break-all">{{ rustdeskStatus.public_server.public_key }}</code></p>
+                                </div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                      <p v-if="rustdeskStatus?.config?.using_public_server" class="text-xs text-blue-500">
+                        {{ t('extensions.rustdesk.usingPublicServer') }}
+                      </p>
                     </div>
                   </div>
                   <div class="grid grid-cols-4 items-center gap-4">

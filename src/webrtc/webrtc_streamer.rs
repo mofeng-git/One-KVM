@@ -51,6 +51,7 @@ use crate::video::shared_video_pipeline::{SharedVideoPipeline, SharedVideoPipeli
 use super::config::{TurnServer, WebRtcConfig};
 use super::signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
 use super::universal_session::{UniversalSession, UniversalSessionConfig};
+use crate::video::encoder::BitratePreset;
 
 /// WebRTC streamer configuration
 #[derive(Debug, Clone)]
@@ -63,12 +64,10 @@ pub struct WebRtcStreamerConfig {
     pub resolution: Resolution,
     /// Input pixel format
     pub input_format: PixelFormat,
-    /// Target bitrate in kbps
-    pub bitrate_kbps: u32,
+    /// Bitrate preset
+    pub bitrate_preset: BitratePreset,
     /// Target FPS
     pub fps: u32,
-    /// GOP size (keyframe interval)
-    pub gop_size: u32,
     /// Enable audio (reserved)
     pub audio_enabled: bool,
     /// Encoder backend (None = auto select best available)
@@ -82,9 +81,8 @@ impl Default for WebRtcStreamerConfig {
             video_codec: VideoCodecType::H264,
             resolution: Resolution::HD720,
             input_format: PixelFormat::Mjpeg,
-            bitrate_kbps: 8000,
+            bitrate_preset: BitratePreset::Balanced,
             fps: 30,
-            gop_size: 30,
             audio_enabled: false,
             encoder_backend: None,
         }
@@ -282,10 +280,10 @@ impl WebRtcStreamer {
             resolution: config.resolution,
             input_format: config.input_format,
             output_codec: Self::codec_type_to_encoder_type(codec),
-            bitrate_kbps: config.bitrate_kbps,
+            bitrate_preset: config.bitrate_preset,
             fps: config.fps,
-            gop_size: config.gop_size,
             encoder_backend: config.encoder_backend,
+            ..Default::default()
         };
 
         info!("Creating shared video pipeline for {:?}", codec);
@@ -541,8 +539,8 @@ impl WebRtcStreamer {
         // Note: bitrate is NOT auto-scaled here - use set_bitrate() or config to change it
 
         info!(
-            "WebRTC config updated: {}x{} {:?} @ {} fps, {} kbps",
-            resolution.width, resolution.height, format, fps, config.bitrate_kbps
+            "WebRTC config updated: {}x{} {:?} @ {} fps, {}",
+            resolution.width, resolution.height, format, fps, config.bitrate_preset
         );
     }
 
@@ -636,9 +634,8 @@ impl WebRtcStreamer {
             codec: Self::codec_type_to_encoder_type(codec),
             resolution: config.resolution,
             input_format: config.input_format,
-            bitrate_kbps: config.bitrate_kbps,
+            bitrate_preset: config.bitrate_preset,
             fps: config.fps,
-            gop_size: config.gop_size,
             audio_enabled: *self.audio_enabled.read().await,
         };
         drop(config);
@@ -875,13 +872,13 @@ impl WebRtcStreamer {
         }
     }
 
-    /// Set bitrate
+    /// Set bitrate using preset
     ///
     /// Note: Hardware encoders (VAAPI, NVENC, etc.) don't support dynamic bitrate changes.
     /// This method restarts the pipeline to apply the new bitrate.
-    pub async fn set_bitrate(self: &Arc<Self>, bitrate_kbps: u32) -> Result<()> {
+    pub async fn set_bitrate_preset(self: &Arc<Self>, preset: BitratePreset) -> Result<()> {
         // Update config first
-        self.config.write().await.bitrate_kbps = bitrate_kbps;
+        self.config.write().await.bitrate_preset = preset;
 
         // Check if pipeline exists and is running
         let pipeline_running = {
@@ -894,8 +891,8 @@ impl WebRtcStreamer {
 
         if pipeline_running {
             info!(
-                "Restarting video pipeline to apply new bitrate: {} kbps",
-                bitrate_kbps
+                "Restarting video pipeline to apply new bitrate: {}",
+                preset
             );
 
             // Stop existing pipeline
@@ -936,16 +933,16 @@ impl WebRtcStreamer {
                     }
 
                     info!(
-                        "Video pipeline restarted with {} kbps, reconnected {} sessions",
-                        bitrate_kbps,
+                        "Video pipeline restarted with {}, reconnected {} sessions",
+                        preset,
                         session_ids.len()
                     );
                 }
             }
         } else {
             debug!(
-                "Pipeline not running, bitrate {} kbps will apply on next start",
-                bitrate_kbps
+                "Pipeline not running, bitrate {} will apply on next start",
+                preset
             );
         }
 
@@ -978,7 +975,7 @@ mod tests {
         let config = WebRtcStreamerConfig::default();
         assert_eq!(config.video_codec, VideoCodecType::H264);
         assert_eq!(config.resolution, Resolution::HD720);
-        assert_eq!(config.bitrate_kbps, 8000);
+        assert_eq!(config.bitrate_preset, BitratePreset::Quality);
         assert_eq!(config.fps, 30);
         assert!(!config.audio_enabled);
     }

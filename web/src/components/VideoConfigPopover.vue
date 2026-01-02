@@ -5,7 +5,6 @@ import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { Slider } from '@/components/ui/slider'
 import {
   Popover,
   PopoverContent,
@@ -18,11 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Monitor, RefreshCw, Loader2, Settings } from 'lucide-vue-next'
+import { Monitor, RefreshCw, Loader2, Settings, Zap, Scale, Image } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
-import { configApi, streamApi, type VideoCodecInfo, type EncoderBackendInfo } from '@/api'
+import { configApi, streamApi, type VideoCodecInfo, type EncoderBackendInfo, type BitratePreset } from '@/api'
 import { useSystemStore } from '@/stores/system'
-import { useDebounceFn } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 
 export type VideoMode = 'mjpeg' | 'h264' | 'h265' | 'vp8' | 'vp9'
@@ -179,7 +177,7 @@ const selectedDevice = ref<string>('')
 const selectedFormat = ref<string>('')
 const selectedResolution = ref<string>('')
 const selectedFps = ref<number>(30)
-const selectedBitrate = ref<number[]>([1000])
+const selectedBitratePreset = ref<'Speed' | 'Balanced' | 'Quality'>('Balanced')
 
 // UI state
 const applying = ref(false)
@@ -379,30 +377,27 @@ function handleFpsChange(fps: unknown) {
   selectedFps.value = typeof fps === 'string' ? Number(fps) : fps
 }
 
-// Apply bitrate change (real-time)
-async function applyBitrate(bitrate: number) {
+// Apply bitrate preset change
+async function applyBitratePreset(preset: 'Speed' | 'Balanced' | 'Quality') {
   if (applyingBitrate.value) return
   applyingBitrate.value = true
   try {
-    await streamApi.setBitrate(bitrate)
+    const bitratePreset: BitratePreset = { type: preset }
+    await streamApi.setBitratePreset(bitratePreset)
   } catch (e) {
-    console.info('[VideoConfig] Failed to apply bitrate:', e)
+    console.info('[VideoConfig] Failed to apply bitrate preset:', e)
   } finally {
     applyingBitrate.value = false
   }
 }
 
-// Debounced bitrate application
-const debouncedApplyBitrate = useDebounceFn((bitrate: number) => {
-  applyBitrate(bitrate)
-}, 300)
-
-// Watch bitrate slider changes (only when in WebRTC mode)
-watch(selectedBitrate, (newValue) => {
-  if (props.videoMode !== 'mjpeg' && newValue[0] !== undefined) {
-    debouncedApplyBitrate(newValue[0])
+// Handle bitrate preset selection
+function handleBitratePresetChange(preset: 'Speed' | 'Balanced' | 'Quality') {
+  selectedBitratePreset.value = preset
+  if (props.videoMode !== 'mjpeg') {
+    applyBitratePreset(preset)
   }
-})
+}
 
 // Apply video configuration
 async function applyVideoConfig() {
@@ -529,21 +524,52 @@ watch(() => props.open, (isOpen) => {
             </p>
           </div>
 
-          <!-- Bitrate Slider - Only shown for WebRTC modes -->
+          <!-- Bitrate Preset - Only shown for WebRTC modes -->
           <div v-if="props.videoMode !== 'mjpeg'" class="space-y-2">
             <div class="flex items-center gap-1">
-              <Label class="text-xs">{{ t('actionbar.bitrate') }}</Label>
-              <HelpTooltip :content="t('help.videoBitrate')" icon-size="sm" />
+              <Label class="text-xs">{{ t('actionbar.bitratePreset') }}</Label>
+              <HelpTooltip :content="t('help.videoBitratePreset')" icon-size="sm" />
             </div>
-            <div class="flex items-center gap-3">
-              <Slider
-                v-model="selectedBitrate"
-                :min="1000"
-                :max="15000"
-                :step="500"
-                class="flex-1"
-              />
-              <span class="text-xs text-muted-foreground w-20 text-right">{{ selectedBitrate[0] }} kbps</span>
+            <div class="grid grid-cols-3 gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                :class="[
+                  'h-auto py-1.5 px-2 flex flex-col items-center gap-0.5',
+                  selectedBitratePreset === 'Speed' && 'border-primary bg-primary/10'
+                ]"
+                :disabled="applyingBitrate"
+                @click="handleBitratePresetChange('Speed')"
+              >
+                <Zap class="h-3.5 w-3.5" />
+                <span class="text-[10px] font-medium">{{ t('actionbar.bitrateSpeed') }}</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                :class="[
+                  'h-auto py-1.5 px-2 flex flex-col items-center gap-0.5',
+                  selectedBitratePreset === 'Balanced' && 'border-primary bg-primary/10'
+                ]"
+                :disabled="applyingBitrate"
+                @click="handleBitratePresetChange('Balanced')"
+              >
+                <Scale class="h-3.5 w-3.5" />
+                <span class="text-[10px] font-medium">{{ t('actionbar.bitrateBalanced') }}</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                :class="[
+                  'h-auto py-1.5 px-2 flex flex-col items-center gap-0.5',
+                  selectedBitratePreset === 'Quality' && 'border-primary bg-primary/10'
+                ]"
+                :disabled="applyingBitrate"
+                @click="handleBitratePresetChange('Quality')"
+              >
+                <Image class="h-3.5 w-3.5" />
+                <span class="text-[10px] font-medium">{{ t('actionbar.bitrateQuality') }}</span>
+              </Button>
             </div>
           </div>
 

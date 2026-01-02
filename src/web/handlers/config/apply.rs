@@ -109,11 +109,11 @@ pub async fn apply_stream_config(
     }
 
     // 更新码率
-    if old_config.bitrate_kbps != new_config.bitrate_kbps {
+    if old_config.bitrate_preset != new_config.bitrate_preset {
         state
             .stream_manager
             .webrtc_streamer()
-            .set_bitrate(new_config.bitrate_kbps)
+            .set_bitrate_preset(new_config.bitrate_preset)
             .await
             .ok(); // Ignore error if no active stream
     }
@@ -143,9 +143,9 @@ pub async fn apply_stream_config(
     }
 
     tracing::info!(
-        "Stream config applied: encoder={:?}, bitrate={} kbps",
+        "Stream config applied: encoder={:?}, bitrate={}",
         new_config.encoder,
-        new_config.bitrate_kbps
+        new_config.bitrate_preset
     );
     Ok(())
 }

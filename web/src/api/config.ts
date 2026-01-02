@@ -256,6 +256,12 @@ export const extensionsApi = {
 
 // ===== RustDesk 配置 API =====
 
+/** 公共服务器信息 */
+export interface PublicServerInfo {
+  server: string
+  public_key: string
+}
+
 /** RustDesk 配置响应 */
 export interface RustDeskConfigResponse {
   enabled: boolean
@@ -264,6 +270,7 @@ export interface RustDeskConfigResponse {
   device_id: string
   has_password: boolean
   has_keypair: boolean
+  using_public_server: boolean
 }
 
 /** RustDesk 状态响应 */
@@ -271,6 +278,7 @@ export interface RustDeskStatusResponse {
   config: RustDeskConfigResponse
   service_status: string
   rendezvous_status: string | null
+  public_server: PublicServerInfo | null
 }
 
 /** RustDesk 配置更新 */

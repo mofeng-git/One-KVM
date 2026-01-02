@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
+use crate::video::encoder::BitratePreset;
 
 // Re-export ExtensionsConfig from extensions module
 pub use crate::extensions::ExtensionsConfig;
@@ -347,10 +348,8 @@ pub struct StreamConfig {
     pub mode: StreamMode,
     /// Encoder type for H264/H265
     pub encoder: EncoderType,
-    /// Target bitrate in kbps (for H264/H265)
-    pub bitrate_kbps: u32,
-    /// GOP size
-    pub gop_size: u32,
+    /// Bitrate preset (Speed/Balanced/Quality)
+    pub bitrate_preset: BitratePreset,
     /// Custom STUN server (e.g., "stun:stun.l.google.com:19302")
     pub stun_server: Option<String>,
     /// Custom TURN server (e.g., "turn:turn.example.com:3478")
@@ -375,8 +374,7 @@ impl Default for StreamConfig {
         Self {
             mode: StreamMode::Mjpeg,
             encoder: EncoderType::Auto,
-            bitrate_kbps: 1000,
-            gop_size: 30,
+            bitrate_preset: BitratePreset::Balanced,
             stun_server: Some("stun:stun.l.google.com:19302".to_string()),
             turn_server: None,
             turn_username: None,

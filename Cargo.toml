@@ -130,6 +130,7 @@ tempfile = "3"
 
 [build-dependencies]
 prost-build = "0.13"
+toml = "0.8"
 
 [profile.release]
 opt-level = 3

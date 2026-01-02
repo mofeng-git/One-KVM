@@ -5,6 +5,8 @@
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
+use crate::secrets;
+
 /// RustDesk configuration
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,6 +17,7 @@ pub struct RustDeskConfig {
 
     /// Rendezvous server address (hbbs), e.g., "rs.example.com" or "192.168.1.100"
     /// Port defaults to 21116 if not specified
+    /// If empty, uses the public server from secrets.toml
     pub rendezvous_server: String,
 
     /// Relay server address (hbbr), if different from rendezvous server
@@ -70,11 +73,39 @@ impl Default for RustDeskConfig {
 
 impl RustDeskConfig {
     /// Check if the configuration is valid for starting the service
+    /// Returns true if enabled and has a valid server (user-configured or public)
     pub fn is_valid(&self) -> bool {
         self.enabled
-            && !self.rendezvous_server.is_empty()
+            && !self.effective_rendezvous_server().is_empty()
             && !self.device_id.is_empty()
             && !self.device_password.is_empty()
+    }
+
+    /// Check if using the public server (user left rendezvous_server empty)
+    pub fn is_using_public_server(&self) -> bool {
+        self.rendezvous_server.is_empty() && secrets::rustdesk::has_public_server()
+    }
+
+    /// Get the effective rendezvous server (user-configured or public fallback)
+    pub fn effective_rendezvous_server(&self) -> &str {
+        if self.rendezvous_server.is_empty() {
+            secrets::rustdesk::PUBLIC_SERVER
+        } else {
+            &self.rendezvous_server
+        }
+    }
+
+    /// Get public server info for display (server address and public key)
+    /// Returns None if no public server is configured
+    pub fn public_server_info() -> Option<PublicServerInfo> {
+        if secrets::rustdesk::has_public_server() {
+            Some(PublicServerInfo {
+                server: secrets::rustdesk::PUBLIC_SERVER.to_string(),
+                public_key: secrets::rustdesk::PUBLIC_KEY.to_string(),
+            })
+        } else {
+            None
+        }
     }
 
     /// Generate a new random device ID
@@ -111,10 +142,11 @@ impl RustDeskConfig {
 
     /// Get the rendezvous server address with default port
     pub fn rendezvous_addr(&self) -> String {
-        if self.rendezvous_server.contains(':') {
-            self.rendezvous_server.clone()
+        let server = self.effective_rendezvous_server();
+        if server.contains(':') {
+            server.to_string()
         } else {
-            format!("{}:21116", self.rendezvous_server)
+            format!("{}:21116", server)
         }
     }
 
@@ -127,9 +159,10 @@ impl RustDeskConfig {
                 format!("{}:21117", s)
             }
         }).or_else(|| {
-            // Default: same host as rendezvous server
-            if !self.rendezvous_server.is_empty() {
-                let host = self.rendezvous_server.split(':').next().unwrap_or("");
+            // Default: same host as effective rendezvous server
+            let server = self.effective_rendezvous_server();
+            if !server.is_empty() {
+                let host = server.split(':').next().unwrap_or("");
                 if !host.is_empty() {
                     Some(format!("{}:21117", host))
                 } else {
@@ -140,6 +173,16 @@ impl RustDeskConfig {
             }
         })
     }
+}
+
+/// Public server information for display to users
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[typeshare]
+pub struct PublicServerInfo {
+    /// Public server address
+    pub server: String,
+    /// Public key for client connection
+    pub public_key: String,
 }
 
 /// Generate a random 9-digit device ID
@@ -196,9 +239,6 @@ mod tests {
     fn test_relay_addr() {
         let mut config = RustDeskConfig::default();
 
-        // No server configured
-        assert!(config.relay_addr().is_none());
-
         // Rendezvous server configured, relay defaults to same host
         config.rendezvous_server = "example.com".to_string();
         assert_eq!(config.relay_addr(), Some("example.com:21117".to_string()));
@@ -206,5 +246,20 @@ mod tests {
         // Explicit relay server
         config.relay_server = Some("relay.example.com".to_string());
         assert_eq!(config.relay_addr(), Some("relay.example.com:21117".to_string()));
+    }
+
+    #[test]
+    fn test_effective_rendezvous_server() {
+        let mut config = RustDeskConfig::default();
+
+        // When user sets a server, use it
+        config.rendezvous_server = "custom.example.com".to_string();
+        assert_eq!(config.effective_rendezvous_server(), "custom.example.com");
+
+        // When empty, falls back to public server (if configured)
+        config.rendezvous_server = String::new();
+        // This will return PUBLIC_SERVER from secrets
+        let effective = config.effective_rendezvous_server();
+        assert!(!effective.is_empty() || !secrets::rustdesk::has_public_server());
     }
 }

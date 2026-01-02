@@ -13,6 +13,7 @@ use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, info, warn};
 
 use super::encoder::registry::{EncoderBackend, EncoderRegistry, VideoEncoderType};
+use super::encoder::BitratePreset;
 use super::format::Resolution;
 use super::frame::VideoFrame;
 use super::shared_video_pipeline::{
@@ -123,8 +124,8 @@ pub struct VideoSessionManagerConfig {
     pub default_codec: VideoEncoderType,
     /// Default resolution
     pub resolution: Resolution,
-    /// Default bitrate (kbps)
-    pub bitrate_kbps: u32,
+    /// Bitrate preset
+    pub bitrate_preset: BitratePreset,
     /// Default FPS
     pub fps: u32,
     /// Session timeout (seconds)
@@ -138,7 +139,7 @@ impl Default for VideoSessionManagerConfig {
         Self {
             default_codec: VideoEncoderType::H264,
             resolution: Resolution::HD720,
-            bitrate_kbps: 8000,
+            bitrate_preset: BitratePreset::Balanced,
             fps: 30,
             session_timeout_secs: 300,
             encoder_backend: None,
@@ -325,10 +326,10 @@ impl VideoSessionManager {
             resolution: self.config.resolution,
             input_format: crate::video::format::PixelFormat::Mjpeg, // Common input
             output_codec: codec,
-            bitrate_kbps: self.config.bitrate_kbps,
+            bitrate_preset: self.config.bitrate_preset,
             fps: self.config.fps,
-            gop_size: 30,
             encoder_backend: self.config.encoder_backend,
+            ..Default::default()
         };
 
         // Create new pipeline

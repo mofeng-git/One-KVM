@@ -3,6 +3,7 @@ use typeshare::typeshare;
 use crate::config::*;
 use crate::error::AppError;
 use crate::rustdesk::config::RustDeskConfig;
+use crate::video::encoder::BitratePreset;
 
 // ===== Video Config =====
 #[typeshare]
@@ -71,8 +72,7 @@ impl VideoConfigUpdate {
 pub struct StreamConfigResponse {
     pub mode: StreamMode,
     pub encoder: EncoderType,
-    pub bitrate_kbps: u32,
-    pub gop_size: u32,
+    pub bitrate_preset: BitratePreset,
     pub stun_server: Option<String>,
     pub turn_server: Option<String>,
     pub turn_username: Option<String>,
@@ -85,8 +85,7 @@ impl From<&StreamConfig> for StreamConfigResponse {
         Self {
             mode: config.mode.clone(),
             encoder: config.encoder.clone(),
-            bitrate_kbps: config.bitrate_kbps,
-            gop_size: config.gop_size,
+            bitrate_preset: config.bitrate_preset,
             stun_server: config.stun_server.clone(),
             turn_server: config.turn_server.clone(),
             turn_username: config.turn_username.clone(),
@@ -100,8 +99,7 @@ impl From<&StreamConfig> for StreamConfigResponse {
 pub struct StreamConfigUpdate {
     pub mode: Option<StreamMode>,
     pub encoder: Option<EncoderType>,
-    pub bitrate_kbps: Option<u32>,
-    pub gop_size: Option<u32>,
+    pub bitrate_preset: Option<BitratePreset>,
     /// STUN server URL (e.g., "stun:stun.l.google.com:19302")
     pub stun_server: Option<String>,
     /// TURN server URL (e.g., "turn:turn.example.com:3478")
@@ -114,16 +112,7 @@ pub struct StreamConfigUpdate {
 
 impl StreamConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
-        if let Some(bitrate) = self.bitrate_kbps {
-            if !(1000..=15000).contains(&bitrate) {
-                return Err(AppError::BadRequest("Bitrate must be 1000-15000 kbps".into()));
-            }
-        }
-        if let Some(gop) = self.gop_size {
-            if !(10..=300).contains(&gop) {
-                return Err(AppError::BadRequest("GOP size must be 10-300".into()));
-            }
-        }
+        // BitratePreset is always valid (enum)
         // Validate STUN server format
         if let Some(ref stun) = self.stun_server {
             if !stun.is_empty() && !stun.starts_with("stun:") {
@@ -150,11 +139,8 @@ impl StreamConfigUpdate {
         if let Some(encoder) = self.encoder.clone() {
             config.encoder = encoder;
         }
-        if let Some(bitrate) = self.bitrate_kbps {
-            config.bitrate_kbps = bitrate;
-        }
-        if let Some(gop) = self.gop_size {
-            config.gop_size = gop;
+        if let Some(preset) = self.bitrate_preset {
+            config.bitrate_preset = preset;
         }
         // STUN/TURN settings - empty string means clear, Some("value") means set
         if let Some(ref stun) = self.stun_server {

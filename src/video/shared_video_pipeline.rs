@@ -37,6 +37,7 @@ use crate::video::encoder::vp8::{VP8Config, VP8Encoder};
 use crate::video::encoder::vp9::{VP9Config, VP9Encoder};
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::frame::VideoFrame;
+use crate::video::pacer::EncoderPacer;
 
 /// Encoded video frame for distribution
 #[derive(Debug, Clone)]
@@ -64,14 +65,14 @@ pub struct SharedVideoPipelineConfig {
     pub input_format: PixelFormat,
     /// Output codec type
     pub output_codec: VideoEncoderType,
-    /// Target bitrate in kbps
-    pub bitrate_kbps: u32,
+    /// Bitrate preset (replaces raw bitrate_kbps)
+    pub bitrate_preset: crate::video::encoder::BitratePreset,
     /// Target FPS
     pub fps: u32,
-    /// GOP size
-    pub gop_size: u32,
     /// Encoder backend (None = auto select best available)
     pub encoder_backend: Option<EncoderBackend>,
+    /// Maximum in-flight frames for backpressure control
+    pub max_in_flight_frames: usize,
 }
 
 impl Default for SharedVideoPipelineConfig {
@@ -80,53 +81,69 @@ impl Default for SharedVideoPipelineConfig {
             resolution: Resolution::HD720,
             input_format: PixelFormat::Yuyv,
             output_codec: VideoEncoderType::H264,
-            bitrate_kbps: 1000,
+            bitrate_preset: crate::video::encoder::BitratePreset::Balanced,
             fps: 30,
-            gop_size: 30,
             encoder_backend: None,
+            max_in_flight_frames: 8,  // Default: allow 8 frames in flight
         }
     }
 }
 
 impl SharedVideoPipelineConfig {
-    /// Create H264 config
-    pub fn h264(resolution: Resolution, bitrate_kbps: u32) -> Self {
+    /// Get effective bitrate in kbps
+    pub fn bitrate_kbps(&self) -> u32 {
+        self.bitrate_preset.bitrate_kbps()
+    }
+
+    /// Get effective GOP size
+    pub fn gop_size(&self) -> u32 {
+        self.bitrate_preset.gop_size(self.fps)
+    }
+
+    /// Create H264 config with bitrate preset
+    pub fn h264(resolution: Resolution, preset: crate::video::encoder::BitratePreset) -> Self {
         Self {
             resolution,
             output_codec: VideoEncoderType::H264,
-            bitrate_kbps,
+            bitrate_preset: preset,
             ..Default::default()
         }
     }
 
-    /// Create H265 config
-    pub fn h265(resolution: Resolution, bitrate_kbps: u32) -> Self {
+    /// Create H265 config with bitrate preset
+    pub fn h265(resolution: Resolution, preset: crate::video::encoder::BitratePreset) -> Self {
         Self {
             resolution,
             output_codec: VideoEncoderType::H265,
-            bitrate_kbps,
+            bitrate_preset: preset,
             ..Default::default()
         }
     }
 
-    /// Create VP8 config
-    pub fn vp8(resolution: Resolution, bitrate_kbps: u32) -> Self {
+    /// Create VP8 config with bitrate preset
+    pub fn vp8(resolution: Resolution, preset: crate::video::encoder::BitratePreset) -> Self {
         Self {
             resolution,
             output_codec: VideoEncoderType::VP8,
-            bitrate_kbps,
+            bitrate_preset: preset,
             ..Default::default()
         }
     }
 
-    /// Create VP9 config
-    pub fn vp9(resolution: Resolution, bitrate_kbps: u32) -> Self {
+    /// Create VP9 config with bitrate preset
+    pub fn vp9(resolution: Resolution, preset: crate::video::encoder::BitratePreset) -> Self {
         Self {
             resolution,
             output_codec: VideoEncoderType::VP9,
-            bitrate_kbps,
+            bitrate_preset: preset,
             ..Default::default()
         }
+    }
+
+    /// Create config with legacy bitrate_kbps (for compatibility during migration)
+    pub fn with_bitrate_kbps(mut self, bitrate_kbps: u32) -> Self {
+        self.bitrate_preset = crate::video::encoder::BitratePreset::from_kbps(bitrate_kbps);
+        self
     }
 }
 
@@ -136,12 +153,16 @@ pub struct SharedVideoPipelineStats {
     pub frames_captured: u64,
     pub frames_encoded: u64,
     pub frames_dropped: u64,
+    /// Frames skipped due to backpressure (pacer)
+    pub frames_skipped: u64,
     pub bytes_encoded: u64,
     pub keyframes_encoded: u64,
     pub avg_encode_time_ms: f32,
     pub current_fps: f32,
     pub errors: u64,
     pub subscribers: u64,
+    /// Current number of frames in-flight (waiting to be sent)
+    pub pending_frames: usize,
 }
 
 
@@ -305,24 +326,30 @@ pub struct SharedVideoPipeline {
     /// Pipeline start time for PTS calculation (epoch millis, 0 = not set)
     /// Uses AtomicI64 instead of Mutex for lock-free access
     pipeline_start_time_ms: AtomicI64,
+    /// Encoder pacer for backpressure control
+    pacer: EncoderPacer,
 }
 
 impl SharedVideoPipeline {
     /// Create a new shared video pipeline
     pub fn new(config: SharedVideoPipelineConfig) -> Result<Arc<Self>> {
         info!(
-            "Creating shared video pipeline: {} {}x{} @ {} kbps (input: {})",
+            "Creating shared video pipeline: {} {}x{} @ {} (input: {}, max_in_flight: {})",
             config.output_codec,
             config.resolution.width,
             config.resolution.height,
-            config.bitrate_kbps,
-            config.input_format
+            config.bitrate_preset,
+            config.input_format,
+            config.max_in_flight_frames
         );
 
         let (frame_tx, _) = broadcast::channel(16);  // Reduced from 64 for lower latency
         let (running_tx, running_rx) = watch::channel(false);
         let nv12_size = (config.resolution.width * config.resolution.height * 3 / 2) as usize;
         let yuv420p_size = nv12_size; // Same size as NV12
+
+        // Create pacer for backpressure control
+        let pacer = EncoderPacer::new(config.max_in_flight_frames);
 
         let pipeline = Arc::new(Self {
             config: RwLock::new(config),
@@ -342,6 +369,7 @@ impl SharedVideoPipeline {
             sequence: AtomicU64::new(0),
             keyframe_requested: AtomicBool::new(false),
             pipeline_start_time_ms: AtomicI64::new(0),
+            pacer,
         });
 
         Ok(pipeline)
@@ -379,9 +407,9 @@ impl SharedVideoPipeline {
                 };
 
                 let encoder_config = H264Config {
-                    base: EncoderConfig::h264(config.resolution, config.bitrate_kbps),
-                    bitrate_kbps: config.bitrate_kbps,
-                    gop_size: config.gop_size,
+                    base: EncoderConfig::h264(config.resolution, config.bitrate_kbps()),
+                    bitrate_kbps: config.bitrate_kbps(),
+                    gop_size: config.gop_size(),
                     fps: config.fps,
                     input_format: h264_input_format,
                 };
@@ -413,9 +441,9 @@ impl SharedVideoPipeline {
             VideoEncoderType::H265 => {
                 // Determine H265 input format based on backend and input format
                 let encoder_config = if use_yuyv_direct {
-                    H265Config::low_latency_yuyv422(config.resolution, config.bitrate_kbps)
+                    H265Config::low_latency_yuyv422(config.resolution, config.bitrate_kbps())
                 } else {
-                    H265Config::low_latency(config.resolution, config.bitrate_kbps)
+                    H265Config::low_latency(config.resolution, config.bitrate_kbps())
                 };
 
                 let encoder = if use_yuyv_direct {
@@ -441,7 +469,7 @@ impl SharedVideoPipeline {
                 Box::new(H265EncoderWrapper(encoder))
             }
             VideoEncoderType::VP8 => {
-                let encoder_config = VP8Config::low_latency(config.resolution, config.bitrate_kbps);
+                let encoder_config = VP8Config::low_latency(config.resolution, config.bitrate_kbps());
 
                 let encoder = if let Some(ref backend) = config.encoder_backend {
                     let codec_name = get_codec_name(VideoEncoderType::VP8, Some(*backend))
@@ -458,7 +486,7 @@ impl SharedVideoPipeline {
                 Box::new(VP8EncoderWrapper(encoder))
             }
             VideoEncoderType::VP9 => {
-                let encoder_config = VP9Config::low_latency(config.resolution, config.bitrate_kbps);
+                let encoder_config = VP9Config::low_latency(config.resolution, config.bitrate_kbps());
 
                 let encoder = if let Some(ref backend) = config.encoder_backend {
                     let codec_name = get_codec_name(VideoEncoderType::VP9, Some(*backend))
@@ -589,6 +617,19 @@ impl SharedVideoPipeline {
         self.frame_tx.receiver_count()
     }
 
+    /// Report that a receiver has lagged behind
+    ///
+    /// Call this when a broadcast receiver detects it has fallen behind
+    /// (e.g., when RecvError::Lagged is received). This triggers throttle
+    /// mode in the encoder to reduce encoding rate.
+    ///
+    /// # Arguments
+    ///
+    /// * `frames_lagged` - Number of frames the receiver has lagged
+    pub async fn report_lag(&self, frames_lagged: u64) {
+        self.pacer.report_lag(frames_lagged).await;
+    }
+
     /// Request encoder to produce a keyframe on next encode
     ///
     /// This is useful when a new client connects and needs an immediate
@@ -604,7 +645,13 @@ impl SharedVideoPipeline {
     pub async fn stats(&self) -> SharedVideoPipelineStats {
         let mut stats = self.stats.lock().await.clone();
         stats.subscribers = self.frame_tx.receiver_count() as u64;
+        stats.pending_frames = if self.pacer.is_throttling() { 1 } else { 0 };
         stats
+    }
+
+    /// Get pacer statistics for debugging
+    pub fn pacer_stats(&self) -> crate::video::pacer::PacerStats {
+        self.pacer.stats()
     }
 
     /// Check if running
@@ -662,7 +709,8 @@ impl SharedVideoPipeline {
         let _ = self.running.send(true);
 
         let config = self.config.read().await.clone();
-        info!("Starting {} pipeline", config.output_codec);
+        let gop_size = config.gop_size();
+        info!("Starting {} pipeline (GOP={})", config.output_codec, gop_size);
 
         let pipeline = self.clone();
 
@@ -678,6 +726,7 @@ impl SharedVideoPipeline {
             let mut local_keyframes: u64 = 0;
             let mut local_errors: u64 = 0;
             let mut local_dropped: u64 = 0;
+            let mut local_skipped: u64 = 0;
 
             // Track when we last had subscribers for auto-stop feature
             let mut no_subscribers_since: Option<Instant> = None;
@@ -728,8 +777,18 @@ impl SharedVideoPipeline {
                                     }
                                 }
 
+                                // === Lag-feedback based flow control ===
+                                // Check if this is a keyframe interval
+                                let is_keyframe_interval = frame_count % gop_size as u64 == 0;
+
+                                // Note: pacer.should_encode() currently always returns true
+                                // TODO: Implement effective backpressure control
+                                let _ = pipeline.pacer.should_encode(is_keyframe_interval).await;
+
                                 match pipeline.encode_frame(&video_frame, frame_count).await {
                                     Ok(Some(encoded_frame)) => {
+                                        // Send frame to all subscribers
+                                        // Note: broadcast::send is non-blocking
                                         let _ = pipeline.frame_tx.send(encoded_frame.clone());
 
                                         // Update local counters (no lock)
@@ -762,6 +821,8 @@ impl SharedVideoPipeline {
                                     s.keyframes_encoded += local_keyframes;
                                     s.errors += local_errors;
                                     s.frames_dropped += local_dropped;
+                                    s.frames_skipped += local_skipped;
+                                    s.pending_frames = if pipeline.pacer.is_throttling() { 1 } else { 0 };
                                     s.current_fps = current_fps;
 
                                     // Reset local counters
@@ -770,6 +831,7 @@ impl SharedVideoPipeline {
                                     local_keyframes = 0;
                                     local_errors = 0;
                                     local_dropped = 0;
+                                    local_skipped = 0;
                                 }
                             }
                             Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -958,13 +1020,20 @@ impl SharedVideoPipeline {
         }
     }
 
-    /// Set bitrate
-    pub async fn set_bitrate(&self, bitrate_kbps: u32) -> Result<()> {
+    /// Set bitrate using preset
+    pub async fn set_bitrate_preset(&self, preset: crate::video::encoder::BitratePreset) -> Result<()> {
+        let bitrate_kbps = preset.bitrate_kbps();
         if let Some(ref mut encoder) = *self.encoder.lock().await {
             encoder.set_bitrate(bitrate_kbps)?;
-            self.config.write().await.bitrate_kbps = bitrate_kbps;
+            self.config.write().await.bitrate_preset = preset;
         }
         Ok(())
+    }
+
+    /// Set bitrate using raw kbps value (converts to appropriate preset)
+    pub async fn set_bitrate(&self, bitrate_kbps: u32) -> Result<()> {
+        let preset = crate::video::encoder::BitratePreset::from_kbps(bitrate_kbps);
+        self.set_bitrate_preset(preset).await
     }
 
     /// Get current config
@@ -1038,13 +1107,14 @@ fn parse_h265_nal_types(data: &[u8]) -> Vec<(u8, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::video::encoder::BitratePreset;
 
     #[test]
     fn test_pipeline_config() {
-        let h264 = SharedVideoPipelineConfig::h264(Resolution::HD1080, 4000);
+        let h264 = SharedVideoPipelineConfig::h264(Resolution::HD1080, BitratePreset::Balanced);
         assert_eq!(h264.output_codec, VideoEncoderType::H264);
 
-        let h265 = SharedVideoPipelineConfig::h265(Resolution::HD720, 2000);
+        let h265 = SharedVideoPipelineConfig::h265(Resolution::HD720, BitratePreset::Speed);
         assert_eq!(h265.output_codec, VideoEncoderType::H265);
     }
 }

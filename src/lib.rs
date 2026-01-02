@@ -22,4 +22,9 @@ pub mod video;
 pub mod web;
 pub mod webrtc;
 
+/// Auto-generated secrets module (from secrets.toml at compile time)
+pub mod secrets {
+    include!(concat!(env!("OUT_DIR"), "/secrets_generated.rs"));
+}
+
 pub use error::{AppError, Result};

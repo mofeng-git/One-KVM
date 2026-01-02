@@ -36,3 +36,6 @@ Thumbs.db
 .mcp.json
 CLAUDE.md
 .gemini/settings.json
+
+# Secrets (compile-time configuration)
+secrets.toml

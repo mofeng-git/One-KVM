@@ -170,8 +170,7 @@ async fn main() -> anyhow::Result<()> {
             resolution: video_resolution,
             input_format: video_format,
             fps: config.video.fps,
-            bitrate_kbps: config.stream.bitrate_kbps,
-            gop_size: config.stream.gop_size,
+            bitrate_preset: config.stream.bitrate_preset,
             encoder_backend: config.stream.encoder.to_backend(),
             webrtc: {
                 let mut stun_servers = vec![];

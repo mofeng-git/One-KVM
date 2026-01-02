@@ -1,10 +1,95 @@
 //! Encoder traits and common types
 
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use std::time::Instant;
+use typeshare::typeshare;
 
 use crate::video::format::{PixelFormat, Resolution};
 use crate::error::Result;
+
+/// Bitrate preset for video encoding
+///
+/// Simplifies bitrate configuration by providing three intuitive presets
+/// plus a custom option for advanced users.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value")]
+pub enum BitratePreset {
+    /// Speed priority: 1 Mbps, lowest latency, smaller GOP
+    /// Best for: slow networks, remote management, low-bandwidth scenarios
+    Speed,
+    /// Balanced: 4 Mbps, good quality/latency tradeoff
+    /// Best for: typical usage, recommended default
+    Balanced,
+    /// Quality priority: 8 Mbps, best visual quality
+    /// Best for: local network, high-bandwidth scenarios, detailed work
+    Quality,
+    /// Custom bitrate in kbps (for advanced users)
+    Custom(u32),
+}
+
+impl BitratePreset {
+    /// Get bitrate value in kbps
+    pub fn bitrate_kbps(&self) -> u32 {
+        match self {
+            Self::Speed => 1000,
+            Self::Balanced => 4000,
+            Self::Quality => 8000,
+            Self::Custom(kbps) => *kbps,
+        }
+    }
+
+    /// Get recommended GOP size based on preset
+    ///
+    /// Speed preset uses shorter GOP for faster recovery from packet loss.
+    /// Quality preset uses longer GOP for better compression efficiency.
+    pub fn gop_size(&self, fps: u32) -> u32 {
+        match self {
+            Self::Speed => (fps / 2).max(15),    // 0.5 second, minimum 15 frames
+            Self::Balanced => fps,               // 1 second
+            Self::Quality => fps * 2,            // 2 seconds
+            Self::Custom(_) => fps,              // Default 1 second for custom
+        }
+    }
+
+    /// Get quality preset name for encoder configuration
+    pub fn quality_level(&self) -> &'static str {
+        match self {
+            Self::Speed => "low",       // ultrafast/veryfast preset
+            Self::Balanced => "medium", // medium preset
+            Self::Quality => "high",    // slower preset, better quality
+            Self::Custom(_) => "medium",
+        }
+    }
+
+    /// Create from kbps value, mapping to nearest preset or Custom
+    pub fn from_kbps(kbps: u32) -> Self {
+        match kbps {
+            0..=1500 => Self::Speed,
+            1501..=6000 => Self::Balanced,
+            6001..=10000 => Self::Quality,
+            _ => Self::Custom(kbps),
+        }
+    }
+}
+
+impl Default for BitratePreset {
+    fn default() -> Self {
+        Self::Balanced
+    }
+}
+
+impl std::fmt::Display for BitratePreset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Speed => write!(f, "Speed (1 Mbps)"),
+            Self::Balanced => write!(f, "Balanced (4 Mbps)"),
+            Self::Quality => write!(f, "Quality (8 Mbps)"),
+            Self::Custom(kbps) => write!(f, "Custom ({} kbps)", kbps),
+        }
+    }
+}
 
 /// Encoder configuration
 #[derive(Debug, Clone)]

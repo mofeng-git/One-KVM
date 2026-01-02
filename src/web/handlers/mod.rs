@@ -13,6 +13,7 @@ use crate::auth::{Session, SESSION_COOKIE};
 use crate::config::{AppConfig, StreamMode};
 use crate::error::{AppError, Result};
 use crate::state::AppState;
+use crate::video::encoder::BitratePreset;
 
 // ============================================================================
 // Health & Info
@@ -742,12 +743,12 @@ pub async fn update_config(
         state
             .stream_manager
             .webrtc_streamer()
-            .set_bitrate(new_config.stream.bitrate_kbps)
+            .set_bitrate_preset(new_config.stream.bitrate_preset)
             .await
             .ok(); // Ignore error if no active stream
 
-        tracing::info!("Stream config applied: encoder={:?}, bitrate={} kbps",
-            new_config.stream.encoder, new_config.stream.bitrate_kbps);
+        tracing::info!("Stream config applied: encoder={:?}, bitrate={}",
+            new_config.stream.encoder, new_config.stream.bitrate_preset);
     }
 
     // HID config processing - always reload if section was sent
@@ -1191,7 +1192,7 @@ pub struct AvailableCodecsResponse {
 /// Set bitrate request
 #[derive(Deserialize)]
 pub struct SetBitrateRequest {
-    pub bitrate_kbps: u32,
+    pub bitrate_preset: BitratePreset,
 }
 
 /// Set stream bitrate (real-time adjustment)
@@ -1199,19 +1200,11 @@ pub async fn stream_set_bitrate(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SetBitrateRequest>,
 ) -> Result<Json<LoginResponse>> {
-    // Validate bitrate range (1000-15000 kbps)
-    if req.bitrate_kbps < 1000 || req.bitrate_kbps > 15000 {
-        return Err(AppError::BadRequest(format!(
-            "Bitrate must be between 1000 and 15000 kbps, got {}",
-            req.bitrate_kbps
-        )));
-    }
-
     // Update config
     state
         .config
         .update(|config| {
-            config.stream.bitrate_kbps = req.bitrate_kbps;
+            config.stream.bitrate_preset = req.bitrate_preset;
         })
         .await?;
 
@@ -1219,18 +1212,18 @@ pub async fn stream_set_bitrate(
     if let Err(e) = state
         .stream_manager
         .webrtc_streamer()
-        .set_bitrate(req.bitrate_kbps)
+        .set_bitrate_preset(req.bitrate_preset)
         .await
     {
         warn!("Failed to set bitrate dynamically: {}", e);
         // Don't fail the request - config is saved, will apply on next connection
     } else {
-        info!("Bitrate updated to {} kbps", req.bitrate_kbps);
+        info!("Bitrate updated to {}", req.bitrate_preset);
     }
 
     Ok(Json(LoginResponse {
         success: true,
-        message: Some(format!("Bitrate set to {} kbps", req.bitrate_kbps)),
+        message: Some(format!("Bitrate set to {}", req.bitrate_preset)),
     }))
 }
 

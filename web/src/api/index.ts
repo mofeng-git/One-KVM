@@ -230,10 +230,10 @@ export const streamApi = {
   getCodecs: () =>
     request<AvailableCodecsResponse>('/stream/codecs'),
 
-  setBitrate: (bitrate_kbps: number) =>
+  setBitratePreset: (bitrate_preset: import('@/types/generated').BitratePreset) =>
     request<{ success: boolean; message?: string }>('/stream/bitrate', {
       method: 'POST',
-      body: JSON.stringify({ bitrate_kbps }),
+      body: JSON.stringify({ bitrate_preset }),
     }),
 }
 
@@ -612,6 +612,7 @@ export type {
   HidBackend,
   StreamMode,
   EncoderType,
+  BitratePreset,
 } from '@/types/generated'
 
 // Audio API

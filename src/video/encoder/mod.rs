@@ -19,7 +19,7 @@ pub mod vp8;
 pub mod vp9;
 
 // Core traits and types
-pub use traits::{EncodedFormat, EncodedFrame, Encoder, EncoderConfig, EncoderFactory};
+pub use traits::{BitratePreset, EncodedFormat, EncodedFrame, Encoder, EncoderConfig, EncoderFactory};
 
 // WebRTC codec abstraction
 pub use codec::{CodecFrame, VideoCodec, VideoCodecConfig, VideoCodecFactory, VideoCodecType};

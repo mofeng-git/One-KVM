@@ -183,16 +183,39 @@ export enum EncoderType {
 	V4l2m2m = "v4l2m2m",
 }
 
+/**
+ * Bitrate preset for video encoding
+ * 
+ * Simplifies bitrate configuration by providing three intuitive presets
+ * plus a custom option for advanced users.
+ */
+export type BitratePreset = 
+	/**
+	 * Speed priority: 1 Mbps, lowest latency, smaller GOP
+	 * Best for: slow networks, remote management, low-bandwidth scenarios
+	 */
+	| { type: "Speed", value?: undefined }
+	/**
+	 * Balanced: 4 Mbps, good quality/latency tradeoff
+	 * Best for: typical usage, recommended default
+	 */
+	| { type: "Balanced", value?: undefined }
+	/**
+	 * Quality priority: 8 Mbps, best visual quality
+	 * Best for: local network, high-bandwidth scenarios, detailed work
+	 */
+	| { type: "Quality", value?: undefined }
+	/** Custom bitrate in kbps (for advanced users) */
+	| { type: "Custom", value: number };
+
 /** Streaming configuration */
 export interface StreamConfig {
 	/** Stream mode */
 	mode: StreamMode;
 	/** Encoder type for H264/H265 */
 	encoder: EncoderType;
-	/** Target bitrate in kbps (for H264/H265) */
-	bitrate_kbps: number;
-	/** GOP size */
-	gop_size: number;
+	/** Bitrate preset (Speed/Balanced/Quality) */
+	bitrate_preset: BitratePreset;
 	/** Custom STUN server (e.g., "stun:stun.l.google.com:19302") */
 	stun_server?: string;
 	/** Custom TURN server (e.g., "turn:turn.example.com:3478") */
@@ -264,6 +287,25 @@ export interface ExtensionsConfig {
 	easytier: EasytierConfig;
 }
 
+/** RustDesk configuration */
+export interface RustDeskConfig {
+	/** Enable RustDesk protocol */
+	enabled: boolean;
+	/**
+	 * Rendezvous server address (hbbs), e.g., "rs.example.com" or "192.168.1.100"
+	 * Port defaults to 21116 if not specified
+	 * If empty, uses the public server from secrets.toml
+	 */
+	rendezvous_server: string;
+	/**
+	 * Relay server address (hbbr), if different from rendezvous server
+	 * Usually the same host as rendezvous server but different port (21117)
+	 */
+	relay_server?: string;
+	/** Device ID (9-digit number), auto-generated if empty */
+	device_id: string;
+}
+
 /** Main application configuration */
 export interface AppConfig {
 	/** Whether initial setup has been completed */
@@ -286,6 +328,8 @@ export interface AppConfig {
 	web: WebConfig;
 	/** Extensions settings (ttyd, gostc, easytier) */
 	extensions: ExtensionsConfig;
+	/** RustDesk remote access settings */
+	rustdesk: RustDeskConfig;
 }
 
 /** Update for a single ATX key configuration */
@@ -441,12 +485,26 @@ export interface MsdConfigUpdate {
 	virtual_drive_size_mb?: number;
 }
 
+/** Public server information for display to users */
+export interface PublicServerInfo {
+	/** Public server address */
+	server: string;
+	/** Public key for client connection */
+	public_key: string;
+}
+
+export interface RustDeskConfigUpdate {
+	enabled?: boolean;
+	rendezvous_server?: string;
+	relay_server?: string;
+	device_password?: string;
+}
+
 /** Stream 配置响应（包含 has_turn_password 字段） */
 export interface StreamConfigResponse {
 	mode: StreamMode;
 	encoder: EncoderType;
-	bitrate_kbps: number;
-	gop_size: number;
+	bitrate_preset: BitratePreset;
 	stun_server?: string;
 	turn_server?: string;
 	turn_username?: string;
@@ -457,8 +515,7 @@ export interface StreamConfigResponse {
 export interface StreamConfigUpdate {
 	mode?: StreamMode;
 	encoder?: EncoderType;
-	bitrate_kbps?: number;
-	gop_size?: number;
+	bitrate_preset?: BitratePreset;
 	/** STUN server URL (e.g., "stun:stun.l.google.com:19302") */
 	stun_server?: string;
 	/** TURN server URL (e.g., "turn:turn.example.com:3478") */

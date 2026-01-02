@@ -4,7 +4,7 @@ use axum::{extract::State, Json};
 use std::sync::Arc;
 
 use crate::error::Result;
-use crate::rustdesk::config::RustDeskConfig;
+use crate::rustdesk::config::{PublicServerInfo, RustDeskConfig};
 use crate::state::AppState;
 
 use super::apply::apply_rustdesk_config;
@@ -21,6 +21,8 @@ pub struct RustDeskConfigResponse {
     pub has_password: bool,
     /// 是否已设置密钥对
     pub has_keypair: bool,
+    /// 是否使用公共服务器（用户留空时）
+    pub using_public_server: bool,
 }
 
 impl From<&RustDeskConfig> for RustDeskConfigResponse {
@@ -32,6 +34,7 @@ impl From<&RustDeskConfig> for RustDeskConfigResponse {
             device_id: config.device_id.clone(),
             has_password: !config.device_password.is_empty(),
             has_keypair: config.public_key.is_some() && config.private_key.is_some(),
+            using_public_server: config.is_using_public_server(),
         }
     }
 }
@@ -42,6 +45,8 @@ pub struct RustDeskStatusResponse {
     pub config: RustDeskConfigResponse,
     pub service_status: String,
     pub rendezvous_status: Option<String>,
+    /// 公共服务器信息（仅当有公共服务器配置时返回）
+    pub public_server: Option<PublicServerInfo>,
 }
 
 /// 获取 RustDesk 配置
@@ -65,10 +70,14 @@ pub async fn get_rustdesk_status(State(state): State<Arc<AppState>>) -> Json<Rus
         }
     };
 
+    // 获取公共服务器信息
+    let public_server = RustDeskConfig::public_server_info();
+
     Json(RustDeskStatusResponse {
         config: RustDeskConfigResponse::from(&config),
         service_status,
         rendezvous_status,
+        public_server,
     })
 }
 
