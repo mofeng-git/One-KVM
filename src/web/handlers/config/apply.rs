@@ -156,11 +156,25 @@ pub async fn apply_hid_config(
     old_config: &HidConfig,
     new_config: &HidConfig,
 ) -> Result<()> {
-    // 检查是否需要重载
+    // 检查 OTG 描述符是否变更
+    let descriptor_changed = old_config.otg_descriptor != new_config.otg_descriptor;
+
+    // 如果描述符变更且当前使用 OTG 后端，需要重建 Gadget
+    if descriptor_changed && new_config.backend == HidBackend::Otg {
+        tracing::info!("OTG descriptor changed, updating gadget...");
+        if let Err(e) = state.otg_service.update_descriptor(&new_config.otg_descriptor).await {
+            tracing::error!("Failed to update OTG descriptor: {}", e);
+            return Err(AppError::Config(format!("OTG descriptor update failed: {}", e)));
+        }
+        tracing::info!("OTG descriptor updated successfully");
+    }
+
+    // 检查是否需要重载 HID 后端
     if old_config.backend == new_config.backend
         && old_config.ch9329_port == new_config.ch9329_port
         && old_config.ch9329_baudrate == new_config.ch9329_baudrate
         && old_config.otg_udc == new_config.otg_udc
+        && !descriptor_changed
     {
         tracing::info!("HID config unchanged, skipping reload");
         return Ok(());
@@ -390,6 +404,8 @@ pub async fn apply_rustdesk_config(
             || old_config.device_id != new_config.device_id
             || old_config.device_password != new_config.device_password;
 
+        let mut credentials_to_save = None;
+
         if rustdesk_guard.is_none() {
             // Create new service
             tracing::info!("Initializing RustDesk service...");
@@ -403,6 +419,8 @@ pub async fn apply_rustdesk_config(
                 tracing::error!("Failed to start RustDesk service: {}", e);
             } else {
                 tracing::info!("RustDesk service started with ID: {}", new_config.device_id);
+                // Save generated keypair and UUID to config
+                credentials_to_save = service.save_credentials();
             }
             *rustdesk_guard = Some(std::sync::Arc::new(service));
         } else if need_restart {
@@ -412,7 +430,30 @@ pub async fn apply_rustdesk_config(
                     tracing::error!("Failed to restart RustDesk service: {}", e);
                 } else {
                     tracing::info!("RustDesk service restarted with ID: {}", new_config.device_id);
+                    // Save generated keypair and UUID to config
+                    credentials_to_save = service.save_credentials();
                 }
+            }
+        }
+
+        // Save credentials to persistent config store (outside the lock)
+        drop(rustdesk_guard);
+        if let Some(updated_config) = credentials_to_save {
+            tracing::info!("Saving RustDesk credentials to config store...");
+            if let Err(e) = state
+                .config
+                .update(|cfg| {
+                    cfg.rustdesk.public_key = updated_config.public_key.clone();
+                    cfg.rustdesk.private_key = updated_config.private_key.clone();
+                    cfg.rustdesk.signing_public_key = updated_config.signing_public_key.clone();
+                    cfg.rustdesk.signing_private_key = updated_config.signing_private_key.clone();
+                    cfg.rustdesk.uuid = updated_config.uuid.clone();
+                })
+                .await
+            {
+                tracing::warn!("Failed to save RustDesk credentials: {}", e);
+            } else {
+                tracing::info!("RustDesk credentials saved successfully");
             }
         }
     }

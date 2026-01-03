@@ -17,14 +17,16 @@ WebRTC 模块提供低延迟的实时音视频流传输，支持多种视频编�
 ```
 src/webrtc/
 ├── mod.rs                  # 模块导出
-├── webrtc_streamer.rs      # 统一管理器 (34KB)
+├── webrtc_streamer.rs      # 统一管理器 (35KB)
 ├── universal_session.rs    # 会话管理 (32KB)
+├── unified_video_track.rs  # 统一视频轨道 (15KB)
 ├── video_track.rs          # 视频轨道 (19KB)
 ├── rtp.rs                  # RTP 打包 (24KB)
 ├── h265_payloader.rs       # H265 RTP (15KB)
 ├── peer.rs                 # PeerConnection (17KB)
 ├── config.rs               # 配置 (3KB)
 ├── signaling.rs            # 信令 (5KB)
+├── session.rs              # 会话基类 (8KB)
 └── track.rs                # 轨道基类 (11KB)
 ```
 
@@ -710,7 +712,57 @@ for (const candidate of ice_candidates) {
 
 ---
 
-## 10. 常见问题
+## 10. 管道重启机制
+
+当码率或编码器配置变更时，视频管道需要重启。WebRTC 模块实现了自动重连机制：
+
+### 10.1 重启流程
+
+```
+用户修改码率/编码器
+        │
+        ▼
+┌─────────────────────┐
+│ set_bitrate_preset  │
+│ 1. 保存 frame_tx    │  ← 关键：在停止前保存
+│ 2. 停止旧管道       │
+│ 3. 等待清理         │
+│ 4. 恢复 frame_tx    │
+│ 5. 创建新管道       │
+│ 6. 重连所有会话     │
+└─────────────────────┘
+        │
+        ▼
+所有 WebRTC 会话自动恢复
+```
+
+### 10.2 关键代码
+
+```rust
+pub async fn set_bitrate_preset(self: &Arc<Self>, preset: BitratePreset) -> Result<()> {
+    // 保存 frame_tx (监控任务会在管道停止后清除它)
+    let saved_frame_tx = self.video_frame_tx.read().await.clone();
+
+    // 停止管道
+    pipeline.stop();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // 恢复 frame_tx 并重建管道
+    if let Some(tx) = saved_frame_tx {
+        *self.video_frame_tx.write().await = Some(tx.clone());
+        let pipeline = self.ensure_video_pipeline(tx).await?;
+
+        // 重连所有会话
+        for session in sessions {
+            session.start_from_video_pipeline(pipeline.subscribe(), ...).await;
+        }
+    }
+}
+```
+
+---
+
+## 11. 常见问题
 
 ### Q: 连接超时?
 
@@ -729,3 +781,9 @@ for (const candidate of ice_candidates) {
 1. 检查时间戳同步
 2. 调整缓冲区大小
 3. 使用 NTP 同步
+
+### Q: 切换码率后视频静止?
+
+1. 检查管道重启逻辑是否正确保存了 `video_frame_tx`
+2. 确认会话重连成功
+3. 查看日志中是否有 "Reconnecting session" 信息

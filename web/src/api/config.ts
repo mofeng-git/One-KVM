@@ -270,6 +270,7 @@ export interface RustDeskConfigResponse {
   device_id: string
   has_password: boolean
   has_keypair: boolean
+  has_relay_key: boolean
   using_public_server: boolean
 }
 
@@ -286,6 +287,7 @@ export interface RustDeskConfigUpdate {
   enabled?: boolean
   rendezvous_server?: string
   relay_server?: string
+  relay_key?: string
   device_password?: string
 }
 
@@ -333,6 +335,52 @@ export const rustdeskConfigApi = {
    */
   regeneratePassword: () =>
     request<RustDeskConfigResponse>('/config/rustdesk/regenerate-password', {
+      method: 'POST',
+    }),
+}
+
+// ===== Web 服务器配置 API =====
+
+/** Web 服务器配置 */
+export interface WebConfig {
+  http_port: number
+  https_port: number
+  bind_address: string
+  https_enabled: boolean
+}
+
+/** Web 服务器配置更新 */
+export interface WebConfigUpdate {
+  http_port?: number
+  https_port?: number
+  bind_address?: string
+  https_enabled?: boolean
+}
+
+export const webConfigApi = {
+  /**
+   * 获取 Web 服务器配置
+   */
+  get: () => request<WebConfig>('/config/web'),
+
+  /**
+   * 更新 Web 服务器配置
+   */
+  update: (config: WebConfigUpdate) =>
+    request<WebConfig>('/config/web', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
+}
+
+// ===== 系统控制 API =====
+
+export const systemApi = {
+  /**
+   * 重启系统
+   */
+  restart: () =>
+    request<{ success: boolean; message?: string }>('/system/restart', {
       method: 'POST',
     }),
 }

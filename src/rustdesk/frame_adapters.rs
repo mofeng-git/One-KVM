@@ -3,10 +3,14 @@
 //! Converts One-KVM video/audio frames to RustDesk protocol format.
 //! Optimized for zero-copy where possible and buffer reuse.
 
-use bytes::{Bytes, BytesMut};
-use prost::Message as ProstMessage;
+use bytes::Bytes;
+use protobuf::Message as ProtobufMessage;
 
-use super::protocol::hbb::{self, message, EncodedVideoFrame, EncodedVideoFrames, AudioFrame, AudioFormat, Misc};
+use super::protocol::hbb::message::{
+    message as msg_union, misc as misc_union, video_frame as vf_union,
+    AudioFormat, AudioFrame, CursorData, CursorPosition,
+    EncodedVideoFrame, EncodedVideoFrames, Message, Misc, VideoFrame,
+};
 
 /// Video codec type for RustDesk
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,59 +63,41 @@ impl VideoFrameAdapter {
     /// Convert encoded video data to RustDesk Message (zero-copy version)
     ///
     /// This version takes Bytes directly to avoid copying the frame data.
-    pub fn encode_frame_from_bytes(&mut self, data: Bytes, is_keyframe: bool, timestamp_ms: u64) -> hbb::Message {
+    pub fn encode_frame_from_bytes(&mut self, data: Bytes, is_keyframe: bool, timestamp_ms: u64) -> Message {
         // Calculate relative timestamp
         if self.seq == 0 {
             self.timestamp_base = timestamp_ms;
         }
         let pts = (timestamp_ms - self.timestamp_base) as i64;
 
-        let frame = EncodedVideoFrame {
-            data,  // Zero-copy: Bytes is reference-counted
-            key: is_keyframe,
-            pts,
-            ..Default::default()
-        };
+        let mut frame = EncodedVideoFrame::new();
+        frame.data = data;
+        frame.key = is_keyframe;
+        frame.pts = pts;
 
         self.seq = self.seq.wrapping_add(1);
 
         // Wrap in EncodedVideoFrames container
-        let frames = EncodedVideoFrames {
-            frames: vec![frame],
-            ..Default::default()
-        };
+        let mut frames = EncodedVideoFrames::new();
+        frames.frames.push(frame);
 
         // Create the appropriate VideoFrame variant based on codec
-        let video_frame = match self.codec {
-            VideoCodec::H264 => hbb::VideoFrame {
-                union: Some(hbb::video_frame::Union::H264s(frames)),
-                display: 0,
-            },
-            VideoCodec::H265 => hbb::VideoFrame {
-                union: Some(hbb::video_frame::Union::H265s(frames)),
-                display: 0,
-            },
-            VideoCodec::VP8 => hbb::VideoFrame {
-                union: Some(hbb::video_frame::Union::Vp8s(frames)),
-                display: 0,
-            },
-            VideoCodec::VP9 => hbb::VideoFrame {
-                union: Some(hbb::video_frame::Union::Vp9s(frames)),
-                display: 0,
-            },
-            VideoCodec::AV1 => hbb::VideoFrame {
-                union: Some(hbb::video_frame::Union::Av1s(frames)),
-                display: 0,
-            },
-        };
-
-        hbb::Message {
-            union: Some(message::Union::VideoFrame(video_frame)),
+        let mut video_frame = VideoFrame::new();
+        match self.codec {
+            VideoCodec::H264 => video_frame.union = Some(vf_union::Union::H264s(frames)),
+            VideoCodec::H265 => video_frame.union = Some(vf_union::Union::H265s(frames)),
+            VideoCodec::VP8 => video_frame.union = Some(vf_union::Union::Vp8s(frames)),
+            VideoCodec::VP9 => video_frame.union = Some(vf_union::Union::Vp9s(frames)),
+            VideoCodec::AV1 => video_frame.union = Some(vf_union::Union::Av1s(frames)),
         }
+
+        let mut msg = Message::new();
+        msg.union = Some(msg_union::Union::VideoFrame(video_frame));
+        msg
     }
 
     /// Convert encoded video data to RustDesk Message
-    pub fn encode_frame(&mut self, data: &[u8], is_keyframe: bool, timestamp_ms: u64) -> hbb::Message {
+    pub fn encode_frame(&mut self, data: &[u8], is_keyframe: bool, timestamp_ms: u64) -> Message {
         self.encode_frame_from_bytes(Bytes::copy_from_slice(data), is_keyframe, timestamp_ms)
     }
 
@@ -120,9 +106,7 @@ impl VideoFrameAdapter {
     /// Takes Bytes directly to avoid copying the frame data.
     pub fn encode_frame_bytes_zero_copy(&mut self, data: Bytes, is_keyframe: bool, timestamp_ms: u64) -> Bytes {
         let msg = self.encode_frame_from_bytes(data, is_keyframe, timestamp_ms);
-        let mut buf = BytesMut::with_capacity(msg.encoded_len());
-        msg.encode(&mut buf).expect("encode should not fail");
-        buf.freeze()
+        Bytes::from(msg.write_to_bytes().unwrap_or_default())
     }
 
     /// Encode frame to bytes for sending
@@ -157,19 +141,19 @@ impl AudioFrameAdapter {
     }
 
     /// Create audio format message (should be sent once before audio frames)
-    pub fn create_format_message(&mut self) -> hbb::Message {
+    pub fn create_format_message(&mut self) -> Message {
         self.format_sent = true;
 
-        let format = AudioFormat {
-            sample_rate: self.sample_rate,
-            channels: self.channels as u32,
-        };
+        let mut format = AudioFormat::new();
+        format.sample_rate = self.sample_rate;
+        format.channels = self.channels as u32;
 
-        hbb::Message {
-            union: Some(message::Union::Misc(Misc {
-                union: Some(hbb::misc::Union::AudioFormat(format)),
-            })),
-        }
+        let mut misc = Misc::new();
+        misc.union = Some(misc_union::Union::AudioFormat(format));
+
+        let mut msg = Message::new();
+        msg.union = Some(msg_union::Union::Misc(misc));
+        msg
     }
 
     /// Check if format message has been sent
@@ -178,20 +162,19 @@ impl AudioFrameAdapter {
     }
 
     /// Convert Opus audio data to RustDesk Message
-    pub fn encode_opus_frame(&self, data: &[u8]) -> hbb::Message {
-        let frame = AudioFrame {
-            data: Bytes::copy_from_slice(data),
-        };
+    pub fn encode_opus_frame(&self, data: &[u8]) -> Message {
+        let mut frame = AudioFrame::new();
+        frame.data = Bytes::copy_from_slice(data);
 
-        hbb::Message {
-            union: Some(message::Union::AudioFrame(frame)),
-        }
+        let mut msg = Message::new();
+        msg.union = Some(msg_union::Union::AudioFrame(frame));
+        msg
     }
 
     /// Encode Opus frame to bytes for sending
     pub fn encode_opus_bytes(&self, data: &[u8]) -> Bytes {
         let msg = self.encode_opus_frame(data);
-        Bytes::from(ProstMessage::encode_to_vec(&msg))
+        Bytes::from(msg.write_to_bytes().unwrap_or_default())
     }
 
     /// Reset state (call when restarting audio stream)
@@ -212,32 +195,29 @@ impl CursorAdapter {
         width: i32,
         height: i32,
         colors: Vec<u8>,
-    ) -> hbb::Message {
-        let cursor = hbb::CursorData {
-            id,
-            hotx,
-            hoty,
-            width,
-            height,
-            colors: Bytes::from(colors),
-            ..Default::default()
-        };
+    ) -> Message {
+        let mut cursor = CursorData::new();
+        cursor.id = id;
+        cursor.hotx = hotx;
+        cursor.hoty = hoty;
+        cursor.width = width;
+        cursor.height = height;
+        cursor.colors = Bytes::from(colors);
 
-        hbb::Message {
-            union: Some(message::Union::CursorData(cursor)),
-        }
+        let mut msg = Message::new();
+        msg.union = Some(msg_union::Union::CursorData(cursor));
+        msg
     }
 
     /// Create cursor position message
-    pub fn encode_position(x: i32, y: i32) -> hbb::Message {
-        let pos = hbb::CursorPosition {
-            x,
-            y,
-        };
+    pub fn encode_position(x: i32, y: i32) -> Message {
+        let mut pos = CursorPosition::new();
+        pos.x = x;
+        pos.y = y;
 
-        hbb::Message {
-            union: Some(message::Union::CursorPosition(pos)),
-        }
+        let mut msg = Message::new();
+        msg.union = Some(msg_union::Union::CursorPosition(pos));
+        msg
     }
 }
 
@@ -253,10 +233,10 @@ mod tests {
         let data = vec![0x00, 0x00, 0x00, 0x01, 0x67]; // H264 SPS NAL
         let msg = adapter.encode_frame(&data, true, 0);
 
-        match msg.union {
-            Some(message::Union::VideoFrame(vf)) => {
-                match vf.union {
-                    Some(hbb::video_frame::Union::H264s(frames)) => {
+        match &msg.union {
+            Some(msg_union::Union::VideoFrame(vf)) => {
+                match &vf.union {
+                    Some(vf_union::Union::H264s(frames)) => {
                         assert_eq!(frames.frames.len(), 1);
                         assert!(frames.frames[0].key);
                     }
@@ -275,10 +255,10 @@ mod tests {
         let msg = adapter.create_format_message();
         assert!(adapter.format_sent());
 
-        match msg.union {
-            Some(message::Union::Misc(misc)) => {
-                match misc.union {
-                    Some(hbb::misc::Union::AudioFormat(fmt)) => {
+        match &msg.union {
+            Some(msg_union::Union::Misc(misc)) => {
+                match &misc.union {
+                    Some(misc_union::Union::AudioFormat(fmt)) => {
                         assert_eq!(fmt.sample_rate, 48000);
                         assert_eq!(fmt.channels, 2);
                     }
@@ -297,9 +277,9 @@ mod tests {
         let opus_data = vec![0xFC, 0x01, 0x02]; // Fake Opus data
         let msg = adapter.encode_opus_frame(&opus_data);
 
-        match msg.union {
-            Some(message::Union::AudioFrame(af)) => {
-                assert_eq!(af.data, opus_data);
+        match &msg.union {
+            Some(msg_union::Union::AudioFrame(af)) => {
+                assert_eq!(&af.data[..], &opus_data[..]);
             }
             _ => panic!("Expected AudioFrame"),
         }
@@ -309,8 +289,8 @@ mod tests {
     fn test_cursor_encoding() {
         let msg = CursorAdapter::encode_cursor(1, 0, 0, 16, 16, vec![0xFF; 16 * 16 * 4]);
 
-        match msg.union {
-            Some(message::Union::CursorData(cd)) => {
+        match &msg.union {
+            Some(msg_union::Union::CursorData(cd)) => {
                 assert_eq!(cd.id, 1);
                 assert_eq!(cd.width, 16);
                 assert_eq!(cd.height, 16);

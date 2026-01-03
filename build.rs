@@ -30,23 +30,26 @@ fn main() {
     println!("cargo:rerun-if-changed=secrets.toml");
 }
 
-/// Compile protobuf files using prost-build
+/// Compile protobuf files using protobuf-codegen (same as RustDesk server)
 fn compile_protos() {
     let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let protos_dir = out_dir.join("protos");
+    std::fs::create_dir_all(&protos_dir).unwrap();
 
-    prost_build::Config::new()
-        .out_dir(&out_dir)
-        // Use bytes::Bytes for video/audio frame data to enable zero-copy
-        .bytes([
-            "EncodedVideoFrame.data",
-            "AudioFrame.data",
-            "CursorData.colors",
-        ])
-        .compile_protos(
-            &["protos/rendezvous.proto", "protos/message.proto"],
-            &["protos/"],
-        )
+    protobuf_codegen::Codegen::new()
+        .pure()
+        .out_dir(&protos_dir)
+        .inputs(["protos/rendezvous.proto", "protos/message.proto"])
+        .include("protos")
+        .customize(protobuf_codegen::Customize::default().tokio_bytes(true))
+        .run()
         .expect("Failed to compile protobuf files");
+
+    // Generate mod.rs for the protos module
+    let mod_content = r#"pub mod rendezvous;
+pub mod message;
+"#;
+    std::fs::write(protos_dir.join("mod.rs"), mod_content).unwrap();
 }
 
 /// Generate secrets module from secrets.toml
@@ -60,6 +63,7 @@ fn generate_secrets() {
     // Default values if secrets.toml doesn't exist
     let mut rustdesk_public_server = String::new();
     let mut rustdesk_public_key = String::new();
+    let mut rustdesk_relay_key = String::new();
     let mut turn_server = String::new();
     let mut turn_username = String::new();
     let mut turn_password = String::new();
@@ -74,6 +78,9 @@ fn generate_secrets() {
                 }
                 if let Some(v) = rustdesk.get("public_key").and_then(|v| v.as_str()) {
                     rustdesk_public_key = v.to_string();
+                }
+                if let Some(v) = rustdesk.get("relay_key").and_then(|v| v.as_str()) {
+                    rustdesk_relay_key = v.to_string();
                 }
             }
 
@@ -109,6 +116,9 @@ pub mod rustdesk {{
     /// Public key for the RustDesk server (for client connection)
     pub const PUBLIC_KEY: &str = "{}";
 
+    /// Relay server authentication key (licence_key for relay server)
+    pub const RELAY_KEY: &str = "{}";
+
     /// Check if public server is configured
     pub const fn has_public_server() -> bool {{
         !PUBLIC_SERVER.is_empty()
@@ -134,6 +144,7 @@ pub mod turn {{
 "#,
         escape_string(&rustdesk_public_server),
         escape_string(&rustdesk_public_key),
+        escape_string(&rustdesk_relay_key),
         escape_string(&turn_server),
         escape_string(&turn_username),
         escape_string(&turn_password),

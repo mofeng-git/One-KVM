@@ -92,6 +92,9 @@ export const useAuthStore = defineStore('auth', () => {
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string
     encoder_backend?: string
+    audio_device?: string
+    ttyd_enabled?: boolean
+    rustdesk_enabled?: boolean
   }) {
     loading.value = true
     error.value = null

@@ -16,16 +16,17 @@
 //! - GET  /api/config/rustdesk - 获取 RustDesk 配置
 //! - PATCH /api/config/rustdesk - 更新 RustDesk 配置
 
-mod apply;
+pub(crate) mod apply;
 mod types;
 
-mod video;
+pub(crate) mod video;
 mod stream;
 mod hid;
 mod msd;
 mod atx;
 mod audio;
 mod rustdesk;
+mod web;
 
 // 导出 handler 函数
 pub use video::{get_video_config, update_video_config};
@@ -38,6 +39,7 @@ pub use rustdesk::{
     get_rustdesk_config, get_rustdesk_status, update_rustdesk_config,
     regenerate_device_id, regenerate_device_password, get_device_password,
 };
+pub use web::{get_web_config, update_web_config};
 
 // 保留全局配置查询（向后兼容）
 use axum::{extract::State, Json};

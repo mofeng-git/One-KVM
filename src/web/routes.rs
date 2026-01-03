@@ -96,6 +96,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/config/rustdesk/password", get(handlers::config::get_device_password))
         .route("/config/rustdesk/regenerate-id", post(handlers::config::regenerate_device_id))
         .route("/config/rustdesk/regenerate-password", post(handlers::config::regenerate_device_password))
+        // Web server configuration
+        .route("/config/web", get(handlers::config::get_web_config))
+        .route("/config/web", patch(handlers::config::update_web_config))
+        // System control
+        .route("/system/restart", post(handlers::system_restart))
         // MSD (Mass Storage Device) endpoints
         .route("/msd/status", get(handlers::msd_status))
         .route("/msd/images", get(handlers::msd_images_list))

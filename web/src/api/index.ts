@@ -161,10 +161,18 @@ export const systemApi = {
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string
     encoder_backend?: string
+    audio_device?: string
+    ttyd_enabled?: boolean
+    rustdesk_enabled?: boolean
   }) =>
     request<{ success: boolean; message?: string }>('/setup/init', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+
+  restart: () =>
+    request<{ success: boolean; message?: string }>('/system/restart', {
+      method: 'POST',
     }),
 }
 
@@ -577,10 +585,20 @@ export const configApi = {
             fps: number[]
           }>
         }>
+        usb_bus: string | null
       }>
       serial: Array<{ path: string; name: string }>
-      audio: Array<{ name: string; description: string }>
+      audio: Array<{
+        name: string
+        description: string
+        is_hdmi: boolean
+        usb_bus: string | null
+      }>
       udc: Array<{ name: string }>
+      extensions: {
+        ttyd_available: boolean
+        rustdesk_available: boolean
+      }
     }>('/devices'),
 }
 
@@ -594,10 +612,12 @@ export {
   audioConfigApi,
   extensionsApi,
   rustdeskConfigApi,
+  webConfigApi,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskConfigUpdate,
   type RustDeskPasswordResponse,
+  type WebConfig,
 } from './config'
 
 // 导出生成的类型

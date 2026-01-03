@@ -397,7 +397,7 @@ impl OtgBackend {
                 Ok(true) => {
                     self.online.store(true, Ordering::Relaxed);
                     self.reset_error_count();
-                    trace!("Sent keyboard report: {:02X?}", data);
+                    debug!("Sent keyboard report: {:02X?}", data);
                     Ok(())
                 }
                 Ok(false) => {
@@ -714,8 +714,12 @@ impl HidBackend for OtgBackend {
     }
 
     async fn send_keyboard(&self, event: KeyboardEvent) -> Result<()> {
-        // Convert JS keycode to USB HID if needed
-        let usb_key = keymap::js_to_usb(event.key).unwrap_or(event.key);
+        // Convert JS keycode to USB HID if needed (skip if already USB HID)
+        let usb_key = if event.is_usb_hid {
+            event.key
+        } else {
+            keymap::js_to_usb(event.key).unwrap_or(event.key)
+        };
 
         // Handle modifier keys separately
         if keymap::is_modifier_key(usb_key) {
@@ -769,9 +773,10 @@ impl HidBackend for OtgBackend {
             MouseEventType::MoveAbs => {
                 // Absolute movement - use hidg2
                 // Frontend sends 0-32767 range directly (standard HID absolute mouse range)
+                // Don't send button state with move - buttons are handled separately on relative device
                 let x = event.x.clamp(0, 32767) as u16;
                 let y = event.y.clamp(0, 32767) as u16;
-                self.send_mouse_report_absolute(buttons, x, y, 0)?;
+                self.send_mouse_report_absolute(0, x, y, 0)?;
             }
             MouseEventType::Down => {
                 if let Some(button) = event.button {

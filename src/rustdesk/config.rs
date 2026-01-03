@@ -24,6 +24,11 @@ pub struct RustDeskConfig {
     /// Usually the same host as rendezvous server but different port (21117)
     pub relay_server: Option<String>,
 
+    /// Relay server authentication key (licence_key)
+    /// Required if the relay server is configured with -k option
+    #[typeshare(skip)]
+    pub relay_key: Option<String>,
+
     /// Device ID (9-digit number), auto-generated if empty
     pub device_id: String,
 
@@ -60,6 +65,7 @@ impl Default for RustDeskConfig {
             enabled: false,
             rendezvous_server: String::new(),
             relay_server: None,
+            relay_key: None,
             device_id: generate_device_id(),
             device_password: generate_random_password(),
             public_key: None,

@@ -128,6 +128,34 @@ impl Default for HidBackend {
     }
 }
 
+/// OTG USB device descriptor configuration
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OtgDescriptorConfig {
+    /// USB Vendor ID (e.g., 0x1d6b)
+    pub vendor_id: u16,
+    /// USB Product ID (e.g., 0x0104)
+    pub product_id: u16,
+    /// Manufacturer string
+    pub manufacturer: String,
+    /// Product string
+    pub product: String,
+    /// Serial number (optional, auto-generated if not set)
+    pub serial_number: Option<String>,
+}
+
+impl Default for OtgDescriptorConfig {
+    fn default() -> Self {
+        Self {
+            vendor_id: 0x1d6b,      // Linux Foundation
+            product_id: 0x0104,     // Multifunction Composite Gadget
+            manufacturer: "One-KVM".to_string(),
+            product: "One-KVM USB Device".to_string(),
+            serial_number: None,
+        }
+    }
+}
+
 /// HID configuration
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -141,6 +169,9 @@ pub struct HidConfig {
     pub otg_mouse: String,
     /// OTG UDC (USB Device Controller) name
     pub otg_udc: Option<String>,
+    /// OTG USB device descriptor configuration
+    #[serde(default)]
+    pub otg_descriptor: OtgDescriptorConfig,
     /// CH9329 serial port
     pub ch9329_port: String,
     /// CH9329 baud rate
@@ -156,6 +187,7 @@ impl Default for HidConfig {
             otg_keyboard: "/dev/hidg0".to_string(),
             otg_mouse: "/dev/hidg1".to_string(),
             otg_udc: None,
+            otg_descriptor: OtgDescriptorConfig::default(),
             ch9329_port: "/dev/ttyUSB0".to_string(),
             ch9329_baudrate: 9600,
             mouse_absolute: true,

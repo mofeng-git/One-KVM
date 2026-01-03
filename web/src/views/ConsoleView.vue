@@ -76,7 +76,8 @@ const videoErrorMessage = ref('')
 const videoRestarting = ref(false) // Track if video is restarting due to config change
 
 // Video aspect ratio (dynamically updated from actual video dimensions)
-const videoAspectRatio = ref<number | null>(null)
+// Using string format "width/height" to let browser handle the ratio calculation
+const videoAspectRatio = ref<string | null>(null)
 
 // Backend-provided FPS (received from WebSocket stream.stats_update events)
 const backendFps = ref(0)
@@ -346,7 +347,7 @@ function handleVideoLoad() {
     // Update aspect ratio from MJPEG image dimensions
     const img = videoRef.value
     if (img && img.naturalWidth && img.naturalHeight) {
-      videoAspectRatio.value = img.naturalWidth / img.naturalHeight
+      videoAspectRatio.value = `${img.naturalWidth}/${img.naturalHeight}`
     }
   }
 
@@ -1057,7 +1058,7 @@ watch(webrtc.stats, (stats) => {
     systemStore.setStreamOnline(true)
     // Update aspect ratio from WebRTC video dimensions
     if (stats.frameWidth && stats.frameHeight) {
-      videoAspectRatio.value = stats.frameWidth / stats.frameHeight
+      videoAspectRatio.value = `${stats.frameWidth}/${stats.frameHeight}`
     }
   }
 }, { deep: true })
@@ -1804,7 +1805,7 @@ onUnmounted(() => {
           ref="videoContainerRef"
           class="relative bg-black overflow-hidden flex items-center justify-center"
           :style="{
-            aspectRatio: videoAspectRatio ? String(videoAspectRatio) : '16/9',
+            aspectRatio: videoAspectRatio ?? '16/9',
             maxWidth: '100%',
             maxHeight: '100%',
             minWidth: '320px',

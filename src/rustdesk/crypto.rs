@@ -194,48 +194,14 @@ pub fn verify_password(password: &str, salt: &str, expected_hash: &[u8]) -> bool
     computed == expected_hash
 }
 
-/// RustDesk symmetric key negotiation result
-pub struct SymmetricKeyNegotiation {
-    /// Our temporary public key (to send to peer)
-    pub our_public_key: Vec<u8>,
-    /// The sealed/encrypted symmetric key (to send to peer)
-    pub sealed_symmetric_key: Vec<u8>,
-    /// The actual symmetric key (for local use)
-    pub symmetric_key: secretbox::Key,
-}
-
-/// Create symmetric key message for RustDesk encrypted handshake
+/// Decrypt symmetric key using Curve25519 secret key directly
 ///
-/// This implements RustDesk's `create_symmetric_key_msg` protocol:
-/// 1. Generate a temporary keypair
-/// 2. Generate a symmetric key
-/// 3. Encrypt the symmetric key using the peer's public key and our temp secret key
-/// 4. Return (our_temp_public_key, sealed_symmetric_key, symmetric_key)
-pub fn create_symmetric_key_msg(their_public_key_bytes: &[u8; 32]) -> SymmetricKeyNegotiation {
-    let their_pk = box_::PublicKey(*their_public_key_bytes);
-    let (our_temp_pk, our_temp_sk) = box_::gen_keypair();
-    let symmetric_key = secretbox::gen_key();
-
-    // Use zero nonce as per RustDesk protocol
-    let nonce = box_::Nonce([0u8; box_::NONCEBYTES]);
-    let sealed_key = box_::seal(&symmetric_key.0, &nonce, &their_pk, &our_temp_sk);
-
-    SymmetricKeyNegotiation {
-        our_public_key: our_temp_pk.0.to_vec(),
-        sealed_symmetric_key: sealed_key,
-        symmetric_key,
-    }
-}
-
-/// Decrypt symmetric key received from peer during handshake
-///
-/// This is the server-side of RustDesk's encrypted handshake:
-/// 1. Receive peer's temporary public key and sealed symmetric key
-/// 2. Decrypt the symmetric key using our secret key
-pub fn decrypt_symmetric_key_msg(
+/// This is used when we have a fresh Curve25519 keypair for the connection
+/// (as per RustDesk protocol - each connection generates a new keypair)
+pub fn decrypt_symmetric_key(
     their_temp_public_key: &[u8],
     sealed_symmetric_key: &[u8],
-    our_keypair: &KeyPair,
+    our_secret_key: &SecretKey,
 ) -> Result<secretbox::Key, CryptoError> {
     if their_temp_public_key.len() != box_::PUBLICKEYBYTES {
         return Err(CryptoError::InvalidKeyLength);
@@ -247,47 +213,7 @@ pub fn decrypt_symmetric_key_msg(
     // Use zero nonce as per RustDesk protocol
     let nonce = box_::Nonce([0u8; box_::NONCEBYTES]);
 
-    let key_bytes = box_::open(sealed_symmetric_key, &nonce, &their_pk, &our_keypair.secret_key)
-        .map_err(|_| CryptoError::DecryptionFailed)?;
-
-    secretbox::Key::from_slice(&key_bytes).ok_or(CryptoError::InvalidKeyLength)
-}
-
-/// Decrypt symmetric key using Ed25519 signing keypair (converted to Curve25519)
-///
-/// RustDesk clients encrypt the symmetric key using the public key from IdPk,
-/// which is our Ed25519 signing public key converted to Curve25519.
-/// We must use the corresponding converted secret key to decrypt.
-pub fn decrypt_symmetric_key_with_signing_keypair(
-    their_temp_public_key: &[u8],
-    sealed_symmetric_key: &[u8],
-    signing_keypair: &SigningKeyPair,
-) -> Result<secretbox::Key, CryptoError> {
-    use tracing::debug;
-
-    if their_temp_public_key.len() != box_::PUBLICKEYBYTES {
-        return Err(CryptoError::InvalidKeyLength);
-    }
-
-    let their_pk = PublicKey::from_slice(their_temp_public_key)
-        .ok_or(CryptoError::InvalidKeyLength)?;
-
-    // Convert our Ed25519 secret key to Curve25519 for decryption
-    let our_curve25519_sk = signing_keypair.to_curve25519_sk()?;
-
-    // Also get our converted public key for debugging
-    let our_curve25519_pk = signing_keypair.to_curve25519_pk()?;
-
-    debug!(
-        "Decrypting with converted keys: our_curve25519_pk={:02x?}, their_temp_pk={:02x?}",
-        &our_curve25519_pk.as_ref()[..8],
-        &their_pk.as_ref()[..8]
-    );
-
-    // Use zero nonce as per RustDesk protocol
-    let nonce = box_::Nonce([0u8; box_::NONCEBYTES]);
-
-    let key_bytes = box_::open(sealed_symmetric_key, &nonce, &their_pk, &our_curve25519_sk)
+    let key_bytes = box_::open(sealed_symmetric_key, &nonce, &their_pk, our_secret_key)
         .map_err(|_| CryptoError::DecryptionFailed)?;
 
     secretbox::Key::from_slice(&key_bytes).ok_or(CryptoError::InvalidKeyLength)

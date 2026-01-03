@@ -87,7 +87,8 @@ One-KVM 是一个用 Rust 编写的轻量级、开源 IP-KVM 解决方案。它�
 │  │ Capture    │             │ Controller │             │ Capture    │      │
 │  │ Encoder    │             │ OTG Backend│             │ Encoder    │      │
 │  │ Streamer   │             │ CH9329     │             │ Pipeline   │      │
-│  │ Pipeline   │             │ DataChannel│             │ (Opus)     │      │
+│  │ Pipeline   │             │ Monitor    │             │ (Opus)     │      │
+│  │ Manager    │             │ DataChan   │             │ Shared     │      │
 │  └────────────┘             └────────────┘             └────────────┘      │
 │        │                           │                          │            │
 │        └───────────────────────────┼──────────────────────────┘            │
@@ -252,21 +253,21 @@ AppState 是整个应用的状态中枢，通过 `Arc` 包装的方式在所有 
 pub struct AppState {
     // 配置和存储
     config: ConfigStore,              // SQLite 配置存储
-    sessions: SessionStore,           // 内存会话存储
+    sessions: SessionStore,           // 会话存储（内存）
     users: UserStore,                 // SQLite 用户存储
 
     // 核心服务
-    otg_service: Arc<OtgService>,     // USB Gadget 统一管理
-    stream_manager: Arc<VideoStreamManager>,  // 视频流管理器
-    hid: Arc<HidController>,          // HID 控制器
-    msd: Arc<RwLock<Option<MsdController>>>,  // MSD 控制器（可选）
-    atx: Arc<RwLock<Option<AtxController>>>,  // ATX 控制器（可选）
-    audio: Arc<AudioController>,      // 音频控制器
-    rustdesk: Arc<RwLock<Option<Arc<RustDeskService>>>>,  // RustDesk（可选）
-    extensions: Arc<ExtensionManager>,// 扩展管理器
+    otg_service: Arc<OtgService>,     // USB Gadget 统一管理（HID/MSD 生命周期协调者）
+    stream_manager: Arc<VideoStreamManager>,  // 视频流管理器（MJPEG/WebRTC）
+    hid: Arc<HidController>,          // HID 控制器（键鼠控制）
+    msd: Arc<RwLock<Option<MsdController>>>,  // MSD 控制器（可选，虚拟U盘）
+    atx: Arc<RwLock<Option<AtxController>>>,  // ATX 控制器（可选，电源控制）
+    audio: Arc<AudioController>,      // 音频控制器（ALSA + Opus）
+    rustdesk: Arc<RwLock<Option<Arc<RustDeskService>>>>,  // RustDesk（可选，远程访问）
+    extensions: Arc<ExtensionManager>,// 扩展管理器（ttyd, gostc, easytier）
 
     // 通信和生命周期
-    events: Arc<EventBus>,            // 事件总线
+    events: Arc<EventBus>,            // 事件总线（tokio broadcast channel）
     shutdown_tx: broadcast::Sender<()>,  // 关闭信号
     data_dir: PathBuf,                // 数据目录
 }
@@ -448,20 +449,29 @@ main()
    ├──► Initialize Core Services
    │      │
    │      ├──► EventBus::new()
+   │      │      └─► Create tokio broadcast channel
    │      │
    │      ├──► OtgService::new()
-   │      │      └─► Detect UDC device
+   │      │      └─► Detect UDC device (/sys/class/udc)
+   │      │      └─► Initialize OtgGadgetManager
+   │      │
+   │      ├──► HidController::new()
+   │      │      └─► Detect backend type (OTG/CH9329/None)
+   │      │      └─► Create controller with optional OtgService
    │      │
    │      ├──► HidController::init()
-   │      │      └─► Select backend (OTG/CH9329/None)
    │      │      └─► Request HID function from OtgService
+   │      │      └─► Create HID devices (/dev/hidg0-3)
+   │      │      └─► Open device files with O_NONBLOCK
+   │      │      └─► Initialize HidHealthMonitor
    │      │
    │      ├──► MsdController::init() (if configured)
    │      │      └─► Request MSD function from OtgService
+   │      │      └─► Create mass storage device
    │      │      └─► Initialize Ventoy drive (if available)
    │      │
    │      ├──► AtxController::init() (if configured)
-   │      │      └─► Setup GPIO pins
+   │      │      └─► Setup GPIO pins or USB relay
    │      │
    │      ├──► AudioController::init()
    │      │      └─► Open ALSA device
@@ -469,7 +479,8 @@ main()
    │      │
    │      ├──► VideoStreamManager::new()
    │      │      └─► Initialize SharedVideoPipeline
-   │      │      └─► Setup encoder registry
+   │      │      └─► Setup encoder registry (H264/H265/VP8/VP9)
+   │      │      └─► Detect hardware acceleration (VAAPI/RKMPP/V4L2 M2M)
    │      │
    │      └──► RustDeskService::new() (if configured)
    │             └─► Load/generate device ID and keys
@@ -521,15 +532,16 @@ One-KVM-RUST/
 │   │       └── jpeg.rs
 │   │
 │   ├── hid/                         # HID 模块
-│   │   ├── mod.rs                  # HidController
-│   │   ├── backend.rs              # 后端抽象
-│   │   ├── otg.rs                  # OTG 后端
+│   │   ├── mod.rs                  # HidController（主控制器）
+│   │   ├── backend.rs              # HidBackend trait 和 HidBackendType
+│   │   ├── otg.rs                  # OTG 后端（USB Gadget HID）
 │   │   ├── ch9329.rs               # CH9329 串口后端
-│   │   ├── keymap.rs               # 按键映射
-│   │   ├── types.rs                # 类型定义
-│   │   ├── monitor.rs              # 健康监视
-│   │   ├── datachannel.rs          # DataChannel 适配
-│   │   └── websocket.rs            # WebSocket 适配
+│   │   ├── consumer.rs             # Consumer Control usage codes
+│   │   ├── keymap.rs               # JS keyCode → USB HID 转换表
+│   │   ├── types.rs                # 事件类型定义
+│   │   ├── monitor.rs              # HidHealthMonitor（错误跟踪与恢复）
+│   │   ├── datachannel.rs          # DataChannel 二进制协议解析
+│   │   └── websocket.rs            # WebSocket 二进制协议适配
 │   │
 │   ├── otg/                         # USB OTG 模块
 │   │   ├── mod.rs
@@ -839,17 +851,36 @@ encoder_registry.register("my-encoder", || Box::new(MyEncoder::new()));
 ### 9.2 添加新 HID 后端
 
 ```rust
-// 1. 实现 HidBackend trait
-impl HidBackend for MyBackend {
-    async fn send_keyboard(&self, event: &KeyboardEvent) -> Result<()>;
-    async fn send_mouse(&self, event: &MouseEvent) -> Result<()>;
-    fn info(&self) -> HidBackendInfo;
-    // ...
+// 1. 在 backend.rs 中定义新后端类型
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum HidBackendType {
+    Otg,
+    Ch9329 { port: String, baud_rate: u32 },
+    MyBackend { /* 配置参数 */ },  // 新增
+    None,
 }
 
-// 2. 在 HidController::init() 中添加分支
-match config.backend {
-    HidBackendType::MyBackend => MyBackend::new(config),
+// 2. 实现 HidBackend trait
+#[async_trait]
+impl HidBackend for MyBackend {
+    fn name(&self) -> &'static str { "MyBackend" }
+    async fn init(&self) -> Result<()> { /* ... */ }
+    async fn send_keyboard(&self, event: KeyboardEvent) -> Result<()> { /* ... */ }
+    async fn send_mouse(&self, event: MouseEvent) -> Result<()> { /* ... */ }
+    async fn send_consumer(&self, event: ConsumerEvent) -> Result<()> { /* ... */ }
+    async fn reset(&self) -> Result<()> { /* ... */ }
+    async fn shutdown(&self) -> Result<()> { /* ... */ }
+    fn supports_absolute_mouse(&self) -> bool { true }
+    fn screen_resolution(&self) -> Option<(u32, u32)> { None }
+    fn set_screen_resolution(&mut self, width: u32, height: u32) { /* ... */ }
+}
+
+// 3. 在 HidController::init() 中添加分支
+match backend_type {
+    HidBackendType::MyBackend { /* params */ } => {
+        Box::new(MyBackend::new(/* params */)?)
+    }
     // ...
 }
 ```

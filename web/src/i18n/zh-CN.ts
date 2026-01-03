@@ -18,6 +18,8 @@ export default {
     on: '开',
     off: '关',
     enabled: '已启用',
+    later: '稍后',
+    restartNow: '立即重启',
     disabled: '已禁用',
     connected: '已连接',
     disconnected: '已断开',
@@ -202,6 +204,7 @@ export default {
     // Step titles
     stepAccount: '账号设置',
     stepVideo: '视频设置',
+    stepAudioVideo: '音视频设置',
     stepHid: '鼠键设置',
     // Account
     setUsername: '设置管理员用户名',
@@ -220,6 +223,12 @@ export default {
     fps: '帧率',
     selectFps: '选择帧率',
     noVideoDevices: '未检测到视频设备',
+    // Audio
+    audioDevice: '音频设备',
+    selectAudioDevice: '选择音频采集设备',
+    noAudio: '不使用音频',
+    noAudioDevices: '未检测到音频设备',
+    audioDeviceHelp: '选择用于捕获远程主机音频的设备。通常与视频采集卡在同一 USB 设备上。',
     // HID
     hidBackend: 'HID 后端',
     selectHidBackend: '选择 HID 控制方式',
@@ -249,6 +258,15 @@ export default {
     otgHelp: 'USB OTG 模式通过 USB 设备控制器直接模拟 HID 设备。需要硬件支持 USB OTG 功能。',
     videoDeviceHelp: '选择用于捕获远程主机画面的视频采集设备。通常是 HDMI 采集卡。',
     videoFormatHelp: 'MJPEG 格式兼容性最好，H.264/H.265 带宽占用更低但需要编码支持。',
+    // Extensions
+    stepExtensions: '扩展设置',
+    extensionsDescription: '选择要自动启动的扩展服务',
+    ttydTitle: 'Web 终端 (ttyd)',
+    ttydDescription: '在浏览器中访问设备的命令行终端',
+    rustdeskTitle: 'RustDesk 远程桌面',
+    rustdeskDescription: '通过 RustDesk 客户端远程访问设备',
+    extensionsHint: '这些设置可以在设置页面中随时更改',
+    notInstalled: '未安装',
     // Password strength
     passwordStrength: '密码强度',
     passwordWeak: '弱',
@@ -436,7 +454,7 @@ export default {
     buildInfo: '构建信息',
     detectDevices: '探测设备',
     detecting: '探测中...',
-    builtWith: '基于 Rust + Vue 3 + shadcn-vue 构建',
+    builtWith: "版权信息 {'@'}2025 SilentWind",
     networkSettings: '网络设置',
     msdSettings: 'MSD 设置',
     atxSettings: 'ATX 设置',
@@ -444,6 +462,17 @@ export default {
     httpSettings: 'HTTP 设置',
     httpPort: 'HTTP 端口',
     configureHttpPort: '配置 HTTP 服务器端口',
+    // Web server
+    webServer: '基础',
+    webServerDesc: '配置 HTTP/HTTPS 端口和绑定地址，修改后需要重启生效',
+    httpsPort: 'HTTPS 端口',
+    bindAddress: '绑定地址',
+    bindAddressDesc: '服务器监听的 IP 地址，0.0.0.0 表示监听所有网络接口',
+    httpsEnabled: '启用 HTTPS',
+    httpsEnabledDesc: '启用 HTTPS 加密连接（将自动生成自签名证书）',
+    restartRequired: '需要重启',
+    restartMessage: 'Web 服务器配置已保存，需要重启程序才能生效。',
+    restarting: '正在重启...',
     // User management
     userManagement: '用户管理',
     userManagementDesc: '管理用户账号和权限',
@@ -528,6 +557,16 @@ export default {
     hidBackend: 'HID 后端',
     serialDevice: '串口设备',
     baudRate: '波特率',
+    // OTG Descriptor
+    otgDescriptor: 'USB 设备描述符',
+    otgDescriptorDesc: '配置 USB 设备标识信息',
+    vendorId: '厂商 ID (VID)',
+    productId: '产品 ID (PID)',
+    manufacturer: '制造商',
+    productName: '产品名称',
+    serialNumber: '序列号',
+    serialNumberAuto: '自动生成',
+    descriptorWarning: '修改这些设置将导致 USB 设备重新连接',
     // WebRTC / ICE
     webrtcSettings: 'WebRTC 设置',
     webrtcSettingsDesc: '配置 STUN/TURN 服务器以实现 NAT 穿透',
@@ -626,7 +665,7 @@ export default {
     binaryNotFound: '未找到 {path}，请先安装对应程序',
     // ttyd
     ttyd: {
-      title: '网页终端',
+      title: 'Ttyd 网页终端',
       desc: '通过 ttyd 提供网页终端访问',
       open: '打开终端',
       openInNewTab: '在新标签页打开',
@@ -636,7 +675,7 @@ export default {
     },
     // gostc
     gostc: {
-      title: '内网穿透',
+      title: 'GOSTC 内网穿透',
       desc: '通过 GOSTC 实现内网穿透',
       addr: '服务器地址',
       key: '客户端密钥',
@@ -644,7 +683,7 @@ export default {
     },
     // easytier
     easytier: {
-      title: 'P2P 组网',
+      title: 'Easytier 组网',
       desc: '通过 EasyTier 实现 P2P VPN 组网',
       networkName: '网络名称',
       networkSecret: '网络密钥',
@@ -664,6 +703,10 @@ export default {
       relayServer: '中继服务器',
       relayServerPlaceholder: 'hbbr.example.com:21117',
       relayServerHint: '中继服务器地址，留空则自动从 ID 服务器推导',
+      relayKey: '中继密钥',
+      relayKeyPlaceholder: '输入中继服务器密钥',
+      relayKeySet: '••••••••',
+      relayKeyHint: '中继服务器认证密钥（如果服务器使用 -k 选项）',
       publicServerInfo: '公共服务器信息',
       publicServerAddress: '服务器地址',
       publicServerKey: '连接密钥',

@@ -37,7 +37,6 @@ use crate::video::encoder::vp8::{VP8Config, VP8Encoder};
 use crate::video::encoder::vp9::{VP9Config, VP9Encoder};
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::frame::VideoFrame;
-use crate::video::pacer::EncoderPacer;
 
 /// Encoded video frame for distribution
 #[derive(Debug, Clone)]
@@ -71,8 +70,6 @@ pub struct SharedVideoPipelineConfig {
     pub fps: u32,
     /// Encoder backend (None = auto select best available)
     pub encoder_backend: Option<EncoderBackend>,
-    /// Maximum in-flight frames for backpressure control
-    pub max_in_flight_frames: usize,
 }
 
 impl Default for SharedVideoPipelineConfig {
@@ -84,7 +81,6 @@ impl Default for SharedVideoPipelineConfig {
             bitrate_preset: crate::video::encoder::BitratePreset::Balanced,
             fps: 30,
             encoder_backend: None,
-            max_in_flight_frames: 8,  // Default: allow 8 frames in flight
         }
     }
 }
@@ -153,7 +149,6 @@ pub struct SharedVideoPipelineStats {
     pub frames_captured: u64,
     pub frames_encoded: u64,
     pub frames_dropped: u64,
-    /// Frames skipped due to backpressure (pacer)
     pub frames_skipped: u64,
     pub bytes_encoded: u64,
     pub keyframes_encoded: u64,
@@ -161,8 +156,6 @@ pub struct SharedVideoPipelineStats {
     pub current_fps: f32,
     pub errors: u64,
     pub subscribers: u64,
-    /// Current number of frames in-flight (waiting to be sent)
-    pub pending_frames: usize,
 }
 
 
@@ -326,30 +319,24 @@ pub struct SharedVideoPipeline {
     /// Pipeline start time for PTS calculation (epoch millis, 0 = not set)
     /// Uses AtomicI64 instead of Mutex for lock-free access
     pipeline_start_time_ms: AtomicI64,
-    /// Encoder pacer for backpressure control
-    pacer: EncoderPacer,
 }
 
 impl SharedVideoPipeline {
     /// Create a new shared video pipeline
     pub fn new(config: SharedVideoPipelineConfig) -> Result<Arc<Self>> {
         info!(
-            "Creating shared video pipeline: {} {}x{} @ {} (input: {}, max_in_flight: {})",
+            "Creating shared video pipeline: {} {}x{} @ {} (input: {})",
             config.output_codec,
             config.resolution.width,
             config.resolution.height,
             config.bitrate_preset,
-            config.input_format,
-            config.max_in_flight_frames
+            config.input_format
         );
 
         let (frame_tx, _) = broadcast::channel(16);  // Reduced from 64 for lower latency
         let (running_tx, running_rx) = watch::channel(false);
         let nv12_size = (config.resolution.width * config.resolution.height * 3 / 2) as usize;
         let yuv420p_size = nv12_size; // Same size as NV12
-
-        // Create pacer for backpressure control
-        let pacer = EncoderPacer::new(config.max_in_flight_frames);
 
         let pipeline = Arc::new(Self {
             config: RwLock::new(config),
@@ -369,7 +356,6 @@ impl SharedVideoPipeline {
             sequence: AtomicU64::new(0),
             keyframe_requested: AtomicBool::new(false),
             pipeline_start_time_ms: AtomicI64::new(0),
-            pacer,
         });
 
         Ok(pipeline)
@@ -620,14 +606,13 @@ impl SharedVideoPipeline {
     /// Report that a receiver has lagged behind
     ///
     /// Call this when a broadcast receiver detects it has fallen behind
-    /// (e.g., when RecvError::Lagged is received). This triggers throttle
-    /// mode in the encoder to reduce encoding rate.
+    /// (e.g., when RecvError::Lagged is received).
     ///
     /// # Arguments
     ///
-    /// * `frames_lagged` - Number of frames the receiver has lagged
-    pub async fn report_lag(&self, frames_lagged: u64) {
-        self.pacer.report_lag(frames_lagged).await;
+    /// * `_frames_lagged` - Number of frames the receiver has lagged (currently unused)
+    pub async fn report_lag(&self, _frames_lagged: u64) {
+        // No-op: backpressure control removed as it was not effective
     }
 
     /// Request encoder to produce a keyframe on next encode
@@ -645,13 +630,7 @@ impl SharedVideoPipeline {
     pub async fn stats(&self) -> SharedVideoPipelineStats {
         let mut stats = self.stats.lock().await.clone();
         stats.subscribers = self.frame_tx.receiver_count() as u64;
-        stats.pending_frames = if self.pacer.is_throttling() { 1 } else { 0 };
         stats
-    }
-
-    /// Get pacer statistics for debugging
-    pub fn pacer_stats(&self) -> crate::video::pacer::PacerStats {
-        self.pacer.stats()
     }
 
     /// Check if running
@@ -777,14 +756,6 @@ impl SharedVideoPipeline {
                                     }
                                 }
 
-                                // === Lag-feedback based flow control ===
-                                // Check if this is a keyframe interval
-                                let is_keyframe_interval = frame_count % gop_size as u64 == 0;
-
-                                // Note: pacer.should_encode() currently always returns true
-                                // TODO: Implement effective backpressure control
-                                let _ = pipeline.pacer.should_encode(is_keyframe_interval).await;
-
                                 match pipeline.encode_frame(&video_frame, frame_count).await {
                                     Ok(Some(encoded_frame)) => {
                                         // Send frame to all subscribers
@@ -822,7 +793,6 @@ impl SharedVideoPipeline {
                                     s.errors += local_errors;
                                     s.frames_dropped += local_dropped;
                                     s.frames_skipped += local_skipped;
-                                    s.pending_frames = if pipeline.pacer.is_throttling() { 1 } else { 0 };
                                     s.current_fps = current_fps;
 
                                     // Reset local counters

@@ -124,6 +124,7 @@ fn parse_keyboard_message(data: &[u8]) -> Option<HidChannelEvent> {
         event_type,
         key,
         modifiers,
+        is_usb_hid: false, // WebRTC datachannel sends JS keycodes
     }))
 }
 

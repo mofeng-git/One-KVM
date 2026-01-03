@@ -13,25 +13,31 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bytes::{Bytes, BytesMut};
+use sodiumoxide::crypto::box_;
 use parking_lot::RwLock;
-use prost::Message as ProstMessage;
+use protobuf::Message as ProtobufMessage;
 use tokio::net::TcpStream;
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::sync::{broadcast, mpsc, Mutex};
 use tracing::{debug, error, info, warn};
 
-use crate::hid::HidController;
+use crate::audio::AudioController;
+use crate::hid::{HidController, KeyboardEvent, KeyEventType, KeyboardModifiers};
 use crate::video::encoder::registry::{EncoderRegistry, VideoEncoderType};
 use crate::video::encoder::BitratePreset;
 use crate::video::stream_manager::VideoStreamManager;
 
 use super::bytes_codec::{read_frame, write_frame, write_frame_buffered};
 use super::config::RustDeskConfig;
-use super::crypto::{self, decrypt_symmetric_key_msg, KeyPair, SigningKeyPair};
-use super::frame_adapters::{VideoCodec, VideoFrameAdapter};
+use super::crypto::{self, KeyPair, SigningKeyPair};
+use super::frame_adapters::{AudioFrameAdapter, VideoCodec, VideoFrameAdapter};
 use super::hid_adapter::{convert_key_event, convert_mouse_event, mouse_type};
-use super::protocol::hbb::{self, message};
-use super::protocol::{LoginRequest, LoginResponse, PeerInfo};
+use super::protocol::{
+    message, misc, login_response,
+    KeyEvent, MouseEvent, Clipboard, Misc, LoginRequest, LoginResponse, PeerInfo,
+    IdPk, SignedId, Hash, TestDelay, ControlKey,
+    decode_message, HbbMessage, DisplayInfo, SupportedEncoding, OptionMessage, PublicKey,
+};
 
 use sodiumoxide::crypto::secretbox;
 
@@ -39,8 +45,8 @@ use sodiumoxide::crypto::secretbox;
 const DEFAULT_SCREEN_WIDTH: u32 = 1920;
 const DEFAULT_SCREEN_HEIGHT: u32 = 1080;
 
-/// Default mouse event throttle interval (10ms = 100Hz, matches USB HID polling rate)
-const DEFAULT_MOUSE_THROTTLE_MS: u64 = 10;
+/// Default mouse event throttle interval (16ms ≈ 60Hz)
+const DEFAULT_MOUSE_THROTTLE_MS: u64 = 16;
 
 /// Input event throttler
 ///
@@ -115,14 +121,17 @@ pub struct Connection {
     peer_name: String,
     /// Connection state
     state: Arc<RwLock<ConnectionState>>,
-    /// Our encryption keypair (Curve25519)
-    keypair: KeyPair,
-    /// Our signing keypair (Ed25519) for SignedId messages
+    /// Our signing keypair (Ed25519) for signing SignedId messages
     signing_keypair: SigningKeyPair,
+    /// Temporary Curve25519 keypair for this connection (used for encryption)
+    /// Generated fresh for each connection, public key goes in IdPk.pk
+    temp_keypair: (box_::PublicKey, box_::SecretKey),
     /// Device password
     password: String,
     /// HID controller for keyboard/mouse events
     hid: Option<Arc<HidController>>,
+    /// Audio controller for audio streaming
+    audio: Option<Arc<AudioController>>,
     /// Video stream manager for frame subscription
     video_manager: Option<Arc<VideoStreamManager>>,
     /// Screen dimensions for mouse coordinate conversion
@@ -134,6 +143,8 @@ pub struct Connection {
     shutdown_tx: broadcast::Sender<()>,
     /// Video streaming task handle
     video_task: Option<tokio::task::JoinHandle<()>>,
+    /// Audio streaming task handle
+    audio_task: Option<tokio::task::JoinHandle<()>>,
     /// Session encryption key (negotiated during handshake)
     session_key: Option<secretbox::Key>,
     /// Encryption enabled flag
@@ -152,6 +163,8 @@ pub struct Connection {
     last_delay: u32,
     /// Time when we last sent a TestDelay to the client (for RTT calculation)
     last_test_delay_sent: Option<Instant>,
+    /// Last known CapsLock state from RustDesk modifiers (for detecting toggle)
+    last_caps_lock: bool,
 }
 
 /// Messages sent to connection handler
@@ -173,13 +186,13 @@ pub enum ClientMessage {
     /// Login request
     Login(LoginRequest),
     /// Key event
-    KeyEvent(hbb::KeyEvent),
+    KeyEvent(KeyEvent),
     /// Mouse event
-    MouseEvent(hbb::MouseEvent),
+    MouseEvent(MouseEvent),
     /// Clipboard
-    Clipboard(hbb::Clipboard),
+    Clipboard(Clipboard),
     /// Misc message
-    Misc(hbb::Misc),
+    Misc(Misc),
     /// Unknown/unhandled
     Unknown,
 }
@@ -189,13 +202,17 @@ impl Connection {
     pub fn new(
         id: u32,
         config: &RustDeskConfig,
-        keypair: KeyPair,
         signing_keypair: SigningKeyPair,
         hid: Option<Arc<HidController>>,
+        audio: Option<Arc<AudioController>>,
         video_manager: Option<Arc<VideoStreamManager>>,
     ) -> (Self, mpsc::UnboundedReceiver<ConnectionMessage>) {
         let (tx, rx) = mpsc::unbounded_channel();
         let (shutdown_tx, _) = broadcast::channel(1);
+
+        // Generate fresh Curve25519 keypair for this connection
+        // This is used for encrypting the symmetric key exchange
+        let temp_keypair = box_::gen_keypair();
 
         let conn = Self {
             id,
@@ -203,16 +220,18 @@ impl Connection {
             peer_id: String::new(),
             peer_name: String::new(),
             state: Arc::new(RwLock::new(ConnectionState::Pending)),
-            keypair,
             signing_keypair,
+            temp_keypair,
             password: config.device_password.clone(),
             hid,
+            audio,
             video_manager,
             screen_width: DEFAULT_SCREEN_WIDTH,
             screen_height: DEFAULT_SCREEN_HEIGHT,
             tx,
             shutdown_tx,
             video_task: None,
+            audio_task: None,
             session_key: None,
             encryption_enabled: false,
             enc_seqnum: 0,
@@ -222,6 +241,7 @@ impl Connection {
             input_throttler: InputThrottler::new(),
             last_delay: 0,
             last_test_delay_sent: None,
+            last_caps_lock: false,
         };
 
         (conn, rx)
@@ -259,13 +279,17 @@ impl Connection {
         // Send our SignedId first (this is what RustDesk protocol expects)
         // The SignedId contains our device ID and temporary public key
         let signed_id_msg = self.create_signed_id_message(&self.device_id.clone());
-        let signed_id_bytes = ProstMessage::encode_to_vec(&signed_id_msg);
-        info!("Sending SignedId with device_id={}", self.device_id);
+        let signed_id_bytes = signed_id_msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode SignedId: {}", e))?;
+        debug!("Sending SignedId with device_id={}", self.device_id);
         self.send_framed_arc(&writer, &signed_id_bytes).await?;
 
         // Channel for receiving video frames to send (bounded to provide backpressure)
         let (video_tx, mut video_rx) = mpsc::channel::<Bytes>(4);
         let mut video_streaming = false;
+
+        // Channel for receiving audio frames to send (bounded to provide backpressure)
+        let (audio_tx, mut audio_rx) = mpsc::channel::<Bytes>(8);
+        let mut audio_streaming = false;
 
         // Timer for sending TestDelay to measure round-trip latency
         // RustDesk clients display this delay information
@@ -282,13 +306,17 @@ impl Connection {
                 result = read_frame(&mut reader) => {
                     match result {
                         Ok(msg_buf) => {
-                            if let Err(e) = self.handle_message_arc(&msg_buf, &writer, &video_tx, &mut video_streaming).await {
+                            if let Err(e) = self.handle_message_arc(&msg_buf, &writer, &video_tx, &mut video_streaming, &audio_tx, &mut audio_streaming).await {
                                 error!("Error handling message: {}", e);
                                 break;
                             }
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                            info!("Connection closed by peer");
+                            if self.state() == ConnectionState::Handshaking {
+                                warn!("Connection closed by peer DURING HANDSHAKE - signature verification likely failed on client side");
+                            } else {
+                                info!("Connection closed by peer");
+                            }
                             break;
                         }
                         Err(e) => {
@@ -321,6 +349,27 @@ impl Connection {
                     }
                 }
 
+                // Send audio frames (encrypted if session key is set)
+                Some(frame_data) = audio_rx.recv() => {
+                    let send_result = if let Some(ref key) = self.session_key {
+                        // Encrypt the frame
+                        self.enc_seqnum += 1;
+                        let nonce = Self::get_nonce(self.enc_seqnum);
+                        let ciphertext = secretbox::seal(&frame_data, &nonce, key);
+                        let mut w = writer.lock().await;
+                        write_frame_buffered(&mut *w, &ciphertext, &mut frame_buf).await
+                    } else {
+                        // No encryption, send plain
+                        let mut w = writer.lock().await;
+                        write_frame_buffered(&mut *w, &frame_data, &mut frame_buf).await
+                    };
+
+                    if let Err(e) = send_result {
+                        error!("Error sending audio frame: {}", e);
+                        break;
+                    }
+                }
+
                 // Send TestDelay periodically to measure latency
                 _ = test_delay_interval.tick() => {
                     if self.state() == ConnectionState::Active && self.last_test_delay_sent.is_none() {
@@ -340,6 +389,11 @@ impl Connection {
 
         // Stop video streaming task if running
         if let Some(task) = self.video_task.take() {
+            task.abort();
+        }
+
+        // Stop audio streaming task if running
+        if let Some(task) = self.audio_task.take() {
             task.abort();
         }
 
@@ -389,6 +443,8 @@ impl Connection {
         writer: &Arc<Mutex<OwnedWriteHalf>>,
         video_tx: &mpsc::Sender<Bytes>,
         video_streaming: &mut bool,
+        audio_tx: &mpsc::Sender<Bytes>,
+        audio_streaming: &mut bool,
     ) -> anyhow::Result<()> {
         // Try to decrypt if we have a session key
         // RustDesk uses sequence-based nonce, NOT nonce prefix in message
@@ -414,19 +470,26 @@ impl Connection {
             data
         };
 
-        let msg = hbb::Message::decode(msg_data)?;
+        let msg = decode_message(msg_data)?;
 
         match msg.union {
-            Some(message::Union::PublicKey(pk)) => {
-                debug!("Received public key from peer");
-                self.handle_peer_public_key(&pk, writer).await?;
+            Some(message::Union::PublicKey(ref pk)) => {
+                info!(
+                    "Received PublicKey from peer: asymmetric_len={}, symmetric_len={}",
+                    pk.asymmetric_value.len(),
+                    pk.symmetric_value.len()
+                );
+                if pk.asymmetric_value.is_empty() && pk.symmetric_value.is_empty() {
+                    warn!("Received EMPTY PublicKey - client may have failed signature verification!");
+                }
+                self.handle_peer_public_key(pk, writer).await?;
             }
             Some(message::Union::LoginRequest(lr)) => {
                 debug!("Received login request from {}", lr.my_id);
                 self.peer_id = lr.my_id.clone();
                 self.peer_name = lr.my_name.clone();
 
-                // Handle login and start video streaming if successful
+                // Handle login and start video/audio streaming if successful
                 if self.handle_login_request_arc(&lr, writer).await? {
                     // Store video_tx for potential codec switching
                     self.video_frame_tx = Some(video_tx.clone());
@@ -434,6 +497,11 @@ impl Connection {
                     if !*video_streaming {
                         self.start_video_streaming(video_tx.clone());
                         *video_streaming = true;
+                    }
+                    // Start audio streaming
+                    if !*audio_streaming {
+                        self.start_audio_streaming(audio_tx.clone());
+                        *audio_streaming = true;
                     }
                 }
             }
@@ -505,7 +573,7 @@ impl Connection {
                 // Client sent empty password - tell them to enter password
                 info!("Empty password from {}, requesting password input", lr.my_id);
                 let error_response = self.create_login_error_response("Empty Password");
-                let response_bytes = ProstMessage::encode_to_vec(&error_response);
+                let response_bytes = error_response.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
                 self.send_encrypted_arc(writer, &response_bytes).await?;
                 // Don't close connection - wait for retry with password
                 return Ok(false);
@@ -515,7 +583,7 @@ impl Connection {
             if !self.verify_password(&lr.password) {
                 warn!("Wrong password from {}", lr.my_id);
                 let error_response = self.create_login_error_response("Wrong Password");
-                let response_bytes = ProstMessage::encode_to_vec(&error_response);
+                let response_bytes = error_response.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
                 self.send_encrypted_arc(writer, &response_bytes).await?;
                 // Don't close connection - wait for retry with correct password
                 return Ok(false);
@@ -533,7 +601,7 @@ impl Connection {
         info!("Negotiated video codec: {:?}", negotiated);
 
         let response = self.create_login_response(true);
-        let response_bytes = ProstMessage::encode_to_vec(&response);
+        let response_bytes = response.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
         self.send_encrypted_arc(writer, &response_bytes).await?;
         Ok(true)
     }
@@ -567,23 +635,23 @@ impl Connection {
     /// Handle misc message with Arc writer
     async fn handle_misc_arc(
         &mut self,
-        misc: &hbb::Misc,
+        misc: &Misc,
         _writer: &Arc<Mutex<OwnedWriteHalf>>,
     ) -> anyhow::Result<()> {
         match &misc.union {
-            Some(hbb::misc::Union::SwitchDisplay(sd)) => {
+            Some(misc::Union::SwitchDisplay(sd)) => {
                 debug!("Switch display request: {}", sd.display);
             }
-            Some(hbb::misc::Union::Option(opt)) => {
+            Some(misc::Union::Option(opt)) => {
                 self.handle_option_message(opt).await?;
             }
-            Some(hbb::misc::Union::RefreshVideo(refresh)) => {
+            Some(misc::Union::RefreshVideo(refresh)) => {
                 if *refresh {
                     debug!("Video refresh requested");
                     // TODO: Request keyframe from encoder
                 }
             }
-            Some(hbb::misc::Union::VideoReceived(received)) => {
+            Some(misc::Union::VideoReceived(received)) => {
                 if *received {
                     debug!("Video received acknowledgement");
                 }
@@ -597,11 +665,11 @@ impl Connection {
     }
 
     /// Handle Option message from client (includes codec and quality preferences)
-    async fn handle_option_message(&mut self, opt: &hbb::OptionMessage) -> anyhow::Result<()> {
+    async fn handle_option_message(&mut self, opt: &OptionMessage) -> anyhow::Result<()> {
         // Handle image quality preset
         // RustDesk ImageQuality: NotSet=0, Low=2, Balanced=3, Best=4
         // Map to One-KVM BitratePreset: Low->Speed, Balanced->Balanced, Best->Quality
-        let image_quality = opt.image_quality;
+        let image_quality = opt.image_quality.value();
         if image_quality != 0 {
             let preset = match image_quality {
                 2 => Some(BitratePreset::Speed),    // Low -> Speed (1 Mbps)
@@ -621,8 +689,8 @@ impl Connection {
         }
 
         // Check if client sent supported_decoding with a codec preference
-        if let Some(ref supported_decoding) = opt.supported_decoding {
-            let prefer = supported_decoding.prefer;
+        if let Some(ref supported_decoding) = opt.supported_decoding.as_ref() {
+            let prefer = supported_decoding.prefer.value();
             debug!("Client codec preference: prefer={}", prefer);
 
             // Map RustDesk PreferCodec enum to our VideoEncoderType
@@ -730,47 +798,75 @@ impl Connection {
         self.video_task = Some(task);
     }
 
+    /// Start audio streaming task
+    fn start_audio_streaming(&mut self, audio_tx: mpsc::Sender<Bytes>) {
+        let audio_controller = match &self.audio {
+            Some(ac) => ac.clone(),
+            None => {
+                debug!("No audio controller available, skipping audio streaming");
+                return;
+            }
+        };
+
+        let state = self.state.clone();
+        let conn_id = self.id;
+        let shutdown_tx = self.shutdown_tx.clone();
+
+        let task = tokio::spawn(async move {
+            info!("Starting audio streaming for connection {}", conn_id);
+
+            if let Err(e) = run_audio_streaming(
+                conn_id,
+                audio_controller,
+                audio_tx,
+                state,
+                shutdown_tx,
+            ).await {
+                error!("Audio streaming error for connection {}: {}", conn_id, e);
+            }
+
+            info!("Audio streaming stopped for connection {}", conn_id);
+        });
+
+        self.audio_task = Some(task);
+    }
+
     /// Create SignedId message for initial handshake
     ///
     /// RustDesk protocol:
-    /// - IdPk contains device ID and our Curve25519 encryption public key
+    /// - IdPk contains device ID and a fresh Curve25519 public key for this connection
     /// - The IdPk is signed with Ed25519 to prove ownership of the device
     /// - Client verifies the Ed25519 signature using public key from hbbs
-    /// - Client then encrypts symmetric key using our Curve25519 public key from IdPk
-    fn create_signed_id_message(&self, device_id: &str) -> hbb::Message {
-        // Create IdPk with our device ID and Curve25519 encryption public key
-        // The client will use this Curve25519 key to encrypt the symmetric session key
-        let id_pk = hbb::IdPk {
-            id: device_id.to_string(),
-            pk: self.keypair.public_key_bytes().to_vec().into(),
-        };
+    /// - Client then encrypts symmetric key using the Curve25519 public key from IdPk
+    fn create_signed_id_message(&self, device_id: &str) -> HbbMessage {
+        // Create IdPk with our device ID and temporary Curve25519 public key
+        // IMPORTANT: Use the fresh Curve25519 public key, NOT Ed25519!
+        // The client will use this directly for encryption (no conversion needed)
+        let pk_bytes = self.temp_keypair.0.as_ref();
+        let mut id_pk = IdPk::new();
+        id_pk.id = device_id.to_string();
+        id_pk.pk = pk_bytes.to_vec().into();
 
         // Encode IdPk to bytes
-        let id_pk_bytes = ProstMessage::encode_to_vec(&id_pk);
+        let id_pk_bytes = id_pk.write_to_bytes().unwrap_or_default();
 
         // Sign the IdPk bytes with Ed25519
         // RustDesk's sign::sign() prepends the 64-byte signature to the message
         let signed_id_pk = self.signing_keypair.sign(&id_pk_bytes);
 
-        debug!(
-            "Created SignedId: id={}, curve25519_pk_len={}, signature_len=64, total_len={}",
-            device_id,
-            self.keypair.public_key_bytes().len(),
-            signed_id_pk.len()
-        );
+        let mut signed_id = SignedId::new();
+        signed_id.id = signed_id_pk.into();
 
-        hbb::Message {
-            union: Some(message::Union::SignedId(hbb::SignedId {
-                id: signed_id_pk.into(),
-            })),
-        }
+        let mut msg = HbbMessage::new();
+        msg.union = Some(message::Union::SignedId(signed_id));
+        msg
     }
 
     /// Handle peer's public key and negotiate session encryption
     /// After successful negotiation, send Hash message for password authentication
     async fn handle_peer_public_key(
         &mut self,
-        pk: &hbb::PublicKey,
+        pk: &PublicKey,
         writer: &Arc<Mutex<OwnedWriteHalf>>,
     ) -> anyhow::Result<()> {
         // RustDesk's PublicKey message has two parts:
@@ -785,12 +881,12 @@ impl Connection {
                 pk.symmetric_value.len()
             );
 
-            // Decrypt the symmetric key using our Curve25519 keypair
+            // Decrypt the symmetric key using our temporary Curve25519 keypair
             // The client encrypted it using our Curve25519 public key from IdPk
-            match decrypt_symmetric_key_msg(
+            match crypto::decrypt_symmetric_key(
                 &pk.asymmetric_value,
                 &pk.symmetric_value,
-                &self.keypair,
+                &self.temp_keypair.1,
             ) {
                 Ok(session_key) => {
                     info!("Session key negotiated successfully");
@@ -821,7 +917,7 @@ impl Connection {
         // This tells the client what salt to use for password hashing
         // Must be encrypted if session key was negotiated
         let hash_msg = self.create_hash_message();
-        let hash_bytes = ProstMessage::encode_to_vec(&hash_msg);
+        let hash_bytes = hash_msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
         debug!("Sending Hash message for password authentication (encrypted={})", self.encryption_enabled);
         self.send_encrypted_arc(writer, &hash_bytes).await?;
 
@@ -835,7 +931,7 @@ impl Connection {
     /// or proceed with the connection.
     async fn handle_signed_id(
         &mut self,
-        si: &hbb::SignedId,
+        si: &SignedId,
         writer: &Arc<Mutex<OwnedWriteHalf>>,
     ) -> anyhow::Result<()> {
         // The SignedId contains a signed IdPk message
@@ -853,7 +949,7 @@ impl Connection {
             &signed_data[..]
         };
 
-        if let Ok(id_pk) = hbb::IdPk::decode(id_pk_bytes) {
+        if let Ok(id_pk) = IdPk::parse_from_bytes(id_pk_bytes) {
             info!(
                 "Received SignedId from peer: id={}, pk_len={}",
                 id_pk.id,
@@ -875,7 +971,7 @@ impl Connection {
         // If we haven't sent our SignedId yet, send it now
         // (This handles the case where client sends SignedId before we do)
         let signed_id_msg = self.create_signed_id_message(&self.device_id.clone());
-        let signed_id_bytes = ProstMessage::encode_to_vec(&signed_id_msg);
+        let signed_id_bytes = signed_id_msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
         self.send_framed_arc(writer, &signed_id_bytes).await?;
 
         Ok(())
@@ -926,7 +1022,7 @@ impl Connection {
     }
 
     /// Create login response with dynamically detected encoder capabilities
-    fn create_login_response(&self, success: bool) -> hbb::Message {
+    fn create_login_response(&self, success: bool) -> HbbMessage {
         if success {
             // Dynamically detect available encoders
             let registry = EncoderRegistry::global();
@@ -942,50 +1038,47 @@ impl Connection {
                 h264_available, h265_available, vp8_available, vp9_available
             );
 
-            hbb::Message {
-                union: Some(message::Union::LoginResponse(LoginResponse {
-                    union: Some(hbb::login_response::Union::PeerInfo(PeerInfo {
-                        username: "one-kvm".to_string(),
-                        hostname: get_hostname(),
-                        platform: "Linux".to_string(),
-                        displays: vec![hbb::DisplayInfo {
-                            x: 0,
-                            y: 0,
-                            width: 1920,
-                            height: 1080,
-                            name: "KVM Display".to_string(),
-                            online: true,
-                            cursor_embedded: false,
-                            original_resolution: None,
-                            scale: 1.0,
-                        }],
-                        current_display: 0,
-                        sas_enabled: false,
-                        version: env!("CARGO_PKG_VERSION").to_string(),
-                        features: None,
-                        encoding: Some(hbb::SupportedEncoding {
-                            h264: h264_available,
-                            h265: h265_available,
-                            vp8: vp8_available,
-                            av1: false, // AV1 not supported yet
-                            i444: None,
-                        }),
-                        resolutions: None,
-                        platform_additions: String::new(),
-                        windows_sessions: None,
-                    })),
-                    enable_trusted_devices: false,
-                })),
-            }
+            let mut display_info = DisplayInfo::new();
+            display_info.x = 0;
+            display_info.y = 0;
+            display_info.width = 1920;
+            display_info.height = 1080;
+            display_info.name = "KVM Display".to_string();
+            display_info.online = true;
+            display_info.cursor_embedded = false;
+            display_info.scale = 1.0;
+
+            let mut encoding = SupportedEncoding::new();
+            encoding.h264 = h264_available;
+            encoding.h265 = h265_available;
+            encoding.vp8 = vp8_available;
+            encoding.av1 = false; // AV1 not supported yet
+
+            let mut peer_info = PeerInfo::new();
+            peer_info.username = "one-kvm".to_string();
+            peer_info.hostname = get_hostname();
+            peer_info.platform = "Linux".to_string();
+            peer_info.displays.push(display_info);
+            peer_info.current_display = 0;
+            peer_info.sas_enabled = false;
+            peer_info.version = env!("CARGO_PKG_VERSION").to_string();
+            peer_info.encoding = protobuf::MessageField::some(encoding);
+
+            let mut login_response = LoginResponse::new();
+            login_response.union = Some(login_response::Union::PeerInfo(peer_info));
+            login_response.enable_trusted_devices = false;
+
+            let mut msg = HbbMessage::new();
+            msg.union = Some(message::Union::LoginResponse(login_response));
+            msg
         } else {
-            hbb::Message {
-                union: Some(message::Union::LoginResponse(LoginResponse {
-                    union: Some(hbb::login_response::Union::Error(
-                        "Invalid password".to_string(),
-                    )),
-                    enable_trusted_devices: false,
-                })),
-            }
+            let mut login_response = LoginResponse::new();
+            login_response.union = Some(login_response::Union::Error("Invalid password".to_string()));
+            login_response.enable_trusted_devices = false;
+
+            let mut msg = HbbMessage::new();
+            msg.union = Some(message::Union::LoginResponse(login_response));
+            msg
         }
     }
 
@@ -993,26 +1086,28 @@ impl Connection {
     /// RustDesk client recognizes specific error strings:
     /// - "Empty Password" -> prompts for password input
     /// - "Wrong Password" -> prompts for password re-entry
-    fn create_login_error_response(&self, error: &str) -> hbb::Message {
-        hbb::Message {
-            union: Some(message::Union::LoginResponse(LoginResponse {
-                union: Some(hbb::login_response::Union::Error(error.to_string())),
-                enable_trusted_devices: false,
-            })),
-        }
+    fn create_login_error_response(&self, error: &str) -> HbbMessage {
+        let mut login_response = LoginResponse::new();
+        login_response.union = Some(login_response::Union::Error(error.to_string()));
+        login_response.enable_trusted_devices = false;
+
+        let mut msg = HbbMessage::new();
+        msg.union = Some(message::Union::LoginResponse(login_response));
+        msg
     }
 
     /// Create Hash message for password authentication
     /// The client will hash the password with the salt and send it back in LoginRequest
-    fn create_hash_message(&self) -> hbb::Message {
+    fn create_hash_message(&self) -> HbbMessage {
         // Use device_id as salt for simplicity (RustDesk uses Config::get_salt())
         // The challenge field is not used for our password verification
-        hbb::Message {
-            union: Some(message::Union::Hash(hbb::Hash {
-                salt: self.device_id.clone(),
-                challenge: String::new(),
-            })),
-        }
+        let mut hash = Hash::new();
+        hash.salt = self.device_id.clone();
+        hash.challenge = String::new();
+
+        let mut msg = HbbMessage::new();
+        msg.union = Some(message::Union::Hash(hash));
+        msg
     }
 
     /// Handle TestDelay message for round-trip latency measurement
@@ -1024,21 +1119,21 @@ impl Connection {
     /// 4. Server includes last_delay in next TestDelay for client display
     async fn handle_test_delay(
         &mut self,
-        td: &hbb::TestDelay,
+        td: &TestDelay,
         writer: &Arc<Mutex<OwnedWriteHalf>>,
     ) -> anyhow::Result<()> {
         if td.from_client {
             // Client initiated the delay test, respond with the same time
-            let response = hbb::Message {
-                union: Some(message::Union::TestDelay(hbb::TestDelay {
-                    time: td.time,
-                    from_client: false,
-                    last_delay: self.last_delay,
-                    target_bitrate: 0, // We don't do adaptive bitrate yet
-                })),
-            };
+            let mut test_delay = TestDelay::new();
+            test_delay.time = td.time;
+            test_delay.from_client = false;
+            test_delay.last_delay = self.last_delay;
+            test_delay.target_bitrate = 0; // We don't do adaptive bitrate yet
 
-            let data = prost::Message::encode_to_vec(&response);
+            let mut response = HbbMessage::new();
+            response.union = Some(message::Union::TestDelay(test_delay));
+
+            let data = response.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
             self.send_encrypted_arc(writer, &data).await?;
 
             debug!(
@@ -1076,16 +1171,16 @@ impl Connection {
             .map(|d| d.as_millis() as i64)
             .unwrap_or(0);
 
-        let msg = hbb::Message {
-            union: Some(message::Union::TestDelay(hbb::TestDelay {
-                time: time_ms,
-                from_client: false,
-                last_delay: self.last_delay,
-                target_bitrate: 0,
-            })),
-        };
+        let mut test_delay = TestDelay::new();
+        test_delay.time = time_ms;
+        test_delay.from_client = false;
+        test_delay.last_delay = self.last_delay;
+        test_delay.target_bitrate = 0;
 
-        let data = prost::Message::encode_to_vec(&msg);
+        let mut msg = HbbMessage::new();
+        msg.union = Some(message::Union::TestDelay(test_delay));
+
+        let data = msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
         self.send_encrypted_arc(writer, &data).await?;
 
         // Record when we sent this, so we can calculate RTT when client echoes back
@@ -1096,14 +1191,51 @@ impl Connection {
     }
 
     /// Handle key event
-    async fn handle_key_event(&self, ke: &hbb::KeyEvent) -> anyhow::Result<()> {
+    async fn handle_key_event(&mut self, ke: &KeyEvent) -> anyhow::Result<()> {
         debug!(
-            "Key event: down={}, press={}, chr={:?}",
-            ke.down, ke.press, ke.union
+            "Key event: down={}, press={}, chr={:?}, modifiers={:?}",
+            ke.down, ke.press, ke.union, ke.modifiers
         );
+
+        // Check for CapsLock state change in modifiers
+        // RustDesk doesn't send CapsLock key events, only includes it in modifiers
+        let caps_lock_in_modifiers = ke.modifiers.iter().any(|m| {
+            use protobuf::Enum;
+            m.value() == ControlKey::CapsLock.value()
+        });
+
+        if caps_lock_in_modifiers != self.last_caps_lock {
+            self.last_caps_lock = caps_lock_in_modifiers;
+            // Send CapsLock key press (down + up) to toggle state on target
+            if let Some(ref hid) = self.hid {
+                debug!("CapsLock state changed to {}, sending CapsLock key", caps_lock_in_modifiers);
+                let caps_down = KeyboardEvent {
+                    event_type: KeyEventType::Down,
+                    key: 0x39, // USB HID CapsLock
+                    modifiers: KeyboardModifiers::default(),
+                    is_usb_hid: true,
+                };
+                let caps_up = KeyboardEvent {
+                    event_type: KeyEventType::Up,
+                    key: 0x39,
+                    modifiers: KeyboardModifiers::default(),
+                    is_usb_hid: true,
+                };
+                if let Err(e) = hid.send_keyboard(caps_down).await {
+                    warn!("Failed to send CapsLock down: {}", e);
+                }
+                if let Err(e) = hid.send_keyboard(caps_up).await {
+                    warn!("Failed to send CapsLock up: {}", e);
+                }
+            }
+        }
 
         // Convert RustDesk key event to One-KVM key event
         if let Some(kb_event) = convert_key_event(ke) {
+            debug!(
+                "Converted to HID: key=0x{:02X}, event_type={:?}, modifiers={:02X}",
+                kb_event.key, kb_event.event_type, kb_event.modifiers.to_hid_byte()
+            );
             // Send to HID controller if available
             if let Some(ref hid) = self.hid {
                 if let Err(e) = hid.send_keyboard(kb_event).await {
@@ -1113,7 +1245,7 @@ impl Connection {
                 debug!("HID controller not available, skipping key event");
             }
         } else {
-            debug!("Could not convert key event to HID");
+            warn!("Could not convert key event to HID: chr={:?}", ke.union);
         }
 
         Ok(())
@@ -1123,7 +1255,7 @@ impl Connection {
     ///
     /// Pure move events (no button/scroll) are throttled to prevent HID EAGAIN errors.
     /// Button down/up and scroll events are always sent immediately.
-    async fn handle_mouse_event(&mut self, me: &hbb::MouseEvent) -> anyhow::Result<()> {
+    async fn handle_mouse_event(&mut self, me: &MouseEvent) -> anyhow::Result<()> {
         // Parse RustDesk mask format: (button << 3) | event_type
         let event_type = me.mask & 0x07;
 
@@ -1195,6 +1327,8 @@ pub struct ConnectionManager {
     signing_keypair: Arc<RwLock<Option<SigningKeyPair>>>,
     /// HID controller for keyboard/mouse
     hid: Arc<RwLock<Option<Arc<HidController>>>>,
+    /// Audio controller for audio streaming
+    audio: Arc<RwLock<Option<Arc<AudioController>>>>,
     /// Video stream manager for frame subscription
     video_manager: Arc<RwLock<Option<Arc<VideoStreamManager>>>>,
 }
@@ -1209,6 +1343,7 @@ impl ConnectionManager {
             keypair: Arc::new(RwLock::new(None)),
             signing_keypair: Arc::new(RwLock::new(None)),
             hid: Arc::new(RwLock::new(None)),
+            audio: Arc::new(RwLock::new(None)),
             video_manager: Arc::new(RwLock::new(None)),
         }
     }
@@ -1216,6 +1351,11 @@ impl ConnectionManager {
     /// Set HID controller
     pub fn set_hid(&self, hid: Arc<HidController>) {
         *self.hid.write() = Some(hid);
+    }
+
+    /// Set audio controller
+    pub fn set_audio(&self, audio: Arc<AudioController>) {
+        *self.audio.write() = Some(audio);
     }
 
     /// Set video stream manager
@@ -1246,6 +1386,7 @@ impl ConnectionManager {
     pub fn ensure_signing_keypair(&self) -> SigningKeyPair {
         let mut skp = self.signing_keypair.write();
         if skp.is_none() {
+            warn!("ConnectionManager: signing_keypair not set, generating new one! This may cause signature verification failure.");
             *skp = Some(SigningKeyPair::generate());
         }
         skp.as_ref().unwrap().clone()
@@ -1261,11 +1402,11 @@ impl ConnectionManager {
         };
 
         let config = self.config.read().clone();
-        let keypair = self.ensure_keypair();
         let signing_keypair = self.ensure_signing_keypair();
         let hid = self.hid.read().clone();
+        let audio = self.audio.read().clone();
         let video_manager = self.video_manager.read().clone();
-        let (mut conn, _rx) = Connection::new(id, &config, keypair, signing_keypair, hid, video_manager);
+        let (mut conn, _rx) = Connection::new(id, &config, signing_keypair, hid, audio, video_manager);
 
         // Track connection state for external access
         let state = conn.state.clone();
@@ -1440,6 +1581,121 @@ async fn run_video_streaming(
     info!(
         "Video streaming ended for connection {}: {} total frames forwarded",
         conn_id, encoded_count
+    );
+
+    Ok(())
+}
+
+/// Run audio streaming loop for a connection
+///
+/// This function subscribes to the audio controller's Opus stream
+/// and forwards encoded audio frames to the RustDesk client.
+async fn run_audio_streaming(
+    conn_id: u32,
+    audio_controller: Arc<AudioController>,
+    audio_tx: mpsc::Sender<Bytes>,
+    state: Arc<RwLock<ConnectionState>>,
+    shutdown_tx: broadcast::Sender<()>,
+) -> anyhow::Result<()> {
+    // Audio format: 48kHz stereo Opus
+    let mut audio_adapter = AudioFrameAdapter::new(48000, 2);
+
+    let mut shutdown_rx = shutdown_tx.subscribe();
+    let mut frame_count: u64 = 0;
+    let mut last_log_time = Instant::now();
+
+    info!("Started audio streaming for connection {}", conn_id);
+
+    // Outer loop: handles pipeline restarts by re-subscribing
+    'subscribe_loop: loop {
+        // Check if connection is still active before subscribing
+        if *state.read() != ConnectionState::Active {
+            debug!("Connection {} no longer active, stopping audio", conn_id);
+            break;
+        }
+
+        // Subscribe to the audio Opus stream
+        let mut opus_rx = match audio_controller.subscribe_opus_async().await {
+            Some(rx) => rx,
+            None => {
+                // Audio not available, wait and retry
+                debug!("No audio source available for connection {}, retrying...", conn_id);
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                continue 'subscribe_loop;
+            }
+        };
+
+        info!("RustDesk connection {} subscribed to audio pipeline", conn_id);
+
+        // Send audio format message once before sending frames
+        if !audio_adapter.format_sent() {
+            let format_msg = audio_adapter.create_format_message();
+            let format_bytes = Bytes::from(format_msg.write_to_bytes().unwrap_or_default());
+            if audio_tx.send(format_bytes).await.is_err() {
+                debug!("Audio channel closed for connection {}", conn_id);
+                break 'subscribe_loop;
+            }
+            debug!("Sent audio format message for connection {}", conn_id);
+        }
+
+        // Inner loop: receives frames from current subscription
+        loop {
+            // Check if connection is still active
+            if *state.read() != ConnectionState::Active {
+                debug!("Connection {} no longer active, stopping audio", conn_id);
+                break 'subscribe_loop;
+            }
+
+            tokio::select! {
+                biased;
+
+                _ = shutdown_rx.recv() => {
+                    debug!("Shutdown signal received, stopping audio for connection {}", conn_id);
+                    break 'subscribe_loop;
+                }
+
+                result = opus_rx.recv() => {
+                    match result {
+                        Ok(opus_frame) => {
+                            // Convert OpusFrame to RustDesk AudioFrame message
+                            let msg_bytes = audio_adapter.encode_opus_bytes(&opus_frame.data);
+
+                            // Send to connection (blocks if channel is full, providing backpressure)
+                            if audio_tx.send(msg_bytes).await.is_err() {
+                                debug!("Audio channel closed for connection {}", conn_id);
+                                break 'subscribe_loop;
+                            }
+
+                            frame_count += 1;
+
+                            // Log stats periodically
+                            if last_log_time.elapsed().as_secs() >= 30 {
+                                info!(
+                                    "Audio streaming stats for connection {}: {} frames forwarded",
+                                    conn_id, frame_count
+                                );
+                                last_log_time = Instant::now();
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(n)) => {
+                            debug!("Connection {} lagged {} audio frames", conn_id, n);
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            // Pipeline was restarted
+                            info!("Audio pipeline closed for connection {}, re-subscribing...", conn_id);
+                            audio_adapter.reset();
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                            continue 'subscribe_loop;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    info!(
+        "Audio streaming ended for connection {}: {} total frames forwarded",
+        conn_id, frame_count
     );
 
     Ok(())

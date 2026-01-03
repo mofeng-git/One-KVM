@@ -110,24 +110,29 @@ pub struct KeyboardEvent {
     /// Modifier keys state
     #[serde(default)]
     pub modifiers: KeyboardModifiers,
+    /// If true, key is already USB HID code (skip js_to_usb conversion)
+    #[serde(default)]
+    pub is_usb_hid: bool,
 }
 
 impl KeyboardEvent {
-    /// Create a key down event
+    /// Create a key down event (JS keycode, needs conversion)
     pub fn key_down(key: u8, modifiers: KeyboardModifiers) -> Self {
         Self {
             event_type: KeyEventType::Down,
             key,
             modifiers,
+            is_usb_hid: false,
         }
     }
 
-    /// Create a key up event
+    /// Create a key up event (JS keycode, needs conversion)
     pub fn key_up(key: u8, modifiers: KeyboardModifiers) -> Self {
         Self {
             event_type: KeyEventType::Up,
             key,
             modifiers,
+            is_usb_hid: false,
         }
     }
 }

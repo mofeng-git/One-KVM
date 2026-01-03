@@ -12,14 +12,14 @@ pub const CONFIGFS_PATH: &str = "/sys/kernel/config/usb_gadget";
 /// Default gadget name
 pub const DEFAULT_GADGET_NAME: &str = "one-kvm";
 
-/// USB Vendor ID (Linux Foundation)
-pub const USB_VENDOR_ID: u16 = 0x1d6b;
+/// USB Vendor ID (Linux Foundation) - default value
+pub const DEFAULT_USB_VENDOR_ID: u16 = 0x1d6b;
 
-/// USB Product ID (Multifunction Composite Gadget)
-pub const USB_PRODUCT_ID: u16 = 0x0104;
+/// USB Product ID (Multifunction Composite Gadget) - default value
+pub const DEFAULT_USB_PRODUCT_ID: u16 = 0x0104;
 
-/// USB device version
-pub const USB_BCD_DEVICE: u16 = 0x0100;
+/// USB device version - default value
+pub const DEFAULT_USB_BCD_DEVICE: u16 = 0x0100;
 
 /// USB spec version (USB 2.0)
 pub const USB_BCD_USB: u16 = 0x0200;

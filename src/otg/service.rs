@@ -25,9 +25,10 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, info, warn};
 
-use super::manager::{wait_for_hid_devices, OtgGadgetManager};
+use super::manager::{wait_for_hid_devices, GadgetDescriptor, OtgGadgetManager};
 use super::msd::MsdFunction;
 use crate::error::{AppError, Result};
+use crate::config::OtgDescriptorConfig;
 
 /// Bitflags for requested functions (lock-free)
 const FLAG_HID: u8 = 0b01;
@@ -82,6 +83,8 @@ pub struct OtgService {
     msd_function: RwLock<Option<MsdFunction>>,
     /// Requested functions flags (atomic, lock-free read/write)
     requested_flags: AtomicU8,
+    /// Current descriptor configuration
+    current_descriptor: RwLock<GadgetDescriptor>,
 }
 
 impl OtgService {
@@ -92,6 +95,7 @@ impl OtgService {
             state: RwLock::new(OtgServiceState::default()),
             msd_function: RwLock::new(None),
             requested_flags: AtomicU8::new(0),
+            current_descriptor: RwLock::new(GadgetDescriptor::default()),
         }
     }
 
@@ -345,8 +349,13 @@ impl OtgService {
             return Err(AppError::Internal(error));
         }
 
-        // Create new gadget manager
-        let mut manager = OtgGadgetManager::new();
+        // Create new gadget manager with current descriptor
+        let descriptor = self.current_descriptor.read().await.clone();
+        let mut manager = OtgGadgetManager::with_descriptor(
+            super::configfs::DEFAULT_GADGET_NAME,
+            super::endpoint::DEFAULT_MAX_ENDPOINTS,
+            descriptor,
+        );
         let mut hid_paths = None;
 
         // Add HID functions if requested
@@ -443,6 +452,64 @@ impl OtgService {
 
         info!("Gadget created successfully");
         Ok(())
+    }
+
+    /// Update the descriptor configuration
+    ///
+    /// This updates the stored descriptor and triggers a gadget recreation
+    /// if the gadget is currently active.
+    pub async fn update_descriptor(&self, config: &OtgDescriptorConfig) -> Result<()> {
+        let new_descriptor = GadgetDescriptor {
+            vendor_id: config.vendor_id,
+            product_id: config.product_id,
+            device_version: super::configfs::DEFAULT_USB_BCD_DEVICE,
+            manufacturer: config.manufacturer.clone(),
+            product: config.product.clone(),
+            serial_number: config.serial_number.clone().unwrap_or_else(|| "0123456789".to_string()),
+        };
+
+        // Update stored descriptor
+        *self.current_descriptor.write().await = new_descriptor;
+
+        // If gadget is active, recreate it with new descriptor
+        let state = self.state.read().await;
+        if state.gadget_active {
+            drop(state); // Release read lock before calling recreate
+            info!("Descriptor changed, recreating gadget");
+            self.force_recreate_gadget().await?;
+        }
+
+        Ok(())
+    }
+
+    /// Force recreate the gadget (used when descriptor changes)
+    async fn force_recreate_gadget(&self) -> Result<()> {
+        // Cleanup existing gadget
+        {
+            let mut manager = self.manager.lock().await;
+            if let Some(mut m) = manager.take() {
+                info!("Cleaning up existing gadget for descriptor change");
+                if let Err(e) = m.cleanup() {
+                    warn!("Error cleaning up existing gadget: {}", e);
+                }
+            }
+        }
+
+        // Clear MSD function
+        *self.msd_function.write().await = None;
+
+        // Update state to inactive
+        {
+            let mut state = self.state.write().await;
+            state.gadget_active = false;
+            state.hid_enabled = false;
+            state.msd_enabled = false;
+            state.hid_paths = None;
+            state.error = None;
+        }
+
+        // Recreate with current requested functions
+        self.recreate_gadget().await
     }
 
     /// Shutdown the OTG service and cleanup all resources

@@ -32,6 +32,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from '@/components/ui/hover-card'
+import { Switch } from '@/components/ui/switch'
 import {
   Monitor,
   Eye,
@@ -44,6 +45,7 @@ import {
   Check,
   HelpCircle,
   Languages,
+  Puzzle,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -58,9 +60,9 @@ function switchLanguage(lang: SupportedLocale) {
   setLanguage(lang)
 }
 
-// Steps: 1 = Account, 2 = Video, 3 = HID
+// Steps: 1 = Account, 2 = Audio/Video, 3 = HID, 4 = Extensions
 const step = ref(1)
-const totalSteps = 3
+const totalSteps = 4
 const loading = ref(false)
 const error = ref('')
 const slideDirection = ref<'forward' | 'backward'>('forward')
@@ -85,11 +87,21 @@ const videoFormat = ref('')
 const videoResolution = ref('')
 const videoFps = ref<number | null>(null)
 
+// Audio settings
+const audioDevice = ref('')
+const audioEnabled = ref(true)
+
 // HID settings
 const hidBackend = ref('ch9329')
 const ch9329Port = ref('')
 const ch9329Baudrate = ref(9600)
 const otgUdc = ref('')
+
+// Extension settings
+const ttydEnabled = ref(false)
+const rustdeskEnabled = ref(false)
+const ttydAvailable = ref(false)
+const rustdeskAvailable = ref(true) // RustDesk is built-in, always available
 
 // Encoder backend settings
 const encoderBackend = ref('auto')
@@ -110,13 +122,25 @@ interface VideoDeviceInfo {
       fps: number[]
     }>
   }>
+  usb_bus: string | null
+}
+
+interface AudioDeviceInfo {
+  name: string
+  description: string
+  is_hdmi: boolean
+  usb_bus: string | null
 }
 
 interface DeviceInfo {
   video: VideoDeviceInfo[]
   serial: Array<{ path: string; name: string }>
-  audio: Array<{ name: string; description: string }>
+  audio: AudioDeviceInfo[]
   udc: Array<{ name: string }>
+  extensions: {
+    ttyd_available: boolean
+    rustdesk_available: boolean
+  }
 }
 
 const devices = ref<DeviceInfo>({
@@ -124,6 +148,10 @@ const devices = ref<DeviceInfo>({
   serial: [],
   audio: [],
   udc: [],
+  extensions: {
+    ttyd_available: false,
+    rustdesk_available: true,
+  },
 })
 
 // Password strength calculation
@@ -182,8 +210,9 @@ const baudRates = [9600, 19200, 38400, 57600, 115200]
 // Step labels for the indicator
 const stepLabels = computed(() => [
   t('setup.stepAccount'),
-  t('setup.stepVideo'),
+  t('setup.stepAudioVideo'),
   t('setup.stepHid'),
+  t('setup.stepExtensions'),
 ])
 
 // Real-time validation functions
@@ -224,8 +253,8 @@ function validateConfirmPassword() {
   }
 }
 
-// Watch video device change to auto-select first format
-watch(videoDevice, () => {
+// Watch video device change to auto-select first format and matching audio device
+watch(videoDevice, (newDevice) => {
   videoFormat.value = ''
   videoResolution.value = ''
   videoFps.value = null
@@ -233,6 +262,28 @@ watch(videoDevice, () => {
     // Prefer MJPEG if available
     const mjpeg = availableFormats.value.find((f) => f.format.toUpperCase().includes('MJPEG'))
     videoFormat.value = mjpeg?.format || availableFormats.value[0]?.format || ''
+  }
+
+  // Auto-select matching audio device based on USB bus
+  if (newDevice && audioEnabled.value) {
+    const video = devices.value.video.find((d) => d.path === newDevice)
+    if (video?.usb_bus) {
+      // Find audio device on the same USB bus
+      const matchedAudio = devices.value.audio.find(
+        (a) => a.usb_bus && a.usb_bus === video.usb_bus
+      )
+      if (matchedAudio) {
+        audioDevice.value = matchedAudio.name
+        return
+      }
+    }
+    // Fallback: select first HDMI audio device
+    const hdmiAudio = devices.value.audio.find((a) => a.is_hdmi)
+    if (hdmiAudio) {
+      audioDevice.value = hdmiAudio.name
+    } else if (devices.value.audio.length > 0 && devices.value.audio[0]) {
+      audioDevice.value = devices.value.audio[0].name
+    }
   }
 })
 
@@ -288,6 +339,19 @@ onMounted(async () => {
     // Auto-select first UDC for OTG
     if (result.udc.length > 0 && result.udc[0]) {
       otgUdc.value = result.udc[0].name
+    }
+
+    // Auto-select audio device if available (and no video device to trigger watch)
+    if (result.audio.length > 0 && !audioDevice.value) {
+      // Prefer HDMI audio device
+      const hdmiAudio = result.audio.find((a) => a.is_hdmi)
+      audioDevice.value = hdmiAudio?.name || result.audio[0]?.name || ''
+    }
+
+    // Set extension availability from devices API
+    if (result.extensions) {
+      ttydAvailable.value = result.extensions.ttyd_available
+      rustdeskAvailable.value = result.extensions.rustdesk_available
     }
   } catch {
     // Use defaults
@@ -435,6 +499,15 @@ async function handleSetup() {
     setupData.encoder_backend = encoderBackend.value
   }
 
+  // Audio settings
+  if (audioDevice.value && audioDevice.value !== '__none__') {
+    setupData.audio_device = audioDevice.value
+  }
+
+  // Extension settings
+  setupData.ttyd_enabled = ttydEnabled.value
+  setupData.rustdesk_enabled = rustdeskEnabled.value
+
   const success = await authStore.setup(setupData)
 
   if (success) {
@@ -449,7 +522,7 @@ async function handleSetup() {
 }
 
 // Step icon component helper
-const stepIcons = [User, Video, Keyboard]
+const stepIcons = [User, Video, Keyboard, Puzzle]
 </script>
 
 <template>
@@ -615,9 +688,9 @@ const stepIcons = [User, Video, Keyboard]
             </div>
           </div>
 
-          <!-- Step 2: Video Settings -->
+          <!-- Step 2: Audio/Video Settings -->
           <div v-else-if="step === 2" key="step2" class="space-y-4">
-            <h3 class="text-lg font-medium text-center">{{ t('setup.stepVideo') }}</h3>
+            <h3 class="text-lg font-medium text-center">{{ t('setup.stepAudioVideo') }}</h3>
 
             <div class="space-y-2">
               <div class="flex items-center gap-2">
@@ -708,6 +781,38 @@ const stepIcons = [User, Video, Keyboard]
             <p v-if="!devices.video.length" class="text-sm text-muted-foreground text-center py-4">
               {{ t('setup.noVideoDevices') }}
             </p>
+
+            <!-- Audio Device Selection -->
+            <div class="space-y-2 pt-2 border-t">
+              <div class="flex items-center gap-2">
+                <Label for="audioDevice">{{ t('setup.audioDevice') }}</Label>
+                <HoverCard>
+                  <HoverCardTrigger as-child>
+                    <button type="button" class="text-muted-foreground hover:text-foreground transition-colors">
+                      <HelpCircle class="w-4 h-4" />
+                    </button>
+                  </HoverCardTrigger>
+                  <HoverCardContent class="w-64 text-sm">
+                    {{ t('setup.audioDeviceHelp') }}
+                  </HoverCardContent>
+                </HoverCard>
+              </div>
+              <Select v-model="audioDevice" :disabled="!audioEnabled">
+                <SelectTrigger>
+                  <SelectValue :placeholder="t('setup.selectAudioDevice')" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{{ t('setup.noAudio') }}</SelectItem>
+                  <SelectItem v-for="dev in devices.audio" :key="dev.name" :value="dev.name">
+                    {{ dev.description }}
+                    <span v-if="dev.is_hdmi" class="text-xs text-muted-foreground ml-1">(HDMI)</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p v-if="!devices.audio.length" class="text-xs text-muted-foreground">
+                {{ t('setup.noAudioDevices') }}
+              </p>
+            </div>
 
             <!-- Advanced: Encoder Backend (Collapsible) -->
             <div class="mt-4 border rounded-lg">
@@ -826,6 +931,47 @@ const stepIcons = [User, Video, Keyboard]
                 </p>
               </div>
             </div>
+          </div>
+
+          <!-- Step 4: Extensions Settings -->
+          <div v-else-if="step === 4" key="step4" class="space-y-4">
+            <h3 class="text-lg font-medium text-center">{{ t('setup.stepExtensions') }}</h3>
+            <p class="text-sm text-muted-foreground text-center">
+              {{ t('setup.extensionsDescription') }}
+            </p>
+
+            <!-- ttyd -->
+            <div class="flex items-center justify-between p-4 rounded-lg border" :class="{ 'opacity-50': !ttydAvailable }">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <Label class="text-base font-medium">{{ t('setup.ttydTitle') }}</Label>
+                  <span v-if="!ttydAvailable" class="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                    {{ t('setup.notInstalled') }}
+                  </span>
+                </div>
+                <p class="text-sm text-muted-foreground">
+                  {{ t('setup.ttydDescription') }}
+                </p>
+              </div>
+              <Switch v-model="ttydEnabled" :disabled="!ttydAvailable" />
+            </div>
+
+            <!-- RustDesk -->
+            <div class="flex items-center justify-between p-4 rounded-lg border">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <Label class="text-base font-medium">{{ t('setup.rustdeskTitle') }}</Label>
+                </div>
+                <p class="text-sm text-muted-foreground">
+                  {{ t('setup.rustdeskDescription') }}
+                </p>
+              </div>
+              <Switch v-model="rustdeskEnabled" />
+            </div>
+
+            <p class="text-xs text-muted-foreground text-center pt-2">
+              {{ t('setup.extensionsHint') }}
+            </p>
           </div>
         </Transition>
 

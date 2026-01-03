@@ -13,11 +13,14 @@ import {
   atxConfigApi,
   extensionsApi,
   rustdeskConfigApi,
+  webConfigApi,
+  systemApi,
   type EncoderBackendInfo,
   type User as UserType,
   type RustDeskConfigResponse,
   type RustDeskStatusResponse,
   type RustDeskPasswordResponse,
+  type WebConfig,
 } from '@/api'
 import type {
   ExtensionsStatus,
@@ -120,6 +123,7 @@ const navGroups = computed(() => [
   {
     title: t('settings.system'),
     items: [
+      { id: 'web-server', label: t('settings.webServer'), icon: Globe },
       { id: 'users', label: t('settings.users'), icon: Users },
       { id: 'about', label: t('settings.about'), icon: Info },
     ]
@@ -186,7 +190,19 @@ const rustdeskLocalConfig = ref({
   enabled: false,
   rendezvous_server: '',
   relay_server: '',
+  relay_key: '',
 })
+
+// Web server config state
+const webServerConfig = ref<WebConfig>({
+  http_port: 8080,
+  https_port: 8443,
+  bind_address: '0.0.0.0',
+  https_enabled: false,
+})
+const webServerLoading = ref(false)
+const showRestartDialog = ref(false)
+const restarting = ref(false)
 
 // Config
 interface DeviceConfig {
@@ -235,6 +251,19 @@ const config = ref({
 
 // 跟踪服务器是否已配置 TURN 密码
 const hasTurnPassword = ref(false)
+
+// OTG Descriptor settings
+const otgVendorIdHex = ref('1d6b')
+const otgProductIdHex = ref('0104')
+const otgManufacturer = ref('One-KVM')
+const otgProduct = ref('One-KVM USB Device')
+const otgSerialNumber = ref('')
+
+// Validate hex input
+const validateHex = (event: Event, _field: string) => {
+  const input = event.target as HTMLInputElement
+  input.value = input.value.replace(/[^0-9a-fA-F]/g, '').toLowerCase()
+}
 
 // ATX config state
 const atxConfig = ref({
@@ -456,13 +485,22 @@ async function saveConfig() {
 
     // HID 配置
     if (activeSection.value === 'hid') {
-      savePromises.push(
-        hidConfigApi.update({
-          backend: config.value.hid_backend as any,
-          ch9329_port: config.value.hid_serial_device || undefined,
-          ch9329_baudrate: config.value.hid_serial_baudrate,
-        })
-      )
+      const hidUpdate: any = {
+        backend: config.value.hid_backend as any,
+        ch9329_port: config.value.hid_serial_device || undefined,
+        ch9329_baudrate: config.value.hid_serial_baudrate,
+      }
+      // 如果是 OTG 后端，添加描述符配置
+      if (config.value.hid_backend === 'otg') {
+        hidUpdate.otg_descriptor = {
+          vendor_id: parseInt(otgVendorIdHex.value, 16) || 0x1d6b,
+          product_id: parseInt(otgProductIdHex.value, 16) || 0x0104,
+          manufacturer: otgManufacturer.value || 'One-KVM',
+          product: otgProduct.value || 'One-KVM USB Device',
+          serial_number: otgSerialNumber.value || undefined,
+        }
+      }
+      savePromises.push(hidConfigApi.update(hidUpdate))
     }
 
     // MSD 配置
@@ -516,6 +554,15 @@ async function loadConfig() {
 
     // 设置是否已配置 TURN 密码
     hasTurnPassword.value = stream.has_turn_password || false
+
+    // 加载 OTG 描述符配置
+    if (hid.otg_descriptor) {
+      otgVendorIdHex.value = hid.otg_descriptor.vendor_id?.toString(16).padStart(4, '0') || '1d6b'
+      otgProductIdHex.value = hid.otg_descriptor.product_id?.toString(16).padStart(4, '0') || '0104'
+      otgManufacturer.value = hid.otg_descriptor.manufacturer || 'One-KVM'
+      otgProduct.value = hid.otg_descriptor.product || 'One-KVM USB Device'
+      otgSerialNumber.value = hid.otg_descriptor.serial_number || ''
+    }
 
     // 加载 web config（仍使用旧 API）
     try {
@@ -806,6 +853,7 @@ async function loadRustdeskConfig() {
       enabled: config.enabled,
       rendezvous_server: config.rendezvous_server,
       relay_server: config.relay_server || '',
+      relay_key: '',
     }
   } catch (e) {
     console.error('Failed to load RustDesk config:', e)
@@ -822,6 +870,47 @@ async function loadRustdeskPassword() {
   }
 }
 
+// Web server config functions
+async function loadWebServerConfig() {
+  try {
+    const config = await webConfigApi.get()
+    webServerConfig.value = config
+  } catch (e) {
+    console.error('Failed to load web server config:', e)
+  }
+}
+
+async function saveWebServerConfig() {
+  webServerLoading.value = true
+  try {
+    await webConfigApi.update(webServerConfig.value)
+    showRestartDialog.value = true
+  } catch (e) {
+    console.error('Failed to save web server config:', e)
+  } finally {
+    webServerLoading.value = false
+  }
+}
+
+async function restartServer() {
+  restarting.value = true
+  try {
+    await systemApi.restart()
+    // Wait for server to restart, then reload page
+    setTimeout(() => {
+      const protocol = webServerConfig.value.https_enabled ? 'https' : 'http'
+      const port = webServerConfig.value.https_enabled
+        ? webServerConfig.value.https_port
+        : webServerConfig.value.http_port
+      const newUrl = `${protocol}://${window.location.hostname}:${port}`
+      window.location.href = newUrl
+    }, 3000)
+  } catch (e) {
+    console.error('Failed to restart server:', e)
+    restarting.value = false
+  }
+}
+
 async function saveRustdeskConfig() {
   loading.value = true
   saved.value = false
@@ -830,8 +919,11 @@ async function saveRustdeskConfig() {
       enabled: rustdeskLocalConfig.value.enabled,
       rendezvous_server: rustdeskLocalConfig.value.rendezvous_server || undefined,
       relay_server: rustdeskLocalConfig.value.relay_server || undefined,
+      relay_key: rustdeskLocalConfig.value.relay_key || undefined,
     })
     await loadRustdeskConfig()
+    // Clear relay_key input after save (it's a password field)
+    rustdeskLocalConfig.value.relay_key = ''
     saved.value = true
     setTimeout(() => (saved.value = false), 2000)
   } catch (e) {
@@ -864,6 +956,34 @@ async function regenerateRustdeskPassword() {
     await loadRustdeskPassword()
   } catch (e) {
     console.error('Failed to regenerate RustDesk password:', e)
+  } finally {
+    rustdeskLoading.value = false
+  }
+}
+
+async function startRustdesk() {
+  rustdeskLoading.value = true
+  try {
+    // Enable and save config to start the service
+    await rustdeskConfigApi.update({ enabled: true })
+    rustdeskLocalConfig.value.enabled = true
+    await loadRustdeskConfig()
+  } catch (e) {
+    console.error('Failed to start RustDesk:', e)
+  } finally {
+    rustdeskLoading.value = false
+  }
+}
+
+async function stopRustdesk() {
+  rustdeskLoading.value = true
+  try {
+    // Disable and save config to stop the service
+    await rustdeskConfigApi.update({ enabled: false })
+    rustdeskLocalConfig.value.enabled = false
+    await loadRustdeskConfig()
+  } catch (e) {
+    console.error('Failed to stop RustDesk:', e)
   } finally {
     rustdeskLoading.value = false
   }
@@ -941,6 +1061,7 @@ onMounted(async () => {
     loadAtxDevices(),
     loadRustdeskConfig(),
     loadRustdeskPassword(),
+    loadWebServerConfig(),
   ])
 })
 </script>
@@ -1223,6 +1344,114 @@ onMounted(async () => {
                     <option :value="57600">57600</option>
                     <option :value="115200">115200</option>
                   </select>
+                </div>
+
+                <!-- OTG Descriptor Settings -->
+                <template v-if="config.hid_backend === 'otg'">
+                  <Separator class="my-4" />
+                  <div class="space-y-4">
+                    <div>
+                      <h4 class="text-sm font-medium">{{ t('settings.otgDescriptor') }}</h4>
+                      <p class="text-sm text-muted-foreground">{{ t('settings.otgDescriptorDesc') }}</p>
+                    </div>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                      <div class="space-y-2">
+                        <Label for="otg-vid">{{ t('settings.vendorId') }}</Label>
+                        <Input
+                          id="otg-vid"
+                          v-model="otgVendorIdHex"
+                          placeholder="1d6b"
+                          maxlength="4"
+                          @input="validateHex($event, 'vid')"
+                        />
+                      </div>
+                      <div class="space-y-2">
+                        <Label for="otg-pid">{{ t('settings.productId') }}</Label>
+                        <Input
+                          id="otg-pid"
+                          v-model="otgProductIdHex"
+                          placeholder="0104"
+                          maxlength="4"
+                          @input="validateHex($event, 'pid')"
+                        />
+                      </div>
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="otg-manufacturer">{{ t('settings.manufacturer') }}</Label>
+                      <Input
+                        id="otg-manufacturer"
+                        v-model="otgManufacturer"
+                        placeholder="One-KVM"
+                        maxlength="126"
+                      />
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="otg-product">{{ t('settings.productName') }}</Label>
+                      <Input
+                        id="otg-product"
+                        v-model="otgProduct"
+                        placeholder="One-KVM USB Device"
+                        maxlength="126"
+                      />
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="otg-serial">{{ t('settings.serialNumber') }}</Label>
+                      <Input
+                        id="otg-serial"
+                        v-model="otgSerialNumber"
+                        :placeholder="t('settings.serialNumberAuto')"
+                        maxlength="126"
+                      />
+                    </div>
+                    <p class="text-sm text-amber-600 dark:text-amber-400">
+                      {{ t('settings.descriptorWarning') }}
+                    </p>
+                  </div>
+                </template>
+              </CardContent>
+            </Card>
+          </div>
+
+          <!-- Web Server Section -->
+          <div v-show="activeSection === 'web-server'" class="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('settings.webServer') }}</CardTitle>
+                <CardDescription>{{ t('settings.webServerDesc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="space-y-0.5">
+                    <Label>{{ t('settings.httpsEnabled') }}</Label>
+                    <p class="text-sm text-muted-foreground">{{ t('settings.httpsEnabledDesc') }}</p>
+                  </div>
+                  <Switch v-model="webServerConfig.https_enabled" />
+                </div>
+
+                <Separator />
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div class="space-y-2">
+                    <Label>{{ t('settings.httpPort') }}</Label>
+                    <Input v-model.number="webServerConfig.http_port" type="number" min="1" max="65535" />
+                  </div>
+                  <div class="space-y-2">
+                    <Label>{{ t('settings.httpsPort') }}</Label>
+                    <Input v-model.number="webServerConfig.https_port" type="number" min="1" max="65535" />
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <Label>{{ t('settings.bindAddress') }}</Label>
+                  <Input v-model="webServerConfig.bind_address" placeholder="0.0.0.0" />
+                  <p class="text-sm text-muted-foreground">{{ t('settings.bindAddressDesc') }}</p>
+                </div>
+
+                <div class="flex justify-end pt-4">
+                  <Button @click="saveWebServerConfig" :disabled="webServerLoading">
+                    <Save class="h-4 w-4 mr-2" />
+                    {{ t('common.save') }}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -1795,7 +2024,7 @@ onMounted(async () => {
                     <CardDescription>{{ t('extensions.rustdesk.desc') }}</CardDescription>
                   </div>
                   <div class="flex items-center gap-2">
-                    <Badge :variant="rustdeskStatus?.service_status === 'Running' ? 'default' : 'secondary'">
+                    <Badge :variant="rustdeskStatus?.service_status === 'running' ? 'default' : 'secondary'">
                       {{ getRustdeskServiceStatusText(rustdeskStatus?.service_status) }}
                     </Badge>
                     <Button variant="ghost" size="icon" class="h-8 w-8" @click="loadRustdeskConfig" :disabled="rustdeskLoading">
@@ -1815,6 +2044,27 @@ onMounted(async () => {
                       <div :class="['w-2 h-2 rounded-full', getRustdeskStatusClass(rustdeskStatus?.rendezvous_status)]" />
                       <span class="text-sm text-muted-foreground">{{ getRustdeskRendezvousStatusText(rustdeskStatus?.rendezvous_status) }}</span>
                     </template>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      v-if="rustdeskStatus?.service_status !== 'running'"
+                      size="sm"
+                      @click="startRustdesk"
+                      :disabled="rustdeskLoading"
+                    >
+                      <Play class="h-4 w-4 mr-1" />
+                      {{ t('extensions.start') }}
+                    </Button>
+                    <Button
+                      v-else
+                      size="sm"
+                      variant="outline"
+                      @click="stopRustdesk"
+                      :disabled="rustdeskLoading"
+                    >
+                      <Square class="h-4 w-4 mr-1" />
+                      {{ t('extensions.stop') }}
+                    </Button>
                   </div>
                 </div>
                 <Separator />
@@ -1864,6 +2114,17 @@ onMounted(async () => {
                         :placeholder="t('extensions.rustdesk.relayServerPlaceholder')"
                       />
                       <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.relayServerHint') }}</p>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-4 items-center gap-4">
+                    <Label class="text-right">{{ t('extensions.rustdesk.relayKey') }}</Label>
+                    <div class="col-span-3 space-y-1">
+                      <Input
+                        v-model="rustdeskLocalConfig.relay_key"
+                        type="password"
+                        :placeholder="rustdeskStatus?.config?.has_relay_key ? t('extensions.rustdesk.relayKeySet') : t('extensions.rustdesk.relayKeyPlaceholder')"
+                      />
+                      <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.relayKeyHint') }}</p>
                     </div>
                   </div>
                 </div>
@@ -2126,6 +2387,27 @@ onMounted(async () => {
             scrolling="no"
           />
         </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Restart Confirmation Dialog -->
+    <Dialog v-model:open="showRestartDialog">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{{ t('settings.restartRequired') }}</DialogTitle>
+        </DialogHeader>
+        <p class="text-sm text-muted-foreground py-4">
+          {{ t('settings.restartMessage') }}
+        </p>
+        <DialogFooter>
+          <Button variant="outline" @click="showRestartDialog = false" :disabled="restarting">
+            {{ t('common.later') }}
+          </Button>
+          <Button @click="restartServer" :disabled="restarting">
+            <RefreshCw v-if="restarting" class="h-4 w-4 mr-2 animate-spin" />
+            {{ restarting ? t('settings.restarting') : t('common.restartNow') }}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   </AppLayout>

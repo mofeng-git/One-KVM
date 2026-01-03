@@ -159,6 +159,60 @@ impl StreamConfigUpdate {
 }
 
 // ===== HID Config =====
+
+/// OTG USB device descriptor configuration update
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct OtgDescriptorConfigUpdate {
+    pub vendor_id: Option<u16>,
+    pub product_id: Option<u16>,
+    pub manufacturer: Option<String>,
+    pub product: Option<String>,
+    pub serial_number: Option<String>,
+}
+
+impl OtgDescriptorConfigUpdate {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        // Validate manufacturer string length
+        if let Some(ref s) = self.manufacturer {
+            if s.len() > 126 {
+                return Err(AppError::BadRequest("Manufacturer string too long (max 126 chars)".into()));
+            }
+        }
+        // Validate product string length
+        if let Some(ref s) = self.product {
+            if s.len() > 126 {
+                return Err(AppError::BadRequest("Product string too long (max 126 chars)".into()));
+            }
+        }
+        // Validate serial number string length
+        if let Some(ref s) = self.serial_number {
+            if s.len() > 126 {
+                return Err(AppError::BadRequest("Serial number string too long (max 126 chars)".into()));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn apply_to(&self, config: &mut crate::config::OtgDescriptorConfig) {
+        if let Some(v) = self.vendor_id {
+            config.vendor_id = v;
+        }
+        if let Some(v) = self.product_id {
+            config.product_id = v;
+        }
+        if let Some(ref v) = self.manufacturer {
+            config.manufacturer = v.clone();
+        }
+        if let Some(ref v) = self.product {
+            config.product = v.clone();
+        }
+        if let Some(ref v) = self.serial_number {
+            config.serial_number = Some(v.clone());
+        }
+    }
+}
+
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct HidConfigUpdate {
@@ -166,6 +220,7 @@ pub struct HidConfigUpdate {
     pub ch9329_port: Option<String>,
     pub ch9329_baudrate: Option<u32>,
     pub otg_udc: Option<String>,
+    pub otg_descriptor: Option<OtgDescriptorConfigUpdate>,
     pub mouse_absolute: Option<bool>,
 }
 
@@ -178,6 +233,9 @@ impl HidConfigUpdate {
                     "Invalid baudrate: must be 9600, 19200, 38400, 57600, or 115200".into(),
                 ));
             }
+        }
+        if let Some(ref desc) = self.otg_descriptor {
+            desc.validate()?;
         }
         Ok(())
     }
@@ -194,6 +252,9 @@ impl HidConfigUpdate {
         }
         if let Some(ref udc) = self.otg_udc {
             config.otg_udc = Some(udc.clone());
+        }
+        if let Some(ref desc) = self.otg_descriptor {
+            desc.apply_to(&mut config.otg_descriptor);
         }
         if let Some(absolute) = self.mouse_absolute {
             config.mouse_absolute = absolute;
@@ -389,6 +450,7 @@ pub struct RustDeskConfigUpdate {
     pub enabled: Option<bool>,
     pub rendezvous_server: Option<String>,
     pub relay_server: Option<String>,
+    pub relay_key: Option<String>,
     pub device_password: Option<String>,
 }
 
@@ -431,10 +493,59 @@ impl RustDeskConfigUpdate {
         if let Some(ref server) = self.relay_server {
             config.relay_server = if server.is_empty() { None } else { Some(server.clone()) };
         }
+        if let Some(ref key) = self.relay_key {
+            config.relay_key = if key.is_empty() { None } else { Some(key.clone()) };
+        }
         if let Some(ref password) = self.device_password {
             if !password.is_empty() {
                 config.device_password = password.clone();
             }
+        }
+    }
+}
+
+// ===== Web Config =====
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct WebConfigUpdate {
+    pub http_port: Option<u16>,
+    pub https_port: Option<u16>,
+    pub bind_address: Option<String>,
+    pub https_enabled: Option<bool>,
+}
+
+impl WebConfigUpdate {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        if let Some(port) = self.http_port {
+            if port == 0 {
+                return Err(AppError::BadRequest("HTTP port cannot be 0".into()));
+            }
+        }
+        if let Some(port) = self.https_port {
+            if port == 0 {
+                return Err(AppError::BadRequest("HTTPS port cannot be 0".into()));
+            }
+        }
+        if let Some(ref addr) = self.bind_address {
+            if addr.parse::<std::net::IpAddr>().is_err() {
+                return Err(AppError::BadRequest("Invalid bind address".into()));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn apply_to(&self, config: &mut crate::config::WebConfig) {
+        if let Some(port) = self.http_port {
+            config.http_port = port;
+        }
+        if let Some(port) = self.https_port {
+            config.https_port = port;
+        }
+        if let Some(ref addr) = self.bind_address {
+            config.bind_address = addr.clone();
+        }
+        if let Some(enabled) = self.https_enabled {
+            config.https_enabled = enabled;
         }
     }
 }

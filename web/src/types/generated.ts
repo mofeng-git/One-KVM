@@ -38,6 +38,20 @@ export enum HidBackend {
 	None = "none",
 }
 
+/** OTG USB device descriptor configuration */
+export interface OtgDescriptorConfig {
+	/** USB Vendor ID (e.g., 0x1d6b) */
+	vendor_id: number;
+	/** USB Product ID (e.g., 0x0104) */
+	product_id: number;
+	/** Manufacturer string */
+	manufacturer: string;
+	/** Product string */
+	product: string;
+	/** Serial number (optional, auto-generated if not set) */
+	serial_number?: string;
+}
+
 /** HID configuration */
 export interface HidConfig {
 	/** HID backend type */
@@ -48,6 +62,8 @@ export interface HidConfig {
 	otg_mouse: string;
 	/** OTG UDC (USB Device Controller) name */
 	otg_udc?: string;
+	/** OTG USB device descriptor configuration */
+	otg_descriptor?: OtgDescriptorConfig;
 	/** CH9329 serial port */
 	ch9329_port: string;
 	/** CH9329 baud rate */
@@ -470,11 +486,21 @@ export interface GostcConfigUpdate {
 	tls?: boolean;
 }
 
+/** OTG USB device descriptor configuration update */
+export interface OtgDescriptorConfigUpdate {
+	vendor_id?: number;
+	product_id?: number;
+	manufacturer?: string;
+	product?: string;
+	serial_number?: string;
+}
+
 export interface HidConfigUpdate {
 	backend?: HidBackend;
 	ch9329_port?: string;
 	ch9329_baudrate?: number;
 	otg_udc?: string;
+	otg_descriptor?: OtgDescriptorConfigUpdate;
 	mouse_absolute?: boolean;
 }
 
@@ -497,6 +523,7 @@ export interface RustDeskConfigUpdate {
 	enabled?: boolean;
 	rendezvous_server?: string;
 	relay_server?: string;
+	relay_key?: string;
 	device_password?: string;
 }
 
@@ -547,5 +574,12 @@ export interface VideoConfigUpdate {
 	height?: number;
 	fps?: number;
 	quality?: number;
+}
+
+export interface WebConfigUpdate {
+	http_port?: number;
+	https_port?: number;
+	bind_address?: string;
+	https_enabled?: boolean;
 }
 

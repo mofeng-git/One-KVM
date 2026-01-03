@@ -19,6 +19,8 @@ export default {
     off: 'Off',
     enabled: 'Enabled',
     disabled: 'Disabled',
+    later: 'Later',
+    restartNow: 'Restart Now',
     connected: 'Connected',
     disconnected: 'Disconnected',
     connecting: 'Connecting...',
@@ -202,6 +204,7 @@ export default {
     // Step titles
     stepAccount: 'Account Setup',
     stepVideo: 'Video Setup',
+    stepAudioVideo: 'Audio/Video Setup',
     stepHid: 'HID Setup',
     // Account
     setUsername: 'Set Admin Username',
@@ -220,6 +223,12 @@ export default {
     fps: 'Frame Rate',
     selectFps: 'Select FPS',
     noVideoDevices: 'No video devices detected',
+    // Audio
+    audioDevice: 'Audio Device',
+    selectAudioDevice: 'Select audio capture device',
+    noAudio: 'No audio',
+    noAudioDevices: 'No audio devices detected',
+    audioDeviceHelp: 'Select the audio capture device for capturing remote host audio. Usually on the same USB device as the video capture card.',
     // HID
     hidBackend: 'HID Backend',
     selectHidBackend: 'Select HID control method',
@@ -249,6 +258,15 @@ export default {
     otgHelp: 'USB OTG mode emulates HID devices directly through USB Device Controller. Requires hardware OTG support.',
     videoDeviceHelp: 'Select the video capture device for capturing the remote host display. Usually an HDMI capture card.',
     videoFormatHelp: 'MJPEG has best compatibility. H.264/H.265 uses less bandwidth but requires encoding support.',
+    // Extensions
+    stepExtensions: 'Extensions',
+    extensionsDescription: 'Choose which extensions to auto-start',
+    ttydTitle: 'Web Terminal (ttyd)',
+    ttydDescription: 'Access device command line in browser',
+    rustdeskTitle: 'RustDesk Remote Desktop',
+    rustdeskDescription: 'Remote access via RustDesk client',
+    extensionsHint: 'These settings can be changed later in Settings',
+    notInstalled: 'Not installed',
     // Password strength
     passwordStrength: 'Password Strength',
     passwordWeak: 'Weak',
@@ -436,7 +454,7 @@ export default {
     buildInfo: 'Build Info',
     detectDevices: 'Detect Devices',
     detecting: 'Detecting...',
-    builtWith: 'Built with Rust + Vue 3 + shadcn-vue',
+    builtWith: "Copyright {'@'}2025 SilentWind",
     networkSettings: 'Network Settings',
     msdSettings: 'MSD Settings',
     atxSettings: 'ATX Settings',
@@ -444,6 +462,17 @@ export default {
     httpSettings: 'HTTP Settings',
     httpPort: 'HTTP Port',
     configureHttpPort: 'Configure HTTP server port',
+    // Web server
+    webServer: 'Basic',
+    webServerDesc: 'Configure HTTP/HTTPS ports and bind address. Restart required for changes to take effect.',
+    httpsPort: 'HTTPS Port',
+    bindAddress: 'Bind Address',
+    bindAddressDesc: 'IP address the server listens on. 0.0.0.0 means all network interfaces.',
+    httpsEnabled: 'Enable HTTPS',
+    httpsEnabledDesc: 'Enable HTTPS encrypted connection (self-signed certificate will be auto-generated)',
+    restartRequired: 'Restart Required',
+    restartMessage: 'Web server configuration saved. A restart is required for changes to take effect.',
+    restarting: 'Restarting...',
     // User management
     userManagement: 'User Management',
     userManagementDesc: 'Manage user accounts and permissions',
@@ -528,6 +557,16 @@ export default {
     hidBackend: 'HID Backend',
     serialDevice: 'Serial Device',
     baudRate: 'Baud Rate',
+    // OTG Descriptor
+    otgDescriptor: 'USB Device Descriptor',
+    otgDescriptorDesc: 'Configure USB device identification',
+    vendorId: 'Vendor ID (VID)',
+    productId: 'Product ID (PID)',
+    manufacturer: 'Manufacturer',
+    productName: 'Product Name',
+    serialNumber: 'Serial Number',
+    serialNumberAuto: 'Auto-generated',
+    descriptorWarning: 'Changing these settings will reconnect the USB device',
     // WebRTC / ICE
     webrtcSettings: 'WebRTC Settings',
     webrtcSettingsDesc: 'Configure STUN/TURN servers for NAT traversal',
@@ -626,7 +665,7 @@ export default {
     binaryNotFound: '{path} not found, please install the required program',
     // ttyd
     ttyd: {
-      title: 'Web Terminal',
+      title: 'Ttyd Web Terminal',
       desc: 'Web terminal access via ttyd',
       open: 'Open Terminal',
       openInNewTab: 'Open in New Tab',
@@ -636,7 +675,7 @@ export default {
     },
     // gostc
     gostc: {
-      title: 'NAT Traversal',
+      title: 'GOSTC NAT Traversal',
       desc: 'NAT traversal via GOSTC',
       addr: 'Server Address',
       key: 'Client Key',
@@ -644,7 +683,7 @@ export default {
     },
     // easytier
     easytier: {
-      title: 'P2P Network',
+      title: 'Easytier Network',
       desc: 'P2P VPN networking via EasyTier',
       networkName: 'Network Name',
       networkSecret: 'Network Secret',
@@ -664,6 +703,10 @@ export default {
       relayServer: 'Relay Server',
       relayServerPlaceholder: 'hbbr.example.com:21117',
       relayServerHint: 'Relay server address, auto-derived from ID server if empty',
+      relayKey: 'Relay Key',
+      relayKeyPlaceholder: 'Enter relay server key',
+      relayKeySet: '••••••••',
+      relayKeyHint: 'Authentication key for relay server (if server uses -k option)',
       publicServerInfo: 'Public Server Info',
       publicServerAddress: 'Server Address',
       publicServerKey: 'Connection Key',

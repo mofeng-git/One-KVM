@@ -26,6 +26,8 @@ pub struct AudioDeviceInfo {
     pub is_capture: bool,
     /// Is this an HDMI audio device (likely from capture card)
     pub is_hdmi: bool,
+    /// USB bus info for matching with video devices (e.g., "1-1" from USB path)
+    pub usb_bus: Option<String>,
 }
 
 impl AudioDeviceInfo {
@@ -33,6 +35,33 @@ impl AudioDeviceInfo {
     pub fn alsa_name(&self) -> String {
         format!("hw:{},{}", self.card_index, self.device_index)
     }
+}
+
+/// Get USB bus info for an audio card by reading sysfs
+/// Returns the USB port path like "1-1" or "1-2.3"
+fn get_usb_bus_info(card_index: i32) -> Option<String> {
+    if card_index < 0 {
+        return None;
+    }
+
+    // Read the device symlink: /sys/class/sound/cardX/device -> ../../usb1/1-1/1-1:1.0
+    let device_path = format!("/sys/class/sound/card{}/device", card_index);
+    let link_target = std::fs::read_link(&device_path).ok()?;
+    let link_str = link_target.to_string_lossy();
+
+    // Extract USB port from path like "../../usb1/1-1/1-1:1.0" or "../../1-1/1-1:1.0"
+    // We want the "1-1" part (USB bus-port)
+    for component in link_str.split('/') {
+        // Match patterns like "1-1", "1-2", "1-1.2", "2-1.3.1"
+        if component.contains('-') && !component.contains(':') {
+            // Verify it looks like a USB port (starts with digit)
+            if component.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                return Some(component.to_string());
+            }
+        }
+    }
+
+    None
 }
 
 /// Enumerate available audio capture devices
@@ -75,6 +104,9 @@ pub fn enumerate_audio_devices_with_current(
             || card_longname.to_lowercase().contains("capture")
             || card_longname.to_lowercase().contains("usb");
 
+        // Get USB bus info for this card
+        let usb_bus = get_usb_bus_info(card_index);
+
         // Try to open each device on this card for capture
         for device_index in 0..8 {
             let device_name = format!("hw:{},{}", card_index, device_index);
@@ -98,6 +130,7 @@ pub fn enumerate_audio_devices_with_current(
                             channels,
                             is_capture: true,
                             is_hdmi,
+                            usb_bus: usb_bus.clone(),
                         });
                     }
                 }
@@ -122,6 +155,7 @@ pub fn enumerate_audio_devices_with_current(
                             channels: vec![2],
                             is_capture: true,
                             is_hdmi,
+                            usb_bus: usb_bus.clone(),
                         });
                     }
                     continue;
@@ -145,6 +179,7 @@ pub fn enumerate_audio_devices_with_current(
                     channels,
                     is_capture: true,
                     is_hdmi: false,
+                    usb_bus: None,
                 },
             );
         }

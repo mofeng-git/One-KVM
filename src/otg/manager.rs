@@ -7,13 +7,37 @@ use tracing::{debug, error, info, warn};
 
 use super::configfs::{
     create_dir, find_udc, is_configfs_available, remove_dir, write_file, CONFIGFS_PATH,
-    DEFAULT_GADGET_NAME, USB_BCD_DEVICE, USB_BCD_USB, USB_PRODUCT_ID, USB_VENDOR_ID,
+    DEFAULT_GADGET_NAME, DEFAULT_USB_BCD_DEVICE, USB_BCD_USB, DEFAULT_USB_PRODUCT_ID, DEFAULT_USB_VENDOR_ID,
 };
 use super::endpoint::{EndpointAllocator, DEFAULT_MAX_ENDPOINTS};
 use super::function::{FunctionMeta, GadgetFunction};
 use super::hid::HidFunction;
 use super::msd::MsdFunction;
 use crate::error::{AppError, Result};
+
+/// USB Gadget device descriptor configuration
+#[derive(Debug, Clone)]
+pub struct GadgetDescriptor {
+    pub vendor_id: u16,
+    pub product_id: u16,
+    pub device_version: u16,
+    pub manufacturer: String,
+    pub product: String,
+    pub serial_number: String,
+}
+
+impl Default for GadgetDescriptor {
+    fn default() -> Self {
+        Self {
+            vendor_id: DEFAULT_USB_VENDOR_ID,
+            product_id: DEFAULT_USB_PRODUCT_ID,
+            device_version: DEFAULT_USB_BCD_DEVICE,
+            manufacturer: "One-KVM".to_string(),
+            product: "One-KVM USB Device".to_string(),
+            serial_number: "0123456789".to_string(),
+        }
+    }
+}
 
 /// OTG Gadget Manager - unified management for HID and MSD
 pub struct OtgGadgetManager {
@@ -23,6 +47,8 @@ pub struct OtgGadgetManager {
     gadget_path: PathBuf,
     /// Configuration path
     config_path: PathBuf,
+    /// Device descriptor
+    descriptor: GadgetDescriptor,
     /// Endpoint allocator
     endpoint_allocator: EndpointAllocator,
     /// HID instance counter
@@ -47,6 +73,11 @@ impl OtgGadgetManager {
 
     /// Create a new gadget manager with custom configuration
     pub fn with_config(gadget_name: &str, max_endpoints: u8) -> Self {
+        Self::with_descriptor(gadget_name, max_endpoints, GadgetDescriptor::default())
+    }
+
+    /// Create a new gadget manager with custom descriptor
+    pub fn with_descriptor(gadget_name: &str, max_endpoints: u8, descriptor: GadgetDescriptor) -> Self {
         let gadget_path = PathBuf::from(CONFIGFS_PATH).join(gadget_name);
         let config_path = gadget_path.join("configs/c.1");
 
@@ -54,6 +85,7 @@ impl OtgGadgetManager {
             gadget_name: gadget_name.to_string(),
             gadget_path,
             config_path,
+            descriptor,
             endpoint_allocator: EndpointAllocator::new(max_endpoints),
             hid_instance: 0,
             msd_instance: 0,
@@ -271,9 +303,9 @@ impl OtgGadgetManager {
 
     /// Set USB device descriptors
     fn set_device_descriptors(&self) -> Result<()> {
-        write_file(&self.gadget_path.join("idVendor"), &format!("0x{:04x}", USB_VENDOR_ID))?;
-        write_file(&self.gadget_path.join("idProduct"), &format!("0x{:04x}", USB_PRODUCT_ID))?;
-        write_file(&self.gadget_path.join("bcdDevice"), &format!("0x{:04x}", USB_BCD_DEVICE))?;
+        write_file(&self.gadget_path.join("idVendor"), &format!("0x{:04x}", self.descriptor.vendor_id))?;
+        write_file(&self.gadget_path.join("idProduct"), &format!("0x{:04x}", self.descriptor.product_id))?;
+        write_file(&self.gadget_path.join("bcdDevice"), &format!("0x{:04x}", self.descriptor.device_version))?;
         write_file(&self.gadget_path.join("bcdUSB"), &format!("0x{:04x}", USB_BCD_USB))?;
         write_file(&self.gadget_path.join("bDeviceClass"), "0x00")?; // Composite device
         write_file(&self.gadget_path.join("bDeviceSubClass"), "0x00")?;
@@ -287,9 +319,9 @@ impl OtgGadgetManager {
         let strings_path = self.gadget_path.join("strings/0x409");
         create_dir(&strings_path)?;
 
-        write_file(&strings_path.join("serialnumber"), "0123456789")?;
-        write_file(&strings_path.join("manufacturer"), "One-KVM")?;
-        write_file(&strings_path.join("product"), "One-KVM HID Device")?;
+        write_file(&strings_path.join("serialnumber"), &self.descriptor.serial_number)?;
+        write_file(&strings_path.join("manufacturer"), &self.descriptor.manufacturer)?;
+        write_file(&strings_path.join("product"), &self.descriptor.product)?;
         debug!("Created USB strings");
         Ok(())
     }

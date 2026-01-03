@@ -20,6 +20,7 @@ pub mod crypto;
 pub mod frame_adapters;
 pub mod hid_adapter;
 pub mod protocol;
+pub mod punch;
 pub mod rendezvous;
 
 use std::net::SocketAddr;
@@ -27,7 +28,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use parking_lot::RwLock;
-use prost::Message;
+use protobuf::Message;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
@@ -39,8 +40,7 @@ use crate::video::stream_manager::VideoStreamManager;
 
 use self::config::RustDeskConfig;
 use self::connection::ConnectionManager;
-use self::protocol::hbb::rendezvous_message;
-use self::protocol::{make_local_addr, make_relay_response, RendezvousMessage};
+use self::protocol::{make_local_addr, make_relay_response, make_request_relay};
 use self::rendezvous::{AddrMangle, RendezvousMediator, RendezvousStatus};
 
 /// Relay connection timeout
@@ -201,6 +201,9 @@ impl RustDeskService {
         // Set the HID controller on connection manager
         self.connection_manager.set_hid(self.hid.clone());
 
+        // Set the audio controller on connection manager for audio streaming
+        self.connection_manager.set_audio(self.audio.clone());
+
         // Set the video manager on connection manager for video streaming
         self.connection_manager.set_video_manager(self.video_manager.clone());
 
@@ -221,8 +224,70 @@ impl RustDeskService {
         let audio = self.audio.clone();
         let service_config = self.config.clone();
 
+        // Set the punch callback on the mediator (tries P2P first, then relay)
+        let connection_manager_punch = self.connection_manager.clone();
+        let video_manager_punch = self.video_manager.clone();
+        let hid_punch = self.hid.clone();
+        let audio_punch = self.audio.clone();
+        let service_config_punch = self.config.clone();
+
+        mediator.set_punch_callback(Arc::new(move |peer_addr, rendezvous_addr, relay_server, uuid, socket_addr, device_id| {
+            let conn_mgr = connection_manager_punch.clone();
+            let video = video_manager_punch.clone();
+            let hid = hid_punch.clone();
+            let audio = audio_punch.clone();
+            let config = service_config_punch.clone();
+
+            tokio::spawn(async move {
+                // Get relay_key from config, or use public server's relay_key if using public server
+                let relay_key = {
+                    let cfg = config.read();
+                    cfg.relay_key.clone().unwrap_or_else(|| {
+                        if cfg.is_using_public_server() {
+                            crate::secrets::rustdesk::RELAY_KEY.to_string()
+                        } else {
+                            String::new()
+                        }
+                    })
+                };
+
+                // Try P2P direct connection first
+                if let Some(addr) = peer_addr {
+                    info!("Attempting P2P direct connection to {}", addr);
+                    match punch::try_direct_connection(addr).await {
+                        punch::PunchResult::DirectConnection(stream) => {
+                            info!("P2P direct connection succeeded to {}", addr);
+                            if let Err(e) = conn_mgr.accept_connection(stream, addr).await {
+                                error!("Failed to accept P2P connection: {}", e);
+                            }
+                            return;
+                        }
+                        punch::PunchResult::NeedRelay => {
+                            info!("P2P direct connection failed, falling back to relay");
+                        }
+                    }
+                }
+
+                // Fall back to relay
+                if let Err(e) = handle_relay_request(
+                    &rendezvous_addr,
+                    &relay_server,
+                    &uuid,
+                    &socket_addr,
+                    &device_id,
+                    &relay_key,
+                    conn_mgr,
+                    video,
+                    hid,
+                    audio,
+                ).await {
+                    error!("Failed to handle relay request: {}", e);
+                }
+            });
+        }));
+
         // Set the relay callback on the mediator
-        mediator.set_relay_callback(Arc::new(move |relay_server, uuid, peer_pk| {
+        mediator.set_relay_callback(Arc::new(move |rendezvous_addr, relay_server, uuid, socket_addr, device_id| {
             let conn_mgr = connection_manager.clone();
             let video = video_manager.clone();
             let hid = hid.clone();
@@ -230,15 +295,29 @@ impl RustDeskService {
             let config = service_config.clone();
 
             tokio::spawn(async move {
+                // Get relay_key from config, or use public server's relay_key if using public server
+                let relay_key = {
+                    let cfg = config.read();
+                    cfg.relay_key.clone().unwrap_or_else(|| {
+                        if cfg.is_using_public_server() {
+                            crate::secrets::rustdesk::RELAY_KEY.to_string()
+                        } else {
+                            String::new()
+                        }
+                    })
+                };
+
                 if let Err(e) = handle_relay_request(
+                    &rendezvous_addr,
                     &relay_server,
                     &uuid,
-                    &peer_pk,
+                    &socket_addr,
+                    &device_id,
+                    &relay_key,
                     conn_mgr,
                     video,
                     hid,
                     audio,
-                    config,
                 ).await {
                     error!("Failed to handle relay request: {}", e);
                 }
@@ -437,25 +516,57 @@ impl RustDeskService {
 }
 
 /// Handle relay request from rendezvous server
+///
+/// Correct flow based on RustDesk protocol:
+/// 1. Connect to RENDEZVOUS server (not relay!)
+/// 2. Send RelayResponse with client's socket_addr
+/// 3. Connect to RELAY server
+/// 4. Accept connection without waiting for response
 async fn handle_relay_request(
+    rendezvous_addr: &str,
     relay_server: &str,
     uuid: &str,
-    _peer_pk: &[u8],
+    socket_addr: &[u8],
+    device_id: &str,
+    relay_key: &str,
     connection_manager: Arc<ConnectionManager>,
     _video_manager: Arc<VideoStreamManager>,
     _hid: Arc<HidController>,
     _audio: Arc<AudioController>,
-    _config: Arc<RwLock<RustDeskConfig>>,
 ) -> anyhow::Result<()> {
-    info!("Handling relay request: server={}, uuid={}", relay_server, uuid);
+    info!("Handling relay request: rendezvous={}, relay={}, uuid={}", rendezvous_addr, relay_server, uuid);
 
-    // Parse relay server address
+    // Step 1: Connect to RENDEZVOUS server and send RelayResponse
+    let rendezvous_socket_addr: SocketAddr = tokio::net::lookup_host(rendezvous_addr)
+        .await?
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Failed to resolve rendezvous server: {}", rendezvous_addr))?;
+
+    let mut rendezvous_stream = tokio::time::timeout(
+        Duration::from_millis(RELAY_CONNECT_TIMEOUT_MS),
+        TcpStream::connect(rendezvous_socket_addr),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("Rendezvous connection timeout"))??;
+
+    debug!("Connected to rendezvous server at {}", rendezvous_socket_addr);
+
+    // Send RelayResponse to rendezvous server with client's socket_addr
+    // IMPORTANT: Include our device ID so rendezvous server can look up and sign our public key
+    let relay_response = make_relay_response(uuid, socket_addr, relay_server, device_id);
+    let bytes = relay_response.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+    bytes_codec::write_frame(&mut rendezvous_stream, &bytes).await?;
+    debug!("Sent RelayResponse to rendezvous server for uuid={}", uuid);
+
+    // Close rendezvous connection - we don't need to wait for response
+    drop(rendezvous_stream);
+
+    // Step 2: Connect to RELAY server and send RequestRelay to identify ourselves
     let relay_addr: SocketAddr = tokio::net::lookup_host(relay_server)
         .await?
         .next()
         .ok_or_else(|| anyhow::anyhow!("Failed to resolve relay server: {}", relay_server))?;
 
-    // Connect to relay server with timeout
     let mut stream = tokio::time::timeout(
         Duration::from_millis(RELAY_CONNECT_TIMEOUT_MS),
         TcpStream::connect(relay_addr),
@@ -465,49 +576,20 @@ async fn handle_relay_request(
 
     info!("Connected to relay server at {}", relay_addr);
 
-    // Send relay response to establish the connection
-    let relay_response = make_relay_response(uuid, None);
-    let bytes = relay_response.encode_to_vec();
-
-    // Send using RustDesk's variable-length framing (NOT big-endian length prefix)
+    // Send RequestRelay to relay server with our uuid, licence_key, and peer's socket_addr
+    // The licence_key is required if the relay server is configured with -k option
+    // The socket_addr is CRITICAL - the relay server uses it to match us with the peer
+    let request_relay = make_request_relay(uuid, relay_key, socket_addr);
+    let bytes = request_relay.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
     bytes_codec::write_frame(&mut stream, &bytes).await?;
+    debug!("Sent RequestRelay to relay server for uuid={}", uuid);
 
-    debug!("Sent relay response for uuid={}", uuid);
+    // Decode peer address for logging
+    let peer_addr = rendezvous::AddrMangle::decode(socket_addr).unwrap_or(relay_addr);
 
-    // Read response from relay using variable-length framing
-    let msg_buf = bytes_codec::read_frame(&mut stream).await?;
-
-    // Parse relay response
-    if let Ok(msg) = RendezvousMessage::decode(&msg_buf[..]) {
-        match msg.union {
-            Some(rendezvous_message::Union::RelayResponse(rr)) => {
-                debug!("Received relay response: uuid={}, socket_addr_len={}", rr.uuid, rr.socket_addr.len());
-
-                // Try to decode peer address from the relay response
-                // The socket_addr field contains the actual peer's address (mangled)
-                let peer_addr = if !rr.socket_addr.is_empty() {
-                    rendezvous::AddrMangle::decode(&rr.socket_addr)
-                        .unwrap_or(relay_addr)
-                } else {
-                    // If no socket_addr in response, use a placeholder
-                    // Note: This is not ideal, but allows the connection to proceed
-                    warn!("No peer socket_addr in relay response, using relay server address");
-                    relay_addr
-                };
-
-                debug!("Peer address from relay: {}", peer_addr);
-
-                // At this point, the relay has connected us to the peer
-                // The stream is now a direct connection to the client
-                // Accept the connection through connection manager
-                connection_manager.accept_connection(stream, peer_addr).await?;
-                info!("Relay connection established for uuid={}, peer={}", uuid, peer_addr);
-            }
-            _ => {
-                warn!("Unexpected message from relay server");
-            }
-        }
-    }
+    // Step 3: Accept connection - relay server bridges the connection
+    connection_manager.accept_connection(stream, peer_addr).await?;
+    info!("Relay connection established for uuid={}, peer={}", uuid, peer_addr);
 
     Ok(())
 }
@@ -556,7 +638,7 @@ async fn handle_intranet_request(
         device_id,
         env!("CARGO_PKG_VERSION"),
     );
-    let bytes = msg.encode_to_vec();
+    let bytes = msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
 
     // Send LocalAddr using RustDesk's variable-length framing
     bytes_codec::write_frame(&mut stream, &bytes).await?;

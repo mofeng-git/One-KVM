@@ -60,7 +60,7 @@ impl Default for SharedAudioPipelineConfig {
             bitrate: 64000,
             application: OpusApplicationMode::Audio,
             fec: true,
-            channel_capacity: 64,
+            channel_capacity: 16,  // Reduced from 64 for lower latency
         }
     }
 }

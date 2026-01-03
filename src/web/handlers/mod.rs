@@ -185,13 +185,26 @@ fn get_cpu_model() -> String {
     std::fs::read_to_string("/proc/cpuinfo")
         .ok()
         .and_then(|content| {
-            content
+            // Try to get model name
+            let model = content
                 .lines()
                 .find(|line| line.starts_with("model name") || line.starts_with("Model"))
                 .and_then(|line| line.split(':').nth(1))
                 .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+
+            if model.is_some() {
+                return model;
+            }
+
+            // Fallback: show arch and core count
+            let cores = content
+                .lines()
+                .filter(|line| line.starts_with("processor"))
+                .count();
+            Some(format!("{} {}C", std::env::consts::ARCH, cores))
         })
-        .unwrap_or_else(|| "Unknown CPU".to_string())
+        .unwrap_or_else(|| format!("{}", std::env::consts::ARCH))
 }
 
 /// CPU usage state for calculating usage between samples
@@ -482,11 +495,16 @@ pub struct SetupRequest {
     pub video_width: Option<u32>,
     pub video_height: Option<u32>,
     pub video_fps: Option<u32>,
+    // Audio settings
+    pub audio_device: Option<String>,
     // HID settings
     pub hid_backend: Option<String>,
     pub hid_ch9329_port: Option<String>,
     pub hid_ch9329_baudrate: Option<u32>,
     pub hid_otg_udc: Option<String>,
+    // Extension settings
+    pub ttyd_enabled: Option<bool>,
+    pub rustdesk_enabled: Option<bool>,
 }
 
 pub async fn setup_init(
@@ -541,6 +559,12 @@ pub async fn setup_init(
                 config.video.fps = fps;
             }
 
+            // Audio settings
+            if let Some(device) = req.audio_device.clone() {
+                config.audio.device = device;
+                config.audio.enabled = true;
+            }
+
             // HID settings
             if let Some(backend) = req.hid_backend.clone() {
                 config.hid.backend = match backend.as_str() {
@@ -558,11 +582,25 @@ pub async fn setup_init(
             if let Some(udc) = req.hid_otg_udc.clone() {
                 config.hid.otg_udc = Some(udc);
             }
+
+            // Extension settings
+            if let Some(enabled) = req.ttyd_enabled {
+                config.extensions.ttyd.enabled = enabled;
+            }
+            if let Some(enabled) = req.rustdesk_enabled {
+                config.rustdesk.enabled = enabled;
+            }
         })
         .await?;
 
     // Get updated config for HID reload
     let new_config = state.config.get();
+
+    tracing::info!(
+        "Extension config after save: ttyd.enabled={}, rustdesk.enabled={}",
+        new_config.extensions.ttyd.enabled,
+        new_config.rustdesk.enabled
+    );
 
     // Initialize HID backend with new config
     let new_hid_backend = match new_config.hid.backend {
@@ -580,6 +618,34 @@ pub async fn setup_init(
         // Don't fail setup, just warn
     } else {
         tracing::info!("HID backend initialized: {:?}", new_config.hid.backend);
+    }
+
+    // Start extensions if enabled
+    if new_config.extensions.ttyd.enabled {
+        if let Err(e) = state
+            .extensions
+            .start(
+                crate::extensions::ExtensionId::Ttyd,
+                &new_config.extensions,
+            )
+            .await
+        {
+            tracing::warn!("Failed to start ttyd during setup: {}", e);
+        } else {
+            tracing::info!("ttyd started during setup");
+        }
+    }
+
+    // Start RustDesk if enabled
+    if new_config.rustdesk.enabled {
+        let empty_config = crate::rustdesk::config::RustDeskConfig::default();
+        if let Err(e) =
+            config::apply::apply_rustdesk_config(&state, &empty_config, &new_config.rustdesk).await
+        {
+            tracing::warn!("Failed to start RustDesk during setup: {}", e);
+        } else {
+            tracing::info!("RustDesk started during setup");
+        }
     }
 
     tracing::info!("System initialized successfully with admin user: {}", req.username);
@@ -908,6 +974,13 @@ pub struct DeviceList {
     pub serial: Vec<SerialDevice>,
     pub audio: Vec<AudioDevice>,
     pub udc: Vec<UdcDevice>,
+    pub extensions: ExtensionsAvailability,
+}
+
+#[derive(Serialize)]
+pub struct ExtensionsAvailability {
+    pub ttyd_available: bool,
+    pub rustdesk_available: bool,
 }
 
 #[derive(Serialize)]
@@ -916,6 +989,7 @@ pub struct VideoDevice {
     pub name: String,
     pub driver: String,
     pub formats: Vec<VideoFormat>,
+    pub usb_bus: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -942,6 +1016,8 @@ pub struct SerialDevice {
 pub struct AudioDevice {
     pub name: String,
     pub description: String,
+    pub is_hdmi: bool,
+    pub usb_bus: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -949,32 +1025,62 @@ pub struct UdcDevice {
     pub name: String,
 }
 
+/// Extract USB bus port from V4L2 bus_info string
+/// Examples:
+/// - "usb-0000:00:14.0-1" -> Some("1")
+/// - "usb-xhci-hcd.0-1.2" -> Some("1.2")
+/// - "usb-0000:00:14.0-1.3.2" -> Some("1.3.2")
+/// - "platform:..." -> None
+fn extract_usb_bus_from_bus_info(bus_info: &str) -> Option<String> {
+    if !bus_info.starts_with("usb-") {
+        return None;
+    }
+    // Find the last '-' which separates the USB port
+    // e.g., "usb-0000:00:14.0-1" -> "1"
+    // e.g., "usb-xhci-hcd.0-1.2" -> "1.2"
+    let parts: Vec<&str> = bus_info.rsplitn(2, '-').collect();
+    if parts.len() == 2 {
+        let port = parts[0];
+        // Verify it looks like a USB port (starts with digit)
+        if port.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+            return Some(port.to_string());
+        }
+    }
+    None
+}
+
 pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList> {
     // Detect video devices
     let video_devices = match state.stream_manager.list_devices().await {
         Ok(devices) => devices
             .into_iter()
-            .map(|d| VideoDevice {
-                path: d.path.to_string_lossy().to_string(),
-                name: d.name,
-                driver: d.driver,
-                formats: d
-                    .formats
-                    .iter()
-                    .map(|f| VideoFormat {
-                        format: format!("{}", f.format),
-                        description: f.description.clone(),
-                        resolutions: f
-                            .resolutions
-                            .iter()
-                            .map(|r| VideoResolution {
-                                width: r.width,
-                                height: r.height,
-                                fps: r.fps.clone(),
-                            })
-                            .collect(),
-                    })
-                    .collect(),
+            .map(|d| {
+                // Extract USB bus from bus_info (e.g., "usb-0000:00:14.0-1" -> "1")
+                // or "usb-xhci-hcd.0-1.2" -> "1.2"
+                let usb_bus = extract_usb_bus_from_bus_info(&d.bus_info);
+                VideoDevice {
+                    path: d.path.to_string_lossy().to_string(),
+                    name: d.name,
+                    driver: d.driver,
+                    formats: d
+                        .formats
+                        .iter()
+                        .map(|f| VideoFormat {
+                            format: format!("{}", f.format),
+                            description: f.description.clone(),
+                            resolutions: f
+                                .resolutions
+                                .iter()
+                                .map(|r| VideoResolution {
+                                    width: r.width,
+                                    height: r.height,
+                                    fps: r.fps.clone(),
+                                })
+                                .collect(),
+                        })
+                        .collect(),
+                    usb_bus,
+                }
             })
             .collect(),
         Err(_) => vec![],
@@ -1024,16 +1130,25 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
             .map(|d| AudioDevice {
                 name: d.name,
                 description: d.description,
+                is_hdmi: d.is_hdmi,
+                usb_bus: d.usb_bus,
             })
             .collect(),
         Err(_) => vec![],
     };
+
+    // Check extension availability
+    let ttyd_available = state.extensions.check_available(crate::extensions::ExtensionId::Ttyd);
 
     Json(DeviceList {
         video: video_devices,
         serial: serial_devices,
         audio: audio_devices,
         udc: udc_devices,
+        extensions: ExtensionsAvailability {
+            ttyd_available,
+            rustdesk_available: true, // RustDesk is built-in
+        },
     })
 }
 
@@ -2573,4 +2688,54 @@ pub async fn change_user_password(
         success: true,
         message: Some("Password changed successfully".to_string()),
     }))
+}
+
+// ============================================================================
+// System Control
+// ============================================================================
+
+/// Restart the application
+pub async fn system_restart(State(state): State<Arc<AppState>>) -> Json<LoginResponse> {
+    info!("System restart requested via API");
+
+    // Send shutdown signal
+    let _ = state.shutdown_tx.send(());
+
+    // Spawn restart task in background
+    tokio::spawn(async {
+        // Wait for resources to be released (OTG, video, etc.)
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+        // Get current executable and args
+        let exe = match std::env::current_exe() {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::error!("Failed to get current exe: {}", e);
+                std::process::exit(1);
+            }
+        };
+        let args: Vec<String> = std::env::args().skip(1).collect();
+
+        info!("Restarting: {:?} {:?}", exe, args);
+
+        // Use exec to replace current process (Unix)
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            let err = std::process::Command::new(&exe).args(&args).exec();
+            tracing::error!("Failed to restart: {}", err);
+            std::process::exit(1);
+        }
+
+        #[cfg(not(unix))]
+        {
+            let _ = std::process::Command::new(&exe).args(&args).spawn();
+            std::process::exit(0);
+        }
+    });
+
+    Json(LoginResponse {
+        success: true,
+        message: Some("Restarting...".to_string()),
+    })
 }

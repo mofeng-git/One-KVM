@@ -33,20 +33,20 @@ enum LogLevel {Error, Warn, #[default] Info, Verbose, Debug, Trace,}
 #[command(name = "one-kvm")]
 #[command(version, about = "A  open and lightweight IP-KVM solution", long_about = None)]
 struct CliArgs {
-    /// Listen address
-    #[arg(short = 'a', long, value_name = "ADDRESS", default_value = "0.0.0.0")]
-    address: String,
+    /// Listen address (overrides database config)
+    #[arg(short = 'a', long, value_name = "ADDRESS")]
+    address: Option<String>,
 
-    /// HTTP port (used when HTTPS is disabled)
-    #[arg(short = 'p', long, value_name = "PORT", default_value = "8080")]
-    http_port: u16,
+    /// HTTP port (overrides database config)
+    #[arg(short = 'p', long, value_name = "PORT")]
+    http_port: Option<u16>,
 
-    /// HTTPS port (used when HTTPS is enabled)
-    #[arg(long, value_name = "PORT", default_value = "8443")]
-    https_port: u16,
+    /// HTTPS port (overrides database config)
+    #[arg(long, value_name = "PORT")]
+    https_port: Option<u16>,
 
-    /// Enable HTTPS
-    #[arg(long, default_value = "false")]
+    /// Enable HTTPS (overrides database config)
+    #[arg(long)]
     enable_https: bool,
 
     /// Path to SSL certificate file (generates self-signed if not provided)
@@ -99,11 +99,19 @@ async fn main() -> anyhow::Result<()> {
     let config_store = ConfigStore::new(&db_path).await?;
     let mut config = (*config_store.get()).clone();
 
-    // Apply CLI argument overrides to config
-    config.web.bind_address = args.address;
-    config.web.http_port = args.http_port;
-    config.web.https_port = args.https_port;
-    config.web.https_enabled = args.enable_https;
+    // Apply CLI argument overrides to config (only if explicitly specified)
+    if let Some(addr) = args.address {
+        config.web.bind_address = addr;
+    }
+    if let Some(port) = args.http_port {
+        config.web.http_port = port;
+    }
+    if let Some(port) = args.https_port {
+        config.web.https_port = port;
+    }
+    if args.enable_https {
+        config.web.https_enabled = true;
+    }
 
     if let Some(cert_path) = args.ssl_cert {
         config.web.ssl_cert_path = Some(cert_path.to_string_lossy().to_string());
@@ -426,6 +434,8 @@ async fn main() -> anyhow::Result<()> {
                     .update(|cfg| {
                         cfg.rustdesk.public_key = updated_config.public_key.clone();
                         cfg.rustdesk.private_key = updated_config.private_key.clone();
+                        cfg.rustdesk.signing_public_key = updated_config.signing_public_key.clone();
+                        cfg.rustdesk.signing_private_key = updated_config.signing_private_key.clone();
                         cfg.rustdesk.uuid = updated_config.uuid.clone();
                     })
                     .await

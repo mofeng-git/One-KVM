@@ -943,8 +943,12 @@ impl HidBackend for Ch9329Backend {
     }
 
     async fn send_keyboard(&self, event: KeyboardEvent) -> Result<()> {
-        // Convert JS keycode to USB HID if needed
-        let usb_key = keymap::js_to_usb(event.key).unwrap_or(event.key);
+        // Convert JS keycode to USB HID if needed (skip if already USB HID)
+        let usb_key = if event.is_usb_hid {
+            event.key
+        } else {
+            keymap::js_to_usb(event.key).unwrap_or(event.key)
+        };
 
         // Handle modifier keys separately
         if keymap::is_modifier_key(usb_key) {

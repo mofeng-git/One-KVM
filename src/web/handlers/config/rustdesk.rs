@@ -21,6 +21,8 @@ pub struct RustDeskConfigResponse {
     pub has_password: bool,
     /// 是否已设置密钥对
     pub has_keypair: bool,
+    /// 是否已设置 relay key
+    pub has_relay_key: bool,
     /// 是否使用公共服务器（用户留空时）
     pub using_public_server: bool,
 }
@@ -34,6 +36,7 @@ impl From<&RustDeskConfig> for RustDeskConfigResponse {
             device_id: config.device_id.clone(),
             has_password: !config.device_password.is_empty(),
             has_keypair: config.public_key.is_some() && config.private_key.is_some(),
+            has_relay_key: config.relay_key.is_some(),
             using_public_server: config.is_using_public_server(),
         }
     }
