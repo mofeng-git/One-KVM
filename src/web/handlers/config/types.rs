@@ -73,6 +73,10 @@ pub struct StreamConfigResponse {
     pub mode: StreamMode,
     pub encoder: EncoderType,
     pub bitrate_preset: BitratePreset,
+    /// 是否有公共 ICE 服务器可用（编译时确定）
+    pub has_public_ice_servers: bool,
+    /// 当前是否正在使用公共 ICE 服务器（STUN/TURN 都为空时）
+    pub using_public_ice_servers: bool,
     pub stun_server: Option<String>,
     pub turn_server: Option<String>,
     pub turn_username: Option<String>,
@@ -82,10 +86,13 @@ pub struct StreamConfigResponse {
 
 impl From<&StreamConfig> for StreamConfigResponse {
     fn from(config: &StreamConfig) -> Self {
+        use crate::webrtc::config::public_ice;
         Self {
             mode: config.mode.clone(),
             encoder: config.encoder.clone(),
             bitrate_preset: config.bitrate_preset,
+            has_public_ice_servers: public_ice::is_configured(),
+            using_public_ice_servers: config.is_using_public_ice_servers(),
             stun_server: config.stun_server.clone(),
             turn_server: config.turn_server.clone(),
             turn_username: config.turn_username.clone(),
@@ -101,8 +108,10 @@ pub struct StreamConfigUpdate {
     pub encoder: Option<EncoderType>,
     pub bitrate_preset: Option<BitratePreset>,
     /// STUN server URL (e.g., "stun:stun.l.google.com:19302")
+    /// Leave empty to use public ICE servers
     pub stun_server: Option<String>,
     /// TURN server URL (e.g., "turn:turn.example.com:3478")
+    /// Leave empty to use public ICE servers
     pub turn_server: Option<String>,
     /// TURN username
     pub turn_username: Option<String>,
@@ -142,7 +151,7 @@ impl StreamConfigUpdate {
         if let Some(preset) = self.bitrate_preset {
             config.bitrate_preset = preset;
         }
-        // STUN/TURN settings - empty string means clear, Some("value") means set
+        // STUN/TURN settings - empty string means clear (use public servers), Some("value") means set custom
         if let Some(ref stun) = self.stun_server {
             config.stun_server = if stun.is_empty() { None } else { Some(stun.clone()) };
         }

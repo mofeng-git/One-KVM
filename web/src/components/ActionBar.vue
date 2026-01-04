@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { useSystemStore } from '@/stores/system'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -42,9 +43,15 @@ import MsdDialog from '@/components/MsdDialog.vue'
 
 const { t } = useI18n()
 const router = useRouter()
+const systemStore = useSystemStore()
 
 // Overflow menu state
 const overflowMenuOpen = ref(false)
+
+// MSD is only available when HID backend is not CH9329 (CH9329 is serial-only, no USB gadget)
+const showMsd = computed(() => {
+  return props.isAdmin && systemStore.hid?.backend !== 'ch9329'
+})
 
 const props = defineProps<{
   mouseMode?: 'absolute' | 'relative'
@@ -100,7 +107,8 @@ const extensionOpen = ref(false)
         />
 
         <!-- Virtual Media (MSD) - Hidden on small screens, shown in overflow -->
-        <TooltipProvider v-if="props.isAdmin" class="hidden sm:block">
+        <!-- Also hidden when HID backend is CH9329 (no USB gadget support) -->
+        <TooltipProvider v-if="showMsd" class="hidden sm:block">
           <Tooltip>
             <TooltipTrigger as-child>
               <Button variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="msdDialogOpen = true">
@@ -253,8 +261,8 @@ const extensionOpen = ref(false)
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" class="w-48">
-            <!-- MSD - Mobile only -->
-            <DropdownMenuItem v-if="props.isAdmin" class="sm:hidden" @click="msdDialogOpen = true; overflowMenuOpen = false">
+            <!-- MSD - Mobile only, hidden when CH9329 backend -->
+            <DropdownMenuItem v-if="showMsd" class="sm:hidden" @click="msdDialogOpen = true; overflowMenuOpen = false">
               <HardDrive class="h-4 w-4 mr-2" />
               {{ t('actionbar.virtualMedia') }}
             </DropdownMenuItem>

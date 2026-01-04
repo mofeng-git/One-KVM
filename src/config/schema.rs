@@ -383,8 +383,10 @@ pub struct StreamConfig {
     /// Bitrate preset (Speed/Balanced/Quality)
     pub bitrate_preset: BitratePreset,
     /// Custom STUN server (e.g., "stun:stun.l.google.com:19302")
+    /// If empty, uses public ICE servers from secrets.toml
     pub stun_server: Option<String>,
     /// Custom TURN server (e.g., "turn:turn.example.com:3478")
+    /// If empty, uses public ICE servers from secrets.toml
     pub turn_server: Option<String>,
     /// TURN username
     pub turn_username: Option<String>,
@@ -407,7 +409,8 @@ impl Default for StreamConfig {
             mode: StreamMode::Mjpeg,
             encoder: EncoderType::Auto,
             bitrate_preset: BitratePreset::Balanced,
-            stun_server: Some("stun:stun.l.google.com:19302".to_string()),
+            // Empty means use public ICE servers (like RustDesk)
+            stun_server: None,
             turn_server: None,
             turn_username: None,
             turn_password: None,
@@ -415,6 +418,16 @@ impl Default for StreamConfig {
             auto_pause_delay_secs: 10,
             client_timeout_secs: 30,
         }
+    }
+}
+
+impl StreamConfig {
+    /// Check if using public ICE servers (user left fields empty)
+    pub fn is_using_public_ice_servers(&self) -> bool {
+        use crate::webrtc::config::public_ice;
+        self.stun_server.as_ref().map(|s| s.is_empty()).unwrap_or(true)
+            && self.turn_server.as_ref().map(|s| s.is_empty()).unwrap_or(true)
+            && public_ice::is_configured()
     }
 }
 

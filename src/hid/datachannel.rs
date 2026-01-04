@@ -34,7 +34,7 @@
 //! Consumer control event (type 0x03):
 //! - Bytes 1-2: Usage code (u16 LE)
 
-use tracing::{debug, warn};
+use tracing::warn;
 
 use super::types::ConsumerEvent;
 use super::{
@@ -115,11 +115,6 @@ fn parse_keyboard_message(data: &[u8]) -> Option<HidChannelEvent> {
         right_meta: modifiers_byte & 0x80 != 0,
     };
 
-    debug!(
-        "Parsed keyboard: {:?} key=0x{:02X} modifiers=0x{:02X}",
-        event_type, key, modifiers_byte
-    );
-
     Some(HidChannelEvent::Keyboard(KeyboardEvent {
         event_type,
         key,
@@ -168,11 +163,6 @@ fn parse_mouse_message(data: &[u8]) -> Option<HidChannelEvent> {
         _ => (None, 0i8),
     };
 
-    debug!(
-        "Parsed mouse: {:?} x={} y={} button={:?} scroll={}",
-        event_type, x, y, button, scroll
-    );
-
     Some(HidChannelEvent::Mouse(MouseEvent {
         event_type,
         x,
@@ -190,8 +180,6 @@ fn parse_consumer_message(data: &[u8]) -> Option<HidChannelEvent> {
     }
 
     let usage = u16::from_le_bytes([data[0], data[1]]);
-
-    debug!("Parsed consumer: usage=0x{:04X}", usage);
 
     Some(HidChannelEvent::Consumer(ConsumerEvent { usage }))
 }

@@ -35,7 +35,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::audio::shared_pipeline::{SharedAudioPipeline, SharedAudioPipelineConfig};
 use crate::audio::{AudioController, OpusFrame};
@@ -315,9 +315,11 @@ impl WebRtcStreamer {
                         }
                         drop(pipeline_guard);
 
-                        // Clear video frame source to signal upstream to stop
-                        *streamer.video_frame_tx.write().await = None;
-                        info!("Cleared video frame source");
+                        // NOTE: Don't clear video_frame_tx here!
+                        // The frame source is managed by stream_manager and should
+                        // remain available for new sessions. Only stream_manager
+                        // should clear it during mode switches.
+                        info!("Video pipeline stopped, but keeping frame source for new sessions");
                     }
                     break;
                 }
@@ -512,13 +514,37 @@ impl WebRtcStreamer {
 
     /// Update video configuration
     ///
-    /// This will restart the encoding pipeline and close all sessions.
+    /// Only restarts the encoding pipeline if configuration actually changed.
+    /// This allows multiple consumers (WebRTC, RustDesk) to share the same pipeline
+    /// without interrupting each other when they call this method with the same config.
     pub async fn update_video_config(
         &self,
         resolution: Resolution,
         format: PixelFormat,
         fps: u32,
     ) {
+        // Check if configuration actually changed
+        let config = self.config.read().await;
+        let config_changed = config.resolution != resolution
+            || config.input_format != format
+            || config.fps != fps;
+        drop(config);
+
+        if !config_changed {
+            // Configuration unchanged, no need to restart pipeline
+            trace!(
+                "Video config unchanged: {}x{} {:?} @ {} fps",
+                resolution.width, resolution.height, format, fps
+            );
+            return;
+        }
+
+        // Configuration changed, restart pipeline
+        info!(
+            "Video config changed, restarting pipeline: {}x{} {:?} @ {} fps",
+            resolution.width, resolution.height, format, fps
+        );
+
         // Stop existing pipeline
         if let Some(ref pipeline) = *self.video_pipeline.read().await {
             pipeline.stop();
@@ -598,6 +624,8 @@ impl WebRtcStreamer {
     ///
     /// Note: Changes take effect for new sessions only.
     /// Existing sessions need to be reconnected to use the new ICE config.
+    ///
+    /// If both stun_server and turn_server are empty/None, uses public ICE servers.
     pub async fn update_ice_config(
         &self,
         stun_server: Option<String>,
@@ -607,32 +635,49 @@ impl WebRtcStreamer {
     ) {
         let mut config = self.config.write().await;
 
-        // Update STUN servers
+        // Clear existing servers
         config.webrtc.stun_servers.clear();
-        if let Some(ref stun) = stun_server {
-            if !stun.is_empty() {
-                config.webrtc.stun_servers.push(stun.clone());
-                info!("WebRTC STUN server updated: {}", stun);
-            }
-        }
-
-        // Update TURN servers
         config.webrtc.turn_servers.clear();
-        if let Some(ref turn) = turn_server {
-            if !turn.is_empty() {
-                let username = turn_username.unwrap_or_default();
-                let credential = turn_password.unwrap_or_default();
-                config.webrtc.turn_servers.push(TurnServer {
-                    url: turn.clone(),
-                    username: username.clone(),
-                    credential,
-                });
-                info!("WebRTC TURN server updated: {} (user: {})", turn, username);
-            }
-        }
 
-        if config.webrtc.stun_servers.is_empty() && config.webrtc.turn_servers.is_empty() {
-            info!("WebRTC ICE config cleared - only host candidates will be used");
+        // Check if user configured custom servers
+        let has_custom_stun = stun_server.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+        let has_custom_turn = turn_server.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+
+        // If no custom servers, use public ICE servers (like RustDesk)
+        if !has_custom_stun && !has_custom_turn {
+            use crate::webrtc::config::public_ice;
+            if public_ice::is_configured() {
+                if let Some(stun) = public_ice::stun_server() {
+                    config.webrtc.stun_servers.push(stun.clone());
+                    info!("Using public STUN server: {}", stun);
+                }
+                for turn in public_ice::turn_servers() {
+                    info!("Using public TURN server: {:?}", turn.urls);
+                    config.webrtc.turn_servers.push(turn);
+                }
+            } else {
+                info!("No public ICE servers configured, using host candidates only");
+            }
+        } else {
+            // Use custom servers
+            if let Some(ref stun) = stun_server {
+                if !stun.is_empty() {
+                    config.webrtc.stun_servers.push(stun.clone());
+                    info!("Using custom STUN server: {}", stun);
+                }
+            }
+            if let Some(ref turn) = turn_server {
+                if !turn.is_empty() {
+                    let username = turn_username.unwrap_or_default();
+                    let credential = turn_password.unwrap_or_default();
+                    config.webrtc.turn_servers.push(TurnServer::new(
+                        turn.clone(),
+                        username.clone(),
+                        credential,
+                    ));
+                    info!("Using custom TURN server: {} (user: {})", turn, username);
+                }
+            }
         }
     }
 
@@ -670,13 +715,12 @@ impl WebRtcStreamer {
         let mut session = UniversalSession::new(session_config.clone(), session_id.clone()).await?;
 
         // Set HID controller if available
+        // Note: We DON'T create a data channel here - the frontend creates it.
+        // The server only receives it via on_data_channel callback set in set_hid_controller().
+        // If server also created a channel, frontend's ondatachannel would overwrite its
+        // own channel with server's, but server's channel has no message handler!
         if let Some(ref hid) = *self.hid_controller.read().await {
             session.set_hid_controller(hid.clone());
-        }
-
-        // Create data channel
-        if self.config.read().await.webrtc.enable_datachannel {
-            session.create_data_channel("hid").await?;
         }
 
         let session = Arc::new(session);
@@ -901,9 +945,16 @@ impl WebRtcStreamer {
     /// Set bitrate using preset
     ///
     /// Note: Hardware encoders (VAAPI, NVENC, etc.) don't support dynamic bitrate changes.
-    /// This method restarts the pipeline to apply the new bitrate.
+    /// This method restarts the pipeline to apply the new bitrate only if the preset actually changed.
     pub async fn set_bitrate_preset(self: &Arc<Self>, preset: BitratePreset) -> Result<()> {
-        // Update config first
+        // Check if preset actually changed
+        let current_preset = self.config.read().await.bitrate_preset;
+        if current_preset == preset {
+            trace!("Bitrate preset unchanged: {}", preset);
+            return Ok(());
+        }
+
+        // Update config
         self.config.write().await.bitrate_preset = preset;
 
         // Check if pipeline exists and is running

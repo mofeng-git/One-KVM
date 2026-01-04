@@ -25,7 +25,7 @@ const networkErrorMessage = ref<string | null>(null)
 let reconnectTimeout: number | null = null
 const hidUnavailable = ref(false) // Track if HID is unavailable to prevent unnecessary reconnects
 
-// Mouse throttle mechanism
+// Mouse throttle mechanism (10ms = 100Hz for smoother cursor movement)
 let mouseThrottleMs = 10
 let lastMouseSendTime = 0
 let pendingMouseEvent: HidMouseEvent | null = null
@@ -183,36 +183,40 @@ function _sendMouseInternal(event: HidMouseEvent): Promise<void> {
 }
 
 // Throttled mouse event sender
+// Note: Returns immediately for throttled events to avoid Promise memory leak.
+// When an event is throttled, we store it as pending and resolve immediately.
+// A timer will send the pending event later, but that's fire-and-forget.
 function sendMouse(event: HidMouseEvent): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const now = Date.now()
-    const elapsed = now - lastMouseSendTime
+  const now = Date.now()
+  const elapsed = now - lastMouseSendTime
 
-    if (elapsed >= mouseThrottleMs) {
-      // Send immediately if enough time has passed
-      lastMouseSendTime = now
-      _sendMouseInternal(event).then(resolve).catch(reject)
-    } else {
-      // Queue the event and send after throttle period
-      pendingMouseEvent = event
+  if (elapsed >= mouseThrottleMs) {
+    // Send immediately if enough time has passed
+    lastMouseSendTime = now
+    return _sendMouseInternal(event)
+  } else {
+    // Throttle: store event for later, resolve immediately to avoid Promise leak
+    pendingMouseEvent = event
 
-      // Clear existing timer
-      if (throttleTimer !== null) {
-        clearTimeout(throttleTimer)
-      }
-
-      // Schedule send after remaining throttle time
-      throttleTimer = window.setTimeout(() => {
-        if (pendingMouseEvent) {
-          lastMouseSendTime = Date.now()
-          _sendMouseInternal(pendingMouseEvent)
-            .then(resolve)
-            .catch(reject)
-          pendingMouseEvent = null
-        }
-      }, mouseThrottleMs - elapsed)
+    // Clear existing timer and set a new one
+    if (throttleTimer !== null) {
+      clearTimeout(throttleTimer)
     }
-  })
+
+    // Schedule send after remaining throttle time (fire-and-forget)
+    throttleTimer = window.setTimeout(() => {
+      if (pendingMouseEvent) {
+        lastMouseSendTime = Date.now()
+        _sendMouseInternal(pendingMouseEvent).catch(() => {
+          // Silently ignore errors for throttled events
+        })
+        pendingMouseEvent = null
+      }
+    }, mouseThrottleMs - elapsed)
+
+    // Resolve immediately - the event is queued, caller doesn't need to wait
+    return Promise.resolve()
+  }
 }
 
 // Send consumer control event (multimedia keys)

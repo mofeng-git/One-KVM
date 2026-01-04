@@ -250,13 +250,13 @@ impl UniversalSession {
             // Skip TURN servers without credentials (webrtc-rs requires them)
             if turn.username.is_empty() || turn.credential.is_empty() {
                 warn!(
-                    "Skipping TURN server {} - credentials required but missing",
-                    turn.url
+                    "Skipping TURN server {:?} - credentials required but missing",
+                    turn.urls
                 );
                 continue;
             }
             ice_servers.push(RTCIceServer {
-                urls: vec![turn.url.clone()],
+                urls: turn.urls.clone(),
                 username: turn.username.clone(),
                 credential: turn.credential.clone(),
                 ..Default::default()
@@ -424,7 +424,9 @@ impl UniversalSession {
                     dc.on_message(Box::new(move |msg: DataChannelMessage| {
                         let hid = hid.clone();
 
-                        Box::pin(async move {
+                        // Immediately spawn task in tokio runtime for low latency
+                        // Don't rely on webrtc-rs to poll the returned Future
+                        tokio::spawn(async move {
                             if let Some(event) = parse_hid_message(&msg.data) {
                                 match event {
                                     HidChannelEvent::Keyboard(kb_event) => {
@@ -444,7 +446,10 @@ impl UniversalSession {
                                     }
                                 }
                             }
-                        })
+                        });
+
+                        // Return empty future (actual work is spawned above)
+                        Box::pin(async {})
                     }));
                 })
             }));
@@ -654,12 +659,6 @@ impl UniversalSession {
                                     }
                                 } else {
                                     packets_sent += 1;
-                                    trace!(
-                                        "Session {} sent audio packet {}: {} bytes",
-                                        session_id,
-                                        packets_sent,
-                                        opus_frame.data.len()
-                                    );
                                 }
                             }
                             Err(broadcast::error::RecvError::Lagged(n)) => {

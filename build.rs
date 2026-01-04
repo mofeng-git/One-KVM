@@ -64,9 +64,10 @@ fn generate_secrets() {
     let mut rustdesk_public_server = String::new();
     let mut rustdesk_public_key = String::new();
     let mut rustdesk_relay_key = String::new();
-    let mut turn_server = String::new();
-    let mut turn_username = String::new();
-    let mut turn_password = String::new();
+    let mut ice_stun_server = String::new();
+    let mut ice_turn_urls = String::new();
+    let mut ice_turn_username = String::new();
+    let mut ice_turn_password = String::new();
 
     // Try to read secrets.toml
     if let Ok(content) = fs::read_to_string("secrets.toml") {
@@ -84,16 +85,19 @@ fn generate_secrets() {
                 }
             }
 
-            // TURN section (for future use)
-            if let Some(turn) = value.get("turn") {
-                if let Some(v) = turn.get("server").and_then(|v| v.as_str()) {
-                    turn_server = v.to_string();
+            // ICE section (for WebRTC)
+            if let Some(ice) = value.get("ice") {
+                if let Some(v) = ice.get("stun_server").and_then(|v| v.as_str()) {
+                    ice_stun_server = v.to_string();
                 }
-                if let Some(v) = turn.get("username").and_then(|v| v.as_str()) {
-                    turn_username = v.to_string();
+                if let Some(v) = ice.get("turn_urls").and_then(|v| v.as_str()) {
+                    ice_turn_urls = v.to_string();
                 }
-                if let Some(v) = turn.get("password").and_then(|v| v.as_str()) {
-                    turn_password = v.to_string();
+                if let Some(v) = ice.get("turn_username").and_then(|v| v.as_str()) {
+                    ice_turn_username = v.to_string();
+                }
+                if let Some(v) = ice.get("turn_password").and_then(|v| v.as_str()) {
+                    ice_turn_password = v.to_string();
                 }
             }
         } else {
@@ -125,29 +129,38 @@ pub mod rustdesk {{
     }}
 }}
 
-/// TURN server configuration (for WebRTC)
-pub mod turn {{
-    /// TURN server address
-    pub const SERVER: &str = "{}";
+/// ICE server configuration (for WebRTC NAT traversal)
+pub mod ice {{
+    /// Public STUN server URL
+    pub const STUN_SERVER: &str = "{}";
 
-    /// TURN username
-    pub const USERNAME: &str = "{}";
+    /// Public TURN server URLs (comma-separated)
+    pub const TURN_URLS: &str = "{}";
 
-    /// TURN password
-    pub const PASSWORD: &str = "{}";
+    /// TURN authentication username
+    pub const TURN_USERNAME: &str = "{}";
 
-    /// Check if TURN server is configured
+    /// TURN authentication password
+    pub const TURN_PASSWORD: &str = "{}";
+
+    /// Check if public ICE servers are configured
     pub const fn is_configured() -> bool {{
-        !SERVER.is_empty()
+        !STUN_SERVER.is_empty() || !TURN_URLS.is_empty()
+    }}
+
+    /// Check if TURN servers are configured (requires credentials)
+    pub const fn has_turn() -> bool {{
+        !TURN_URLS.is_empty() && !TURN_USERNAME.is_empty() && !TURN_PASSWORD.is_empty()
     }}
 }}
 "#,
         escape_string(&rustdesk_public_server),
         escape_string(&rustdesk_public_key),
         escape_string(&rustdesk_relay_key),
-        escape_string(&turn_server),
-        escape_string(&turn_username),
-        escape_string(&turn_password),
+        escape_string(&ice_stun_server),
+        escape_string(&ice_turn_urls),
+        escape_string(&ice_turn_username),
+        escape_string(&ice_turn_password),
     );
 
     fs::write(&dest_path, code).expect("Failed to write secrets_generated.rs");

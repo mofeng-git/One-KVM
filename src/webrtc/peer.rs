@@ -78,7 +78,7 @@ impl PeerConnection {
 
         for turn in &config.turn_servers {
             ice_servers.push(RTCIceServer {
-                urls: vec![turn.url.clone()],
+                urls: turn.urls.clone(),
                 username: turn.username.clone(),
                 credential: turn.credential.clone(),
                 ..Default::default()
@@ -207,10 +207,11 @@ impl PeerConnection {
                 *data_channel.write().await = Some(dc.clone());
 
                 // Set up message handler with HID processing
+                // Immediately spawn task in tokio runtime for low latency
                 dc.on_message(Box::new(move |msg: DataChannelMessage| {
                     let hid = hid.clone();
 
-                    Box::pin(async move {
+                    tokio::spawn(async move {
                         debug!("DataChannel HID message: {} bytes", msg.data.len());
 
                         // Parse and process HID message
@@ -233,7 +234,10 @@ impl PeerConnection {
                                 }
                             }
                         }
-                    })
+                    });
+
+                    // Return empty future (actual work is spawned above)
+                    Box::pin(async {})
                 }));
             })
         }));
@@ -432,11 +436,10 @@ impl PeerConnectionManager {
         // Add video track
         peer.add_video_track(VideoTrackConfig::default()).await?;
 
-        // Create data channel and set HID controller
+        // Set HID controller if available
+        // Note: We DON'T create a data channel here - the frontend creates it.
+        // The server receives it via on_data_channel callback set in set_hid_controller().
         if self.config.enable_datachannel {
-            peer.create_data_channel("hid").await?;
-
-            // Set HID controller if available
             if let Some(ref hid) = self.hid_controller {
                 peer.set_hid_controller(hid.clone());
             }

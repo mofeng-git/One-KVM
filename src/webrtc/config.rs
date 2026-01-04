@@ -2,6 +2,63 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::secrets;
+
+/// Public ICE server utilities
+pub mod public_ice {
+    use super::*;
+
+    /// Check if public ICE servers are configured (at compile time)
+    pub fn is_configured() -> bool {
+        secrets::ice::is_configured()
+    }
+
+    /// Check if public TURN servers are configured (requires credentials)
+    pub fn has_turn() -> bool {
+        secrets::ice::has_turn()
+    }
+
+    /// Get the public STUN server URL
+    pub fn stun_server() -> Option<String> {
+        let server = secrets::ice::STUN_SERVER;
+        if server.is_empty() {
+            None
+        } else {
+            Some(server.to_string())
+        }
+    }
+
+    /// Get public TURN servers as TurnServer structs
+    pub fn turn_servers() -> Vec<TurnServer> {
+        if !secrets::ice::has_turn() {
+            return vec![];
+        }
+
+        let urls: Vec<String> = secrets::ice::TURN_URLS
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if urls.is_empty() {
+            return vec![];
+        }
+
+        vec![TurnServer {
+            urls,
+            username: secrets::ice::TURN_USERNAME.to_string(),
+            credential: secrets::ice::TURN_PASSWORD.to_string(),
+        }]
+    }
+
+    /// Get all public ICE servers (STUN + TURN) for WebRTC configuration
+    pub fn get_all_servers() -> (Vec<String>, Vec<TurnServer>) {
+        let stun_servers = stun_server().into_iter().collect();
+        let turn_servers = turn_servers();
+        (stun_servers, turn_servers)
+    }
+}
+
 /// WebRTC configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebRtcConfig {
@@ -46,12 +103,24 @@ impl Default for WebRtcConfig {
 /// TURN server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TurnServer {
-    /// TURN server URL (e.g., "turn:turn.example.com:3478")
-    pub url: String,
+    /// TURN server URLs (e.g., ["turn:turn.example.com:3478?transport=udp", "turn:turn.example.com:3478?transport=tcp"])
+    /// Multiple URLs allow fallback between UDP and TCP transports
+    pub urls: Vec<String>,
     /// Username for TURN authentication
     pub username: String,
     /// Credential for TURN authentication
     pub credential: String,
+}
+
+impl TurnServer {
+    /// Create a TurnServer with a single URL (for backwards compatibility)
+    pub fn new(url: String, username: String, credential: String) -> Self {
+        Self {
+            urls: vec![url],
+            username,
+            credential,
+        }
+    }
 }
 
 /// Video codec preference

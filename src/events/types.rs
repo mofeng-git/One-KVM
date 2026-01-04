@@ -187,6 +187,18 @@ pub enum SystemEvent {
         device: String,
     },
 
+    /// WebRTC is ready to accept connections
+    ///
+    /// Sent after video frame source is connected to WebRTC pipeline.
+    /// Clients should wait for this event before attempting to create WebRTC sessions.
+    #[serde(rename = "stream.webrtc_ready")]
+    WebRTCReady {
+        /// Current video codec
+        codec: String,
+        /// Whether hardware encoding is being used
+        hardware: bool,
+    },
+
     /// Stream statistics update (sent periodically for client stats)
     #[serde(rename = "stream.stats_update")]
     StreamStatsUpdate {
@@ -485,6 +497,7 @@ impl SystemEvent {
             Self::StreamDeviceLost { .. } => "stream.device_lost",
             Self::StreamReconnecting { .. } => "stream.reconnecting",
             Self::StreamRecovered { .. } => "stream.recovered",
+            Self::WebRTCReady { .. } => "stream.webrtc_ready",
             Self::StreamStatsUpdate { .. } => "stream.stats_update",
             Self::StreamModeChanged { .. } => "stream.mode_changed",
             Self::HidStateChanged { .. } => "hid.state_changed",

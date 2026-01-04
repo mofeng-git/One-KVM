@@ -648,6 +648,24 @@ pub async fn setup_init(
         }
     }
 
+    // Start audio streaming if audio device was selected during setup
+    if new_config.audio.enabled {
+        let audio_config = crate::audio::AudioControllerConfig {
+            enabled: true,
+            device: new_config.audio.device.clone(),
+            quality: crate::audio::AudioQuality::from_str(&new_config.audio.quality),
+        };
+        if let Err(e) = state.audio.update_config(audio_config).await {
+            tracing::warn!("Failed to start audio during setup: {}", e);
+        } else {
+            tracing::info!("Audio started during setup: device={}", new_config.audio.device);
+        }
+        // Also enable WebRTC audio
+        if let Err(e) = state.stream_manager.set_webrtc_audio_enabled(true).await {
+            tracing::warn!("Failed to enable WebRTC audio during setup: {}", e);
+        }
+    }
+
     tracing::info!("System initialized successfully with admin user: {}", req.username);
 
     Ok(Json(LoginResponse {

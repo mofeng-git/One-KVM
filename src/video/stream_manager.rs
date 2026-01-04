@@ -396,6 +396,29 @@ impl VideoStreamManager {
                     );
                     self.webrtc_streamer.update_video_config(resolution, format, fps).await;
                     self.webrtc_streamer.set_video_source(frame_tx).await;
+
+                    // Get device path for events
+                    let device_path = self.streamer.current_device().await
+                        .map(|d| d.path.to_string_lossy().to_string())
+                        .unwrap_or_default();
+
+                    // Publish StreamConfigApplied event - clients can now safely connect
+                    self.publish_event(SystemEvent::StreamConfigApplied {
+                        device: device_path,
+                        resolution: (resolution.width, resolution.height),
+                        format: format!("{:?}", format).to_lowercase(),
+                        fps,
+                    })
+                    .await;
+
+                    // Publish WebRTCReady event - frame source is now connected
+                    let codec = self.webrtc_streamer.current_video_codec().await;
+                    let is_hardware = self.webrtc_streamer.is_hardware_encoding().await;
+                    self.publish_event(SystemEvent::WebRTCReady {
+                        codec: codec_to_string(codec),
+                        hardware: is_hardware,
+                    })
+                    .await;
                 } else {
                     warn!("No frame source available for WebRTC - sessions may fail to receive video");
                 }

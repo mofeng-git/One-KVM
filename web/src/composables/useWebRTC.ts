@@ -83,6 +83,7 @@ let sessionId: string | null = null
 let statsInterval: number | null = null
 let isConnecting = false // Lock to prevent concurrent connect calls
 let pendingIceCandidates: RTCIceCandidate[] = [] // Queue for ICE candidates before sessionId is set
+let cachedMediaStream: MediaStream | null = null // Cached MediaStream to avoid recreating
 
 const state = ref<WebRTCState>('disconnected')
 const videoTrack = ref<MediaStreamTrack | null>(null)
@@ -399,8 +400,28 @@ async function connect(): Promise<boolean> {
       }
     }
 
-    isConnecting = false
-    return true
+    // 等待连接真正建立（最多等待 15 秒）
+    // 直接检查 peerConnection.connectionState 而不是 reactive state
+    // 因为 TypeScript 不知道 state 会被 onconnectionstatechange 回调异步修改
+    const connectionTimeout = 15000
+    const pollInterval = 100
+    let waited = 0
+
+    while (waited < connectionTimeout && peerConnection) {
+      const pcState = peerConnection.connectionState
+      if (pcState === 'connected') {
+        isConnecting = false
+        return true
+      }
+      if (pcState === 'failed' || pcState === 'closed') {
+        throw new Error('Connection failed during ICE negotiation')
+      }
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+      waited += pollInterval
+    }
+
+    // 超时
+    throw new Error('Connection timeout waiting for ICE negotiation')
   } catch (err) {
     state.value = 'failed'
     error.value = err instanceof Error ? err.message : 'Connection failed'
@@ -441,6 +462,7 @@ async function disconnect() {
 
   videoTrack.value = null
   audioTrack.value = null
+  cachedMediaStream = null // Clear cached stream on disconnect
   state.value = 'disconnected'
   error.value = null
 
@@ -493,20 +515,49 @@ function sendMouse(event: HidMouseEvent): boolean {
   }
 }
 
-// Get MediaStream for video element
+// Get MediaStream for video element (cached to avoid recreating)
 function getMediaStream(): MediaStream | null {
   if (!videoTrack.value && !audioTrack.value) {
     return null
   }
 
-  const stream = new MediaStream()
+  // Reuse cached stream if tracks match
+  if (cachedMediaStream) {
+    const currentVideoTracks = cachedMediaStream.getVideoTracks()
+    const currentAudioTracks = cachedMediaStream.getAudioTracks()
+
+    const videoMatches = videoTrack.value
+      ? currentVideoTracks.includes(videoTrack.value)
+      : currentVideoTracks.length === 0
+    const audioMatches = audioTrack.value
+      ? currentAudioTracks.includes(audioTrack.value)
+      : currentAudioTracks.length === 0
+
+    if (videoMatches && audioMatches) {
+      return cachedMediaStream
+    }
+
+    // Tracks changed, update the cached stream
+    // Remove old tracks
+    currentVideoTracks.forEach(t => cachedMediaStream!.removeTrack(t))
+    currentAudioTracks.forEach(t => cachedMediaStream!.removeTrack(t))
+
+    // Add new tracks
+    if (videoTrack.value) cachedMediaStream.addTrack(videoTrack.value)
+    if (audioTrack.value) cachedMediaStream.addTrack(audioTrack.value)
+
+    return cachedMediaStream
+  }
+
+  // Create new cached stream
+  cachedMediaStream = new MediaStream()
   if (videoTrack.value) {
-    stream.addTrack(videoTrack.value)
+    cachedMediaStream.addTrack(videoTrack.value)
   }
   if (audioTrack.value) {
-    stream.addTrack(audioTrack.value)
+    cachedMediaStream.addTrack(audioTrack.value)
   }
-  return stream
+  return cachedMediaStream
 }
 
 // Composable export

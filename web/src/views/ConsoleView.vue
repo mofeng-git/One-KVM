@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
@@ -9,6 +9,7 @@ import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { streamApi, hidApi, atxApi, extensionsApi, atxConfigApi, userApi } from '@/api'
+import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { toast } from 'vue-sonner'
 import { generateUUID } from '@/lib/utils'
 import type { VideoMode } from '@/components/VideoConfigPopover.vue'
@@ -186,6 +187,18 @@ const videoDetails = computed<StatusDetail[]>(() => {
 })
 
 const hidStatus = computed<'connected' | 'connecting' | 'disconnected' | 'error'>(() => {
+  // In WebRTC mode, check DataChannel status first
+  if (videoMode.value !== 'mjpeg') {
+    // DataChannel is ready - HID is connected via WebRTC
+    if (webrtc.dataChannelReady.value) return 'connected'
+    // WebRTC is connecting - HID is also connecting
+    if (webrtc.isConnecting.value) return 'connecting'
+    // WebRTC is connected but DataChannel not ready - still connecting
+    if (webrtc.isConnected.value) return 'connecting'
+    // WebRTC not connected - fall through to WebSocket check as fallback
+  }
+
+  // MJPEG mode or WebRTC fallback: check WebSocket HID status
   // If HID WebSocket has network error, show connecting (yellow)
   if (hidWs.networkError.value) return 'connecting'
 
@@ -221,13 +234,31 @@ const hidDetails = computed<StatusDetail[]>(() => {
     { label: t('statusCard.currentMode'), value: mouseMode.value === 'absolute' ? t('statusCard.absolute') : t('statusCard.relative'), status: 'ok' },
   ]
 
-  // Add connection status
-  if (hidWs.networkError.value) {
-    details.push({ label: t('statusCard.connection'), value: t('statusCard.networkError'), status: 'warning' })
-  } else if (!hidWs.connected.value) {
-    details.push({ label: t('statusCard.connection'), value: t('statusCard.disconnected'), status: 'warning' })
-  } else if (hidWs.hidUnavailable.value) {
-    details.push({ label: t('statusCard.availability'), value: t('statusCard.hidUnavailable'), status: 'warning' })
+  // Add HID channel info based on video mode
+  if (videoMode.value !== 'mjpeg') {
+    // WebRTC mode - show DataChannel status
+    if (webrtc.dataChannelReady.value) {
+      details.push({ label: t('statusCard.channel'), value: 'DataChannel (WebRTC)', status: 'ok' })
+    } else if (webrtc.isConnecting.value || webrtc.isConnected.value) {
+      details.push({ label: t('statusCard.channel'), value: 'DataChannel', status: 'warning' })
+    } else {
+      // Fallback to WebSocket
+      details.push({ label: t('statusCard.channel'), value: 'WebSocket (fallback)', status: hidWs.connected.value ? 'ok' : 'warning' })
+    }
+  } else {
+    // MJPEG mode - WebSocket HID
+    details.push({ label: t('statusCard.channel'), value: 'WebSocket', status: hidWs.connected.value ? 'ok' : 'warning' })
+  }
+
+  // Add connection status for WebSocket (only relevant for MJPEG or fallback)
+  if (videoMode.value === 'mjpeg' || !webrtc.dataChannelReady.value) {
+    if (hidWs.networkError.value) {
+      details.push({ label: t('statusCard.connection'), value: t('statusCard.networkError'), status: 'warning' })
+    } else if (!hidWs.connected.value) {
+      details.push({ label: t('statusCard.connection'), value: t('statusCard.disconnected'), status: 'warning' })
+    } else if (hidWs.hidUnavailable.value) {
+      details.push({ label: t('statusCard.availability'), value: t('statusCard.hidUnavailable'), status: 'warning' })
+    }
   }
 
   return details
@@ -242,10 +273,20 @@ const audioStatus = computed<'connected' | 'connecting' | 'disconnected' | 'erro
   return 'disconnected'
 })
 
+// Helper function to translate audio quality
+function translateAudioQuality(quality: string | undefined): string {
+  if (!quality) return t('common.unknown')
+  const qualityLower = quality.toLowerCase()
+  if (qualityLower === 'voice') return t('actionbar.qualityVoice')
+  if (qualityLower === 'balanced') return t('actionbar.qualityBalanced')
+  if (qualityLower === 'high') return t('actionbar.qualityHigh')
+  return quality // fallback to original value
+}
+
 const audioQuickInfo = computed(() => {
   const audio = systemStore.audio
   if (!audio?.available) return ''
-  if (audio.streaming) return audio.quality
+  if (audio.streaming) return translateAudioQuality(audio.quality)
   return t('statusCard.off')
 })
 
@@ -258,8 +299,8 @@ const audioDetails = computed<StatusDetail[]>(() => {
   if (!audio) return []
 
   return [
-    { label: t('statusCard.device'), value: audio.device || 'default' },
-    { label: t('statusCard.quality'), value: audio.quality },
+    { label: t('statusCard.device'), value: audio.device || t('statusCard.defaultDevice') },
+    { label: t('statusCard.quality'), value: translateAudioQuality(audio.quality) },
     { label: t('statusCard.streaming'), value: audio.streaming ? t('statusCard.yes') : t('statusCard.no'), status: audio.streaming ? 'ok' : undefined },
   ]
 })
@@ -384,6 +425,11 @@ function handleVideoLoad() {
 function handleVideoError() {
   // 如果当前是 WebRTC 模式，忽略 MJPEG 错误（因为我们主动清空了 src）
   if (videoMode.value !== 'mjpeg') {
+    return
+  }
+
+  // 如果正在切换模式，忽略错误（可能是 503 错误，因为后端已切换模式）
+  if (isModeSwitching.value) {
     return
   }
 
@@ -676,6 +722,12 @@ function handleStreamConfigApplied(data: any) {
   // Refresh video based on current mode
   videoRestarting.value = false
 
+  // 如果正在进行模式切换，不需要在这里处理（WebRTCReady 事件会处理）
+  if (isModeSwitching.value) {
+    console.log('[StreamConfigApplied] Mode switch in progress, waiting for WebRTCReady')
+    return
+  }
+
   if (videoMode.value !== 'mjpeg') {
     // In WebRTC mode, reconnect WebRTC (session was closed due to config change)
     switchToWebRTC(videoMode.value)
@@ -688,6 +740,17 @@ function handleStreamConfigApplied(data: any) {
     description: `${data.device} - ${data.resolution[0]}x${data.resolution[1]} @ ${data.fps}fps`,
     duration: 3000,
   })
+}
+
+// 处理 WebRTC 就绪事件 - 这是后端真正准备好接受 WebRTC 连接的信号
+function handleWebRTCReady(data: { codec: string; hardware: boolean }) {
+  console.log(`[WebRTCReady] Backend ready: codec=${data.codec}, hardware=${data.hardware}`)
+
+  // 如果正在进行模式切换，标记后端已就绪
+  if (isModeSwitching.value) {
+    console.log('[WebRTCReady] Signaling backend ready for WebRTC connection')
+    backendReadyForWebRTC = true
+  }
 }
 
 function handleStreamStateChanged(data: any) {
@@ -778,7 +841,13 @@ function handleStreamModeChanged(data: { mode: string; previous_mode: string }) 
   // Server returns: 'mjpeg', 'h264', 'h265', 'vp8', 'vp9', or 'webrtc'
   const newMode = data.mode === 'webrtc' ? 'h264' : data.mode as VideoMode
 
-  // Show toast notification
+  // 如果正在进行模式切换，忽略这个事件（这是我们自己触发的切换产生的）
+  if (isModeSwitching.value) {
+    console.log('[StreamModeChanged] Mode switch in progress, ignoring event')
+    return
+  }
+
+  // Show toast notification only if this is an external mode change
   toast.info(t('console.streamModeChanged'), {
     description: t('console.streamModeChangedDesc', { mode: data.mode.toUpperCase() }),
     duration: 5000,
@@ -792,6 +861,14 @@ function handleStreamModeChanged(data: { mode: string; previous_mode: string }) 
 
 // 标记是否正在刷新视频（用于忽略清空 src 时触发的 error 事件）
 let isRefreshingVideo = false
+// 标记是否正在切换模式（防止竞态条件和 503 错误）
+const isModeSwitching = ref(false)
+// 标记后端是否已准备好接受 WebRTC 连接（由 StreamConfigApplied 事件设置）
+let backendReadyForWebRTC = false
+
+function reloadPage() {
+  window.location.reload()
+}
 
 function refreshVideo() {
   backendFps.value = 0
@@ -845,6 +922,7 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
   mjpegTimestamp.value = 0
   if (videoRef.value) {
     videoRef.value.src = ''
+    videoRef.value.removeAttribute('src')
   }
 
   videoLoading.value = true
@@ -859,18 +937,9 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
         duration: 3000,
       })
 
-      // Try to attach video immediately in case track is already available
-      if (webrtc.videoTrack.value && webrtcVideoRef.value) {
-        const stream = webrtc.getMediaStream()
-        if (stream) {
-          webrtcVideoRef.value.srcObject = stream
-          try {
-            await webrtcVideoRef.value.play()
-          } catch {
-            // AbortError is expected when switching modes quickly, ignore it
-          }
-        }
-      }
+      // 强制重新绑定视频（即使 track 已存在）
+      // 这解决了页面返回时视频不显示的问题
+      await rebindWebRTCVideo()
 
       videoLoading.value = false
       videoMode.value = codec
@@ -882,6 +951,28 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
     videoError.value = true
     videoErrorMessage.value = 'WebRTC connection failed'
     videoLoading.value = false
+  }
+}
+
+// 强制重新绑定 WebRTC 视频到视频元素
+// 解决页面切换后视频不显示的问题
+async function rebindWebRTCVideo() {
+  if (!webrtcVideoRef.value) return
+
+  // 先清空再重新绑定，确保浏览器重新渲染
+  webrtcVideoRef.value.srcObject = null
+  await nextTick()
+
+  if (webrtc.videoTrack.value) {
+    const stream = webrtc.getMediaStream()
+    if (stream) {
+      webrtcVideoRef.value.srcObject = stream
+      try {
+        await webrtcVideoRef.value.play()
+      } catch {
+        // AbortError is expected when switching modes quickly, ignore it
+      }
+    }
   }
 }
 
@@ -918,29 +1009,48 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
     }
 
     // Step 2: Call backend API to switch mode with specific codec
+    // 重置就绪标志
+    backendReadyForWebRTC = false
     await streamApi.setMode(codec)
 
-    // Step 3: Connect WebRTC with new codec
-    const success = await webrtc.connect()
+    // Step 3: 等待后端完成格式切换（由 StreamConfigApplied 事件触发）
+    // 后端需要时间来：停止捕获 → 切换格式 → 重启捕获 → 连接 frame source
+    // 使用轮询等待，最多等待 3 秒
+    const maxWaitTime = 3000
+    const pollInterval = 100
+    let waited = 0
+    while (!backendReadyForWebRTC && waited < maxWaitTime) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+      waited += pollInterval
+    }
+
+    if (!backendReadyForWebRTC) {
+      console.warn('[WebRTC] Backend not ready after timeout, attempting connection anyway')
+    } else {
+      console.log('[WebRTC] Backend ready signal received, connecting')
+    }
+
+    // Step 4: Connect WebRTC with retry
+    let retries = 3
+    let success = false
+    while (retries > 0 && !success) {
+      success = await webrtc.connect()
+      if (!success) {
+        retries--
+        if (retries > 0) {
+          console.log(`[WebRTC] Connection failed, retrying (${retries} attempts left)`)
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+    }
     if (success) {
       toast.success(t('console.webrtcConnected'), {
         description: t('console.webrtcConnectedDesc'),
         duration: 3000,
       })
 
-      // Video will be attached by the watch on webrtc.videoTrack
-      // But also try to attach immediately in case track is already available
-      if (webrtc.videoTrack.value && webrtcVideoRef.value) {
-        const stream = webrtc.getMediaStream()
-        if (stream) {
-          webrtcVideoRef.value.srcObject = stream
-          try {
-            await webrtcVideoRef.value.play()
-          } catch {
-            // AbortError is expected when switching modes quickly, ignore it
-          }
-        }
-      }
+      // 强制重新绑定视频
+      await rebindWebRTCVideo()
 
       videoLoading.value = false
 
@@ -995,40 +1105,49 @@ async function switchToMJPEG() {
 }
 
 // Handle video mode change
-function handleVideoModeChange(mode: VideoMode) {
+async function handleVideoModeChange(mode: VideoMode) {
+  // 防止重复切换和竞态条件
   if (mode === videoMode.value) return
-
-  // Reset mjpegTimestamp to 0 when switching away from MJPEG
-  // This prevents mjpegUrl from returning a valid URL and stops MJPEG requests
-  if (mode !== 'mjpeg') {
-    mjpegTimestamp.value = 0
+  if (isModeSwitching.value) {
+    console.log('[VideoMode] Switch already in progress, ignoring')
+    return
   }
 
-  videoMode.value = mode
-  localStorage.setItem('videoMode', mode)
+  isModeSwitching.value = true
 
-  // All WebRTC modes: h264, h265, vp8, vp9
-  if (mode !== 'mjpeg') {
-    switchToWebRTC(mode)
-  } else {
-    switchToMJPEG()
+  try {
+    // Reset mjpegTimestamp to 0 when switching away from MJPEG
+    // This prevents mjpegUrl from returning a valid URL and stops MJPEG requests
+    if (mode !== 'mjpeg') {
+      mjpegTimestamp.value = 0
+      // 完全清理 MJPEG 图片元素
+      if (videoRef.value) {
+        videoRef.value.src = ''
+        videoRef.value.removeAttribute('src')
+      }
+      // 等待一小段时间确保浏览器取消 pending 请求
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+
+    videoMode.value = mode
+    localStorage.setItem('videoMode', mode)
+
+    // All WebRTC modes: h264, h265, vp8, vp9
+    if (mode !== 'mjpeg') {
+      await switchToWebRTC(mode)
+    } else {
+      await switchToMJPEG()
+    }
+  } finally {
+    isModeSwitching.value = false
   }
 }
 
 // Watch for WebRTC video track changes
 watch(() => webrtc.videoTrack.value, async (track) => {
   if (track && webrtcVideoRef.value && videoMode.value !== 'mjpeg') {
-    const stream = webrtc.getMediaStream()
-
-    if (stream) {
-      webrtcVideoRef.value.srcObject = stream
-
-      try {
-        await webrtcVideoRef.value.play()
-      } catch {
-        // AbortError is expected when switching modes quickly, ignore it
-      }
-    }
+    // 使用统一的重新绑定函数
+    await rebindWebRTCVideo()
   }
 })
 
@@ -1232,6 +1351,41 @@ function handleHidError(_error: any, _operation: string) {
   // All HID errors are silently ignored
 }
 
+// HID channel selection: use WebRTC DataChannel when available, fallback to WebSocket
+function sendKeyboardEvent(type: 'down' | 'up', key: number, modifiers?: { ctrl?: boolean; shift?: boolean; alt?: boolean; meta?: boolean }) {
+  // In WebRTC mode with DataChannel ready, use DataChannel for lower latency
+  if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
+    const event: HidKeyboardEvent = {
+      type: type === 'down' ? 'keydown' : 'keyup',
+      key,
+      modifiers,
+    }
+    const sent = webrtc.sendKeyboard(event)
+    if (sent) return
+    // Fallback to WebSocket if DataChannel send failed
+  }
+  // Use WebSocket as fallback or for MJPEG mode
+  hidApi.keyboard(type, key, modifiers).catch(err => handleHidError(err, `keyboard ${type}`))
+}
+
+function sendMouseEvent(data: { type: 'move' | 'move_abs' | 'down' | 'up' | 'scroll'; x?: number; y?: number; button?: 'left' | 'right' | 'middle'; scroll?: number }) {
+  // In WebRTC mode with DataChannel ready, use DataChannel for lower latency
+  if (videoMode.value !== 'mjpeg' && webrtc.dataChannelReady.value) {
+    const event: HidMouseEvent = {
+      type: data.type === 'move_abs' ? 'moveabs' : data.type,
+      x: data.x,
+      y: data.y,
+      button: data.button === 'left' ? 0 : data.button === 'middle' ? 1 : data.button === 'right' ? 2 : undefined,
+      scroll: data.scroll,
+    }
+    const sent = webrtc.sendMouse(event)
+    if (sent) return
+    // Fallback to WebSocket if DataChannel send failed
+  }
+  // Use WebSocket as fallback or for MJPEG mode
+  hidApi.mouse(data).catch(err => handleHidError(err, `mouse ${data.type}`))
+}
+
 // Check if a key should be blocked (prevented from default behavior)
 function shouldBlockKey(e: KeyboardEvent): boolean {
   // In fullscreen mode, block all keys for maximum capture
@@ -1291,7 +1445,7 @@ function handleKeyDown(e: KeyboardEvent) {
     meta: e.metaKey,
   }
 
-  hidApi.keyboard('down', e.keyCode, modifiers).catch(err => handleHidError(err, 'keyboard down'))
+  sendKeyboardEvent('down', e.keyCode, modifiers)
 }
 
 function handleKeyUp(e: KeyboardEvent) {
@@ -1310,7 +1464,7 @@ function handleKeyUp(e: KeyboardEvent) {
   const keyName = e.key === ' ' ? 'Space' : e.key
   pressedKeys.value = pressedKeys.value.filter(k => k !== keyName)
 
-  hidApi.keyboard('up', e.keyCode).catch(err => handleHidError(err, 'keyboard up'))
+  sendKeyboardEvent('up', e.keyCode)
 }
 
 function handleMouseMove(e: MouseEvent) {
@@ -1325,7 +1479,7 @@ function handleMouseMove(e: MouseEvent) {
     const y = Math.round((e.clientY - rect.top) / rect.height * 32767)
 
     mousePosition.value = { x, y }
-    hidApi.mouse({ type: 'move_abs', x, y }).catch(err => handleHidError(err, 'mouse move'))
+    sendMouseEvent({ type: 'move_abs', x, y })
   } else {
     // Relative mode: use movementX/Y when pointer is locked
     if (isPointerLocked.value) {
@@ -1338,7 +1492,7 @@ function handleMouseMove(e: MouseEvent) {
         const clampedDx = Math.max(-127, Math.min(127, dx))
         const clampedDy = Math.max(-127, Math.min(127, dy))
 
-        hidApi.mouse({ type: 'move', x: clampedDx, y: clampedDy }).catch(err => handleHidError(err, 'mouse move'))
+        sendMouseEvent({ type: 'move', x: clampedDx, y: clampedDy })
       }
 
       // Update display position (accumulated delta for display only)
@@ -1372,7 +1526,7 @@ function handleMouseDown(e: MouseEvent) {
 
   const button = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle'
   pressedMouseButton.value = button
-  hidApi.mouse({ type: 'down', button }).catch(err => handleHidError(err, 'mouse down'))
+  sendMouseEvent({ type: 'down', button })
 }
 
 function handleMouseUp(e: MouseEvent) {
@@ -1401,13 +1555,13 @@ function handleMouseUpInternal(rawButton: number) {
   }
 
   pressedMouseButton.value = null
-  hidApi.mouse({ type: 'up', button }).catch(err => handleHidError(err, 'mouse up'))
+  sendMouseEvent({ type: 'up', button })
 }
 
 function handleWheel(e: WheelEvent) {
   e.preventDefault()
   const scroll = e.deltaY > 0 ? -1 : 1
-  hidApi.mouse({ type: 'scroll', scroll }).catch(err => handleHidError(err, 'mouse scroll'))
+  sendMouseEvent({ type: 'scroll', scroll })
 }
 
 function handleContextMenu(e: MouseEvent) {
@@ -1456,7 +1610,7 @@ function handleBlur() {
   if (pressedMouseButton.value !== null) {
     const button = pressedMouseButton.value
     pressedMouseButton.value = null
-    hidApi.mouse({ type: 'up', button }).catch(err => handleHidError(err, 'mouse up (blur)'))
+    sendMouseEvent({ type: 'up', button })
   }
 }
 
@@ -1514,6 +1668,7 @@ onMounted(async () => {
   // 1. 先注册 WebSocket 事件监听器
   on('stream.config_changing', handleStreamConfigChanging)
   on('stream.config_applied', handleStreamConfigApplied)
+  on('stream.webrtc_ready', handleWebRTCReady)
   on('stream.state_changed', handleStreamStateChanged)
   on('stream.stats_update', handleStreamStatsUpdate)
   on('stream.mode_changed', handleStreamModeChanged)
@@ -1613,6 +1768,7 @@ onUnmounted(() => {
   // Unregister WebSocket event handlers
   off('stream.config_changing', handleStreamConfigChanging)
   off('stream.config_applied', handleStreamConfigApplied)
+  off('stream.webrtc_ready', handleWebRTCReady)
   off('stream.state_changed', handleStreamStateChanged)
   off('stream.stats_update', handleStreamStatsUpdate)
   off('stream.mode_changed', handleStreamModeChanged)
@@ -1646,6 +1802,7 @@ onUnmounted(() => {
   // Remove WebSocket event listeners
   off('stream.config_changing', handleStreamConfigChanging)
   off('stream.config_applied', handleStreamConfigApplied)
+  off('stream.webrtc_ready', handleWebRTCReady)
   off('stream.state_changed', handleStreamStateChanged)
   off('stream.stats_update', handleStreamStatsUpdate)
   off('stream.mode_changed', handleStreamModeChanged)
@@ -1710,9 +1867,9 @@ onUnmounted(() => {
             :details="hidDetails"
           />
 
-          <!-- MSD Status - Admin only -->
+          <!-- MSD Status - Admin only, hidden when CH9329 backend (no USB gadget support) -->
           <StatusCard
-            v-if="authStore.isAdmin && systemStore.msd?.available"
+            v-if="authStore.isAdmin && systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329'"
             :title="t('statusCard.msd')"
             type="msd"
             :status="msdStatus"
@@ -1882,7 +2039,7 @@ onUnmounted(() => {
                 </div>
               </div>
               <div class="flex gap-2">
-                <Button variant="secondary" size="sm" @click="refreshVideo">
+                <Button variant="secondary" size="sm" @click="reloadPage">
                   <RefreshCw class="h-4 w-4 mr-2" />
                   {{ t('console.reconnect') }}
                 </Button>

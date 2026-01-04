@@ -232,9 +232,15 @@ export interface StreamConfig {
 	encoder: EncoderType;
 	/** Bitrate preset (Speed/Balanced/Quality) */
 	bitrate_preset: BitratePreset;
-	/** Custom STUN server (e.g., "stun:stun.l.google.com:19302") */
+	/**
+	 * Custom STUN server (e.g., "stun:stun.l.google.com:19302")
+	 * If empty, uses public ICE servers from secrets.toml
+	 */
 	stun_server?: string;
-	/** Custom TURN server (e.g., "turn:turn.example.com:3478") */
+	/**
+	 * Custom TURN server (e.g., "turn:turn.example.com:3478")
+	 * If empty, uses public ICE servers from secrets.toml
+	 */
 	turn_server?: string;
 	/** TURN username */
 	turn_username?: string;
@@ -532,6 +538,10 @@ export interface StreamConfigResponse {
 	mode: StreamMode;
 	encoder: EncoderType;
 	bitrate_preset: BitratePreset;
+	/** 是否有公共 ICE 服务器可用（编译时确定） */
+	has_public_ice_servers: boolean;
+	/** 当前是否正在使用公共 ICE 服务器（STUN/TURN 都为空时） */
+	using_public_ice_servers: boolean;
 	stun_server?: string;
 	turn_server?: string;
 	turn_username?: string;
@@ -543,9 +553,15 @@ export interface StreamConfigUpdate {
 	mode?: StreamMode;
 	encoder?: EncoderType;
 	bitrate_preset?: BitratePreset;
-	/** STUN server URL (e.g., "stun:stun.l.google.com:19302") */
+	/**
+	 * STUN server URL (e.g., "stun:stun.l.google.com:19302")
+	 * Leave empty to use public ICE servers
+	 */
 	stun_server?: string;
-	/** TURN server URL (e.g., "turn:turn.example.com:3478") */
+	/**
+	 * TURN server URL (e.g., "turn:turn.example.com:3478")
+	 * Leave empty to use public ICE servers
+	 */
 	turn_server?: string;
 	/** TURN username */
 	turn_username?: string;

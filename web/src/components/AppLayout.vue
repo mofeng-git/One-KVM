@@ -52,9 +52,9 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background">
+  <div class="h-screen flex flex-col bg-background overflow-hidden">
     <!-- Header -->
-    <header class="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header class="shrink-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div class="flex h-14 items-center px-4 max-w-full">
         <!-- Logo -->
         <RouterLink to="/" class="flex items-center gap-2 font-semibold">
@@ -128,7 +128,7 @@ async function handleLogout() {
     </header>
 
     <!-- Main Content -->
-    <main class="px-4 py-6 max-w-full">
+    <main class="flex-1 overflow-hidden">
       <slot />
     </main>
   </div>

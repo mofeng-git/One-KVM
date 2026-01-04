@@ -4,7 +4,7 @@ use audiopus::coder::GenericCtl;
 use audiopus::{coder::Encoder, Application, Bitrate, Channels, SampleRate};
 use bytes::Bytes;
 use std::time::Instant;
-use tracing::{info, trace};
+use tracing::info;
 
 use super::capture::AudioFrame;
 use crate::error::{AppError, Result};
@@ -186,12 +186,6 @@ impl OpusEncoder {
         let rtp_timestamp = (self.frame_count * self.samples_per_frame as u64) as u32;
 
         self.frame_count += 1;
-
-        trace!(
-            "Encoded {} samples to {} bytes Opus",
-            pcm_data.len(),
-            encoded_len
-        );
 
         Ok(OpusFrame {
             data: Bytes::copy_from_slice(&self.output_buffer[..encoded_len]),

@@ -184,25 +184,44 @@ async fn main() -> anyhow::Result<()> {
                 let mut stun_servers = vec![];
                 let mut turn_servers = vec![];
 
-                // Add STUN server from config
-                if let Some(ref stun) = config.stream.stun_server {
-                    if !stun.is_empty() {
-                        stun_servers.push(stun.clone());
-                        tracing::info!("WebRTC STUN server configured: {}", stun);
-                    }
-                }
+                // Check if user configured custom servers
+                let has_custom_stun = config.stream.stun_server.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+                let has_custom_turn = config.stream.turn_server.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
 
-                // Add TURN server from config
-                if let Some(ref turn) = config.stream.turn_server {
-                    if !turn.is_empty() {
-                        let username = config.stream.turn_username.clone().unwrap_or_default();
-                        let credential = config.stream.turn_password.clone().unwrap_or_default();
-                        turn_servers.push(one_kvm::webrtc::config::TurnServer {
-                            url: turn.clone(),
-                            username: username.clone(),
-                            credential,
-                        });
-                        tracing::info!("WebRTC TURN server configured: {} (user: {})", turn, username);
+                // If no custom servers, use public ICE servers (like RustDesk)
+                if !has_custom_stun && !has_custom_turn {
+                    use one_kvm::webrtc::config::public_ice;
+                    if public_ice::is_configured() {
+                        if let Some(stun) = public_ice::stun_server() {
+                            stun_servers.push(stun.clone());
+                            tracing::info!("Using public STUN server: {}", stun);
+                        }
+                        for turn in public_ice::turn_servers() {
+                            tracing::info!("Using public TURN server: {:?}", turn.urls);
+                            turn_servers.push(turn);
+                        }
+                    } else {
+                        tracing::info!("No public ICE servers configured, using host candidates only");
+                    }
+                } else {
+                    // Use custom servers
+                    if let Some(ref stun) = config.stream.stun_server {
+                        if !stun.is_empty() {
+                            stun_servers.push(stun.clone());
+                            tracing::info!("Using custom STUN server: {}", stun);
+                        }
+                    }
+                    if let Some(ref turn) = config.stream.turn_server {
+                        if !turn.is_empty() {
+                            let username = config.stream.turn_username.clone().unwrap_or_default();
+                            let credential = config.stream.turn_password.clone().unwrap_or_default();
+                            turn_servers.push(one_kvm::webrtc::config::TurnServer::new(
+                                turn.clone(),
+                                username.clone(),
+                                credential,
+                            ));
+                            tracing::info!("Using custom TURN server: {} (user: {})", turn, username);
+                        }
                     }
                 }
 
@@ -326,6 +345,10 @@ async fn main() -> anyhow::Result<()> {
                 config.audio.device,
                 config.audio.quality
             );
+            // Start audio streaming so WebRTC can subscribe to Opus frames
+            if let Err(e) = controller.start_streaming().await {
+                tracing::warn!("Failed to start audio streaming: {}", e);
+            }
         } else {
             tracing::info!("Audio disabled in configuration");
         }
