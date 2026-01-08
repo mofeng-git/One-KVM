@@ -148,40 +148,31 @@ fn link_vcpkg(mut path: PathBuf) -> bool {
 
     println!("cargo:rustc-link-search=native={}", lib_path.display());
 
-    // For Linux: use dynamic linking
-    #[cfg(target_os = "linux")]
-    {
-        println!("cargo:rustc-link-lib=yuv");
-        println!("cargo:rustc-link-lib=jpeg");
-        println!("cargo:rustc-link-lib=stdc++");
-    }
+    // Check if static linking is requested via environment variable
+    let use_static = env::var("LIBYUV_STATIC").map(|v| v == "1").unwrap_or(false);
 
-    // For Windows/macOS: keep static linking
-    #[cfg(not(target_os = "linux"))]
-    {
-        let static_lib = lib_path.join("libyuv.a");
-        let static_lib_win = lib_path.join("yuv.lib");
+    let static_lib = lib_path.join("libyuv.a");
+    let jpeg_static = lib_path.join("libjpeg.a");
+    let turbojpeg_static = lib_path.join("libturbojpeg.a");
 
-        if static_lib.exists() || static_lib_win.exists() {
-            println!("cargo:rustc-link-lib=static=yuv");
-        } else {
-            println!("cargo:rustc-link-lib=yuv");
-        }
-
-        let jpeg_static = lib_path.join("libjpeg.a");
-        let jpeg_static_win = lib_path.join("jpeg.lib");
-        let turbojpeg_static = lib_path.join("libturbojpeg.a");
-
+    if use_static && static_lib.exists() {
+        // Static linking (for deb packaging)
+        println!("cargo:rustc-link-lib=static=yuv");
         if turbojpeg_static.exists() {
             println!("cargo:rustc-link-lib=static=turbojpeg");
-        } else if jpeg_static.exists() || jpeg_static_win.exists() {
+        } else if jpeg_static.exists() {
             println!("cargo:rustc-link-lib=static=jpeg");
         } else {
             println!("cargo:rustc-link-lib=jpeg");
         }
-
-        #[cfg(target_os = "windows")]
         println!("cargo:rustc-link-lib=stdc++");
+        println!("cargo:info=Using libyuv from vcpkg (static linking)");
+    } else {
+        // Dynamic linking (default for development)
+        println!("cargo:rustc-link-lib=yuv");
+        println!("cargo:rustc-link-lib=jpeg");
+        println!("cargo:rustc-link-lib=stdc++");
+        println!("cargo:info=Using libyuv from vcpkg (dynamic linking)");
     }
 
     println!(
@@ -238,21 +229,72 @@ fn link_pkg_config() -> bool {
 }
 
 fn link_system() -> bool {
-    // Try common system library paths (dynamic linking only)
-    let lib_paths = [
+    // Check if static linking is requested
+    let use_static = env::var("LIBYUV_STATIC").map(|v| v == "1").unwrap_or(false);
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+
+    // Build custom library paths based on target architecture:
+    // 1. Check ONE_KVM_LIBS_PATH environment variable (explicit override)
+    // 2. Fall back to architecture-based detection
+    let custom_lib_path = if let Ok(path) = env::var("ONE_KVM_LIBS_PATH") {
+        format!("{}/lib", path)
+    } else {
+        match target_arch.as_str() {
+            "x86_64" => "/opt/one-kvm-libs/x86_64-linux-gnu/lib",
+            "aarch64" => "/opt/one-kvm-libs/aarch64-linux-gnu/lib",
+            "arm" => "/opt/one-kvm-libs/armv7-linux-gnueabihf/lib",
+            _ => "",
+        }
+        .to_string()
+    };
+
+    // Try common system library paths (custom paths first)
+    let mut lib_paths: Vec<String> = Vec::new();
+
+    // Add custom build path first (highest priority)
+    if !custom_lib_path.is_empty() {
+        lib_paths.push(custom_lib_path);
+    }
+
+    // Then standard paths
+    lib_paths.extend([
+        "/usr/local/lib",                 // Custom builds
+        "/usr/local/lib64",
         "/usr/lib",
         "/usr/lib64",
-        "/usr/local/lib",
-        "/usr/local/lib64",
         "/usr/lib/x86_64-linux-gnu",      // Debian/Ubuntu x86_64
         "/usr/lib/aarch64-linux-gnu",     // Debian/Ubuntu ARM64
         "/usr/lib/arm-linux-gnueabihf",   // Debian/Ubuntu ARMv7
-    ];
+    ].iter().map(|s| s.to_string()));
 
     for path in &lib_paths {
         let lib_path = Path::new(path);
+        let libyuv_static = lib_path.join("libyuv.a");
         let libyuv_so = lib_path.join("libyuv.so");
 
+        // Prefer static library if LIBYUV_STATIC=1
+        if use_static && libyuv_static.exists() {
+            println!("cargo:rustc-link-search=native={}", path);
+            println!("cargo:rustc-link-lib=static=yuv");
+
+            // Check for static libjpeg-turbo in the same directory
+            let turbojpeg_static = lib_path.join("libturbojpeg.a");
+            let jpeg_static = lib_path.join("libjpeg.a");
+            if turbojpeg_static.exists() {
+                println!("cargo:rustc-link-lib=static=turbojpeg");
+            } else if jpeg_static.exists() {
+                println!("cargo:rustc-link-lib=static=jpeg");
+            } else {
+                // Fall back to dynamic jpeg
+                println!("cargo:rustc-link-lib=jpeg");
+            }
+
+            println!("cargo:rustc-link-lib=stdc++");
+            println!("cargo:info=Using system libyuv from {} (static linking)", path);
+            return true;
+        }
+
+        // Fall back to dynamic linking
         if libyuv_so.exists() {
             println!("cargo:rustc-link-search=native={}", path);
             println!("cargo:rustc-link-lib=yuv");

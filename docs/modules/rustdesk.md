@@ -14,7 +14,6 @@ RustDesk 模块实现 RustDesk 协议集成,允许使用标准 RustDesk 客户�
 - 视频/音频/HID 转换
 - 端到端加密 (Curve25519 + XSalsa20-Poly1305)
 - 签名认证 (Ed25519)
-- 公共服务器支持 (通过 secrets.toml)
 - 动态编码器协商 (H264/H265/VP8/VP9)
 - 输入节流 (防止 HID EAGAIN)
 - CapsLock 状态同步
@@ -660,7 +659,7 @@ pub struct RustDeskConfig {
 
     /// Rendezvous 服务器地址 (hbbs)
     /// 格式: "rs.example.com" 或 "192.168.1.100:21116"
-    /// 如果为空,使用 secrets.toml 中配置的公共服务器
+    /// 必填项 - 不再提供公共服务器,需自行配置
     pub rendezvous_server: String,
 
     /// 中继服务器地址 (hbbr),默认与 rendezvous 同主机
@@ -703,14 +702,8 @@ impl RustDeskConfig {
     /// 检查配置是否有效
     pub fn is_valid(&self) -> bool;
 
-    /// 检查是否使用公共服务器
-    pub fn is_using_public_server(&self) -> bool;
-
     /// 获取有效的 Rendezvous 服务器地址
     pub fn effective_rendezvous_server(&self) -> &str;
-
-    /// 获取公共服务器信息 (如果配置了)
-    pub fn public_server_info() -> Option<PublicServerInfo>;
 
     /// 获取带默认端口的 Rendezvous 地址
     pub fn rendezvous_addr(&self) -> String;
@@ -720,14 +713,6 @@ impl RustDeskConfig {
 
     /// 确保 UUID 存在 (自动生成并标记需要保存)
     pub fn ensure_uuid(&mut self) -> ([u8; 16], bool);
-}
-
-/// 公共服务器信息
-#[derive(Serialize, Deserialize)]
-#[typeshare]
-pub struct PublicServerInfo {
-    pub server: String,      // 服务器地址
-    pub public_key: String,  // 公钥 (Base64)
 }
 ```
 
@@ -744,23 +729,7 @@ device_password = "mypassword"
 # 密钥和 UUID 由程序自动生成和保存
 ```
 
-**使用公共服务器:**
-```toml
-[rustdesk]
-enabled = true
-rendezvous_server = ""  # 留空使用 secrets.toml 中的公共服务器
-device_id = "123456789"
-device_password = "mypassword"
-```
-
-**secrets.toml 公共服务器配置:**
-```toml
-[rustdesk]
-# 公共服务器配置 (可选)
-public_server = "rs-ny.rustdesk.com"
-public_key = "xxx...base64...xxx"
-relay_key = "xxx...key...xxx"
-```
+**注意**: 不再提供公共服务器,需自行配置 RustDesk 服务器。
 
 ---
 
@@ -868,7 +837,7 @@ pub enum RustDeskError {
 ```rust
 let config = RustDeskConfig {
     enabled: true,
-    rendezvous_server: "".to_string(),  // 使用公共服务器
+    rendezvous_server: "hbbs.example.com:21116".to_string(),  // 必填 - 配置您的服务器
     device_id: "123456789".to_string(),
     device_password: "mypassword".to_string(),
     ..Default::default()
@@ -1271,7 +1240,7 @@ docker run -d --name hbbr \
 | 协议 | RustDesk Protocol | 同 |
 | P2P | 支持 | 支持 |
 | 中继 | 支持 | 提供中继服务 |
-| 公共服务器 | 可配置 (secrets.toml) | N/A |
+| 公共服务器 | 不提供,需自建 | N/A |
 | 多连接 | 支持 | N/A |
 | 输入节流 | 60Hz 限流 | 无限制 |
 

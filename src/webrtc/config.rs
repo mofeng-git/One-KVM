@@ -4,21 +4,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::secrets;
 
-/// Public ICE server utilities
+/// ICE server utilities - Only provides Google STUN, no TURN
 pub mod public_ice {
     use super::*;
 
-    /// Check if public ICE servers are configured (at compile time)
+    /// Always returns true (we have Google STUN)
     pub fn is_configured() -> bool {
         secrets::ice::is_configured()
     }
 
-    /// Check if public TURN servers are configured (requires credentials)
+    /// Always returns false (TURN not provided)
     pub fn has_turn() -> bool {
         secrets::ice::has_turn()
     }
 
-    /// Get the public STUN server URL
+    /// Get the Google STUN server URL
     pub fn stun_server() -> Option<String> {
         let server = secrets::ice::STUN_SERVER;
         if server.is_empty() {
@@ -28,33 +28,15 @@ pub mod public_ice {
         }
     }
 
-    /// Get public TURN servers as TurnServer structs
+    /// Always returns empty vector (TURN not provided)
     pub fn turn_servers() -> Vec<TurnServer> {
-        if !secrets::ice::has_turn() {
-            return vec![];
-        }
-
-        let urls: Vec<String> = secrets::ice::TURN_URLS
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        if urls.is_empty() {
-            return vec![];
-        }
-
-        vec![TurnServer {
-            urls,
-            username: secrets::ice::TURN_USERNAME.to_string(),
-            credential: secrets::ice::TURN_PASSWORD.to_string(),
-        }]
+        vec![]
     }
 
-    /// Get all public ICE servers (STUN + TURN) for WebRTC configuration
+    /// Get all public ICE servers (STUN only, no TURN)
     pub fn get_all_servers() -> (Vec<String>, Vec<TurnServer>) {
         let stun_servers = stun_server().into_iter().collect();
-        let turn_servers = turn_servers();
+        let turn_servers = vec![];
         (stun_servers, turn_servers)
     }
 }

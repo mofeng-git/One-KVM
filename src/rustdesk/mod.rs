@@ -239,16 +239,10 @@ impl RustDeskService {
             let config = service_config_punch.clone();
 
             tokio::spawn(async move {
-                // Get relay_key from config, or use public server's relay_key if using public server
+                // Get relay_key from config (no public server fallback)
                 let relay_key = {
                     let cfg = config.read();
-                    cfg.relay_key.clone().unwrap_or_else(|| {
-                        if cfg.is_using_public_server() {
-                            crate::secrets::rustdesk::RELAY_KEY.to_string()
-                        } else {
-                            String::new()
-                        }
-                    })
+                    cfg.relay_key.clone().unwrap_or_default()
                 };
 
                 // Try P2P direct connection first
@@ -295,16 +289,10 @@ impl RustDeskService {
             let config = service_config.clone();
 
             tokio::spawn(async move {
-                // Get relay_key from config, or use public server's relay_key if using public server
+                // Get relay_key from config (no public server fallback)
                 let relay_key = {
                     let cfg = config.read();
-                    cfg.relay_key.clone().unwrap_or_else(|| {
-                        if cfg.is_using_public_server() {
-                            crate::secrets::rustdesk::RELAY_KEY.to_string()
-                        } else {
-                            String::new()
-                        }
-                    })
+                    cfg.relay_key.clone().unwrap_or_default()
                 };
 
                 if let Err(e) = handle_relay_request(

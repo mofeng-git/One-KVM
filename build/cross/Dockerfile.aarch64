@@ -28,36 +28,82 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libclang-dev \
     llvm \
-    protobuf-compiler \
     mold \
     meson \
     ninja-build \
     wget \
+    file \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ARM64 development libraries (without system ffmpeg)
+# Install ARM64 development libraries (without VAAPI/X11 for ARM)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl-dev:arm64 \
     libasound2-dev:arm64 \
     libv4l-dev:arm64 \
     libudev-dev:arm64 \
     zlib1g-dev:arm64 \
-    libjpeg62-turbo-dev:arm64 \
-    libyuv-dev:arm64 \
+    # Note: libjpeg-turbo, libyuv, libvpx are built from source below for static linking
     libx264-dev:arm64 \
     libx265-dev:arm64 \
-    libvpx-dev:arm64 \
     libopus-dev:arm64 \
-    libva-dev:arm64 \
     libdrm-dev:arm64 \
-    libx11-dev:arm64 \
-    libxcb1-dev:arm64 \
-    libxau-dev:arm64 \
-    libxdmcp-dev:arm64 \
     && rm -rf /var/lib/apt/lists/*
+
+# Build static libjpeg-turbo from source (cross-compile for ARM64)
+RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libjpeg-turbo \
+    && cd /tmp/libjpeg-turbo \
+    && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DCMAKE_SYSTEM_NAME=Linux \
+        -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+        -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+        -DCMAKE_INSTALL_PREFIX=/opt/one-kvm-libs/aarch64-linux-gnu \
+        -DENABLE_SHARED=OFF -DENABLE_STATIC=ON \
+    && cmake --build build -j$(nproc) \
+    && cmake --install build \
+    && rm -rf /tmp/libjpeg-turbo
+
+# Build static libyuv from source (cross-compile for ARM64)
+RUN git clone --depth 1 https://github.com/lemenkov/libyuv /tmp/libyuv \
+    && cd /tmp/libyuv \
+    && mkdir build && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DCMAKE_SYSTEM_NAME=Linux \
+        -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+        -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+        -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+        -DCMAKE_PREFIX_PATH=/opt/one-kvm-libs/aarch64-linux-gnu \
+        -DCMAKE_INSTALL_PREFIX=/opt/one-kvm-libs/aarch64-linux-gnu \
+    && make -j$(nproc) \
+    && mkdir -p /opt/one-kvm-libs/aarch64-linux-gnu/lib \
+    && cp libyuv.a /opt/one-kvm-libs/aarch64-linux-gnu/lib/ \
+    && cp -r ../include /opt/one-kvm-libs/aarch64-linux-gnu/ \
+    && rm -rf /tmp/libyuv
+
+# Build static libvpx from source (cross-compile for ARM64)
+# CC/CXX/LD/AR must be environment variables, not configure arguments
+RUN git clone --depth 1 https://github.com/webmproject/libvpx /tmp/libvpx \
+    && cd /tmp/libvpx \
+    && echo "=== libvpx: Configuring for ARM64 ===" \
+    && export CC=aarch64-linux-gnu-gcc \
+    && export CXX=aarch64-linux-gnu-g++ \
+    && export LD=aarch64-linux-gnu-ld \
+    && export AR=aarch64-linux-gnu-ar \
+    && export CROSS=aarch64-linux-gnu- \
+    && ./configure --prefix=/opt/one-kvm-libs/aarch64-linux-gnu \
+        --target=arm64-linux-gcc \
+        --enable-static --disable-shared --enable-pic \
+        --disable-examples --disable-tools --disable-docs \
+        --disable-unit-tests \
+    && echo "=== libvpx: Building ===" \
+    && make -j$(nproc) \
+    && echo "=== libvpx: Checking architecture ===" \
+    && file libvpx.a \
+    && make install \
+    && echo "=== libvpx: Verifying installed library ===" \
+    && file /opt/one-kvm-libs/aarch64-linux-gnu/lib/libvpx.a \
+    && rm -rf /tmp/libvpx
 
 # Download and build FFmpeg with RKMPP support
 RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
@@ -73,7 +119,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
         -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
         -DCMAKE_INSTALL_PREFIX=/usr/aarch64-linux-gnu \
         -DCMAKE_BUILD_TYPE=Release \
-        -DBUILD_SHARED_LIBS=ON \
+        -DBUILD_SHARED_LIBS=OFF \
         -DBUILD_TEST=OFF \
     && make -j$(nproc) \
     && make install \
@@ -94,6 +140,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && meson setup build --prefix=/usr/aarch64-linux-gnu --libdir=lib \
         --cross-file=/tmp/aarch64-cross.txt \
         --buildtype=release \
+        --default-library=static \
         -Dcpp_args=-fpermissive \
         -Dlibdrm=false \
         -Dlibrga_demo=false \
@@ -102,7 +149,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && cd .. \
     # Create pkg-config wrapper for cross-compilation
     && echo '#!/bin/sh' > /tmp/aarch64-pkg-config \
-    && echo 'export PKG_CONFIG_LIBDIR=/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig' >> /tmp/aarch64-pkg-config \
+    && echo 'export PKG_CONFIG_LIBDIR=/opt/one-kvm-libs/aarch64-linux-gnu/lib/pkgconfig:/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig' >> /tmp/aarch64-pkg-config \
     && echo 'export PKG_CONFIG_PATH=""' >> /tmp/aarch64-pkg-config \
     && echo 'export PKG_CONFIG_SYSROOT_DIR=""' >> /tmp/aarch64-pkg-config \
     && echo 'exec pkg-config "$@"' >> /tmp/aarch64-pkg-config \
@@ -110,7 +157,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     # Build FFmpeg with RKMPP (minimal build for encoding only)
     && cd ffmpeg-rockchip \
     && ./configure \
-        --prefix=/usr/aarch64-linux-gnu \
+        --prefix=/opt/one-kvm-libs/aarch64-linux-gnu \
         --cross-prefix=aarch64-linux-gnu- \
         --arch=aarch64 \
         --target-os=linux \
@@ -118,13 +165,14 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
         --pkg-config=/tmp/aarch64-pkg-config \
         --enable-gpl \
         --enable-version3 \
-        --enable-shared \
-        --disable-static \
-        # Hardware acceleration
+        --disable-shared \
+        --enable-static \
+        --enable-pic \
+        # Hardware acceleration (ARM: RKMPP + V4L2, no VAAPI)
         --enable-libdrm \
         --enable-rkmpp \
         --enable-rkrga \
-        --enable-vaapi \
+        --disable-vaapi \
         --enable-v4l2-m2m \
         # Software encoding libraries
         --enable-libx264 \
@@ -151,10 +199,6 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
         --disable-decoders \
         # Disable all encoders, enable only needed ones
         --disable-encoders \
-        --enable-encoder=h264_vaapi \
-        --enable-encoder=hevc_vaapi \
-        --enable-encoder=vp8_vaapi \
-        --enable-encoder=vp9_vaapi \
         --enable-encoder=h264_rkmpp \
         --enable-encoder=hevc_rkmpp \
         --enable-encoder=h264_v4l2m2m \
@@ -194,14 +238,22 @@ RUN rustup target add aarch64-unknown-linux-gnu
 # Create symlink for mold to work with cross-compiler
 RUN ln -s /usr/bin/mold /usr/bin/aarch64-linux-gnu-ld.mold
 
+# Copy entrypoint script
+COPY build/cross/entrypoint.sh /usr/local/bin/cross-entrypoint.sh
+RUN chmod +x /usr/local/bin/cross-entrypoint.sh
+
 # Configure environment for cross-compilation
-# Use PKG_CONFIG_LIBDIR to completely replace default search paths
-# This ensures we use our custom-built FFmpeg instead of system FFmpeg
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
     CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
     AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar \
-    PKG_CONFIG_LIBDIR=/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig \
+    PKG_CONFIG_LIBDIR=/opt/one-kvm-libs/aarch64-linux-gnu/lib/pkgconfig:/usr/aarch64-linux-gnu/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig \
     PKG_CONFIG_PATH="" \
     PKG_CONFIG_ALLOW_CROSS=1 \
+    LIBRARY_PATH="/opt/one-kvm-libs/aarch64-linux-gnu/lib" \
+    CPATH="/opt/one-kvm-libs/aarch64-linux-gnu/include" \
+    FFMPEG_STATIC=1 \
+    LIBYUV_STATIC=1 \
     RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc -C link-arg=-fuse-ld=mold"
+
+ENTRYPOINT ["/usr/local/bin/cross-entrypoint.sh"]

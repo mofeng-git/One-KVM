@@ -97,10 +97,76 @@ mod ffmpeg {
         build_ffmpeg_ram(builder);
     }
 
-    /// Link system FFmpeg using pkg-config (for Linux development)
+    /// Link system FFmpeg using pkg-config or custom path
+    /// Supports both static and dynamic linking based on FFMPEG_STATIC env var
     fn link_system_ffmpeg(builder: &mut Build) {
         use std::process::Command;
 
+        // Check if static linking is requested
+        let use_static = std::env::var("FFMPEG_STATIC").map(|v| v == "1").unwrap_or(false);
+        let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+
+        // Try custom library path first:
+        // 1. Check ONE_KVM_LIBS_PATH environment variable (explicit override)
+        // 2. Fall back to architecture-based detection
+        let custom_lib_path = if let Ok(path) = std::env::var("ONE_KVM_LIBS_PATH") {
+            path
+        } else {
+            match target_arch.as_str() {
+                "x86_64" => "/opt/one-kvm-libs/x86_64-linux-gnu",
+                "aarch64" => "/opt/one-kvm-libs/aarch64-linux-gnu",
+                "arm" => "/opt/one-kvm-libs/armv7-linux-gnueabihf",
+                _ => "",
+            }
+            .to_string()
+        };
+
+        // Check if our custom FFmpeg exists
+        if !custom_lib_path.is_empty() {
+            let lib_dir = Path::new(&custom_lib_path).join("lib");
+            let include_dir = Path::new(&custom_lib_path).join("include");
+            let avcodec_lib = lib_dir.join("libavcodec.a");
+
+            if avcodec_lib.exists() {
+                println!("cargo:info=Using custom FFmpeg from {}", custom_lib_path);
+                println!("cargo:rustc-link-search=native={}", lib_dir.display());
+                builder.include(&include_dir);
+
+                // Static link FFmpeg core libraries
+                println!("cargo:rustc-link-lib=static=avcodec");
+                println!("cargo:rustc-link-lib=static=avutil");
+
+                // Link hardware acceleration dependencies (dynamic)
+                // These vary by architecture
+                if target_arch == "x86_64" {
+                    // VAAPI for x86_64
+                    println!("cargo:rustc-link-lib=va");
+                    println!("cargo:rustc-link-lib=va-drm");
+                    println!("cargo:rustc-link-lib=va-x11");  // Required for vaGetDisplay
+                    println!("cargo:rustc-link-lib=mfx");
+                } else {
+                    // RKMPP for ARM
+                    println!("cargo:rustc-link-lib=rockchip_mpp");
+                    println!("cargo:rustc-link-lib=rga");
+                }
+
+                // Software codec dependencies (dynamic - GPL)
+                println!("cargo:rustc-link-lib=x264");
+                println!("cargo:rustc-link-lib=x265");
+
+                // VPX - check if static version exists in our custom path
+                let vpx_static = lib_dir.join("libvpx.a");
+                if vpx_static.exists() {
+                    println!("cargo:rustc-link-lib=static=vpx");
+                } else {
+                    println!("cargo:rustc-link-lib=vpx");
+                }
+
+                return;
+            }
+        }
+
+        // Fallback to pkg-config
         // Only need libavcodec and libavutil for encoding
         let libs = ["libavcodec", "libavutil"];
 
@@ -120,9 +186,15 @@ mod ffmpeg {
                 }
             }
 
-            // Get libs - always use dynamic linking on Linux
+            // Get libs - use --static flag for static linking
+            let pkg_config_args = if use_static {
+                vec!["--static", "--libs", lib]
+            } else {
+                vec!["--libs", lib]
+            };
+
             if let Ok(output) = Command::new("pkg-config")
-                .args(["--libs", lib])
+                .args(&pkg_config_args)
                 .output()
             {
                 if output.status.success() {
@@ -131,7 +203,18 @@ mod ffmpeg {
                         if flag.starts_with("-L") {
                             println!("cargo:rustc-link-search=native={}", &flag[2..]);
                         } else if flag.starts_with("-l") {
-                            println!("cargo:rustc-link-lib={}", &flag[2..]);
+                            let lib_name = &flag[2..];
+                            if use_static {
+                                // For static linking, link FFmpeg libs statically, others dynamically
+                                if lib_name.starts_with("av") || lib_name == "swresample" {
+                                    println!("cargo:rustc-link-lib=static={}", lib_name);
+                                } else {
+                                    // Runtime libraries (va, drm, etc.) must be dynamic
+                                    println!("cargo:rustc-link-lib={}", lib_name);
+                                }
+                            } else {
+                                println!("cargo:rustc-link-lib={}", lib_name);
+                            }
                         }
                     }
                 } else {
@@ -142,7 +225,11 @@ mod ffmpeg {
             }
         }
 
-        println!("cargo:info=Using system FFmpeg via pkg-config (dynamic linking)");
+        if use_static {
+            println!("cargo:info=Using system FFmpeg via pkg-config (static linking)");
+        } else {
+            println!("cargo:info=Using system FFmpeg via pkg-config (dynamic linking)");
+        }
     }
 
     fn link_vcpkg(builder: &mut Build, mut path: PathBuf) -> PathBuf {
@@ -203,14 +290,15 @@ mod ffmpeg {
         let dyn_libs: Vec<&str> = if target_os == "windows" {
             ["User32", "bcrypt", "ole32", "advapi32"].to_vec()
         } else if target_os == "linux" {
-            // Note: VA-API libraries (va, va-drm, va-x11) must remain dynamic
-            // as they load drivers at runtime. Same for libmfx.
-            // All dependencies use dynamic linking on Linux.
-            let mut v = vec!["drm", "X11", "stdc++"];
+            // Base libraries for all Linux platforms
+            let mut v = vec!["drm", "stdc++"];
 
+            // x86_64: needs X11 for VAAPI and zlib
             if target_arch == "x86_64" {
+                v.push("X11");
                 v.push("z");
             }
+            // ARM (aarch64, arm): no X11 needed, uses RKMPP/V4L2
             v
         } else {
             panic!("Unsupported OS: {}. Only Windows and Linux are supported.", target_os);

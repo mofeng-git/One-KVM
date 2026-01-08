@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Install build dependencies
+# Note: libyuv, libvpx are built from source below for static linking
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build tools
     build-essential \
@@ -27,8 +28,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libclang-dev \
     llvm \
-    protobuf-compiler \
-    libssl-dev \
     mold \
     wget \
     # Core system libraries
@@ -36,37 +35,69 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libv4l-dev \
     libudev-dev \
     zlib1g-dev \
-    # Video/image processing
-    libjpeg62-turbo-dev \
-    libyuv-dev \
-    # Video codec libraries (for FFmpeg build)
+    # Note: libjpeg-turbo is built from source below for static linking
+    # Video codec libraries (dynamic, for software fallback)
     libx264-dev \
     libx265-dev \
-    libvpx-dev \
     # Audio codec
     libopus-dev \
     # Hardware acceleration
     libva-dev \
     libdrm-dev \
     libmfx-dev \
-    # X11 libraries
+    # X11 libraries (for VAAPI)
     libx11-dev \
     libxcb1-dev \
     libxau-dev \
     libxdmcp-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Build static libjpeg-turbo from source (needed by libyuv)
+RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libjpeg-turbo \
+    && cd /tmp/libjpeg-turbo \
+    && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DCMAKE_INSTALL_PREFIX=/opt/one-kvm-libs/x86_64-linux-gnu \
+        -DENABLE_SHARED=OFF -DENABLE_STATIC=ON \
+    && cmake --build build -j$(nproc) \
+    && cmake --install build \
+    && rm -rf /tmp/libjpeg-turbo
+
+# Build static libyuv from source (uses libjpeg-turbo headers)
+RUN git clone --depth 1 https://github.com/lemenkov/libyuv /tmp/libyuv \
+    && cd /tmp/libyuv \
+    && mkdir build && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DCMAKE_PREFIX_PATH=/opt/one-kvm-libs/x86_64-linux-gnu \
+        -DCMAKE_INSTALL_PREFIX=/opt/one-kvm-libs/x86_64-linux-gnu \
+    && make -j$(nproc) \
+    && mkdir -p /opt/one-kvm-libs/x86_64-linux-gnu/lib \
+    && cp libyuv.a /opt/one-kvm-libs/x86_64-linux-gnu/lib/ \
+    && cp -r ../include /opt/one-kvm-libs/x86_64-linux-gnu/ \
+    && rm -rf /tmp/libyuv
+
+# Build static libvpx from source
+RUN git clone --depth 1 https://github.com/webmproject/libvpx /tmp/libvpx \
+    && cd /tmp/libvpx \
+    && ./configure --prefix=/opt/one-kvm-libs/x86_64-linux-gnu \
+        --enable-static --disable-shared --enable-pic \
+        --disable-examples --disable-tools --disable-docs \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/libvpx
+
 # Download and build FFmpeg with minimal configuration for encoding only
 RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && wget -q https://files.mofeng.run/src/image/other/ffmpeg.tar.gz \
     && tar -xzf ffmpeg.tar.gz \
     && cd ffmpeg/ffmpeg-rockchip \
+    && export PKG_CONFIG_PATH="/opt/one-kvm-libs/x86_64-linux-gnu/lib/pkgconfig:$PKG_CONFIG_PATH" \
     && ./configure \
-        --prefix=/usr/local \
+        --prefix=/opt/one-kvm-libs/x86_64-linux-gnu \
         --enable-gpl \
         --enable-version3 \
-        --enable-shared \
-        --disable-static \
+        --disable-shared \
+        --enable-static \
+        --enable-pic \
         # Hardware acceleration
         --enable-libdrm \
         --enable-vaapi \
@@ -128,13 +159,22 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
         --disable-debug \
     && make -j$(nproc) \
     && make install \
-    && ldconfig \
     && cd / \
     && rm -rf /tmp/ffmpeg-build
 
 # Add Rust target
 RUN rustup target add x86_64-unknown-linux-gnu
 
-# Configure mold as the linker and use custom FFmpeg
+# Copy entrypoint script
+COPY build/cross/entrypoint.sh /usr/local/bin/cross-entrypoint.sh
+RUN chmod +x /usr/local/bin/cross-entrypoint.sh
+
+# Configure environment for static linking
 ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold" \
-    PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH}"
+    PKG_CONFIG_PATH="/opt/one-kvm-libs/x86_64-linux-gnu/lib/pkgconfig" \
+    LIBRARY_PATH="/opt/one-kvm-libs/x86_64-linux-gnu/lib" \
+    CPATH="/opt/one-kvm-libs/x86_64-linux-gnu/include" \
+    FFMPEG_STATIC=1 \
+    LIBYUV_STATIC=1
+
+ENTRYPOINT ["/usr/local/bin/cross-entrypoint.sh"]

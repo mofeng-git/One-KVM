@@ -199,46 +199,56 @@ impl PeerConnection {
         pc.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
             let data_channel = data_channel.clone();
             let hid = hid_clone.clone();
+            let label = dc.label().to_string();
 
             Box::pin(async move {
-                info!("Data channel opened with HID support: {}", dc.label());
+                // Handle both reliable (hid) and unreliable (hid-unreliable) channels
+                let is_hid_channel = label == "hid" || label == "hid-unreliable";
 
-                // Store data channel
-                *data_channel.write().await = Some(dc.clone());
+                if is_hid_channel {
+                    info!("HID DataChannel opened: {} (unreliable: {})", label, label == "hid-unreliable");
 
-                // Set up message handler with HID processing
-                // Immediately spawn task in tokio runtime for low latency
-                dc.on_message(Box::new(move |msg: DataChannelMessage| {
-                    let hid = hid.clone();
+                    // Store the reliable data channel for sending responses
+                    if label == "hid" {
+                        *data_channel.write().await = Some(dc.clone());
+                    }
 
-                    tokio::spawn(async move {
-                        debug!("DataChannel HID message: {} bytes", msg.data.len());
+                    // Set up message handler with HID processing
+                    // Both channels use the same HID processing logic
+                    dc.on_message(Box::new(move |msg: DataChannelMessage| {
+                        let hid = hid.clone();
 
-                        // Parse and process HID message
-                        if let Some(event) = parse_hid_message(&msg.data) {
-                            match event {
-                                HidChannelEvent::Keyboard(kb_event) => {
-                                    if let Err(e) = hid.send_keyboard(kb_event).await {
-                                        debug!("Failed to send keyboard event: {}", e);
+                        tokio::spawn(async move {
+                            debug!("DataChannel HID message: {} bytes", msg.data.len());
+
+                            // Parse and process HID message
+                            if let Some(event) = parse_hid_message(&msg.data) {
+                                match event {
+                                    HidChannelEvent::Keyboard(kb_event) => {
+                                        if let Err(e) = hid.send_keyboard(kb_event).await {
+                                            debug!("Failed to send keyboard event: {}", e);
+                                        }
                                     }
-                                }
-                                HidChannelEvent::Mouse(ms_event) => {
-                                    if let Err(e) = hid.send_mouse(ms_event).await {
-                                        debug!("Failed to send mouse event: {}", e);
+                                    HidChannelEvent::Mouse(ms_event) => {
+                                        if let Err(e) = hid.send_mouse(ms_event).await {
+                                            debug!("Failed to send mouse event: {}", e);
+                                        }
                                     }
-                                }
-                                HidChannelEvent::Consumer(consumer_event) => {
-                                    if let Err(e) = hid.send_consumer(consumer_event).await {
-                                        debug!("Failed to send consumer event: {}", e);
+                                    HidChannelEvent::Consumer(consumer_event) => {
+                                        if let Err(e) = hid.send_consumer(consumer_event).await {
+                                            debug!("Failed to send consumer event: {}", e);
+                                        }
                                     }
                                 }
                             }
-                        }
-                    });
+                        });
 
-                    // Return empty future (actual work is spawned above)
-                    Box::pin(async {})
-                }));
+                        // Return empty future (actual work is spawned above)
+                        Box::pin(async {})
+                    }));
+                } else {
+                    info!("Non-HID DataChannel opened: {}", label);
+                }
             })
         }));
 

@@ -105,6 +105,12 @@ const mousePosition = ref({ x: 0, y: 0 })
 const lastMousePosition = ref({ x: 0, y: 0 }) // Track last position for relative mode
 const isPointerLocked = ref(false) // Track pointer lock state
 
+// Mouse move throttling (60 Hz = ~16.67ms interval)
+const MOUSE_SEND_INTERVAL_MS = 16
+let mouseSendTimer: ReturnType<typeof setInterval> | null = null
+let pendingMouseMove: { type: 'move' | 'move_abs'; x: number; y: number } | null = null
+let accumulatedDelta = { x: 0, y: 0 } // For relative mode: accumulate deltas between sends
+
 // Cursor visibility (from localStorage, updated via storage event)
 const cursorVisible = ref(localStorage.getItem('hidShowCursor') !== 'false')
 
@@ -1479,20 +1485,21 @@ function handleMouseMove(e: MouseEvent) {
     const y = Math.round((e.clientY - rect.top) / rect.height * 32767)
 
     mousePosition.value = { x, y }
-    sendMouseEvent({ type: 'move_abs', x, y })
+    // Queue for throttled sending (absolute mode: just update pending position)
+    pendingMouseMove = { type: 'move_abs', x, y }
+    ensureMouseSendTimer()
   } else {
     // Relative mode: use movementX/Y when pointer is locked
     if (isPointerLocked.value) {
       const dx = e.movementX
       const dy = e.movementY
 
-      // Only send if there's actual movement
+      // Only accumulate if there's actual movement
       if (dx !== 0 || dy !== 0) {
-        // Clamp to i8 range (-127 to 127)
-        const clampedDx = Math.max(-127, Math.min(127, dx))
-        const clampedDy = Math.max(-127, Math.min(127, dy))
-
-        sendMouseEvent({ type: 'move', x: clampedDx, y: clampedDy })
+        // Accumulate deltas for throttled sending
+        accumulatedDelta.x += dx
+        accumulatedDelta.y += dy
+        ensureMouseSendTimer()
       }
 
       // Update display position (accumulated delta for display only)
@@ -1502,6 +1509,50 @@ function handleMouseMove(e: MouseEvent) {
       }
     }
   }
+}
+
+// Start the mouse send timer if not already running
+function ensureMouseSendTimer() {
+  if (mouseSendTimer !== null) return
+
+  // Send immediately on first event, then throttle
+  flushMouseMove()
+
+  mouseSendTimer = setInterval(() => {
+    if (!flushMouseMove()) {
+      // No pending data, stop the timer
+      if (mouseSendTimer !== null) {
+        clearInterval(mouseSendTimer)
+        mouseSendTimer = null
+      }
+    }
+  }, MOUSE_SEND_INTERVAL_MS)
+}
+
+// Flush pending mouse move data, returns true if data was sent
+function flushMouseMove(): boolean {
+  if (mouseMode.value === 'absolute') {
+    if (pendingMouseMove) {
+      sendMouseEvent(pendingMouseMove)
+      pendingMouseMove = null
+      return true
+    }
+  } else {
+    // Relative mode: send accumulated delta
+    if (accumulatedDelta.x !== 0 || accumulatedDelta.y !== 0) {
+      // Clamp to i8 range (-127 to 127)
+      const clampedDx = Math.max(-127, Math.min(127, accumulatedDelta.x))
+      const clampedDy = Math.max(-127, Math.min(127, accumulatedDelta.y))
+
+      sendMouseEvent({ type: 'move', x: clampedDx, y: clampedDy })
+
+      // Subtract sent amount (keep remainder for next send if clamped)
+      accumulatedDelta.x -= clampedDx
+      accumulatedDelta.y -= clampedDy
+      return true
+    }
+  }
+  return false
 }
 
 // Track pressed mouse button for window-level mouseup handling
@@ -1745,6 +1796,12 @@ onMounted(async () => {
 onUnmounted(() => {
   // Reset initial device info flag
   initialDeviceInfoReceived = false
+
+  // Clear mouse send timer
+  if (mouseSendTimer !== null) {
+    clearInterval(mouseSendTimer)
+    mouseSendTimer = null
+  }
 
   // Clear ttyd poll interval
   if (ttydPollInterval) {

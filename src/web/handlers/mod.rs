@@ -1814,35 +1814,62 @@ pub struct IceServerInfo {
 }
 
 /// Get ICE servers configuration for client-side WebRTC
+/// Returns user-configured servers, or Google STUN as fallback if none configured
 pub async fn webrtc_ice_servers(State(state): State<Arc<AppState>>) -> Json<IceServersResponse> {
+    use crate::webrtc::config::public_ice;
+
     let config = state.config.get();
     let mut ice_servers = Vec::new();
 
-    // Add STUN server
-    if let Some(ref stun) = config.stream.stun_server {
-        if !stun.is_empty() {
+    // Check if user has configured custom ICE servers
+    let has_custom_stun = config
+        .stream
+        .stun_server
+        .as_ref()
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    let has_custom_turn = config
+        .stream
+        .turn_server
+        .as_ref()
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+
+    if has_custom_stun || has_custom_turn {
+        // Use user-configured ICE servers
+        if let Some(ref stun) = config.stream.stun_server {
+            if !stun.is_empty() {
+                ice_servers.push(IceServerInfo {
+                    urls: vec![stun.clone()],
+                    username: None,
+                    credential: None,
+                });
+            }
+        }
+
+        if let Some(ref turn) = config.stream.turn_server {
+            if !turn.is_empty() {
+                let username = config.stream.turn_username.clone();
+                let credential = config.stream.turn_password.clone();
+                if username.is_some() && credential.is_some() {
+                    ice_servers.push(IceServerInfo {
+                        urls: vec![turn.clone()],
+                        username,
+                        credential,
+                    });
+                }
+            }
+        }
+    } else {
+        // No custom servers configured - use Google STUN as default
+        if let Some(stun) = public_ice::stun_server() {
             ice_servers.push(IceServerInfo {
-                urls: vec![stun.clone()],
+                urls: vec![stun],
                 username: None,
                 credential: None,
             });
         }
-    }
-
-    // Add TURN server (with credentials)
-    if let Some(ref turn) = config.stream.turn_server {
-        if !turn.is_empty() {
-            let username = config.stream.turn_username.clone();
-            let credential = config.stream.turn_password.clone();
-            // Only add TURN if credentials are provided
-            if username.is_some() && credential.is_some() {
-                ice_servers.push(IceServerInfo {
-                    urls: vec![turn.clone()],
-                    username,
-                    credential,
-                });
-            }
-        }
+        // Note: TURN servers are not provided - users must configure their own
     }
 
     Json(IceServersResponse { ice_servers })

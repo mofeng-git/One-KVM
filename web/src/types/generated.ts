@@ -314,9 +314,8 @@ export interface RustDeskConfig {
 	/** Enable RustDesk protocol */
 	enabled: boolean;
 	/**
-	 * Rendezvous server address (hbbs), e.g., "rs.example.com" or "192.168.1.100"
-	 * Port defaults to 21116 if not specified
-	 * If empty, uses the public server from secrets.toml
+	 * Rendezvous server address (hbbs), e.g., "rs.example.com" or "192.168.1.100:21116"
+	 * Required for RustDesk to function
 	 */
 	rendezvous_server: string;
 	/**
@@ -515,14 +514,6 @@ export interface MsdConfigUpdate {
 	images_path?: string;
 	drive_path?: string;
 	virtual_drive_size_mb?: number;
-}
-
-/** Public server information for display to users */
-export interface PublicServerInfo {
-	/** Public server address */
-	server: string;
-	/** Public key for client connection */
-	public_key: string;
 }
 
 export interface RustDeskConfigUpdate {
