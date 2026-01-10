@@ -1,7 +1,7 @@
-# Cross-compilation image for ARMv7 based on Debian 12
-# Uses multiarch to install ARMv7 libraries on x86_64 host
+# Cross-compilation image for ARMv7 based on Debian 11
+# Build on Debian 11 (GLIBC 2.31) for maximum runtime compatibility
 
-FROM debian:12
+FROM debian:11
 
 # Set Rustup mirrors (Aliyun)
 ENV RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
@@ -28,7 +28,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libclang-dev \
     llvm \
-    mold \
     meson \
     ninja-build \
     wget \
@@ -36,6 +35,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc-arm-linux-gnueabihf \
     g++-arm-linux-gnueabihf \
     libc6-dev-armhf-cross \
+    # Autotools for libopus (requires autoreconf)
+    autoconf \
+    automake \
+    libtool \
     && rm -rf /var/lib/apt/lists/*
 
 # Install ARMv7 development libraries (without VAAPI/X11 for ARM)
@@ -44,24 +47,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libv4l-dev:armhf \
     libudev-dev:armhf \
     zlib1g-dev:armhf \
-    # Note: libjpeg-turbo, libyuv, libvpx are built from source below for static linking
-    libx264-dev:armhf \
-    libx265-dev:armhf \
-    libopus-dev:armhf \
     libdrm-dev:armhf \
     && rm -rf /var/lib/apt/lists/*
 
 # Build static libjpeg-turbo from source (cross-compile for ARMv7)
 RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libjpeg-turbo \
     && cd /tmp/libjpeg-turbo \
-    && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    && mkdir build && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DCMAKE_INSTALL_PREFIX=/usr/arm-linux-gnueabihf \
         -DCMAKE_SYSTEM_NAME=Linux \
         -DCMAKE_SYSTEM_PROCESSOR=arm \
         -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
-        -DCMAKE_INSTALL_PREFIX=/opt/one-kvm-libs/armv7-linux-gnueabihf \
         -DENABLE_SHARED=OFF -DENABLE_STATIC=ON \
-    && cmake --build build -j$(nproc) \
-    && cmake --install build \
+    && make -j$(nproc) \
+    && make install \
     && rm -rf /tmp/libjpeg-turbo
 
 # Build static libyuv from source (cross-compile for ARMv7)
@@ -69,20 +69,16 @@ RUN git clone --depth 1 https://github.com/lemenkov/libyuv /tmp/libyuv \
     && cd /tmp/libyuv \
     && mkdir build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DCMAKE_INSTALL_PREFIX=/usr/arm-linux-gnueabihf \
         -DCMAKE_SYSTEM_NAME=Linux \
         -DCMAKE_SYSTEM_PROCESSOR=arm \
         -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
         -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
-        -DCMAKE_PREFIX_PATH=/opt/one-kvm-libs/armv7-linux-gnueabihf \
-        -DCMAKE_INSTALL_PREFIX=/opt/one-kvm-libs/armv7-linux-gnueabihf \
     && make -j$(nproc) \
-    && mkdir -p /opt/one-kvm-libs/armv7-linux-gnueabihf/lib \
-    && cp libyuv.a /opt/one-kvm-libs/armv7-linux-gnueabihf/lib/ \
-    && cp -r ../include /opt/one-kvm-libs/armv7-linux-gnueabihf/ \
+    && make install \
     && rm -rf /tmp/libyuv
 
 # Build static libvpx from source (cross-compile for ARMv7)
-# CC/CXX/LD/AR must be environment variables, not configure arguments
 RUN git clone --depth 1 https://github.com/webmproject/libvpx /tmp/libvpx \
     && cd /tmp/libvpx \
     && export CC=arm-linux-gnueabihf-gcc \
@@ -90,16 +86,82 @@ RUN git clone --depth 1 https://github.com/webmproject/libvpx /tmp/libvpx \
     && export LD=arm-linux-gnueabihf-ld \
     && export AR=arm-linux-gnueabihf-ar \
     && export CROSS=arm-linux-gnueabihf- \
-    && ./configure --prefix=/opt/one-kvm-libs/armv7-linux-gnueabihf \
+    && ./configure \
+        --prefix=/usr/arm-linux-gnueabihf \
         --target=armv7-linux-gcc \
         --enable-static --disable-shared --enable-pic \
         --disable-examples --disable-tools --disable-docs \
         --disable-unit-tests \
     && make -j$(nproc) \
-    && echo "=== libvpx: Checking architecture ===" \
-    && file libvpx.a \
     && make install \
     && rm -rf /tmp/libvpx
+
+# Build static libx264 from source (cross-compile for ARMv7)
+RUN git clone --depth 1 https://code.videolan.org/videolan/x264.git /tmp/x264 \
+    && cd /tmp/x264 \
+    && export CC=arm-linux-gnueabihf-gcc \
+    && export AR=arm-linux-gnueabihf-ar \
+    && export RANLIB=arm-linux-gnueabihf-ranlib \
+    && ./configure \
+        --prefix=/usr/arm-linux-gnueabihf \
+        --host=arm-linux-gnueabihf \
+        --cross-prefix=arm-linux-gnueabihf- \
+        --enable-static --disable-shared \
+        --enable-pic \
+        --disable-cli \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/x264
+
+# Build static libx265 from source (cross-compile for ARMv7)
+RUN git clone --depth 1 https://bitbucket.org/multicoreware/x265_git /tmp/x265 \
+    && cd /tmp/x265 \
+    && cd source \
+    && mkdir -p build \
+    && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/arm-linux-gnueabihf \
+        -DCMAKE_SYSTEM_NAME=Linux \
+        -DCMAKE_SYSTEM_PROCESSOR=arm \
+        -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
+        -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
+        -DENABLE_SHARED=OFF \
+        -DENABLE_CLI=OFF \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/x265
+
+# Create pkg-config file for x265 (required by FFmpeg)
+RUN mkdir -p /usr/arm-linux-gnueabihf/lib/pkgconfig && \
+    cat > /usr/arm-linux-gnueabihf/lib/pkgconfig/x265.pc <<EOF
+prefix=/usr/arm-linux-gnueabihf
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+
+Name: x265
+Description: H.265/HEVC video encoder
+Version: 199
+Libs: -L\${libdir} -lx265 -lstdc++ -lm -ldl -lpthread
+Cflags: -I\${includedir}
+EOF
+
+# Build static libopus from source (cross-compile for ARMv7)
+RUN git clone --depth 1 https://github.com/xiph/opus /tmp/opus \
+    && cd /tmp/opus \
+    && export CC=arm-linux-gnueabihf-gcc \
+    && export AR=arm-linux-gnueabihf-ar \
+    && export RANLIB=arm-linux-gnueabihf-ranlib \
+    && ./autogen.sh \
+    && ./configure \
+        --host=arm-linux-gnueabihf \
+        --enable-static --disable-shared \
+        --disable-doc \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/opus
 
 # Download and build FFmpeg with RKMPP support
 RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
@@ -119,6 +181,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
         -DBUILD_TEST=OFF \
     && make -j$(nproc) \
     && make install \
+    && sed -i 's/^Libs:.*$/& -lstdc++ -lm -lpthread/' /usr/arm-linux-gnueabihf/lib/pkgconfig/rockchip_mpp.pc \
     && cd ../.. \
     # Build RKRGA - create cross file for meson
     && echo '[binaries]' > /tmp/armhf-cross.txt \
@@ -142,10 +205,11 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
         -Dlibrga_demo=false \
     && ninja -C build \
     && ninja -C build install \
+    && sed -i 's/^Libs:.*$/& -lstdc++ -lm -lpthread/' /usr/arm-linux-gnueabihf/lib/pkgconfig/librga.pc \
     && cd .. \
     # Create pkg-config wrapper for cross-compilation
     && echo '#!/bin/sh' > /tmp/armhf-pkg-config \
-    && echo 'export PKG_CONFIG_LIBDIR=/opt/one-kvm-libs/armv7-linux-gnueabihf/lib/pkgconfig:/usr/arm-linux-gnueabihf/lib/pkgconfig:/usr/lib/arm-linux-gnueabihf/pkgconfig' >> /tmp/armhf-pkg-config \
+    && echo 'export PKG_CONFIG_LIBDIR=/usr/arm-linux-gnueabihf/lib/pkgconfig:/usr/arm-linux-gnueabihf/lib/pkgconfig:/usr/lib/arm-linux-gnueabihf/pkgconfig' >> /tmp/armhf-pkg-config \
     && echo 'export PKG_CONFIG_PATH=""' >> /tmp/armhf-pkg-config \
     && echo 'export PKG_CONFIG_SYSROOT_DIR=""' >> /tmp/armhf-pkg-config \
     && echo 'exec pkg-config "$@"' >> /tmp/armhf-pkg-config \
@@ -153,7 +217,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     # Build FFmpeg with RKMPP (minimal build for encoding only)
     && cd ffmpeg-rockchip \
     && ./configure \
-        --prefix=/opt/one-kvm-libs/armv7-linux-gnueabihf \
+        --prefix=/usr/arm-linux-gnueabihf \
         --cross-prefix=arm-linux-gnueabihf- \
         --arch=arm \
         --target-os=linux \
@@ -231,25 +295,17 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
 # Add Rust target
 RUN rustup target add armv7-unknown-linux-gnueabihf
 
-# Create symlink for mold to work with cross-compiler
-RUN ln -s /usr/bin/mold /usr/bin/arm-linux-gnueabihf-ld.mold
-
-# Copy entrypoint script
-COPY build/cross/entrypoint.sh /usr/local/bin/cross-entrypoint.sh
-RUN chmod +x /usr/local/bin/cross-entrypoint.sh
-
 # Configure environment for cross-compilation
 ENV CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc \
     CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc \
     CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++ \
     AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar \
-    PKG_CONFIG_LIBDIR=/opt/one-kvm-libs/armv7-linux-gnueabihf/lib/pkgconfig:/usr/arm-linux-gnueabihf/lib/pkgconfig:/usr/lib/arm-linux-gnueabihf/pkgconfig \
+    PKG_CONFIG_LIBDIR=/usr/arm-linux-gnueabihf/lib/pkgconfig:/usr/lib/arm-linux-gnueabihf/pkgconfig \
     PKG_CONFIG_PATH="" \
     PKG_CONFIG_ALLOW_CROSS=1 \
-    LIBRARY_PATH="/opt/one-kvm-libs/armv7-linux-gnueabihf/lib" \
-    CPATH="/opt/one-kvm-libs/armv7-linux-gnueabihf/include" \
     FFMPEG_STATIC=1 \
     LIBYUV_STATIC=1 \
-    RUSTFLAGS="-C linker=arm-linux-gnueabihf-gcc -C link-arg=-fuse-ld=mold"
+    RUSTFLAGS="-C linker=arm-linux-gnueabihf-gcc"
 
-ENTRYPOINT ["/usr/local/bin/cross-entrypoint.sh"]
+# Default command
+CMD ["bash"]

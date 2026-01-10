@@ -50,7 +50,7 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
         vec![RESP_ERR_HID_UNAVAILABLE]
     };
 
-    if sender.send(Message::Binary(initial_response)).await.is_err() {
+    if sender.send(Message::Binary(initial_response.into())).await.is_err() {
         error!("Failed to send initial HID status");
         return;
     }
@@ -66,7 +66,7 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
                         warn!("HID controller not available, ignoring message");
                     }
                     // Send error response (optional, for client awareness)
-                    let _ = sender.send(Message::Binary(vec![RESP_ERR_HID_UNAVAILABLE])).await;
+                    let _ = sender.send(Message::Binary(vec![RESP_ERR_HID_UNAVAILABLE].into())).await;
                     continue;
                 }
 
@@ -83,7 +83,7 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
                 if log_throttler.should_log("text_message_rejected") {
                     debug!("Received text message (not supported): {} bytes", text.len());
                 }
-                let _ = sender.send(Message::Binary(vec![RESP_ERR_INVALID_MESSAGE])).await;
+                let _ = sender.send(Message::Binary(vec![RESP_ERR_INVALID_MESSAGE].into())).await;
             }
             Ok(Message::Ping(data)) => {
                 let _ = sender.send(Message::Pong(data)).await;

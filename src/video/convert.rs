@@ -415,64 +415,6 @@ pub fn yuyv_buffer_size(resolution: Resolution) -> usize {
 }
 
 // ============================================================================
-// MJPEG Decoder - Decodes JPEG to YUV420P using libyuv
-// ============================================================================
-
-/// MJPEG/JPEG decoder that outputs YUV420P using libyuv
-pub struct MjpegDecoder {
-    /// Resolution hint (can be updated from decoded frame)
-    resolution: Resolution,
-    /// YUV420P output buffer
-    yuv_buffer: Yuv420pBuffer,
-}
-
-impl MjpegDecoder {
-    /// Create a new MJPEG decoder with expected resolution
-    pub fn new(resolution: Resolution) -> Result<Self> {
-        Ok(Self {
-            resolution,
-            yuv_buffer: Yuv420pBuffer::new(resolution),
-        })
-    }
-
-    /// Decode MJPEG/JPEG data to YUV420P using libyuv
-    pub fn decode(&mut self, jpeg_data: &[u8]) -> Result<&[u8]> {
-        // Get MJPEG dimensions
-        let (width, height) = libyuv::mjpeg_size(jpeg_data)
-            .map_err(|e| AppError::VideoError(format!("Failed to get MJPEG size: {}", e)))?;
-
-        // Check if resolution changed
-        if width != self.resolution.width as i32 || height != self.resolution.height as i32 {
-            tracing::debug!(
-                "MJPEG resolution changed: {}x{} -> {}x{}",
-                self.resolution.width,
-                self.resolution.height,
-                width,
-                height
-            );
-            self.resolution = Resolution::new(width as u32, height as u32);
-            self.yuv_buffer = Yuv420pBuffer::new(self.resolution);
-        }
-
-        // Decode MJPEG directly to I420 using libyuv
-        libyuv::mjpeg_to_i420(jpeg_data, self.yuv_buffer.as_bytes_mut(), width, height)
-            .map_err(|e| AppError::VideoError(format!("MJPEG decode failed: {}", e)))?;
-
-        Ok(self.yuv_buffer.as_bytes())
-    }
-
-    /// Get current resolution
-    pub fn resolution(&self) -> Resolution {
-        self.resolution
-    }
-
-    /// Get YUV420P buffer size
-    pub fn yuv_buffer_size(&self) -> usize {
-        self.yuv_buffer.len()
-    }
-}
-
-// ============================================================================
 // NV12 Converter for VAAPI encoder (using libyuv)
 // ============================================================================
 
@@ -569,34 +511,6 @@ pub fn rgb_to_nv12(rgb: &[u8], nv12: &mut [u8], width: usize, height: usize) {
 pub fn yuyv_to_nv12(yuyv: &[u8], nv12: &mut [u8], width: usize, height: usize) {
     if let Err(e) = libyuv::yuy2_to_nv12(yuyv, nv12, width as i32, height as i32) {
         tracing::error!("libyuv YUYV→NV12 conversion failed: {}", e);
-    }
-}
-
-// ============================================================================
-// Extended PixelConverter for MJPEG support
-// ============================================================================
-
-/// MJPEG to YUV420P converter (wraps MjpegDecoder)
-pub struct MjpegToYuv420Converter {
-    decoder: MjpegDecoder,
-}
-
-impl MjpegToYuv420Converter {
-    /// Create a new MJPEG to YUV420P converter
-    pub fn new(resolution: Resolution) -> Result<Self> {
-        Ok(Self {
-            decoder: MjpegDecoder::new(resolution)?,
-        })
-    }
-
-    /// Convert MJPEG data to YUV420P
-    pub fn convert(&mut self, mjpeg_data: &[u8]) -> Result<&[u8]> {
-        self.decoder.decode(mjpeg_data)
-    }
-
-    /// Get current resolution
-    pub fn resolution(&self) -> Resolution {
-        self.decoder.resolution()
     }
 }
 

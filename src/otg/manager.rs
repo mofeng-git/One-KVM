@@ -423,13 +423,13 @@ mod tests {
     fn test_endpoint_tracking() {
         let mut manager = OtgGadgetManager::with_config("test", 8);
 
-        // Keyboard uses 2 endpoints
+        // Keyboard uses 1 endpoint
         let _ = manager.add_keyboard();
-        assert_eq!(manager.endpoint_allocator.used(), 2);
+        assert_eq!(manager.endpoint_allocator.used(), 1);
 
         // Mouse uses 1 endpoint each
         let _ = manager.add_mouse_relative();
         let _ = manager.add_mouse_absolute();
-        assert_eq!(manager.endpoint_allocator.used(), 4);
+        assert_eq!(manager.endpoint_allocator.used(), 3);
     }
 }

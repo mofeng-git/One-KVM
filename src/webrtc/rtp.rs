@@ -731,7 +731,7 @@ mod tests {
     fn test_h264_track_config_default() {
         let config = H264VideoTrackConfig::default();
         assert_eq!(config.fps, 30);
-        assert_eq!(config.bitrate_kbps, 2000);
+        assert_eq!(config.bitrate_kbps, 8000);
         assert_eq!(config.resolution, Resolution::HD720);
     }
 }

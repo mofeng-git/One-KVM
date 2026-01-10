@@ -355,7 +355,7 @@ mod tests {
     fn test_codec_config_default() {
         let config = VideoCodecConfig::default();
         assert_eq!(config.codec, VideoCodecType::H264);
-        assert_eq!(config.bitrate_kbps, 2000);
+        assert_eq!(config.bitrate_kbps, 8000);
         assert_eq!(config.fps, 30);
     }
 

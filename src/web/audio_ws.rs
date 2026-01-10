@@ -57,7 +57,7 @@ async fn handle_audio_socket(socket: WebSocket, state: Arc<AppState>) {
             // Send error message before closing
             let _ = sender
                 .send(Message::Text(
-                    r#"{"error": "Audio not streaming"}"#.to_string(),
+                    r#"{"error": "Audio not streaming"}"#.to_string().into(),
                 ))
                 .await;
             return;
@@ -83,7 +83,7 @@ async fn handle_audio_socket(socket: WebSocket, state: Arc<AppState>) {
                 match opus_result {
                     Ok(frame) => {
                         let binary = encode_audio_packet(&frame, stream_start);
-                        if sender.send(Message::Binary(binary)).await.is_err() {
+                        if sender.send(Message::Binary(binary.into())).await.is_err() {
                             debug!("Failed to send audio frame, client disconnected");
                             break;
                         }
@@ -133,7 +133,7 @@ async fn handle_audio_socket(socket: WebSocket, state: Arc<AppState>) {
 
             // Periodic ping to keep connection alive (using interval)
             _ = ping_interval.tick() => {
-                if sender.send(Message::Ping(vec![])).await.is_err() {
+                if sender.send(Message::Ping(vec![].into())).await.is_err() {
                     warn!("Failed to send ping, disconnecting");
                     break;
                 }

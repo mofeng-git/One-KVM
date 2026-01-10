@@ -59,11 +59,6 @@ fn generate_bindings(cpp_dir: &Path) {
         .allowlist_function("UYVYToARGB")
         .allowlist_function("ARGBToRGB24")
         .allowlist_function("ARGBToRAW")
-        // MJPEG decoding
-        .allowlist_function("MJPGToI420")
-        .allowlist_function("MJPGToNV12")
-        .allowlist_function("MJPGToARGB")
-        .allowlist_function("MJPGSize")
         // Scaling
         .allowlist_function("I420Scale")
         .allowlist_function("NV12Scale")
@@ -152,25 +147,15 @@ fn link_vcpkg(mut path: PathBuf) -> bool {
     let use_static = env::var("LIBYUV_STATIC").map(|v| v == "1").unwrap_or(false);
 
     let static_lib = lib_path.join("libyuv.a");
-    let jpeg_static = lib_path.join("libjpeg.a");
-    let turbojpeg_static = lib_path.join("libturbojpeg.a");
 
     if use_static && static_lib.exists() {
         // Static linking (for deb packaging)
         println!("cargo:rustc-link-lib=static=yuv");
-        if turbojpeg_static.exists() {
-            println!("cargo:rustc-link-lib=static=turbojpeg");
-        } else if jpeg_static.exists() {
-            println!("cargo:rustc-link-lib=static=jpeg");
-        } else {
-            println!("cargo:rustc-link-lib=jpeg");
-        }
         println!("cargo:rustc-link-lib=stdc++");
         println!("cargo:info=Using libyuv from vcpkg (static linking)");
     } else {
         // Dynamic linking (default for development)
         println!("cargo:rustc-link-lib=yuv");
-        println!("cargo:rustc-link-lib=jpeg");
         println!("cargo:rustc-link-lib=stdc++");
         println!("cargo:info=Using libyuv from vcpkg (dynamic linking)");
     }
@@ -204,23 +189,6 @@ fn link_pkg_config() -> bool {
         }
     }
 
-    // Also need libjpeg
-    if let Ok(jpeg_output) = Command::new("pkg-config")
-        .args(["--libs", "libjpeg"])
-        .output()
-    {
-        if jpeg_output.status.success() {
-            let jpeg_flags = String::from_utf8_lossy(&jpeg_output.stdout);
-            for flag in jpeg_flags.split_whitespace() {
-                if flag.starts_with("-L") {
-                    println!("cargo:rustc-link-search=native={}", &flag[2..]);
-                } else if flag.starts_with("-l") {
-                    println!("cargo:rustc-link-lib={}", &flag[2..]);
-                }
-            }
-        }
-    }
-
     #[cfg(target_os = "linux")]
     println!("cargo:rustc-link-lib=stdc++");
 
@@ -240,9 +208,9 @@ fn link_system() -> bool {
         format!("{}/lib", path)
     } else {
         match target_arch.as_str() {
-            "x86_64" => "/opt/one-kvm-libs/x86_64-linux-gnu/lib",
-            "aarch64" => "/opt/one-kvm-libs/aarch64-linux-gnu/lib",
-            "arm" => "/opt/one-kvm-libs/armv7-linux-gnueabihf/lib",
+            "x86_64" => "/usr/local/lib",
+            "aarch64" => "/usr/aarch64-linux-gnu/lib",
+            "arm" => "/usr/arm-linux-gnueabihf/lib",
             _ => "",
         }
         .to_string()
@@ -276,19 +244,6 @@ fn link_system() -> bool {
         if use_static && libyuv_static.exists() {
             println!("cargo:rustc-link-search=native={}", path);
             println!("cargo:rustc-link-lib=static=yuv");
-
-            // Check for static libjpeg-turbo in the same directory
-            let turbojpeg_static = lib_path.join("libturbojpeg.a");
-            let jpeg_static = lib_path.join("libjpeg.a");
-            if turbojpeg_static.exists() {
-                println!("cargo:rustc-link-lib=static=turbojpeg");
-            } else if jpeg_static.exists() {
-                println!("cargo:rustc-link-lib=static=jpeg");
-            } else {
-                // Fall back to dynamic jpeg
-                println!("cargo:rustc-link-lib=jpeg");
-            }
-
             println!("cargo:rustc-link-lib=stdc++");
             println!("cargo:info=Using system libyuv from {} (static linking)", path);
             return true;
@@ -298,7 +253,6 @@ fn link_system() -> bool {
         if libyuv_so.exists() {
             println!("cargo:rustc-link-search=native={}", path);
             println!("cargo:rustc-link-lib=yuv");
-            println!("cargo:rustc-link-lib=jpeg");
 
             #[cfg(target_os = "linux")]
             println!("cargo:rustc-link-lib=stdc++");

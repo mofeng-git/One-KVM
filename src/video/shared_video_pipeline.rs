@@ -28,7 +28,6 @@ const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
 
 use crate::error::{AppError, Result};
 use crate::video::convert::{Nv12Converter, PixelConverter};
-use crate::video::decoder::mjpeg::{MjpegTurboDecoder, MjpegVaapiDecoder, MjpegVaapiDecoderConfig};
 use crate::video::encoder::h264::{H264Config, H264Encoder};
 use crate::video::encoder::h265::{H265Config, H265Encoder};
 use crate::video::encoder::registry::{EncoderBackend, EncoderRegistry, VideoEncoderType};
@@ -298,12 +297,6 @@ pub struct SharedVideoPipeline {
     encoder: Mutex<Option<Box<dyn VideoEncoderTrait + Send>>>,
     nv12_converter: Mutex<Option<Nv12Converter>>,
     yuv420p_converter: Mutex<Option<PixelConverter>>,
-    mjpeg_decoder: Mutex<Option<MjpegVaapiDecoder>>,
-    /// Turbojpeg decoder for direct MJPEG->YUV420P (optimized for software encoders)
-    mjpeg_turbo_decoder: Mutex<Option<MjpegTurboDecoder>>,
-    nv12_buffer: Mutex<Vec<u8>>,
-    /// YUV420P buffer for turbojpeg decoder output
-    yuv420p_buffer: Mutex<Vec<u8>>,
     /// Whether the encoder needs YUV420P (true) or NV12 (false)
     encoder_needs_yuv420p: AtomicBool,
     /// Whether YUYV direct input is enabled (RKMPP optimization)
@@ -335,18 +328,12 @@ impl SharedVideoPipeline {
 
         let (frame_tx, _) = broadcast::channel(16);  // Reduced from 64 for lower latency
         let (running_tx, running_rx) = watch::channel(false);
-        let nv12_size = (config.resolution.width * config.resolution.height * 3 / 2) as usize;
-        let yuv420p_size = nv12_size; // Same size as NV12
 
         let pipeline = Arc::new(Self {
             config: RwLock::new(config),
             encoder: Mutex::new(None),
             nv12_converter: Mutex::new(None),
             yuv420p_converter: Mutex::new(None),
-            mjpeg_decoder: Mutex::new(None),
-            mjpeg_turbo_decoder: Mutex::new(None),
-            nv12_buffer: Mutex::new(vec![0u8; nv12_size]),
-            yuv420p_buffer: Mutex::new(vec![0u8; yuv420p_size]),
             encoder_needs_yuv420p: AtomicBool::new(false),
             yuyv_direct_input: AtomicBool::new(false),
             frame_tx,
@@ -505,42 +492,36 @@ impl SharedVideoPipeline {
               config.input_format,
               if use_yuyv_direct { "YUYV422 (direct)" } else if needs_yuv420p { "YUV420P" } else { "NV12" });
 
-        let (nv12_converter, yuv420p_converter, mjpeg_decoder, mjpeg_turbo_decoder) = if use_yuyv_direct {
+        let (nv12_converter, yuv420p_converter) = if use_yuyv_direct {
             // RKMPP with YUYV direct input - skip all conversion
             info!("YUYV direct input enabled for RKMPP, skipping format conversion");
-            (None, None, None, None)
+            (None, None)
         } else if needs_yuv420p {
             // Software encoder needs YUV420P
             match config.input_format {
                 PixelFormat::Yuv420 => {
                     info!("Using direct YUV420P input (no conversion)");
-                    (None, None, None, None)
+                    (None, None)
                 }
                 PixelFormat::Yuyv => {
                     info!("Using YUYV->YUV420P converter");
-                    (None, Some(PixelConverter::yuyv_to_yuv420p(config.resolution)), None, None)
+                    (None, Some(PixelConverter::yuyv_to_yuv420p(config.resolution)))
                 }
                 PixelFormat::Nv12 => {
                     info!("Using NV12->YUV420P converter");
-                    (None, Some(PixelConverter::nv12_to_yuv420p(config.resolution)), None, None)
+                    (None, Some(PixelConverter::nv12_to_yuv420p(config.resolution)))
                 }
                 PixelFormat::Rgb24 => {
                     info!("Using RGB24->YUV420P converter");
-                    (None, Some(PixelConverter::rgb24_to_yuv420p(config.resolution)), None, None)
+                    (None, Some(PixelConverter::rgb24_to_yuv420p(config.resolution)))
                 }
                 PixelFormat::Bgr24 => {
                     info!("Using BGR24->YUV420P converter");
-                    (None, Some(PixelConverter::bgr24_to_yuv420p(config.resolution)), None, None)
-                }
-                PixelFormat::Mjpeg | PixelFormat::Jpeg => {
-                    // Use turbojpeg for direct MJPEG->YUV420P (no intermediate NV12)
-                    info!("Using turbojpeg MJPEG decoder (direct YUV420P output)");
-                    let turbo_decoder = MjpegTurboDecoder::new(config.resolution)?;
-                    (None, None, None, Some(turbo_decoder))
+                    (None, Some(PixelConverter::bgr24_to_yuv420p(config.resolution)))
                 }
                 _ => {
                     return Err(AppError::VideoError(format!(
-                        "Unsupported input format: {}",
+                        "Unsupported input format for software encoding: {}",
                         config.input_format
                     )));
                 }
@@ -550,32 +531,23 @@ impl SharedVideoPipeline {
             match config.input_format {
                 PixelFormat::Nv12 => {
                     info!("Using direct NV12 input (no conversion)");
-                    (None, None, None, None)
+                    (None, None)
                 }
                 PixelFormat::Yuyv => {
                     info!("Using YUYV->NV12 converter");
-                    (Some(Nv12Converter::yuyv_to_nv12(config.resolution)), None, None, None)
+                    (Some(Nv12Converter::yuyv_to_nv12(config.resolution)), None)
                 }
                 PixelFormat::Rgb24 => {
                     info!("Using RGB24->NV12 converter");
-                    (Some(Nv12Converter::rgb24_to_nv12(config.resolution)), None, None, None)
+                    (Some(Nv12Converter::rgb24_to_nv12(config.resolution)), None)
                 }
                 PixelFormat::Bgr24 => {
                     info!("Using BGR24->NV12 converter");
-                    (Some(Nv12Converter::bgr24_to_nv12(config.resolution)), None, None, None)
-                }
-                PixelFormat::Mjpeg | PixelFormat::Jpeg => {
-                    info!("Using MJPEG decoder (NV12 output)");
-                    let decoder_config = MjpegVaapiDecoderConfig {
-                        resolution: config.resolution,
-                        use_hwaccel: true,
-                    };
-                    let decoder = MjpegVaapiDecoder::new(decoder_config)?;
-                    (None, None, Some(decoder), None)
+                    (Some(Nv12Converter::bgr24_to_nv12(config.resolution)), None)
                 }
                 _ => {
                     return Err(AppError::VideoError(format!(
-                        "Unsupported input format: {}",
+                        "Unsupported input format for hardware encoding: {}",
                         config.input_format
                     )));
                 }
@@ -585,8 +557,6 @@ impl SharedVideoPipeline {
         *self.encoder.lock().await = Some(encoder);
         *self.nv12_converter.lock().await = nv12_converter;
         *self.yuv420p_converter.lock().await = yuv420p_converter;
-        *self.mjpeg_decoder.lock().await = mjpeg_decoder;
-        *self.mjpeg_turbo_decoder.lock().await = mjpeg_turbo_decoder;
         self.encoder_needs_yuv420p.store(needs_yuv420p, Ordering::Release);
         self.yuyv_direct_input.store(use_yuyv_direct, Ordering::Release);
 
@@ -669,8 +639,6 @@ impl SharedVideoPipeline {
         *self.encoder.lock().await = None;
         *self.nv12_converter.lock().await = None;
         *self.yuv420p_converter.lock().await = None;
-        *self.mjpeg_decoder.lock().await = None;
-        *self.mjpeg_turbo_decoder.lock().await = None;
         self.encoder_needs_yuv420p.store(false, Ordering::Release);
 
         info!("Switched to {} codec", codec);
@@ -862,8 +830,6 @@ impl SharedVideoPipeline {
             );
         }
 
-        let mut mjpeg_decoder = self.mjpeg_decoder.lock().await;
-        let mut mjpeg_turbo_decoder = self.mjpeg_turbo_decoder.lock().await;
         let mut nv12_converter = self.nv12_converter.lock().await;
         let mut yuv420p_converter = self.yuv420p_converter.lock().await;
         let needs_yuv420p = self.encoder_needs_yuv420p.load(Ordering::Acquire);
@@ -879,38 +845,7 @@ impl SharedVideoPipeline {
             debug!("[Pipeline] Keyframe will be generated for this frame");
         }
 
-        let encode_result = if mjpeg_turbo_decoder.is_some() {
-            // Optimized path: MJPEG -> YUV420P directly via turbojpeg (for software encoders)
-            let turbo = mjpeg_turbo_decoder.as_mut().unwrap();
-            let mut yuv420p_buffer = self.yuv420p_buffer.lock().await;
-            let written = turbo.decode_to_yuv420p_buffer(raw_frame, &mut yuv420p_buffer)
-                .map_err(|e| AppError::VideoError(format!("turbojpeg decode failed: {}", e)))?;
-            encoder.encode_raw(&yuv420p_buffer[..written], pts_ms)
-        } else if mjpeg_decoder.is_some() {
-            // MJPEG input: decode to NV12 (for hardware encoders)
-            let decoder = mjpeg_decoder.as_mut().unwrap();
-            let nv12_frame = decoder.decode(raw_frame)
-                .map_err(|e| AppError::VideoError(format!("MJPEG decode failed: {}", e)))?;
-
-            let required_size = (nv12_frame.width * nv12_frame.height * 3 / 2) as usize;
-            let mut nv12_buffer = self.nv12_buffer.lock().await;
-            if nv12_buffer.len() < required_size {
-                nv12_buffer.resize(required_size, 0);
-            }
-
-            let written = nv12_frame.copy_to_packed_nv12(&mut nv12_buffer)
-                .expect("Buffer too small");
-
-            // Debug log for H265 after MJPEG decode
-            if codec == VideoEncoderType::H265 && frame_count % 30 == 1 {
-                debug!(
-                    "[Pipeline-H265] MJPEG decoded: nv12_size={}, frame_width={}, frame_height={}",
-                    written, nv12_frame.width, nv12_frame.height
-                );
-            }
-
-            encoder.encode_raw(&nv12_buffer[..written], pts_ms)
-        } else if needs_yuv420p && yuv420p_converter.is_some() {
+        let encode_result = if needs_yuv420p && yuv420p_converter.is_some() {
             // Software encoder with direct input conversion to YUV420P
             let conv = yuv420p_converter.as_mut().unwrap();
             let yuv420p_data = conv.convert(raw_frame)
@@ -930,8 +865,6 @@ impl SharedVideoPipeline {
         drop(encoder_guard);
         drop(nv12_converter);
         drop(yuv420p_converter);
-        drop(mjpeg_decoder);
-        drop(mjpeg_turbo_decoder);
 
         match encode_result {
             Ok(frames) => {

@@ -245,12 +245,6 @@ const config = ref({
 // 跟踪服务器是否已配置 TURN 密码
 const hasTurnPassword = ref(false)
 
-// 跟踪公共 ICE 服务器状态
-const hasPublicIceServers = ref(false)
-const usingPublicIceServers = computed(() => {
-  return !config.value.stun_server && !config.value.turn_server && hasPublicIceServers.value
-})
-
 // OTG Descriptor settings
 const otgVendorIdHex = ref('1d6b')
 const otgProductIdHex = ref('0104')
@@ -553,9 +547,6 @@ async function loadConfig() {
 
     // 设置是否已配置 TURN 密码
     hasTurnPassword.value = stream.has_turn_password || false
-
-    // 设置公共 ICE 服务器状态
-    hasPublicIceServers.value = stream.has_public_ice_servers || false
 
     // 加载 OTG 描述符配置
     if (hid.otg_descriptor) {
@@ -1261,9 +1252,6 @@ onMounted(async () => {
                     :placeholder="t('settings.stunServerPlaceholder')"
                   />
                   <p class="text-xs text-muted-foreground">{{ t('settings.stunServerHint') }}</p>
-                  <p v-if="usingPublicIceServers && hasPublicIceServers" class="text-xs text-blue-500">
-                    {{ t('settings.usingPublicIceServers') }}
-                  </p>
                 </div>
                 <Separator />
                 <div class="space-y-2">

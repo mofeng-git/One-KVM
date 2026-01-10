@@ -284,6 +284,7 @@ mod tests {
                 right_alt: false,
                 right_meta: false,
             },
+            is_usb_hid: false,
         };
 
         let encoded = encode_keyboard_event(&event);

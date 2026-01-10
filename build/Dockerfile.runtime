@@ -1,32 +1,36 @@
 # One-KVM Runtime Image
 # This Dockerfile only packages pre-compiled binaries (no compilation)
 # Used after cross-compiling with `cross build`
+# Using Debian 11 for maximum compatibility (GLIBC 2.31)
 
 ARG TARGETPLATFORM=linux/amd64
 
-FROM debian:12-slim
+FROM debian:11-slim
 
 ARG TARGETPLATFORM
 
 # Install runtime dependencies in a single layer
-# Static linked: FFmpeg core, libyuv, libvpx, libjpeg-turbo
-# Dynamic linked: hardware acceleration drivers, GPL codecs (x264/x265)
+# All codec libraries (libx264, libx265, libopus) are now statically linked
+# Only hardware acceleration drivers and core system libraries remain dynamic
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        # Core runtime (all platforms)
-        libasound2 \
-        libv4l-0 \
-        libudev1 \
-        libdrm2 \
-        libopus0 \
+        # Core runtime (all platforms) - no codec libs needed
         ca-certificates \
-        # GPL codecs (must be dynamic for license compliance)
-        libx264-164 \
-        libx265-199 && \
+        libudev1 \
+        libasound2 \
+        # v4l2 is handled by kernel, minimal userspace needed
+        libv4l-0 \
+        && \
     # Platform-specific hardware acceleration
     if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         apt-get install -y --no-install-recommends \
-            libva2 libva-drm2 libva-x11-2 libx11-6 libxcb1 libmfx1; \
+            libva2 libva-drm2 libva-x11-2 libx11-6 libxcb1 libxau6 libxdmcp6 libmfx1; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+        apt-get install -y --no-install-recommends \
+            libdrm2 libva2; \
+    elif [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
+        apt-get install -y --no-install-recommends \
+            libdrm2 libva2; \
     fi && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /etc/one-kvm/ventoy

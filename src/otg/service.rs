@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn test_service_creation() {
-        let service = OtgService::new();
+        let _service = OtgService::new();
         // Just test that creation doesn't panic
         assert!(!OtgService::is_available() || true); // Depends on environment
     }

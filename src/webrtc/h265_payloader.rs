@@ -397,7 +397,7 @@ mod tests {
 
     #[test]
     fn test_verify_with_rtp_depacketizer() {
-        use rtp::codecs::h265::{H265Packet, H265Payload, H265FragmentationUnitPacket};
+        use rtp::codecs::h265::{H265Packet, H265Payload};
         use rtp::packetizer::Depacketizer;
 
         let mut payloader = H265Payloader::new();

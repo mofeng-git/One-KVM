@@ -70,7 +70,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Audio WebSocket endpoint
         .route("/ws/audio", any(audio_ws_handler))
         // User can change their own password (handler will check ownership)
-        .route("/users/:id/password", post(handlers::change_user_password));
+        .route("/users/{id}/password", post(handlers::change_user_password));
 
     // Admin-only routes (require admin privileges)
     let admin_routes = Router::new()
@@ -106,8 +106,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/msd/images", get(handlers::msd_images_list))
         .route("/msd/images/download", post(handlers::msd_image_download))
         .route("/msd/images/download/cancel", post(handlers::msd_image_download_cancel))
-        .route("/msd/images/:id", get(handlers::msd_image_get))
-        .route("/msd/images/:id", delete(handlers::msd_image_delete))
+        .route("/msd/images/{id}", get(handlers::msd_image_get))
+        .route("/msd/images/{id}", delete(handlers::msd_image_delete))
         .route("/msd/connect", post(handlers::msd_connect))
         .route("/msd/disconnect", post(handlers::msd_disconnect))
         // MSD Virtual Drive endpoints
@@ -115,9 +115,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/msd/drive", delete(handlers::msd_drive_delete))
         .route("/msd/drive/init", post(handlers::msd_drive_init))
         .route("/msd/drive/files", get(handlers::msd_drive_files))
-        .route("/msd/drive/files/*path", get(handlers::msd_drive_download))
-        .route("/msd/drive/files/*path", delete(handlers::msd_drive_file_delete))
-        .route("/msd/drive/mkdir/*path", post(handlers::msd_drive_mkdir))
+        .route("/msd/drive/files/{*path}", get(handlers::msd_drive_download))
+        .route("/msd/drive/files/{*path}", delete(handlers::msd_drive_file_delete))
+        .route("/msd/drive/mkdir/{*path}", post(handlers::msd_drive_mkdir))
         // ATX (Power Control) endpoints
         .route("/atx/status", get(handlers::atx_status))
         .route("/atx/power", post(handlers::atx_power))
@@ -127,14 +127,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // User management endpoints
         .route("/users", get(handlers::list_users))
         .route("/users", post(handlers::create_user))
-        .route("/users/:id", put(handlers::update_user))
-        .route("/users/:id", delete(handlers::delete_user))
+        .route("/users/{id}", put(handlers::update_user))
+        .route("/users/{id}", delete(handlers::delete_user))
         // Extension management endpoints
         .route("/extensions", get(handlers::extensions::list_extensions))
-        .route("/extensions/:id", get(handlers::extensions::get_extension))
-        .route("/extensions/:id/start", post(handlers::extensions::start_extension))
-        .route("/extensions/:id/stop", post(handlers::extensions::stop_extension))
-        .route("/extensions/:id/logs", get(handlers::extensions::get_extension_logs))
+        .route("/extensions/{id}", get(handlers::extensions::get_extension))
+        .route("/extensions/{id}/start", post(handlers::extensions::start_extension))
+        .route("/extensions/{id}/stop", post(handlers::extensions::stop_extension))
+        .route("/extensions/{id}/logs", get(handlers::extensions::get_extension_logs))
         .route("/extensions/ttyd/config", patch(handlers::extensions::update_ttyd_config))
         .route("/extensions/ttyd/status", get(handlers::extensions::get_ttyd_status))
         .route("/extensions/gostc/config", patch(handlers::extensions::update_gostc_config))
@@ -143,7 +143,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/terminal", get(handlers::terminal::terminal_index))
         .route("/terminal/", get(handlers::terminal::terminal_index))
         .route("/terminal/ws", get(handlers::terminal::terminal_ws))
-        .route("/terminal/*path", get(handlers::terminal::terminal_proxy))
+        .route("/terminal/{*path}", get(handlers::terminal::terminal_proxy))
         // Apply admin middleware to all admin routes
         .layer(middleware::from_fn_with_state(state.clone(), require_admin));
 

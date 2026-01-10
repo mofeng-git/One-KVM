@@ -45,7 +45,7 @@ where
 {
     Router::new()
         .route("/", get(index_handler))
-        .route("/*path", get(static_handler))
+        .route("/{*path}", get(static_handler))
 }
 
 /// Serve index.html for root path

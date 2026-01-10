@@ -532,7 +532,7 @@ async fn main() -> anyhow::Result<()> {
                 let cert = generate_self_signed_cert()?;
                 tokio::fs::create_dir_all(&cert_dir).await?;
                 tokio::fs::write(&cert_path, cert.cert.pem()).await?;
-                tokio::fs::write(&key_path, cert.key_pair.serialize_pem()).await?;
+                tokio::fs::write(&key_path, cert.signing_key.serialize_pem()).await?;
             } else {
                 tracing::info!("Using existing TLS certificate from {}", cert_dir.display());
             }
@@ -633,7 +633,7 @@ fn parse_video_config(config: &AppConfig) -> (PixelFormat, Resolution) {
 }
 
 /// Generate a self-signed TLS certificate
-fn generate_self_signed_cert() -> anyhow::Result<rcgen::CertifiedKey> {
+fn generate_self_signed_cert() -> anyhow::Result<rcgen::CertifiedKey<rcgen::KeyPair>> {
     use rcgen::generate_simple_self_signed;
 
     let subject_alt_names = vec![

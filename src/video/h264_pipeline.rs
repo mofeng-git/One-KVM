@@ -13,7 +13,6 @@ use tracing::{debug, error, info, warn};
 
 use crate::error::{AppError, Result};
 use crate::video::convert::Nv12Converter;
-use crate::video::decoder::mjpeg::{MjpegVaapiDecoder, MjpegVaapiDecoderConfig};
 use crate::video::encoder::h264::{H264Config, H264Encoder};
 use crate::video::format::{PixelFormat, Resolution};
 use crate::webrtc::rtp::{H264VideoTrack, H264VideoTrackConfig};
@@ -79,8 +78,6 @@ pub struct H264Pipeline {
     encoder: Arc<Mutex<Option<H264Encoder>>>,
     /// NV12 converter (for BGR24/RGB24/YUYV → NV12)
     nv12_converter: Arc<Mutex<Option<Nv12Converter>>>,
-    /// MJPEG VAAPI decoder (for MJPEG input, outputs NV12)
-    mjpeg_decoder: Arc<Mutex<Option<MjpegVaapiDecoder>>>,
     /// WebRTC video track
     video_track: Arc<H264VideoTrack>,
     /// Pipeline statistics
@@ -127,44 +124,38 @@ impl H264Pipeline {
             encoder_input_format
         );
 
-        // Create NV12 converter or MJPEG decoder based on input format
+        // Create NV12 converter based on input format
         // All formats are converted to NV12 for VAAPI encoder
-        let (nv12_converter, mjpeg_decoder) = match config.input_format {
+        let nv12_converter = match config.input_format {
             // NV12 input - direct passthrough
             PixelFormat::Nv12 => {
                 info!("NV12 input: direct passthrough to encoder");
-                (None, None)
+                None
             }
 
             // YUYV (4:2:2 packed) → NV12
             PixelFormat::Yuyv => {
                 info!("YUYV input: converting to NV12");
-                (Some(Nv12Converter::yuyv_to_nv12(config.resolution)), None)
+                Some(Nv12Converter::yuyv_to_nv12(config.resolution))
             }
 
             // RGB24 → NV12
             PixelFormat::Rgb24 => {
                 info!("RGB24 input: converting to NV12");
-                (Some(Nv12Converter::rgb24_to_nv12(config.resolution)), None)
+                Some(Nv12Converter::rgb24_to_nv12(config.resolution))
             }
 
             // BGR24 → NV12
             PixelFormat::Bgr24 => {
                 info!("BGR24 input: converting to NV12");
-                (Some(Nv12Converter::bgr24_to_nv12(config.resolution)), None)
+                Some(Nv12Converter::bgr24_to_nv12(config.resolution))
             }
 
-            // MJPEG/JPEG → NV12 (via hwcodec decoder)
+            // MJPEG/JPEG input - not supported (requires libjpeg for decoding)
             PixelFormat::Mjpeg | PixelFormat::Jpeg => {
-                let decoder_config = MjpegVaapiDecoderConfig {
-                    resolution: config.resolution,
-                    use_hwaccel: true,
-                };
-                let decoder = MjpegVaapiDecoder::new(decoder_config)?;
-                info!(
-                    "MJPEG decoder created for H264 pipeline (outputs NV12)"
-                );
-                (None, Some(decoder))
+                return Err(AppError::VideoError(
+                    "MJPEG input format not supported in this build".to_string()
+                ));
             }
 
             _ => {
@@ -192,7 +183,6 @@ impl H264Pipeline {
             config,
             encoder: Arc::new(Mutex::new(Some(encoder))),
             nv12_converter: Arc::new(Mutex::new(nv12_converter)),
-            mjpeg_decoder: Arc::new(Mutex::new(mjpeg_decoder)),
             video_track,
             stats: Arc::new(Mutex::new(H264PipelineStats::default())),
             running: running_tx,
@@ -230,7 +220,6 @@ impl H264Pipeline {
 
         let encoder = self.encoder.lock().await.take();
         let nv12_converter = self.nv12_converter.lock().await.take();
-        let mjpeg_decoder = self.mjpeg_decoder.lock().await.take();
         let video_track = self.video_track.clone();
         let stats = self.stats.clone();
         let encode_times = self.encode_times.clone();
@@ -248,14 +237,9 @@ impl H264Pipeline {
             };
 
             let mut nv12_converter = nv12_converter;
-            let mut mjpeg_decoder = mjpeg_decoder;
             let mut frame_count: u64 = 0;
             let mut last_fps_time = Instant::now();
             let mut fps_frame_count: u64 = 0;
-
-            // Pre-allocated NV12 buffer for MJPEG decoder output (avoids per-frame allocation)
-            let nv12_size = (config.resolution.width * config.resolution.height * 3 / 2) as usize;
-            let mut nv12_buffer = vec![0u8; nv12_size];
 
             // Flag for one-time warnings
             let mut size_mismatch_warned = false;
@@ -298,7 +282,6 @@ impl H264Pipeline {
                                 }
 
                                 // Convert to NV12 for VAAPI encoder
-                                // MJPEG -> NV12 (via VAAPI decoder)
                                 // BGR24/RGB24/YUYV -> NV12 (via NV12 converter)
                                 // NV12 -> pass through
                                 //
@@ -307,36 +290,7 @@ impl H264Pipeline {
                                 fps_frame_count += 1;
                                 let pts_ms = (frame_count * 1000 / config.fps as u64) as i64;
 
-                                let encode_result = if let Some(ref mut decoder) = mjpeg_decoder {
-                                    // MJPEG input - decode to NV12 via VAAPI
-                                    match decoder.decode(&raw_frame) {
-                                        Ok(nv12_frame) => {
-                                            // Calculate required size for this frame
-                                            let required_size = (nv12_frame.width * nv12_frame.height * 3 / 2) as usize;
-
-                                            // Resize buffer if needed (handles resolution changes)
-                                            if nv12_buffer.len() < required_size {
-                                                debug!(
-                                                    "Resizing NV12 buffer: {} -> {} bytes (resolution: {}x{})",
-                                                    nv12_buffer.len(), required_size,
-                                                    nv12_frame.width, nv12_frame.height
-                                                );
-                                                nv12_buffer.resize(required_size, 0);
-                                            }
-
-                                            // Copy to pre-allocated buffer (guaranteed to fit after resize)
-                                            let written = nv12_frame.copy_to_packed_nv12(&mut nv12_buffer)
-                                                .expect("BUG: buffer too small after resize");
-                                            encoder.encode_raw(&nv12_buffer[..written], pts_ms)
-                                        }
-                                        Err(e) => {
-                                            error!("MJPEG VAAPI decode failed: {}", e);
-                                            let mut s = stats.lock().await;
-                                            s.errors += 1;
-                                            continue;
-                                        }
-                                    }
-                                } else if let Some(ref mut conv) = nv12_converter {
+                                let encode_result = if let Some(ref mut conv) = nv12_converter {
                                     // BGR24/RGB24/YUYV input - convert to NV12
                                     // Optimized: pass reference directly without copy
                                     match conv.convert(&raw_frame) {
@@ -518,7 +472,7 @@ mod tests {
     fn test_pipeline_config_default() {
         let config = H264PipelineConfig::default();
         assert_eq!(config.resolution, Resolution::HD720);
-        assert_eq!(config.bitrate_kbps, 2000);
+        assert_eq!(config.bitrate_kbps, 8000);
         assert_eq!(config.fps, 30);
         assert_eq!(config.gop_size, 30);
     }

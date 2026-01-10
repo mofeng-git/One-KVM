@@ -1,7 +1,7 @@
-# Cross-compilation image for x86_64 based on Debian 12
-# Matches the runtime environment exactly
+# Cross-compilation image for x86_64 based on Debian 11
+# Build on Debian 11 (GLIBC 2.31) for maximum runtime compatibility
 
-FROM debian:12
+FROM debian:11
 
 # Set Rustup mirrors (Aliyun)
 ENV RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Install build dependencies
-# Note: libyuv, libvpx are built from source below for static linking
+# Note: libyuv, libvpx, libx264, libx265, libopus are built from source below for static linking
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build tools
     build-essential \
@@ -28,20 +28,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libclang-dev \
     llvm \
-    mold \
     wget \
+    # Autotools for libopus (requires autoreconf)
+    autoconf \
+    automake \
+    libtool \
     # Core system libraries
     libasound2-dev \
     libv4l-dev \
     libudev-dev \
     zlib1g-dev \
-    # Note: libjpeg-turbo is built from source below for static linking
-    # Video codec libraries (dynamic, for software fallback)
-    libx264-dev \
-    libx265-dev \
-    # Audio codec
-    libopus-dev \
-    # Hardware acceleration
+    # Note: libjpeg-turbo, libx264, libx265, libopus are built from source below for static linking
     libva-dev \
     libdrm-dev \
     libmfx-dev \
@@ -55,11 +52,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Build static libjpeg-turbo from source (needed by libyuv)
 RUN git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo /tmp/libjpeg-turbo \
     && cd /tmp/libjpeg-turbo \
-    && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DCMAKE_INSTALL_PREFIX=/opt/one-kvm-libs/x86_64-linux-gnu \
+    && mkdir build && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DENABLE_SHARED=OFF -DENABLE_STATIC=ON \
-    && cmake --build build -j$(nproc) \
-    && cmake --install build \
+    && make -j$(nproc) \
+    && make install \
     && rm -rf /tmp/libjpeg-turbo
 
 # Build static libyuv from source (uses libjpeg-turbo headers)
@@ -67,32 +64,75 @@ RUN git clone --depth 1 https://github.com/lemenkov/libyuv /tmp/libyuv \
     && cd /tmp/libyuv \
     && mkdir build && cd build \
     && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DCMAKE_PREFIX_PATH=/opt/one-kvm-libs/x86_64-linux-gnu \
-        -DCMAKE_INSTALL_PREFIX=/opt/one-kvm-libs/x86_64-linux-gnu \
     && make -j$(nproc) \
-    && mkdir -p /opt/one-kvm-libs/x86_64-linux-gnu/lib \
-    && cp libyuv.a /opt/one-kvm-libs/x86_64-linux-gnu/lib/ \
-    && cp -r ../include /opt/one-kvm-libs/x86_64-linux-gnu/ \
+    && make install \
     && rm -rf /tmp/libyuv
 
 # Build static libvpx from source
 RUN git clone --depth 1 https://github.com/webmproject/libvpx /tmp/libvpx \
     && cd /tmp/libvpx \
-    && ./configure --prefix=/opt/one-kvm-libs/x86_64-linux-gnu \
+    && ./configure \
         --enable-static --disable-shared --enable-pic \
         --disable-examples --disable-tools --disable-docs \
     && make -j$(nproc) \
     && make install \
     && rm -rf /tmp/libvpx
 
+# Build static libx264 from source
+RUN git clone --depth 1 https://code.videolan.org/videolan/x264.git /tmp/x264 \
+    && cd /tmp/x264 \
+    && ./configure --enable-static --disable-cli \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/x264
+
+# Build static libx265 from source
+RUN git clone --depth 1 https://bitbucket.org/multicoreware/x265_git /tmp/x265 \
+    && cd /tmp/x265 \
+    && cd source \
+    && mkdir -p build \
+    && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release \
+        -DENABLE_SHARED=OFF \
+        -DENABLE_CLI=OFF \
+        -DBUILD_SHARED_LIBS=OFF \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/x265
+
+# Create pkg-config file for x265 (required by FFmpeg)
+# Fix: Added -lstdc++ -lm -ldl -lpthread to Libs for static linking compatibility
+RUN mkdir -p /usr/local/lib/pkgconfig && \
+    cat > /usr/local/lib/pkgconfig/x265.pc <<EOF
+prefix=/usr/local
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+
+Name: x265
+Description: H.265/HEVC video encoder
+Version: 199
+Libs: -L\${libdir} -lx265 -lstdc++ -lm -ldl -lpthread
+Cflags: -I\${includedir}
+EOF
+
+# Build static libopus from source
+RUN git clone --depth 1 https://github.com/xiph/opus /tmp/opus \
+    && cd /tmp/opus \
+    && ./autogen.sh \
+    && ./configure \
+        --enable-static --disable-shared \
+        --disable-doc \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/opus
+
 # Download and build FFmpeg with minimal configuration for encoding only
 RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
     && wget -q https://files.mofeng.run/src/image/other/ffmpeg.tar.gz \
     && tar -xzf ffmpeg.tar.gz \
     && cd ffmpeg/ffmpeg-rockchip \
-    && export PKG_CONFIG_PATH="/opt/one-kvm-libs/x86_64-linux-gnu/lib/pkgconfig:$PKG_CONFIG_PATH" \
     && ./configure \
-        --prefix=/opt/one-kvm-libs/x86_64-linux-gnu \
         --enable-gpl \
         --enable-version3 \
         --disable-shared \
@@ -165,16 +205,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
 # Add Rust target
 RUN rustup target add x86_64-unknown-linux-gnu
 
-# Copy entrypoint script
-COPY build/cross/entrypoint.sh /usr/local/bin/cross-entrypoint.sh
-RUN chmod +x /usr/local/bin/cross-entrypoint.sh
-
 # Configure environment for static linking
-ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold" \
-    PKG_CONFIG_PATH="/opt/one-kvm-libs/x86_64-linux-gnu/lib/pkgconfig" \
-    LIBRARY_PATH="/opt/one-kvm-libs/x86_64-linux-gnu/lib" \
-    CPATH="/opt/one-kvm-libs/x86_64-linux-gnu/include" \
+ENV PKG_CONFIG_ALLOW_CROSS=1\
     FFMPEG_STATIC=1 \
     LIBYUV_STATIC=1
-
-ENTRYPOINT ["/usr/local/bin/cross-entrypoint.sh"]

@@ -1,0 +1,15 @@
+[Unit]
+Description=One-KVM IP-KVM Service
+Documentation=https://github.com/mofeng-git/One-KVM
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/one-kvm
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

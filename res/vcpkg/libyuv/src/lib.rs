@@ -58,8 +58,6 @@ pub enum YuvError {
     BufferTooSmall,
     /// libyuv function returned an error code
     ConversionFailed(i32),
-    /// MJPEG data is invalid or corrupt
-    InvalidMjpeg,
 }
 
 impl fmt::Display for YuvError {
@@ -68,7 +66,6 @@ impl fmt::Display for YuvError {
             YuvError::InvalidDimensions => write!(f, "Invalid dimensions (must be even)"),
             YuvError::BufferTooSmall => write!(f, "Buffer too small"),
             YuvError::ConversionFailed(code) => write!(f, "Conversion failed with code {}", code),
-            YuvError::InvalidMjpeg => write!(f, "Invalid MJPEG data"),
         }
     }
 }
@@ -916,129 +913,6 @@ pub fn bgr24_to_nv12(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Res
 }
 
 // ============================================================================
-// MJPEG decoding
-// ============================================================================
-
-/// Decode MJPEG to I420
-///
-/// # Arguments
-/// * `src` - Source MJPEG data
-/// * `dst` - Destination I420 buffer
-/// * `width` - Expected frame width
-/// * `height` - Expected frame height
-///
-/// # Note
-/// This function requires libyuv to be compiled with JPEG support
-pub fn mjpeg_to_i420(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Result<()> {
-    if width % 2 != 0 || height % 2 != 0 {
-        return Err(YuvError::InvalidDimensions);
-    }
-
-    let w = width as usize;
-    let h = height as usize;
-    let y_size = w * h;
-    let uv_size = (w / 2) * (h / 2);
-
-    if dst.len() < i420_size(w, h) {
-        return Err(YuvError::BufferTooSmall);
-    }
-
-    if src.len() < 2 || src[0] != 0xFF || src[1] != 0xD8 {
-        return Err(YuvError::InvalidMjpeg);
-    }
-
-    call_yuv!(MJPGToI420(
-        src.as_ptr(),
-        usize_to_size_t(src.len()),
-        dst.as_mut_ptr(),
-        width,
-        dst[y_size..].as_mut_ptr(),
-        width / 2,
-        dst[y_size + uv_size..].as_mut_ptr(),
-        width / 2,
-        width,
-        height,
-        width,
-        height,
-    ))
-}
-
-/// Decode MJPEG to NV12 (optimal for VAAPI)
-pub fn mjpeg_to_nv12(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Result<()> {
-    if width % 2 != 0 || height % 2 != 0 {
-        return Err(YuvError::InvalidDimensions);
-    }
-
-    let w = width as usize;
-    let h = height as usize;
-    let y_size = w * h;
-
-    if dst.len() < nv12_size(w, h) {
-        return Err(YuvError::BufferTooSmall);
-    }
-
-    if src.len() < 2 || src[0] != 0xFF || src[1] != 0xD8 {
-        return Err(YuvError::InvalidMjpeg);
-    }
-
-    call_yuv!(MJPGToNV12(
-        src.as_ptr(),
-        usize_to_size_t(src.len()),
-        dst.as_mut_ptr(),
-        width,
-        dst[y_size..].as_mut_ptr(),
-        width,
-        width,
-        height,
-        width,
-        height,
-    ))
-}
-
-/// Decode MJPEG to BGRA
-pub fn mjpeg_to_bgra(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Result<()> {
-    let w = width as usize;
-    let h = height as usize;
-
-    if dst.len() < argb_size(w, h) {
-        return Err(YuvError::BufferTooSmall);
-    }
-
-    if src.len() < 2 || src[0] != 0xFF || src[1] != 0xD8 {
-        return Err(YuvError::InvalidMjpeg);
-    }
-
-    call_yuv!(MJPGToARGB(
-        src.as_ptr(),
-        usize_to_size_t(src.len()),
-        dst.as_mut_ptr(),
-        width * 4,
-        width,
-        height,
-        width,
-        height,
-    ))
-}
-
-/// Get MJPEG frame dimensions without decoding
-pub fn mjpeg_size(src: &[u8]) -> Result<(i32, i32)> {
-    if src.len() < 2 || src[0] != 0xFF || src[1] != 0xD8 {
-        return Err(YuvError::InvalidMjpeg);
-    }
-
-    let mut width: i32 = 0;
-    let mut height: i32 = 0;
-
-    let ret = unsafe { MJPGSize(src.as_ptr(), usize_to_size_t(src.len()), &mut width, &mut height) };
-
-    if ret != 0 || width <= 0 || height <= 0 {
-        return Err(YuvError::InvalidMjpeg);
-    }
-
-    Ok((width, height))
-}
-
-// ============================================================================
 // Scaling
 // ============================================================================
 
@@ -1197,18 +1071,6 @@ impl Converter {
     pub fn uyvy_to_nv12(&mut self, src: &[u8]) -> Result<&[u8]> {
         uyvy_to_nv12(src, &mut self.nv12_buffer, self.width, self.height)?;
         Ok(&self.nv12_buffer)
-    }
-
-    /// Decode MJPEG to NV12, returns reference to internal buffer
-    pub fn mjpeg_to_nv12(&mut self, src: &[u8]) -> Result<&[u8]> {
-        mjpeg_to_nv12(src, &mut self.nv12_buffer, self.width, self.height)?;
-        Ok(&self.nv12_buffer)
-    }
-
-    /// Decode MJPEG to I420, returns reference to internal buffer
-    pub fn mjpeg_to_i420(&mut self, src: &[u8]) -> Result<&[u8]> {
-        mjpeg_to_i420(src, &mut self.i420_buffer, self.width, self.height)?;
-        Ok(&self.i420_buffer)
     }
 
     /// Convert I420 to NV12, returns reference to internal buffer

@@ -111,6 +111,15 @@ impl LogThrottler {
     }
 }
 
+impl Clone for LogThrottler {
+    fn clone(&self) -> Self {
+        Self {
+            last_logged: RwLock::new(HashMap::new()),
+            interval: self.interval,
+        }
+    }
+}
+
 impl Default for LogThrottler {
     /// Create a default log throttler with 5 second interval
     fn default() -> Self {

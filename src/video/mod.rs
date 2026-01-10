@@ -16,8 +16,7 @@ pub mod streamer;
 pub mod video_session;
 
 pub use capture::VideoCapturer;
-pub use convert::{MjpegDecoder, MjpegToYuv420Converter, PixelConverter, Yuv420pBuffer};
-pub use decoder::{MjpegVaapiDecoder, MjpegVaapiDecoderConfig};
+pub use convert::{PixelConverter, Yuv420pBuffer};
 pub use device::{VideoDevice, VideoDeviceInfo};
 pub use encoder::{JpegEncoder, H264Encoder, H264EncoderType};
 pub use format::PixelFormat;

@@ -3,7 +3,7 @@ name = "ventoy-img"
 version = "0.1.0"
 edition = "2021"
 description = "Create and manage Ventoy bootable IMG files without root or loop devices"
-license = "GPL-3.0"
+license = "GPL-2.0"
 
 [dependencies]
 # CLI
@@ -11,12 +11,6 @@ clap = { version = "4", features = ["derive"] }
 
 # Error handling
 thiserror = "1"
-
-# Time handling
-chrono = "0.4"
-
-# CRC32 for exFAT checksum
-crc32fast = "1"
 
 [dev-dependencies]
 tempfile = "3"

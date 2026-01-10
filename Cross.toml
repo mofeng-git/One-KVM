@@ -1,49 +1,16 @@
 # Cross-compilation configuration for One-KVM
-# Uses custom Debian 12 based images for consistent build/runtime environment
+# Uses pre-built custom Debian 11 based images for consistent build/runtime environment
 # See: https://github.com/cross-rs/cross
 
 [build]
 # Default Docker image settings
 default-target = "x86_64-unknown-linux-gnu"
 
-[build.env]
-passthrough = [
-    "RUST_BACKTRACE",
-    "CARGO_INCREMENTAL",
-]
-
-# x86_64 target - use custom Debian 12 image
 [target.x86_64-unknown-linux-gnu]
 dockerfile = "build/cross/Dockerfile.x86_64"
 
-[target.x86_64-unknown-linux-gnu.env]
-passthrough = [
-    "PKG_CONFIG_ALLOW_CROSS=1",
-    "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig",
-]
-
-# ARM64 target - use custom Debian 12 image with multiarch
 [target.aarch64-unknown-linux-gnu]
-dockerfile = "build/cross/Dockerfile.aarch64"
+dockerfile = "build/cross/Dockerfile.arm64"
 
-[target.aarch64-unknown-linux-gnu.env]
-passthrough = [
-    "PKG_CONFIG_ALLOW_CROSS=1",
-    "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig",
-    "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc",
-    "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc",
-    "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++",
-]
-
-# ARMv7 target - use custom Debian 12 image with multiarch
 [target.armv7-unknown-linux-gnueabihf]
 dockerfile = "build/cross/Dockerfile.armv7"
-
-[target.armv7-unknown-linux-gnueabihf.env]
-passthrough = [
-    "PKG_CONFIG_ALLOW_CROSS=1",
-    "PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig",
-    "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc",
-    "CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc",
-    "CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++",
-]

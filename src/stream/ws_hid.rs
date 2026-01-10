@@ -183,7 +183,7 @@ impl WsHidHandler {
 
         // Send initial status as binary: 0x00 = ok, 0x01 = error
         let status_byte = if self.is_hid_available() { 0x00u8 } else { 0x01u8 };
-        let _ = sender.send(Message::Binary(vec![status_byte])).await;
+        let _ = sender.send(Message::Binary(vec![status_byte].into())).await;
 
         loop {
             tokio::select! {

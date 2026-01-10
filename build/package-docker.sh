@@ -81,7 +81,7 @@ while [[ $# -gt 0 ]]; do
             BUILD_BINARY=true
             shift
             ;;
-        --help)
+        -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Package pre-compiled One-KVM binaries into Docker images."

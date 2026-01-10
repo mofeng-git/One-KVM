@@ -82,7 +82,7 @@ async fn handle_terminal_websocket(client_ws: WebSocket, query_string: String) {
     let client_to_ttyd = tokio::spawn(async move {
         while let Some(msg) = client_rx.next().await {
             let ttyd_msg = match msg {
-                Ok(AxumMessage::Text(text)) => TungsteniteMessage::Text(text),
+                Ok(AxumMessage::Text(text)) => TungsteniteMessage::Text(text.to_string().into()),
                 Ok(AxumMessage::Binary(data)) => TungsteniteMessage::Binary(data),
                 Ok(AxumMessage::Ping(data)) => TungsteniteMessage::Ping(data),
                 Ok(AxumMessage::Pong(data)) => TungsteniteMessage::Pong(data),
@@ -103,7 +103,7 @@ async fn handle_terminal_websocket(client_ws: WebSocket, query_string: String) {
     let ttyd_to_client = tokio::spawn(async move {
         while let Some(msg) = ttyd_rx.next().await {
             let client_msg = match msg {
-                Ok(TungsteniteMessage::Text(text)) => AxumMessage::Text(text),
+                Ok(TungsteniteMessage::Text(text)) => AxumMessage::Text(text.to_string().into()),
                 Ok(TungsteniteMessage::Binary(data)) => AxumMessage::Binary(data),
                 Ok(TungsteniteMessage::Ping(data)) => AxumMessage::Ping(data),
                 Ok(TungsteniteMessage::Pong(data)) => AxumMessage::Pong(data),

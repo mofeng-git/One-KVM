@@ -79,7 +79,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         if !device_info_sent && !subscribed_topics.is_empty() {
                             let device_info = state.get_device_info().await;
                             if let Ok(json) = serialize_event(&device_info) {
-                                if sender.send(Message::Text(json)).await.is_err() {
+                                if sender.send(Message::Text(json.into())).await.is_err() {
                                     warn!("Failed to send device info to client");
                                     break;
                                 }
@@ -113,7 +113,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         // Filter event based on subscribed topics
                         if should_send_event(&event, &subscribed_topics) {
                             if let Ok(json) = serialize_event(&event) {
-                                if sender.send(Message::Text(json)).await.is_err() {
+                                if sender.send(Message::Text(json.into())).await.is_err() {
                                     warn!("Failed to send event to client, disconnecting");
                                     break;
                                 }
@@ -127,7 +127,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             message: format!("Lagged by {} events", n),
                         };
                         if let Ok(json) = serialize_event(&error_event) {
-                            let _ = sender.send(Message::Text(json)).await;
+                            let _ = sender.send(Message::Text(json.into())).await;
                         }
                     }
                     Err(_) => {
@@ -139,7 +139,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
             // Heartbeat
             _ = heartbeat_interval.tick() => {
-                if sender.send(Message::Ping(vec![])).await.is_err() {
+                if sender.send(Message::Ping(vec![].into())).await.is_err() {
                     warn!("Failed to send ping, disconnecting");
                     break;
                 }

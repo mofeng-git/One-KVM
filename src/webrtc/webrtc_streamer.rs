@@ -1058,7 +1058,7 @@ mod tests {
         let config = WebRtcStreamerConfig::default();
         assert_eq!(config.video_codec, VideoCodecType::H264);
         assert_eq!(config.resolution, Resolution::HD720);
-        assert_eq!(config.bitrate_preset, BitratePreset::Quality);
+        assert_eq!(config.bitrate_preset, BitratePreset::Balanced);
         assert_eq!(config.fps, 30);
         assert!(!config.audio_enabled);
     }

@@ -113,9 +113,9 @@ mod ffmpeg {
             path
         } else {
             match target_arch.as_str() {
-                "x86_64" => "/opt/one-kvm-libs/x86_64-linux-gnu",
-                "aarch64" => "/opt/one-kvm-libs/aarch64-linux-gnu",
-                "arm" => "/opt/one-kvm-libs/armv7-linux-gnueabihf",
+                "x86_64" => "/usr/local",
+                "aarch64" => "/usr/aarch64-linux-gnu",
+                "arm" => "/usr/arm-linux-gnueabihf",
                 _ => "",
             }
             .to_string()
