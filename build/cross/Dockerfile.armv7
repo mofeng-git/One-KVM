@@ -156,6 +156,7 @@ RUN git clone --depth 1 https://github.com/xiph/opus /tmp/opus \
     && export RANLIB=arm-linux-gnueabihf-ranlib \
     && ./autogen.sh \
     && ./configure \
+        --prefix=/usr/arm-linux-gnueabihf \
         --host=arm-linux-gnueabihf \
         --enable-static --disable-shared \
         --disable-doc \
@@ -305,6 +306,8 @@ ENV CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc \
     PKG_CONFIG_ALLOW_CROSS=1 \
     FFMPEG_STATIC=1 \
     LIBYUV_STATIC=1 \
+    OPUS_STATIC=1 \
+    PKG_CONFIG_ALL_STATIC=1 \
     RUSTFLAGS="-C linker=arm-linux-gnueabihf-gcc"
 
 # Default command

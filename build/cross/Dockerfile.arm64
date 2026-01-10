@@ -167,6 +167,7 @@ RUN git clone --depth 1 https://github.com/xiph/opus /tmp/opus \
     && export RANLIB=aarch64-linux-gnu-ranlib \
     && ./autogen.sh \
     && ./configure \
+        --prefix=/usr/aarch64-linux-gnu \
         --host=aarch64-linux-gnu \
         --enable-static --disable-shared \
         --disable-doc \
@@ -316,4 +317,6 @@ ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     PKG_CONFIG_ALLOW_CROSS=1 \
     FFMPEG_STATIC=1 \
     LIBYUV_STATIC=1 \
+    OPUS_STATIC=1 \
+    PKG_CONFIG_ALL_STATIC=1 \
     RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"
