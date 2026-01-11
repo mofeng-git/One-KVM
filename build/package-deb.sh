@@ -125,13 +125,20 @@ EOF
     chmod 755 "$PKG_DIR/DEBIAN/prerm"
 
     # Create control file
+    BASE_DEPS="libc6 (>= 2.31), libgcc-s1, libstdc++6, libasound2 (>= 1.1), libdrm2 (>= 2.4)"
+    AMD64_DEPS="libva2 (>= 2.0), libva-drm2 (>= 2.10), libva-x11-2 (>= 2.10), libmfx1 (>= 21.1), libx11-6 (>= 1.6), libxcb1 (>= 1.14)"
+    DEPS="$BASE_DEPS"
+    if [ "$DEB_ARCH" = "amd64" ]; then
+        DEPS="$DEPS, $AMD64_DEPS"
+    fi
+
     cat > "$PKG_DIR/DEBIAN/control" <<EOF
 Package: one-kvm
 Version: $VERSION
 Section: admin
 Priority: optional
 Architecture: $DEB_ARCH
-Depends: libc6 (>= 2.31), libgcc-s1, libstdc++6, libasound2 (>= 1.1), libva2 (>= 2.0), libdrm2 (>= 2.4), libx11-6 (>= 1.6), libxcb1 (>= 1.14)
+Depends: $DEPS
 Maintainer: SilentWind <admin@mofeng.run>
 Description: A open and lightweight IP-KVM solution
  Enables BIOS-level remote management of servers and workstations.

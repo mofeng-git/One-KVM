@@ -233,6 +233,7 @@ const config = ref({
   hid_serial_device: '',
   hid_serial_baudrate: 9600,
   msd_enabled: false,
+  msd_dir: '',
   network_port: 8080,
   encoder_backend: 'auto',
   // STUN/TURN settings
@@ -296,6 +297,8 @@ const selectedBackendFormats = computed(() => {
   const backend = availableBackends.value.find(b => b.id === config.value.encoder_backend)
   return backend?.supported_formats || []
 })
+
+const isCh9329Backend = computed(() => config.value.hid_backend === 'ch9329')
 
 // Video selection computed properties
 import { watch } from 'vue'
@@ -536,6 +539,7 @@ async function loadConfig() {
       hid_serial_device: hid.ch9329_port || '',
       hid_serial_baudrate: hid.ch9329_baudrate || 9600,
       msd_enabled: msd.enabled || false,
+      msd_dir: msd.msd_dir || '',
       network_port: 8080, // 从旧 API 加载
       encoder_backend: stream.encoder || 'auto',
       // STUN/TURN settings
@@ -1499,6 +1503,10 @@ onMounted(async () => {
                 <CardDescription>{{ t('settings.msdDesc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
+                <div v-if="isCh9329Backend" class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  <p class="font-medium">{{ t('settings.msdCh9329Warning') }}</p>
+                  <p class="text-xs text-amber-900/80">{{ t('settings.msdCh9329WarningDesc') }}</p>
+                </div>
                 <div class="flex items-center justify-between">
                   <div class="space-y-0.5">
                     <Label for="msd-enabled">{{ t('settings.msdEnable') }}</Label>
@@ -1506,9 +1514,19 @@ onMounted(async () => {
                   </div>
                   <Switch
                     id="msd-enabled"
+                    :disabled="isCh9329Backend"
                     :model-value="config.msd_enabled"
                     @update:model-value="onMsdEnabledChange"
                   />
+                </div>
+                <Separator />
+                <div class="space-y-4">
+                  <div class="space-y-2">
+                    <Label for="msd-dir">{{ t('settings.msdDir') }}</Label>
+                    <Input id="msd-dir" v-model="config.msd_dir" placeholder="/etc/one-kvm/msd" :disabled="isCh9329Backend" />
+                    <p class="text-xs text-muted-foreground">{{ t('settings.msdDirDesc') }}</p>
+                  </div>
+                  <p class="text-xs text-muted-foreground">{{ t('settings.msdDirHint') }}</p>
                 </div>
                 <Separator />
                 <div class="flex items-center justify-between">

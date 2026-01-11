@@ -6,6 +6,7 @@ description = "Hardware video codec for IP-KVM (Windows/Linux)"
 
 [features]
 default = []
+rkmpp = []
 
 [dependencies]
 log = "0.4"

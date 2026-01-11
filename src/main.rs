@@ -65,7 +65,7 @@ struct CliArgs {
     #[arg(long, value_name = "FILE", requires = "ssl_cert")]
     ssl_key: Option<PathBuf>,
 
-    /// Data directory path (default: ./data)
+    /// Data directory path (default: /etc/one-kvm)
     #[arg(short = 'd', long, value_name = "DIR")]
     data_dir: Option<PathBuf>,
 
@@ -103,6 +103,34 @@ async fn main() -> anyhow::Result<()> {
     let db_path = data_dir.join("one-kvm.db");
     let config_store = ConfigStore::new(&db_path).await?;
     let mut config = (*config_store.get()).clone();
+
+    // Normalize MSD directory (absolute path under data dir if empty/relative)
+    let mut msd_dir_updated = false;
+    if config.msd.msd_dir.trim().is_empty() {
+        let msd_dir = data_dir.join("msd");
+        config.msd.msd_dir = msd_dir.to_string_lossy().to_string();
+        msd_dir_updated = true;
+    } else if !PathBuf::from(&config.msd.msd_dir).is_absolute() {
+        let msd_dir = data_dir.join(&config.msd.msd_dir);
+        tracing::warn!(
+            "MSD directory is relative, rebasing to {}",
+            msd_dir.display()
+        );
+        config.msd.msd_dir = msd_dir.to_string_lossy().to_string();
+        msd_dir_updated = true;
+    }
+    if msd_dir_updated {
+        config_store.set(config.clone()).await?;
+    }
+
+    // Ensure MSD directories exist (msd/images, msd/ventoy)
+    let msd_dir = PathBuf::from(&config.msd.msd_dir);
+    if let Err(e) = tokio::fs::create_dir_all(msd_dir.join("images")).await {
+        tracing::warn!("Failed to create MSD images directory: {}", e);
+    }
+    if let Err(e) = tokio::fs::create_dir_all(msd_dir.join("ventoy")).await {
+        tracing::warn!("Failed to create MSD ventoy directory: {}", e);
+    }
 
     // Apply CLI argument overrides to config (only if explicitly specified)
     if let Some(addr) = args.address {
@@ -344,11 +372,7 @@ async fn main() -> anyhow::Result<()> {
             );
         }
 
-        let controller = MsdController::new(
-            otg_service.clone(),
-            &config.msd.images_path,
-            &config.msd.drive_path,
-        );
+        let controller = MsdController::new(otg_service.clone(), config.msd.msd_dir_path());
         if let Err(e) = controller.init().await {
             tracing::warn!("Failed to initialize MSD controller: {}", e);
             None

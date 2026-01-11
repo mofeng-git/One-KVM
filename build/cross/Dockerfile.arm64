@@ -217,6 +217,9 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
         -Dlibrga_demo=false \
     && ninja -C build \
     && ninja -C build install \
+    # Create static librga.a from built objects (rkrga uses shared_library)
+    && ar rcs /usr/aarch64-linux-gnu/lib/librga.a $(find build -name '*.o') \
+    && ranlib /usr/aarch64-linux-gnu/lib/librga.a \
     && sed -i 's/^Libs:.*$/& -lstdc++ -lm -lpthread/' /usr/aarch64-linux-gnu/lib/pkgconfig/librga.pc \
     && cd .. \
     # Create pkg-config wrapper for cross-compilation
@@ -267,8 +270,10 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
         --disable-avfilter \
         --disable-avdevice \
         --disable-postproc \
-        # Disable all decoders
+        # Disable all decoders (re-enable only what we need)
         --disable-decoders \
+        --enable-decoder=mjpeg \
+        --enable-decoder=mjpeg_rkmpp \
         # Disable all encoders, enable only needed ones
         --disable-encoders \
         --enable-encoder=h264_rkmpp \
@@ -292,8 +297,7 @@ RUN mkdir -p /tmp/ffmpeg-build && cd /tmp/ffmpeg-build \
         --disable-bsfs \
         --enable-bsf=h264_mp4toannexb \
         --enable-bsf=hevc_mp4toannexb \
-        # Disable hardware decoding
-        --disable-hwaccels \
+        # Hardware decoding uses explicit rkmpp decoder (no hwaccel flag)
         # Disable other unused features
         --disable-indevs \
         --disable-outdevs \

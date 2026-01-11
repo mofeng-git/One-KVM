@@ -28,14 +28,17 @@ const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
 
 use crate::error::{AppError, Result};
 use crate::video::convert::{Nv12Converter, PixelConverter};
+#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+use crate::video::decoder::MjpegRkmppDecoder;
+use crate::video::decoder::MjpegTurboDecoder;
 use crate::video::encoder::h264::{detect_best_encoder, H264Config, H264Encoder, H264InputFormat};
 use crate::video::encoder::h265::{
     detect_best_h265_encoder, H265Config, H265Encoder, H265InputFormat,
 };
 use crate::video::encoder::registry::{EncoderBackend, EncoderRegistry, VideoEncoderType};
 use crate::video::encoder::traits::EncoderConfig;
-use crate::video::encoder::vp8::{VP8Config, VP8Encoder};
-use crate::video::encoder::vp9::{VP9Config, VP9Encoder};
+use crate::video::encoder::vp8::{detect_best_vp8_encoder, VP8Config, VP8Encoder};
+use crate::video::encoder::vp9::{detect_best_vp9_encoder, VP9Config, VP9Encoder};
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::frame::VideoFrame;
 
@@ -292,10 +295,27 @@ impl VideoEncoderTrait for VP9EncoderWrapper {
     }
 }
 
+enum MjpegDecoderKind {
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    Rkmpp(MjpegRkmppDecoder),
+    Turbo(MjpegTurboDecoder),
+}
+
+impl MjpegDecoderKind {
+    fn decode(&mut self, data: &[u8]) -> Result<Vec<u8>> {
+        match self {
+            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            MjpegDecoderKind::Rkmpp(decoder) => decoder.decode_to_nv12(data),
+            MjpegDecoderKind::Turbo(decoder) => decoder.decode_to_rgb(data),
+        }
+    }
+}
+
 /// Universal shared video pipeline
 pub struct SharedVideoPipeline {
     config: RwLock<SharedVideoPipelineConfig>,
     encoder: Mutex<Option<Box<dyn VideoEncoderTrait + Send>>>,
+    mjpeg_decoder: Mutex<Option<MjpegDecoderKind>>,
     nv12_converter: Mutex<Option<Nv12Converter>>,
     yuv420p_converter: Mutex<Option<PixelConverter>>,
     /// Whether the encoder needs YUV420P (true) or NV12 (false)
@@ -333,6 +353,7 @@ impl SharedVideoPipeline {
         let pipeline = Arc::new(Self {
             config: RwLock::new(config),
             encoder: Mutex::new(None),
+            mjpeg_decoder: Mutex::new(None),
             nv12_converter: Mutex::new(None),
             yuv420p_converter: Mutex::new(None),
             encoder_needs_yuv420p: AtomicBool::new(false),
@@ -367,12 +388,16 @@ impl SharedVideoPipeline {
                 }
             };
 
+        let needs_mjpeg_decode = config.input_format.is_compressed();
+
         // Check if RKMPP backend is available for direct input optimization
         let is_rkmpp_available = registry
             .encoder_with_backend(VideoEncoderType::H264, EncoderBackend::Rkmpp)
             .is_some();
-        let use_yuyv_direct = is_rkmpp_available && config.input_format == PixelFormat::Yuyv;
+        let use_yuyv_direct =
+            is_rkmpp_available && !needs_mjpeg_decode && config.input_format == PixelFormat::Yuyv;
         let use_rkmpp_direct = is_rkmpp_available
+            && !needs_mjpeg_decode
             && matches!(
                 config.input_format,
                 PixelFormat::Yuyv
@@ -396,10 +421,9 @@ impl SharedVideoPipeline {
             );
         }
 
-        // Create encoder based on codec type
-        let encoder: Box<dyn VideoEncoderTrait + Send> = match config.output_codec {
+        let selected_codec_name = match config.output_codec {
             VideoEncoderType::H264 => {
-                let codec_name = if use_rkmpp_direct {
+                if use_rkmpp_direct {
                     // Force RKMPP backend for direct input
                     get_codec_name(VideoEncoderType::H264, Some(EncoderBackend::Rkmpp)).ok_or_else(
                         || {
@@ -423,11 +447,109 @@ impl SharedVideoPipeline {
                     detected.ok_or_else(|| {
                         AppError::VideoError("No H.264 encoder available".to_string())
                     })?
-                };
+                }
+            }
+            VideoEncoderType::H265 => {
+                if use_rkmpp_direct {
+                    get_codec_name(VideoEncoderType::H265, Some(EncoderBackend::Rkmpp)).ok_or_else(
+                        || {
+                            AppError::VideoError(
+                                "RKMPP backend not available for H.265".to_string(),
+                            )
+                        },
+                    )?
+                } else if let Some(ref backend) = config.encoder_backend {
+                    get_codec_name(VideoEncoderType::H265, Some(*backend)).ok_or_else(|| {
+                        AppError::VideoError(format!(
+                            "Backend {:?} does not support H.265",
+                            backend
+                        ))
+                    })?
+                } else {
+                    let (_encoder_type, detected) =
+                        detect_best_h265_encoder(config.resolution.width, config.resolution.height);
+                    detected.ok_or_else(|| {
+                        AppError::VideoError("No H.265 encoder available".to_string())
+                    })?
+                }
+            }
+            VideoEncoderType::VP8 => {
+                if let Some(ref backend) = config.encoder_backend {
+                    get_codec_name(VideoEncoderType::VP8, Some(*backend)).ok_or_else(|| {
+                        AppError::VideoError(format!("Backend {:?} does not support VP8", backend))
+                    })?
+                } else {
+                    let (_encoder_type, detected) =
+                        detect_best_vp8_encoder(config.resolution.width, config.resolution.height);
+                    detected.ok_or_else(|| {
+                        AppError::VideoError("No VP8 encoder available".to_string())
+                    })?
+                }
+            }
+            VideoEncoderType::VP9 => {
+                if let Some(ref backend) = config.encoder_backend {
+                    get_codec_name(VideoEncoderType::VP9, Some(*backend)).ok_or_else(|| {
+                        AppError::VideoError(format!("Backend {:?} does not support VP9", backend))
+                    })?
+                } else {
+                    let (_encoder_type, detected) =
+                        detect_best_vp9_encoder(config.resolution.width, config.resolution.height);
+                    detected.ok_or_else(|| {
+                        AppError::VideoError("No VP9 encoder available".to_string())
+                    })?
+                }
+            }
+        };
+
+        let is_rkmpp_encoder = selected_codec_name.contains("rkmpp");
+        let is_software_encoder = selected_codec_name.contains("libx264")
+            || selected_codec_name.contains("libx265")
+            || selected_codec_name.contains("libvpx");
+
+        let pipeline_input_format = if needs_mjpeg_decode {
+            if is_rkmpp_encoder {
+                info!(
+                    "MJPEG input detected, using RKMPP decoder ({} -> NV12 with NV16 fallback)",
+                    config.input_format
+                );
+                #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+                {
+                    let decoder = MjpegRkmppDecoder::new(config.resolution)?;
+                    *self.mjpeg_decoder.lock().await = Some(MjpegDecoderKind::Rkmpp(decoder));
+                    PixelFormat::Nv12
+                }
+                #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
+                {
+                    return Err(AppError::VideoError(
+                        "RKMPP MJPEG decode is only supported on ARM builds".to_string(),
+                    ));
+                }
+            } else if is_software_encoder {
+                info!(
+                    "MJPEG input detected, using TurboJPEG decoder ({} -> RGB24)",
+                    config.input_format
+                );
+                let decoder = MjpegTurboDecoder::new(config.resolution)?;
+                *self.mjpeg_decoder.lock().await = Some(MjpegDecoderKind::Turbo(decoder));
+                PixelFormat::Rgb24
+            } else {
+                return Err(AppError::VideoError(
+                    "MJPEG input requires RKMPP or software encoder".to_string(),
+                ));
+            }
+        } else {
+            *self.mjpeg_decoder.lock().await = None;
+            config.input_format
+        };
+
+        // Create encoder based on codec type
+        let encoder: Box<dyn VideoEncoderTrait + Send> = match config.output_codec {
+            VideoEncoderType::H264 => {
+                let codec_name = selected_codec_name.clone();
 
                 let is_rkmpp = codec_name.contains("rkmpp");
                 let direct_input_format = if is_rkmpp {
-                    match config.input_format {
+                    match pipeline_input_format {
                         PixelFormat::Yuyv => Some(H264InputFormat::Yuyv422),
                         PixelFormat::Yuv420 => Some(H264InputFormat::Yuv420p),
                         PixelFormat::Rgb24 => Some(H264InputFormat::Rgb24),
@@ -439,7 +561,7 @@ impl SharedVideoPipeline {
                         _ => None,
                     }
                 } else if codec_name.contains("libx264") {
-                    match config.input_format {
+                    match pipeline_input_format {
                         PixelFormat::Nv12 => Some(H264InputFormat::Nv12),
                         PixelFormat::Nv16 => Some(H264InputFormat::Nv16),
                         PixelFormat::Nv21 => Some(H264InputFormat::Nv21),
@@ -485,32 +607,11 @@ impl SharedVideoPipeline {
                 Box::new(H264EncoderWrapper(encoder))
             }
             VideoEncoderType::H265 => {
-                let codec_name = if use_rkmpp_direct {
-                    get_codec_name(VideoEncoderType::H265, Some(EncoderBackend::Rkmpp)).ok_or_else(
-                        || {
-                            AppError::VideoError(
-                                "RKMPP backend not available for H.265".to_string(),
-                            )
-                        },
-                    )?
-                } else if let Some(ref backend) = config.encoder_backend {
-                    get_codec_name(VideoEncoderType::H265, Some(*backend)).ok_or_else(|| {
-                        AppError::VideoError(format!(
-                            "Backend {:?} does not support H.265",
-                            backend
-                        ))
-                    })?
-                } else {
-                    let (_encoder_type, detected) =
-                        detect_best_h265_encoder(config.resolution.width, config.resolution.height);
-                    detected.ok_or_else(|| {
-                        AppError::VideoError("No H.265 encoder available".to_string())
-                    })?
-                };
+                let codec_name = selected_codec_name.clone();
 
                 let is_rkmpp = codec_name.contains("rkmpp");
                 let direct_input_format = if is_rkmpp {
-                    match config.input_format {
+                    match pipeline_input_format {
                         PixelFormat::Yuyv => Some(H265InputFormat::Yuyv422),
                         PixelFormat::Yuv420 => Some(H265InputFormat::Yuv420p),
                         PixelFormat::Rgb24 => Some(H265InputFormat::Rgb24),
@@ -522,7 +623,7 @@ impl SharedVideoPipeline {
                         _ => None,
                     }
                 } else if codec_name.contains("libx265") {
-                    match config.input_format {
+                    match pipeline_input_format {
                         PixelFormat::Yuv420 => Some(H265InputFormat::Yuv420p),
                         _ => None,
                     }
@@ -572,23 +673,14 @@ impl SharedVideoPipeline {
             VideoEncoderType::VP8 => {
                 let encoder_config =
                     VP8Config::low_latency(config.resolution, config.bitrate_kbps());
-
-                let encoder = if let Some(ref backend) = config.encoder_backend {
-                    let codec_name = get_codec_name(VideoEncoderType::VP8, Some(*backend))
-                        .ok_or_else(|| {
-                            AppError::VideoError(format!(
-                                "Backend {:?} does not support VP8",
-                                backend
-                            ))
-                        })?;
+                let codec_name = selected_codec_name.clone();
+                if let Some(ref backend) = config.encoder_backend {
                     info!(
                         "Creating VP8 encoder with backend {:?} (codec: {})",
                         backend, codec_name
                     );
-                    VP8Encoder::with_codec(encoder_config, &codec_name)?
-                } else {
-                    VP8Encoder::new(encoder_config)?
-                };
+                }
+                let encoder = VP8Encoder::with_codec(encoder_config, &codec_name)?;
 
                 info!("Created VP8 encoder: {}", encoder.codec_name());
                 Box::new(VP8EncoderWrapper(encoder))
@@ -596,23 +688,14 @@ impl SharedVideoPipeline {
             VideoEncoderType::VP9 => {
                 let encoder_config =
                     VP9Config::low_latency(config.resolution, config.bitrate_kbps());
-
-                let encoder = if let Some(ref backend) = config.encoder_backend {
-                    let codec_name = get_codec_name(VideoEncoderType::VP9, Some(*backend))
-                        .ok_or_else(|| {
-                            AppError::VideoError(format!(
-                                "Backend {:?} does not support VP9",
-                                backend
-                            ))
-                        })?;
+                let codec_name = selected_codec_name.clone();
+                if let Some(ref backend) = config.encoder_backend {
                     info!(
                         "Creating VP9 encoder with backend {:?} (codec: {})",
                         backend, codec_name
                     );
-                    VP9Encoder::with_codec(encoder_config, &codec_name)?
-                } else {
-                    VP9Encoder::new(encoder_config)?
-                };
+                }
+                let encoder = VP9Encoder::with_codec(encoder_config, &codec_name)?;
 
                 info!("Created VP9 encoder: {}", encoder.codec_name());
                 Box::new(VP9EncoderWrapper(encoder))
@@ -623,7 +706,7 @@ impl SharedVideoPipeline {
         let codec_name = encoder.codec_name();
         let use_direct_input = if codec_name.contains("rkmpp") {
             matches!(
-                config.input_format,
+                pipeline_input_format,
                 PixelFormat::Yuyv
                     | PixelFormat::Yuv420
                     | PixelFormat::Rgb24
@@ -635,7 +718,7 @@ impl SharedVideoPipeline {
             )
         } else if codec_name.contains("libx264") {
             matches!(
-                config.input_format,
+                pipeline_input_format,
                 PixelFormat::Nv12 | PixelFormat::Nv16 | PixelFormat::Nv21 | PixelFormat::Yuv420
             )
         } else {
@@ -645,7 +728,7 @@ impl SharedVideoPipeline {
         // Determine if encoder needs YUV420P (software encoders) or NV12 (hardware encoders)
         let needs_yuv420p = if codec_name.contains("libx264") {
             !matches!(
-                config.input_format,
+                pipeline_input_format,
                 PixelFormat::Nv12 | PixelFormat::Nv16 | PixelFormat::Nv21 | PixelFormat::Yuv420
             )
         } else {
@@ -667,7 +750,7 @@ impl SharedVideoPipeline {
         // Create converter or decoder based on input format and encoder needs
         info!(
             "Initializing input format handler for: {} -> {}",
-            config.input_format,
+            pipeline_input_format,
             if use_direct_input {
                 "direct"
             } else if needs_yuv420p {
@@ -686,7 +769,7 @@ impl SharedVideoPipeline {
             (None, None)
         } else if needs_yuv420p {
             // Software encoder needs YUV420P
-            match config.input_format {
+            match pipeline_input_format {
                 PixelFormat::Yuv420 => {
                     info!("Using direct YUV420P input (no conversion)");
                     (None, None)
@@ -729,13 +812,13 @@ impl SharedVideoPipeline {
                 _ => {
                     return Err(AppError::VideoError(format!(
                         "Unsupported input format for software encoding: {}",
-                        config.input_format
+                        pipeline_input_format
                     )));
                 }
             }
         } else {
             // Hardware encoder needs NV12
-            match config.input_format {
+            match pipeline_input_format {
                 PixelFormat::Nv12 => {
                     info!("Using direct NV12 input (no conversion)");
                     (None, None)
@@ -767,7 +850,7 @@ impl SharedVideoPipeline {
                 _ => {
                     return Err(AppError::VideoError(format!(
                         "Unsupported input format for hardware encoding: {}",
-                        config.input_format
+                        pipeline_input_format
                     )));
                 }
             }
@@ -857,6 +940,7 @@ impl SharedVideoPipeline {
 
         // Clear encoder state
         *self.encoder.lock().await = None;
+        *self.mjpeg_decoder.lock().await = None;
         *self.nv12_converter.lock().await = None;
         *self.yuv420p_converter.lock().await = None;
         self.encoder_needs_yuv420p.store(false, Ordering::Release);
@@ -973,8 +1057,10 @@ impl SharedVideoPipeline {
                                 }
 
                                 // Batch update stats every second (reduces lock contention)
-                                if last_fps_time.elapsed() >= Duration::from_secs(1) {
-                                    let current_fps = fps_frame_count as f32 / last_fps_time.elapsed().as_secs_f32();
+                                let fps_elapsed = last_fps_time.elapsed();
+                                if fps_elapsed >= Duration::from_secs(1) {
+                                    let current_fps =
+                                        fps_frame_count as f32 / fps_elapsed.as_secs_f32();
                                     fps_frame_count = 0;
                                     last_fps_time = Instant::now();
 
@@ -1020,11 +1106,25 @@ impl SharedVideoPipeline {
         frame: &VideoFrame,
         frame_count: u64,
     ) -> Result<Option<EncodedVideoFrame>> {
-        let config = self.config.read().await;
+        let (fps, codec, input_format) = {
+            let config = self.config.read().await;
+            (config.fps, config.output_codec, config.input_format)
+        };
+
         let raw_frame = frame.data();
-        let fps = config.fps;
-        let codec = config.output_codec;
-        drop(config);
+        let decoded_buf = if input_format.is_compressed() {
+            let decoded = {
+                let mut decoder_guard = self.mjpeg_decoder.lock().await;
+                let decoder = decoder_guard.as_mut().ok_or_else(|| {
+                    AppError::VideoError("MJPEG decoder not initialized".to_string())
+                })?;
+                decoder.decode(raw_frame)?
+            };
+            Some(decoded)
+        } else {
+            None
+        };
+        let raw_frame = decoded_buf.as_deref().unwrap_or(raw_frame);
 
         // Calculate PTS from real capture timestamp (lock-free using AtomicI64)
         // This ensures smooth playback even when capture timing varies

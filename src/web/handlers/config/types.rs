@@ -3,6 +3,7 @@ use crate::error::AppError;
 use crate::rustdesk::config::RustDeskConfig;
 use crate::video::encoder::BitratePreset;
 use serde::Deserialize;
+use std::path::Path;
 use typeshare::typeshare;
 
 // ===== Video Config =====
@@ -305,16 +306,20 @@ impl HidConfigUpdate {
 #[derive(Debug, Deserialize)]
 pub struct MsdConfigUpdate {
     pub enabled: Option<bool>,
-    pub images_path: Option<String>,
-    pub drive_path: Option<String>,
-    pub virtual_drive_size_mb: Option<u32>,
+    pub msd_dir: Option<String>,
 }
 
 impl MsdConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
-        if let Some(size) = self.virtual_drive_size_mb {
-            if !(1..=10240).contains(&size) {
-                return Err(AppError::BadRequest("Drive size must be 1-10240 MB".into()));
+        if let Some(ref dir) = self.msd_dir {
+            let trimmed = dir.trim();
+            if trimmed.is_empty() {
+                return Err(AppError::BadRequest("MSD directory cannot be empty".into()));
+            }
+            if !Path::new(trimmed).is_absolute() {
+                return Err(AppError::BadRequest(
+                    "MSD directory must be an absolute path".into(),
+                ));
             }
         }
         Ok(())
@@ -324,14 +329,8 @@ impl MsdConfigUpdate {
         if let Some(enabled) = self.enabled {
             config.enabled = enabled;
         }
-        if let Some(ref path) = self.images_path {
-            config.images_path = path.clone();
-        }
-        if let Some(ref path) = self.drive_path {
-            config.drive_path = path.clone();
-        }
-        if let Some(size) = self.virtual_drive_size_mb {
-            config.virtual_drive_size_mb = size;
+        if let Some(ref dir) = self.msd_dir {
+            config.msd_dir = dir.trim().to_string();
         }
     }
 }

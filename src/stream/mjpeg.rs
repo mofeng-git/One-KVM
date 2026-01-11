@@ -184,11 +184,22 @@ impl MjpegStreamHandler {
 
     /// Update current frame
     pub fn update_frame(&self, frame: VideoFrame) {
-        // Skip JPEG encoding if no clients are connected (optimization for WebRTC-only mode)
-        // This avoids unnecessary libyuv conversion when only WebRTC is active
-        if self.clients.read().is_empty() && !frame.format.is_compressed() {
-            // Still update the online status and sequence for monitoring purposes
-            // but skip the expensive JPEG encoding
+        // Fast path: if no MJPEG clients are connected, do minimal bookkeeping and avoid
+        // expensive work (JPEG encoding and per-frame dedup hashing).
+        let has_clients = !self.clients.read().is_empty();
+        if !has_clients {
+            self.dropped_same_frames.store(0, Ordering::Relaxed);
+            self.sequence.fetch_add(1, Ordering::Relaxed);
+            self.online.store(frame.online, Ordering::SeqCst);
+            *self.last_frame_ts.write() = Some(Instant::now());
+
+            // Keep the latest compressed frame for "instant first frame" when a client connects.
+            // Avoid retaining large raw buffers when there are no MJPEG clients.
+            if frame.format.is_compressed() {
+                self.current_frame.store(Arc::new(Some(frame)));
+            } else {
+                self.current_frame.store(Arc::new(None));
+            }
             return;
         }
 
@@ -237,7 +248,7 @@ impl MjpegStreamHandler {
         self.dropped_same_frames.store(0, Ordering::Relaxed);
 
         self.sequence.fetch_add(1, Ordering::Relaxed);
-        self.online.store(true, Ordering::SeqCst);
+        self.online.store(frame.online, Ordering::SeqCst);
         *self.last_frame_ts.write() = Some(Instant::now());
         self.current_frame.store(Arc::new(Some(frame)));
 
@@ -535,9 +546,44 @@ fn frames_are_identical(a: &VideoFrame, b: &VideoFrame) -> bool {
         return false;
     }
 
-    // Compare hashes instead of full binary data
-    // Hash is computed once and cached in OnceLock for efficiency
-    // This is much faster than binary comparison for large frames (1080p MJPEG)
+    // Avoid hashing the whole frame for obviously different frames by sampling a few
+    // fixed-size windows first. If all samples match, fall back to the cached hash.
+    let a_data = a.data();
+    let b_data = b.data();
+    let len = a_data.len();
+
+    // Small frames: direct compare is cheap.
+    if len <= 256 {
+        return a_data == b_data;
+    }
+
+    const SAMPLE: usize = 16;
+    debug_assert!(len == b_data.len());
+
+    // Head + tail.
+    if a_data[..SAMPLE] != b_data[..SAMPLE] {
+        return false;
+    }
+    if a_data[len - SAMPLE..] != b_data[len - SAMPLE..] {
+        return false;
+    }
+
+    // Two interior samples (quarter + middle) to catch common "same header/footer" cases.
+    let quarter = len / 4;
+    let quarter_start = quarter.saturating_sub(SAMPLE / 2);
+    if a_data[quarter_start..quarter_start + SAMPLE]
+        != b_data[quarter_start..quarter_start + SAMPLE]
+    {
+        return false;
+    }
+    let mid = len / 2;
+    let mid_start = mid.saturating_sub(SAMPLE / 2);
+    if a_data[mid_start..mid_start + SAMPLE] != b_data[mid_start..mid_start + SAMPLE] {
+        return false;
+    }
+
+    // Compare hashes instead of full binary data.
+    // Hash is computed once and cached in OnceLock for efficiency.
     a.get_hash() == b.get_hash()
 }
 

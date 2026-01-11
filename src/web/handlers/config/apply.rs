@@ -220,11 +220,8 @@ pub async fn apply_hid_config(
             // Get MSD config from store
             let config = state.config.get();
 
-            let msd = crate::msd::MsdController::new(
-                state.otg_service.clone(),
-                &config.msd.images_path,
-                &config.msd.drive_path,
-            );
+            let msd =
+                crate::msd::MsdController::new(state.otg_service.clone(), config.msd.msd_dir_path());
 
             if let Err(e) = msd.init().await {
                 tracing::warn!("Failed to auto-initialize MSD for OTG: {}", e);
@@ -253,51 +250,73 @@ pub async fn apply_msd_config(
     // Check if MSD enabled state changed
     let old_msd_enabled = old_config.enabled;
     let new_msd_enabled = new_config.enabled;
+    let msd_dir_changed = old_config.msd_dir != new_config.msd_dir;
 
     tracing::info!(
         "MSD enabled: old={}, new={}",
         old_msd_enabled,
         new_msd_enabled
     );
+    if msd_dir_changed {
+        tracing::info!("MSD directory changed: {}", new_config.msd_dir);
+    }
 
-    if old_msd_enabled != new_msd_enabled {
-        if new_msd_enabled {
-            // MSD was disabled, now enabled - need to initialize
-            tracing::info!("MSD enabled in config, initializing...");
+    // Ensure MSD directories exist (msd/images, msd/ventoy)
+    let msd_dir = new_config.msd_dir_path();
+    if let Err(e) = std::fs::create_dir_all(msd_dir.join("images")) {
+        tracing::warn!("Failed to create MSD images directory: {}", e);
+    }
+    if let Err(e) = std::fs::create_dir_all(msd_dir.join("ventoy")) {
+        tracing::warn!("Failed to create MSD ventoy directory: {}", e);
+    }
 
-            let msd = crate::msd::MsdController::new(
-                state.otg_service.clone(),
-                &new_config.images_path,
-                &new_config.drive_path,
-            );
-            msd.init()
-                .await
-                .map_err(|e| AppError::Config(format!("MSD initialization failed: {}", e)))?;
-
-            // Set event bus
-            let events = state.events.clone();
-            msd.set_event_bus(events).await;
-
-            // Store the initialized controller
-            *state.msd.write().await = Some(msd);
-            tracing::info!("MSD initialized successfully");
-        } else {
-            // MSD was enabled, now disabled - shutdown
-            tracing::info!("MSD disabled in config, shutting down...");
-
-            if let Some(msd) = state.msd.write().await.as_mut() {
-                if let Err(e) = msd.shutdown().await {
-                    tracing::warn!("MSD shutdown failed: {}", e);
-                }
-            }
-            *state.msd.write().await = None;
-            tracing::info!("MSD shutdown complete");
-        }
-    } else {
+    let needs_reload = old_msd_enabled != new_msd_enabled || msd_dir_changed;
+    if !needs_reload {
         tracing::info!(
-            "MSD enabled state unchanged ({}), no reload needed",
+            "MSD enabled state unchanged ({}) and directory unchanged, no reload needed",
             new_msd_enabled
         );
+        return Ok(());
+    }
+
+    if new_msd_enabled {
+        tracing::info!("(Re)initializing MSD...");
+
+        // Shutdown existing controller if present
+        let mut msd_guard = state.msd.write().await;
+        if let Some(msd) = msd_guard.as_mut() {
+            if let Err(e) = msd.shutdown().await {
+                tracing::warn!("MSD shutdown failed: {}", e);
+            }
+        }
+        *msd_guard = None;
+        drop(msd_guard);
+
+        let msd =
+            crate::msd::MsdController::new(state.otg_service.clone(), new_config.msd_dir_path());
+        msd.init()
+            .await
+            .map_err(|e| AppError::Config(format!("MSD initialization failed: {}", e)))?;
+
+        // Set event bus
+        let events = state.events.clone();
+        msd.set_event_bus(events).await;
+
+        // Store the initialized controller
+        *state.msd.write().await = Some(msd);
+        tracing::info!("MSD initialized successfully");
+    } else {
+        // MSD disabled - shutdown
+        tracing::info!("MSD disabled in config, shutting down...");
+
+        let mut msd_guard = state.msd.write().await;
+        if let Some(msd) = msd_guard.as_mut() {
+            if let Err(e) = msd.shutdown().await {
+                tracing::warn!("MSD shutdown failed: {}", e);
+            }
+        }
+        *msd_guard = None;
+        tracing::info!("MSD shutdown complete");
     }
 
     Ok(())

@@ -12,6 +12,47 @@ use std::ffi::c_int;
 
 include!(concat!(env!("OUT_DIR"), "/ffmpeg_ram_ffi.rs"));
 
+#[cfg(any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp"))]
+pub mod decode;
+
+// Provide a small stub on non-ARM builds so dependents can still compile, but decoder
+// construction will fail (since the C++ RKMPP decoder isn't built/linked).
+#[cfg(not(any(target_arch = "aarch64", target_arch = "arm", feature = "rkmpp")))]
+pub mod decode {
+    use crate::ffmpeg::AVPixelFormat;
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct DecodeContext {
+        pub name: String,
+        pub width: i32,
+        pub height: i32,
+        pub sw_pixfmt: AVPixelFormat,
+        pub thread_count: i32,
+    }
+
+    pub struct DecodeFrame {
+        pub data: Vec<u8>,
+        pub width: i32,
+        pub height: i32,
+        pub pixfmt: AVPixelFormat,
+    }
+
+    pub struct Decoder {
+        pub ctx: DecodeContext,
+    }
+
+    impl Decoder {
+        pub fn new(ctx: DecodeContext) -> Result<Self, ()> {
+            let _ = ctx;
+            Err(())
+        }
+
+        pub fn decode(&mut self, _data: &[u8]) -> Result<&mut Vec<DecodeFrame>, i32> {
+            Err(-1)
+        }
+    }
+}
+
 pub mod encode;
 
 pub enum Priority {

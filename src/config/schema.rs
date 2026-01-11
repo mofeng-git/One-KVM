@@ -202,22 +202,34 @@ impl Default for HidConfig {
 pub struct MsdConfig {
     /// Enable MSD functionality
     pub enabled: bool,
-    /// Storage path for ISO/IMG images
-    pub images_path: String,
-    /// Path for Ventoy bootable drive file
-    pub drive_path: String,
-    /// Ventoy drive size in MB (minimum 1024 MB / 1 GB)
-    pub virtual_drive_size_mb: u32,
+    /// MSD base directory (absolute path)
+    pub msd_dir: String,
 }
 
 impl Default for MsdConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            images_path: "./data/msd/images".to_string(),
-            drive_path: "./data/msd/ventoy.img".to_string(),
-            virtual_drive_size_mb: 16 * 1024, // 16GB default
+            msd_dir: String::new(),
         }
+    }
+}
+
+impl MsdConfig {
+    pub fn msd_dir_path(&self) -> std::path::PathBuf {
+        std::path::PathBuf::from(&self.msd_dir)
+    }
+
+    pub fn images_dir(&self) -> std::path::PathBuf {
+        self.msd_dir_path().join("images")
+    }
+
+    pub fn ventoy_dir(&self) -> std::path::PathBuf {
+        self.msd_dir_path().join("ventoy")
+    }
+
+    pub fn drive_path(&self) -> std::path::PathBuf {
+        self.ventoy_dir().join("ventoy.img")
     }
 }
 

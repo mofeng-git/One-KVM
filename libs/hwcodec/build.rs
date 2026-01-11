@@ -152,7 +152,12 @@ mod ffmpeg {
                 } else {
                     // RKMPP for ARM
                     println!("cargo:rustc-link-lib=rockchip_mpp");
-                    println!("cargo:rustc-link-lib=rga");
+                    let rga_static = lib_dir.join("librga.a");
+                    if rga_static.exists() {
+                        println!("cargo:rustc-link-lib=static=rga");
+                    } else {
+                        println!("cargo:rustc-link-lib=rga");
+                    }
                 }
 
                 // Software codec dependencies (dynamic - GPL)
@@ -198,15 +203,24 @@ mod ffmpeg {
             if let Ok(output) = Command::new("pkg-config").args(&pkg_config_args).output() {
                 if output.status.success() {
                     let libs_str = String::from_utf8_lossy(&output.stdout);
+                    let mut link_paths: Vec<String> = Vec::new();
                     for flag in libs_str.split_whitespace() {
                         if flag.starts_with("-L") {
-                            println!("cargo:rustc-link-search=native={}", &flag[2..]);
+                            let path = flag[2..].to_string();
+                            println!("cargo:rustc-link-search=native={}", path);
+                            link_paths.push(path);
                         } else if flag.starts_with("-l") {
                             let lib_name = &flag[2..];
                             if use_static {
                                 // For static linking, link FFmpeg libs statically, others dynamically
                                 if lib_name.starts_with("av") || lib_name == "swresample" {
                                     println!("cargo:rustc-link-lib=static={}", lib_name);
+                                } else if lib_name == "rga"
+                                    && link_paths
+                                        .iter()
+                                        .any(|path| Path::new(path).join("librga.a").exists())
+                                {
+                                    println!("cargo:rustc-link-lib=static=rga");
                                 } else {
                                     // Runtime libraries (va, drm, etc.) must be dynamic
                                     println!("cargo:rustc-link-lib={}", lib_name);
@@ -343,6 +357,20 @@ mod ffmpeg {
             .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_ram_ffi.rs"))
             .unwrap();
 
-        builder.files(["ffmpeg_ram_encode.cpp"].map(|f| ffmpeg_ram_dir.join(f)));
+        builder.file(ffmpeg_ram_dir.join("ffmpeg_ram_encode.cpp"));
+
+        // RKMPP decode only exists on ARM builds where FFmpeg is compiled with RKMPP support.
+        // Avoid compiling this file on x86/x64 where `AV_HWDEVICE_TYPE_RKMPP` doesn't exist.
+        let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        let enable_rkmpp = matches!(target_arch.as_str(), "aarch64" | "arm")
+            || std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
+        if enable_rkmpp {
+            builder.file(ffmpeg_ram_dir.join("ffmpeg_ram_decode.cpp"));
+        } else {
+            println!(
+                "cargo:info=Skipping ffmpeg_ram_decode.cpp (RKMPP) for arch {}",
+                target_arch
+            );
+        }
     }
 }

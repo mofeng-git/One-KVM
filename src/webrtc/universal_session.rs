@@ -586,7 +586,10 @@ impl UniversalSession {
 
                                 // Send encoded frame via RTP
                                 if let Err(e) = video_track
-                                    .write_frame(&encoded_frame.data, encoded_frame.is_keyframe)
+                                    .write_frame_bytes(
+                                        encoded_frame.data.clone(),
+                                        encoded_frame.is_keyframe,
+                                    )
                                     .await
                                 {
                                     if frames_sent % 100 == 0 {

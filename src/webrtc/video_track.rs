@@ -310,7 +310,7 @@ impl UniversalVideoTrack {
     /// Handles codec-specific processing:
     /// - H264/H265: NAL unit parsing, parameter caching
     /// - VP8/VP9: Direct frame sending
-    pub async fn write_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
+    pub async fn write_frame_bytes(&self, data: Bytes, is_keyframe: bool) -> Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -323,11 +323,16 @@ impl UniversalVideoTrack {
         }
     }
 
+    pub async fn write_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
+        self.write_frame_bytes(Bytes::copy_from_slice(data), is_keyframe)
+            .await
+    }
+
     /// Write H264 frame (Annex B format)
     ///
     /// Sends the entire Annex B frame as a single Sample to allow the
     /// H264Payloader to aggregate SPS+PPS into STAP-A packets.
-    async fn write_h264_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
+    async fn write_h264_frame(&self, data: Bytes, is_keyframe: bool) -> Result<()> {
         // Send entire Annex B frame as one Sample
         // The H264Payloader in rtp crate will:
         // 1. Parse NAL units from Annex B format
@@ -335,8 +340,9 @@ impl UniversalVideoTrack {
         // 3. Aggregate SPS+PPS+IDR into STAP-A when possible
         // 4. Fragment large NALs using FU-A
         let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
+        let data_len = data.len();
         let sample = Sample {
-            data: Bytes::copy_from_slice(data),
+            data,
             duration: frame_duration,
             ..Default::default()
         };
@@ -355,7 +361,7 @@ impl UniversalVideoTrack {
         // Update stats
         let mut stats = self.stats.lock().await;
         stats.frames_sent += 1;
-        stats.bytes_sent += data.len() as u64;
+        stats.bytes_sent += data_len as u64;
         if is_keyframe {
             stats.keyframes_sent += 1;
         }
@@ -367,18 +373,19 @@ impl UniversalVideoTrack {
     ///
     /// Pass raw Annex B data directly to the official HevcPayloader.
     /// The payloader handles NAL parsing, VPS/SPS/PPS caching, AP generation, and FU fragmentation.
-    async fn write_h265_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
+    async fn write_h265_frame(&self, data: Bytes, is_keyframe: bool) -> Result<()> {
         // Pass raw Annex B data directly to the official HevcPayloader
         self.send_h265_rtp(data, is_keyframe).await
     }
 
     /// Write VP8 frame
-    async fn write_vp8_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
+    async fn write_vp8_frame(&self, data: Bytes, is_keyframe: bool) -> Result<()> {
         // VP8 frames are sent directly without NAL parsing
         // Calculate frame duration based on configured FPS
         let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
+        let data_len = data.len();
         let sample = Sample {
-            data: Bytes::copy_from_slice(data),
+            data,
             duration: frame_duration,
             ..Default::default()
         };
@@ -397,7 +404,7 @@ impl UniversalVideoTrack {
         // Update stats
         let mut stats = self.stats.lock().await;
         stats.frames_sent += 1;
-        stats.bytes_sent += data.len() as u64;
+        stats.bytes_sent += data_len as u64;
         if is_keyframe {
             stats.keyframes_sent += 1;
         }
@@ -406,12 +413,13 @@ impl UniversalVideoTrack {
     }
 
     /// Write VP9 frame
-    async fn write_vp9_frame(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
+    async fn write_vp9_frame(&self, data: Bytes, is_keyframe: bool) -> Result<()> {
         // VP9 frames are sent directly without NAL parsing
         // Calculate frame duration based on configured FPS
         let frame_duration = Duration::from_micros(1_000_000 / self.config.fps.max(1) as u64);
+        let data_len = data.len();
         let sample = Sample {
-            data: Bytes::copy_from_slice(data),
+            data,
             duration: frame_duration,
             ..Default::default()
         };
@@ -430,7 +438,7 @@ impl UniversalVideoTrack {
         // Update stats
         let mut stats = self.stats.lock().await;
         stats.frames_sent += 1;
-        stats.bytes_sent += data.len() as u64;
+        stats.bytes_sent += data_len as u64;
         if is_keyframe {
             stats.keyframes_sent += 1;
         }
@@ -439,7 +447,7 @@ impl UniversalVideoTrack {
     }
 
     /// Send H265 NAL units via custom H265Payloader
-    async fn send_h265_rtp(&self, data: &[u8], is_keyframe: bool) -> Result<()> {
+    async fn send_h265_rtp(&self, payload: Bytes, is_keyframe: bool) -> Result<()> {
         let rtp_track = match &self.track {
             TrackType::Rtp(t) => t,
             TrackType::Sample(_) => {
@@ -459,7 +467,6 @@ impl UniversalVideoTrack {
         // Minimize lock hold time: only hold lock during payload generation and state update
         let (payloads, timestamp, seq_start, num_payloads) = {
             let mut state = h265_state.lock().await;
-            let payload = Bytes::copy_from_slice(data);
 
             // Use custom H265Payloader to fragment the data
             let payloads = state.payloader.payload(RTP_MTU, &payload);

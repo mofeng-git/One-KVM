@@ -32,6 +32,8 @@ pub struct MsdController {
     state: RwLock<MsdState>,
     /// Images storage path
     images_path: PathBuf,
+    /// Ventoy directory path
+    ventoy_dir: PathBuf,
     /// Virtual drive path
     drive_path: PathBuf,
     /// Event bus for broadcasting state changes (optional)
@@ -49,19 +51,22 @@ impl MsdController {
     ///
     /// # Parameters
     /// * `otg_service` - OTG service for gadget management
-    /// * `images_path` - Directory path for storing ISO/IMG files
-    /// * `drive_path` - File path for the virtual FAT32 drive
+    /// * `msd_dir` - Base directory for MSD storage
     pub fn new(
         otg_service: Arc<OtgService>,
-        images_path: impl Into<PathBuf>,
-        drive_path: impl Into<PathBuf>,
+        msd_dir: impl Into<PathBuf>,
     ) -> Self {
+        let msd_dir = msd_dir.into();
+        let images_path = msd_dir.join("images");
+        let ventoy_dir = msd_dir.join("ventoy");
+        let drive_path = ventoy_dir.join("ventoy.img");
         Self {
             otg_service,
             msd_function: RwLock::new(None),
             state: RwLock::new(MsdState::default()),
-            images_path: images_path.into(),
-            drive_path: drive_path.into(),
+            images_path,
+            ventoy_dir,
+            drive_path,
             events: tokio::sync::RwLock::new(None),
             downloads: Arc::new(RwLock::new(HashMap::new())),
             operation_lock: Arc::new(RwLock::new(())),
@@ -76,6 +81,9 @@ impl MsdController {
         // 1. Ensure images directory exists
         if let Err(e) = std::fs::create_dir_all(&self.images_path) {
             warn!("Failed to create images directory: {}", e);
+        }
+        if let Err(e) = std::fs::create_dir_all(&self.ventoy_dir) {
+            warn!("Failed to create ventoy directory: {}", e);
         }
 
         // 2. Request MSD function from OtgService
@@ -364,6 +372,11 @@ impl MsdController {
         &self.images_path
     }
 
+    /// Get ventoy directory path
+    pub fn ventoy_dir(&self) -> &PathBuf {
+        &self.ventoy_dir
+    }
+
     /// Get virtual drive path
     pub fn drive_path(&self) -> &PathBuf {
         &self.drive_path
@@ -588,10 +601,9 @@ mod tests {
     async fn test_controller_creation() {
         let temp_dir = TempDir::new().unwrap();
         let otg_service = Arc::new(OtgService::new());
-        let images_path = temp_dir.path().join("images");
-        let drive_path = temp_dir.path().join("ventoy.img");
+        let msd_dir = temp_dir.path().join("msd");
 
-        let controller = MsdController::new(otg_service, &images_path, &drive_path);
+        let controller = MsdController::new(otg_service, &msd_dir);
 
         // Check that MSD is not initialized (msd_function is None)
         let state = controller.state().await;
@@ -604,10 +616,9 @@ mod tests {
     async fn test_state_default() {
         let temp_dir = TempDir::new().unwrap();
         let otg_service = Arc::new(OtgService::new());
-        let images_path = temp_dir.path().join("images");
-        let drive_path = temp_dir.path().join("ventoy.img");
+        let msd_dir = temp_dir.path().join("msd");
 
-        let controller = MsdController::new(otg_service, &images_path, &drive_path);
+        let controller = MsdController::new(otg_service, &msd_dir);
 
         let state = controller.state().await;
         assert!(!state.available);

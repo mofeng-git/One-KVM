@@ -49,8 +49,10 @@ const systemStore = useSystemStore()
 const overflowMenuOpen = ref(false)
 
 // MSD is only available when HID backend is not CH9329 (CH9329 is serial-only, no USB gadget)
+const hidBackend = computed(() => (systemStore.hid?.backend ?? '').toLowerCase())
+const isCh9329Backend = computed(() => hidBackend.value.includes('ch9329'))
 const showMsd = computed(() => {
-  return props.isAdmin && systemStore.hid?.backend !== 'ch9329'
+  return props.isAdmin && !isCh9329Backend.value
 })
 
 const props = defineProps<{
@@ -310,5 +312,5 @@ const extensionOpen = ref(false)
   </div>
 
   <!-- MSD Dialog -->
-  <MsdDialog v-model:open="msdDialogOpen" />
+  <MsdDialog v-if="showMsd" v-model:open="msdDialogOpen" />
 </template>

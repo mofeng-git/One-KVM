@@ -114,6 +114,7 @@ function detectBrowserCodecSupport() {
 
 // Check if a codec is supported by browser
 const isBrowserSupported = (codecId: string): boolean => {
+  if (codecId === 'mjpeg') return true
   return browserSupportedCodecs.value.has(codecId)
 }
 
@@ -704,7 +705,7 @@ watch(currentConfig, () => {
                   v-for="format in availableFormats"
                   :key="format.format"
                   :value="format.format"
-                  :class="['text-xs', { 'opacity-50': isFormatNotRecommended(format.format) }]"
+                  class="text-xs"
                 >
                   <div class="flex items-center gap-2">
                     <span>{{ format.description }}</span>

@@ -90,12 +90,13 @@ pub struct CapabilityInfo {
 pub async fn system_info(State(state): State<Arc<AppState>>) -> Json<SystemInfo> {
     let config = state.config.get();
 
-    // Get disk space information for MSD images directory
+    // Get disk space information for MSD base directory
     let disk_space = {
-        if let Some(ref msd_controller) = *state.msd.read().await {
-            get_disk_space(msd_controller.images_path()).ok()
-        } else {
+        let msd_dir = config.msd.msd_dir_path();
+        if msd_dir.as_os_str().is_empty() {
             None
+        } else {
+            get_disk_space(&msd_dir).ok()
         }
     };
 
@@ -933,66 +934,85 @@ pub async fn update_config(
         }
     }
 
-    // MSD config processing - reload if enabled state changed
+    // MSD config processing - reload if enabled state or directory changed
     if has_msd {
         tracing::info!("MSD config sent, checking if reload needed...");
         tracing::debug!("Old MSD config: {:?}", old_config.msd);
         tracing::debug!("New MSD config: {:?}", new_config.msd);
 
-        // Check if MSD enabled state changed
         let old_msd_enabled = old_config.msd.enabled;
         let new_msd_enabled = new_config.msd.enabled;
+        let msd_dir_changed = old_config.msd.msd_dir != new_config.msd.msd_dir;
 
         tracing::info!(
             "MSD enabled: old={}, new={}",
             old_msd_enabled,
             new_msd_enabled
         );
+        if msd_dir_changed {
+            tracing::info!("MSD directory changed: {}", new_config.msd.msd_dir);
+        }
 
-        if old_msd_enabled != new_msd_enabled {
-            if new_msd_enabled {
-                // MSD was disabled, now enabled - need to initialize
-                tracing::info!("MSD enabled in config, initializing...");
+        // Ensure MSD directories exist (msd/images, msd/ventoy)
+        let msd_dir = new_config.msd.msd_dir_path();
+        if let Err(e) = std::fs::create_dir_all(msd_dir.join("images")) {
+            tracing::warn!("Failed to create MSD images directory: {}", e);
+        }
+        if let Err(e) = std::fs::create_dir_all(msd_dir.join("ventoy")) {
+            tracing::warn!("Failed to create MSD ventoy directory: {}", e);
+        }
 
-                let msd = crate::msd::MsdController::new(
-                    state.otg_service.clone(),
-                    &new_config.msd.images_path,
-                    &new_config.msd.drive_path,
-                );
-                if let Err(e) = msd.init().await {
-                    tracing::error!("MSD initialization failed: {}", e);
-                    // Rollback config on failure
-                    state.config.set((*old_config).clone()).await?;
-                    return Ok(Json(LoginResponse {
-                        success: false,
-                        message: Some(format!("MSD initialization failed: {}", e)),
-                    }));
-                }
-
-                // Set event bus
-                let events = state.events.clone();
-                msd.set_event_bus(events).await;
-
-                // Store the initialized controller
-                *state.msd.write().await = Some(msd);
-                tracing::info!("MSD initialized successfully");
-            } else {
-                // MSD was enabled, now disabled - shutdown
-                tracing::info!("MSD disabled in config, shutting down...");
-
-                if let Some(msd) = state.msd.write().await.as_mut() {
-                    if let Err(e) = msd.shutdown().await {
-                        tracing::warn!("MSD shutdown failed: {}", e);
-                    }
-                }
-                *state.msd.write().await = None;
-                tracing::info!("MSD shutdown complete");
-            }
-        } else {
+        let needs_reload = old_msd_enabled != new_msd_enabled || msd_dir_changed;
+        if !needs_reload {
             tracing::info!(
-                "MSD enabled state unchanged ({}), no reload needed",
+                "MSD enabled state unchanged ({}) and directory unchanged, no reload needed",
                 new_msd_enabled
             );
+        } else if new_msd_enabled {
+            tracing::info!("(Re)initializing MSD...");
+
+            // Shutdown existing controller if present
+            let mut msd_guard = state.msd.write().await;
+            if let Some(msd) = msd_guard.as_mut() {
+                if let Err(e) = msd.shutdown().await {
+                    tracing::warn!("MSD shutdown failed: {}", e);
+                }
+            }
+            *msd_guard = None;
+            drop(msd_guard);
+
+            let msd = crate::msd::MsdController::new(
+                state.otg_service.clone(),
+                new_config.msd.msd_dir_path(),
+            );
+            if let Err(e) = msd.init().await {
+                tracing::error!("MSD initialization failed: {}", e);
+                // Rollback config on failure
+                state.config.set((*old_config).clone()).await?;
+                return Ok(Json(LoginResponse {
+                    success: false,
+                    message: Some(format!("MSD initialization failed: {}", e)),
+                }));
+            }
+
+            // Set event bus
+            let events = state.events.clone();
+            msd.set_event_bus(events).await;
+
+            // Store the initialized controller
+            *state.msd.write().await = Some(msd);
+            tracing::info!("MSD initialized successfully");
+        } else {
+            tracing::info!("MSD disabled in config, shutting down...");
+
+            let mut msd_guard = state.msd.write().await;
+            if let Some(msd) = msd_guard.as_mut() {
+                if let Err(e) = msd.shutdown().await {
+                    tracing::warn!("MSD shutdown failed: {}", e);
+                }
+            }
+            *msd_guard = None;
+            tracing::info!("MSD shutdown complete");
         }
     }
 
@@ -2069,7 +2089,7 @@ pub async fn msd_status(State(state): State<Arc<AppState>>) -> Result<Json<MsdSt
 /// List all available images
 pub async fn msd_images_list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<ImageInfo>>> {
     let config = state.config.get();
-    let images_path = std::path::PathBuf::from(&config.msd.images_path);
+    let images_path = config.msd.images_dir();
     let manager = ImageManager::new(images_path);
 
     let images = manager.list()?;
@@ -2082,7 +2102,7 @@ pub async fn msd_image_upload(
     mut multipart: Multipart,
 ) -> Result<Json<ImageInfo>> {
     let config = state.config.get();
-    let images_path = std::path::PathBuf::from(&config.msd.images_path);
+    let images_path = config.msd.images_dir();
     let manager = ImageManager::new(images_path);
 
     while let Some(field) = multipart
@@ -2115,7 +2135,7 @@ pub async fn msd_image_get(
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<ImageInfo>> {
     let config = state.config.get();
-    let images_path = std::path::PathBuf::from(&config.msd.images_path);
+    let images_path = config.msd.images_dir();
     let manager = ImageManager::new(images_path);
 
     let image = manager.get(&id)?;
@@ -2128,7 +2148,7 @@ pub async fn msd_image_delete(
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<LoginResponse>> {
     let config = state.config.get();
-    let images_path = std::path::PathBuf::from(&config.msd.images_path);
+    let images_path = config.msd.images_dir();
     let manager = ImageManager::new(images_path);
 
     manager.delete(&id)?;
@@ -2194,7 +2214,7 @@ pub async fn msd_connect(
             })?;
 
             // Get image info from ImageManager
-            let images_path = std::path::PathBuf::from(&config.msd.images_path);
+            let images_path = config.msd.images_dir();
             let manager = ImageManager::new(images_path);
             let image = manager.get(&image_id)?;
 
@@ -2240,7 +2260,7 @@ pub async fn msd_disconnect(State(state): State<Arc<AppState>>) -> Result<Json<L
 /// Get drive info
 pub async fn msd_drive_info(State(state): State<Arc<AppState>>) -> Result<Json<DriveInfo>> {
     let config = state.config.get();
-    let drive_path = std::path::PathBuf::from(&config.msd.drive_path);
+    let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
     if !drive.exists() {
@@ -2257,7 +2277,7 @@ pub async fn msd_drive_init(
     Json(req): Json<DriveInitRequest>,
 ) -> Result<Json<DriveInfo>> {
     let config = state.config.get();
-    let drive_path = std::path::PathBuf::from(&config.msd.drive_path);
+    let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
     let info = drive.init(req.size_mb).await?;
@@ -2281,7 +2301,7 @@ pub async fn msd_drive_delete(State(state): State<Arc<AppState>>) -> Result<Json
     drop(msd_guard);
 
     // Delete the drive file
-    let drive_path = std::path::PathBuf::from(&config.msd.drive_path);
+    let drive_path = config.msd.drive_path();
     if drive_path.exists() {
         std::fs::remove_file(&drive_path)
             .map_err(|e| AppError::Internal(format!("Failed to delete drive file: {}", e)))?;
@@ -2299,7 +2319,7 @@ pub async fn msd_drive_files(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<DriveFile>>> {
     let config = state.config.get();
-    let drive_path = std::path::PathBuf::from(&config.msd.drive_path);
+    let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
     let dir_path = params.get("path").map(|s| s.as_str()).unwrap_or("/");
@@ -2314,7 +2334,7 @@ pub async fn msd_drive_upload(
     mut multipart: Multipart,
 ) -> Result<Json<LoginResponse>> {
     let config = state.config.get();
-    let drive_path = std::path::PathBuf::from(&config.msd.drive_path);
+    let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
     let target_dir = params.get("path").map(|s| s.as_str()).unwrap_or("/");
@@ -2359,7 +2379,7 @@ pub async fn msd_drive_download(
     AxumPath(file_path): AxumPath<String>,
 ) -> Result<Response> {
     let config = state.config.get();
-    let drive_path = std::path::PathBuf::from(&config.msd.drive_path);
+    let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
     // Get file stream (returns file size and channel receiver)
@@ -2393,7 +2413,7 @@ pub async fn msd_drive_file_delete(
     AxumPath(file_path): AxumPath<String>,
 ) -> Result<Json<LoginResponse>> {
     let config = state.config.get();
-    let drive_path = std::path::PathBuf::from(&config.msd.drive_path);
+    let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
     drive.delete(&file_path).await?;
@@ -2410,7 +2430,7 @@ pub async fn msd_drive_mkdir(
     AxumPath(dir_path): AxumPath<String>,
 ) -> Result<Json<LoginResponse>> {
     let config = state.config.get();
-    let drive_path = std::path::PathBuf::from(&config.msd.drive_path);
+    let drive_path = config.msd.drive_path();
     let drive = VentoyDrive::new(drive_path);
 
     drive.mkdir(&dir_path).await?;

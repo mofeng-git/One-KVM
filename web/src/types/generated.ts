@@ -76,12 +76,8 @@ export interface HidConfig {
 export interface MsdConfig {
 	/** Enable MSD functionality */
 	enabled: boolean;
-	/** Storage path for ISO/IMG images */
-	images_path: string;
-	/** Path for Ventoy bootable drive file */
-	drive_path: string;
-	/** Ventoy drive size in MB (minimum 1024 MB / 1 GB) */
-	virtual_drive_size_mb: number;
+	/** MSD base directory (absolute path) */
+	msd_dir: string;
 }
 
 /** Driver type for ATX key operations */
@@ -511,9 +507,7 @@ export interface HidConfigUpdate {
 
 export interface MsdConfigUpdate {
 	enabled?: boolean;
-	images_path?: string;
-	drive_path?: string;
-	virtual_drive_size_mb?: number;
+	msd_dir?: string;
 }
 
 export interface RustDeskConfigUpdate {
