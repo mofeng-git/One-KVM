@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
 
-use crate::video::encoder::JpegEncoder;
 use crate::video::encoder::traits::{Encoder, EncoderConfig};
+use crate::video::encoder::JpegEncoder;
 use crate::video::format::PixelFormat;
 use crate::video::VideoFrame;
 
@@ -256,7 +256,10 @@ impl MjpegStreamHandler {
             let config = EncoderConfig::jpeg(resolution, 85);
             match JpegEncoder::new(config) {
                 Ok(enc) => {
-                    debug!("Created JPEG encoder for MJPEG stream: {}x{}", resolution.width, resolution.height);
+                    debug!(
+                        "Created JPEG encoder for MJPEG stream: {}x{}",
+                        resolution.width, resolution.height
+                    );
                     enc
                 }
                 Err(e) => {
@@ -270,37 +273,40 @@ impl MjpegStreamHandler {
 
         // Check if resolution changed
         if encoder.config().resolution != resolution {
-            debug!("Resolution changed, recreating JPEG encoder: {}x{}", resolution.width, resolution.height);
+            debug!(
+                "Resolution changed, recreating JPEG encoder: {}x{}",
+                resolution.width, resolution.height
+            );
             let config = EncoderConfig::jpeg(resolution, 85);
-            *encoder = JpegEncoder::new(config).map_err(|e| format!("Failed to create encoder: {}", e))?;
+            *encoder =
+                JpegEncoder::new(config).map_err(|e| format!("Failed to create encoder: {}", e))?;
         }
 
         // Encode based on input format
         let encoded = match frame.format {
-            PixelFormat::Yuyv => {
-                encoder.encode_yuyv(frame.data(), sequence)
-                    .map_err(|e| format!("YUYV encode failed: {}", e))?
-            }
-            PixelFormat::Nv12 => {
-                encoder.encode_nv12(frame.data(), sequence)
-                    .map_err(|e| format!("NV12 encode failed: {}", e))?
-            }
-            PixelFormat::Rgb24 => {
-                encoder.encode_rgb(frame.data(), sequence)
-                    .map_err(|e| format!("RGB encode failed: {}", e))?
-            }
-            PixelFormat::Bgr24 => {
-                encoder.encode_bgr(frame.data(), sequence)
-                    .map_err(|e| format!("BGR encode failed: {}", e))?
-            }
+            PixelFormat::Yuyv => encoder
+                .encode_yuyv(frame.data(), sequence)
+                .map_err(|e| format!("YUYV encode failed: {}", e))?,
+            PixelFormat::Nv12 => encoder
+                .encode_nv12(frame.data(), sequence)
+                .map_err(|e| format!("NV12 encode failed: {}", e))?,
+            PixelFormat::Rgb24 => encoder
+                .encode_rgb(frame.data(), sequence)
+                .map_err(|e| format!("RGB encode failed: {}", e))?,
+            PixelFormat::Bgr24 => encoder
+                .encode_bgr(frame.data(), sequence)
+                .map_err(|e| format!("BGR encode failed: {}", e))?,
             _ => {
-                return Err(format!("Unsupported format for JPEG encoding: {}", frame.format));
+                return Err(format!(
+                    "Unsupported format for JPEG encoding: {}",
+                    frame.format
+                ));
             }
         };
 
-        // Create new VideoFrame with JPEG data
-        Ok(VideoFrame::from_vec(
-            encoded.data.to_vec(),
+        // Create new VideoFrame with JPEG data (zero-copy: Bytes -> Arc<Bytes>)
+        Ok(VideoFrame::new(
+            encoded.data,
             resolution,
             PixelFormat::Mjpeg,
             0, // stride not relevant for JPEG
@@ -333,7 +339,11 @@ impl MjpegStreamHandler {
     pub fn register_client(&self, client_id: ClientId) {
         let session = ClientSession::new(client_id.clone());
         self.clients.write().insert(client_id.clone(), session);
-        info!("Client {} connected (total: {})", client_id, self.client_count());
+        info!(
+            "Client {} connected (total: {})",
+            client_id,
+            self.client_count()
+        );
     }
 
     /// Unregister a client
@@ -391,7 +401,9 @@ impl MjpegStreamHandler {
         *self.auto_pause_config.write() = config;
         info!(
             "Auto-pause config updated: enabled={}, delay={}s, timeout={}s",
-            config_clone.enabled, config_clone.shutdown_delay_secs, config_clone.client_timeout_secs
+            config_clone.enabled,
+            config_clone.shutdown_delay_secs,
+            config_clone.client_timeout_secs
         );
     }
 
@@ -440,10 +452,7 @@ impl ClientGuard {
     /// Create a new client guard
     pub fn new(client_id: ClientId, handler: Arc<MjpegStreamHandler>) -> Self {
         handler.register_client(client_id.clone());
-        Self {
-            client_id,
-            handler,
-        }
+        Self { client_id, handler }
     }
 
     /// Get client ID
@@ -535,8 +544,8 @@ fn frames_are_identical(a: &VideoFrame, b: &VideoFrame) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::Bytes;
     use crate::video::{format::Resolution, PixelFormat};
+    use bytes::Bytes;
 
     #[tokio::test]
     async fn test_stream_handler() {

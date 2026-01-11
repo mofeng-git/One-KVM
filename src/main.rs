@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use axum_server::tls_rustls::RustlsConfig;
 use clap::{Parser, ValueEnum};
+use rustls::crypto::{ring, CryptoProvider};
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use rustls::crypto::{ring, CryptoProvider};
 
 use one_kvm::atx::AtxController;
 use one_kvm::audio::{AudioController, AudioControllerConfig, AudioQuality};
@@ -26,7 +26,15 @@ use one_kvm::webrtc::{WebRtcStreamer, WebRtcStreamerConfig};
 
 /// Log level for the application
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
-enum LogLevel {Error, Warn, #[default] Info, Verbose, Debug, Trace,}
+enum LogLevel {
+    Error,
+    Warn,
+    #[default]
+    Info,
+    Verbose,
+    Debug,
+    Trace,
+}
 
 /// One-KVM command line arguments
 #[derive(Parser, Debug)]
@@ -82,10 +90,7 @@ async fn main() -> anyhow::Result<()> {
     CryptoProvider::install_default(ring::default_provider())
         .expect("Failed to install rustls crypto provider");
 
-    tracing::info!(
-        "Starting One-KVM v{}",
-        env!("CARGO_PKG_VERSION")
-    );
+    tracing::info!("Starting One-KVM v{}", env!("CARGO_PKG_VERSION"));
 
     // Determine data directory (CLI arg takes precedence)
     let data_dir = args.data_dir.unwrap_or_else(get_data_dir);
@@ -153,21 +158,37 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse video configuration once (avoid duplication)
     let (video_format, video_resolution) = parse_video_config(&config);
-    tracing::debug!("Parsed video config: {} @ {}x{}", video_format, video_resolution.width, video_resolution.height);
+    tracing::debug!(
+        "Parsed video config: {} @ {}x{}",
+        video_format,
+        video_resolution.width,
+        video_resolution.height
+    );
 
     // Create video streamer and initialize with config if device is set
     let streamer = Streamer::new();
     streamer.set_event_bus(events.clone()).await;
     if let Some(ref device_path) = config.video.device {
         if let Err(e) = streamer
-            .apply_video_config(device_path, video_format, video_resolution, config.video.fps)
+            .apply_video_config(
+                device_path,
+                video_format,
+                video_resolution,
+                config.video.fps,
+            )
             .await
         {
-            tracing::warn!("Failed to initialize video with config: {}, will auto-detect", e);
+            tracing::warn!(
+                "Failed to initialize video with config: {}, will auto-detect",
+                e
+            );
         } else {
             tracing::info!(
                 "Video configured: {} @ {}x{} {}",
-                device_path, video_resolution.width, video_resolution.height, video_format
+                device_path,
+                video_resolution.width,
+                video_resolution.height,
+                video_format
             );
         }
     }
@@ -185,8 +206,18 @@ async fn main() -> anyhow::Result<()> {
                 let mut turn_servers = vec![];
 
                 // Check if user configured custom servers
-                let has_custom_stun = config.stream.stun_server.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-                let has_custom_turn = config.stream.turn_server.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+                let has_custom_stun = config
+                    .stream
+                    .stun_server
+                    .as_ref()
+                    .map(|s| !s.is_empty())
+                    .unwrap_or(false);
+                let has_custom_turn = config
+                    .stream
+                    .turn_server
+                    .as_ref()
+                    .map(|s| !s.is_empty())
+                    .unwrap_or(false);
 
                 // If no custom servers, use public ICE servers (like RustDesk)
                 if !has_custom_stun && !has_custom_turn {
@@ -201,7 +232,9 @@ async fn main() -> anyhow::Result<()> {
                             turn_servers.push(turn);
                         }
                     } else {
-                        tracing::info!("No public ICE servers configured, using host candidates only");
+                        tracing::info!(
+                            "No public ICE servers configured, using host candidates only"
+                        );
                     }
                 } else {
                     // Use custom servers
@@ -214,13 +247,18 @@ async fn main() -> anyhow::Result<()> {
                     if let Some(ref turn) = config.stream.turn_server {
                         if !turn.is_empty() {
                             let username = config.stream.turn_username.clone().unwrap_or_default();
-                            let credential = config.stream.turn_password.clone().unwrap_or_default();
+                            let credential =
+                                config.stream.turn_password.clone().unwrap_or_default();
                             turn_servers.push(one_kvm::webrtc::config::TurnServer::new(
                                 turn.clone(),
                                 username.clone(),
                                 credential,
                             ));
-                            tracing::info!("Using custom TURN server: {} (user: {})", turn, username);
+                            tracing::info!(
+                                "Using custom TURN server: {} (user: {})",
+                                turn,
+                                username
+                            );
                         }
                     }
                 }
@@ -236,7 +274,6 @@ async fn main() -> anyhow::Result<()> {
         WebRtcStreamer::with_config(webrtc_config)
     };
     tracing::info!("WebRTC streamer created (supports H264, extensible to VP8/VP9/H265)");
-
 
     // Create OTG Service (single instance for centralized USB gadget management)
     let otg_service = Arc::new(OtgService::new());
@@ -285,14 +322,26 @@ async fn main() -> anyhow::Result<()> {
         if ventoy_resource_dir.exists() {
             if let Err(e) = ventoy_img::init_resources(&ventoy_resource_dir) {
                 tracing::warn!("Failed to initialize Ventoy resources: {}", e);
-                tracing::info!("Ventoy resource files should be placed in: {}", ventoy_resource_dir.display());
+                tracing::info!(
+                    "Ventoy resource files should be placed in: {}",
+                    ventoy_resource_dir.display()
+                );
                 tracing::info!("Required files: {:?}", ventoy_img::required_files());
             } else {
-                tracing::info!("Ventoy resources initialized from {}", ventoy_resource_dir.display());
+                tracing::info!(
+                    "Ventoy resources initialized from {}",
+                    ventoy_resource_dir.display()
+                );
             }
         } else {
-            tracing::warn!("Ventoy resource directory not found: {}", ventoy_resource_dir.display());
-            tracing::info!("Create the directory and place the following files: {:?}", ventoy_img::required_files());
+            tracing::warn!(
+                "Ventoy resource directory not found: {}",
+                ventoy_resource_dir.display()
+            );
+            tracing::info!(
+                "Create the directory and place the following files: {:?}",
+                ventoy_img::required_files()
+            );
         }
 
         let controller = MsdController::new(
@@ -382,27 +431,42 @@ async fn main() -> anyhow::Result<()> {
         let (actual_format, actual_resolution, actual_fps) = streamer.current_video_config().await;
         tracing::info!(
             "Initial video config from capturer: {}x{} {:?} @ {}fps",
-            actual_resolution.width, actual_resolution.height, actual_format, actual_fps
+            actual_resolution.width,
+            actual_resolution.height,
+            actual_format,
+            actual_fps
         );
-        webrtc_streamer.update_video_config(actual_resolution, actual_format, actual_fps).await;
+        webrtc_streamer
+            .update_video_config(actual_resolution, actual_format, actual_fps)
+            .await;
         webrtc_streamer.set_video_source(frame_tx).await;
         tracing::info!("WebRTC streamer connected to video frame source");
     } else {
-        tracing::warn!("Video capturer not ready, WebRTC will connect to frame source when available");
+        tracing::warn!(
+            "Video capturer not ready, WebRTC will connect to frame source when available"
+        );
     }
 
     // Create video stream manager (unified MJPEG/WebRTC management)
     // Use with_webrtc_streamer to ensure we use the same WebRtcStreamer instance
-    let stream_manager = VideoStreamManager::with_webrtc_streamer(streamer.clone(), webrtc_streamer.clone());
+    let stream_manager =
+        VideoStreamManager::with_webrtc_streamer(streamer.clone(), webrtc_streamer.clone());
     stream_manager.set_event_bus(events.clone()).await;
     stream_manager.set_config_store(config_store.clone()).await;
 
     // Initialize stream manager with configured mode
     let initial_mode = config.stream.mode.clone();
     if let Err(e) = stream_manager.init_with_mode(initial_mode.clone()).await {
-        tracing::warn!("Failed to initialize stream manager with mode {:?}: {}", initial_mode, e);
+        tracing::warn!(
+            "Failed to initialize stream manager with mode {:?}: {}",
+            initial_mode,
+            e
+        );
     } else {
-        tracing::info!("Video stream manager initialized with mode: {:?}", initial_mode);
+        tracing::info!(
+            "Video stream manager initialized with mode: {:?}",
+            initial_mode
+        );
     }
 
     // Create RustDesk service (optional, based on config)
@@ -421,7 +485,9 @@ async fn main() -> anyhow::Result<()> {
         Some(Arc::new(service))
     } else {
         if config.rustdesk.enabled {
-            tracing::warn!("RustDesk enabled but configuration is incomplete (missing server or credentials)");
+            tracing::warn!(
+                "RustDesk enabled but configuration is incomplete (missing server or credentials)"
+            );
         } else {
             tracing::info!("RustDesk disabled in configuration");
         }
@@ -458,7 +524,8 @@ async fn main() -> anyhow::Result<()> {
                         cfg.rustdesk.public_key = updated_config.public_key.clone();
                         cfg.rustdesk.private_key = updated_config.private_key.clone();
                         cfg.rustdesk.signing_public_key = updated_config.signing_public_key.clone();
-                        cfg.rustdesk.signing_private_key = updated_config.signing_private_key.clone();
+                        cfg.rustdesk.signing_private_key =
+                            updated_config.signing_private_key.clone();
                         cfg.rustdesk.uuid = updated_config.uuid.clone();
                     })
                     .await
@@ -542,8 +609,7 @@ async fn main() -> anyhow::Result<()> {
 
         tracing::info!("Starting HTTPS server on {}", bind_addr);
 
-        let server = axum_server::bind_rustls(bind_addr, tls_config)
-            .serve(app.into_make_service());
+        let server = axum_server::bind_rustls(bind_addr, tls_config).serve(app.into_make_service());
 
         tokio::select! {
             _ = shutdown_signal => {
@@ -600,8 +666,8 @@ fn init_logging(level: LogLevel, verbose_count: u8) {
     };
 
     // Environment variable takes highest priority
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| filter.into());
+    let env_filter =
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| filter.into());
 
     tracing_subscriber::registry()
         .with(env_filter)
@@ -662,7 +728,8 @@ fn spawn_device_info_broadcaster(state: Arc<AppState>, events: Arc<EventBus>) {
         loop {
             // Use timeout to handle pending broadcasts
             let recv_result = if pending_broadcast {
-                let remaining = DEBOUNCE_MS.saturating_sub(last_broadcast.elapsed().as_millis() as u64);
+                let remaining =
+                    DEBOUNCE_MS.saturating_sub(last_broadcast.elapsed().as_millis() as u64);
                 tokio::time::timeout(Duration::from_millis(remaining), rx.recv()).await
             } else {
                 Ok(rx.recv().await)
@@ -674,6 +741,7 @@ fn spawn_device_info_broadcaster(state: Arc<AppState>, events: Arc<EventBus>) {
                         event,
                         SystemEvent::StreamStateChanged { .. }
                             | SystemEvent::StreamConfigApplied { .. }
+                            | SystemEvent::StreamModeReady { .. }
                             | SystemEvent::HidStateChanged { .. }
                             | SystemEvent::MsdStateChanged { .. }
                             | SystemEvent::AtxStateChanged { .. }
@@ -706,7 +774,10 @@ fn spawn_device_info_broadcaster(state: Arc<AppState>, events: Arc<EventBus>) {
         }
     });
 
-    tracing::info!("DeviceInfo broadcaster task started (debounce: {}ms)", DEBOUNCE_MS);
+    tracing::info!(
+        "DeviceInfo broadcaster task started (debounce: {}ms)",
+        DEBOUNCE_MS
+    );
 }
 
 /// Clean up subsystems on shutdown

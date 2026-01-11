@@ -22,5 +22,7 @@ pub use controller::{AudioController, AudioControllerConfig, AudioQuality, Audio
 pub use device::{enumerate_audio_devices, enumerate_audio_devices_with_current, AudioDeviceInfo};
 pub use encoder::{OpusConfig, OpusEncoder, OpusFrame};
 pub use monitor::{AudioHealthMonitor, AudioHealthStatus, AudioMonitorConfig};
-pub use shared_pipeline::{SharedAudioPipeline, SharedAudioPipelineConfig, SharedAudioPipelineStats};
+pub use shared_pipeline::{
+    SharedAudioPipeline, SharedAudioPipelineConfig, SharedAudioPipelineStats,
+};
 pub use streamer::{AudioStreamState, AudioStreamer, AudioStreamerConfig};

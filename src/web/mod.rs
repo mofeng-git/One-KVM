@@ -1,6 +1,6 @@
 mod audio_ws;
-mod routes;
 mod handlers;
+mod routes;
 mod static_files;
 mod ws;
 

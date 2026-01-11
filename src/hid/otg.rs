@@ -30,9 +30,11 @@ use tracing::{debug, info, trace, warn};
 
 use super::backend::HidBackend;
 use super::keymap;
-use super::types::{ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType};
+use super::types::{
+    ConsumerEvent, KeyEventType, KeyboardEvent, KeyboardReport, MouseEvent, MouseEventType,
+};
 use crate::error::{AppError, Result};
-use crate::otg::{HidDevicePaths, wait_for_hid_devices};
+use crate::otg::{wait_for_hid_devices, HidDevicePaths};
 
 /// Device type for ensure_device operations
 #[derive(Debug, Clone, Copy)]
@@ -73,11 +75,21 @@ impl LedState {
     /// Convert to raw byte
     pub fn to_byte(&self) -> u8 {
         let mut b = 0u8;
-        if self.num_lock { b |= 0x01; }
-        if self.caps_lock { b |= 0x02; }
-        if self.scroll_lock { b |= 0x04; }
-        if self.compose { b |= 0x08; }
-        if self.kana { b |= 0x10; }
+        if self.num_lock {
+            b |= 0x01;
+        }
+        if self.caps_lock {
+            b |= 0x02;
+        }
+        if self.scroll_lock {
+            b |= 0x04;
+        }
+        if self.compose {
+            b |= 0x08;
+        }
+        if self.kana {
+            b |= 0x10;
+        }
         b
     }
 }
@@ -145,7 +157,9 @@ impl OtgBackend {
             keyboard_path: paths.keyboard,
             mouse_rel_path: paths.mouse_relative,
             mouse_abs_path: paths.mouse_absolute,
-            consumer_path: paths.consumer.unwrap_or_else(|| PathBuf::from("/dev/hidg3")),
+            consumer_path: paths
+                .consumer
+                .unwrap_or_else(|| PathBuf::from("/dev/hidg3")),
             keyboard_dev: Mutex::new(None),
             mouse_rel_dev: Mutex::new(None),
             mouse_abs_dev: Mutex::new(None),
@@ -198,7 +212,8 @@ impl OtgBackend {
             Ok(1) => {
                 // Device ready, check for errors
                 if let Some(revents) = pollfd[0].revents() {
-                    if revents.contains(PollFlags::POLLERR) || revents.contains(PollFlags::POLLHUP) {
+                    if revents.contains(PollFlags::POLLERR) || revents.contains(PollFlags::POLLHUP)
+                    {
                         return Err(std::io::Error::new(
                             std::io::ErrorKind::BrokenPipe,
                             "Device error or hangup",
@@ -297,7 +312,10 @@ impl OtgBackend {
             // Close the device if open (device was removed)
             let mut dev = dev_mutex.lock();
             if dev.is_some() {
-                debug!("Device path {} no longer exists, closing handle", path.display());
+                debug!(
+                    "Device path {} no longer exists, closing handle",
+                    path.display()
+                );
                 *dev = None;
             }
             self.online.store(false, Ordering::Relaxed);
@@ -335,20 +353,24 @@ impl OtgBackend {
             .custom_flags(libc::O_NONBLOCK)
             .open(path)
             .map_err(|e| {
-                AppError::Internal(format!("Failed to open HID device {}: {}", path.display(), e))
+                AppError::Internal(format!(
+                    "Failed to open HID device {}: {}",
+                    path.display(),
+                    e
+                ))
             })
     }
 
     /// Convert I/O error to HidError with appropriate error code
     fn io_error_to_hid_error(e: std::io::Error, operation: &str) -> AppError {
         let error_code = match e.raw_os_error() {
-            Some(32) => "epipe",       // EPIPE - broken pipe
-            Some(108) => "eshutdown",  // ESHUTDOWN - transport endpoint shutdown
-            Some(11) => "eagain",      // EAGAIN - resource temporarily unavailable
-            Some(6) => "enxio",        // ENXIO - no such device or address
-            Some(19) => "enodev",      // ENODEV - no such device
-            Some(5) => "eio",          // EIO - I/O error
-            Some(2) => "enoent",       // ENOENT - no such file or directory
+            Some(32) => "epipe",      // EPIPE - broken pipe
+            Some(108) => "eshutdown", // ESHUTDOWN - transport endpoint shutdown
+            Some(11) => "eagain",     // EAGAIN - resource temporarily unavailable
+            Some(6) => "enxio",       // ENXIO - no such device or address
+            Some(19) => "enodev",     // ENODEV - no such device
+            Some(5) => "eio",         // EIO - I/O error
+            Some(2) => "enoent",      // ENOENT - no such file or directory
             _ => "io_error",
         };
 
@@ -361,9 +383,7 @@ impl OtgBackend {
 
     /// Check if all HID device files exist
     pub fn check_devices_exist(&self) -> bool {
-        self.keyboard_path.exists()
-            && self.mouse_rel_path.exists()
-            && self.mouse_abs_path.exists()
+        self.keyboard_path.exists() && self.mouse_rel_path.exists() && self.mouse_abs_path.exists()
     }
 
     /// Get list of missing device paths
@@ -415,7 +435,10 @@ impl OtgBackend {
                             self.eagain_count.store(0, Ordering::Relaxed);
                             debug!("Keyboard ESHUTDOWN, closing for recovery");
                             *dev = None;
-                            Err(Self::io_error_to_hid_error(e, "Failed to write keyboard report"))
+                            Err(Self::io_error_to_hid_error(
+                                e,
+                                "Failed to write keyboard report",
+                            ))
                         }
                         Some(11) => {
                             // EAGAIN after poll - should be rare, silently drop
@@ -426,7 +449,10 @@ impl OtgBackend {
                             self.online.store(false, Ordering::Relaxed);
                             self.eagain_count.store(0, Ordering::Relaxed);
                             warn!("Keyboard write error: {}", e);
-                            Err(Self::io_error_to_hid_error(e, "Failed to write keyboard report"))
+                            Err(Self::io_error_to_hid_error(
+                                e,
+                                "Failed to write keyboard report",
+                            ))
                         }
                     }
                 }
@@ -472,7 +498,10 @@ impl OtgBackend {
                             self.eagain_count.store(0, Ordering::Relaxed);
                             debug!("Relative mouse ESHUTDOWN, closing for recovery");
                             *dev = None;
-                            Err(Self::io_error_to_hid_error(e, "Failed to write mouse report"))
+                            Err(Self::io_error_to_hid_error(
+                                e,
+                                "Failed to write mouse report",
+                            ))
                         }
                         Some(11) => {
                             // EAGAIN after poll - should be rare, silently drop
@@ -482,7 +511,10 @@ impl OtgBackend {
                             self.online.store(false, Ordering::Relaxed);
                             self.eagain_count.store(0, Ordering::Relaxed);
                             warn!("Relative mouse write error: {}", e);
-                            Err(Self::io_error_to_hid_error(e, "Failed to write mouse report"))
+                            Err(Self::io_error_to_hid_error(
+                                e,
+                                "Failed to write mouse report",
+                            ))
                         }
                     }
                 }
@@ -534,7 +566,10 @@ impl OtgBackend {
                             self.eagain_count.store(0, Ordering::Relaxed);
                             debug!("Absolute mouse ESHUTDOWN, closing for recovery");
                             *dev = None;
-                            Err(Self::io_error_to_hid_error(e, "Failed to write mouse report"))
+                            Err(Self::io_error_to_hid_error(
+                                e,
+                                "Failed to write mouse report",
+                            ))
                         }
                         Some(11) => {
                             // EAGAIN after poll - should be rare, silently drop
@@ -544,7 +579,10 @@ impl OtgBackend {
                             self.online.store(false, Ordering::Relaxed);
                             self.eagain_count.store(0, Ordering::Relaxed);
                             warn!("Absolute mouse write error: {}", e);
-                            Err(Self::io_error_to_hid_error(e, "Failed to write mouse report"))
+                            Err(Self::io_error_to_hid_error(
+                                e,
+                                "Failed to write mouse report",
+                            ))
                         }
                     }
                 }
@@ -590,7 +628,10 @@ impl OtgBackend {
                             self.online.store(false, Ordering::Relaxed);
                             debug!("Consumer control ESHUTDOWN, closing for recovery");
                             *dev = None;
-                            Err(Self::io_error_to_hid_error(e, "Failed to write consumer report"))
+                            Err(Self::io_error_to_hid_error(
+                                e,
+                                "Failed to write consumer report",
+                            ))
                         }
                         Some(11) => {
                             // EAGAIN after poll - silently drop
@@ -599,7 +640,10 @@ impl OtgBackend {
                         _ => {
                             self.online.store(false, Ordering::Relaxed);
                             warn!("Consumer control write error: {}", e);
-                            Err(Self::io_error_to_hid_error(e, "Failed to write consumer report"))
+                            Err(Self::io_error_to_hid_error(
+                                e,
+                                "Failed to write consumer report",
+                            ))
                         }
                     }
                 }
@@ -632,7 +676,10 @@ impl OtgBackend {
                 }
                 Ok(_) => Ok(None), // No data available
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-                Err(e) => Err(AppError::Internal(format!("Failed to read LED state: {}", e))),
+                Err(e) => Err(AppError::Internal(format!(
+                    "Failed to read LED state: {}",
+                    e
+                ))),
             }
         } else {
             Ok(None)
@@ -677,34 +724,55 @@ impl HidBackend for OtgBackend {
             *self.keyboard_dev.lock() = Some(file);
             info!("Keyboard device opened: {}", self.keyboard_path.display());
         } else {
-            warn!("Keyboard device not found: {}", self.keyboard_path.display());
+            warn!(
+                "Keyboard device not found: {}",
+                self.keyboard_path.display()
+            );
         }
 
         // Open relative mouse device
         if self.mouse_rel_path.exists() {
             let file = Self::open_device(&self.mouse_rel_path)?;
             *self.mouse_rel_dev.lock() = Some(file);
-            info!("Relative mouse device opened: {}", self.mouse_rel_path.display());
+            info!(
+                "Relative mouse device opened: {}",
+                self.mouse_rel_path.display()
+            );
         } else {
-            warn!("Relative mouse device not found: {}", self.mouse_rel_path.display());
+            warn!(
+                "Relative mouse device not found: {}",
+                self.mouse_rel_path.display()
+            );
         }
 
         // Open absolute mouse device
         if self.mouse_abs_path.exists() {
             let file = Self::open_device(&self.mouse_abs_path)?;
             *self.mouse_abs_dev.lock() = Some(file);
-            info!("Absolute mouse device opened: {}", self.mouse_abs_path.display());
+            info!(
+                "Absolute mouse device opened: {}",
+                self.mouse_abs_path.display()
+            );
         } else {
-            warn!("Absolute mouse device not found: {}", self.mouse_abs_path.display());
+            warn!(
+                "Absolute mouse device not found: {}",
+                self.mouse_abs_path.display()
+            );
         }
 
         // Open consumer control device (optional, may not exist on older setups)
         if self.consumer_path.exists() {
             let file = Self::open_device(&self.consumer_path)?;
             *self.consumer_dev.lock() = Some(file);
-            info!("Consumer control device opened: {}", self.consumer_path.display());
+            info!(
+                "Consumer control device opened: {}",
+                self.consumer_path.display()
+            );
         } else {
-            debug!("Consumer control device not found: {}", self.consumer_path.display());
+            debug!(
+                "Consumer control device not found: {}",
+                self.consumer_path.display()
+            );
         }
 
         // Mark as online if all devices opened successfully

@@ -50,7 +50,11 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
         vec![RESP_ERR_HID_UNAVAILABLE]
     };
 
-    if sender.send(Message::Binary(initial_response.into())).await.is_err() {
+    if sender
+        .send(Message::Binary(initial_response.into()))
+        .await
+        .is_err()
+    {
         error!("Failed to send initial HID status");
         return;
     }
@@ -66,7 +70,9 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
                         warn!("HID controller not available, ignoring message");
                     }
                     // Send error response (optional, for client awareness)
-                    let _ = sender.send(Message::Binary(vec![RESP_ERR_HID_UNAVAILABLE].into())).await;
+                    let _ = sender
+                        .send(Message::Binary(vec![RESP_ERR_HID_UNAVAILABLE].into()))
+                        .await;
                     continue;
                 }
 
@@ -81,9 +87,14 @@ async fn handle_hid_socket(socket: WebSocket, state: Arc<AppState>) {
             Ok(Message::Text(text)) => {
                 // Text messages are no longer supported
                 if log_throttler.should_log("text_message_rejected") {
-                    debug!("Received text message (not supported): {} bytes", text.len());
+                    debug!(
+                        "Received text message (not supported): {} bytes",
+                        text.len()
+                    );
                 }
-                let _ = sender.send(Message::Binary(vec![RESP_ERR_INVALID_MESSAGE].into())).await;
+                let _ = sender
+                    .send(Message::Binary(vec![RESP_ERR_INVALID_MESSAGE].into()))
+                    .await;
             }
             Ok(Message::Ping(data)) => {
                 let _ = sender.send(Message::Pong(data)).await;
@@ -142,7 +153,7 @@ async fn handle_binary_message(data: &[u8], state: &AppState) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hid::datachannel::{MSG_KEYBOARD, MSG_MOUSE, KB_EVENT_DOWN, MS_EVENT_MOVE};
+    use crate::hid::datachannel::{KB_EVENT_DOWN, MSG_KEYBOARD, MSG_MOUSE, MS_EVENT_MOVE};
 
     #[test]
     fn test_response_codes() {

@@ -42,9 +42,8 @@ impl ImageManager {
 
     /// Ensure images directory exists
     pub fn ensure_dir(&self) -> Result<()> {
-        fs::create_dir_all(&self.images_path).map_err(|e| {
-            AppError::Internal(format!("Failed to create images directory: {}", e))
-        })?;
+        fs::create_dir_all(&self.images_path)
+            .map_err(|e| AppError::Internal(format!("Failed to create images directory: {}", e)))?;
         Ok(())
     }
 
@@ -54,9 +53,9 @@ impl ImageManager {
 
         let mut images = Vec::new();
 
-        for entry in fs::read_dir(&self.images_path).map_err(|e| {
-            AppError::Internal(format!("Failed to read images directory: {}", e))
-        })? {
+        for entry in fs::read_dir(&self.images_path)
+            .map_err(|e| AppError::Internal(format!("Failed to read images directory: {}", e)))?
+        {
             let entry = entry.map_err(|e| {
                 AppError::Internal(format!("Failed to read directory entry: {}", e))
             })?;
@@ -146,9 +145,8 @@ impl ImageManager {
             )));
         }
 
-        let mut file = File::create(&path).map_err(|e| {
-            AppError::Internal(format!("Failed to create image file: {}", e))
-        })?;
+        let mut file = File::create(&path)
+            .map_err(|e| AppError::Internal(format!("Failed to create image file: {}", e)))?;
 
         file.write_all(data).map_err(|e| {
             // Try to clean up on error
@@ -193,9 +191,8 @@ impl ImageManager {
         }
 
         // Create file and copy data
-        let mut file = File::create(&path).map_err(|e| {
-            AppError::Internal(format!("Failed to create image file: {}", e))
-        })?;
+        let mut file = File::create(&path)
+            .map_err(|e| AppError::Internal(format!("Failed to create image file: {}", e)))?;
 
         let bytes_written = io::copy(reader, &mut file).map_err(|e| {
             let _ = fs::remove_file(&path);
@@ -244,9 +241,11 @@ impl ImageManager {
         let mut bytes_written: u64 = 0;
 
         // Stream chunks directly to disk
-        while let Some(chunk) = field.chunk().await.map_err(|e| {
-            AppError::Internal(format!("Failed to read upload chunk: {}", e))
-        })? {
+        while let Some(chunk) = field
+            .chunk()
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to read upload chunk: {}", e)))?
+        {
             // Check size limit
             bytes_written += chunk.len() as u64;
             if bytes_written > MAX_IMAGE_SIZE {
@@ -260,15 +259,15 @@ impl ImageManager {
             }
 
             // Write chunk to file
-            file.write_all(&chunk).await.map_err(|e| {
-                AppError::Internal(format!("Failed to write chunk: {}", e))
-            })?;
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| AppError::Internal(format!("Failed to write chunk: {}", e)))?;
         }
 
         // Flush and close file
-        file.flush().await.map_err(|e| {
-            AppError::Internal(format!("Failed to flush file: {}", e))
-        })?;
+        file.flush()
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to flush file: {}", e)))?;
         drop(file);
 
         // Move temp file to final location
@@ -279,7 +278,10 @@ impl ImageManager {
                 AppError::Internal(format!("Failed to rename temp file: {}", e))
             })?;
 
-        info!("Created image (streaming): {} ({} bytes)", name, bytes_written);
+        info!(
+            "Created image (streaming): {} ({} bytes)",
+            name, bytes_written
+        );
 
         self.get_by_name(&name)
     }
@@ -288,9 +290,8 @@ impl ImageManager {
     pub fn delete(&self, id: &str) -> Result<()> {
         let image = self.get(id)?;
 
-        fs::remove_file(&image.path).map_err(|e| {
-            AppError::Internal(format!("Failed to delete image: {}", e))
-        })?;
+        fs::remove_file(&image.path)
+            .map_err(|e| AppError::Internal(format!("Failed to delete image: {}", e)))?;
 
         info!("Deleted image: {}", image.name);
         Ok(())
@@ -304,9 +305,8 @@ impl ImageManager {
             return Err(AppError::NotFound(format!("Image not found: {}", name)));
         }
 
-        fs::remove_file(&path).map_err(|e| {
-            AppError::Internal(format!("Failed to delete image: {}", e))
-        })?;
+        fs::remove_file(&path)
+            .map_err(|e| AppError::Internal(format!("Failed to delete image: {}", e)))?;
 
         info!("Deleted image: {}", name);
         Ok(())
@@ -414,7 +414,9 @@ impl ImageManager {
         };
 
         if final_filename.is_empty() {
-            return Err(AppError::BadRequest("Could not determine filename".to_string()));
+            return Err(AppError::BadRequest(
+                "Could not determine filename".to_string(),
+            ));
         }
 
         // Check if file already exists
@@ -468,16 +470,14 @@ impl ImageManager {
         progress_callback(0, content_length);
 
         while let Some(chunk_result) = stream.next().await {
-            let chunk = chunk_result
-                .map_err(|e| AppError::Internal(format!("Download error: {}", e)))?;
+            let chunk =
+                chunk_result.map_err(|e| AppError::Internal(format!("Download error: {}", e)))?;
 
-            file.write_all(&chunk)
-                .await
-                .map_err(|e| {
-                    // Cleanup on error
-                    let _ = std::fs::remove_file(&temp_path);
-                    AppError::Internal(format!("Failed to write data: {}", e))
-                })?;
+            file.write_all(&chunk).await.map_err(|e| {
+                // Cleanup on error
+                let _ = std::fs::remove_file(&temp_path);
+                AppError::Internal(format!("Failed to write data: {}", e))
+            })?;
 
             downloaded += chunk.len() as u64;
 

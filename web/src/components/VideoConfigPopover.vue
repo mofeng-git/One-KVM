@@ -189,6 +189,7 @@ const selectedFormat = ref<string>('')
 const selectedResolution = ref<string>('')
 const selectedFps = ref<number>(30)
 const selectedBitratePreset = ref<'Speed' | 'Balanced' | 'Quality'>('Balanced')
+const isDirty = ref(false)
 
 // UI state
 const applying = ref(false)
@@ -327,6 +328,25 @@ function initializeFromCurrent() {
   selectedFormat.value = config.format
   selectedResolution.value = `${config.width}x${config.height}`
   selectedFps.value = config.fps
+  isDirty.value = false
+}
+
+function syncFromCurrentIfChanged() {
+  const config = currentConfig.value
+  const nextResolution = `${config.width}x${config.height}`
+
+  if (selectedDevice.value === config.device
+      && selectedFormat.value === config.format
+      && selectedResolution.value === nextResolution
+      && selectedFps.value === config.fps) {
+    return
+  }
+
+  selectedDevice.value = config.device
+  selectedFormat.value = config.format
+  selectedResolution.value = nextResolution
+  selectedFps.value = config.fps
+  isDirty.value = false
 }
 
 // Handle video mode change
@@ -339,6 +359,7 @@ function handleVideoModeChange(mode: unknown) {
 function handleDeviceChange(devicePath: unknown) {
   if (typeof devicePath !== 'string') return
   selectedDevice.value = devicePath
+  isDirty.value = true
 
   // Auto-select first format
   const device = devices.value.find(d => d.path === devicePath)
@@ -358,6 +379,7 @@ function handleDeviceChange(devicePath: unknown) {
 function handleFormatChange(format: unknown) {
   if (typeof format !== 'string') return
   selectedFormat.value = format
+  isDirty.value = true
 
   // Auto-select first resolution for this format
   const formatData = availableFormats.value.find(f => f.format === format)
@@ -372,6 +394,7 @@ function handleFormatChange(format: unknown) {
 function handleResolutionChange(resolution: unknown) {
   if (typeof resolution !== 'string') return
   selectedResolution.value = resolution
+  isDirty.value = true
 
   // Auto-select first FPS for this resolution
   const resolutionData = availableResolutions.value.find(
@@ -386,6 +409,7 @@ function handleResolutionChange(resolution: unknown) {
 function handleFpsChange(fps: unknown) {
   if (typeof fps !== 'string' && typeof fps !== 'number') return
   selectedFps.value = typeof fps === 'string' ? Number(fps) : fps
+  isDirty.value = true
 }
 
 // Apply bitrate preset change
@@ -427,6 +451,7 @@ async function applyVideoConfig() {
     })
 
     toast.success(t('config.applied'))
+    isDirty.value = false
     // Stream state will be updated via WebSocket system.device_info event
   } catch (e) {
     console.info('[VideoConfig] Failed to apply config:', e)
@@ -455,8 +480,17 @@ watch(() => props.open, (isOpen) => {
     loadEncoderBackend()
     // Initialize from current config
     initializeFromCurrent()
+  } else {
+    isDirty.value = false
   }
 })
+
+// Sync selected values when backend config changes (e.g., auto format switch on mode change)
+watch(currentConfig, () => {
+  if (applying.value) return
+  if (props.open && isDirty.value) return
+  syncFromCurrentIfChanged()
+}, { deep: true })
 </script>
 
 <template>

@@ -14,22 +14,20 @@ pub mod hbb {
 
 // Re-export commonly used types
 pub use hbb::rendezvous::{
-    rendezvous_message, relay_response, punch_hole_response,
-    ConnType, ConfigUpdate, FetchLocalAddr, HealthCheck, KeyExchange, LocalAddr, NatType,
-    OnlineRequest, OnlineResponse, PeerDiscovery, PunchHole, PunchHoleRequest, PunchHoleResponse,
-    PunchHoleSent, RegisterPeer, RegisterPeerResponse, RegisterPk, RegisterPkResponse,
-    RelayResponse, RendezvousMessage, RequestRelay, SoftwareUpdate, TestNatRequest,
-    TestNatResponse,
+    punch_hole_response, relay_response, rendezvous_message, ConfigUpdate, ConnType,
+    FetchLocalAddr, HealthCheck, KeyExchange, LocalAddr, NatType, OnlineRequest, OnlineResponse,
+    PeerDiscovery, PunchHole, PunchHoleRequest, PunchHoleResponse, PunchHoleSent, RegisterPeer,
+    RegisterPeerResponse, RegisterPk, RegisterPkResponse, RelayResponse, RendezvousMessage,
+    RequestRelay, SoftwareUpdate, TestNatRequest, TestNatResponse,
 };
 
 // Re-export message.proto types
 pub use hbb::message::{
-    message, misc, login_response, key_event,
-    AudioFormat, AudioFrame, Auth2FA, Clipboard, CursorData, CursorPosition, EncodedVideoFrame,
-    EncodedVideoFrames, Hash, IdPk, KeyEvent, LoginRequest, LoginResponse, MouseEvent, Misc,
-    OptionMessage, PeerInfo, PublicKey, SignedId, SupportedDecoding, VideoFrame, TestDelay,
-    Features, SupportedResolutions, WindowsSessions, Message as HbbMessage, ControlKey,
-    DisplayInfo, SupportedEncoding,
+    key_event, login_response, message, misc, AudioFormat, AudioFrame, Auth2FA, Clipboard,
+    ControlKey, CursorData, CursorPosition, DisplayInfo, EncodedVideoFrame, EncodedVideoFrames,
+    Features, Hash, IdPk, KeyEvent, LoginRequest, LoginResponse, Message as HbbMessage, Misc,
+    MouseEvent, OptionMessage, PeerInfo, PublicKey, SignedId, SupportedDecoding, SupportedEncoding,
+    SupportedResolutions, TestDelay, VideoFrame, WindowsSessions,
 };
 
 /// Helper to create a RendezvousMessage with RegisterPeer
@@ -80,7 +78,12 @@ pub fn make_punch_hole_sent(
 /// IMPORTANT: The union field should be `Id` (our device ID), NOT `Pk`.
 /// The rendezvous server will look up our registered public key using this ID,
 /// sign it with the server's private key, and set the `pk` field before forwarding to client.
-pub fn make_relay_response(uuid: &str, socket_addr: &[u8], relay_server: &str, device_id: &str) -> RendezvousMessage {
+pub fn make_relay_response(
+    uuid: &str,
+    socket_addr: &[u8],
+    relay_server: &str,
+    device_id: &str,
+) -> RendezvousMessage {
     let mut rr = RelayResponse::new();
     rr.socket_addr = socket_addr.to_vec().into();
     rr.uuid = uuid.to_string();

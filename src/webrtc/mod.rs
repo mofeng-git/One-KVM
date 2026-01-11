@@ -42,5 +42,7 @@ pub use rtp::{H264VideoTrack, H264VideoTrackConfig, OpusAudioTrack};
 pub use session::WebRtcSessionManager;
 pub use signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer, SignalingMessage};
 pub use universal_session::{UniversalSession, UniversalSessionConfig, UniversalSessionInfo};
-pub use video_track::{UniversalVideoTrack, UniversalVideoTrackConfig, VideoCodec, VideoTrackStats};
+pub use video_track::{
+    UniversalVideoTrack, UniversalVideoTrackConfig, VideoCodec, VideoTrackStats,
+};
 pub use webrtc_streamer::{SessionInfo, WebRtcStreamer, WebRtcStreamerConfig, WebRtcStreamerStats};

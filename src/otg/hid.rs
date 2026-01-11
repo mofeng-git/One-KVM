@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
-use super::configfs::{create_dir, create_symlink, remove_dir, remove_file, write_bytes, write_file};
+use super::configfs::{
+    create_dir, create_symlink, remove_dir, remove_file, write_bytes, write_file,
+};
 use super::function::{FunctionMeta, GadgetFunction};
 use super::report_desc::{CONSUMER_CONTROL, KEYBOARD, MOUSE_ABSOLUTE, MOUSE_RELATIVE};
 use crate::error::Result;
@@ -39,20 +41,20 @@ impl HidFunctionType {
     /// Get HID protocol
     pub fn protocol(&self) -> u8 {
         match self {
-            HidFunctionType::Keyboard => 1,         // Keyboard
-            HidFunctionType::MouseRelative => 2,    // Mouse
-            HidFunctionType::MouseAbsolute => 2,    // Mouse
-            HidFunctionType::ConsumerControl => 0,  // None
+            HidFunctionType::Keyboard => 1,        // Keyboard
+            HidFunctionType::MouseRelative => 2,   // Mouse
+            HidFunctionType::MouseAbsolute => 2,   // Mouse
+            HidFunctionType::ConsumerControl => 0, // None
         }
     }
 
     /// Get HID subclass
     pub fn subclass(&self) -> u8 {
         match self {
-            HidFunctionType::Keyboard => 1,         // Boot interface
-            HidFunctionType::MouseRelative => 1,    // Boot interface
-            HidFunctionType::MouseAbsolute => 0,    // No boot interface
-            HidFunctionType::ConsumerControl => 0,  // No boot interface
+            HidFunctionType::Keyboard => 1,        // Boot interface
+            HidFunctionType::MouseRelative => 1,   // Boot interface
+            HidFunctionType::MouseAbsolute => 0,   // No boot interface
+            HidFunctionType::ConsumerControl => 0, // No boot interface
         }
     }
 
@@ -169,14 +171,27 @@ impl GadgetFunction for HidFunction {
         create_dir(&func_path)?;
 
         // Set HID parameters
-        write_file(&func_path.join("protocol"), &self.func_type.protocol().to_string())?;
-        write_file(&func_path.join("subclass"), &self.func_type.subclass().to_string())?;
-        write_file(&func_path.join("report_length"), &self.func_type.report_length().to_string())?;
+        write_file(
+            &func_path.join("protocol"),
+            &self.func_type.protocol().to_string(),
+        )?;
+        write_file(
+            &func_path.join("subclass"),
+            &self.func_type.subclass().to_string(),
+        )?;
+        write_file(
+            &func_path.join("report_length"),
+            &self.func_type.report_length().to_string(),
+        )?;
 
         // Write report descriptor
         write_bytes(&func_path.join("report_desc"), self.func_type.report_desc())?;
 
-        debug!("Created HID function: {} at {}", self.name(), func_path.display());
+        debug!(
+            "Created HID function: {} at {}",
+            self.name(),
+            func_path.display()
+        );
         Ok(())
     }
 

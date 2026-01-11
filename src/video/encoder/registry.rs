@@ -264,10 +264,7 @@ impl EncoderRegistry {
             if let Some(encoder) = AvailableEncoder::from_codec_info(codec_info) {
                 debug!(
                     "Detected encoder: {} ({}) - {} priority={}",
-                    encoder.codec_name,
-                    encoder.format,
-                    encoder.backend,
-                    encoder.priority
+                    encoder.codec_name, encoder.format, encoder.backend, encoder.priority
                 );
 
                 self.encoders
@@ -336,13 +333,15 @@ impl EncoderRegistry {
         format: VideoEncoderType,
         hardware_only: bool,
     ) -> Option<&AvailableEncoder> {
-        self.encoders.get(&format)?.iter().find(|e| {
-            if hardware_only {
-                e.is_hardware
-            } else {
-                true
-            }
-        })
+        self.encoders.get(&format)?.iter().find(
+            |e| {
+                if hardware_only {
+                    e.is_hardware
+                } else {
+                    true
+                }
+            },
+        )
     }
 
     /// Get all encoders for a format
@@ -523,9 +522,6 @@ mod tests {
 
         // Should have detected at least H264 (software fallback available)
         println!("Available formats: {:?}", registry.available_formats(false));
-        println!(
-            "Selectable formats: {:?}",
-            registry.selectable_formats()
-        );
+        println!("Selectable formats: {:?}", registry.selectable_formats());
     }
 }

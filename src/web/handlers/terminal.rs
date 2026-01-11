@@ -14,9 +14,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio_tungstenite::tungstenite::{
-    client::IntoClientRequest,
-    http::HeaderValue,
-    Message as TungsteniteMessage,
+    client::IntoClientRequest, http::HeaderValue, Message as TungsteniteMessage,
 };
 
 use crate::error::AppError;
@@ -60,10 +58,9 @@ async fn handle_terminal_websocket(client_ws: WebSocket, query_string: String) {
         }
     };
 
-    request.headers_mut().insert(
-        "Sec-WebSocket-Protocol",
-        HeaderValue::from_static("tty"),
-    );
+    request
+        .headers_mut()
+        .insert("Sec-WebSocket-Protocol", HeaderValue::from_static("tty"));
 
     // Create WebSocket connection to ttyd
     let ws_stream = match tokio_tungstenite::client_async(request, unix_stream).await {
@@ -143,7 +140,11 @@ pub async fn terminal_proxy(
 
     // Build HTTP request to forward
     let method = req.method().as_str();
-    let query = req.uri().query().map(|q| format!("?{}", q)).unwrap_or_default();
+    let query = req
+        .uri()
+        .query()
+        .map(|q| format!("?{}", q))
+        .unwrap_or_default();
     let uri_path = if path_str.is_empty() {
         format!("/api/terminal/{}", query)
     } else {
@@ -203,7 +204,8 @@ pub async fn terminal_proxy(
         .unwrap_or(200);
 
     // Build response
-    let mut builder = Response::builder().status(StatusCode::from_u16(status_code).unwrap_or(StatusCode::OK));
+    let mut builder =
+        Response::builder().status(StatusCode::from_u16(status_code).unwrap_or(StatusCode::OK));
 
     // Forward response headers
     for line in headers_part.lines().skip(1) {

@@ -225,15 +225,19 @@ fn link_system() -> bool {
     }
 
     // Then standard paths
-    lib_paths.extend([
-        "/usr/local/lib",                 // Custom builds
-        "/usr/local/lib64",
-        "/usr/lib",
-        "/usr/lib64",
-        "/usr/lib/x86_64-linux-gnu",      // Debian/Ubuntu x86_64
-        "/usr/lib/aarch64-linux-gnu",     // Debian/Ubuntu ARM64
-        "/usr/lib/arm-linux-gnueabihf",   // Debian/Ubuntu ARMv7
-    ].iter().map(|s| s.to_string()));
+    lib_paths.extend(
+        [
+            "/usr/local/lib", // Custom builds
+            "/usr/local/lib64",
+            "/usr/lib",
+            "/usr/lib64",
+            "/usr/lib/x86_64-linux-gnu",    // Debian/Ubuntu x86_64
+            "/usr/lib/aarch64-linux-gnu",   // Debian/Ubuntu ARM64
+            "/usr/lib/arm-linux-gnueabihf", // Debian/Ubuntu ARMv7
+        ]
+        .iter()
+        .map(|s| s.to_string()),
+    );
 
     for path in &lib_paths {
         let lib_path = Path::new(path);
@@ -245,7 +249,10 @@ fn link_system() -> bool {
             println!("cargo:rustc-link-search=native={}", path);
             println!("cargo:rustc-link-lib=static=yuv");
             println!("cargo:rustc-link-lib=stdc++");
-            println!("cargo:info=Using system libyuv from {} (static linking)", path);
+            println!(
+                "cargo:info=Using system libyuv from {} (static linking)",
+                path
+            );
             return true;
         }
 
@@ -257,7 +264,10 @@ fn link_system() -> bool {
             #[cfg(target_os = "linux")]
             println!("cargo:rustc-link-lib=stdc++");
 
-            println!("cargo:info=Using system libyuv from {} (dynamic linking)", path);
+            println!(
+                "cargo:info=Using system libyuv from {} (dynamic linking)",
+                path
+            );
             return true;
         }
     }

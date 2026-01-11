@@ -126,11 +126,10 @@ impl ConfigStore {
 
     /// Load configuration from database
     async fn load_config(pool: &Pool<Sqlite>) -> Result<AppConfig> {
-        let row: Option<(String,)> = sqlx::query_as(
-            "SELECT value FROM config WHERE key = 'app_config'"
-        )
-        .fetch_optional(pool)
-        .await?;
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT value FROM config WHERE key = 'app_config'")
+                .fetch_optional(pool)
+                .await?;
 
         match row {
             Some((json,)) => {
@@ -245,10 +244,13 @@ mod tests {
         assert!(!config.initialized);
 
         // Update config
-        store.update(|c| {
-            c.initialized = true;
-            c.web.http_port = 9000;
-        }).await.unwrap();
+        store
+            .update(|c| {
+                c.initialized = true;
+                c.web.http_port = 9000;
+            })
+            .await
+            .unwrap();
 
         // Verify update
         let config = store.get();

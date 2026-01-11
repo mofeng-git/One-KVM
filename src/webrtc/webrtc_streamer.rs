@@ -41,12 +41,14 @@ use crate::audio::shared_pipeline::{SharedAudioPipeline, SharedAudioPipelineConf
 use crate::audio::{AudioController, OpusFrame};
 use crate::error::{AppError, Result};
 use crate::hid::HidController;
-use crate::video::encoder::registry::VideoEncoderType;
 use crate::video::encoder::registry::EncoderBackend;
+use crate::video::encoder::registry::VideoEncoderType;
 use crate::video::encoder::VideoCodecType;
 use crate::video::format::{PixelFormat, Resolution};
 use crate::video::frame::VideoFrame;
-use crate::video::shared_video_pipeline::{SharedVideoPipeline, SharedVideoPipelineConfig, SharedVideoPipelineStats};
+use crate::video::shared_video_pipeline::{
+    SharedVideoPipeline, SharedVideoPipelineConfig, SharedVideoPipelineStats,
+};
 
 use super::config::{TurnServer, WebRtcConfig};
 use super::signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
@@ -489,7 +491,9 @@ impl WebRtcStreamer {
                 }
             }
         } else {
-            info!("No video pipeline exists yet, frame source will be used when pipeline is created");
+            info!(
+                "No video pipeline exists yet, frame source will be used when pipeline is created"
+            );
         }
     }
 
@@ -517,24 +521,21 @@ impl WebRtcStreamer {
     /// Only restarts the encoding pipeline if configuration actually changed.
     /// This allows multiple consumers (WebRTC, RustDesk) to share the same pipeline
     /// without interrupting each other when they call this method with the same config.
-    pub async fn update_video_config(
-        &self,
-        resolution: Resolution,
-        format: PixelFormat,
-        fps: u32,
-    ) {
+    pub async fn update_video_config(&self, resolution: Resolution, format: PixelFormat, fps: u32) {
         // Check if configuration actually changed
         let config = self.config.read().await;
-        let config_changed = config.resolution != resolution
-            || config.input_format != format
-            || config.fps != fps;
+        let config_changed =
+            config.resolution != resolution || config.input_format != format || config.fps != fps;
         drop(config);
 
         if !config_changed {
             // Configuration unchanged, no need to restart pipeline
             trace!(
                 "Video config unchanged: {}x{} {:?} @ {} fps",
-                resolution.width, resolution.height, format, fps
+                resolution.width,
+                resolution.height,
+                format,
+                fps
             );
             return;
         }
@@ -554,7 +555,10 @@ impl WebRtcStreamer {
         // Close all existing sessions - they need to reconnect
         let session_count = self.close_all_sessions().await;
         if session_count > 0 {
-            info!("Closed {} existing sessions due to config change", session_count);
+            info!(
+                "Closed {} existing sessions due to config change",
+                session_count
+            );
         }
 
         // Update config (preserve user-configured bitrate)
@@ -581,17 +585,17 @@ impl WebRtcStreamer {
         // Close all existing sessions - they need to reconnect with new encoder
         let session_count = self.close_all_sessions().await;
         if session_count > 0 {
-            info!("Closed {} existing sessions due to encoder backend change", session_count);
+            info!(
+                "Closed {} existing sessions due to encoder backend change",
+                session_count
+            );
         }
 
         // Update config
         let mut config = self.config.write().await;
         config.encoder_backend = encoder_backend;
 
-        info!(
-            "WebRTC encoder backend updated: {:?}",
-            encoder_backend
-        );
+        info!("WebRTC encoder backend updated: {:?}", encoder_backend);
     }
 
     /// Check if current encoder configuration uses hardware encoding
@@ -694,7 +698,11 @@ impl WebRtcStreamer {
         let codec = *self.video_codec.read().await;
 
         // Ensure video pipeline is running
-        let frame_tx = self.video_frame_tx.read().await.clone()
+        let frame_tx = self
+            .video_frame_tx
+            .read()
+            .await
+            .clone()
             .ok_or_else(|| AppError::VideoError("No video frame source".to_string()))?;
         let pipeline = self.ensure_video_pipeline(frame_tx).await?;
 
@@ -729,15 +737,20 @@ impl WebRtcStreamer {
         // Request keyframe after ICE connection is established (via callback)
         let pipeline_for_callback = pipeline.clone();
         let session_id_for_callback = session_id.clone();
-        session.start_from_video_pipeline(pipeline.subscribe(), move || {
-            // Spawn async task to request keyframe
-            let pipeline = pipeline_for_callback;
-            let sid = session_id_for_callback;
-            tokio::spawn(async move {
-                info!("Requesting keyframe for session {} after ICE connected", sid);
-                pipeline.request_keyframe().await;
-            });
-        }).await;
+        session
+            .start_from_video_pipeline(pipeline.subscribe(), move || {
+                // Spawn async task to request keyframe
+                let pipeline = pipeline_for_callback;
+                let sid = session_id_for_callback;
+                tokio::spawn(async move {
+                    info!(
+                        "Requesting keyframe for session {} after ICE connected",
+                        sid
+                    );
+                    pipeline.request_keyframe().await;
+                });
+            })
+            .await;
 
         // Start audio if enabled
         if session_config.audio_enabled {
@@ -863,7 +876,9 @@ impl WebRtcStreamer {
                 .filter(|(_, s)| {
                     matches!(
                         s.state(),
-                        ConnectionState::Closed | ConnectionState::Failed | ConnectionState::Disconnected
+                        ConnectionState::Closed
+                            | ConnectionState::Failed
+                            | ConnectionState::Disconnected
                     )
                 })
                 .map(|(id, _)| id.clone())
@@ -967,10 +982,7 @@ impl WebRtcStreamer {
         };
 
         if pipeline_running {
-            info!(
-                "Restarting video pipeline to apply new bitrate: {}",
-                preset
-            );
+            info!("Restarting video pipeline to apply new bitrate: {}", preset);
 
             // Save video_frame_tx BEFORE stopping pipeline (monitor task will clear it)
             let saved_frame_tx = self.video_frame_tx.read().await.clone();
@@ -1005,13 +1017,18 @@ impl WebRtcStreamer {
                             info!("Reconnecting session {} to new pipeline", session_id);
                             let pipeline_for_callback = pipeline.clone();
                             let sid = session_id.clone();
-                            session.start_from_video_pipeline(pipeline.subscribe(), move || {
-                                let pipeline = pipeline_for_callback;
-                                tokio::spawn(async move {
-                                    info!("Requesting keyframe for session {} after reconnect", sid);
-                                    pipeline.request_keyframe().await;
-                                });
-                            }).await;
+                            session
+                                .start_from_video_pipeline(pipeline.subscribe(), move || {
+                                    let pipeline = pipeline_for_callback;
+                                    tokio::spawn(async move {
+                                        info!(
+                                            "Requesting keyframe for session {} after reconnect",
+                                            sid
+                                        );
+                                        pipeline.request_keyframe().await;
+                                    });
+                                })
+                                .await;
                         }
                     }
 

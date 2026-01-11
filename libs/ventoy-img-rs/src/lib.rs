@@ -45,4 +45,4 @@ pub use error::{Result, VentoyError};
 pub use exfat::FileInfo;
 pub use image::VentoyImage;
 pub use partition::{parse_size, PartitionLayout};
-pub use resources::{init_resources, get_resource_dir, is_initialized, required_files};
+pub use resources::{get_resource_dir, init_resources, is_initialized, required_files};

@@ -102,8 +102,14 @@ impl HidController {
                 info!("Creating OTG HID backend from device paths");
                 Box::new(otg::OtgBackend::from_handles(handles)?)
             }
-            HidBackendType::Ch9329 { ref port, baud_rate } => {
-                info!("Initializing CH9329 HID backend on {} @ {} baud", port, baud_rate);
+            HidBackendType::Ch9329 {
+                ref port,
+                baud_rate,
+            } => {
+                info!(
+                    "Initializing CH9329 HID backend on {} @ {} baud",
+                    port, baud_rate
+                );
                 Box::new(ch9329::Ch9329Backend::with_baud_rate(port, baud_rate)?)
             }
             HidBackendType::None => {
@@ -157,16 +163,25 @@ impl HidController {
                         // Report error to monitor, but skip temporary EAGAIN retries
                         // - "eagain_retry": within threshold, just temporary busy
                         // - "eagain": exceeded threshold, report as error
-                        if let AppError::HidError { ref backend, ref reason, ref error_code } = e {
+                        if let AppError::HidError {
+                            ref backend,
+                            ref reason,
+                            ref error_code,
+                        } = e
+                        {
                             if error_code != "eagain_retry" {
-                                self.monitor.report_error(backend, None, reason, error_code).await;
+                                self.monitor
+                                    .report_error(backend, None, reason, error_code)
+                                    .await;
                             }
                         }
                         Err(e)
                     }
                 }
             }
-            None => Err(AppError::BadRequest("HID backend not available".to_string())),
+            None => Err(AppError::BadRequest(
+                "HID backend not available".to_string(),
+            )),
         }
     }
 
@@ -188,16 +203,25 @@ impl HidController {
                         // Report error to monitor, but skip temporary EAGAIN retries
                         // - "eagain_retry": within threshold, just temporary busy
                         // - "eagain": exceeded threshold, report as error
-                        if let AppError::HidError { ref backend, ref reason, ref error_code } = e {
+                        if let AppError::HidError {
+                            ref backend,
+                            ref reason,
+                            ref error_code,
+                        } = e
+                        {
                             if error_code != "eagain_retry" {
-                                self.monitor.report_error(backend, None, reason, error_code).await;
+                                self.monitor
+                                    .report_error(backend, None, reason, error_code)
+                                    .await;
                             }
                         }
                         Err(e)
                     }
                 }
             }
-            None => Err(AppError::BadRequest("HID backend not available".to_string())),
+            None => Err(AppError::BadRequest(
+                "HID backend not available".to_string(),
+            )),
         }
     }
 
@@ -205,26 +229,33 @@ impl HidController {
     pub async fn send_consumer(&self, event: ConsumerEvent) -> Result<()> {
         let backend = self.backend.read().await;
         match backend.as_ref() {
-            Some(b) => {
-                match b.send_consumer(event).await {
-                    Ok(_) => {
-                        if self.monitor.is_error().await {
-                            let backend_type = self.backend_type.read().await;
-                            self.monitor.report_recovered(backend_type.name_str()).await;
-                        }
-                        Ok(())
+            Some(b) => match b.send_consumer(event).await {
+                Ok(_) => {
+                    if self.monitor.is_error().await {
+                        let backend_type = self.backend_type.read().await;
+                        self.monitor.report_recovered(backend_type.name_str()).await;
                     }
-                    Err(e) => {
-                        if let AppError::HidError { ref backend, ref reason, ref error_code } = e {
-                            if error_code != "eagain_retry" {
-                                self.monitor.report_error(backend, None, reason, error_code).await;
-                            }
-                        }
-                        Err(e)
-                    }
+                    Ok(())
                 }
-            }
-            None => Err(AppError::BadRequest("HID backend not available".to_string())),
+                Err(e) => {
+                    if let AppError::HidError {
+                        ref backend,
+                        ref reason,
+                        ref error_code,
+                    } = e
+                    {
+                        if error_code != "eagain_retry" {
+                            self.monitor
+                                .report_error(backend, None, reason, error_code)
+                                .await;
+                        }
+                    }
+                    Err(e)
+                }
+            },
+            None => Err(AppError::BadRequest(
+                "HID backend not available".to_string(),
+            )),
         }
     }
 
@@ -269,9 +300,9 @@ impl HidController {
 
         // Include error information from monitor
         let (error, error_code) = match self.monitor.status().await {
-            HidHealthStatus::Error { reason, error_code, .. } => {
-                (Some(reason), Some(error_code))
-            }
+            HidHealthStatus::Error {
+                reason, error_code, ..
+            } => (Some(reason), Some(error_code)),
             _ => (None, None),
         };
 
@@ -320,7 +351,7 @@ impl HidController {
                     None => {
                         warn!("OTG backend requires OtgService, but it's not available");
                         return Err(AppError::Config(
-                            "OTG backend not available (OtgService missing)".to_string()
+                            "OTG backend not available (OtgService missing)".to_string(),
                         ));
                     }
                 };
@@ -341,7 +372,10 @@ impl HidController {
                                         warn!("Failed to initialize OTG backend: {}", e);
                                         // Cleanup: disable HID in OtgService
                                         if let Err(e2) = otg_service.disable_hid().await {
-                                            warn!("Failed to cleanup HID after init failure: {}", e2);
+                                            warn!(
+                                                "Failed to cleanup HID after init failure: {}",
+                                                e2
+                                            );
                                         }
                                         None
                                     }
@@ -363,8 +397,14 @@ impl HidController {
                     }
                 }
             }
-            HidBackendType::Ch9329 { ref port, baud_rate } => {
-                info!("Initializing CH9329 HID backend on {} @ {} baud", port, baud_rate);
+            HidBackendType::Ch9329 {
+                ref port,
+                baud_rate,
+            } => {
+                info!(
+                    "Initializing CH9329 HID backend on {} @ {} baud",
+                    port, baud_rate
+                );
                 match ch9329::Ch9329Backend::with_baud_rate(port, baud_rate) {
                     Ok(b) => {
                         let boxed = Box::new(b);

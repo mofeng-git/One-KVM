@@ -341,12 +341,7 @@ pub struct MouseReport {
 impl MouseReport {
     /// Convert to bytes for USB HID (relative mouse)
     pub fn to_bytes_relative(&self) -> [u8; 4] {
-        [
-            self.buttons,
-            self.x as u8,
-            self.y as u8,
-            self.wheel as u8,
-        ]
+        [self.buttons, self.x as u8, self.y as u8, self.wheel as u8]
     }
 
     /// Convert to bytes for USB HID (absolute mouse)

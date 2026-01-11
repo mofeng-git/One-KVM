@@ -10,8 +10,8 @@ use typeshare::typeshare;
 
 use crate::error::{AppError, Result};
 use crate::extensions::{
-    EasytierConfig, EasytierInfo, ExtensionId, ExtensionInfo, ExtensionLogs,
-    ExtensionsStatus, GostcConfig, GostcInfo, TtydConfig, TtydInfo,
+    EasytierConfig, EasytierInfo, ExtensionId, ExtensionInfo, ExtensionLogs, ExtensionsStatus,
+    GostcConfig, GostcInfo, TtydConfig, TtydInfo,
 };
 use crate::state::AppState;
 
@@ -108,9 +108,7 @@ pub async fn stop_extension(
     let mgr = &state.extensions;
 
     // Stop the extension
-    mgr.stop(ext_id)
-        .await
-        .map_err(|e| AppError::Internal(e))?;
+    mgr.stop(ext_id).await.map_err(|e| AppError::Internal(e))?;
 
     // Return updated status
     Ok(Json(ExtensionInfo {

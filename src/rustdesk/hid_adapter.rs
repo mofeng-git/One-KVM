@@ -2,13 +2,13 @@
 //!
 //! Converts RustDesk HID events (KeyEvent, MouseEvent) to One-KVM HID events.
 
-use protobuf::Enum;
-use crate::hid::{
-    KeyboardEvent, KeyboardModifiers, KeyEventType,
-    MouseButton, MouseEvent as OneKvmMouseEvent, MouseEventType,
-};
-use super::protocol::{KeyEvent, MouseEvent, ControlKey};
 use super::protocol::hbb::message::key_event as ke_union;
+use super::protocol::{ControlKey, KeyEvent, MouseEvent};
+use crate::hid::{
+    KeyEventType, KeyboardEvent, KeyboardModifiers, MouseButton, MouseEvent as OneKvmMouseEvent,
+    MouseEventType,
+};
+use protobuf::Enum;
 
 /// Mouse event types from RustDesk protocol
 /// mask = (button << 3) | event_type
@@ -32,7 +32,11 @@ pub mod mouse_button {
 /// Convert RustDesk MouseEvent to One-KVM MouseEvent(s)
 /// Returns a Vec because a single RustDesk event may need multiple One-KVM events
 /// (e.g., move + button + scroll)
-pub fn convert_mouse_event(event: &MouseEvent, screen_width: u32, screen_height: u32) -> Vec<OneKvmMouseEvent> {
+pub fn convert_mouse_event(
+    event: &MouseEvent,
+    screen_width: u32,
+    screen_height: u32,
+) -> Vec<OneKvmMouseEvent> {
     let mut events = Vec::new();
 
     // RustDesk uses absolute coordinates
@@ -243,10 +247,10 @@ fn parse_modifiers(event: &KeyEvent) -> KeyboardModifiers {
 /// Convert RustDesk ControlKey to USB HID usage code
 fn control_key_to_hid(key: i32) -> Option<u8> {
     match key {
-        x if x == ControlKey::Alt as i32 => Some(0xE2),      // Left Alt
+        x if x == ControlKey::Alt as i32 => Some(0xE2), // Left Alt
         x if x == ControlKey::Backspace as i32 => Some(0x2A),
         x if x == ControlKey::CapsLock as i32 => Some(0x39),
-        x if x == ControlKey::Control as i32 => Some(0xE0),  // Left Ctrl
+        x if x == ControlKey::Control as i32 => Some(0xE0), // Left Ctrl
         x if x == ControlKey::Delete as i32 => Some(0x4C),
         x if x == ControlKey::DownArrow as i32 => Some(0x51),
         x if x == ControlKey::End as i32 => Some(0x4D),
@@ -265,12 +269,12 @@ fn control_key_to_hid(key: i32) -> Option<u8> {
         x if x == ControlKey::F12 as i32 => Some(0x45),
         x if x == ControlKey::Home as i32 => Some(0x4A),
         x if x == ControlKey::LeftArrow as i32 => Some(0x50),
-        x if x == ControlKey::Meta as i32 => Some(0xE3),     // Left GUI/Windows
+        x if x == ControlKey::Meta as i32 => Some(0xE3), // Left GUI/Windows
         x if x == ControlKey::PageDown as i32 => Some(0x4E),
         x if x == ControlKey::PageUp as i32 => Some(0x4B),
         x if x == ControlKey::Return as i32 => Some(0x28),
         x if x == ControlKey::RightArrow as i32 => Some(0x4F),
-        x if x == ControlKey::Shift as i32 => Some(0xE1),    // Left Shift
+        x if x == ControlKey::Shift as i32 => Some(0xE1), // Left Shift
         x if x == ControlKey::Space as i32 => Some(0x2C),
         x if x == ControlKey::Tab as i32 => Some(0x2B),
         x if x == ControlKey::UpArrow as i32 => Some(0x52),
@@ -330,7 +334,7 @@ fn ascii_to_hid(ascii: u32) -> Option<u8> {
             Some((ascii - 65 + 0x04) as u8)
         }
         // Numbers 0-9 (ASCII 48-57)
-        48 => Some(0x27), // 0
+        48 => Some(0x27),                           // 0
         49..=57 => Some((ascii - 49 + 0x1E) as u8), // 1-9
         // Common punctuation
         32 => Some(0x2C),  // Space
@@ -341,17 +345,17 @@ fn ascii_to_hid(ascii: u32) -> Option<u8> {
         8 => Some(0x2A),   // Backspace
         127 => Some(0x4C), // Delete
         // Symbols (US keyboard layout)
-        45 => Some(0x2D),  // -
-        61 => Some(0x2E),  // =
-        91 => Some(0x2F),  // [
-        93 => Some(0x30),  // ]
-        92 => Some(0x31),  // \
-        59 => Some(0x33),  // ;
-        39 => Some(0x34),  // '
-        96 => Some(0x35),  // `
-        44 => Some(0x36),  // ,
-        46 => Some(0x37),  // .
-        47 => Some(0x38),  // /
+        45 => Some(0x2D), // -
+        61 => Some(0x2E), // =
+        91 => Some(0x2F), // [
+        93 => Some(0x30), // ]
+        92 => Some(0x31), // \
+        59 => Some(0x33), // ;
+        39 => Some(0x34), // '
+        96 => Some(0x35), // `
+        44 => Some(0x36), // ,
+        46 => Some(0x37), // .
+        47 => Some(0x38), // /
         _ => None,
     }
 }
@@ -394,10 +398,10 @@ fn windows_vk_to_hid(vk: u32) -> Option<u8> {
             })
         }
         // Numbers 0-9 (VK_0=0x30 to VK_9=0x39)
-        0x30 => Some(0x27), // 0
+        0x30 => Some(0x27),                            // 0
         0x31..=0x39 => Some((vk - 0x31 + 0x1E) as u8), // 1-9
         // Numpad 0-9 (VK_NUMPAD0=0x60 to VK_NUMPAD9=0x69)
-        0x60 => Some(0x62), // Numpad 0
+        0x60 => Some(0x62),                            // Numpad 0
         0x61..=0x69 => Some((vk - 0x61 + 0x59) as u8), // Numpad 1-9
         // Numpad operators
         0x6A => Some(0x55), // Numpad *
@@ -451,7 +455,7 @@ fn x11_keycode_to_hid(keycode: u32) -> Option<u8> {
     match keycode {
         // Numbers: X11 keycode 10="1", 11="2", ..., 18="9", 19="0"
         10..=18 => Some((keycode - 10 + 0x1E) as u8), // 1-9
-        19 => Some(0x27), // 0
+        19 => Some(0x27),                             // 0
         // Punctuation
         20 => Some(0x2D), // -
         21 => Some(0x2E), // =
@@ -533,7 +537,9 @@ mod tests {
         let events = convert_mouse_event(&event, 1920, 1080);
         assert!(events.len() >= 2);
         // Should have a button down event
-        assert!(events.iter().any(|e| e.event_type == MouseEventType::Down && e.button == Some(MouseButton::Left)));
+        assert!(events
+            .iter()
+            .any(|e| e.event_type == MouseEventType::Down && e.button == Some(MouseButton::Left)));
     }
 
     #[test]
@@ -542,7 +548,9 @@ mod tests {
         let mut key_event = KeyEvent::new();
         key_event.down = true;
         key_event.press = false;
-        key_event.union = Some(ke_union::Union::ControlKey(EnumOrUnknown::new(ControlKey::Return)));
+        key_event.union = Some(ke_union::Union::ControlKey(EnumOrUnknown::new(
+            ControlKey::Return,
+        )));
 
         let result = convert_key_event(&key_event);
         assert!(result.is_some());

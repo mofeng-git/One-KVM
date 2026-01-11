@@ -21,9 +21,9 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, trace};
 use webrtc::media::io::h264_reader::H264Reader;
 use webrtc::media::Sample;
+use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use webrtc::track::track_local::TrackLocal;
-use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 
 use crate::error::{AppError, Result};
 use crate::video::format::Resolution;
@@ -168,7 +168,12 @@ impl H264VideoTrack {
     /// * `data` - H264 Annex B encoded frame data
     /// * `duration` - Frame duration (typically 1/fps seconds)
     /// * `is_keyframe` - Whether this is a keyframe (IDR frame)
-    pub async fn write_frame(&self, data: &[u8], _duration: Duration, is_keyframe: bool) -> Result<()> {
+    pub async fn write_frame(
+        &self,
+        data: &[u8],
+        _duration: Duration,
+        is_keyframe: bool,
+    ) -> Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -324,9 +329,9 @@ impl H264VideoTrack {
         let mut payloader = self.payloader.lock().await;
         let bytes = Bytes::copy_from_slice(data);
 
-        payloader.payload(mtu, &bytes).map_err(|e| {
-            AppError::VideoError(format!("H264 packetization failed: {}", e))
-        })
+        payloader
+            .payload(mtu, &bytes)
+            .map_err(|e| AppError::VideoError(format!("H264 packetization failed: {}", e)))
     }
 
     /// Get configuration
@@ -423,7 +428,10 @@ impl OpusAudioTrack {
                 let mut stats = self.stats.lock().await;
                 stats.errors += 1;
                 error!("Failed to write Opus sample: {}", e);
-                Err(AppError::WebRtcError(format!("Failed to write audio sample: {}", e)))
+                Err(AppError::WebRtcError(format!(
+                    "Failed to write audio sample: {}",
+                    e
+                )))
             }
         }
     }

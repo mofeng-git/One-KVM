@@ -1,9 +1,9 @@
-use serde::Deserialize;
-use typeshare::typeshare;
 use crate::config::*;
 use crate::error::AppError;
 use crate::rustdesk::config::RustDeskConfig;
 use crate::video::encoder::BitratePreset;
+use serde::Deserialize;
+use typeshare::typeshare;
 
 // ===== Video Config =====
 #[typeshare]
@@ -21,12 +21,16 @@ impl VideoConfigUpdate {
     pub fn validate(&self) -> crate::error::Result<()> {
         if let Some(width) = self.width {
             if !(320..=7680).contains(&width) {
-                return Err(AppError::BadRequest("Invalid width: must be 320-7680".into()));
+                return Err(AppError::BadRequest(
+                    "Invalid width: must be 320-7680".into(),
+                ));
             }
         }
         if let Some(height) = self.height {
             if !(240..=4320).contains(&height) {
-                return Err(AppError::BadRequest("Invalid height: must be 240-4320".into()));
+                return Err(AppError::BadRequest(
+                    "Invalid height: must be 240-4320".into(),
+                ));
             }
         }
         if let Some(fps) = self.fps {
@@ -36,7 +40,9 @@ impl VideoConfigUpdate {
         }
         if let Some(quality) = self.quality {
             if !(1..=100).contains(&quality) {
-                return Err(AppError::BadRequest("Invalid quality: must be 1-100".into()));
+                return Err(AppError::BadRequest(
+                    "Invalid quality: must be 1-100".into(),
+                ));
             }
         }
         Ok(())
@@ -126,7 +132,8 @@ impl StreamConfigUpdate {
         if let Some(ref stun) = self.stun_server {
             if !stun.is_empty() && !stun.starts_with("stun:") {
                 return Err(AppError::BadRequest(
-                    "STUN server must start with 'stun:' (e.g., stun:stun.l.google.com:19302)".into(),
+                    "STUN server must start with 'stun:' (e.g., stun:stun.l.google.com:19302)"
+                        .into(),
                 ));
             }
         }
@@ -153,16 +160,32 @@ impl StreamConfigUpdate {
         }
         // STUN/TURN settings - empty string means clear (use public servers), Some("value") means set custom
         if let Some(ref stun) = self.stun_server {
-            config.stun_server = if stun.is_empty() { None } else { Some(stun.clone()) };
+            config.stun_server = if stun.is_empty() {
+                None
+            } else {
+                Some(stun.clone())
+            };
         }
         if let Some(ref turn) = self.turn_server {
-            config.turn_server = if turn.is_empty() { None } else { Some(turn.clone()) };
+            config.turn_server = if turn.is_empty() {
+                None
+            } else {
+                Some(turn.clone())
+            };
         }
         if let Some(ref username) = self.turn_username {
-            config.turn_username = if username.is_empty() { None } else { Some(username.clone()) };
+            config.turn_username = if username.is_empty() {
+                None
+            } else {
+                Some(username.clone())
+            };
         }
         if let Some(ref password) = self.turn_password {
-            config.turn_password = if password.is_empty() { None } else { Some(password.clone()) };
+            config.turn_password = if password.is_empty() {
+                None
+            } else {
+                Some(password.clone())
+            };
         }
     }
 }
@@ -185,19 +208,25 @@ impl OtgDescriptorConfigUpdate {
         // Validate manufacturer string length
         if let Some(ref s) = self.manufacturer {
             if s.len() > 126 {
-                return Err(AppError::BadRequest("Manufacturer string too long (max 126 chars)".into()));
+                return Err(AppError::BadRequest(
+                    "Manufacturer string too long (max 126 chars)".into(),
+                ));
             }
         }
         // Validate product string length
         if let Some(ref s) = self.product {
             if s.len() > 126 {
-                return Err(AppError::BadRequest("Product string too long (max 126 chars)".into()));
+                return Err(AppError::BadRequest(
+                    "Product string too long (max 126 chars)".into(),
+                ));
             }
         }
         // Validate serial number string length
         if let Some(ref s) = self.serial_number {
             if s.len() > 126 {
-                return Err(AppError::BadRequest("Serial number string too long (max 126 chars)".into()));
+                return Err(AppError::BadRequest(
+                    "Serial number string too long (max 126 chars)".into(),
+                ));
             }
         }
         Ok(())
@@ -469,7 +498,8 @@ impl RustDeskConfigUpdate {
         if let Some(ref server) = self.rendezvous_server {
             if !server.is_empty() && !server.contains(':') {
                 return Err(AppError::BadRequest(
-                    "Rendezvous server must be in format 'host:port' (e.g., rs.example.com:21116)".into(),
+                    "Rendezvous server must be in format 'host:port' (e.g., rs.example.com:21116)"
+                        .into(),
                 ));
             }
         }
@@ -477,7 +507,8 @@ impl RustDeskConfigUpdate {
         if let Some(ref server) = self.relay_server {
             if !server.is_empty() && !server.contains(':') {
                 return Err(AppError::BadRequest(
-                    "Relay server must be in format 'host:port' (e.g., rs.example.com:21117)".into(),
+                    "Relay server must be in format 'host:port' (e.g., rs.example.com:21117)"
+                        .into(),
                 ));
             }
         }
@@ -500,10 +531,18 @@ impl RustDeskConfigUpdate {
             config.rendezvous_server = server.clone();
         }
         if let Some(ref server) = self.relay_server {
-            config.relay_server = if server.is_empty() { None } else { Some(server.clone()) };
+            config.relay_server = if server.is_empty() {
+                None
+            } else {
+                Some(server.clone())
+            };
         }
         if let Some(ref key) = self.relay_key {
-            config.relay_key = if key.is_empty() { None } else { Some(key.clone()) };
+            config.relay_key = if key.is_empty() {
+                None
+            } else {
+                Some(key.clone())
+            };
         }
         if let Some(ref password) = self.device_password {
             if !password.is_empty() {

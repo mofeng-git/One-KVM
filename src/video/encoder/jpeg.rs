@@ -35,10 +35,12 @@ impl JpegEncoder {
         // I420: Y = width*height, U = width*height/4, V = width*height/4
         let i420_size = width * height * 3 / 2;
 
-        let mut compressor = turbojpeg::Compressor::new()
-            .map_err(|e| AppError::VideoError(format!("Failed to create turbojpeg compressor: {}", e)))?;
+        let mut compressor = turbojpeg::Compressor::new().map_err(|e| {
+            AppError::VideoError(format!("Failed to create turbojpeg compressor: {}", e))
+        })?;
 
-        compressor.set_quality(config.quality.min(100) as i32)
+        compressor
+            .set_quality(config.quality.min(100) as i32)
             .map_err(|e| AppError::VideoError(format!("Failed to set JPEG quality: {}", e)))?;
 
         Ok(Self {
@@ -56,7 +58,8 @@ impl JpegEncoder {
 
     /// Set JPEG quality (1-100)
     pub fn set_quality(&mut self, quality: u32) -> Result<()> {
-        self.compressor.set_quality(quality.min(100) as i32)
+        self.compressor
+            .set_quality(quality.min(100) as i32)
             .map_err(|e| AppError::VideoError(format!("Failed to set JPEG quality: {}", e)))?;
         self.config.quality = quality;
         Ok(())
@@ -73,12 +76,14 @@ impl JpegEncoder {
             pixels: self.i420_buffer.as_slice(),
             width,
             height,
-            align: 1, // No padding between rows
+            align: 1,                            // No padding between rows
             subsamp: turbojpeg::Subsamp::Sub2x2, // YUV 4:2:0
         };
 
         // Compress YUV directly to JPEG (skips color space conversion!)
-        let jpeg_data = self.compressor.compress_yuv_to_vec(yuv_image)
+        let jpeg_data = self
+            .compressor
+            .compress_yuv_to_vec(yuv_image)
             .map_err(|e| AppError::VideoError(format!("JPEG compression failed: {}", e)))?;
 
         Ok(EncodedFrame::jpeg(

@@ -13,16 +13,16 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bytes::{Bytes, BytesMut};
-use sodiumoxide::crypto::box_;
 use parking_lot::RwLock;
 use protobuf::Message as ProtobufMessage;
-use tokio::net::TcpStream;
+use sodiumoxide::crypto::box_;
 use tokio::net::tcp::OwnedWriteHalf;
+use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, Mutex};
 use tracing::{debug, error, info, warn};
 
 use crate::audio::AudioController;
-use crate::hid::{HidController, KeyboardEvent, KeyEventType, KeyboardModifiers};
+use crate::hid::{HidController, KeyEventType, KeyboardEvent, KeyboardModifiers};
 use crate::video::encoder::registry::{EncoderRegistry, VideoEncoderType};
 use crate::video::encoder::BitratePreset;
 use crate::video::stream_manager::VideoStreamManager;
@@ -33,10 +33,9 @@ use super::crypto::{self, KeyPair, SigningKeyPair};
 use super::frame_adapters::{AudioFrameAdapter, VideoCodec, VideoFrameAdapter};
 use super::hid_adapter::{convert_key_event, convert_mouse_event, mouse_type};
 use super::protocol::{
-    message, misc, login_response,
-    KeyEvent, MouseEvent, Clipboard, Misc, LoginRequest, LoginResponse, PeerInfo,
-    IdPk, SignedId, Hash, TestDelay, ControlKey,
-    decode_message, HbbMessage, DisplayInfo, SupportedEncoding, OptionMessage, PublicKey,
+    decode_message, login_response, message, misc, Clipboard, ControlKey, DisplayInfo, Hash,
+    HbbMessage, IdPk, KeyEvent, LoginRequest, LoginResponse, Misc, MouseEvent, OptionMessage,
+    PeerInfo, PublicKey, SignedId, SupportedEncoding, TestDelay,
 };
 
 use sodiumoxide::crypto::secretbox;
@@ -268,7 +267,11 @@ impl Connection {
     }
 
     /// Handle an incoming TCP connection
-    pub async fn handle_tcp(&mut self, stream: TcpStream, peer_addr: SocketAddr) -> anyhow::Result<()> {
+    pub async fn handle_tcp(
+        &mut self,
+        stream: TcpStream,
+        peer_addr: SocketAddr,
+    ) -> anyhow::Result<()> {
         info!("New connection from {}", peer_addr);
         *self.state.write() = ConnectionState::Handshaking;
 
@@ -279,7 +282,9 @@ impl Connection {
         // Send our SignedId first (this is what RustDesk protocol expects)
         // The SignedId contains our device ID and temporary public key
         let signed_id_msg = self.create_signed_id_message(&self.device_id.clone());
-        let signed_id_bytes = signed_id_msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode SignedId: {}", e))?;
+        let signed_id_bytes = signed_id_msg
+            .write_to_bytes()
+            .map_err(|e| anyhow::anyhow!("Failed to encode SignedId: {}", e))?;
         debug!("Sending SignedId with device_id={}", self.device_id);
         self.send_framed_arc(&writer, &signed_id_bytes).await?;
 
@@ -402,7 +407,11 @@ impl Connection {
     }
 
     /// Send framed message using Arc<Mutex<OwnedWriteHalf>> with RustDesk's variable-length encoding
-    async fn send_framed_arc(&self, writer: &Arc<Mutex<OwnedWriteHalf>>, data: &[u8]) -> anyhow::Result<()> {
+    async fn send_framed_arc(
+        &self,
+        writer: &Arc<Mutex<OwnedWriteHalf>>,
+        data: &[u8],
+    ) -> anyhow::Result<()> {
         let mut w = writer.lock().await;
         write_frame(&mut *w, data).await?;
         Ok(())
@@ -480,7 +489,9 @@ impl Connection {
                     pk.symmetric_value.len()
                 );
                 if pk.asymmetric_value.is_empty() && pk.symmetric_value.is_empty() {
-                    warn!("Received EMPTY PublicKey - client may have failed signature verification!");
+                    warn!(
+                        "Received EMPTY PublicKey - client may have failed signature verification!"
+                    );
                 }
                 self.handle_peer_public_key(pk, writer).await?;
             }
@@ -535,7 +546,7 @@ impl Connection {
                         info!("Received SignedId from peer, id_len={}", si.id.len());
                         self.handle_signed_id(si, writer).await?;
                         return Ok(());
-                    },
+                    }
                     message::Union::Hash(_) => "Hash",
                     message::Union::VideoFrame(_) => "VideoFrame",
                     message::Union::CursorData(_) => "CursorData",
@@ -564,16 +575,26 @@ impl Connection {
         lr: &LoginRequest,
         writer: &Arc<Mutex<OwnedWriteHalf>>,
     ) -> anyhow::Result<bool> {
-        info!("Login request from {} ({}), password_len={}", lr.my_id, lr.my_name, lr.password.len());
+        info!(
+            "Login request from {} ({}), password_len={}",
+            lr.my_id,
+            lr.my_name,
+            lr.password.len()
+        );
 
         // Check if our server requires a password
         if !self.password.is_empty() {
             // Server requires password
             if lr.password.is_empty() {
                 // Client sent empty password - tell them to enter password
-                info!("Empty password from {}, requesting password input", lr.my_id);
+                info!(
+                    "Empty password from {}, requesting password input",
+                    lr.my_id
+                );
                 let error_response = self.create_login_error_response("Empty Password");
-                let response_bytes = error_response.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+                let response_bytes = error_response
+                    .write_to_bytes()
+                    .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
                 self.send_encrypted_arc(writer, &response_bytes).await?;
                 // Don't close connection - wait for retry with password
                 return Ok(false);
@@ -583,7 +604,9 @@ impl Connection {
             if !self.verify_password(&lr.password) {
                 warn!("Wrong password from {}", lr.my_id);
                 let error_response = self.create_login_error_response("Wrong Password");
-                let response_bytes = error_response.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+                let response_bytes = error_response
+                    .write_to_bytes()
+                    .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
                 self.send_encrypted_arc(writer, &response_bytes).await?;
                 // Don't close connection - wait for retry with correct password
                 return Ok(false);
@@ -601,7 +624,9 @@ impl Connection {
         info!("Negotiated video codec: {:?}", negotiated);
 
         let response = self.create_login_response(true);
-        let response_bytes = response.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+        let response_bytes = response
+            .write_to_bytes()
+            .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
         self.send_encrypted_arc(writer, &response_bytes).await?;
         Ok(true)
     }
@@ -679,7 +704,10 @@ impl Connection {
             };
 
             if let Some(preset) = preset {
-                info!("Client requested quality preset: {:?} (image_quality={})", preset, image_quality);
+                info!(
+                    "Client requested quality preset: {:?} (image_quality={})",
+                    preset, image_quality
+                );
                 if let Some(ref video_manager) = self.video_manager {
                     if let Err(e) = video_manager.set_bitrate_preset(preset).await {
                         warn!("Failed to set bitrate preset: {}", e);
@@ -729,7 +757,10 @@ impl Connection {
 
         // Log custom_image_quality (accept but don't process)
         if opt.custom_image_quality > 0 {
-            debug!("Client sent custom_image_quality: {} (ignored)", opt.custom_image_quality);
+            debug!(
+                "Client sent custom_image_quality: {} (ignored)",
+                opt.custom_image_quality
+            );
         }
         if opt.custom_fps > 0 {
             debug!("Client requested FPS: {}", opt.custom_fps);
@@ -779,7 +810,10 @@ impl Connection {
         let negotiated_codec = self.negotiated_codec.unwrap_or(VideoEncoderType::H264);
 
         let task = tokio::spawn(async move {
-            info!("Starting video streaming for connection {} with codec {:?}", conn_id, negotiated_codec);
+            info!(
+                "Starting video streaming for connection {} with codec {:?}",
+                conn_id, negotiated_codec
+            );
 
             if let Err(e) = run_video_streaming(
                 conn_id,
@@ -788,7 +822,9 @@ impl Connection {
                 state,
                 shutdown_tx,
                 negotiated_codec,
-            ).await {
+            )
+            .await
+            {
                 error!("Video streaming error for connection {}: {}", conn_id, e);
             }
 
@@ -815,13 +851,9 @@ impl Connection {
         let task = tokio::spawn(async move {
             info!("Starting audio streaming for connection {}", conn_id);
 
-            if let Err(e) = run_audio_streaming(
-                conn_id,
-                audio_controller,
-                audio_tx,
-                state,
-                shutdown_tx,
-            ).await {
+            if let Err(e) =
+                run_audio_streaming(conn_id, audio_controller, audio_tx, state, shutdown_tx).await
+            {
                 error!("Audio streaming error for connection {}: {}", conn_id, e);
             }
 
@@ -894,7 +926,10 @@ impl Connection {
                     self.encryption_enabled = true;
                 }
                 Err(e) => {
-                    warn!("Failed to decrypt session key: {:?}, falling back to unencrypted", e);
+                    warn!(
+                        "Failed to decrypt session key: {:?}, falling back to unencrypted",
+                        e
+                    );
                     // Continue without encryption - some clients may not support it
                     self.encryption_enabled = false;
                 }
@@ -917,8 +952,13 @@ impl Connection {
         // This tells the client what salt to use for password hashing
         // Must be encrypted if session key was negotiated
         let hash_msg = self.create_hash_message();
-        let hash_bytes = hash_msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
-        debug!("Sending Hash message for password authentication (encrypted={})", self.encryption_enabled);
+        let hash_bytes = hash_msg
+            .write_to_bytes()
+            .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+        debug!(
+            "Sending Hash message for password authentication (encrypted={})",
+            self.encryption_enabled
+        );
         self.send_encrypted_arc(writer, &hash_bytes).await?;
 
         Ok(())
@@ -971,7 +1011,9 @@ impl Connection {
         // If we haven't sent our SignedId yet, send it now
         // (This handles the case where client sends SignedId before we do)
         let signed_id_msg = self.create_signed_id_message(&self.device_id.clone());
-        let signed_id_bytes = signed_id_msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+        let signed_id_bytes = signed_id_msg
+            .write_to_bytes()
+            .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
         self.send_framed_arc(writer, &signed_id_bytes).await?;
 
         Ok(())
@@ -1073,7 +1115,8 @@ impl Connection {
             msg
         } else {
             let mut login_response = LoginResponse::new();
-            login_response.union = Some(login_response::Union::Error("Invalid password".to_string()));
+            login_response.union =
+                Some(login_response::Union::Error("Invalid password".to_string()));
             login_response.enable_trusted_devices = false;
 
             let mut msg = HbbMessage::new();
@@ -1133,7 +1176,9 @@ impl Connection {
             let mut response = HbbMessage::new();
             response.union = Some(message::Union::TestDelay(test_delay));
 
-            let data = response.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+            let data = response
+                .write_to_bytes()
+                .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
             self.send_encrypted_arc(writer, &data).await?;
 
             debug!(
@@ -1161,10 +1206,7 @@ impl Connection {
     /// The client will echo this back, allowing us to calculate RTT.
     /// The measured delay is then included in future TestDelay messages
     /// for the client to display.
-    async fn send_test_delay(
-        &mut self,
-        writer: &Arc<Mutex<OwnedWriteHalf>>,
-    ) -> anyhow::Result<()> {
+    async fn send_test_delay(&mut self, writer: &Arc<Mutex<OwnedWriteHalf>>) -> anyhow::Result<()> {
         // Get current time in milliseconds since epoch
         let time_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1180,13 +1222,18 @@ impl Connection {
         let mut msg = HbbMessage::new();
         msg.union = Some(message::Union::TestDelay(test_delay));
 
-        let data = msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+        let data = msg
+            .write_to_bytes()
+            .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
         self.send_encrypted_arc(writer, &data).await?;
 
         // Record when we sent this, so we can calculate RTT when client echoes back
         self.last_test_delay_sent = Some(Instant::now());
 
-        debug!("TestDelay sent: time={}, last_delay={}ms", time_ms, self.last_delay);
+        debug!(
+            "TestDelay sent: time={}, last_delay={}ms",
+            time_ms, self.last_delay
+        );
         Ok(())
     }
 
@@ -1208,7 +1255,10 @@ impl Connection {
             self.last_caps_lock = caps_lock_in_modifiers;
             // Send CapsLock key press (down + up) to toggle state on target
             if let Some(ref hid) = self.hid {
-                debug!("CapsLock state changed to {}, sending CapsLock key", caps_lock_in_modifiers);
+                debug!(
+                    "CapsLock state changed to {}, sending CapsLock key",
+                    caps_lock_in_modifiers
+                );
                 let caps_down = KeyboardEvent {
                     event_type: KeyEventType::Down,
                     key: 0x39, // USB HID CapsLock
@@ -1234,7 +1284,9 @@ impl Connection {
         if let Some(kb_event) = convert_key_event(ke) {
             debug!(
                 "Converted to HID: key=0x{:02X}, event_type={:?}, modifiers={:02X}",
-                kb_event.key, kb_event.event_type, kb_event.modifiers.to_hid_byte()
+                kb_event.key,
+                kb_event.event_type,
+                kb_event.modifiers.to_hid_byte()
             );
             // Send to HID controller if available
             if let Some(ref hid) = self.hid {
@@ -1393,7 +1445,11 @@ impl ConnectionManager {
     }
 
     /// Accept a new connection
-    pub async fn accept_connection(&self, stream: TcpStream, peer_addr: SocketAddr) -> anyhow::Result<u32> {
+    pub async fn accept_connection(
+        &self,
+        stream: TcpStream,
+        peer_addr: SocketAddr,
+    ) -> anyhow::Result<u32> {
         let id = {
             let mut next = self.next_id.write();
             let id = *next;
@@ -1406,14 +1462,14 @@ impl ConnectionManager {
         let hid = self.hid.read().clone();
         let audio = self.audio.read().clone();
         let video_manager = self.video_manager.read().clone();
-        let (mut conn, _rx) = Connection::new(id, &config, signing_keypair, hid, audio, video_manager);
+        let (mut conn, _rx) =
+            Connection::new(id, &config, signing_keypair, hid, audio, video_manager);
 
         // Track connection state for external access
         let state = conn.state.clone();
-        self.connections.write().push(Arc::new(RwLock::new(ConnectionInfo {
-            id,
-            state,
-        })));
+        self.connections
+            .write()
+            .push(Arc::new(RwLock::new(ConnectionInfo { id, state })));
 
         // Spawn connection handler - Connection is moved, not locked
         tokio::spawn(async move {
@@ -1466,7 +1522,10 @@ async fn run_video_streaming(
     };
 
     // Set the video codec on the shared pipeline before subscribing
-    info!("Setting video codec to {:?} for connection {}", negotiated_codec, conn_id);
+    info!(
+        "Setting video codec to {:?} for connection {}",
+        negotiated_codec, conn_id
+    );
     if let Err(e) = video_manager.set_video_codec(webrtc_codec).await {
         error!("Failed to set video codec: {}", e);
         // Continue anyway, will use whatever codec the pipeline already has
@@ -1485,7 +1544,10 @@ async fn run_video_streaming(
     let mut encoded_count: u64 = 0;
     let mut last_log_time = Instant::now();
 
-    info!("Started shared video streaming for connection {} (codec: {:?})", conn_id, codec);
+    info!(
+        "Started shared video streaming for connection {} (codec: {:?})",
+        conn_id, codec
+    );
 
     // Outer loop: handles pipeline restarts by re-subscribing
     'subscribe_loop: loop {
@@ -1500,7 +1562,10 @@ async fn run_video_streaming(
             Some(rx) => rx,
             None => {
                 // Pipeline not ready yet, wait and retry
-                debug!("No encoded frame source available for connection {}, retrying...", conn_id);
+                debug!(
+                    "No encoded frame source available for connection {}, retrying...",
+                    conn_id
+                );
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 continue 'subscribe_loop;
             }
@@ -1619,13 +1684,19 @@ async fn run_audio_streaming(
             Some(rx) => rx,
             None => {
                 // Audio not available, wait and retry
-                debug!("No audio source available for connection {}, retrying...", conn_id);
+                debug!(
+                    "No audio source available for connection {}, retrying...",
+                    conn_id
+                );
                 tokio::time::sleep(Duration::from_millis(500)).await;
                 continue 'subscribe_loop;
             }
         };
 
-        info!("RustDesk connection {} subscribed to audio pipeline", conn_id);
+        info!(
+            "RustDesk connection {} subscribed to audio pipeline",
+            conn_id
+        );
 
         // Send audio format message once before sending frames
         if !audio_adapter.format_sent() {

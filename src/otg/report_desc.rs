@@ -135,17 +135,17 @@ pub const MOUSE_ABSOLUTE: &[u8] = &[
 ///   [0-1] Consumer Control Usage (16-bit little-endian)
 /// Supports: Play/Pause, Stop, Next/Prev Track, Mute, Volume Up/Down, etc.
 pub const CONSUMER_CONTROL: &[u8] = &[
-    0x05, 0x0C,       // Usage Page (Consumer)
-    0x09, 0x01,       // Usage (Consumer Control)
-    0xA1, 0x01,       // Collection (Application)
-    0x15, 0x00,       //   Logical Minimum (0)
+    0x05, 0x0C, // Usage Page (Consumer)
+    0x09, 0x01, // Usage (Consumer Control)
+    0xA1, 0x01, // Collection (Application)
+    0x15, 0x00, //   Logical Minimum (0)
     0x26, 0xFF, 0x03, //   Logical Maximum (1023)
-    0x19, 0x00,       //   Usage Minimum (0)
+    0x19, 0x00, //   Usage Minimum (0)
     0x2A, 0xFF, 0x03, //   Usage Maximum (1023)
-    0x75, 0x10,       //   Report Size (16)
-    0x95, 0x01,       //   Report Count (1)
-    0x81, 0x00,       //   Input (Data, Array)
-    0xC0,             // End Collection
+    0x75, 0x10, //   Report Size (16)
+    0x95, 0x01, //   Report Count (1)
+    0x81, 0x00, //   Input (Data, Array)
+    0xC0, // End Collection
 ];
 
 #[cfg(test)]

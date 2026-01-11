@@ -5,7 +5,10 @@ use crate::atx::AtxController;
 use crate::audio::AudioController;
 use crate::auth::{SessionStore, UserStore};
 use crate::config::ConfigStore;
-use crate::events::{AtxDeviceInfo, AudioDeviceInfo, EventBus, HidDeviceInfo, MsdDeviceInfo, SystemEvent, VideoDeviceInfo};
+use crate::events::{
+    AtxDeviceInfo, AudioDeviceInfo, EventBus, HidDeviceInfo, MsdDeviceInfo, SystemEvent,
+    VideoDeviceInfo,
+};
 use crate::extensions::ExtensionManager;
 use crate::hid::HidController;
 use crate::msd::MsdController;

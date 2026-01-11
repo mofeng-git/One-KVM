@@ -18,7 +18,9 @@ use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
-use webrtc::rtp_transceiver::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
+use webrtc::rtp_transceiver::rtp_codec::{
+    RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
+};
 use webrtc::rtp_transceiver::RTCPFeedback;
 
 use super::config::WebRtcConfig;
@@ -192,7 +194,8 @@ impl UniversalSession {
                             clock_rate: 90000,
                             channels: 0,
                             // Match browser's fmtp format for profile-id=1
-                            sdp_fmtp_line: "level-id=180;profile-id=1;tier-flag=0;tx-mode=SRST".to_owned(),
+                            sdp_fmtp_line: "level-id=180;profile-id=1;tier-flag=0;tx-mode=SRST"
+                                .to_owned(),
                             rtcp_feedback: video_rtcp_feedback.clone(),
                         },
                         payload_type: 49, // Use same payload type as browser
@@ -200,7 +203,9 @@ impl UniversalSession {
                     },
                     RTPCodecType::Video,
                 )
-                .map_err(|e| AppError::VideoError(format!("Failed to register H.265 codec: {}", e)))?;
+                .map_err(|e| {
+                    AppError::VideoError(format!("Failed to register H.265 codec: {}", e))
+                })?;
 
             // Also register profile-id=2 (Main 10) variant
             media_engine
@@ -210,7 +215,8 @@ impl UniversalSession {
                             mime_type: MIME_TYPE_H265.to_owned(),
                             clock_rate: 90000,
                             channels: 0,
-                            sdp_fmtp_line: "level-id=180;profile-id=2;tier-flag=0;tx-mode=SRST".to_owned(),
+                            sdp_fmtp_line: "level-id=180;profile-id=2;tier-flag=0;tx-mode=SRST"
+                                .to_owned(),
                             rtcp_feedback: video_rtcp_feedback,
                         },
                         payload_type: 51,
@@ -218,7 +224,12 @@ impl UniversalSession {
                     },
                     RTPCodecType::Video,
                 )
-                .map_err(|e| AppError::VideoError(format!("Failed to register H.265 codec (profile 2): {}", e)))?;
+                .map_err(|e| {
+                    AppError::VideoError(format!(
+                        "Failed to register H.265 codec (profile 2): {}",
+                        e
+                    ))
+                })?;
 
             info!("Registered H.265/HEVC codec for session {}", session_id);
         }
@@ -269,10 +280,9 @@ impl UniversalSession {
             ..Default::default()
         };
 
-        let pc = api
-            .new_peer_connection(rtc_config)
-            .await
-            .map_err(|e| AppError::VideoError(format!("Failed to create peer connection: {}", e)))?;
+        let pc = api.new_peer_connection(rtc_config).await.map_err(|e| {
+            AppError::VideoError(format!("Failed to create peer connection: {}", e))
+        })?;
 
         let pc = Arc::new(pc);
 
@@ -291,7 +301,10 @@ impl UniversalSession {
             pc.add_track(audio.as_track_local())
                 .await
                 .map_err(|e| AppError::AudioError(format!("Failed to add audio track: {}", e)))?;
-            info!("Opus audio track added to peer connection (session {})", session_id);
+            info!(
+                "Opus audio track added to peer connection (session {})",
+                session_id
+            );
         }
 
         // Create state channel
@@ -479,11 +492,13 @@ impl UniversalSession {
         &self,
         mut frame_rx: broadcast::Receiver<EncodedVideoFrame>,
         on_connected: F,
-    )
-    where
+    ) where
         F: FnOnce() + Send + 'static,
     {
-        info!("Starting {} session {} with shared encoder", self.codec, self.session_id);
+        info!(
+            "Starting {} session {} with shared encoder",
+            self.codec, self.session_id
+        );
 
         let video_track = self.video_track.clone();
         let mut state_rx = self.state_rx.clone();
@@ -492,7 +507,10 @@ impl UniversalSession {
         let expected_codec = self.codec;
 
         let handle = tokio::spawn(async move {
-            info!("Video receiver waiting for connection for session {}", session_id);
+            info!(
+                "Video receiver waiting for connection for session {}",
+                session_id
+            );
 
             // Wait for Connected state before sending frames
             loop {
@@ -500,7 +518,10 @@ impl UniversalSession {
                 if current_state == ConnectionState::Connected {
                     break;
                 }
-                if matches!(current_state, ConnectionState::Closed | ConnectionState::Failed) {
+                if matches!(
+                    current_state,
+                    ConnectionState::Closed | ConnectionState::Failed
+                ) {
                     info!("Session {} closed before connecting", session_id);
                     return;
                 }
@@ -509,7 +530,10 @@ impl UniversalSession {
                 }
             }
 
-            info!("Video receiver started for session {} (ICE connected)", session_id);
+            info!(
+                "Video receiver started for session {} (ICE connected)",
+                session_id
+            );
 
             // Request keyframe now that connection is established
             on_connected();
@@ -592,7 +616,10 @@ impl UniversalSession {
                 }
             }
 
-            info!("Video receiver stopped for session {} (sent {} frames)", session_id, frames_sent);
+            info!(
+                "Video receiver stopped for session {} (sent {} frames)",
+                session_id, frames_sent
+            );
         });
 
         *self.video_receiver_handle.lock().await = Some(handle);
@@ -620,7 +647,10 @@ impl UniversalSession {
                 if current_state == ConnectionState::Connected {
                     break;
                 }
-                if matches!(current_state, ConnectionState::Closed | ConnectionState::Failed) {
+                if matches!(
+                    current_state,
+                    ConnectionState::Closed | ConnectionState::Failed
+                ) {
                     info!("Session {} closed before audio could start", session_id);
                     return;
                 }
@@ -629,7 +659,10 @@ impl UniversalSession {
                 }
             }
 
-            info!("Audio receiver started for session {} (ICE connected)", session_id);
+            info!(
+                "Audio receiver started for session {} (ICE connected)",
+                session_id
+            );
 
             let mut packets_sent: u64 = 0;
 
@@ -673,7 +706,10 @@ impl UniversalSession {
                 }
             }
 
-            info!("Audio receiver stopped for session {} (sent {} packets)", session_id, packets_sent);
+            info!(
+                "Audio receiver stopped for session {} (sent {} packets)",
+                session_id, packets_sent
+            );
         });
 
         *self.audio_receiver_handle.lock().await = Some(handle);
@@ -697,8 +733,7 @@ impl UniversalSession {
                 || offer.sdp.to_lowercase().contains("hevc");
             info!(
                 "[SDP] Session {} offer contains H.265: {}",
-                self.session_id,
-                has_h265
+                self.session_id, has_h265
             );
             if !has_h265 {
                 warn!("[SDP] Browser offer does not include H.265 codec! Session may fail.");
@@ -708,10 +743,9 @@ impl UniversalSession {
         let sdp = RTCSessionDescription::offer(offer.sdp)
             .map_err(|e| AppError::VideoError(format!("Invalid SDP offer: {}", e)))?;
 
-        self.pc
-            .set_remote_description(sdp)
-            .await
-            .map_err(|e| AppError::VideoError(format!("Failed to set remote description: {}", e)))?;
+        self.pc.set_remote_description(sdp).await.map_err(|e| {
+            AppError::VideoError(format!("Failed to set remote description: {}", e))
+        })?;
 
         let answer = self
             .pc
@@ -725,8 +759,7 @@ impl UniversalSession {
                 || answer.sdp.to_lowercase().contains("hevc");
             info!(
                 "[SDP] Session {} answer contains H.265: {}",
-                self.session_id,
-                has_h265
+                self.session_id, has_h265
             );
             if !has_h265 {
                 warn!("[SDP] Answer does not include H.265! Codec negotiation may have failed.");
@@ -821,9 +854,21 @@ mod tests {
 
     #[test]
     fn test_encoder_type_to_video_codec() {
-        assert_eq!(encoder_type_to_video_codec(VideoEncoderType::H264), VideoCodec::H264);
-        assert_eq!(encoder_type_to_video_codec(VideoEncoderType::H265), VideoCodec::H265);
-        assert_eq!(encoder_type_to_video_codec(VideoEncoderType::VP8), VideoCodec::VP8);
-        assert_eq!(encoder_type_to_video_codec(VideoEncoderType::VP9), VideoCodec::VP9);
+        assert_eq!(
+            encoder_type_to_video_codec(VideoEncoderType::H264),
+            VideoCodec::H264
+        );
+        assert_eq!(
+            encoder_type_to_video_codec(VideoEncoderType::H265),
+            VideoCodec::H265
+        );
+        assert_eq!(
+            encoder_type_to_video_codec(VideoEncoderType::VP8),
+            VideoCodec::VP8
+        );
+        assert_eq!(
+            encoder_type_to_video_codec(VideoEncoderType::VP9),
+            VideoCodec::VP9
+        );
     }
 }

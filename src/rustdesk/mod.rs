@@ -205,7 +205,8 @@ impl RustDeskService {
         self.connection_manager.set_audio(self.audio.clone());
 
         // Set the video manager on connection manager for video streaming
-        self.connection_manager.set_video_manager(self.video_manager.clone());
+        self.connection_manager
+            .set_video_manager(self.video_manager.clone());
 
         *self.rendezvous.write() = Some(mediator.clone());
 
@@ -231,105 +232,117 @@ impl RustDeskService {
         let audio_punch = self.audio.clone();
         let service_config_punch = self.config.clone();
 
-        mediator.set_punch_callback(Arc::new(move |peer_addr, rendezvous_addr, relay_server, uuid, socket_addr, device_id| {
-            let conn_mgr = connection_manager_punch.clone();
-            let video = video_manager_punch.clone();
-            let hid = hid_punch.clone();
-            let audio = audio_punch.clone();
-            let config = service_config_punch.clone();
+        mediator.set_punch_callback(Arc::new(
+            move |peer_addr, rendezvous_addr, relay_server, uuid, socket_addr, device_id| {
+                let conn_mgr = connection_manager_punch.clone();
+                let video = video_manager_punch.clone();
+                let hid = hid_punch.clone();
+                let audio = audio_punch.clone();
+                let config = service_config_punch.clone();
 
-            tokio::spawn(async move {
-                // Get relay_key from config (no public server fallback)
-                let relay_key = {
-                    let cfg = config.read();
-                    cfg.relay_key.clone().unwrap_or_default()
-                };
+                tokio::spawn(async move {
+                    // Get relay_key from config (no public server fallback)
+                    let relay_key = {
+                        let cfg = config.read();
+                        cfg.relay_key.clone().unwrap_or_default()
+                    };
 
-                // Try P2P direct connection first
-                if let Some(addr) = peer_addr {
-                    info!("Attempting P2P direct connection to {}", addr);
-                    match punch::try_direct_connection(addr).await {
-                        punch::PunchResult::DirectConnection(stream) => {
-                            info!("P2P direct connection succeeded to {}", addr);
-                            if let Err(e) = conn_mgr.accept_connection(stream, addr).await {
-                                error!("Failed to accept P2P connection: {}", e);
+                    // Try P2P direct connection first
+                    if let Some(addr) = peer_addr {
+                        info!("Attempting P2P direct connection to {}", addr);
+                        match punch::try_direct_connection(addr).await {
+                            punch::PunchResult::DirectConnection(stream) => {
+                                info!("P2P direct connection succeeded to {}", addr);
+                                if let Err(e) = conn_mgr.accept_connection(stream, addr).await {
+                                    error!("Failed to accept P2P connection: {}", e);
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        punch::PunchResult::NeedRelay => {
-                            info!("P2P direct connection failed, falling back to relay");
+                            punch::PunchResult::NeedRelay => {
+                                info!("P2P direct connection failed, falling back to relay");
+                            }
                         }
                     }
-                }
 
-                // Fall back to relay
-                if let Err(e) = handle_relay_request(
-                    &rendezvous_addr,
-                    &relay_server,
-                    &uuid,
-                    &socket_addr,
-                    &device_id,
-                    &relay_key,
-                    conn_mgr,
-                    video,
-                    hid,
-                    audio,
-                ).await {
-                    error!("Failed to handle relay request: {}", e);
-                }
-            });
-        }));
+                    // Fall back to relay
+                    if let Err(e) = handle_relay_request(
+                        &rendezvous_addr,
+                        &relay_server,
+                        &uuid,
+                        &socket_addr,
+                        &device_id,
+                        &relay_key,
+                        conn_mgr,
+                        video,
+                        hid,
+                        audio,
+                    )
+                    .await
+                    {
+                        error!("Failed to handle relay request: {}", e);
+                    }
+                });
+            },
+        ));
 
         // Set the relay callback on the mediator
-        mediator.set_relay_callback(Arc::new(move |rendezvous_addr, relay_server, uuid, socket_addr, device_id| {
-            let conn_mgr = connection_manager.clone();
-            let video = video_manager.clone();
-            let hid = hid.clone();
-            let audio = audio.clone();
-            let config = service_config.clone();
+        mediator.set_relay_callback(Arc::new(
+            move |rendezvous_addr, relay_server, uuid, socket_addr, device_id| {
+                let conn_mgr = connection_manager.clone();
+                let video = video_manager.clone();
+                let hid = hid.clone();
+                let audio = audio.clone();
+                let config = service_config.clone();
 
-            tokio::spawn(async move {
-                // Get relay_key from config (no public server fallback)
-                let relay_key = {
-                    let cfg = config.read();
-                    cfg.relay_key.clone().unwrap_or_default()
-                };
+                tokio::spawn(async move {
+                    // Get relay_key from config (no public server fallback)
+                    let relay_key = {
+                        let cfg = config.read();
+                        cfg.relay_key.clone().unwrap_or_default()
+                    };
 
-                if let Err(e) = handle_relay_request(
-                    &rendezvous_addr,
-                    &relay_server,
-                    &uuid,
-                    &socket_addr,
-                    &device_id,
-                    &relay_key,
-                    conn_mgr,
-                    video,
-                    hid,
-                    audio,
-                ).await {
-                    error!("Failed to handle relay request: {}", e);
-                }
-            });
-        }));
+                    if let Err(e) = handle_relay_request(
+                        &rendezvous_addr,
+                        &relay_server,
+                        &uuid,
+                        &socket_addr,
+                        &device_id,
+                        &relay_key,
+                        conn_mgr,
+                        video,
+                        hid,
+                        audio,
+                    )
+                    .await
+                    {
+                        error!("Failed to handle relay request: {}", e);
+                    }
+                });
+            },
+        ));
 
         // Set the intranet callback on the mediator for same-LAN connections
         let connection_manager2 = self.connection_manager.clone();
-        mediator.set_intranet_callback(Arc::new(move |rendezvous_addr, peer_socket_addr, local_addr, relay_server, device_id| {
-            let conn_mgr = connection_manager2.clone();
+        mediator.set_intranet_callback(Arc::new(
+            move |rendezvous_addr, peer_socket_addr, local_addr, relay_server, device_id| {
+                let conn_mgr = connection_manager2.clone();
 
-            tokio::spawn(async move {
-                if let Err(e) = handle_intranet_request(
-                    &rendezvous_addr,
-                    &peer_socket_addr,
-                    local_addr,
-                    &relay_server,
-                    &device_id,
-                    conn_mgr,
-                ).await {
-                    error!("Failed to handle intranet request: {}", e);
-                }
-            });
-        }));
+                tokio::spawn(async move {
+                    if let Err(e) = handle_intranet_request(
+                        &rendezvous_addr,
+                        &peer_socket_addr,
+                        local_addr,
+                        &relay_server,
+                        &device_id,
+                        conn_mgr,
+                    )
+                    .await
+                    {
+                        error!("Failed to handle intranet request: {}", e);
+                    }
+                });
+            },
+        ));
 
         // Spawn rendezvous task
         let status = self.status.clone();
@@ -471,7 +484,9 @@ impl RustDeskService {
             // Save signing keypair (Ed25519)
             let signing_pk = skp.public_key_base64();
             let signing_sk = skp.secret_key_base64();
-            if config.signing_public_key.as_ref() != Some(&signing_pk) || config.signing_private_key.as_ref() != Some(&signing_sk) {
+            if config.signing_public_key.as_ref() != Some(&signing_pk)
+                || config.signing_private_key.as_ref() != Some(&signing_sk)
+            {
                 config.signing_public_key = Some(signing_pk);
                 config.signing_private_key = Some(signing_sk);
                 changed = true;
@@ -522,13 +537,18 @@ async fn handle_relay_request(
     _hid: Arc<HidController>,
     _audio: Arc<AudioController>,
 ) -> anyhow::Result<()> {
-    info!("Handling relay request: rendezvous={}, relay={}, uuid={}", rendezvous_addr, relay_server, uuid);
+    info!(
+        "Handling relay request: rendezvous={}, relay={}, uuid={}",
+        rendezvous_addr, relay_server, uuid
+    );
 
     // Step 1: Connect to RENDEZVOUS server and send RelayResponse
     let rendezvous_socket_addr: SocketAddr = tokio::net::lookup_host(rendezvous_addr)
         .await?
         .next()
-        .ok_or_else(|| anyhow::anyhow!("Failed to resolve rendezvous server: {}", rendezvous_addr))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("Failed to resolve rendezvous server: {}", rendezvous_addr)
+        })?;
 
     let mut rendezvous_stream = tokio::time::timeout(
         Duration::from_millis(RELAY_CONNECT_TIMEOUT_MS),
@@ -537,12 +557,17 @@ async fn handle_relay_request(
     .await
     .map_err(|_| anyhow::anyhow!("Rendezvous connection timeout"))??;
 
-    debug!("Connected to rendezvous server at {}", rendezvous_socket_addr);
+    debug!(
+        "Connected to rendezvous server at {}",
+        rendezvous_socket_addr
+    );
 
     // Send RelayResponse to rendezvous server with client's socket_addr
     // IMPORTANT: Include our device ID so rendezvous server can look up and sign our public key
     let relay_response = make_relay_response(uuid, socket_addr, relay_server, device_id);
-    let bytes = relay_response.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+    let bytes = relay_response
+        .write_to_bytes()
+        .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
     bytes_codec::write_frame(&mut rendezvous_stream, &bytes).await?;
     debug!("Sent RelayResponse to rendezvous server for uuid={}", uuid);
 
@@ -568,7 +593,9 @@ async fn handle_relay_request(
     // The licence_key is required if the relay server is configured with -k option
     // The socket_addr is CRITICAL - the relay server uses it to match us with the peer
     let request_relay = make_request_relay(uuid, relay_key, socket_addr);
-    let bytes = request_relay.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+    let bytes = request_relay
+        .write_to_bytes()
+        .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
     bytes_codec::write_frame(&mut stream, &bytes).await?;
     debug!("Sent RequestRelay to relay server for uuid={}", uuid);
 
@@ -576,8 +603,13 @@ async fn handle_relay_request(
     let peer_addr = rendezvous::AddrMangle::decode(socket_addr).unwrap_or(relay_addr);
 
     // Step 3: Accept connection - relay server bridges the connection
-    connection_manager.accept_connection(stream, peer_addr).await?;
-    info!("Relay connection established for uuid={}, peer={}", uuid, peer_addr);
+    connection_manager
+        .accept_connection(stream, peer_addr)
+        .await?;
+    info!(
+        "Relay connection established for uuid={}, peer={}",
+        uuid, peer_addr
+    );
 
     Ok(())
 }
@@ -608,14 +640,15 @@ async fn handle_intranet_request(
     debug!("Peer address from FetchLocalAddr: {:?}", peer_addr);
 
     // Connect to rendezvous server via TCP with timeout
-    let mut stream = tokio::time::timeout(
-        Duration::from_secs(5),
-        TcpStream::connect(rendezvous_addr),
-    )
-    .await
-    .map_err(|_| anyhow::anyhow!("Timeout connecting to rendezvous server"))??;
+    let mut stream =
+        tokio::time::timeout(Duration::from_secs(5), TcpStream::connect(rendezvous_addr))
+            .await
+            .map_err(|_| anyhow::anyhow!("Timeout connecting to rendezvous server"))??;
 
-    info!("Connected to rendezvous server for intranet: {}", rendezvous_addr);
+    info!(
+        "Connected to rendezvous server for intranet: {}",
+        rendezvous_addr
+    );
 
     // Build LocalAddr message with our local address (mangled)
     let local_addr_bytes = AddrMangle::encode(local_addr);
@@ -626,7 +659,9 @@ async fn handle_intranet_request(
         device_id,
         env!("CARGO_PKG_VERSION"),
     );
-    let bytes = msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+    let bytes = msg
+        .write_to_bytes()
+        .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
 
     // Send LocalAddr using RustDesk's variable-length framing
     bytes_codec::write_frame(&mut stream, &bytes).await?;
@@ -640,11 +675,15 @@ async fn handle_intranet_request(
     // Get peer address for logging/connection tracking
     let effective_peer_addr = peer_addr.unwrap_or_else(|| {
         // If we can't decode the peer address, use the rendezvous server address
-        rendezvous_addr.parse().unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap())
+        rendezvous_addr
+            .parse()
+            .unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap())
     });
 
     // Accept the connection - the stream is now a proxied connection to the client
-    connection_manager.accept_connection(stream, effective_peer_addr).await?;
+    connection_manager
+        .accept_connection(stream, effective_peer_addr)
+        .await?;
     info!("Intranet connection established via rendezvous server proxy");
 
     Ok(())

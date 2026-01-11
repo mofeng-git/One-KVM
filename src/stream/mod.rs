@@ -13,5 +13,7 @@ pub mod mjpeg_streamer;
 pub mod ws_hid;
 
 pub use mjpeg::{ClientGuard, MjpegStreamHandler};
-pub use mjpeg_streamer::{MjpegStreamer, MjpegStreamerConfig, MjpegStreamerState, MjpegStreamerStats};
+pub use mjpeg_streamer::{
+    MjpegStreamer, MjpegStreamerConfig, MjpegStreamerState, MjpegStreamerStats,
+};
 pub use ws_hid::WsHidHandler;

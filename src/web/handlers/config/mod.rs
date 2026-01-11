@@ -19,26 +19,26 @@
 pub(crate) mod apply;
 mod types;
 
-pub(crate) mod video;
-mod stream;
-mod hid;
-mod msd;
 mod atx;
 mod audio;
+mod hid;
+mod msd;
 mod rustdesk;
+mod stream;
+pub(crate) mod video;
 mod web;
 
 // 导出 handler 函数
-pub use video::{get_video_config, update_video_config};
-pub use stream::{get_stream_config, update_stream_config};
-pub use hid::{get_hid_config, update_hid_config};
-pub use msd::{get_msd_config, update_msd_config};
 pub use atx::{get_atx_config, update_atx_config};
 pub use audio::{get_audio_config, update_audio_config};
+pub use hid::{get_hid_config, update_hid_config};
+pub use msd::{get_msd_config, update_msd_config};
 pub use rustdesk::{
-    get_rustdesk_config, get_rustdesk_status, update_rustdesk_config,
-    regenerate_device_id, regenerate_device_password, get_device_password,
+    get_device_password, get_rustdesk_config, get_rustdesk_status, regenerate_device_id,
+    regenerate_device_password, update_rustdesk_config,
 };
+pub use stream::{get_stream_config, update_stream_config};
+pub use video::{get_video_config, update_video_config};
 pub use web::{get_web_config, update_web_config};
 
 // 保留全局配置查询（向后兼容）

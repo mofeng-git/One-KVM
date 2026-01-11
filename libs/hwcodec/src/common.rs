@@ -84,7 +84,7 @@ pub fn setup_parent_death_signal() {
 pub fn child_exit_when_parent_exit(child_process_id: u32) -> bool {
     unsafe {
         extern "C" {
-             fn add_process_to_new_job(child_process_id: u32) -> i32;
+            fn add_process_to_new_job(child_process_id: u32) -> i32;
         }
         let result = add_process_to_new_job(child_process_id);
         result == 0

@@ -71,13 +71,11 @@ impl VentoyDrive {
 
         // Run Ventoy creation in blocking task
         let info = tokio::task::spawn_blocking(move || {
-            VentoyImage::create(&path, &size_str, DEFAULT_LABEL)
-                .map_err(ventoy_to_app_error)?;
+            VentoyImage::create(&path, &size_str, DEFAULT_LABEL).map_err(ventoy_to_app_error)?;
 
             // Get file metadata for DriveInfo
-            let metadata = std::fs::metadata(&path).map_err(|e| {
-                AppError::Internal(format!("Failed to read drive metadata: {}", e))
-            })?;
+            let metadata = std::fs::metadata(&path)
+                .map_err(|e| AppError::Internal(format!("Failed to read drive metadata: {}", e)))?;
 
             Ok::<DriveInfo, AppError>(DriveInfo {
                 size: metadata.len(),
@@ -104,16 +102,13 @@ impl VentoyDrive {
         let _lock = self.lock.read().await; // Read lock for info query
 
         tokio::task::spawn_blocking(move || {
-            let metadata = std::fs::metadata(&path).map_err(|e| {
-                AppError::Internal(format!("Failed to read drive metadata: {}", e))
-            })?;
+            let metadata = std::fs::metadata(&path)
+                .map_err(|e| AppError::Internal(format!("Failed to read drive metadata: {}", e)))?;
 
             // Open image to get file list and calculate used space
             let image = VentoyImage::open(&path).map_err(ventoy_to_app_error)?;
 
-            let files = image
-                .list_files_recursive()
-                .map_err(ventoy_to_app_error)?;
+            let files = image.list_files_recursive().map_err(ventoy_to_app_error)?;
 
             let used: u64 = files
                 .iter()
@@ -190,9 +185,11 @@ impl VentoyDrive {
 
         let mut bytes_written: u64 = 0;
 
-        while let Some(chunk) = field.chunk().await.map_err(|e| {
-            AppError::Internal(format!("Failed to read upload chunk: {}", e))
-        })? {
+        while let Some(chunk) = field
+            .chunk()
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to read upload chunk: {}", e)))?
+        {
             bytes_written += chunk.len() as u64;
             tokio::io::AsyncWriteExt::write_all(&mut temp_file, &chunk)
                 .await
@@ -248,9 +245,7 @@ impl VentoyDrive {
         tokio::task::spawn_blocking(move || {
             let image = VentoyImage::open(&path).map_err(ventoy_to_app_error)?;
 
-            image
-                .read_file(&file_path)
-                .map_err(ventoy_to_app_error)
+            image.read_file(&file_path).map_err(ventoy_to_app_error)
         })
         .await
         .map_err(|e| AppError::Internal(format!("Task join error: {}", e)))?
@@ -321,7 +316,8 @@ impl VentoyDrive {
         let lock = self.lock.clone();
 
         // Create a channel for streaming data
-        let (tx, rx) = tokio::sync::mpsc::channel::<std::result::Result<bytes::Bytes, std::io::Error>>(8);
+        let (tx, rx) =
+            tokio::sync::mpsc::channel::<std::result::Result<bytes::Bytes, std::io::Error>>(8);
 
         // Spawn blocking task to read and send chunks
         tokio::task::spawn_blocking(move || {
@@ -404,20 +400,14 @@ fn ventoy_to_app_error(err: VentoyError) -> AppError {
     match err {
         VentoyError::Io(e) => AppError::Io(e),
         VentoyError::InvalidSize(s) => AppError::BadRequest(format!("Invalid size: {}", s)),
-        VentoyError::SizeParseError(s) => {
-            AppError::BadRequest(format!("Size parse error: {}", s))
-        }
-        VentoyError::FilesystemError(s) => {
-            AppError::Internal(format!("Filesystem error: {}", s))
-        }
+        VentoyError::SizeParseError(s) => AppError::BadRequest(format!("Size parse error: {}", s)),
+        VentoyError::FilesystemError(s) => AppError::Internal(format!("Filesystem error: {}", s)),
         VentoyError::ImageError(s) => AppError::Internal(format!("Image error: {}", s)),
         VentoyError::FileNotFound(s) => AppError::NotFound(format!("File not found: {}", s)),
         VentoyError::ResourceNotFound(s) => {
             AppError::Internal(format!("Resource not found: {}", s))
         }
-        VentoyError::PartitionError(s) => {
-            AppError::Internal(format!("Partition error: {}", s))
-        }
+        VentoyError::PartitionError(s) => AppError::Internal(format!("Partition error: {}", s)),
     }
 }
 
@@ -481,7 +471,8 @@ impl std::io::Write for ChannelWriter {
             let space = STREAM_CHUNK_SIZE - self.buffer.len();
             let to_copy = std::cmp::min(space, buf.len() - written);
 
-            self.buffer.extend_from_slice(&buf[written..written + to_copy]);
+            self.buffer
+                .extend_from_slice(&buf[written..written + to_copy]);
             written += to_copy;
 
             if self.buffer.len() >= STREAM_CHUNK_SIZE {
@@ -512,10 +503,7 @@ mod tests {
     use tempfile::TempDir;
 
     /// Path to ventoy resources directory
-    static RESOURCE_DIR: &str = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../ventoy-img-rs/resources"
-    );
+    static RESOURCE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../ventoy-img-rs/resources");
 
     /// Initialize ventoy resources once
     fn init_ventoy_resources() -> bool {
@@ -561,7 +549,10 @@ mod tests {
         if !output.status.success() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("xz decompress failed: {}", String::from_utf8_lossy(&output.stderr)),
+                format!(
+                    "xz decompress failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ),
             ));
         }
 

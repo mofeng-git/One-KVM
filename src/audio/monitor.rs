@@ -329,9 +329,7 @@ mod tests {
         let monitor = AudioHealthMonitor::with_defaults();
 
         for i in 1..=5 {
-            monitor
-                .report_error(None, "Error", "io_error")
-                .await;
+            monitor.report_error(None, "Error", "io_error").await;
             assert_eq!(monitor.retry_count(), i);
         }
     }
@@ -340,9 +338,7 @@ mod tests {
     async fn test_reset() {
         let monitor = AudioHealthMonitor::with_defaults();
 
-        monitor
-            .report_error(None, "Error", "io_error")
-            .await;
+        monitor.report_error(None, "Error", "io_error").await;
         assert!(monitor.is_error().await);
 
         monitor.reset().await;

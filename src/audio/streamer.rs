@@ -297,11 +297,8 @@ impl AudioStreamer {
             }
 
             // Receive PCM frame with timeout
-            let recv_result = tokio::time::timeout(
-                std::time::Duration::from_secs(2),
-                pcm_rx.recv(),
-            )
-            .await;
+            let recv_result =
+                tokio::time::timeout(std::time::Duration::from_secs(2), pcm_rx.recv()).await;
 
             match recv_result {
                 Ok(Ok(audio_frame)) => {

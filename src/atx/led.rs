@@ -55,7 +55,10 @@ impl LedSensor {
             .map_err(|e| AppError::Internal(format!("LED GPIO chip failed: {}", e)))?;
 
         let line = chip.get_line(self.config.gpio_pin).map_err(|e| {
-            AppError::Internal(format!("LED GPIO line {} failed: {}", self.config.gpio_pin, e))
+            AppError::Internal(format!(
+                "LED GPIO line {} failed: {}",
+                self.config.gpio_pin, e
+            ))
         })?;
 
         let handle = line

@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use ventoy_img::{VentoyImage, Result, VentoyError};
+use ventoy_img::{Result, VentoyError, VentoyImage};
 
 #[derive(Parser)]
 #[command(name = "ventoy-img")]
@@ -103,11 +103,33 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Commands::Create { size, output, label } => cmd_create(&output, &size, &label),
-        Commands::Add { image, file, dest, force, parents } => cmd_add(&image, &file, dest.as_deref(), force, parents),
-        Commands::List { image, path, recursive } => cmd_list(&image, path.as_deref(), recursive),
-        Commands::Remove { image, path, recursive } => cmd_remove(&image, &path, recursive),
-        Commands::Mkdir { image, path, parents } => cmd_mkdir(&image, &path, parents),
+        Commands::Create {
+            size,
+            output,
+            label,
+        } => cmd_create(&output, &size, &label),
+        Commands::Add {
+            image,
+            file,
+            dest,
+            force,
+            parents,
+        } => cmd_add(&image, &file, dest.as_deref(), force, parents),
+        Commands::List {
+            image,
+            path,
+            recursive,
+        } => cmd_list(&image, path.as_deref(), recursive),
+        Commands::Remove {
+            image,
+            path,
+            recursive,
+        } => cmd_remove(&image, &path, recursive),
+        Commands::Mkdir {
+            image,
+            path,
+            parents,
+        } => cmd_mkdir(&image, &path, parents),
         Commands::Info { image } => cmd_info(&image),
     };
 
@@ -138,7 +160,13 @@ fn cmd_create(output: &PathBuf, size: &str, label: &str) -> Result<()> {
     Ok(())
 }
 
-fn cmd_add(image: &PathBuf, file: &PathBuf, dest: Option<&str>, force: bool, parents: bool) -> Result<()> {
+fn cmd_add(
+    image: &PathBuf,
+    file: &PathBuf,
+    dest: Option<&str>,
+    force: bool,
+    parents: bool,
+) -> Result<()> {
     if !file.exists() {
         return Err(VentoyError::FileNotFound(file.display().to_string()));
     }
@@ -234,18 +262,23 @@ fn cmd_info(image: &PathBuf) -> Result<()> {
     println!();
     println!("Partition Layout:");
     println!("  Data partition:");
-    println!("    Start:  sector {} (offset {})",
+    println!(
+        "    Start:  sector {} (offset {})",
         layout.data_start_sector,
-        format_size(layout.data_offset()));
-    println!("    Size:   {} sectors ({})",
+        format_size(layout.data_offset())
+    );
+    println!(
+        "    Size:   {} sectors ({})",
         layout.data_size_sectors,
-        format_size(layout.data_size()));
+        format_size(layout.data_size())
+    );
     println!("  EFI partition:");
-    println!("    Start:  sector {} (offset {})",
+    println!(
+        "    Start:  sector {} (offset {})",
         layout.efi_start_sector,
-        format_size(layout.efi_offset()));
-    println!("    Size:   {} sectors (32 MB)",
-        layout.efi_size_sectors);
+        format_size(layout.efi_offset())
+    );
+    println!("    Size:   {} sectors (32 MB)", layout.efi_size_sectors);
 
     Ok(())
 }

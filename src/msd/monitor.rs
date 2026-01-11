@@ -120,7 +120,10 @@ impl MsdHealthMonitor {
         // Log with throttling (always log if error type changed)
         let throttle_key = format!("msd_{}", error_code);
         if error_changed || self.throttler.should_log(&throttle_key) {
-            warn!("MSD error: {} (code: {}, count: {})", reason, error_code, count);
+            warn!(
+                "MSD error: {} (code: {}, count: {})",
+                reason, error_code, count
+            );
         }
 
         // Update last error code

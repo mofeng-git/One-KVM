@@ -14,11 +14,15 @@
 enum AVPixelFormat {
   AV_PIX_FMT_YUV420P = 0,
   AV_PIX_FMT_YUYV422 = 1,
+  AV_PIX_FMT_RGB24 = 2,
+  AV_PIX_FMT_BGR24 = 3,
   AV_PIX_FMT_YUV422P = 4,     // planar YUV 4:2:2
   AV_PIX_FMT_YUVJ420P = 12,   // JPEG full-range YUV420P (same layout as YUV420P)
   AV_PIX_FMT_YUVJ422P = 13,   // JPEG full-range YUV422P (same layout as YUV422P)
   AV_PIX_FMT_NV12 = 23,
   AV_PIX_FMT_NV21 = 24,
+  AV_PIX_FMT_NV16 = 101,
+  AV_PIX_FMT_NV24 = 188,
 };
 
 int av_log_get_level(void);

@@ -93,10 +93,7 @@ impl H264Pipeline {
     pub fn new(config: H264PipelineConfig) -> Result<Self> {
         info!(
             "Creating H264 pipeline: {}x{} @ {} kbps, {} fps",
-            config.resolution.width,
-            config.resolution.height,
-            config.bitrate_kbps,
-            config.fps
+            config.resolution.width, config.resolution.height, config.bitrate_kbps, config.fps
         );
 
         // Determine encoder input format based on pipeline input
@@ -154,7 +151,7 @@ impl H264Pipeline {
             // MJPEG/JPEG input - not supported (requires libjpeg for decoding)
             PixelFormat::Mjpeg | PixelFormat::Jpeg => {
                 return Err(AppError::VideoError(
-                    "MJPEG input format not supported in this build".to_string()
+                    "MJPEG input format not supported in this build".to_string(),
                 ));
             }
 
@@ -216,7 +213,10 @@ impl H264Pipeline {
         }
 
         let _ = self.running.send(true);
-        info!("Starting H264 pipeline (input format: {})", self.config.input_format);
+        info!(
+            "Starting H264 pipeline (input format: {})",
+            self.config.input_format
+        );
 
         let encoder = self.encoder.lock().await.take();
         let nv12_converter = self.nv12_converter.lock().await.take();

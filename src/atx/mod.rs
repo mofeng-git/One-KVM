@@ -52,8 +52,8 @@ mod wol;
 pub use controller::{AtxController, AtxControllerConfig};
 pub use executor::timing;
 pub use types::{
-    ActiveLevel, AtxAction, AtxDevices, AtxDriverType, AtxKeyConfig, AtxLedConfig,
-    AtxPowerRequest, AtxState, PowerStatus,
+    ActiveLevel, AtxAction, AtxDevices, AtxDriverType, AtxKeyConfig, AtxLedConfig, AtxPowerRequest,
+    AtxState, PowerStatus,
 };
 pub use wol::send_wol;
 

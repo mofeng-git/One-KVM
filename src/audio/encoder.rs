@@ -137,9 +137,8 @@ impl OpusEncoder {
         let channels = config.to_audiopus_channels();
         let application = config.to_audiopus_application();
 
-        let mut encoder = Encoder::new(sample_rate, channels, application).map_err(|e| {
-            AppError::AudioError(format!("Failed to create Opus encoder: {:?}", e))
-        })?;
+        let mut encoder = Encoder::new(sample_rate, channels, application)
+            .map_err(|e| AppError::AudioError(format!("Failed to create Opus encoder: {:?}", e)))?;
 
         // Configure encoder
         encoder

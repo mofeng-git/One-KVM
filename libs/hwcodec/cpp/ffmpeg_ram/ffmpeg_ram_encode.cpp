@@ -388,7 +388,9 @@ private:
     }
   _exit:
     av_packet_unref(pkt_);
-    return encoded ? 0 : -1;
+    // If no packet is produced for this input frame, treat it as EAGAIN.
+    // This is not a fatal error: encoders may buffer internally (e.g., startup delay).
+    return encoded ? 0 : AVERROR(EAGAIN);
   }
 
   int fill_frame(AVFrame *frame, uint8_t *data, int data_length,

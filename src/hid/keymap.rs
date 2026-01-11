@@ -278,16 +278,16 @@ static JS_TO_USB_TABLE: [u8; 256] = {
     }
 
     // Numbers 1-9, 0 (JS 49-57, 48 -> USB 0x1E-0x27)
-    table[49] = usb::KEY_1;  // 1
-    table[50] = usb::KEY_2;  // 2
-    table[51] = usb::KEY_3;  // 3
-    table[52] = usb::KEY_4;  // 4
-    table[53] = usb::KEY_5;  // 5
-    table[54] = usb::KEY_6;  // 6
-    table[55] = usb::KEY_7;  // 7
-    table[56] = usb::KEY_8;  // 8
-    table[57] = usb::KEY_9;  // 9
-    table[48] = usb::KEY_0;  // 0
+    table[49] = usb::KEY_1; // 1
+    table[50] = usb::KEY_2; // 2
+    table[51] = usb::KEY_3; // 3
+    table[52] = usb::KEY_4; // 4
+    table[53] = usb::KEY_5; // 5
+    table[54] = usb::KEY_6; // 6
+    table[55] = usb::KEY_7; // 7
+    table[56] = usb::KEY_8; // 8
+    table[57] = usb::KEY_9; // 9
+    table[48] = usb::KEY_0; // 0
 
     // Function keys F1-F12 (JS 112-123 -> USB 0x3A-0x45)
     table[112] = usb::KEY_F1;
@@ -304,25 +304,25 @@ static JS_TO_USB_TABLE: [u8; 256] = {
     table[123] = usb::KEY_F12;
 
     // Control keys
-    table[13] = usb::KEY_ENTER;      // Enter
-    table[27] = usb::KEY_ESCAPE;     // Escape
-    table[8] = usb::KEY_BACKSPACE;   // Backspace
-    table[9] = usb::KEY_TAB;         // Tab
-    table[32] = usb::KEY_SPACE;      // Space
-    table[20] = usb::KEY_CAPS_LOCK;  // Caps Lock
+    table[13] = usb::KEY_ENTER; // Enter
+    table[27] = usb::KEY_ESCAPE; // Escape
+    table[8] = usb::KEY_BACKSPACE; // Backspace
+    table[9] = usb::KEY_TAB; // Tab
+    table[32] = usb::KEY_SPACE; // Space
+    table[20] = usb::KEY_CAPS_LOCK; // Caps Lock
 
     // Punctuation (JS codes vary by browser/layout)
-    table[189] = usb::KEY_MINUS;         // -
-    table[187] = usb::KEY_EQUAL;         // =
-    table[219] = usb::KEY_LEFT_BRACKET;  // [
+    table[189] = usb::KEY_MINUS; // -
+    table[187] = usb::KEY_EQUAL; // =
+    table[219] = usb::KEY_LEFT_BRACKET; // [
     table[221] = usb::KEY_RIGHT_BRACKET; // ]
-    table[220] = usb::KEY_BACKSLASH;     // \
-    table[186] = usb::KEY_SEMICOLON;     // ;
-    table[222] = usb::KEY_APOSTROPHE;    // '
-    table[192] = usb::KEY_GRAVE;         // `
-    table[188] = usb::KEY_COMMA;         // ,
-    table[190] = usb::KEY_PERIOD;        // .
-    table[191] = usb::KEY_SLASH;         // /
+    table[220] = usb::KEY_BACKSLASH; // \
+    table[186] = usb::KEY_SEMICOLON; // ;
+    table[222] = usb::KEY_APOSTROPHE; // '
+    table[192] = usb::KEY_GRAVE; // `
+    table[188] = usb::KEY_COMMA; // ,
+    table[190] = usb::KEY_PERIOD; // .
+    table[191] = usb::KEY_SLASH; // /
 
     // Navigation keys
     table[45] = usb::KEY_INSERT;
@@ -359,14 +359,14 @@ static JS_TO_USB_TABLE: [u8; 256] = {
     // Special keys
     table[19] = usb::KEY_PAUSE;
     table[145] = usb::KEY_SCROLL_LOCK;
-    table[93] = usb::KEY_APPLICATION;  // Context menu
+    table[93] = usb::KEY_APPLICATION; // Context menu
 
     // Modifier keys
     table[17] = usb::KEY_LEFT_CTRL;
     table[16] = usb::KEY_LEFT_SHIFT;
     table[18] = usb::KEY_LEFT_ALT;
-    table[91] = usb::KEY_LEFT_META;   // Left Windows/Command
-    table[92] = usb::KEY_RIGHT_META;  // Right Windows/Command
+    table[91] = usb::KEY_LEFT_META; // Left Windows/Command
+    table[92] = usb::KEY_RIGHT_META; // Right Windows/Command
 
     table
 };

@@ -86,8 +86,12 @@ impl KeyPair {
 
     /// Create from base64-encoded keys
     pub fn from_base64(public_key: &str, secret_key: &str) -> Result<Self, CryptoError> {
-        let pk_bytes = BASE64.decode(public_key).map_err(|_| CryptoError::InvalidKeyLength)?;
-        let sk_bytes = BASE64.decode(secret_key).map_err(|_| CryptoError::InvalidKeyLength)?;
+        let pk_bytes = BASE64
+            .decode(public_key)
+            .map_err(|_| CryptoError::InvalidKeyLength)?;
+        let sk_bytes = BASE64
+            .decode(secret_key)
+            .map_err(|_| CryptoError::InvalidKeyLength)?;
         Self::from_keys(&pk_bytes, &sk_bytes)
     }
 }
@@ -140,7 +144,10 @@ pub fn decrypt_with_key(
 
 /// Compute a shared symmetric key from public/private keypair
 /// This is the precomputed key for the NaCl box
-pub fn precompute_key(their_public_key: &PublicKey, our_secret_key: &SecretKey) -> box_::PrecomputedKey {
+pub fn precompute_key(
+    their_public_key: &PublicKey,
+    our_secret_key: &SecretKey,
+) -> box_::PrecomputedKey {
     box_::precompute(their_public_key, our_secret_key)
 }
 
@@ -207,8 +214,8 @@ pub fn decrypt_symmetric_key(
         return Err(CryptoError::InvalidKeyLength);
     }
 
-    let their_pk = PublicKey::from_slice(their_temp_public_key)
-        .ok_or(CryptoError::InvalidKeyLength)?;
+    let their_pk =
+        PublicKey::from_slice(their_temp_public_key).ok_or(CryptoError::InvalidKeyLength)?;
 
     // Use zero nonce as per RustDesk protocol
     let nonce = box_::Nonce([0u8; box_::NONCEBYTES]);
@@ -294,8 +301,12 @@ impl SigningKeyPair {
 
     /// Create from base64-encoded keys
     pub fn from_base64(public_key: &str, secret_key: &str) -> Result<Self, CryptoError> {
-        let pk_bytes = BASE64.decode(public_key).map_err(|_| CryptoError::InvalidKeyLength)?;
-        let sk_bytes = BASE64.decode(secret_key).map_err(|_| CryptoError::InvalidKeyLength)?;
+        let pk_bytes = BASE64
+            .decode(public_key)
+            .map_err(|_| CryptoError::InvalidKeyLength)?;
+        let sk_bytes = BASE64
+            .decode(secret_key)
+            .map_err(|_| CryptoError::InvalidKeyLength)?;
         Self::from_keys(&pk_bytes, &sk_bytes)
     }
 
@@ -321,8 +332,7 @@ impl SigningKeyPair {
     /// which is required by RustDesk's protocol where clients encrypt the
     /// symmetric key using the public key from IdPk.
     pub fn to_curve25519_pk(&self) -> Result<PublicKey, CryptoError> {
-        ed25519::to_curve25519_pk(&self.public_key)
-            .map_err(|_| CryptoError::KeyConversionFailed)
+        ed25519::to_curve25519_pk(&self.public_key).map_err(|_| CryptoError::KeyConversionFailed)
     }
 
     /// Convert Ed25519 secret key to Curve25519 secret key for decryption
@@ -330,14 +340,16 @@ impl SigningKeyPair {
     /// This allows decrypting messages that were encrypted using the
     /// converted public key.
     pub fn to_curve25519_sk(&self) -> Result<SecretKey, CryptoError> {
-        ed25519::to_curve25519_sk(&self.secret_key)
-            .map_err(|_| CryptoError::KeyConversionFailed)
+        ed25519::to_curve25519_sk(&self.secret_key).map_err(|_| CryptoError::KeyConversionFailed)
     }
 }
 
 /// Verify a signed message
 /// Returns the original message if signature is valid
-pub fn verify_signed(signed_message: &[u8], public_key: &sign::PublicKey) -> Result<Vec<u8>, CryptoError> {
+pub fn verify_signed(
+    signed_message: &[u8],
+    public_key: &sign::PublicKey,
+) -> Result<Vec<u8>, CryptoError> {
     sign::verify(signed_message, public_key).map_err(|_| CryptoError::SignatureVerificationFailed)
 }
 
@@ -374,7 +386,8 @@ mod tests {
         let message = b"Hello, RustDesk!";
         let (nonce, ciphertext) = encrypt_box(message, &bob.public_key, &alice.secret_key);
 
-        let plaintext = decrypt_box(&ciphertext, &nonce, &alice.public_key, &bob.secret_key).unwrap();
+        let plaintext =
+            decrypt_box(&ciphertext, &nonce, &alice.public_key, &bob.secret_key).unwrap();
         assert_eq!(plaintext, message);
     }
 

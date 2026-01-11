@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 ///
 /// ```rust
 /// use one_kvm::utils::LogThrottler;
+/// use std::time::Duration;
 ///
 /// let throttler = LogThrottler::new(Duration::from_secs(5));
 ///

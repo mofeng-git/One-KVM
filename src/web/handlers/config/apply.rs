@@ -31,15 +31,14 @@ pub async fn apply_video_config(
         .format
         .as_ref()
         .and_then(|f| {
-            serde_json::from_value::<crate::video::format::PixelFormat>(
-                serde_json::Value::String(f.clone()),
-            )
+            serde_json::from_value::<crate::video::format::PixelFormat>(serde_json::Value::String(
+                f.clone(),
+            ))
             .ok()
         })
         .unwrap_or(crate::video::format::PixelFormat::Mjpeg);
 
-    let resolution =
-        crate::video::format::Resolution::new(new_config.width, new_config.height);
+    let resolution = crate::video::format::Resolution::new(new_config.width, new_config.height);
 
     // Step 1: 更新 WebRTC streamer 配置（停止现有 pipeline 和 sessions）
     state
@@ -162,9 +161,16 @@ pub async fn apply_hid_config(
     // 如果描述符变更且当前使用 OTG 后端，需要重建 Gadget
     if descriptor_changed && new_config.backend == HidBackend::Otg {
         tracing::info!("OTG descriptor changed, updating gadget...");
-        if let Err(e) = state.otg_service.update_descriptor(&new_config.otg_descriptor).await {
+        if let Err(e) = state
+            .otg_service
+            .update_descriptor(&new_config.otg_descriptor)
+            .await
+        {
             tracing::error!("Failed to update OTG descriptor: {}", e);
-            return Err(AppError::Config(format!("OTG descriptor update failed: {}", e)));
+            return Err(AppError::Config(format!(
+                "OTG descriptor update failed: {}",
+                e
+            )));
         }
         tracing::info!("OTG descriptor updated successfully");
     }
@@ -197,7 +203,10 @@ pub async fn apply_hid_config(
         .await
         .map_err(|e| AppError::Config(format!("HID reload failed: {}", e)))?;
 
-    tracing::info!("HID backend reloaded successfully: {:?}", new_config.backend);
+    tracing::info!(
+        "HID backend reloaded successfully: {:?}",
+        new_config.backend
+    );
 
     // When switching to OTG backend, automatically enable MSD if not already enabled
     // OTG HID and MSD share the same USB gadget, so it makes sense to enable both
@@ -245,7 +254,11 @@ pub async fn apply_msd_config(
     let old_msd_enabled = old_config.enabled;
     let new_msd_enabled = new_config.enabled;
 
-    tracing::info!("MSD enabled: old={}, new={}", old_msd_enabled, new_msd_enabled);
+    tracing::info!(
+        "MSD enabled: old={}, new={}",
+        old_msd_enabled,
+        new_msd_enabled
+    );
 
     if old_msd_enabled != new_msd_enabled {
         if new_msd_enabled {
@@ -257,9 +270,9 @@ pub async fn apply_msd_config(
                 &new_config.images_path,
                 &new_config.drive_path,
             );
-            msd.init().await.map_err(|e| {
-                AppError::Config(format!("MSD initialization failed: {}", e))
-            })?;
+            msd.init()
+                .await
+                .map_err(|e| AppError::Config(format!("MSD initialization failed: {}", e)))?;
 
             // Set event bus
             let events = state.events.clone();
@@ -429,7 +442,10 @@ pub async fn apply_rustdesk_config(
                 if let Err(e) = service.restart(new_config.clone()).await {
                     tracing::error!("Failed to restart RustDesk service: {}", e);
                 } else {
-                    tracing::info!("RustDesk service restarted with ID: {}", new_config.device_id);
+                    tracing::info!(
+                        "RustDesk service restarted with ID: {}",
+                        new_config.device_id
+                    );
                     // Save generated keypair and UUID to config
                     credentials_to_save = service.save_credentials();
                 }

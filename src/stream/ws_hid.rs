@@ -142,7 +142,9 @@ impl WsHidHandler {
             shutdown_tx,
         });
 
-        self.clients.write().insert(client_id.clone(), client.clone());
+        self.clients
+            .write()
+            .insert(client_id.clone(), client.clone());
         info!(
             "WsHidHandler: Client {} connected (total: {})",
             client_id,
@@ -182,7 +184,11 @@ impl WsHidHandler {
         let (mut sender, mut receiver) = socket.split();
 
         // Send initial status as binary: 0x00 = ok, 0x01 = error
-        let status_byte = if self.is_hid_available() { 0x00u8 } else { 0x01u8 };
+        let status_byte = if self.is_hid_available() {
+            0x00u8
+        } else {
+            0x01u8
+        };
         let _ = sender.send(Message::Binary(vec![status_byte].into())).await;
 
         loop {
@@ -230,7 +236,10 @@ impl WsHidHandler {
         let hid = self.hid_controller.read().clone();
         if let Some(hid) = hid {
             if let Err(e) = hid.reset().await {
-                warn!("WsHidHandler: Failed to reset HID on client {} disconnect: {}", client_id, e);
+                warn!(
+                    "WsHidHandler: Failed to reset HID on client {} disconnect: {}",
+                    client_id, e
+                );
             } else {
                 debug!("WsHidHandler: HID reset on client {} disconnect", client_id);
             }

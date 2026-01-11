@@ -34,7 +34,10 @@ pub fn encode_frame(data: &[u8]) -> io::Result<Vec<u8>> {
         let h = ((len << 2) as u32) | 0x3;
         buf.extend_from_slice(&h.to_le_bytes());
     } else {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Message too large"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Message too large",
+        ));
     }
 
     buf.extend_from_slice(data);
@@ -79,7 +82,10 @@ pub async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> io::Result<Byte
     let (_, msg_len) = decode_header(first_byte[0], &header_rest);
 
     if msg_len > MAX_PACKET_LENGTH {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Message too large"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Message too large",
+        ));
     }
 
     // Read message body
@@ -133,7 +139,10 @@ pub fn encode_frame_into(data: &[u8], buf: &mut BytesMut) -> io::Result<()> {
     } else if len <= MAX_PACKET_LENGTH {
         buf.put_u32_le(((len << 2) as u32) | 0x3);
     } else {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Message too large"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Message too large",
+        ));
     }
 
     buf.extend_from_slice(data);
@@ -216,7 +225,10 @@ impl BytesCodec {
         n >>= 2;
 
         if n > self.max_packet_length {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "Message too large"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Message too large",
+            ));
         }
 
         src.advance(head_len);
@@ -245,7 +257,10 @@ impl BytesCodec {
         } else if len <= MAX_PACKET_LENGTH {
             buf.put_u32_le(((len << 2) as u32) | 0x3);
         } else {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Message too large"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Message too large",
+            ));
         }
 
         buf.extend(data);

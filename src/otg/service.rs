@@ -27,8 +27,8 @@ use tracing::{debug, info, warn};
 
 use super::manager::{wait_for_hid_devices, GadgetDescriptor, OtgGadgetManager};
 use super::msd::MsdFunction;
-use crate::error::{AppError, Result};
 use crate::config::OtgDescriptorConfig;
+use crate::error::{AppError, Result};
 
 /// Bitflags for requested functions (lock-free)
 const FLAG_HID: u8 = 0b01;
@@ -254,8 +254,9 @@ impl OtgService {
 
         // Get MSD function
         let msd = self.msd_function.read().await;
-        msd.clone()
-            .ok_or_else(|| AppError::Internal("MSD function not set after gadget setup".to_string()))
+        msd.clone().ok_or_else(|| {
+            AppError::Internal("MSD function not set after gadget setup".to_string())
+        })
     }
 
     /// Disable MSD function
@@ -465,7 +466,10 @@ impl OtgService {
             device_version: super::configfs::DEFAULT_USB_BCD_DEVICE,
             manufacturer: config.manufacturer.clone(),
             product: config.product.clone(),
-            serial_number: config.serial_number.clone().unwrap_or_else(|| "0123456789".to_string()),
+            serial_number: config
+                .serial_number
+                .clone()
+                .unwrap_or_else(|| "0123456789".to_string()),
         };
 
         // Update stored descriptor

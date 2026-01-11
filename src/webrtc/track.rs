@@ -4,9 +4,9 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, watch, Mutex};
 use tracing::{debug, error, info};
+use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::TrackLocalWriter;
-use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 
 use crate::video::frame::VideoFrame;
 
@@ -56,7 +56,9 @@ impl VideoCodecType {
 
     pub fn sdp_fmtp(&self) -> &'static str {
         match self {
-            VideoCodecType::H264 => "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+            VideoCodecType::H264 => {
+                "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
+            }
             VideoCodecType::VP8 => "",
             VideoCodecType::VP9 => "profile-id=0",
         }
@@ -156,10 +158,7 @@ impl VideoTrack {
     }
 
     /// Start sending frames from a broadcast receiver
-    pub async fn start_sending(
-        &self,
-        mut frame_rx: broadcast::Receiver<VideoFrame>,
-    ) {
+    pub async fn start_sending(&self, mut frame_rx: broadcast::Receiver<VideoFrame>) {
         let _ = self.running.send(true);
         let track = self.track.clone();
         let stats = self.stats.clone();

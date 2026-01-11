@@ -186,10 +186,7 @@ pub fn detect_best_vp9_encoder(width: u32, height: u32) -> (VP9EncoderType, Opti
         VP9EncoderType::Software // Default to software for unknown
     };
 
-    info!(
-        "Selected VP9 encoder: {} ({})",
-        codec.name, encoder_type
-    );
+    info!("Selected VP9 encoder: {} ({})", codec.name, encoder_type);
     (encoder_type, Some(codec.name.clone()))
 }
 
@@ -238,7 +235,8 @@ impl VP9Encoder {
 
         if encoder_type == VP9EncoderType::None {
             return Err(AppError::VideoError(
-                "No VP9 encoder available. Please ensure FFmpeg is built with libvpx support.".to_string(),
+                "No VP9 encoder available. Please ensure FFmpeg is built with libvpx support."
+                    .to_string(),
             ));
         }
 
@@ -270,7 +268,9 @@ impl VP9Encoder {
         } else {
             match config.input_format {
                 VP9InputFormat::Nv12 => (AVPixelFormat::AV_PIX_FMT_NV12, VP9InputFormat::Nv12),
-                VP9InputFormat::Yuv420p => (AVPixelFormat::AV_PIX_FMT_YUV420P, VP9InputFormat::Yuv420p),
+                VP9InputFormat::Yuv420p => {
+                    (AVPixelFormat::AV_PIX_FMT_YUV420P, VP9InputFormat::Yuv420p)
+                }
             }
         };
 
@@ -340,9 +340,9 @@ impl VP9Encoder {
 
     /// Update bitrate dynamically
     pub fn set_bitrate(&mut self, bitrate_kbps: u32) -> Result<()> {
-        self.inner.set_bitrate(bitrate_kbps as i32).map_err(|_| {
-            AppError::VideoError("Failed to set VP9 bitrate".to_string())
-        })?;
+        self.inner
+            .set_bitrate(bitrate_kbps as i32)
+            .map_err(|_| AppError::VideoError("Failed to set VP9 bitrate".to_string()))?;
         self.config.bitrate_kbps = bitrate_kbps;
         debug!("VP9 bitrate updated to {} kbps", bitrate_kbps);
         Ok(())
@@ -470,7 +470,10 @@ mod tests {
     #[test]
     fn test_detect_vp9_encoder() {
         let (encoder_type, codec_name) = detect_best_vp9_encoder(1280, 720);
-        println!("Detected VP9 encoder: {:?} ({:?})", encoder_type, codec_name);
+        println!(
+            "Detected VP9 encoder: {:?} ({:?})",
+            encoder_type, codec_name
+        );
     }
 
     #[test]

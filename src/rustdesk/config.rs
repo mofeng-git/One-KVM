@@ -116,9 +116,9 @@ impl RustDeskConfig {
 
     /// Get the UUID bytes (returns None if not set)
     pub fn get_uuid_bytes(&self) -> Option<[u8; 16]> {
-        self.uuid.as_ref().and_then(|s| {
-            uuid::Uuid::parse_str(s).ok().map(|u| *u.as_bytes())
-        })
+        self.uuid
+            .as_ref()
+            .and_then(|s| uuid::Uuid::parse_str(s).ok().map(|u| *u.as_bytes()))
     }
 
     /// Get the rendezvous server address with default port
@@ -135,26 +135,29 @@ impl RustDeskConfig {
 
     /// Get the relay server address with default port
     pub fn relay_addr(&self) -> Option<String> {
-        self.relay_server.as_ref().map(|s| {
-            if s.contains(':') {
-                s.clone()
-            } else {
-                format!("{}:21117", s)
-            }
-        }).or_else(|| {
-            // Default: same host as rendezvous server
-            let server = &self.rendezvous_server;
-            if !server.is_empty() {
-                let host = server.split(':').next().unwrap_or("");
-                if !host.is_empty() {
-                    Some(format!("{}:21117", host))
+        self.relay_server
+            .as_ref()
+            .map(|s| {
+                if s.contains(':') {
+                    s.clone()
+                } else {
+                    format!("{}:21117", s)
+                }
+            })
+            .or_else(|| {
+                // Default: same host as rendezvous server
+                let server = &self.rendezvous_server;
+                if !server.is_empty() {
+                    let host = server.split(':').next().unwrap_or("");
+                    if !host.is_empty() {
+                        Some(format!("{}:21117", host))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
-            } else {
-                None
-            }
-        })
+            })
     }
 }
 
@@ -222,7 +225,10 @@ mod tests {
 
         // Explicit relay server
         config.relay_server = Some("relay.example.com".to_string());
-        assert_eq!(config.relay_addr(), Some("relay.example.com:21117".to_string()));
+        assert_eq!(
+            config.relay_addr(),
+            Some("relay.example.com:21117".to_string())
+        );
 
         // No rendezvous server, relay is None
         config.rendezvous_server = String::new();

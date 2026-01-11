@@ -3,7 +3,8 @@ use crate::{
     ffmpeg::{init_av_log, AVPixelFormat},
     ffmpeg_ram::{
         ffmpeg_linesize_offset_length, ffmpeg_ram_encode, ffmpeg_ram_free_encoder,
-        ffmpeg_ram_new_encoder, ffmpeg_ram_request_keyframe, ffmpeg_ram_set_bitrate, CodecInfo, AV_NUM_DATA_POINTERS,
+        ffmpeg_ram_new_encoder, ffmpeg_ram_request_keyframe, ffmpeg_ram_set_bitrate, CodecInfo,
+        AV_NUM_DATA_POINTERS,
     },
 };
 use log::trace;
@@ -123,6 +124,12 @@ impl Encoder {
                 self.frames as *const _ as *const c_void,
                 ms,
             );
+            // ffmpeg_ram_encode returns AVERROR(EAGAIN) when the encoder accepts the frame
+            // but does not output a packet yet (e.g., startup delay / internal buffering).
+            // Treat this as a successful call with an empty output list.
+            if result == -11 {
+                return Ok(&mut *self.frames);
+            }
             if result != 0 {
                 return Err(result);
             }
@@ -358,7 +365,8 @@ impl Encoder {
                                         if frames[0].key == 1 && elapsed < TEST_TIMEOUT_MS as _ {
                                             debug!(
                                                 "Encoder {} test passed on attempt {}",
-                                                codec.name, attempt + 1
+                                                codec.name,
+                                                attempt + 1
                                             );
                                             res.push(codec.clone());
                                             passed = true;

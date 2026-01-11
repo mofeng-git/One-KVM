@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 use tracing::{debug, info, trace, warn};
 
@@ -358,8 +358,7 @@ impl Response {
 
     /// Check if the response indicates success
     pub fn is_success(&self) -> bool {
-        !self.is_error
-            && (self.data.is_empty() || self.data[0] == Ch9329Error::Success as u8)
+        !self.is_error && (self.data.is_empty() || self.data[0] == Ch9329Error::Success as u8)
     }
 }
 
@@ -489,7 +488,10 @@ impl Ch9329Backend {
             .map_err(|e| Self::serial_error_to_hid_error(e, "Failed to open serial port"))?;
 
         *self.port.lock() = Some(port);
-        info!("CH9329 serial port reopened: {} @ {} baud", self.port_path, self.baud_rate);
+        info!(
+            "CH9329 serial port reopened: {} @ {} baud",
+            self.port_path, self.baud_rate
+        );
 
         // Verify connection with GET_INFO command
         self.query_chip_info().map_err(|e| {
@@ -518,7 +520,10 @@ impl Ch9329Backend {
     /// Returns the packet buffer and the actual length
     #[inline]
     fn build_packet_buf(&self, cmd: u8, data: &[u8]) -> ([u8; MAX_PACKET_SIZE], usize) {
-        debug_assert!(data.len() <= MAX_DATA_LEN, "Data too long for CH9329 packet");
+        debug_assert!(
+            data.len() <= MAX_DATA_LEN,
+            "Data too long for CH9329 packet"
+        );
 
         let len = data.len() as u8;
         let packet_len = 6 + data.len();
@@ -554,16 +559,19 @@ impl Ch9329Backend {
 
         let mut port_guard = self.port.lock();
         if let Some(ref mut port) = *port_guard {
-            port.write_all(&packet[..packet_len]).map_err(|e| {
-                AppError::HidError {
+            port.write_all(&packet[..packet_len])
+                .map_err(|e| AppError::HidError {
                     backend: "ch9329".to_string(),
                     reason: format!("Failed to write to CH9329: {}", e),
                     error_code: "write_failed".to_string(),
-                }
-            })?;
+                })?;
             // Only log mouse button events at debug level to avoid flooding
             if cmd == cmd::SEND_MS_ABS_DATA && data.len() >= 2 && data[1] != 0 {
-                debug!("CH9329 TX [cmd=0x{:02X}]: {:02X?}", cmd, &packet[..packet_len]);
+                debug!(
+                    "CH9329 TX [cmd=0x{:02X}]: {:02X?}",
+                    cmd,
+                    &packet[..packet_len]
+                );
             }
             Ok(())
         } else {
@@ -655,7 +663,11 @@ impl Ch9329Backend {
                     info!(
                         "CH9329: Recovery successful, chip version: {}, USB: {}",
                         info.version,
-                        if info.usb_connected { "connected" } else { "disconnected" }
+                        if info.usb_connected {
+                            "connected"
+                        } else {
+                            "disconnected"
+                        }
                     );
                     // Reset error count on successful recovery
                     self.error_count.store(0, Ordering::Relaxed);
@@ -695,9 +707,8 @@ impl Ch9329Backend {
         let mut port_guard = self.port.lock();
         if let Some(ref mut port) = *port_guard {
             // Send packet
-            port.write_all(&packet).map_err(|e| {
-                AppError::Internal(format!("Failed to write to CH9329: {}", e))
-            })?;
+            port.write_all(&packet)
+                .map_err(|e| AppError::Internal(format!("Failed to write to CH9329: {}", e)))?;
             trace!("CH9329 TX: {:02X?}", packet);
 
             // Wait for response - use shorter delay for faster response
@@ -725,7 +736,10 @@ impl Ch9329Backend {
                     debug!("CH9329 response timeout (may be normal)");
                     Err(AppError::Internal("CH9329 response timeout".to_string()))
                 }
-                Err(e) => Err(AppError::Internal(format!("Failed to read from CH9329: {}", e))),
+                Err(e) => Err(AppError::Internal(format!(
+                    "Failed to read from CH9329: {}",
+                    e
+                ))),
             }
         } else {
             Err(AppError::Internal("CH9329 port not opened".to_string()))
@@ -799,7 +813,9 @@ impl Ch9329Backend {
         if response.is_success() {
             Ok(())
         } else {
-            Err(AppError::Internal("Failed to restore factory defaults".to_string()))
+            Err(AppError::Internal(
+                "Failed to restore factory defaults".to_string(),
+            ))
         }
     }
 
@@ -820,7 +836,9 @@ impl Ch9329Backend {
     /// For other multimedia keys: data = [0x02, byte2, byte3, byte4]
     pub fn send_media_key(&self, data: &[u8]) -> Result<()> {
         if data.len() < 2 || data.len() > 4 {
-            return Err(AppError::Internal("Invalid media key data length".to_string()));
+            return Err(AppError::Internal(
+                "Invalid media key data length".to_string(),
+            ));
         }
         self.send_packet(cmd::SEND_KB_MEDIA_DATA, data)
     }
@@ -871,10 +889,7 @@ impl Ch9329Backend {
         // Use send_packet which has retry logic built-in
         self.send_packet(cmd::SEND_MS_ABS_DATA, &data)?;
 
-        trace!(
-            "CH9329 mouse: buttons=0x{:02X} pos=({},{})",
-            buttons, x, y
-        );
+        trace!("CH9329 mouse: buttons=0x{:02X} pos=({},{})", buttons, x, y);
 
         Ok(())
     }
@@ -930,7 +945,11 @@ impl HidBackend for Ch9329Backend {
         info!(
             "CH9329 chip detected: {}, USB: {}, LEDs: NumLock={}, CapsLock={}, ScrollLock={}",
             info.version,
-            if info.usb_connected { "connected" } else { "disconnected" },
+            if info.usb_connected {
+                "connected"
+            } else {
+                "disconnected"
+            },
             info.num_lock,
             info.caps_lock,
             info.scroll_lock
@@ -1128,10 +1147,7 @@ pub fn detect_ch9329() -> Option<String> {
                             && response[0] == PACKET_HEADER[0]
                             && response[1] == PACKET_HEADER[1]
                         {
-                            info!(
-                                "CH9329 detected on {} @ {} baud",
-                                port_path, baud_rate
-                            );
+                            info!("CH9329 detected on {} @ {} baud", port_path, baud_rate);
                             return Some(port_path.to_string());
                         }
                     }
@@ -1176,10 +1192,7 @@ pub fn detect_ch9329_with_baud() -> Option<(String, u32)> {
                             && response[0] == PACKET_HEADER[0]
                             && response[1] == PACKET_HEADER[1]
                         {
-                            info!(
-                                "CH9329 detected on {} @ {} baud",
-                                port_path, baud_rate
-                            );
+                            info!("CH9329 detected on {} @ {} baud", port_path, baud_rate);
                             return Some((port_path.to_string(), baud_rate));
                         }
                     }
@@ -1217,7 +1230,7 @@ mod tests {
         assert_eq!(packet[3], cmd::SEND_KB_GENERAL_DATA); // Command
         assert_eq!(packet[4], 8); // Length (8 data bytes)
         assert_eq!(&packet[5..13], &data); // Data
-        // Checksum = 0x57 + 0xAB + 0x00 + 0x02 + 0x08 + 0x00 + 0x00 + 0x04 + ... = 0x10
+                                           // Checksum = 0x57 + 0xAB + 0x00 + 0x02 + 0x08 + 0x00 + 0x00 + 0x04 + ... = 0x10
         let expected_checksum: u8 = packet[..13].iter().fold(0u8, |acc, &x| acc.wrapping_add(x));
         assert_eq!(packet[13], expected_checksum);
     }
@@ -1234,10 +1247,10 @@ mod tests {
         assert_eq!(packet[1], 0xAB);
         assert_eq!(packet[2], 0x00); // Address
         assert_eq!(packet[3], 0x05); // CMD_SEND_MS_REL_DATA
-        assert_eq!(packet[4], 5);    // Length = 5
+        assert_eq!(packet[4], 5); // Length = 5
         assert_eq!(packet[5], 0x01); // Mode marker
         assert_eq!(packet[6], 0x00); // Buttons
-        assert_eq!(packet[7], 50);   // X delta
+        assert_eq!(packet[7], 50); // X delta
     }
 
     #[test]
@@ -1248,7 +1261,9 @@ mod tests {
         assert_eq!(checksum, 0x03);
 
         // Known packet: Keyboard 'A' press
-        let packet = [0x57u8, 0xAB, 0x00, 0x02, 0x08, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let packet = [
+            0x57u8, 0xAB, 0x00, 0x02, 0x08, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
         let checksum = Ch9329Backend::calculate_checksum(&packet);
         assert_eq!(checksum, 0x10);
     }
@@ -1258,11 +1273,11 @@ mod tests {
         // Valid GET_INFO response
         let response_bytes = [
             0x57, 0xAB, // Header
-            0x00,       // Address
-            0x81,       // Command (GET_INFO | 0x80 = success)
-            0x08,       // Length
+            0x00, // Address
+            0x81, // Command (GET_INFO | 0x80 = success)
+            0x08, // Length
             0x31, 0x01, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, // Data
-            0xE0,       // Checksum (calculated)
+            0xE0, // Checksum (calculated)
         ];
 
         // Note: checksum in test is just placeholder, parse will validate

@@ -231,7 +231,9 @@ impl VideoCapturer {
         let last_error = self.last_error.clone();
 
         let handle = tokio::task::spawn_blocking(move || {
-            capture_loop(config, state, stats, frame_tx, stop_flag, sequence, last_error);
+            capture_loop(
+                config, state, stats, frame_tx, stop_flag, sequence, last_error,
+            );
         });
 
         *self.capture_handle.lock().await = Some(handle);
@@ -275,14 +277,7 @@ fn capture_loop(
     sequence: Arc<AtomicU64>,
     error_holder: Arc<parking_lot::RwLock<Option<(String, String)>>>,
 ) {
-    let result = run_capture(
-        &config,
-        &state,
-        &stats,
-        &frame_tx,
-        &stop_flag,
-        &sequence,
-    );
+    let result = run_capture(&config, &state, &stats, &frame_tx, &stop_flag, &sequence);
 
     match result {
         Ok(_) => {
@@ -503,7 +498,10 @@ fn run_capture_inner(
 
         // Validate frame
         if frame_size < MIN_FRAME_SIZE {
-            debug!("Dropping small frame: {} bytes (bytesused={})", frame_size, meta.bytesused);
+            debug!(
+                "Dropping small frame: {} bytes (bytesused={})",
+                frame_size, meta.bytesused
+            );
             if let Ok(mut s) = stats.try_lock() {
                 s.frames_dropped += 1;
             }
@@ -606,18 +604,12 @@ impl FrameGrabber {
     }
 
     /// Capture a single frame
-    pub async fn grab(
-        &self,
-        resolution: Resolution,
-        format: PixelFormat,
-    ) -> Result<VideoFrame> {
+    pub async fn grab(&self, resolution: Resolution, format: PixelFormat) -> Result<VideoFrame> {
         let device_path = self.device_path.clone();
 
-        tokio::task::spawn_blocking(move || {
-            grab_single_frame(&device_path, resolution, format)
-        })
-        .await
-        .map_err(|e| AppError::VideoError(format!("Grab task failed: {}", e)))?
+        tokio::task::spawn_blocking(move || grab_single_frame(&device_path, resolution, format))
+            .await
+            .map_err(|e| AppError::VideoError(format!("Grab task failed: {}", e)))?
     }
 }
 
@@ -626,14 +618,13 @@ fn grab_single_frame(
     resolution: Resolution,
     format: PixelFormat,
 ) -> Result<VideoFrame> {
-    let device = Device::with_path(device_path).map_err(|e| {
-        AppError::VideoError(format!("Failed to open device: {}", e))
-    })?;
+    let device = Device::with_path(device_path)
+        .map_err(|e| AppError::VideoError(format!("Failed to open device: {}", e)))?;
 
     let fmt = Format::new(resolution.width, resolution.height, format.to_fourcc());
-    let actual = device.set_format(&fmt).map_err(|e| {
-        AppError::VideoError(format!("Failed to set format: {}", e))
-    })?;
+    let actual = device
+        .set_format(&fmt)
+        .map_err(|e| AppError::VideoError(format!("Failed to set format: {}", e)))?;
 
     let mut stream = MmapStream::with_buffers(&device, BufferType::VideoCapture, 2)
         .map_err(|e| AppError::VideoError(format!("Failed to create stream: {}", e)))?;
@@ -643,8 +634,7 @@ fn grab_single_frame(
         match stream.next() {
             Ok((buf, _meta)) => {
                 if buf.len() >= MIN_FRAME_SIZE {
-                    let actual_format =
-                        PixelFormat::from_fourcc(actual.fourcc).unwrap_or(format);
+                    let actual_format = PixelFormat::from_fourcc(actual.fourcc).unwrap_or(format);
 
                     return Ok(VideoFrame::new(
                         Bytes::copy_from_slice(buf),
@@ -657,16 +647,15 @@ fn grab_single_frame(
             }
             Err(e) => {
                 if attempt == 4 {
-                    return Err(AppError::VideoError(format!(
-                        "Failed to grab frame: {}",
-                        e
-                    )));
+                    return Err(AppError::VideoError(format!("Failed to grab frame: {}", e)));
                 }
             }
         }
     }
 
-    Err(AppError::VideoError("Failed to capture valid frame".to_string()))
+    Err(AppError::VideoError(
+        "Failed to capture valid frame".to_string(),
+    ))
 }
 
 #[cfg(test)]

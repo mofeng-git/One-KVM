@@ -99,7 +99,10 @@ impl MsdController {
                     initialized: true,
                     path: self.drive_path.clone(),
                 });
-                debug!("Found existing virtual drive: {}", self.drive_path.display());
+                debug!(
+                    "Found existing virtual drive: {}",
+                    self.drive_path.display()
+                );
             }
         }
 
@@ -146,7 +149,12 @@ impl MsdController {
     /// * `image` - Image info to mount
     /// * `cdrom` - Mount as CD-ROM (read-only, removable)
     /// * `read_only` - Mount as read-only
-    pub async fn connect_image(&self, image: &ImageInfo, cdrom: bool, read_only: bool) -> Result<()> {
+    pub async fn connect_image(
+        &self,
+        image: &ImageInfo,
+        cdrom: bool,
+        read_only: bool,
+    ) -> Result<()> {
         // Acquire operation lock to prevent concurrent operations
         let _op_guard = self.operation_lock.write().await;
 
@@ -154,7 +162,9 @@ impl MsdController {
 
         if !state.available {
             let err = AppError::Internal("MSD not available".to_string());
-            self.monitor.report_error("MSD not available", "not_available").await;
+            self.monitor
+                .report_error("MSD not available", "not_available")
+                .await;
             return Err(err);
         }
 
@@ -167,7 +177,9 @@ impl MsdController {
         // Verify image exists
         if !image.path.exists() {
             let error_msg = format!("Image file not found: {}", image.path.display());
-            self.monitor.report_error(&error_msg, "image_not_found").await;
+            self.monitor
+                .report_error(&error_msg, "image_not_found")
+                .await;
             return Err(AppError::Internal(error_msg));
         }
 
@@ -182,12 +194,16 @@ impl MsdController {
         if let Some(ref msd) = *self.msd_function.read().await {
             if let Err(e) = msd.configure_lun_async(&gadget_path, 0, &config).await {
                 let error_msg = format!("Failed to configure LUN: {}", e);
-                self.monitor.report_error(&error_msg, "configfs_error").await;
+                self.monitor
+                    .report_error(&error_msg, "configfs_error")
+                    .await;
                 return Err(e);
             }
         } else {
             let err = AppError::Internal("MSD function not initialized".to_string());
-            self.monitor.report_error("MSD function not initialized", "not_initialized").await;
+            self.monitor
+                .report_error("MSD function not initialized", "not_initialized")
+                .await;
             return Err(err);
         }
 
@@ -236,7 +252,9 @@ impl MsdController {
 
         if !state.available {
             let err = AppError::Internal("MSD not available".to_string());
-            self.monitor.report_error("MSD not available", "not_available").await;
+            self.monitor
+                .report_error("MSD not available", "not_available")
+                .await;
             return Err(err);
         }
 
@@ -248,10 +266,11 @@ impl MsdController {
 
         // Check drive exists
         if !self.drive_path.exists() {
-            let err = AppError::Internal(
-                "Virtual drive not initialized. Call init first.".to_string(),
-            );
-            self.monitor.report_error("Virtual drive not initialized", "drive_not_found").await;
+            let err =
+                AppError::Internal("Virtual drive not initialized. Call init first.".to_string());
+            self.monitor
+                .report_error("Virtual drive not initialized", "drive_not_found")
+                .await;
             return Err(err);
         }
 
@@ -262,12 +281,16 @@ impl MsdController {
         if let Some(ref msd) = *self.msd_function.read().await {
             if let Err(e) = msd.configure_lun_async(&gadget_path, 0, &config).await {
                 let error_msg = format!("Failed to configure LUN: {}", e);
-                self.monitor.report_error(&error_msg, "configfs_error").await;
+                self.monitor
+                    .report_error(&error_msg, "configfs_error")
+                    .await;
                 return Err(e);
             }
         } else {
             let err = AppError::Internal("MSD function not initialized".to_string());
-            self.monitor.report_error("MSD function not initialized", "not_initialized").await;
+            self.monitor
+                .report_error("MSD function not initialized", "not_initialized")
+                .await;
             return Err(err);
         }
 
@@ -381,12 +404,9 @@ impl MsdController {
         }
 
         // Extract filename for initial response
-        let display_filename = filename.clone().unwrap_or_else(|| {
-            url.rsplit('/')
-                .next()
-                .unwrap_or("download")
-                .to_string()
-        });
+        let display_filename = filename
+            .clone()
+            .unwrap_or_else(|| url.rsplit('/').next().unwrap_or("download").to_string());
 
         // Create initial progress
         let initial_progress = DownloadProgress {

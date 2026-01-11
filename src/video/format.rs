@@ -20,6 +20,8 @@ pub enum PixelFormat {
     Uyvy,
     /// NV12 semi-planar format (Y plane + interleaved UV)
     Nv12,
+    /// NV21 semi-planar format (Y plane + interleaved VU)
+    Nv21,
     /// NV16 semi-planar format
     Nv16,
     /// NV24 semi-planar format
@@ -48,6 +50,7 @@ impl PixelFormat {
             PixelFormat::Yvyu => fourcc::FourCC::new(b"YVYU"),
             PixelFormat::Uyvy => fourcc::FourCC::new(b"UYVY"),
             PixelFormat::Nv12 => fourcc::FourCC::new(b"NV12"),
+            PixelFormat::Nv21 => fourcc::FourCC::new(b"NV21"),
             PixelFormat::Nv16 => fourcc::FourCC::new(b"NV16"),
             PixelFormat::Nv24 => fourcc::FourCC::new(b"NV24"),
             PixelFormat::Yuv420 => fourcc::FourCC::new(b"YU12"),
@@ -69,6 +72,7 @@ impl PixelFormat {
             b"YVYU" => Some(PixelFormat::Yvyu),
             b"UYVY" => Some(PixelFormat::Uyvy),
             b"NV12" => Some(PixelFormat::Nv12),
+            b"NV21" => Some(PixelFormat::Nv21),
             b"NV16" => Some(PixelFormat::Nv16),
             b"NV24" => Some(PixelFormat::Nv24),
             b"YU12" | b"I420" => Some(PixelFormat::Yuv420),
@@ -92,7 +96,9 @@ impl PixelFormat {
         match self {
             PixelFormat::Mjpeg | PixelFormat::Jpeg => None,
             PixelFormat::Yuyv | PixelFormat::Yvyu | PixelFormat::Uyvy => Some(2),
-            PixelFormat::Nv12 | PixelFormat::Yuv420 | PixelFormat::Yvu420 => None, // Variable
+            PixelFormat::Nv12 | PixelFormat::Nv21 | PixelFormat::Yuv420 | PixelFormat::Yvu420 => {
+                None
+            } // Variable
             PixelFormat::Nv16 => None,
             PixelFormat::Nv24 => None,
             PixelFormat::Rgb565 => Some(2),
@@ -108,7 +114,9 @@ impl PixelFormat {
         match self {
             PixelFormat::Mjpeg | PixelFormat::Jpeg => None,
             PixelFormat::Yuyv | PixelFormat::Yvyu | PixelFormat::Uyvy => Some(pixels * 2),
-            PixelFormat::Nv12 | PixelFormat::Yuv420 | PixelFormat::Yvu420 => Some(pixels * 3 / 2),
+            PixelFormat::Nv12 | PixelFormat::Nv21 | PixelFormat::Yuv420 | PixelFormat::Yvu420 => {
+                Some(pixels * 3 / 2)
+            }
             PixelFormat::Nv16 => Some(pixels * 2),
             PixelFormat::Nv24 => Some(pixels * 3),
             PixelFormat::Rgb565 => Some(pixels * 2),
@@ -125,6 +133,7 @@ impl PixelFormat {
             PixelFormat::Jpeg => 99,
             PixelFormat::Yuyv => 80,
             PixelFormat::Nv12 => 75,
+            PixelFormat::Nv21 => 74,
             PixelFormat::Yuv420 => 70,
             PixelFormat::Uyvy => 65,
             PixelFormat::Yvyu => 64,
@@ -144,7 +153,10 @@ impl PixelFormat {
     /// Software encoding prefers: YUYV > NV12
     ///
     /// Returns None if no suitable format is available
-    pub fn recommended_for_encoding(available: &[PixelFormat], is_hardware: bool) -> Option<PixelFormat> {
+    pub fn recommended_for_encoding(
+        available: &[PixelFormat],
+        is_hardware: bool,
+    ) -> Option<PixelFormat> {
         if is_hardware {
             // Hardware encoding: NV12 > YUYV
             if available.contains(&PixelFormat::Nv12) {
@@ -175,6 +187,7 @@ impl PixelFormat {
             PixelFormat::Yvyu,
             PixelFormat::Uyvy,
             PixelFormat::Nv12,
+            PixelFormat::Nv21,
             PixelFormat::Nv16,
             PixelFormat::Nv24,
             PixelFormat::Yuv420,
@@ -196,6 +209,7 @@ impl fmt::Display for PixelFormat {
             PixelFormat::Yvyu => "YVYU",
             PixelFormat::Uyvy => "UYVY",
             PixelFormat::Nv12 => "NV12",
+            PixelFormat::Nv21 => "NV21",
             PixelFormat::Nv16 => "NV16",
             PixelFormat::Nv24 => "NV24",
             PixelFormat::Yuv420 => "YUV420",
@@ -220,6 +234,7 @@ impl std::str::FromStr for PixelFormat {
             "YVYU" => Ok(PixelFormat::Yvyu),
             "UYVY" => Ok(PixelFormat::Uyvy),
             "NV12" => Ok(PixelFormat::Nv12),
+            "NV21" => Ok(PixelFormat::Nv21),
             "NV16" => Ok(PixelFormat::Nv16),
             "NV24" => Ok(PixelFormat::Nv24),
             "YUV420" | "I420" => Ok(PixelFormat::Yuv420),

@@ -46,7 +46,10 @@ pub async fn auth_middleware(
     if !state.config.is_initialized() {
         // Allow access to setup endpoints when not initialized
         let path = request.uri().path();
-        if path.starts_with("/api/setup") || path == "/api/info" || path.starts_with("/") && !path.starts_with("/api/") {
+        if path.starts_with("/api/setup")
+            || path == "/api/info"
+            || path.starts_with("/") && !path.starts_with("/api/")
+        {
             return Ok(next.run(request).await);
         }
     }

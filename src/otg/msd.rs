@@ -161,7 +161,10 @@ impl MsdFunction {
         // Write only changed attributes
         let cdrom_changed = current_cdrom != new_cdrom;
         if cdrom_changed {
-            debug!("Updating LUN {} cdrom: {} -> {}", lun, current_cdrom, new_cdrom);
+            debug!(
+                "Updating LUN {} cdrom: {} -> {}",
+                lun, current_cdrom, new_cdrom
+            );
             write_file(&lun_path.join("cdrom"), new_cdrom)?;
         }
         if current_ro != new_ro {
@@ -169,11 +172,17 @@ impl MsdFunction {
             write_file(&lun_path.join("ro"), new_ro)?;
         }
         if current_removable != new_removable {
-            debug!("Updating LUN {} removable: {} -> {}", lun, current_removable, new_removable);
+            debug!(
+                "Updating LUN {} removable: {} -> {}",
+                lun, current_removable, new_removable
+            );
             write_file(&lun_path.join("removable"), new_removable)?;
         }
         if current_nofua != new_nofua {
-            debug!("Updating LUN {} nofua: {} -> {}", lun, current_nofua, new_nofua);
+            debug!(
+                "Updating LUN {} nofua: {} -> {}",
+                lun, current_nofua, new_nofua
+            );
             write_file(&lun_path.join("nofua"), new_nofua)?;
         }
 
@@ -258,11 +267,17 @@ impl MsdFunction {
             // forced_eject forcibly detaches the backing file regardless of host state
             let forced_eject_path = lun_path.join("forced_eject");
             if forced_eject_path.exists() {
-                debug!("Using forced_eject to disconnect LUN {} at {:?}", lun, forced_eject_path);
+                debug!(
+                    "Using forced_eject to disconnect LUN {} at {:?}",
+                    lun, forced_eject_path
+                );
                 match write_file(&forced_eject_path, "1") {
                     Ok(_) => debug!("forced_eject write succeeded"),
                     Err(e) => {
-                        warn!("forced_eject write failed: {}, falling back to clearing file", e);
+                        warn!(
+                            "forced_eject write failed: {}, falling back to clearing file",
+                            e
+                        );
                         write_file(&lun_path.join("file"), "")?;
                     }
                 }

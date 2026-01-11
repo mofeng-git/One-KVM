@@ -78,9 +78,15 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/config", get(handlers::config::get_all_config))
         .route("/config", post(handlers::update_config))
         .route("/config/video", get(handlers::config::get_video_config))
-        .route("/config/video", patch(handlers::config::update_video_config))
+        .route(
+            "/config/video",
+            patch(handlers::config::update_video_config),
+        )
         .route("/config/stream", get(handlers::config::get_stream_config))
-        .route("/config/stream", patch(handlers::config::update_stream_config))
+        .route(
+            "/config/stream",
+            patch(handlers::config::update_stream_config),
+        )
         .route("/config/hid", get(handlers::config::get_hid_config))
         .route("/config/hid", patch(handlers::config::update_hid_config))
         .route("/config/msd", get(handlers::config::get_msd_config))
@@ -88,14 +94,35 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/config/atx", get(handlers::config::get_atx_config))
         .route("/config/atx", patch(handlers::config::update_atx_config))
         .route("/config/audio", get(handlers::config::get_audio_config))
-        .route("/config/audio", patch(handlers::config::update_audio_config))
+        .route(
+            "/config/audio",
+            patch(handlers::config::update_audio_config),
+        )
         // RustDesk configuration endpoints
-        .route("/config/rustdesk", get(handlers::config::get_rustdesk_config))
-        .route("/config/rustdesk", patch(handlers::config::update_rustdesk_config))
-        .route("/config/rustdesk/status", get(handlers::config::get_rustdesk_status))
-        .route("/config/rustdesk/password", get(handlers::config::get_device_password))
-        .route("/config/rustdesk/regenerate-id", post(handlers::config::regenerate_device_id))
-        .route("/config/rustdesk/regenerate-password", post(handlers::config::regenerate_device_password))
+        .route(
+            "/config/rustdesk",
+            get(handlers::config::get_rustdesk_config),
+        )
+        .route(
+            "/config/rustdesk",
+            patch(handlers::config::update_rustdesk_config),
+        )
+        .route(
+            "/config/rustdesk/status",
+            get(handlers::config::get_rustdesk_status),
+        )
+        .route(
+            "/config/rustdesk/password",
+            get(handlers::config::get_device_password),
+        )
+        .route(
+            "/config/rustdesk/regenerate-id",
+            post(handlers::config::regenerate_device_id),
+        )
+        .route(
+            "/config/rustdesk/regenerate-password",
+            post(handlers::config::regenerate_device_password),
+        )
         // Web server configuration
         .route("/config/web", get(handlers::config::get_web_config))
         .route("/config/web", patch(handlers::config::update_web_config))
@@ -105,7 +132,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/msd/status", get(handlers::msd_status))
         .route("/msd/images", get(handlers::msd_images_list))
         .route("/msd/images/download", post(handlers::msd_image_download))
-        .route("/msd/images/download/cancel", post(handlers::msd_image_download_cancel))
+        .route(
+            "/msd/images/download/cancel",
+            post(handlers::msd_image_download_cancel),
+        )
         .route("/msd/images/{id}", get(handlers::msd_image_get))
         .route("/msd/images/{id}", delete(handlers::msd_image_delete))
         .route("/msd/connect", post(handlers::msd_connect))
@@ -115,8 +145,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/msd/drive", delete(handlers::msd_drive_delete))
         .route("/msd/drive/init", post(handlers::msd_drive_init))
         .route("/msd/drive/files", get(handlers::msd_drive_files))
-        .route("/msd/drive/files/{*path}", get(handlers::msd_drive_download))
-        .route("/msd/drive/files/{*path}", delete(handlers::msd_drive_file_delete))
+        .route(
+            "/msd/drive/files/{*path}",
+            get(handlers::msd_drive_download),
+        )
+        .route(
+            "/msd/drive/files/{*path}",
+            delete(handlers::msd_drive_file_delete),
+        )
         .route("/msd/drive/mkdir/{*path}", post(handlers::msd_drive_mkdir))
         // ATX (Power Control) endpoints
         .route("/atx/status", get(handlers::atx_status))
@@ -132,13 +168,34 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Extension management endpoints
         .route("/extensions", get(handlers::extensions::list_extensions))
         .route("/extensions/{id}", get(handlers::extensions::get_extension))
-        .route("/extensions/{id}/start", post(handlers::extensions::start_extension))
-        .route("/extensions/{id}/stop", post(handlers::extensions::stop_extension))
-        .route("/extensions/{id}/logs", get(handlers::extensions::get_extension_logs))
-        .route("/extensions/ttyd/config", patch(handlers::extensions::update_ttyd_config))
-        .route("/extensions/ttyd/status", get(handlers::extensions::get_ttyd_status))
-        .route("/extensions/gostc/config", patch(handlers::extensions::update_gostc_config))
-        .route("/extensions/easytier/config", patch(handlers::extensions::update_easytier_config))
+        .route(
+            "/extensions/{id}/start",
+            post(handlers::extensions::start_extension),
+        )
+        .route(
+            "/extensions/{id}/stop",
+            post(handlers::extensions::stop_extension),
+        )
+        .route(
+            "/extensions/{id}/logs",
+            get(handlers::extensions::get_extension_logs),
+        )
+        .route(
+            "/extensions/ttyd/config",
+            patch(handlers::extensions::update_ttyd_config),
+        )
+        .route(
+            "/extensions/ttyd/status",
+            get(handlers::extensions::get_ttyd_status),
+        )
+        .route(
+            "/extensions/gostc/config",
+            patch(handlers::extensions::update_gostc_config),
+        )
+        .route(
+            "/extensions/easytier/config",
+            patch(handlers::extensions::update_easytier_config),
+        )
         // Terminal (ttyd) reverse proxy - WebSocket and HTTP
         .route("/terminal", get(handlers::terminal::terminal_index))
         .route("/terminal/", get(handlers::terminal::terminal_index))
@@ -148,9 +205,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .layer(middleware::from_fn_with_state(state.clone(), require_admin));
 
     // Combine protected routes (user + admin)
-    let protected_routes = Router::new()
-        .merge(user_routes)
-        .merge(admin_routes);
+    let protected_routes = Router::new().merge(user_routes).merge(admin_routes);
 
     // Stream endpoints (accessible with auth, but typically embedded in pages)
     let stream_routes = Router::new()

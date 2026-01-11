@@ -124,8 +124,7 @@ pub async fn system_info(State(state): State<Arc<AppState>>) -> Json<SystemInfo>
                 backend: if config.atx.enabled {
                     Some(format!(
                         "power: {:?}, reset: {:?}",
-                        config.atx.power.driver,
-                        config.atx.reset.driver
+                        config.atx.power.driver, config.atx.reset.driver
                     ))
                 } else {
                     None
@@ -208,7 +207,8 @@ fn get_cpu_model() -> String {
 }
 
 /// CPU usage state for calculating usage between samples
-static CPU_PREV_STATS: std::sync::OnceLock<std::sync::Mutex<(u64, u64)>> = std::sync::OnceLock::new();
+static CPU_PREV_STATS: std::sync::OnceLock<std::sync::Mutex<(u64, u64)>> =
+    std::sync::OnceLock::new();
 
 /// Get CPU usage percentage (0.0 - 100.0)
 fn get_cpu_usage() -> f32 {
@@ -268,7 +268,12 @@ struct MemInfo {
 fn get_meminfo() -> MemInfo {
     let content = match std::fs::read_to_string("/proc/meminfo") {
         Ok(c) => c,
-        Err(_) => return MemInfo { total: 0, available: 0 },
+        Err(_) => {
+            return MemInfo {
+                total: 0,
+                available: 0,
+            }
+        }
     };
 
     let mut total = 0u64;
@@ -276,11 +281,19 @@ fn get_meminfo() -> MemInfo {
 
     for line in content.lines() {
         if line.starts_with("MemTotal:") {
-            if let Some(kb) = line.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok()) {
+            if let Some(kb) = line
+                .split_whitespace()
+                .nth(1)
+                .and_then(|v| v.parse::<u64>().ok())
+            {
                 total = kb * 1024;
             }
         } else if line.starts_with("MemAvailable:") {
-            if let Some(kb) = line.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok()) {
+            if let Some(kb) = line
+                .split_whitespace()
+                .nth(1)
+                .and_then(|v| v.parse::<u64>().ok())
+            {
                 available = kb * 1024;
             }
         }
@@ -312,10 +325,7 @@ fn get_network_addresses() -> Vec<NetworkAddress> {
         if !ipv4_map.contains_key(&ifaddr.interface_name) {
             if let Some(addr) = ifaddr.address {
                 if let Some(sockaddr_in) = addr.as_sockaddr_in() {
-                    ipv4_map.insert(
-                        ifaddr.interface_name.clone(),
-                        sockaddr_in.ip().to_string(),
-                    );
+                    ipv4_map.insert(ifaddr.interface_name.clone(), sockaddr_in.ip().to_string());
                 }
             }
         }
@@ -624,10 +634,7 @@ pub async fn setup_init(
     if new_config.extensions.ttyd.enabled {
         if let Err(e) = state
             .extensions
-            .start(
-                crate::extensions::ExtensionId::Ttyd,
-                &new_config.extensions,
-            )
+            .start(crate::extensions::ExtensionId::Ttyd, &new_config.extensions)
             .await
         {
             tracing::warn!("Failed to start ttyd during setup: {}", e);
@@ -658,7 +665,10 @@ pub async fn setup_init(
         if let Err(e) = state.audio.update_config(audio_config).await {
             tracing::warn!("Failed to start audio during setup: {}", e);
         } else {
-            tracing::info!("Audio started during setup: device={}", new_config.audio.device);
+            tracing::info!(
+                "Audio started during setup: device={}",
+                new_config.audio.device
+            );
         }
         // Also enable WebRTC audio
         if let Err(e) = state.stream_manager.set_webrtc_audio_enabled(true).await {
@@ -666,7 +676,10 @@ pub async fn setup_init(
         }
     }
 
-    tracing::info!("System initialized successfully with admin user: {}", req.username);
+    tracing::info!(
+        "System initialized successfully with admin user: {}",
+        req.username
+    );
 
     Ok(Json(LoginResponse {
         success: true,
@@ -798,10 +811,19 @@ pub async fn update_config(
         if let Some(frame_tx) = state.stream_manager.frame_sender().await {
             let receiver_count = frame_tx.receiver_count();
             // Use WebRtcStreamer (new unified interface)
-            state.stream_manager.webrtc_streamer().set_video_source(frame_tx).await;
-            tracing::info!("WebRTC streamer frame source updated with new capturer (receiver_count={})", receiver_count);
+            state
+                .stream_manager
+                .webrtc_streamer()
+                .set_video_source(frame_tx)
+                .await;
+            tracing::info!(
+                "WebRTC streamer frame source updated with new capturer (receiver_count={})",
+                receiver_count
+            );
         } else {
-            tracing::warn!("No frame source available after config change - streamer may not be running");
+            tracing::warn!(
+                "No frame source available after config change - streamer may not be running"
+            );
         }
     }
 
@@ -831,8 +853,11 @@ pub async fn update_config(
             .await
             .ok(); // Ignore error if no active stream
 
-        tracing::info!("Stream config applied: encoder={:?}, bitrate={}",
-            new_config.stream.encoder, new_config.stream.bitrate_preset);
+        tracing::info!(
+            "Stream config applied: encoder={:?}, bitrate={}",
+            new_config.stream.encoder,
+            new_config.stream.bitrate_preset
+        );
     }
 
     // HID config processing - always reload if section was sent
@@ -860,7 +885,10 @@ pub async fn update_config(
             }));
         }
 
-        tracing::info!("HID backend reloaded successfully: {:?}", new_config.hid.backend);
+        tracing::info!(
+            "HID backend reloaded successfully: {:?}",
+            new_config.hid.backend
+        );
     }
 
     // Audio config processing - always reload if section was sent
@@ -888,7 +916,11 @@ pub async fn update_config(
         }
 
         // Also update WebRTC audio enabled state
-        if let Err(e) = state.stream_manager.set_webrtc_audio_enabled(new_config.audio.enabled).await {
+        if let Err(e) = state
+            .stream_manager
+            .set_webrtc_audio_enabled(new_config.audio.enabled)
+            .await
+        {
             tracing::warn!("Failed to update WebRTC audio state: {}", e);
         } else {
             tracing::info!("WebRTC audio enabled: {}", new_config.audio.enabled);
@@ -911,7 +943,11 @@ pub async fn update_config(
         let old_msd_enabled = old_config.msd.enabled;
         let new_msd_enabled = new_config.msd.enabled;
 
-        tracing::info!("MSD enabled: old={}, new={}", old_msd_enabled, new_msd_enabled);
+        tracing::info!(
+            "MSD enabled: old={}, new={}",
+            old_msd_enabled,
+            new_msd_enabled
+        );
 
         if old_msd_enabled != new_msd_enabled {
             if new_msd_enabled {
@@ -953,7 +989,10 @@ pub async fn update_config(
                 tracing::info!("MSD shutdown complete");
             }
         } else {
-            tracing::info!("MSD enabled state unchanged ({}), no reload needed", new_msd_enabled);
+            tracing::info!(
+                "MSD enabled state unchanged ({}), no reload needed",
+                new_msd_enabled
+            );
         }
     }
 
@@ -1060,7 +1099,12 @@ fn extract_usb_bus_from_bus_info(bus_info: &str) -> Option<String> {
     if parts.len() == 2 {
         let port = parts[0];
         // Verify it looks like a USB port (starts with digit)
-        if port.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        if port
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_digit())
+            .unwrap_or(false)
+        {
             return Some(port.to_string());
         }
     }
@@ -1115,7 +1159,10 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
                 None => continue,
             };
             // Check if matches any prefix
-            if serial_prefixes.iter().any(|prefix| name.starts_with(prefix)) {
+            if serial_prefixes
+                .iter()
+                .any(|prefix| name.starts_with(prefix))
+            {
                 let path = entry.path();
                 if let Some(p) = path.to_str() {
                     serial_devices.push(SerialDevice {
@@ -1156,7 +1203,9 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
     };
 
     // Check extension availability
-    let ttyd_available = state.extensions.check_available(crate::extensions::ExtensionId::Ttyd);
+    let ttyd_available = state
+        .extensions
+        .check_available(crate::extensions::ExtensionId::Ttyd);
 
     Json(DeviceList {
         video: video_devices,
@@ -1174,12 +1223,12 @@ pub async fn list_devices(State(state): State<Arc<AppState>>) -> Json<DeviceList
 // Stream Control
 // ============================================================================
 
+use crate::video::streamer::StreamerStats;
 use axum::{
     body::Body,
     http::{header, StatusCode},
     response::{IntoResponse, Response},
 };
-use crate::video::streamer::StreamerStats;
 
 /// Get stream state
 pub async fn stream_state(State(state): State<Arc<AppState>>) -> Json<StreamerStats> {
@@ -1216,6 +1265,9 @@ pub struct SetStreamModeRequest {
 pub struct StreamModeResponse {
     pub success: bool,
     pub mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transition_id: Option<String>,
+    pub switching: bool,
     pub message: Option<String>,
 }
 
@@ -1223,12 +1275,27 @@ pub struct StreamModeResponse {
 pub async fn stream_mode_get(State(state): State<Arc<AppState>>) -> Json<StreamModeResponse> {
     let mode = state.stream_manager.current_mode().await;
     let mode_str = match mode {
-        StreamMode::Mjpeg => "mjpeg",
-        StreamMode::WebRTC => "webrtc",
+        StreamMode::Mjpeg => "mjpeg".to_string(),
+        StreamMode::WebRTC => {
+            use crate::video::encoder::VideoCodecType;
+            let codec = state
+                .stream_manager
+                .webrtc_streamer()
+                .current_video_codec()
+                .await;
+            match codec {
+                VideoCodecType::H264 => "h264".to_string(),
+                VideoCodecType::H265 => "h265".to_string(),
+                VideoCodecType::VP8 => "vp8".to_string(),
+                VideoCodecType::VP9 => "vp9".to_string(),
+            }
+        }
     };
     Json(StreamModeResponse {
         success: true,
-        mode: mode_str.to_string(),
+        mode: mode_str,
+        transition_id: state.stream_manager.current_transition_id().await,
+        switching: state.stream_manager.is_switching(),
         message: None,
     })
 }
@@ -1258,15 +1325,24 @@ pub async fn stream_mode_set(
     // Set video codec if switching to WebRTC mode with specific codec
     if let Some(codec) = video_codec {
         info!("Setting WebRTC video codec to {:?}", codec);
-        if let Err(e) = state.stream_manager.webrtc_streamer().set_video_codec(codec).await {
+        if let Err(e) = state
+            .stream_manager
+            .webrtc_streamer()
+            .set_video_codec(codec)
+            .await
+        {
             warn!("Failed to set video codec: {}", e);
         }
     }
 
-    state.stream_manager.switch_mode(new_mode.clone()).await?;
+    let tx = state
+        .stream_manager
+        .switch_mode_transaction(new_mode.clone())
+        .await?;
 
-    // Return the actual codec being used
-    let mode_str = match (&new_mode, &video_codec) {
+    // Return the requested codec identifier (for UI display). The actual active mode
+    // may differ if the request was rejected due to an in-progress switch.
+    let requested_mode_str = match (&new_mode, &video_codec) {
         (StreamMode::Mjpeg, _) => "mjpeg",
         (StreamMode::WebRTC, Some(VideoCodecType::H264)) => "h264",
         (StreamMode::WebRTC, Some(VideoCodecType::H265)) => "h265",
@@ -1275,10 +1351,39 @@ pub async fn stream_mode_set(
         (StreamMode::WebRTC, None) => "webrtc",
     };
 
+    let active_mode_str = match state.stream_manager.current_mode().await {
+        StreamMode::Mjpeg => "mjpeg".to_string(),
+        StreamMode::WebRTC => {
+            let codec = state
+                .stream_manager
+                .webrtc_streamer()
+                .current_video_codec()
+                .await;
+            match codec {
+                VideoCodecType::H264 => "h264".to_string(),
+                VideoCodecType::H265 => "h265".to_string(),
+                VideoCodecType::VP8 => "vp8".to_string(),
+                VideoCodecType::VP9 => "vp9".to_string(),
+            }
+        }
+    };
+
     Ok(Json(StreamModeResponse {
-        success: true,
-        mode: mode_str.to_string(),
-        message: Some(format!("Switched to {} mode", mode_str)),
+        success: tx.accepted,
+        mode: if tx.accepted {
+            requested_mode_str.to_string()
+        } else {
+            active_mode_str
+        },
+        transition_id: tx.transition_id,
+        switching: tx.switching,
+        message: Some(if tx.accepted {
+            format!("Switching to {} mode", requested_mode_str)
+        } else if tx.switching {
+            "Mode switch already in progress".to_string()
+        } else {
+            "No switch needed".to_string()
+        }),
     }))
 }
 
@@ -1470,7 +1575,9 @@ pub async fn mjpeg_stream(
         return axum::response::Response::builder()
             .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
             .header("Content-Type", "application/json")
-            .body(axum::body::Body::from(r#"{"error":"MJPEG mode not active. Current mode is WebRTC."}"#))
+            .body(axum::body::Body::from(
+                r#"{"error":"MJPEG mode not active. Current mode is WebRTC."}"#,
+            ))
             .unwrap();
     }
 
@@ -1479,7 +1586,9 @@ pub async fn mjpeg_stream(
         return axum::response::Response::builder()
             .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
             .header("Content-Type", "application/json")
-            .body(axum::body::Body::from(r#"{"error":"Video configuration is being changed. Please retry shortly."}"#))
+            .body(axum::body::Body::from(
+                r#"{"error":"Video configuration is being changed. Please retry shortly."}"#,
+            ))
             .unwrap();
     }
 
@@ -1493,8 +1602,9 @@ pub async fn mjpeg_stream(
     let handler = state.stream_manager.mjpeg_handler();
 
     // Use provided client ID or generate a new one
-    let client_id = query.client_id
-        .filter(|id| !id.is_empty() && id.len() <= 64)  // Validate: non-empty, max 64 chars
+    let client_id = query
+        .client_id
+        .filter(|id| !id.is_empty() && id.len() <= 64) // Validate: non-empty, max 64 chars
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     // Create RAII guard - this will automatically register and unregister the client
@@ -1538,10 +1648,8 @@ pub async fn mjpeg_stream(
             }
 
             // Wait for new frame notification with timeout
-            let result = tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                notify_rx.recv()
-            ).await;
+            let result =
+                tokio::time::timeout(std::time::Duration::from_secs(5), notify_rx.recv()).await;
 
             match result {
                 Ok(Ok(())) => {
@@ -1622,7 +1730,10 @@ pub async fn mjpeg_stream(
 
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "multipart/x-mixed-replace; boundary=frame")
+        .header(
+            header::CONTENT_TYPE,
+            "multipart/x-mixed-replace; boundary=frame",
+        )
         .header(header::CACHE_CONTROL, "no-cache, no-store, must-revalidate")
         .header(header::PRAGMA, "no-cache")
         .header(header::EXPIRES, "0")
@@ -1636,14 +1747,12 @@ pub async fn snapshot(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let handler = state.stream_manager.mjpeg_handler();
 
     match handler.current_frame() {
-        Some(frame) if frame.is_valid_jpeg() => {
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "image/jpeg")
-                .header(header::CACHE_CONTROL, "no-cache")
-                .body(Body::from(frame.data_bytes()))
-                .unwrap()
-        }
+        Some(frame) if frame.is_valid_jpeg() => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "image/jpeg")
+            .header(header::CACHE_CONTROL, "no-cache")
+            .body(Body::from(frame.data_bytes()))
+            .unwrap(),
         _ => Response::builder()
             .status(StatusCode::SERVICE_UNAVAILABLE)
             .body(Body::from("No frame available"))
@@ -1674,7 +1783,7 @@ fn create_mjpeg_part(jpeg_data: &[u8]) -> bytes::Bytes {
 // WebRTC
 // ============================================================================
 
-use crate::webrtc::signaling::{IceCandidateRequest, OfferRequest, AnswerResponse};
+use crate::webrtc::signaling::{AnswerResponse, IceCandidateRequest, OfferRequest};
 
 /// Create WebRTC session
 #[derive(Serialize)]
@@ -1692,7 +1801,11 @@ pub async fn webrtc_create_session(
         ));
     }
 
-    let session_id = state.stream_manager.webrtc_streamer().create_session().await?;
+    let session_id = state
+        .stream_manager
+        .webrtc_streamer()
+        .create_session()
+        .await?;
     Ok(Json(CreateSessionResponse { session_id }))
 }
 
@@ -1986,7 +2099,9 @@ pub async fn msd_image_upload(
 
             // Use streaming upload - chunks are written directly to disk
             // This avoids loading the entire file into memory
-            let image = manager.create_from_multipart_field(&filename, field).await?;
+            let image = manager
+                .create_from_multipart_field(&filename, field)
+                .await?;
             return Ok(Json(image));
         }
     }
@@ -2033,9 +2148,7 @@ pub async fn msd_image_download(
         .as_ref()
         .ok_or_else(|| AppError::Internal("MSD not initialized".to_string()))?;
 
-    let progress = controller
-        .download_image(req.url, req.filename)
-        .await?;
+    let progress = controller.download_image(req.url, req.filename).await?;
 
     Ok(Json(progress))
 }
@@ -2076,9 +2189,9 @@ pub async fn msd_connect(
 
     match req.mode {
         MsdMode::Image => {
-            let image_id = req
-                .image_id
-                .ok_or_else(|| AppError::BadRequest("image_id required for image mode".to_string()))?;
+            let image_id = req.image_id.ok_or_else(|| {
+                AppError::BadRequest("image_id required for image mode".to_string())
+            })?;
 
             // Get image info from ImageManager
             let images_path = std::path::PathBuf::from(&config.msd.images_path);
@@ -2170,9 +2283,8 @@ pub async fn msd_drive_delete(State(state): State<Arc<AppState>>) -> Result<Json
     // Delete the drive file
     let drive_path = std::path::PathBuf::from(&config.msd.drive_path);
     if drive_path.exists() {
-        std::fs::remove_file(&drive_path).map_err(|e| {
-            AppError::Internal(format!("Failed to delete drive file: {}", e))
-        })?;
+        std::fs::remove_file(&drive_path)
+            .map_err(|e| AppError::Internal(format!("Failed to delete drive file: {}", e)))?;
     }
 
     Ok(Json(LoginResponse {
@@ -2227,7 +2339,9 @@ pub async fn msd_drive_upload(
 
             // Use streaming upload - chunks are written directly to disk
             // This avoids loading the entire file into memory
-            drive.write_file_from_multipart_field(&file_path, field).await?;
+            drive
+                .write_file_from_multipart_field(&file_path, field)
+                .await?;
 
             return Ok(Json(LoginResponse {
                 success: true,
@@ -2561,7 +2675,10 @@ pub async fn list_users(
     Extension(session): Extension<Session>,
 ) -> Result<Json<Vec<UserResponse>>> {
     // Check if current user is admin
-    let current_user = state.users.get(&session.user_id).await?
+    let current_user = state
+        .users
+        .get(&session.user_id)
+        .await?
         .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
 
     if !current_user.is_admin {
@@ -2588,7 +2705,10 @@ pub async fn create_user(
     Json(req): Json<CreateUserRequest>,
 ) -> Result<Json<UserResponse>> {
     // Check if current user is admin
-    let current_user = state.users.get(&session.user_id).await?
+    let current_user = state
+        .users
+        .get(&session.user_id)
+        .await?
         .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
 
     if !current_user.is_admin {
@@ -2597,13 +2717,20 @@ pub async fn create_user(
 
     // Validate input
     if req.username.len() < 2 {
-        return Err(AppError::BadRequest("Username must be at least 2 characters".to_string()));
+        return Err(AppError::BadRequest(
+            "Username must be at least 2 characters".to_string(),
+        ));
     }
     if req.password.len() < 4 {
-        return Err(AppError::BadRequest("Password must be at least 4 characters".to_string()));
+        return Err(AppError::BadRequest(
+            "Password must be at least 4 characters".to_string(),
+        ));
     }
 
-    let user = state.users.create(&req.username, &req.password, req.is_admin).await?;
+    let user = state
+        .users
+        .create(&req.username, &req.password, req.is_admin)
+        .await?;
     info!("User created: {} (admin: {})", user.username, user.is_admin);
     Ok(Json(UserResponse::from(user)))
 }
@@ -2623,7 +2750,10 @@ pub async fn update_user(
     Json(req): Json<UpdateUserRequest>,
 ) -> Result<Json<UserResponse>> {
     // Check if current user is admin
-    let current_user = state.users.get(&session.user_id).await?
+    let current_user = state
+        .users
+        .get(&session.user_id)
+        .await?
         .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
 
     if !current_user.is_admin {
@@ -2631,13 +2761,18 @@ pub async fn update_user(
     }
 
     // Get target user
-    let mut user = state.users.get(&user_id).await?
+    let mut user = state
+        .users
+        .get(&user_id)
+        .await?
         .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
     // Update fields if provided
     if let Some(username) = req.username {
         if username.len() < 2 {
-            return Err(AppError::BadRequest("Username must be at least 2 characters".to_string()));
+            return Err(AppError::BadRequest(
+                "Username must be at least 2 characters".to_string(),
+            ));
         }
         user.username = username;
     }
@@ -2647,7 +2782,9 @@ pub async fn update_user(
 
     // Note: We need to add an update method to UserStore
     // For now, return error
-    Err(AppError::Internal("User update not yet implemented".to_string()))
+    Err(AppError::Internal(
+        "User update not yet implemented".to_string(),
+    ))
 }
 
 /// Delete user (admin only)
@@ -2657,7 +2794,10 @@ pub async fn delete_user(
     Path(user_id): Path<String>,
 ) -> Result<Json<LoginResponse>> {
     // Check if current user is admin
-    let current_user = state.users.get(&session.user_id).await?
+    let current_user = state
+        .users
+        .get(&session.user_id)
+        .await?
         .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
 
     if !current_user.is_admin {
@@ -2666,17 +2806,24 @@ pub async fn delete_user(
 
     // Prevent deleting self
     if user_id == session.user_id {
-        return Err(AppError::BadRequest("Cannot delete your own account".to_string()));
+        return Err(AppError::BadRequest(
+            "Cannot delete your own account".to_string(),
+        ));
     }
 
     // Check if this is the last admin
     let users = state.users.list().await?;
     let admin_count = users.iter().filter(|u| u.is_admin).count();
-    let target_user = state.users.get(&user_id).await?
+    let target_user = state
+        .users
+        .get(&user_id)
+        .await?
         .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
     if target_user.is_admin && admin_count <= 1 {
-        return Err(AppError::BadRequest("Cannot delete the last admin user".to_string()));
+        return Err(AppError::BadRequest(
+            "Cannot delete the last admin user".to_string(),
+        ));
     }
 
     state.users.delete(&user_id).await?;
@@ -2703,30 +2850,45 @@ pub async fn change_user_password(
     Json(req): Json<ChangePasswordRequest>,
 ) -> Result<Json<LoginResponse>> {
     // Check if current user is admin or changing own password
-    let current_user = state.users.get(&session.user_id).await?
+    let current_user = state
+        .users
+        .get(&session.user_id)
+        .await?
         .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
 
     let is_self = user_id == session.user_id;
     let is_admin = current_user.is_admin;
 
     if !is_self && !is_admin {
-        return Err(AppError::Forbidden("Cannot change other user's password".to_string()));
+        return Err(AppError::Forbidden(
+            "Cannot change other user's password".to_string(),
+        ));
     }
 
     // Validate new password
     if req.new_password.len() < 4 {
-        return Err(AppError::BadRequest("Password must be at least 4 characters".to_string()));
+        return Err(AppError::BadRequest(
+            "Password must be at least 4 characters".to_string(),
+        ));
     }
 
     // If changing own password, verify current password
     if is_self {
-        let verified = state.users.verify(&current_user.username, &req.current_password).await?;
+        let verified = state
+            .users
+            .verify(&current_user.username, &req.current_password)
+            .await?;
         if verified.is_none() {
-            return Err(AppError::AuthError("Current password is incorrect".to_string()));
+            return Err(AppError::AuthError(
+                "Current password is incorrect".to_string(),
+            ));
         }
     }
 
-    state.users.update_password(&user_id, &req.new_password).await?;
+    state
+        .users
+        .update_password(&user_id, &req.new_password)
+        .await?;
     info!("Password changed for user ID: {}", user_id);
 
     Ok(Json(LoginResponse {

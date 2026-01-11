@@ -15,19 +15,19 @@
 //! ```
 
 pub mod controller;
-pub mod ventoy_drive;
 pub mod image;
 pub mod monitor;
 pub mod types;
+pub mod ventoy_drive;
 
 pub use controller::MsdController;
-pub use ventoy_drive::VentoyDrive;
 pub use image::ImageManager;
 pub use monitor::{MsdHealthMonitor, MsdHealthStatus, MsdMonitorConfig};
 pub use types::{
     DownloadProgress, DownloadStatus, DriveFile, DriveInfo, DriveInitRequest, ImageDownloadRequest,
     ImageInfo, MsdConnectRequest, MsdMode, MsdState,
 };
+pub use ventoy_drive::VentoyDrive;
 
 // Re-export from otg module for backward compatibility
 pub use crate::otg::{MsdFunction, MsdLunConfig};

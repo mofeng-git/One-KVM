@@ -28,8 +28,10 @@ const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
 
 use crate::error::{AppError, Result};
 use crate::video::convert::{Nv12Converter, PixelConverter};
-use crate::video::encoder::h264::{H264Config, H264Encoder};
-use crate::video::encoder::h265::{H265Config, H265Encoder};
+use crate::video::encoder::h264::{detect_best_encoder, H264Config, H264Encoder, H264InputFormat};
+use crate::video::encoder::h265::{
+    detect_best_h265_encoder, H265Config, H265Encoder, H265InputFormat,
+};
 use crate::video::encoder::registry::{EncoderBackend, EncoderRegistry, VideoEncoderType};
 use crate::video::encoder::traits::EncoderConfig;
 use crate::video::encoder::vp8::{VP8Config, VP8Encoder};
@@ -156,7 +158,6 @@ pub struct SharedVideoPipelineStats {
     pub errors: u64,
     pub subscribers: u64,
 }
-
 
 /// Universal video encoder trait object
 #[allow(dead_code)]
@@ -300,7 +301,7 @@ pub struct SharedVideoPipeline {
     /// Whether the encoder needs YUV420P (true) or NV12 (false)
     encoder_needs_yuv420p: AtomicBool,
     /// Whether YUYV direct input is enabled (RKMPP optimization)
-    yuyv_direct_input: AtomicBool,
+    direct_input: AtomicBool,
     frame_tx: broadcast::Sender<EncodedVideoFrame>,
     stats: Mutex<SharedVideoPipelineStats>,
     running: watch::Sender<bool>,
@@ -326,7 +327,7 @@ impl SharedVideoPipeline {
             config.input_format
         );
 
-        let (frame_tx, _) = broadcast::channel(16);  // Reduced from 64 for lower latency
+        let (frame_tx, _) = broadcast::channel(16); // Reduced from 64 for lower latency
         let (running_tx, running_rx) = watch::channel(false);
 
         let pipeline = Arc::new(Self {
@@ -335,7 +336,7 @@ impl SharedVideoPipeline {
             nv12_converter: Mutex::new(None),
             yuv420p_converter: Mutex::new(None),
             encoder_needs_yuv420p: AtomicBool::new(false),
-            yuyv_direct_input: AtomicBool::new(false),
+            direct_input: AtomicBool::new(false),
             frame_tx,
             stats: Mutex::new(SharedVideoPipelineStats::default()),
             running: running_tx,
@@ -354,29 +355,108 @@ impl SharedVideoPipeline {
         let registry = EncoderRegistry::global();
 
         // Helper to get codec name for specific backend
-        let get_codec_name = |format: VideoEncoderType, backend: Option<EncoderBackend>| -> Option<String> {
-            match backend {
-                Some(b) => registry.encoder_with_backend(format, b).map(|e| e.codec_name.clone()),
-                None => registry.best_encoder(format, false).map(|e| e.codec_name.clone()),
-            }
-        };
+        let get_codec_name =
+            |format: VideoEncoderType, backend: Option<EncoderBackend>| -> Option<String> {
+                match backend {
+                    Some(b) => registry
+                        .encoder_with_backend(format, b)
+                        .map(|e| e.codec_name.clone()),
+                    None => registry
+                        .best_encoder(format, false)
+                        .map(|e| e.codec_name.clone()),
+                }
+            };
 
-        // Check if RKMPP backend is available for YUYV direct input optimization
-        let is_rkmpp_available = registry.encoder_with_backend(VideoEncoderType::H264, EncoderBackend::Rkmpp).is_some();
+        // Check if RKMPP backend is available for direct input optimization
+        let is_rkmpp_available = registry
+            .encoder_with_backend(VideoEncoderType::H264, EncoderBackend::Rkmpp)
+            .is_some();
         let use_yuyv_direct = is_rkmpp_available && config.input_format == PixelFormat::Yuyv;
+        let use_rkmpp_direct = is_rkmpp_available
+            && matches!(
+                config.input_format,
+                PixelFormat::Yuyv
+                    | PixelFormat::Yuv420
+                    | PixelFormat::Rgb24
+                    | PixelFormat::Bgr24
+                    | PixelFormat::Nv12
+                    | PixelFormat::Nv16
+                    | PixelFormat::Nv21
+                    | PixelFormat::Nv24
+            );
 
         if use_yuyv_direct {
-            info!("RKMPP backend detected with YUYV input, enabling YUYV direct input optimization");
+            info!(
+                "RKMPP backend detected with YUYV input, enabling YUYV direct input optimization"
+            );
+        } else if use_rkmpp_direct {
+            info!(
+                "RKMPP backend detected with {} input, enabling direct input optimization",
+                config.input_format
+            );
         }
 
         // Create encoder based on codec type
         let encoder: Box<dyn VideoEncoderTrait + Send> = match config.output_codec {
             VideoEncoderType::H264 => {
-                // Determine H264 input format based on backend and input format
-                let h264_input_format = if use_yuyv_direct {
-                    crate::video::encoder::h264::H264InputFormat::Yuyv422
+                let codec_name = if use_rkmpp_direct {
+                    // Force RKMPP backend for direct input
+                    get_codec_name(VideoEncoderType::H264, Some(EncoderBackend::Rkmpp)).ok_or_else(
+                        || {
+                            AppError::VideoError(
+                                "RKMPP backend not available for H.264".to_string(),
+                            )
+                        },
+                    )?
+                } else if let Some(ref backend) = config.encoder_backend {
+                    // Specific backend requested
+                    get_codec_name(VideoEncoderType::H264, Some(*backend)).ok_or_else(|| {
+                        AppError::VideoError(format!(
+                            "Backend {:?} does not support H.264",
+                            backend
+                        ))
+                    })?
                 } else {
-                    crate::video::encoder::h264::H264InputFormat::Nv12
+                    // Auto select best available encoder
+                    let (_encoder_type, detected) =
+                        detect_best_encoder(config.resolution.width, config.resolution.height);
+                    detected.ok_or_else(|| {
+                        AppError::VideoError("No H.264 encoder available".to_string())
+                    })?
+                };
+
+                let is_rkmpp = codec_name.contains("rkmpp");
+                let direct_input_format = if is_rkmpp {
+                    match config.input_format {
+                        PixelFormat::Yuyv => Some(H264InputFormat::Yuyv422),
+                        PixelFormat::Yuv420 => Some(H264InputFormat::Yuv420p),
+                        PixelFormat::Rgb24 => Some(H264InputFormat::Rgb24),
+                        PixelFormat::Bgr24 => Some(H264InputFormat::Bgr24),
+                        PixelFormat::Nv12 => Some(H264InputFormat::Nv12),
+                        PixelFormat::Nv16 => Some(H264InputFormat::Nv16),
+                        PixelFormat::Nv21 => Some(H264InputFormat::Nv21),
+                        PixelFormat::Nv24 => Some(H264InputFormat::Nv24),
+                        _ => None,
+                    }
+                } else if codec_name.contains("libx264") {
+                    match config.input_format {
+                        PixelFormat::Nv12 => Some(H264InputFormat::Nv12),
+                        PixelFormat::Nv16 => Some(H264InputFormat::Nv16),
+                        PixelFormat::Nv21 => Some(H264InputFormat::Nv21),
+                        PixelFormat::Yuv420 => Some(H264InputFormat::Yuv420p),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+
+                // Choose input format: prefer direct input when supported
+                let h264_input_format = if let Some(fmt) = direct_input_format {
+                    fmt
+                } else if codec_name.contains("libx264") {
+                    H264InputFormat::Yuv420p
+                } else {
+                    H264InputFormat::Nv12
                 };
 
                 let encoder_config = H264Config {
@@ -387,69 +467,124 @@ impl SharedVideoPipeline {
                     input_format: h264_input_format,
                 };
 
-                let encoder = if use_yuyv_direct {
-                    // Force RKMPP backend for YUYV direct input
-                    let codec_name = get_codec_name(VideoEncoderType::H264, Some(EncoderBackend::Rkmpp))
-                        .ok_or_else(|| AppError::VideoError(
-                            "RKMPP backend not available for H.264".to_string()
-                        ))?;
-                    info!("Creating H264 encoder with RKMPP backend for YUYV direct input (codec: {})", codec_name);
-                    H264Encoder::with_codec(encoder_config, &codec_name)?
+                if use_rkmpp_direct {
+                    info!(
+                        "Creating H264 encoder with RKMPP backend for {} direct input (codec: {})",
+                        config.input_format, codec_name
+                    );
                 } else if let Some(ref backend) = config.encoder_backend {
-                    // Specific backend requested
-                    let codec_name = get_codec_name(VideoEncoderType::H264, Some(*backend))
-                        .ok_or_else(|| AppError::VideoError(format!(
-                            "Backend {:?} does not support H.264", backend
-                        )))?;
-                    info!("Creating H264 encoder with backend {:?} (codec: {})", backend, codec_name);
-                    H264Encoder::with_codec(encoder_config, &codec_name)?
-                } else {
-                    // Auto select
-                    H264Encoder::new(encoder_config)?
-                };
+                    info!(
+                        "Creating H264 encoder with backend {:?} (codec: {})",
+                        backend, codec_name
+                    );
+                }
+
+                let encoder = H264Encoder::with_codec(encoder_config, &codec_name)?;
 
                 info!("Created H264 encoder: {}", encoder.codec_name());
                 Box::new(H264EncoderWrapper(encoder))
             }
             VideoEncoderType::H265 => {
-                // Determine H265 input format based on backend and input format
-                let encoder_config = if use_yuyv_direct {
-                    H265Config::low_latency_yuyv422(config.resolution, config.bitrate_kbps())
+                let codec_name = if use_rkmpp_direct {
+                    get_codec_name(VideoEncoderType::H265, Some(EncoderBackend::Rkmpp)).ok_or_else(
+                        || {
+                            AppError::VideoError(
+                                "RKMPP backend not available for H.265".to_string(),
+                            )
+                        },
+                    )?
+                } else if let Some(ref backend) = config.encoder_backend {
+                    get_codec_name(VideoEncoderType::H265, Some(*backend)).ok_or_else(|| {
+                        AppError::VideoError(format!(
+                            "Backend {:?} does not support H.265",
+                            backend
+                        ))
+                    })?
                 } else {
-                    H265Config::low_latency(config.resolution, config.bitrate_kbps())
+                    let (_encoder_type, detected) =
+                        detect_best_h265_encoder(config.resolution.width, config.resolution.height);
+                    detected.ok_or_else(|| {
+                        AppError::VideoError("No H.265 encoder available".to_string())
+                    })?
                 };
 
-                let encoder = if use_yuyv_direct {
-                    // Force RKMPP backend for YUYV direct input
-                    let codec_name = get_codec_name(VideoEncoderType::H265, Some(EncoderBackend::Rkmpp))
-                        .ok_or_else(|| AppError::VideoError(
-                            "RKMPP backend not available for H.265".to_string()
-                        ))?;
-                    info!("Creating H265 encoder with RKMPP backend for YUYV direct input (codec: {})", codec_name);
-                    H265Encoder::with_codec(encoder_config, &codec_name)?
-                } else if let Some(ref backend) = config.encoder_backend {
-                    let codec_name = get_codec_name(VideoEncoderType::H265, Some(*backend))
-                        .ok_or_else(|| AppError::VideoError(format!(
-                            "Backend {:?} does not support H.265", backend
-                        )))?;
-                    info!("Creating H265 encoder with backend {:?} (codec: {})", backend, codec_name);
-                    H265Encoder::with_codec(encoder_config, &codec_name)?
+                let is_rkmpp = codec_name.contains("rkmpp");
+                let direct_input_format = if is_rkmpp {
+                    match config.input_format {
+                        PixelFormat::Yuyv => Some(H265InputFormat::Yuyv422),
+                        PixelFormat::Yuv420 => Some(H265InputFormat::Yuv420p),
+                        PixelFormat::Rgb24 => Some(H265InputFormat::Rgb24),
+                        PixelFormat::Bgr24 => Some(H265InputFormat::Bgr24),
+                        PixelFormat::Nv12 => Some(H265InputFormat::Nv12),
+                        PixelFormat::Nv16 => Some(H265InputFormat::Nv16),
+                        PixelFormat::Nv21 => Some(H265InputFormat::Nv21),
+                        PixelFormat::Nv24 => Some(H265InputFormat::Nv24),
+                        _ => None,
+                    }
+                } else if codec_name.contains("libx265") {
+                    match config.input_format {
+                        PixelFormat::Yuv420 => Some(H265InputFormat::Yuv420p),
+                        _ => None,
+                    }
                 } else {
-                    H265Encoder::new(encoder_config)?
+                    None
                 };
+
+                let h265_input_format = if let Some(fmt) = direct_input_format {
+                    fmt
+                } else if codec_name.contains("libx265") {
+                    H265InputFormat::Yuv420p
+                } else {
+                    H265InputFormat::Nv12
+                };
+
+                let encoder_config = H265Config {
+                    base: EncoderConfig {
+                        resolution: config.resolution,
+                        input_format: config.input_format,
+                        quality: config.bitrate_kbps(),
+                        fps: config.fps,
+                        gop_size: config.gop_size(),
+                    },
+                    bitrate_kbps: config.bitrate_kbps(),
+                    gop_size: config.gop_size(),
+                    fps: config.fps,
+                    input_format: h265_input_format,
+                };
+
+                if use_rkmpp_direct {
+                    info!(
+                        "Creating H265 encoder with RKMPP backend for {} direct input (codec: {})",
+                        config.input_format, codec_name
+                    );
+                } else if let Some(ref backend) = config.encoder_backend {
+                    info!(
+                        "Creating H265 encoder with backend {:?} (codec: {})",
+                        backend, codec_name
+                    );
+                }
+
+                let encoder = H265Encoder::with_codec(encoder_config, &codec_name)?;
 
                 info!("Created H265 encoder: {}", encoder.codec_name());
                 Box::new(H265EncoderWrapper(encoder))
             }
             VideoEncoderType::VP8 => {
-                let encoder_config = VP8Config::low_latency(config.resolution, config.bitrate_kbps());
+                let encoder_config =
+                    VP8Config::low_latency(config.resolution, config.bitrate_kbps());
 
                 let encoder = if let Some(ref backend) = config.encoder_backend {
                     let codec_name = get_codec_name(VideoEncoderType::VP8, Some(*backend))
-                        .ok_or_else(|| AppError::VideoError(format!(
-                            "Backend {:?} does not support VP8", backend
-                        )))?;
-                    info!("Creating VP8 encoder with backend {:?} (codec: {})", backend, codec_name);
+                        .ok_or_else(|| {
+                            AppError::VideoError(format!(
+                                "Backend {:?} does not support VP8",
+                                backend
+                            ))
+                        })?;
+                    info!(
+                        "Creating VP8 encoder with backend {:?} (codec: {})",
+                        backend, codec_name
+                    );
                     VP8Encoder::with_codec(encoder_config, &codec_name)?
                 } else {
                     VP8Encoder::new(encoder_config)?
@@ -459,14 +594,21 @@ impl SharedVideoPipeline {
                 Box::new(VP8EncoderWrapper(encoder))
             }
             VideoEncoderType::VP9 => {
-                let encoder_config = VP9Config::low_latency(config.resolution, config.bitrate_kbps());
+                let encoder_config =
+                    VP9Config::low_latency(config.resolution, config.bitrate_kbps());
 
                 let encoder = if let Some(ref backend) = config.encoder_backend {
                     let codec_name = get_codec_name(VideoEncoderType::VP9, Some(*backend))
-                        .ok_or_else(|| AppError::VideoError(format!(
-                            "Backend {:?} does not support VP9", backend
-                        )))?;
-                    info!("Creating VP9 encoder with backend {:?} (codec: {})", backend, codec_name);
+                        .ok_or_else(|| {
+                            AppError::VideoError(format!(
+                                "Backend {:?} does not support VP9",
+                                backend
+                            ))
+                        })?;
+                    info!(
+                        "Creating VP9 encoder with backend {:?} (codec: {})",
+                        backend, codec_name
+                    );
                     VP9Encoder::with_codec(encoder_config, &codec_name)?
                 } else {
                     VP9Encoder::new(encoder_config)?
@@ -477,24 +619,70 @@ impl SharedVideoPipeline {
             }
         };
 
-        // Determine if encoder needs YUV420P (software encoders) or NV12 (hardware encoders)
+        // Determine if encoder can take direct input without conversion
         let codec_name = encoder.codec_name();
-        let needs_yuv420p = codec_name.contains("libvpx") || codec_name.contains("libx265");
+        let use_direct_input = if codec_name.contains("rkmpp") {
+            matches!(
+                config.input_format,
+                PixelFormat::Yuyv
+                    | PixelFormat::Yuv420
+                    | PixelFormat::Rgb24
+                    | PixelFormat::Bgr24
+                    | PixelFormat::Nv12
+                    | PixelFormat::Nv16
+                    | PixelFormat::Nv21
+                    | PixelFormat::Nv24
+            )
+        } else if codec_name.contains("libx264") {
+            matches!(
+                config.input_format,
+                PixelFormat::Nv12 | PixelFormat::Nv16 | PixelFormat::Nv21 | PixelFormat::Yuv420
+            )
+        } else {
+            false
+        };
+
+        // Determine if encoder needs YUV420P (software encoders) or NV12 (hardware encoders)
+        let needs_yuv420p = if codec_name.contains("libx264") {
+            !matches!(
+                config.input_format,
+                PixelFormat::Nv12 | PixelFormat::Nv16 | PixelFormat::Nv21 | PixelFormat::Yuv420
+            )
+        } else {
+            codec_name.contains("libvpx") || codec_name.contains("libx265")
+        };
 
         info!(
             "Encoder {} needs {} format",
             codec_name,
-            if use_yuyv_direct { "YUYV422 (direct)" } else if needs_yuv420p { "YUV420P" } else { "NV12" }
+            if use_direct_input {
+                "direct"
+            } else if needs_yuv420p {
+                "YUV420P"
+            } else {
+                "NV12"
+            }
         );
 
         // Create converter or decoder based on input format and encoder needs
-        info!("Initializing input format handler for: {} -> {}",
-              config.input_format,
-              if use_yuyv_direct { "YUYV422 (direct)" } else if needs_yuv420p { "YUV420P" } else { "NV12" });
+        info!(
+            "Initializing input format handler for: {} -> {}",
+            config.input_format,
+            if use_direct_input {
+                "direct"
+            } else if needs_yuv420p {
+                "YUV420P"
+            } else {
+                "NV12"
+            }
+        );
 
         let (nv12_converter, yuv420p_converter) = if use_yuyv_direct {
             // RKMPP with YUYV direct input - skip all conversion
             info!("YUYV direct input enabled for RKMPP, skipping format conversion");
+            (None, None)
+        } else if use_direct_input {
+            info!("Direct input enabled, skipping format conversion");
             (None, None)
         } else if needs_yuv420p {
             // Software encoder needs YUV420P
@@ -505,19 +693,38 @@ impl SharedVideoPipeline {
                 }
                 PixelFormat::Yuyv => {
                     info!("Using YUYV->YUV420P converter");
-                    (None, Some(PixelConverter::yuyv_to_yuv420p(config.resolution)))
+                    (
+                        None,
+                        Some(PixelConverter::yuyv_to_yuv420p(config.resolution)),
+                    )
                 }
                 PixelFormat::Nv12 => {
                     info!("Using NV12->YUV420P converter");
-                    (None, Some(PixelConverter::nv12_to_yuv420p(config.resolution)))
+                    (
+                        None,
+                        Some(PixelConverter::nv12_to_yuv420p(config.resolution)),
+                    )
+                }
+                PixelFormat::Nv21 => {
+                    info!("Using NV21->YUV420P converter");
+                    (
+                        None,
+                        Some(PixelConverter::nv21_to_yuv420p(config.resolution)),
+                    )
                 }
                 PixelFormat::Rgb24 => {
                     info!("Using RGB24->YUV420P converter");
-                    (None, Some(PixelConverter::rgb24_to_yuv420p(config.resolution)))
+                    (
+                        None,
+                        Some(PixelConverter::rgb24_to_yuv420p(config.resolution)),
+                    )
                 }
                 PixelFormat::Bgr24 => {
                     info!("Using BGR24->YUV420P converter");
-                    (None, Some(PixelConverter::bgr24_to_yuv420p(config.resolution)))
+                    (
+                        None,
+                        Some(PixelConverter::bgr24_to_yuv420p(config.resolution)),
+                    )
                 }
                 _ => {
                     return Err(AppError::VideoError(format!(
@@ -536,6 +743,18 @@ impl SharedVideoPipeline {
                 PixelFormat::Yuyv => {
                     info!("Using YUYV->NV12 converter");
                     (Some(Nv12Converter::yuyv_to_nv12(config.resolution)), None)
+                }
+                PixelFormat::Nv21 => {
+                    info!("Using NV21->NV12 converter");
+                    (Some(Nv12Converter::nv21_to_nv12(config.resolution)), None)
+                }
+                PixelFormat::Nv16 => {
+                    info!("Using NV16->NV12 converter");
+                    (Some(Nv12Converter::nv16_to_nv12(config.resolution)), None)
+                }
+                PixelFormat::Yuv420 => {
+                    info!("Using YUV420P->NV12 converter");
+                    (Some(Nv12Converter::yuv420_to_nv12(config.resolution)), None)
                 }
                 PixelFormat::Rgb24 => {
                     info!("Using RGB24->NV12 converter");
@@ -557,8 +776,9 @@ impl SharedVideoPipeline {
         *self.encoder.lock().await = Some(encoder);
         *self.nv12_converter.lock().await = nv12_converter;
         *self.yuv420p_converter.lock().await = yuv420p_converter;
-        self.encoder_needs_yuv420p.store(needs_yuv420p, Ordering::Release);
-        self.yuyv_direct_input.store(use_yuyv_direct, Ordering::Release);
+        self.encoder_needs_yuv420p
+            .store(needs_yuv420p, Ordering::Release);
+        self.direct_input.store(use_direct_input, Ordering::Release);
 
         Ok(())
     }
@@ -646,7 +866,10 @@ impl SharedVideoPipeline {
     }
 
     /// Start the pipeline
-    pub async fn start(self: &Arc<Self>, mut frame_rx: broadcast::Receiver<VideoFrame>) -> Result<()> {
+    pub async fn start(
+        self: &Arc<Self>,
+        mut frame_rx: broadcast::Receiver<VideoFrame>,
+    ) -> Result<()> {
         if *self.running_rx.borrow() {
             warn!("Pipeline already running");
             return Ok(());
@@ -657,7 +880,10 @@ impl SharedVideoPipeline {
 
         let config = self.config.read().await.clone();
         let gop_size = config.gop_size();
-        info!("Starting {} pipeline (GOP={})", config.output_codec, gop_size);
+        info!(
+            "Starting {} pipeline (GOP={})",
+            config.output_codec, gop_size
+        );
 
         let pipeline = self.clone();
 
@@ -674,7 +900,6 @@ impl SharedVideoPipeline {
             let mut local_errors: u64 = 0;
             let mut local_dropped: u64 = 0;
             let mut local_skipped: u64 = 0;
-
             // Track when we last had subscribers for auto-stop feature
             let mut no_subscribers_since: Option<Instant> = None;
             let grace_period = Duration::from_secs(AUTO_STOP_GRACE_PERIOD_SECS);
@@ -790,7 +1015,11 @@ impl SharedVideoPipeline {
     }
 
     /// Encode a single frame
-    async fn encode_frame(&self, frame: &VideoFrame, frame_count: u64) -> Result<Option<EncodedVideoFrame>> {
+    async fn encode_frame(
+        &self,
+        frame: &VideoFrame,
+        frame_count: u64,
+    ) -> Result<Option<EncodedVideoFrame>> {
         let config = self.config.read().await;
         let raw_frame = frame.data();
         let fps = config.fps;
@@ -835,9 +1064,9 @@ impl SharedVideoPipeline {
         let needs_yuv420p = self.encoder_needs_yuv420p.load(Ordering::Acquire);
         let mut encoder_guard = self.encoder.lock().await;
 
-        let encoder = encoder_guard.as_mut().ok_or_else(|| {
-            AppError::VideoError("Encoder not initialized".to_string())
-        })?;
+        let encoder = encoder_guard
+            .as_mut()
+            .ok_or_else(|| AppError::VideoError("Encoder not initialized".to_string()))?;
 
         // Check and consume keyframe request (atomic, no lock contention)
         if self.keyframe_requested.swap(false, Ordering::AcqRel) {
@@ -848,13 +1077,15 @@ impl SharedVideoPipeline {
         let encode_result = if needs_yuv420p && yuv420p_converter.is_some() {
             // Software encoder with direct input conversion to YUV420P
             let conv = yuv420p_converter.as_mut().unwrap();
-            let yuv420p_data = conv.convert(raw_frame)
+            let yuv420p_data = conv
+                .convert(raw_frame)
                 .map_err(|e| AppError::VideoError(format!("YUV420P conversion failed: {}", e)))?;
             encoder.encode_raw(yuv420p_data, pts_ms)
         } else if nv12_converter.is_some() {
             // Hardware encoder with input conversion to NV12
             let conv = nv12_converter.as_mut().unwrap();
-            let nv12_data = conv.convert(raw_frame)
+            let nv12_data = conv
+                .convert(raw_frame)
                 .map_err(|e| AppError::VideoError(format!("NV12 conversion failed: {}", e)))?;
             encoder.encode_raw(nv12_data, pts_ms)
         } else {
@@ -871,7 +1102,6 @@ impl SharedVideoPipeline {
                 if !frames.is_empty() {
                     let encoded = frames.into_iter().next().unwrap();
                     let is_keyframe = encoded.key == 1;
-
                     let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
 
                     // Debug log for H265 encoded frame
@@ -901,17 +1131,23 @@ impl SharedVideoPipeline {
                     }))
                 } else {
                     if codec == VideoEncoderType::H265 {
-                        warn!("[Pipeline-H265] Encoder returned no frames for frame #{}", frame_count);
+                        warn!(
+                            "[Pipeline-H265] Encoder returned no frames for frame #{}",
+                            frame_count
+                        );
                     }
                     Ok(None)
                 }
             }
             Err(e) => {
                 if codec == VideoEncoderType::H265 {
-                    error!("[Pipeline-H265] Encode error at frame #{}: {}", frame_count, e);
+                    error!(
+                        "[Pipeline-H265] Encode error at frame #{}: {}",
+                        frame_count, e
+                    );
                 }
                 Err(e)
-            },
+            }
         }
     }
 
@@ -924,7 +1160,10 @@ impl SharedVideoPipeline {
     }
 
     /// Set bitrate using preset
-    pub async fn set_bitrate_preset(&self, preset: crate::video::encoder::BitratePreset) -> Result<()> {
+    pub async fn set_bitrate_preset(
+        &self,
+        preset: crate::video::encoder::BitratePreset,
+    ) -> Result<()> {
         let bitrate_kbps = preset.bitrate_kbps();
         if let Some(ref mut encoder) = *self.encoder.lock().await {
             encoder.set_bitrate(bitrate_kbps)?;
@@ -965,11 +1204,7 @@ fn parse_h265_nal_types(data: &[u8]) -> Vec<(u8, usize)> {
             && data[i + 3] == 1
         {
             i + 4
-        } else if i + 3 <= data.len()
-            && data[i] == 0
-            && data[i + 1] == 0
-            && data[i + 2] == 1
-        {
+        } else if i + 3 <= data.len() && data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 {
             i + 3
         } else {
             i += 1;

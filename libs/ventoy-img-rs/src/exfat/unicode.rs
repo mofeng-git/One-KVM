@@ -93,7 +93,7 @@ pub fn to_uppercase_simple(ch: u16) -> u16 {
         // Greek lowercase (α-ω and variants)
         0x03B1..=0x03C1 => ch - 32, // α-ρ -> Α-Ρ
         0x03C3..=0x03C9 => ch - 32, // σ-ω -> Σ-Ω
-        0x03C2 => 0x03A3, // ς (final sigma) -> Σ
+        0x03C2 => 0x03A3,           // ς (final sigma) -> Σ
 
         // Cyrillic lowercase (а-я)
         0x0430..=0x044F => ch - 32, // а-я -> А-Я

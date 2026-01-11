@@ -133,7 +133,12 @@ impl Streamer {
     /// Get current state as SystemEvent
     pub async fn current_state_event(&self) -> SystemEvent {
         let state = *self.state.read().await;
-        let device = self.current_device.read().await.as_ref().map(|d| d.path.display().to_string());
+        let device = self
+            .current_device
+            .read()
+            .await
+            .as_ref()
+            .map(|d| d.path.display().to_string());
 
         SystemEvent::StreamStateChanged {
             state: match state {
@@ -162,7 +167,8 @@ impl Streamer {
     /// Check if config is currently being changed
     /// When true, auto-start should be blocked to prevent device busy errors
     pub fn is_config_changing(&self) -> bool {
-        self.config_changing.load(std::sync::atomic::Ordering::SeqCst)
+        self.config_changing
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Get MJPEG handler for stream endpoints
@@ -209,13 +215,17 @@ impl Streamer {
         fps: u32,
     ) -> Result<()> {
         // Set config_changing flag to prevent frontend mode sync during config change
-        self.config_changing.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.config_changing
+            .store(true, std::sync::atomic::Ordering::SeqCst);
 
-        let result = self.apply_video_config_inner(device_path, format, resolution, fps).await;
+        let result = self
+            .apply_video_config_inner(device_path, format, resolution, fps)
+            .await;
 
         // Clear the flag after config change is complete
         // The stream will be started by MJPEG client connection, not here
-        self.config_changing.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.config_changing
+            .store(false, std::sync::atomic::Ordering::SeqCst);
 
         result
     }
@@ -230,6 +240,7 @@ impl Streamer {
     ) -> Result<()> {
         // Publish "config changing" event
         self.publish_event(SystemEvent::StreamConfigChanging {
+            transition_id: None,
             reason: "device_switch".to_string(),
         })
         .await;
@@ -254,7 +265,9 @@ impl Streamer {
                 .iter()
                 .any(|r| r.width == resolution.width && r.height == resolution.height)
         {
-            return Err(AppError::VideoError("Requested resolution not supported".to_string()));
+            return Err(AppError::VideoError(
+                "Requested resolution not supported".to_string(),
+            ));
         }
 
         // IMPORTANT: Disconnect all MJPEG clients FIRST before stopping capture
@@ -277,7 +290,6 @@ impl Streamer {
                 // Explicitly drop the capturer to release V4L2 resources
                 drop(capturer);
             }
-
         }
 
         // Update config
@@ -305,9 +317,12 @@ impl Streamer {
         *self.state.write().await = StreamerState::Ready;
 
         // Publish "config applied" event
-        info!("Publishing StreamConfigApplied event: {}x{} {:?} @ {}fps",
-              resolution.width, resolution.height, format, fps);
+        info!(
+            "Publishing StreamConfigApplied event: {}x{} {:?} @ {}fps",
+            resolution.width, resolution.height, format, fps
+        );
         self.publish_event(SystemEvent::StreamConfigApplied {
+            transition_id: None,
             device: device_path.to_string(),
             resolution: (resolution.width, resolution.height),
             format: format!("{:?}", format),
@@ -381,7 +396,11 @@ impl Streamer {
     }
 
     /// Select best format for device
-    fn select_format(&self, device: &VideoDeviceInfo, preferred: PixelFormat) -> Result<PixelFormat> {
+    fn select_format(
+        &self,
+        device: &VideoDeviceInfo,
+        preferred: PixelFormat,
+    ) -> Result<PixelFormat> {
         // Check if preferred format is available
         if device.formats.iter().any(|f| f.format == preferred) {
             return Ok(preferred);
@@ -410,9 +429,10 @@ impl Streamer {
 
         // Check if preferred resolution is available
         if format_info.resolutions.is_empty()
-            || format_info.resolutions.iter().any(|r| {
-                r.width == preferred.width && r.height == preferred.height
-            })
+            || format_info
+                .resolutions
+                .iter()
+                .any(|r| r.width == preferred.width && r.height == preferred.height)
         {
             return Ok(preferred);
         }
@@ -528,7 +548,10 @@ impl Streamer {
                                     // Stop the streamer
                                     if let Some(streamer) = state_ref.upgrade() {
                                         if let Err(e) = streamer.stop().await {
-                                            warn!("Failed to stop streamer during idle cleanup: {}", e);
+                                            warn!(
+                                                "Failed to stop streamer during idle cleanup: {}",
+                                                e
+                                            );
                                         }
                                     }
                                     break;
@@ -609,8 +632,14 @@ impl Streamer {
 
         // Start background tasks only once per Streamer instance
         // Use compare_exchange to atomically check and set the flag
-        if self.background_tasks_started
-            .compare_exchange(false, true, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst)
+        if self
+            .background_tasks_started
+            .compare_exchange(
+                false,
+                true,
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+            )
             .is_ok()
         {
             info!("Starting background tasks (stats, cleanup, monitor)");
@@ -626,10 +655,12 @@ impl Streamer {
                         let clients_stat = streamer.mjpeg_handler().get_clients_stat();
                         let clients = clients_stat.len() as u64;
 
-                        streamer.publish_event(SystemEvent::StreamStatsUpdate {
-                            clients,
-                            clients_stat,
-                        }).await;
+                        streamer
+                            .publish_event(SystemEvent::StreamStatsUpdate {
+                                clients,
+                                clients_stat,
+                            })
+                            .await;
                     } else {
                         break;
                     }
@@ -649,7 +680,9 @@ impl Streamer {
                 loop {
                     interval.tick().await;
 
-                    let Some(streamer) = monitor_ref.upgrade() else { break; };
+                    let Some(streamer) = monitor_ref.upgrade() else {
+                        break;
+                    };
 
                     // Check auto-pause configuration
                     let config = monitor_handler.auto_pause_config();
@@ -663,10 +696,16 @@ impl Streamer {
                     if count == 0 {
                         if zero_since.is_none() {
                             zero_since = Some(std::time::Instant::now());
-                            info!("No clients connected, starting shutdown timer ({}s)", config.shutdown_delay_secs);
+                            info!(
+                                "No clients connected, starting shutdown timer ({}s)",
+                                config.shutdown_delay_secs
+                            );
                         } else if let Some(since) = zero_since {
                             if since.elapsed().as_secs() >= config.shutdown_delay_secs {
-                                info!("Auto-pausing stream (no clients for {}s)", config.shutdown_delay_secs);
+                                info!(
+                                    "Auto-pausing stream (no clients for {}s)",
+                                    config.shutdown_delay_secs
+                                );
                                 if let Err(e) = streamer.stop().await {
                                     error!("Auto-pause failed: {}", e);
                                 }
@@ -734,8 +773,14 @@ impl Streamer {
             clients: self.mjpeg_handler.client_count(),
             target_fps: config.fps,
             fps: capture_stats.as_ref().map(|s| s.current_fps).unwrap_or(0.0),
-            frames_captured: capture_stats.as_ref().map(|s| s.frames_captured).unwrap_or(0),
-            frames_dropped: capture_stats.as_ref().map(|s| s.frames_dropped).unwrap_or(0),
+            frames_captured: capture_stats
+                .as_ref()
+                .map(|s| s.frames_captured)
+                .unwrap_or(0),
+            frames_dropped: capture_stats
+                .as_ref()
+                .map(|s| s.frames_dropped)
+                .unwrap_or(0),
         }
     }
 
@@ -776,7 +821,10 @@ impl Streamer {
     /// until the device is recovered.
     async fn start_device_recovery_internal(self: &Arc<Self>) {
         // Check if recovery is already in progress
-        if self.recovery_in_progress.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        if self
+            .recovery_in_progress
+            .swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
             debug!("Device recovery already in progress, skipping");
             return;
         }
@@ -786,7 +834,9 @@ impl Streamer {
             let capturer = self.capturer.read().await;
             if let Some(cap) = capturer.as_ref() {
                 cap.last_error().unwrap_or_else(|| {
-                    let device_path = self.current_device.blocking_read()
+                    let device_path = self
+                        .current_device
+                        .blocking_read()
                         .as_ref()
                         .map(|d| d.path.display().to_string())
                         .unwrap_or_else(|| "unknown".to_string());
@@ -800,13 +850,15 @@ impl Streamer {
         // Store error info
         *self.last_lost_device.write().await = Some(device.clone());
         *self.last_lost_reason.write().await = Some(reason.clone());
-        self.recovery_retry_count.store(0, std::sync::atomic::Ordering::Relaxed);
+        self.recovery_retry_count
+            .store(0, std::sync::atomic::Ordering::Relaxed);
 
         // Publish device lost event
         self.publish_event(SystemEvent::StreamDeviceLost {
             device: device.clone(),
             reason: reason.clone(),
-        }).await;
+        })
+        .await;
 
         // Start recovery task
         let streamer = Arc::clone(self);
@@ -814,11 +866,16 @@ impl Streamer {
             let device_path = device.clone();
 
             loop {
-                let attempt = streamer.recovery_retry_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                let attempt = streamer
+                    .recovery_retry_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1;
 
                 // Check if still in device lost state
                 let current_state = *streamer.state.read().await;
-                if current_state != StreamerState::DeviceLost && current_state != StreamerState::Recovering {
+                if current_state != StreamerState::DeviceLost
+                    && current_state != StreamerState::Recovering
+                {
                     info!("Stream state changed during recovery, stopping recovery task");
                     break;
                 }
@@ -828,11 +885,16 @@ impl Streamer {
 
                 // Publish reconnecting event (every 5 attempts to avoid spam)
                 if attempt == 1 || attempt % 5 == 0 {
-                    streamer.publish_event(SystemEvent::StreamReconnecting {
-                        device: device_path.clone(),
-                        attempt,
-                    }).await;
-                    info!("Attempting to recover video device {} (attempt {})", device_path, attempt);
+                    streamer
+                        .publish_event(SystemEvent::StreamReconnecting {
+                            device: device_path.clone(),
+                            attempt,
+                        })
+                        .await;
+                    info!(
+                        "Attempting to recover video device {} (attempt {})",
+                        device_path, attempt
+                    );
                 }
 
                 // Wait before retry (1 second)
@@ -848,13 +910,20 @@ impl Streamer {
                 // Try to restart capture
                 match streamer.restart_capturer().await {
                     Ok(_) => {
-                        info!("Video device {} recovered after {} attempts", device_path, attempt);
-                        streamer.recovery_in_progress.store(false, std::sync::atomic::Ordering::SeqCst);
+                        info!(
+                            "Video device {} recovered after {} attempts",
+                            device_path, attempt
+                        );
+                        streamer
+                            .recovery_in_progress
+                            .store(false, std::sync::atomic::Ordering::SeqCst);
 
                         // Publish recovered event
-                        streamer.publish_event(SystemEvent::StreamRecovered {
-                            device: device_path.clone(),
-                        }).await;
+                        streamer
+                            .publish_event(SystemEvent::StreamRecovered {
+                                device: device_path.clone(),
+                            })
+                            .await;
 
                         // Clear error info
                         *streamer.last_lost_device.write().await = None;
@@ -867,7 +936,9 @@ impl Streamer {
                 }
             }
 
-            streamer.recovery_in_progress.store(false, std::sync::atomic::Ordering::SeqCst);
+            streamer
+                .recovery_in_progress
+                .store(false, std::sync::atomic::Ordering::SeqCst);
         });
     }
 }

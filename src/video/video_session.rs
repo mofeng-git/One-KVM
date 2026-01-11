@@ -234,10 +234,7 @@ impl VideoSessionManager {
         let mut sessions = self.sessions.write().await;
         sessions.insert(session_id.clone(), session);
 
-        info!(
-            "Video session created: {} (codec: {})",
-            session_id, codec
-        );
+        info!("Video session created: {} (codec: {})", session_id, codec);
 
         Ok(session_id)
     }
@@ -428,8 +425,7 @@ impl VideoSessionManager {
             sessions
                 .iter()
                 .filter(|(_, s)| {
-                    (s.state == VideoSessionState::Paused
-                        || s.state == VideoSessionState::Created)
+                    (s.state == VideoSessionState::Paused || s.state == VideoSessionState::Created)
                         && now.duration_since(s.last_activity) > timeout
                 })
                 .map(|(id, _)| id.clone())

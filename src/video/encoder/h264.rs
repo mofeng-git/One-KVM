@@ -99,8 +99,18 @@ pub enum H264InputFormat {
     Yuv420p,
     /// NV12 - Y plane + interleaved UV plane (optimal for VAAPI)
     Nv12,
+    /// NV21 - Y plane + interleaved VU plane
+    Nv21,
+    /// NV16 - Y plane + interleaved UV plane (4:2:2)
+    Nv16,
+    /// NV24 - Y plane + interleaved UV plane (4:4:4)
+    Nv24,
     /// YUYV422 - packed YUV 4:2:2 format (optimal for RKMPP direct input)
     Yuyv422,
+    /// RGB24 - packed RGB format (RKMPP direct input)
+    Rgb24,
+    /// BGR24 - packed BGR format (RKMPP direct input)
+    Bgr24,
 }
 
 impl Default for H264InputFormat {
@@ -202,7 +212,7 @@ pub fn get_available_encoders(width: u32, height: u32) -> Vec<CodecInfo> {
         fps: 30,
         gop: 30,
         rc: RateControl::RC_CBR,
-        quality: Quality::Quality_Low,  // Use low quality preset for fastest encoding (ultrafast)
+        quality: Quality::Quality_Low, // Use low quality preset for fastest encoding (ultrafast)
         kbs: 2000,
         q: 23,
         thread_count: 4,
@@ -270,9 +280,8 @@ impl H264Encoder {
         // Detect best encoder
         let (_encoder_type, codec_name) = detect_best_encoder(width, height);
 
-        let codec_name = codec_name.ok_or_else(|| {
-            AppError::VideoError("No H.264 encoder available".to_string())
-        })?;
+        let codec_name = codec_name
+            .ok_or_else(|| AppError::VideoError("No H.264 encoder available".to_string()))?;
 
         Self::with_codec(config, &codec_name)
     }
@@ -287,8 +296,13 @@ impl H264Encoder {
         // Select pixel format based on config
         let pixfmt = match config.input_format {
             H264InputFormat::Nv12 => AVPixelFormat::AV_PIX_FMT_NV12,
+            H264InputFormat::Nv21 => AVPixelFormat::AV_PIX_FMT_NV21,
+            H264InputFormat::Nv16 => AVPixelFormat::AV_PIX_FMT_NV16,
+            H264InputFormat::Nv24 => AVPixelFormat::AV_PIX_FMT_NV24,
             H264InputFormat::Yuv420p => AVPixelFormat::AV_PIX_FMT_YUV420P,
             H264InputFormat::Yuyv422 => AVPixelFormat::AV_PIX_FMT_YUYV422,
+            H264InputFormat::Rgb24 => AVPixelFormat::AV_PIX_FMT_RGB24,
+            H264InputFormat::Bgr24 => AVPixelFormat::AV_PIX_FMT_BGR24,
         };
 
         info!(
@@ -306,10 +320,10 @@ impl H264Encoder {
             fps: config.fps as i32,
             gop: config.gop_size as i32,
             rc: RateControl::RC_CBR,
-            quality: Quality::Quality_Low,  // Use low quality preset for fastest encoding (lowest latency)
+            quality: Quality::Quality_Low, // Use low quality preset for fastest encoding (lowest latency)
             kbs: config.bitrate_kbps as i32,
             q: 23,
-            thread_count: 4,  // Use 4 threads for better performance
+            thread_count: 4, // Use 4 threads for better performance
         };
 
         let inner = HwEncoder::new(ctx).map_err(|_| {
@@ -353,9 +367,9 @@ impl H264Encoder {
 
     /// Update bitrate dynamically
     pub fn set_bitrate(&mut self, bitrate_kbps: u32) -> Result<()> {
-        self.inner.set_bitrate(bitrate_kbps as i32).map_err(|_| {
-            AppError::VideoError("Failed to set bitrate".to_string())
-        })?;
+        self.inner
+            .set_bitrate(bitrate_kbps as i32)
+            .map_err(|_| AppError::VideoError("Failed to set bitrate".to_string()))?;
         self.config.bitrate_kbps = bitrate_kbps;
         debug!("Bitrate updated to {} kbps", bitrate_kbps);
         Ok(())
@@ -394,16 +408,7 @@ impl H264Encoder {
                 Ok(owned_frames)
             }
             Err(e) => {
-                // For the first ~30 frames, x264 may fail due to initialization
-                // Log as warning instead of error to avoid alarming users
-                if self.frame_count <= 30 {
-                    warn!(
-                        "Encode failed during initialization (frame {}): {} - this is normal for x264",
-                        self.frame_count, e
-                    );
-                } else {
-                    error!("Encode failed: {}", e);
-                }
+                error!("Encode failed: {}", e);
                 Err(AppError::VideoError(format!("Encode failed: {}", e)))
             }
         }
@@ -458,7 +463,9 @@ impl Encoder for H264Encoder {
         if frames.is_empty() {
             // Encoder needs more frames (shouldn't happen with our config)
             warn!("Encoder returned no frames");
-            return Err(AppError::VideoError("Encoder returned no frames".to_string()));
+            return Err(AppError::VideoError(
+                "Encoder returned no frames".to_string(),
+            ));
         }
 
         // Take ownership of the first frame (zero-copy)
@@ -493,8 +500,13 @@ impl Encoder for H264Encoder {
         // Check if the format matches our configured input format
         match self.config.input_format {
             H264InputFormat::Nv12 => matches!(format, PixelFormat::Nv12),
+            H264InputFormat::Nv21 => matches!(format, PixelFormat::Nv21),
+            H264InputFormat::Nv16 => matches!(format, PixelFormat::Nv16),
+            H264InputFormat::Nv24 => matches!(format, PixelFormat::Nv24),
             H264InputFormat::Yuv420p => matches!(format, PixelFormat::Yuv420),
             H264InputFormat::Yuyv422 => matches!(format, PixelFormat::Yuyv),
+            H264InputFormat::Rgb24 => matches!(format, PixelFormat::Rgb24),
+            H264InputFormat::Bgr24 => matches!(format, PixelFormat::Bgr24),
         }
     }
 }
@@ -538,7 +550,11 @@ mod tests {
         let config = H264Config::low_latency(Resolution::HD720, 2000);
         match H264Encoder::new(config) {
             Ok(encoder) => {
-                println!("Created encoder: {} ({})", encoder.codec_name(), encoder.encoder_type());
+                println!(
+                    "Created encoder: {} ({})",
+                    encoder.codec_name(),
+                    encoder.encoder_type()
+                );
             }
             Err(e) => {
                 println!("Failed to create encoder: {}", e);

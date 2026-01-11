@@ -193,7 +193,9 @@ impl AudioController {
     pub async fn select_device(&self, device: &str) -> Result<()> {
         // Validate device exists
         let devices = self.list_devices().await?;
-        let found = devices.iter().any(|d| d.name == device || d.description.contains(device));
+        let found = devices
+            .iter()
+            .any(|d| d.name == device || d.description.contains(device));
 
         if !found && device != "default" {
             return Err(AppError::AudioError(format!(
@@ -244,7 +246,11 @@ impl AudioController {
         })
         .await;
 
-        info!("Audio quality set to: {:?} ({}bps)", quality, quality.bitrate());
+        info!(
+            "Audio quality set to: {:?} ({}bps)",
+            quality,
+            quality.bitrate()
+        );
         Ok(())
     }
 
@@ -346,14 +352,17 @@ impl AudioController {
         let streaming = self.is_streaming().await;
         let error = self.last_error.read().await.clone();
 
-        let (subscriber_count, frames_encoded, bytes_output) = if let Some(ref streamer) =
-            *self.streamer.read().await
-        {
-            let stats = streamer.stats().await;
-            (stats.subscriber_count, stats.frames_encoded, stats.bytes_output)
-        } else {
-            (0, 0, 0)
-        };
+        let (subscriber_count, frames_encoded, bytes_output) =
+            if let Some(ref streamer) = *self.streamer.read().await {
+                let stats = streamer.stats().await;
+                (
+                    stats.subscriber_count,
+                    stats.frames_encoded,
+                    stats.bytes_output,
+                )
+            } else {
+                (0, 0, 0)
+            };
 
         AudioStatus {
             enabled: config.enabled,
@@ -383,7 +392,11 @@ impl AudioController {
 
     /// Subscribe to Opus frames (async version)
     pub async fn subscribe_opus_async(&self) -> Option<broadcast::Receiver<OpusFrame>> {
-        self.streamer.read().await.as_ref().map(|s| s.subscribe_opus())
+        self.streamer
+            .read()
+            .await
+            .as_ref()
+            .map(|s| s.subscribe_opus())
     }
 
     /// Enable or disable audio

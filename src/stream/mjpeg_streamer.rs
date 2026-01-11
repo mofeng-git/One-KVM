@@ -228,16 +228,17 @@ impl MjpegStreamer {
         let device = self.current_device.read().await;
         let config = self.config.read().await;
 
-        let (resolution, format, frames_captured) = if let Some(ref cap) = *self.capturer.read().await {
-            let stats = cap.stats().await;
-            (
-                Some((config.resolution.width, config.resolution.height)),
-                Some(config.format.to_string()),
-                stats.frames_captured,
-            )
-        } else {
-            (None, None, 0)
-        };
+        let (resolution, format, frames_captured) =
+            if let Some(ref cap) = *self.capturer.read().await {
+                let stats = cap.stats().await;
+                (
+                    Some((config.resolution.width, config.resolution.height)),
+                    Some(config.format.to_string()),
+                    stats.frames_captured,
+                )
+            } else {
+                (None, None, 0)
+            };
 
         MjpegStreamerStats {
             state: state.to_string(),
@@ -286,7 +287,10 @@ impl MjpegStreamer {
 
     /// Initialize with specific device
     pub async fn init_with_device(self: &Arc<Self>, device: VideoDeviceInfo) -> Result<()> {
-        info!("MjpegStreamer: Initializing with device: {}", device.path.display());
+        info!(
+            "MjpegStreamer: Initializing with device: {}",
+            device.path.display()
+        );
 
         let config = self.config.read().await.clone();
 
@@ -322,7 +326,9 @@ impl MjpegStreamer {
         let _lock = self.start_lock.lock().await;
 
         if self.config_changing.load(Ordering::SeqCst) {
-            return Err(AppError::VideoError("Config change in progress".to_string()));
+            return Err(AppError::VideoError(
+                "Config change in progress".to_string(),
+            ));
         }
 
         let state = *self.state.read().await;
@@ -332,7 +338,8 @@ impl MjpegStreamer {
 
         // Get capturer
         let capturer = self.capturer.read().await.clone();
-        let capturer = capturer.ok_or_else(|| AppError::VideoError("Not initialized".to_string()))?;
+        let capturer =
+            capturer.ok_or_else(|| AppError::VideoError("Not initialized".to_string()))?;
 
         // Start capture
         capturer.start().await?;
@@ -412,7 +419,9 @@ impl MjpegStreamer {
             let device = devices
                 .into_iter()
                 .find(|d| d.path == *path)
-                .ok_or_else(|| AppError::VideoError(format!("Device not found: {}", path.display())))?;
+                .ok_or_else(|| {
+                    AppError::VideoError(format!("Device not found: {}", path.display()))
+                })?;
 
             self.init_with_device(device).await?;
         }

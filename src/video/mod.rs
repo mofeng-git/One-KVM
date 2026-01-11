@@ -18,11 +18,15 @@ pub mod video_session;
 pub use capture::VideoCapturer;
 pub use convert::{PixelConverter, Yuv420pBuffer};
 pub use device::{VideoDevice, VideoDeviceInfo};
-pub use encoder::{JpegEncoder, H264Encoder, H264EncoderType};
+pub use encoder::{H264Encoder, H264EncoderType, JpegEncoder};
 pub use format::PixelFormat;
 pub use frame::VideoFrame;
 pub use h264_pipeline::{H264Pipeline, H264PipelineBuilder, H264PipelineConfig};
-pub use shared_video_pipeline::{EncodedVideoFrame, SharedVideoPipeline, SharedVideoPipelineConfig, SharedVideoPipelineStats};
+pub use shared_video_pipeline::{
+    EncodedVideoFrame, SharedVideoPipeline, SharedVideoPipelineConfig, SharedVideoPipelineStats,
+};
 pub use stream_manager::VideoStreamManager;
 pub use streamer::{Streamer, StreamerState};
-pub use video_session::{VideoSessionManager, VideoSessionManagerConfig, VideoSessionInfo, VideoSessionState, CodecInfo};
+pub use video_session::{
+    CodecInfo, VideoSessionInfo, VideoSessionManager, VideoSessionManagerConfig, VideoSessionState,
+};

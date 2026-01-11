@@ -186,10 +186,7 @@ pub fn detect_best_vp8_encoder(width: u32, height: u32) -> (VP8EncoderType, Opti
         VP8EncoderType::Software // Default to software for unknown
     };
 
-    info!(
-        "Selected VP8 encoder: {} ({})",
-        codec.name, encoder_type
-    );
+    info!("Selected VP8 encoder: {} ({})", codec.name, encoder_type);
     (encoder_type, Some(codec.name.clone()))
 }
 
@@ -238,7 +235,8 @@ impl VP8Encoder {
 
         if encoder_type == VP8EncoderType::None {
             return Err(AppError::VideoError(
-                "No VP8 encoder available. Please ensure FFmpeg is built with libvpx support.".to_string(),
+                "No VP8 encoder available. Please ensure FFmpeg is built with libvpx support."
+                    .to_string(),
             ));
         }
 
@@ -270,7 +268,9 @@ impl VP8Encoder {
         } else {
             match config.input_format {
                 VP8InputFormat::Nv12 => (AVPixelFormat::AV_PIX_FMT_NV12, VP8InputFormat::Nv12),
-                VP8InputFormat::Yuv420p => (AVPixelFormat::AV_PIX_FMT_YUV420P, VP8InputFormat::Yuv420p),
+                VP8InputFormat::Yuv420p => {
+                    (AVPixelFormat::AV_PIX_FMT_YUV420P, VP8InputFormat::Yuv420p)
+                }
             }
         };
 
@@ -340,9 +340,9 @@ impl VP8Encoder {
 
     /// Update bitrate dynamically
     pub fn set_bitrate(&mut self, bitrate_kbps: u32) -> Result<()> {
-        self.inner.set_bitrate(bitrate_kbps as i32).map_err(|_| {
-            AppError::VideoError("Failed to set VP8 bitrate".to_string())
-        })?;
+        self.inner
+            .set_bitrate(bitrate_kbps as i32)
+            .map_err(|_| AppError::VideoError("Failed to set VP8 bitrate".to_string()))?;
         self.config.bitrate_kbps = bitrate_kbps;
         debug!("VP8 bitrate updated to {} kbps", bitrate_kbps);
         Ok(())
@@ -470,7 +470,10 @@ mod tests {
     #[test]
     fn test_detect_vp8_encoder() {
         let (encoder_type, codec_name) = detect_best_vp8_encoder(1280, 720);
-        println!("Detected VP8 encoder: {:?} ({:?})", encoder_type, codec_name);
+        println!(
+            "Detected VP8 encoder: {:?} ({:?})",
+            encoder_type, codec_name
+        );
     }
 
     #[test]

@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use uuid::Uuid;
 
-use crate::error::{AppError, Result};
 use super::password::{hash_password, verify_password};
+use crate::error::{AppError, Result};
 
 /// User row type from database
 type UserRow = (String, String, String, i32, String, String);
@@ -134,14 +134,13 @@ impl UserStore {
         let password_hash = hash_password(new_password)?;
         let now = Utc::now();
 
-        let result = sqlx::query(
-            "UPDATE users SET password_hash = ?1, updated_at = ?2 WHERE id = ?3",
-        )
-        .bind(&password_hash)
-        .bind(now.to_rfc3339())
-        .bind(user_id)
-        .execute(&self.pool)
-        .await?;
+        let result =
+            sqlx::query("UPDATE users SET password_hash = ?1, updated_at = ?2 WHERE id = ?3")
+                .bind(&password_hash)
+                .bind(now.to_rfc3339())
+                .bind(user_id)
+                .execute(&self.pool)
+                .await?;
 
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound("User not found".to_string()));

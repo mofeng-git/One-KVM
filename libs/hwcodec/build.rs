@@ -56,7 +56,10 @@ fn build_common(builder: &mut Build) {
 
     // Unsupported platforms
     if target_os != "windows" && target_os != "linux" {
-        panic!("Unsupported OS: {}. Only Windows and Linux are supported.", target_os);
+        panic!(
+            "Unsupported OS: {}. Only Windows and Linux are supported.",
+            target_os
+        );
     }
 
     // tool
@@ -103,7 +106,9 @@ mod ffmpeg {
         use std::process::Command;
 
         // Check if static linking is requested
-        let use_static = std::env::var("FFMPEG_STATIC").map(|v| v == "1").unwrap_or(false);
+        let use_static = std::env::var("FFMPEG_STATIC")
+            .map(|v| v == "1")
+            .unwrap_or(false);
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
 
         // Try custom library path first:
@@ -142,7 +147,7 @@ mod ffmpeg {
                     // VAAPI for x86_64
                     println!("cargo:rustc-link-lib=va");
                     println!("cargo:rustc-link-lib=va-drm");
-                    println!("cargo:rustc-link-lib=va-x11");  // Required for vaGetDisplay
+                    println!("cargo:rustc-link-lib=va-x11"); // Required for vaGetDisplay
                     println!("cargo:rustc-link-lib=mfx");
                 } else {
                     // RKMPP for ARM
@@ -172,10 +177,7 @@ mod ffmpeg {
 
         for lib in &libs {
             // Get cflags
-            if let Ok(output) = Command::new("pkg-config")
-                .args(["--cflags", lib])
-                .output()
-            {
+            if let Ok(output) = Command::new("pkg-config").args(["--cflags", lib]).output() {
                 if output.status.success() {
                     let cflags = String::from_utf8_lossy(&output.stdout);
                     for flag in cflags.split_whitespace() {
@@ -193,10 +195,7 @@ mod ffmpeg {
                 vec!["--libs", lib]
             };
 
-            if let Ok(output) = Command::new("pkg-config")
-                .args(&pkg_config_args)
-                .output()
-            {
+            if let Ok(output) = Command::new("pkg-config").args(&pkg_config_args).output() {
                 if output.status.success() {
                     let libs_str = String::from_utf8_lossy(&output.stdout);
                     for flag in libs_str.split_whitespace() {
@@ -221,7 +220,9 @@ mod ffmpeg {
                     panic!("pkg-config failed for {}. Install FFmpeg development libraries: sudo apt install libavcodec-dev libavutil-dev", lib);
                 }
             } else {
-                panic!("pkg-config not found. Install pkg-config and FFmpeg development libraries.");
+                panic!(
+                    "pkg-config not found. Install pkg-config and FFmpeg development libraries."
+                );
             }
         }
 
@@ -301,7 +302,10 @@ mod ffmpeg {
             // ARM (aarch64, arm): no X11 needed, uses RKMPP/V4L2
             v
         } else {
-            panic!("Unsupported OS: {}. Only Windows and Linux are supported.", target_os);
+            panic!(
+                "Unsupported OS: {}. Only Windows and Linux are supported.",
+                target_os
+            );
         };
 
         for lib in dyn_libs.iter() {
@@ -312,10 +316,9 @@ mod ffmpeg {
     fn ffmpeg_ffi() {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let ffmpeg_ram_dir = manifest_dir.join("cpp").join("common");
-        let ffi_header = ffmpeg_ram_dir
-            .join("ffmpeg_ffi.h")
-            .to_string_lossy()
-            .to_string();
+        let ffi_header_path = ffmpeg_ram_dir.join("ffmpeg_ffi.h");
+        println!("cargo:rerun-if-changed={}", ffi_header_path.display());
+        let ffi_header = ffi_header_path.to_string_lossy().to_string();
         bindgen::builder()
             .header(ffi_header)
             .rustified_enum("*")
@@ -340,8 +343,6 @@ mod ffmpeg {
             .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_ram_ffi.rs"))
             .unwrap();
 
-        builder.files(
-            ["ffmpeg_ram_encode.cpp"].map(|f| ffmpeg_ram_dir.join(f)),
-        );
+        builder.files(["ffmpeg_ram_encode.cpp"].map(|f| ffmpeg_ram_dir.join(f)));
     }
 }

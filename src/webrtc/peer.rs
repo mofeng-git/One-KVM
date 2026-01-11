@@ -92,10 +92,9 @@ impl PeerConnection {
         };
 
         // Create peer connection
-        let pc = api
-            .new_peer_connection(rtc_config)
-            .await
-            .map_err(|e| AppError::VideoError(format!("Failed to create peer connection: {}", e)))?;
+        let pc = api.new_peer_connection(rtc_config).await.map_err(|e| {
+            AppError::VideoError(format!("Failed to create peer connection: {}", e))
+        })?;
 
         let pc = Arc::new(pc);
 
@@ -125,68 +124,69 @@ impl PeerConnection {
         let session_id = self.session_id.clone();
 
         // Connection state change handler
-        self.pc.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            let state = state.clone();
-            let session_id = session_id.clone();
+        self.pc
+            .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
+                let state = state.clone();
+                let session_id = session_id.clone();
 
-            Box::pin(async move {
-                let new_state = match s {
-                    RTCPeerConnectionState::New => ConnectionState::New,
-                    RTCPeerConnectionState::Connecting => ConnectionState::Connecting,
-                    RTCPeerConnectionState::Connected => ConnectionState::Connected,
-                    RTCPeerConnectionState::Disconnected => ConnectionState::Disconnected,
-                    RTCPeerConnectionState::Failed => ConnectionState::Failed,
-                    RTCPeerConnectionState::Closed => ConnectionState::Closed,
-                    _ => return,
-                };
+                Box::pin(async move {
+                    let new_state = match s {
+                        RTCPeerConnectionState::New => ConnectionState::New,
+                        RTCPeerConnectionState::Connecting => ConnectionState::Connecting,
+                        RTCPeerConnectionState::Connected => ConnectionState::Connected,
+                        RTCPeerConnectionState::Disconnected => ConnectionState::Disconnected,
+                        RTCPeerConnectionState::Failed => ConnectionState::Failed,
+                        RTCPeerConnectionState::Closed => ConnectionState::Closed,
+                        _ => return,
+                    };
 
-                info!("Peer {} connection state: {}", session_id, new_state);
-                let _ = state.send(new_state);
-            })
-        }));
+                    info!("Peer {} connection state: {}", session_id, new_state);
+                    let _ = state.send(new_state);
+                })
+            }));
 
         // ICE candidate handler
         let ice_candidates = self.ice_candidates.clone();
-        self.pc.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
-            let ice_candidates = ice_candidates.clone();
+        self.pc
+            .on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
+                let ice_candidates = ice_candidates.clone();
 
-            Box::pin(async move {
-                if let Some(c) = candidate {
-                    let candidate_str = c.to_json()
-                        .map(|j| j.candidate)
-                        .unwrap_or_default();
+                Box::pin(async move {
+                    if let Some(c) = candidate {
+                        let candidate_str = c.to_json().map(|j| j.candidate).unwrap_or_default();
 
-                    debug!("ICE candidate: {}", candidate_str);
+                        debug!("ICE candidate: {}", candidate_str);
 
-                    let mut candidates = ice_candidates.lock().await;
-                    candidates.push(IceCandidate {
-                        candidate: candidate_str,
-                        sdp_mid: c.to_json().ok().and_then(|j| j.sdp_mid),
-                        sdp_mline_index: c.to_json().ok().and_then(|j| j.sdp_mline_index),
-                        username_fragment: None,
-                    });
-                }
-            })
-        }));
+                        let mut candidates = ice_candidates.lock().await;
+                        candidates.push(IceCandidate {
+                            candidate: candidate_str,
+                            sdp_mid: c.to_json().ok().and_then(|j| j.sdp_mid),
+                            sdp_mline_index: c.to_json().ok().and_then(|j| j.sdp_mline_index),
+                            username_fragment: None,
+                        });
+                    }
+                })
+            }));
 
         // Data channel handler - note: HID processing is done when hid_controller is set
         let data_channel = self.data_channel.clone();
-        self.pc.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
-            let data_channel = data_channel.clone();
+        self.pc
+            .on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
+                let data_channel = data_channel.clone();
 
-            Box::pin(async move {
-                info!("Data channel opened: {}", dc.label());
+                Box::pin(async move {
+                    info!("Data channel opened: {}", dc.label());
 
-                // Store data channel
-                *data_channel.write().await = Some(dc.clone());
+                    // Store data channel
+                    *data_channel.write().await = Some(dc.clone());
 
-                // Message handler logs messages; HID processing requires set_hid_controller()
-                dc.on_message(Box::new(move |msg: DataChannelMessage| {
-                    debug!("DataChannel message: {} bytes", msg.data.len());
-                    Box::pin(async {})
-                }));
-            })
-        }));
+                    // Message handler logs messages; HID processing requires set_hid_controller()
+                    dc.on_message(Box::new(move |msg: DataChannelMessage| {
+                        debug!("DataChannel message: {} bytes", msg.data.len());
+                        Box::pin(async {})
+                    }));
+                })
+            }));
     }
 
     /// Set HID controller for processing DataChannel messages
@@ -206,7 +206,11 @@ impl PeerConnection {
                 let is_hid_channel = label == "hid" || label == "hid-unreliable";
 
                 if is_hid_channel {
-                    info!("HID DataChannel opened: {} (unreliable: {})", label, label == "hid-unreliable");
+                    info!(
+                        "HID DataChannel opened: {} (unreliable: {})",
+                        label,
+                        label == "hid-unreliable"
+                    );
 
                     // Store the reliable data channel for sending responses
                     if label == "hid" {
@@ -291,10 +295,9 @@ impl PeerConnection {
         let sdp = RTCSessionDescription::offer(offer.sdp)
             .map_err(|e| AppError::VideoError(format!("Invalid SDP offer: {}", e)))?;
 
-        self.pc
-            .set_remote_description(sdp)
-            .await
-            .map_err(|e| AppError::VideoError(format!("Failed to set remote description: {}", e)))?;
+        self.pc.set_remote_description(sdp).await.map_err(|e| {
+            AppError::VideoError(format!("Failed to set remote description: {}", e))
+        })?;
 
         // Create answer
         let answer = self
@@ -373,7 +376,11 @@ impl PeerConnection {
         // Reset HID state to release any held keys/buttons
         if let Some(ref hid) = self.hid_controller {
             if let Err(e) = hid.reset().await {
-                tracing::warn!("Failed to reset HID on peer {} close: {}", self.session_id, e);
+                tracing::warn!(
+                    "Failed to reset HID on peer {} close: {}",
+                    self.session_id,
+                    e
+                );
             } else {
                 tracing::debug!("HID reset on peer {} close", self.session_id);
             }

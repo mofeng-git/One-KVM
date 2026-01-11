@@ -7,9 +7,8 @@ use bytes::Bytes;
 use protobuf::Message as ProtobufMessage;
 
 use super::protocol::hbb::message::{
-    message as msg_union, misc as misc_union, video_frame as vf_union,
-    AudioFormat, AudioFrame, CursorData, CursorPosition,
-    EncodedVideoFrame, EncodedVideoFrames, Message, Misc, VideoFrame,
+    message as msg_union, misc as misc_union, video_frame as vf_union, AudioFormat, AudioFrame,
+    CursorData, CursorPosition, EncodedVideoFrame, EncodedVideoFrames, Message, Misc, VideoFrame,
 };
 
 /// Video codec type for RustDesk
@@ -63,7 +62,12 @@ impl VideoFrameAdapter {
     /// Convert encoded video data to RustDesk Message (zero-copy version)
     ///
     /// This version takes Bytes directly to avoid copying the frame data.
-    pub fn encode_frame_from_bytes(&mut self, data: Bytes, is_keyframe: bool, timestamp_ms: u64) -> Message {
+    pub fn encode_frame_from_bytes(
+        &mut self,
+        data: Bytes,
+        is_keyframe: bool,
+        timestamp_ms: u64,
+    ) -> Message {
         // Calculate relative timestamp
         if self.seq == 0 {
             self.timestamp_base = timestamp_ms;
@@ -104,13 +108,23 @@ impl VideoFrameAdapter {
     /// Encode frame to bytes for sending (zero-copy version)
     ///
     /// Takes Bytes directly to avoid copying the frame data.
-    pub fn encode_frame_bytes_zero_copy(&mut self, data: Bytes, is_keyframe: bool, timestamp_ms: u64) -> Bytes {
+    pub fn encode_frame_bytes_zero_copy(
+        &mut self,
+        data: Bytes,
+        is_keyframe: bool,
+        timestamp_ms: u64,
+    ) -> Bytes {
         let msg = self.encode_frame_from_bytes(data, is_keyframe, timestamp_ms);
         Bytes::from(msg.write_to_bytes().unwrap_or_default())
     }
 
     /// Encode frame to bytes for sending
-    pub fn encode_frame_bytes(&mut self, data: &[u8], is_keyframe: bool, timestamp_ms: u64) -> Bytes {
+    pub fn encode_frame_bytes(
+        &mut self,
+        data: &[u8],
+        is_keyframe: bool,
+        timestamp_ms: u64,
+    ) -> Bytes {
         self.encode_frame_bytes_zero_copy(Bytes::copy_from_slice(data), is_keyframe, timestamp_ms)
     }
 
@@ -234,15 +248,13 @@ mod tests {
         let msg = adapter.encode_frame(&data, true, 0);
 
         match &msg.union {
-            Some(msg_union::Union::VideoFrame(vf)) => {
-                match &vf.union {
-                    Some(vf_union::Union::H264s(frames)) => {
-                        assert_eq!(frames.frames.len(), 1);
-                        assert!(frames.frames[0].key);
-                    }
-                    _ => panic!("Expected H264s"),
+            Some(msg_union::Union::VideoFrame(vf)) => match &vf.union {
+                Some(vf_union::Union::H264s(frames)) => {
+                    assert_eq!(frames.frames.len(), 1);
+                    assert!(frames.frames[0].key);
                 }
-            }
+                _ => panic!("Expected H264s"),
+            },
             _ => panic!("Expected VideoFrame"),
         }
     }
@@ -256,15 +268,13 @@ mod tests {
         assert!(adapter.format_sent());
 
         match &msg.union {
-            Some(msg_union::Union::Misc(misc)) => {
-                match &misc.union {
-                    Some(misc_union::Union::AudioFormat(fmt)) => {
-                        assert_eq!(fmt.sample_rate, 48000);
-                        assert_eq!(fmt.channels, 2);
-                    }
-                    _ => panic!("Expected AudioFormat"),
+            Some(msg_union::Union::Misc(misc)) => match &misc.union {
+                Some(misc_union::Union::AudioFormat(fmt)) => {
+                    assert_eq!(fmt.sample_rate, 48000);
+                    assert_eq!(fmt.channels, 2);
                 }
-            }
+                _ => panic!("Expected AudioFormat"),
+            },
             _ => panic!("Expected Misc"),
         }
     }

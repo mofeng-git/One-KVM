@@ -1,6 +1,6 @@
+use crate::video::encoder::BitratePreset;
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
-use crate::video::encoder::BitratePreset;
 
 // Re-export ExtensionsConfig from extensions module
 pub use crate::extensions::ExtensionsConfig;
@@ -147,8 +147,8 @@ pub struct OtgDescriptorConfig {
 impl Default for OtgDescriptorConfig {
     fn default() -> Self {
         Self {
-            vendor_id: 0x1d6b,      // Linux Foundation
-            product_id: 0x0104,     // Multifunction Composite Gadget
+            vendor_id: 0x1d6b,  // Linux Foundation
+            product_id: 0x0104, // Multifunction Composite Gadget
             manufacturer: "One-KVM".to_string(),
             product: "One-KVM USB Device".to_string(),
             serial_number: None,
@@ -425,8 +425,15 @@ impl StreamConfig {
     /// Check if using public ICE servers (user left fields empty)
     pub fn is_using_public_ice_servers(&self) -> bool {
         use crate::webrtc::config::public_ice;
-        self.stun_server.as_ref().map(|s| s.is_empty()).unwrap_or(true)
-            && self.turn_server.as_ref().map(|s| s.is_empty()).unwrap_or(true)
+        self.stun_server
+            .as_ref()
+            .map(|s| s.is_empty())
+            .unwrap_or(true)
+            && self
+                .turn_server
+                .as_ref()
+                .map(|s| s.is_empty())
+                .unwrap_or(true)
             && public_ice::is_configured()
     }
 }

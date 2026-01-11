@@ -55,7 +55,12 @@ fn get_usb_bus_info(card_index: i32) -> Option<String> {
         // Match patterns like "1-1", "1-2", "1-1.2", "2-1.3.1"
         if component.contains('-') && !component.contains(':') {
             // Verify it looks like a USB port (starts with digit)
-            if component.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+            if component
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+            {
                 return Some(component.to_string());
             }
         }
@@ -223,15 +228,14 @@ pub fn find_best_audio_device() -> Result<AudioDeviceInfo> {
     let devices = enumerate_audio_devices()?;
 
     if devices.is_empty() {
-        return Err(AppError::AudioError("No audio capture devices found".to_string()));
+        return Err(AppError::AudioError(
+            "No audio capture devices found".to_string(),
+        ));
     }
 
     // First, look for HDMI/capture card devices that support 48kHz stereo
     for device in &devices {
-        if device.is_hdmi
-            && device.sample_rates.contains(&48000)
-            && device.channels.contains(&2)
-        {
+        if device.is_hdmi && device.sample_rates.contains(&48000) && device.channels.contains(&2) {
             info!("Selected HDMI audio device: {}", device.description);
             return Ok(device.clone());
         }

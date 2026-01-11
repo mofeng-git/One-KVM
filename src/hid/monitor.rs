@@ -144,7 +144,8 @@ impl HidHealthMonitor {
         // Check if we're in cooldown period after recent recovery
         let current_ms = self.start_instant.elapsed().as_millis() as u64;
         let last_recovery = self.last_recovery_ms.load(Ordering::Relaxed);
-        let in_cooldown = last_recovery > 0 && current_ms < last_recovery + self.config.recovery_cooldown_ms;
+        let in_cooldown =
+            last_recovery > 0 && current_ms < last_recovery + self.config.recovery_cooldown_ms;
 
         // Check if error code changed
         let error_changed = {
@@ -229,10 +230,7 @@ impl HidHealthMonitor {
             // Only log and publish events if there were multiple retries
             // (avoid log spam for transient single-retry recoveries)
             if retry_count > 1 {
-                debug!(
-                    "HID {} recovered after {} retries",
-                    backend, retry_count
-                );
+                debug!("HID {} recovered after {} retries", backend, retry_count);
 
                 // Publish recovery event
                 if let Some(ref events) = *self.events.read().await {
@@ -372,9 +370,7 @@ mod tests {
         let monitor = HidHealthMonitor::with_defaults();
 
         for i in 1..=5 {
-            monitor
-                .report_error("otg", None, "Error", "io_error")
-                .await;
+            monitor.report_error("otg", None, "Error", "io_error").await;
             assert_eq!(monitor.retry_count(), i);
         }
     }
@@ -387,9 +383,7 @@ mod tests {
         });
 
         for _ in 0..100 {
-            monitor
-                .report_error("otg", None, "Error", "io_error")
-                .await;
+            monitor.report_error("otg", None, "Error", "io_error").await;
             assert!(monitor.should_retry());
         }
     }
@@ -417,9 +411,7 @@ mod tests {
     async fn test_reset() {
         let monitor = HidHealthMonitor::with_defaults();
 
-        monitor
-            .report_error("otg", None, "Error", "io_error")
-            .await;
+        monitor.report_error("otg", None, "Error", "io_error").await;
         assert!(monitor.is_error().await);
 
         monitor.reset().await;

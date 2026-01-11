@@ -69,10 +69,7 @@ impl PunchHoleHandler {
     ///
     /// Tries direct connection first, falls back to relay if needed.
     /// Returns true if direct connection succeeded, false if relay is needed.
-    pub async fn handle_punch_hole(
-        &self,
-        peer_addr: Option<SocketAddr>,
-    ) -> bool {
+    pub async fn handle_punch_hole(&self, peer_addr: Option<SocketAddr>) -> bool {
         let peer_addr = match peer_addr {
             Some(addr) => addr,
             None => {
@@ -84,7 +81,11 @@ impl PunchHoleHandler {
         match try_direct_connection(peer_addr).await {
             PunchResult::DirectConnection(stream) => {
                 // Direct connection succeeded, accept it
-                match self.connection_manager.accept_connection(stream, peer_addr).await {
+                match self
+                    .connection_manager
+                    .accept_connection(stream, peer_addr)
+                    .await
+                {
                     Ok(_) => {
                         info!("P2P direct connection established with {}", peer_addr);
                         true

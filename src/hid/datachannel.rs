@@ -210,27 +210,23 @@ pub fn encode_mouse_event(event: &MouseEvent) -> Vec<u8> {
     let y_bytes = (event.y as i16).to_le_bytes();
 
     let extra = match event.event_type {
-        MouseEventType::Down | MouseEventType::Up => {
-            event.button.as_ref().map(|b| match b {
+        MouseEventType::Down | MouseEventType::Up => event
+            .button
+            .as_ref()
+            .map(|b| match b {
                 MouseButton::Left => 0u8,
                 MouseButton::Middle => 1u8,
                 MouseButton::Right => 2u8,
                 MouseButton::Back => 3u8,
                 MouseButton::Forward => 4u8,
-            }).unwrap_or(0)
-        }
+            })
+            .unwrap_or(0),
         MouseEventType::Scroll => event.scroll as u8,
         _ => 0,
     };
 
     vec![
-        MSG_MOUSE,
-        event_type,
-        x_bytes[0],
-        x_bytes[1],
-        y_bytes[0],
-        y_bytes[1],
-        extra,
+        MSG_MOUSE, event_type, x_bytes[0], x_bytes[1], y_bytes[0], y_bytes[1], extra,
     ]
 }
 

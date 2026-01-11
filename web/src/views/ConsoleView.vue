@@ -5,8 +5,10 @@ import { useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useConsoleEvents } from '@/composables/useConsoleEvents'
 import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
+import { useVideoSession } from '@/composables/useVideoSession'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
 import { streamApi, hidApi, atxApi, extensionsApi, atxConfigApi, userApi } from '@/api'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
@@ -58,10 +60,26 @@ const { t, locale } = useI18n()
 const router = useRouter()
 const systemStore = useSystemStore()
 const authStore = useAuthStore()
-const { on, off, connect, connected: wsConnected, networkError: wsNetworkError } = useWebSocket()
+const { connected: wsConnected, networkError: wsNetworkError } = useWebSocket()
 const hidWs = useHidWebSocket()
 const webrtc = useWebRTC()
 const unifiedAudio = getUnifiedAudio()
+const videoSession = useVideoSession()
+
+const consoleEvents = useConsoleEvents({
+  onStreamConfigChanging: handleStreamConfigChanging,
+  onStreamConfigApplied: handleStreamConfigApplied,
+  onStreamStatsUpdate: handleStreamStatsUpdate,
+  onStreamModeChanged: handleStreamModeChanged,
+  onStreamModeSwitching: handleStreamModeSwitching,
+  onStreamModeReady: handleStreamModeReady,
+  onWebRTCReady: handleWebRTCReady,
+  onStreamStateChanged: handleStreamStateChanged,
+  onStreamDeviceLost: handleStreamDeviceLost,
+  onStreamRecovered: handleStreamRecovered,
+  onDeviceInfo: handleDeviceInfo,
+  onAudioStateChanged: handleAudioStateChanged,
+})
 
 // Video mode state
 const videoMode = ref<VideoMode>('mjpeg')
@@ -386,6 +404,74 @@ const BASE_RETRY_DELAY = 2000
 const GRACE_PERIOD = 2000 // Ignore errors for 2s after config change (reduced from 3s)
 const MAX_CONSECUTIVE_ERRORS = 2 // If 2+ errors in grace period, it's a real problem
 
+// Last-frame overlay (prevents black flash during mode switches)
+const frameOverlayUrl = ref<string | null>(null)
+
+function clearFrameOverlay() {
+  frameOverlayUrl.value = null
+}
+
+async function captureFrameOverlay() {
+  try {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const MAX_WIDTH = 1280
+
+    if (videoMode.value === 'mjpeg') {
+      const img = videoRef.value
+      if (!img || !img.naturalWidth || !img.naturalHeight) return
+
+      const scale = Math.min(1, MAX_WIDTH / img.naturalWidth)
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    } else {
+      const video = webrtcVideoRef.value
+      if (!video || !video.videoWidth || !video.videoHeight) return
+
+      const scale = Math.min(1, MAX_WIDTH / video.videoWidth)
+      canvas.width = Math.max(1, Math.round(video.videoWidth * scale))
+      canvas.height = Math.max(1, Math.round(video.videoHeight * scale))
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    }
+
+    // Use JPEG to keep memory reasonable
+    frameOverlayUrl.value = canvas.toDataURL('image/jpeg', 0.7)
+  } catch {
+    // Best-effort only
+  }
+}
+
+function waitForVideoFirstFrame(el: HTMLVideoElement, timeoutMs = 2000): Promise<boolean> {
+  return new Promise((resolve) => {
+    let done = false
+
+    const cleanup = () => {
+      el.removeEventListener('loadeddata', onReady)
+      el.removeEventListener('playing', onReady)
+    }
+
+    const onReady = () => {
+      if (done) return
+      done = true
+      cleanup()
+      resolve(true)
+    }
+
+    el.addEventListener('loadeddata', onReady)
+    el.addEventListener('playing', onReady)
+
+    setTimeout(() => {
+      if (done) return
+      done = true
+      cleanup()
+      resolve(false)
+    }, timeoutMs)
+  })
+}
+
 function handleVideoLoad() {
   // MJPEG video frame loaded successfully - update stream online status
   // This fixes the timing issue where device_info event may arrive before stream is fully active
@@ -420,6 +506,7 @@ function handleVideoLoad() {
   videoRestarting.value = false
   retryCount = 0
   consecutiveErrors = 0
+  clearFrameOverlay()
 
   // Auto-focus video container for immediate keyboard input
   const container = videoContainerRef.value
@@ -478,156 +565,18 @@ function handleVideoError() {
   }, delay)
 }
 
-// WebSocket event handlers
-function handleHidStateChanged(_data: any) {
-  // Empty handler to prevent "No handler for event: hid.state_changed" warning
-  // HID state changes are handled via system.device_info event
-}
-
-// HID device monitoring handlers
-function handleHidDeviceLost(data: { backend: string; device?: string; reason: string; error_code: string }) {
-  // Don't treat temporary errors (EAGAIN) as device lost
-  // These are just temporary busy states that will recover automatically
-  const temporaryErrors = ['eagain', 'eagain_retry']
-  if (temporaryErrors.includes(data.error_code)) {
-    return
-  }
-
-  // Update system store HID state for actual device loss
-  if (systemStore.hid) {
-    systemStore.hid.initialized = false
-  }
-  // Show error toast
-  toast.error(t('hid.deviceLost'), {
-    description: t('hid.deviceLostDesc', { backend: data.backend, reason: data.reason }),
-    duration: 5000,
-  })
-}
-
-function handleHidReconnecting(data: { backend: string; attempt: number }) {
-  // Only show toast every 5 attempts to avoid spam
-  if (data.attempt === 1 || data.attempt % 5 === 0) {
-    toast.info(t('hid.reconnecting'), {
-      description: t('hid.reconnectingDesc', { attempt: data.attempt }),
-      duration: 3000,
-    })
-  }
-}
-
-function handleHidRecovered(data: { backend: string }) {
-  // Update system store HID state
-  if (systemStore.hid) {
-    systemStore.hid.initialized = true
-  }
-  // Show success toast
-  toast.success(t('hid.recovered'), {
-    description: t('hid.recoveredDesc', { backend: data.backend }),
-    duration: 3000,
-  })
-}
-
-// Stream device monitoring handlers
+// Stream device monitoring handlers (UI-only; notifications/state are handled by useConsoleEvents)
 function handleStreamDeviceLost(data: { device: string; reason: string }) {
-  // Update video state
   videoError.value = true
   videoErrorMessage.value = t('console.deviceLostDesc', { device: data.device, reason: data.reason })
-  // Update system store
-  if (systemStore.stream) {
-    systemStore.stream.online = false
-  }
-  // Show error toast
-  toast.error(t('console.deviceLost'), {
-    description: t('console.deviceLostDesc', { device: data.device, reason: data.reason }),
-    duration: 5000,
-  })
-}
-
-function handleStreamReconnecting(data: { device: string; attempt: number }) {
-  // Only show toast every 5 attempts to avoid spam
-  if (data.attempt === 1 || data.attempt % 5 === 0) {
-    toast.info(t('console.deviceRecovering'), {
-      description: t('console.deviceRecoveringDesc', { attempt: data.attempt }),
-      duration: 3000,
-    })
-  }
 }
 
 function handleStreamRecovered(_data: { device: string }) {
   // Reset video error state
   videoError.value = false
   videoErrorMessage.value = ''
-  // Update system store
-  if (systemStore.stream) {
-    systemStore.stream.online = true
-  }
-  // Show success toast
-  toast.success(t('console.deviceRecovered'), {
-    description: t('console.deviceRecoveredDesc'),
-    duration: 3000,
-  })
   // Refresh video stream
   refreshVideo()
-}
-
-// Audio device monitoring handlers
-function handleAudioDeviceLost(data: { device?: string; reason: string; error_code: string }) {
-  // Update system store audio state
-  if (systemStore.audio) {
-    systemStore.audio.streaming = false
-    systemStore.audio.error = data.reason
-  }
-  // Show error toast
-  toast.error(t('audio.deviceLost'), {
-    description: t('audio.deviceLostDesc', { device: data.device || 'default', reason: data.reason }),
-    duration: 5000,
-  })
-}
-
-function handleAudioReconnecting(data: { attempt: number }) {
-  // Only show toast every 5 attempts to avoid spam
-  if (data.attempt === 1 || data.attempt % 5 === 0) {
-    toast.info(t('audio.reconnecting'), {
-      description: t('audio.reconnectingDesc', { attempt: data.attempt }),
-      duration: 3000,
-    })
-  }
-}
-
-function handleAudioRecovered(data: { device?: string }) {
-  // Update system store audio state
-  if (systemStore.audio) {
-    systemStore.audio.error = null
-  }
-  // Show success toast
-  toast.success(t('audio.recovered'), {
-    description: t('audio.recoveredDesc', { device: data.device || 'default' }),
-    duration: 3000,
-  })
-}
-
-// MSD device monitoring handlers
-function handleMsdError(data: { reason: string; error_code: string }) {
-  // Update system store MSD state
-  if (systemStore.msd) {
-    systemStore.msd.error = data.reason
-  }
-  // Show error toast
-  toast.error(t('msd.error'), {
-    description: t('msd.errorDesc', { reason: data.reason }),
-    duration: 5000,
-  })
-}
-
-function handleMsdRecovered() {
-  // Update system store MSD state
-  if (systemStore.msd) {
-    systemStore.msd.error = null
-  }
-  // Show success toast
-  toast.success(t('msd.recovered'), {
-    description: t('msd.recoveredDesc'),
-    duration: 3000,
-  })
 }
 
 async function handleAudioStateChanged(data: { streaming: boolean; device: string | null }) {
@@ -661,31 +610,6 @@ async function handleAudioStateChanged(data: { streaming: boolean; device: strin
   // In MJPEG mode, this connects the WebSocket audio player
   // In WebRTC mode, this unmutes the video element
   await unifiedAudio.connect()
-}
-
-// MSD WebSocket event handlers
-function handleMsdStateChanged(_data: { mode: string; connected: boolean }) {
-  // Update MSD state in store (will be reflected in MSD components)
-  systemStore.fetchMsdState().catch(() => null)
-}
-
-function handleMsdImageMounted(data: { image_id: string; image_name: string; size: number; cdrom: boolean }) {
-  // Show success notification
-  toast.success(t('msd.imageMounted', { name: data.image_name }), {
-    description: `${(data.size / 1024 / 1024).toFixed(2)} MB - ${data.cdrom ? 'CD-ROM' : 'Disk'}`,
-    duration: 3000,
-  })
-  // Refresh MSD state
-  systemStore.fetchMsdState().catch(() => null)
-}
-
-function handleMsdImageUnmounted() {
-  // Show info notification
-  toast.info(t('msd.imageUnmounted'), {
-    duration: 2000,
-  })
-  // Refresh MSD state
-  systemStore.fetchMsdState().catch(() => null)
 }
 
 function handleStreamConfigChanging(data: any) {
@@ -749,14 +673,24 @@ function handleStreamConfigApplied(data: any) {
 }
 
 // 处理 WebRTC 就绪事件 - 这是后端真正准备好接受 WebRTC 连接的信号
-function handleWebRTCReady(data: { codec: string; hardware: boolean }) {
-  console.log(`[WebRTCReady] Backend ready: codec=${data.codec}, hardware=${data.hardware}`)
+function handleWebRTCReady(data: { codec: string; hardware: boolean; transition_id?: string }) {
+  console.log(`[WebRTCReady] Backend ready: codec=${data.codec}, hardware=${data.hardware}, transition_id=${data.transition_id || '-'}`)
+  videoSession.onWebRTCReady(data)
+}
 
-  // 如果正在进行模式切换，标记后端已就绪
-  if (isModeSwitching.value) {
-    console.log('[WebRTCReady] Signaling backend ready for WebRTC connection')
-    backendReadyForWebRTC = true
+function handleStreamModeReady(data: { transition_id: string; mode: string }) {
+  videoSession.onModeReady(data)
+  videoRestarting.value = false
+}
+
+function handleStreamModeSwitching(data: { transition_id: string; to_mode: string; from_mode: string }) {
+  // External mode switches: keep UI responsive and avoid black flash
+  if (!isModeSwitching.value) {
+    videoRestarting.value = true
+    videoLoading.value = true
+    captureFrameOverlay().catch(() => {})
   }
+  videoSession.onModeSwitching(data)
 }
 
 function handleStreamStateChanged(data: any) {
@@ -836,8 +770,8 @@ function handleDeviceInfo(data: any) {
         setTimeout(() => refreshVideo(), 100)
       }
     } else if (serverMode !== videoMode.value) {
-      // Subsequent device_info with mode change - sync to server
-      handleVideoModeChange(serverMode as VideoMode)
+      // Subsequent device_info with mode change - sync to server (no setMode)
+      syncToServerMode(serverMode as VideoMode)
     }
   }
 }
@@ -859,18 +793,16 @@ function handleStreamModeChanged(data: { mode: string; previous_mode: string }) 
     duration: 5000,
   })
 
-  // Switch to new mode
+  // Switch to new mode (external sync handled by device_info after mode_ready)
   if (newMode !== videoMode.value) {
-    handleVideoModeChange(newMode as VideoMode)
+    syncToServerMode(newMode as VideoMode)
   }
 }
 
 // 标记是否正在刷新视频（用于忽略清空 src 时触发的 error 事件）
 let isRefreshingVideo = false
 // 标记是否正在切换模式（防止竞态条件和 503 错误）
-const isModeSwitching = ref(false)
-// 标记后端是否已准备好接受 WebRTC 连接（由 StreamConfigApplied 事件设置）
-let backendReadyForWebRTC = false
+const isModeSwitching = videoSession.localSwitching
 
 function reloadPage() {
   window.location.reload()
@@ -954,9 +886,7 @@ async function connectWebRTCOnly(codec: VideoMode = 'h264') {
       throw new Error('WebRTC connection failed')
     }
   } catch {
-    videoError.value = true
-    videoErrorMessage.value = 'WebRTC connection failed'
-    videoLoading.value = false
+    await fallbackToMJPEG(t('console.webrtcFailed'), t('console.fallingBackToMjpeg'))
   }
 }
 
@@ -978,6 +908,8 @@ async function rebindWebRTCVideo() {
       } catch {
         // AbortError is expected when switching modes quickly, ignore it
       }
+      await waitForVideoFirstFrame(webrtcVideoRef.value, 2000)
+      clearFrameOverlay()
     }
   }
 }
@@ -1015,28 +947,27 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
     }
 
     // Step 2: Call backend API to switch mode with specific codec
-    // 重置就绪标志
-    backendReadyForWebRTC = false
-    await streamApi.setMode(codec)
+    const modeResp = await streamApi.setMode(codec)
+    if (modeResp.transition_id) {
+      videoSession.registerTransition(modeResp.transition_id)
+      const [mode, webrtcReady] = await Promise.all([
+        videoSession.waitForModeReady(modeResp.transition_id, 5000),
+        videoSession.waitForWebRTCReady(modeResp.transition_id, 3000),
+      ])
 
-    // Step 3: 等待后端完成格式切换（由 StreamConfigApplied 事件触发）
-    // 后端需要时间来：停止捕获 → 切换格式 → 重启捕获 → 连接 frame source
-    // 使用轮询等待，最多等待 3 秒
-    const maxWaitTime = 3000
-    const pollInterval = 100
-    let waited = 0
-    while (!backendReadyForWebRTC && waited < maxWaitTime) {
-      await new Promise(resolve => setTimeout(resolve, pollInterval))
-      waited += pollInterval
+      if (mode && mode !== codec && mode !== 'webrtc') {
+        console.warn(`[WebRTC] Backend mode_ready returned '${mode}', expected '${codec}', falling back`)
+        throw new Error(`Backend switched to unexpected mode: ${mode}`)
+      }
+
+      if (!webrtcReady) {
+        console.warn('[WebRTC] Backend not ready after timeout, attempting connection anyway')
+      } else {
+        console.log('[WebRTC] Backend ready signal received, connecting')
+      }
     }
 
-    if (!backendReadyForWebRTC) {
-      console.warn('[WebRTC] Backend not ready after timeout, attempting connection anyway')
-    } else {
-      console.log('[WebRTC] Backend ready signal received, connecting')
-    }
-
-    // Step 4: Connect WebRTC with retry
+    // Step 3: Connect WebRTC with retry
     let retries = 3
     let success = false
     while (retries > 0 && !success) {
@@ -1066,16 +997,30 @@ async function switchToWebRTC(codec: VideoMode = 'h264') {
       throw new Error('WebRTC connection failed')
     }
   } catch {
-    videoError.value = true
-    videoErrorMessage.value = t('console.webrtcFailed')
-    videoLoading.value = false
+    await fallbackToMJPEG(t('console.webrtcFailed'), t('console.fallingBackToMjpeg'), true)
+  }
+}
 
-    // Fall back to MJPEG
-    toast.error(t('console.webrtcFailed'), {
-      description: t('console.fallingBackToMjpeg'),
-      duration: 5000,
-    })
-    videoMode.value = 'mjpeg'
+async function fallbackToMJPEG(reason: string, description?: string, force = false) {
+  if (fallbackInProgress) return
+  if (videoMode.value === 'mjpeg') return
+  if (!force && (videoSession.localSwitching.value || videoSession.backendSwitching.value)) return
+
+  fallbackInProgress = true
+  videoError.value = true
+  videoErrorMessage.value = reason
+  videoLoading.value = false
+
+  toast.error(reason, {
+    description: description ?? '',
+    duration: 5000,
+  })
+
+  videoMode.value = 'mjpeg'
+  try {
+    await switchToMJPEG()
+  } finally {
+    fallbackInProgress = false
   }
 }
 
@@ -1087,7 +1032,14 @@ async function switchToMJPEG() {
   // Step 1: Call backend API to switch mode FIRST
   // This ensures the MJPEG endpoint will accept our request
   try {
-    await streamApi.setMode('mjpeg')
+    const modeResp = await streamApi.setMode('mjpeg')
+    if (modeResp.transition_id) {
+      videoSession.registerTransition(modeResp.transition_id)
+      const mode = await videoSession.waitForModeReady(modeResp.transition_id, 5000)
+      if (mode && mode !== 'mjpeg') {
+        console.warn(`[MJPEG] Backend mode_ready returned '${mode}', expected 'mjpeg'`)
+      }
+    }
   } catch (e) {
     console.error('Failed to switch to MJPEG mode:', e)
     // Continue anyway - the mode might already be correct
@@ -1110,18 +1062,32 @@ async function switchToMJPEG() {
   refreshVideo()
 }
 
+function syncToServerMode(mode: VideoMode) {
+  if (videoSession.localSwitching.value || videoSession.backendSwitching.value) return
+  if (mode === videoMode.value) return
+
+  videoMode.value = mode
+  localStorage.setItem('videoMode', mode)
+
+  if (mode !== 'mjpeg') {
+    connectWebRTCOnly(mode)
+  } else {
+    refreshVideo()
+  }
+}
+
 // Handle video mode change
 async function handleVideoModeChange(mode: VideoMode) {
   // 防止重复切换和竞态条件
   if (mode === videoMode.value) return
-  if (isModeSwitching.value) {
-    console.log('[VideoMode] Switch already in progress, ignoring')
+  if (!videoSession.tryStartLocalSwitch()) {
+    console.log('[VideoMode] Switch throttled or in progress, ignoring')
     return
   }
 
-  isModeSwitching.value = true
-
   try {
+    await captureFrameOverlay()
+
     // Reset mjpegTimestamp to 0 when switching away from MJPEG
     // This prevents mjpegUrl from returning a valid URL and stops MJPEG requests
     if (mode !== 'mjpeg') {
@@ -1145,7 +1111,7 @@ async function handleVideoModeChange(mode: VideoMode) {
       await switchToMJPEG()
     }
   } finally {
-    isModeSwitching.value = false
+    videoSession.endLocalSwitch()
   }
 }
 
@@ -1190,6 +1156,8 @@ watch(webrtc.stats, (stats) => {
 
 // Watch for WebRTC connection state changes - auto-reconnect on disconnect
 let webrtcReconnectTimeout: ReturnType<typeof setTimeout> | null = null
+let webrtcReconnectFailures = 0
+let fallbackInProgress = false
 watch(() => webrtc.state.value, (newState, oldState) => {
   console.log('[WebRTC] State changed:', oldState, '->', newState)
 
@@ -1197,6 +1165,7 @@ watch(() => webrtc.state.value, (newState, oldState) => {
   if (videoMode.value !== 'mjpeg') {
     if (newState === 'connected') {
       systemStore.setStreamOnline(true)
+      webrtcReconnectFailures = 0
     } else if (newState === 'disconnected' || newState === 'failed') {
       // Don't immediately set offline - wait for potential reconnect
       // The device_info event will eventually sync the correct state
@@ -1214,12 +1183,28 @@ watch(() => webrtc.state.value, (newState, oldState) => {
     webrtcReconnectTimeout = setTimeout(async () => {
       if (videoMode.value !== 'mjpeg' && webrtc.state.value === 'disconnected') {
         try {
-          await webrtc.connect()
+          const success = await webrtc.connect()
+          if (!success) {
+            webrtcReconnectFailures += 1
+            if (webrtcReconnectFailures >= 2) {
+              await fallbackToMJPEG(t('console.webrtcFailed'), t('console.fallingBackToMjpeg'))
+            }
+          }
         } catch {
-          // Reconnect failed, will retry on next disconnect
+          webrtcReconnectFailures += 1
+          if (webrtcReconnectFailures >= 2) {
+            await fallbackToMJPEG(t('console.webrtcFailed'), t('console.fallingBackToMjpeg'))
+          }
         }
       }
     }, 1000)
+  }
+
+  if (newState === 'failed' && videoMode.value !== 'mjpeg') {
+    webrtcReconnectFailures += 1
+    if (webrtcReconnectFailures >= 1) {
+      fallbackToMJPEG(t('console.webrtcFailed'), t('console.fallingBackToMjpeg')).catch(() => {})
+    }
   }
 })
 
@@ -1716,33 +1701,8 @@ function handleToggleMouseMode() {
 
 // Lifecycle
 onMounted(async () => {
-  // 1. 先注册 WebSocket 事件监听器
-  on('stream.config_changing', handleStreamConfigChanging)
-  on('stream.config_applied', handleStreamConfigApplied)
-  on('stream.webrtc_ready', handleWebRTCReady)
-  on('stream.state_changed', handleStreamStateChanged)
-  on('stream.stats_update', handleStreamStatsUpdate)
-  on('stream.mode_changed', handleStreamModeChanged)
-  on('system.device_info', handleDeviceInfo)
-  on('hid.state_changed', handleHidStateChanged)
-  on('hid.device_lost', handleHidDeviceLost)
-  on('hid.reconnecting', handleHidReconnecting)
-  on('hid.recovered', handleHidRecovered)
-  on('audio.state_changed', handleAudioStateChanged)
-  on('msd.state_changed', handleMsdStateChanged)
-  on('msd.image_mounted', handleMsdImageMounted)
-  on('msd.image_unmounted', handleMsdImageUnmounted)
-  on('stream.device_lost', handleStreamDeviceLost)
-  on('stream.reconnecting', handleStreamReconnecting)
-  on('stream.recovered', handleStreamRecovered)
-  on('audio.device_lost', handleAudioDeviceLost)
-  on('audio.reconnecting', handleAudioReconnecting)
-  on('audio.recovered', handleAudioRecovered)
-  on('msd.error', handleMsdError)
-  on('msd.recovered', handleMsdRecovered)
-
-  // 2. 再连接 WebSocket (会触发 subscribe → device_info)
-  connect()
+  // 1. 先订阅 WebSocket 事件，再连接（内部会 connect）
+  consoleEvents.subscribe()
 
   // 3. Watch WebSocket connection states and sync to store
   watch([wsConnected, wsNetworkError], ([connected, netError], [_prevConnected, prevNetError]) => {
@@ -1818,34 +1778,12 @@ onUnmounted(() => {
     clearTimeout(gracePeriodTimeoutId)
     gracePeriodTimeoutId = null
   }
+  videoSession.clearWaiters()
 
   // Reset counters
   retryCount = 0
 
-  // Unregister WebSocket event handlers
-  off('stream.config_changing', handleStreamConfigChanging)
-  off('stream.config_applied', handleStreamConfigApplied)
-  off('stream.webrtc_ready', handleWebRTCReady)
-  off('stream.state_changed', handleStreamStateChanged)
-  off('stream.stats_update', handleStreamStatsUpdate)
-  off('stream.mode_changed', handleStreamModeChanged)
-  off('system.device_info', handleDeviceInfo)
-  off('hid.state_changed', handleHidStateChanged)
-  off('hid.device_lost', handleHidDeviceLost)
-  off('hid.reconnecting', handleHidReconnecting)
-  off('hid.recovered', handleHidRecovered)
-  off('audio.state_changed', handleAudioStateChanged)
-  off('msd.state_changed', handleMsdStateChanged)
-  off('msd.image_mounted', handleMsdImageMounted)
-  off('msd.image_unmounted', handleMsdImageUnmounted)
-  off('stream.device_lost', handleStreamDeviceLost)
-  off('stream.reconnecting', handleStreamReconnecting)
-  off('stream.recovered', handleStreamRecovered)
-  off('audio.device_lost', handleAudioDeviceLost)
-  off('audio.reconnecting', handleAudioReconnecting)
-  off('audio.recovered', handleAudioRecovered)
-  off('msd.error', handleMsdError)
-  off('msd.recovered', handleMsdRecovered)
+  consoleEvents.unsubscribe()
   consecutiveErrors = 0
 
   // Disconnect WebRTC if connected
@@ -1855,17 +1793,6 @@ onUnmounted(() => {
 
   // Exit pointer lock if active
   exitPointerLock()
-
-  // Remove WebSocket event listeners
-  off('stream.config_changing', handleStreamConfigChanging)
-  off('stream.config_applied', handleStreamConfigApplied)
-  off('stream.webrtc_ready', handleWebRTCReady)
-  off('stream.state_changed', handleStreamStateChanged)
-  off('stream.stats_update', handleStreamStatsUpdate)
-  off('stream.mode_changed', handleStreamModeChanged)
-  off('system.device_info', handleDeviceInfo)
-  off('hid.state_changed', handleHidStateChanged)
-  off('audio.state_changed', handleAudioStateChanged)
 
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('keyup', handleKeyUp)
@@ -2056,6 +1983,14 @@ onUnmounted(() => {
             class="w-full h-full object-contain"
             autoplay
             playsinline
+          />
+
+          <!-- Last-frame overlay (reduces black flash when switching modes) -->
+          <img
+            v-if="frameOverlayUrl"
+            :src="frameOverlayUrl"
+            class="absolute inset-0 w-full h-full object-contain pointer-events-none"
+            alt=""
           />
 
           <!-- Loading Overlay with smooth transition and visual feedback -->

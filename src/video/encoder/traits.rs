@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use typeshare::typeshare;
 
-use crate::video::format::{PixelFormat, Resolution};
 use crate::error::Result;
+use crate::video::format::{PixelFormat, Resolution};
 
 /// Bitrate preset for video encoding
 ///
@@ -46,10 +46,10 @@ impl BitratePreset {
     /// Quality preset uses longer GOP for better compression efficiency.
     pub fn gop_size(&self, fps: u32) -> u32 {
         match self {
-            Self::Speed => (fps / 2).max(15),    // 0.5 second, minimum 15 frames
-            Self::Balanced => fps,               // 1 second
-            Self::Quality => fps * 2,            // 2 seconds
-            Self::Custom(_) => fps,              // Default 1 second for custom
+            Self::Speed => (fps / 2).max(15), // 0.5 second, minimum 15 frames
+            Self::Balanced => fps,            // 1 second
+            Self::Quality => fps * 2,         // 2 seconds
+            Self::Custom(_) => fps,           // Default 1 second for custom
         }
     }
 

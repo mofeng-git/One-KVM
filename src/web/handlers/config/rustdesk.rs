@@ -48,12 +48,16 @@ pub struct RustDeskStatusResponse {
 }
 
 /// 获取 RustDesk 配置
-pub async fn get_rustdesk_config(State(state): State<Arc<AppState>>) -> Json<RustDeskConfigResponse> {
+pub async fn get_rustdesk_config(
+    State(state): State<Arc<AppState>>,
+) -> Json<RustDeskConfigResponse> {
     Json(RustDeskConfigResponse::from(&state.config.get().rustdesk))
 }
 
 /// 获取 RustDesk 完整状态（配置 + 服务状态）
-pub async fn get_rustdesk_status(State(state): State<Arc<AppState>>) -> Json<RustDeskStatusResponse> {
+pub async fn get_rustdesk_status(
+    State(state): State<Arc<AppState>>,
+) -> Json<RustDeskStatusResponse> {
     let config = state.config.get().rustdesk.clone();
 
     // 获取服务状态

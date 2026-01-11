@@ -92,8 +92,18 @@ pub enum H265InputFormat {
     Yuv420p,
     /// NV12 - Y plane + interleaved UV plane (optimal for hardware encoders)
     Nv12,
+    /// NV21 - Y plane + interleaved VU plane
+    Nv21,
+    /// NV16 - Y plane + interleaved UV plane (4:2:2)
+    Nv16,
+    /// NV24 - Y plane + interleaved UV plane (4:4:4)
+    Nv24,
     /// YUYV422 - packed YUV 4:2:2 format (optimal for RKMPP direct input)
     Yuyv422,
+    /// RGB24 - packed RGB format (RKMPP direct input)
+    Rgb24,
+    /// BGR24 - packed BGR format (RKMPP direct input)
+    Bgr24,
 }
 
 impl Default for H265InputFormat {
@@ -252,10 +262,7 @@ pub fn detect_best_h265_encoder(width: u32, height: u32) -> (H265EncoderType, Op
         H265EncoderType::Software // Default to software for unknown
     };
 
-    info!(
-        "Selected H.265 encoder: {} ({})",
-        codec.name, encoder_type
-    );
+    info!("Selected H.265 encoder: {} ({})", codec.name, encoder_type);
     (encoder_type, Some(codec.name.clone()))
 }
 
@@ -304,7 +311,8 @@ impl H265Encoder {
 
         if encoder_type == H265EncoderType::None {
             return Err(AppError::VideoError(
-                "No H.265 encoder available. Please ensure FFmpeg is built with libx265 support.".to_string(),
+                "No H.265 encoder available. Please ensure FFmpeg is built with libx265 support."
+                    .to_string(),
             ));
         }
 
@@ -336,8 +344,17 @@ impl H265Encoder {
         } else {
             match config.input_format {
                 H265InputFormat::Nv12 => (AVPixelFormat::AV_PIX_FMT_NV12, H265InputFormat::Nv12),
-                H265InputFormat::Yuv420p => (AVPixelFormat::AV_PIX_FMT_YUV420P, H265InputFormat::Yuv420p),
-                H265InputFormat::Yuyv422 => (AVPixelFormat::AV_PIX_FMT_YUYV422, H265InputFormat::Yuyv422),
+                H265InputFormat::Nv21 => (AVPixelFormat::AV_PIX_FMT_NV21, H265InputFormat::Nv21),
+                H265InputFormat::Nv16 => (AVPixelFormat::AV_PIX_FMT_NV16, H265InputFormat::Nv16),
+                H265InputFormat::Nv24 => (AVPixelFormat::AV_PIX_FMT_NV24, H265InputFormat::Nv24),
+                H265InputFormat::Yuv420p => {
+                    (AVPixelFormat::AV_PIX_FMT_YUV420P, H265InputFormat::Yuv420p)
+                }
+                H265InputFormat::Yuyv422 => {
+                    (AVPixelFormat::AV_PIX_FMT_YUYV422, H265InputFormat::Yuyv422)
+                }
+                H265InputFormat::Rgb24 => (AVPixelFormat::AV_PIX_FMT_RGB24, H265InputFormat::Rgb24),
+                H265InputFormat::Bgr24 => (AVPixelFormat::AV_PIX_FMT_BGR24, H265InputFormat::Bgr24),
             }
         };
 
@@ -407,9 +424,9 @@ impl H265Encoder {
 
     /// Update bitrate dynamically
     pub fn set_bitrate(&mut self, bitrate_kbps: u32) -> Result<()> {
-        self.inner.set_bitrate(bitrate_kbps as i32).map_err(|_| {
-            AppError::VideoError("Failed to set H.265 bitrate".to_string())
-        })?;
+        self.inner
+            .set_bitrate(bitrate_kbps as i32)
+            .map_err(|_| AppError::VideoError("Failed to set H.265 bitrate".to_string()))?;
         self.config.bitrate_kbps = bitrate_kbps;
         debug!("H.265 bitrate updated to {} kbps", bitrate_kbps);
         Ok(())
@@ -464,7 +481,10 @@ impl H265Encoder {
                     if keyframe || self.frame_count % 30 == 1 {
                         debug!(
                             "[H265] Encoded frame #{}: output_size={}, keyframe={}, frame_count={}",
-                            self.frame_count, total_size, keyframe, owned_frames.len()
+                            self.frame_count,
+                            total_size,
+                            keyframe,
+                            owned_frames.len()
                         );
 
                         // Log first few bytes of keyframe for debugging
@@ -477,7 +497,10 @@ impl H265Encoder {
                         }
                     }
                 } else {
-                    warn!("[H265] Encoder returned empty frame list for frame #{}", self.frame_count);
+                    warn!(
+                        "[H265] Encoder returned empty frame list for frame #{}",
+                        self.frame_count
+                    );
                 }
 
                 Ok(owned_frames)
@@ -567,8 +590,13 @@ impl Encoder for H265Encoder {
     fn supports_format(&self, format: PixelFormat) -> bool {
         match self.config.input_format {
             H265InputFormat::Nv12 => matches!(format, PixelFormat::Nv12),
+            H265InputFormat::Nv21 => matches!(format, PixelFormat::Nv21),
+            H265InputFormat::Nv16 => matches!(format, PixelFormat::Nv16),
+            H265InputFormat::Nv24 => matches!(format, PixelFormat::Nv24),
             H265InputFormat::Yuv420p => matches!(format, PixelFormat::Yuv420),
             H265InputFormat::Yuyv422 => matches!(format, PixelFormat::Yuyv),
+            H265InputFormat::Rgb24 => matches!(format, PixelFormat::Rgb24),
+            H265InputFormat::Bgr24 => matches!(format, PixelFormat::Bgr24),
         }
     }
 }
@@ -580,7 +608,10 @@ mod tests {
     #[test]
     fn test_detect_h265_encoder() {
         let (encoder_type, codec_name) = detect_best_h265_encoder(1280, 720);
-        println!("Detected H.265 encoder: {:?} ({:?})", encoder_type, codec_name);
+        println!(
+            "Detected H.265 encoder: {:?} ({:?})",
+            encoder_type, codec_name
+        );
     }
 
     #[test]

@@ -210,7 +210,11 @@ impl ExtensionManager {
     }
 
     /// Build command arguments for an extension
-    async fn build_args(&self, id: ExtensionId, config: &ExtensionsConfig) -> Result<Vec<String>, String> {
+    async fn build_args(
+        &self,
+        id: ExtensionId,
+        config: &ExtensionsConfig,
+    ) -> Result<Vec<String>, String> {
         match id {
             ExtensionId::Ttyd => {
                 let c = &config.ttyd;
@@ -219,9 +223,11 @@ impl ExtensionManager {
                 Self::prepare_ttyd_socket().await?;
 
                 let mut args = vec![
-                    "-i".to_string(), TTYD_SOCKET_PATH.to_string(),  // Unix socket
-                    "-b".to_string(), "/api/terminal".to_string(),   // Base path for reverse proxy
-                    "-W".to_string(),                                 // Writable (allow input)
+                    "-i".to_string(),
+                    TTYD_SOCKET_PATH.to_string(), // Unix socket
+                    "-b".to_string(),
+                    "/api/terminal".to_string(), // Base path for reverse proxy
+                    "-W".to_string(),            // Writable (allow input)
                 ];
 
                 // Add credential if set (still useful for additional security layer)
@@ -313,7 +319,10 @@ impl ExtensionManager {
         }
 
         // Remove old socket file if exists
-        if tokio::fs::try_exists(TTYD_SOCKET_PATH).await.unwrap_or(false) {
+        if tokio::fs::try_exists(TTYD_SOCKET_PATH)
+            .await
+            .unwrap_or(false)
+        {
             tokio::fs::remove_file(TTYD_SOCKET_PATH)
                 .await
                 .map_err(|e| format!("Failed to remove old socket: {}", e))?;
@@ -374,8 +383,8 @@ impl ExtensionManager {
 
     /// Start all enabled extensions in parallel
     pub async fn start_enabled(&self, config: &ExtensionsConfig) {
-        use std::pin::Pin;
         use futures::Future;
+        use std::pin::Pin;
 
         let mut start_futures: Vec<Pin<Box<dyn Future<Output = ()> + Send + '_>>> = Vec::new();
 
@@ -416,10 +425,7 @@ impl ExtensionManager {
 
     /// Stop all running extensions in parallel
     pub async fn stop_all(&self) {
-        let stop_futures: Vec<_> = ExtensionId::all()
-            .iter()
-            .map(|id| self.stop(*id))
-            .collect();
+        let stop_futures: Vec<_> = ExtensionId::all().iter().map(|id| self.stop(*id)).collect();
         futures::future::join_all(stop_futures).await;
     }
 }

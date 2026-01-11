@@ -227,10 +227,10 @@ export const streamApi = {
   getSnapshotUrl: () => `${API_BASE}/snapshot`,
 
   getMode: () =>
-    request<{ success: boolean; mode: string; message?: string }>('/stream/mode'),
+    request<{ success: boolean; mode: string; transition_id?: string; switching?: boolean; message?: string }>('/stream/mode'),
 
   setMode: (mode: string) =>
-    request<{ success: boolean; mode: string; message?: string }>('/stream/mode', {
+    request<{ success: boolean; mode: string; transition_id?: string; switching?: boolean; message?: string }>('/stream/mode', {
       method: 'POST',
       body: JSON.stringify({ mode }),
     }),

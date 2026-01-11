@@ -33,13 +33,13 @@ fn get_cluster_size(total_sectors: u64) -> u32 {
 /// For example: 32KB cluster = 64 sectors = 2^6, so shift = 6
 fn sectors_per_cluster_shift(cluster_size: u32) -> u8 {
     match cluster_size {
-        4096 => 3,     // 8 sectors (4KB)
-        8192 => 4,     // 16 sectors (8KB)
-        16384 => 5,    // 32 sectors (16KB)
-        32768 => 6,    // 64 sectors (32KB)
-        65536 => 7,    // 128 sectors (64KB)
-        131072 => 8,   // 256 sectors (128KB)
-        262144 => 9,   // 512 sectors (256KB)
+        4096 => 3,   // 8 sectors (4KB)
+        8192 => 4,   // 16 sectors (8KB)
+        16384 => 5,  // 32 sectors (16KB)
+        32768 => 6,  // 64 sectors (32KB)
+        65536 => 7,  // 128 sectors (64KB)
+        131072 => 8, // 256 sectors (128KB)
+        262144 => 9, // 512 sectors (256KB)
         _ => {
             // Fallback: calculate dynamically
             let sectors = cluster_size / 512;
@@ -75,11 +75,7 @@ struct ExfatBootSector {
 }
 
 impl ExfatBootSector {
-    fn new(
-        volume_length: u64,
-        cluster_size: u32,
-        volume_serial: u32,
-    ) -> Self {
+    fn new(volume_length: u64, cluster_size: u32, volume_serial: u32) -> Self {
         let sector_size: u32 = 512;
         let sectors_per_cluster = cluster_size / sector_size;
         let spc_shift = sectors_per_cluster_shift(cluster_size);
@@ -106,7 +102,8 @@ impl ExfatBootSector {
         // Cluster 3...: Upcase table (128KB, may span multiple clusters)
         // Next available: Root directory
         const UPCASE_TABLE_SIZE: u64 = 128 * 1024;
-        let upcase_clusters = ((UPCASE_TABLE_SIZE + cluster_size as u64 - 1) / cluster_size as u64) as u32;
+        let upcase_clusters =
+            ((UPCASE_TABLE_SIZE + cluster_size as u64 - 1) / cluster_size as u64) as u32;
         let first_cluster_of_root = 3 + upcase_clusters;
 
         Self {
@@ -235,7 +232,7 @@ fn create_bitmap_entry(start_cluster: u32, size: u64) -> [u8; 32] {
     let mut entry = [0u8; 32];
     entry[0] = ENTRY_TYPE_BITMAP;
     entry[1] = 0; // BitmapFlags
-    // Reserved: bytes 2-19
+                  // Reserved: bytes 2-19
     entry[20..24].copy_from_slice(&start_cluster.to_le_bytes());
     entry[24..32].copy_from_slice(&size.to_le_bytes());
     entry
@@ -306,7 +303,8 @@ pub fn format_exfat<W: Write + Seek>(
 
     // Calculate how many clusters the upcase table needs (128KB)
     const UPCASE_TABLE_SIZE: u64 = 128 * 1024;
-    let upcase_clusters = ((UPCASE_TABLE_SIZE + cluster_size as u64 - 1) / cluster_size as u64) as u32;
+    let upcase_clusters =
+        ((UPCASE_TABLE_SIZE + cluster_size as u64 - 1) / cluster_size as u64) as u32;
     let root_cluster = 3 + upcase_clusters; // Root comes after bitmap and upcase
 
     // FAT entries: cluster 0 and 1 are reserved
@@ -349,13 +347,14 @@ pub fn format_exfat<W: Write + Seek>(
 
     // Cluster 2: Allocation Bitmap
     let bitmap_size = (boot_sector.cluster_count + 7) / 8;
-    let _bitmap_clusters = ((bitmap_size as u64 + cluster_size as u64 - 1) / cluster_size as u64).max(1);
+    let _bitmap_clusters =
+        ((bitmap_size as u64 + cluster_size as u64 - 1) / cluster_size as u64).max(1);
     let mut bitmap = vec![0u8; cluster_size as usize];
 
     // Mark clusters 2, 3..3+upcase_clusters-1, root_cluster as used
     // Cluster 2: bitmap
     bitmap[0] |= 0b00000100; // Bit 2
-    // Clusters 3..3+upcase_clusters-1: upcase table
+                             // Clusters 3..3+upcase_clusters-1: upcase table
     for i in 0..upcase_clusters {
         let cluster = 3 + i;
         let byte_idx = (cluster / 8) as usize;

@@ -38,12 +38,12 @@ const H265_NAL_PPS: u8 = 34;
 const H265_NAL_AUD: u8 = 35;
 const H265_NAL_FILLER: u8 = 38;
 #[allow(dead_code)]
-const H265_NAL_SEI_PREFIX: u8 = 39;  // PREFIX_SEI_NUT
+const H265_NAL_SEI_PREFIX: u8 = 39; // PREFIX_SEI_NUT
 #[allow(dead_code)]
-const H265_NAL_SEI_SUFFIX: u8 = 40;  // SUFFIX_SEI_NUT
+const H265_NAL_SEI_SUFFIX: u8 = 40; // SUFFIX_SEI_NUT
 #[allow(dead_code)]
-const H265_NAL_AP: u8 = 48;  // Aggregation Packet
-const H265_NAL_FU: u8 = 49;  // Fragmentation Unit
+const H265_NAL_AP: u8 = 48; // Aggregation Packet
+const H265_NAL_FU: u8 = 49; // Fragmentation Unit
 
 /// H.265 NAL header size
 const H265_NAL_HEADER_SIZE: usize = 2;
@@ -228,7 +228,8 @@ impl H265Payloader {
             let fragment_size = remaining.min(max_fragment_size);
 
             // Create FU packet
-            let mut packet = BytesMut::with_capacity(H265_NAL_HEADER_SIZE + H265_FU_HEADER_SIZE + fragment_size);
+            let mut packet =
+                BytesMut::with_capacity(H265_NAL_HEADER_SIZE + H265_FU_HEADER_SIZE + fragment_size);
 
             // NAL header for FU (2 bytes)
             // Preserve F bit (bit 7) and LayerID MSB (bit 0) from original, set Type to 49

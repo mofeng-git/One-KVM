@@ -22,7 +22,11 @@ impl VentoyImage {
         let size = parse_size(size_str)?;
         let layout = PartitionLayout::calculate(size)?;
 
-        println!("[INFO] Creating {}MB image: {}", size / (1024 * 1024), path.display());
+        println!(
+            "[INFO] Creating {}MB image: {}",
+            size / (1024 * 1024),
+            path.display()
+        );
 
         // Create sparse file
         let mut file = File::create(path)?;
@@ -247,7 +251,11 @@ impl VentoyImage {
     ///
     /// This is the preferred method for large files as it doesn't load
     /// the entire file into memory.
-    pub fn read_file_to_writer<W: std::io::Write>(&self, path: &str, writer: &mut W) -> Result<u64> {
+    pub fn read_file_to_writer<W: std::io::Write>(
+        &self,
+        path: &str,
+        writer: &mut W,
+    ) -> Result<u64> {
         let mut fs = ExfatFs::open(&self.path, &self.layout)?;
         fs.read_file_path_to_writer(path, writer)
     }

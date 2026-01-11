@@ -404,6 +404,37 @@ pub fn nv12_to_i420(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Resu
     ))
 }
 
+/// Convert NV21 to I420 (YUV420P)
+pub fn nv21_to_i420(src: &[u8], dst: &mut [u8], width: i32, height: i32) -> Result<()> {
+    if width % 2 != 0 || height % 2 != 0 {
+        return Err(YuvError::InvalidDimensions);
+    }
+
+    let w = width as usize;
+    let h = height as usize;
+    let y_size = w * h;
+    let uv_size = (w / 2) * (h / 2);
+
+    if src.len() < nv12_size(w, h) || dst.len() < i420_size(w, h) {
+        return Err(YuvError::BufferTooSmall);
+    }
+
+    call_yuv!(NV21ToI420(
+        src.as_ptr(),
+        width,
+        src[y_size..].as_ptr(),
+        width,
+        dst.as_mut_ptr(),
+        width,
+        dst[y_size..].as_mut_ptr(),
+        width / 2,
+        dst[y_size + uv_size..].as_mut_ptr(),
+        width / 2,
+        width,
+        height,
+    ))
+}
+
 // ============================================================================
 // ARGB/BGRA conversions (32-bit)
 // Note: libyuv ARGB = BGRA in memory on little-endian systems

@@ -60,7 +60,7 @@ impl Default for SharedAudioPipelineConfig {
             bitrate: 64000,
             application: OpusApplicationMode::Audio,
             fec: true,
-            channel_capacity: 16,  // Reduced from 64 for lower latency
+            channel_capacity: 16, // Reduced from 64 for lower latency
         }
     }
 }
@@ -320,11 +320,8 @@ impl SharedAudioPipeline {
             }
 
             // Receive audio frame with timeout
-            let recv_result = tokio::time::timeout(
-                std::time::Duration::from_secs(2),
-                audio_rx.recv(),
-            )
-            .await;
+            let recv_result =
+                tokio::time::timeout(std::time::Duration::from_secs(2), audio_rx.recv()).await;
 
             match recv_result {
                 Ok(Ok(audio_frame)) => {

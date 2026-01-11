@@ -18,8 +18,8 @@ use tracing::{debug, error, info, warn};
 use super::config::RustDeskConfig;
 use super::crypto::{KeyPair, SigningKeyPair};
 use super::protocol::{
-    rendezvous_message, make_punch_hole_sent, make_register_peer,
-    make_register_pk, NatType, RendezvousMessage, decode_rendezvous_message,
+    decode_rendezvous_message, make_punch_hole_sent, make_register_peer, make_register_pk,
+    rendezvous_message, NatType, RendezvousMessage,
 };
 
 /// Registration interval in milliseconds
@@ -81,7 +81,8 @@ pub type RelayCallback = Arc<dyn Fn(String, String, String, Vec<u8>, String) + S
 /// Callback type for P2P punch hole requests
 /// Parameters: peer_addr (decoded), relay_callback_params (rendezvous_addr, relay_server, uuid, socket_addr, device_id)
 /// Returns: should call relay callback if P2P fails
-pub type PunchCallback = Arc<dyn Fn(Option<SocketAddr>, String, String, String, Vec<u8>, String) + Send + Sync>;
+pub type PunchCallback =
+    Arc<dyn Fn(Option<SocketAddr>, String, String, String, Vec<u8>, String) + Send + Sync>;
 
 /// Callback type for intranet/local address connections
 /// Parameters: rendezvous_addr, peer_socket_addr (mangled), local_addr, relay_server, device_id
@@ -232,7 +233,8 @@ impl RendezvousMediator {
         if signing_guard.is_none() {
             let config = self.config.read();
             // Try to load from config first
-            if let (Some(pk), Some(sk)) = (&config.signing_public_key, &config.signing_private_key) {
+            if let (Some(pk), Some(sk)) = (&config.signing_public_key, &config.signing_private_key)
+            {
                 if let Ok(skp) = SigningKeyPair::from_base64(pk, sk) {
                     debug!("Loaded signing keypair from config");
                     *signing_guard = Some(skp.clone());
@@ -265,14 +267,20 @@ impl RendezvousMediator {
             config.enabled, effective_server
         );
         if !config.enabled || effective_server.is_empty() {
-            info!("Rendezvous mediator not starting: enabled={}, server='{}'", config.enabled, effective_server);
+            info!(
+                "Rendezvous mediator not starting: enabled={}, server='{}'",
+                config.enabled, effective_server
+            );
             return Ok(());
         }
 
         *self.status.write() = RendezvousStatus::Connecting;
 
         let addr = config.rendezvous_addr();
-        info!("Starting rendezvous mediator for {} to {}", config.device_id, addr);
+        info!(
+            "Starting rendezvous mediator for {} to {}",
+            config.device_id, addr
+        );
 
         // Resolve server address
         let server_addr: SocketAddr = tokio::net::lookup_host(&addr)
@@ -376,7 +384,9 @@ impl RendezvousMediator {
         let serial = *self.serial.read();
 
         let msg = make_register_peer(&id, serial);
-        let bytes = msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+        let bytes = msg
+            .write_to_bytes()
+            .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
         socket.send(&bytes).await?;
         Ok(())
     }
@@ -393,7 +403,9 @@ impl RendezvousMediator {
 
         debug!("Sending RegisterPk: id={}", id);
         let msg = make_register_pk(&id, &uuid, pk, "");
-        let bytes = msg.write_to_bytes().map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
+        let bytes = msg
+            .write_to_bytes()
+            .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
         socket.send(&bytes).await?;
         Ok(())
     }
@@ -540,7 +552,7 @@ impl RendezvousMediator {
                 );
 
                 let msg = make_punch_hole_sent(
-                    &ph.socket_addr.to_vec(),  // Use peer's socket_addr, not ours
+                    &ph.socket_addr.to_vec(), // Use peer's socket_addr, not ours
                     &id,
                     &ph.relay_server,
                     ph.nat_type.enum_value().unwrap_or(NatType::UNKNOWN_NAT),
@@ -570,9 +582,22 @@ impl RendezvousMediator {
                     // Use punch callback if set (tries P2P first, then relay)
                     // Otherwise fall back to relay callback directly
                     if let Some(callback) = self.punch_callback.read().as_ref() {
-                        callback(peer_addr, rendezvous_addr, relay_server, uuid, ph.socket_addr.to_vec(), device_id);
+                        callback(
+                            peer_addr,
+                            rendezvous_addr,
+                            relay_server,
+                            uuid,
+                            ph.socket_addr.to_vec(),
+                            device_id,
+                        );
                     } else if let Some(callback) = self.relay_callback.read().as_ref() {
-                        callback(rendezvous_addr, relay_server, uuid, ph.socket_addr.to_vec(), device_id);
+                        callback(
+                            rendezvous_addr,
+                            relay_server,
+                            uuid,
+                            ph.socket_addr.to_vec(),
+                            device_id,
+                        );
                     }
                 }
             }
@@ -591,7 +616,13 @@ impl RendezvousMediator {
                     let config = self.config.read().clone();
                     let rendezvous_addr = config.rendezvous_addr();
                     let device_id = config.device_id.clone();
-                    callback(rendezvous_addr, relay_server, rr.uuid.clone(), rr.socket_addr.to_vec(), device_id);
+                    callback(
+                        rendezvous_addr,
+                        relay_server,
+                        rr.uuid.clone(),
+                        rr.socket_addr.to_vec(),
+                        device_id,
+                    );
                 }
             }
             Some(rendezvous_message::Union::FetchLocalAddr(fla)) => {
@@ -602,7 +633,8 @@ impl RendezvousMediator {
                     peer_addr, fla.socket_addr.len(), fla.relay_server
                 );
                 // Respond with our local address for same-LAN direct connection
-                self.send_local_addr(socket, &fla.socket_addr, &fla.relay_server).await?;
+                self.send_local_addr(socket, &fla.socket_addr, &fla.relay_server)
+                    .await?;
             }
             Some(rendezvous_message::Union::ConfigureUpdate(cu)) => {
                 info!("Received ConfigureUpdate, serial={}", cu.serial);

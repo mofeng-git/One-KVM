@@ -95,9 +95,10 @@ impl VideoDevice {
 
     /// Get device capabilities
     pub fn capabilities(&self) -> Result<DeviceCapabilities> {
-        let caps = self.device.query_caps().map_err(|e| {
-            AppError::VideoError(format!("Failed to query capabilities: {}", e))
-        })?;
+        let caps = self
+            .device
+            .query_caps()
+            .map_err(|e| AppError::VideoError(format!("Failed to query capabilities: {}", e)))?;
 
         Ok(DeviceCapabilities {
             video_capture: caps.capabilities.contains(Flags::VIDEO_CAPTURE),
@@ -110,9 +111,10 @@ impl VideoDevice {
 
     /// Get detailed device information
     pub fn info(&self) -> Result<VideoDeviceInfo> {
-        let caps = self.device.query_caps().map_err(|e| {
-            AppError::VideoError(format!("Failed to query capabilities: {}", e))
-        })?;
+        let caps = self
+            .device
+            .query_caps()
+            .map_err(|e| AppError::VideoError(format!("Failed to query capabilities: {}", e)))?;
 
         let capabilities = DeviceCapabilities {
             video_capture: caps.capabilities.contains(Flags::VIDEO_CAPTURE),
@@ -128,7 +130,8 @@ impl VideoDevice {
         let is_capture_card = Self::detect_capture_card(&caps.card, &caps.driver, &formats);
 
         // Calculate priority score
-        let priority = Self::calculate_priority(&caps.card, &caps.driver, &formats, is_capture_card);
+        let priority =
+            Self::calculate_priority(&caps.card, &caps.driver, &formats, is_capture_card);
 
         Ok(VideoDeviceInfo {
             path: self.path.clone(),
@@ -148,9 +151,10 @@ impl VideoDevice {
         let mut formats = Vec::new();
 
         // Get supported formats
-        let format_descs = self.device.enum_formats().map_err(|e| {
-            AppError::VideoError(format!("Failed to enumerate formats: {}", e))
-        })?;
+        let format_descs = self
+            .device
+            .enum_formats()
+            .map_err(|e| AppError::VideoError(format!("Failed to enumerate formats: {}", e)))?;
 
         for desc in format_descs {
             // Try to convert FourCC to our PixelFormat
@@ -186,7 +190,9 @@ impl VideoDevice {
                 for size in sizes {
                     match size.size {
                         v4l::framesize::FrameSizeEnum::Discrete(d) => {
-                            let fps = self.enumerate_fps(fourcc, d.width, d.height).unwrap_or_default();
+                            let fps = self
+                                .enumerate_fps(fourcc, d.width, d.height)
+                                .unwrap_or_default();
                             resolutions.push(ResolutionInfo::new(d.width, d.height, fps));
                         }
                         v4l::framesize::FrameSizeEnum::Stepwise(s) => {
@@ -202,8 +208,11 @@ impl VideoDevice {
                                     && res.height >= s.min_height
                                     && res.height <= s.max_height
                                 {
-                                    let fps = self.enumerate_fps(fourcc, res.width, res.height).unwrap_or_default();
-                                    resolutions.push(ResolutionInfo::new(res.width, res.height, fps));
+                                    let fps = self
+                                        .enumerate_fps(fourcc, res.width, res.height)
+                                        .unwrap_or_default();
+                                    resolutions
+                                        .push(ResolutionInfo::new(res.width, res.height, fps));
                                 }
                             }
                         }
@@ -255,7 +264,7 @@ impl VideoDevice {
                 fps_list.push(30);
             }
         }
-        
+
         fps_list.sort_by(|a, b| b.cmp(a));
         fps_list.dedup();
         Ok(fps_list)
@@ -263,9 +272,9 @@ impl VideoDevice {
 
     /// Get current format
     pub fn get_format(&self) -> Result<Format> {
-        self.device.format().map_err(|e| {
-            AppError::VideoError(format!("Failed to get format: {}", e))
-        })
+        self.device
+            .format()
+            .map_err(|e| AppError::VideoError(format!("Failed to get format: {}", e)))
     }
 
     /// Set capture format
@@ -273,9 +282,10 @@ impl VideoDevice {
         let fmt = Format::new(width, height, format.to_fourcc());
 
         // Request the format
-        let actual = self.device.set_format(&fmt).map_err(|e| {
-            AppError::VideoError(format!("Failed to set format: {}", e))
-        })?;
+        let actual = self
+            .device
+            .set_format(&fmt)
+            .map_err(|e| AppError::VideoError(format!("Failed to set format: {}", e)))?;
 
         if actual.width != width || actual.height != height {
             warn!(
@@ -374,9 +384,9 @@ pub fn enumerate_devices() -> Result<Vec<VideoDeviceInfo>> {
     let mut devices = Vec::new();
 
     // Scan /dev/video* devices
-    for entry in std::fs::read_dir("/dev").map_err(|e| {
-        AppError::VideoError(format!("Failed to read /dev: {}", e))
-    })? {
+    for entry in std::fs::read_dir("/dev")
+        .map_err(|e| AppError::VideoError(format!("Failed to read /dev: {}", e)))?
+    {
         let entry = match entry {
             Ok(e) => e,
             Err(_) => continue,
@@ -432,9 +442,10 @@ pub fn enumerate_devices() -> Result<Vec<VideoDeviceInfo>> {
 pub fn find_best_device() -> Result<VideoDeviceInfo> {
     let devices = enumerate_devices()?;
 
-    devices.into_iter().next().ok_or_else(|| {
-        AppError::VideoError("No video capture devices found".to_string())
-    })
+    devices
+        .into_iter()
+        .next()
+        .ok_or_else(|| AppError::VideoError("No video capture devices found".to_string()))
 }
 
 #[cfg(test)]

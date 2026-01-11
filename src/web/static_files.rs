@@ -26,16 +26,18 @@ pub struct StaticAssets;
 #[cfg(debug_assertions)]
 fn get_static_base_dir() -> PathBuf {
     static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
-    BASE_DIR.get_or_init(|| {
-        // Try to get executable directory
-        if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(exe_dir) = exe_path.parent() {
-                return exe_dir.join("web").join("dist");
+    BASE_DIR
+        .get_or_init(|| {
+            // Try to get executable directory
+            if let Ok(exe_path) = std::env::current_exe() {
+                if let Some(exe_dir) = exe_path.parent() {
+                    return exe_dir.join("web").join("dist");
+                }
             }
-        }
-        // Fallback to current directory
-        PathBuf::from("web/dist")
-    }).clone()
+            // Fallback to current directory
+            PathBuf::from("web/dist")
+        })
+        .clone()
 }
 
 /// Create router for static file serving
@@ -102,29 +104,29 @@ fn try_serve_file(path: &str) -> Option<Response<Body>> {
         // Debug mode: read from file system
         let base_dir = get_static_base_dir();
         let file_path = base_dir.join(path);
-        
+
         // Check if file exists and is within base directory (prevent directory traversal)
         if !file_path.starts_with(&base_dir) {
             tracing::warn!("Path traversal attempt blocked: {}", path);
             return None;
         }
-        
+
         // Normalize path to prevent directory traversal (only if file exists)
-        if let (Ok(normalized_path), Ok(normalized_base)) = 
-            (file_path.canonicalize(), base_dir.canonicalize()) 
+        if let (Ok(normalized_path), Ok(normalized_base)) =
+            (file_path.canonicalize(), base_dir.canonicalize())
         {
             if !normalized_path.starts_with(&normalized_base) {
                 tracing::warn!("Path traversal attempt blocked (canonicalized): {}", path);
                 return None;
             }
         }
-        
+
         match std::fs::read(&file_path) {
             Ok(data) => {
                 let mime = mime_guess::from_path(path)
                     .first_or_octet_stream()
                     .to_string();
-                
+
                 return Some(
                     Response::builder()
                         .status(StatusCode::OK)
@@ -145,16 +147,16 @@ fn try_serve_file(path: &str) -> Option<Response<Body>> {
             }
         }
     }
-    
+
     #[cfg(not(debug_assertions))]
     {
         // Release mode: use embedded assets
         let asset = StaticAssets::get(path)?;
-        
+
         let mime = mime_guess::from_path(path)
             .first_or_octet_stream()
             .to_string();
-        
+
         Some(
             Response::builder()
                 .status(StatusCode::OK)

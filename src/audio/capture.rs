@@ -201,7 +201,15 @@ impl AudioCapturer {
         let log_throttler = self.log_throttler.clone();
 
         let handle = tokio::task::spawn_blocking(move || {
-            capture_loop(config, state, stats, frame_tx, stop_flag, sequence, log_throttler);
+            capture_loop(
+                config,
+                state,
+                stats,
+                frame_tx,
+                stop_flag,
+                sequence,
+                log_throttler,
+            );
         });
 
         *self.capture_handle.lock().await = Some(handle);
@@ -274,40 +282,34 @@ fn run_capture(
 
     // Configure hardware parameters
     {
-        let hwp = HwParams::any(&pcm).map_err(|e| {
-            AppError::AudioError(format!("Failed to get HwParams: {}", e))
-        })?;
+        let hwp = HwParams::any(&pcm)
+            .map_err(|e| AppError::AudioError(format!("Failed to get HwParams: {}", e)))?;
 
-        hwp.set_channels(config.channels).map_err(|e| {
-            AppError::AudioError(format!("Failed to set channels: {}", e))
-        })?;
+        hwp.set_channels(config.channels)
+            .map_err(|e| AppError::AudioError(format!("Failed to set channels: {}", e)))?;
 
-        hwp.set_rate(config.sample_rate, ValueOr::Nearest).map_err(|e| {
-            AppError::AudioError(format!("Failed to set sample rate: {}", e))
-        })?;
+        hwp.set_rate(config.sample_rate, ValueOr::Nearest)
+            .map_err(|e| AppError::AudioError(format!("Failed to set sample rate: {}", e)))?;
 
-        hwp.set_format(Format::s16()).map_err(|e| {
-            AppError::AudioError(format!("Failed to set format: {}", e))
-        })?;
+        hwp.set_format(Format::s16())
+            .map_err(|e| AppError::AudioError(format!("Failed to set format: {}", e)))?;
 
-        hwp.set_access(Access::RWInterleaved).map_err(|e| {
-            AppError::AudioError(format!("Failed to set access: {}", e))
-        })?;
+        hwp.set_access(Access::RWInterleaved)
+            .map_err(|e| AppError::AudioError(format!("Failed to set access: {}", e)))?;
 
-        hwp.set_buffer_size_near(config.buffer_frames as Frames).map_err(|e| {
-            AppError::AudioError(format!("Failed to set buffer size: {}", e))
-        })?;
+        hwp.set_buffer_size_near(config.buffer_frames as Frames)
+            .map_err(|e| AppError::AudioError(format!("Failed to set buffer size: {}", e)))?;
 
         hwp.set_period_size_near(config.period_frames as Frames, ValueOr::Nearest)
             .map_err(|e| AppError::AudioError(format!("Failed to set period size: {}", e)))?;
 
-        pcm.hw_params(&hwp).map_err(|e| {
-            AppError::AudioError(format!("Failed to apply hw params: {}", e))
-        })?;
+        pcm.hw_params(&hwp)
+            .map_err(|e| AppError::AudioError(format!("Failed to apply hw params: {}", e)))?;
     }
 
     // Get actual configuration
-    let actual_rate = pcm.hw_params_current()
+    let actual_rate = pcm
+        .hw_params_current()
         .map(|h| h.get_rate().unwrap_or(config.sample_rate))
         .unwrap_or(config.sample_rate);
 
@@ -317,9 +319,8 @@ fn run_capture(
     );
 
     // Prepare for capture
-    pcm.prepare().map_err(|e| {
-        AppError::AudioError(format!("Failed to prepare PCM: {}", e))
-    })?;
+    pcm.prepare()
+        .map_err(|e| AppError::AudioError(format!("Failed to prepare PCM: {}", e)))?;
 
     let _ = state.send(CaptureState::Running);
 
@@ -340,7 +341,11 @@ fn run_capture(
                 continue;
             }
             State::Suspended => {
-                warn_throttled!(log_throttler, "suspended", "Audio device suspended, recovering");
+                warn_throttled!(
+                    log_throttler,
+                    "suspended",
+                    "Audio device suspended, recovering"
+                );
                 let _ = pcm.resume();
                 continue;
             }
@@ -363,11 +368,8 @@ fn run_capture(
 
                 // Directly use the buffer slice (already in correct byte format)
                 let seq = sequence.fetch_add(1, Ordering::Relaxed);
-                let frame = AudioFrame::new(
-                    Bytes::copy_from_slice(&buffer[..byte_count]),
-                    config,
-                    seq,
-                );
+                let frame =
+                    AudioFrame::new(Bytes::copy_from_slice(&buffer[..byte_count]), config, seq);
 
                 // Send to subscribers
                 if frame_tx.receiver_count() > 0 {

@@ -106,9 +106,9 @@ impl VideoFrame {
     /// Get hash of frame data (computed once, cached)
     /// Used for fast frame deduplication comparison
     pub fn get_hash(&self) -> u64 {
-        *self.hash.get_or_init(|| {
-            xxhash_rust::xxh64::xxh64(self.data.as_ref(), 0)
-        })
+        *self
+            .hash
+            .get_or_init(|| xxhash_rust::xxh64::xxh64(self.data.as_ref(), 0))
     }
 
     /// Check if format is JPEG/MJPEG

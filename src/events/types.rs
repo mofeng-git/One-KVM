@@ -128,6 +128,20 @@ pub enum SystemEvent {
     // ============================================================================
     // Video Stream Events
     // ============================================================================
+    /// Stream mode switching started (transactional, correlates all following events)
+    ///
+    /// Sent immediately after a mode switch request is accepted.
+    /// Clients can use `transition_id` to correlate subsequent `stream.*` events.
+    #[serde(rename = "stream.mode_switching")]
+    StreamModeSwitching {
+        /// Unique transition ID for this mode switch transaction
+        transition_id: String,
+        /// Target mode: "mjpeg", "h264", "h265", "vp8", "vp9"
+        to_mode: String,
+        /// Previous mode: "mjpeg", "h264", "h265", "vp8", "vp9"
+        from_mode: String,
+    },
+
     /// Stream state changed (e.g., started, stopped, error)
     #[serde(rename = "stream.state_changed")]
     StreamStateChanged {
@@ -143,6 +157,9 @@ pub enum SystemEvent {
     /// the stream will be interrupted temporarily.
     #[serde(rename = "stream.config_changing")]
     StreamConfigChanging {
+        /// Optional transition ID if this config change is part of a mode switch transaction
+        #[serde(skip_serializing_if = "Option::is_none")]
+        transition_id: Option<String>,
         /// Reason for change: "device_switch", "resolution_change", "format_change"
         reason: String,
     },
@@ -152,6 +169,9 @@ pub enum SystemEvent {
     /// Sent after new configuration is active. Clients can reconnect now.
     #[serde(rename = "stream.config_applied")]
     StreamConfigApplied {
+        /// Optional transition ID if this config change is part of a mode switch transaction
+        #[serde(skip_serializing_if = "Option::is_none")]
+        transition_id: Option<String>,
         /// Device path
         device: String,
         /// Resolution (width, height)
@@ -193,6 +213,9 @@ pub enum SystemEvent {
     /// Clients should wait for this event before attempting to create WebRTC sessions.
     #[serde(rename = "stream.webrtc_ready")]
     WebRTCReady {
+        /// Optional transition ID if this readiness is part of a mode switch transaction
+        #[serde(skip_serializing_if = "Option::is_none")]
+        transition_id: Option<String>,
         /// Current video codec
         codec: String,
         /// Whether hardware encoding is being used
@@ -215,10 +238,24 @@ pub enum SystemEvent {
     /// from the current stream and reconnect using the new mode.
     #[serde(rename = "stream.mode_changed")]
     StreamModeChanged {
+        /// Optional transition ID if this change is part of a mode switch transaction
+        #[serde(skip_serializing_if = "Option::is_none")]
+        transition_id: Option<String>,
         /// New mode: "mjpeg", "h264", "h265", "vp8", or "vp9"
         mode: String,
         /// Previous mode: "mjpeg", "h264", "h265", "vp8", or "vp9"
         previous_mode: String,
+    },
+
+    /// Stream mode switching completed (transactional end marker)
+    ///
+    /// Sent when the backend considers the new mode ready for clients to connect.
+    #[serde(rename = "stream.mode_ready")]
+    StreamModeReady {
+        /// Unique transition ID for this mode switch transaction
+        transition_id: String,
+        /// Active mode after switch: "mjpeg", "h264", "h265", "vp8", "vp9"
+        mode: String,
     },
 
     // ============================================================================
@@ -491,6 +528,7 @@ impl SystemEvent {
     /// Get the event name (for filtering/routing)
     pub fn event_name(&self) -> &'static str {
         match self {
+            Self::StreamModeSwitching { .. } => "stream.mode_switching",
             Self::StreamStateChanged { .. } => "stream.state_changed",
             Self::StreamConfigChanging { .. } => "stream.config_changing",
             Self::StreamConfigApplied { .. } => "stream.config_applied",
@@ -500,6 +538,7 @@ impl SystemEvent {
             Self::WebRTCReady { .. } => "stream.webrtc_ready",
             Self::StreamStatsUpdate { .. } => "stream.stats_update",
             Self::StreamModeChanged { .. } => "stream.mode_changed",
+            Self::StreamModeReady { .. } => "stream.mode_ready",
             Self::HidStateChanged { .. } => "hid.state_changed",
             Self::HidBackendSwitching { .. } => "hid.backend_switching",
             Self::HidDeviceLost { .. } => "hid.device_lost",
@@ -589,6 +628,7 @@ mod tests {
     #[test]
     fn test_serialization() {
         let event = SystemEvent::StreamConfigApplied {
+            transition_id: None,
             device: "/dev/video0".to_string(),
             resolution: (1920, 1080),
             format: "mjpeg".to_string(),
@@ -600,6 +640,9 @@ mod tests {
         assert!(json.contains("/dev/video0"));
 
         let deserialized: SystemEvent = serde_json::from_str(&json).unwrap();
-        assert!(matches!(deserialized, SystemEvent::StreamConfigApplied { .. }));
+        assert!(matches!(
+            deserialized,
+            SystemEvent::StreamConfigApplied { .. }
+        ));
     }
 }

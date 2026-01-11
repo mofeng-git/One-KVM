@@ -22,7 +22,10 @@ fn parse_mac_address(mac: &str) -> Result<[u8; 6]> {
     } else if mac.contains('-') {
         mac.split('-').collect()
     } else {
-        return Err(AppError::Config(format!("Invalid MAC address format: {}", mac)));
+        return Err(AppError::Config(format!(
+            "Invalid MAC address format: {}",
+            mac
+        )));
     };
 
     if parts.len() != 6 {
@@ -34,9 +37,8 @@ fn parse_mac_address(mac: &str) -> Result<[u8; 6]> {
 
     let mut bytes = [0u8; 6];
     for (i, part) in parts.iter().enumerate() {
-        bytes[i] = u8::from_str_radix(part, 16).map_err(|_| {
-            AppError::Config(format!("Invalid MAC address byte: {}", part))
-        })?;
+        bytes[i] = u8::from_str_radix(part, 16)
+            .map_err(|_| AppError::Config(format!("Invalid MAC address byte: {}", part)))?;
     }
 
     Ok(bytes)

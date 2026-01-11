@@ -109,15 +109,25 @@ pub fn read_file(path: &Path) -> Result<String> {
 
 /// Create directory if not exists
 pub fn create_dir(path: &Path) -> Result<()> {
-    fs::create_dir_all(path)
-        .map_err(|e| AppError::Internal(format!("Failed to create directory {}: {}", path.display(), e)))
+    fs::create_dir_all(path).map_err(|e| {
+        AppError::Internal(format!(
+            "Failed to create directory {}: {}",
+            path.display(),
+            e
+        ))
+    })
 }
 
 /// Remove directory
 pub fn remove_dir(path: &Path) -> Result<()> {
     if path.exists() {
-        fs::remove_dir(path)
-            .map_err(|e| AppError::Internal(format!("Failed to remove directory {}: {}", path.display(), e)))?;
+        fs::remove_dir(path).map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to remove directory {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
     }
     Ok(())
 }
@@ -125,14 +135,21 @@ pub fn remove_dir(path: &Path) -> Result<()> {
 /// Remove file
 pub fn remove_file(path: &Path) -> Result<()> {
     if path.exists() {
-        fs::remove_file(path)
-            .map_err(|e| AppError::Internal(format!("Failed to remove file {}: {}", path.display(), e)))?;
+        fs::remove_file(path).map_err(|e| {
+            AppError::Internal(format!("Failed to remove file {}: {}", path.display(), e))
+        })?;
     }
     Ok(())
 }
 
 /// Create symlink
 pub fn create_symlink(src: &Path, dest: &Path) -> Result<()> {
-    std::os::unix::fs::symlink(src, dest)
-        .map_err(|e| AppError::Internal(format!("Failed to create symlink {} -> {}: {}", dest.display(), src.display(), e)))
+    std::os::unix::fs::symlink(src, dest).map_err(|e| {
+        AppError::Internal(format!(
+            "Failed to create symlink {} -> {}: {}",
+            dest.display(),
+            src.display(),
+            e
+        ))
+    })
 }
