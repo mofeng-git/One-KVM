@@ -31,28 +31,7 @@ import type {
   TtydStatus,
 } from '@/types/generated'
 
-const API_BASE = '/api'
-
-/**
- * 通用请求函数
- */
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    credentials: 'include',
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }))
-    throw new Error(error.message || `HTTP ${response.status}`)
-  }
-
-  return response.json()
-}
+import { request } from './request'
 
 // ===== 全局配置 API =====
 export const configApi = {

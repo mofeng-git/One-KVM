@@ -23,7 +23,6 @@ import { MousePointer, Move, Loader2, RefreshCw } from 'lucide-vue-next'
 import HelpTooltip from '@/components/HelpTooltip.vue'
 import { configApi } from '@/api'
 import { useSystemStore } from '@/stores/system'
-import { setMouseThrottle } from '@/composables/useHidWebSocket'
 
 const props = defineProps<{
   open: boolean
@@ -39,9 +38,24 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const systemStore = useSystemStore()
 
+const DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS = 16
+
+function clampMouseMoveSendIntervalMs(ms: number): number {
+  if (!Number.isFinite(ms)) return DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS
+  return Math.max(0, Math.min(1000, Math.floor(ms)))
+}
+
+function loadMouseMoveSendIntervalFromStorage(): number {
+  const raw = localStorage.getItem('hidMouseThrottle')
+  const parsed = raw === null ? NaN : Number(raw)
+  return clampMouseMoveSendIntervalMs(
+    Number.isFinite(parsed) ? parsed : DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS
+  )
+}
+
 // Mouse Settings (real-time)
 const mouseThrottle = ref<number>(
-  Number(localStorage.getItem('hidMouseThrottle')) || 0
+  loadMouseMoveSendIntervalFromStorage()
 )
 const showCursor = ref<boolean>(
   localStorage.getItem('hidShowCursor') !== 'false' // default true
@@ -105,9 +119,7 @@ async function loadDevices() {
 // Initialize from current config
 function initializeFromCurrent() {
   // Re-sync real-time settings from localStorage
-  const storedThrottle = Number(localStorage.getItem('hidMouseThrottle')) || 0
-  mouseThrottle.value = storedThrottle
-  setMouseThrottle(storedThrottle)
+  mouseThrottle.value = loadMouseMoveSendIntervalFromStorage()
 
   const storedCursor = localStorage.getItem('hidShowCursor') !== 'false'
   showCursor.value = storedCursor
@@ -138,11 +150,14 @@ function toggleMouseMode() {
 // Update mouse throttle (real-time)
 function handleThrottleChange(value: number[] | undefined) {
   if (!value || value.length === 0 || value[0] === undefined) return
-  const throttleValue = value[0]
+  const throttleValue = clampMouseMoveSendIntervalMs(value[0])
   mouseThrottle.value = throttleValue
-  setMouseThrottle(throttleValue)
   // Save to localStorage
   localStorage.setItem('hidMouseThrottle', String(throttleValue))
+  // Notify ConsoleView (storage event doesn't fire in same tab)
+  window.dispatchEvent(new CustomEvent('hidMouseSendIntervalChanged', {
+    detail: { intervalMs: throttleValue },
+  }))
 }
 
 // Handle backend change
@@ -273,7 +288,7 @@ watch(() => props.open, (isOpen) => {
               @update:model-value="handleThrottleChange"
               :min="0"
               :max="1000"
-              :step="10"
+              :step="1"
               class="py-2"
             />
             <div class="flex justify-between text-xs text-muted-foreground">

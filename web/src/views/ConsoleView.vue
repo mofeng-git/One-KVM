@@ -124,8 +124,10 @@ const lastMousePosition = ref({ x: 0, y: 0 }) // Track last position for relativ
 const isPointerLocked = ref(false) // Track pointer lock state
 
 // Mouse move throttling (60 Hz = ~16.67ms interval)
-const MOUSE_SEND_INTERVAL_MS = 16
-let mouseSendTimer: ReturnType<typeof setInterval> | null = null
+const DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS = 16
+let mouseMoveSendIntervalMs = DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS
+let mouseFlushTimer: ReturnType<typeof setTimeout> | null = null
+let lastMouseMoveSendTime = 0
 let pendingMouseMove: { type: 'move' | 'move_abs'; x: number; y: number } | null = null
 let accumulatedDelta = { x: 0, y: 0 } // For relative mode: accumulate deltas between sends
 
@@ -1472,7 +1474,7 @@ function handleMouseMove(e: MouseEvent) {
     mousePosition.value = { x, y }
     // Queue for throttled sending (absolute mode: just update pending position)
     pendingMouseMove = { type: 'move_abs', x, y }
-    ensureMouseSendTimer()
+    requestMouseMoveFlush()
   } else {
     // Relative mode: use movementX/Y when pointer is locked
     if (isPointerLocked.value) {
@@ -1484,7 +1486,7 @@ function handleMouseMove(e: MouseEvent) {
         // Accumulate deltas for throttled sending
         accumulatedDelta.x += dx
         accumulatedDelta.y += dy
-        ensureMouseSendTimer()
+        requestMouseMoveFlush()
       }
 
       // Update display position (accumulated delta for display only)
@@ -1496,48 +1498,80 @@ function handleMouseMove(e: MouseEvent) {
   }
 }
 
-// Start the mouse send timer if not already running
-function ensureMouseSendTimer() {
-  if (mouseSendTimer !== null) return
-
-  // Send immediately on first event, then throttle
-  flushMouseMove()
-
-  mouseSendTimer = setInterval(() => {
-    if (!flushMouseMove()) {
-      // No pending data, stop the timer
-      if (mouseSendTimer !== null) {
-        clearInterval(mouseSendTimer)
-        mouseSendTimer = null
-      }
-    }
-  }, MOUSE_SEND_INTERVAL_MS)
+function hasPendingMouseMove(): boolean {
+  if (mouseMode.value === 'absolute') return pendingMouseMove !== null
+  return accumulatedDelta.x !== 0 || accumulatedDelta.y !== 0
 }
 
-// Flush pending mouse move data, returns true if data was sent
-function flushMouseMove(): boolean {
+function flushMouseMoveOnce(): boolean {
   if (mouseMode.value === 'absolute') {
-    if (pendingMouseMove) {
-      sendMouseEvent(pendingMouseMove)
-      pendingMouseMove = null
-      return true
-    }
-  } else {
-    // Relative mode: send accumulated delta
-    if (accumulatedDelta.x !== 0 || accumulatedDelta.y !== 0) {
-      // Clamp to i8 range (-127 to 127)
-      const clampedDx = Math.max(-127, Math.min(127, accumulatedDelta.x))
-      const clampedDy = Math.max(-127, Math.min(127, accumulatedDelta.y))
-
-      sendMouseEvent({ type: 'move', x: clampedDx, y: clampedDy })
-
-      // Subtract sent amount (keep remainder for next send if clamped)
-      accumulatedDelta.x -= clampedDx
-      accumulatedDelta.y -= clampedDy
-      return true
-    }
+    if (!pendingMouseMove) return false
+    sendMouseEvent(pendingMouseMove)
+    pendingMouseMove = null
+    return true
   }
-  return false
+
+  if (accumulatedDelta.x === 0 && accumulatedDelta.y === 0) return false
+
+  // Clamp to i8 range (-127 to 127)
+  const clampedDx = Math.max(-127, Math.min(127, accumulatedDelta.x))
+  const clampedDy = Math.max(-127, Math.min(127, accumulatedDelta.y))
+
+  sendMouseEvent({ type: 'move', x: clampedDx, y: clampedDy })
+
+  // Subtract sent amount (keep remainder for next send if clamped)
+  accumulatedDelta.x -= clampedDx
+  accumulatedDelta.y -= clampedDy
+  return true
+}
+
+function scheduleMouseMoveFlush() {
+  if (mouseFlushTimer !== null) return
+
+  const interval = mouseMoveSendIntervalMs
+  const now = Date.now()
+  const elapsed = now - lastMouseMoveSendTime
+  const delay = interval <= 0 ? 0 : Math.max(0, interval - elapsed)
+
+  mouseFlushTimer = setTimeout(() => {
+    mouseFlushTimer = null
+
+    const burstLimit = mouseMoveSendIntervalMs <= 0 ? 8 : 1
+    let sent = false
+    for (let i = 0; i < burstLimit; i++) {
+      if (!flushMouseMoveOnce()) break
+      sent = true
+      if (!hasPendingMouseMove()) break
+    }
+    if (sent) lastMouseMoveSendTime = Date.now()
+
+    if (hasPendingMouseMove()) {
+      scheduleMouseMoveFlush()
+    }
+  }, delay)
+}
+
+function requestMouseMoveFlush() {
+  const interval = mouseMoveSendIntervalMs
+  const now = Date.now()
+
+  if (interval <= 0 || now - lastMouseMoveSendTime >= interval) {
+    const burstLimit = interval <= 0 ? 8 : 1
+    let sent = false
+    for (let i = 0; i < burstLimit; i++) {
+      if (!flushMouseMoveOnce()) break
+      sent = true
+      if (!hasPendingMouseMove()) break
+    }
+    if (sent) lastMouseMoveSendTime = Date.now()
+
+    if (hasPendingMouseMove()) {
+      scheduleMouseMoveFlush()
+    }
+    return
+  }
+
+  scheduleMouseMoveFlush()
 }
 
 // Track pressed mouse button for window-level mouseup handling
@@ -1656,6 +1690,41 @@ function handleCursorVisibilityChange(e: Event) {
   cursorVisible.value = customEvent.detail.visible
 }
 
+function clampMouseMoveSendIntervalMs(ms: number): number {
+  if (!Number.isFinite(ms)) return DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS
+  return Math.max(0, Math.min(1000, Math.floor(ms)))
+}
+
+function loadMouseMoveSendIntervalFromStorage(): number {
+  const raw = localStorage.getItem('hidMouseThrottle')
+  const parsed = raw === null ? NaN : Number(raw)
+  return clampMouseMoveSendIntervalMs(
+    Number.isFinite(parsed) ? parsed : DEFAULT_MOUSE_MOVE_SEND_INTERVAL_MS
+  )
+}
+
+function setMouseMoveSendInterval(ms: number) {
+  mouseMoveSendIntervalMs = clampMouseMoveSendIntervalMs(ms)
+
+  if (mouseFlushTimer !== null) {
+    clearTimeout(mouseFlushTimer)
+    mouseFlushTimer = null
+  }
+  if (hasPendingMouseMove()) {
+    requestMouseMoveFlush()
+  }
+}
+
+function handleMouseSendIntervalChange(e: Event) {
+  const customEvent = e as CustomEvent<{ intervalMs: number }>
+  setMouseMoveSendInterval(customEvent.detail?.intervalMs)
+}
+
+function handleMouseSendIntervalStorage(e: StorageEvent) {
+  if (e.key !== 'hidMouseThrottle') return
+  setMouseMoveSendInterval(loadMouseMoveSendIntervalFromStorage())
+}
+
 // ActionBar handlers
 // (MSD and Settings are now handled by ActionBar component directly)
 
@@ -1687,6 +1756,8 @@ function handleToggleMouseMode() {
   }
 
   mouseMode.value = mouseMode.value === 'absolute' ? 'relative' : 'absolute'
+  pendingMouseMove = null
+  accumulatedDelta = { x: 0, y: 0 }
   // Reset position when switching modes
   lastMousePosition.value = { x: 0, y: 0 }
   mousePosition.value = { x: 0, y: 0 }
@@ -1727,8 +1798,12 @@ onMounted(async () => {
   window.addEventListener('blur', handleBlur)
   window.addEventListener('mouseup', handleWindowMouseUp)
 
+  setMouseMoveSendInterval(loadMouseMoveSendIntervalFromStorage())
+
   // Listen for cursor visibility changes from HidConfigPopover
   window.addEventListener('hidCursorVisibilityChanged', handleCursorVisibilityChange as EventListener)
+  window.addEventListener('hidMouseSendIntervalChanged', handleMouseSendIntervalChange as EventListener)
+  window.addEventListener('storage', handleMouseSendIntervalStorage)
 
   // Pointer Lock event listeners
   document.addEventListener('pointerlockchange', handlePointerLockChange)
@@ -1757,10 +1832,10 @@ onUnmounted(() => {
   // Reset initial device info flag
   initialDeviceInfoReceived = false
 
-  // Clear mouse send timer
-  if (mouseSendTimer !== null) {
-    clearInterval(mouseSendTimer)
-    mouseSendTimer = null
+  // Clear mouse flush timer
+  if (mouseFlushTimer !== null) {
+    clearTimeout(mouseFlushTimer)
+    mouseFlushTimer = null
   }
 
   // Clear ttyd poll interval
@@ -1799,6 +1874,8 @@ onUnmounted(() => {
   window.removeEventListener('blur', handleBlur)
   window.removeEventListener('mouseup', handleWindowMouseUp)
   window.removeEventListener('hidCursorVisibilityChanged', handleCursorVisibilityChange as EventListener)
+  window.removeEventListener('hidMouseSendIntervalChanged', handleMouseSendIntervalChange as EventListener)
+  window.removeEventListener('storage', handleMouseSendIntervalStorage)
 
   // Remove pointer lock event listeners
   document.removeEventListener('pointerlockchange', handlePointerLockChange)

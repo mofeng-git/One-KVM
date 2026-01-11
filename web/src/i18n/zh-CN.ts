@@ -41,6 +41,13 @@ export default {
     toggleTheme: '切换主题',
     toggleLanguage: '切换语言',
   },
+  api: {
+    operationFailed: '操作失败',
+    operationFailedDesc: '操作失败',
+    parseResponseFailed: '解析响应失败',
+    networkError: '网络错误',
+    networkErrorDesc: '无法连接到服务器，请检查网络连接。',
+  },
   nav: {
     console: '控制台',
     msd: '虚拟媒体',

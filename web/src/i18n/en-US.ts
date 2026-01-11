@@ -41,6 +41,13 @@ export default {
     toggleTheme: 'Toggle theme',
     toggleLanguage: 'Toggle language',
   },
+  api: {
+    operationFailed: 'Operation Failed',
+    operationFailedDesc: 'Operation failed',
+    parseResponseFailed: 'Failed to parse response',
+    networkError: 'Network Error',
+    networkErrorDesc: 'Unable to connect to server. Please check your connection.',
+  },
   nav: {
     console: 'Console',
     msd: 'Virtual Media',
