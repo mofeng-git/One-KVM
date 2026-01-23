@@ -319,6 +319,10 @@ watch(hidBackend, (newBackend) => {
   if (newBackend === 'otg' && !otgUdc.value && devices.value.udc.length > 0) {
     otgUdc.value = devices.value.udc[0]?.name || ''
   }
+  if (newBackend === 'none') {
+    ch9329Port.value = ''
+    otgUdc.value = ''
+  }
 })
 
 onMounted(async () => {
@@ -341,6 +345,11 @@ onMounted(async () => {
       otgUdc.value = result.udc[0].name
     }
 
+    // If no HID devices exist, default to disabled to avoid blocking setup
+    if (result.serial.length === 0 && result.udc.length === 0) {
+      hidBackend.value = 'none'
+    }
+
     // Auto-select audio device if available (and no video device to trigger watch)
     if (result.audio.length > 0 && !audioDevice.value) {
       // Prefer HDMI audio device
@@ -355,6 +364,10 @@ onMounted(async () => {
     }
   } catch {
     // Use defaults
+  }
+
+  if (devices.value.serial.length === 0 && devices.value.udc.length === 0) {
+    hidBackend.value = 'none'
   }
 
   // Load encoder backends
@@ -864,6 +877,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                     CH9329 ({{ t('setup.serialHid') }})
                   </SelectItem>
                   <SelectItem value="otg">USB OTG</SelectItem>
+                  <SelectItem value="none">{{ t('setup.disableHid') }}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -931,6 +945,10 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 </p>
               </div>
             </div>
+
+            <p v-if="hidBackend === 'none'" class="text-xs text-muted-foreground">
+              {{ t('setup.hidDisabledHint') }}
+            </p>
           </div>
 
           <!-- Step 4: Extensions Settings -->
