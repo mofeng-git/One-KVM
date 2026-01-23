@@ -1,37 +1,38 @@
 # One-KVM Runtime Image
 # This Dockerfile only packages pre-compiled binaries (no compilation)
 # Used after cross-compiling with `cross build`
-# Using Arch Linux base to match rolling glibc on build hosts.
+# Using Debian 11 for maximum compatibility (GLIBC 2.31)
 
 ARG TARGETPLATFORM=linux/amd64
 
-FROM lsiobase/arch
+FROM debian:11-slim
 
 ARG TARGETPLATFORM
 
 # Install runtime dependencies in a single layer
 # All codec libraries (libx264, libx265, libopus) are now statically linked
 # Only hardware acceleration drivers and core system libraries remain dynamic
-RUN pacman -Syu --noconfirm --needed \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        # Core runtime (all platforms) - no codec libs needed
         ca-certificates \
-        systemd-libs \
-        alsa-lib \
-        libv4l \
-        libyuv \
-        ffmpeg \
+        libudev1 \
+        libasound2 \
+        # v4l2 is handled by kernel, minimal userspace needed
+        libv4l-0 \
         && \
     # Platform-specific hardware acceleration
     if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-        pacman -S --noconfirm --needed \
-            libva libx11 libxcb libxau libxdmcp libmfx; \
+        apt-get install -y --no-install-recommends \
+            libva2 libva-drm2 libva-x11-2 libx11-6 libxcb1 libxau6 libxdmcp6 libmfx1; \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-        pacman -S --noconfirm --needed \
-            libdrm libva; \
+        apt-get install -y --no-install-recommends \
+            libdrm2 libva2; \
     elif [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
-        pacman -S --noconfirm --needed \
-            libdrm libva; \
+        apt-get install -y --no-install-recommends \
+            libdrm2 libva2; \
     fi && \
-    pacman -Scc --noconfirm && \
+    rm -rf /var/lib/apt/lists/* && \
     mkdir -p /etc/one-kvm/ventoy
 
 # Copy init script
