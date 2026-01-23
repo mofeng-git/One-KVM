@@ -66,7 +66,7 @@
 
 - **VAAPI**：Intel/AMD GPU
 - **RKMPP**：Rockchip SoC
-- **V4L2 M2M**：通用硬件编码器（尚未实现）
+- **V4L2 M2M**：RaspberryPi
 - **软件编码**：CPU 编码
 
 ### 扩展能力
