@@ -19,8 +19,22 @@ ARCH_MAP=(
 build_arch() {
     local rust_target="$1"
 
-    echo "=== Building: $rust_target (via cross with custom Dockerfile) ==="
-    cross build --release --target "$rust_target"
+    # Build frontend first
+    if [ ! -d "$PROJECT_DIR/web/dist" ]; then
+        echo "=== Building Frontend ==="
+        cd "$PROJECT_DIR/web" && npm install && npm run build
+        cd "$PROJECT_DIR"
+    fi
+
+    local host_arch=$(rustc -vV | grep host | cut -d ' ' -f 2)
+
+    if [ "$rust_target" == "$host_arch" ]; then
+        echo "=== Building: $rust_target (NATIVE build, skipping cross) ==="
+        cargo build --release --target "$rust_target"
+    else
+        echo "=== Building: $rust_target (via cross) ==="
+        cross build --release --target "$rust_target"
+    fi
 }
 
 # Main
