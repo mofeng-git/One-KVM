@@ -98,6 +98,7 @@ mod ffmpeg {
 
         link_os();
         build_ffmpeg_ram(builder);
+        build_ffmpeg_hw(builder);
     }
 
     /// Link system FFmpeg using pkg-config or custom path
@@ -369,6 +370,59 @@ mod ffmpeg {
         } else {
             println!(
                 "cargo:info=Skipping ffmpeg_ram_decode.cpp (RKMPP) for arch {}",
+                target_arch
+            );
+        }
+    }
+
+    fn build_ffmpeg_hw(builder: &mut Build) {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let ffmpeg_hw_dir = manifest_dir.join("cpp").join("ffmpeg_hw");
+        let ffi_header = ffmpeg_hw_dir
+            .join("ffmpeg_hw_ffi.h")
+            .to_string_lossy()
+            .to_string();
+        bindgen::builder()
+            .header(ffi_header)
+            .rustified_enum("*")
+            .generate()
+            .unwrap()
+            .write_to_file(Path::new(&env::var_os("OUT_DIR").unwrap()).join("ffmpeg_hw_ffi.rs"))
+            .unwrap();
+
+        let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        let enable_rkmpp = matches!(target_arch.as_str(), "aarch64" | "arm")
+            || std::env::var_os("CARGO_FEATURE_RKMPP").is_some();
+        if enable_rkmpp {
+            // Include RGA headers for NV16->NV12 conversion (RGA im2d API)
+            let rga_sys_dirs = [
+                Path::new("/usr/aarch64-linux-gnu/include/rga"),
+                Path::new("/usr/include/rga"),
+            ];
+            let mut added = false;
+            for dir in rga_sys_dirs.iter() {
+                if dir.exists() {
+                    builder.include(dir);
+                    added = true;
+                }
+            }
+            if !added {
+                // Fallback to repo-local rkrga headers if present
+                let repo_root = manifest_dir
+                    .parent()
+                    .and_then(|p| p.parent())
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| manifest_dir.clone());
+                let rkrga_dir = repo_root.join("ffmpeg").join("rkrga");
+                if rkrga_dir.exists() {
+                    builder.include(rkrga_dir.join("include"));
+                    builder.include(rkrga_dir.join("im2d_api"));
+                }
+            }
+            builder.file(ffmpeg_hw_dir.join("ffmpeg_hw_mjpeg_h264.cpp"));
+        } else {
+            println!(
+                "cargo:info=Skipping ffmpeg_hw_mjpeg_h264.cpp (RKMPP) for arch {}",
                 target_arch
             );
         }

@@ -2,19 +2,17 @@ use axum::{
     extract::{Request, State},
     http::StatusCode,
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
+    Json,
 };
 use axum_extra::extract::CookieJar;
 use std::sync::Arc;
 
+use crate::error::ErrorResponse;
 use crate::state::AppState;
 
 /// Session cookie name
 pub const SESSION_COOKIE: &str = "one_kvm_session";
-
-/// Auth layer for extracting session from request
-#[derive(Clone)]
-pub struct AuthLayer;
 
 /// Extract session ID from request
 pub fn extract_session_id(cookies: &CookieJar, headers: &axum::http::HeaderMap) -> Option<String> {
@@ -69,9 +67,24 @@ pub async fn auth_middleware(
             request.extensions_mut().insert(session);
             return Ok(next.run(request).await);
         }
+
+        let message = if state.is_session_revoked(&session_id).await {
+            "Logged in elsewhere"
+        } else {
+            "Session expired"
+        };
+        return Ok(unauthorized_response(message));
     }
 
-    Err(StatusCode::UNAUTHORIZED)
+    Ok(unauthorized_response("Not authenticated"))
+}
+
+fn unauthorized_response(message: &str) -> Response {
+    let body = ErrorResponse {
+        success: false,
+        message: message.to_string(),
+    };
+    (StatusCode::UNAUTHORIZED, Json(body)).into_response()
 }
 
 /// Check if endpoint is public (no auth required)
@@ -98,48 +111,4 @@ fn is_public_endpoint(path: &str) -> bool {
         || path.ends_with(".ico")
         || path.ends_with(".png")
         || path.ends_with(".svg")
-}
-
-/// Require authentication - returns 401 if not authenticated
-pub async fn require_auth(
-    State(state): State<Arc<AppState>>,
-    cookies: CookieJar,
-    request: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    let session_id = extract_session_id(&cookies, request.headers());
-
-    if let Some(session_id) = session_id {
-        if let Ok(Some(_session)) = state.sessions.get(&session_id).await {
-            return Ok(next.run(request).await);
-        }
-    }
-
-    Err(StatusCode::UNAUTHORIZED)
-}
-
-/// Require admin privileges - returns 403 if not admin
-pub async fn require_admin(
-    State(state): State<Arc<AppState>>,
-    cookies: CookieJar,
-    request: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    let session_id = extract_session_id(&cookies, request.headers());
-
-    if let Some(session_id) = session_id {
-        if let Ok(Some(session)) = state.sessions.get(&session_id).await {
-            // Get user and check admin status
-            if let Ok(Some(user)) = state.users.get(&session.user_id).await {
-                if user.is_admin {
-                    return Ok(next.run(request).await);
-                }
-                // User is authenticated but not admin
-                return Err(StatusCode::FORBIDDEN);
-            }
-        }
-    }
-
-    // Not authenticated at all
-    Err(StatusCode::UNAUTHORIZED)
 }

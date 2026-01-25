@@ -15,10 +15,6 @@
 //!     |               +-- VP8 Encoder (hardware only - VAAPI)
 //!     |               +-- VP9 Encoder (hardware only - VAAPI)
 //!     |
-//!     +-- Audio Pipeline
-//!     |       +-- SharedAudioPipeline
-//!     |               +-- OpusEncoder
-//!     |
 //!     +-- UniversalSession[] (video + audio tracks + DataChannel)
 //!             +-- UniversalVideoTrack (H264/H265/VP8/VP9)
 //!             +-- Audio Track (RTP/Opus)
@@ -29,23 +25,23 @@
 //!
 //! - **Single encoder**: All sessions share one video encoder
 //! - **Multi-codec support**: H264, H265, VP8, VP9
-//! - **Audio support**: Opus audio streaming via SharedAudioPipeline
+//! - **Audio support**: Opus audio streaming via AudioController
 //! - **HID via DataChannel**: Keyboard/mouse events through WebRTC DataChannel
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
-use tracing::{debug, error, info, trace, warn};
+use tokio::sync::RwLock;
+use tracing::{debug, info, trace, warn};
 
-use crate::audio::shared_pipeline::{SharedAudioPipeline, SharedAudioPipelineConfig};
 use crate::audio::{AudioController, OpusFrame};
+use crate::events::EventBus;
 use crate::error::{AppError, Result};
 use crate::hid::HidController;
 use crate::video::encoder::registry::EncoderBackend;
 use crate::video::encoder::registry::VideoEncoderType;
 use crate::video::encoder::VideoCodecType;
 use crate::video::format::{PixelFormat, Resolution};
-use crate::video::frame::VideoFrame;
 use crate::video::shared_video_pipeline::{
     SharedVideoPipeline, SharedVideoPipelineConfig, SharedVideoPipelineStats,
 };
@@ -91,6 +87,14 @@ impl Default for WebRtcStreamerConfig {
     }
 }
 
+/// Capture device configuration for direct capture pipeline
+#[derive(Debug, Clone)]
+pub struct CaptureDeviceConfig {
+    pub device_path: PathBuf,
+    pub buffer_count: u32,
+    pub jpeg_quality: u8,
+}
+
 /// WebRTC streamer statistics
 #[derive(Debug, Clone, Default)]
 pub struct WebRtcStreamerStats {
@@ -102,30 +106,12 @@ pub struct WebRtcStreamerStats {
     pub video_pipeline: Option<VideoPipelineStats>,
     /// Audio enabled
     pub audio_enabled: bool,
-    /// Audio pipeline stats (if available)
-    pub audio_pipeline: Option<AudioPipelineStats>,
 }
 
 /// Video pipeline statistics
 #[derive(Debug, Clone, Default)]
 pub struct VideoPipelineStats {
-    pub frames_encoded: u64,
-    pub frames_dropped: u64,
-    pub bytes_encoded: u64,
-    pub keyframes_encoded: u64,
-    pub avg_encode_time_ms: f32,
     pub current_fps: f32,
-    pub subscribers: u64,
-}
-
-/// Audio pipeline statistics
-#[derive(Debug, Clone, Default)]
-pub struct AudioPipelineStats {
-    pub frames_encoded: u64,
-    pub frames_dropped: u64,
-    pub bytes_encoded: u64,
-    pub avg_encode_time_ms: f32,
-    pub subscribers: u64,
 }
 
 /// Session info for listing
@@ -151,20 +137,21 @@ pub struct WebRtcStreamer {
     video_pipeline: RwLock<Option<Arc<SharedVideoPipeline>>>,
     /// All sessions (unified management)
     sessions: Arc<RwLock<HashMap<String, Arc<UniversalSession>>>>,
-    /// Video frame source
-    video_frame_tx: RwLock<Option<broadcast::Sender<VideoFrame>>>,
+    /// Capture device configuration for direct capture mode
+    capture_device: RwLock<Option<CaptureDeviceConfig>>,
 
     // === Audio ===
     /// Audio enabled flag
     audio_enabled: RwLock<bool>,
-    /// Shared audio pipeline for Opus encoding
-    audio_pipeline: RwLock<Option<Arc<SharedAudioPipeline>>>,
     /// Audio controller reference
     audio_controller: RwLock<Option<Arc<AudioController>>>,
 
     // === Controllers ===
     /// HID controller for DataChannel
     hid_controller: RwLock<Option<Arc<HidController>>>,
+
+    /// Event bus for WebRTC signaling (optional)
+    events: RwLock<Option<Arc<EventBus>>>,
 }
 
 impl WebRtcStreamer {
@@ -180,11 +167,11 @@ impl WebRtcStreamer {
             video_codec: RwLock::new(config.video_codec),
             video_pipeline: RwLock::new(None),
             sessions: Arc::new(RwLock::new(HashMap::new())),
-            video_frame_tx: RwLock::new(None),
+            capture_device: RwLock::new(None),
             audio_enabled: RwLock::new(config.audio_enabled),
-            audio_pipeline: RwLock::new(None),
             audio_controller: RwLock::new(None),
             hid_controller: RwLock::new(None),
+            events: RwLock::new(None),
         })
     }
 
@@ -219,9 +206,10 @@ impl WebRtcStreamer {
         // Update codec
         *self.video_codec.write().await = codec;
 
-        // Create new pipeline with new codec
-        if let Some(ref tx) = *self.video_frame_tx.read().await {
-            self.ensure_video_pipeline(tx.clone()).await?;
+        // Create new pipeline with new codec if capture source is configured
+        let has_capture = self.capture_device.read().await.is_some();
+        if has_capture {
+            self.ensure_video_pipeline().await?;
         }
 
         info!("Video codec switched to {:?}", codec);
@@ -263,10 +251,7 @@ impl WebRtcStreamer {
     }
 
     /// Ensure video pipeline is initialized and running
-    async fn ensure_video_pipeline(
-        self: &Arc<Self>,
-        tx: broadcast::Sender<VideoFrame>,
-    ) -> Result<Arc<SharedVideoPipeline>> {
+    async fn ensure_video_pipeline(self: &Arc<Self>) -> Result<Arc<SharedVideoPipeline>> {
         let mut pipeline_guard = self.video_pipeline.write().await;
 
         if let Some(ref pipeline) = *pipeline_guard {
@@ -290,7 +275,16 @@ impl WebRtcStreamer {
 
         info!("Creating shared video pipeline for {:?}", codec);
         let pipeline = SharedVideoPipeline::new(pipeline_config)?;
-        pipeline.start(tx.subscribe()).await?;
+        let capture_device = self.capture_device.read().await.clone();
+        if let Some(device) = capture_device {
+            pipeline
+                .start_with_device(device.device_path, device.buffer_count, device.jpeg_quality)
+                .await?;
+        } else {
+            return Err(AppError::VideoError(
+                "No capture device configured".to_string(),
+            ));
+        }
 
         // Start a monitor task to detect when pipeline auto-stops
         let pipeline_weak = Arc::downgrade(&pipeline);
@@ -317,11 +311,7 @@ impl WebRtcStreamer {
                         }
                         drop(pipeline_guard);
 
-                        // NOTE: Don't clear video_frame_tx here!
-                        // The frame source is managed by stream_manager and should
-                        // remain available for new sessions. Only stream_manager
-                        // should clear it during mode switches.
-                        info!("Video pipeline stopped, but keeping frame source for new sessions");
+                        info!("Video pipeline stopped, but keeping capture config for new sessions");
                     }
                     break;
                 }
@@ -339,9 +329,8 @@ impl WebRtcStreamer {
     /// components (like RustDesk) that need to share the encoded video stream.
     pub async fn ensure_video_pipeline_for_external(
         self: &Arc<Self>,
-        tx: broadcast::Sender<VideoFrame>,
     ) -> Result<Arc<SharedVideoPipeline>> {
-        self.ensure_video_pipeline(tx).await
+        self.ensure_video_pipeline().await
     }
 
     /// Get the current pipeline configuration (if pipeline is running)
@@ -367,13 +356,10 @@ impl WebRtcStreamer {
         self.config.write().await.audio_enabled = enabled;
 
         if enabled && !was_enabled {
-            // Start audio pipeline if we have an audio controller
-            if let Some(ref controller) = *self.audio_controller.read().await {
-                self.start_audio_pipeline(controller.clone()).await?;
+            // Reconnect audio for existing sessions if we have a controller
+            if let Some(ref _controller) = *self.audio_controller.read().await {
+                self.reconnect_audio_sources().await;
             }
-        } else if !enabled && was_enabled {
-            // Stop audio pipeline
-            self.stop_audio_pipeline().await;
         }
 
         info!("WebRTC audio enabled: {}", enabled);
@@ -385,61 +371,16 @@ impl WebRtcStreamer {
         info!("Setting audio controller for WebRTC streamer");
         *self.audio_controller.write().await = Some(controller.clone());
 
-        // Start audio pipeline if audio is enabled
+        // Reconnect audio for existing sessions if audio is enabled
         if *self.audio_enabled.read().await {
-            if let Err(e) = self.start_audio_pipeline(controller).await {
-                error!("Failed to start audio pipeline: {}", e);
-            }
+            self.reconnect_audio_sources().await;
         }
-    }
-
-    /// Start the shared audio pipeline
-    async fn start_audio_pipeline(&self, controller: Arc<AudioController>) -> Result<()> {
-        // Check if already running
-        if let Some(ref pipeline) = *self.audio_pipeline.read().await {
-            if pipeline.is_running() {
-                debug!("Audio pipeline already running");
-                return Ok(());
-            }
-        }
-
-        // Get Opus frame receiver from audio controller
-        let _opus_rx = match controller.subscribe_opus_async().await {
-            Some(rx) => rx,
-            None => {
-                warn!("Audio controller not streaming, cannot start audio pipeline");
-                return Ok(());
-            }
-        };
-
-        // Create shared audio pipeline config
-        let config = SharedAudioPipelineConfig::default();
-        let pipeline = SharedAudioPipeline::new(config)?;
-
-        // Note: SharedAudioPipeline expects raw AudioFrame, but AudioController
-        // already provides encoded OpusFrame. We'll pass the OpusFrame directly
-        // to sessions instead of re-encoding.
-        // For now, store the pipeline reference for future use
-        *self.audio_pipeline.write().await = Some(pipeline);
-
-        // Reconnect audio for all existing sessions
-        self.reconnect_audio_sources().await;
-
-        info!("WebRTC audio pipeline started");
-        Ok(())
-    }
-
-    /// Stop the shared audio pipeline
-    async fn stop_audio_pipeline(&self) {
-        if let Some(ref pipeline) = *self.audio_pipeline.read().await {
-            pipeline.stop();
-        }
-        *self.audio_pipeline.write().await = None;
-        info!("WebRTC audio pipeline stopped");
     }
 
     /// Subscribe to encoded Opus frames (for sessions)
-    pub async fn subscribe_opus(&self) -> Option<broadcast::Receiver<OpusFrame>> {
+    pub async fn subscribe_opus(
+        &self,
+    ) -> Option<tokio::sync::watch::Receiver<Option<std::sync::Arc<OpusFrame>>>> {
         if let Some(ref controller) = *self.audio_controller.read().await {
             controller.subscribe_opus_async().await
         } else {
@@ -463,38 +404,22 @@ impl WebRtcStreamer {
         }
     }
 
-    // === Video Frame Source ===
-
-    /// Set video frame source
-    pub async fn set_video_source(&self, tx: broadcast::Sender<VideoFrame>) {
+    /// Set capture device for direct capture pipeline
+    pub async fn set_capture_device(&self, device_path: PathBuf, jpeg_quality: u8) {
         info!(
-            "Setting video source for WebRTC streamer (receiver_count={})",
-            tx.receiver_count()
+            "Setting direct capture device for WebRTC: {:?}",
+            device_path
         );
-        *self.video_frame_tx.write().await = Some(tx.clone());
+        *self.capture_device.write().await = Some(CaptureDeviceConfig {
+            device_path,
+            buffer_count: 2,
+            jpeg_quality,
+        });
+    }
 
-        // Start or restart pipeline if it exists
-        if let Some(ref pipeline) = *self.video_pipeline.read().await {
-            if !pipeline.is_running() {
-                info!("Starting video pipeline with new frame source");
-                if let Err(e) = pipeline.start(tx.subscribe()).await {
-                    error!("Failed to start video pipeline: {}", e);
-                }
-            } else {
-                // Pipeline is already running but may have old frame source
-                // We need to restart it with the new frame source
-                info!("Video pipeline already running, restarting with new frame source");
-                pipeline.stop();
-                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-                if let Err(e) = pipeline.start(tx.subscribe()).await {
-                    error!("Failed to restart video pipeline: {}", e);
-                }
-            }
-        } else {
-            info!(
-                "No video pipeline exists yet, frame source will be used when pipeline is created"
-            );
-        }
+    /// Clear direct capture device configuration
+    pub async fn clear_capture_device(&self) {
+        *self.capture_device.write().await = None;
     }
 
     /// Prepare for configuration change
@@ -507,11 +432,6 @@ impl WebRtcStreamer {
         }
         *self.video_pipeline.write().await = None;
         self.close_all_sessions().await;
-    }
-
-    /// Reconnect video source after configuration change
-    pub async fn reconnect_video_source(&self, tx: broadcast::Sender<VideoFrame>) {
-        self.set_video_source(tx).await;
     }
 
     // === Configuration ===
@@ -690,6 +610,11 @@ impl WebRtcStreamer {
         *self.hid_controller.write().await = Some(hid);
     }
 
+    /// Set event bus for WebRTC signaling events
+    pub async fn set_event_bus(&self, events: Arc<EventBus>) {
+        *self.events.write().await = Some(events);
+    }
+
     // === Session Management ===
 
     /// Create a new WebRTC session
@@ -698,13 +623,7 @@ impl WebRtcStreamer {
         let codec = *self.video_codec.read().await;
 
         // Ensure video pipeline is running
-        let frame_tx = self
-            .video_frame_tx
-            .read()
-            .await
-            .clone()
-            .ok_or_else(|| AppError::VideoError("No video frame source".to_string()))?;
-        let pipeline = self.ensure_video_pipeline(frame_tx).await?;
+        let pipeline = self.ensure_video_pipeline().await?;
 
         // Create session config
         let config = self.config.read().await;
@@ -720,7 +639,9 @@ impl WebRtcStreamer {
         drop(config);
 
         // Create universal session
-        let mut session = UniversalSession::new(session_config.clone(), session_id.clone()).await?;
+        let event_bus = self.events.read().await.clone();
+        let mut session =
+            UniversalSession::new(session_config.clone(), session_id.clone(), event_bus).await?;
 
         // Set HID controller if available
         // Note: We DON'T create a data channel here - the frontend creates it.
@@ -734,22 +655,22 @@ impl WebRtcStreamer {
         let session = Arc::new(session);
 
         // Subscribe to video pipeline frames
-        // Request keyframe after ICE connection is established (via callback)
+        // Request keyframe after ICE connection is established and on gaps
         let pipeline_for_callback = pipeline.clone();
         let session_id_for_callback = session_id.clone();
+        let request_keyframe = Arc::new(move || {
+            let pipeline = pipeline_for_callback.clone();
+            let sid = session_id_for_callback.clone();
+            tokio::spawn(async move {
+                info!(
+                    "Requesting keyframe for session {} after ICE connected",
+                    sid
+                );
+                pipeline.request_keyframe().await;
+            });
+        });
         session
-            .start_from_video_pipeline(pipeline.subscribe(), move || {
-                // Spawn async task to request keyframe
-                let pipeline = pipeline_for_callback;
-                let sid = session_id_for_callback;
-                tokio::spawn(async move {
-                    info!(
-                        "Requesting keyframe for session {} after ICE connected",
-                        sid
-                    );
-                    pipeline.request_keyframe().await;
-                });
-            })
+            .start_from_video_pipeline(pipeline.subscribe(), request_keyframe)
             .await;
 
         // Start audio if enabled
@@ -913,27 +834,7 @@ impl WebRtcStreamer {
         let video_pipeline = if let Some(ref pipeline) = *self.video_pipeline.read().await {
             let s = pipeline.stats().await;
             Some(VideoPipelineStats {
-                frames_encoded: s.frames_encoded,
-                frames_dropped: s.frames_dropped,
-                bytes_encoded: s.bytes_encoded,
-                keyframes_encoded: s.keyframes_encoded,
-                avg_encode_time_ms: s.avg_encode_time_ms,
                 current_fps: s.current_fps,
-                subscribers: s.subscribers,
-            })
-        } else {
-            None
-        };
-
-        // Get audio pipeline stats
-        let audio_pipeline = if let Some(ref pipeline) = *self.audio_pipeline.read().await {
-            let stats = pipeline.stats().await;
-            Some(AudioPipelineStats {
-                frames_encoded: stats.frames_encoded,
-                frames_dropped: stats.frames_dropped,
-                bytes_encoded: stats.bytes_encoded,
-                avg_encode_time_ms: stats.avg_encode_time_ms,
-                subscribers: stats.subscribers,
             })
         } else {
             None
@@ -944,7 +845,6 @@ impl WebRtcStreamer {
             video_codec: format!("{:?}", codec),
             video_pipeline,
             audio_enabled: *self.audio_enabled.read().await,
-            audio_pipeline,
         }
     }
 
@@ -984,9 +884,6 @@ impl WebRtcStreamer {
         if pipeline_running {
             info!("Restarting video pipeline to apply new bitrate: {}", preset);
 
-            // Save video_frame_tx BEFORE stopping pipeline (monitor task will clear it)
-            let saved_frame_tx = self.video_frame_tx.read().await.clone();
-
             // Stop existing pipeline
             if let Some(ref pipeline) = *self.video_pipeline.read().await {
                 pipeline.stop();
@@ -998,46 +895,43 @@ impl WebRtcStreamer {
             // Clear pipeline reference - will be recreated
             *self.video_pipeline.write().await = None;
 
-            // Recreate pipeline with new config if we have a frame source
-            if let Some(tx) = saved_frame_tx {
-                // Get existing sessions that need to be reconnected
-                let session_ids: Vec<String> = self.sessions.read().await.keys().cloned().collect();
+            let has_source = self.capture_device.read().await.is_some();
+            if !has_source {
+                return Ok(());
+            }
 
-                if !session_ids.is_empty() {
-                    // Restore video_frame_tx before recreating pipeline
-                    *self.video_frame_tx.write().await = Some(tx.clone());
+            let session_ids: Vec<String> = self.sessions.read().await.keys().cloned().collect();
+            if !session_ids.is_empty() {
+                let pipeline = self.ensure_video_pipeline().await?;
 
-                    // Recreate pipeline
-                    let pipeline = self.ensure_video_pipeline(tx).await?;
-
-                    // Reconnect all sessions to new pipeline
-                    let sessions = self.sessions.read().await;
-                    for session_id in &session_ids {
-                        if let Some(session) = sessions.get(session_id) {
-                            info!("Reconnecting session {} to new pipeline", session_id);
-                            let pipeline_for_callback = pipeline.clone();
-                            let sid = session_id.clone();
-                            session
-                                .start_from_video_pipeline(pipeline.subscribe(), move || {
-                                    let pipeline = pipeline_for_callback;
-                                    tokio::spawn(async move {
-                                        info!(
-                                            "Requesting keyframe for session {} after reconnect",
-                                            sid
-                                        );
-                                        pipeline.request_keyframe().await;
-                                    });
-                                })
-                                .await;
-                        }
+                let sessions = self.sessions.read().await;
+                for session_id in &session_ids {
+                    if let Some(session) = sessions.get(session_id) {
+                        info!("Reconnecting session {} to new pipeline", session_id);
+                        let pipeline_for_callback = pipeline.clone();
+                        let sid = session_id.clone();
+                        let request_keyframe = Arc::new(move || {
+                            let pipeline = pipeline_for_callback.clone();
+                            let sid = sid.clone();
+                            tokio::spawn(async move {
+                                info!(
+                                    "Requesting keyframe for session {} after reconnect",
+                                    sid
+                                );
+                                pipeline.request_keyframe().await;
+                            });
+                        });
+                        session
+                            .start_from_video_pipeline(pipeline.subscribe(), request_keyframe)
+                            .await;
                     }
-
-                    info!(
-                        "Video pipeline restarted with {}, reconnected {} sessions",
-                        preset,
-                        session_ids.len()
-                    );
                 }
+
+                info!(
+                    "Video pipeline restarted with {}, reconnected {} sessions",
+                    preset,
+                    session_ids.len()
+                );
             }
         } else {
             debug!(
@@ -1057,11 +951,11 @@ impl Default for WebRtcStreamer {
             video_codec: RwLock::new(VideoCodecType::H264),
             video_pipeline: RwLock::new(None),
             sessions: Arc::new(RwLock::new(HashMap::new())),
-            video_frame_tx: RwLock::new(None),
+            capture_device: RwLock::new(None),
             audio_enabled: RwLock::new(false),
-            audio_pipeline: RwLock::new(None),
             audio_controller: RwLock::new(None),
             hid_controller: RwLock::new(None),
+            events: RwLock::new(None),
         }
     }
 }

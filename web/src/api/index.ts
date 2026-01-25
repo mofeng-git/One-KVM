@@ -17,6 +17,18 @@ export const authApi = {
 
   check: () =>
     request<{ authenticated: boolean; user?: string; is_admin?: boolean }>('/auth/check'),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ success: boolean }>('/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+
+  changeUsername: (username: string, currentPassword: string) =>
+    request<{ success: boolean }>('/auth/username', {
+      method: 'POST',
+      body: JSON.stringify({ username, current_password: currentPassword }),
+    }),
 }
 
 // System API
@@ -121,8 +133,6 @@ export const streamApi = {
       clients: number
       target_fps: number
       fps: number
-      frames_captured: number
-      frames_dropped: number
     }>('/stream/status'),
 
   start: () =>
@@ -200,7 +210,7 @@ export const webrtcApi = {
     }),
 
   getIceServers: () =>
-    request<{ ice_servers: IceServerConfig[] }>('/webrtc/ice-servers'),
+    request<{ ice_servers: IceServerConfig[]; mdns_mode: string }>('/webrtc/ice-servers'),
 }
 
 // HID API
@@ -516,6 +526,7 @@ export const configApi = {
 
 // 导出新的域分离配置 API
 export {
+  authConfigApi,
   videoConfigApi,
   streamConfigApi,
   hidConfigApi,
@@ -535,6 +546,8 @@ export {
 // 导出生成的类型
 export type {
   AppConfig,
+  AuthConfig,
+  AuthConfigUpdate,
   VideoConfig,
   VideoConfigUpdate,
   StreamConfig,
@@ -585,55 +598,6 @@ export const audioApi = {
     request<{ success: boolean }>('/audio/device', {
       method: 'POST',
       body: JSON.stringify({ device }),
-    }),
-}
-
-// User Management API
-export interface User {
-  id: string
-  username: string
-  role: 'admin' | 'user'
-  created_at: string
-}
-
-interface UserApiResponse {
-  id: string
-  username: string
-  is_admin: boolean
-  created_at: string
-}
-
-export const userApi = {
-  list: async () => {
-    const rawUsers = await request<UserApiResponse[]>('/users')
-    const users: User[] = rawUsers.map(u => ({
-      id: u.id,
-      username: u.username,
-      role: u.is_admin ? 'admin' : 'user',
-      created_at: u.created_at,
-    }))
-    return { success: true, users }
-  },
-
-  create: (username: string, password: string, role: 'admin' | 'user' = 'user') =>
-    request<UserApiResponse>('/users', {
-      method: 'POST',
-      body: JSON.stringify({ username, password, is_admin: role === 'admin' }),
-    }),
-
-  update: (id: string, data: { username?: string; role?: 'admin' | 'user' }) =>
-    request<{ success: boolean }>(`/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ username: data.username, is_admin: data.role === 'admin' }),
-    }),
-
-  delete: (id: string) =>
-    request<{ success: boolean }>(`/users/${id}`, { method: 'DELETE' }),
-
-  changePassword: (id: string, newPassword: string, currentPassword?: string) =>
-    request<{ success: boolean }>(`/users/${id}/password`, {
-      method: 'POST',
-      body: JSON.stringify({ new_password: newPassword, current_password: currentPassword }),
     }),
 }
 

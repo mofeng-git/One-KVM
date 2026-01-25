@@ -309,12 +309,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Pre-enable OTG functions to avoid gadget recreation (prevents kernel crashes)
     let will_use_otg_hid = matches!(config.hid.backend, config::HidBackend::Otg);
-    let will_use_msd = config.msd.enabled || will_use_otg_hid;
+    let will_use_msd = config.msd.enabled;
 
     if will_use_otg_hid {
-        if !config.msd.enabled {
-            tracing::info!("OTG HID enabled, automatically enabling MSD functionality");
-        }
         if let Err(e) = otg_service.enable_hid().await {
             tracing::warn!("Failed to pre-enable HID: {}", e);
         }
@@ -448,27 +445,26 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Set up frame source from video streamer (if capturer is available)
-    // The frame source allows WebRTC sessions to receive live video frames
-    if let Some(frame_tx) = streamer.frame_sender().await {
-        // Synchronize WebRTC config with actual capture format before connecting
-        let (actual_format, actual_resolution, actual_fps) = streamer.current_video_config().await;
-        tracing::info!(
-            "Initial video config from capturer: {}x{} {:?} @ {}fps",
-            actual_resolution.width,
-            actual_resolution.height,
-            actual_format,
-            actual_fps
-        );
+    // Configure direct capture for WebRTC encoder pipeline
+    let (device_path, actual_resolution, actual_format, actual_fps, jpeg_quality) =
+        streamer.current_capture_config().await;
+    tracing::info!(
+        "Initial video config: {}x{} {:?} @ {}fps",
+        actual_resolution.width,
+        actual_resolution.height,
+        actual_format,
+        actual_fps
+    );
+    webrtc_streamer
+        .update_video_config(actual_resolution, actual_format, actual_fps)
+        .await;
+    if let Some(device_path) = device_path {
         webrtc_streamer
-            .update_video_config(actual_resolution, actual_format, actual_fps)
+            .set_capture_device(device_path, jpeg_quality)
             .await;
-        webrtc_streamer.set_video_source(frame_tx).await;
-        tracing::info!("WebRTC streamer connected to video frame source");
+        tracing::info!("WebRTC streamer configured for direct capture");
     } else {
-        tracing::warn!(
-            "Video capturer not ready, WebRTC will connect to frame source when available"
-        );
+        tracing::warn!("No capture device configured for WebRTC");
     }
 
     // Create video stream manager (unified MJPEG/WebRTC management)

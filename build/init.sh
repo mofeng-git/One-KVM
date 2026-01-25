@@ -4,36 +4,44 @@
 
 set -e
 
-# Start one-kvm with default options
-# Additional options can be passed via environment variables
-EXTRA_ARGS="-d /etc/one-kvm"
+# Start one-kvm with default options.
+# Additional options can be passed via environment variables.
+
+# Data directory (prefer DATA_DIR, keep ONE_KVM_DATA_DIR for backward compatibility)
+DATA_DIR="${DATA_DIR:-${ONE_KVM_DATA_DIR:-/etc/one-kvm}}"
+ARGS=(-d "$DATA_DIR")
 
 # Enable HTTPS if requested
 if [ "${ENABLE_HTTPS:-false}" = "true" ]; then
-    EXTRA_ARGS="$EXTRA_ARGS --enable-https"
+    ARGS+=(--enable-https)
 fi
 
 # Custom bind address
 if [ -n "$BIND_ADDRESS" ]; then
-    EXTRA_ARGS="$EXTRA_ARGS -a $BIND_ADDRESS"
+    ARGS+=(-a "$BIND_ADDRESS")
 fi
 
 # Custom port
 if [ -n "$HTTP_PORT" ]; then
-    EXTRA_ARGS="$EXTRA_ARGS -p $HTTP_PORT"
+    ARGS+=(-p "$HTTP_PORT")
+fi
+
+# Custom HTTPS port
+if [ -n "$HTTPS_PORT" ]; then
+    ARGS+=(--https-port "$HTTPS_PORT")
 fi
 
 # Verbosity level
 if [ -n "$VERBOSE" ]; then
     case "$VERBOSE" in
-        1) EXTRA_ARGS="$EXTRA_ARGS -v" ;;
-        2) EXTRA_ARGS="$EXTRA_ARGS -vv" ;;
-        3) EXTRA_ARGS="$EXTRA_ARGS -vvv" ;;
+        1) ARGS+=(-v) ;;
+        2) ARGS+=(-vv) ;;
+        3) ARGS+=(-vvv) ;;
     esac
 fi
 
 echo "[INFO] Starting one-kvm..."
-echo "[INFO] Extra arguments: $EXTRA_ARGS"
+echo "[INFO] Arguments: ${ARGS[*]}"
 
 # Execute one-kvm
-exec /usr/bin/one-kvm $EXTRA_ARGS
+exec /usr/bin/one-kvm "${ARGS[@]}"

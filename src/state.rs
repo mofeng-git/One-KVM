@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 use tokio::sync::{broadcast, RwLock};
 
 use crate::atx::AtxController;
@@ -56,6 +56,8 @@ pub struct AppState {
     pub events: Arc<EventBus>,
     /// Shutdown signal sender
     pub shutdown_tx: broadcast::Sender<()>,
+    /// Recently revoked session IDs (for client kick detection)
+    pub revoked_sessions: Arc<RwLock<VecDeque<String>>>,
     /// Data directory path
     data_dir: std::path::PathBuf,
 }
@@ -92,6 +94,7 @@ impl AppState {
             extensions,
             events,
             shutdown_tx,
+            revoked_sessions: Arc::new(RwLock::new(VecDeque::new())),
             data_dir,
         })
     }
@@ -104,6 +107,26 @@ impl AppState {
     /// Subscribe to shutdown signal
     pub fn shutdown_signal(&self) -> broadcast::Receiver<()> {
         self.shutdown_tx.subscribe()
+    }
+
+    /// Record revoked session IDs (bounded queue)
+    pub async fn remember_revoked_sessions(&self, session_ids: Vec<String>) {
+        if session_ids.is_empty() {
+            return;
+        }
+        let mut guard = self.revoked_sessions.write().await;
+        for id in session_ids {
+            guard.push_back(id);
+        }
+        while guard.len() > 32 {
+            guard.pop_front();
+        }
+    }
+
+    /// Check if a session ID was revoked (kicked)
+    pub async fn is_session_revoked(&self, session_id: &str) -> bool {
+        let guard = self.revoked_sessions.read().await;
+        guard.iter().any(|id| id == session_id)
     }
 
     /// Get complete device information for WebSocket clients

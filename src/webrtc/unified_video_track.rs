@@ -123,15 +123,6 @@ impl Default for UnifiedVideoTrackConfig {
     }
 }
 
-/// Unified video track statistics
-#[derive(Debug, Clone, Default)]
-pub struct UnifiedVideoTrackStats {
-    pub frames_sent: u64,
-    pub bytes_sent: u64,
-    pub keyframes_sent: u64,
-    pub errors: u64,
-}
-
 /// Cached NAL parameter sets for H264
 struct H264ParameterSets {
     sps: Option<Bytes>,
@@ -179,8 +170,6 @@ pub struct UnifiedVideoTrack {
     track: Arc<TrackLocalStaticSample>,
     /// Track configuration
     config: UnifiedVideoTrackConfig,
-    /// Statistics
-    stats: Mutex<UnifiedVideoTrackStats>,
     /// H264 parameter set cache
     h264_params: Mutex<H264ParameterSets>,
     /// H265 parameter set cache
@@ -207,7 +196,6 @@ impl UnifiedVideoTrack {
         Self {
             track,
             config,
-            stats: Mutex::new(UnifiedVideoTrackStats::default()),
             h264_params: Mutex::new(H264ParameterSets { sps: None, pps: None }),
             h265_params: Mutex::new(H265ParameterSets { vps: None, sps: None, pps: None }),
         }
@@ -277,9 +265,6 @@ impl UnifiedVideoTrack {
     }
 
     /// Get statistics
-    pub async fn stats(&self) -> UnifiedVideoTrackStats {
-        self.stats.lock().await.clone()
-    }
 
     /// Write an encoded frame to the track
     ///
@@ -504,13 +489,6 @@ impl UnifiedVideoTrack {
             debug!("VP8 write_sample failed: {}", e);
         }
 
-        let mut stats = self.stats.lock().await;
-        stats.frames_sent += 1;
-        stats.bytes_sent += data.len() as u64;
-        if is_keyframe {
-            stats.keyframes_sent += 1;
-        }
-
         trace!("VP8 frame: {} bytes, keyframe={}", data.len(), is_keyframe);
         Ok(())
     }
@@ -529,13 +507,6 @@ impl UnifiedVideoTrack {
 
         if let Err(e) = self.track.write_sample(&sample).await {
             debug!("VP9 write_sample failed: {}", e);
-        }
-
-        let mut stats = self.stats.lock().await;
-        stats.frames_sent += 1;
-        stats.bytes_sent += data.len() as u64;
-        if is_keyframe {
-            stats.keyframes_sent += 1;
         }
 
         trace!("VP9 frame: {} bytes, keyframe={}", data.len(), is_keyframe);
@@ -570,15 +541,6 @@ impl UnifiedVideoTrack {
             }
 
             total_bytes += nal_data.len() as u64;
-        }
-
-        if nal_count > 0 {
-            let mut stats = self.stats.lock().await;
-            stats.frames_sent += 1;
-            stats.bytes_sent += total_bytes;
-            if is_keyframe {
-                stats.keyframes_sent += 1;
-            }
         }
 
         trace!("Sent {} NAL units, {} bytes, keyframe={}", nal_count, total_bytes, is_keyframe);

@@ -1,7 +1,7 @@
 use axum::{
     extract::DefaultBodyLimit,
     middleware,
-    routing::{any, delete, get, patch, post, put},
+    routing::{any, delete, get, patch, post},
     Router,
 };
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use tower_http::{
 use super::audio_ws::audio_ws_handler;
 use super::handlers;
 use super::ws::ws_handler;
-use crate::auth::{auth_middleware, require_admin};
+use crate::auth::auth_middleware;
 use crate::hid::websocket::ws_hid_handler;
 use crate::state::AppState;
 
@@ -37,6 +37,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/info", get(handlers::system_info))
         .route("/auth/logout", post(handlers::logout))
         .route("/auth/check", get(handlers::auth_check))
+        .route("/auth/password", post(handlers::change_password))
+        .route("/auth/username", post(handlers::change_username))
         .route("/devices", get(handlers::list_devices))
         // WebSocket endpoint for real-time events
         .route("/ws", any(ws_handler))
@@ -69,8 +71,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/audio/devices", get(handlers::list_audio_devices))
         // Audio WebSocket endpoint
         .route("/ws/audio", any(audio_ws_handler))
-        // User can change their own password (handler will check ownership)
-        .route("/users/{id}/password", post(handlers::change_user_password));
+        ;
 
     // Admin-only routes (require admin privileges)
     let admin_routes = Router::new()
@@ -126,6 +127,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Web server configuration
         .route("/config/web", get(handlers::config::get_web_config))
         .route("/config/web", patch(handlers::config::update_web_config))
+        // Auth configuration
+        .route("/config/auth", get(handlers::config::get_auth_config))
+        .route("/config/auth", patch(handlers::config::update_auth_config))
         // System control
         .route("/system/restart", post(handlers::system_restart))
         // MSD (Mass Storage Device) endpoints
@@ -160,11 +164,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/atx/wol", post(handlers::atx_wol))
         // Device discovery endpoints
         .route("/devices/atx", get(handlers::devices::list_atx_devices))
-        // User management endpoints
-        .route("/users", get(handlers::list_users))
-        .route("/users", post(handlers::create_user))
-        .route("/users/{id}", put(handlers::update_user))
-        .route("/users/{id}", delete(handlers::delete_user))
         // Extension management endpoints
         .route("/extensions", get(handlers::extensions::list_extensions))
         .route("/extensions/{id}", get(handlers::extensions::get_extension))
@@ -201,8 +200,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/terminal/", get(handlers::terminal::terminal_index))
         .route("/terminal/ws", get(handlers::terminal::terminal_ws))
         .route("/terminal/{*path}", get(handlers::terminal::terminal_proxy))
-        // Apply admin middleware to all admin routes
-        .layer(middleware::from_fn_with_state(state.clone(), require_admin));
+        ;
 
     // Combine protected routes (user + admin)
     let protected_routes = Router::new().merge(user_routes).merge(admin_routes);

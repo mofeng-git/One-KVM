@@ -27,7 +27,7 @@ use tracing::{debug, info, warn};
 
 use super::manager::{wait_for_hid_devices, GadgetDescriptor, OtgGadgetManager};
 use super::msd::MsdFunction;
-use crate::config::OtgDescriptorConfig;
+use crate::config::{OtgDescriptorConfig, OtgHidFunctions};
 use crate::error::{AppError, Result};
 
 /// Bitflags for requested functions (lock-free)
@@ -37,20 +37,39 @@ const FLAG_MSD: u8 = 0b10;
 /// HID device paths
 #[derive(Debug, Clone)]
 pub struct HidDevicePaths {
-    pub keyboard: PathBuf,
-    pub mouse_relative: PathBuf,
-    pub mouse_absolute: PathBuf,
+    pub keyboard: Option<PathBuf>,
+    pub mouse_relative: Option<PathBuf>,
+    pub mouse_absolute: Option<PathBuf>,
     pub consumer: Option<PathBuf>,
 }
 
 impl Default for HidDevicePaths {
     fn default() -> Self {
         Self {
-            keyboard: PathBuf::from("/dev/hidg0"),
-            mouse_relative: PathBuf::from("/dev/hidg1"),
-            mouse_absolute: PathBuf::from("/dev/hidg2"),
-            consumer: Some(PathBuf::from("/dev/hidg3")),
+            keyboard: None,
+            mouse_relative: None,
+            mouse_absolute: None,
+            consumer: None,
         }
+    }
+}
+
+impl HidDevicePaths {
+    pub fn existing_paths(&self) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        if let Some(ref p) = self.keyboard {
+            paths.push(p.clone());
+        }
+        if let Some(ref p) = self.mouse_relative {
+            paths.push(p.clone());
+        }
+        if let Some(ref p) = self.mouse_absolute {
+            paths.push(p.clone());
+        }
+        if let Some(ref p) = self.consumer {
+            paths.push(p.clone());
+        }
+        paths
     }
 }
 
@@ -65,6 +84,8 @@ pub struct OtgServiceState {
     pub msd_enabled: bool,
     /// HID device paths (set after gadget setup)
     pub hid_paths: Option<HidDevicePaths>,
+    /// HID function selection (set after gadget setup)
+    pub hid_functions: Option<OtgHidFunctions>,
     /// Error message if setup failed
     pub error: Option<String>,
 }
@@ -83,6 +104,8 @@ pub struct OtgService {
     msd_function: RwLock<Option<MsdFunction>>,
     /// Requested functions flags (atomic, lock-free read/write)
     requested_flags: AtomicU8,
+    /// Requested HID function set
+    hid_functions: RwLock<OtgHidFunctions>,
     /// Current descriptor configuration
     current_descriptor: RwLock<GadgetDescriptor>,
 }
@@ -95,6 +118,7 @@ impl OtgService {
             state: RwLock::new(OtgServiceState::default()),
             msd_function: RwLock::new(None),
             requested_flags: AtomicU8::new(0),
+            hid_functions: RwLock::new(OtgHidFunctions::default()),
             current_descriptor: RwLock::new(GadgetDescriptor::default()),
         }
     }
@@ -167,6 +191,35 @@ impl OtgService {
         self.state.read().await.hid_paths.clone()
     }
 
+    /// Get current HID function selection
+    pub async fn hid_functions(&self) -> OtgHidFunctions {
+        self.hid_functions.read().await.clone()
+    }
+
+    /// Update HID function selection
+    pub async fn update_hid_functions(&self, functions: OtgHidFunctions) -> Result<()> {
+        if functions.is_empty() {
+            return Err(AppError::BadRequest(
+                "OTG HID functions cannot be empty".to_string(),
+            ));
+        }
+
+        {
+            let mut current = self.hid_functions.write().await;
+            if *current == functions {
+                return Ok(());
+            }
+            *current = functions;
+        }
+
+        // If HID is active, recreate gadget with new function set
+        if self.is_hid_requested() {
+            self.recreate_gadget().await?;
+        }
+
+        Ok(())
+    }
+
     /// Get MSD function handle (for LUN configuration)
     pub async fn msd_function(&self) -> Option<MsdFunction> {
         self.msd_function.read().await.clone()
@@ -182,13 +235,16 @@ impl OtgService {
         // Mark HID as requested (lock-free)
         self.set_hid_requested(true);
 
-        // Check if already enabled
+        // Check if already enabled and function set unchanged
+        let requested_functions = self.hid_functions.read().await.clone();
         {
             let state = self.state.read().await;
             if state.hid_enabled {
-                if let Some(ref paths) = state.hid_paths {
-                    info!("HID already enabled, returning existing paths");
-                    return Ok(paths.clone());
+                if state.hid_functions.as_ref() == Some(&requested_functions) {
+                    if let Some(ref paths) = state.hid_paths {
+                        info!("HID already enabled, returning existing paths");
+                        return Ok(paths.clone());
+                    }
                 }
             }
         }
@@ -294,6 +350,11 @@ impl OtgService {
         // Read requested flags atomically (lock-free)
         let hid_requested = self.is_hid_requested();
         let msd_requested = self.is_msd_requested();
+        let hid_functions = if hid_requested {
+            self.hid_functions.read().await.clone()
+        } else {
+            OtgHidFunctions::default()
+        };
 
         info!(
             "Recreating gadget with: HID={}, MSD={}",
@@ -303,9 +364,15 @@ impl OtgService {
         // Check if gadget already matches requested state
         {
             let state = self.state.read().await;
+            let functions_match = if hid_requested {
+                state.hid_functions.as_ref() == Some(&hid_functions)
+            } else {
+                state.hid_functions.is_none()
+            };
             if state.gadget_active
                 && state.hid_enabled == hid_requested
                 && state.msd_enabled == msd_requested
+                && functions_match
             {
                 info!("Gadget already has requested functions, skipping recreate");
                 return Ok(());
@@ -333,6 +400,7 @@ impl OtgService {
             state.hid_enabled = false;
             state.msd_enabled = false;
             state.hid_paths = None;
+            state.hid_functions = None;
             state.error = None;
         }
 
@@ -361,28 +429,65 @@ impl OtgService {
 
         // Add HID functions if requested
         if hid_requested {
-            match (
-                manager.add_keyboard(),
-                manager.add_mouse_relative(),
-                manager.add_mouse_absolute(),
-                manager.add_consumer_control(),
-            ) {
-                (Ok(kb), Ok(rel), Ok(abs), Ok(consumer)) => {
-                    hid_paths = Some(HidDevicePaths {
-                        keyboard: kb,
-                        mouse_relative: rel,
-                        mouse_absolute: abs,
-                        consumer: Some(consumer),
-                    });
-                    debug!("HID functions added to gadget");
-                }
-                (Err(e), _, _, _) | (_, Err(e), _, _) | (_, _, Err(e), _) | (_, _, _, Err(e)) => {
-                    let error = format!("Failed to add HID functions: {}", e);
-                    let mut state = self.state.write().await;
-                    state.error = Some(error.clone());
-                    return Err(AppError::Internal(error));
+            if hid_functions.is_empty() {
+                let error = "HID functions set is empty".to_string();
+                let mut state = self.state.write().await;
+                state.error = Some(error.clone());
+                return Err(AppError::BadRequest(error));
+            }
+
+            let mut paths = HidDevicePaths::default();
+
+            if hid_functions.keyboard {
+                match manager.add_keyboard() {
+                    Ok(kb) => paths.keyboard = Some(kb),
+                    Err(e) => {
+                        let error = format!("Failed to add keyboard HID function: {}", e);
+                        let mut state = self.state.write().await;
+                        state.error = Some(error.clone());
+                        return Err(AppError::Internal(error));
+                    }
                 }
             }
+
+            if hid_functions.mouse_relative {
+                match manager.add_mouse_relative() {
+                    Ok(rel) => paths.mouse_relative = Some(rel),
+                    Err(e) => {
+                        let error = format!("Failed to add relative mouse HID function: {}", e);
+                        let mut state = self.state.write().await;
+                        state.error = Some(error.clone());
+                        return Err(AppError::Internal(error));
+                    }
+                }
+            }
+
+            if hid_functions.mouse_absolute {
+                match manager.add_mouse_absolute() {
+                    Ok(abs) => paths.mouse_absolute = Some(abs),
+                    Err(e) => {
+                        let error = format!("Failed to add absolute mouse HID function: {}", e);
+                        let mut state = self.state.write().await;
+                        state.error = Some(error.clone());
+                        return Err(AppError::Internal(error));
+                    }
+                }
+            }
+
+            if hid_functions.consumer {
+                match manager.add_consumer_control() {
+                    Ok(consumer) => paths.consumer = Some(consumer),
+                    Err(e) => {
+                        let error = format!("Failed to add consumer HID function: {}", e);
+                        let mut state = self.state.write().await;
+                        state.error = Some(error.clone());
+                        return Err(AppError::Internal(error));
+                    }
+                }
+            }
+
+            hid_paths = Some(paths);
+            debug!("HID functions added to gadget");
         }
 
         // Add MSD function if requested
@@ -423,12 +528,8 @@ impl OtgService {
 
         // Wait for HID devices to appear
         if let Some(ref paths) = hid_paths {
-            let device_paths = vec![
-                paths.keyboard.clone(),
-                paths.mouse_relative.clone(),
-                paths.mouse_absolute.clone(),
-            ];
-            if !wait_for_hid_devices(&device_paths, 2000).await {
+            let device_paths = paths.existing_paths();
+            if !device_paths.is_empty() && !wait_for_hid_devices(&device_paths, 2000).await {
                 warn!("HID devices did not appear after gadget setup");
             }
         }
@@ -448,6 +549,11 @@ impl OtgService {
             state.hid_enabled = hid_requested;
             state.msd_enabled = msd_requested;
             state.hid_paths = hid_paths;
+            state.hid_functions = if hid_requested {
+                Some(hid_functions)
+            } else {
+                None
+            };
             state.error = None;
         }
 
@@ -509,6 +615,7 @@ impl OtgService {
             state.hid_enabled = false;
             state.msd_enabled = false;
             state.hid_paths = None;
+            state.hid_functions = None;
             state.error = None;
         }
 

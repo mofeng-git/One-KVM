@@ -7,6 +7,8 @@
 
 import type {
   AppConfig,
+  AuthConfig,
+  AuthConfigUpdate,
   VideoConfig,
   VideoConfigUpdate,
   StreamConfigResponse,
@@ -39,6 +41,24 @@ export const configApi = {
    * 获取完整配置
    */
   getAll: () => request<AppConfig>('/config'),
+}
+
+// ===== Auth 配置 API =====
+export const authConfigApi = {
+  /**
+   * 获取认证配置
+   */
+  get: () => request<AuthConfig>('/config/auth'),
+
+  /**
+   * 更新认证配置
+   * @param config 要更新的字段
+   */
+  update: (config: AuthConfigUpdate) =>
+    request<AuthConfig>('/config/auth', {
+      method: 'PATCH',
+      body: JSON.stringify(config),
+    }),
 }
 
 // ===== Video 配置 API =====

@@ -99,9 +99,7 @@ const otgUdc = ref('')
 
 // Extension settings
 const ttydEnabled = ref(false)
-const rustdeskEnabled = ref(false)
 const ttydAvailable = ref(false)
-const rustdeskAvailable = ref(true) // RustDesk is built-in, always available
 
 // Encoder backend settings
 const encoderBackend = ref('auto')
@@ -139,7 +137,6 @@ interface DeviceInfo {
   udc: Array<{ name: string }>
   extensions: {
     ttyd_available: boolean
-    rustdesk_available: boolean
   }
 }
 
@@ -150,7 +147,6 @@ const devices = ref<DeviceInfo>({
   udc: [],
   extensions: {
     ttyd_available: false,
-    rustdesk_available: true,
   },
 })
 
@@ -351,7 +347,6 @@ onMounted(async () => {
     // Set extension availability from devices API
     if (result.extensions) {
       ttydAvailable.value = result.extensions.ttyd_available
-      rustdeskAvailable.value = result.extensions.rustdesk_available
     }
   } catch {
     // Use defaults
@@ -506,7 +501,6 @@ async function handleSetup() {
 
   // Extension settings
   setupData.ttyd_enabled = ttydEnabled.value
-  setupData.rustdesk_enabled = rustdeskEnabled.value
 
   const success = await authStore.setup(setupData)
 
@@ -954,19 +948,6 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 </p>
               </div>
               <Switch v-model="ttydEnabled" :disabled="!ttydAvailable" />
-            </div>
-
-            <!-- RustDesk -->
-            <div class="flex items-center justify-between p-4 rounded-lg border">
-              <div class="space-y-1">
-                <div class="flex items-center gap-2">
-                  <Label class="text-base font-medium">{{ t('setup.rustdeskTitle') }}</Label>
-                </div>
-                <p class="text-sm text-muted-foreground">
-                  {{ t('setup.rustdeskDescription') }}
-                </p>
-              </div>
-              <Switch v-model="rustdeskEnabled" />
             </div>
 
             <p class="text-xs text-muted-foreground text-center pt-2">

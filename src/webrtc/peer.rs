@@ -5,9 +5,11 @@ use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use tracing::{debug, info};
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
+use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data_channel::RTCDataChannel;
+use webrtc::ice::mdns::MulticastDnsMode;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
@@ -17,6 +19,7 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 
 use super::config::WebRtcConfig;
+use super::mdns::{default_mdns_host_name, mdns_mode};
 use super::signaling::{ConnectionState, IceCandidate, SdpAnswer, SdpOffer};
 use super::track::{VideoTrack, VideoTrackConfig};
 use crate::error::{AppError, Result};
@@ -60,8 +63,17 @@ impl PeerConnection {
         registry = register_default_interceptors(registry, &mut media_engine)
             .map_err(|e| AppError::VideoError(format!("Failed to register interceptors: {}", e)))?;
 
-        // Create API
+        // Create API (with optional mDNS settings)
+        let mut setting_engine = SettingEngine::default();
+        let mode = mdns_mode();
+        setting_engine.set_ice_multicast_dns_mode(mode);
+        if mode == MulticastDnsMode::QueryAndGather {
+            setting_engine.set_multicast_dns_host_name(default_mdns_host_name(&session_id));
+        }
+        info!("WebRTC mDNS mode: {:?} (session {})", mode, session_id);
+
         let api = APIBuilder::new()
+            .with_setting_engine(setting_engine)
             .with_media_engine(media_engine)
             .with_interceptor_registry(registry)
             .build();
@@ -418,7 +430,7 @@ pub struct PeerConnectionManager {
 impl PeerConnectionManager {
     /// Create a new peer connection manager
     pub fn new(config: WebRtcConfig) -> Self {
-        let (frame_tx, _) = broadcast::channel(16); // Buffer size 16 for low latency
+        let (frame_tx, _) = broadcast::channel(16);
 
         Self {
             config,
@@ -430,7 +442,7 @@ impl PeerConnectionManager {
 
     /// Create a new peer connection manager with HID controller
     pub fn with_hid(config: WebRtcConfig, hid: Arc<HidController>) -> Self {
-        let (frame_tx, _) = broadcast::channel(16); // Buffer size 16 for low latency
+        let (frame_tx, _) = broadcast::channel(16);
 
         Self {
             config,

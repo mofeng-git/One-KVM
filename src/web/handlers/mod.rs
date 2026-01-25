@@ -12,6 +12,7 @@ use tracing::{info, warn};
 use crate::auth::{Session, SESSION_COOKIE};
 use crate::config::{AppConfig, StreamMode};
 use crate::error::{AppError, Result};
+use crate::events::SystemEvent;
 use crate::state::AppState;
 use crate::video::encoder::BitratePreset;
 
@@ -407,6 +408,13 @@ pub async fn login(
         .await?
         .ok_or_else(|| AppError::AuthError("Invalid username or password".to_string()))?;
 
+    if !config.auth.single_user_allow_multiple_sessions {
+        // Kick existing sessions before creating a new one.
+        let revoked_ids = state.sessions.list_ids().await?;
+        state.sessions.delete_all().await?;
+        state.remember_revoked_sessions(revoked_ids).await;
+    }
+
     // Create session
     let session = state.sessions.create(&user.id).await?;
 
@@ -465,15 +473,15 @@ pub async fn auth_check(
     axum::Extension(session): axum::Extension<Session>,
 ) -> Json<AuthCheckResponse> {
     // Get user info from user_id
-    let (username, is_admin) = match state.users.get(&session.user_id).await {
-        Ok(Some(user)) => (Some(user.username), user.is_admin),
-        _ => (Some(session.user_id.clone()), false), // Fallback to user_id if user not found
+    let username = match state.users.get(&session.user_id).await {
+        Ok(Some(user)) => Some(user.username),
+        _ => Some(session.user_id.clone()), // Fallback to user_id if user not found
     };
 
     Json(AuthCheckResponse {
         authenticated: true,
         user: username,
-        is_admin,
+        is_admin: true,
     })
 }
 
@@ -797,34 +805,57 @@ pub async fn update_config(
         }
         tracing::info!("Video config applied successfully");
 
-        // Step 3: Start the streamer to begin capturing frames
-        // This is necessary because apply_video_config only creates the capturer but doesn't start it
-        if let Err(e) = state.stream_manager.start().await {
-            tracing::error!("Failed to start streamer after config change: {}", e);
-            // Don't fail the request - the stream might start later when client connects
-        } else {
-            tracing::info!("Streamer started after config change");
+        // Step 3: Start the streamer to begin capturing frames (MJPEG mode only)
+        if !state.stream_manager.is_webrtc_enabled().await {
+            // This is necessary because apply_video_config only creates the capturer but doesn't start it
+            if let Err(e) = state.stream_manager.start().await {
+                tracing::error!("Failed to start streamer after config change: {}", e);
+                // Don't fail the request - the stream might start later when client connects
+            } else {
+                tracing::info!("Streamer started after config change");
+            }
         }
 
-        // Update frame source from the NEW capturer
-        // This is critical - the old frame_tx is invalid after config change
-        // New sessions will use this frame_tx when they connect
-        if let Some(frame_tx) = state.stream_manager.frame_sender().await {
-            let receiver_count = frame_tx.receiver_count();
-            // Use WebRtcStreamer (new unified interface)
+        // Configure WebRTC direct capture (all modes)
+        let (device_path, _resolution, _format, _fps, jpeg_quality) = state
+            .stream_manager
+            .streamer()
+            .current_capture_config()
+            .await;
+        if let Some(device_path) = device_path {
             state
                 .stream_manager
                 .webrtc_streamer()
-                .set_video_source(frame_tx)
+                .set_capture_device(device_path, jpeg_quality)
                 .await;
-            tracing::info!(
-                "WebRTC streamer frame source updated with new capturer (receiver_count={})",
-                receiver_count
-            );
         } else {
-            tracing::warn!(
-                "No frame source available after config change - streamer may not be running"
-            );
+            tracing::warn!("No capture device configured for WebRTC");
+        }
+
+        if state.stream_manager.is_webrtc_enabled().await {
+            use crate::video::encoder::VideoCodecType;
+            let codec = state
+                .stream_manager
+                .webrtc_streamer()
+                .current_video_codec()
+                .await;
+            let codec_str = match codec {
+                VideoCodecType::H264 => "h264",
+                VideoCodecType::H265 => "h265",
+                VideoCodecType::VP8 => "vp8",
+                VideoCodecType::VP9 => "vp9",
+            }
+            .to_string();
+            let is_hardware = state
+                .stream_manager
+                .webrtc_streamer()
+                .is_hardware_encoding()
+                .await;
+            state.events.publish(SystemEvent::WebRTCReady {
+                transition_id: None,
+                codec: codec_str,
+                hardware: is_hardware,
+            });
         }
     }
 
@@ -1388,8 +1419,9 @@ pub async fn stream_mode_set(
         }
     };
 
+    let no_switch_needed = !tx.accepted && !tx.switching && tx.transition_id.is_none();
     Ok(Json(StreamModeResponse {
-        success: tx.accepted,
+        success: tx.accepted || no_switch_needed,
         mode: if tx.accepted {
             requested_mode_str.to_string()
         } else {
@@ -1935,6 +1967,7 @@ pub async fn webrtc_close_session(
 #[derive(Serialize)]
 pub struct IceServersResponse {
     pub ice_servers: Vec<IceServerInfo>,
+    pub mdns_mode: String,
 }
 
 #[derive(Serialize)]
@@ -1950,6 +1983,7 @@ pub struct IceServerInfo {
 /// Returns user-configured servers, or Google STUN as fallback if none configured
 pub async fn webrtc_ice_servers(State(state): State<Arc<AppState>>) -> Json<IceServersResponse> {
     use crate::webrtc::config::public_ice;
+    use crate::webrtc::mdns::{mdns_mode, mdns_mode_label};
 
     let config = state.config.get();
     let mut ice_servers = Vec::new();
@@ -2005,7 +2039,13 @@ pub async fn webrtc_ice_servers(State(state): State<Arc<AppState>>) -> Json<IceS
         // Note: TURN servers are not provided - users must configure their own
     }
 
-    Json(IceServersResponse { ice_servers })
+    let mdns_mode = mdns_mode();
+    let mdns_mode = mdns_mode_label(mdns_mode).to_string();
+
+    Json(IceServersResponse {
+        ice_servers,
+        mdns_mode,
+    })
 }
 
 // ============================================================================
@@ -2661,199 +2701,8 @@ pub async fn list_audio_devices(
 }
 
 // ============================================================================
-// User Management
+// Password Management
 // ============================================================================
-
-use axum::extract::Path;
-use axum::Extension;
-
-/// User response (without password hash)
-#[derive(Serialize)]
-pub struct UserResponse {
-    pub id: String,
-    pub username: String,
-    pub is_admin: bool,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-impl From<crate::auth::User> for UserResponse {
-    fn from(user: crate::auth::User) -> Self {
-        Self {
-            id: user.id,
-            username: user.username,
-            is_admin: user.is_admin,
-            created_at: user.created_at.to_rfc3339(),
-            updated_at: user.updated_at.to_rfc3339(),
-        }
-    }
-}
-
-/// List all users (admin only)
-pub async fn list_users(
-    State(state): State<Arc<AppState>>,
-    Extension(session): Extension<Session>,
-) -> Result<Json<Vec<UserResponse>>> {
-    // Check if current user is admin
-    let current_user = state
-        .users
-        .get(&session.user_id)
-        .await?
-        .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
-
-    if !current_user.is_admin {
-        return Err(AppError::Forbidden("Admin access required".to_string()));
-    }
-
-    let users = state.users.list().await?;
-    let response: Vec<UserResponse> = users.into_iter().map(UserResponse::from).collect();
-    Ok(Json(response))
-}
-
-/// Create user request
-#[derive(Deserialize)]
-pub struct CreateUserRequest {
-    pub username: String,
-    pub password: String,
-    pub is_admin: bool,
-}
-
-/// Create new user (admin only)
-pub async fn create_user(
-    State(state): State<Arc<AppState>>,
-    Extension(session): Extension<Session>,
-    Json(req): Json<CreateUserRequest>,
-) -> Result<Json<UserResponse>> {
-    // Check if current user is admin
-    let current_user = state
-        .users
-        .get(&session.user_id)
-        .await?
-        .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
-
-    if !current_user.is_admin {
-        return Err(AppError::Forbidden("Admin access required".to_string()));
-    }
-
-    // Validate input
-    if req.username.len() < 2 {
-        return Err(AppError::BadRequest(
-            "Username must be at least 2 characters".to_string(),
-        ));
-    }
-    if req.password.len() < 4 {
-        return Err(AppError::BadRequest(
-            "Password must be at least 4 characters".to_string(),
-        ));
-    }
-
-    let user = state
-        .users
-        .create(&req.username, &req.password, req.is_admin)
-        .await?;
-    info!("User created: {} (admin: {})", user.username, user.is_admin);
-    Ok(Json(UserResponse::from(user)))
-}
-
-/// Update user request
-#[derive(Deserialize)]
-pub struct UpdateUserRequest {
-    pub username: Option<String>,
-    pub is_admin: Option<bool>,
-}
-
-/// Update user (admin only)
-pub async fn update_user(
-    State(state): State<Arc<AppState>>,
-    Extension(session): Extension<Session>,
-    Path(user_id): Path<String>,
-    Json(req): Json<UpdateUserRequest>,
-) -> Result<Json<UserResponse>> {
-    // Check if current user is admin
-    let current_user = state
-        .users
-        .get(&session.user_id)
-        .await?
-        .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
-
-    if !current_user.is_admin {
-        return Err(AppError::Forbidden("Admin access required".to_string()));
-    }
-
-    // Get target user
-    let mut user = state
-        .users
-        .get(&user_id)
-        .await?
-        .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
-
-    // Update fields if provided
-    if let Some(username) = req.username {
-        if username.len() < 2 {
-            return Err(AppError::BadRequest(
-                "Username must be at least 2 characters".to_string(),
-            ));
-        }
-        user.username = username;
-    }
-    if let Some(is_admin) = req.is_admin {
-        user.is_admin = is_admin;
-    }
-
-    // Note: We need to add an update method to UserStore
-    // For now, return error
-    Err(AppError::Internal(
-        "User update not yet implemented".to_string(),
-    ))
-}
-
-/// Delete user (admin only)
-pub async fn delete_user(
-    State(state): State<Arc<AppState>>,
-    Extension(session): Extension<Session>,
-    Path(user_id): Path<String>,
-) -> Result<Json<LoginResponse>> {
-    // Check if current user is admin
-    let current_user = state
-        .users
-        .get(&session.user_id)
-        .await?
-        .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
-
-    if !current_user.is_admin {
-        return Err(AppError::Forbidden("Admin access required".to_string()));
-    }
-
-    // Prevent deleting self
-    if user_id == session.user_id {
-        return Err(AppError::BadRequest(
-            "Cannot delete your own account".to_string(),
-        ));
-    }
-
-    // Check if this is the last admin
-    let users = state.users.list().await?;
-    let admin_count = users.iter().filter(|u| u.is_admin).count();
-    let target_user = state
-        .users
-        .get(&user_id)
-        .await?
-        .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
-
-    if target_user.is_admin && admin_count <= 1 {
-        return Err(AppError::BadRequest(
-            "Cannot delete the last admin user".to_string(),
-        ));
-    }
-
-    state.users.delete(&user_id).await?;
-    info!("User deleted: {}", target_user.username);
-
-    Ok(Json(LoginResponse {
-        success: true,
-        message: Some("User deleted successfully".to_string()),
-    }))
-}
 
 /// Change password request
 #[derive(Deserialize)]
@@ -2862,58 +2711,92 @@ pub struct ChangePasswordRequest {
     pub new_password: String,
 }
 
-/// Change user password
-pub async fn change_user_password(
+/// Change current user's password
+pub async fn change_password(
     State(state): State<Arc<AppState>>,
-    Extension(session): Extension<Session>,
-    Path(user_id): Path<String>,
+    axum::Extension(session): axum::Extension<Session>,
     Json(req): Json<ChangePasswordRequest>,
 ) -> Result<Json<LoginResponse>> {
-    // Check if current user is admin or changing own password
     let current_user = state
         .users
         .get(&session.user_id)
         .await?
         .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
 
-    let is_self = user_id == session.user_id;
-    let is_admin = current_user.is_admin;
-
-    if !is_self && !is_admin {
-        return Err(AppError::Forbidden(
-            "Cannot change other user's password".to_string(),
-        ));
-    }
-
-    // Validate new password
     if req.new_password.len() < 4 {
         return Err(AppError::BadRequest(
             "Password must be at least 4 characters".to_string(),
         ));
     }
 
-    // If changing own password, verify current password
-    if is_self {
-        let verified = state
-            .users
-            .verify(&current_user.username, &req.current_password)
-            .await?;
-        if verified.is_none() {
-            return Err(AppError::AuthError(
-                "Current password is incorrect".to_string(),
-            ));
-        }
+    let verified = state
+        .users
+        .verify(&current_user.username, &req.current_password)
+        .await?;
+    if verified.is_none() {
+        return Err(AppError::AuthError(
+            "Current password is incorrect".to_string(),
+        ));
     }
 
     state
         .users
-        .update_password(&user_id, &req.new_password)
+        .update_password(&session.user_id, &req.new_password)
         .await?;
-    info!("Password changed for user ID: {}", user_id);
+    info!("Password changed for user ID: {}", session.user_id);
 
     Ok(Json(LoginResponse {
         success: true,
         message: Some("Password changed successfully".to_string()),
+    }))
+}
+
+/// Change username request
+#[derive(Deserialize)]
+pub struct ChangeUsernameRequest {
+    pub username: String,
+    pub current_password: String,
+}
+
+/// Change current user's username
+pub async fn change_username(
+    State(state): State<Arc<AppState>>,
+    axum::Extension(session): axum::Extension<Session>,
+    Json(req): Json<ChangeUsernameRequest>,
+) -> Result<Json<LoginResponse>> {
+    let current_user = state
+        .users
+        .get(&session.user_id)
+        .await?
+        .ok_or_else(|| AppError::AuthError("User not found".to_string()))?;
+
+    if req.username.len() < 2 {
+        return Err(AppError::BadRequest(
+            "Username must be at least 2 characters".to_string(),
+        ));
+    }
+
+    let verified = state
+        .users
+        .verify(&current_user.username, &req.current_password)
+        .await?;
+    if verified.is_none() {
+        return Err(AppError::AuthError(
+            "Current password is incorrect".to_string(),
+        ));
+    }
+
+    if current_user.username != req.username {
+        state
+            .users
+            .update_username(&session.user_id, &req.username)
+            .await?;
+    }
+    info!("Username changed for user ID: {}", session.user_id);
+
+    Ok(Json(LoginResponse {
+        success: true,
+        message: Some("Username changed successfully".to_string()),
     }))
 }
 

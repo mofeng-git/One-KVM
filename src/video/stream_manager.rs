@@ -135,7 +135,8 @@ impl VideoStreamManager {
 
     /// Set event bus for notifications
     pub async fn set_event_bus(&self, events: Arc<EventBus>) {
-        *self.events.write().await = Some(events);
+        *self.events.write().await = Some(events.clone());
+        self.webrtc_streamer.set_event_bus(events).await;
     }
 
     /// Set configuration store
@@ -199,19 +200,20 @@ impl VideoStreamManager {
             }
         }
 
-        // Always reconnect frame source after initialization
-        // This ensures WebRTC has the correct frame_tx from the current capturer
-        if let Some(frame_tx) = self.streamer.frame_sender().await {
-            // Synchronize WebRTC config with actual capture format
-            let (format, resolution, fps) = self.streamer.current_video_config().await;
-            info!(
-                "Reconnecting frame source to WebRTC after init: {}x{} {:?} @ {}fps (receiver_count={})",
-                resolution.width, resolution.height, format, fps, frame_tx.receiver_count()
-            );
+        // Configure WebRTC capture source after initialization
+        let (device_path, resolution, format, fps, jpeg_quality) =
+            self.streamer.current_capture_config().await;
+        info!(
+            "WebRTC capture config after init: {}x{} {:?} @ {}fps",
+            resolution.width, resolution.height, format, fps
+        );
+        self.webrtc_streamer
+            .update_video_config(resolution, format, fps)
+            .await;
+        if let Some(device_path) = device_path {
             self.webrtc_streamer
-                .update_video_config(resolution, format, fps)
+                .set_capture_device(device_path, jpeg_quality)
                 .await;
-            self.webrtc_streamer.set_video_source(frame_tx).await;
         }
 
         Ok(())
@@ -329,7 +331,7 @@ impl VideoStreamManager {
 
     /// Ensure video capture is running (for WebRTC mode)
     async fn ensure_video_capture_running(self: &Arc<Self>) -> Result<()> {
-        // Initialize streamer if not already initialized
+        // Initialize streamer if not already initialized (for config discovery)
         if self.streamer.state().await == StreamerState::Uninitialized {
             info!("Initializing video capture for WebRTC (ensure)");
             if let Err(e) = self.streamer.init_auto().await {
@@ -338,29 +340,19 @@ impl VideoStreamManager {
             }
         }
 
-        // Start video capture if not streaming
-        if self.streamer.state().await != StreamerState::Streaming {
-            info!("Starting video capture for WebRTC (ensure)");
-            if let Err(e) = self.streamer.start().await {
-                error!("Failed to start video capture: {}", e);
-                return Err(e);
-            }
-
-            // Wait a bit for capture to stabilize
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        }
-
-        // Reconnect frame source to WebRTC
-        if let Some(frame_tx) = self.streamer.frame_sender().await {
-            let (format, resolution, fps) = self.streamer.current_video_config().await;
-            info!(
-                "Reconnecting frame source to WebRTC: {}x{} {:?} @ {}fps",
-                resolution.width, resolution.height, format, fps
-            );
+        let (device_path, resolution, format, fps, jpeg_quality) =
+            self.streamer.current_capture_config().await;
+        info!(
+            "Configuring WebRTC capture: {}x{} {:?} @ {}fps",
+            resolution.width, resolution.height, format, fps
+        );
+        self.webrtc_streamer
+            .update_video_config(resolution, format, fps)
+            .await;
+        if let Some(device_path) = device_path {
             self.webrtc_streamer
-                .update_video_config(resolution, format, fps)
+                .set_capture_device(device_path, jpeg_quality)
                 .await;
-            self.webrtc_streamer.set_video_source(frame_tx).await;
         }
 
         Ok(())
@@ -403,7 +395,6 @@ impl VideoStreamManager {
         match current_mode {
             StreamMode::Mjpeg => {
                 info!("Stopping MJPEG streaming");
-                // Only stop MJPEG distribution, keep video capture running for WebRTC
                 self.streamer.mjpeg_handler().set_offline();
                 if let Err(e) = self.streamer.stop().await {
                     warn!("Error stopping MJPEG streamer: {}", e);
@@ -458,10 +449,9 @@ impl VideoStreamManager {
                 }
             }
             StreamMode::WebRTC => {
-                // WebRTC mode: ensure video capture is running for H264 encoding
+                // WebRTC mode: configure direct capture for encoder pipeline
                 info!("Activating WebRTC mode");
 
-                // Initialize streamer if not already initialized
                 if self.streamer.state().await == StreamerState::Uninitialized {
                     info!("Initializing video capture for WebRTC");
                     if let Err(e) = self.streamer.init_auto().await {
@@ -470,76 +460,31 @@ impl VideoStreamManager {
                     }
                 }
 
-                // Auto-switch to non-compressed format if current format is MJPEG/JPEG
-                if let Some(device) = self.streamer.current_device().await {
-                    let (current_format, resolution, fps) =
-                        self.streamer.current_video_config().await;
-
-                    if current_format.is_compressed() {
-                        let available_formats: Vec<PixelFormat> =
-                            device.formats.iter().map(|f| f.format).collect();
-
-                        // Determine if using hardware encoding
-                        let is_hardware = self.webrtc_streamer.is_hardware_encoding().await;
-
-                        if let Some(recommended) =
-                            PixelFormat::recommended_for_encoding(&available_formats, is_hardware)
-                        {
-                            info!(
-                                "Auto-switching from {:?} to {:?} for WebRTC encoding (hardware={})",
-                                current_format, recommended, is_hardware
-                            );
-                            let device_path = device.path.to_string_lossy().to_string();
-                            if let Err(e) = self
-                                .streamer
-                                .apply_video_config(&device_path, recommended, resolution, fps)
-                                .await
-                            {
-                                warn!("Failed to auto-switch format for WebRTC: {}, keeping current format", e);
-                            }
-                        }
-                    }
-                }
-
-                // Start video capture if not streaming
-                if self.streamer.state().await != StreamerState::Streaming {
-                    info!("Starting video capture for WebRTC");
-                    if let Err(e) = self.streamer.start().await {
-                        error!("Failed to start video capture for WebRTC: {}", e);
-                        return Err(e);
-                    }
-                }
-
-                // Wait a bit for capture to stabilize
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-                // Connect frame source to WebRTC with correct format
-                if let Some(frame_tx) = self.streamer.frame_sender().await {
-                    // Synchronize WebRTC config with actual capture format
-                    let (format, resolution, fps) = self.streamer.current_video_config().await;
-                    info!(
-                        "Connecting frame source to WebRTC pipeline: {}x{} {:?} @ {}fps",
-                        resolution.width, resolution.height, format, fps
-                    );
-                    self.webrtc_streamer
-                        .update_video_config(resolution, format, fps)
-                        .await;
-                    self.webrtc_streamer.set_video_source(frame_tx).await;
-
-                    // Publish WebRTCReady event - frame source is now connected
-                    let codec = self.webrtc_streamer.current_video_codec().await;
-                    let is_hardware = self.webrtc_streamer.is_hardware_encoding().await;
-                    self.publish_event(SystemEvent::WebRTCReady {
-                        transition_id: Some(transition_id.clone()),
-                        codec: codec_to_string(codec),
-                        hardware: is_hardware,
-                    })
+                let (device_path, resolution, format, fps, jpeg_quality) =
+                    self.streamer.current_capture_config().await;
+                info!(
+                    "Configuring WebRTC capture pipeline: {}x{} {:?} @ {}fps",
+                    resolution.width, resolution.height, format, fps
+                );
+                self.webrtc_streamer
+                    .update_video_config(resolution, format, fps)
                     .await;
+                if let Some(device_path) = device_path {
+                    self.webrtc_streamer
+                        .set_capture_device(device_path, jpeg_quality)
+                        .await;
                 } else {
-                    warn!(
-                        "No frame source available for WebRTC - sessions may fail to receive video"
-                    );
+                    warn!("No capture device configured for WebRTC");
                 }
+
+                let codec = self.webrtc_streamer.current_video_codec().await;
+                let is_hardware = self.webrtc_streamer.is_hardware_encoding().await;
+                self.publish_event(SystemEvent::WebRTCReady {
+                    transition_id: Some(transition_id.clone()),
+                    codec: codec_to_string(codec),
+                    hardware: is_hardware,
+                })
+                .await;
 
                 info!("WebRTC mode activated (sessions created on-demand)");
             }
@@ -587,36 +532,34 @@ impl VideoStreamManager {
                 .update_video_config(resolution, format, fps)
                 .await;
 
-            // Restart video capture for WebRTC (it was stopped during config change)
-            info!("Restarting video capture for WebRTC after config change");
-            if let Err(e) = self.streamer.start().await {
-                error!("Failed to restart video capture for WebRTC: {}", e);
-                return Err(e);
+            let (device_path, actual_resolution, actual_format, actual_fps, jpeg_quality) =
+                self.streamer.current_capture_config().await;
+            if actual_format != format || actual_resolution != resolution || actual_fps != fps {
+                info!(
+                    "Actual capture config differs from requested, updating WebRTC: {}x{} {:?} @ {}fps",
+                    actual_resolution.width, actual_resolution.height, actual_format, actual_fps
+                );
+                self.webrtc_streamer
+                    .update_video_config(actual_resolution, actual_format, actual_fps)
+                    .await;
             }
-
-            // Wait a bit for capture to stabilize
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-            // Reconnect frame source with the new capturer
-            if let Some(frame_tx) = self.streamer.frame_sender().await {
-                // Note: update_video_config was already called above with the requested config,
-                // but verify that actual capture matches
-                let (actual_format, actual_resolution, actual_fps) =
-                    self.streamer.current_video_config().await;
-                if actual_format != format || actual_resolution != resolution || actual_fps != fps {
-                    info!(
-                        "Actual capture config differs from requested, updating WebRTC: {}x{} {:?} @ {}fps",
-                        actual_resolution.width, actual_resolution.height, actual_format, actual_fps
-                    );
-                    self.webrtc_streamer
-                        .update_video_config(actual_resolution, actual_format, actual_fps)
-                        .await;
-                }
-                info!("Reconnecting frame source to WebRTC after config change");
-                self.webrtc_streamer.set_video_source(frame_tx).await;
+            if let Some(device_path) = device_path {
+                info!("Configuring direct capture for WebRTC after config change");
+                self.webrtc_streamer
+                    .set_capture_device(device_path, jpeg_quality)
+                    .await;
             } else {
-                warn!("No frame source available after config change");
+                warn!("No capture device configured for WebRTC after config change");
             }
+
+            let codec = self.webrtc_streamer.current_video_codec().await;
+            let is_hardware = self.webrtc_streamer.is_hardware_encoding().await;
+            self.publish_event(SystemEvent::WebRTCReady {
+                transition_id: None,
+                codec: codec_to_string(codec),
+                hardware: is_hardware,
+            })
+            .await;
         }
 
         Ok(())
@@ -631,22 +574,23 @@ impl VideoStreamManager {
                 self.streamer.start().await?;
             }
             StreamMode::WebRTC => {
-                // Ensure video capture is running
+                // Ensure device is initialized for config discovery
                 if self.streamer.state().await == StreamerState::Uninitialized {
                     self.streamer.init_auto().await?;
                 }
-                if self.streamer.state().await != StreamerState::Streaming {
-                    self.streamer.start().await?;
-                }
 
-                // Connect frame source with correct format
-                if let Some(frame_tx) = self.streamer.frame_sender().await {
-                    // Synchronize WebRTC config with actual capture format
-                    let (format, resolution, fps) = self.streamer.current_video_config().await;
+                // Synchronize WebRTC config with current capture config
+                let (device_path, resolution, format, fps, jpeg_quality) =
+                    self.streamer.current_capture_config().await;
+                self.webrtc_streamer
+                    .update_video_config(resolution, format, fps)
+                    .await;
+                if let Some(device_path) = device_path {
                     self.webrtc_streamer
-                        .update_video_config(resolution, format, fps)
+                        .set_capture_device(device_path, jpeg_quality)
                         .await;
-                    self.webrtc_streamer.set_video_source(frame_tx).await;
+                } else {
+                    warn!("No capture device configured for WebRTC");
                 }
             }
         }
@@ -764,13 +708,6 @@ impl VideoStreamManager {
         self.streamer.is_streaming().await
     }
 
-    /// Get frame sender for video frames
-    pub async fn frame_sender(
-        &self,
-    ) -> Option<tokio::sync::broadcast::Sender<crate::video::frame::VideoFrame>> {
-        self.streamer.frame_sender().await
-    }
-
     /// Subscribe to encoded video frames from the shared video pipeline
     ///
     /// This allows RustDesk (and other consumers) to receive H264/H265/VP8/VP9
@@ -781,10 +718,10 @@ impl VideoStreamManager {
     /// Returns None if video capture cannot be started or pipeline creation fails.
     pub async fn subscribe_encoded_frames(
         &self,
-    ) -> Option<
-        tokio::sync::broadcast::Receiver<crate::video::shared_video_pipeline::EncodedVideoFrame>,
-    > {
-        // 1. Ensure video capture is initialized
+    ) -> Option<tokio::sync::mpsc::Receiver<std::sync::Arc<
+        crate::video::shared_video_pipeline::EncodedVideoFrame,
+    >>> {
+        // 1. Ensure video capture is initialized (for config discovery)
         if self.streamer.state().await == StreamerState::Uninitialized {
             tracing::info!("Initializing video capture for encoded frame subscription");
             if let Err(e) = self.streamer.init_auto().await {
@@ -796,28 +733,9 @@ impl VideoStreamManager {
             }
         }
 
-        // 2. Ensure video capture is running (streaming)
-        if self.streamer.state().await != StreamerState::Streaming {
-            tracing::info!("Starting video capture for encoded frame subscription");
-            if let Err(e) = self.streamer.start().await {
-                tracing::error!("Failed to start video capture for encoded frames: {}", e);
-                return None;
-            }
-            // Wait for capture to stabilize
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        }
-
-        // 3. Get frame sender from running capture
-        let frame_tx = match self.streamer.frame_sender().await {
-            Some(tx) => tx,
-            None => {
-                tracing::warn!("Cannot subscribe to encoded frames: no frame sender available");
-                return None;
-            }
-        };
-
-        // 4. Synchronize WebRTC config with actual capture format
-        let (format, resolution, fps) = self.streamer.current_video_config().await;
+        // 2. Synchronize WebRTC config with capture config
+        let (device_path, resolution, format, fps, jpeg_quality) =
+            self.streamer.current_capture_config().await;
         tracing::info!(
             "Connecting encoded frame subscription: {}x{} {:?} @ {}fps",
             resolution.width,
@@ -828,14 +746,17 @@ impl VideoStreamManager {
         self.webrtc_streamer
             .update_video_config(resolution, format, fps)
             .await;
+        if let Some(device_path) = device_path {
+            self.webrtc_streamer
+                .set_capture_device(device_path, jpeg_quality)
+                .await;
+        } else {
+            tracing::warn!("No capture device configured for encoded frames");
+            return None;
+        }
 
-        // 5. Use WebRtcStreamer to ensure the shared video pipeline is running
-        // This will create the pipeline if needed
-        match self
-            .webrtc_streamer
-            .ensure_video_pipeline_for_external(frame_tx)
-            .await
-        {
+        // 3. Use WebRtcStreamer to ensure the shared video pipeline is running
+        match self.webrtc_streamer.ensure_video_pipeline_for_external().await {
             Ok(pipeline) => Some(pipeline.subscribe()),
             Err(e) => {
                 tracing::error!("Failed to start shared video pipeline: {}", e);

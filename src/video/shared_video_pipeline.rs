@@ -17,20 +17,33 @@
 //! ```
 
 use bytes::Bytes;
+use parking_lot::RwLock as ParkingRwLock;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{broadcast, watch, Mutex, RwLock};
+use tokio::sync::{broadcast, mpsc, watch, Mutex, RwLock};
 use tracing::{debug, error, info, trace, warn};
 
 /// Grace period before auto-stopping pipeline when no subscribers (in seconds)
 const AUTO_STOP_GRACE_PERIOD_SECS: u64 = 3;
+/// Minimum valid frame size for capture
+const MIN_CAPTURE_FRAME_SIZE: usize = 128;
+/// Validate JPEG header every N frames to reduce overhead
+const JPEG_VALIDATE_INTERVAL: u64 = 30;
 
 use crate::error::{AppError, Result};
 use crate::video::convert::{Nv12Converter, PixelConverter};
 #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
 use crate::video::decoder::MjpegRkmppDecoder;
 use crate::video::decoder::MjpegTurboDecoder;
+#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+use hwcodec::ffmpeg_hw::{last_error_message as ffmpeg_hw_last_error, HwMjpegH264Config, HwMjpegH264Pipeline};
+use v4l::buffer::Type as BufferType;
+use v4l::io::traits::CaptureStream;
+use v4l::prelude::*;
+use v4l::video::Capture;
+use v4l::video::capture::Parameters;
+use v4l::Format;
 use crate::video::encoder::h264::{detect_best_encoder, H264Config, H264Encoder, H264InputFormat};
 use crate::video::encoder::h265::{
     detect_best_h265_encoder, H265Config, H265Encoder, H265InputFormat,
@@ -40,7 +53,7 @@ use crate::video::encoder::traits::EncoderConfig;
 use crate::video::encoder::vp8::{detect_best_vp8_encoder, VP8Config, VP8Encoder};
 use crate::video::encoder::vp9::{detect_best_vp9_encoder, VP9Config, VP9Encoder};
 use crate::video::format::{PixelFormat, Resolution};
-use crate::video::frame::VideoFrame;
+use crate::video::frame::{FrameBuffer, FrameBufferPool, VideoFrame};
 
 /// Encoded video frame for distribution
 #[derive(Debug, Clone)]
@@ -57,6 +70,10 @@ pub struct EncodedVideoFrame {
     pub duration: Duration,
     /// Codec type
     pub codec: VideoEncoderType,
+}
+
+enum PipelineCmd {
+    SetBitrate { bitrate_kbps: u32, gop: u32 },
 }
 
 /// Shared video pipeline configuration
@@ -150,16 +167,22 @@ impl SharedVideoPipelineConfig {
 /// Pipeline statistics
 #[derive(Debug, Clone, Default)]
 pub struct SharedVideoPipelineStats {
-    pub frames_captured: u64,
-    pub frames_encoded: u64,
-    pub frames_dropped: u64,
-    pub frames_skipped: u64,
-    pub bytes_encoded: u64,
-    pub keyframes_encoded: u64,
-    pub avg_encode_time_ms: f32,
     pub current_fps: f32,
-    pub errors: u64,
-    pub subscribers: u64,
+}
+
+struct EncoderThreadState {
+    encoder: Option<Box<dyn VideoEncoderTrait + Send>>,
+    mjpeg_decoder: Option<MjpegDecoderKind>,
+    nv12_converter: Option<Nv12Converter>,
+    yuv420p_converter: Option<PixelConverter>,
+    encoder_needs_yuv420p: bool,
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    ffmpeg_hw_pipeline: Option<HwMjpegH264Pipeline>,
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    ffmpeg_hw_enabled: bool,
+    fps: u32,
+    codec: VideoEncoderType,
+    input_format: PixelFormat,
 }
 
 /// Universal video encoder trait object
@@ -314,18 +337,13 @@ impl MjpegDecoderKind {
 /// Universal shared video pipeline
 pub struct SharedVideoPipeline {
     config: RwLock<SharedVideoPipelineConfig>,
-    encoder: Mutex<Option<Box<dyn VideoEncoderTrait + Send>>>,
-    mjpeg_decoder: Mutex<Option<MjpegDecoderKind>>,
-    nv12_converter: Mutex<Option<Nv12Converter>>,
-    yuv420p_converter: Mutex<Option<PixelConverter>>,
-    /// Whether the encoder needs YUV420P (true) or NV12 (false)
-    encoder_needs_yuv420p: AtomicBool,
-    /// Whether YUYV direct input is enabled (RKMPP optimization)
-    direct_input: AtomicBool,
-    frame_tx: broadcast::Sender<EncodedVideoFrame>,
+    subscribers: ParkingRwLock<Vec<mpsc::Sender<Arc<EncodedVideoFrame>>>>,
     stats: Mutex<SharedVideoPipelineStats>,
     running: watch::Sender<bool>,
     running_rx: watch::Receiver<bool>,
+    cmd_tx: ParkingRwLock<Option<tokio::sync::mpsc::UnboundedSender<PipelineCmd>>>,
+    /// Fast running flag for blocking capture loop
+    running_flag: AtomicBool,
     /// Frame sequence counter (atomic for lock-free access)
     sequence: AtomicU64,
     /// Atomic flag for keyframe request (avoids lock contention)
@@ -347,21 +365,16 @@ impl SharedVideoPipeline {
             config.input_format
         );
 
-        let (frame_tx, _) = broadcast::channel(16); // Reduced from 64 for lower latency
         let (running_tx, running_rx) = watch::channel(false);
 
         let pipeline = Arc::new(Self {
             config: RwLock::new(config),
-            encoder: Mutex::new(None),
-            mjpeg_decoder: Mutex::new(None),
-            nv12_converter: Mutex::new(None),
-            yuv420p_converter: Mutex::new(None),
-            encoder_needs_yuv420p: AtomicBool::new(false),
-            direct_input: AtomicBool::new(false),
-            frame_tx,
+            subscribers: ParkingRwLock::new(Vec::new()),
             stats: Mutex::new(SharedVideoPipelineStats::default()),
             running: running_tx,
             running_rx,
+            cmd_tx: ParkingRwLock::new(None),
+            running_flag: AtomicBool::new(false),
             sequence: AtomicU64::new(0),
             keyframe_requested: AtomicBool::new(false),
             pipeline_start_time_ms: AtomicI64::new(0),
@@ -370,9 +383,7 @@ impl SharedVideoPipeline {
         Ok(pipeline)
     }
 
-    /// Initialize encoder based on config
-    async fn init_encoder(&self) -> Result<()> {
-        let config = self.config.read().await.clone();
+    fn build_encoder_state(config: &SharedVideoPipelineConfig) -> Result<EncoderThreadState> {
         let registry = EncoderRegistry::global();
 
         // Helper to get codec name for specific backend
@@ -506,6 +517,43 @@ impl SharedVideoPipeline {
             || selected_codec_name.contains("libx265")
             || selected_codec_name.contains("libvpx");
 
+        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+        if needs_mjpeg_decode && is_rkmpp_encoder && config.output_codec == VideoEncoderType::H264 {
+            info!("Initializing FFmpeg HW MJPEG->H264 pipeline (no fallback)");
+            let hw_config = HwMjpegH264Config {
+                decoder: "mjpeg_rkmpp".to_string(),
+                encoder: selected_codec_name.clone(),
+                width: config.resolution.width as i32,
+                height: config.resolution.height as i32,
+                fps: config.fps as i32,
+                bitrate_kbps: config.bitrate_kbps() as i32,
+                gop: config.gop_size() as i32,
+                thread_count: 1,
+            };
+            let pipeline = HwMjpegH264Pipeline::new(hw_config).map_err(|e| {
+                let detail = if e.is_empty() { ffmpeg_hw_last_error() } else { e };
+                AppError::VideoError(format!(
+                    "FFmpeg HW MJPEG->H264 init failed: {}",
+                    detail
+                ))
+            })?;
+            info!("Using FFmpeg HW MJPEG->H264 pipeline");
+            return Ok(EncoderThreadState {
+                encoder: None,
+                mjpeg_decoder: None,
+                nv12_converter: None,
+                yuv420p_converter: None,
+                encoder_needs_yuv420p: false,
+                #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+                ffmpeg_hw_pipeline: Some(pipeline),
+                #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+                ffmpeg_hw_enabled: true,
+                fps: config.fps,
+                codec: config.output_codec,
+                input_format: config.input_format,
+            });
+        }
+
         let pipeline_input_format = if needs_mjpeg_decode {
             if is_rkmpp_encoder {
                 info!(
@@ -515,8 +563,8 @@ impl SharedVideoPipeline {
                 #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
                 {
                     let decoder = MjpegRkmppDecoder::new(config.resolution)?;
-                    *self.mjpeg_decoder.lock().await = Some(MjpegDecoderKind::Rkmpp(decoder));
-                    PixelFormat::Nv12
+                    let pipeline_format = PixelFormat::Nv12;
+                    (Some(MjpegDecoderKind::Rkmpp(decoder)), pipeline_format)
                 }
                 #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
                 {
@@ -530,17 +578,16 @@ impl SharedVideoPipeline {
                     config.input_format
                 );
                 let decoder = MjpegTurboDecoder::new(config.resolution)?;
-                *self.mjpeg_decoder.lock().await = Some(MjpegDecoderKind::Turbo(decoder));
-                PixelFormat::Rgb24
+                (Some(MjpegDecoderKind::Turbo(decoder)), PixelFormat::Rgb24)
             } else {
                 return Err(AppError::VideoError(
                     "MJPEG input requires RKMPP or software encoder".to_string(),
                 ));
             }
         } else {
-            *self.mjpeg_decoder.lock().await = None;
-            config.input_format
+            (None, config.input_format)
         };
+        let (mjpeg_decoder, pipeline_input_format) = pipeline_input_format;
 
         // Create encoder based on codec type
         let encoder: Box<dyn VideoEncoderTrait + Send> = match config.output_codec {
@@ -856,24 +903,32 @@ impl SharedVideoPipeline {
             }
         };
 
-        *self.encoder.lock().await = Some(encoder);
-        *self.nv12_converter.lock().await = nv12_converter;
-        *self.yuv420p_converter.lock().await = yuv420p_converter;
-        self.encoder_needs_yuv420p
-            .store(needs_yuv420p, Ordering::Release);
-        self.direct_input.store(use_direct_input, Ordering::Release);
-
-        Ok(())
+        Ok(EncoderThreadState {
+            encoder: Some(encoder),
+            mjpeg_decoder,
+            nv12_converter,
+            yuv420p_converter,
+            encoder_needs_yuv420p: needs_yuv420p,
+            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            ffmpeg_hw_pipeline: None,
+            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+            ffmpeg_hw_enabled: false,
+            fps: config.fps,
+            codec: config.output_codec,
+            input_format: config.input_format,
+        })
     }
 
     /// Subscribe to encoded frames
-    pub fn subscribe(&self) -> broadcast::Receiver<EncodedVideoFrame> {
-        self.frame_tx.subscribe()
+    pub fn subscribe(&self) -> mpsc::Receiver<Arc<EncodedVideoFrame>> {
+        let (tx, rx) = mpsc::channel(4);
+        self.subscribers.write().push(tx);
+        rx
     }
 
     /// Get subscriber count
     pub fn subscriber_count(&self) -> usize {
-        self.frame_tx.receiver_count()
+        self.subscribers.read().iter().filter(|tx| !tx.is_closed()).count()
     }
 
     /// Report that a receiver has lagged behind
@@ -899,11 +954,50 @@ impl SharedVideoPipeline {
         info!("[Pipeline] Keyframe requested for new client");
     }
 
+    fn send_cmd(&self, cmd: PipelineCmd) {
+        let tx = self.cmd_tx.read().clone();
+        if let Some(tx) = tx {
+            let _ = tx.send(cmd);
+        }
+    }
+
+    fn clear_cmd_tx(&self) {
+        let mut guard = self.cmd_tx.write();
+        *guard = None;
+    }
+
+    fn apply_cmd(&self, state: &mut EncoderThreadState, cmd: PipelineCmd) -> Result<()> {
+        match cmd {
+            PipelineCmd::SetBitrate { bitrate_kbps, gop } => {
+                #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
+                let _ = gop;
+                #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+                if state.ffmpeg_hw_enabled {
+                    if let Some(ref mut pipeline) = state.ffmpeg_hw_pipeline {
+                        pipeline
+                            .reconfigure(bitrate_kbps as i32, gop as i32)
+                            .map_err(|e| {
+                                let detail = if e.is_empty() { ffmpeg_hw_last_error() } else { e };
+                                AppError::VideoError(format!(
+                                    "FFmpeg HW reconfigure failed: {}",
+                                    detail
+                                ))
+                            })?;
+                        return Ok(());
+                    }
+                }
+
+                if let Some(ref mut encoder) = state.encoder {
+                    encoder.set_bitrate(bitrate_kbps)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Get current stats
     pub async fn stats(&self) -> SharedVideoPipelineStats {
-        let mut stats = self.stats.lock().await.clone();
-        stats.subscribers = self.frame_tx.receiver_count() as u64;
-        stats
+        self.stats.lock().await.clone()
     }
 
     /// Check if running
@@ -917,6 +1011,27 @@ impl SharedVideoPipeline {
     /// This is useful for auto-cleanup when the pipeline auto-stops due to no subscribers.
     pub fn running_watch(&self) -> watch::Receiver<bool> {
         self.running_rx.clone()
+    }
+
+    async fn broadcast_encoded(&self, frame: Arc<EncodedVideoFrame>) {
+        let subscribers = {
+            let guard = self.subscribers.read();
+            if guard.is_empty() {
+                return;
+            }
+            guard.iter().cloned().collect::<Vec<_>>()
+        };
+
+        for tx in &subscribers {
+            if tx.send(frame.clone()).await.is_err() {
+                // Receiver dropped; cleanup happens below.
+            }
+        }
+
+        if subscribers.iter().any(|tx| tx.is_closed()) {
+            let mut guard = self.subscribers.write();
+            guard.retain(|tx| !tx.is_closed());
+        }
     }
 
     /// Get current codec
@@ -938,12 +1053,7 @@ impl SharedVideoPipeline {
             config.output_codec = codec;
         }
 
-        // Clear encoder state
-        *self.encoder.lock().await = None;
-        *self.mjpeg_decoder.lock().await = None;
-        *self.nv12_converter.lock().await = None;
-        *self.yuv420p_converter.lock().await = None;
-        self.encoder_needs_yuv420p.store(false, Ordering::Release);
+        self.clear_cmd_tx();
 
         info!("Switched to {} codec", codec);
         Ok(())
@@ -959,10 +1069,10 @@ impl SharedVideoPipeline {
             return Ok(());
         }
 
-        self.init_encoder().await?;
-        let _ = self.running.send(true);
-
         let config = self.config.read().await.clone();
+        let mut encoder_state = Self::build_encoder_state(&config)?;
+        let _ = self.running.send(true);
+        self.running_flag.store(true, Ordering::Release);
         let gop_size = config.gop_size();
         info!(
             "Starting {} pipeline (GOP={})",
@@ -970,6 +1080,11 @@ impl SharedVideoPipeline {
         );
 
         let pipeline = self.clone();
+        let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
+        {
+            let mut guard = self.cmd_tx.write();
+            *guard = Some(cmd_tx);
+        }
 
         tokio::spawn(async move {
             let mut frame_count: u64 = 0;
@@ -977,13 +1092,6 @@ impl SharedVideoPipeline {
             let mut fps_frame_count: u64 = 0;
             let mut running_rx = pipeline.running_rx.clone();
 
-            // Local counters for batch stats update (reduce lock contention)
-            let mut local_frames_encoded: u64 = 0;
-            let mut local_bytes_encoded: u64 = 0;
-            let mut local_keyframes: u64 = 0;
-            let mut local_errors: u64 = 0;
-            let mut local_dropped: u64 = 0;
-            let mut local_skipped: u64 = 0;
             // Track when we last had subscribers for auto-stop feature
             let mut no_subscribers_since: Option<Instant> = None;
             let grace_period = Duration::from_secs(AUTO_STOP_GRACE_PERIOD_SECS);
@@ -1001,7 +1109,12 @@ impl SharedVideoPipeline {
                     result = frame_rx.recv() => {
                         match result {
                             Ok(video_frame) => {
-                                let subscriber_count = pipeline.frame_tx.receiver_count();
+                                while let Ok(cmd) = cmd_rx.try_recv() {
+                                    if let Err(e) = pipeline.apply_cmd(&mut encoder_state, cmd) {
+                                        error!("Failed to apply pipeline command: {}", e);
+                                    }
+                                }
+                                let subscriber_count = pipeline.subscriber_count();
 
                                 if subscriber_count == 0 {
                                     // Track when we started having no subscribers
@@ -1019,6 +1132,9 @@ impl SharedVideoPipeline {
                                             );
                                             // Signal stop and break out of loop
                                             let _ = pipeline.running.send(false);
+                                            pipeline
+                                                .running_flag
+                                                .store(false, Ordering::Release);
                                             break;
                                         }
                                     }
@@ -1033,18 +1149,10 @@ impl SharedVideoPipeline {
                                     }
                                 }
 
-                                match pipeline.encode_frame(&video_frame, frame_count).await {
+                                match pipeline.encode_frame_sync(&mut encoder_state, &video_frame, frame_count) {
                                     Ok(Some(encoded_frame)) => {
-                                        // Send frame to all subscribers
-                                        // Note: broadcast::send is non-blocking
-                                        let _ = pipeline.frame_tx.send(encoded_frame.clone());
-
-                                        // Update local counters (no lock)
-                                        local_frames_encoded += 1;
-                                        local_bytes_encoded += encoded_frame.data.len() as u64;
-                                        if encoded_frame.is_keyframe {
-                                            local_keyframes += 1;
-                                        }
+                                        let encoded_arc = Arc::new(encoded_frame);
+                                        pipeline.broadcast_encoded(encoded_arc).await;
 
                                         frame_count += 1;
                                         fps_frame_count += 1;
@@ -1052,11 +1160,10 @@ impl SharedVideoPipeline {
                                     Ok(None) => {}
                                     Err(e) => {
                                         error!("Encoding failed: {}", e);
-                                        local_errors += 1;
                                     }
                                 }
 
-                                // Batch update stats every second (reduces lock contention)
+                                // Update FPS every second (reduces lock contention)
                                 let fps_elapsed = last_fps_time.elapsed();
                                 if fps_elapsed >= Duration::from_secs(1) {
                                     let current_fps =
@@ -1064,27 +1171,13 @@ impl SharedVideoPipeline {
                                     fps_frame_count = 0;
                                     last_fps_time = Instant::now();
 
-                                    // Single lock acquisition for all stats
+                                    // Single lock acquisition for FPS
                                     let mut s = pipeline.stats.lock().await;
-                                    s.frames_encoded += local_frames_encoded;
-                                    s.bytes_encoded += local_bytes_encoded;
-                                    s.keyframes_encoded += local_keyframes;
-                                    s.errors += local_errors;
-                                    s.frames_dropped += local_dropped;
-                                    s.frames_skipped += local_skipped;
                                     s.current_fps = current_fps;
-
-                                    // Reset local counters
-                                    local_frames_encoded = 0;
-                                    local_bytes_encoded = 0;
-                                    local_keyframes = 0;
-                                    local_errors = 0;
-                                    local_dropped = 0;
-                                    local_skipped = 0;
                                 }
                             }
                             Err(broadcast::error::RecvError::Lagged(n)) => {
-                                local_dropped += n;
+                                let _ = n;
                             }
                             Err(broadcast::error::RecvError::Closed) => {
                                 break;
@@ -1094,37 +1187,277 @@ impl SharedVideoPipeline {
                 }
             }
 
+            pipeline.clear_cmd_tx();
+            pipeline.running_flag.store(false, Ordering::Release);
             info!("Video pipeline stopped");
         });
 
         Ok(())
     }
 
-    /// Encode a single frame
-    async fn encode_frame(
+    /// Start the pipeline by owning capture + encode in a single loop.
+    ///
+    /// This avoids the raw-frame broadcast path and keeps capture and encode
+    /// in the same thread for lower overhead.
+    pub async fn start_with_device(
+        self: &Arc<Self>,
+        device_path: std::path::PathBuf,
+        buffer_count: u32,
+        _jpeg_quality: u8,
+    ) -> Result<()> {
+        if *self.running_rx.borrow() {
+            warn!("Pipeline already running");
+            return Ok(());
+        }
+
+        let config = self.config.read().await.clone();
+        let mut encoder_state = Self::build_encoder_state(&config)?;
+        let _ = self.running.send(true);
+        self.running_flag.store(true, Ordering::Release);
+
+        let pipeline = self.clone();
+        let latest_frame: Arc<ParkingRwLock<Option<Arc<VideoFrame>>>> =
+            Arc::new(ParkingRwLock::new(None));
+        let (frame_seq_tx, mut frame_seq_rx) = watch::channel(0u64);
+        let buffer_pool = Arc::new(FrameBufferPool::new(buffer_count.max(4) as usize));
+        let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
+        {
+            let mut guard = self.cmd_tx.write();
+            *guard = Some(cmd_tx);
+        }
+
+        // Encoder loop (runs on tokio, consumes latest frame)
+        {
+            let pipeline = pipeline.clone();
+            let latest_frame = latest_frame.clone();
+            tokio::spawn(async move {
+                let mut frame_count: u64 = 0;
+                let mut last_fps_time = Instant::now();
+                let mut fps_frame_count: u64 = 0;
+                let mut last_seq = *frame_seq_rx.borrow();
+
+                while pipeline.running_flag.load(Ordering::Acquire) {
+                    if frame_seq_rx.changed().await.is_err() {
+                        break;
+                    }
+                    if !pipeline.running_flag.load(Ordering::Acquire) {
+                        break;
+                    }
+
+                    let seq = *frame_seq_rx.borrow();
+                    if seq == last_seq {
+                        continue;
+                    }
+                    last_seq = seq;
+
+                    if pipeline.subscriber_count() == 0 {
+                        continue;
+                    }
+
+                    while let Ok(cmd) = cmd_rx.try_recv() {
+                        if let Err(e) = pipeline.apply_cmd(&mut encoder_state, cmd) {
+                            error!("Failed to apply pipeline command: {}", e);
+                        }
+                    }
+
+                    let frame = {
+                        let guard = latest_frame.read();
+                        guard.clone()
+                    };
+                    let frame = match frame {
+                        Some(f) => f,
+                        None => continue,
+                    };
+
+                    match pipeline.encode_frame_sync(&mut encoder_state, &frame, frame_count) {
+                        Ok(Some(encoded_frame)) => {
+                            let encoded_arc = Arc::new(encoded_frame);
+                            pipeline.broadcast_encoded(encoded_arc).await;
+
+                            frame_count += 1;
+                            fps_frame_count += 1;
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            error!("Encoding failed: {}", e);
+                        }
+                    }
+
+                    let fps_elapsed = last_fps_time.elapsed();
+                    if fps_elapsed >= Duration::from_secs(1) {
+                        let current_fps = fps_frame_count as f32 / fps_elapsed.as_secs_f32();
+                        fps_frame_count = 0;
+                        last_fps_time = Instant::now();
+
+                        let mut s = pipeline.stats.lock().await;
+                        s.current_fps = current_fps;
+                    }
+                }
+
+                pipeline.clear_cmd_tx();
+            });
+        }
+
+        // Capture loop (runs on thread, updates latest frame)
+        {
+            let pipeline = pipeline.clone();
+            let latest_frame = latest_frame.clone();
+            let frame_seq_tx = frame_seq_tx.clone();
+            let buffer_pool = buffer_pool.clone();
+            std::thread::spawn(move || {
+                let device = match Device::with_path(&device_path) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        error!("Failed to open device {:?}: {}", device_path, e);
+                        let _ = pipeline.running.send(false);
+                        pipeline.running_flag.store(false, Ordering::Release);
+                        let _ = frame_seq_tx.send(1);
+                        return;
+                    }
+                };
+
+                let requested_format = Format::new(
+                    config.resolution.width,
+                    config.resolution.height,
+                    config.input_format.to_fourcc(),
+                );
+
+                let actual_format = match device.set_format(&requested_format) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        error!("Failed to set capture format: {}", e);
+                        let _ = pipeline.running.send(false);
+                        pipeline.running_flag.store(false, Ordering::Release);
+                        let _ = frame_seq_tx.send(1);
+                        return;
+                    }
+                };
+
+                let resolution = Resolution::new(actual_format.width, actual_format.height);
+                let pixel_format =
+                    PixelFormat::from_fourcc(actual_format.fourcc).unwrap_or(config.input_format);
+                let stride = actual_format.stride;
+
+                if config.fps > 0 {
+                    if let Err(e) = device.set_params(&Parameters::with_fps(config.fps)) {
+                        warn!("Failed to set hardware FPS: {}", e);
+                    }
+                }
+
+                let mut stream = match MmapStream::with_buffers(
+                    &device,
+                    BufferType::VideoCapture,
+                    buffer_count.max(1),
+                ) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!("Failed to create capture stream: {}", e);
+                        let _ = pipeline.running.send(false);
+                        pipeline.running_flag.store(false, Ordering::Release);
+                        let _ = frame_seq_tx.send(1);
+                        return;
+                    }
+                };
+
+                let mut no_subscribers_since: Option<Instant> = None;
+                let grace_period = Duration::from_secs(AUTO_STOP_GRACE_PERIOD_SECS);
+                let mut sequence: u64 = 0;
+                let mut validate_counter: u64 = 0;
+
+                while pipeline.running_flag.load(Ordering::Acquire) {
+                    let subscriber_count = pipeline.subscriber_count();
+                    if subscriber_count == 0 {
+                        if no_subscribers_since.is_none() {
+                            no_subscribers_since = Some(Instant::now());
+                            trace!("No subscribers, starting grace period timer");
+                        }
+
+                        if let Some(since) = no_subscribers_since {
+                            if since.elapsed() >= grace_period {
+                                info!(
+                                    "No subscribers for {}s, auto-stopping video pipeline",
+                                    grace_period.as_secs()
+                                );
+                                let _ = pipeline.running.send(false);
+                                pipeline.running_flag.store(false, Ordering::Release);
+                                let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                                break;
+                            }
+                        }
+
+                        std::thread::sleep(Duration::from_millis(5));
+                        continue;
+                    } else if no_subscribers_since.is_some() {
+                        trace!("Subscriber connected, resetting grace period timer");
+                        no_subscribers_since = None;
+                    }
+
+                    let (buf, meta) = match stream.next() {
+                        Ok(frame_data) => frame_data,
+                        Err(e) => {
+                            if e.kind() == std::io::ErrorKind::TimedOut {
+                                warn!("Capture timeout - no signal?");
+                            } else {
+                                error!("Capture error: {}", e);
+                            }
+                            continue;
+                        }
+                    };
+
+                    let frame_size = meta.bytesused as usize;
+                    if frame_size < MIN_CAPTURE_FRAME_SIZE {
+                        continue;
+                    }
+
+                    validate_counter = validate_counter.wrapping_add(1);
+                    if pixel_format.is_compressed()
+                        && validate_counter % JPEG_VALIDATE_INTERVAL == 0
+                        && !VideoFrame::is_valid_jpeg_bytes(&buf[..frame_size])
+                    {
+                        continue;
+                    }
+
+                    let mut owned = buffer_pool.take(frame_size);
+                    owned.resize(frame_size, 0);
+                    owned[..frame_size].copy_from_slice(&buf[..frame_size]);
+                    let frame = Arc::new(VideoFrame::from_pooled(
+                        Arc::new(FrameBuffer::new(owned, Some(buffer_pool.clone()))),
+                        resolution,
+                        pixel_format,
+                        stride,
+                        sequence,
+                    ));
+                    sequence = sequence.wrapping_add(1);
+
+                    {
+                        let mut guard = latest_frame.write();
+                        *guard = Some(frame);
+                    }
+                    let _ = frame_seq_tx.send(sequence);
+
+                }
+
+                pipeline.running_flag.store(false, Ordering::Release);
+                let _ = pipeline.running.send(false);
+                let _ = frame_seq_tx.send(sequence.wrapping_add(1));
+                info!("Video pipeline stopped");
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Encode a single frame (synchronous, no async locks)
+    fn encode_frame_sync(
         &self,
+        state: &mut EncoderThreadState,
         frame: &VideoFrame,
         frame_count: u64,
     ) -> Result<Option<EncodedVideoFrame>> {
-        let (fps, codec, input_format) = {
-            let config = self.config.read().await;
-            (config.fps, config.output_codec, config.input_format)
-        };
-
+        let fps = state.fps;
+        let codec = state.codec;
+        let input_format = state.input_format;
         let raw_frame = frame.data();
-        let decoded_buf = if input_format.is_compressed() {
-            let decoded = {
-                let mut decoder_guard = self.mjpeg_decoder.lock().await;
-                let decoder = decoder_guard.as_mut().ok_or_else(|| {
-                    AppError::VideoError("MJPEG decoder not initialized".to_string())
-                })?;
-                decoder.decode(raw_frame)?
-            };
-            Some(decoded)
-        } else {
-            None
-        };
-        let raw_frame = decoded_buf.as_deref().unwrap_or(raw_frame);
 
         // Calculate PTS from real capture timestamp (lock-free using AtomicI64)
         // This ensures smooth playback even when capture timing varies
@@ -1149,6 +1482,53 @@ impl SharedVideoPipeline {
             current_ts_ms - start_ts
         };
 
+        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+        if state.ffmpeg_hw_enabled {
+            if input_format != PixelFormat::Mjpeg {
+                return Err(AppError::VideoError(
+                    "FFmpeg HW pipeline requires MJPEG input".to_string(),
+                ));
+            }
+            let pipeline = state.ffmpeg_hw_pipeline.as_mut().ok_or_else(|| {
+                AppError::VideoError("FFmpeg HW pipeline not initialized".to_string())
+            })?;
+
+            if self.keyframe_requested.swap(false, Ordering::AcqRel) {
+                pipeline.request_keyframe();
+                debug!("[Pipeline] FFmpeg HW keyframe requested");
+            }
+
+            let packet = pipeline.encode(raw_frame, pts_ms).map_err(|e| {
+                let detail = if e.is_empty() { ffmpeg_hw_last_error() } else { e };
+                AppError::VideoError(format!("FFmpeg HW encode failed: {}", detail))
+            })?;
+
+            if let Some((data, is_keyframe)) = packet {
+                let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
+                return Ok(Some(EncodedVideoFrame {
+                    data: Bytes::from(data),
+                    pts_ms,
+                    is_keyframe,
+                    sequence,
+                    duration: Duration::from_millis(1000 / fps as u64),
+                    codec,
+                }));
+            }
+
+            return Ok(None);
+        }
+
+        let decoded_buf = if input_format.is_compressed() {
+            let decoder = state.mjpeg_decoder.as_mut().ok_or_else(|| {
+                AppError::VideoError("MJPEG decoder not initialized".to_string())
+            })?;
+            let decoded = decoder.decode(raw_frame)?;
+            Some(decoded)
+        } else {
+            None
+        };
+        let raw_frame = decoded_buf.as_deref().unwrap_or(raw_frame);
+
         // Debug log for H265
         if codec == VideoEncoderType::H265 && frame_count % 30 == 1 {
             debug!(
@@ -1159,12 +1539,9 @@ impl SharedVideoPipeline {
             );
         }
 
-        let mut nv12_converter = self.nv12_converter.lock().await;
-        let mut yuv420p_converter = self.yuv420p_converter.lock().await;
-        let needs_yuv420p = self.encoder_needs_yuv420p.load(Ordering::Acquire);
-        let mut encoder_guard = self.encoder.lock().await;
-
-        let encoder = encoder_guard
+        let needs_yuv420p = state.encoder_needs_yuv420p;
+        let encoder = state
+            .encoder
             .as_mut()
             .ok_or_else(|| AppError::VideoError("Encoder not initialized".to_string()))?;
 
@@ -1174,16 +1551,16 @@ impl SharedVideoPipeline {
             debug!("[Pipeline] Keyframe will be generated for this frame");
         }
 
-        let encode_result = if needs_yuv420p && yuv420p_converter.is_some() {
+        let encode_result = if needs_yuv420p && state.yuv420p_converter.is_some() {
             // Software encoder with direct input conversion to YUV420P
-            let conv = yuv420p_converter.as_mut().unwrap();
+            let conv = state.yuv420p_converter.as_mut().unwrap();
             let yuv420p_data = conv
                 .convert(raw_frame)
                 .map_err(|e| AppError::VideoError(format!("YUV420P conversion failed: {}", e)))?;
             encoder.encode_raw(yuv420p_data, pts_ms)
-        } else if nv12_converter.is_some() {
+        } else if state.nv12_converter.is_some() {
             // Hardware encoder with input conversion to NV12
-            let conv = nv12_converter.as_mut().unwrap();
+            let conv = state.nv12_converter.as_mut().unwrap();
             let nv12_data = conv
                 .convert(raw_frame)
                 .map_err(|e| AppError::VideoError(format!("NV12 conversion failed: {}", e)))?;
@@ -1192,10 +1569,6 @@ impl SharedVideoPipeline {
             // Direct input (already in correct format)
             encoder.encode_raw(raw_frame, pts_ms)
         };
-
-        drop(encoder_guard);
-        drop(nv12_converter);
-        drop(yuv420p_converter);
 
         match encode_result {
             Ok(frames) => {
@@ -1255,6 +1628,8 @@ impl SharedVideoPipeline {
     pub fn stop(&self) {
         if *self.running_rx.borrow() {
             let _ = self.running.send(false);
+            self.running_flag.store(false, Ordering::Release);
+            self.clear_cmd_tx();
             info!("Stopping video pipeline");
         }
     }
@@ -1265,10 +1640,12 @@ impl SharedVideoPipeline {
         preset: crate::video::encoder::BitratePreset,
     ) -> Result<()> {
         let bitrate_kbps = preset.bitrate_kbps();
-        if let Some(ref mut encoder) = *self.encoder.lock().await {
-            encoder.set_bitrate(bitrate_kbps)?;
-            self.config.write().await.bitrate_preset = preset;
-        }
+        let gop = {
+            let mut config = self.config.write().await;
+            config.bitrate_preset = preset;
+            config.gop_size()
+        };
+        self.send_cmd(PipelineCmd::SetBitrate { bitrate_kbps, gop });
         Ok(())
     }
 

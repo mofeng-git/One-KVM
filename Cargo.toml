@@ -129,6 +129,7 @@ tempfile = "3"
 [build-dependencies]
 protobuf-codegen = "3.7"
 toml = "0.9"
+cc = "1"
 
 [profile.release]
 opt-level = 3

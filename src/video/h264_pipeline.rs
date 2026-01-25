@@ -53,22 +53,8 @@ impl Default for H264PipelineConfig {
 /// H264 pipeline statistics
 #[derive(Debug, Clone, Default)]
 pub struct H264PipelineStats {
-    /// Total frames captured
-    pub frames_captured: u64,
-    /// Total frames encoded
-    pub frames_encoded: u64,
-    /// Frames dropped (encoding too slow)
-    pub frames_dropped: u64,
-    /// Total bytes encoded
-    pub bytes_encoded: u64,
-    /// Keyframes encoded
-    pub keyframes_encoded: u64,
-    /// Average encoding time per frame (ms)
-    pub avg_encode_time_ms: f32,
     /// Current encoding FPS
     pub current_fps: f32,
-    /// Errors encountered
-    pub errors: u64,
 }
 
 /// H264 video encoding pipeline
@@ -84,8 +70,6 @@ pub struct H264Pipeline {
     stats: Arc<Mutex<H264PipelineStats>>,
     /// Running state
     running: watch::Sender<bool>,
-    /// Encode time accumulator for averaging
-    encode_times: Arc<Mutex<Vec<f32>>>,
 }
 
 impl H264Pipeline {
@@ -183,7 +167,6 @@ impl H264Pipeline {
             video_track,
             stats: Arc::new(Mutex::new(H264PipelineStats::default())),
             running: running_tx,
-            encode_times: Arc::new(Mutex::new(Vec::with_capacity(100))),
         })
     }
 
@@ -222,7 +205,6 @@ impl H264Pipeline {
         let nv12_converter = self.nv12_converter.lock().await.take();
         let video_track = self.video_track.clone();
         let stats = self.stats.clone();
-        let encode_times = self.encode_times.clone();
         let config = self.config.clone();
         let mut running_rx = self.running.subscribe();
 
@@ -275,12 +257,6 @@ impl H264Pipeline {
                                     }
                                 }
 
-                                // Update captured count
-                                {
-                                    let mut s = stats.lock().await;
-                                    s.frames_captured += 1;
-                                }
-
                                 // Convert to NV12 for VAAPI encoder
                                 // BGR24/RGB24/YUYV -> NV12 (via NV12 converter)
                                 // NV12 -> pass through
@@ -297,8 +273,6 @@ impl H264Pipeline {
                                         Ok(nv12_data) => encoder.encode_raw(nv12_data, pts_ms),
                                         Err(e) => {
                                             error!("NV12 conversion failed: {}", e);
-                                            let mut s = stats.lock().await;
-                                            s.errors += 1;
                                             continue;
                                         }
                                     }
@@ -323,35 +297,13 @@ impl H264Pipeline {
                                                 .await
                                             {
                                                 error!("Failed to write frame to track: {}", e);
-                                                let mut s = stats.lock().await;
-                                                s.errors += 1;
                                             } else {
-                                                // Update stats
-                                                let encode_time = start.elapsed().as_secs_f32() * 1000.0;
-                                                let mut s = stats.lock().await;
-                                                s.frames_encoded += 1;
-                                                s.bytes_encoded += frame.data.len() as u64;
-                                                if is_keyframe {
-                                                    s.keyframes_encoded += 1;
-                                                }
-
-                                                // Update encode time average
-                                                let mut times = encode_times.lock().await;
-                                                times.push(encode_time);
-                                                if times.len() > 100 {
-                                                    times.remove(0);
-                                                }
-                                                if !times.is_empty() {
-                                                    s.avg_encode_time_ms =
-                                                        times.iter().sum::<f32>() / times.len() as f32;
-                                                }
+                                                let _ = start;
                                             }
                                         }
                                     }
                                     Err(e) => {
                                         error!("Encoding failed: {}", e);
-                                        let mut s = stats.lock().await;
-                                        s.errors += 1;
                                     }
                                 }
 
@@ -365,8 +317,7 @@ impl H264Pipeline {
                                 }
                             }
                             Err(broadcast::error::RecvError::Lagged(n)) => {
-                                let mut s = stats.lock().await;
-                                s.frames_dropped += n;
+                                let _ = n;
                             }
                             Err(broadcast::error::RecvError::Closed) => {
                                 info!("Frame channel closed, stopping H264 pipeline");

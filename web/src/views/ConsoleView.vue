@@ -10,7 +10,7 @@ import { useHidWebSocket } from '@/composables/useHidWebSocket'
 import { useWebRTC } from '@/composables/useWebRTC'
 import { useVideoSession } from '@/composables/useVideoSession'
 import { getUnifiedAudio } from '@/composables/useUnifiedAudio'
-import { streamApi, hidApi, atxApi, extensionsApi, atxConfigApi, userApi } from '@/api'
+import { streamApi, hidApi, atxApi, extensionsApi, atxConfigApi, authApi } from '@/api'
 import type { HidKeyboardEvent, HidMouseEvent } from '@/types/hid'
 import { toast } from 'vue-sonner'
 import { generateUUID } from '@/lib/utils'
@@ -641,7 +641,7 @@ function handleStreamConfigChanging(data: any) {
   })
 }
 
-function handleStreamConfigApplied(data: any) {
+async function handleStreamConfigApplied(data: any) {
   // Reset consecutive error counter for new config
   consecutiveErrors = 0
 
@@ -662,6 +662,10 @@ function handleStreamConfigApplied(data: any) {
 
   if (videoMode.value !== 'mjpeg') {
     // In WebRTC mode, reconnect WebRTC (session was closed due to config change)
+    const ready = await videoSession.waitForWebRTCReadyAny(3000)
+    if (!ready) {
+      console.warn('[WebRTC] Backend not ready after timeout (config change), attempting connection anyway')
+    }
     switchToWebRTC(videoMode.value)
   } else {
     // In MJPEG mode, refresh the MJPEG stream
@@ -1259,16 +1263,7 @@ async function handleChangePassword() {
 
   changingPassword.value = true
   try {
-    // Get current user ID - we need to fetch user list first
-    const result = await userApi.list()
-    const currentUser = result.users.find(u => u.username === authStore.user)
-
-    if (!currentUser) {
-      toast.error(t('auth.userNotFound'))
-      return
-    }
-
-    await userApi.changePassword(currentUser.id, newPassword.value, currentPassword.value)
+    await authApi.changePassword(currentPassword.value, newPassword.value)
     toast.success(t('auth.passwordChanged'))
 
     // Reset form and close dialog

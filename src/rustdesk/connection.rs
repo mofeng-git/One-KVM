@@ -1600,43 +1600,38 @@ async fn run_video_streaming(
                 }
 
                 result = encoded_frame_rx.recv() => {
-                    match result {
-                        Ok(frame) => {
-                            // Convert EncodedVideoFrame to RustDesk VideoFrame message
-                            // Use zero-copy version: Bytes.clone() only increments refcount
-                            let msg_bytes = video_adapter.encode_frame_bytes_zero_copy(
-                                frame.data.clone(),
-                                frame.is_keyframe,
-                                frame.pts_ms as u64,
-                            );
-
-                            // Send to connection (blocks if channel is full, providing backpressure)
-                            if video_tx.send(msg_bytes).await.is_err() {
-                                debug!("Video channel closed for connection {}", conn_id);
-                                break 'subscribe_loop;
-                            }
-
-                            encoded_count += 1;
-
-                            // Log stats periodically
-                            if last_log_time.elapsed().as_secs() >= 10 {
-                                info!(
-                                    "Video streaming stats for connection {}: {} frames forwarded",
-                                    conn_id, encoded_count
-                                );
-                                last_log_time = Instant::now();
-                            }
-                        }
-                        Err(broadcast::error::RecvError::Lagged(n)) => {
-                            debug!("Connection {} lagged {} encoded frames", conn_id, n);
-                        }
-                        Err(broadcast::error::RecvError::Closed) => {
-                            // Pipeline was restarted (e.g., bitrate/codec change)
-                            // Re-subscribe to the new pipeline
+                    let frame = match result {
+                        Some(frame) => frame,
+                        None => {
                             info!("Video pipeline closed for connection {}, re-subscribing...", conn_id);
                             tokio::time::sleep(Duration::from_millis(100)).await;
                             continue 'subscribe_loop;
                         }
+                    };
+
+                    // Convert EncodedVideoFrame to RustDesk VideoFrame message
+                    // Use zero-copy version: Bytes.clone() only increments refcount
+                    let msg_bytes = video_adapter.encode_frame_bytes_zero_copy(
+                        frame.data.clone(),
+                        frame.is_keyframe,
+                        frame.pts_ms as u64,
+                    );
+
+                    // Send to connection (blocks if channel is full, providing backpressure)
+                    if video_tx.try_send(msg_bytes).is_err() {
+                        // Drop when channel is full to avoid backpressure
+                        continue;
+                    }
+
+                    encoded_count += 1;
+
+                    // Log stats periodically
+                    if last_log_time.elapsed().as_secs() >= 30 {
+                        info!(
+                            "Video streaming stats for connection {}: {} frames forwarded",
+                            conn_id, encoded_count
+                        );
+                        last_log_time = Instant::now();
                     }
                 }
             }
@@ -1725,39 +1720,38 @@ async fn run_audio_streaming(
                     break 'subscribe_loop;
                 }
 
-                result = opus_rx.recv() => {
-                    match result {
-                        Ok(opus_frame) => {
-                            // Convert OpusFrame to RustDesk AudioFrame message
-                            let msg_bytes = audio_adapter.encode_opus_bytes(&opus_frame.data);
+                result = opus_rx.changed() => {
+                    if result.is_err() {
+                        // Pipeline was restarted
+                        info!("Audio pipeline closed for connection {}, re-subscribing...", conn_id);
+                        audio_adapter.reset();
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        continue 'subscribe_loop;
+                    }
 
-                            // Send to connection (blocks if channel is full, providing backpressure)
-                            if audio_tx.send(msg_bytes).await.is_err() {
-                                debug!("Audio channel closed for connection {}", conn_id);
-                                break 'subscribe_loop;
-                            }
+                    let opus_frame = match opus_rx.borrow().clone() {
+                        Some(frame) => frame,
+                        None => continue,
+                    };
 
-                            frame_count += 1;
+                    // Convert OpusFrame to RustDesk AudioFrame message
+                    let msg_bytes = audio_adapter.encode_opus_bytes(&opus_frame.data);
 
-                            // Log stats periodically
-                            if last_log_time.elapsed().as_secs() >= 30 {
-                                info!(
-                                    "Audio streaming stats for connection {}: {} frames forwarded",
-                                    conn_id, frame_count
-                                );
-                                last_log_time = Instant::now();
-                            }
-                        }
-                        Err(broadcast::error::RecvError::Lagged(n)) => {
-                            debug!("Connection {} lagged {} audio frames", conn_id, n);
-                        }
-                        Err(broadcast::error::RecvError::Closed) => {
-                            // Pipeline was restarted
-                            info!("Audio pipeline closed for connection {}, re-subscribing...", conn_id);
-                            audio_adapter.reset();
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                            continue 'subscribe_loop;
-                        }
+                    // Send to connection (blocks if channel is full, providing backpressure)
+                    if audio_tx.send(msg_bytes).await.is_err() {
+                        debug!("Audio channel closed for connection {}", conn_id);
+                        break 'subscribe_loop;
+                    }
+
+                    frame_count += 1;
+
+                    // Log stats periodically
+                    if last_log_time.elapsed().as_secs() >= 30 {
+                        info!(
+                            "Audio streaming stats for connection {}: {} frames forwarded",
+                            conn_id, frame_count
+                        );
+                        last_log_time = Instant::now();
                     }
                 }
             }

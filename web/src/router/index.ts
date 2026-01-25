@@ -24,7 +24,7 @@ const routes: RouteRecordRaw[] = [
     path: '/settings',
     name: 'Settings',
     component: () => import('@/views/SettingsView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true },
   },
 ]
 
@@ -63,11 +63,6 @@ router.beforeEach(async (to, _from, next) => {
       }
     }
 
-    // Check admin requirement
-    if (to.meta.requiresAdmin && !authStore.isAdmin) {
-      // Redirect non-admin users to console
-      return next({ name: 'Console' })
-    }
   }
 
   next()

@@ -511,21 +511,6 @@ impl Encoder for H264Encoder {
     }
 }
 
-/// Encoder statistics
-#[derive(Debug, Clone, Default)]
-pub struct EncoderStats {
-    /// Total frames encoded
-    pub frames_encoded: u64,
-    /// Total bytes output
-    pub bytes_output: u64,
-    /// Current encoding FPS
-    pub fps: f32,
-    /// Average encoding time per frame (ms)
-    pub avg_encode_time_ms: f32,
-    /// Keyframes encoded
-    pub keyframes: u64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
