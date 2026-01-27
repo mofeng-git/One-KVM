@@ -342,6 +342,18 @@ impl WebRtcStreamer {
         }
     }
 
+    /// Request the encoder to generate a keyframe on next encode
+    pub async fn request_keyframe(&self) -> Result<()> {
+        if let Some(ref pipeline) = *self.video_pipeline.read().await {
+            pipeline.request_keyframe().await;
+            Ok(())
+        } else {
+            Err(AppError::VideoError(
+                "Video pipeline not running".to_string(),
+            ))
+        }
+    }
+
     // === Audio Management ===
 
     /// Check if audio is enabled

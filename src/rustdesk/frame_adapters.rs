@@ -42,6 +42,9 @@ pub struct VideoFrameAdapter {
     seq: u32,
     /// Timestamp offset
     timestamp_base: u64,
+    /// Cached H264 SPS/PPS (Annex B NAL without start code)
+    h264_sps: Option<Bytes>,
+    h264_pps: Option<Bytes>,
 }
 
 impl VideoFrameAdapter {
@@ -51,6 +54,8 @@ impl VideoFrameAdapter {
             codec,
             seq: 0,
             timestamp_base: 0,
+            h264_sps: None,
+            h264_pps: None,
         }
     }
 
@@ -68,6 +73,7 @@ impl VideoFrameAdapter {
         is_keyframe: bool,
         timestamp_ms: u64,
     ) -> Message {
+        let data = self.prepare_h264_frame(data, is_keyframe);
         // Calculate relative timestamp
         if self.seq == 0 {
             self.timestamp_base = timestamp_ms;
@@ -98,6 +104,41 @@ impl VideoFrameAdapter {
         let mut msg = Message::new();
         msg.union = Some(msg_union::Union::VideoFrame(video_frame));
         msg
+    }
+
+    fn prepare_h264_frame(&mut self, data: Bytes, is_keyframe: bool) -> Bytes {
+        if self.codec != VideoCodec::H264 {
+            return data;
+        }
+
+        // Parse SPS/PPS from Annex B data (without start codes)
+        let (sps, pps) = crate::webrtc::rtp::extract_sps_pps(&data);
+        let mut has_sps = false;
+        let mut has_pps = false;
+
+        if let Some(sps) = sps {
+            self.h264_sps = Some(Bytes::from(sps));
+            has_sps = true;
+        }
+        if let Some(pps) = pps {
+            self.h264_pps = Some(Bytes::from(pps));
+            has_pps = true;
+        }
+
+        // Inject cached SPS/PPS before IDR when missing
+        if is_keyframe && (!has_sps || !has_pps) {
+            if let (Some(ref sps), Some(ref pps)) = (self.h264_sps.as_ref(), self.h264_pps.as_ref()) {
+                let mut out = Vec::with_capacity(8 + sps.len() + pps.len() + data.len());
+                out.extend_from_slice(&[0, 0, 0, 1]);
+                out.extend_from_slice(sps);
+                out.extend_from_slice(&[0, 0, 0, 1]);
+                out.extend_from_slice(pps);
+                out.extend_from_slice(&data);
+                return Bytes::from(out);
+            }
+        }
+
+        data
     }
 
     /// Convert encoded video data to RustDesk Message

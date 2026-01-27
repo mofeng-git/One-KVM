@@ -623,7 +623,7 @@ impl Connection {
         self.negotiated_codec = Some(negotiated);
         info!("Negotiated video codec: {:?}", negotiated);
 
-        let response = self.create_login_response(true);
+        let response = self.create_login_response(true).await;
         let response_bytes = response
             .write_to_bytes()
             .map_err(|e| anyhow::anyhow!("Failed to encode: {}", e))?;
@@ -673,7 +673,11 @@ impl Connection {
             Some(misc::Union::RefreshVideo(refresh)) => {
                 if *refresh {
                     debug!("Video refresh requested");
-                    // TODO: Request keyframe from encoder
+                    if let Some(ref video_manager) = self.video_manager {
+                        if let Err(e) = video_manager.request_keyframe().await {
+                            warn!("Failed to request keyframe: {}", e);
+                        }
+                    }
                 }
             }
             Some(misc::Union::VideoReceived(received)) => {
@@ -1064,7 +1068,7 @@ impl Connection {
     }
 
     /// Create login response with dynamically detected encoder capabilities
-    fn create_login_response(&self, success: bool) -> HbbMessage {
+    async fn create_login_response(&self, success: bool) -> HbbMessage {
         if success {
             // Dynamically detect available encoders
             let registry = EncoderRegistry::global();
@@ -1080,11 +1084,21 @@ impl Connection {
                 h264_available, h265_available, vp8_available, vp9_available
             );
 
+            let mut display_width = self.screen_width;
+            let mut display_height = self.screen_height;
+            if let Some(ref video_manager) = self.video_manager {
+                let video_info = video_manager.get_video_info().await;
+                if let Some((width, height)) = video_info.resolution {
+                    display_width = width;
+                    display_height = height;
+                }
+            }
+
             let mut display_info = DisplayInfo::new();
             display_info.x = 0;
             display_info.y = 0;
-            display_info.width = 1920;
-            display_info.height = 1080;
+            display_info.width = display_width as i32;
+            display_info.height = display_height as i32;
             display_info.name = "KVM Display".to_string();
             display_info.online = true;
             display_info.cursor_embedded = false;
@@ -1581,6 +1595,9 @@ async fn run_video_streaming(
                 config.resolution.height,
                 config.bitrate_preset
             );
+        }
+        if let Err(e) = video_manager.request_keyframe().await {
+            debug!("Failed to request keyframe for connection {}: {}", conn_id, e);
         }
 
         // Inner loop: receives frames from current subscription

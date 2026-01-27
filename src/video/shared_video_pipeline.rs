@@ -33,11 +33,9 @@ const JPEG_VALIDATE_INTERVAL: u64 = 30;
 
 use crate::error::{AppError, Result};
 use crate::video::convert::{Nv12Converter, PixelConverter};
-#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
-use crate::video::decoder::MjpegRkmppDecoder;
 use crate::video::decoder::MjpegTurboDecoder;
 #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
-use hwcodec::ffmpeg_hw::{last_error_message as ffmpeg_hw_last_error, HwMjpegH264Config, HwMjpegH264Pipeline};
+use hwcodec::ffmpeg_hw::{last_error_message as ffmpeg_hw_last_error, HwMjpegH26xConfig, HwMjpegH26xPipeline};
 use v4l::buffer::Type as BufferType;
 use v4l::io::traits::CaptureStream;
 use v4l::prelude::*;
@@ -177,7 +175,7 @@ struct EncoderThreadState {
     yuv420p_converter: Option<PixelConverter>,
     encoder_needs_yuv420p: bool,
     #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
-    ffmpeg_hw_pipeline: Option<HwMjpegH264Pipeline>,
+    ffmpeg_hw_pipeline: Option<HwMjpegH26xPipeline>,
     #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
     ffmpeg_hw_enabled: bool,
     fps: u32,
@@ -319,16 +317,12 @@ impl VideoEncoderTrait for VP9EncoderWrapper {
 }
 
 enum MjpegDecoderKind {
-    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
-    Rkmpp(MjpegRkmppDecoder),
     Turbo(MjpegTurboDecoder),
 }
 
 impl MjpegDecoderKind {
     fn decode(&mut self, data: &[u8]) -> Result<Vec<u8>> {
         match self {
-            #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
-            MjpegDecoderKind::Rkmpp(decoder) => decoder.decode_to_nv12(data),
             MjpegDecoderKind::Turbo(decoder) => decoder.decode_to_rgb(data),
         }
     }
@@ -513,14 +507,16 @@ impl SharedVideoPipeline {
         };
 
         let is_rkmpp_encoder = selected_codec_name.contains("rkmpp");
-        let is_software_encoder = selected_codec_name.contains("libx264")
-            || selected_codec_name.contains("libx265")
-            || selected_codec_name.contains("libvpx");
-
         #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
-        if needs_mjpeg_decode && is_rkmpp_encoder && config.output_codec == VideoEncoderType::H264 {
-            info!("Initializing FFmpeg HW MJPEG->H264 pipeline (no fallback)");
-            let hw_config = HwMjpegH264Config {
+        if needs_mjpeg_decode
+            && is_rkmpp_encoder
+            && matches!(config.output_codec, VideoEncoderType::H264 | VideoEncoderType::H265)
+        {
+            info!(
+                "Initializing FFmpeg HW MJPEG->{} pipeline (no fallback)",
+                config.output_codec
+            );
+            let hw_config = HwMjpegH26xConfig {
                 decoder: "mjpeg_rkmpp".to_string(),
                 encoder: selected_codec_name.clone(),
                 width: config.resolution.width as i32,
@@ -530,14 +526,14 @@ impl SharedVideoPipeline {
                 gop: config.gop_size() as i32,
                 thread_count: 1,
             };
-            let pipeline = HwMjpegH264Pipeline::new(hw_config).map_err(|e| {
+            let pipeline = HwMjpegH26xPipeline::new(hw_config).map_err(|e| {
                 let detail = if e.is_empty() { ffmpeg_hw_last_error() } else { e };
                 AppError::VideoError(format!(
-                    "FFmpeg HW MJPEG->H264 init failed: {}",
-                    detail
+                    "FFmpeg HW MJPEG->{} init failed: {}",
+                    config.output_codec, detail
                 ))
             })?;
-            info!("Using FFmpeg HW MJPEG->H264 pipeline");
+            info!("Using FFmpeg HW MJPEG->{} pipeline", config.output_codec);
             return Ok(EncoderThreadState {
                 encoder: None,
                 mjpeg_decoder: None,
@@ -555,35 +551,12 @@ impl SharedVideoPipeline {
         }
 
         let pipeline_input_format = if needs_mjpeg_decode {
-            if is_rkmpp_encoder {
-                info!(
-                    "MJPEG input detected, using RKMPP decoder ({} -> NV12 with NV16 fallback)",
-                    config.input_format
-                );
-                #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
-                {
-                    let decoder = MjpegRkmppDecoder::new(config.resolution)?;
-                    let pipeline_format = PixelFormat::Nv12;
-                    (Some(MjpegDecoderKind::Rkmpp(decoder)), pipeline_format)
-                }
-                #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
-                {
-                    return Err(AppError::VideoError(
-                        "RKMPP MJPEG decode is only supported on ARM builds".to_string(),
-                    ));
-                }
-            } else if is_software_encoder {
-                info!(
-                    "MJPEG input detected, using TurboJPEG decoder ({} -> RGB24)",
-                    config.input_format
-                );
-                let decoder = MjpegTurboDecoder::new(config.resolution)?;
-                (Some(MjpegDecoderKind::Turbo(decoder)), PixelFormat::Rgb24)
-            } else {
-                return Err(AppError::VideoError(
-                    "MJPEG input requires RKMPP or software encoder".to_string(),
-                ));
-            }
+            info!(
+                "MJPEG input detected, using TurboJPEG decoder ({} -> RGB24)",
+                config.input_format
+            );
+            let decoder = MjpegTurboDecoder::new(config.resolution)?;
+            (Some(MjpegDecoderKind::Turbo(decoder)), PixelFormat::Rgb24)
         } else {
             (None, config.input_format)
         };

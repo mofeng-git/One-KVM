@@ -794,6 +794,11 @@ impl VideoStreamManager {
         self.webrtc_streamer.set_bitrate_preset(preset).await
     }
 
+    /// Request a keyframe from the shared video pipeline
+    pub async fn request_keyframe(&self) -> crate::error::Result<()> {
+        self.webrtc_streamer.request_keyframe().await
+    }
+
     /// Publish event to event bus
     async fn publish_event(&self, event: SystemEvent) {
         if let Some(ref events) = *self.events.read().await {

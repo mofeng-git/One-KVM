@@ -35,7 +35,7 @@ static const char* pix_fmt_name(AVPixelFormat fmt) {
   return name ? name : "unknown";
 }
 
-struct FfmpegHwMjpegH264Ctx {
+struct FfmpegHwMjpegH26xCtx {
   AVCodecContext *dec_ctx = nullptr;
   AVCodecContext *enc_ctx = nullptr;
   AVPacket *dec_pkt = nullptr;
@@ -48,6 +48,8 @@ struct FfmpegHwMjpegH264Ctx {
   std::string enc_name;
   int width = 0;
   int height = 0;
+  int aligned_width = 0;
+  int aligned_height = 0;
   int fps = 30;
   int bitrate_kbps = 2000;
   int gop = 60;
@@ -57,7 +59,7 @@ struct FfmpegHwMjpegH264Ctx {
 
 static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
                                         const enum AVPixelFormat *pix_fmts) {
-  auto *self = reinterpret_cast<FfmpegHwMjpegH264Ctx *>(ctx->opaque);
+  auto *self = reinterpret_cast<FfmpegHwMjpegH26xCtx *>(ctx->opaque);
   if (self && self->hw_pixfmt != AV_PIX_FMT_NONE) {
     const enum AVPixelFormat *p;
     for (p = pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
@@ -69,7 +71,7 @@ static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
   return pix_fmts[0];
 }
 
-static int init_decoder(FfmpegHwMjpegH264Ctx *ctx) {
+static int init_decoder(FfmpegHwMjpegH26xCtx *ctx) {
   const AVCodec *dec = avcodec_find_decoder_by_name(ctx->dec_name.c_str());
   if (!dec) {
     set_last_error("Decoder not found: " + ctx->dec_name);
@@ -127,7 +129,7 @@ static int init_decoder(FfmpegHwMjpegH264Ctx *ctx) {
   return 0;
 }
 
-static int init_encoder(FfmpegHwMjpegH264Ctx *ctx, AVBufferRef *frames_ctx) {
+static int init_encoder(FfmpegHwMjpegH26xCtx *ctx, AVBufferRef *frames_ctx) {
   const AVCodec *enc = avcodec_find_encoder_by_name(ctx->enc_name.c_str());
   if (!enc) {
     set_last_error("Encoder not found: " + ctx->enc_name);
@@ -142,6 +144,10 @@ static int init_encoder(FfmpegHwMjpegH264Ctx *ctx, AVBufferRef *frames_ctx) {
 
   ctx->enc_ctx->width = ctx->width;
   ctx->enc_ctx->height = ctx->height;
+  ctx->enc_ctx->coded_width = ctx->width;
+  ctx->enc_ctx->coded_height = ctx->height;
+  ctx->aligned_width = ctx->width;
+  ctx->aligned_height = ctx->height;
   ctx->enc_ctx->time_base = AVRational{1, 1000};
   ctx->enc_ctx->framerate = AVRational{ctx->fps, 1};
   ctx->enc_ctx->bit_rate = (int64_t)ctx->bitrate_kbps * 1000;
@@ -155,8 +161,14 @@ static int init_encoder(FfmpegHwMjpegH264Ctx *ctx, AVBufferRef *frames_ctx) {
     if (hwfc) {
       ctx->enc_ctx->pix_fmt = static_cast<AVPixelFormat>(hwfc->format);
       ctx->enc_ctx->sw_pix_fmt = static_cast<AVPixelFormat>(hwfc->sw_format);
-      if (hwfc->width > 0) ctx->enc_ctx->width = hwfc->width;
-      if (hwfc->height > 0) ctx->enc_ctx->height = hwfc->height;
+      if (hwfc->width > 0) {
+        ctx->aligned_width = hwfc->width;
+        ctx->enc_ctx->coded_width = hwfc->width;
+      }
+      if (hwfc->height > 0) {
+        ctx->aligned_height = hwfc->height;
+        ctx->enc_ctx->coded_height = hwfc->height;
+      }
     }
     ctx->hw_frames_ctx = av_buffer_ref(frames_ctx);
     ctx->enc_ctx->hw_frames_ctx = av_buffer_ref(frames_ctx);
@@ -167,7 +179,11 @@ static int init_encoder(FfmpegHwMjpegH264Ctx *ctx, AVBufferRef *frames_ctx) {
 
   AVDictionary *opts = nullptr;
   av_dict_set(&opts, "rc_mode", "CBR", 0);
-  av_dict_set(&opts, "profile", "high", 0);
+  if (enc->id == AV_CODEC_ID_H264) {
+    av_dict_set(&opts, "profile", "high", 0);
+  } else if (enc->id == AV_CODEC_ID_HEVC) {
+    av_dict_set(&opts, "profile", "main", 0);
+  }
   av_dict_set_int(&opts, "qp_init", 23, 0);
   av_dict_set_int(&opts, "qp_max", 48, 0);
   av_dict_set_int(&opts, "qp_min", 0, 0);
@@ -195,7 +211,7 @@ static int init_encoder(FfmpegHwMjpegH264Ctx *ctx, AVBufferRef *frames_ctx) {
   return 0;
 }
 
-static void free_encoder(FfmpegHwMjpegH264Ctx *ctx) {
+static void free_encoder(FfmpegHwMjpegH26xCtx *ctx) {
   if (ctx->enc_ctx) {
     avcodec_free_context(&ctx->enc_ctx);
     ctx->enc_ctx = nullptr;
@@ -208,7 +224,7 @@ static void free_encoder(FfmpegHwMjpegH264Ctx *ctx) {
 
 } // namespace
 
-extern "C" FfmpegHwMjpegH264* ffmpeg_hw_mjpeg_h264_new(const char* dec_name,
+extern "C" FfmpegHwMjpegH26x* ffmpeg_hw_mjpeg_h26x_new(const char* dec_name,
                                                         const char* enc_name,
                                                         int width,
                                                         int height,
@@ -217,11 +233,11 @@ extern "C" FfmpegHwMjpegH264* ffmpeg_hw_mjpeg_h264_new(const char* dec_name,
                                                         int gop,
                                                         int thread_count) {
   if (!dec_name || !enc_name || width <= 0 || height <= 0) {
-    set_last_error("Invalid parameters for ffmpeg_hw_mjpeg_h264_new");
+    set_last_error("Invalid parameters for ffmpeg_hw_mjpeg_h26x_new");
     return nullptr;
   }
 
-  auto *ctx = new FfmpegHwMjpegH264Ctx();
+  auto *ctx = new FfmpegHwMjpegH26xCtx();
   ctx->dec_name = dec_name;
   ctx->enc_name = enc_name;
   ctx->width = width;
@@ -232,14 +248,14 @@ extern "C" FfmpegHwMjpegH264* ffmpeg_hw_mjpeg_h264_new(const char* dec_name,
   ctx->thread_count = thread_count > 0 ? thread_count : 1;
 
   if (init_decoder(ctx) != 0) {
-    ffmpeg_hw_mjpeg_h264_free(reinterpret_cast<FfmpegHwMjpegH264*>(ctx));
+    ffmpeg_hw_mjpeg_h26x_free(reinterpret_cast<FfmpegHwMjpegH26x*>(ctx));
     return nullptr;
   }
 
-  return reinterpret_cast<FfmpegHwMjpegH264*>(ctx);
+  return reinterpret_cast<FfmpegHwMjpegH26x*>(ctx);
 }
 
-extern "C" int ffmpeg_hw_mjpeg_h264_encode(FfmpegHwMjpegH264* handle,
+extern "C" int ffmpeg_hw_mjpeg_h26x_encode(FfmpegHwMjpegH26x* handle,
                                              const uint8_t* data,
                                              int len,
                                              int64_t pts_ms,
@@ -251,7 +267,7 @@ extern "C" int ffmpeg_hw_mjpeg_h264_encode(FfmpegHwMjpegH264* handle,
     return -1;
   }
 
-  auto *ctx = reinterpret_cast<FfmpegHwMjpegH264Ctx*>(handle);
+  auto *ctx = reinterpret_cast<FfmpegHwMjpegH26xCtx*>(handle);
   *out_data = nullptr;
   *out_len = 0;
   *out_keyframe = 0;
@@ -308,6 +324,14 @@ extern "C" int ffmpeg_hw_mjpeg_h264_encode(FfmpegHwMjpegH264* handle,
         send_frame = tmp;
       }
       ctx->force_keyframe = false;
+    }
+
+    // Apply visible size crop if aligned buffer is larger than display size
+    if (ctx->aligned_width > 0 && ctx->width > 0 && ctx->aligned_width > ctx->width) {
+      send_frame->crop_right = ctx->aligned_width - ctx->width;
+    }
+    if (ctx->aligned_height > 0 && ctx->height > 0 && ctx->aligned_height > ctx->height) {
+      send_frame->crop_bottom = ctx->aligned_height - ctx->height;
     }
 
     send_frame->pts = pts_ms; // time_base is ms
@@ -379,14 +403,14 @@ extern "C" int ffmpeg_hw_mjpeg_h264_encode(FfmpegHwMjpegH264* handle,
   }
 }
 
-extern "C" int ffmpeg_hw_mjpeg_h264_reconfigure(FfmpegHwMjpegH264* handle,
+extern "C" int ffmpeg_hw_mjpeg_h26x_reconfigure(FfmpegHwMjpegH26x* handle,
                                                   int bitrate_kbps,
                                                   int gop) {
   if (!handle) {
     set_last_error("Invalid handle for reconfigure");
     return -1;
   }
-  auto *ctx = reinterpret_cast<FfmpegHwMjpegH264Ctx*>(handle);
+  auto *ctx = reinterpret_cast<FfmpegHwMjpegH26xCtx*>(handle);
   if (!ctx->enc_ctx || !ctx->hw_frames_ctx) {
     set_last_error("Encoder not initialized for reconfigure");
     return -1;
@@ -407,18 +431,18 @@ extern "C" int ffmpeg_hw_mjpeg_h264_reconfigure(FfmpegHwMjpegH264* handle,
   return 0;
 }
 
-extern "C" int ffmpeg_hw_mjpeg_h264_request_keyframe(FfmpegHwMjpegH264* handle) {
+extern "C" int ffmpeg_hw_mjpeg_h26x_request_keyframe(FfmpegHwMjpegH26x* handle) {
   if (!handle) {
     set_last_error("Invalid handle for request_keyframe");
     return -1;
   }
-  auto *ctx = reinterpret_cast<FfmpegHwMjpegH264Ctx*>(handle);
+  auto *ctx = reinterpret_cast<FfmpegHwMjpegH26xCtx*>(handle);
   ctx->force_keyframe = true;
   return 0;
 }
 
-extern "C" void ffmpeg_hw_mjpeg_h264_free(FfmpegHwMjpegH264* handle) {
-  auto *ctx = reinterpret_cast<FfmpegHwMjpegH264Ctx*>(handle);
+extern "C" void ffmpeg_hw_mjpeg_h26x_free(FfmpegHwMjpegH26x* handle) {
+  auto *ctx = reinterpret_cast<FfmpegHwMjpegH26xCtx*>(handle);
   if (!ctx) return;
 
   if (ctx->dec_pkt) av_packet_free(&ctx->dec_pkt);

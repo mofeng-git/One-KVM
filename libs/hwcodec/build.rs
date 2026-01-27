@@ -419,10 +419,10 @@ mod ffmpeg {
                     builder.include(rkrga_dir.join("im2d_api"));
                 }
             }
-            builder.file(ffmpeg_hw_dir.join("ffmpeg_hw_mjpeg_h264.cpp"));
+            builder.file(ffmpeg_hw_dir.join("ffmpeg_hw_mjpeg_h26x.cpp"));
         } else {
             println!(
-                "cargo:info=Skipping ffmpeg_hw_mjpeg_h264.cpp (RKMPP) for arch {}",
+                "cargo:info=Skipping ffmpeg_hw_mjpeg_h26x.cpp (RKMPP) for arch {}",
                 target_arch
             );
         }

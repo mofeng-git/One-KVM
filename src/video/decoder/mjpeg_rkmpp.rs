@@ -2,7 +2,7 @@
 
 use hwcodec::ffmpeg::AVPixelFormat;
 use hwcodec::ffmpeg_ram::decode::{DecodeContext, Decoder};
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::error::{AppError, Result};
 use crate::video::convert::Nv12Converter;
@@ -72,6 +72,9 @@ impl MjpegRkmppDecoder {
                 );
             }
         } else {
+            if frame.pixfmt == AVPixelFormat::AV_PIX_FMT_NV16 {
+                info!("mjpeg_rkmpp output pixfmt NV16 on first frame; converting to NV12");
+            }
             self.last_pixfmt = Some(frame.pixfmt);
         }
 

@@ -10,7 +10,7 @@ use std::{
 include!(concat!(env!("OUT_DIR"), "/ffmpeg_hw_ffi.rs"));
 
 #[derive(Debug, Clone)]
-pub struct HwMjpegH264Config {
+pub struct HwMjpegH26xConfig {
     pub decoder: String,
     pub encoder: String,
     pub width: i32,
@@ -21,19 +21,19 @@ pub struct HwMjpegH264Config {
     pub thread_count: i32,
 }
 
-pub struct HwMjpegH264Pipeline {
-    ctx: *mut FfmpegHwMjpegH264,
-    config: HwMjpegH264Config,
+pub struct HwMjpegH26xPipeline {
+    ctx: *mut FfmpegHwMjpegH26x,
+    config: HwMjpegH26xConfig,
 }
 
-unsafe impl Send for HwMjpegH264Pipeline {}
+unsafe impl Send for HwMjpegH26xPipeline {}
 
-impl HwMjpegH264Pipeline {
-    pub fn new(config: HwMjpegH264Config) -> Result<Self, String> {
+impl HwMjpegH26xPipeline {
+    pub fn new(config: HwMjpegH26xConfig) -> Result<Self, String> {
         unsafe {
             let dec = CString::new(config.decoder.as_str()).map_err(|_| "decoder name invalid".to_string())?;
             let enc = CString::new(config.encoder.as_str()).map_err(|_| "encoder name invalid".to_string())?;
-            let ctx = ffmpeg_hw_mjpeg_h264_new(
+            let ctx = ffmpeg_hw_mjpeg_h26x_new(
                 dec.as_ptr(),
                 enc.as_ptr(),
                 config.width,
@@ -55,7 +55,7 @@ impl HwMjpegH264Pipeline {
             let mut out_data: *mut u8 = std::ptr::null_mut();
             let mut out_len: c_int = 0;
             let mut out_key: c_int = 0;
-            let ret = ffmpeg_hw_mjpeg_h264_encode(
+            let ret = ffmpeg_hw_mjpeg_h26x_encode(
                 self.ctx,
                 data.as_ptr(),
                 data.len() as c_int,
@@ -80,7 +80,7 @@ impl HwMjpegH264Pipeline {
 
     pub fn reconfigure(&mut self, bitrate_kbps: i32, gop: i32) -> Result<(), String> {
         unsafe {
-            let ret = ffmpeg_hw_mjpeg_h264_reconfigure(self.ctx, bitrate_kbps, gop);
+            let ret = ffmpeg_hw_mjpeg_h26x_reconfigure(self.ctx, bitrate_kbps, gop);
             if ret != 0 {
                 return Err(last_error_message());
             }
@@ -92,15 +92,15 @@ impl HwMjpegH264Pipeline {
 
     pub fn request_keyframe(&mut self) {
         unsafe {
-            let _ = ffmpeg_hw_mjpeg_h264_request_keyframe(self.ctx);
+            let _ = ffmpeg_hw_mjpeg_h26x_request_keyframe(self.ctx);
         }
     }
 }
 
-impl Drop for HwMjpegH264Pipeline {
+impl Drop for HwMjpegH26xPipeline {
     fn drop(&mut self) {
         unsafe {
-            ffmpeg_hw_mjpeg_h264_free(self.ctx);
+            ffmpeg_hw_mjpeg_h26x_free(self.ctx);
         }
         self.ctx = std::ptr::null_mut();
     }
