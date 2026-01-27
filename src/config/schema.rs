@@ -166,6 +166,8 @@ impl Default for OtgDescriptorConfig {
 pub enum OtgHidProfile {
     /// Full HID device set (keyboard + relative mouse + absolute mouse + consumer control)
     Full,
+    /// Full HID device set without MSD
+    FullNoMsd,
     /// Legacy profile: only keyboard
     LegacyKeyboard,
     /// Legacy profile: only relative mouse
@@ -234,6 +236,7 @@ impl OtgHidProfile {
     pub fn resolve_functions(&self, custom: &OtgHidFunctions) -> OtgHidFunctions {
         match self {
             Self::Full => OtgHidFunctions::full(),
+            Self::FullNoMsd => OtgHidFunctions::full(),
             Self::LegacyKeyboard => OtgHidFunctions::legacy_keyboard(),
             Self::LegacyMouseRelative => OtgHidFunctions::legacy_mouse_relative(),
             Self::Custom => custom.clone(),

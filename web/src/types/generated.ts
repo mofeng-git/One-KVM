@@ -58,6 +58,8 @@ export interface OtgDescriptorConfig {
 export enum OtgHidProfile {
 	/** Full HID device set (keyboard + relative mouse + absolute mouse + consumer control) */
 	Full = "full",
+	/** Full HID device set without MSD */
+	FullNoMsd = "full_no_msd",
 	/** Legacy profile: only keyboard */
 	LegacyKeyboard = "legacy_keyboard",
 	/** Legacy profile: only relative mouse */

@@ -548,6 +548,8 @@ async function saveConfig() {
       if (config.value.hid_backend === 'otg') {
         if (config.value.hid_otg_profile === 'full') {
           desiredMsdEnabled = true
+        } else if (config.value.hid_otg_profile === 'full_no_msd') {
+          desiredMsdEnabled = false
         } else if (
           config.value.hid_otg_profile === 'legacy_keyboard'
           || config.value.hid_otg_profile === 'legacy_mouse_relative'
@@ -1477,6 +1479,7 @@ onMounted(async () => {
                       <Label for="otg-profile">{{ t('settings.profile') }}</Label>
                       <select id="otg-profile" v-model="config.hid_otg_profile" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
                         <option value="full">{{ t('settings.otgProfileFull') }}</option>
+                        <option value="full_no_msd">{{ t('settings.otgProfileFullNoMsd') }}</option>
                         <option value="legacy_keyboard">{{ t('settings.otgProfileLegacyKeyboard') }}</option>
                         <option value="legacy_mouse_relative">{{ t('settings.otgProfileLegacyMouseRelative') }}</option>
                         <option value="custom">{{ t('settings.otgProfileCustom') }}</option>
