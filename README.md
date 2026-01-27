@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="https://github.com/mofeng-git/Build-Armbian/assets/62919083/add9743a-0987-4e8a-b2cb-62121f236582" alt="One-KVM Logo" width="300">
   <h1>One-KVM</h1>
   <p><strong>Rust 编写的开放轻量 IP-KVM 解决方案，实现 BIOS 级远程管理</strong></p>
 
@@ -18,16 +17,6 @@
 </div>
 
 ---
-
-## 📋 目录
-
-- [项目概述](#项目概述)
-- [迁移说明](#迁移说明)
-- [功能介绍](#功能介绍)
-- [快速开始](#快速开始)
-- [贡献与反馈](#贡献与反馈)
-- [致谢](#致谢)
-- [许可证](#许可证)
 
 ## 📖 项目概述
 
@@ -74,85 +63,14 @@
 - Web UI 配置，多语言支持（中文/英文）
 - 内置 Web 终端（ttyd）内网穿透支持（gostc）、P2P 组网支持（EasyTier）、RustDesk 协议集成（用于跨平台远程访问能力扩展）
 
-## ⚡ 快速开始
+## ⚡ 安装使用
 
-安装方式：Docker / DEB 软件包 / 飞牛 NAS（FPK）。
-
-### 方式一：Docker 安装（推荐）
-
-前提条件：
-
-- Linux 主机已安装 Docker
-- 插好 USB HDMI 采集卡
-- 启用 USB OTG 或插好 CH340+CH9329 HID 线（用于 HID 模拟）
-
-启动容器：
-
-```bash
-docker run --name one-kvm -itd --privileged=true \
-  -v /dev:/dev  -v /sys/:/sys \
-  --net=host \
-  silentwind0/one-kvm
-```
-
-访问 Web 界面：`http://<设备IP>:8080`（首次访问会引导创建管理员账户）。默认端口：HTTP `8080`；启用 HTTPS 后为 `8443`。
-
-#### 常用环境变量（Docker）
-
-| 变量名 | 默认值 | 说明 |
-|------|------|------|
-| `ENABLE_HTTPS` | `false` | 是否启用 HTTPS（`true/false`） |
-| `HTTP_PORT` | `8080` | HTTP 端口（`ENABLE_HTTPS=false` 时生效） |
-| `HTTPS_PORT` | `8443` | HTTPS 端口（`ENABLE_HTTPS=true` 时生效） |
-| `BIND_ADDRESS` | - | 监听地址（如 `0.0.0.0`） |
-| `VERBOSE` | `0` | 日志详细程度：`1`（-v）、`2`（-vv）、`3`（-vvv） |
-| `DATA_DIR` | `/etc/one-kvm` | 数据目录（等价于 `one-kvm -d <DIR>`，优先级高于 `ONE_KVM_DATA_DIR`） |
-
-> 说明：`--privileged=true` 和挂载 `/dev`、`/sys` 是硬件访问所需配置，当前版本不可省略。
->
-> 兼容性：同时支持旧变量名 `ONE_KVM_DATA_DIR`。
->
-> HTTPS：未提供证书时会自动生成默认自签名证书。
->
-> Ventoy：若修改 `DATA_DIR`，请确保 Ventoy 资源文件位于 `${DATA_DIR}/ventoy`（`boot.img`、`core.img`、`ventoy.disk.img`）。
-
-### 方式二：DEB 软件包安装
-
-前提条件：
-
-- Debian 11+ / Ubuntu 22+
-- 插好 USB HDMI 采集卡、HID 线（OTG 或 CH340+CH9329）
-
-安装步骤：
-
-1. 从 GitHub Releases 下载适合架构的 `one-kvm_*.deb`：[Releases](https://github.com/mofeng-git/One-KVM/releases)
-2. 安装：
-
-```bash
-sudo apt update
-sudo apt install ./one-kvm_*_*.deb
-```
-
-访问 Web 界面：`http://<设备IP>:8080`。
-
-### 方式三：飞牛 NAS（FPK）安装
-
-前提条件：
-
-- 飞牛 NAS 系统（目前仅支持 x86_64 架构）
-- 插好 USB HDMI 采集卡、CH340+CH9329 HID 线
-
-安装步骤：
-
-1. 从 GitHub Releases 下载 `*.fpk` 软件包：[Releases](https://github.com/mofeng-git/One-KVM/releases)
-2. 在飞牛应用商店选择“手动安装”，导入 `*.fpk`
-
-访问 Web 界面：`http://<设备IP>:8420`。
+可以访问 [One-KVM Rust 文档站点](https://docs.one-kvm.cn/) 获取详细信息。
 
 ## 报告问题
 
 如果您发现了问题，请：
-1. 使用 [GitHub Issues](https://github.com/mofeng-git/One-KVM/issues) 报告
+1. 使用 [GitHub Issues](https://github.com/mofeng-git/One-KVM/issues) 报告，或加入 QQ 群聊反馈。
 2. 提供详细的错误信息和复现步骤
 3. 包含您的硬件配置和系统信息
 
@@ -269,6 +187,14 @@ sudo apt install ./one-kvm_*_*.deb
 
 - 葱
 
+- MaxZ
+
+- 爱发电用户_c5f33
+
+- 爱发电用户_09386
+
+- 爱发电用户_JT6c
+
 - ......
 
 </details>
@@ -276,11 +202,6 @@ sudo apt install ./one-kvm_*_*.deb
 ### 赞助商
 
 本项目得到以下赞助商的支持：
-
-**CDN 加速及安全防护：**
-- **[Tencent EdgeOne](https://edgeone.ai/zh?from=github)** - 提供 CDN 加速及安全防护服务
-
-![Tencent EdgeOne](https://edgeone.ai/media/34fe3a45-492d-4ea4-ae5d-ea1087ca7b4b.png)
 
 **文件存储服务：**
 - **[Huang1111公益计划](https://pan.huang1111.cn/s/mxkx3T1)** - 提供免登录下载服务
