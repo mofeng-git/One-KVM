@@ -506,6 +506,7 @@ impl SharedVideoPipeline {
             }
         };
 
+        #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
         let is_rkmpp_encoder = selected_codec_name.contains("rkmpp");
         #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
         if needs_mjpeg_decode

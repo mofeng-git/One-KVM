@@ -1557,6 +1557,9 @@ async fn run_video_streaming(
     let mut shutdown_rx = shutdown_tx.subscribe();
     let mut encoded_count: u64 = 0;
     let mut last_log_time = Instant::now();
+    let mut waiting_for_keyframe = true;
+    let mut last_sequence: Option<u64> = None;
+    let mut last_keyframe_request = Instant::now() - Duration::from_secs(1);
 
     info!(
         "Started shared video streaming for connection {} (codec: {:?})",
@@ -1626,6 +1629,30 @@ async fn run_video_streaming(
                         }
                     };
 
+                    let gap_detected = if let Some(prev) = last_sequence {
+                        frame.sequence > prev.saturating_add(1)
+                    } else {
+                        false
+                    };
+
+                    if waiting_for_keyframe || gap_detected {
+                        if frame.is_keyframe {
+                            waiting_for_keyframe = false;
+                        } else {
+                            if gap_detected {
+                                waiting_for_keyframe = true;
+                            }
+                            let now = Instant::now();
+                            if now.duration_since(last_keyframe_request) >= Duration::from_millis(200) {
+                                if let Err(e) = video_manager.request_keyframe().await {
+                                    debug!("Failed to request keyframe for connection {}: {}", conn_id, e);
+                                }
+                                last_keyframe_request = now;
+                            }
+                            continue;
+                        }
+                    }
+
                     // Convert EncodedVideoFrame to RustDesk VideoFrame message
                     // Use zero-copy version: Bytes.clone() only increments refcount
                     let msg_bytes = video_adapter.encode_frame_bytes_zero_copy(
@@ -1634,12 +1661,13 @@ async fn run_video_streaming(
                         frame.pts_ms as u64,
                     );
 
-                    // Send to connection (blocks if channel is full, providing backpressure)
-                    if video_tx.try_send(msg_bytes).is_err() {
-                        // Drop when channel is full to avoid backpressure
-                        continue;
+                    // Send to connection (backpressure instead of dropping)
+                    if video_tx.send(msg_bytes).await.is_err() {
+                        debug!("Video channel closed for connection {}", conn_id);
+                        break 'subscribe_loop;
                     }
 
+                    last_sequence = Some(frame.sequence);
                     encoded_count += 1;
 
                     // Log stats periodically
