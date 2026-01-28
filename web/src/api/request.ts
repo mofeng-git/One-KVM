@@ -6,7 +6,6 @@ const API_BASE = '/api'
 // Toast debounce mechanism - prevent toast spam (5 seconds)
 const toastDebounceMap = new Map<string, number>()
 const TOAST_DEBOUNCE_TIME = 5000
-let sessionExpiredNotified = false
 
 function shouldShowToast(key: string): boolean {
   const now = Date.now()
@@ -84,24 +83,10 @@ export async function request<T>(
       const message = getErrorMessage(data, `HTTP ${response.status}`)
       const normalized = message.toLowerCase()
       const isNotAuthenticated = normalized.includes('not authenticated')
-      if (response.status === 401 && !sessionExpiredNotified) {
-        const isLoggedInElsewhere = normalized.includes('logged in elsewhere')
-        const isSessionExpired = normalized.includes('session expired')
-        if (isLoggedInElsewhere || isSessionExpired) {
-          sessionExpiredNotified = true
-          const titleKey = isLoggedInElsewhere ? 'auth.loggedInElsewhere' : 'auth.sessionExpired'
-          if (toastOnError && shouldShowToast('error_session_expired')) {
-            toast.error(t(titleKey), {
-              description: message,
-              duration: 3000,
-            })
-          }
-          setTimeout(() => {
-            window.location.reload()
-          }, 1200)
-        }
-      }
-      if (toastOnError && shouldShowToast(toastKey) && !(response.status === 401 && isNotAuthenticated)) {
+      const isSessionExpired = normalized.includes('session expired')
+      const isLoggedInElsewhere = normalized.includes('logged in elsewhere')
+      const isAuthIssue = response.status === 401 && (isNotAuthenticated || isSessionExpired || isLoggedInElsewhere)
+      if (toastOnError && shouldShowToast(toastKey) && !isAuthIssue) {
         toast.error(t('api.operationFailed'), {
           description: message,
           duration: 4000,

@@ -32,10 +32,14 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = result.user || null
       isAdmin.value = result.is_admin ?? false
       return result
-    } catch {
+    } catch (e) {
       isAuthenticated.value = false
       user.value = null
       isAdmin.value = false
+      error.value = e instanceof Error ? e.message : 'Not authenticated'
+      if (e instanceof Error) {
+        throw e
+      }
       throw new Error('Not authenticated')
     }
   }

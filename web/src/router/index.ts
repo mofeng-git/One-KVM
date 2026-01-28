@@ -1,4 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { toast } from 'vue-sonner'
+import i18n from '@/i18n'
+import { ApiError } from '@/api/request'
 import { useAuthStore } from '@/stores/auth'
 
 const routes: RouteRecordRaw[] = [
@@ -33,6 +36,12 @@ const router = createRouter({
   routes,
 })
 
+let sessionExpiredNotified = false
+
+function t(key: string, params?: Record<string, unknown>): string {
+  return String(i18n.global.t(key, params as any))
+}
+
 // Navigation guard
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
@@ -54,8 +63,21 @@ router.beforeEach(async (to, _from, next) => {
     if (!authStore.isAuthenticated) {
       try {
         await authStore.checkAuth()
-      } catch {
+      } catch (e) {
         // Not authenticated
+        if (e instanceof ApiError && e.status === 401 && !sessionExpiredNotified) {
+          const normalized = e.message.toLowerCase()
+          const isLoggedInElsewhere = normalized.includes('logged in elsewhere')
+          const isSessionExpired = normalized.includes('session expired')
+          if (isLoggedInElsewhere || isSessionExpired) {
+            sessionExpiredNotified = true
+            const titleKey = isLoggedInElsewhere ? 'auth.loggedInElsewhere' : 'auth.sessionExpired'
+            toast.error(t(titleKey), {
+              description: e.message,
+              duration: 3000,
+            })
+          }
+        }
       }
 
       if (!authStore.isAuthenticated) {
