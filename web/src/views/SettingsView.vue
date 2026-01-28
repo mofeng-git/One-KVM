@@ -933,6 +933,13 @@ async function loadRustdeskPassword() {
   }
 }
 
+function normalizeRustdeskServer(value: string, defaultPort: number): string | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  if (trimmed.includes(':')) return trimmed
+  return `${trimmed}:${defaultPort}`
+}
+
 // Web server config functions
 async function loadWebServerConfig() {
   try {
@@ -978,10 +985,15 @@ async function saveRustdeskConfig() {
   loading.value = true
   saved.value = false
   try {
+    const rendezvousServer = normalizeRustdeskServer(
+      rustdeskLocalConfig.value.rendezvous_server,
+      21116,
+    )
+    const relayServer = normalizeRustdeskServer(rustdeskLocalConfig.value.relay_server, 21117)
     await rustdeskConfigApi.update({
       enabled: rustdeskLocalConfig.value.enabled,
-      rendezvous_server: rustdeskLocalConfig.value.rendezvous_server || undefined,
-      relay_server: rustdeskLocalConfig.value.relay_server || undefined,
+      rendezvous_server: rendezvousServer,
+      relay_server: relayServer,
       relay_key: rustdeskLocalConfig.value.relay_key || undefined,
     })
     await loadRustdeskConfig()
