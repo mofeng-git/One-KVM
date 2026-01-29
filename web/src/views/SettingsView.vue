@@ -1193,13 +1193,11 @@ onMounted(async () => {
   <AppLayout>
     <div class="flex h-full overflow-hidden">
       <!-- Mobile Header -->
-      <div class="lg:hidden fixed top-16 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 border-b bg-background">
-        <h1 class="text-lg font-semibold">{{ t('settings.title') }}</h1>
+      <div class="lg:hidden fixed top-16 left-0 right-0 z-20 flex items-center px-4 py-3 border-b bg-background">
         <Sheet v-model:open="mobileMenuOpen">
           <SheetTrigger as-child>
-            <Button variant="outline" size="sm">
-              <Menu class="h-4 w-4 mr-2" />
-              {{ t('common.menu') }}
+            <Button variant="ghost" size="icon" class="mr-2 h-9 w-9">
+              <Menu class="h-4 w-4" />
             </Button>
           </SheetTrigger>
           <SheetContent side="left" class="w-72 p-0">
@@ -1228,6 +1226,7 @@ onMounted(async () => {
             </div>
           </SheetContent>
         </Sheet>
+        <h1 class="text-lg font-semibold">{{ t('settings.title') }}</h1>
       </div>
 
       <!-- Desktop Sidebar -->
@@ -1382,7 +1381,7 @@ onMounted(async () => {
                     <option v-for="fmt in availableFormats" :key="fmt.format" :value="fmt.format">{{ fmt.format }} - {{ fmt.description }}</option>
                   </select>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="video-resolution">{{ t('settings.resolution') }}</Label>
                     <select id="video-resolution" :value="`${config.video_width}x${config.video_height}`" @change="e => { const parts = (e.target as HTMLSelectElement).value.split('x').map(Number); if (parts[0] && parts[1]) { config.video_width = parts[0]; config.video_height = parts[1]; } }" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" :disabled="!config.video_format">
@@ -1450,7 +1449,7 @@ onMounted(async () => {
                   />
                   <p class="text-xs text-muted-foreground">{{ t('settings.turnServerHint') }}</p>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="turn-username">{{ t('settings.turnUsername') }}</Label>
                     <Input
@@ -1799,7 +1798,7 @@ onMounted(async () => {
                 <CardDescription>{{ t('settings.atxPowerButtonDesc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="power-driver">{{ t('settings.atxDriver') }}</Label>
                     <select id="power-driver" v-model="atxConfig.power.driver" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
@@ -1816,7 +1815,7 @@ onMounted(async () => {
                     </select>
                   </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="power-pin">{{ atxConfig.power.driver === 'usbrelay' ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
                     <Input id="power-pin" type="number" v-model.number="atxConfig.power.pin" min="0" :disabled="atxConfig.power.driver === 'none'" />
@@ -1839,7 +1838,7 @@ onMounted(async () => {
                 <CardDescription>{{ t('settings.atxResetButtonDesc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="reset-driver">{{ t('settings.atxDriver') }}</Label>
                     <select id="reset-driver" v-model="atxConfig.reset.driver" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
@@ -1856,7 +1855,7 @@ onMounted(async () => {
                     </select>
                   </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <Label for="reset-pin">{{ atxConfig.reset.driver === 'usbrelay' ? t('settings.atxChannel') : t('settings.atxPin') }}</Label>
                     <Input id="reset-pin" type="number" v-model.number="atxConfig.reset.pin" min="0" :disabled="atxConfig.reset.driver === 'none'" />
@@ -1891,7 +1890,7 @@ onMounted(async () => {
                 </div>
                 <template v-if="atxConfig.led.enabled">
                   <Separator />
-                  <div class="grid grid-cols-2 gap-4">
+                  <div class="grid gap-4 sm:grid-cols-2">
                     <div class="space-y-2">
                       <Label for="led-chip">{{ t('settings.atxLedChip') }}</Label>
                       <select id="led-chip" v-model="atxConfig.led.gpio_chip" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
@@ -2008,13 +2007,13 @@ onMounted(async () => {
                       <Label>{{ t('extensions.autoStart') }}</Label>
                       <Switch v-model="extConfig.ttyd.enabled" :disabled="isExtRunning(extensions?.ttyd?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.ttyd.shell') }}</Label>
-                      <Input v-model="extConfig.ttyd.shell" class="col-span-3" placeholder="/bin/bash" :disabled="isExtRunning(extensions?.ttyd?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.ttyd.shell') }}</Label>
+                      <Input v-model="extConfig.ttyd.shell" class="sm:col-span-3" placeholder="/bin/bash" :disabled="isExtRunning(extensions?.ttyd?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.ttyd.credential') }}</Label>
-                      <Input v-model="extConfig.ttyd.credential" class="col-span-3" placeholder="user:password" :disabled="isExtRunning(extensions?.ttyd?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.ttyd.credential') }}</Label>
+                      <Input v-model="extConfig.ttyd.credential" class="sm:col-span-3" placeholder="user:password" :disabled="isExtRunning(extensions?.ttyd?.status)" />
                     </div>
                   </div>
                   <!-- Logs -->
@@ -2096,17 +2095,17 @@ onMounted(async () => {
                       <Label>{{ t('extensions.autoStart') }}</Label>
                       <Switch v-model="extConfig.gostc.enabled" :disabled="isExtRunning(extensions?.gostc?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.gostc.addr') }}</Label>
-                      <Input v-model="extConfig.gostc.addr" class="col-span-3" placeholder="gostc.mofeng.run" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.gostc.addr') }}</Label>
+                      <Input v-model="extConfig.gostc.addr" class="sm:col-span-3" placeholder="gostc.mofeng.run" :disabled="isExtRunning(extensions?.gostc?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.gostc.key') }}</Label>
-                      <Input v-model="extConfig.gostc.key" type="password" class="col-span-3" :disabled="isExtRunning(extensions?.gostc?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.gostc.key') }}</Label>
+                      <Input v-model="extConfig.gostc.key" type="password" class="sm:col-span-3" :disabled="isExtRunning(extensions?.gostc?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.gostc.tls') }}</Label>
-                      <div class="col-span-3">
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.gostc.tls') }}</Label>
+                      <div class="sm:col-span-3">
                         <Switch v-model="extConfig.gostc.tls" :disabled="isExtRunning(extensions?.gostc?.status)" />
                       </div>
                     </div>
@@ -2187,17 +2186,17 @@ onMounted(async () => {
                       <Label>{{ t('extensions.autoStart') }}</Label>
                       <Switch v-model="extConfig.easytier.enabled" :disabled="isExtRunning(extensions?.easytier?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.easytier.networkName') }}</Label>
-                      <Input v-model="extConfig.easytier.network_name" class="col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.easytier.networkName') }}</Label>
+                      <Input v-model="extConfig.easytier.network_name" class="sm:col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.easytier.networkSecret') }}</Label>
-                      <Input v-model="extConfig.easytier.network_secret" type="password" class="col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.easytier.networkSecret') }}</Label>
+                      <Input v-model="extConfig.easytier.network_secret" type="password" class="sm:col-span-3" :disabled="isExtRunning(extensions?.easytier?.status)" />
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.easytier.peers') }}</Label>
-                      <div class="col-span-3 space-y-2">
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.easytier.peers') }}</Label>
+                      <div class="sm:col-span-3 space-y-2">
                         <div v-for="(_, i) in extConfig.easytier.peer_urls" :key="i" class="flex gap-2">
                           <Input v-model="extConfig.easytier.peer_urls[i]" placeholder="tcp://1.2.3.4:11010" :disabled="isExtRunning(extensions?.easytier?.status)" />
                           <Button variant="ghost" size="icon" @click="removeEasytierPeer(i)" :disabled="isExtRunning(extensions?.easytier?.status)">
@@ -2210,9 +2209,9 @@ onMounted(async () => {
                         </Button>
                       </div>
                     </div>
-                    <div class="grid grid-cols-4 items-center gap-4">
-                      <Label class="text-right">{{ t('extensions.easytier.virtualIp') }}</Label>
-                      <div class="col-span-3 space-y-1">
+                    <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                      <Label class="sm:text-right">{{ t('extensions.easytier.virtualIp') }}</Label>
+                      <div class="sm:col-span-3 space-y-1">
                         <Input v-model="extConfig.easytier.virtual_ip" placeholder="10.0.0.1/24" :disabled="isExtRunning(extensions?.easytier?.status)" />
                         <p class="text-xs text-muted-foreground">{{ t('extensions.easytier.virtualIpHint') }}</p>
                       </div>
@@ -2304,9 +2303,9 @@ onMounted(async () => {
                     <Label>{{ t('extensions.autoStart') }}</Label>
                     <Switch v-model="rustdeskLocalConfig.enabled" />
                   </div>
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.rendezvousServer') }}</Label>
-                    <div class="col-span-3 space-y-1">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.rendezvousServer') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
                       <Input
                         v-model="rustdeskLocalConfig.rendezvous_server"
                         :placeholder="t('extensions.rustdesk.rendezvousServerPlaceholder')"
@@ -2314,9 +2313,9 @@ onMounted(async () => {
                       <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.rendezvousServerHint') }}</p>
                     </div>
                   </div>
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.relayServer') }}</Label>
-                    <div class="col-span-3 space-y-1">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.relayServer') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
                       <Input
                         v-model="rustdeskLocalConfig.relay_server"
                         :placeholder="t('extensions.rustdesk.relayServerPlaceholder')"
@@ -2324,9 +2323,9 @@ onMounted(async () => {
                       <p class="text-xs text-muted-foreground">{{ t('extensions.rustdesk.relayServerHint') }}</p>
                     </div>
                   </div>
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.relayKey') }}</Label>
-                    <div class="col-span-3 space-y-1">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.relayKey') }}</Label>
+                    <div class="sm:col-span-3 space-y-1">
                       <Input
                         v-model="rustdeskLocalConfig.relay_key"
                         type="password"
@@ -2343,9 +2342,9 @@ onMounted(async () => {
                   <h4 class="text-sm font-medium">{{ t('extensions.rustdesk.deviceInfo') }}</h4>
 
                   <!-- Device ID -->
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.deviceId') }}</Label>
-                    <div class="col-span-3 flex items-center gap-2">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.deviceId') }}</Label>
+                    <div class="sm:col-span-3 flex items-center gap-2">
                       <code class="font-mono text-lg bg-muted px-3 py-1 rounded">{{ rustdeskConfig?.device_id || '-' }}</code>
                       <Button
                         variant="ghost"
@@ -2365,9 +2364,9 @@ onMounted(async () => {
                   </div>
 
                   <!-- Device Password (直接显示) -->
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.devicePassword') }}</Label>
-                    <div class="col-span-3 flex items-center gap-2">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.devicePassword') }}</Label>
+                    <div class="sm:col-span-3 flex items-center gap-2">
                       <code class="font-mono text-lg bg-muted px-3 py-1 rounded">{{ rustdeskPassword?.device_password || '-' }}</code>
                       <Button
                         variant="ghost"
@@ -2387,9 +2386,9 @@ onMounted(async () => {
                   </div>
 
                   <!-- Keypair Status -->
-                  <div class="grid grid-cols-4 items-center gap-4">
-                    <Label class="text-right">{{ t('extensions.rustdesk.keypairGenerated') }}</Label>
-                    <div class="col-span-3">
+                  <div class="grid gap-2 sm:grid-cols-4 sm:items-center">
+                    <Label class="sm:text-right">{{ t('extensions.rustdesk.keypairGenerated') }}</Label>
+                    <div class="sm:col-span-3">
                       <Badge :variant="rustdeskConfig?.has_keypair ? 'default' : 'secondary'">
                         {{ rustdeskConfig?.has_keypair ? t('common.yes') : t('common.no') }}
                       </Badge>

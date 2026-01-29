@@ -85,9 +85,9 @@ const extensionOpen = ref(false)
 
 <template>
   <div class="w-full border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="flex items-center justify-between gap-2 px-4 py-1.5">
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-1.5">
       <!-- Left side buttons -->
-      <div class="flex items-center gap-1.5 min-w-0 flex-1">
+      <div class="flex flex-wrap items-center gap-1.5 w-full sm:flex-1 sm:min-w-0">
         <!-- Video Config - Always visible -->
         <VideoConfigPopover
           v-model:open="videoPopoverOpen"
@@ -155,7 +155,7 @@ const extensionOpen = ref(false)
       </div>
 
       <!-- Right side buttons -->
-      <div class="flex items-center gap-1.5 shrink-0">
+      <div class="flex items-center gap-1.5 w-full justify-end sm:w-auto sm:ml-auto shrink-0">
         <!-- Extension Menu - Hidden on small screens -->
         <Popover v-model:open="extensionOpen" class="hidden lg:block">
           <PopoverTrigger as-child>

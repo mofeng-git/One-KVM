@@ -114,6 +114,21 @@ const keyboardLayout = {
   },
 }
 
+const compactMainLayout = {
+  default: keyboardLayout.main.default.slice(2),
+  shift: keyboardLayout.main.shift.slice(2),
+}
+
+const isCompactLayout = ref(false)
+let compactLayoutMedia: MediaQueryList | null = null
+let compactLayoutListener: ((event: MediaQueryListEvent) => void) | null = null
+
+function setCompactLayout(active: boolean) {
+  if (isCompactLayout.value === active) return
+  isCompactLayout.value = active
+  updateKeyboardLayout()
+}
+
 // Key display mapping with Unicode symbols (JetKVM style)
 const keyDisplayMap = computed<Record<string, string>>(() => {
   // OS-specific Meta key labels
@@ -233,14 +248,15 @@ function switchOsLayout(os: KeyboardOsType) {
 // Update keyboard layout based on selected OS
 function updateKeyboardLayout() {
   const bottomRow = getBottomRow()
+  const baseLayout = isCompactLayout.value ? compactMainLayout : keyboardLayout.main
   const newLayout = {
-    ...keyboardLayout.main,
+    ...baseLayout,
     default: [
-      ...keyboardLayout.main.default.slice(0, -1),
+      ...baseLayout.default.slice(0, -1),
       bottomRow,
     ],
     shift: [
-      ...keyboardLayout.main.shift.slice(0, -1),
+      ...baseLayout.shift.slice(0, -1),
       bottomRow,
     ],
   }
@@ -422,7 +438,7 @@ function initKeyboards() {
 
   // Main keyboard - pass element directly instead of selector string
   mainKeyboard.value = new Keyboard(mainEl, {
-    layout: keyboardLayout.main,
+    layout: isCompactLayout.value ? compactMainLayout : keyboardLayout.main,
     layoutName: layoutName.value,
     display: keyDisplayMap.value,
     theme: 'hg-theme-default hg-layout-default vkb-keyboard',
@@ -471,6 +487,7 @@ function initKeyboards() {
     stopMouseUpPropagation: true,
   })
 
+  updateKeyboardLayout()
   console.log('[VirtualKeyboard] Keyboards initialized:', id)
 }
 
@@ -570,6 +587,15 @@ onMounted(() => {
     selectedOs.value = savedOs
   }
 
+  if (window.matchMedia) {
+    compactLayoutMedia = window.matchMedia('(max-width: 640px)')
+    setCompactLayout(compactLayoutMedia.matches)
+    compactLayoutListener = (event: MediaQueryListEvent) => {
+      setCompactLayout(event.matches)
+    }
+    compactLayoutMedia.addEventListener('change', compactLayoutListener)
+  }
+
   document.addEventListener('mousemove', onDrag)
   document.addEventListener('touchmove', onDrag)
   document.addEventListener('mouseup', endDrag)
@@ -577,6 +603,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (compactLayoutMedia && compactLayoutListener) {
+    compactLayoutMedia.removeEventListener('change', compactLayoutListener)
+  }
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('touchmove', onDrag)
   document.removeEventListener('mouseup', endDrag)
@@ -1109,6 +1138,80 @@ html.dark .hg-theme-default .hg-button.down-key,
     flex-direction: row;
     justify-content: center;
     gap: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .vkb .simple-keyboard .hg-button {
+    height: 30px;
+    font-size: 10px;
+    padding: 0 4px;
+    margin: 0 1px 3px 0;
+    min-width: 26px;
+  }
+
+  .vkb .simple-keyboard .hg-button.combination-key {
+    font-size: 9px;
+    height: 24px;
+    padding: 0 6px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="Backspace"] {
+    min-width: 60px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="Tab"] {
+    min-width: 52px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="Backslash"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="(Backslash)"] {
+    min-width: 52px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="CapsLock"] {
+    min-width: 60px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="Enter"] {
+    min-width: 70px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="ShiftLeft"] {
+    min-width: 70px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="ShiftRight"] {
+    min-width: 80px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="ControlLeft"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="ControlRight"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="MetaLeft"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="MetaRight"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="AltLeft"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="AltGr"],
+  .vkb .simple-keyboard .hg-button[data-skbtn="Menu"] {
+    min-width: 46px;
+  }
+
+  .vkb .simple-keyboard .hg-button[data-skbtn="Space"] {
+    min-width: 140px;
+  }
+
+  .kb-control-container .hg-button {
+    min-width: 44px !important;
+  }
+
+  .kb-arrows-container .hg-button {
+    min-width: 36px !important;
+    width: 36px !important;
+  }
+
+  .vkb-media-btn {
+    padding: 4px 8px;
+    font-size: 14px;
+    min-width: 32px;
   }
 }
 

@@ -556,7 +556,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-background p-4">
+  <div class="min-h-screen flex items-start sm:items-center justify-center bg-background px-4 py-6 sm:py-10">
     <Card class="w-full max-w-lg relative">
       <!-- Language Switcher -->
       <div class="absolute top-4 right-4">
@@ -583,28 +583,28 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
         </DropdownMenu>
       </div>
 
-      <CardHeader class="text-center space-y-2 pt-12">
+      <CardHeader class="text-center space-y-2 pt-10 sm:pt-12">
         <div
           class="inline-flex items-center justify-center w-16 h-16 mx-auto rounded-full bg-primary/10"
         >
           <Monitor class="w-8 h-8 text-primary" />
         </div>
-        <CardTitle class="text-2xl">{{ t('setup.welcome') }}</CardTitle>
+        <CardTitle class="text-xl sm:text-2xl">{{ t('setup.welcome') }}</CardTitle>
         <CardDescription>{{ t('setup.description') }}</CardDescription>
       </CardHeader>
 
-      <CardContent class="space-y-6">
+      <CardContent class="space-y-5 sm:space-y-6">
         <!-- Progress Text -->
         <p class="text-sm text-muted-foreground text-center">
           {{ t('setup.progress', { current: step, total: totalSteps }) }}
         </p>
 
         <!-- Step Indicator with Labels -->
-        <div class="flex items-center justify-center gap-2 mb-6">
+        <div class="flex items-center justify-center gap-1.5 sm:gap-2 mb-5 sm:mb-6">
           <template v-for="i in totalSteps" :key="i">
             <div class="flex flex-col items-center gap-1">
               <div
-                class="flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300"
+                class="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 transition-all duration-300"
                 :class="
                   step > i
                     ? 'bg-primary border-primary text-primary-foreground scale-100'
@@ -613,11 +613,11 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                       : 'border-muted text-muted-foreground scale-100'
                 "
               >
-                <Check v-if="step > i" class="w-5 h-5" />
-                <component :is="stepIcons[i - 1]" v-else class="w-5 h-5" />
+                <Check v-if="step > i" class="w-4 h-4 sm:w-5 sm:h-5" />
+                <component :is="stepIcons[i - 1]" v-else class="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <span
-                class="text-xs transition-colors duration-300 max-w-16 text-center leading-tight"
+                class="text-[10px] sm:text-xs transition-colors duration-300 max-w-14 sm:max-w-16 text-center leading-tight"
                 :class="step >= i ? 'text-foreground font-medium' : 'text-muted-foreground'"
               >
                 {{ stepLabels[i - 1] }}
@@ -625,7 +625,7 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
             </div>
             <div
               v-if="i < totalSteps"
-              class="w-8 h-0.5 transition-colors duration-300 mb-6"
+              class="w-5 sm:w-8 h-0.5 transition-colors duration-300 mb-5 sm:mb-6"
               :class="step > i ? 'bg-primary' : 'bg-muted'"
             />
           </template>
