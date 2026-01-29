@@ -95,6 +95,7 @@ export const useAuthStore = defineStore('auth', () => {
     hid_ch9329_port?: string
     hid_ch9329_baudrate?: number
     hid_otg_udc?: string
+    hid_otg_profile?: string
     encoder_backend?: string
     audio_device?: string
     ttyd_enabled?: boolean

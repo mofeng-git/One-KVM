@@ -220,12 +220,14 @@ interface DeviceConfig {
   }>
   serial: Array<{ path: string; name: string }>
   audio: Array<{ name: string; description: string }>
+  udc: Array<{ name: string }>
 }
 
 const devices = ref<DeviceConfig>({
   video: [],
   serial: [],
   audio: [],
+  udc: [],
 })
 
 const config = ref({
@@ -237,6 +239,7 @@ const config = ref({
   hid_backend: 'ch9329',
   hid_serial_device: '',
   hid_serial_baudrate: 9600,
+  hid_otg_udc: '',
   hid_otg_profile: 'full' as OtgHidProfile,
   hid_otg_functions: {
     keyboard: true,
@@ -257,6 +260,39 @@ const config = ref({
 
 // 跟踪服务器是否已配置 TURN 密码
 const hasTurnPassword = ref(false)
+const configLoaded = ref(false)
+const devicesLoaded = ref(false)
+const hidProfileAligned = ref(false)
+
+const isLowEndpointUdc = computed(() => {
+  if (config.value.hid_otg_udc) {
+    return /musb/i.test(config.value.hid_otg_udc)
+  }
+  return devices.value.udc.some((udc) => /musb/i.test(udc.name))
+})
+
+const showLowEndpointHint = computed(() =>
+  config.value.hid_backend === 'otg' && isLowEndpointUdc.value
+)
+
+function alignHidProfileForLowEndpoint() {
+  if (hidProfileAligned.value) return
+  if (!configLoaded.value || !devicesLoaded.value) return
+  if (config.value.hid_backend !== 'otg') {
+    hidProfileAligned.value = true
+    return
+  }
+  if (!isLowEndpointUdc.value) {
+    hidProfileAligned.value = true
+    return
+  }
+  if (config.value.hid_otg_profile === 'full') {
+    config.value.hid_otg_profile = 'full_no_consumer' as OtgHidProfile
+  } else if (config.value.hid_otg_profile === 'full_no_msd') {
+    config.value.hid_otg_profile = 'full_no_consumer_no_msd' as OtgHidProfile
+  }
+  hidProfileAligned.value = true
+}
 
 const isHidFunctionSelectionValid = computed(() => {
   if (config.value.hid_backend !== 'otg') return true
@@ -550,6 +586,10 @@ async function saveConfig() {
           desiredMsdEnabled = true
         } else if (config.value.hid_otg_profile === 'full_no_msd') {
           desiredMsdEnabled = false
+        } else if (config.value.hid_otg_profile === 'full_no_consumer') {
+          desiredMsdEnabled = true
+        } else if (config.value.hid_otg_profile === 'full_no_consumer_no_msd') {
+          desiredMsdEnabled = false
         } else if (
           config.value.hid_otg_profile === 'legacy_keyboard'
           || config.value.hid_otg_profile === 'legacy_mouse_relative'
@@ -624,6 +664,7 @@ async function loadConfig() {
       hid_backend: hid.backend || 'none',
       hid_serial_device: hid.ch9329_port || '',
       hid_serial_baudrate: hid.ch9329_baudrate || 9600,
+      hid_otg_udc: hid.otg_udc || '',
       hid_otg_profile: (hid.otg_profile || 'full') as OtgHidProfile,
       hid_otg_functions: {
         keyboard: hid.otg_functions?.keyboard ?? true,
@@ -664,6 +705,9 @@ async function loadConfig() {
     }
   } catch (e) {
     console.error('Failed to load config:', e)
+  } finally {
+    configLoaded.value = true
+    alignHidProfileForLowEndpoint()
   }
 }
 
@@ -672,6 +716,9 @@ async function loadDevices() {
     devices.value = await configApi.listDevices()
   } catch (e) {
     console.error('Failed to load devices:', e)
+  } finally {
+    devicesLoaded.value = true
+    alignHidProfileForLowEndpoint()
   }
 }
 
@@ -1492,6 +1539,8 @@ onMounted(async () => {
                       <select id="otg-profile" v-model="config.hid_otg_profile" class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
                         <option value="full">{{ t('settings.otgProfileFull') }}</option>
                         <option value="full_no_msd">{{ t('settings.otgProfileFullNoMsd') }}</option>
+                        <option value="full_no_consumer">{{ t('settings.otgProfileFullNoConsumer') }}</option>
+                        <option value="full_no_consumer_no_msd">{{ t('settings.otgProfileFullNoConsumerNoMsd') }}</option>
                         <option value="legacy_keyboard">{{ t('settings.otgProfileLegacyKeyboard') }}</option>
                         <option value="legacy_mouse_relative">{{ t('settings.otgProfileLegacyMouseRelative') }}</option>
                         <option value="custom">{{ t('settings.otgProfileCustom') }}</option>
@@ -1540,6 +1589,9 @@ onMounted(async () => {
                     </div>
                     <p class="text-xs text-amber-600 dark:text-amber-400">
                       {{ t('settings.otgProfileWarning') }}
+                    </p>
+                    <p v-if="showLowEndpointHint" class="text-xs text-amber-600 dark:text-amber-400">
+                      {{ t('settings.otgLowEndpointHint') }}
                     </p>
                   </div>
                   <Separator class="my-4" />

@@ -187,7 +187,23 @@ pub async fn apply_hid_config(
     // 检查 OTG 描述符是否变更
     let descriptor_changed = old_config.otg_descriptor != new_config.otg_descriptor;
     let old_hid_functions = old_config.effective_otg_functions();
-    let new_hid_functions = new_config.effective_otg_functions();
+    let mut new_hid_functions = new_config.effective_otg_functions();
+
+    // Low-endpoint UDCs (e.g., musb) cannot handle consumer control endpoints reliably
+    if new_config.backend == HidBackend::Otg {
+        if let Some(udc) =
+            crate::otg::configfs::resolve_udc_name(new_config.otg_udc.as_deref())
+        {
+            if crate::otg::configfs::is_low_endpoint_udc(&udc) && new_hid_functions.consumer {
+                tracing::warn!(
+                    "UDC {} has low endpoint resources, disabling consumer control",
+                    udc
+                );
+                new_hid_functions.consumer = false;
+            }
+        }
+    }
+
     let hid_functions_changed = old_hid_functions != new_hid_functions;
 
     if new_config.backend == HidBackend::Otg && new_hid_functions.is_empty() {

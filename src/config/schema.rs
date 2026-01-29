@@ -168,6 +168,10 @@ pub enum OtgHidProfile {
     Full,
     /// Full HID device set without MSD
     FullNoMsd,
+    /// Full HID device set without consumer control
+    FullNoConsumer,
+    /// Full HID device set without consumer control and MSD
+    FullNoConsumerNoMsd,
     /// Legacy profile: only keyboard
     LegacyKeyboard,
     /// Legacy profile: only relative mouse
@@ -200,6 +204,15 @@ impl OtgHidFunctions {
             mouse_relative: true,
             mouse_absolute: true,
             consumer: true,
+        }
+    }
+
+    pub fn full_no_consumer() -> Self {
+        Self {
+            keyboard: true,
+            mouse_relative: true,
+            mouse_absolute: true,
+            consumer: false,
         }
     }
 
@@ -237,6 +250,8 @@ impl OtgHidProfile {
         match self {
             Self::Full => OtgHidFunctions::full(),
             Self::FullNoMsd => OtgHidFunctions::full(),
+            Self::FullNoConsumer => OtgHidFunctions::full_no_consumer(),
+            Self::FullNoConsumerNoMsd => OtgHidFunctions::full_no_consumer(),
             Self::LegacyKeyboard => OtgHidFunctions::legacy_keyboard(),
             Self::LegacyMouseRelative => OtgHidFunctions::legacy_mouse_relative(),
             Self::Custom => custom.clone(),

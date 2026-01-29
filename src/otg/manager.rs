@@ -6,15 +6,17 @@ use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
 
 use super::configfs::{
-    create_dir, find_udc, is_configfs_available, remove_dir, write_file, CONFIGFS_PATH,
-    DEFAULT_GADGET_NAME, DEFAULT_USB_BCD_DEVICE, DEFAULT_USB_PRODUCT_ID, DEFAULT_USB_VENDOR_ID,
-    USB_BCD_USB,
+    create_dir, create_symlink, find_udc, is_configfs_available, remove_dir, remove_file,
+    write_file, CONFIGFS_PATH, DEFAULT_GADGET_NAME, DEFAULT_USB_BCD_DEVICE, DEFAULT_USB_PRODUCT_ID,
+    DEFAULT_USB_VENDOR_ID, USB_BCD_USB,
 };
 use super::endpoint::{EndpointAllocator, DEFAULT_MAX_ENDPOINTS};
 use super::function::{FunctionMeta, GadgetFunction};
 use super::hid::HidFunction;
 use super::msd::MsdFunction;
 use crate::error::{AppError, Result};
+
+const REBIND_DELAY_MS: u64 = 300;
 
 /// USB Gadget device descriptor configuration
 #[derive(Debug, Clone)]
@@ -249,9 +251,15 @@ impl OtgGadgetManager {
             AppError::Internal("No USB Device Controller (UDC) found".to_string())
         })?;
 
+        // Recreate config symlinks before binding to avoid kernel gadget issues after rebind
+        if let Err(e) = self.recreate_config_links() {
+            warn!("Failed to recreate gadget config links before bind: {}", e);
+        }
+
         info!("Binding gadget to UDC: {}", udc);
         write_file(&self.gadget_path.join("UDC"), &udc)?;
         self.bound_udc = Some(udc);
+        std::thread::sleep(std::time::Duration::from_millis(REBIND_DELAY_MS));
 
         Ok(())
     }
@@ -262,6 +270,7 @@ impl OtgGadgetManager {
             write_file(&self.gadget_path.join("UDC"), "")?;
             self.bound_udc = None;
             info!("Unbound gadget from UDC");
+            std::thread::sleep(std::time::Duration::from_millis(REBIND_DELAY_MS));
         }
         Ok(())
     }
@@ -381,6 +390,47 @@ impl OtgGadgetManager {
     /// Get gadget path
     pub fn gadget_path(&self) -> &PathBuf {
         &self.gadget_path
+    }
+
+    /// Recreate config symlinks from functions directory
+    fn recreate_config_links(&self) -> Result<()> {
+        let functions_path = self.gadget_path.join("functions");
+        if !functions_path.exists() || !self.config_path.exists() {
+            return Ok(());
+        }
+
+        let entries = std::fs::read_dir(&functions_path).map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to read functions directory {}: {}",
+                functions_path.display(),
+                e
+            ))
+        })?;
+
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = match name.to_str() {
+                Some(n) => n,
+                None => continue,
+            };
+            if !name.contains(".usb") {
+                continue;
+            }
+
+            let src = functions_path.join(name);
+            let dest = self.config_path.join(name);
+
+            if dest.exists() {
+                if let Err(e) = remove_file(&dest) {
+                    warn!("Failed to remove existing config link {}: {}", dest.display(), e);
+                    continue;
+                }
+            }
+
+            create_symlink(&src, &dest)?;
+        }
+
+        Ok(())
     }
 }
 

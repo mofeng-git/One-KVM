@@ -96,6 +96,9 @@ const hidBackend = ref('ch9329')
 const ch9329Port = ref('')
 const ch9329Baudrate = ref(9600)
 const otgUdc = ref('')
+const hidOtgProfile = ref('full')
+const otgProfileTouched = ref(false)
+const showAdvancedOtg = ref(false)
 
 // Extension settings
 const ttydEnabled = ref(false)
@@ -199,6 +202,26 @@ const availableFps = computed(() => {
   )
   return resolution?.fps || []
 })
+
+const isLowEndpointUdc = computed(() => {
+  if (otgUdc.value) {
+    return /musb/i.test(otgUdc.value)
+  }
+  return devices.value.udc.some((udc) => /musb/i.test(udc.name))
+})
+
+function applyOtgProfileDefault() {
+  if (otgProfileTouched.value) return
+  if (hidBackend.value !== 'otg') return
+  const preferred = isLowEndpointUdc.value ? 'full_no_consumer' : 'full'
+  if (hidOtgProfile.value === preferred) return
+  hidOtgProfile.value = preferred
+}
+
+function onOtgProfileChange(value: unknown) {
+  hidOtgProfile.value = typeof value === 'string' ? value : 'full'
+  otgProfileTouched.value = true
+}
 
 // Common baud rates for CH9329
 const baudRates = [9600, 19200, 38400, 57600, 115200]
@@ -315,6 +338,17 @@ watch(hidBackend, (newBackend) => {
   if (newBackend === 'otg' && !otgUdc.value && devices.value.udc.length > 0) {
     otgUdc.value = devices.value.udc[0]?.name || ''
   }
+  applyOtgProfileDefault()
+})
+
+watch(otgUdc, () => {
+  applyOtgProfileDefault()
+})
+
+watch(showAdvancedOtg, (open) => {
+  if (open) {
+    applyOtgProfileDefault()
+  }
 })
 
 onMounted(async () => {
@@ -336,6 +370,7 @@ onMounted(async () => {
     if (result.udc.length > 0 && result.udc[0]) {
       otgUdc.value = result.udc[0].name
     }
+    applyOtgProfileDefault()
 
     // Auto-select audio device if available (and no video device to trigger watch)
     if (result.audio.length > 0 && !audioDevice.value) {
@@ -487,6 +522,7 @@ async function handleSetup() {
   }
   if (hidBackend.value === 'otg' && otgUdc.value) {
     setupData.hid_otg_udc = otgUdc.value
+    setupData.hid_otg_profile = hidOtgProfile.value
   }
 
   // Encoder backend setting
@@ -923,6 +959,46 @@ const stepIcons = [User, Video, Keyboard, Puzzle]
                 <p v-if="!devices.udc.length" class="text-xs text-muted-foreground">
                   {{ t('setup.noUdcDevices') }}
                 </p>
+              </div>
+
+              <div class="mt-2 border rounded-lg">
+                <button
+                  type="button"
+                  class="w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 rounded-lg transition-colors"
+                  @click="showAdvancedOtg = !showAdvancedOtg"
+                >
+                  <span class="text-sm font-medium">
+                    {{ t('setup.otgAdvanced') }} ({{ t('common.optional') }})
+                  </span>
+                  <ChevronRight
+                    class="h-4 w-4 transition-transform duration-200"
+                    :class="{ 'rotate-90': showAdvancedOtg }"
+                  />
+                </button>
+                <div v-if="showAdvancedOtg" class="px-3 pb-3 space-y-3">
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('setup.otgProfileDesc') }}
+                  </p>
+                  <div class="space-y-2">
+                    <Label for="otgProfile">{{ t('setup.otgProfile') }}</Label>
+                    <Select :model-value="hidOtgProfile" @update:modelValue="onOtgProfileChange">
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="full">{{ t('settings.otgProfileFull') }}</SelectItem>
+                        <SelectItem value="full_no_msd">{{ t('settings.otgProfileFullNoMsd') }}</SelectItem>
+                        <SelectItem value="full_no_consumer">{{ t('settings.otgProfileFullNoConsumer') }}</SelectItem>
+                        <SelectItem value="full_no_consumer_no_msd">{{ t('settings.otgProfileFullNoConsumerNoMsd') }}</SelectItem>
+                        <SelectItem value="legacy_keyboard">{{ t('settings.otgProfileLegacyKeyboard') }}</SelectItem>
+                        <SelectItem value="legacy_mouse_relative">{{ t('settings.otgProfileLegacyMouseRelative') }}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p v-if="isLowEndpointUdc" class="text-xs text-amber-600 dark:text-amber-400">
+                    {{ t('setup.otgLowEndpointHint') }}
+                  </p>
+                </div>
               </div>
             </div>
           </div>

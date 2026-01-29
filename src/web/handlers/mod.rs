@@ -521,9 +521,37 @@ pub struct SetupRequest {
     pub hid_ch9329_port: Option<String>,
     pub hid_ch9329_baudrate: Option<u32>,
     pub hid_otg_udc: Option<String>,
+    pub hid_otg_profile: Option<String>,
     // Extension settings
     pub ttyd_enabled: Option<bool>,
     pub rustdesk_enabled: Option<bool>,
+}
+
+fn normalize_otg_profile_for_low_endpoint(config: &mut AppConfig) {
+    if !matches!(config.hid.backend, crate::config::HidBackend::Otg) {
+        return;
+    }
+    let udc = crate::otg::configfs::resolve_udc_name(config.hid.otg_udc.as_deref());
+    let Some(udc) = udc else {
+        return;
+    };
+    if !crate::otg::configfs::is_low_endpoint_udc(&udc) {
+        return;
+    }
+    match config.hid.otg_profile {
+        crate::config::OtgHidProfile::Full => {
+            config.hid.otg_profile = crate::config::OtgHidProfile::FullNoConsumer;
+        }
+        crate::config::OtgHidProfile::FullNoMsd => {
+            config.hid.otg_profile = crate::config::OtgHidProfile::FullNoConsumerNoMsd;
+        }
+        crate::config::OtgHidProfile::Custom => {
+            if config.hid.otg_functions.consumer {
+                config.hid.otg_functions.consumer = false;
+            }
+        }
+        _ => {}
+    }
 }
 
 pub async fn setup_init(
@@ -601,6 +629,33 @@ pub async fn setup_init(
             if let Some(udc) = req.hid_otg_udc.clone() {
                 config.hid.otg_udc = Some(udc);
             }
+            if let Some(profile) = req.hid_otg_profile.clone() {
+                config.hid.otg_profile = match profile.as_str() {
+                    "full" => crate::config::OtgHidProfile::Full,
+                    "full_no_msd" => crate::config::OtgHidProfile::FullNoMsd,
+                    "full_no_consumer" => crate::config::OtgHidProfile::FullNoConsumer,
+                    "full_no_consumer_no_msd" => crate::config::OtgHidProfile::FullNoConsumerNoMsd,
+                    "legacy_keyboard" => crate::config::OtgHidProfile::LegacyKeyboard,
+                    "legacy_mouse_relative" => crate::config::OtgHidProfile::LegacyMouseRelative,
+                    "custom" => crate::config::OtgHidProfile::Custom,
+                    _ => config.hid.otg_profile.clone(),
+                };
+                if matches!(config.hid.backend, crate::config::HidBackend::Otg) {
+                    match config.hid.otg_profile {
+                        crate::config::OtgHidProfile::Full
+                        | crate::config::OtgHidProfile::FullNoConsumer => {
+                            config.msd.enabled = true;
+                        }
+                        crate::config::OtgHidProfile::FullNoMsd
+                        | crate::config::OtgHidProfile::FullNoConsumerNoMsd
+                        | crate::config::OtgHidProfile::LegacyKeyboard
+                        | crate::config::OtgHidProfile::LegacyMouseRelative => {
+                            config.msd.enabled = false;
+                        }
+                        crate::config::OtgHidProfile::Custom => {}
+                    }
+                }
+            }
 
             // Extension settings
             if let Some(enabled) = req.ttyd_enabled {
@@ -609,11 +664,31 @@ pub async fn setup_init(
             if let Some(enabled) = req.rustdesk_enabled {
                 config.rustdesk.enabled = enabled;
             }
+
+            normalize_otg_profile_for_low_endpoint(config);
         })
         .await?;
 
     // Get updated config for HID reload
     let new_config = state.config.get();
+
+    if matches!(new_config.hid.backend, crate::config::HidBackend::Otg) {
+        let mut hid_functions = new_config.hid.effective_otg_functions();
+        if let Some(udc) =
+            crate::otg::configfs::resolve_udc_name(new_config.hid.otg_udc.as_deref())
+        {
+            if crate::otg::configfs::is_low_endpoint_udc(&udc) && hid_functions.consumer {
+                tracing::warn!(
+                    "UDC {} has low endpoint resources, disabling consumer control",
+                    udc
+                );
+                hid_functions.consumer = false;
+            }
+        }
+        if let Err(e) = state.otg_service.update_hid_functions(hid_functions).await {
+            tracing::warn!("Failed to apply HID functions during setup: {}", e);
+        }
+    }
 
     tracing::info!(
         "Extension config after save: ttyd.enabled={}, rustdesk.enabled={}",
@@ -726,6 +801,9 @@ pub async fn update_config(
 
     let new_config: AppConfig = serde_json::from_value(merged)
         .map_err(|e| AppError::BadRequest(format!("Invalid config format: {}", e)))?;
+
+    let mut new_config = new_config;
+    normalize_otg_profile_for_low_endpoint(&mut new_config);
 
     // Apply the validated config
     state.config.set(new_config.clone()).await?;

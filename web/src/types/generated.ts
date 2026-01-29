@@ -60,6 +60,10 @@ export enum OtgHidProfile {
 	Full = "full",
 	/** Full HID device set without MSD */
 	FullNoMsd = "full_no_msd",
+	/** Full HID device set without consumer control */
+	FullNoConsumer = "full_no_consumer",
+	/** Full HID device set without consumer control and MSD */
+	FullNoConsumerNoMsd = "full_no_consumer_no_msd",
 	/** Legacy profile: only keyboard */
 	LegacyKeyboard = "legacy_keyboard",
 	/** Legacy profile: only relative mouse */

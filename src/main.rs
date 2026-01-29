@@ -16,7 +16,7 @@ use one_kvm::events::EventBus;
 use one_kvm::extensions::ExtensionManager;
 use one_kvm::hid::{HidBackendType, HidController};
 use one_kvm::msd::MsdController;
-use one_kvm::otg::OtgService;
+use one_kvm::otg::{configfs, OtgService};
 use one_kvm::rustdesk::RustDeskService;
 use one_kvm::state::AppState;
 use one_kvm::video::format::{PixelFormat, Resolution};
@@ -312,6 +312,19 @@ async fn main() -> anyhow::Result<()> {
     let will_use_msd = config.msd.enabled;
 
     if will_use_otg_hid {
+        let mut hid_functions = config.hid.effective_otg_functions();
+        if let Some(udc) = configfs::resolve_udc_name(config.hid.otg_udc.as_deref()) {
+            if configfs::is_low_endpoint_udc(&udc) && hid_functions.consumer {
+                tracing::warn!(
+                    "UDC {} has low endpoint resources, disabling consumer control",
+                    udc
+                );
+                hid_functions.consumer = false;
+            }
+        }
+        if let Err(e) = otg_service.update_hid_functions(hid_functions).await {
+            tracing::warn!("Failed to apply HID functions: {}", e);
+        }
         if let Err(e) = otg_service.enable_hid().await {
             tracing::warn!("Failed to pre-enable HID: {}", e);
         }
