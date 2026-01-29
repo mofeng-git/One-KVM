@@ -465,7 +465,6 @@ pub async fn logout(
 pub struct AuthCheckResponse {
     pub authenticated: bool,
     pub user: Option<String>,
-    pub is_admin: bool,
 }
 
 pub async fn auth_check(
@@ -481,7 +480,6 @@ pub async fn auth_check(
     Json(AuthCheckResponse {
         authenticated: true,
         user: username,
-        is_admin: true,
     })
 }
 

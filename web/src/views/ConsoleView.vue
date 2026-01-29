@@ -1923,9 +1923,9 @@ onUnmounted(() => {
             :details="hidDetails"
           />
 
-          <!-- MSD Status - Admin only, hidden when CH9329 backend (no USB gadget support) -->
+          <!-- MSD Status - Hidden when CH9329 backend (no USB gadget support) -->
           <StatusCard
-            v-if="authStore.isAdmin && systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329'"
+            v-if="systemStore.msd?.available && systemStore.hid?.backend !== 'ch9329'"
             :title="t('statusCard.msd')"
             type="msd"
             :status="msdStatus"
@@ -1988,7 +1988,6 @@ onUnmounted(() => {
       :mouse-mode="mouseMode"
       :video-mode="videoMode"
       :ttyd-running="ttydStatus?.running"
-      :is-admin="authStore.isAdmin"
       @toggle-fullscreen="toggleFullscreen"
       @toggle-stats="statsSheetOpen = true"
       @toggle-virtual-keyboard="handleToggleVirtualKeyboard"

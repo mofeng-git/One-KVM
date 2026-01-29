@@ -43,7 +43,6 @@ interface VideoDevice {
 const props = defineProps<{
   open: boolean
   videoMode: VideoMode
-  isAdmin?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -619,9 +618,7 @@ watch(currentConfig, () => {
             </div>
           </div>
 
-          <!-- Settings Link - Admin only -->
           <Button
-            v-if="props.isAdmin"
             variant="ghost"
             size="sm"
             class="w-full h-7 text-xs text-muted-foreground hover:text-foreground justify-start px-0"
@@ -632,11 +629,10 @@ watch(currentConfig, () => {
           </Button>
         </div>
 
-        <!-- Device Settings Section - Admin only -->
-        <template v-if="props.isAdmin">
-          <Separator />
+        <!-- Device Settings Section -->
+        <Separator />
 
-          <div class="space-y-3">
+        <div class="space-y-3">
           <div class="flex items-center justify-between">
             <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.deviceSettings') }}</h5>
             <Button
@@ -784,8 +780,7 @@ watch(currentConfig, () => {
             <Loader2 v-if="applying" class="h-3.5 w-3.5 mr-1.5 animate-spin" />
             <span>{{ applying ? t('actionbar.applying') : t('common.apply') }}</span>
           </Button>
-        </div>
-        </template>
+          </div>
       </div>
     </PopoverContent>
   </Popover>

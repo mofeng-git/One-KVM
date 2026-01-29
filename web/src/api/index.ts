@@ -16,7 +16,7 @@ export const authApi = {
     request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
 
   check: () =>
-    request<{ authenticated: boolean; user?: string; is_admin?: boolean }>('/auth/check'),
+    request<{ authenticated: boolean; user?: string }>('/auth/check'),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     request<{ success: boolean }>('/auth/password', {

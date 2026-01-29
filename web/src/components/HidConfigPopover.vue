@@ -27,7 +27,6 @@ import { useSystemStore } from '@/stores/system'
 const props = defineProps<{
   open: boolean
   mouseMode?: 'absolute' | 'relative'
-  isAdmin?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -304,11 +303,10 @@ watch(() => props.open, (isOpen) => {
           </div>
         </div>
 
-        <!-- HID Device Settings (Requires Apply) - Admin only -->
-        <template v-if="props.isAdmin">
-          <Separator />
+        <!-- HID Device Settings (Requires Apply) -->
+        <Separator />
 
-          <div class="space-y-3">
+        <div class="space-y-3">
           <div class="flex items-center justify-between">
             <h5 class="text-xs font-medium text-muted-foreground">{{ t('actionbar.hidDeviceSettings') }}</h5>
             <Button
@@ -393,8 +391,7 @@ watch(() => props.open, (isOpen) => {
             <Loader2 v-if="applying" class="h-3.5 w-3.5 mr-1.5 animate-spin" />
             <span>{{ applying ? t('actionbar.applying') : t('common.apply') }}</span>
           </Button>
-        </div>
-        </template>
+          </div>
       </div>
     </PopoverContent>
   </Popover>

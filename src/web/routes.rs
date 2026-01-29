@@ -32,7 +32,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/setup", get(handlers::setup_status))
         .route("/setup/init", post(handlers::setup_init));
 
-    // User routes (authenticated users - both regular and admin)
+    // Authenticated routes (all logged-in users)
     let user_routes = Router::new()
         .route("/info", get(handlers::system_info))
         .route("/auth/logout", post(handlers::logout))
@@ -71,10 +71,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/audio/devices", get(handlers::list_audio_devices))
         // Audio WebSocket endpoint
         .route("/ws/audio", any(audio_ws_handler))
-        ;
-
-    // Admin-only routes (require admin privileges)
-    let admin_routes = Router::new()
         // Configuration management (domain-separated endpoints)
         .route("/config", get(handlers::config::get_all_config))
         .route("/config", post(handlers::update_config))
@@ -199,11 +195,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/terminal", get(handlers::terminal::terminal_index))
         .route("/terminal/", get(handlers::terminal::terminal_index))
         .route("/terminal/ws", get(handlers::terminal::terminal_ws))
-        .route("/terminal/{*path}", get(handlers::terminal::terminal_proxy))
-        ;
+        .route("/terminal/{*path}", get(handlers::terminal::terminal_proxy));
 
-    // Combine protected routes (user + admin)
-    let protected_routes = Router::new().merge(user_routes).merge(admin_routes);
+    // Protected routes (all authenticated users)
+    let protected_routes = user_routes;
 
     // Stream endpoints (accessible with auth, but typically embedded in pages)
     let stream_routes = Router::new()

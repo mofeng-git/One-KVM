@@ -30,7 +30,6 @@ interface AudioDevice {
 
 const props = defineProps<{
   open: boolean
-  isAdmin?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -203,11 +202,10 @@ watch(() => props.open, (isOpen) => {
           </div>
         </div>
 
-        <!-- Device Settings (requires apply) - Admin only -->
-        <template v-if="props.isAdmin">
-          <Separator />
+        <!-- Device Settings (requires apply) -->
+        <Separator />
 
-          <div class="space-y-3">
+        <div class="space-y-3">
             <div class="flex items-center justify-between">
               <h5 class="text-xs font-medium text-muted-foreground">
                 {{ t('actionbar.audioDeviceSettings') }}
@@ -311,7 +309,6 @@ watch(() => props.open, (isOpen) => {
               <span>{{ applying ? t('actionbar.applying') : t('common.apply') }}</span>
             </Button>
           </div>
-        </template>
       </div>
     </PopoverContent>
   </Popover>

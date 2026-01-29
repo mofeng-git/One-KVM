@@ -40,20 +40,20 @@ pub async fn auth_middleware(
     mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    let raw_path = request.uri().path();
+    // When this middleware is mounted under /api, Axum strips the prefix for the inner router.
+    // Normalize the path so checks work whether it is mounted or not.
+    let path = raw_path.strip_prefix("/api").unwrap_or(raw_path);
+
     // Check if system is initialized
     if !state.config.is_initialized() {
-        // Allow access to setup endpoints when not initialized
-        let path = request.uri().path();
-        if path.starts_with("/api/setup")
-            || path == "/api/info"
-            || path.starts_with("/") && !path.starts_with("/api/")
-        {
+        // Allow only setup-related endpoints when not initialized
+        if is_setup_public_endpoint(path) {
             return Ok(next.run(request).await);
         }
     }
 
     // Public endpoints that don't require auth
-    let path = request.uri().path();
     if is_public_endpoint(path) {
         return Ok(next.run(request).await);
     }
@@ -89,21 +89,14 @@ fn unauthorized_response(message: &str) -> Response {
 
 /// Check if endpoint is public (no auth required)
 fn is_public_endpoint(path: &str) -> bool {
-    // Note: paths here are relative to /api since middleware is applied before nest
+    // Note: paths here are relative to /api since middleware is applied within the nested router
     matches!(
         path,
         "/"
         | "/auth/login"
-        | "/info"
         | "/health"
         | "/setup"
         | "/setup/init"
-        // Also check with /api prefix for direct access
-        | "/api/auth/login"
-        | "/api/info"
-        | "/api/health"
-        | "/api/setup"
-        | "/api/setup/init"
     ) || path.starts_with("/assets/")
         || path.starts_with("/static/")
         || path.ends_with(".js")
@@ -111,4 +104,12 @@ fn is_public_endpoint(path: &str) -> bool {
         || path.ends_with(".ico")
         || path.ends_with(".png")
         || path.ends_with(".svg")
+}
+
+/// Setup-only endpoints allowed before initialization.
+fn is_setup_public_endpoint(path: &str) -> bool {
+    matches!(
+        path,
+        "/setup" | "/setup/init" | "/devices" | "/stream/codecs"
+    )
 }
